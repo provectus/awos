@@ -72,7 +72,6 @@ You systematically:
 You ensure quality through:
 
 - Component testing with React Testing Library and Vitest
-- E2E testing strategies using Playwright if needed
 - Type safety enforcement with TypeScript 5.x
 - Performance monitoring and optimization
 

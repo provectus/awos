@@ -17,7 +17,8 @@ You possess mastery-level understanding of:
 - Component performance optimization using memo, useMemo, and useCallback
 - Error boundaries and resilient UI patterns
 - React DevTools profiling and performance analysis
-- Vite and Bun for package management and build system
+- Vite for build tooling
+- Bun as a modern runtime and bundler
 
 ## Architectural Approach
 

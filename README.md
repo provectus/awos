@@ -69,37 +69,17 @@ The **`awos`** workflow is built on a clear document structure that creates a tr
 
 ➡️ [Learn more about the purpose of each document](docs/document-structure.md)
 
-## **The Content of the Framework**
+## What's Included in `awos`?
+**`awos`** is a complete framework for agentic software development. It consists of four key components that work together to turn your ideas into code:
 
-The framework's operational success relies on a set of core components: framework commands, predefined subagents and standards, the underlying tools, and useful hooks for continuous improvement.
+- 🚀 **An Installer**: A simple `npx` command that instantly sets up a new project. It creates all the necessary directories, templates, and configuration files, so you can start defining your product in minutes.
 
-### **1\. Framework Commands Implementing the Flow**
+- 🤖 **A Set of AI Agents**: A suite of interactive commands (like `/awos:product`, `/awos:roadmap`, and `/awos:implement`). Each command is a specialized agent with a sophisticated prompt that guides you through a specific stage of the development lifecycle, from product definition to task execution.
 
-The framework uses specific commands to drive the described flow:
+- 🛠️ **Pre-defined Sub-Agents**: A collection of specialized AI workers that the main agents delegate tasks to. This includes sub-agents for coding, testing, and other utility functions, ensuring that the right "AI expert" is used for every job.
 
-* `/product`
-* `/roadmap`
-* `/adr`  
-* `/spec`  
-* `/tasks`
-* `/implement`
+- 🔌 **Extensibility Hooks**: An advanced system for customization. Hooks and other configuration points allow you to modify and extend the framework to fit your team's specific workflow and needs (more decisions on this is coming soon).
 
-These commands provide a consistent interface for interacting with the LLM agents, ensuring adherence to the defined workflow.
-
-### **2\. Set of Predefined Subagents**
-
-The framework leverages specialized subagents and embeds organizational standards and best practices directly into the LLM's context.
-
-* **Utility Subagents:** subagent for working with git, file system, shell, etc.  
-* **Context Fetcher:** This subagent is a specialized component that understands the project's documentation structure. Its role is to provide the main coding agents with *only* the necessary information from the project's documentation. This approach offers several key benefits. It offloads knowledge from the main agent's memory, ensuring it receives precise, up-to-date context without being overwhelmed. All project documentation is kept in the repository, making it accessible to both human developers and agents. Agents receive accurate and consistent information directly from project documentation, reducing errors. By delivering targeted context, the context-fetcher allows the main agent to focus on the coding task, improving overall efficiency.  
-* **Predefined Agents:** agents with specialized roles such as architects, developers, and testers. These roles are defined through specific instructions and standards tailored to their function within the development process
-
-### **3\. Must-Have MCP Servers**
-
-This framework necessitates the use of specific, high-performance MCP servers. Examples of such essential servers include Serena or Context7, with the final, definitive list of required providers to be specified as the framework evolves.
-
-### **4\. Useful Hooks**
-
-TBD
+--- 
 
 [^1]: The Russian word «авось» (a-VOHS’) doesn’t have a direct equivalent in English — it’s a very culturally loaded concept. It’s a mix of hope, chance, and fatalism, often with a sense of “let’s do it and maybe it will work out.”

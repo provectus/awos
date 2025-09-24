@@ -1,12 +1,10 @@
 # **Agentic Workflow Operating System for Coding Assistance**
 
-This framework outlines a structured approach to leveraging Large Language Models (LLMs) for high-quality code generation, moving beyond basic prompting to a spec-driven development methodology.
+This framework outlines a structured approach to leveraging LLMs for high-quality code generation, moving beyond basic prompting to a spec-driven development methodology.
 
 ## 🚀 Quick Start: Your First Project with `awos`
 
 Welcome to **`awos`**[^1]! This guide will walk you through building a new software product from idea to implementation using a series of simple commands.
-
----
 
 ### Step 1: Install `awos`
 
@@ -59,19 +57,15 @@ npx @provectusinc/awos
 
 That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product.
 
----
-
 ## The `awos` Philosophy
 
 The **`awos`** framework is built on a simple but powerful idea: AI agents, like human developers, need clear context to do great work. Without a structured plan, even the most advanced LLM can act like a confused intern. **`awos`** provides a step-by-step workflow that transforms your vision into a detailed blueprint that AI agents can understand and execute flawlessly. This process ensures the AI's incredible speed is channeled into building the right software, correctly, on the first try.
 
 ➡️ [Read more about the philosophy behind **`awos`**](docs/rationale.md)
 
----
-
 ## The `awos` Document Structure
 
-The **`awos`** workflow is built on a clear document structure that creates a traceable path from a high-level idea to a single line of code. By storing the project's entire state in files like the **Product Definition**, **Roadmap**, and **Specifications**, the entire process becomes idempotent. This is a powerful feature: you can clear your chat history at any time, and an AWOS agent can instantly restore the full project context from this single source of truth. This ensures that both humans and AI agents always have exactly the context they need to build the right thing.
+The **`awos`** workflow is built on a clear document structure that creates a traceable path from a high-level idea to a single line of code. By storing the project's entire state in files like the **Product Definition**, **Roadmap**, and **Specifications**, the entire process becomes idempotent. This is a powerful feature: you can clear your chat history at any time, and an **`awos`** agent can instantly restore the full project context from this single source of truth. This ensures that both humans and AI agents always have exactly the context they need to build the right thing.
 
 ➡️ [Learn more about the purpose of each document](docs/document-structure.md)
 

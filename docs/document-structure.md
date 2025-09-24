@@ -2,8 +2,6 @@
 
 The **`awos`** framework is built around a series of documents that create a clear, traceable path from a high-level idea to a single line of code. Each document has a specific purpose and audience. Understanding this structure is key to getting the most out of the system.
 
----
-
 ### 1. Product Definition
 - **Purpose:** This document is the single source of truth for your entire product. It answers the fundamental questions: **What** are we building? **Why** is it important? And **who** is it for?
 - **Content:** It contains only business goals, user descriptions (personas), and the core value proposition. It must not contain any technical details.
@@ -38,8 +36,6 @@ The **`awos`** framework is built around a series of documents that create a cle
 - **Purpose:** This is the final, tangible output of the entire process.
 - **Content:** The source code for your application.
 - **How to Use It:** If all the documents above are created with care, you have a very high chance of getting high-quality, working code from the AI agents. Good documentation leads to good code.
-
---- 
 
 ## A Hidden Superpower: Your Project's Memory is in the Files
 Have you ever had a long chat with an AI and felt that the important context is now buried in the conversation history? What happens if you need to restart the conversation?

@@ -98,6 +98,10 @@ async function main() {
   const templatesDest = path.join(awosDir, "templates");
   await copyDirRecursive(templatesSrc, templatesDest);
 
+  const scriptSrc = path.join(pkgRoot, "scripts");
+  const scriptDest = path.join(awosDir, "scripts");
+  await copyDirRecursive(scriptSrc, scriptDest);
+
   console.log("Setup completed:");
   console.log(`- Ensured: ${claudeDir}`);
   console.log(`- Ensured: ${claudeCommandAwosDir}`);

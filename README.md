@@ -61,20 +61,11 @@ That's it! By following these steps, you can systematically turn your vision int
 
 ---
 
-## **Rationale: Why Spec-Driven Development is Key for LLM Code Generation**
+## The `awos` Philosophy
 
-Generating high-quality code with LLMs necessitates a departure from simply immediately jumping straight into writing code, which can be a terrible idea if the solution hasn't been thoroughly conceptualized. LLMs, much like human developers, require complete and well-organized information about the problem, the desired solution, and environmental constraints . Without this structured context, LLMs can produce wrong code or behave like confused interns.
+The **`awos`** framework is built on a simple but powerful idea: AI agents, like human developers, need clear context to do great work. Without a structured plan, even the most advanced LLM can act like a confused intern. **`awos`** provides a step-by-step workflow that transforms your vision into a detailed blueprint that AI agents can understand and execute flawlessly. This process ensures the AI's incredible speed is channeled into building the right software, correctly, on the first try.
 
-Spec-driven development, facilitated by detailed technical specifications, provides this essential context, forcing upfront thinking and ensuring a clear design. Technical specifications outline how you’re going to address a technical problem by designing and building a solution for it. The benefits are immense:
-
-* **Increased Project Success:** Writing a technical spec increases the chances of having a successful project, service, or feature that all stakeholders involved are satisfied with.  
-* **Reduced Errors and Liabilities:** It decreases the chances of something going horribly wrong during implementation and even after you’ve launched your product. It helps catch exceptional cases of the solution that you may have neglected, reducing your liability. Problems are best fixed during planning, not after code is written.  
-* **Enhanced Documentation and Communication:** Technical specs serve as documentation for the project and provide a straightforward and efficient way to communicate project design ideas between a team and other stakeholders.  
-* **Improved Collaboration and Ownership:** By writing a technical spec, engineers are forced to examine a problem before going straight into code. The whole team can collaboratively solve a problem and create a solution, fostering investment and ownership. It also helps newer teammates unfamiliar with the project can onboard themselves and contribute to the implementation earlier.  
-* **Superior Product and Scope Management:** Investing in a technical spec ultimately results in a superior product by aligning the team, managing complexity, preventing scope/feature creep, and setting priorities. It ensures only the most impactful and urgent parts of a project go out first.  
-* **Consistency and Alignment:** This framework ensures agents build your way, not their way by capturing your standards, your stack, and the unique details of your codebase. 
-
-In essence, context engineering aims to provide the LLM with the maximally high-quality context for code generation, enabling it to move from raw output to production-ready, high-quality code.
+➡️ [Read more about the philosophy behind **`awos`**](docs/rationale.md)
 
 ## **The Flow: A Structured Approach to LLM Agentic Development**
 

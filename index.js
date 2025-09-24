@@ -102,6 +102,10 @@ async function main() {
   const scriptDest = path.join(awosDir, "scripts");
   await copyDirRecursive(scriptSrc, scriptDest);
 
+  const agentSrc = path.join(pkgRoot, "subagents");
+  const agentDest = path.join(claudeDir, "agents");
+  await copyDirRecursive(agentSrc, agentDest);
+
   console.log("Setup completed:");
   console.log(`- Ensured: ${claudeDir}`);
   console.log(`- Ensured: ${claudeCommandAwosDir}`);

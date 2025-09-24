@@ -8,15 +8,16 @@
 
 ## 1. Overview and Rationale (The "Why")
 
-*Describe the core purpose of this change. What is the context? What problem are we solving, and what is the desired outcome? How will we measure success?*
+_Describe the core purpose of this change. What is the context? What problem are we solving, and what is the desired outcome? How will we measure success?_
 
 ---
 
 ## 2. Functional Requirements (The "What")
 
-*Describe the required functionality in a clear, non-technical way. Use the format that is most effective for this specific change, such as user stories, bulleted lists of requirements, or user flow descriptions. For each requirement, include testable acceptance criteria.*
+_Describe the required functionality in a clear, non-technical way. Use the format that is most effective for this specific change, such as user stories, bulleted lists of requirements, or user flow descriptions. For each requirement, include testable acceptance criteria._
 
 **Example (User Story format):**
+
 - **As a** user, **I want to** be able to reset my password, **so that** I can regain access to my account if I forget it.
   - **Acceptance Criteria:**
     - [ ] When I click the "Forgot Password" link, I am taken to a page to enter my email.
@@ -24,6 +25,7 @@
     - [ ] Clicking the link takes me to a page where I can set a new password.
 
 **Example (Bulleted List format):**
+
 - The system must generate a PDF report of the user's monthly activity.
   - **Acceptance Criteria:**
     - [ ] The report must include sections for X, Y, and Z.
@@ -33,11 +35,12 @@
 
 ## 3. Scope and Boundaries
 
-*Clearly define what is and is not included in this work to prevent ambiguity.*
+_Clearly define what is and is not included in this work to prevent ambiguity._
 
 ### In-Scope
+
 - [A list of what is definitely included.]
 
 ### Out-of-Scope
-- [A list of related items that are explicitly NOT included.]
 
+- [A list of related items that are explicitly NOT included.]

@@ -1,13 +1,15 @@
 # Product Roadmap: [Your Product Name]
 
-*This roadmap outlines our strategic direction based on customer needs and business goals. It focuses on the "what" and "why," not the technical "how."*
+_This roadmap outlines our strategic direction based on customer needs and business goals. It focuses on the "what" and "why," not the technical "how."_
 
 ---
 
 ### Phase 1
-*The highest priority features that form the core foundation of the product.*
+
+_The highest priority features that form the core foundation of the product._
 
 - [ ] **User Account Essentials**
+
   - [ ] **Seamless Sign-Up & Login:** Allow users to create an account and sign in using their email and password, providing a secure entry point to the application.
   - [ ] **Basic Profile Management:** Enable users to view and update their name and email address after signing up.
 
@@ -18,9 +20,11 @@
 ---
 
 ### Phase 2
-*Once the foundational features are complete, we will move on to these high-value additions.*
+
+_Once the foundational features are complete, we will move on to these high-value additions._
 
 - [ ] **Dashboard & Reporting V1**
+
   - [ ] **At-a-Glance Financial Dashboard:** Create a primary dashboard that displays key metrics like total income, total expenses, and net profit for the current month.
   - [ ] **Monthly Profit/Loss Report:** Allow users to view a simple, downloadable report summarizing their financial activity for any given month.
 
@@ -31,9 +35,11 @@
 ---
 
 ### Phase 3
-*Features planned for future consideration. Their priority and scope may be refined based on user feedback from earlier phases.*
+
+_Features planned for future consideration. Their priority and scope may be refined based on user feedback from earlier phases._
 
 - [ ] **Advanced Functionality**
+
   - [ ] **Client Invoicing System:** Allow users to create, send, and track the status of invoices sent to their clients directly from the application.
   - [ ] **Multi-Currency Support:** Add the ability for users to log transactions and view reports in different currencies.
 

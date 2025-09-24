@@ -21,36 +21,43 @@ npx @provectusinc/awos
 **`awos`** guides you through a logical, step-by-step process. You'll use a series of "agents" to define, plan, and build your product. Run the commands in the following order.
 
 1. `/awos:product`
+
 - **What it does**: Creates the high-level Product Definition.
 - **Think of it as**: Your project's main ID card. It answers the big questions: _What_ are we building, _why_, and for _who_?
 - Audience: Product Owner (Non-Technical)
 
 2. `/awos:roadmap`
+
 - **What it does**: Creates the Product Roadmap.
 - **Think of it as**: Your project's GPS. It lays out the features you will build and in what order.
 - Audience: Product Manager (Non-Technical)
 
 3. `/awos:architecture`
+
 - **What it does**: Defines the System Architecture.
 - **Think of it as**: Your project's building blueprint. It decides the technology stack, databases, infrastructure, etc.
 - Audience: Solution Architect (Technical)
 
 4. `/awos:spec`
+
 - **What it does**: Creates a detailed Functional Specification for a single feature from the roadmap.
 - **Think of it as**: A detailed plan for one room in your house. It describes exactly what the feature does for a user.
 - Audience: Product Analyst (Non-Technical)
 
 5. `/awos:tech`
+
 - **What it does**: Creates the Technical Specification.
 - **Think of it as**: The builder's instructions for that one room. It explains _how_ to build the feature.
 - Audience: Tech Lead (Technical)
 
 6. `/awos:tasks`
+
 - **What it does**: Breaks the technical spec into a Task List.
 - **Think of it as**: The step-by-step construction checklist for engineers to follow.
 - Audience: Tech Lead (Technical)
 
 7. `/awos:implement`
+
 - **What it does**: Executes tasks (finally, actual code generation).
 - **Think of it as**: The project foreman. This agent delegates the coding work to sub-agents and tracks progress.
 - Audience: Team Lead (Technical)
@@ -72,6 +79,7 @@ The **`awos`** workflow is built on a clear document structure that creates a tr
 ➡️ [Learn more about the purpose of each document](docs/document-structure.md)
 
 ## What's Included in `awos`?
+
 **`awos`** is a complete framework for agentic software development. It consists of four key components that work together to turn your ideas into code:
 
 - 🚀 **An Installer**: A simple `npx` command that instantly sets up a new project. It creates all the necessary directories, templates, and configuration files, so you can start defining your product in minutes.
@@ -82,6 +90,6 @@ The **`awos`** workflow is built on a clear document structure that creates a tr
 
 - 🔌 **Extensibility Hooks**: An advanced system for customization. Hooks and other configuration points allow you to modify and extend the framework to fit your team's specific workflow and needs (more decisions on this is coming soon).
 
---- 
+---
 
 [^1]: The Russian word «авось» (a-VOHS’) doesn’t have a direct equivalent in English — it’s a very culturally loaded concept. It’s a mix of hope, chance, and fatalism, often with a sense of “let’s do it and maybe it will work out.”

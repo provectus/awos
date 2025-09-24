@@ -2,6 +2,23 @@
 
 This framework outlines a structured approach to leveraging Large Language Models (LLMs) for high-quality code generation, moving beyond basic prompting to a spec-driven development methodology.
 
+## Quick Start
+1. Install AWOS in a newly created directory
+```
+$ npx @provectusinc/awos
+```
+This command will install everything you need to start working on your product.
+
+2. Run Claude Code 
+3. Use the commands in the following order:
+- `/awos:product`
+- `/awos:roadmap`
+- `/awos:architecture`
+- `/awos:spec`
+- `/awos:tech`
+- `/awos:tasks`
+- `/awos:implement`
+
 ## **Rationale: Why Spec-Driven Development is Key for LLM Code Generation**
 
 Generating high-quality code with LLMs necessitates a departure from simply immediately jumping straight into writing code, which can be a terrible idea if the solution hasn't been thoroughly conceptualized. LLMs, much like human developers, require complete and well-organized information about the problem, the desired solution, and environmental constraints . Without this structured context, LLMs can produce wrong code or behave like confused interns.

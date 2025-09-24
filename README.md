@@ -2,22 +2,64 @@
 
 This framework outlines a structured approach to leveraging Large Language Models (LLMs) for high-quality code generation, moving beyond basic prompting to a spec-driven development methodology.
 
-## Quick Start
-1. Install AWOS in a newly created directory
-```
-$ npx @provectusinc/awos
-```
-This command will install everything you need to start working on your product.
+## 🚀 Quick Start: Your First Project with `awos`
 
-2. Run Claude Code 
-3. Use the commands in the following order:
-- `/awos:product`
-- `/awos:roadmap`
-- `/awos:architecture`
-- `/awos:spec`
-- `/awos:tech`
-- `/awos:tasks`
-- `/awos:implement`
+Welcome to **`awos`**! This guide will walk you through building a new software product from idea to implementation using a series of simple commands.
+
+---
+
+### Step 1: Install `awos`
+
+First, open your terminal, create a new directory for your project, and run this single command. It will set up everything you need.
+
+```sh
+npx @provectusinc/awos
+```
+
+### Step 2: Follow the Workflow
+
+**`awos`** guides you through a logical, step-by-step process. You'll use a series of "agents" to define, plan, and build your product. Run the commands in the following order.
+
+1. `/awos:product`
+- **What it does**: Creates the high-level Product Definition.
+- **Think of it as**: Your project's main ID card. It answers the big questions: _What_ are we building, _why_, and for _who_?
+- Audience: Product Owner (Non-Technical)
+
+2. `/awos:roadmap`
+- **What it does**: Creates the Product Roadmap.
+- **Think of it as**: Your project's GPS. It lays out the features you will build and in what order.
+- Audience: Product Manager (Non-Technical)
+
+3. `/awos:architecture`
+- **What it does**: Defines the System Architecture.
+- **Think of it as**: Your project's building blueprint. It decides the technology stack, databases, infrastructure, etc.
+- Audience: Solution Architect (Technical)
+
+4. `/awos:spec`
+- **What it does**: Creates a detailed Functional Specification for a single feature from the roadmap.
+- **Think of it as**: A detailed plan for one room in your house. It describes exactly what the feature does for a user.
+- Audience: Product Analyst (Non-Technical)
+
+5. `/awos:tech`
+- **What it does**: Creates the Technical Specification.
+- **Think of it as**: The builder's instructions for that one room. It explains _how_ to build the feature.
+- Audience: Tech Lead (Technical)
+
+6. `/awos:tasks`
+- **What it does**: Breaks the technical spec into a Task List.
+- **Think of it as**: The step-by-step construction checklist for engineers to follow.
+- Audience: Tech Lead (Technical)
+
+7. `/awos:implement`
+- **What it does**: Executes tasks (finally, actual code generation).
+- **Think of it as**: The project foreman. This agent delegates the coding work to sub-agents and tracks progress.
+- Audience: Team Lead (Technical)
+
+### Step 3: You're Awesome
+
+That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product.
+
+---
 
 ## **Rationale: Why Spec-Driven Development is Key for LLM Code Generation**
 

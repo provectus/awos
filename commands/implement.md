@@ -1,5 +1,5 @@
 ---
-description: Executes tasks, delegates the coding work to sub-agents and tracks progress
+description: Runs tasks — delegates coding to sub-agents, tracks progress.
 ---
 
 # ROLE

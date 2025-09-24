@@ -1,5 +1,5 @@
 ---
-description: Breaks the technical spec into a Task List, step-by-step construction checklist for engineers to follow.
+description: Breaks the Tech Spec into a task list for engineers.
 ---
 
 # ROLE

@@ -1,5 +1,5 @@
 ---
-description: Creates a detailed Functional Specification for a single feature from the roadmap, describes exactly what the feature does for a user.
+description: Creates the Functional Spec — what the feature does for the user.
 ---
 
 # ROLE

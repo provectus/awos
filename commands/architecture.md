@@ -1,5 +1,5 @@
 ---
-description: Manages the System Architecture. It decides the technology stack, databases, infrastructure, etc.
+description: Defines the System Architecture — stack, DBs, infra.
 ---
 
 # ROLE

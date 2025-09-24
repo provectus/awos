@@ -1,5 +1,5 @@
 ---
-description: Creates the Technical Specification. It explains how to build the feature.
+description: Creates the Technical Spec — how the feature will be built.
 ---
 
 # ROLE

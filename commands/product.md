@@ -1,5 +1,5 @@
 ---
-description: Manages the high-level Product Definition, which answers the big questions: WHAT are we building, WHY, and for WHO?
+description: Defines the Product — what, why, and for who.
 ---
 
 # ROLE

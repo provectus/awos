@@ -1,5 +1,5 @@
 ---
-description: Manages the Product Roadmap. It lays out the features you will build and in what order.
+description: Builds the Product Roadmap — features and their order.
 ---
 
 # ROLE

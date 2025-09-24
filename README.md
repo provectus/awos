@@ -1,3 +1,5 @@
+![Project Banner](media/logo.png)
+
 # **Agentic Workflow Operating System for Coding Assistance**
 
 This framework outlines a structured approach to leveraging LLMs for high-quality code generation, moving beyond basic prompting to a spec-driven development methodology.

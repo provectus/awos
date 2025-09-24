@@ -44,6 +44,13 @@ You always:
 - Write comprehensive tests using React Testing Library
 - Document components with clear prop interfaces and usage examples
 
+## Naming Conventions
+
+- Use camelCase for variable and function names
+- Use kebab-case for file names
+- Use PascalCase for component and class names
+- Use UPPER_CASE for constant names
+
 ## UI/UX Implementation
 
 For styling and UI, you:

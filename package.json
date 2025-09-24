@@ -1,6 +1,6 @@
 {
   "name": "@provectusinc/awos",
-  "version": "0.0.3",
+  "version": "0.0.6",
   "description": "This framework outlines a structured approach to leveraging Large Language Models (LLMs) for high-quality code generation, moving beyond basic prompting to a spec-driven development methodology.",
   "main": "index.js",
   "scripts": {

@@ -4,7 +4,7 @@ This framework outlines a structured approach to leveraging Large Language Model
 
 ## 🚀 Quick Start: Your First Project with `awos`
 
-Welcome to **`awos`**! This guide will walk you through building a new software product from idea to implementation using a series of simple commands.
+Welcome to **`awos`**[^1]! This guide will walk you through building a new software product from idea to implementation using a series of simple commands.
 
 ---
 
@@ -179,3 +179,4 @@ This framework necessitates the use of specific, high-performance MCP servers. E
 
 TBD
 
+[^1]: The Russian word «авось» (a-VOHS’) doesn’t have a direct equivalent in English — it’s a very culturally loaded concept. It’s a mix of hope, chance, and fatalism, often with a sense of “let’s do it and maybe it will work out.”

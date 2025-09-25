@@ -59,6 +59,7 @@ jobs:
         run: |
           npm version ${{ github.event.inputs.VERSION }}
 
+          git tag -a v${{ github.event.inputs.VERSION }}
           git push --set-upstream origin release-v${{ github.event.inputs.VERSION }}
           git push --tags
 

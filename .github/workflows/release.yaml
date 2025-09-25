@@ -15,7 +15,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 # env:
 #   GH_BOT_EMAIL: ${{ secrets.GH_BOT_EMAIL }}

@@ -37,11 +37,6 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
-      - name: Get current version
-        id: version
-        run: |
-          current_version=$(cat package.json | jq -r '.version') >> "$GITHUB_OUTPUT"
-
       - name: Create and checkout new release branch
         run: |
           git checkout -b release-v${{ github.event.inputs.VERSION }}

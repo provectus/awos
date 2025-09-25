@@ -8,6 +8,15 @@ This framework outlines a structured approach to leveraging LLMs for high-qualit
 
 Welcome to **`awos`**[^1]! This guide will walk you through building a new software product from idea to implementation using a series of simple commands.
 
+### Before You Begin
+To get started with **`awos`**, you'll need a couple of things set up first:
+
+- **Node.js and npm**: You only need these to run the npx installer command and for future updates. The **`awos`** agents themselves do not require Node.js to operate once installed.
+
+- **Claude Code**: This framework is designed and tested primarily for the Claude Code environment. While we've built it with other agentic systems in mind (and welcome contributions!), all examples assume you are using Claude Code.
+
+**Important Note on Token Usage**: **`awos`** works by feeding large amounts of context from your project files to the AI. This can consume a significant number of tokens. Please plan your Claude subscription or AWS Bedrock usage accordingly to avoid unexpected costs/limits.
+
 ### Step 1: Install `awos`
 
 First, open your terminal, create a new directory for your project, and run this single command. It will set up everything you need.

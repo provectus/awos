@@ -1,0 +1,79 @@
+name: Release and Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      VERSION:
+        description: 'New version number (e.g., 1.2.3)'
+        required: true
+        type: string
+      NODE_VERSION:
+        description: 'NodeJS version to use'
+        required: false
+        type: string
+        default: '16'
+
+permissions:
+  contents: write
+  packages: write
+
+# env:
+#   GH_BOT_EMAIL: ${{ secrets.GH_BOT_EMAIL }}
+#   GH_BOT_NAME: ${{ secrets.GH_BOT_NAME }}
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      # - name: Generate token
+      #   uses: tibdex/github-app-token@v2.1.0
+      #   id: generate_token
+      #   with:
+      #     app_id: ${{ secrets.GH_APP_ID }}
+      #     private_key: ${{ secrets.GH_APP_PKEY }}
+
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Get current version
+        id: version
+        run: |
+          current_version=$(cat package.json | jq -r '.version' | cut -f1 -d"-") >> "$GITHUB_OUTPUT"
+
+      - name: Create and checkout new release branch
+        run: |
+          git checkout -b release-v${{ github.event.inputs.VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ github.event.inputs.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Update package version and Push changes
+        run: |
+          npm version ${{ github.event.inputs.VERSION }}
+
+          git push --set-upstream origin release-v${{ github.event.inputs.VERSION }}
+          git push --tags
+
+      - name: Publish to NPM
+        run: npm publish --access=public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ github.token }}
+          name: Release v${{ github.event.inputs.VERSION }}
+          tag_name: v${{ github.event.inputs.VERSION }}
+          generate_release_notes: true
+          make_latest: true

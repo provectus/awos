@@ -1,0 +1,12 @@
+# Ignore artifacts:
+node_modules
+
+package-lock.json
+
+.DS*Store
+.DS_Store?
+.*\*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

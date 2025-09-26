@@ -1,5 +1,6 @@
 # Ignore artifacts:
 node_modules
+media
 
 package-lock.json
 

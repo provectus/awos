@@ -46,13 +46,11 @@ Follow this process precisely.
 - You will now generate the task list. You must adhere to the following critical rule.
 
 - **CRITICAL RULE: Create Runnable Tasks using Vertical Slicing**
-
   - A **runnable task** means that after the work is done, the application can be started and used without errors, and a small piece of new functionality is visible or testable.
   - To achieve this, you must **avoid horizontal, layer-based tasks** (e.g., "Do all database work," then "Do all API work").
   - Instead, you must **create vertical slices**. A vertical slice is the smallest possible piece of end-to-end functionality.
 
 - **Your Thought Process for Generating Tasks:**
-
   1.  First, identify the absolute smallest piece of user-visible value from the spec. This is your **Slice 1**.
   2.  Create a high-level checklist item for that slice (e.g., `- [ ] **Slice 1: View existing avatar (or placeholder)**`).
   3.  Under that slice, create the nested sub-tasks (database, backend, frontend) needed to implement **only that slice**.

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-const fs = require("fs");
+const fs = require('fs');
 const fsp = fs.promises;
-const path = require("path");
+const path = require('path');
 
 const AWOS_ASCII = `
    ░███      ░██       ░██     ░██████       ░██████
@@ -13,69 +13,69 @@ const AWOS_ASCII = `
 ░██    ░██   ░████   ░████    ░██   ░██     ░██   ░██
 ░██    ░██   ░███     ░███     ░██████       ░██████
 `;
-const AWOS_SUBTITLE = "Agentic Workflow Operating System for Coding Assistance";
+const AWOS_SUBTITLE = 'Agentic Workflow Operating System for Coding Assistance';
 
 const CONFIG = {
   directories: [
     {
-      path: ".claude",
-      description: "Claude configuration directory"
+      path: '.claude',
+      description: 'Claude configuration directory',
     },
     {
-      path: ".awos",
-      description: "awos configuration directory"
+      path: '.awos',
+      description: 'awos configuration directory',
     },
     {
-      path: "context",
-      description: "A home for project documentation"
+      path: 'context',
+      description: 'A home for project documentation',
     },
     {
-      path: "context/product",
-      description: "Global product definitions"
+      path: 'context/product',
+      description: 'Global product definitions',
     },
     {
-      path: "context/spec",
-      description: "A home for specifications"
-    }
+      path: 'context/spec',
+      description: 'A home for specifications',
+    },
   ],
   copyOperations: [
     {
-      source: "commands",
-      destination: ".awos/commands",
-      patterns: ["*"],
-      description: "awos command prompts"
+      source: 'commands',
+      destination: '.awos/commands',
+      patterns: ['*'],
+      description: 'awos command prompts',
     },
     {
-      source: "templates",
-      destination: ".awos/templates",
-      patterns: ["*"],
-      description: "awos templates"
+      source: 'templates',
+      destination: '.awos/templates',
+      patterns: ['*'],
+      description: 'awos templates',
     },
     {
-      source: "scripts",
-      destination: ".awos/scripts",
-      patterns: ["*"],
-      description: "awos scripts"
+      source: 'scripts',
+      destination: '.awos/scripts',
+      patterns: ['*'],
+      description: 'awos scripts',
     },
     {
-      source: "subagents",
-      destination: ".awos/subagents",
-      patterns: ["*"],
-      description: "awos subagents"
+      source: 'subagents',
+      destination: '.awos/subagents',
+      patterns: ['*'],
+      description: 'awos subagents',
     },
     {
-      source: "claude/commands",
-      destination: ".claude/commands",
-      patterns: ["*"],
-      description: "Claude Code commands"
+      source: 'claude/commands',
+      destination: '.claude/commands',
+      patterns: ['*'],
+      description: 'Claude Code commands',
     },
     {
-      source: "claude/agents",
-      destination: ".claude/agents",
-      patterns: ["*"],
-      description: "Claude Code agents"
-    }
-  ]
+      source: 'claude/agents',
+      destination: '.claude/agents',
+      patterns: ['*'],
+      description: 'Claude Code agents',
+    },
+  ],
 };
 
 function log(message, type = 'info') {
@@ -109,7 +109,7 @@ function matchesPattern(filename, pattern) {
 }
 
 function matchesAnyPattern(filename, patterns) {
-  return patterns.some(pattern => matchesPattern(filename, pattern));
+  return patterns.some((pattern) => matchesPattern(filename, pattern));
 }
 
 async function copyFileWithPatterns(src, dest, patterns) {
@@ -175,7 +175,10 @@ async function copyDirWithPatterns(src, dest, patterns, description) {
     }
   }
 
-  log(`Completed copying ${description}: ${copiedCount} items copied`, 'success');
+  log(
+    `Completed copying ${description}: ${copiedCount} items copied`,
+    'success'
+  );
 }
 
 async function main() {

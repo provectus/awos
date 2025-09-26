@@ -49,12 +49,10 @@ Follow this process precisely.
 - You will now fill the template section by section. Your primary goal is to create a concrete plan, making reasonable assumptions and verifying them with the user.
 
 1.  **High-Level Approach:**
-
     - Based on all context, propose a high-level summary of the technical solution.
     - Example: "Based on the functional spec and our microservices architecture, I propose we add a new endpoint to the 'Users' service to handle the upload, which will then stream the file to Amazon S3 for storage. Does this general approach sound correct?"
 
 2.  **Detailed Implementation (Assume but Verify):**
-
     - Work through the sections of the template (System Changes, API, etc.).
     - **CRITICAL BEHAVIOR:** For each section, you must propose a specific implementation detail based on the architecture, state it as an assumption, and ask for approval.
     - Example: "For the database, the functional spec implies we need to store the image location. I'll **assume** we should add a new `avatar_url` (TEXT) column to the `users` table. **Is that assumption correct?**"

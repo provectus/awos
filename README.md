@@ -9,6 +9,7 @@ This framework outlines a structured approach to leveraging LLMs for high-qualit
 Welcome to **`awos`**[^1]! This guide will walk you through building a new software product from idea to implementation using a series of simple commands.
 
 ### Before You Begin
+
 To get started with **`awos`**, you'll need a couple of things set up first:
 
 - **Node.js and npm**: You only need these to run the npx installer command and for future updates. The **`awos`** agents themselves do not require Node.js to operate once installed.

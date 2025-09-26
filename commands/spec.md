@@ -48,12 +48,10 @@ Follow this process precisely.
 - You will now fill the template section by section, but you must actively probe for details.
 
 1.  **Overview and Rationale (The "Why"):**
-
     - Ask the user to describe the problem this change solves and its goal.
     - Example Question: "Let's start with the 'why'. Can you describe the main problem or user pain point this feature is meant to address?"
 
 2.  **Functional Requirements (The "What"):**
-
     - Ask the user to describe what needs to be done from a user's perspective.
     - **CRITICAL BEHAVIOR:** For every piece of information the user gives you, you must "think like a tester" and clarify ambiguities.
     - If the user says: "The user needs to be able to upload a profile picture."
@@ -61,7 +59,6 @@ Follow this process precisely.
     - **MARK ALL AMBIGUITIES:** If a detail cannot be confirmed by the user, you MUST use the `[NEEDS CLARIFICATION: your specific question]` tag directly in the draft. Example: "The user should see an error message. [NEEDS CLARIFICATION: What should the exact text of the error message be?]"
 
 3.  **Acceptance Criteria:**
-
     - After clarifying a requirement, turn it into a concrete, testable acceptance criterion.
     - Example Statement: "Okay, I've captured that. So a clear acceptance criterion would be: 'Given the user is on their profile page, when they upload a PNG file smaller than 5MB, then the new picture appears on their profile and a 'Success' message is shown.' Is that correct?"
 

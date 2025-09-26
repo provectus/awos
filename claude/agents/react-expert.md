@@ -4,4 +4,3 @@ description: Use this agent PROACTIVELY when you need expert React development a
 model: sonnet
 color: orange
 ---
-

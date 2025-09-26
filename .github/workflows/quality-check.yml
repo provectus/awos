@@ -18,5 +18,5 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Run prettier
+      - name: Run prettier check
         run: npx prettier . --check

@@ -162,3 +162,52 @@ The next command to run in your Claude Code chat is:
 ```
 /awos:architecture
 ```
+
+## Step 4: Defining the Architecture
+
+With your product defined and your roadmap in place, you know what to build and in what order. Now it's time for the first step in defining how you will build it.
+
+The Architecture Document is the high-level technical blueprint for your entire project. Think of it as deciding on the foundational rules and materials for a new house before you start building the rooms. Will it have a concrete or a wood foundation? Will the electrical system be 110V or 220V? These are the kinds of foundational decisions this document will capture for your software.
+
+### The Tool for the Job: `/awos:architecture`
+
+The `/awos:architecture` command starts a session with an AI assistant that acts as a Solution Architect. It will carefully read your product definition and roadmap to propose a technical foundation for your project. This includes the technology stack, databases, infrastructure choices, and more. The output is the architecture.md file in your `context/product/` directory.
+
+### Best Practices for a Great Architecture Document
+
+This document will be the primary technical guide for all future development by both humans and AI agents. It's crucial to keep it clear, accurate, and focused.
+
+1.  **Define the High-Level Technical Blueprint**
+    This document should only contain the foundational, cross-cutting technical decisions that affect the entire project or multiple features. Avoid low-level details that belong in a specific feature's technical specification.
+
+    - **Bad Example** 👎: "The user profile page will use a useState hook to manage its loading state." (This is a specific implementation detail, not a global architectural rule).
+
+    - **Good Example** 👍: "All backend services will be written in Python using the FastAPI framework." or "We will use PostgreSQL as our primary relational database."
+
+2.  **It Must Reflect the Current State Only**
+    This document is a living blueprint, not a historical log. Its job is to tell agents and developers how the system works right now. Do not clutter it with details about options you considered, why you rejected them, or decisions that are no longer relevant.
+
+    - **Bad Example** 👎: A long paragraph explaining that you considered building your own auth system, then tried a different provider, and finally settled on Auth0, with pros and cons for each. (This is an ADR, not a blueprint).
+
+    - **Good Example** 👍: A clean section that simply states: - Authentication Provider: Auth0.
+
+3.  Keep It Updated Religiously
+    Because all AI agents and developers will use this document as their source of truth, it must be **100% accurate at all times**. An outdated architecture document is worse than no document at all, as it will lead to incorrect implementations.
+
+    - **Bad Example** 👎: A developer starts using a new library in a feature, but the architecture.md file is never updated. Future agents have no idea this library is now part of the official stack.
+
+    - **Good Example** 👍: The team decides to add a Redis cache. The _first_ step they take is updating the architecture.md file to include Redis under the "Data Storage" section.
+
+### Your Role: The Final Authority
+
+The AI assistant will propose a sound architecture based on your product goals, but your team has the final say. You must carefully review, align on, and approve every decision in this document. This blueprint will be the foundation for all future technical work, so it's critical that the entire engineering team agrees with the approach.
+
+### Your Next Step
+
+With the foundational blueprint of your project defined, you are now ready to zoom in and start planning your first feature. Take the first item from Phase 1 of your roadmap and prepare to describe it in detail.
+
+The next command to run in your Claude Code chat is:
+
+```
+/awos:spec
+```

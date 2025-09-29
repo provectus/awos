@@ -200,7 +200,7 @@ This document will be the primary technical guide for all future development by 
 
 ### Your Role: The Final Authority
 
-The AI assistant will propose a sound architecture based on your product goals, but your team has the final say. You must carefully review, align on, and approve every decision in this document. This blueprint will be the foundation for all future technical work, so it's critical that the entire engineering team agrees with the approach.
+The AI assistant will propose a sound architecture based on your product goals, but your team has the final say. You **must carefully review, align on, and approve** every decision in this document. This blueprint will be the foundation for all future technical work, so it's critical that the entire engineering team agrees with the approach.
 
 ### Your Next Step
 

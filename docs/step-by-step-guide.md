@@ -253,7 +253,7 @@ The AI agent is your assistant, but you are the author and the person responsibl
 
 ### Your Next Step
 
-Once your functional-spec.md is complete, detailed, and approved by all stakeholders, the "what" and "why" of your feature are officially defined. Now, it's time for the engineering team to plan the "how."
+Once your `functional-spec.md` is complete, detailed, and approved by all stakeholders, the "what" and "why" of your feature are officially defined. Now, it's time for the engineering team to plan the "how."
 
 The next command to run in your Claude Code chat is:
 

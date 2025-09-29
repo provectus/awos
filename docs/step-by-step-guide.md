@@ -275,9 +275,7 @@ The goal of this document is to create a clear set of instructions for the codin
 1. **Connect Everything to the Functional Spec**
 
 Every technical decision in this document must exist for one reason only: to fulfill a requirement from the `functional-spec.md`. Avoid adding unrelated technical improvements or "gold plating." If you discover a new requirement, it's better to update the functional spec first.
-
     - **Bad Example** 👎: "While we're working on image resizing, we should also take the opportunity to refactor the unrelated logging system." (This is scope creep and should be a separate feature).
-
     - **Good Example** 👍: "To satisfy the 'image resizing' requirement from the functional spec, we will create a new background job."
 
 2. **Break Down Requirements into "Commonly Known Terms"**
@@ -285,11 +283,8 @@ Every technical decision in this document must exist for one reason only: to ful
 This is the most important rule for creating a technical spec for an LLM. LLMs are extremely good at implementing well-known technical concepts but are bad at guessing the meaning of abstract business terms. Your job is to be the translator.
 
 You must break down high-level requirements like a "business process" into a list of concrete technical building blocks that the LLM already knows.
-
     - **Bad Example** 👎: A section titled "Implement the Profile Picture Business Process." (This is too vague for an AI to act on).
-
     - **Good Example** 👍: Breaking that same process down into technical primitives the AI understands:
-
         - API Endpoint: `Create a POST /api/v1/users/me/avatar endpoint.`
         - Database Change: `Add an avatar_url column to the users table.`
         - UI Component: `Develop a new React component named ProfileAvatar.`

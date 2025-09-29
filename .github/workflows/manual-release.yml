@@ -41,23 +41,20 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Publish to npm (dry run)
-        run: npm publish --dry-run
+      - name: Publish to npm
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
 
-      - name: Create git tag (dry run)
+      - name: Create git tag
         run: |
-          echo "Would create git tag: ${{ steps.get_version.outputs.new_tag }}"
-          echo "Would push tag to origin"
-        # git tag ${{ steps.get_version.outputs.new_tag }}
-        # git push origin ${{ steps.get_version.outputs.new_tag }}
+          git tag ${{ steps.get_version.outputs.new_tag }}
+          git push origin ${{ steps.get_version.outputs.new_tag }}
 
-      - name: Create Release (dry run)
-        run: |
-          echo "Would create GitHub release with tag: ${{ steps.get_version.outputs.new_tag }}"
-        # uses: softprops/action-gh-release@v1
-        # with:
-        #   tag_name: ${{ steps.get_version.outputs.new_tag }}
-        # env:
-        #   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.new_tag }}
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

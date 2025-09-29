@@ -225,20 +225,17 @@ This document is the primary source of truth for the feature. The quality of the
 
 1.  **Describe the Result, Not the Implementation**
     This is a non-technical document. You must describe the desired result and the user experience, not the technical details of how it will be built.
-
     - **Bad Example** 👎: "We will use the Sharp.js library in a new AWS Lambda function to handle image resizing." (This describes the _implementation_, which belongs in the next step).
     - **Good Example** 👍: "When a user uploads a profile picture, it should be automatically resized to a 200x200 pixel square and converted to WebP format to ensure fast load times." (This describes a _behavior_ and a _result_).
 
 2.  **Be Extremely Detailed About _How It Should Work_**
     While you avoid technical details, you must be exhaustive about the functional details. Describe every user journey, every possible outcome, and every piece of text the user will see. The goal is to leave zero room for guessing.
-
     - **Bad Example** 👎: A vague requirement like "The user can upload a picture." (This is useless and will lead to bad assumptions by the AI).
 
     - **Good Example** 👍: A detailed user story: "As a user, I want to upload a profile picture... Acceptance Criteria: 1. The upload button only accepts JPG and PNG file types. 2. A loading spinner is shown while the file is uploading. 3. If the file is larger than 5MB, a specific error message 'File size cannot exceed 5MB' is displayed to the user."
 
 3.  **The Exception: Technical Specifications**
     Sometimes, the feature itself is technical, like a refactoring. In this case, the spec can be more technical, but it must still focus on the what and why, not the specific lines of code.
-
     - **Bad Example** 👎: A spec that includes the exact SQL statement like CREATE INDEX idx_products_on_name ON products USING GIN (name gin_trgm_ops); or provides a detailed code diff. These are implementation details for the technical spec, not the "what" and "why" of the functional spec.
 
     - **Good Example** 👍: What: "Refactor the product search query to use the new database index." Why: "To reduce the average API response time for search from 800ms to under 100ms."
@@ -259,4 +256,57 @@ The next command to run in your Claude Code chat is:
 
 ```
 /awos:tech
+```
+
+## Step 6: Planning the Technical Implementation
+
+You now have a functional specification that has been approved by all stakeholders. Everyone agrees on **what** to build and **why**. The next step is to create a detailed engineering plan for **how** to build it. This is the **Technical Considerations** document.
+
+This document is a complete plan for the implementation of the feature. It describes all the necessary changes, from the database and APIs to the user interface components.
+
+### The Tool for the Job: `/awos:tech`
+
+The `/awos:tech` command starts a session with an AI assistant that acts as a Technical Architect. The agent will carefully read the approved `functional-spec.md` and the global `architecture.md` document. Based on this context, it will propose a detailed technical plan and save it in the `technical-considerations.md` file within your feature's spec directory.
+
+### Best Practices for a Great Technical Specification
+
+The goal of this document is to create a clear set of instructions for the coding agents. The key is to translate the business requirements from the functional spec into concrete technical terms.
+
+1. **Connect Everything to the Functional Spec**
+
+Every technical decision in this document must exist for one reason only: to fulfill a requirement from the `functional-spec.md`. Avoid adding unrelated technical improvements or "gold plating." If you discover a new requirement, it's better to update the functional spec first.
+
+    - **Bad Example** 👎: "While we're working on image resizing, we should also take the opportunity to refactor the unrelated logging system." (This is scope creep and should be a separate feature).
+
+    - **Good Example** 👍: "To satisfy the 'image resizing' requirement from the functional spec, we will create a new background job."
+
+2. **Break Down Requirements into "Commonly Known Terms"**
+
+This is the most important rule for creating a technical spec for an LLM. LLMs are extremely good at implementing well-known technical concepts but are bad at guessing the meaning of abstract business terms. Your job is to be the translator.
+
+You must break down high-level requirements like a "business process" into a list of concrete technical building blocks that the LLM already knows.
+
+    - **Bad Example** 👎: A section titled "Implement the Profile Picture Business Process." (This is too vague for an AI to act on).
+
+    - **Good Example** 👍: Breaking that same process down into technical primitives the AI understands:
+
+        - API Endpoint: `Create a POST /api/v1/users/me/avatar endpoint.`
+        - Database Change: `Add an avatar_url column to the users table.`
+        - UI Component: `Develop a new React component named ProfileAvatar.`
+        - Background Job: `Implement a job to handle asynchronous image resizing.`
+
+### Your Role: The Engineering Review
+
+The AI assistant will propose a solid technical plan based on the existing architecture and the feature requirements. However, the human engineering team is the final authority.
+
+You must **carefully review this document with your engineering team** before moving forward. This is your last chance to check for technical feasibility, identify potential risks, and ensure the plan aligns with your team's best practices before any code is written.
+
+### Your Next Step
+
+With an approved technical plan in hand, you have a complete blueprint for the feature. The final step before the AI starts coding is to break this plan down into a checklist of small, runnable tasks.
+
+The next command to run in your Claude Code chat is:
+
+```
+/awos:tasks
 ```

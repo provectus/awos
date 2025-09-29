@@ -34,27 +34,27 @@ The installer creates three important directories. Understanding their purpose i
 
 1. **The `.awos` Folder (The Engine Room)**
 
-- **Purpose**: This folder contains the core prompts, templates, and scripts that make the **`awos`** agents work. It is the "engine" of the framework.
+    - **Purpose**: This folder contains the core prompts, templates, and scripts that make the **`awos`** agents work. It is the "engine" of the framework.
 
-- **Who owns it**: The **`awos`** team. This folder will be updated when you update the framework to bring you new features and improved agents.
+    - **Who owns it**: The **`awos`** team. This folder will be updated when you update the framework to bring you new features and improved agents.
 
-- **Should you edit it?** It is highly recommended that you **do not** modify the files in this directory, as your changes will be overwritten during the next update.
+    - **Should you edit it?** It is highly recommended that you **do not** modify the files in this directory, as your changes will be overwritten during the next update.
 
 2. **The `.claude` Folder (The Control Panel)**
 
-- **Purpose**: This is a Claude Code-specific directory. **`awos`** places files here that tell Claude Code how to use the agents and commands from the `.awos` folder.
+    - **Purpose**: This is a Claude Code-specific directory. **`awos`** places files here that tell Claude Code how to use the agents and commands from the `.awos` folder.
 
-- **Who owns it**: You (the project team).
+    - **Who owns it**: You (the project team).
 
-- **Should you edit it?** Yes! This is where you can customize the framework. You can add your own commands or create custom agents that are specific to your project, extending the core **`awos`** functionality.
+    - **Should you edit it?** Yes! This is where you can customize the framework. You can add your own commands or create custom agents that are specific to your project, extending the core **`awos`** functionality.
 
 3. **The `context` Folder (The Project's Brain)**
 
-- **Purpose**: This is the most important directory for your team. It contains all the documents that define your product: the product definition, roadmap, architecture, specifications, and task lists. This is the persistent "memory" of your project.
+    - **Purpose**: This is the most important directory for your team. It contains all the documents that define your product: the product definition, roadmap, architecture, specifications, and task lists. This is the persistent "memory" of your project.
 
-- **Who owns it**: You (the project team).
+    - **Who owns it**: You (the project team).
 
-- **Should you edit it?** Yes. This is where you and the **`awos`** agents will work every day. All documents created by the agents are saved here, and you are expected to review, edit, and contribute to them directly.
+    - **Should you edit it?** Yes. This is where you and the **`awos`** agents will work every day. All documents created by the agents are saved here, and you are expected to review, edit, and contribute to them directly.
 
 ### Your Next Step
 
@@ -83,30 +83,30 @@ To create a high-quality product definition, you and the agent must follow these
 1. **Focus on "What" and "Why," Not "How"**
    This document must be completely free of technical details. It's about the business and user goals, not the implementation.
 
-- **Bad Example** 👎: "We will build a mobile app using React Native that connects to a PostgreSQL database on AWS to store a user's daily water intake."
+    - **Bad Example** 👎: "We will build a mobile app using React Native that connects to a PostgreSQL database on AWS to store a user's daily water intake."
 
-- **Good Example** 👍: "We want to help users track their daily water intake to improve their health habits. The product will be a simple mobile app where users can log their water consumption."
+    - **Good Example** 👍: "We want to help users track their daily water intake to improve their health habits. The product will be a simple mobile app where users can log their water consumption."
 
 2. **Be Clear and Explicit**
    The better you define the product now, the better the results will be in all future steps. Ambiguity is your enemy.
 
-- **Bad Example** 👎: "The app should be for everyone and have social features."
+    - **Bad Example** 👎: "The app should be for everyone and have social features."
 
-- **Good Example** 👍: "The target audience is health-conscious adults aged 25-40. The primary social feature will be the ability to share daily progress with a select group of friends."
+    - **Good Example** 👍: "The target audience is health-conscious adults aged 25-40. The primary social feature will be the ability to share daily progress with a select group of friends."
 
 3. **Define Clear Boundaries**
    Knowing what you are not building is just as important as knowing what you are. The AI agent will help you create an "In-Scope" and "Out-of-Scope" list.
 
-- **Bad Example** 👎: "The app will track water, and we might add other drinks later."
+    - **Bad Example** 👎: "The app will track water, and we might add other drinks later."
 
-- **Good Example** 👍: "In-Scope: Tracking plain water intake in milliliters or ounces. Out-of-Scope: Tracking other types of drinks (like coffee, juice, or soda) and nutritional information."
+    - **Good Example** 👍: "In-Scope: Tracking plain water intake in milliliters or ounces. Out-of-Scope: Tracking other types of drinks (like coffee, juice, or soda) and nutritional information."
 
 4. **Keep it High-Level (Don't Dive into Details)**
    This is the 10,000-foot view of your product. We are defining the forest, not the individual trees. We will define every little detail for each feature later in the specification step.
 
-- **Bad Example** 👎: "The main screen will have a big blue button with a water drop icon. Clicking it opens a modal with a slider from 0 to 500ml, and another button that says 'Log Water'."
+    - **Bad Example** 👎: "The main screen will have a big blue button with a water drop icon. Clicking it opens a modal with a slider from 0 to 500ml, and another button that says 'Log Water'."
 
-- **Good Example** 👍: "The core functionality will be a simple interface for users to quickly log their water consumption throughout the day."
+    - **Good Example** 👍: "The core functionality will be a simple interface for users to quickly log their water consumption throughout the day."
 
 ### Your Role: Review, Align, and Revisit
 
@@ -127,3 +127,4 @@ The next command to run in your Claude Code chat is:
 ```
 /awos:roadmap
 ```
+

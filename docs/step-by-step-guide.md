@@ -179,21 +179,18 @@ This document will be the primary technical guide for all future development by 
 
 1.  **Define the High-Level Technical Blueprint**
     This document should only contain the foundational, cross-cutting technical decisions that affect the entire project or multiple features. Avoid low-level details that belong in a specific feature's technical specification.
-
     - **Bad Example** 👎: "The user profile page will use a useState hook to manage its loading state." (This is a specific implementation detail, not a global architectural rule).
 
     - **Good Example** 👍: "All backend services will be written in Python using the FastAPI framework." or "We will use PostgreSQL as our primary relational database."
 
 2.  **It Must Reflect the Current State Only**
     This document is a living blueprint, not a historical log. Its job is to tell agents and developers how the system works right now. Do not clutter it with details about options you considered, why you rejected them, or decisions that are no longer relevant.
-
     - **Bad Example** 👎: A long paragraph explaining that you considered building your own auth system, then tried a different provider, and finally settled on Auth0, with pros and cons for each. (This is an ADR, not a blueprint).
 
     - **Good Example** 👍: A clean section that simply states: - Authentication Provider: Auth0.
 
 3.  Keep It Updated Religiously
     Because all AI agents and developers will use this document as their source of truth, it must be **100% accurate at all times**. An outdated architecture document is worse than no document at all, as it will lead to incorrect implementations.
-
     - **Bad Example** 👎: A developer starts using a new library in a feature, but the architecture.md file is never updated. Future agents have no idea this library is now part of the official stack.
 
     - **Good Example** 👍: The team decides to add a Redis cache. The _first_ step they take is updating the architecture.md file to include Redis under the "Data Storage" section.
@@ -210,4 +207,56 @@ The next command to run in your Claude Code chat is:
 
 ```
 /awos:spec
+```
+
+## Step 5: Writing a Specification
+
+You have a product vision and a roadmap of features. It's now time to take the first item from your roadmap and describe it in perfect detail. This is done in a **Specification**.
+
+A specification is a document that describes the **what** and **why** for any **significant change**. A significant change is anything that alters the behavior of your system, such as a new feature or a major refactoring. Small changes, like fixing a minor bug or changing a button's color, typically do not need a full specification and can be handled by prompting an agent directly.
+
+### The Tool for the Job: `/awos:spec`
+
+The `/awos:spec` command starts a session with an AI assistant that acts as a Product Analyst. It will ask you to choose a feature from your roadmap. It will then guide you through a series of questions to create a detailed `functional-spec.md` file within a new, dedicated directory for that feature (e.g., `context/spec/001-user-login/`).
+
+### Best Practices for a Great Specification
+
+This document is the primary source of truth for the feature. The quality of the final coded feature is directly proportional to the quality of this specification.
+
+1.  **Describe the Result, Not the Implementation**
+    This is a non-technical document. You must describe the desired result and the user experience, not the technical details of how it will be built.
+
+    - **Bad Example** 👎: "We will use the Sharp.js library in a new AWS Lambda function to handle image resizing." (This describes the _implementation_, which belongs in the next step).
+    - **Good Example** 👍: "When a user uploads a profile picture, it should be automatically resized to a 200x200 pixel square and converted to WebP format to ensure fast load times." (This describes a _behavior_ and a _result_).
+
+2.  **Be Extremely Detailed About _How It Should Work_**
+    While you avoid technical details, you must be exhaustive about the functional details. Describe every user journey, every possible outcome, and every piece of text the user will see. The goal is to leave zero room for guessing.
+
+    - **Bad Example** 👎: A vague requirement like "The user can upload a picture." (This is useless and will lead to bad assumptions by the AI).
+
+    - **Good Example** 👍: A detailed user story: "As a user, I want to upload a profile picture... Acceptance Criteria: 1. The upload button only accepts JPG and PNG file types. 2. A loading spinner is shown while the file is uploading. 3. If the file is larger than 5MB, a specific error message 'File size cannot exceed 5MB' is displayed to the user."
+
+3.  **The Exception: Technical Specifications**
+    Sometimes, the feature itself is technical, like a refactoring. In this case, the spec can be more technical, but it must still focus on the what and why, not the specific lines of code.
+
+    - **Bad Example** 👎: A spec that includes the exact SQL statement like CREATE INDEX idx_products_on_name ON products USING GIN (name gin_trgm_ops); or provides a detailed code diff. These are implementation details for the technical spec, not the "what" and "why" of the functional spec.
+
+    - **Good Example** 👍: What: "Refactor the product search query to use the new database index." Why: "To reduce the average API response time for search from 800ms to under 100ms."
+
+### Your Role: The Source of Truth and Alignment
+
+The AI agent is your assistant, but you are the author and the person responsible for the quality of the spec.
+
+- **Check Everything**: The model will make assumptions about anything that is not explicitly written down. You must assume it will make the wrong assumption every time. Carefully check the content produced by the assistant and add the necessary clarifications and details yourself.
+
+- **Align with Your Team**: This document is the perfect tool to align with your entire team, including stakeholders, product managers, and designers. Before moving on, everyone should read this document and agree: "Yes, this is what we should build." This alignment is critical and will save you from costly mistakes.
+
+### Your Next Step
+
+Once your functional-spec.md is complete, detailed, and approved by all stakeholders, the "what" and "why" of your feature are officially defined. Now, it's time for the engineering team to plan the "how."
+
+The next command to run in your Claude Code chat is:
+
+```
+/awos:tech
 ```

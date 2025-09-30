@@ -100,6 +100,84 @@ The **`awos`** workflow is built on a clear document structure that creates a tr
 
 - 🔌 **Extensibility Hooks**: An advanced system for customization. Hooks and other configuration points allow you to modify and extend the framework to fit your team's specific workflow and needs (more decisions on this is coming soon).
 
+## Customizing `awos`
+
+The **`awos`** framework is designed to be both powerful out-of-the-box and highly customizable. Understanding how to safely customize the framework is key to making it work perfectly for your team.
+
+### The `.awos` Folder: Framework Core (Do Not Edit)
+
+All framework service data lives in the `.awos/` directory:
+
+- `.awos/commands` - Full command prompt instructions
+- `.awos/templates` - Document templates
+- `.awos/scripts` - Utility scripts
+- `.awos/subagents` - Detailed subagent prompts
+
+**⚠️ Important:** Do NOT manually edit files in the `.awos/` folder. These files are always overwritten during updates to ensure you get the latest framework improvements. Any customizations here will be lost.
+
+### The `.claude` Folder: Your Customization Layer
+
+This is where you customize **`awos`** to fit your needs:
+
+- **`.claude/commands/awos/{command}.md`** - Lightweight wrapper files that link to `.awos/commands/{command}.md`
+- **`.claude/agents/{agent}.md`** - Agent configuration files that reference `.awos/subagents/{agent}.md`
+
+These files are protected by default and won't be touched during normal updates.
+
+### How to Customize
+
+**Example: Customize a Command**
+
+Open `.claude/commands/awos/implement.md` and add your instructions:
+
+```diff
+---
+description: Runs tasks — delegates coding to sub-agents, tracks progress.
+---
+
+Refer to the instructions located in this file: .awos/commands/implement.md
+
++ - Always run tests after implementing each task
++ - Follow the code style guide in docs/style-guide.md
+```
+
+## Updating `awos`
+
+### Normal Update
+
+To update **`awos`** to the latest version, run the installer again:
+
+```sh
+npx @provectusinc/awos
+```
+
+**What gets updated:**
+
+- ✅ Commands in `.awos/commands`
+- ✅ Templates in `.awos/templates`
+- ✅ Scripts in `.awos/scripts`
+- ✅ Subagents in `.awos/subagents`
+
+### Force Update
+
+To update **`awos`** to the latest version, run the installer again with the `--force-overwrite` flag:
+
+```sh
+npx @provectusinc/awos --force-overwrite
+```
+
+**Important:** The `--force-overwrite` flag will overwrite existing files in `.claude/commands/awos` and `.claude/agents`.
+If you've customized these files, make sure to back them up first, as your changes will be lost.
+
+**What gets updated:**
+
+- ✅ Commands in `.awos/commands`
+- ✅ Templates in `.awos/templates`
+- ✅ Scripts in `.awos/scripts`
+- ✅ Subagents in `.awos/subagents`
+- ⚠️ Commands in `.claude/commands/awos`
+- ⚠️ Agents in `.claude/agents`
+
 ---
 
 [^1]: The Russian word «авось» (a-VOHS’) doesn’t have a direct equivalent in English — it’s a very culturally loaded concept. It’s a mix of hope, chance, and fatalism, often with a sense of “let’s do it and maybe it will work out.”

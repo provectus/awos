@@ -38,18 +38,27 @@ Follow this process precisely.
     - Announce this as your topic: "Since no topic was provided, I'll start with the next incomplete item from the roadmap: **'[Name of Roadmap Item]'**."
     - If all roadmap items are complete, stop and inform the user.
 
-### Step 2: Gather Context
+### Step 2: Gather Context and Extract Known Information
 
-- Read the `context/product/product-definition.md` and `context/product/roadmap.md` files to understand the project's overall goals, target audience, and priorities. You will use this context to ask smarter questions.
+- Read the `context/product/product-definition.md` and `context/product/roadmap.md` files to understand the project's overall goals, target audience, and priorities.
+- **CRITICAL:** Extract all information already documented about the roadmap item you're working on. This includes:
+  - The purpose and rationale (why it exists)
+  - Expected user capabilities (what users will be able to do)
+  - Any mentioned constraints or boundaries
+  - Related features or dependencies
+- Identify what is **already clear** from these documents versus what **needs clarification**. You will use this extracted context to avoid asking questions whose answers are already documented.
 
 ### Step 3: Interactive Drafting and Clarification
 
-- Inform the user: "I will now ask you a series of questions to build the functional specification. My goal is to ensure every detail is crystal clear."
-- You will now fill the template section by section, but you must actively probe for details.
+- **CRITICAL FIRST STEP:** Before asking any questions, present a summary to the user: "Based on the roadmap and product definition, here's what I understand: [summarize known purpose, user capabilities, and context]. Let me clarify the remaining details."
+- **IMPORTANT:** Only ask questions whose answers are NOT already documented in the roadmap or product definition.
+- **FOCUS:** Your questions should emphasize the 'why' - the problem or user pain point this feature is meant to address, and the specific user value it delivers.
+- You will now fill the template section by section, but you must actively probe for details that are not yet documented.
 
 1.  **Overview and Rationale (The "Why"):**
-    - Ask the user to describe the problem this change solves and its goal.
-    - Example Question: "Let's start with the 'why'. Can you describe the main problem or user pain point this feature is meant to address?"
+    - Use the information extracted from the roadmap item description and product definition as the foundation.
+    - If the rationale is already clear from those documents, state it and focus your questions on deepening understanding of the user pain point.
+    - Example: "The roadmap states this enables [X capability]. Let me understand the user pain: What specific problem does the user face today without this? How does this change their workflow?"
 
 2.  **Functional Requirements (The "What"):**
     - Ask the user to describe what needs to be done from a user's perspective.

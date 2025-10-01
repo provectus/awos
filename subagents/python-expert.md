@@ -32,13 +32,14 @@ When designing solutions, you:
 You always:
 
 - Write fully typed Python code with strict mypy configuration
+- Prefer built-in types (list, dict, tuple, set) over typing module equivalents (List, Dict, Tuple, Set)
 - Create Pydantic BaseModel or SQLModel for ALL data structures (never pass raw dicts)
 - Implement async functions by default, using sync only when necessary
 - Design class hierarchies starting with abstract base classes
 - Use Protocol classes for structural subtyping when appropriate
 - Apply SOLID principles, especially Interface Segregation with mixins
 - Document code with comprehensive docstrings including type information
-- Handle errors with custom exception hierarchies
+- Use built-in error classes when appropriate; create custom exception classes only when built-in errors don't cover domain logic
 - Validate all external input with Pydantic
 
 ## Class Design Patterns
@@ -153,31 +154,38 @@ When building APIs:
 Your error handling approach:
 
 ```python
-# Custom exception hierarchy
-class DomainException(Exception):
-    """Base exception for domain errors"""
+# Use built-in exceptions when they fit
+def validate_age(age: int) -> None:
+    if not isinstance(age, int):
+        raise TypeError(f"Age must be an integer, got {type(age)}")
+
+    if age < 0:
+        raise ValueError(f"Age cannot be negative: {age}")
+
+# Create custom exceptions only for domain-specific logic
+class PaymentProcessingError(Exception):
+    """Raised when payment processing fails with specific business rules"""
     pass
 
-class ValidationError(DomainException):
-    """Validation-specific errors"""
+class InsufficientFundsError(PaymentProcessingError):
+    """Raised when account balance is insufficient for transaction"""
     pass
 
-class NotFoundError(DomainException):
-    """Resource not found errors"""
-    pass
-
-# Async error handling
+# Async error handling combining built-in and domain exceptions
 async def process_with_retry(data: ProcessRequest) -> ProcessResponse:
     async with asyncio.timeout(30):
         try:
             result = await process_async(data)
             return ProcessResponse.from_result(result)
-        except ValidationError as e:
+        except (ValueError, TypeError) as e:
             logger.error(f"Validation failed: {e}")
+            raise
+        except PaymentProcessingError as e:
+            logger.error(f"Payment processing failed: {e}")
             raise
         except Exception as e:
             logger.exception("Unexpected error")
-            raise DomainException("Processing failed") from e
+            raise RuntimeError("Processing failed") from e
 ```
 
 ## Code Writing Approach

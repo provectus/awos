@@ -1,15 +1,86 @@
 # Contributing to AWOS
 
-## Submitting a pull request
+Thank you for your interest in contributing to AWOS! This guide will help you get started with local development and testing.
 
-1. Fork and clone the repository
-1. Create a new branch: `git checkout -b my-branch-name`
-1. Make your change, test, and make sure everything still works
-1. Format the repository with `npx prettier --write .`
-1. Push to your fork and submit a pull request
-1. Wait for your pull request to be reviewed and merged.
+## Prerequisites
 
-Here are a few things you can do that will increase the likelihood of your pull request being accepted:
+- **Node.js**: Version 22 or higher
+- **npm**: Comes with Node.js
+- **git**: For version control
 
-- Keep your change as focused as possible. If there are multiple changes you would like to make that are not dependent upon each other, consider submitting them as separate pull requests.
-- Test your changes with the Spec-Driven Development workflow to ensure compatibility.
+## Local Development Setup
+
+### 1. Fork and Clone
+
+```bash
+# Fork the repository on GitHub, then:
+git clone https://github.com/YOUR_USERNAME/awos.git
+cd awos
+```
+
+### 2. Understand the Project Structure
+
+```
+awos/
+├── docs/                # AWOS documentation
+├── scripts/             # AWOS scripts
+├── commands/            # AWOS command prompts
+├── templates/           # Document templates
+├── subagents/           # Subagent definitions
+├── claude/              # Claude Code integration files
+├── index.js              # Root entry point (delegates to src/)
+└── src/                  # AWOS installer source code
+```
+
+## Testing Changes Locally
+
+### We recommend testing in a Pet Project
+
+The best way to test your changes is in a separate test project:
+
+```bash
+# 1. Create or navigate to your test project
+cd ~/my-test-project
+
+# 2. Run the installer from your local AWOS clone
+npx /absolute/path/to/your/awos-clone/index.js
+
+# Example:
+npx ~/repos/provectus/awos/index.js
+```
+
+**Testing Updates (Force Overwrite):**
+
+```bash
+# Test the --force-overwrite flag
+npx ~/repos/provectus/awos/index.js --force-overwrite
+```
+
+### What to Test
+
+#### If you make changes to the command prompts or subagents:
+
+- ✅ Commands and subagents are copied to the right locations
+- ✅ Commands and subagents are working as expected
+
+#### If you make changes to the installer code:
+
+- ✅ All directories are created correctly
+- ✅ Files are copied to the right locations
+- ✅ `--force-overwrite` flag works as expected
+- ✅ Existing files are preserved when flag is not used
+- ✅ Error messages are clear and helpful
+- ✅ Console output looks good (colors, formatting)
+
+## Submitting a Pull Request
+
+### Before Submitting
+
+1. ✅ Test your changes in a test project
+2. ✅ Run `npx prettier --write .` to format code
+3. ✅ Ensure all files are committed
+4. ✅ Write a clear PR description
+
+---
+
+Thank you for contributing to AWOS! 🚀

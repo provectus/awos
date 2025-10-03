@@ -94,6 +94,7 @@ PR labels determine version increment:
 - `major` label: Increments major version
 - `minor` label: Increments minor version
 - `patch` label: Increments patch version
+- if no label is present: Increments patch version
 
 ### Manual Release Publishing
 

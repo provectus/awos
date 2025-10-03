@@ -81,6 +81,32 @@ npx ~/repos/provectus/awos/index.js --force-overwrite
 3. ✅ Ensure all files are committed
 4. ✅ Write a clear PR description
 
+## Release Process
+
+### Automated Release Drafting
+
+We use [release-drafter](https://github.com/release-drafter/release-drafter) to automatically compile pull requests into release notes.
+
+### Version Increment Guidelines
+
+PR labels determine version increment:
+
+- `major` label: Increments major version
+- `minor` label: Increments minor version
+- `patch` label: Increments patch version
+- if no label is present: Increments patch version
+
+### Manual Release Publishing
+
+To publish a release:
+
+1. Navigate to GitHub Releases page
+2. Edit the draft release
+3. Optional: Update changelog
+4. Click "Publish release"
+
+**Important**: The npm package is published only after manually publishing the release.
+
 ---
 
 Thank you for contributing to AWOS! 🚀

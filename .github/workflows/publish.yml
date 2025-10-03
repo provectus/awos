@@ -15,17 +15,17 @@ jobs:
         
       - uses: actions/setup-node@v5
         with:
-          node-version: 16
+          node-version: 22
           registry-url: 'https://registry.npmjs.org'
 
       - name: Get version from release tag
         id: get_version
         run: |
           release_tag="${{ github.event.release.tag_name }}"
-          version_without_v=$(echo $release_tag | sed 's/^v//')
+          version=$(echo $release_tag | sed 's/^v//')
           echo "Release tag: $release_tag"
-          echo "Version: $version_without_v"
-          echo "Version=$version_without_v" >> $GITHUB_OUTPUT
+          echo "Version: $version"
+          echo "Version=$version" >> $GITHUB_OUTPUT
 
       - name: Update package.json version for publishing
         run: npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version

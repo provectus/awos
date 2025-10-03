@@ -90,8 +90,9 @@ We use [release-drafter](https://github.com/release-drafter/release-drafter) to 
 ### Version Increment Guidelines
 
 PR labels determine version increment:
+
 - `major` label: Increments major version
-- `minor` label: Increments minor version  
+- `minor` label: Increments minor version
 - `patch` label: Increments patch version
 
 ### Manual Release Publishing

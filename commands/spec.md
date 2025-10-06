@@ -31,34 +31,37 @@ Follow this process precisely.
 
 ### Step 1: Determine the Specification Topic
 
+Your first goal is to determine the **topic** - the single, specific feature or capability that this specification will define. To determine the topic, follow these steps:
+
 1.  **Check User Prompt:** Analyze the content of the `<user_prompt>` tag.
-2.  **Prioritize User Input:** If the `<user_prompt>` tag is **not empty**, that is your topic. Announce it: "Okay, let's create a functional specification for: '`<user_prompt>`'."
-3.  **Use Roadmap as Fallback:** If the `<user_prompt>` tag is **empty**, you must read `context/product/roadmap.md`.
-    - Find the **first incomplete checklist item** (`- [ ] ...`).
-    - Announce this as your topic: "Since no topic was provided, I'll start with the next incomplete item from the roadmap: **'[Name of Roadmap Item]'**."
+2.  **Determine Topic:**
+    - If the `<user_prompt>` tag is **not empty**, this is your **topic**. Announce it: "Okay, let's create a functional specification for: '`<user_prompt>`'."
+    - If the `<user_prompt>` tag is **empty**, read `context/product/roadmap.md`, find the **first incomplete checklist item** (`- [ ] ...`), and use it as your **topic**. Announce: "Since no topic was provided, I'll start with the next incomplete item from the roadmap: **'[Name of Roadmap Item]'**."
     - If all roadmap items are complete, stop and inform the user.
+3.  **CRITICAL - Scope Boundary:** You are working on THIS single **topic** only. All other roadmap items are out-of-scope and will be addressed in separate specifications.
 
 ### Step 2: Gather Context and Extract Known Information
 
 - Read the `context/product/product-definition.md` and `context/product/roadmap.md` files to understand the project's overall goals, target audience, and priorities.
-- **CRITICAL:** Extract all information already documented about the roadmap item you're working on. This includes:
+- **CRITICAL - Focus on Your Topic Only:** Extract all information already documented about your **topic**. This includes:
   - The purpose and rationale (why it exists)
   - Expected user capabilities (what users will be able to do)
   - Any mentioned constraints or boundaries
-  - Related features or dependencies
+- As you read the roadmap, note all OTHER roadmap items. They are automatically out-of-scope for this specification.
 - Identify what is **already clear** from these documents versus what **needs clarification**. You will use this extracted context to avoid asking questions whose answers are already documented.
 
 ### Step 3: Interactive Drafting and Clarification
 
-- **CRITICAL FIRST STEP:** Before asking any questions, present a summary to the user: "Based on the roadmap and product definition, here's what I understand: [summarize known purpose, user capabilities, and context]. Let me clarify the remaining details."
-- **IMPORTANT:** Only ask questions whose answers are NOT already documented in the roadmap or product definition.
-- **FOCUS:** Your questions should emphasize the 'why' - the problem or user pain point this feature is meant to address, and the specific user value it delivers.
+- **Before asking questions:** Present a summary to the user: "Based on the roadmap and product definition, here's what I understand: [summarize known purpose, user capabilities, and context]. Let me clarify the remaining details."
+- Only ask questions whose answers are NOT already documented in the roadmap or product definition.
+- Your questions should emphasize the 'why' - the problem or user pain point this feature is meant to address, and the specific user value it delivers.
+- **Scope Rule:** All questions and discussions must relate ONLY to your **topic**. Do not ask about or discuss functionality from other roadmap items.
 - You will now fill the template section by section, but you must actively probe for details that are not yet documented.
 
 1.  **Overview and Rationale (The "Why"):**
-    - Use the information extracted from the roadmap item description and product definition as the foundation.
-    - If the rationale is already clear from those documents, state it and focus your questions on deepening understanding of the user pain point.
-    - Example: "The roadmap states this enables [X capability]. Let me understand the user pain: What specific problem does the user face today without this? How does this change their workflow?"
+    - Use the information extracted about your **topic** from Step 2 as the foundation.
+    - If the rationale is already clear, state it and focus your questions on deepening understanding of the user pain point for this **topic** only.
+    - Example: "Based on the context, this enables [X capability]. Let me understand the user pain: What specific problem does the user face today without this? How does this change their workflow?"
 
 2.  **Functional Requirements (The "What"):**
     - Ask the user to describe what needs to be done from a user's perspective.
@@ -72,8 +75,10 @@ Follow this process precisely.
     - Example Statement: "Okay, I've captured that. So a clear acceptance criterion would be: 'Given the user is on their profile page, when they upload a PNG file smaller than 5MB, then the new picture appears on their profile and a 'Success' message is shown.' Is that correct?"
 
 4.  **Scope and Boundaries:**
-    - Ask the user directly what should be excluded.
-    - Example Question: "To keep this focused, what are some related things we should explicitly NOT build right now? For example, should we include image cropping or editing tools? I will add 'Image cropping and editing' to the 'Out-of-Scope' section for now."
+    - Ask the user what should be excluded from THIS specific **topic**.
+    - **Automatically add other roadmap items to Out-of-Scope:** State to the user: "I'm adding the following to Out-of-Scope as they are separate roadmap items: [list other roadmap items]"
+    - Focus only on clarifying boundaries within the current **topic** itself.
+    - Example: "To keep this focused on [your topic], what related aspects should we explicitly NOT include? For example, should we include [specific feature within this topic]?"
 
 ### Step 4: Final Review
 

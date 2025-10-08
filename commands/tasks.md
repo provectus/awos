@@ -28,7 +28,7 @@ Your goal is to create a markdown file with a comprehensive list of checkbox tas
 
 Follow this process precisely.
 
-### Step 1: Identify the Target Specification
+## Step 1: Identify the Target Specification
 
 1.  **Analyze User Prompt:** Analyze the `<user_prompt>`. If it clearly references a spec by name or index, identify the corresponding directory in `context/spec/`.
 2.  **Ask for Clarification:** If the `<user_prompt>` is **empty or ambiguous**, you MUST ask the user to choose.
@@ -36,12 +36,12 @@ Follow this process precisely.
     - Example: "Which specification would you like to break down into tasks? Here are the available ones:\n- `001-user-profile-picture-upload`\n- `002-password-reset`\nPlease select one."
     - Do not proceed until the user has selected a valid spec.
 
-### Step 2: Gather and Synthesize Context
+## Step 2: Gather and Synthesize Context
 
 1.  **Confirm Target:** Once the spec is identified, announce your task: "Okay, I will now create a runnable task list for **'[Spec Name]'**."
 2.  **Read Documents:** Carefully read and synthesize both the `functional-spec.md` and `technical-considerations.md` from the chosen directory. You need to understand both the "what" and the "how."
 
-### Step 3: Plan and Draft the Task List
+## Step 3: Plan and Draft the Task List
 
 - You will now generate the task list. You must adhere to the following critical rule.
 
@@ -72,13 +72,13 @@ Follow this process precisely.
       - `[ ] Sub-task: Update the user API endpoint to return the `avatar_url`.`
       - `[ ] Sub-task: Update the 'ProfileAvatar' component to fetch and display the user's `avatar_url`, falling back to the placeholder if null.`
 
-### Step 4: Present Draft and Refine
+## Step 4: Present Draft and Refine
 
 - Present the complete, vertically sliced task list to the user.
 - Ask for feedback: "Here is a proposed task list, broken down into runnable, incremental slices. Does this sequence and level of detail look correct? We can adjust, split, or merge tasks as needed."
 - Allow the user to request changes until they are satisfied.
 
-### Step 5: File Generation
+## Step 5: File Generation
 
 1.  **Identify Path:** The output path is the `tasks.md` file inside the directory you identified in Step 1.
 2.  **Save File:** Once the user approves the draft, write the final task list into this file.

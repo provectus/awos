@@ -76,6 +76,13 @@ const copyOperations = [
     overwrite: false,
     description: 'Claude Code agents',
   },
+  {
+    source: 'claude/agents/domain-experts',
+    destination: '.claude/agents/domain-experts',
+    patterns: ['*'],
+    overwrite: false,
+    description: 'Claude Code domain expert agents',
+  },
 ];
 
 module.exports = {

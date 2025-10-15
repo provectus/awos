@@ -71,6 +71,71 @@ npx ~/repos/provectus/awos/index.js --force-overwrite
 - ✅ Existing files are preserved when flag is not used
 - ✅ Error messages are clear and helpful
 - ✅ Console output looks good (colors, formatting)
+- ✅ `--dry-run` flag shows preview without making changes
+
+## Working with Migrations
+
+AWOS includes a migration system to safely update project structures between versions.
+
+### Creating a New Migration
+
+When you need to move or restructure files in existing installations:
+
+1. Create a new JSON file in `src/migrations/`:
+
+   ```
+   src/migrations/NNN-description.json
+   ```
+
+   Where NNN is the next sequential number (e.g., 002, 003).
+
+2. Define the migration with preconditions:
+   ```json
+   {
+     "version": 2,
+     "name": "Short description",
+     "preconditions": {
+       "require_any": ["files/that/must/exist.md"],
+       "skip_if_any": ["files/indicating/already/migrated.md"]
+     },
+     "operations": [
+       {
+         "type": "move",
+         "from": "old/path/file.md",
+         "to": "new/path/file.md"
+       }
+     ]
+   }
+   ```
+
+### Precondition Types
+
+- **`require_any`**: At least one file must exist to run migration
+- **`require_all`**: All files must exist to run migration
+- **`skip_if_any`**: Skip if any of these files exist (already migrated)
+- **`error_if_any`**: Fail if any of these files exist (conflict)
+
+### Operation Types
+
+- **`move`**: Move file from one location to another
+- **`copy`**: Copy file to new location
+- **`delete`**: Remove file
+
+### Testing Migrations
+
+```bash
+# Test with dry-run (preview changes)
+npx ~/repos/provectus/awos/index.js --dry-run
+
+# Test on old structure
+mkdir -p test-project/.claude/agents
+echo "test" > test-project/.claude/agents/old-file.md
+cd test-project
+npx ~/repos/provectus/awos/index.js
+
+# Verify migration ran
+ls .awos/.migration-version  # Should contain latest version number
+```
 
 ## Submitting a Pull Request
 

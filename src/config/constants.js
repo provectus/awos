@@ -24,6 +24,7 @@ const COLORS = {
   red: '\x1b[31m',
   blue: '\x1b[34m',
   green: '\x1b[32m',
+  yellow: '\x1b[33m',
 };
 
 /**
@@ -32,9 +33,11 @@ const COLORS = {
 const style = {
   success: (text) => `${COLORS.green}${text}${COLORS.reset}`,
   error: (text) => `${COLORS.red}${text}${COLORS.reset}`,
+  warn: (text) => `${COLORS.yellow}${text}${COLORS.reset}`,
   bold: (text) => `${COLORS.bright}${text}${COLORS.reset}`,
   dim: (text) => `${COLORS.dim}${text}${COLORS.reset}`,
   step: (text) => `${COLORS.bright}${COLORS.blue}${text}${COLORS.reset}`,
+  info: (text) => `${COLORS.blue}${text}${COLORS.reset}`,
 };
 
 module.exports = {

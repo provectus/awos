@@ -109,7 +109,23 @@ function showSummary(statistics, options) {
 
   summaryItems.forEach(([label, value]) => {
     const prefix = options?.dryRun ? style.dim('○') : style.success('•');
-    const labelText = options?.dryRun ? `Would ${label.toLowerCase()}` : label;
+    let labelText = label;
+
+    if (options?.dryRun) {
+      // Convert past tense to future conditional
+      if (label === 'Directories created') {
+        labelText = 'Would create directories';
+      } else if (label === 'Files installed') {
+        labelText = 'Would install files';
+      } else if (label === 'Existing items preserved') {
+        labelText = 'Would preserve existing items';
+      } else if (label === 'Migrations applied') {
+        labelText = 'Would apply migrations';
+      } else {
+        labelText = `Would ${label.toLowerCase()}`;
+      }
+    }
+
     console.log(`${prefix} ${labelText}: ${style.bold(value.toString())}`);
   });
 

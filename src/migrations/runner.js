@@ -118,7 +118,7 @@ async function executeOperation(
         }
         if (targetExists) {
           log(
-            `  ${style.warn('⚠')} [DRY-RUN] Would skip move (target exists): ${operation.to}`,
+            `  ${style.warn('⚠')} ${style.dim('[DRY-RUN]')} Would skip move (target exists): ${operation.to}`,
             'item'
           );
           return;
@@ -168,7 +168,7 @@ async function executeOperation(
         }
         if (copyTargetExists) {
           log(
-            `  ${style.warn('⚠')} [DRY-RUN] Would skip copy (target exists): ${operation.to}`,
+            `  ${style.warn('⚠')} ${style.dim('[DRY-RUN]')} Would skip copy (target exists): ${operation.to}`,
             'item'
           );
           return;
@@ -398,7 +398,7 @@ async function runMigrations(workingDir, options = {}) {
     // Execute migrations in order
     for (const migration of pending) {
       log(
-        `${dryRun ? style.dim('[DRY-RUN] Would run') : 'Running'} migration ${migration.version}: ${migration.name}`,
+        `${dryRun ? `${style.dim('  [DRY-RUN]')} Would run` : 'Running'} migration ${migration.version}: ${migration.name}`,
         'info'
       );
 

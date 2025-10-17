@@ -135,13 +135,13 @@ async function copyDirectory({
   const destinationExists = await pathExists(destinationDir);
   const relativePath = destinationDir.replace(targetDir + '/', '');
 
-  console.log('');
   if (!destinationExists) {
     await fsPromises.mkdir(destinationDir, { recursive: true });
-    console.group(`  ✓ Created ${style.bold(relativePath)} - ${description}`);
+    log(`Created ${style.bold(relativePath)} - ${description}`, 'success');
   } else {
-    console.group(
-      `  • ${style.bold(relativePath)} - ${description} already exists`
+    log(
+      `${style.bold(relativePath)} - ${description} already exists`,
+      'info'
     );
   }
 
@@ -186,9 +186,6 @@ async function copyDirectory({
       }
     }
   }
-
-  console.groupEnd();
-  clearLine();
 }
 
 /**

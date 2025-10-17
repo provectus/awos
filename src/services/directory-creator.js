@@ -42,14 +42,14 @@ async function createDirectories({ baseDir, directories, dryRun = false }) {
     if (!directoryExists) {
       if (!dryRun) {
         await fsPromises.mkdir(fullPath, { recursive: true });
-        log(`Created ${directory.path} - ${directory.description}`, 'success');
+        log(`Created: ${directory.path} - ${directory.description}`, 'success');
       }
       stats.directoriesCreated++;
     } else {
       stats.directoriesExisted++;
       if (!dryRun) {
         log(
-          `${directory.path} - ${directory.description} already exists`,
+          `Exists: ${directory.path} - ${directory.description}`,
           'info'
         );
       }

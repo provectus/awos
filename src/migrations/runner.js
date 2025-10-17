@@ -143,8 +143,8 @@ async function executeOperation(
         // Perform the move
         await fs.rename(sourcePath, targetPath);
         log(
-          `  ${style.success('✓')} Moved: ${operation.from} → ${operation.to}`,
-          'item'
+          `  Moved: ${operation.from} → ${operation.to}`,
+          'success'
         );
       }
       break;
@@ -193,8 +193,8 @@ async function executeOperation(
         // Perform the copy
         await fs.copyFile(sourcePath, targetPath);
         log(
-          `  ${style.success('✓')} Copied: ${operation.from} → ${operation.to}`,
-          'item'
+          `  Copied: ${operation.from} → ${operation.to}`,
+          'success'
         );
       }
       break;
@@ -215,7 +215,7 @@ async function executeOperation(
       } else {
         try {
           await fs.unlink(sourcePath);
-          log(`  ${style.success('✓')} Deleted: ${operation.from}`, 'item');
+          log(`  Deleted: ${operation.from}`, 'success');
         } catch (error) {
           if (error.code !== 'ENOENT') {
             throw error;
@@ -382,13 +382,8 @@ async function runMigrations(workingDir, options = {}) {
       };
     }
 
-    // Log migration status
-    if (dryRun) {
-      log(
-        `${style.info('ℹ')} ${style.dim('[DRY-RUN]')} ${pending.length} migration(s) would be applied`,
-        'info'
-      );
-    } else {
+    // Log migration status - only for non-dry-run
+    if (!dryRun) {
       log(
         `${style.info('ℹ')} ${pending.length} migration(s) to apply`,
         'info'
@@ -396,13 +391,26 @@ async function runMigrations(workingDir, options = {}) {
     }
 
     // Execute migrations in order
+    let applicableMigrations = 0;
     for (const migration of pending) {
-      log(
-        `${dryRun ? `${style.dim('  [DRY-RUN]')} Would run` : 'Running'} migration ${migration.version}: ${migration.name}`,
-        'info'
-      );
+      if (dryRun) {
+        log(
+          `Checking migration ${migration.version}: ${migration.name}`,
+          'info'
+        );
+      } else {
+        log(
+          `Running migration ${migration.version}: ${migration.name}`,
+          'info'
+        );
+      }
 
-      await executeMigration(migration, workingDir, { dryRun });
+      const status = await executeMigration(migration, workingDir, { dryRun });
+
+      // Only count migrations that are actually applied or would be applied
+      if (status === 'applied') {
+        applicableMigrations++;
+      }
 
       if (!dryRun) {
         // Update version after successful migration
@@ -413,22 +421,17 @@ async function runMigrations(workingDir, options = {}) {
     // Clear the last line if it's a status line
     clearLine();
 
-    // Report success
-    if (dryRun) {
+    // Only report if migrations were actually applicable
+    if (!dryRun && applicableMigrations > 0) {
       log(
-        `${style.success('✓')} ${style.dim('[DRY-RUN]')} ${pending.length} migration(s) would be applied successfully`,
-        'success'
-      );
-    } else {
-      log(
-        `${style.success('✓')} Applied ${pending.length} migration(s) successfully`,
+        `Applied ${applicableMigrations} migration(s) successfully`,
         'success'
       );
     }
 
     return {
-      applied: pending.length,
-      current: dryRun ? currentVersion : pending[pending.length - 1].version,
+      applied: applicableMigrations,
+      current: dryRun ? currentVersion : (pending.length > 0 ? pending[pending.length - 1].version : currentVersion),
       latest: Math.max(...migrations.map((m) => m.version)),
     };
   } catch (error) {

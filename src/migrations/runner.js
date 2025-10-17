@@ -142,10 +142,7 @@ async function executeOperation(
 
         // Perform the move
         await fs.rename(sourcePath, targetPath);
-        log(
-          `  Moved: ${operation.from} → ${operation.to}`,
-          'success'
-        );
+        log(`  Moved: ${operation.from} → ${operation.to}`, 'success');
       }
       break;
 
@@ -192,10 +189,7 @@ async function executeOperation(
 
         // Perform the copy
         await fs.copyFile(sourcePath, targetPath);
-        log(
-          `  Copied: ${operation.from} → ${operation.to}`,
-          'success'
-        );
+        log(`  Copied: ${operation.from} → ${operation.to}`, 'success');
       }
       break;
 
@@ -431,7 +425,11 @@ async function runMigrations(workingDir, options = {}) {
 
     return {
       applied: applicableMigrations,
-      current: dryRun ? currentVersion : (pending.length > 0 ? pending[pending.length - 1].version : currentVersion),
+      current: dryRun
+        ? currentVersion
+        : pending.length > 0
+          ? pending[pending.length - 1].version
+          : currentVersion,
       latest: Math.max(...migrations.map((m) => m.version)),
     };
   } catch (error) {

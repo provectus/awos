@@ -48,10 +48,7 @@ async function createDirectories({ baseDir, directories, dryRun = false }) {
     } else {
       stats.directoriesExisted++;
       if (!dryRun) {
-        log(
-          `Exists: ${directory.path} - ${directory.description}`,
-          'info'
-        );
+        log(`Exists: ${directory.path} - ${directory.description}`, 'info');
       }
     }
   }

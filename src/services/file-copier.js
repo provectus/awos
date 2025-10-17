@@ -139,10 +139,7 @@ async function copyDirectory({
     await fsPromises.mkdir(destinationDir, { recursive: true });
     log(`Created ${style.bold(relativePath)} - ${description}`, 'success');
   } else {
-    log(
-      `${style.bold(relativePath)} - ${description} already exists`,
-      'info'
-    );
+    log(`${style.bold(relativePath)} - ${description} already exists`, 'info');
   }
 
   // Read and process all entries in the directory

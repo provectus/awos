@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "name": "Move agents to domain-experts",
+  "preconditions": {
+    "require_any": [
+      ".claude/agents/python-expert.md",
+      ".claude/agents/react-expert.md"
+    ],
+    "skip_if_any": [
+      ".claude/agents/domain-experts/python-expert.md",
+      ".claude/agents/domain-experts/react-expert.md"
+    ]
+  },
+  "operations": [
+    {
+      "type": "move",
+      "from": ".claude/agents/python-expert.md",
+      "to": ".claude/agents/domain-experts/python-expert.md"
+    },
+    {
+      "type": "move",
+      "from": ".claude/agents/react-expert.md",
+      "to": ".claude/agents/domain-experts/react-expert.md"
+    }
+  ]
+}

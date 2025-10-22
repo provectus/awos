@@ -26,9 +26,10 @@ async function pathExists(filePath) {
  * @param {Object} config - Directory creation configuration
  * @param {string} config.baseDir - The base directory where directories will be created
  * @param {Array<Object>} config.directories - Array of directory configurations
+ * @param {boolean} config.dryRun - Whether to run in dry-run mode
  * @returns {Promise<Object>} Statistics: { dirsCreated, dirsExisted }
  */
-async function createDirectories({ baseDir, directories }) {
+async function createDirectories({ baseDir, directories, dryRun = false }) {
   const stats = {
     directoriesCreated: 0,
     directoriesExisted: 0,
@@ -39,15 +40,16 @@ async function createDirectories({ baseDir, directories }) {
     const directoryExists = await pathExists(fullPath);
 
     if (!directoryExists) {
-      await fsPromises.mkdir(fullPath, { recursive: true });
-      log(`Created ${directory.path} - ${directory.description}`, 'success');
+      if (!dryRun) {
+        await fsPromises.mkdir(fullPath, { recursive: true });
+        log(`Created: ${directory.path} - ${directory.description}`, 'success');
+      }
       stats.directoriesCreated++;
     } else {
       stats.directoriesExisted++;
-      log(
-        `${directory.path} - ${directory.description} already exists`,
-        'info'
-      );
+      if (!dryRun) {
+        log(`Exists: ${directory.path} - ${directory.description}`, 'info');
+      }
     }
   }
 

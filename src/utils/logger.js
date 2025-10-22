@@ -70,29 +70,66 @@ function showHeader(asciiArt, subtitle) {
  * @param {Object} statistics - Statistics about the setup process
  * @param {Object} options - Options for the setup process
  * @param {boolean} options.forceOverwrite - Force overwrite all files regardless of config
+ * @param {boolean} options.dryRun - Whether this was a dry-run
  */
 function showSummary(statistics, options) {
+  // Handle both old and new property names for compatibility
+  const directoriesCreated =
+    statistics.directoriesCreated || statistics.created || 0;
+  const filesCopied = statistics.filesCopied || statistics.copied || 0;
+  const directoriesExisted =
+    statistics.directoriesExisted || statistics.existing || 0;
+  const filesSkipped = statistics.filesSkipped || statistics.skipped || 0;
+  const migrationsApplied = statistics.migrations || 0;
+
   const summaryItems = [
-    ['Directories created', statistics.directoriesCreated],
-    ['Files installed', statistics.filesCopied],
-    [
-      'Existing items preserved',
-      statistics.directoriesExisted + statistics.filesSkipped,
-    ],
+    ['Directories created', directoriesCreated],
+    ['Files installed', filesCopied],
+    ['Existing items preserved', directoriesExisted + filesSkipped],
   ];
 
+  // Add migrations if any were applied
+  if (migrationsApplied > 0) {
+    summaryItems.push(['Migrations applied', migrationsApplied]);
+  }
+
   showLine();
-  console.log(style.bold(style.success(' ✨ AWOS Setup Complete!')));
-  console.log('');
-  console.group(style.bold('  Summary:'));
+
+  if (options?.dryRun) {
+    console.log(style.bold(style.warn(' 🔍 Dry-Run Complete')));
+    console.log('');
+    console.log(style.dim('  This was a preview. No files were modified.'));
+    console.log('');
+    console.group(style.bold('  What would happen:'));
+  } else {
+    console.log(style.bold(style.success(' ✨ AWOS Setup Complete!')));
+    console.log('');
+    console.group(style.bold('  Summary:'));
+  }
 
   summaryItems.forEach(([label, value]) => {
-    console.log(
-      `${style.success('•')} ${label}: ${style.bold(value.toString())}`
-    );
+    const prefix = options?.dryRun ? style.dim('○') : style.success('•');
+    let labelText = label;
+
+    if (options?.dryRun) {
+      // Convert past tense to future conditional
+      if (label === 'Directories created') {
+        labelText = 'Would create directories';
+      } else if (label === 'Files installed') {
+        labelText = 'Would install files';
+      } else if (label === 'Existing items preserved') {
+        labelText = 'Would preserve existing items';
+      } else if (label === 'Migrations applied') {
+        labelText = 'Would apply migrations';
+      } else {
+        labelText = `Would ${label.toLowerCase()}`;
+      }
+    }
+
+    console.log(`${prefix} ${labelText}: ${style.bold(value.toString())}`);
   });
 
-  if (options?.forceOverwrite) {
+  if (options?.forceOverwrite && !options?.dryRun) {
     console.log('');
     console.group(`${style.error('⚠')} ${style.bold('Important:')}`);
     console.log(
@@ -109,6 +146,11 @@ function showSummary(statistics, options) {
       'If you had customizations within these files, please review and restore them.'
     );
     console.groupEnd();
+  }
+
+  if (options?.dryRun) {
+    console.log('');
+    console.log(style.dim('  Run without --dry-run to apply these changes.'));
   }
 
   console.groupEnd();

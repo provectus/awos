@@ -33,6 +33,7 @@ async function pathExists(filePath) {
  * @param {boolean} config.shouldOverwrite - Whether to overwrite existing files
  * @param {boolean} config.forceOverwrite - Force overwrite regardless of config
  * @param {Object} config.stats - Statistics tracker
+ * @param {boolean} config.dryRun - Whether to run in dry-run mode
  * @returns {Promise<boolean>} True if file was copied, false otherwise
  */
 async function copyFile({
@@ -43,6 +44,7 @@ async function copyFile({
   shouldOverwrite,
   forceOverwrite,
   stats,
+  dryRun = false,
 }) {
   // Check if source file exists
   const sourceExists = await pathExists(sourcePath);
@@ -65,30 +67,32 @@ async function copyFile({
     return false;
   }
 
-  // Ensure destination directory exists
-  const destinationDir = path.dirname(destinationPath);
-  await fsPromises.mkdir(destinationDir, { recursive: true });
+  if (!dryRun) {
+    // Ensure destination directory exists
+    const destinationDir = path.dirname(destinationPath);
+    await fsPromises.mkdir(destinationDir, { recursive: true });
 
-  // Remove existing file if it exists
-  if (destinationExists) {
-    await fsPromises.unlink(destinationPath);
-  }
-
-  // Copy the file
-  await fsPromises.copyFile(sourcePath, destinationPath);
-
-  // Log the result
-  const relativePath = destinationPath.replace(targetDir + '/', '');
-  const wasForced = !shouldOverwrite && forceOverwrite;
-
-  if (destinationExists) {
-    if (wasForced) {
-      log(style.error(`Forced overwrite ${relativePath}`), 'success');
-    } else {
-      log(`Overwrote ${relativePath}`, 'success');
+    // Remove existing file if it exists
+    if (destinationExists) {
+      await fsPromises.unlink(destinationPath);
     }
-  } else {
-    log(`Copied ${relativePath}`, 'success');
+
+    // Copy the file
+    await fsPromises.copyFile(sourcePath, destinationPath);
+
+    // Log the result
+    const relativePath = destinationPath.replace(targetDir + '/', '');
+    const wasForced = !shouldOverwrite && forceOverwrite;
+
+    if (destinationExists) {
+      if (wasForced) {
+        log(style.error(`Forced overwrite ${relativePath}`), 'success');
+      } else {
+        log(`Overwrote ${relativePath}`, 'success');
+      }
+    } else {
+      log(`Copied ${relativePath}`, 'success');
+    }
   }
 
   stats.filesCopied++;
@@ -131,14 +135,11 @@ async function copyDirectory({
   const destinationExists = await pathExists(destinationDir);
   const relativePath = destinationDir.replace(targetDir + '/', '');
 
-  console.log('');
   if (!destinationExists) {
     await fsPromises.mkdir(destinationDir, { recursive: true });
-    console.group(`  ✓ Created ${style.bold(relativePath)} - ${description}`);
+    log(`Created ${style.bold(relativePath)} - ${description}`, 'success');
   } else {
-    console.group(
-      `  • ${style.bold(relativePath)} - ${description} already exists`
-    );
+    log(`${style.bold(relativePath)} - ${description} already exists`, 'info');
   }
 
   // Read and process all entries in the directory
@@ -182,9 +183,57 @@ async function copyDirectory({
       }
     }
   }
+}
 
-  console.groupEnd();
-  clearLine();
+/**
+ * Count files that would be copied (for dry-run)
+ * @param {Object} config - Same as copyDirectory but simplified
+ * @returns {Promise<void>}
+ */
+async function countFiles({
+  sourceDir,
+  destinationDir,
+  patterns,
+  shouldOverwrite,
+  forceOverwrite,
+  stats,
+}) {
+  // Verify source directory exists
+  const sourceStat = await fsPromises.stat(sourceDir).catch(() => null);
+  if (!sourceStat?.isDirectory()) {
+    return;
+  }
+
+  // Read directory entries
+  const entries = await fsPromises.readdir(sourceDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const entrySourcePath = path.join(sourceDir, entry.name);
+    const entryDestinationPath = path.join(destinationDir, entry.name);
+
+    if (entry.isDirectory()) {
+      await countFiles({
+        sourceDir: entrySourcePath,
+        destinationDir: entryDestinationPath,
+        patterns,
+        shouldOverwrite,
+        forceOverwrite,
+        stats,
+      });
+    } else if (entry.isFile()) {
+      const fileName = path.basename(entrySourcePath);
+      if (matchesAnyPattern(fileName, patterns)) {
+        const destinationExists = await pathExists(entryDestinationPath);
+        const shouldSkip =
+          destinationExists && !shouldOverwrite && !forceOverwrite;
+        if (shouldSkip) {
+          stats.filesSkipped++;
+        } else {
+          stats.filesCopied++;
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -194,6 +243,7 @@ async function copyDirectory({
  * @param {string} config.targetDir - The target directory where files will be copied
  * @param {Array<Object>} config.copyOperations - Array of copy operation configurations
  * @param {boolean} config.forceOverwrite - Force overwrite all files regardless of config
+ * @param {boolean} config.dryRun - Whether to run in dry-run mode
  * @returns {Promise<Object>} Statistics: { filesCopied, filesSkipped }
  */
 async function executeCopyOperations({
@@ -201,27 +251,47 @@ async function executeCopyOperations({
   targetDir,
   copyOperations,
   forceOverwrite = false,
+  dryRun = false,
 }) {
   const stats = { filesCopied: 0, filesSkipped: 0 };
 
-  for (const operation of copyOperations) {
-    const sourceDir = path.join(packageRoot, operation.source);
-    const destinationDir = path.join(targetDir, operation.destination);
+  if (dryRun) {
+    // In dry-run, just count what would happen
+    for (const operation of copyOperations) {
+      const sourceDir = path.join(packageRoot, operation.source);
+      const destinationDir = path.join(targetDir, operation.destination);
 
-    await copyDirectory({
-      sourceDir,
-      destinationDir,
-      targetDir,
-      patterns: operation.patterns,
-      description: operation.description,
-      shouldOverwrite: operation.overwrite,
-      forceOverwrite,
-      stats,
-    });
-  }
+      await countFiles({
+        sourceDir,
+        destinationDir,
+        patterns: operation.patterns,
+        shouldOverwrite: operation.overwrite,
+        forceOverwrite,
+        stats,
+      });
+    }
+  } else {
+    // Normal operation
+    for (const operation of copyOperations) {
+      const sourceDir = path.join(packageRoot, operation.source);
+      const destinationDir = path.join(targetDir, operation.destination);
 
-  if (stats.filesSkipped > 0) {
-    log(`Skipped ${stats.filesSkipped} existing files`, 'info');
+      await copyDirectory({
+        sourceDir,
+        destinationDir,
+        targetDir,
+        patterns: operation.patterns,
+        description: operation.description,
+        shouldOverwrite: operation.overwrite,
+        forceOverwrite,
+        stats,
+        dryRun,
+      });
+    }
+
+    if (stats.filesSkipped > 0) {
+      log(`Skipped ${stats.filesSkipped} existing files`, 'info');
+    }
   }
 
   return stats;

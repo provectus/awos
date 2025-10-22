@@ -15,6 +15,7 @@ const {
 } = require('../utils/logger');
 const { createDirectories } = require('../services/directory-creator');
 const { executeCopyOperations } = require('../services/file-copier');
+const { runMigrations } = require('../migrations/runner');
 
 /**
  * Run the setup process
@@ -22,13 +23,25 @@ const { executeCopyOperations } = require('../services/file-copier');
  * @param {string} config.workingDir - The working directory where setup will be performed
  * @param {string} config.packageRoot - The root directory of the AWOS package
  * @param {boolean} config.forceOverwrite - Force overwrite all files regardless of config
+ * @param {boolean} config.dryRun - Run in dry-run mode (preview changes only)
  * @returns {Promise<void>}
  */
-async function runSetup({ workingDir, packageRoot, forceOverwrite = false }) {
-  const TOTAL_STEPS = 3;
+async function runSetup({
+  workingDir,
+  packageRoot,
+  forceOverwrite = false,
+  dryRun = false,
+}) {
+  const TOTAL_STEPS = 4;
 
   // Display header
   showHeader(AWOS_ASCII, AWOS_SUBTITLE);
+
+  // Show dry-run mode notice
+  if (dryRun) {
+    log(`${style.warn('DRY-RUN MODE:')} No files will be modified`, 'info');
+    console.log('');
+  }
 
   // Step 1: Initialization
   showStep(
@@ -49,14 +62,25 @@ async function runSetup({ workingDir, packageRoot, forceOverwrite = false }) {
   const directoryStatistics = await createDirectories({
     baseDir: workingDir,
     directories,
+    dryRun,
   });
   clearLine();
 
-  // Step 3: Installing components
+  // Step 3: Running migrations
+  showStep(
+    'Running Migrations',
+    'Updating existing project structure',
+    3,
+    TOTAL_STEPS
+  );
+  const migrationStatistics = await runMigrations(workingDir, { dryRun });
+  clearLine();
+
+  // Step 4: Installing components
   showStep(
     'Installing Components',
     'Copying commands, templates, and agents',
-    3,
+    4,
     TOTAL_STEPS
   );
   const fileStatistics = await executeCopyOperations({
@@ -64,11 +88,16 @@ async function runSetup({ workingDir, packageRoot, forceOverwrite = false }) {
     targetDir: workingDir,
     copyOperations,
     forceOverwrite,
+    dryRun,
   });
 
   // Display summary with combined statistics
-  const statistics = { ...directoryStatistics, ...fileStatistics };
-  showSummary(statistics, { forceOverwrite });
+  const statistics = {
+    ...directoryStatistics,
+    ...fileStatistics,
+    migrations: migrationStatistics.applied,
+  };
+  showSummary(statistics, { forceOverwrite, dryRun });
 }
 
 module.exports = { runSetup };

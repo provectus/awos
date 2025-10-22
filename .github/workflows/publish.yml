@@ -30,7 +30,7 @@ jobs:
       - name: Update package.json version for publishing
         run: npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version
           
-      - run: npm ci
+      - run: npm install
         
       - run: npm publish
         env:

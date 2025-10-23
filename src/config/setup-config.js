@@ -8,7 +8,7 @@
  * List of supported AI agents
  * Add new agents here to enable support in the installer
  */
-const SUPPORTED_AGENTS = ['claude'];
+const SUPPORTED_AGENTS = ['claude', 'copilot'];
 
 /**
  * Core directories that are agent-agnostic
@@ -79,6 +79,16 @@ const agentDirectories = {
       description: 'Claude configuration directory',
     },
   ],
+  copilot: [
+    {
+      path: '.github',
+      description: 'GitHub configuration directory',
+    },
+    {
+      path: '.github/prompts',
+      description: 'GitHub Copilot custom instructions directory',
+    },
+  ],
 };
 
 /**
@@ -100,6 +110,15 @@ const agentCopyOperations = {
       patterns: ['*'],
       overwrite: false,
       description: 'Claude Code agents',
+    },
+  ],
+  copilot: [
+    {
+      source: 'copilot/prompts',
+      destination: '.github/prompts',
+      patterns: ['*'],
+      overwrite: false,
+      description: 'GitHub Copilot custom instructions',
     },
   ],
 };

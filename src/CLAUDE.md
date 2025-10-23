@@ -13,9 +13,9 @@ The actual AWOS framework - all the AI agent prompts, templates, and commands th
 
 ## What It Does
 
-When a user runs `npx @provectusinc/awos`, this script:
+When a user runs `npx @provectusinc/awos --agent <agent-name>`, this script:
 
-1. Creates directories in their project (`.awos/`, `.claude/`, `context/`)
+1. Creates directories in their project (`.awos/`, agent-specific dirs, `context/`)
 2. Copies framework files from this package into those directories
 3. Shows progress messages and statistics
 
@@ -40,35 +40,92 @@ src/
 
 From `config/setup-config.js`:
 
+### Core Files (All Agents)
+| Source        | Destination       | Overwrite? |
+| ------------- | ----------------- | ---------- |
+| `commands/`   | `.awos/commands/` | Always     |
+| `templates/`  | `.awos/templates/`| Always     |
+| `scripts/`    | `.awos/scripts/`  | Always     |
+| `subagents/`  | `.awos/subagents/`| Always     |
+
+### Agent-Specific Files
+
+**Claude (`--agent claude`):**
 | Source             | Destination              | Overwrite?                    |
 | ------------------ | ------------------------ | ----------------------------- |
-| `commands/`        | `.awos/commands/`        | Always                        |
-| `templates/`       | `.awos/templates/`       | Always                        |
-| `scripts/`         | `.awos/scripts/`         | Always                        |
-| `subagents/`       | `.awos/subagents/`       | Always                        |
 | `claude/commands/` | `.claude/commands/awos/` | Only with `--force-overwrite` |
 | `claude/agents/`   | `.claude/agents/`        | Only with `--force-overwrite` |
 
+**GitHub Copilot (`--agent copilot`):**
+| Source             | Destination         | Overwrite?                    |
+| ------------------ | ------------------- | ----------------------------- |
+| `copilot/prompts/` | `.github/prompts/`  | Only with `--force-overwrite` |
+
 **Why the difference?**
 
-- `.awos/` files = Framework internals (user shouldn't edit these)
-- `.claude/` files = User customization layer (preserve their changes)
+- `.awos/` files = Framework internals (user shouldn't edit these) - always overwritten
+- Agent-specific files = User customization layer (preserve their changes by default)
 
 ## CLI Flags
 
+**`--agent <agent-name>`** (Required)
+
+- Specifies which AI agent to configure
+- Supported agents: `claude`, `copilot`
+- Usage: `npx @provectusinc/awos --agent claude`
+- Example: `npx @provectusinc/awos --agent copilot`
+
 **`--force-overwrite`**
 
-- Overwrites everything, including `.claude/` files
+- Overwrites everything, including agent-specific customization files
 - Use case: Updating AWOS to latest version
 - User can recover their customizations via `git diff`
 
+**`--dry-run`**
+
+- Preview changes without modifying any files
+- Shows what would be created/copied
+- Use case: Testing before actual installation
+
 ## Common Modifications
 
-**Add/remove directories:**
-→ Edit `directories` array in `config/setup-config.js`
+**Add a new AI agent:**
 
-**Add/remove files to copy:**
-→ Edit `copyOperations` array in `config/setup-config.js`
+1. Add agent name to `SUPPORTED_AGENTS` array in `config/setup-config.js`
+   ```js
+   const SUPPORTED_AGENTS = ['claude', 'copilot', 'your-agent'];
+   ```
+
+2. Add agent directories to `agentDirectories` object:
+   ```js
+   'your-agent': [
+     {
+       path: '.your-agent',
+       description: 'Your agent configuration directory',
+     },
+   ],
+   ```
+
+3. Add copy operations to `agentCopyOperations` object:
+   ```js
+   'your-agent': [
+     {
+       source: 'your-agent/files',
+       destination: '.your-agent/files',
+       patterns: ['*'],
+       overwrite: false,
+       description: 'Your agent files',
+     },
+   ],
+   ```
+
+4. Create source directory with agent files in the package root (e.g., `your-agent/`)
+
+**Add/remove core directories:**
+→ Edit `coreDirectories` array in `config/setup-config.js`
+
+**Add/remove core files to copy:**
+→ Edit `coreCopyOperations` array in `config/setup-config.js`
 
 **Change overwrite behavior:**
 → Edit `overwrite: true/false` in copy operations

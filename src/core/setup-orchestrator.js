@@ -5,10 +5,7 @@
  */
 
 const { AWOS_ASCII, AWOS_SUBTITLE, style } = require('../config/constants');
-const {
-  getDirectories,
-  getCopyOperations,
-} = require('../config/setup-config');
+const { getDirectories, getCopyOperations } = require('../config/setup-config');
 const {
   showHeader,
   showStep,

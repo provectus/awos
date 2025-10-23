@@ -41,25 +41,26 @@ src/
 From `config/setup-config.js`:
 
 ### Core Files (All Agents)
-| Source        | Destination       | Overwrite? |
-| ------------- | ----------------- | ---------- |
-| `commands/`   | `.awos/commands/` | Always     |
-| `templates/`  | `.awos/templates/`| Always     |
-| `scripts/`    | `.awos/scripts/`  | Always     |
-| `subagents/`  | `.awos/subagents/`| Always     |
+
+| Source       | Destination        | Overwrite? |
+| ------------ | ------------------ | ---------- |
+| `commands/`  | `.awos/commands/`  | Always     |
+| `templates/` | `.awos/templates/` | Always     |
+| `scripts/`   | `.awos/scripts/`   | Always     |
+| `subagents/` | `.awos/subagents/` | Always     |
 
 ### Agent-Specific Files
 
 **Claude (`--agent claude`):**
-| Source             | Destination              | Overwrite?                    |
+| Source | Destination | Overwrite? |
 | ------------------ | ------------------------ | ----------------------------- |
 | `claude/commands/` | `.claude/commands/awos/` | Only with `--force-overwrite` |
-| `claude/agents/`   | `.claude/agents/`        | Only with `--force-overwrite` |
+| `claude/agents/` | `.claude/agents/` | Only with `--force-overwrite` |
 
 **GitHub Copilot (`--agent copilot`):**
-| Source             | Destination         | Overwrite?                    |
+| Source | Destination | Overwrite? |
 | ------------------ | ------------------- | ----------------------------- |
-| `copilot/prompts/` | `.github/prompts/`  | Only with `--force-overwrite` |
+| `copilot/prompts/` | `.github/prompts/` | Only with `--force-overwrite` |
 
 **Why the difference?**
 
@@ -92,11 +93,13 @@ From `config/setup-config.js`:
 **Add a new AI agent:**
 
 1. Add agent name to `SUPPORTED_AGENTS` array in `config/setup-config.js`
+
    ```js
    const SUPPORTED_AGENTS = ['claude', 'copilot', 'your-agent'];
    ```
 
 2. Add agent directories to `agentDirectories` object:
+
    ```js
    'your-agent': [
      {
@@ -107,6 +110,7 @@ From `config/setup-config.js`:
    ```
 
 3. Add copy operations to `agentCopyOperations` object:
+
    ```js
    'your-agent': [
      {

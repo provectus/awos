@@ -40,7 +40,7 @@ async function runSetup({
   const TOTAL_STEPS = 4;
 
   // Display header
-  showHeader(AWOS_ASCII, AWOS_SUBTITLE);
+  showHeader(AWOS_ASCII, AWOS_SUBTITLE, agent);
 
   // Show dry-run mode notice
   if (dryRun) {

@@ -59,10 +59,15 @@ function clearLine() {
  * Display the AWOS header
  * @param {string} asciiArt - The ASCII art to display
  * @param {string} subtitle - The subtitle to display
+ * @param {string} agent - The AI agent being configured (optional)
  */
-function showHeader(asciiArt, subtitle) {
+function showHeader(asciiArt, subtitle, agent) {
   console.log(style.success(asciiArt));
   console.log(style.bold('  ' + subtitle));
+  if (agent) {
+    const agentName = agent.charAt(0).toUpperCase() + agent.slice(1);
+    console.log(style.dim(`  Configuring for: ${style.bold(agentName)}`));
+  }
 }
 
 /**

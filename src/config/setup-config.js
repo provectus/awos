@@ -5,6 +5,12 @@
  */
 
 /**
+ * List of supported AI agents
+ * Add new agents here to enable support in the installer
+ */
+const SUPPORTED_AGENTS = ['claude'];
+
+/**
  * Core directories that are agent-agnostic
  * These are always created regardless of which agent is used
  */
@@ -137,6 +143,7 @@ function getCopyOperations(agent) {
 }
 
 module.exports = {
+  SUPPORTED_AGENTS,
   getDirectories,
   getCopyOperations,
   // Export for potential future use

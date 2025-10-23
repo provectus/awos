@@ -6,6 +6,7 @@
 
 const { runSetup } = require('./core/setup-orchestrator');
 const { log } = require('./utils/logger');
+const { SUPPORTED_AGENTS } = require('./config/setup-config');
 
 /**
  * Main application entry point
@@ -30,12 +31,11 @@ async function main() {
   }
 
   const agent = process.argv[agentIndex + 1];
-  const supportedAgents = ['claude'];
 
-  if (!supportedAgents.includes(agent)) {
+  if (!SUPPORTED_AGENTS.includes(agent)) {
     console.error('');
     log(`Error: Unsupported agent "${agent}"`, 'error');
-    log(`Supported agents: ${supportedAgents.join(', ')}`, 'info');
+    log(`Supported agents: ${SUPPORTED_AGENTS.join(', ')}`, 'info');
     process.exit(1);
   }
 

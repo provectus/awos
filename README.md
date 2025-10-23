@@ -20,11 +20,38 @@ To get started with **`awos`**, you'll need a couple of things set up first:
 
 ### Step 1: Install `awos`
 
-First, open your terminal, create a new directory for your project, and run this single command. It will set up everything you need.
+First, open your terminal, create a new directory for your project, and run the installer with the required `--agent` flag. This will set up everything you need.
+
+**For Claude Code:**
 
 ```sh
-npx @provectusinc/awos
+npx @provectusinc/awos --agent claude
 ```
+
+**For GitHub Copilot:**
+
+```sh
+npx @provectusinc/awos --agent copilot
+```
+
+**Note:** The `--agent` flag is mandatory and specifies which AI agent you'll be using. Currently supported agents are `claude` and `copilot`.
+
+### CLI Flags Reference
+
+**Required Flags:**
+
+- `--agent <agent-name>` - Specifies which AI agent to configure (required)
+  - Supported values: `claude`, `copilot`
+  - Example: `npx @provectusinc/awos --agent claude`
+
+**Optional Flags:**
+
+- `--force-overwrite` - Overwrites all files, including customizations
+  - Use case: Updating to latest version
+  - Example: `npx @provectusinc/awos --agent claude --force-overwrite`
+- `--dry-run` - Preview changes without modifying files
+  - Use case: Testing before installation
+  - Example: `npx @provectusinc/awos --agent claude --dry-run`
 
 ### Step 2: Follow the Workflow
 
@@ -145,10 +172,10 @@ Refer to the instructions located in this file: .awos/commands/implement.md
 
 ### Normal Update
 
-To update **`awos`** to the latest version, run the installer again:
+To update **`awos`** to the latest version, run the installer again with the `--agent` flag:
 
 ```sh
-npx @provectusinc/awos
+npx @provectusinc/awos --agent claude
 ```
 
 **What gets updated:**
@@ -160,10 +187,10 @@ npx @provectusinc/awos
 
 ### Force Update
 
-To update **`awos`** to the latest version, run the installer again with the `--force-overwrite` flag:
+To update **`awos`** to the latest version, run the installer again with both the `--agent` and `--force-overwrite` flags:
 
 ```sh
-npx @provectusinc/awos --force-overwrite
+npx @provectusinc/awos --agent claude --force-overwrite
 ```
 
 **Important:** The `--force-overwrite` flag will overwrite existing files in `.claude/commands/awos` and `.claude/agents`.

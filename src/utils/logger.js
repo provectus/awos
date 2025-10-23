@@ -71,6 +71,7 @@ function showHeader(asciiArt, subtitle) {
  * @param {Object} options - Options for the setup process
  * @param {boolean} options.forceOverwrite - Force overwrite all files regardless of config
  * @param {boolean} options.dryRun - Whether this was a dry-run
+ * @param {string} options.agent - The AI agent being configured
  */
 function showSummary(statistics, options) {
   // Handle both old and new property names for compatibility
@@ -130,6 +131,7 @@ function showSummary(statistics, options) {
   });
 
   if (options?.forceOverwrite && !options?.dryRun) {
+    const agent = options.agent || 'claude';
     console.log('');
     console.group(`${style.error('⚠')} ${style.bold('Important:')}`);
     console.log(
@@ -138,8 +140,8 @@ function showSummary(statistics, options) {
       )} flag overwrote existing files, including:`
     );
     console.log(
-      `${style.bold(style.error('.claude/commands/awos'))} and ${style.bold(
-        style.error('.claude/agents')
+      `${style.bold(style.error(`.${agent}/commands/awos`))} and ${style.bold(
+        style.error(`.${agent}/agents`)
       )}.`
     );
     console.log(

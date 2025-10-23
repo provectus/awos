@@ -5,7 +5,10 @@
  */
 
 const { AWOS_ASCII, AWOS_SUBTITLE, style } = require('../config/constants');
-const { directories, copyOperations } = require('../config/setup-config');
+const {
+  getDirectories,
+  getCopyOperations,
+} = require('../config/setup-config');
 const {
   showHeader,
   showStep,
@@ -24,6 +27,7 @@ const { runMigrations } = require('../migrations/runner');
  * @param {string} config.packageRoot - The root directory of the AWOS package
  * @param {boolean} config.forceOverwrite - Force overwrite all files regardless of config
  * @param {boolean} config.dryRun - Run in dry-run mode (preview changes only)
+ * @param {string} config.agent - The AI agent to configure (e.g., 'claude')
  * @returns {Promise<void>}
  */
 async function runSetup({
@@ -31,6 +35,7 @@ async function runSetup({
   packageRoot,
   forceOverwrite = false,
   dryRun = false,
+  agent,
 }) {
   const TOTAL_STEPS = 4;
 
@@ -59,6 +64,7 @@ async function runSetup({
     2,
     TOTAL_STEPS
   );
+  const directories = getDirectories(agent);
   const directoryStatistics = await createDirectories({
     baseDir: workingDir,
     directories,
@@ -83,6 +89,7 @@ async function runSetup({
     4,
     TOTAL_STEPS
   );
+  const copyOperations = getCopyOperations(agent);
   const fileStatistics = await executeCopyOperations({
     packageRoot,
     targetDir: workingDir,
@@ -97,7 +104,7 @@ async function runSetup({
     ...fileStatistics,
     migrations: migrationStatistics.applied,
   };
-  showSummary(statistics, { forceOverwrite, dryRun });
+  showSummary(statistics, { forceOverwrite, dryRun, agent });
 }
 
 module.exports = { runSetup };

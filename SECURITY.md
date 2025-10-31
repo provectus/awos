@@ -16,7 +16,7 @@ We take the security of AWOS seriously. If you have discovered a security vulner
 
 Instead, please report them via email to:
 
-**security@provectus.com**
+**opensource@provectus.com**
 
 Please include the following information in your report:
 

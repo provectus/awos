@@ -88,6 +88,12 @@ The **`awos`** workflow is built on a clear document structure that creates a tr
 
 ➡️ [Learn more about the purpose of each document](docs/document-structure.md)
 
+## Testing Strategies
+
+The **`awos`** framework is flexible and non-prescriptive when it comes to testing. Teams can adopt the testing approach that best fits their project—whether that's TDD, BDD, integration testing, or a combination of strategies. The framework provides natural integration points in the workflow (like `/awos:tasks` and `/awos:implement`) where testing fits seamlessly.
+
+➡️ [Explore testing strategies and customization options](docs/testing-strategies.md)
+
 ## What's Included in `awos`?
 
 **`awos`** is a complete framework for agentic software development. It consists of four key components that work together to turn your ideas into code:

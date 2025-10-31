@@ -38,9 +38,22 @@ npx @provectusinc/awos
 
 **Example Usage:**
 
-✅ **Good**: `/awos:product` → _"Build a photo editing app that adds beer and smiles to user photos using AI"_
+✅ **Good**:
 
-❌ **Bad**: `/awos:product` → _"Build an ML pipeline with TensorFlow for facial landmark detection and image compositing with alpha blending"_ (too technical for product definition)
+```bash
+> /awos:product
+Build a photo editing app that adds beer and smiles to user photos using AI.
+Users want to create fun party photos to share on social media.
+```
+
+❌ **Bad**:
+
+```bash
+> /awos:product
+Build an ML pipeline with TensorFlow for facial landmark detection and image compositing with alpha blending.
+```
+
+_(too technical for product definition)_
 
 2. `/awos:roadmap`
 
@@ -50,9 +63,23 @@ npx @provectusinc/awos
 
 **Example Usage:**
 
-✅ **Good**: `/awos:roadmap` → _Phase 1: Photo upload and face detection, Phase 2: Beer and smile overlay, Phase 3: Social sharing_
+✅ **Good**:
 
-❌ **Bad**: `/awos:roadmap` → _Sprint 1 Task #42: Implement YOLO v8 model inference endpoint_ (too granular and technical)
+```bash
+> /awos:roadmap
+Phase 1: Photo upload and face detection
+Phase 2: Beer and smile overlay
+Phase 3: Social sharing
+```
+
+❌ **Bad**:
+
+```bash
+> /awos:roadmap
+Sprint 1 Task #42: Implement YOLO v8 model inference endpoint
+```
+
+_(too granular and technical)_
 
 3. `/awos:architecture`
 
@@ -62,9 +89,22 @@ npx @provectusinc/awos
 
 **Example Usage:**
 
-✅ **Good**: `/awos:architecture` → _React frontend, Python Flask backend with OpenCV, AWS S3 for image storage, Lambda for processing_
+✅ **Good**:
 
-❌ **Bad**: `/awos:architecture` → _Users can upload photos and see beer added to their pictures_ (describes features, not architecture)
+```bash
+> /awos:architecture
+React frontend, Python Flask backend with OpenCV
+AWS S3 for image storage, Lambda for processing
+```
+
+❌ **Bad**:
+
+```bash
+> /awos:architecture
+Users can upload photos and see beer added to their pictures.
+```
+
+_(describes features, not architecture)_
 
 4. `/awos:spec`
 
@@ -74,9 +114,39 @@ npx @provectusinc/awos
 
 **Example Usage:**
 
-✅ **Good**: `/awos:spec` → _Feature: Photo Upload. User clicks upload, selects image, sees preview with detected face highlighted, confirms to proceed_
+✅ **Good**:
 
-❌ **Bad**: `/awos:spec` → _Implement multipart/form-data POST to /api/upload with JWT auth_ (implementation details, not user-facing functionality)
+```bash
+> /awos:spec
+Feature: Photo Upload
+User clicks upload button, selects image from device, sees preview thumbnail.
+```
+
+✅ **Good**:
+
+```bash
+> /awos:spec
+Feature: Face Detection
+System detects faces in uploaded image, highlights detected area with bounding box.
+```
+
+❌ **Bad**:
+
+```bash
+> /awos:spec
+Implement multipart/form-data POST to /api/upload with JWT auth.
+```
+
+_(implementation details, not user-facing functionality)_
+
+❌ **Bad**:
+
+```bash
+> /awos:spec
+Feature: Make the app work well.
+```
+
+_(too generic to implement)_
 
 5. `/awos:tech`
 
@@ -86,9 +156,23 @@ npx @provectusinc/awos
 
 **Example Usage:**
 
-✅ **Good**: `/awos:tech` → _Use OpenCV's Haar Cascade for face detection, overlay PNG assets at detected coordinates, return processed image via presigned S3 URL_
+✅ **Good**:
 
-❌ **Bad**: `/awos:tech` → _Make the photo upload smooth and fast for users_ (describes outcome, not technical approach)
+```bash
+> /awos:tech
+Use OpenCV's Haar Cascade for face detection
+Overlay PNG assets at detected coordinates
+Return processed image via presigned S3 URL
+```
+
+❌ **Bad**:
+
+```bash
+> /awos:tech
+Make the photo upload smooth and fast for users.
+```
+
+_(describes outcome, not technical approach)_
 
 6. `/awos:tasks`
 
@@ -98,9 +182,21 @@ npx @provectusinc/awos
 
 **Example Usage:**
 
-✅ **Good**: `/awos:tasks` → _Task 1: Create Flask upload endpoint; Task 2: Integrate OpenCV face detection; Task 3: Add beer overlay logic_
+✅ **Good**:
 
-❌ **Bad**: `/awos:tasks` → _Build the entire photo processing feature_ (not broken down into implementable tasks)
+```bash
+> /awos:tasks
+Task 1: Create Flask upload endpoint
+Task 2: Integrate OpenCV face detection
+Task 3: Add beer overlay logic
+```
+
+✅ **Good**:
+
+```bash
+> /awos:tasks
+(empty task list - feature not ready for implementation yet)
+```
 
 7. `/awos:implement`
 
@@ -110,9 +206,19 @@ npx @provectusinc/awos
 
 **Example Usage:**
 
-✅ **Good**: `/awos:implement` → _Reads tasks.md, delegates "Create Flask upload endpoint" to Python subagent, tracks completion_
+✅ **Good**:
 
-❌ **Bad**: `/awos:implement` → _Write all the code for the app_ (too vague, no clear task delegation)
+```bash
+> /awos:implement
+Implement all tasks
+```
+
+✅ **Good**:
+
+```bash
+> /awos:implement
+Implement Phase 2
+```
 
 ### Step 3: You're Awesome
 

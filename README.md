@@ -72,22 +72,14 @@ npx @provectusinc/awos
 
 **Example Usage:**
 
-✅ **Good**:
-
 ```bash
-> /awos:architecture
-React frontend, Python Flask backend with OpenCV
-AWS S3 for image storage, Lambda for processing
+# ✅ Good:
+> /awos:architecture React frontend, Python Flask backend with OpenCV, AWS S3 for image storage, Lambda for processing
+
+# ❌ Bad:
+# describes features, not architecture
+> /awos:architecture Users can upload photos and see beer added to their pictures.
 ```
-
-❌ **Bad**:
-
-```bash
-> /awos:architecture
-Users can upload photos and see beer added to their pictures.
-```
-
-_(describes features, not architecture)_
 
 4. `/awos:spec`
 
@@ -97,39 +89,22 @@ _(describes features, not architecture)_
 
 **Example Usage:**
 
-✅ **Good**:
-
 ```bash
+# ✅ Good:
 > /awos:spec
+# (It will start working on the first incomplete checklist item in the roadmap)
+
+# ✅ Good:
+> /awos:spec Feature: Face Detection - System detects faces in uploaded image, highlights detected area with bounding box.
+
+# ❌ Bad:
+# implementation details, not user-facing functionality
+> /awos:spec Implement multipart/form-data POST to /api/upload with JWT auth.
+
+# ❌ Bad:
+# too generic to implement
+> /awos:spec Feature: Make the app work well.
 ```
-
-_(It will start working on the first incomplete checklist item in the roadmap)_
-
-✅ **Good**:
-
-```bash
-> /awos:spec
-Feature: Face Detection
-System detects faces in uploaded image, highlights detected area with bounding box.
-```
-
-❌ **Bad**:
-
-```bash
-> /awos:spec
-Implement multipart/form-data POST to /api/upload with JWT auth.
-```
-
-_(implementation details, not user-facing functionality)_
-
-❌ **Bad**:
-
-```bash
-> /awos:spec
-Feature: Make the app work well.
-```
-
-_(too generic to implement)_
 
 5. `/awos:tech`
 
@@ -139,23 +114,14 @@ _(too generic to implement)_
 
 **Example Usage:**
 
-✅ **Good**:
-
 ```bash
-> /awos:tech
-Use OpenCV's Haar Cascade for face detection
-Overlay PNG assets at detected coordinates
-Return processed image via presigned S3 URL
+# ✅ Good:
+> /awos:tech Use OpenCV's Haar Cascade for face detection, overlay PNG assets at detected coordinates, return processed image via presigned S3 URL
+
+# ❌ Bad:
+# describes outcome, not technical approach
+> /awos:tech Make the photo upload smooth and fast for users.
 ```
-
-❌ **Bad**:
-
-```bash
-> /awos:tech
-Make the photo upload smooth and fast for users.
-```
-
-_(describes outcome, not technical approach)_
 
 6. `/awos:tasks`
 
@@ -165,13 +131,11 @@ _(describes outcome, not technical approach)_
 
 **Example Usage:**
 
-✅ **Good**:
-
 ```bash
+# ✅ Good:
 > /awos:tasks
+# (It will create tasks for the spec created on the previous step)
 ```
-
-_(It will create tasks for the spec created on the previous step)_
 
 7. `/awos:implement`
 
@@ -181,23 +145,14 @@ _(It will create tasks for the spec created on the previous step)_
 
 **Example Usage:**
 
-✅ **Good**:
-
 ```bash
-> /awos:implement
-Implement all tasks
-```
+# ✅ Good:
+> /awos:implement Implement all tasks
 
-✅ **Good**:
+# ✅ Good:
+> /awos:implement Implement Phase 2
 
-```bash
-> /awos:implement
-Implement Phase 2
-```
-
-✅ **Good**:
-
-```bash
+# ✅ Good:
 > /awos:implement
 ```
 

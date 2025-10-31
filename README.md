@@ -38,22 +38,14 @@ npx @provectusinc/awos
 
 **Example Usage:**
 
-✅ **Good**:
-
 ```bash
-> /awos:product
-Build a photo editing app that adds beer and smiles to user photos using AI.
-Users want to create fun party photos to share on social media.
+# ✅ Good:
+> /awos:product Build a photo editing app that adds beer and smiles to user photos using AI. Users want to create fun party photos to share on social media.
+
+# ❌ Bad:
+# too technical for product definition
+> /awos:product Build an ML pipeline with TensorFlow for facial landmark detection and image compositing with alpha blending.
 ```
-
-❌ **Bad**:
-
-```bash
-> /awos:product
-Build an ML pipeline with TensorFlow for facial landmark detection and image compositing with alpha blending.
-```
-
-_(too technical for product definition)_
 
 2. `/awos:roadmap`
 
@@ -63,23 +55,14 @@ _(too technical for product definition)_
 
 **Example Usage:**
 
-✅ **Good**:
-
 ```bash
-> /awos:roadmap
-Phase 1: Photo upload and face detection
-Phase 2: Beer and smile overlay
-Phase 3: Social sharing
+# ✅ Good:
+> /awos:roadmap Phase 1: Photo upload, Phase 2: Face detection, ...
+
+# ❌ Bad:
+# too granular and technical
+> /awos:roadmap Sprint 1 Task #42: Implement YOLO v8 model inference endpoint
 ```
-
-❌ **Bad**:
-
-```bash
-> /awos:roadmap
-Sprint 1 Task #42: Implement YOLO v8 model inference endpoint
-```
-
-_(too granular and technical)_
 
 3. `/awos:architecture`
 
@@ -118,9 +101,9 @@ _(describes features, not architecture)_
 
 ```bash
 > /awos:spec
-Feature: Photo Upload
-User clicks upload button, selects image from device, sees preview thumbnail.
 ```
+
+_(It will start working on the first incomplete checklist item in the roadmap)_
 
 ✅ **Good**:
 
@@ -186,17 +169,9 @@ _(describes outcome, not technical approach)_
 
 ```bash
 > /awos:tasks
-Task 1: Create Flask upload endpoint
-Task 2: Integrate OpenCV face detection
-Task 3: Add beer overlay logic
 ```
 
-✅ **Good**:
-
-```bash
-> /awos:tasks
-(empty task list - feature not ready for implementation yet)
-```
+_(It will create tasks for the spec created on the previous step)_
 
 7. `/awos:implement`
 
@@ -218,6 +193,12 @@ Implement all tasks
 ```bash
 > /awos:implement
 Implement Phase 2
+```
+
+✅ **Good**:
+
+```bash
+> /awos:implement
 ```
 
 ### Step 3: You're Awesome

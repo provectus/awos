@@ -43,10 +43,10 @@ Follow this process precisely.
 For each spec directory identified in Step 1:
 
 1. **Check for Required Files:** Verify that the directory contains at least `functional-spec.md`.
-2. **Skip if Already Compacted:** If `completed-summary.md` already exists, ask the user: "The spec `[spec-name]` appears to have already been compacted. Should I re-compact it anyway?" 
+2. **Skip if Already Compacted:** If any of the compact files (`functional-spec-compact.md`, `technical-considerations-compact.md`, or `completed-summary.md`) already exist, ask the user: "The spec `[spec-name]` appears to have already been compacted. Should I re-compact it anyway?" 
    - If the user says no, skip this spec.
-   - If the user says yes or the file doesn't exist, proceed.
-3. **Recommend Completion:** If the spec's `tasks.md` file exists and contains uncompleted items (unchecked checkboxes), warn the user: "Warning: `[spec-name]` has incomplete tasks. It's recommended to compact specs only after all work is complete. Continue anyway?" Wait for user confirmation.
+   - If the user says yes or the files don't exist, proceed.
+3. **Recommend Completion:** If the spec's `tasks.md` file exists and contains unchecked checkbox items (lines matching the pattern `- [ ]`), warn the user: "Warning: `[spec-name]` has incomplete tasks (N unchecked items found). It's recommended to compact specs only after all work is complete. Continue anyway?" Wait for user confirmation.
 
 ### Step 3: Read and Analyze Each Spec
 

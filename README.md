@@ -72,6 +72,12 @@ npx @provectusinc/awos
 - **Think of it as**: The project foreman. This agent delegates the coding work to sub-agents and tracks progress.
 - Audience: Team Lead (Technical)
 
+8. `/awos:compact`
+
+- **What it does**: Compacts detailed specifications into concise summaries after milestone completion.
+- **Think of it as**: The project librarian. After completing a milestone, it archives verbose specs and creates compact summaries to keep your documentation manageable.
+- Audience: Team Lead (Technical)
+
 ### Step 3: You're Awesome
 
 That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product.

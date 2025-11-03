@@ -58,8 +58,8 @@ Follow this logic precisely.
 5. **Announce Context Summary:**
    - Report findings to the user.
    - Basic mode example: "I found your architecture document and roadmap with [N] planned features. No specs exist yet, so I'll create a **basic prototype prompt** with screens based on roadmap descriptions."
-   - Hybrid mode example: "I found your architecture document, **[N] completed feature specifications**, and **[M] roadmap features** without specs. I'll create a **hybrid prototype prompt**:\n  - Spec-based detail: 001: User Authentication, 002: Dashboard\n  - Roadmap-based detail: Reporting Module, Admin Panel\n\nShall we proceed?"
-   - Detailed mode example: "I found your architecture document and **[N] completed feature specifications** covering all planned features. I'll create a **detailed prototype prompt** with full spec-based detail for all [N] features:\n  - 001: User Authentication\n  - 002: Dashboard\n  - 003: Profile Management\n\nShall we proceed?"
+   - Hybrid mode example: "I found your architecture document, **[N] completed feature specifications**, and **[M] roadmap features** without specs. I'll create a **hybrid prototype prompt**:\n - Spec-based detail: 001: User Authentication, 002: Dashboard\n - Roadmap-based detail: Reporting Module, Admin Panel\n\nShall we proceed?"
+   - Detailed mode example: "I found your architecture document and **[N] completed feature specifications** covering all planned features. I'll create a **detailed prototype prompt** with full spec-based detail for all [N] features:\n - 001: User Authentication\n - 002: Dashboard\n - 003: Profile Management\n\nShall we proceed?"
 
 ### Step 3: Content Analysis and Extraction
 
@@ -139,6 +139,7 @@ For each feature or screen identified:
 
 1. **Present Application Structure:**
    - Show the user a clear breakdown of what you've extracted:
+
    ```
    Based on your specifications, here's the application structure I'll prototype:
 
@@ -297,6 +298,7 @@ For each feature or screen identified:
 2. **Save File:** Write the final, complete content to `context/product/prototype-prompt.md`.
 3. **Provide Usage Instructions:**
    - End with a clear confirmation and next steps:
+
    ```
    The prototype prompt has been saved to `context/product/prototype-prompt.md`.
 

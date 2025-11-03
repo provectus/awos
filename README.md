@@ -72,6 +72,15 @@ npx @provectusinc/awos
 - **Think of it as**: The project foreman. This agent delegates the coding work to sub-agents and tracks progress.
 - Audience: Team Lead (Technical)
 
+#### Optional: Visual Prototype
+
+`/awos:prototype-prompt`
+
+- **What it does**: Generates AI-optimized prompt for prototyping entire application in tools like Figma Make, v0, Lovable, Bolt.new.
+- **When to run**: After `/awos:architecture` for basic prototype, or after series of `/awos:spec` commands for detailed prototype.
+- **Think of it as**: Visual preview generator. Creates comprehensive prompt to build interactive UI prototype before implementation.
+- Audience: UI/UX Designer (Non-Technical)
+
 ### Step 3: You're Awesome
 
 That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product.

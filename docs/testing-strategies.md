@@ -93,20 +93,23 @@ Add this section to your agent configuration file:
 Our project follows these testing practices:
 
 ### Testing Approach
+
 - [ ] TDD (write tests first)
-- [ ] BDD (behavior-driven scenarios)  
+- [ ] BDD (behavior-driven scenarios)
 - [ ] Unit tests for business logic
 - [ ] Integration tests for APIs
 - [ ] E2E tests for critical user flows
 - [ ] Manual QA before releases
 
 ### Test Requirements
+
 - **Coverage target**: [e.g., 80% for new code]
 - **Test frameworks**: [e.g., Jest, Playwright, pytest]
 - **Test location**: [e.g., `__tests__/` directory, co-located `*.test.js`]
 - **Naming convention**: [e.g., `describe()` blocks per component/function]
 
 ### When to Write Tests
+
 - [ ] Before implementation (TDD)
 - [ ] After implementation (TAD)
 - [ ] For bug fixes (regression tests)
@@ -114,11 +117,13 @@ Our project follows these testing practices:
 - [ ] For all public APIs
 
 ### CI/CD Integration
+
 - Tests run on: [e.g., every commit, PR only, nightly]
 - Required pass rate: [e.g., 100%, allows failures in experimental features]
 - Performance benchmarks: [e.g., E2E tests must complete in <5 minutes]
 
 ### Notes
+
 [Add any project-specific testing context, exceptions, or guidelines here]
 ```
 

@@ -76,6 +76,8 @@ npx @provectusinc/awos
 
 That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product.
 
+**💡 Pro tip:** Check out the [plugins directory](plugins/) for optional extensions like the UI prototyping prompt generator - they can add extra superpowers to your workflow!
+
 ## The `awos` Philosophy
 
 The **`awos`** framework is built on a simple but powerful idea: AI agents, like human developers, need clear context to do great work. Without a structured plan, even the most advanced LLM can act like a confused intern. **`awos`** provides a step-by-step workflow that transforms your vision into a detailed blueprint that AI agents can understand and execute flawlessly. This process ensures the AI's incredible speed is channeled into building the right software, correctly, on the first try.
@@ -99,6 +101,8 @@ The **`awos`** workflow is built on a clear document structure that creates a tr
 - 🛠️ **Pre-defined Sub-Agents**: A collection of specialized AI workers that the main agents delegate tasks to. This includes sub-agents for coding, testing, and other utility functions, ensuring that the right "AI expert" is used for every job.
 
 - 🔌 **Extensibility Hooks**: An advanced system for customization. Hooks and other configuration points allow you to modify and extend the framework to fit your team's specific workflow and needs (more decisions on this is coming soon).
+
+- 🧩 **Plugin Ecosystem**: Optional plugins that extend **`awos`** with additional capabilities beyond the core workflow. ➡️ [View available plugins](plugins/)
 
 ## Customizing `awos`
 

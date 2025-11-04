@@ -36,11 +36,33 @@ npx @provectusinc/awos
 - **Think of it as**: Your project's main ID card. It answers the big questions: _What_ are we building, _why_, and for _who_?
 - Audience: Product Owner (Non-Technical)
 
+**Example Usage:**
+
+```bash
+# ✅ Good:
+> /awos:product Build a photo editing app that adds beer and smiles to user photos using AI. Users want to create fun party photos to share on social media.
+
+# ❌ Bad:
+# too technical for product definition
+> /awos:product Build an ML pipeline with TensorFlow for facial landmark detection and image compositing with alpha blending.
+```
+
 2. `/awos:roadmap`
 
 - **What it does**: Creates the Product Roadmap.
 - **Think of it as**: Your project's GPS. It lays out the features you will build and in what order.
 - Audience: Product Manager (Non-Technical)
+
+**Example Usage:**
+
+```bash
+# ✅ Good:
+> /awos:roadmap Phase 1: Photo upload, Phase 2: Face detection, ...
+
+# ❌ Bad:
+# too granular and technical
+> /awos:roadmap Sprint 1 Task #42: Implement YOLO v8 model inference endpoint
+```
 
 3. `/awos:architecture`
 
@@ -48,11 +70,41 @@ npx @provectusinc/awos
 - **Think of it as**: Your project's building blueprint. It decides the technology stack, databases, infrastructure, etc.
 - Audience: Solution Architect (Technical)
 
+**Example Usage:**
+
+```bash
+# ✅ Good:
+> /awos:architecture React frontend, Python Flask backend with OpenCV, AWS S3 for image storage, Lambda for processing
+
+# ❌ Bad:
+# describes features, not architecture
+> /awos:architecture Users can upload photos and see beer added to their pictures.
+```
+
 4. `/awos:spec`
 
 - **What it does**: Creates a detailed Functional Specification for a single feature from the roadmap.
 - **Think of it as**: A detailed plan for one room in your house. It describes exactly what the feature does for a user.
 - Audience: Product Analyst (Non-Technical)
+
+**Example Usage:**
+
+```bash
+# ✅ Good:
+> /awos:spec
+# (It will start working on the first incomplete checklist item in the roadmap)
+
+# ✅ Good:
+> /awos:spec Feature: Face Detection - System detects faces in uploaded image, highlights detected area with bounding box.
+
+# ❌ Bad:
+# implementation details, not user-facing functionality
+> /awos:spec Implement multipart/form-data POST to /api/upload with JWT auth.
+
+# ❌ Bad:
+# too generic to implement
+> /awos:spec Feature: Make the app work well.
+```
 
 5. `/awos:tech`
 
@@ -60,17 +112,49 @@ npx @provectusinc/awos
 - **Think of it as**: The builder's instructions for that one room. It explains _how_ to build the feature.
 - Audience: Tech Lead (Technical)
 
+**Example Usage:**
+
+```bash
+# ✅ Good:
+> /awos:tech Use OpenCV's Haar Cascade for face detection, overlay PNG assets at detected coordinates, return processed image via presigned S3 URL
+
+# ❌ Bad:
+# describes outcome, not technical approach
+> /awos:tech Make the photo upload smooth and fast for users.
+```
+
 6. `/awos:tasks`
 
 - **What it does**: Breaks the technical spec into a Task List.
 - **Think of it as**: The step-by-step construction checklist for engineers to follow.
 - Audience: Tech Lead (Technical)
 
+**Example Usage:**
+
+```bash
+# ✅ Good:
+> /awos:tasks
+# (It will create tasks for the spec created on the previous step)
+```
+
 7. `/awos:implement`
 
 - **What it does**: Executes tasks (finally, actual code generation).
 - **Think of it as**: The project foreman. This agent delegates the coding work to sub-agents and tracks progress.
 - Audience: Team Lead (Technical)
+
+**Example Usage:**
+
+```bash
+# ✅ Good:
+> /awos:implement Implement all tasks
+
+# ✅ Good:
+> /awos:implement Implement Phase 2
+
+# ✅ Good:
+> /awos:implement
+```
 
 ### Step 3: You're Awesome
 

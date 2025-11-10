@@ -240,29 +240,34 @@ class UserService(
 Before submitting code, verify:
 
 **Function Quality:**
+
 - Functions under 25 lines (preferably under 15)
 - Each function has single responsibility
 - Function names clearly express intent (no "AndThen" or "DoThisAndThat")
 - Complex logic extracted into named private functions
 
 **Type Safety:**
+
 - No `!!` null assertions (use safe calls, elvis operator, or explicit checks)
 - Proper nullable vs non-nullable types
 - Sealed classes for exhaustive when expressions
 - Value classes for domain-specific types
 
 **Domain Modeling:**
+
 - Data classes instead of `Map<String, Any>`
 - Value classes for type-safe primitives
 - Parameter objects for functions with >3 related parameters
 
 **Coroutines:**
+
 - Suspend functions for all I/O operations
 - Correct dispatcher selection (IO, Default, Main)
 - Structured concurrency (avoid GlobalScope)
 - Proper exception handling in coroutines
 
 **Precision Requirements:**
+
 - BigDecimal with explicit MathContext for financial calculations
 - String constructor for BigDecimal (never double)
 - Long storage for monetary values (store cents, not dollars)

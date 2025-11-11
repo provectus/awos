@@ -61,6 +61,13 @@ fun processOrder(order: Order): Result<ProcessedOrder> {
     val amounts = calculateAmounts(order)
     return Result.success(createProcessedOrder(order, amounts))
 }
+
+private fun validateOrder(order: Order): Result<Unit> =
+    when {
+        order.items.isEmpty() -> Result.failure(EmptyOrder)
+        order.total < BigDecimal.ZERO -> Result.failure(InvalidTotal)
+        else -> Result.success(Unit)
+    }
 ```
 
 ### Type-Safe Domain Modeling

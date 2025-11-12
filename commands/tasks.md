@@ -82,13 +82,13 @@ Follow this process precisely.
 - **CRITICAL ADDITION: Auto-Assign Subagents to Tasks**
 
   For each high-level task you create, you MUST:
-
   1.  **Determine Task Technology:** Identify the primary technology/layer for the task (e.g., "Add avatar_url column" = Backend/Python, "Create ProfileAvatar component" = Frontend/React)
 
   2.  **Assign Subagent:** Based on the matching rules from Step 3, add an HTML comment immediately after the task checkbox with the assigned subagent:
+
       ```markdown
       - [ ] **Task Name**
-        <!-- Assignee: python-expert -->
+      <!-- Assignee: python-expert -->
       ```
 
   3.  **Assignment Guidelines:**
@@ -111,9 +111,9 @@ Follow this process precisely.
       - `[ ] Sub-task: Place the component on the profile page.`
     - `[ ] **Slice 2: Display the user's actual avatar if it exists**`
       `<!-- Assignee: python-expert -->`
-      - `[ ] Sub-task: Add `avatar_url` column to the `users` table via a migration.`
+      - `[ ] Sub-task: Add `avatar_url`column to the`users` table via a migration.`
       - `[ ] Sub-task: Update the user API endpoint to return the `avatar_url`.`
-      `<!-- Assignee: react-expert -->`
+        `<!-- Assignee: react-expert -->`
       - `[ ] Sub-task: Update the 'ProfileAvatar' component to fetch and display the user's `avatar_url`, falling back to the placeholder if null.`
 
   **Note:** The HTML comments `<!-- Assignee: ... -->` are invisible when viewing the markdown file normally, but can be parsed by the `/awos:implement` agent to automatically select the correct subagent for each task.

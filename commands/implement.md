@@ -54,7 +54,7 @@ Follow this process precisely.
     - Example:
       ```markdown
       - [ ] **Implement user authentication**
-        <!-- Assignee: python-expert -->
+      <!-- Assignee: python-expert -->
       ```
 
 2.  **Extract Assigned Subagent:**

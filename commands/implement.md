@@ -47,7 +47,27 @@ Follow this process precisely.
     - `[target-spec-directory]/technical-considerations.md`
     - `[target-spec-directory]/tasks.md`
 
-### Step 3: Delegate Implementation to a Subagent
+### Step 3: Parse Subagent Assignment (if present)
+
+1.  **Check for Assignee Comment:** In the `tasks.md` file you just loaded, look for an HTML comment immediately following the current task checkbox.
+    - The format is: `<!-- Assignee: subagent-name -->`
+    - Example:
+      ```markdown
+      - [ ] **Implement user authentication**
+        <!-- Assignee: python-expert -->
+      ```
+
+2.  **Extract Assigned Subagent:**
+    - If an assignee comment is found, extract the subagent name (e.g., `python-expert`, `react-expert`, `htmx-expert`, `kotlin-expert`)
+    - This will be your **primary subagent choice** for Step 4
+
+3.  **Fallback Logic:**
+    - If no assignee comment is present, you will need to determine the appropriate subagent based on the task description and technical context (same as before)
+    - Announce: "No explicit assignee found for this task. I will analyze the task to determine the appropriate subagent."
+
+4.  **Announce Assignment:** If an assignee was found, announce it: "This task is assigned to: **`[subagent-name]`**. I will delegate to this expert."
+
+### Step 4: Delegate Implementation to a Subagent
 
 - **CRITICAL RULE:** You are **strictly prohibited** from writing, editing, or modifying any production code, configuration files, or database schemas yourself. Your only role is to delegate.
 
@@ -58,11 +78,11 @@ Follow this process precisely.
     - A definition of success (e.g., "The task is done when the new migration file is created and passes linting.").
 2.  **Execute Delegation:** Call the subagent with the formulated prompt. Example: "I am now delegating this task to a coding agent with all the necessary context and instructions."
 
-### Step 4: Await and Verify Completion
+### Step 5: Await and Verify Completion
 
 - Wait for the subagent to complete its work and report a successful outcome. You should assume that a success signal from the subagent means the task was completed as instructed.
 
-### Step 5: Update Progress
+### Step 6: Update Progress
 
 1.  **Mark Task as Done:** Upon successful completion by the subagent, you must update the progress tracker.
 2.  Read the contents of the `tasks.md` file from the target directory.

@@ -156,7 +156,7 @@ npx @provectusinc/awos
 > /awos:implement
 ```
 
-8. `/awos:handoff` *(Optional - for milestone completion)*
+8. `/awos:handoff` _(Optional - for milestone completion)_
 
 - **What it does**: Archives completed specifications at the end of a milestone. Verifies completion, creates compact summaries, and cleans up spec directories.
 - **Think of it as**: The milestone closer. It compacts your detailed specs into concise summaries and prepares your project for the next phase.

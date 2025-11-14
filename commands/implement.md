@@ -76,7 +76,39 @@ Follow this process precisely.
 
 1.  **Mark Task as Done:** Upon successful completion by the subagent, you must update the progress tracker.
 2.  Read the contents of the `tasks.md` file from the target directory.
-3.  Find the exact line for the task that was just completed.
-4.  Change its checkbox from `[ ]` to `[x]`.
-5.  Save the modified content back to the `tasks.md` file.
-6.  **Announce Completion:** Conclude the process with a clear status update. Example: "The task has been successfully completed by the subagent. I have updated `tasks.md` to reflect this."
+3.  **Find and Mark the Specific Completed Task:**
+    - Identify the exact line that corresponds to the task that was just completed.
+    - **Important:** If the task was a sub-item (indented checkbox under a parent task), mark ONLY that specific sub-item by changing its checkbox from `[ ]` to `[x]`.
+    - After marking the sub-item, check if ALL sub-items under the same parent are now complete (`[x]`). If they are, ALSO mark the parent task as complete.
+    - If the task was a top-level task (not a sub-item), simply mark that task's checkbox from `[ ]` to `[x]`.
+4.  Save the modified content back to the `tasks.md` file.
+5.  **Announce Completion:** Conclude this step with a status update. Example: "The task has been successfully completed by the subagent. I have updated `tasks.md` to reflect this."
+
+### Step 6: Check for Spec Completion and Update Acceptance Criteria & Roadmap
+
+After updating the task list, you must check if the entire specification has been completed and, if so, mark the corresponding acceptance criteria and roadmap item as done.
+
+1.  **Check if All Tasks are Complete:**
+    - Re-read the `tasks.md` file you just updated.
+    - Determine if **all** checkboxes in the file are now marked as complete (`[x]`). This includes both top-level tasks and all sub-items.
+    - If there are still incomplete tasks (`[ ]`), skip the rest of this step and proceed to finalization.
+
+2.  **Mark Acceptance Criteria as Complete (if all tasks are done):**
+    - If all tasks are complete, read the `functional-spec.md` file from the same spec directory.
+    - Find all acceptance criteria checkboxes (formatted as `- [ ]` within the "Acceptance Criteria" sections).
+    - Change all acceptance criteria checkboxes from `[ ]` to `[x]`.
+    - Save the updated `functional-spec.md` file.
+    - Announce: "All tasks for this spec are complete. I have marked all acceptance criteria in the functional spec as done."
+
+3.  **Mark Roadmap Item as Complete (if all tasks are done):**
+    - Read the `functional-spec.md` file to find the **"Roadmap Item"** field near the top (e.g., `- **Roadmap Item:** User Profile Picture Upload`).
+    - Extract the text of the roadmap item from this field.
+    - Read the `context/product/roadmap.md` file.
+    - Search for the roadmap item that matches the extracted text (it may be part of a checkbox item description or the bolded feature name).
+    - Change the checkbox for that roadmap item from `[ ]` to `[x]`.
+    - Save the updated `roadmap.md` file.
+    - Announce: "I have also marked the corresponding roadmap item as complete in `context/product/roadmap.md`."
+
+4.  **Final Announcement:**
+    - If all tasks were complete and you performed steps 2 and 3, announce: "This specification is now fully implemented. All tasks, acceptance criteria, and the roadmap item have been marked as complete. You may now run `/awos:implement` again to work on the next spec, or run `/awos:handoff` to archive completed specs."
+    - If tasks remain, simply announce: "Implementation step complete. There are still remaining tasks in this spec."

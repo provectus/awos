@@ -139,7 +139,7 @@ npx @provectusinc/awos
 
 7. `/awos:implement`
 
-- **What it does**: Executes tasks (finally, actual code generation).
+- **What it does**: Executes tasks (finally, actual code generation). Automatically marks completed tasks, acceptance criteria, and roadmap items.
 - **Think of it as**: The project foreman. This agent delegates the coding work to sub-agents and tracks progress.
 - Audience: Team Lead (Technical)
 
@@ -156,9 +156,27 @@ npx @provectusinc/awos
 > /awos:implement
 ```
 
+8. `/awos:handoff` *(Optional - for milestone completion)*
+
+- **What it does**: Archives completed specifications at the end of a milestone. Verifies completion, creates compact summaries, and cleans up spec directories.
+- **Think of it as**: The milestone closer. It compacts your detailed specs into concise summaries and prepares your project for the next phase.
+- Audience: Project Manager (Technical/Non-Technical)
+
+**Example Usage:**
+
+```bash
+# ✅ Good:
+> /awos:handoff
+# (Verifies all specs are complete, creates summaries in context/product/completed-specs/, removes original spec directories)
+
+# ❌ Bad:
+# This command doesn't take arguments
+> /awos:handoff spec-001
+```
+
 ### Step 3: You're Awesome
 
-That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product.
+That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product. When you complete a milestone, use `/awos:handoff` to archive your work and prepare for the next phase.
 
 ## The `awos` Philosophy
 

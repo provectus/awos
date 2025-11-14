@@ -1,0 +1,5 @@
+{
+  "name": "awos:prototype-prompt",
+  "description": "Generates AI-optimized prompt for UI prototyping tools (Figma Make, v0, Bolt.new, Lovable)",
+  "version": "1.0.0"
+}

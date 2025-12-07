@@ -27,7 +27,7 @@ _Example: A command-line tool designed to help AI agents create and maintain str
 
 ### Tech Stack
 
-[**What technologies does it use?** Detect and parse configuration files and dependencies to extract the primary languages, frameworks, and major dependencies. We don't need complete list, just most important and major ones, standard or more general purpose libraries can be ignored.]
+[**What technologies does it use?** Detect and parse configuration files and dependencies to extract the primary languages, frameworks, and major dependencies. We don't need a complete list, just the most important and major ones. Standard or more general-purpose libraries can be ignored.]
 
 - [Language/Framework 1]
 - [Language/Framework 2]
@@ -88,14 +88,17 @@ _Example:_
 
 ### Relationships
 
-[**How does this repo connect to others?** Document dependencies and how this repository interconnects with other registered repositories. Focus primarily on dependencies and direct relationships. The "Used by" field is optional and mainly useful when known. If `context/registry.md` exists Read it, Parse all existing repository entries and Extract their names, paths, and package names for cross-referencing, Scan dependency files(typically found in package/lib management files) in the repository to better understand dependencies.]
+[**How does this repo connect to others?** Document dependencies and how this repository interconnects with other registered repositories. Focus primarily on dependencies and direct relationships. The "Used by" field is optional and mainly useful when known. If `context/registry.md` exists, read it, parse all existing repository entries, and extract their names, paths, and package names for cross-referencing. Scan dependency files (typically found in package/lib management files) in the repository to better understand dependencies.]
 
+- **Relation to current project:**
+  [**How are the current project and this repository connected?** 5-10 sentences describing how the current project can be connected to, use, be used by, or depend on this repository. Describe potential use cases and scenarios when we will need to scan this repository to implement a new feature or get information.]
 - **Depends on:** [list of other registered repos this depends on]
   - [**What does it need?** List repositories, services, or libraries this repo requires to function. Explain the nature of the dependency. For each dependency or reference found, check if it matches a registered repo's package name (from its package.json, pyproject.toml, etc.) or a registered repo's GitHub path (owner/repo) or a registered repo's local path and build list from matches.]
 - **Used by:** [list of other registered repos that depend on this] _(optional)_
-  - [**What needs it?** List repositories that depend on or integrate with this one, if known. When saving a new/updated entry, if it depends on repo X Read repo X's entry from the registry Add the current repo to repo X's "Used by" list (if not already there) and Save the updated registry]
+  - [**What needs it?** List repositories that depend on or integrate with this one, if known. When saving a new/updated entry, if it depends on repo X, read repo X's entry from the registry, add the current repo to repo X's "Used by" list (if not already there), and save the updated registry.]
 
 _Example:_
+- **Relation to current project:** Current project uses `anthropic/claude-code` and integrates to it. We need to analyze or scan this repo if we need some internals on how claude-code is working and what type of functionality it has.
 - **Depends on:** `anthropic/claude-api` (for AI model access), `shared/ui-components` (for CLI interface elements)
 - **Used by:** `acme/frontend-app` (uses generated specs for feature planning), `acme/admin-dashboard` (integrates documentation workflow)
 

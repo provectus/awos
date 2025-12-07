@@ -112,7 +112,7 @@
 
 ## Slice 12: Add stale repo handling
 
-- [x] On registry load, verify accessibility of each registered repository
+- [x] On registry load, verify accessibility of repos not updated more than a week ago
 - [x] For local repos: Check if the path exists on the filesystem
 - [x] For GitHub repos: Attempt an MCP call to verify the repo is accessible
 - [x] Mark inaccessible repos with `status: stale` and display warning

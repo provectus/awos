@@ -84,8 +84,8 @@ The `/awos:registry` command creates and manages a registry file (`context/regis
 - **As a** user, **I want to** choose the scan depth **so that** I can control how much analysis is performed.
   - **Acceptance Criteria:**
     - [x] Prompt: "How deep should I analyze this repository?"
-    - [x] Option 1: "Quick scan" - Documentation files only (*.md, docs/, context/)
-    - [x] Option 2: "Full scan" - Everything (show token warning)
+    - [x] Option 1: "Quick scan" - Documentation, guides, and examples in all directories and subdirectories (README.md, CLAUDE.md, *.md, docs/, examples/, configuration files, etc.)
+    - [x] Option 2: "Full scan" - Everything, each and every file (show token warning)
     - [x] If AWOS-enabled repo detected (context/ with product/ and spec/ subdirectories), automatically include context/ folder analysis
 
 ### 2.7. Repo Analysis Engine
@@ -137,7 +137,7 @@ The `/awos:registry` command creates and manages a registry file (`context/regis
 
 - **As a** user, **I want** clear feedback when a repo becomes inaccessible **so that** I know something is wrong.
   - **Acceptance Criteria:**
-    - [x] On registry load, verify accessibility of each registered repository
+    - [x] On registry load, verify accessibility of repos not updated more than a week ago
     - [x] For local repos: Check if the path exists on the filesystem
     - [x] For GitHub repos: Attempt an MCP call to verify the repo is accessible
     - [x] Mark inaccessible repos with `status: stale`

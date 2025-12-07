@@ -109,7 +109,7 @@ Using GitHub MCP tools:
 
 Detect dependencies on other registered repositories by:
 
-1. **Reading Current Registry:** Parse existing entries for cross-referencing
+1. **Reading Current Registry:** If `context/registry.md` exists, read it, parse all existing repository entries, and extract their names, paths, and package names for cross-referencing
 2. **Scanning Dependency Files:**
    - `package.json` → dependencies, devDependencies, peerDependencies
    - `pyproject.toml` → project.dependencies, tool.poetry.dependencies
@@ -117,7 +117,7 @@ Detect dependencies on other registered repositories by:
    - `Cargo.toml` → dependencies
    - `composer.json`, `Gemfile`, `pom.xml`, `build.gradle`
 3. **Cross-Referencing:** Match dependencies against registered repos by package name, GitHub path, or local path
-4. **Bidirectional Updates:** When saving, update "Used by" lists in dependent repos
+4. **Bidirectional Updates:** When saving, if the new repo depends on repo X, read repo X's entry from the registry, add the current repo to repo X's "Used by" list (if not already there), and save the updated registry
 
 ---
 
@@ -136,7 +136,7 @@ Detect dependencies on other registered repositories by:
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | MCP not installed | Cannot access GitHub repos | Clear guidance to install or clone locally |
-| Repo becomes inaccessible | Stale registry data | Mark as `status: stale` on registry load, keep entry |
+| Repo becomes inaccessible | Stale registry data | Mark as `status: stale` when repo not updated in over a week, keep entry |
 | Large repo analysis | Slow/timeout | Offer quick vs full scan options |
 | Conflicting repo names | Ambiguous references | Use full path/URL as unique identifier |
 | Registry file corruption | Lost registry data | Registry is markdown, recoverable via git |
@@ -173,8 +173,8 @@ Detect dependencies on other registered repositories by:
    - Verify entry is updated with new Last Updated timestamp
 
 7. **Stale Repo Handling:**
-   - Delete a registered local repo directory
-   - Open registry and verify stale marking and warning message
+   - Delete a registered local repo directory (or wait until entry is over a week old)
+   - Open registry and verify stale marking and warning message for repos not updated in over a week
 
 8. **Remove Repository:**
    - Remove a repo from registry

@@ -24,6 +24,11 @@ Your task is to manage the registry file at `context/registry.md`. This file tra
 
 # PROCESS
 
+Follow this logic precisely!
+When you need user input on a decision:
+  - Use **AskUserQuestion** tool with clear, clickable options
+  - Never present numbered lists requiring manual number entry
+
 ### Step 1: Mode Detection & Menu
 
 **This is the entry point when `/awos:registry` is invoked.**
@@ -37,7 +42,7 @@ Display:
 No registry found. Let's create your registry.
 ```
 
-Ask: **"Would you like to add a repository?"**
+Ask: **"Would you like to add a repository?"** And give below options for selection.
 
 - **Yes**: Proceed to Step 2 (Get Repository)
 - **No**: End the flow
@@ -59,13 +64,13 @@ Current Registry:
 ```
 
 **Check for stale repositories:**
-Before showing the menu, verify accessibility of each registered repository:
+Before showing the menu, verify accessibility of each registered repository if it was not updated more than a week ago:
 - **For local repos:** Check if the path exists on the filesystem
 - **For GitHub repos:** Attempt an MCP call to verify the repo is accessible
 
 If any repos are inaccessible, mark them as `status: stale` in the registry and display a warning:
 ```
-Warning: The following repositories are no longer accessible:
+Warning: The following repositories are no longer accessible. Please update or remove them:
 - [Repo Name] ([path]) - Path does not exist / GitHub repo not accessible
 ```
 
@@ -80,7 +85,7 @@ Warning: The following repositories are no longer accessible:
 
 Ask what repository the user wants to add or update. Accept GitHub URLs, owner/repo format, or local paths.
 
-**Auto-detect type:**
+**Note:** Auto-detect type from user input. It should be one of the below:
 - **GitHub repositories**: Parse input to extract owner/repo. Check for GitHub MCP (Step 2.1).
 - **Local repositories**: Proceed to Step 3 with the path.
 
@@ -96,7 +101,7 @@ Ask what repository the user wants to add or update. Accept GitHub URLs, owner/r
 
 Display:
 ```
-GitHub MCP required. Install with: claude mcp add github
+GitHub MCP required. Install with: `claude mcp add github -- npx -y @modelcontextprotocol/server-github` and re-run Claude Code.
 ```
 
 Ask: **"Try again after installing, or clone locally instead?"**
@@ -126,8 +131,8 @@ Once valid path is confirmed, proceed to Step 4.
 #### 4.1. Scan Type
 
 Ask: "How deep should I analyze this repository?"
-- **Quick scan**: Documentation files only (*.md, docs/, context/)
-- **Full scan**: Everything (show token warning)
+- **Quick scan**: Documentation, guides, and examples in all directories and subdirectories (README.md, CLAUDE.md and any other `.md` files or files with potential documentation and examples, *.md, docs/, examples/, configuration files, etc.)
+- **Full scan**: Everything, each and every file (show token warning)
 
 #### 4.2. File Access Strategy
 
@@ -161,16 +166,11 @@ Check if `context/` directory exists AND contains both `product/` and `spec/` su
 
 #### 4.4. Scan Files
 
-Based on scan type and repository type, discover and read files:
-- README.md, CLAUDE.md and any other `.md` file or files with potential documentations and examples.
-- Configuration files (package.json, pyproject.toml, go.mod, Cargo.toml, etc.)
-- Documentation files based on scan depth
-- Source code structure (if full scan)
-
+Based on scan type and repository type, discover and read files.
 
 #### 4.5. Generate Entry
 
-Based on files that you have read in previous step, Read `.awos/templates/registry-template.md` and follow its structure to generate all necessary fields in template:
+Based on files that you have read in the previous step, read `.awos/templates/registry-template.md` and follow its structure to generate all necessary fields in the template.
 
 #### 4.6. Present Analysis
 
@@ -206,9 +206,6 @@ Determine the save operation by checking if the repository already exists in the
 #### 6.2. Add Mode (Registry exists, but repo not in it)
 - Read existing registry
 - Append new entry to the end
-- **Update bidirectional relationships:**
-  - For each repo in the "Depends on" list, find its entry in the registry
-  - Add the current repo to that entry's "Used by" list (if not already present)
 - Save to `context/registry.md`
 - Display: "Added [Repository Name] to registry."
 
@@ -217,10 +214,6 @@ Determine the save operation by checking if the repository already exists in the
 - Locate the existing entry (search for matching path/owner-repo)
 - Compare old and new to identify changes
 - Replace the entire entry (from `## [Name]` heading to the `---` separator before next entry or end of file)
-- Update the **Last Updated** timestamp to current date/time
-- **Update bidirectional relationships:**
-  - For newly added dependencies: Add current repo to their "Used by" lists
-  - For removed dependencies: Remove current repo from their "Used by" lists
 - Save to `context/registry.md`
 - Display: "Updated [Repository Name] in registry."
 

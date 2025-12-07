@@ -34,23 +34,26 @@ _The foundational features that form the core of AWOS - all implemented._
 
 ---
 
-### Phase 2: Multi-Repository Registry
+### Phase 2: Multi-Repository Registry (Complete)
 
 _Enable AWOS to work across multiple repositories, allowing shared context between frontend, backend, and infrastructure codebases._
 
-- [ ] **Registry Command (`/awos:registry`)**
-  - [ ] **Interactive Repo Registration:** Prompt user to choose between local folder or GitHub repository
-  - [ ] **Local Repository Support:** Use CLI commands to analyze local repos (no MCP required)
-  - [ ] **GitHub Repository Support:** Integrate with official GitHub MCP server for remote repo access
-  - [ ] **MCP Availability Check:** Detect if GitHub MCP is configured; guide user to add it if missing
-  - [ ] **Repo Analysis Engine:** Scan README.md, CLAUDE.md, context/ directory, and documentation files
-  - [ ] **Registry File Management:** Create/update `context/registry.md` with repo metadata
+- [x] **Registry Command (`/awos:registry`)**
+  - [x] **Interactive Repo Registration:** Prompt user to choose between local folder or GitHub repository
+  - [x] **Local Repository Support:** Use CLI commands to analyze local repos (no MCP required)
+  - [x] **GitHub Repository Support:** Integrate with official GitHub MCP server for remote repo access
+  - [x] **MCP Availability Check:** Detect if GitHub MCP is configured; guide user to add it if missing
+  - [x] **Repo Analysis Engine:** Scan README.md, CLAUDE.md, context/ directory, and documentation files
+  - [x] **Registry File Management:** Create/update `context/registry.md` with repo metadata
+  - [x] **Stale Repo Detection:** Check accessibility of repos not updated in over a week
+  - [x] **Bidirectional Relationships:** Track dependencies and "Used by" relationships
 
-- [ ] **Registry Data Model**
-  - [ ] **Basic Repo Info:** Store repo name, type (local/github), path or URL
-  - [ ] **Tech Stack Detection:** Identify languages, frameworks, and tools used
-  - [ ] **Architecture Summary:** Extract key architectural decisions and patterns
-  - [ ] **Linked Specifications:** Reference related specs and features across repos
+- [x] **Registry Data Model**
+  - [x] **Basic Repo Info:** Store repo name, type (local/github), path or URL, status, last updated
+  - [x] **Tech Stack Detection:** Identify languages, frameworks, and tools used
+  - [x] **Architecture Summary:** Extract key architectural decisions and patterns
+  - [x] **Linked Specifications:** Reference related specs and features across repos
+  - [x] **AWOS Context Detection:** Parse product vision, roadmap phase, and specs for AWOS-enabled repos
 
 ---
 

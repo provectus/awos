@@ -134,44 +134,68 @@ Ask: "How deep should I analyze this repository?"
 - **Quick scan**: Documentation, guides, and examples in all directories and subdirectories (README.md, CLAUDE.md and any other `.md` files or files with potential documentation and examples, *.md, docs/, examples/, configuration files, etc.)
 - **Full scan**: Everything, each and every file (show token warning)
 
-#### 4.2. File Access Strategy
+#### 4.2. Delegate to Repository Scanner
 
-**For local repositories (type=`local`):**
-- **List/Find:** Use Glob tool with patterns (e.g., `**/*.md`, `context/**/*`)
-- **Search:** Use Grep tool for content search
-- **Read:** Use Read tool with file paths
+**Use the Task tool to invoke the `repo-scanner` subagent:**
 
-**For GitHub repositories (type=`github`):**
-- **List/Find:** Use `mcp__github__get_tree` or `mcp__github__list_files` to get directory structure
-- **Search:** Use `mcp__github__search_code` if available, or fetch and search files manually
-- **Read:** Use `mcp__github__get_file_contents(owner, repo, path)` to read individual files
+Pass the following parameters based on the repository type and user's scan choice:
+- `repo_type`: `local` or `github` (from Step 2/3)
+- `repo_path`: The filesystem path (local) or `owner/repo` (GitHub)
+- `scan_depth`: `quick` or `full` (from Step 4.1)
+- `scope`: Omit to use default scanning patterns
+
+**Receive scanner results:**
+
+The scanner will return a JSON array of file results:
+```json
+[
+  { "path": "README.md", "content": "...", "status": "success" },
+  { "path": "context/product/product-definition.md", "content": "...", "status": "success" },
+  { "path": "missing.md", "content": null, "status": "error", "error": "File not found" }
+]
+```
+
+**Error handling:**
+- If scanner returns an error status (e.g., GitHub MCP not available), display the error message and offer solutions
+- Individual file errors should be noted but don't stop the entire analysis
+- If no files were successfully read, report the issue and ask user if they want to retry or cancel
 
 #### 4.3. AWOS Detection
 
-Check if `context/` directory exists AND contains both `product/` and `spec/` subdirectories. If both exist, this is an AWOS-enabled repository.
+**Process the scanner results to detect AWOS:**
 
-**When AWOS is detected, read all context files:**
+Look through the returned file array for paths that indicate AWOS structure:
+- Check if any file paths start with `context/product/`
+- Check if any file paths start with `context/spec/`
 
-1. **Read Product Files** (`context/product/`):
+If BOTH `context/product/` AND `context/spec/` paths exist, this is an AWOS-enabled repository.
+
+**When AWOS is detected, extract context files from scanner results:**
+
+1. **Extract Product Files** (paths starting with `context/product/`):
    - `product-definition.md` - Product vision, target audience, success metrics
    - `roadmap.md` - Phases, features, project status
    - `architecture.md` - Tech decisions, stack, patterns
 
-2. **Read Spec Files** (`context/spec/`):
-   - Scan for all spec files (functional and technical)
-   - For each spec: note filename, assess completeness
+2. **Extract Spec Files** (paths starting with `context/spec/`):
+   - Identify all spec files (functional and technical)
+   - For each spec: note filename, assess completeness based on content
 
-3. **Check Registry** (`context/registry.md`):
-   - If exists in target repo, read it to understand dependencies on other repos
+3. **Check Registry** (path `context/registry.md`):
+   - If found in scanner results, parse it to understand dependencies on other repos
 
-#### 4.4. Scan Files
+**If additional context files are needed:**
 
-Based on scan type and repository type, discover and read files.
+If scanner didn't return all expected context files (e.g., quick scan might have missed some), you can use the Task tool again with specific `scope` attribute to request missing files
+
+#### 4.4. Process Scanner Results
+
+Parse through all successfully scanned files from the scanner results.
 
 #### 4.5. Generate Entry
 
-Based on files that you have read in the previous step, read `.awos/templates/registry-template.md` and follow its structure to generate all necessary fields in the template.
-
+Based on the processed scanner results, read `.awos/templates/registry-template.md` and follow its structure to generate all necessary fields in the template.
+Use the file contents from the scanner results to populate it.
 #### 4.6. Present Analysis
 
 Display the complete entry following template format. Proceed to Step 5.

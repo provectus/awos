@@ -9,12 +9,12 @@ _This registry tracks related repositories for cross-project context. Other AWOS
 - **Type:** `github`
 - **Path:** `anthropics/claude-code`
 - **Status:** `active`
-- **Last Updated:** 2025-12-07 18:30
+- **Last Updated:** 2025-12-08 10:30
 - **AWOS Enabled:** `no`
 
 ### Summary
 
-Claude Code is an agentic coding tool that lives in your terminal, understands your codebase, and helps developers code faster through natural language commands. It executes routine tasks, explains complex code, and handles git workflows - all via conversational interactions. The tool can be used in terminals, IDEs, or by tagging @claude on GitHub for seamless integration into existing workflows. It features a comprehensive plugin system that allows extending functionality through custom slash commands, specialized agents, hooks, and MCP servers. Claude Code supports multiple installation methods including shell scripts, Homebrew, npm, and native desktop apps for cross-platform compatibility. The tool connects to Anthropic's Claude models including Opus 4.5, Sonnet 4, and Haiku 4.5 for AI-powered assistance. Primary users are developers who want to accelerate their coding workflows with AI assistance while maintaining control over their codebase. The project is actively maintained by Anthropic with frequent updates (currently at version 2.0.61) and includes official plugins for code review, PR workflows, security guidance, and more.
+Claude Code is an agentic coding tool that lives in your terminal, understands your codebase, and helps developers code faster through natural language commands. It executes routine tasks, explains complex code, and handles git workflows - all via conversational interactions. The tool can be used in terminals, IDEs, or by tagging @claude on GitHub for seamless integration into existing workflows. It features a comprehensive plugin system with 13 official plugins covering code review, feature development, security guidance, and workflow automation. Claude Code supports multiple installation methods including shell scripts, Homebrew, npm, and native desktop apps for cross-platform compatibility. The tool connects to Anthropic's Claude models including Opus 4.5, Sonnet 4, and Haiku 4.5 for AI-powered assistance. Primary users are developers who want to accelerate their coding workflows with AI assistance while maintaining control over their codebase. The project is actively maintained by Anthropic with frequent updates (currently at version 2.0.61).
 
 ### Tech Stack
 
@@ -31,23 +31,21 @@ Claude Code is an agentic coding tool that lives in your terminal, understands y
 
 - Natural language code understanding and generation
 - Git workflow automation (commits, PRs, branch management)
-- Plugin system with custom commands, agents, hooks, and MCP servers
+- Plugin system with 13 official plugins (code-review, feature-dev, security-guidance, hookify, etc.)
 - VS Code extension integration with native desktop app
-- Web search capabilities
-- Plan mode for complex task planning with thinking/ultrathink
-- Session resume and conversation history
 - Multi-model support (Opus 4.5, Sonnet 4, Haiku 4.5)
-- MCP (Model Context Protocol) server support with OAuth
-- Background agent and task execution
+- MCP (Model Context Protocol) server support
 - Custom slash commands and skills
-- Sandbox mode for secure bash execution
+- Hook system for behavior interception and customization
+- Agent SDK for building custom agents
 
 ### Functionality & Documentation References
 
 - **`README.md`:** Installation guide and getting started documentation
-- **`CHANGELOG.md`:** Detailed version history with all features and fixes (2.0.61 latest)
-- **`plugins/`:** 14 official plugins including code-review, commit-commands, feature-dev, hookify, pr-review-toolkit, security-guidance
-- **`plugins/README.md`:** Complete plugin documentation with structure and installation guide
+- **`CHANGELOG.md`:** Detailed version history (v0.2.21 to v2.0.61)
+- **`plugins/README.md`:** Complete plugin documentation with 13 official plugins
+- **`.claude/commands/`:** Built-in slash commands (commit-push-pr, dedupe, oncall-triage)
+- **`SECURITY.md`:** Security reporting and vulnerability disclosure
 
 ### Relationships
 

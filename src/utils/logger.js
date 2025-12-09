@@ -93,6 +93,13 @@ function showSummary(statistics, options) {
     summaryItems.push(['Migrations applied', migrationsApplied]);
   }
 
+  // Add VS Code settings status for Copilot
+  if (statistics.settingsMerged) {
+    summaryItems.push(['VS Code settings merged', 1]);
+  } else if (statistics.settingsCreated) {
+    summaryItems.push(['VS Code settings created', 1]);
+  }
+
   showLine();
 
   if (options?.dryRun) {
@@ -121,6 +128,10 @@ function showSummary(statistics, options) {
         labelText = 'Would preserve existing items';
       } else if (label === 'Migrations applied') {
         labelText = 'Would apply migrations';
+      } else if (label === 'VS Code settings merged') {
+        labelText = 'Would merge VS Code settings';
+      } else if (label === 'VS Code settings created') {
+        labelText = 'Would create VS Code settings';
       } else {
         labelText = `Would ${label.toLowerCase()}`;
       }

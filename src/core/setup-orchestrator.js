@@ -5,7 +5,12 @@
  */
 
 const { AWOS_ASCII, AWOS_SUBTITLE, style } = require('../config/constants');
-const { directories, copyOperations } = require('../config/setup-config');
+const {
+  directories,
+  copyOperations,
+  filterOperationsByTool,
+  filterDirectoriesByTool,
+} = require('../config/setup-config');
 const {
   showHeader,
   showStep,
@@ -15,6 +20,7 @@ const {
 } = require('../utils/logger');
 const { createDirectories } = require('../services/directory-creator');
 const { executeCopyOperations } = require('../services/file-copier');
+const { mergeVSCodeSettings } = require('../services/settings-merger');
 const { runMigrations } = require('../migrations/runner');
 
 /**
@@ -24,6 +30,7 @@ const { runMigrations } = require('../migrations/runner');
  * @param {string} config.packageRoot - The root directory of the AWOS package
  * @param {boolean} config.forceOverwrite - Force overwrite all files regardless of config
  * @param {boolean} config.dryRun - Run in dry-run mode (preview changes only)
+ * @param {string} config.tool - Target tool ('claude', 'copilot', 'all')
  * @returns {Promise<void>}
  */
 async function runSetup({
@@ -31,13 +38,18 @@ async function runSetup({
   packageRoot,
   forceOverwrite = false,
   dryRun = false,
+  tool = 'claude',
 }) {
   const TOTAL_STEPS = 4;
+
+  // Filter directories and operations based on selected tool
+  const filteredDirectories = filterDirectoriesByTool(directories, tool);
+  const filteredOperations = filterOperationsByTool(copyOperations, tool);
 
   // Display header
   showHeader(AWOS_ASCII, AWOS_SUBTITLE);
 
-  // Show dry-run mode notice
+  // Show mode notices
   if (dryRun) {
     log(`${style.warn('DRY-RUN MODE:')} No files will be modified`, 'info');
     console.log('');
@@ -51,6 +63,7 @@ async function runSetup({
     TOTAL_STEPS
   );
   log(`Working directory: ${style.dim(workingDir)}`, 'item');
+  log(`Target tool: ${style.dim(tool)}`, 'item');
 
   // Step 2: Creating directories
   showStep(
@@ -61,7 +74,7 @@ async function runSetup({
   );
   const directoryStatistics = await createDirectories({
     baseDir: workingDir,
-    directories,
+    directories: filteredDirectories,
     dryRun,
   });
   clearLine();
@@ -86,18 +99,30 @@ async function runSetup({
   const fileStatistics = await executeCopyOperations({
     packageRoot,
     targetDir: workingDir,
-    copyOperations,
+    copyOperations: filteredOperations,
     forceOverwrite,
     dryRun,
   });
+
+  // Merge VS Code settings for Copilot
+  let settingsStatistics = { merged: false, created: false };
+  if (tool === 'copilot' || tool === 'all') {
+    settingsStatistics = await mergeVSCodeSettings({
+      packageRoot,
+      targetDir: workingDir,
+      dryRun,
+    });
+  }
 
   // Display summary with combined statistics
   const statistics = {
     ...directoryStatistics,
     ...fileStatistics,
     migrations: migrationStatistics.applied,
+    settingsMerged: settingsStatistics.merged,
+    settingsCreated: settingsStatistics.created,
   };
-  showSummary(statistics, { forceOverwrite, dryRun });
+  showSummary(statistics, { forceOverwrite, dryRun, tool });
 }
 
 module.exports = { runSetup };

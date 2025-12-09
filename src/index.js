@@ -11,6 +11,8 @@ const { log } = require('./utils/logger');
  * Main application entry point
  * Handles setup execution and error handling
  */
+const VALID_TOOLS = ['claude', 'copilot', 'all'];
+
 async function main() {
   const workingDir = process.cwd();
   const packageRoot = __dirname + '/..';
@@ -19,8 +21,18 @@ async function main() {
   const forceOverwrite = process.argv.includes('--force-overwrite');
   const dryRun = process.argv.includes('--dry-run');
 
+  // Parse --tool <name> argument (supports: claude, copilot, all)
+  const toolIndex = process.argv.indexOf('--tool');
+  const tool = toolIndex !== -1 ? process.argv[toolIndex + 1] : 'claude';
+
+  // Validate tool
+  if (!VALID_TOOLS.includes(tool)) {
+    log(`Invalid tool: ${tool}. Supported: ${VALID_TOOLS.join(', ')}`, 'error');
+    process.exit(1);
+  }
+
   try {
-    await runSetup({ workingDir, packageRoot, forceOverwrite, dryRun });
+    await runSetup({ workingDir, packageRoot, forceOverwrite, dryRun, tool });
   } catch (err) {
     console.error('');
     log(`Error during setup: ${err.message}`, 'error');

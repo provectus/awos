@@ -26,14 +26,71 @@ Your task is to manage the architecture file located at `context/product/archite
 # PROCESS
 
 Follow this logic precisely.
+When you need user input on a decision:
+  - Use **AskUserQuestion** tool with clear, clickable options
+  - Never present numbered lists requiring manual number entry
 
-### Step 1: Prerequisite Checks
+### Step 1: Load Cross-Repository Context
+
+1. **Read Registry:** Use the Read tool to check if `context/registry.md` exists.
+   - If it doesn't exist, skip to Step 2 (no error, no message).
+   - If it exists, read and parse its contents to understand:
+     - What repositories are registered (names, types, paths etc.)
+     - Their status (`active` or `stale`)
+     - Relationships and dependencies between repos and this project
+     - AWOS-enabled status and available context
+     - Tech stack information from registry entries
+
+2. **Determine Context Needs:** Based on architecture planning needs, identify which registered repos are relevant:
+   - **Direct dependencies:** Repos this project depends on or will integrate with
+   - **Shared ecosystem:** Repos with tech stack decisions that should be consistent
+   - **Common libraries:** Shared dependencies or internal packages
+   - **API contracts:** Services this project will call or expose to
+   - **Infrastructure patterns:** Deployment, monitoring, or security approaches to align with
+   - **Skip stale repos:** Do not fetch context from repos marked as `stale`
+
+3. **Fetch AWOS Context (if enabled):** For AWOS-enabled repos where deeper architecture context would help:
+
+   Use the Task tool to delegate to the `repo-scanner` subagent. Pass:
+   - `repo_type`: `local` or `github` (from registry entry)
+   - `repo_path`: filesystem path or `owner/repo` (from registry entry)
+   - `question`: "Read the `context/product` directory and summarize the architecture decisions, tech stack, infrastructure choices, and any integration patterns."
+
+   **Note:** Only scan repos that are both AWOS-enabled AND relevant to architecture decisions. Skip repos that are informational only.
+
+4. **Fetch Additional Context (if needed):** If needed more context or clarifying questions:
+  
+   Use the Task tool to delegate to the `repo-scanner` subagent. Pass:
+   - `repo_type`: `local` or `github` (from registry entry)
+   - `repo_path`: filesystem path or `owner/repo` (from registry entry)
+   - `question`: clarifying questions or necessary information
+   
+   Iterate with scanner until you get all necessary information.**This step can be repeated throughout implementation** whenever the subagent needs additional context about related repos.
+
+5. **Process Results:** Receive repository context from scanner. Organize internally:
+   - Common tech stack patterns across the ecosystem
+   - Shared infrastructure or deployment approaches
+   - API patterns and integration points between repos
+   - Authentication/authorization patterns if applicable
+   - Dependencies that will impact architectural decisions in this project
+   - Constraints or standards that must be followed
+
+6. **Use Context Silently:** Apply this context throughout the conversation to inform architecture suggestions. When recommending technologies:
+   - Prefer consistency with related repos unless there's a strong reason to diverge
+   - Flag when a choice would create integration complexity
+   - Consider shared infrastructure opportunities
+
+**Do NOT display ecosystem summaries to the user. Use the context to make better recommendations.**
+
+---
+
+### Step 2: Prerequisite Checks
 
 - First, check if both `context/product/product-definition.md` and `context/product/roadmap.md` exist.
 - If either file is missing, you must stop immediately. Respond with: "Before we can design the architecture, we need a clear product definition and roadmap. Please run `/awos:product` and `/awos:roadmap` first, then run me again."
 - If both files exist, proceed to the next step.
 
-### Step 2: Mode Detection
+### Step 3: Mode Detection
 
 - Now, check if the file `context/product/architecture.md` exists.
 - If it **does not exist**, proceed to **Scenario 1: Creation Mode**.
@@ -53,7 +110,7 @@ Follow this logic precisely.
     - Example interaction: "For the backend, considering the features in Phase 1, I suggest using **Python with FastAPI** for its development speed and performance. An excellent alternative would be **Node.js with Express** if your team has stronger JavaScript expertise. Which direction feels right for this project?"
     - **Clarify and Confirm:** If the user is unsure, ask clarifying questions about their team's skills, budget, or priorities to help them decide. Do not proceed until the choices for the current section are confirmed.
     - Repeat this collaborative process for all necessary architectural areas (Data, Infrastructure, etc.).
-3.  **Finalize:** Once all sections of the template are filled and confirmed by the user, proceed to **Step 3: Finalization**.
+3.  **Finalize:** Once all sections of the template are filled and confirmed by the user, proceed to **Step 4: Finalization**.
 
 ---
 
@@ -73,11 +130,11 @@ Follow this logic precisely.
 4.  **Consistency Check:**
     - Before saving, perform a quick mental check. Does this change conflict with existing principles or technologies? Does it align with the project's direction?
     - If you spot a potential issue, raise it politely: "Just a thought, adding this new database might increase our operational costs. Is that an acceptable trade-off?"
-5.  **Finalize:** When the user confirms all changes, proceed to **Step 3: Finalization**.
+5.  **Finalize:** When the user confirms all changes, proceed to **Step 4: Finalization**.
 
 ---
 
-### Step 3: Finalization
+### Step 4: Finalization
 
 1.  **Confirm:** State clearly: "Great! I am now saving the architecture document."
 2.  **Save File:** Write the final, complete content to `context/product/architecture.md`.

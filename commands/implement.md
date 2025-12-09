@@ -29,8 +29,71 @@ Your goal is to execute the next available task for a given specification. You w
 # PROCESS
 
 Follow this process precisely.
+When you need user input on a decision:
+  - Use **AskUserQuestion** tool with clear, clickable options
+  - Never present numbered lists requiring manual number entry
 
-### Step 1: Identify the Target Specification and Task
+### Step 1: Load Cross-Repository Context
+
+1. **Read Registry:** Use the Read tool to check if `context/registry.md` exists.
+   - If it doesn't exist, skip to Step 2 (no error, no message).
+   - If it exists, read and parse its contents to understand:
+     - What repositories are registered (names, types, paths etc.)
+     - Their status (`active` or `stale`)
+     - Relationships and dependencies between repos and this project
+     - AWOS-enabled status and available context
+     - Code patterns, APIs, and implementation approaches from registry entries
+
+2. **Determine Context Needs:** Based on implementation needs, identify which registered repos are relevant:
+   - **Code patterns:** Repos with conventions and patterns to follow for consistency
+   - **API contracts:** Repos with API schemas, endpoints, or clients to integrate with
+   - **Shared types:** Repos with interfaces, models, or DTOs to maintain compatibility
+   - **Dependencies:** Repos with libraries or utilities this implementation will use
+   - **Integration points:** Repos where this code will call or be called by external services
+   - **Skip stale repos:** Do not fetch context from repos marked as `stale`
+
+3. **Fetch AWOS Context (if enabled):** For AWOS-enabled repos that the current task integrates with:
+
+   Use the Task tool to delegate to the `repo-scanner` subagent. Pass:
+   - `repo_type`: `local` or `github` (from registry entry)
+   - `repo_path`: filesystem path or `owner/repo` (from registry entry)
+   - `question`: "Read the `context` directory including `context/product` and `context/spec`. Summarize the architecture, API designs, data models, code patterns, and any integration requirements relevant to implementation."
+
+   **Note:** Only scan repos that are both relevant to the current task AND have integration points. Skip repos that are informational only.
+
+4. **Fetch Additional Context (if needed):** If more context or clarifying questions are needed during implementation:
+
+   Use the Task tool to delegate to the `repo-scanner` subagent. Pass:
+   - `repo_type`: `local` or `github` (from registry entry)
+   - `repo_path`: filesystem path or `owner/repo` (from registry entry)
+   - `question`: specific questions about APIs, types, patterns, or integration details
+
+   Iterate with scanner until you get all necessary information. **This step can be repeated throughout implementation** whenever the subagent needs additional context about related repos.
+
+5. **Process Results:** Receive repository context from scanner. Organize internally:
+   - How to call APIs from dependent repos
+   - Shared types or interfaces to use
+   - Testing approaches used in related repos
+   - Error handling and logging conventions
+   - Authentication/authorization patterns for API calls
+   - Conventions and patterns to follow for consistency
+   - API schemas, endpoints, or clients to integrate with
+   - Interfaces, models, or DTOs to maintain compatibility
+   - Libraries or utilities this implementation will use
+   - Functions or methods this code will call or where this code will be called by external services
+   
+
+
+6. **Use Context Silently:** When delegating to subagents, include relevant cross-repo context to ensure implementation is compatible with the ecosystem. When making recommendations:
+   - Provide API contract details for integrations
+   - Include shared type definitions for compatibility
+   - Reference coding conventions from related repos
+
+**Do NOT display ecosystem summaries to the user. Implementation stays within current repo (no cross-repo code changes).**
+
+---
+
+### Step 2: Identify the Target Specification and Task
 
 1.  **Analyze User Prompt:** First, analyze the `<user_prompt>`. If it specifies a particular spec or task (e.g., "implement the next task for spec 002" or "run the database migration for the profile picture feature"), use that to identify the target spec directory and/or task.
 2.  **Automatic Mode (Default):** If the `<user_prompt>` is empty, you must automatically find the next task to be done.

@@ -66,7 +66,7 @@ Current Registry:
 **Check for stale repositories:**
 Before showing the menu, verify accessibility of each registered repository if it was not updated more than a week ago:
 - **For local repos:** Check if the path exists on the filesystem
-- **For GitHub repos:** Attempt an MCP call to verify the repo is accessible
+- **For GitHub repos:** Use the Task tool to invoke the `repo-scanner` subagent and ask to attempt an MCP call to verify the repo is accessible
 
 If any repos are inaccessible, mark them as `status: stale` in the registry and display a warning:
 ```
@@ -76,7 +76,7 @@ Warning: The following repositories are no longer accessible. Please update or r
 
 **Show menu:** "What would you like to do?"
 - **Add/Update repo**: Proceed to Step 2 (Get Repository) - This will automatically upsert (add if new, update if exists)
-- **Remove repo**: Proceed to Step 7 (Remove Repository)
+- **Remove repo**: Proceed to Step 6 (Remove Repository)
 - **Exit**: End the flow
 
 ---
@@ -85,136 +85,75 @@ Warning: The following repositories are no longer accessible. Please update or r
 
 Ask what repository the user wants to add or update. Accept GitHub URLs, owner/repo format, or local paths.
 
-**Note:** Auto-detect type from user input. It should be one of the below:
-- **GitHub repositories**: Parse input to extract owner/repo. Check for GitHub MCP (Step 2.1).
-- **Local repositories**: Proceed to Step 3 with the path.
+**Auto-detect type from user input:**
+- **GitHub repositories**: If input contains `github.com` URL or matches `owner/repo` format, set type=`github` and extract `owner/repo`. Proceed to Step 3.
+- **Local repositories**: Otherwise treat as local path. Proceed to Step 3 for validation.
 
 ---
 
-### Step 2.1: GitHub MCP Check
-
-**Detection:** Read `~/.claude/mcp.json` for `"github"` in `mcpServers`. If found, attempt an `mcp__github__*` test call to verify it works.
-
-**If MCP available:** Parse `owner/repo` from input, proceed to Step 4 with type=`github` and path=`owner/repo`.
-
-**If MCP missing or failing:**
-
-Display:
-```
-GitHub MCP required. Install with: `claude mcp add github -- npx -y @modelcontextprotocol/server-github` and re-run Claude Code.
-```
-
-Ask: **"Try again after installing, or clone locally instead?"**
-
-- **Retry**: Return to MCP detection
-- **Clone locally**: Show `git clone https://github.com/{owner}/{repo}`, suggest registering the local path after cloning, proceed to Step 3 if user provides path now
+**Note on stale repos:** If the user is updating a repo that was previously marked as `stale` and the path is now valid, the status will be updated to `active` during Step 3.4 (Generate Entry).
 
 ---
 
-### Step 3: Path Validation
+### Step 3: Repository Analysis
 
-Normalize and validate the provided path:
-- Absolute paths (starts with `/`)
-- Relative paths (`../` or `./`)
-- Sibling directory (otherwise, try `../[input]`)
+#### 3.1. Read Template and Prepare Questions
 
-If path is invalid, offer to show sibling directories or allow retry.
+1. **Read the registry template:** Load `.awos/templates/registry-template.md` to understand all fields that need to be populated.
 
-Once valid path is confirmed, proceed to Step 4.
+2. **Generate comprehensive question:** Based on the template structure, formulate a detailed question that asks for all the information needed to fill every field in the template. 
 
-**Note on stale repos:** If the user is updating a repo that was previously marked as `stale` and the path is now valid, the status will be updated to `active` during Step 4.7 (Generate Entry).
-
----
-
-### Step 4: Repository Analysis
-
-#### 4.1. Scan Type
-
-Ask: "How deep should I analyze this repository?"
-- **Quick scan**: Documentation, guides, and examples in all directories and subdirectories (README.md, CLAUDE.md and any other `.md` files or files with potential documentation and examples, *.md, docs/, examples/, configuration files, etc.)
-- **Full scan**: Everything, each and every file (show token warning)
-
-#### 4.2. Delegate to Repository Scanner
+#### 3.2. Delegate to Repository Scanner
 
 **Use the Task tool to invoke the `repo-scanner` subagent:**
 
-Pass the following parameters based on the repository type and user's scan choice:
-- `repo_type`: `local` or `github` (from Step 2/3)
+Pass:
+- `repo_type`: `local` or `github` (from Step 2)
 - `repo_path`: The filesystem path (local) or `owner/repo` (GitHub)
-- `scan_depth`: `quick` or `full` (from Step 4.1)
-- `scope`: Omit to use default scanning patterns
+- `question`: The comprehensive question generated in Step 3.1
 
-**Receive scanner results:**
+**Receive and evaluate response:**
 
-The scanner will return a JSON array of file results:
-```json
-[
-  { "path": "README.md", "content": "...", "status": "success" },
-  { "path": "context/product/product-definition.md", "content": "...", "status": "success" },
-  { "path": "missing.md", "content": null, "status": "error", "error": "File not found" }
-]
-```
+The scanner will return a detailed answer with file references. Evaluate if all template fields can be populated from the response.
 
-**Error handling:**
-- If scanner returns an error status (e.g., GitHub MCP not available), display the error message and offer solutions
-- Individual file errors should be noted but don't stop the entire analysis
-- If no files were successfully read, report the issue and ask user if they want to retry or cancel
+#### 3.3. Iterate Until Complete
 
-#### 4.3. AWOS Detection
+**If any template fields are missing or unclear:**
+- Identify what specific information is still needed
+- Call repo-scanner again with a focused follow-up question
+- Repeat until all template fields have sufficient information
 
-**Process the scanner results to detect AWOS:**
+**Example follow-up questions:**
+- "I need more details about the tech stack. What frameworks, databases, and infrastructure are used?"
+- "Can you find information about the target audience and user personas?"
+- "What are the main API endpoints or integration points?"
 
-Look through the returned file array for paths that indicate AWOS structure:
-- Check if any file paths start with `context/product/`
-- Check if any file paths start with `context/spec/`
+#### 3.4. Generate Entry
 
-If BOTH `context/product/` AND `context/spec/` paths exist, this is an AWOS-enabled repository.
+Once all information is gathered:
+1. Read `.awos/templates/registry-template.md` for the exact structure
+2. Populate every field using the information from repo-scanner responses
+3. Include file references where the information was found
 
-**When AWOS is detected, extract context files from scanner results:**
+#### 3.5. Present Analysis
 
-1. **Extract Product Files** (paths starting with `context/product/`):
-   - `product-definition.md` - Product vision, target audience, success metrics
-   - `roadmap.md` - Phases, features, project status
-   - `architecture.md` - Tech decisions, stack, patterns
-
-2. **Extract Spec Files** (paths starting with `context/spec/`):
-   - Identify all spec files (functional and technical)
-   - For each spec: note filename, assess completeness based on content
-
-3. **Check Registry** (path `context/registry.md`):
-   - If found in scanner results, parse it to understand dependencies on other repos
-
-**If additional context files are needed:**
-
-If scanner didn't return all expected context files (e.g., quick scan might have missed some), you can use the Task tool again with specific `scope` attribute to request missing files
-
-#### 4.4. Process Scanner Results
-
-Parse through all successfully scanned files from the scanner results.
-
-#### 4.5. Generate Entry
-
-Based on the processed scanner results, read `.awos/templates/registry-template.md` and follow its structure to generate all necessary fields in the template.
-Use the file contents from the scanner results to populate it.
-#### 4.6. Present Analysis
-
-Display the complete entry following template format. Proceed to Step 5.
+Display the complete entry following template format. Proceed to Step 4.
 
 ---
 
-### Step 5: User Review
+### Step 4: User Review
 
 Ask: "Does this summary look correct? Would you like to adjust anything before saving?"
 
 **Two response paths:**
-1. **Approval**: Proceed to Step 6
+1. **Approval**: Proceed to Step 5
 2. **Changes requested**: Ask what needs adjustment, make edits, show updated entry, and repeat review
 
 Continue until user approves.
 
 ---
 
-### Step 6: Save to Registry (Upsert)
+### Step 5: Save to Registry (Upsert)
 
 Determine the save operation by checking if the repository already exists in the registry:
 
@@ -223,17 +162,17 @@ Determine the save operation by checking if the repository already exists in the
 
 **Three possible save modes:**
 
-#### 6.1. Creation Mode (No registry exists)
+#### 5.1. Creation Mode (No registry exists)
 - Write repository entry to `context/registry.md`
 - Display: "Created new registry with [Repository Name]."
 
-#### 6.2. Add Mode (Registry exists, but repo not in it)
+#### 5.2. Add Mode (Registry exists, but repo not in it)
 - Read existing registry
 - Append new entry to the end
 - Save to `context/registry.md`
 - Display: "Added [Repository Name] to registry."
 
-#### 6.3. Update Mode (Registry exists and repo already in it)
+#### 5.3. Update Mode (Registry exists and repo already in it)
 - Read existing registry
 - Locate the existing entry (search for matching path/owner-repo)
 - Compare old and new to identify changes
@@ -247,11 +186,11 @@ Determine the save operation by checking if the repository already exists in the
 
 ---
 
-### Step 7: Remove Repository
+### Step 6: Remove Repository
 
 This step handles removing a repository entry from the registry.
 
-#### 7.1. Display Registry List
+#### 6.1. Display Registry List
 
 **Read and parse** `context/registry.md` to extract all existing repository entries. Parse each entry to extract:
 - Repository name (from the `## [Name]` heading)
@@ -267,14 +206,14 @@ Select a repository to remove:
 [number]. Cancel
 ```
 
-#### 7.2. Get User Selection
+#### 6.2. Get User Selection
 
 Ask the user to select which repository to remove by number, or select Cancel.
 
 - **If Cancel**: Return to Step 1 (Mode Detection & Menu)
 - **Otherwise**: Continue with the selected repository
 
-#### 7.3. Confirm Removal
+#### 6.3. Confirm Removal
 
 Display:
 ```
@@ -285,10 +224,10 @@ Are you sure you want to remove this repository from the registry?
 ```
 
 Ask for confirmation: **"Confirm removal?"**
-- **Yes**: Proceed to Step 7.4
+- **Yes**: Proceed to Step 6.4
 - **No**: Return to Step 1 (Mode Detection & Menu)
 
-#### 7.4. Delete Entry
+#### 6.4. Delete Entry
 
 1. Read the current `context/registry.md`
 2. Parse to locate the entry to remove (match by path for local repos, or by owner/repo for GitHub repos)
@@ -310,7 +249,7 @@ Ask for confirmation: **"Confirm removal?"**
 **Normal case:**
 - Display: "Removed [Repository Name] from registry."
 
-#### 7.5. Return to Menu
+#### 6.5. Return to Menu
 
 Ask: **"Would you like to perform another action?"**
 - **Yes**: Return to Step 1 (Mode Detection & Menu)

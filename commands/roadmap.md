@@ -28,14 +28,69 @@ Your task is to manage the product roadmap file located at `context/product/road
 # PROCESS
 
 Follow this logic precisely.
+When you need user input on a decision:
+  - Use **AskUserQuestion** tool with clear, clickable options
+  - Never present numbered lists requiring manual number entry
 
-### Step 1: Prerequisite Check
+### Step 1: Load Cross-Repository Context
+
+1. **Read Registry:** Use the Read tool to check if `context/registry.md` exists.
+   - If it doesn't exist, skip to Step 2 (no error, no message).
+   - If it exists, read and parse its contents to understand:
+     - What repositories are registered (names, types, paths etc.)
+     - Their status (`active` or `stale`)
+     - Relationships and dependencies between repos and this project
+     - AWOS-enabled status and available context
+     - Roadmap phases and current status from registry entries
+
+2. **Determine Context Needs:** Based on roadmap planning needs, identify which registered repos are relevant:
+   - **Phase dependencies:** Repos with roadmaps that affect this project's sequencing
+   - **Feature dependencies:** Repos with features this project depends on or enables
+   - **Shared milestones:** Repos with integration points or coordinated releases
+   - **Blocking items:** Repos that must complete phases before this project can proceed
+   - **Skip stale repos:** Do not fetch context from repos marked as `stale`
+
+3. **Fetch AWOS Context (if enabled):** For AWOS-enabled repos where deeper roadmap context would help:
+
+   Use the Task tool to delegate to the `repo-scanner` subagent. Pass:
+   - `repo_type`: `local` or `github` (from registry entry)
+   - `repo_path`: filesystem path or `owner/repo` (from registry entry)
+   - `question`: "Read the `context/product` directory and summarize the roadmap phases, current status, planned features, and any cross-project dependencies."
+
+   **Note:** Only scan repos that are both AWOS-enabled AND relevant to roadmap decisions. Skip repos that are informational only.
+
+4. **Fetch Additional Context (if needed):** If more context or clarifying questions are needed:
+
+   Use the Task tool to delegate to the `repo-scanner` subagent. Pass:
+   - `repo_type`: `local` or `github` (from registry entry)
+   - `repo_path`: filesystem path or `owner/repo` (from registry entry)
+   - `question`: clarifying questions or necessary information
+
+   Iterate with scanner until you get all necessary information.**This step can be repeated throughout implementation** whenever the subagent needs additional context about related repos.
+
+5. **Process Results:** Receive repository context from scanner. Organize internally:
+   - Cross-project dependencies that affect sequencing
+   - Features in other repos that block or enable this project's phases
+   - Shared timelines or milestones across the ecosystem
+   - Integration points that require coordination
+   - Constraints that impact phase ordering
+
+6. **Use Context Silently:** Apply this context throughout the conversation to inform roadmap sequencing suggestions. When making recommendations:
+   - Consider dependencies on other repos when ordering phases
+   - Flag when a phase depends on external deliverables
+   - Identify opportunities for parallel development across repos
+
+**Do NOT display ecosystem summaries to the user. Use the context to make better recommendations.**
+
+---
+
+### Step 2: Prerequisite Check
 
 - First, check if the file `context/product/product-definition.md` exists.
 - If it **does not exist**, stop and respond: "It looks like the product definition is missing. Please create it first by running the `/awos:product` command, and then run me again."
 - If it **exists**, proceed to the next step.
 
-### Step 2: Mode Detection
+### Step 3: Mode Detection
 
 - Now, check if the file `context/product/roadmap.md` exists.
 - If it **does not exist**, proceed to **Scenario 1: Creation Mode**.
@@ -55,7 +110,7 @@ Follow this logic precisely.
 4.  **Interactive Editing Loop:**
     - Wait for the user's instructions (e.g., "Move X to Phase 3," "Add a feature for Y").
     - After each change, present the updated section of the roadmap and ask, "What's next?"
-    - When the user is satisfied, proceed to **Step 3: Finalization**.
+    - When the user is satisfied, proceed to **Step 4: Finalization**.
 
 ---
 
@@ -69,11 +124,11 @@ Follow this logic precisely.
 5.  **Maintain Consistency and Structure (Your Core Responsibility):**
     - **Logical Order:** Politely question any user request that seems to break a logical dependency (e.g., placing reporting before data entry).
     - **Template Adherence:** Ensure all modifications **preserve the markdown structure and formatting** (nesting, checklists, headings) as defined by the original template.
-6.  **Finalize:** When the user is finished with their changes, proceed to **Step 3: Finalization**.
+6.  **Finalize:** When the user is finished with their changes, proceed to **Step 4: Finalization**.
 
 ---
 
-### Step 3: Finalization
+### Step 4: Finalization
 
 1.  **Confirm:** Give a final confirmation: "Great! I am now saving the roadmap."
 2.  **Save File:** Write the final, complete roadmap content to `context/product/roadmap.md`.

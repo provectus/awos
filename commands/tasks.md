@@ -27,8 +27,65 @@ Your goal is to create a markdown file with a comprehensive list of checkbox tas
 # PROCESS
 
 Follow this process precisely.
+When you need user input on a decision:
 
-## Step 1: Identify the Target Specification
+- Use **AskUserQuestion** tool with clear, clickable options
+- Never present numbered lists requiring manual number entry
+
+## Step 1: Load Cross-Repository Context
+
+1. **Read Registry:** Use the Read tool to check if `context/registry.md` exists.
+   - If it doesn't exist, skip to Step 2 (no error, no message).
+   - If it exists, read and parse its contents to understand:
+     - What repositories are registered (names, types, paths etc.)
+     - Their status (`active` or `stale`)
+     - Relationships and dependencies between repos and this project
+     - AWOS-enabled status and available context
+     - Task patterns and implementation approaches from registry entries
+
+2. **Determine Context Needs:** Based on task planning needs, identify which registered repos are relevant:
+   - **Task patterns:** Repos with similar task breakdowns to reference
+   - **Shared components:** Repos with utilities or libraries that can be reused
+   - **Integration tasks:** Repos requiring coordinated changes for cross-repo features
+   - **Dependencies:** Repos with tasks that must be completed before this work can begin
+   - **Blocking work:** Repos where this project's tasks may block or be blocked by
+   - **Skip stale repos:** Do not fetch context from repos marked as `stale`
+
+3. **Fetch AWOS Context (if enabled):** For AWOS-enabled repos where task planning context would help:
+
+   Use the Task tool to delegate to the `repo-scanner` subagent. Pass:
+   - `repo_type`: `local` or `github` (from registry entry)
+   - `repo_path`: filesystem path or `owner/repo` (from registry entry)
+   - `question`: "Read the `context` directory including `context/product` and `context/spec`. Summarize the task lists, vertical slicing patterns, implementation approaches, and any cross-project dependencies."
+
+   **Note:** Only scan repos that are both AWOS-enabled AND relevant to task planning. Skip repos that are informational only.
+
+4. **Fetch Additional Context (if needed):** If more context or clarifying questions are needed:
+
+   Use the Task tool to delegate to the `repo-scanner` subagent. Pass:
+   - `repo_type`: `local` or `github` (from registry entry)
+   - `repo_path`: filesystem path or `owner/repo` (from registry entry)
+   - `question`: clarifying questions or necessary information
+
+   Iterate with scanner until you get all necessary information.**This step can be repeated throughout implementation** whenever the subagent needs additional context about related repos.
+
+5. **Process Results:** Receive repository context from scanner. Organize internally:
+   - Task breakdown patterns in related projects
+   - Vertical slicing approaches used across the ecosystem
+   - Dependencies that must be completed in other repos first
+   - Shared components or utilities available for reuse
+   - Integration points requiring coordinated tasks
+
+6. **Use Context Silently:** Apply this context to inform task breakdown suggestions. When planning tasks:
+   - Identify tasks that depend on or require updates in connected repos
+   - Flag when a slice requires coordination with external teams
+   - Reference shared utilities or patterns from related repos
+
+**Do NOT display ecosystem summaries to the user. Use the context to make better recommendations.**
+
+---
+
+## Step 2: Identify the Target Specification
 
 1.  **Analyze User Prompt:** Analyze the `<user_prompt>`. If it clearly references a spec by name or index, identify the corresponding directory in `context/spec/`.
 2.  **Ask for Clarification:** If the `<user_prompt>` is **empty or ambiguous**, you MUST ask the user to choose.

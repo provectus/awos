@@ -28,8 +28,65 @@ Your primary task is to create a new functional specification file. You will det
 # PROCESS
 
 Follow this process precisely.
+When you need user input on a decision:
 
-### Step 1: Determine the Specification Topic
+- Use **AskUserQuestion** tool with clear, clickable options
+- Never present numbered lists requiring manual number entry
+
+### Step 1: Load Cross-Repository Context
+
+1. **Read Registry:** Use the Read tool to check if `context/registry.md` exists.
+   - If it doesn't exist, skip to Step 2 (no error, no message).
+   - If it exists, read and parse its contents to understand:
+     - What repositories are registered (names, types, paths etc.)
+     - Their status (`active` or `stale`)
+     - Relationships and dependencies between repos and this project
+     - AWOS-enabled status and available context
+     - Existing specs and feature areas from registry entries
+
+2. **Determine Context Needs:** Based on functional spec needs, identify which registered repos are relevant:
+   - **Feature dependencies:** Repos with features this spec depends on or integrates with
+   - **API contracts:** Repos with APIs this feature needs to call or expose
+   - **Similar domains:** Repos with related feature areas that could inform requirements
+   - **Existing specs:** Repos with specs this feature might reference or extend
+   - **User flows:** Repos with overlapping user journeys or shared interactions
+   - **Skip stale repos:** Do not fetch context from repos marked as `stale`
+
+3. **Fetch AWOS Context (if enabled):** For AWOS-enabled repos where related spec context would help:
+
+   Use the Task tool to delegate to the `repo-scanner` subagent. Pass:
+   - `repo_type`: `local` or `github` (from registry entry)
+   - `repo_path`: filesystem path or `owner/repo` (from registry entry)
+   - `question`: "Read the `context` directory including `context/product` and `context/spec`. Summarize the product vision, existing specifications, feature areas, and any integration points or APIs."
+
+   **Note:** Only scan repos that are both AWOS-enabled AND relevant to this specification. Skip repos that are informational only.
+
+4. **Fetch Additional Context (if needed):** If more context or clarifying questions are needed:
+
+   Use the Task tool to delegate to the `repo-scanner` subagent. Pass:
+   - `repo_type`: `local` or `github` (from registry entry)
+   - `repo_path`: filesystem path or `owner/repo` (from registry entry)
+   - `question`: clarifying questions or necessary information
+
+   Iterate with scanner until you get all necessary information.**This step can be repeated throughout implementation** whenever the subagent needs additional context about related repos.
+
+5. **Process Results:** Receive repository context from scanner. Organize internally:
+   - Related specifications across the ecosystem
+   - Integration points with other repos' features
+   - Common patterns or conventions in specifications
+   - API contracts and data formats to align with
+   - User flows that span multiple repos
+
+6. **Use Context Silently:** Apply this context throughout the conversation to inform requirements. When making recommendations:
+   - Suggest cross-repo references when relevant (e.g., "This feature will integrate with [repo]'s authentication")
+   - Flag when requirements depend on external APIs or services
+   - Identify opportunities to reuse existing patterns from related specs
+
+**Do NOT display ecosystem summaries to the user. Use the context to make better recommendations.**
+
+---
+
+### Step 2: Determine the Specification Topic
 
 Your first goal is to determine the **topic** - the single, specific feature or capability that this specification will define. To determine the topic, follow these steps:
 

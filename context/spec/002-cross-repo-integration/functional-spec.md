@@ -18,6 +18,7 @@ With the registry command (Phase 2) complete, AWOS can now track related reposit
 - Code patterns and implementations in related services
 
 This leads to:
+
 - Duplicate specifications being written for shared functionality
 - Inconsistent architectural decisions across related services
 - Missing context when planning features that span multiple repos
@@ -26,6 +27,7 @@ This leads to:
 ### Solution
 
 Update existing AWOS commands to automatically leverage the registry for cross-repository awareness. Commands will:
+
 1. **Read the registry file directly** on startup to understand the multi-repo landscape
 2. **Identify relevant repos** based on the current task or context
 3. **Delegate to a shared Repository Scanner subagent** when deeper context is needed from specific repos
@@ -91,7 +93,7 @@ Update existing AWOS commands to automatically leverage the registry for cross-r
       - Features in current project that depend on unreleased features in other repos
       - Features in other repos waiting on current project's deliverables
       - Shared milestones or integration points across repos
-    - [ ] If registry metadata is insufficient, scan referenced repos for roadmap details and supported feature detection 
+    - [ ] If registry metadata is insufficient, scan referenced repos for roadmap details and supported feature detection
     - [ ] Build internal context of ecosystem timelines without displaying it to the user
     - [ ] Use this context to inform roadmap sequencing suggestions
     - [ ] When user defines phases, automatically consider dependencies on connected repos

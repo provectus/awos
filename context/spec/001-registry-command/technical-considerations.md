@@ -11,12 +11,14 @@
 The `/awos:registry` command is implemented as a **prompt-based command** following the existing AWOS command pattern. No changes to the Node.js installer are required.
 
 **Key Components:**
+
 1. **Command File:** `commands/registry.md` with ROLE/TASK/INPUTS/OUTPUTS/PROCESS structure
 2. **Wrapper File:** `claude/commands/awos/registry.md` for user customization layer
 3. **Template File:** `templates/registry-template.md` defining the registry entry structure
 4. **Output File:** `context/registry.md` storing the multi-repo index
 
 **Integration Points:**
+
 - **Local Repos:** Use Glob, Grep, and Read tools for file access
 - **GitHub Repos:** Use official GitHub MCP server (`mcp__github__*` tools)
 - **MCP Detection:** Check `~/.claude/mcp.json` config, then verify with test MCP call
@@ -27,11 +29,11 @@ The `/awos:registry` command is implemented as a **prompt-based command** follow
 
 ### 2.1. Files Created
 
-| File | Location | Overwrite Behavior |
-|------|----------|-------------------|
-| `registry.md` | `commands/` | Always (framework core) |
-| `registry.md` | `claude/commands/awos/` | Protected (user layer) |
-| `registry-template.md` | `templates/` | Always (framework core) |
+| File                   | Location                | Overwrite Behavior      |
+| ---------------------- | ----------------------- | ----------------------- |
+| `registry.md`          | `commands/`             | Always (framework core) |
+| `registry.md`          | `claude/commands/awos/` | Protected (user layer)  |
+| `registry-template.md` | `templates/`            | Always (framework core) |
 
 Files are automatically picked up by existing installer patterns.
 
@@ -59,6 +61,7 @@ The command follows the standard AWOS structure:
 Each repository entry includes:
 
 **Metadata:**
+
 - Type: `local` | `github`
 - Path: relative/absolute path or `owner/repo`
 - Status: `active` | `stale`
@@ -66,6 +69,7 @@ Each repository entry includes:
 - AWOS Enabled: `yes` | `no`
 
 **Sections:**
+
 - **Summary:** 7-10 sentence comprehensive description
 - **Tech Stack:** Major languages, frameworks, key dependencies (not complete list)
 - **Tags:** 5-10 descriptive tags in lowercase-with-hyphens format
@@ -82,6 +86,7 @@ Two-step MCP detection:
 2. **Verification Call:** Attempt `mcp__github__*` test call to verify it works
 
 **Fallback Flow:**
+
 - If MCP not available: Show "GitHub MCP required. Install with: `claude mcp add github`"
 - Offer: "Try again after installing, or clone locally instead?"
 - If clone locally: Show git clone command and suggest registering local path
@@ -125,21 +130,21 @@ Detect dependencies on other registered repositories by:
 
 ### System Dependencies
 
-| Dependency | Required | Fallback |
-|------------|----------|----------|
-| Claude Code CLI | Yes | None - framework requirement |
-| GitHub MCP | For GitHub repos only | Clone repo locally |
-| Local file system | For local repos | None - always available |
+| Dependency        | Required              | Fallback                     |
+| ----------------- | --------------------- | ---------------------------- |
+| Claude Code CLI   | Yes                   | None - framework requirement |
+| GitHub MCP        | For GitHub repos only | Clone repo locally           |
+| Local file system | For local repos       | None - always available      |
 
 ### Potential Risks & Mitigations
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| MCP not installed | Cannot access GitHub repos | Clear guidance to install or clone locally |
-| Repo becomes inaccessible | Stale registry data | Mark as `status: stale` when repo not updated in over a week, keep entry |
-| Large repo analysis | Slow/timeout | Offer quick vs full scan options |
-| Conflicting repo names | Ambiguous references | Use full path/URL as unique identifier |
-| Registry file corruption | Lost registry data | Registry is markdown, recoverable via git |
+| Risk                      | Impact                     | Mitigation                                                               |
+| ------------------------- | -------------------------- | ------------------------------------------------------------------------ |
+| MCP not installed         | Cannot access GitHub repos | Clear guidance to install or clone locally                               |
+| Repo becomes inaccessible | Stale registry data        | Mark as `status: stale` when repo not updated in over a week, keep entry |
+| Large repo analysis       | Slow/timeout               | Offer quick vs full scan options                                         |
+| Conflicting repo names    | Ambiguous references       | Use full path/URL as unique identifier                                   |
+| Registry file corruption  | Lost registry data         | Registry is markdown, recoverable via git                                |
 
 ---
 

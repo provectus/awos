@@ -34,6 +34,7 @@ _Example: A command-line tool designed to help AI agents create and maintain str
 - [Library/Tool 1]
 
 _Example:_
+
 - TypeScript
 - Node.js
 - Commander.js
@@ -58,6 +59,7 @@ _Example: `cli-tool` `documentation` `ai-agent` `product-management` `typescript
 - [Feature 6]
 
 _Example:_
+
 - Generate product definitions with vision, target audience, and success metrics
 - Create phased product roadmaps from high-level requirements
 - Auto-generate functional and technical specifications for features
@@ -78,6 +80,7 @@ _Example:_
 - [**Path/File 3:**] [Brief description of what's there]
 
 _Example:_
+
 - **`src/commands/`:** All CLI command implementations
 - **`templates/`:** Markdown templates for specs and documentation
 - **`context/spec/`:** Functional and technical specifications for AWOS features
@@ -98,6 +101,7 @@ _Example:_
   - [**What needs it?** List repositories that depend on or integrate with this one, if known. When saving a new/updated entry, if it depends on repo X, read repo X's entry from the registry, add the current repo to repo X's "Used by" list (if not already there), and save the updated registry.]
 
 _Example:_
+
 - **Relation to current project:** Current project uses `anthropic/claude-code` and integrates to it. We need to analyze or scan this repo if we need some internals on how claude-code is working and what type of functionality it has.
 - **Depends on:** `anthropic/claude-api` (for AI model access), `shared/ui-components` (for CLI interface elements)
 - **Used by:** `acme/frontend-app` (uses generated specs for feature planning), `acme/admin-dashboard` (integrates documentation workflow)
@@ -117,6 +121,7 @@ _Example:_
 Use extracted info to fill other sections of this document as well.
 
 _Example:_
+
 - **Product Vision:** To empower AI agents to create production-ready documentation through structured workflows, enabling seamless collaboration across multi-repository projects.
 - **Current Phase:** Phase 2 - Core Workflow Enhancement (focusing on multi-repo support and agent specialization)
 - **Specs:**

@@ -16,14 +16,14 @@
 - **Framework Core (`.awos/`):** Always-overwritten framework internals (commands, templates, subagents, scripts)
 - **User Customization (`.claude/`):** Protected user modifications (command wrappers, agent configurations)
 - **Project Context (`context/`):** Specification storage (product definition, roadmap, architecture, feature specs)
-- **Registry Storage (`context/registry.md`):** *(Phase 2)* Multi-repo metadata and cross-references
+- **Registry Storage (`context/registry.md`):** _(Phase 2)_ Multi-repo metadata and cross-references
 
 ---
 
 ## 3. Command & Agent System
 
 - **Primary Commands:** 7 sequential workflow commands (product → roadmap → architecture → spec → tech → tasks → implement)
-- **Registry Command:** *(Phase 2)* `/awos:registry` for multi-repo management
+- **Registry Command:** _(Phase 2)_ `/awos:registry` for multi-repo management
 - **Domain Expert Subagents:** Specialized agents delegated by `/awos:implement` (React, Python, Kotlin)
 - **Command Pattern:** ROLE → TASK → INPUTS/OUTPUTS → PROCESS structure
 
@@ -32,8 +32,8 @@
 ## 4. External Integrations & MCP
 
 - **Local Repository Access:** Native CLI commands (ls, grep, find, git) - no MCP required
-- **GitHub Repository Access:** *(Phase 2)* Official GitHub MCP server (`@modelcontextprotocol/server-github`)
-- **MCP Detection:** *(Phase 2)* Runtime check for GitHub MCP availability with guided installation
+- **GitHub Repository Access:** _(Phase 2)_ Official GitHub MCP server (`@modelcontextprotocol/server-github`)
+- **MCP Detection:** _(Phase 2)_ Runtime check for GitHub MCP availability with guided installation
 - **Fallback Strategy:** Local repos always work; GitHub repos require MCP
 
 ---

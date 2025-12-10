@@ -28,8 +28,9 @@ Your goal is to create a markdown file with a comprehensive list of checkbox tas
 
 Follow this process precisely.
 When you need user input on a decision:
-  - Use **AskUserQuestion** tool with clear, clickable options
-  - Never present numbered lists requiring manual number entry
+
+- Use **AskUserQuestion** tool with clear, clickable options
+- Never present numbered lists requiring manual number entry
 
 ## Step 1: Load Cross-Repository Context
 

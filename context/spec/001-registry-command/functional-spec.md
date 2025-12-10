@@ -9,18 +9,23 @@
 ## 1. Overview and Rationale (The "Why")
 
 ### Problem Statement
+
 AWOS currently operates within a single repository context. However, most real-world projects consist of multiple repositories (frontend, backend, infrastructure, shared libraries). When working on a feature that spans repos, AI agents lack visibility into related codebases, leading to:
+
 - Incomplete context when generating code that depends on other repos
 - Duplicate effort re-explaining cross-repo relationships
 - Inconsistent architectural decisions across related services
 
 ### Solution
+
 The `/awos:registry` command creates and manages a registry file (`context/registry.md`) that serves as an index of related repositories. This registry provides comprehensive metadata for other AWOS commands to:
+
 1. Understand which repos are relevant to a given question or task
 2. Know where to look for detailed answers (then scan those repos on-demand)
 3. Track dependencies and relationships between repos
 
 ### Success Criteria
+
 - Users can register local and GitHub repos within a single interactive session
 - Other AWOS commands can query the registry to find relevant repos for cross-repo context
 - Registry entries contain comprehensive metadata (summary, tech stack, tags, features, relationships) to enable quick lookups
@@ -84,7 +89,7 @@ The `/awos:registry` command creates and manages a registry file (`context/regis
 - **As a** user, **I want to** choose the scan depth **so that** I can control how much analysis is performed.
   - **Acceptance Criteria:**
     - [x] Prompt: "How deep should I analyze this repository?"
-    - [x] Option 1: "Quick scan" - Documentation, guides, and examples in all directories and subdirectories (README.md, CLAUDE.md, *.md, docs/, examples/, configuration files, etc.)
+    - [x] Option 1: "Quick scan" - Documentation, guides, and examples in all directories and subdirectories (README.md, CLAUDE.md, \*.md, docs/, examples/, configuration files, etc.)
     - [x] Option 2: "Full scan" - Everything, each and every file (show token warning)
     - [x] If AWOS-enabled repo detected (context/ with product/ and spec/ subdirectories), automatically include context/ folder analysis
 
@@ -163,7 +168,7 @@ The `/awos:registry` command creates and manages a registry file (`context/regis
 
 ### Out-of-Scope
 
-*(These are separate roadmap items for Phase 3 and beyond)*
+_(These are separate roadmap items for Phase 3 and beyond)_
 
 - **Read-Only Context Integration:** Making other commands (product, roadmap, architecture, spec, tech, tasks) registry-aware
 - **Cross-Repository Search:** Searching across repos for specs, code patterns

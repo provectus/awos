@@ -64,7 +64,7 @@
 ## Slice 7: Add GitHub MCP detection and installation guidance
 
 - [x] Add MCP config check (read ~/.claude/mcp.json for "github" in mcpServers)
-- [x] Add MCP verification call (mcp__github__* test call) to verify it works
+- [x] Add MCP verification call (mcp**github**\* test call) to verify it works
 - [x] Add MCP missing flow with installation guidance: "GitHub MCP required. Install with: claude mcp add github"
 - [x] Add fallback: "Try again after installing, or clone locally instead?"
 - [x] Test: Run GitHub flow without MCP, verify guidance is shown

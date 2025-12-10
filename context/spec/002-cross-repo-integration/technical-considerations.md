@@ -13,6 +13,7 @@ The Cross-Repository Integration feature is implemented as a **prompt-based solu
 **Core Architecture Decision:** Create a **shared Repository Scanner subagent** (`subagents/repo-scanner.md`) that handles the mechanics of scanning repositories. Commands read the registry file directly and only call the scanner when deeper context is needed from specific repos.
 
 **Separation of Concerns:**
+
 - **Registry File:** Contains all repo metadata - commands read it directly using the Read tool
 - **Scanner:** Called on-demand to fetch additional content from specific repos
 - **Commands:** Read registry, decide if more context needed, delegate to scanner, process results
@@ -35,14 +36,15 @@ Repository Scanner - A utility agent that reads files from repositories regardle
 
 #### INPUTS
 
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `repo_type` | Yes | `local` or `github` |
-| `repo_path` | Yes | Filesystem path (local) or `owner/repo` (GitHub) |
-| `scan_depth` | Yes | `quick` (docs only) or `full` (everything) |
-| `scope` | No | Optional scope to narrow the scan |
+| Parameter    | Required | Description                                      |
+| ------------ | -------- | ------------------------------------------------ |
+| `repo_type`  | Yes      | `local` or `github`                              |
+| `repo_path`  | Yes      | Filesystem path (local) or `owner/repo` (GitHub) |
+| `scan_depth` | Yes      | `quick` (docs only) or `full` (everything)       |
+| `scope`      | No       | Optional scope to narrow the scan                |
 
 **Scope Options (optional, can combine):**
+
 - `files`: List of specific file paths to read (e.g., `["README.md", "context/product/product-definition.md"]`)
 - `patterns`: Glob patterns to match (e.g., `["context/spec/**/*.md", "*.json"]`)
 - `search`: Text pattern to search for (e.g., `"authentication"`)
@@ -96,7 +98,7 @@ No summarization. No interpretation. Just raw content.
 
 ### 2.2. Command Updates
 
-Each command adds a step for cross-repo context loading. Commands read the registry directly and only call the scanner when more context needed. Spec-level commands like `/awos:spec`, `/awos:tech`, `/awos:tasks`, and `/awos:implement` can call the scanner for spec-related repos to get more context about specific functionality or integration of repos.  
+Each command adds a step for cross-repo context loading. Commands read the registry directly and only call the scanner when more context needed. Spec-level commands like `/awos:spec`, `/awos:tech`, `/awos:tasks`, and `/awos:implement` can call the scanner for spec-related repos to get more context about specific functionality or integration of repos.
 
 #### Pattern for All Commands
 
@@ -148,6 +150,7 @@ Update `commands/registry.md` to use the scanner for repository analysis:
 #### 4.1. Scan Repository
 
 Use the Task tool to delegate to `repo-scanner` subagent with:
+
 - `repo_type`: determined from user input (local or github)
 - `repo_path`: validated path from Step 3
 - `scan_depth`: from user selection (quick/full)
@@ -170,17 +173,17 @@ Show the complete entry to user for review.
 
 ### 2.4. Files Created/Modified
 
-| File | Location | Action | Description |
-|------|----------|--------|-------------|
+| File              | Location     | Action | Description                        |
+| ----------------- | ------------ | ------ | ---------------------------------- |
 | `repo-scanner.md` | `subagents/` | Create | Shared repository scanner subagent |
-| `product.md` | `commands/` | Modify | Add Step 1 for context loading |
-| `roadmap.md` | `commands/` | Modify | Add Step 1 for context loading |
-| `architecture.md` | `commands/` | Modify | Add Step 1 for context loading |
-| `spec.md` | `commands/` | Modify | Add Step 1 for context loading |
-| `tech.md` | `commands/` | Modify | Add Step 1 for context loading |
-| `tasks.md` | `commands/` | Modify | Add Step 1 for context loading |
-| `implement.md` | `commands/` | Modify | Add Step 1 for context loading |
-| `registry.md` | `commands/` | Modify | Delegate scanning to repo-scanner |
+| `product.md`      | `commands/`  | Modify | Add Step 1 for context loading     |
+| `roadmap.md`      | `commands/`  | Modify | Add Step 1 for context loading     |
+| `architecture.md` | `commands/`  | Modify | Add Step 1 for context loading     |
+| `spec.md`         | `commands/`  | Modify | Add Step 1 for context loading     |
+| `tech.md`         | `commands/`  | Modify | Add Step 1 for context loading     |
+| `tasks.md`        | `commands/`  | Modify | Add Step 1 for context loading     |
+| `implement.md`    | `commands/`  | Modify | Add Step 1 for context loading     |
+| `registry.md`     | `commands/`  | Modify | Delegate scanning to repo-scanner  |
 
 ---
 
@@ -188,23 +191,23 @@ Show the complete entry to user for review.
 
 ### System Dependencies
 
-| Dependency | Required | Fallback |
-|------------|----------|----------|
-| Claude Code CLI | Yes | None - framework requirement |
-| GitHub MCP | For GitHub repos only | Scanner returns error status; command skips that repo |
-| Local file system | For local repos | None - always available |
-| Task tool | Yes | Required for subagent delegation |
-| Read tool | Yes | Required for reading registry |
+| Dependency        | Required              | Fallback                                              |
+| ----------------- | --------------------- | ----------------------------------------------------- |
+| Claude Code CLI   | Yes                   | None - framework requirement                          |
+| GitHub MCP        | For GitHub repos only | Scanner returns error status; command skips that repo |
+| Local file system | For local repos       | None - always available                               |
+| Task tool         | Yes                   | Required for subagent delegation                      |
+| Read tool         | Yes                   | Required for reading registry                         |
 
 ### Potential Risks & Mitigations
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| GitHub MCP unavailable | Cannot scan GitHub repos | Scanner returns error status; command skips that repo |
-| Large files | Token limits exceeded | Scanner can truncate large files or return error |
-| Many repos in registry | Slow context loading | Commands only call scanner when needed, not for all repos |
-| Registry format changes | Commands might misinterpret | Commands read registry as document, no hardcoded parsing |
-| Invalid repo paths | Scanner errors | Return error status per repo, continue with others |
+| Risk                    | Impact                      | Mitigation                                                |
+| ----------------------- | --------------------------- | --------------------------------------------------------- |
+| GitHub MCP unavailable  | Cannot scan GitHub repos    | Scanner returns error status; command skips that repo     |
+| Large files             | Token limits exceeded       | Scanner can truncate large files or return error          |
+| Many repos in registry  | Slow context loading        | Commands only call scanner when needed, not for all repos |
+| Registry format changes | Commands might misinterpret | Commands read registry as document, no hardcoded parsing  |
+| Invalid repo paths      | Scanner errors              | Return error status per repo, continue with others        |
 
 ---
 

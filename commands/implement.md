@@ -30,8 +30,9 @@ Your goal is to execute the next available task for a given specification. You w
 
 Follow this process precisely.
 When you need user input on a decision:
-  - Use **AskUserQuestion** tool with clear, clickable options
-  - Never present numbered lists requiring manual number entry
+
+- Use **AskUserQuestion** tool with clear, clickable options
+- Never present numbered lists requiring manual number entry
 
 ### Step 1: Load Cross-Repository Context
 
@@ -81,8 +82,6 @@ When you need user input on a decision:
    - Interfaces, models, or DTOs to maintain compatibility
    - Libraries or utilities this implementation will use
    - Functions or methods this code will call or where this code will be called by external services
-   
-
 
 6. **Use Context Silently:** When delegating to subagents, include relevant cross-repo context to ensure implementation is compatible with the ecosystem. When making recommendations:
    - Provide API contract details for integrations

@@ -55,12 +55,14 @@ npx /path/to/awos/index.js --dry-run
 ### File Copy Behavior
 
 Defined in `src/config/setup-config.js`:
+
 - `.awos/` files: Always overwritten (framework internals)
 - `.claude/` files: Only overwritten with `--force-overwrite` (user customizations)
 
 ### Migration System
 
 For restructuring files in existing installations:
+
 - Migration files: `src/migrations/NNN-description.json`
 - Preconditions: `require_any`, `require_all`, `skip_if_any`, `error_if_any`
 - Operations: `move`, `copy`, `delete`

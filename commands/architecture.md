@@ -27,8 +27,9 @@ Your task is to manage the architecture file located at `context/product/archite
 
 Follow this logic precisely.
 When you need user input on a decision:
-  - Use **AskUserQuestion** tool with clear, clickable options
-  - Never present numbered lists requiring manual number entry
+
+- Use **AskUserQuestion** tool with clear, clickable options
+- Never present numbered lists requiring manual number entry
 
 ### Step 1: Load Cross-Repository Context
 
@@ -59,12 +60,12 @@ When you need user input on a decision:
    **Note:** Only scan repos that are both AWOS-enabled AND relevant to architecture decisions. Skip repos that are informational only.
 
 4. **Fetch Additional Context (if needed):** If needed more context or clarifying questions:
-  
+
    Use the Task tool to delegate to the `repo-scanner` subagent. Pass:
    - `repo_type`: `local` or `github` (from registry entry)
    - `repo_path`: filesystem path or `owner/repo` (from registry entry)
    - `question`: clarifying questions or necessary information
-   
+
    Iterate with scanner until you get all necessary information.**This step can be repeated throughout implementation** whenever the subagent needs additional context about related repos.
 
 5. **Process Results:** Receive repository context from scanner. Organize internally:

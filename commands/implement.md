@@ -110,5 +110,5 @@ After updating the task list, you must check if the entire specification has bee
     - Announce: "I have also marked the corresponding roadmap item as complete in `context/product/roadmap.md`."
 
 4.  **Final Announcement:**
-    - If all tasks were complete and you performed steps 2 and 3, announce: "This specification is now fully implemented. All tasks, acceptance criteria, and the roadmap item have been marked as complete. You may now run `/awos:implement` again to work on the next spec, or run `/awos:handoff` to archive completed specs."
+    - If all tasks were complete and you performed steps 2 and 3, announce: "This specification is now fully implemented. All tasks, acceptance criteria, and the roadmap item have been marked as complete. You may now run `/awos:implement` again to work on the next spec."
     - If tasks remain, simply announce: "Implementation step complete. There are still remaining tasks in this spec."

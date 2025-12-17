@@ -28,6 +28,9 @@ Your primary task is to create a new functional specification file. You will det
 # PROCESS
 
 Follow this process precisely.
+When you need user input on a decision:
+- Use **AskUserQuestion** tool with clear, clickable options
+- Never present numbered lists requiring manual number entry
 
 ### Step 1: Determine the Specification Topic
 

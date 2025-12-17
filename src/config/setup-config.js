@@ -56,13 +56,6 @@ const copyOperations = [
     description: 'AWOS scripts',
   },
   {
-    source: 'subagents',
-    destination: '.awos/subagents',
-    patterns: ['*'],
-    overwrite: true,
-    description: 'AWOS subagents',
-  },
-  {
     source: 'claude/commands',
     destination: '.claude/commands/awos',
     patterns: ['*'],

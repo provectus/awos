@@ -29,6 +29,7 @@ Your primary task is to create a new functional specification file. You will det
 
 Follow this process precisely.
 When you need user input on a decision:
+
 - Use **AskUserQuestion** tool with clear, clickable options
 - Never present numbered lists requiring manual number entry
 

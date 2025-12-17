@@ -28,6 +28,7 @@ Your task is to analyze the architecture file at `context/product/architecture.m
 
 Follow this logic precisely!
 When you need user input on a decision:
+
 - Use **AskUserQuestion** tool with clear, clickable options
 - Never present numbered lists requiring manual number entry
 
@@ -112,6 +113,7 @@ For each approved subagent, follow this process:
    - List all created agents with their file paths.
 
 2. **Provide Usage Instructions:**
+
    ```
    Your new subagents are ready to use. They will be automatically invoked when:
    - You work with files matching their domain expertise

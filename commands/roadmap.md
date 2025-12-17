@@ -29,6 +29,7 @@ Your task is to manage the product roadmap file located at `context/product/road
 
 Follow this logic precisely.
 When you need user input on a decision:
+
 - Use **AskUserQuestion** tool with clear, clickable options
 - Never present numbered lists requiring manual number entry
 

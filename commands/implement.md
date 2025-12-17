@@ -30,6 +30,7 @@ Your goal is to execute the next available task for a given specification. You w
 
 Follow this process precisely.
 When you need user input on a decision:
+
 - Use **AskUserQuestion** tool with clear, clickable options
 - Never present numbered lists requiring manual number entry
 

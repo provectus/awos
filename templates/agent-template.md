@@ -21,14 +21,14 @@ color: [color]
 
 ### Configuration Fields (Frontmatter)
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Unique identifier (lowercase, hyphens only, e.g., `postgres-expert`) |
-| `description` | Yes | When Claude should use this agent (critical for auto-invocation) |
-| `model` | No | `haiku`, `sonnet`, `opus`, or `inherit` (default: sonnet) |
-| `color` | Yes | Visual identifier: `blue`, `green`, `purple`, `orange`, `red`, `yellow` |
-| `tools` | No | Comma-separated list of allowed tools (omit to inherit all) |
-| `permissionMode` | No | `default`, `acceptEdits`, `bypassPermissions`, or `plan` |
+| Field            | Required | Description                                                             |
+| ---------------- | -------- | ----------------------------------------------------------------------- |
+| `name`           | Yes      | Unique identifier (lowercase, hyphens only, e.g., `postgres-expert`)    |
+| `description`    | Yes      | When Claude should use this agent (critical for auto-invocation)        |
+| `model`          | No       | `haiku`, `sonnet`, `opus`, or `inherit` (default: sonnet)               |
+| `color`          | Yes      | Visual identifier: `blue`, `green`, `purple`, `orange`, `red`, `yellow` |
+| `tools`          | No       | Comma-separated list of allowed tools (omit to inherit all)             |
+| `permissionMode` | No       | `default`, `acceptEdits`, `bypassPermissions`, or `plan`                |
 
 ---
 
@@ -37,11 +37,13 @@ color: [color]
 The `description` field determines when Claude will automatically use the agent.
 
 **Required Pattern:**
+
 ```
 Use this agent PROACTIVELY when [specific triggers]. MUST BE USED for [specific tasks].
 ```
 
 **Trigger Words That Work:**
+
 - `Use PROACTIVELY` - Claude will use without being asked
 - `MUST BE USED` - Strong signal for automatic invocation
 - `USE AUTOMATICALLY` - Alternative strong trigger
@@ -49,6 +51,7 @@ Use this agent PROACTIVELY when [specific triggers]. MUST BE USED for [specific 
 - `for [specific task]` - Defines scope
 
 **Example:**
+
 ```
 Use this agent PROACTIVELY when working with PostgreSQL schemas, queries, or migrations. MUST BE USED for database design, query optimization, or troubleshooting database performance issues.
 ```
@@ -57,14 +60,15 @@ Use this agent PROACTIVELY when working with PostgreSQL schemas, queries, or mig
 
 # MODEL SELECTION
 
-| Model | Speed | Capability | Best For |
-|-------|-------|------------|----------|
-| `haiku` | Fastest | Good | Simple searches, quick tasks, cost-sensitive |
-| `sonnet` | Fast | Great | Most tasks (recommended default) |
-| `opus` | Slower | Best | Complex reasoning, architecture, security |
-| `inherit` | Varies | Varies | Match user's current model selection |
+| Model     | Speed   | Capability | Best For                                     |
+| --------- | ------- | ---------- | -------------------------------------------- |
+| `haiku`   | Fastest | Good       | Simple searches, quick tasks, cost-sensitive |
+| `sonnet`  | Fast    | Great      | Most tasks (recommended default)             |
+| `opus`    | Slower  | Best       | Complex reasoning, architecture, security    |
+| `inherit` | Varies  | Varies     | Match user's current model selection         |
 
 **Decision Guide:**
+
 - Simple file searches, basic analysis → `haiku`
 - Code review, bug fixing, implementation → `sonnet` (recommended)
 - Complex architecture, security audits, multi-file refactoring → `opus`
@@ -74,6 +78,7 @@ Use this agent PROACTIVELY when working with PostgreSQL schemas, queries, or mig
 # COLOR SELECTION
 
 Choose colors to visually distinguish agent types:
+
 - `blue` - Backend/server-side technologies
 - `green` - Database/data technologies
 - `purple` - Frontend/UI technologies
@@ -87,7 +92,7 @@ Choose colors to visually distinguish agent types:
 
 The system prompt content (after the frontmatter) should follow this structure:
 
-```markdown
+````markdown
 You are an elite [technology] developer with deep expertise in [domain areas]. Your knowledge spans [key areas], with a focus on [primary objectives].
 
 ## Core Expertise
@@ -118,6 +123,7 @@ You are an elite [technology] developer with deep expertise in [domain areas]. Y
 // ✅ Recommended pattern
 [good code with explanation]
 ```
+````
 
 ### [Pattern Name 2]
 
@@ -149,7 +155,8 @@ You are an elite [technology] developer with deep expertise in [domain areas]. Y
 ---
 
 **Remember:** [Closing philosophy statement about the technology and approach]
-```
+
+````
 
 ---
 
@@ -223,7 +230,7 @@ You are an elite Kotlin developer with deep expertise in modern backend developm
 value class Money(val cents: Long) {
     fun toDecimal(): BigDecimal = BigDecimal(cents).divide(BigDecimal(100))
 }
-```
+````
 
 ### Result Types for Error Handling
 
@@ -260,6 +267,7 @@ val priceInCents: Long = 1999L
 ---
 
 **Remember:** Adapt patterns to context. Start simple, extract when functions grow.
+
 ```
 
 ---
@@ -269,14 +277,16 @@ val priceInCents: Long = 1999L
 For better organization, consider subdirectories within `.claude/agents/`:
 
 ```
+
 .claude/agents/
 ├── domain-experts/
-│   ├── kotlin-expert.md
-│   └── react-expert.md
+│ ├── kotlin-expert.md
+│ └── react-expert.md
 ├── security/
-│   └── security-auditor.md
+│ └── security-auditor.md
 └── testing/
-    └── qa-expert.md
+└── qa-expert.md
+
 ```
 
 ---
@@ -293,3 +303,4 @@ For better organization, consider subdirectories within `.claude/agents/`:
 ---
 
 **Remember:** Great agents are specific, opinionated, and backed by concrete code examples. They should feel like working with a senior developer who has deep expertise in that specific technology.
+```

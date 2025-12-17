@@ -30,6 +30,7 @@ Your primary task is to create the technical specification for a given feature. 
 
 Follow this process precisely.
 When you need user input on a decision:
+
 - Use **AskUserQuestion** tool with clear, clickable options
 - Never present numbered lists requiring manual number entry
 

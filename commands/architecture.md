@@ -27,6 +27,7 @@ Your task is to manage the architecture file located at `context/product/archite
 
 Follow this logic precisely.
 When you need user input on a decision:
+
 - Use **AskUserQuestion** tool with clear, clickable options
 - Never present numbered lists requiring manual number entry
 

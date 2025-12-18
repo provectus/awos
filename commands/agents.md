@@ -18,7 +18,7 @@ Your task is to analyze the architecture file at `context/product/architecture.m
 
 - **Prerequisite Input:** `context/product/architecture.md` (The technical blueprint - must exist).
 - **Context Input:** `context/product/product-definition.md` (For understanding the domain).
-- **Reference Input:** `.claude/agents/` (Existing subagent examples for pattern reference).
+- **Reference Input:** Existing agents at project (`.claude/agents/`) and user (`~/.claude/agents/`) levels for pattern reference.
 - **Template File:** `.awos/templates/agent-template.md` (Subagent file format and best practices).
 - **Output Files:** `.claude/agents/[agent-name].md` (Complete agent file with config and system prompt)
 
@@ -66,7 +66,7 @@ When you need user input on a decision:
 ### Step 3: Existing Subagent Check
 
 1. **Scan Existing Subagents:**
-   - Check what subagent files already exist in `.claude/agents/` (including any subdirectories).
+   - Check what subagent files already exist at project (`.claude/agents/`) and user (`~/.claude/agents/`) levels, including any subdirectories.
    - Read existing subagents to understand the established patterns.
    - Analyze each existing subagent and identify potential improvements (e.g., missing capabilities, outdated patterns, better model selection, enhanced system prompts).
 

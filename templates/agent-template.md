@@ -269,28 +269,6 @@ val priceInCents: Long = 1999L
 **Remember:** Adapt patterns to context. Start simple, extract when functions grow.
 
 ```
-
----
-
-# FILE ORGANIZATION
-
-For better organization, consider subdirectories within `.claude/agents/`:
-
-```
-
-.claude/agents/
-├── domain-experts/
-│ ├── kotlin-expert.md
-│ └── react-expert.md
-├── security/
-│ └── security-auditor.md
-└── testing/
-└── qa-expert.md
-
-```
-
----
-
 # COMMON MISTAKES
 
 1. **Vague Descriptions** - Too generic, Claude won't know when to use the agent

@@ -62,13 +62,6 @@ const copyOperations = [
     overwrite: false,
     description: 'Claude Code commands',
   },
-  {
-    source: 'claude/agents',
-    destination: '.claude/agents',
-    patterns: ['*'],
-    overwrite: false,
-    description: 'Claude Code agents',
-  },
 ];
 
 module.exports = {

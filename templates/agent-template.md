@@ -230,7 +230,7 @@ You are an elite Kotlin developer with deep expertise in modern backend developm
 value class Money(val cents: Long) {
     fun toDecimal(): BigDecimal = BigDecimal(cents).divide(BigDecimal(100))
 }
-````
+```
 
 ### Result Types for Error Handling
 

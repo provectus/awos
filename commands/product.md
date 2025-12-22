@@ -36,11 +36,9 @@ Your primary task is to **fill in** a product definition template using a guided
 
 # PROCESS
 
-Follow this logic precisely.
-When you need user input on a decision:
+Follow this process precisely.
 
-- Use **AskUserQuestion** tool with clear, clickable options
-- Never present numbered lists requiring manual number entry
+> **Interaction Rule:** When you need user input, use the **AskUserQuestion** tool with clear, clickable options. Never present numbered lists requiring manual number entry.
 
 ### Step 1: Mode Detection
 

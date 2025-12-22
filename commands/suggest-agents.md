@@ -18,7 +18,7 @@ Your task is to analyze the architecture file at `context/product/architecture.m
 
 - **Prerequisite Input:** `context/product/architecture.md` (The technical blueprint - must exist).
 - **Context Input:** `context/product/product-definition.md` (For understanding the domain).
-- **Reference Input:** Use `/agents` command to discover existing agents for pattern reference.
+- **Reference Input:** Use Claude Code's native `/agents` slash command to discover existing agents for pattern reference.
 - **Template File:** `.awos/templates/agent-template.md` (Subagent file format and best practices).
 - **Output Files:** `.claude/agents/[agent-name].md` (Complete agent file with config and system prompt)
 

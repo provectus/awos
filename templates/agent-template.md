@@ -280,3 +280,4 @@ val priceInCents: Long = 1999L
 ---
 
 **Remember:** Great agents are specific, opinionated, and backed by concrete code examples. They should feel like working with a senior developer who has deep expertise in that specific technology.
+````

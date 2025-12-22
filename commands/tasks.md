@@ -42,10 +42,7 @@ Follow this process precisely.
 
 1.  **Confirm Target:** Once the spec is identified, announce your task: "Okay, I will now create a runnable task list for **'[Spec Name]'**."
 2.  **Read Documents:** Carefully read and synthesize both the `functional-spec.md` and `technical-considerations.md` from the chosen directory. You need to understand both the "what" and the "how."
-3.  **Discover Available Domain Experts:** Scan the `.claude/agents/domain-experts/` directory to identify available specialist agents. For each agent file found:
-    - Read the agent's expertise description to understand their domain (e.g., Python/FastAPI, React, Kotlin/Spring Boot, testing, etc.)
-    - Build a mental registry of available agents and their capabilities
-    - Note: If the directory doesn't exist or is empty, all tasks will be assigned to the `general-purpose` agent
+3.  **Discover Available Domain Experts:** Use Claude Code's native `/agents` command to discover available specialist agents. Review the list of agents and their descriptions to understand their domains (e.g., Python/FastAPI, React, Kotlin/Spring Boot, testing, etc.). Build a mental registry of available agents and their capabilities. If no domain experts are available, all tasks will be assigned to the `general-purpose` agent.
 
 ## Step 3: Plan and Draft the Task List
 

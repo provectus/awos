@@ -83,4 +83,6 @@ Follow this process precisely.
 
 1.  **Confirm:** State clearly: "Great! I am now saving the architecture document."
 2.  **Save File:** Write the final, complete content to `context/product/architecture.md`.
-3.  **Conclude:** End the session with a confirmation message: "The architecture has been saved to `context/product/architecture.md`. This will serve as the blueprint for implementation. Next, define the functional specifications for the upcoming feature by running `/awos:suggest-agents`"
+3.  **Conclude:** End the session with a confirmation message: "The architecture has been saved to `context/product/architecture.md`. This will serve as the blueprint for implementation. You can now either:
+    - Run `/awos:suggest-agents` to create domain expert subagents based on your tech stack (optional but recommended for larger projects)
+    - Jump directly to `/awos:spec` to start defining your first feature specification"

@@ -81,7 +81,21 @@ npx @provectusinc/awos
 > /awos:architecture Users can upload photos and see beer added to their pictures.
 ```
 
-4. `/awos:spec`
+4. `/awos:suggest-agents` **(Optional)**
+
+- **What it does**: Analyzes your architecture and suggests domain expert subagents tailored to your tech stack.
+- **Think of it as**: Assembling a team of specialists. Each subagent becomes an expert in a specific technology from your stack.
+- Audience: Tech Lead (Technical)
+
+**Example Usage:**
+
+```bash
+# ✅ Good:
+> /awos:suggest-agents
+# (It will analyze architecture.md and recommend relevant domain experts)
+```
+
+5. `/awos:spec`
 
 - **What it does**: Creates a detailed Functional Specification for a single feature from the roadmap.
 - **Think of it as**: A detailed plan for one room in your house. It describes exactly what the feature does for a user.
@@ -106,7 +120,7 @@ npx @provectusinc/awos
 > /awos:spec Feature: Make the app work well.
 ```
 
-5. `/awos:tech`
+6. `/awos:tech`
 
 - **What it does**: Creates the Technical Specification.
 - **Think of it as**: The builder's instructions for that one room. It explains _how_ to build the feature.
@@ -123,7 +137,7 @@ npx @provectusinc/awos
 > /awos:tech Make the photo upload smooth and fast for users.
 ```
 
-6. `/awos:tasks`
+7. `/awos:tasks`
 
 - **What it does**: Breaks the technical spec into a Task List.
 - **Think of it as**: The step-by-step construction checklist for engineers to follow.
@@ -137,7 +151,7 @@ npx @provectusinc/awos
 # (It will create tasks for the spec created on the previous step)
 ```
 
-7. `/awos:implement`
+8. `/awos:implement`
 
 - **What it does**: Executes tasks (finally, actual code generation).
 - **Think of it as**: The project foreman. This agent delegates the coding work to sub-agents and tracks progress.

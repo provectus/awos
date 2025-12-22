@@ -18,7 +18,7 @@ Your task is to analyze the architecture file at `context/product/architecture.m
 
 - **Prerequisite Input:** `context/product/architecture.md` (The technical blueprint - must exist).
 - **Context Input:** `context/product/product-definition.md` (For understanding the domain).
-- **Reference Input:** Existing agents at project (`.claude/agents/`) and user (`~/.claude/agents/`) levels for pattern reference.
+- **Reference Input:** Use `/agents` command to discover existing agents for pattern reference.
 - **Template File:** `.awos/templates/agent-template.md` (Subagent file format and best practices).
 - **Output Files:** `.claude/agents/[agent-name].md` (Complete agent file with config and system prompt)
 
@@ -63,9 +63,9 @@ Follow this process precisely.
 
 ### Step 3: Existing Subagent Check
 
-1. **Scan Existing Subagents:**
-   - Check what subagent files already exist at project (`.claude/agents/`) and user (`~/.claude/agents/`) levels, including any subdirectories.
-   - Read existing subagents to understand the established patterns.
+1. **Discover Existing Subagents:**
+   - Use Claude Code's native `/agents` command to discover all available agents (both project-level and user-level).
+   - Review the list of agents and their descriptions to understand the established patterns and coverage.
    - Analyze each existing subagent and identify potential improvements (e.g., missing capabilities, outdated patterns, better model selection, enhanced system prompts).
 
 2. **Present Existing Coverage:**

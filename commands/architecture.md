@@ -85,4 +85,4 @@ When you need user input on a decision:
 
 1.  **Confirm:** State clearly: "Great! I am now saving the architecture document."
 2.  **Save File:** Write the final, complete content to `context/product/architecture.md`.
-3.  **Conclude:** End the session with a confirmation message: "The architecture has been saved to `context/product/architecture.md`. This will serve as the blueprint for implementation. Next, define the functional specifications for the upcoming feature by running `/awos:agents`"
+3.  **Conclude:** End the session with a confirmation message: "The architecture has been saved to `context/product/architecture.md`. This will serve as the blueprint for implementation. Next, define the functional specifications for the upcoming feature by running `/awos:suggest-agents`"

@@ -223,6 +223,36 @@ async function executeOperation(
       }
       break;
 
+    case 'delete-directory':
+      if (dryRun) {
+        if (!(await exists(sourcePath))) {
+          log(
+            `  ${style.dim('[DRY-RUN]')} Would skip delete directory (not found): ${operation.from}`,
+            'item'
+          );
+        } else {
+          log(
+            `  ${style.dim('[DRY-RUN]')} Would delete directory: ${operation.from}`,
+            'item'
+          );
+        }
+      } else {
+        try {
+          await fs.rm(sourcePath, { recursive: true, force: true });
+          log(`  Deleted directory: ${operation.from}`, 'success');
+        } catch (error) {
+          if (error.code !== 'ENOENT') {
+            throw error;
+          }
+          // Directory doesn't exist, that's okay for delete
+          log(
+            `  ${style.dim('–')} Skipped delete directory (not found): ${operation.from}`,
+            'item'
+          );
+        }
+      }
+      break;
+
     default:
       throw new Error(`Unknown operation type: ${operation.type}`);
   }

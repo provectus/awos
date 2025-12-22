@@ -268,7 +268,6 @@ val priceInCents: Long = 1999L
 
 **Remember:** Adapt patterns to context. Start simple, extract when functions grow.
 
-```
 # COMMON MISTAKES
 
 1. **Vague Descriptions** - Too generic, Claude won't know when to use the agent
@@ -281,4 +280,3 @@ val priceInCents: Long = 1999L
 ---
 
 **Remember:** Great agents are specific, opinionated, and backed by concrete code examples. They should feel like working with a senior developer who has deep expertise in that specific technology.
-```

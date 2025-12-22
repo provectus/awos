@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "name": "Remove deprecated .awos/subagents directory",
+  "description": "Agents are now created directly in .claude/agents/ with full content. The separate .awos/subagents/ directory is no longer used.",
+  "preconditions": {
+    "require_any": [".awos/subagents"]
+  },
+  "operations": [
+    {
+      "type": "delete-directory",
+      "from": ".awos/subagents"
+    }
+  ]
+}

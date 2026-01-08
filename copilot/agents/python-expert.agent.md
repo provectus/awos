@@ -7,4 +7,4 @@ tools:
   - runInTerminal
 ---
 
-Refer to the instructions in: .awos/subagents/python-expert.md
+{{INLINE:subagents/python-expert.md}}

@@ -6,4 +6,4 @@ tools:
   - editFiles
 ---
 
-Refer to the instructions located in this file: .awos/commands/spec.md
+{{INLINE:commands/spec.md}}

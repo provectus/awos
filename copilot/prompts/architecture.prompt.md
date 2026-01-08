@@ -6,4 +6,4 @@ tools:
   - editFiles
 ---
 
-Refer to the instructions located in this file: .awos/commands/architecture.md
+{{INLINE:commands/architecture.md}}

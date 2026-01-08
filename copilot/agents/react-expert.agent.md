@@ -7,4 +7,4 @@ tools:
   - runInTerminal
 ---
 
-Refer to the instructions in: .awos/subagents/react-expert.md
+{{INLINE:subagents/react-expert.md}}

@@ -6,4 +6,4 @@ tools:
   - editFiles
 ---
 
-Refer to the instructions located in this file: .awos/commands/tasks.md
+{{INLINE:commands/tasks.md}}

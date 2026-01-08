@@ -7,4 +7,4 @@ tools:
   - runInTerminal
 ---
 
-Refer to the instructions located in this file: .awos/commands/implement.md
+{{INLINE:commands/implement.md}}

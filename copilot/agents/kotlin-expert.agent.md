@@ -7,4 +7,4 @@ tools:
   - runInTerminal
 ---
 
-Refer to the instructions in: .awos/subagents/kotlin-expert.md
+{{INLINE:subagents/kotlin-expert.md}}

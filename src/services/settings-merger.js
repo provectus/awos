@@ -10,7 +10,8 @@ const path = require('path');
 const { log } = require('../utils/logger');
 
 /**
- * Deep merge two objects, with source taking precedence
+ * Deep merge two objects, with source taking precedence for objects
+ * Arrays are merged by combining unique values (preserving user settings)
  * @param {Object} target - Target object to merge into
  * @param {Object} source - Source object with new values
  * @returns {Object} Merged object
@@ -25,6 +26,26 @@ function deepMerge(target, source) {
       !Array.isArray(source[key])
     ) {
       result[key] = deepMerge(result[key] || {}, source[key]);
+    } else if (Array.isArray(source[key])) {
+      const targetArray = Array.isArray(result[key]) ? result[key] : [];
+      const sourceArray = source[key];
+
+      const combined = [...targetArray];
+
+      for (const item of sourceArray) {
+        const isPrimitive = typeof item !== 'object' || item === null;
+        const exists = isPrimitive
+          ? combined.includes(item)
+          : combined.some(
+              (existing) => JSON.stringify(existing) === JSON.stringify(item)
+            );
+
+        if (!exists) {
+          combined.push(item);
+        }
+      }
+
+      result[key] = combined;
     } else {
       result[key] = source[key];
     }
@@ -57,14 +78,34 @@ async function pathExists(filePath) {
 async function mergeSettings({ sourceFile, targetFile, dryRun = false }) {
   const result = { merged: false, created: false };
 
-  const sourceContent = await fsPromises.readFile(sourceFile, 'utf8');
-  const sourceSettings = JSON.parse(sourceContent);
+  let sourceSettings;
+  try {
+    const sourceContent = await fsPromises.readFile(sourceFile, 'utf8');
+    sourceSettings = JSON.parse(sourceContent);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      log(`Invalid JSON in source settings file: ${sourceFile}`, 'error');
+      log(`Error: ${error.message}`, 'error');
+      throw new Error(`Invalid JSON in source settings file: ${sourceFile}`);
+    }
+    throw error;
+  }
 
   const targetExists = await pathExists(targetFile);
 
   if (targetExists) {
-    const targetContent = await fsPromises.readFile(targetFile, 'utf8');
-    const targetSettings = JSON.parse(targetContent);
+    let targetSettings;
+    try {
+      const targetContent = await fsPromises.readFile(targetFile, 'utf8');
+      targetSettings = JSON.parse(targetContent);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        log(`Invalid JSON in target settings file: ${targetFile}`, 'error');
+        log(`Error: ${error.message}`, 'error');
+        throw new Error(`Invalid JSON in target settings file: ${targetFile}`);
+      }
+      throw error;
+    }
     const mergedSettings = deepMerge(targetSettings, sourceSettings);
 
     if (dryRun) {

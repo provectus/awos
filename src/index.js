@@ -23,7 +23,21 @@ async function main() {
 
   // Parse --tool <name> argument (supports: claude, copilot, all)
   const toolIndex = process.argv.indexOf('--tool');
-  const tool = toolIndex !== -1 ? process.argv[toolIndex + 1] : 'claude';
+  let tool = 'claude';
+
+  if (toolIndex !== -1) {
+    const nextArg = process.argv[toolIndex + 1];
+
+    if (!nextArg || nextArg.startsWith('--')) {
+      log(
+        `Error: --tool requires a value. Supported: ${VALID_TOOLS.join(', ')}`,
+        'error'
+      );
+      process.exit(1);
+    }
+
+    tool = nextArg;
+  }
 
   // Validate tool
   if (!VALID_TOOLS.includes(tool)) {

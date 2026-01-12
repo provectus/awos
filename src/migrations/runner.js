@@ -378,10 +378,7 @@ async function runMigrations(workingDir, options = {}) {
 
     // Log migration status - only for non-dry-run
     if (!dryRun) {
-      log(
-        `${style.info('ℹ')} ${pending.length} migration(s) to apply`,
-        'info'
-      );
+      log(`${style.info('ℹ')} ${pending.length} migration(s) to apply`, 'info');
     }
 
     // Execute migrations in order

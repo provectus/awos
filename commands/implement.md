@@ -76,7 +76,17 @@ Follow this process precisely.
 
 1.  **Mark Task as Done:** Upon successful completion by the subagent, you must update the progress tracker.
 2.  Read the contents of the `tasks.md` file from the target directory.
-3.  Find the exact line for the task that was just completed.
-4.  Change its checkbox from `[ ]` to `[x]`.
-5.  Save the modified content back to the `tasks.md` file.
-6.  **Announce Completion:** Conclude the process with a clear status update. Example: "The task has been successfully completed by the subagent. I have updated `tasks.md` to reflect this."
+3.  **Find and Mark the Specific Completed Task:**
+    - Identify the exact line that corresponds to the task that was just completed.
+    - **Important:** If the task was a sub-item (indented checkbox under a parent task), mark ONLY that specific sub-item by changing its checkbox from `[ ]` to `[x]`.
+    - After marking the sub-item, check if ALL sub-items under the same parent are now complete (`[x]`). If they are, ALSO mark the parent task as complete.
+    - If the task was a top-level task (not a sub-item), simply mark that task's checkbox from `[ ]` to `[x]`.
+4.  Save the modified content back to the `tasks.md` file.
+5.  **Announce Completion:** Conclude this step with a status update. Example: "The task has been successfully completed by the subagent. I have updated `tasks.md` to reflect this."
+
+### Step 6: Announce Status
+
+Count completed `[x]` and total tasks, calculate percentage.
+
+- If tasks remain: "Implementation step complete. [N]/[Total] tasks done ([X]%)."
+- If all tasks are `[x]`: "All tasks complete (100%). Run `/awos:verify` to verify acceptance criteria and mark spec as Completed."

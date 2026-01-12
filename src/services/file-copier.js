@@ -10,18 +10,7 @@ const path = require('path');
 const { matchesAnyPattern } = require('../utils/pattern-matcher');
 const { log, clearLine } = require('../utils/logger');
 const { style } = require('../config/constants');
-
-/**
- * Check if a path exists (file or directory)
- * @param {string} filePath - The path to check
- * @returns {Promise<boolean>} True if the path exists, false otherwise
- */
-async function pathExists(filePath) {
-  return await fsPromises
-    .access(filePath, fs.constants.F_OK)
-    .then(() => true)
-    .catch(() => false);
-}
+const { pathExists } = require('../utils/fs-utils');
 
 /**
  * Copy a single file if it matches the patterns

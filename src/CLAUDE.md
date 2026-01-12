@@ -50,7 +50,7 @@ From `config/setup-config.js`:
 **Why the difference?**
 
 - `.awos/` files = Framework internals (user shouldn't edit these)
-- `.claude/` files = User customization layer (preserve their changes)
+- `.claude/` files = User customization layer (user can edit these)
 
 ## CLI Flags
 

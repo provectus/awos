@@ -202,8 +202,6 @@ The **`awos`** framework is flexible and non-prescriptive when it comes to testi
 
 - 🤖 **A Set of AI Agents**: A suite of interactive commands (like `/awos:product`, `/awos:roadmap`, and `/awos:implement`). Each command is a specialized agent with a sophisticated prompt that guides you through a specific stage of the development lifecycle, from product definition to task execution.
 
-- 🛠️ **Pre-defined Sub-Agents**: A collection of specialized AI workers that the main agents delegate tasks to. This includes sub-agents for coding, testing, and other utility functions, ensuring that the right "AI expert" is used for every job.
-
 - 🔌 **Extensibility Hooks**: An advanced system for customization. Hooks and other configuration points allow you to modify and extend the framework to fit your team's specific workflow and needs (more decisions on this is coming soon).
 
 ## Customizing `awos`
@@ -262,7 +260,7 @@ npx @provectusinc/awos
 - ✅ Scripts in `.awos/scripts`
 - ⚠️ Commands in `.claude/commands/awos`
 
-**Important:** The installer will overwrite existing files in `.claude/commands/awos` and `.claude/agents`.
+**Important:** The installer will overwrite existing files in `.claude/commands/awos`.
 If you've customized these files, make sure to back them up first, as your changes will be lost.
 
 ---

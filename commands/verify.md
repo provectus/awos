@@ -16,7 +16,7 @@ Verify a specification's implementation against its acceptance criteria. For eac
 
 # INPUTS & OUTPUTS
 
-- **User Prompt (Optional):** `<user_prompt>$ARGUMENTS</user_prompt>`
+- **User Prompt (Optional):** <user_prompt>$ARGUMENTS</user_prompt>
 - **Primary Context:** The spec directory in `context/spec/` containing:
   - `functional-spec.md`
   - `technical-considerations.md`

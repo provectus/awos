@@ -208,13 +208,13 @@ async function executeOperation(
         }
       } else {
         try {
-          await fs.unlink(sourcePath);
+          await fs.rm(sourcePath, { recursive: true, force: true });
           log(`  Deleted: ${operation.from}`, 'success');
         } catch (error) {
           if (error.code !== 'ENOENT') {
             throw error;
           }
-          // File doesn't exist, that's okay for delete
+          // Path doesn't exist, that's okay for delete
           log(
             `  ${style.dim('–')} Skipped delete (not found): ${operation.from}`,
             'item'

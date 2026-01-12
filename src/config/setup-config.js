@@ -56,25 +56,11 @@ const copyOperations = [
     description: 'AWOS scripts',
   },
   {
-    source: 'subagents',
-    destination: '.awos/subagents',
-    patterns: ['*'],
-    overwrite: true,
-    description: 'AWOS subagents',
-  },
-  {
     source: 'claude/commands',
     destination: '.claude/commands/awos',
     patterns: ['*'],
     overwrite: false,
     description: 'Claude Code commands',
-  },
-  {
-    source: 'claude/agents',
-    destination: '.claude/agents',
-    patterns: ['*'],
-    overwrite: false,
-    description: 'Claude Code agents',
   },
 ];
 

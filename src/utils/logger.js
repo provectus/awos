@@ -69,7 +69,6 @@ function showHeader(asciiArt, subtitle) {
  * Display the setup summary
  * @param {Object} statistics - Statistics about the setup process
  * @param {Object} options - Options for the setup process
- * @param {boolean} options.forceOverwrite - Force overwrite all files regardless of config
  * @param {boolean} options.dryRun - Whether this was a dry-run
  */
 function showSummary(statistics, options) {
@@ -128,25 +127,6 @@ function showSummary(statistics, options) {
 
     console.log(`${prefix} ${labelText}: ${style.bold(value.toString())}`);
   });
-
-  if (options?.forceOverwrite && !options?.dryRun) {
-    console.log('');
-    console.group(`${style.error('⚠')} ${style.bold('Important:')}`);
-    console.log(
-      `The ${style.bold(
-        style.error('--force-overwrite')
-      )} flag overwrote existing files, including:`
-    );
-    console.log(
-      `${style.bold(style.error('.claude/commands/awos'))} and ${style.bold(
-        style.error('.claude/agents')
-      )}.`
-    );
-    console.log(
-      'If you had customizations within these files, please review and restore them.'
-    );
-    console.groupEnd();
-  }
 
   if (options?.dryRun) {
     console.log('');

@@ -25,13 +25,11 @@ This is a framework for spec-driven development using AI agents. It provides str
 - **Installer (`index.js`)**: NPM package that copies workflow templates and commands to user projects
 - **Commands (`/commands/*.md`)**: AI agent prompts that guide users through development stages
 - **Templates (`/templates/*.md`)**: Structured document templates for specifications and planning
-- **Subagents (`/subagents/*.md`)**: Specialized coding agents for implementation tasks
 
 **Installation Flow:**
 ```
 npx @provectusinc/awos
 ├── Creates `.claude/commands/awos/` (copies all commands/*.md files)
-├── Creates `.claude/agents/` (copies subagents/*.md files)
 ├── Creates `.awos/templates/` (copies templates/*.md files)
 └── Creates `.awos/scripts/` (copies scripts/*.sh files)
 ```
@@ -96,6 +94,5 @@ The `/awos:implement` command acts as an **engineering manager** that:
 - Package is published as `@provectusinc/awos` with binary configuration
 - Uses Node.js built-in modules (no external dependencies)
 - Copies files only if they don't exist (never overwrites user customizations)
-- Subagents are specialized for specific technologies (React, Python, etc.)
 
 When working with this codebase, remember that you're building **AI agent orchestration framework**, not end-user applications. Focus on clear prompt engineering, structured document templates, and maintainable command workflows.

@@ -16,11 +16,10 @@ async function main() {
   const packageRoot = __dirname + '/..';
 
   // Parse command line arguments
-  const forceOverwrite = process.argv.includes('--force-overwrite');
   const dryRun = process.argv.includes('--dry-run');
 
   try {
-    await runSetup({ workingDir, packageRoot, forceOverwrite, dryRun });
+    await runSetup({ workingDir, packageRoot, dryRun });
   } catch (err) {
     console.error('');
     log(`Error during setup: ${err.message}`, 'error');

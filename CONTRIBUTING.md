@@ -26,7 +26,6 @@ awos/
 ├── scripts/             # AWOS scripts
 ├── commands/            # AWOS command prompts
 ├── templates/           # Document templates
-├── subagents/           # Subagent definitions
 ├── claude/              # Claude Code integration files
 ├── index.js              # Root entry point (delegates to src/)
 └── src/                  # AWOS installer source code
@@ -49,26 +48,23 @@ npx /absolute/path/to/your/awos-clone/index.js
 npx ~/repos/provectus/awos/index.js
 ```
 
-**Testing Updates (Force Overwrite):**
+**Testing Updates:**
 
 ```bash
-# Test the --force-overwrite flag
-npx ~/repos/provectus/awos/index.js --force-overwrite
+npx ~/repos/provectus/awos/index.js
 ```
 
 ### What to Test
 
-#### If you make changes to the command prompts or subagents:
+#### If you make changes to the command prompts:
 
-- ✅ Commands and subagents are copied to the right locations
-- ✅ Commands and subagents are working as expected
+- ✅ Commands are copied to the right locations
+- ✅ Commands are working as expected
 
 #### If you make changes to the installer code:
 
 - ✅ All directories are created correctly
 - ✅ Files are copied to the right locations
-- ✅ `--force-overwrite` flag works as expected
-- ✅ Existing files are preserved when flag is not used
 - ✅ Error messages are clear and helpful
 - ✅ Console output looks good (colors, formatting)
 - ✅ `--dry-run` flag shows preview without making changes

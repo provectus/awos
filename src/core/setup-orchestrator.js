@@ -22,16 +22,10 @@ const { runMigrations } = require('../migrations/runner');
  * @param {Object} config - Setup configuration
  * @param {string} config.workingDir - The working directory where setup will be performed
  * @param {string} config.packageRoot - The root directory of the AWOS package
- * @param {boolean} config.forceOverwrite - Force overwrite all files regardless of config
  * @param {boolean} config.dryRun - Run in dry-run mode (preview changes only)
  * @returns {Promise<void>}
  */
-async function runSetup({
-  workingDir,
-  packageRoot,
-  forceOverwrite = false,
-  dryRun = false,
-}) {
+async function runSetup({ workingDir, packageRoot, dryRun = false }) {
   const TOTAL_STEPS = 4;
 
   // Display header
@@ -87,7 +81,6 @@ async function runSetup({
     packageRoot,
     targetDir: workingDir,
     copyOperations,
-    forceOverwrite,
     dryRun,
   });
 
@@ -97,7 +90,7 @@ async function runSetup({
     ...fileStatistics,
     migrations: migrationStatistics.applied,
   };
-  showSummary(statistics, { forceOverwrite, dryRun });
+  showSummary(statistics, { dryRun });
 }
 
 module.exports = { runSetup };

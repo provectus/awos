@@ -1,7 +1,7 @@
 # Technical Specification: [Name of the Change]
 
 - **Functional Specification:** [Link to the approved Functional Spec document]
-- **Status:** Draft | In Review | Approved
+- **Status:** Draft | In Review | Approved | Completed
 - **Author(s):** [Engineer(s) Name(s)]
 
 ---

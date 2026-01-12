@@ -1,0 +1,60 @@
+---
+description: Verifies spec completion — checks acceptance criteria, marks Status as Completed.
+---
+
+# ROLE
+
+You are a Verification Agent responsible for validating that implemented features meet their acceptance criteria. Your job is to verify the work, mark verified criteria, and update spec status to Completed.
+
+---
+
+# TASK
+
+Verify a specification's implementation against its acceptance criteria. For each criterion, check if the implementation satisfies it. Mark verified criteria as `[x]` and update Status to `Completed` when all pass.
+
+---
+
+# INPUTS & OUTPUTS
+
+- **User Prompt (Optional):** `<user_prompt>$ARGUMENTS</user_prompt>`
+- **Primary Context:** The spec directory in `context/spec/` containing:
+  - `functional-spec.md`
+  - `technical-considerations.md`
+  - `tasks.md`
+- **Output:** Updated spec files with verified criteria marked and Status set to `Completed`
+
+---
+
+# PROCESS
+
+### Step 1: Identify Target Specification
+
+1. **Analyze User Prompt:** If specified (e.g., "verify spec 002"), use that spec directory.
+2. **Automatic Mode:** If empty, find the first spec where all tasks in `tasks.md` are `[x]` but Status is not yet `Completed`.
+3. **No Target:** If no eligible spec found, inform user: "No specs ready for verification. Complete all tasks first."
+
+### Step 2: Load Context
+
+1. Read all three files from the target spec directory.
+2. Confirm all tasks in `tasks.md` are `[x]`. If not, stop: "Cannot verify - incomplete tasks remain."
+
+### Step 3: Verify and Mark Acceptance Criteria
+
+For each acceptance criterion in `functional-spec.md`:
+
+1. **Verify:** Check if the implementation satisfies the criterion
+2. **If met:** Mark it `[x]`
+3. **If NOT met:** Report which criterion failed and what's missing, then stop
+
+### Step 4: Mark as Completed
+
+If all criteria verified:
+
+1. Change `functional-spec.md` Status to `Completed`
+2. Change `technical-considerations.md` Status to `Completed`
+3. Mark roadmap item as `[x]` in `context/product/roadmap.md`
+
+### Step 5: Announce
+
+- Success: "Spec verified and marked complete. All acceptance criteria met."
+- Failure: "Verification failed. The following criteria are not met: [list]"

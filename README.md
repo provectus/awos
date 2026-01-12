@@ -139,7 +139,7 @@ npx @provectusinc/awos
 
 7. `/awos:implement`
 
-- **What it does**: Executes tasks (finally, actual code generation). Automatically marks completed tasks, acceptance criteria, and roadmap items.
+- **What it does**: Executes tasks (finally, actual code generation). Shows progress percentage as tasks complete.
 - **Think of it as**: The project foreman. This agent delegates the coding work to sub-agents and tracks progress.
 - Audience: Team Lead (Technical)
 
@@ -154,6 +154,22 @@ npx @provectusinc/awos
 
 # ✅ Good:
 > /awos:implement
+```
+
+8. `/awos:verify`
+
+- **What it does**: Verifies implementation meets acceptance criteria. Marks Status as Completed when all criteria pass.
+- **Think of it as**: The QA lead. Checks that what was built matches what was specified.
+- Audience: Team Lead (Technical)
+
+**Example Usage:**
+
+```bash
+# ✅ Good:
+> /awos:verify
+
+# ✅ Good:
+> /awos:verify spec 002
 ```
 
 ### Step 3: You're Awesome

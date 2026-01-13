@@ -87,7 +87,7 @@ Follow this logic precisely.
 
 ### Step 4: Review Subagent Coverage
 
-After saving, analyze the architecture decisions and check if appropriate domain expert subagents exist:
+After saving, analyze the architecture decisions and the Task tool definition to extract all available subagent_type values with their descriptions to check if appropriate subagents exist:
 
 1.  **Identify Technologies:** Extract all technologies from the architecture (languages, frameworks, cloud providers, databases, infrastructure tools).
 
@@ -103,6 +103,6 @@ After saving, analyze the architecture decisions and check if appropriate domain
 | [e.g., Terraform]      | Terraform/IaC expert      | ✅ Exists / ⚠️ Missing |
 | [e.g., PostgreSQL]     | Database expert           | ✅ Exists / ⚠️ Missing |
 
-4.  **Recommendations for Missing Agents:** For any ⚠️ Missing, advise: "Consider adding a domain expert for [technology]. You can create one in `.claude/agents/`, install from a plugin marketplace, or use `general-purpose` agent as fallback."
+4.  **Recommendations for Missing Agents:** For any ⚠️ Missing, advise: "Consider adding a subagent for [technology]. You can create one in `.claude/agents/`, install from a plugin marketplace, or use `general-purpose` agent as fallback."
 
 5.  **Conclude:** End the session with: "The architecture has been saved to `context/product/architecture.md`. Next, define the functional specifications by running `/awos:spec`"

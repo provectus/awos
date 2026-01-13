@@ -224,8 +224,6 @@ This is where you customize **`awos`** to fit your needs:
 
 - **`.claude/commands/awos/{command}.md`** - Lightweight wrapper files that link to `.awos/commands/{command}.md`
 
-These files are protected by default and won't be touched during normal updates.
-
 ### How to Customize
 
 **Example: Customize a Command**

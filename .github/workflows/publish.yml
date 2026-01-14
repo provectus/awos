@@ -34,3 +34,5 @@ jobs:
       - run: npm install
         
       - run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.TEMP_NPM_TOKEN }}

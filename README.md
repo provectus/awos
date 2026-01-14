@@ -202,8 +202,6 @@ The **`awos`** framework is flexible and non-prescriptive when it comes to testi
 
 - 🤖 **A Set of AI Agents**: A suite of interactive commands (like `/awos:product`, `/awos:roadmap`, and `/awos:implement`). Each command is a specialized agent with a sophisticated prompt that guides you through a specific stage of the development lifecycle, from product definition to task execution.
 
-- 🛠️ **Pre-defined Sub-Agents**: A collection of specialized AI workers that the main agents delegate tasks to. This includes sub-agents for coding, testing, and other utility functions, ensuring that the right "AI expert" is used for every job.
-
 - 🔌 **Extensibility Hooks**: An advanced system for customization. Hooks and other configuration points allow you to modify and extend the framework to fit your team's specific workflow and needs (more decisions on this is coming soon).
 
 ## Customizing `awos`
@@ -217,7 +215,6 @@ All framework service data lives in the `.awos/` directory:
 - `.awos/commands` - Full command prompt instructions
 - `.awos/templates` - Document templates
 - `.awos/scripts` - Utility scripts
-- `.awos/subagents` - Detailed subagent prompts
 
 **⚠️ Important:** Do NOT manually edit files in the `.awos/` folder. These files are always overwritten during updates to ensure you get the latest framework improvements. Any customizations here will be lost.
 
@@ -226,9 +223,6 @@ All framework service data lives in the `.awos/` directory:
 This is where you customize **`awos`** to fit your needs:
 
 - **`.claude/commands/awos/{command}.md`** - Lightweight wrapper files that link to `.awos/commands/{command}.md`
-- **`.claude/agents/{agent}.md`** - Agent configuration files that reference `.awos/subagents/{agent}.md`
-
-These files are protected by default and won't be touched during normal updates.
 
 ### How to Customize
 
@@ -262,27 +256,10 @@ npx @provectusinc/awos
 - ✅ Commands in `.awos/commands`
 - ✅ Templates in `.awos/templates`
 - ✅ Scripts in `.awos/scripts`
-- ✅ Subagents in `.awos/subagents`
-
-### Force Update
-
-To update **`awos`** to the latest version, run the installer again with the `--force-overwrite` flag:
-
-```sh
-npx @provectusinc/awos --force-overwrite
-```
-
-**Important:** The `--force-overwrite` flag will overwrite existing files in `.claude/commands/awos` and `.claude/agents`.
-If you've customized these files, make sure to back them up first, as your changes will be lost.
-
-**What gets updated:**
-
-- ✅ Commands in `.awos/commands`
-- ✅ Templates in `.awos/templates`
-- ✅ Scripts in `.awos/scripts`
-- ✅ Subagents in `.awos/subagents`
 - ⚠️ Commands in `.claude/commands/awos`
-- ⚠️ Agents in `.claude/agents`
+
+**Important:** The installer will overwrite existing files in `.claude/commands/awos`.
+If you've customized these files, make sure to back them up first, as your changes will be lost.
 
 ---
 

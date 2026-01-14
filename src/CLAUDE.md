@@ -7,7 +7,7 @@
 **Think of it this way:**
 
 - This code (`src/`) = The installer (like `npm install` or `apt-get`)
-- The framework (`commands/`, `templates/`, `subagents/`, `claude/`) = The actual product
+- The framework (`commands/`, `templates/`, `claude/`) = The actual product
 
 The actual AWOS framework - all the AI agent prompts, templates, and commands that help users build software - lives in the parent directories. This installer just copies those files into the user's project.
 
@@ -40,27 +40,25 @@ src/
 
 From `config/setup-config.js`:
 
-| Source             | Destination              | Overwrite?                    |
-| ------------------ | ------------------------ | ----------------------------- |
-| `commands/`        | `.awos/commands/`        | Always                        |
-| `templates/`       | `.awos/templates/`       | Always                        |
-| `scripts/`         | `.awos/scripts/`         | Always                        |
-| `subagents/`       | `.awos/subagents/`       | Always                        |
-| `claude/commands/` | `.claude/commands/awos/` | Only with `--force-overwrite` |
-| `claude/agents/`   | `.claude/agents/`        | Only with `--force-overwrite` |
+| Source             | Destination              |
+| ------------------ | ------------------------ |
+| `commands/`        | `.awos/commands/`        |
+| `templates/`       | `.awos/templates/`       |
+| `scripts/`         | `.awos/scripts/`         |
+| `claude/commands/` | `.claude/commands/awos/` |
 
 **Why the difference?**
 
 - `.awos/` files = Framework internals (user shouldn't edit these)
-- `.claude/` files = User customization layer (preserve their changes)
+- `.claude/` files = User customization layer (user can edit these)
 
 ## CLI Flags
 
-**`--force-overwrite`**
+**`--dry-run`**
 
-- Overwrites everything, including `.claude/` files
-- Use case: Updating AWOS to latest version
-- User can recover their customizations via `git diff`
+- Shows preview of what will be updated without making changes
+
+Files are updated by default when running the installer. This ensures users always have the latest version of AWOS components.
 
 ## Common Modifications
 
@@ -69,9 +67,6 @@ From `config/setup-config.js`:
 
 **Add/remove files to copy:**
 → Edit `copyOperations` array in `config/setup-config.js`
-
-**Change overwrite behavior:**
-→ Edit `overwrite: true/false` in copy operations
 
 **Add new CLI flags:**
 → Parse in `index.js`, pass to orchestrator, use in services

@@ -40,10 +40,6 @@ Follow this process precisely.
 
 1.  **Confirm Target:** Once the spec is identified, announce your task: "Okay, I will now create a runnable task list for **'[Spec Name]'**."
 2.  **Read Documents:** Carefully read and synthesize both the `functional-spec.md` and `technical-considerations.md` from the chosen directory. You need to understand both the "what" and the "how."
-3.  **Discover Available Domain Experts:** Scan the `.claude/agents/domain-experts/` directory to identify available specialist agents. For each agent file found:
-    - Read the agent's expertise description to understand their domain (e.g., Python/FastAPI, React, Kotlin/Spring Boot, testing, etc.)
-    - Build a mental registry of available agents and their capabilities
-    - Note: If the directory doesn't exist or is empty, all tasks will be assigned to the `general-purpose` agent
 
 ## Step 3: Plan and Draft the Task List
 
@@ -58,16 +54,17 @@ Follow this process precisely.
   1.  First, identify the absolute smallest piece of user-visible value from the spec. This is your **Slice 1**.
   2.  Create a high-level checklist item for that slice (e.g., `- [ ] **Slice 1: View existing avatar (or placeholder)**`).
   3.  Under that slice, create the nested sub-tasks (database, backend, frontend) needed to implement **only that slice**.
-  4.  **For each sub-task, assign the appropriate domain expert agent:**
+  4.  **For each sub-task, assign the appropriate subagent:**
       - Analyze the sub-task description to understand what technology/domain it involves
-      - Match the sub-task to a specialist agent based on:
-        - Technology keywords (e.g., "FastAPI" → python-expert, "React component" → react-expert, "Spring Boot" → kotlin-expert)
-        - Task intent (e.g., "E2E test" → testing-expert, "API endpoint" → backend expert)
+      - Analyze the Task tool definition to extract all available subagent_type values with their descriptions to understand what subagents are available for assignment.
+      - Match the sub-task to a subagent based on:
+        - Technology keywords
+        - Task intent
         - Tech stack identified in technical-considerations.md
-      - Append the agent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
+      - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
       - Use `general-purpose` agent when no specialist clearly matches the task
   5.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
-  6.  Create a high-level checklist item and its sub-tasks with agent assignments.
+  6.  Create a high-level checklist item and its sub-tasks with subagent assignments.
   7.  Repeat this process until all requirements from the specification are covered.
 
 - **Example of applying the rule for "User Profile Picture Upload":**
@@ -75,7 +72,7 @@ Follow this process precisely.
     - `[ ] Add avatar_url to users table`
     - `[ ] Create all avatar API endpoints (upload, delete)`
     - `[ ] Build the entire profile picture UI`
-  - **Good, Vertical Slices with Agent Assignments (DO THIS):**
+  - **Good, Vertical Slices with subagent assignments (DO THIS):**
     - `[ ] **Slice 1: Display a placeholder avatar on the profile page**`
       - `[ ] Sub-task: Add a non-functional 'ProfileAvatar' UI component that shows a static placeholder image. **[Agent: react-expert]**`
       - `[ ] Sub-task: Place the component on the profile page. **[Agent: react-expert]**`
@@ -86,8 +83,8 @@ Follow this process precisely.
 
 ## Step 4: Present Draft and Refine
 
-- Present the complete, vertically sliced task list with agent assignments to the user.
-- Ask for feedback: "Here is a proposed task list, broken down into runnable, incremental slices with domain expert assignments. Does this sequence, level of detail, and agent assignments look correct? We can adjust, split, merge tasks, or reassign agents as needed."
+- Present the complete, vertically sliced task list with subagent assignments to the user.
+- Ask for feedback: "Here is a proposed task list, broken down into runnable, incremental slices with subagent assignments. Does this sequence, level of detail, and subagent assignments look correct? We can adjust, split, merge tasks, or reassign subagents as needed."
 - Allow the user to request changes until they are satisfied.
 
 ## Step 5: File Generation

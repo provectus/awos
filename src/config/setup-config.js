@@ -38,43 +38,25 @@ const copyOperations = [
     source: 'commands',
     destination: '.awos/commands',
     patterns: ['*'],
-    overwrite: true,
     description: 'AWOS command prompts',
   },
   {
     source: 'templates',
     destination: '.awos/templates',
     patterns: ['*'],
-    overwrite: true,
     description: 'AWOS templates',
   },
   {
     source: 'scripts',
     destination: '.awos/scripts',
     patterns: ['*'],
-    overwrite: true,
     description: 'AWOS scripts',
-  },
-  {
-    source: 'subagents',
-    destination: '.awos/subagents',
-    patterns: ['*'],
-    overwrite: true,
-    description: 'AWOS subagents',
   },
   {
     source: 'claude/commands',
     destination: '.claude/commands/awos',
     patterns: ['*'],
-    overwrite: false,
     description: 'Claude Code commands',
-  },
-  {
-    source: 'claude/agents',
-    destination: '.claude/agents',
-    patterns: ['*'],
-    overwrite: false,
-    description: 'Claude Code agents',
   },
 ];
 

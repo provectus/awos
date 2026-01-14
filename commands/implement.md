@@ -46,7 +46,7 @@ Follow this process precisely.
     - `[target-spec-directory]/functional-spec.md`
     - `[target-spec-directory]/technical-considerations.md`
     - `[target-spec-directory]/tasks.md`
-3.  **Extract Agent Assignment:** Analyze the current task description to identify which domain expert should handle the implementation:
+3.  **Extract Agent Assignment:** Analyze the current task description to identify which subagent should handle the implementation:
     - Look for the `**[Agent: agent-name]**` pattern in the task description
     - Extract the agent name (e.g., `python-expert`, `react-expert`, `kotlin-expert`, `testing-expert`, etc.)
     - If no agent assignment is found, default to `general-purpose` agent
@@ -61,7 +61,7 @@ Follow this process precisely.
     - The specific task description that needs to be implemented.
     - Clear instructions on what code to write or what files to modify.
     - A definition of success (e.g., "The task is done when the new migration file is created and passes linting.").
-2.  **Execute Delegation with Appropriate Agent:** Call the Task tool to delegate to the domain specialist or general-purpose agent:
+2.  **Execute Delegation with Appropriate Agent:** Call the Task tool to delegate to the domain specialist subagent or general-purpose agent:
     - Use the agent name extracted in Step 2 as the `subagent_type` parameter
     - Example: If extracted agent is `python-expert`, use `subagent_type: "python-expert"`
     - If no agent was found or extracted, use `subagent_type: "general-purpose"`

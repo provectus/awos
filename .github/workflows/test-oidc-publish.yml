@@ -38,9 +38,16 @@ jobs:
           env | grep -i node || true
           env | grep -i token || true
           env | grep -i registry || true
-          echo "=== .npmrc contents ==="
-          cat ~/.npmrc || echo "No .npmrc found"
+          echo "=== .npmrc locations ==="
+          echo "NPM_CONFIG_USERCONFIG=${NPM_CONFIG_USERCONFIG:-not set}"
+          echo "=== temp .npmrc (setup-node created) ==="
+          cat /home/runner/work/_temp/.npmrc || echo "No temp .npmrc found"
+          echo "=== ~/.npmrc ==="
+          cat ~/.npmrc || echo "No ~/.npmrc found"
+          echo "=== local .npmrc ==="
           cat .npmrc || echo "No local .npmrc found"
+          echo "=== NODE_AUTH_TOKEN value (first 10 chars) ==="
+          echo "${NODE_AUTH_TOKEN:0:10}..." || echo "NODE_AUTH_TOKEN not set"
 
       - name: Debug - Check OIDC token availability
         run: |
@@ -60,3 +67,37 @@ jobs:
         run: |
           echo "=== Dry-run publish ==="
           npm publish --dry-run --access public ${{ inputs.debug_mode == 'true' && '--loglevel verbose' || '' }} 2>&1
+
+  # Second job: Test WITHOUT registry-url to see if OIDC works directly
+  test-oidc-no-registry-url:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          # NO registry-url - let npm handle OIDC directly
+
+      - name: Debug - Check environment (no registry-url)
+        run: |
+          echo "=== Without registry-url ==="
+          echo "NPM_CONFIG_USERCONFIG=${NPM_CONFIG_USERCONFIG:-not set}"
+          echo "NODE_AUTH_TOKEN=${NODE_AUTH_TOKEN:-not set}"
+          cat /home/runner/work/_temp/.npmrc 2>/dev/null || echo "No temp .npmrc"
+          echo "=== OIDC vars ==="
+          echo "ACTIONS_ID_TOKEN_REQUEST_URL is set: $([[ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]] && echo 'YES' || echo 'NO')"
+
+      - name: Configure npm registry manually
+        run: |
+          npm config set registry https://registry.npmjs.org/
+          echo "=== npm config list ==="
+          npm config list
+
+      - run: npm install
+
+      - name: Dry-run publish (no registry-url variant)
+        continue-on-error: true
+        run: |
+          echo "=== Dry-run publish without registry-url ==="
+          npm publish --dry-run --access public --loglevel verbose 2>&1

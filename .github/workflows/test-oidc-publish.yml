@@ -93,6 +93,15 @@ jobs:
           echo "=== OIDC vars ==="
           echo "ACTIONS_ID_TOKEN_REQUEST_URL is set: $([[ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]] && echo 'YES' || echo 'NO')"
 
+      - name: Upgrade npm to 11.x (required for OIDC)
+        run: |
+          echo "=== Current npm version ==="
+          npm --version
+          echo "=== Upgrading to npm@latest (11.x) ==="
+          npm install -g npm@latest
+          echo "=== New npm version ==="
+          npm --version
+
       - name: Configure npm registry manually
         run: |
           npm config set registry https://registry.npmjs.org/

@@ -9,7 +9,7 @@ on:
         default: 'true'
         type: boolean
       real_publish:
-        description: 'Do REAL publish (not dry-run) - publishes 0.0.0-oidc-test.1'
+        description: 'Do REAL publish (not dry-run) - publishes 0.0.0-oidc-test.2'
         required: false
         default: 'false'
         type: boolean
@@ -77,12 +77,12 @@ jobs:
   test-oidc-no-registry-url:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
-          # NO registry-url - let npm handle OIDC directly
+          # DO NOT use registry-url - it interferes with OIDC
 
       - name: Debug - Check environment (no registry-url)
         run: |
@@ -113,7 +113,7 @@ jobs:
       - name: Set test version for OIDC test
         if: ${{ inputs.real_publish }}
         run: |
-          npm version 0.0.0-oidc-test.1 --no-git-tag-version
+          npm version 0.0.0-oidc-test.2 --no-git-tag-version
           echo "=== package.json version ==="
           grep '"version"' package.json
 
@@ -128,7 +128,7 @@ jobs:
         if: ${{ inputs.real_publish }}
         run: |
           echo "=== REAL PUBLISH via OIDC ==="
-          echo "Publishing version 0.0.0-oidc-test.1 to npm..."
+          echo "Publishing version 0.0.0-oidc-test.2 to npm..."
           echo "Using --provenance flag to trigger OIDC token exchange"
           npm publish --access public --provenance --tag oidc-test --loglevel verbose 2>&1
           echo "=== SUCCESS! OIDC publishing works! ==="

@@ -17,7 +17,8 @@ const INLINE_PATTERN = /\{\{INLINE:([^}]+)\}\}/g;
  * @returns {string} Content without frontmatter
  */
 function removeFrontmatter(content) {
-  const frontmatterMatch = content.match(/^---\n[\s\S]*?\n---\n/);
+  // Handle both Unix (\n) and Windows (\r\n) line endings
+  const frontmatterMatch = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
   if (frontmatterMatch) {
     return content.slice(frontmatterMatch[0].length);
   }
@@ -32,7 +33,7 @@ function removeFrontmatter(content) {
  * @param {string} config.outputDir - Output directory (absolute path)
  * @param {string} config.filePattern - File extension pattern to match (e.g., '.prompt.md')
  * @param {boolean} config.dryRun - Whether to run in dry-run mode
- * @returns {Promise<Object>} Statistics: { generated, skipped }
+ * @returns {Promise<Object>} Statistics: { generated: files successfully processed, skipped: files with failed inlines }
  */
 async function generateFiles({
   packageRoot,
@@ -76,7 +77,8 @@ async function generateFiles({
         const inlineContent = await fs.readFile(inlinePath, 'utf8');
         // Remove frontmatter from inlined content (keep only body)
         const bodyContent = removeFrontmatter(inlineContent);
-        content = content.replace(match[0], bodyContent);
+        // Use replaceAll to handle multiple occurrences of the same marker
+        content = content.replaceAll(match[0], bodyContent);
       } catch (err) {
         log(`Failed to inline ${relativePath}: ${err.message}`, 'error');
         inlineFailed = true;
@@ -91,8 +93,10 @@ async function generateFiles({
     }
 
     // Write generated file
-    if (!dryRun) {
-      const outputPath = path.join(outputDir, file);
+    const outputPath = path.join(outputDir, file);
+    if (dryRun) {
+      log(`[DRY-RUN] Would generate: ${outputPath}`, 'info');
+    } else {
       await fs.writeFile(outputPath, content, 'utf8');
       log(`Generated ${file}`, 'success');
     }

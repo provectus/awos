@@ -66,6 +66,7 @@ async function generateFiles({
 
     // Replace all {{INLINE:path}} markers with file content
     const matches = [...content.matchAll(INLINE_PATTERN)];
+    let inlineFailed = false;
 
     for (const match of matches) {
       const relativePath = match[1];
@@ -78,9 +79,15 @@ async function generateFiles({
         content = content.replace(match[0], bodyContent);
       } catch (err) {
         log(`Failed to inline ${relativePath}: ${err.message}`, 'error');
-        stats.skipped++;
-        continue;
+        inlineFailed = true;
+        break;
       }
+    }
+
+    // Skip file if any inline failed
+    if (inlineFailed) {
+      stats.skipped++;
+      continue;
     }
 
     // Write generated file

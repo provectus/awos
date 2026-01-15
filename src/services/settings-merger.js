@@ -10,8 +10,36 @@ const path = require('path');
 const { log } = require('../utils/logger');
 
 /**
- * Deep merge two objects, with source taking precedence for objects
- * Arrays are merged by combining unique values (preserving user settings)
+ * Deep equality check for two values
+ * Handles primitives, objects, arrays, and null
+ * @param {*} a - First value
+ * @param {*} b - Second value
+ * @returns {boolean} True if values are deeply equal
+ */
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  if (typeof a !== typeof b) return false;
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((item, index) => deepEqual(item, b[index]));
+  }
+
+  if (typeof a === 'object') {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    return keysA.every((key) => Object.hasOwn(b, key) && deepEqual(a[key], b[key]));
+  }
+
+  return false;
+}
+
+/**
+ * Deep merge two objects recursively
+ * For nested objects, keys are merged; for primitive values, source takes precedence.
+ * Arrays are deduplicated by combining unique values from both.
  * @param {Object} target - Target object to merge into
  * @param {Object} source - Source object with new values
  * @returns {Object} Merged object
@@ -33,13 +61,7 @@ function deepMerge(target, source) {
       const combined = [...targetArray];
 
       for (const item of sourceArray) {
-        const isPrimitive = typeof item !== 'object' || item === null;
-        const exists = isPrimitive
-          ? combined.includes(item)
-          : combined.some(
-              (existing) => JSON.stringify(existing) === JSON.stringify(item)
-            );
-
+        const exists = combined.some((existing) => deepEqual(existing, item));
         if (!exists) {
           combined.push(item);
         }

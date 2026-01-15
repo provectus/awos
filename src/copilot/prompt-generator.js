@@ -2,7 +2,7 @@
  * Copilot File Generator Service
  * Generates Copilot prompt and agent files by inlining referenced content
  *
- * Copilot doesn't resolve file references in prompts/agents, so we inline
+ * Copilot doesn't resolve file references in prompts, so we inline
  * the full content at install time.
  */
 const fs = require('fs').promises;
@@ -114,22 +114,4 @@ async function generatePrompts({ packageRoot, targetDir, dryRun = false }) {
   });
 }
 
-/**
- * Generate Copilot agent files by inlining subagent content
- * @param {Object} config - Generation configuration
- * @param {string} config.packageRoot - Root directory of the AWOS package
- * @param {string} config.targetDir - Target directory for generated files
- * @param {boolean} config.dryRun - Whether to run in dry-run mode
- * @returns {Promise<Object>} Statistics: { generated, skipped }
- */
-async function generateAgents({ packageRoot, targetDir, dryRun = false }) {
-  return generateFiles({
-    packageRoot,
-    sourceDir: 'copilot/agents',
-    outputDir: path.join(targetDir, '.github/agents'),
-    filePattern: '.agent.md',
-    dryRun,
-  });
-}
-
-module.exports = { generatePrompts, generateAgents };
+module.exports = { generatePrompts };

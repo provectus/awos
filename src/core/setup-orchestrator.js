@@ -22,7 +22,7 @@ const { createDirectories } = require('../services/directory-creator');
 const { executeCopyOperations } = require('../services/file-copier');
 const { mergeVSCodeSettings } = require('../services/settings-merger');
 const { runMigrations } = require('../migrations/runner');
-const { generatePrompts, generateAgents } = require('../copilot');
+const { generatePrompts } = require('../copilot');
 
 /**
  * Run the setup process
@@ -33,7 +33,11 @@ const { generatePrompts, generateAgents } = require('../copilot');
  * @param {string} config.tool - Target tool ('claude', 'copilot', 'all')
  * @returns {Promise<void>}
  */
-async function runSetup({ workingDir, packageRoot, dryRun = false   tool = 'claude',
+async function runSetup({
+  workingDir,
+  packageRoot,
+  dryRun = false,
+  tool = 'claude',
 }) {
   const TOTAL_STEPS = 4;
 
@@ -87,7 +91,7 @@ async function runSetup({ workingDir, packageRoot, dryRun = false   tool = 'clau
   // Step 4: Installing components
   showStep(
     'Installing Components',
-    'Copying commands, templates, and agents',
+    'Copying commands and templates',
     4,
     TOTAL_STEPS
   );
@@ -101,7 +105,6 @@ async function runSetup({ workingDir, packageRoot, dryRun = false   tool = 'clau
   // Merge VS Code settings for Copilot
   let settingsStatistics = { merged: false, created: false };
   let promptStatistics = { generated: 0, skipped: 0 };
-  let agentStatistics = { generated: 0, skipped: 0 };
   if (tool === 'copilot' || tool === 'all') {
     settingsStatistics = await mergeVSCodeSettings({
       packageRoot,
@@ -111,13 +114,6 @@ async function runSetup({ workingDir, packageRoot, dryRun = false   tool = 'clau
 
     // Generate Copilot prompts with inlined command content
     promptStatistics = await generatePrompts({
-      packageRoot,
-      targetDir: workingDir,
-      dryRun,
-    });
-
-    // Generate Copilot agents with inlined subagent content
-    agentStatistics = await generateAgents({
       packageRoot,
       targetDir: workingDir,
       dryRun,
@@ -132,7 +128,6 @@ async function runSetup({ workingDir, packageRoot, dryRun = false   tool = 'clau
     settingsMerged: settingsStatistics.merged,
     settingsCreated: settingsStatistics.created,
     promptsGenerated: promptStatistics.generated,
-    agentsGenerated: agentStatistics.generated,
   };
   showSummary(statistics, { dryRun, tool });
 }

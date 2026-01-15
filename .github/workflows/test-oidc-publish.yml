@@ -120,5 +120,6 @@ jobs:
         run: |
           echo "=== REAL PUBLISH via OIDC ==="
           echo "Publishing version 0.0.0-oidc-test.1 to npm..."
-          npm publish --access public --loglevel verbose 2>&1
+          echo "Using --provenance flag to trigger OIDC token exchange"
+          npm publish --access public --provenance --loglevel verbose 2>&1
           echo "=== SUCCESS! OIDC publishing works! ==="

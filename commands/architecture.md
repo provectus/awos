@@ -81,4 +81,28 @@ Follow this logic precisely.
 
 1.  **Confirm:** State clearly: "Great! I am now saving the architecture document."
 2.  **Save File:** Write the final, complete content to `context/product/architecture.md`.
-3.  **Conclude:** End the session with a confirmation message: "The architecture has been saved to `context/product/architecture.md`. This will serve as the blueprint for implementation. Next, define the functional specifications for the upcoming feature by running `/awos:spec`"
+3.  **Proceed** to Step 4: Review Subagent Coverage.
+
+---
+
+### Step 4: Review Subagent Coverage
+
+After saving, analyze the architecture decisions and the Task tool definition to extract all available subagent_type values with their descriptions to check if appropriate subagents exist:
+
+1.  **Identify Technologies:** Extract all technologies from the architecture (languages, frameworks, cloud providers, databases, infrastructure tools).
+
+2.  **Check Subagent Coverage:** For each technology, check your available subagents to see if a relevant domain expert exists.
+
+3.  **Present Coverage Table:**
+
+| Technology             | Recommended Subagent Role | Status                 |
+| ---------------------- | ------------------------- | ---------------------- |
+| [e.g., Python/FastAPI] | Python backend expert     | ✅ Exists / ⚠️ Missing |
+| [e.g., React]          | React/frontend expert     | ✅ Exists / ⚠️ Missing |
+| [e.g., AWS]            | AWS infrastructure expert | ✅ Exists / ⚠️ Missing |
+| [e.g., Terraform]      | Terraform/IaC expert      | ✅ Exists / ⚠️ Missing |
+| [e.g., PostgreSQL]     | Database expert           | ✅ Exists / ⚠️ Missing |
+
+4.  **Recommendations for Missing Agents:** For any ⚠️ Missing, advise: "Consider adding a subagent for [technology]. You can create one in `.claude/agents/`, install from a plugin marketplace, or use `general-purpose` agent as fallback."
+
+5.  **Conclude:** End the session with: "The architecture has been saved to `context/product/architecture.md`. Next, define the functional specifications by running `/awos:spec`"

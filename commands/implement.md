@@ -46,7 +46,7 @@ Follow this process precisely.
     - `[target-spec-directory]/functional-spec.md`
     - `[target-spec-directory]/technical-considerations.md`
     - `[target-spec-directory]/tasks.md`
-3.  **Extract Agent Assignment:** Analyze the current task description to identify which domain expert should handle the implementation:
+3.  **Extract Agent Assignment:** Analyze the current task description to identify which subagent should handle the implementation:
     - Look for the `**[Agent: agent-name]**` pattern in the task description
     - Extract the agent name (e.g., `python-expert`, `react-expert`, `kotlin-expert`, `testing-expert`, etc.)
     - If no agent assignment is found, default to `general-purpose` agent
@@ -61,7 +61,7 @@ Follow this process precisely.
     - The specific task description that needs to be implemented.
     - Clear instructions on what code to write or what files to modify.
     - A definition of success (e.g., "The task is done when the new migration file is created and passes linting.").
-2.  **Execute Delegation with Appropriate Agent:** Call the Task tool to delegate to the domain specialist or general-purpose agent:
+2.  **Execute Delegation with Appropriate Agent:** Call the Task tool to delegate to the domain specialist subagent or general-purpose agent:
     - Use the agent name extracted in Step 2 as the `subagent_type` parameter
     - Example: If extracted agent is `python-expert`, use `subagent_type: "python-expert"`
     - If no agent was found or extracted, use `subagent_type: "general-purpose"`
@@ -76,7 +76,17 @@ Follow this process precisely.
 
 1.  **Mark Task as Done:** Upon successful completion by the subagent, you must update the progress tracker.
 2.  Read the contents of the `tasks.md` file from the target directory.
-3.  Find the exact line for the task that was just completed.
-4.  Change its checkbox from `[ ]` to `[x]`.
-5.  Save the modified content back to the `tasks.md` file.
-6.  **Announce Completion:** Conclude the process with a clear status update. Example: "The task has been successfully completed by the subagent. I have updated `tasks.md` to reflect this."
+3.  **Find and Mark the Specific Completed Task:**
+    - Identify the exact line that corresponds to the task that was just completed.
+    - **Important:** If the task was a sub-item (indented checkbox under a parent task), mark ONLY that specific sub-item by changing its checkbox from `[ ]` to `[x]`.
+    - After marking the sub-item, check if ALL sub-items under the same parent are now complete (`[x]`). If they are, ALSO mark the parent task as complete.
+    - If the task was a top-level task (not a sub-item), simply mark that task's checkbox from `[ ]` to `[x]`.
+4.  Save the modified content back to the `tasks.md` file.
+5.  **Announce Completion:** Conclude this step with a status update. Example: "The task has been successfully completed by the subagent. I have updated `tasks.md` to reflect this."
+
+### Step 6: Announce Status
+
+Count completed `[x]` and total tasks, calculate percentage.
+
+- If tasks remain: "Implementation step complete. [N]/[Total] tasks done ([X]%)."
+- If all tasks are `[x]`: "All tasks complete (100%). Run `/awos:verify` to verify acceptance criteria and mark spec as Completed."

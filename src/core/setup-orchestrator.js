@@ -29,17 +29,11 @@ const { generatePrompts, generateAgents } = require('../copilot');
  * @param {Object} config - Setup configuration
  * @param {string} config.workingDir - The working directory where setup will be performed
  * @param {string} config.packageRoot - The root directory of the AWOS package
- * @param {boolean} config.forceOverwrite - Force overwrite all files regardless of config
  * @param {boolean} config.dryRun - Run in dry-run mode (preview changes only)
  * @param {string} config.tool - Target tool ('claude', 'copilot', 'all')
  * @returns {Promise<void>}
  */
-async function runSetup({
-  workingDir,
-  packageRoot,
-  forceOverwrite = false,
-  dryRun = false,
-  tool = 'claude',
+async function runSetup({ workingDir, packageRoot, dryRun = false   tool = 'claude',
 }) {
   const TOTAL_STEPS = 4;
 
@@ -101,7 +95,6 @@ async function runSetup({
     packageRoot,
     targetDir: workingDir,
     copyOperations: filteredOperations,
-    forceOverwrite,
     dryRun,
   });
 
@@ -141,7 +134,7 @@ async function runSetup({
     promptsGenerated: promptStatistics.generated,
     agentsGenerated: agentStatistics.generated,
   };
-  showSummary(statistics, { forceOverwrite, dryRun, tool });
+  showSummary(statistics, { dryRun, tool });
 }
 
 module.exports = { runSetup };

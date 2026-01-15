@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "name": "Remove bundled domain expert directories",
+  "preconditions": {
+    "require_any": [".awos/subagents", ".claude/agents/domain-experts"]
+  },
+  "operations": [
+    {
+      "type": "delete",
+      "from": ".awos/subagents"
+    },
+    {
+      "type": "delete",
+      "from": ".claude/agents/domain-experts"
+    }
+  ]
+}

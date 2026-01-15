@@ -1,7 +1,7 @@
 # Functional Specification: [Name of the Change]
 
 - **Roadmap Item:** [Description of the single roadmap item]
-- **Status:** Draft | In Review | Approved
+- **Status:** Draft | In Review | Approved | Completed
 - **Author:** [Author's Name]
 
 ---

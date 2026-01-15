@@ -2,6 +2,10 @@
   "name": "@provectusinc/awos",
   "version": "0.0.0-develop",
   "description": "This framework outlines a structured approach to leveraging Large Language Models (LLMs) for high-quality code generation, moving beyond basic prompting to a spec-driven development methodology.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/provectus/awos.git"
+  },
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

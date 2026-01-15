@@ -102,21 +102,21 @@ jobs:
       - run: npm install
 
       - name: Set test version for OIDC test
-        if: ${{ inputs.real_publish == 'true' }}
+        if: ${{ inputs.real_publish }}
         run: |
           npm version 0.0.0-oidc-test.1 --no-git-tag-version
           echo "=== package.json version ==="
           grep '"version"' package.json
 
       - name: Dry-run publish (no registry-url variant)
-        if: ${{ inputs.real_publish != 'true' }}
+        if: ${{ !inputs.real_publish }}
         continue-on-error: true
         run: |
           echo "=== Dry-run publish without registry-url ==="
           npm publish --dry-run --access public --loglevel verbose 2>&1
 
       - name: REAL publish via OIDC (test version)
-        if: ${{ inputs.real_publish == 'true' }}
+        if: ${{ inputs.real_publish }}
         run: |
           echo "=== REAL PUBLISH via OIDC ==="
           echo "Publishing version 0.0.0-oidc-test.1 to npm..."

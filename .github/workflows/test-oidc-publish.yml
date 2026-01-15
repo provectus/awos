@@ -1,4 +1,4 @@
-name: Test OIDC Publishing (Dry Run)
+name: Test OIDC Publishing
 
 on:
   workflow_dispatch:
@@ -7,6 +7,11 @@ on:
         description: 'Enable verbose npm debugging'
         required: false
         default: 'true'
+        type: boolean
+      real_publish:
+        description: 'Do REAL publish (not dry-run) - publishes 0.0.0-oidc-test.1'
+        required: false
+        default: 'false'
         type: boolean
 
 permissions:
@@ -96,8 +101,24 @@ jobs:
 
       - run: npm install
 
+      - name: Set test version for OIDC test
+        if: ${{ inputs.real_publish == 'true' }}
+        run: |
+          npm version 0.0.0-oidc-test.1 --no-git-tag-version
+          echo "=== package.json version ==="
+          grep '"version"' package.json
+
       - name: Dry-run publish (no registry-url variant)
+        if: ${{ inputs.real_publish != 'true' }}
         continue-on-error: true
         run: |
           echo "=== Dry-run publish without registry-url ==="
           npm publish --dry-run --access public --loglevel verbose 2>&1
+
+      - name: REAL publish via OIDC (test version)
+        if: ${{ inputs.real_publish == 'true' }}
+        run: |
+          echo "=== REAL PUBLISH via OIDC ==="
+          echo "Publishing version 0.0.0-oidc-test.1 to npm..."
+          npm publish --access public --loglevel verbose 2>&1
+          echo "=== SUCCESS! OIDC publishing works! ==="

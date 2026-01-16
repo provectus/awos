@@ -3,6 +3,17 @@ name: Publish Package
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 1.2.3 or 1.2.3-beta.1)'
+        required: true
+        type: string
+      tag:
+        description: 'npm tag (use "latest" for stable, or custom tag for prereleases)'
+        required: false
+        default: 'latest'
+        type: string
 
 permissions:
   contents: read
@@ -12,27 +23,41 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-        
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
-          registry-url: 'https://registry.npmjs.org'
+          node-version: '22'
+          # DO NOT use registry-url - it interferes with OIDC
 
-      - name: Get version from release tag
-        id: get_version
+      - name: Upgrade npm to 11.x (required for OIDC)
+        run: npm install -g npm@latest
+
+      - name: Configure npm registry
+        run: npm config set registry https://registry.npmjs.org/
+
+      - name: Determine version and tag
+        id: version
         run: |
-          release_tag="${{ github.event.release.tag_name }}"
-          version=$(echo $release_tag | sed 's/^v//')
-          echo "Release tag: $release_tag"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # From release event - extract version from tag
+            release_tag="${{ github.event.release.tag_name }}"
+            version=$(echo "$release_tag" | sed 's/^v//')
+            tag="latest"
+          else
+            # From workflow_dispatch - use inputs
+            version="${{ inputs.version }}"
+            tag="${{ inputs.tag }}"
+          fi
           echo "Version: $version"
-          echo "Version=$version" >> $GITHUB_OUTPUT
+          echo "Tag: $tag"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "tag=$tag" >> $GITHUB_OUTPUT
 
-      - name: Update package.json version for publishing
-        run: npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version
-          
+      - name: Update package.json version
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+
       - run: npm install
-        
-      - run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.TEMP_NPM_TOKEN }}
+
+      - name: Publish to npm via OIDC
+        run: npm publish --access public --provenance --tag ${{ steps.version.outputs.tag }}

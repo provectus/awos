@@ -91,7 +91,7 @@ Once your project foundation is set, you'll iterate through this cycle for each 
 >
 > Should you keep specs after implementation? The framework leaves this decision to you. However, keep in mind: specs describe your product _before_ implementation. As you rewrite parts of your codebase and change decisions during development (which is normal!), completed specs can become outdated. Stale specs may confuse the AI model—it sees one thing in the spec but the code tells a different story.
 >
-> **Our recommendation**: Don't hesitate to delete specs after completion. Keep your code documentation up-to-date instead—it reflects the actual state of your product.
+> **Our recommendation**: Treat specs as part of your long‑term project record, but keep the active context consistent. When a spec no longer matches reality, either update it, archive it (for example by moving it to an `/archive` folder or clearly marking it as superseded), or make sure the same decisions and rationale are captured in living documents like your architecture docs, ADRs, or code documentation. Avoid leaving ambiguous, out‑of‑date specs in the main context that agents read.
 
 1. `/awos:spec`
 

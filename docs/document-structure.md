@@ -51,7 +51,7 @@ Have you ever had a long chat with an AI and felt that the important context is 
 
 The document-centric approach of **`awos`** solves this problem.
 
-Because your foundational decisions—product vision, roadmap, and architecture—are saved in structured text files, the framework is **idempotent**. This means: **you can clear your chat history at any time, and an `awos` agent can restore the entire project context just by reading the files.**
+Because your foundational decisions—product vision, roadmap, and architecture—are saved in structured text files, the framework is **idempotent during spec work**. This means: **while implementing a feature, you can clear your chat history at any time, and an `awos` agent can restore the complete context (product, roadmap, architecture, and the current spec) just by reading the files.**
 
 Your project's "brain" doesn't live in a fragile conversation; it lives permanently in your Git repository. This means you can always pick up exactly where you left off.
 

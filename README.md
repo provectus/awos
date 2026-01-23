@@ -26,9 +26,9 @@ First, open your terminal, create a new directory for your project, and run this
 npx @provectusinc/awos
 ```
 
-### Step 2: Follow the Workflow
+### Step 2: Project Onboarding
 
-**`awos`** guides you through a logical, step-by-step process. You'll use a series of "agents" to define, plan, and build your product. Run the commands in the following order.
+These commands establish the foundation of your project. Run them once at the start, but **don't hesitate to re-run them as your project evolves**. Requirements change, architecture decisions get refined during development—this is normal and expected. Keeping these documents up-to-date ensures your AI agents always have accurate context.
 
 1. `/awos:product`
 
@@ -80,6 +80,10 @@ npx @provectusinc/awos
 # describes features, not architecture
 > /awos:architecture Users can upload photos and see beer added to their pictures.
 ```
+
+### Step 3: Feature Development Cycle
+
+Once your project foundation is set, you'll iterate through this cycle for each feature. These commands are designed to be run repeatedly—once per feature from your roadmap.
 
 4. `/awos:spec`
 
@@ -172,7 +176,7 @@ npx @provectusinc/awos
 > /awos:verify spec 002
 ```
 
-### Step 3: You're Awesome
+### Step 4: You're Awesome
 
 That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product.
 

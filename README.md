@@ -85,7 +85,7 @@ These commands establish the foundation of your project. Run them once at the st
 
 Once your project foundation is set, you'll iterate through this cycle for each feature. These commands are designed to be run repeatedly—once per feature from your roadmap.
 
-4. `/awos:spec`
+1. `/awos:spec`
 
 - **What it does**: Creates a detailed Functional Specification for a single feature from the roadmap.
 - **Think of it as**: A detailed plan for one room in your house. It describes exactly what the feature does for a user.
@@ -110,7 +110,7 @@ Once your project foundation is set, you'll iterate through this cycle for each 
 > /awos:spec Feature: Make the app work well.
 ```
 
-5. `/awos:tech`
+2. `/awos:tech`
 
 - **What it does**: Creates the Technical Specification.
 - **Think of it as**: The builder's instructions for that one room. It explains _how_ to build the feature.
@@ -127,7 +127,7 @@ Once your project foundation is set, you'll iterate through this cycle for each 
 > /awos:tech Make the photo upload smooth and fast for users.
 ```
 
-6. `/awos:tasks`
+3. `/awos:tasks`
 
 - **What it does**: Breaks the technical spec into a Task List.
 - **Think of it as**: The step-by-step construction checklist for engineers to follow.
@@ -141,7 +141,7 @@ Once your project foundation is set, you'll iterate through this cycle for each 
 # (It will create tasks for the spec created on the previous step)
 ```
 
-7. `/awos:implement`
+4. `/awos:implement`
 
 - **What it does**: Executes tasks (finally, actual code generation). Shows progress percentage as tasks complete.
 - **Think of it as**: The project foreman. This agent delegates the coding work to sub-agents and tracks progress.
@@ -160,7 +160,7 @@ Once your project foundation is set, you'll iterate through this cycle for each 
 > /awos:implement
 ```
 
-8. `/awos:verify`
+5. `/awos:verify`
 
 - **What it does**: Verifies implementation meets acceptance criteria. Marks Status as Completed when all criteria pass.
 - **Think of it as**: The QA lead. Checks that what was built matches what was specified.

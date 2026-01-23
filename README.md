@@ -52,6 +52,7 @@ These commands establish the foundation of your project. Run them once at the st
 - **What it does**: Creates the Product Roadmap.
 - **Think of it as**: Your project's GPS. It lays out the features you will build and in what order.
 - Audience: Product Manager (Non-Technical)
+- **Living document**: Priorities shift, new features emerge, plans change—this is normal. Update your roadmap as your project evolves.
 
 **Example Usage:**
 
@@ -69,6 +70,7 @@ These commands establish the foundation of your project. Run them once at the st
 - **What it does**: Defines the System Architecture.
 - **Think of it as**: Your project's building blueprint. It decides the technology stack, databases, infrastructure, etc.
 - Audience: Solution Architect (Technical)
+- **Living document**: Architecture evolves as you learn more about your system. Re-run this command when you make significant technical decisions.
 
 **Example Usage:**
 
@@ -84,6 +86,12 @@ These commands establish the foundation of your project. Run them once at the st
 ### Step 3: Feature Development Cycle
 
 Once your project foundation is set, you'll iterate through this cycle for each feature. These commands are designed to be run repeatedly—once per feature from your roadmap.
+
+> **📝 A note on spec retention**
+>
+> Should you keep specs after implementation? The framework leaves this decision to you. However, keep in mind: specs describe your product _before_ implementation. As you rewrite parts of your codebase and change decisions during development (which is normal!), completed specs can become outdated. Stale specs may confuse the AI model—it sees one thing in the spec but the code tells a different story.
+>
+> **Our recommendation**: Don't hesitate to delete specs after completion. Keep your code documentation up-to-date instead—it reflects the actual state of your product.
 
 1. `/awos:spec`
 

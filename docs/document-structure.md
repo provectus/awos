@@ -25,6 +25,7 @@ The **`awos`** framework is built around a series of documents that create a cle
 - **Purpose:** This is where an idea from the roadmap is described in complete detail. A specification is created for any significant change (like a new feature or a major refactoring).
 - **Content:** Like the product definition, this document focuses on the **what** and **why**, never the **how**. It contains user stories, acceptance criteria, and the scope of the feature.
 - **How to Use It:** This is the most important document for alignment. The team must review it with business stakeholders to get approval _before_ any technical planning or coding begins. This ensures everyone agrees on what will be built.
+- **Transient by design:** Specs describe the product _before_ implementation. Once a feature is built, the spec may no longer reflect reality—code evolves, decisions change, and that's normal. Don't hesitate to delete completed specs to avoid stale context confusing AI agents. Your code documentation is the true source of truth after implementation.
 
 ### 5. Technical Considerations
 
@@ -50,6 +51,8 @@ Have you ever had a long chat with an AI and felt that the important context is 
 
 The document-centric approach of **`awos`** solves this problem.
 
-Because every important decision—from your product vision to the technical plan for a feature—is saved in a structured text file, the framework is **idempotent**. This is a term with a simple meaning: **you can clear your chat history at any time, and an `awos` agent can restore the entire project context just by reading the files.**
+Because your foundational decisions—product vision, roadmap, and architecture—are saved in structured text files, the framework is **idempotent**. This means: **you can clear your chat history at any time, and an `awos` agent can restore the entire project context just by reading the files.**
 
-Your project's "brain" doesn't live in a fragile conversation; it lives permanently in your Git repository. This means you can always pick up exactly where you left off, and you can be confident that the AI agent has the same complete and accurate information as you do, every single time.
+Your project's "brain" doesn't live in a fragile conversation; it lives permanently in your Git repository. This means you can always pick up exactly where you left off.
+
+**Note on specs and tasks:** These are _transient_ documents—they guide you through implementation but become stale once the work is done. Your long-term project memory lives in the foundational documents (product, roadmap, architecture) and in your code documentation. After implementation, the code itself is the source of truth.

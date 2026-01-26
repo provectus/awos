@@ -26,9 +26,9 @@ First, open your terminal, create a new directory for your project, and run this
 npx @provectusinc/awos
 ```
 
-### Step 2: Follow the Workflow
+### Step 2: Project Onboarding
 
-**`awos`** guides you through a logical, step-by-step process. You'll use a series of "agents" to define, plan, and build your product. Run the commands in the following order.
+These commands establish the foundation of your project. Run them once at the start, but **don't hesitate to re-run them as your project evolves**. Requirements change, architecture decisions get refined during development—this is normal and expected. Keeping these documents up-to-date ensures your AI agents always have accurate context.
 
 1. `/awos:product`
 
@@ -52,6 +52,7 @@ npx @provectusinc/awos
 - **What it does**: Creates the Product Roadmap.
 - **Think of it as**: Your project's GPS. It lays out the features you will build and in what order.
 - Audience: Product Manager (Non-Technical)
+- **Living document**: Priorities shift, new features emerge, plans change—this is normal. Update your roadmap as your project evolves.
 
 **Example Usage:**
 
@@ -69,6 +70,7 @@ npx @provectusinc/awos
 - **What it does**: Defines the System Architecture.
 - **Think of it as**: Your project's building blueprint. It decides the technology stack, databases, infrastructure, etc.
 - Audience: Solution Architect (Technical)
+- **Living document**: Architecture evolves as you learn more about your system. Re-run this command when you make significant technical decisions.
 
 **Example Usage:**
 
@@ -81,7 +83,17 @@ npx @provectusinc/awos
 > /awos:architecture Users can upload photos and see beer added to their pictures.
 ```
 
-4. `/awos:spec`
+### Step 3: Feature Development Cycle
+
+Once your project foundation is set, you'll iterate through this cycle for each feature. These commands are designed to be run repeatedly—once per feature from your roadmap.
+
+> **📝 A note on spec retention**
+>
+> Should you keep specs after implementation? The framework leaves this decision to you. However, keep in mind: specs describe your product _before_ implementation. As you rewrite parts of your codebase and change decisions during development (which is normal!), completed specs can become outdated. Stale specs may confuse the AI model—it sees one thing in the spec but the code tells a different story.
+>
+> **Our recommendation**: Don't hesitate to delete specs after completion. Keep your code documentation up-to-date instead—it reflects the actual state of your product.
+
+1. `/awos:spec`
 
 - **What it does**: Creates a detailed Functional Specification for a single feature from the roadmap.
 - **Think of it as**: A detailed plan for one room in your house. It describes exactly what the feature does for a user.
@@ -106,7 +118,7 @@ npx @provectusinc/awos
 > /awos:spec Feature: Make the app work well.
 ```
 
-5. `/awos:tech`
+2. `/awos:tech`
 
 - **What it does**: Creates the Technical Specification.
 - **Think of it as**: The builder's instructions for that one room. It explains _how_ to build the feature.
@@ -123,7 +135,7 @@ npx @provectusinc/awos
 > /awos:tech Make the photo upload smooth and fast for users.
 ```
 
-6. `/awos:tasks`
+3. `/awos:tasks`
 
 - **What it does**: Breaks the technical spec into a Task List.
 - **Think of it as**: The step-by-step construction checklist for engineers to follow.
@@ -137,7 +149,7 @@ npx @provectusinc/awos
 # (It will create tasks for the spec created on the previous step)
 ```
 
-7. `/awos:implement`
+4. `/awos:implement`
 
 - **What it does**: Executes tasks (finally, actual code generation). Shows progress percentage as tasks complete.
 - **Think of it as**: The project foreman. This agent delegates the coding work to sub-agents and tracks progress.
@@ -156,7 +168,7 @@ npx @provectusinc/awos
 > /awos:implement
 ```
 
-8. `/awos:verify`
+5. `/awos:verify`
 
 - **What it does**: Verifies implementation meets acceptance criteria. Marks Status as Completed when all criteria pass.
 - **Think of it as**: The QA lead. Checks that what was built matches what was specified.
@@ -172,7 +184,7 @@ npx @provectusinc/awos
 > /awos:verify spec 002
 ```
 
-### Step 3: You're Awesome
+### Step 4: You're Awesome
 
 That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product.
 

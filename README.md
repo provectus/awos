@@ -1,4 +1,4 @@
-![Project Banner](media/logo.png)
+![Project Banner](media/awos-cover.webp)
 
 # **Agentic Workflow Operating System for Coding Assistance**
 

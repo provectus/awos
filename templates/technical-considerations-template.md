@@ -1,3 +1,19 @@
+<!--
+This document describes HOW to build the feature at an architectural level.
+It is NOT a copy-paste implementation guide.
+
+DO:
+- Describe data models (table names, key columns, relationships)
+- Describe API contracts (endpoints, request/response shapes)
+- Reference file paths where code will live
+- Note critical configuration requirements
+
+DON'T:
+- Include full code implementations
+- Write complete schema definitions
+- Provide copy-paste config files
+-->
+
 # Technical Specification: [Name of the Change]
 
 - **Functional Specification:** [Link to the approved Functional Spec document]

@@ -58,6 +58,12 @@ Follow this process precisely.
 
 2.  **Detailed Implementation (Assume but Verify):**
     - Work through the sections of the template (System Changes, API, etc.).
+    - **LEVEL OF DETAIL:** Describe structures and contracts, not implementations. The spec should be reviewable and not go stale.
+      - For schemas: list table names, key columns, and relationships in a table format (no full DDL/ORM code)
+      - For APIs: specify endpoints, methods, and payload shapes (no handler code)
+      - For configs: list required env vars and their purpose (no full file contents)
+      - For files: specify paths and responsibilities (no full implementations)
+      - Reference official docs for exact syntax/requirements rather than duplicating them
     - **CRITICAL BEHAVIOR:** For each section, you must propose a specific implementation detail based on the architecture, state it as an assumption, and ask for approval.
     - Example: "For the database, the functional spec implies we need to store the image location. I'll **assume** we should add a new `avatar_url` (TEXT) column to the `users` table. **Is that assumption correct?**"
     - Example: "For the API, I'll propose a `POST /api/v1/users/me/avatar` endpoint that accepts a multipart/form-data request. **Does that fit the requirements?**"

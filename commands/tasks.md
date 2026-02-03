@@ -66,10 +66,11 @@ Follow this process precisely.
         - Task intent
         - Tech stack identified in technical-considerations.md
       - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
-      - Use `general-purpose` agent when no specialist clearly matches the task
+      - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
   5.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
   6.  Create a high-level checklist item and its sub-tasks with subagent assignments.
   7.  Repeat this process until all requirements from the specification are covered.
+  8.  For each slice's verification sub-task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing.
 
 - **Example of applying the rule for "User Profile Picture Upload":**
   - **Bad, Horizontal Tasks (DO NOT DO THIS):**
@@ -91,9 +92,15 @@ Follow this process precisely.
 - Present the complete, vertically sliced task list with subagent assignments to the user.
 - Ask for feedback: "Here is a proposed task list, broken down into runnable, incremental slices with subagent assignments. Does this sequence, level of detail, and subagent assignments look correct? We can adjust, split, merge tasks, or reassign subagents as needed."
 - Allow the user to request changes until they are satisfied.
+- If any tasks were assigned to `general-purpose` (because no specialist exists) or verification cannot be performed (missing MCPs/services), present a table:
 
-## Step 5: File Generation
+  | Task/Slice            | Issue                                                    | Recommendation                                       |
+  | --------------------- | -------------------------------------------------------- | ---------------------------------------------------- |
+  | Slice 2: Sub-task 3   | Assigned to `general-purpose` — no TypeScript specialist | Install `typescript-pro` agent for proper delegation |
+  | Slice 3: Verification | Browser MCP not available                                | Install browser MCP to enable UI verification        |
+
+## Step 6: File Generation
 
 1.  **Identify Path:** The output path is the `tasks.md` file inside the directory you identified in Step 1.
 2.  **Save File:** Once the user approves the draft, write the final task list into this file.
-3.  **Conclude:** Announce the completion and the file's location: "The task list has been created. You can find it at `context/spec/[directory-name]/tasks.md`. Let’s get to work! Execute the next task with `/awos:implement` when you're ready."
+3.  **Conclude:** Announce the completion and the file's location: "The task list has been created. You can find it at `context/spec/[directory-name]/tasks.md`. Let's get to work! Execute the next task with `/awos:implement` when you're ready."

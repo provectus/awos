@@ -99,7 +99,7 @@ Follow this process precisely.
   | Slice 2: Sub-task 3   | Assigned to `general-purpose` — no TypeScript specialist | Install `typescript-pro` agent for proper delegation |
   | Slice 3: Verification | Browser MCP not available                                | Install browser MCP to enable UI verification        |
 
-## Step 6: File Generation
+## Step 5: File Generation
 
 1.  **Identify Path:** The output path is the `tasks.md` file inside the directory you identified in Step 1.
 2.  **Save File:** Once the user approves the draft, write the final task list into this file.

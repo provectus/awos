@@ -10,7 +10,7 @@ You are an expert Tech Lead and software delivery planner. Your primary skill is
 
 # TASK
 
-Your goal is to create a markdown file with a comprehensive list of checkbox tasks for a given specification. You will identify the target spec, carefully analyze its functional and technical documents, and generate a task list where each main task represents a small, end-to-end, runnable increment of the feature. The final list will be saved to `tasks.md` within the spec's directory.
+Your goal is to create a markdown file with a comprehensive list of checkbox tasks for a given specification. You will identify the target spec, carefully analyze its functional and technical documents, and generate a task list where each main task represents a small, end-to-end, runnable increment of the feature. Every slice should contain test scenarios for subagents to verify that the slice is completed correctly. The final list will be saved to `tasks.md` within the spec's directory.
 
 ---
 
@@ -47,13 +47,17 @@ Follow this process precisely.
 
 - **CRITICAL RULE: Create Runnable Tasks using Vertical Slicing**
   - A **runnable task** means that after the work is done, the application can be started and used without errors, and a small piece of new functionality is visible or testable.
-  - To achieve this, you must **avoid horizontal, layer-based tasks** (e.g., "Do all database work," then "Do all API work").
-  - Instead, you must **create vertical slices**. A vertical slice is the smallest possible piece of end-to-end functionality.
+  - You must **avoid horizontal, layer-based tasks** (e.g., "Do all database work," then "Do all API work").
+  - You must **create vertical slices**. A vertical slice is the smallest possible piece of end-to-end functionality.
+  - A slice is only valid if its functionality is **verified by the agent** using real tools (browser MCP, curl, shell, etc.).
+  - You must **check and require all needed MCPs, services, and dependencies** for testing. If something is missing, instruct the user to install it.
+  - If a slice **cannot be tested**, explain why and **get user approval** before proceeding.
+  - A slice **is not complete** unless it is tested or explicitly approved to skip testing.
 
 - **Your Thought Process for Generating Tasks:**
   1.  First, identify the absolute smallest piece of user-visible value from the spec. This is your **Slice 1**.
   2.  Create a high-level checklist item for that slice (e.g., `- [ ] **Slice 1: View existing avatar (or placeholder)**`).
-  3.  Under that slice, create the nested sub-tasks (database, backend, frontend) needed to implement **only that slice**.
+  3.  Under that slice, create the nested sub-tasks (database, backend, frontend) needed to implement and verify **only that slice**.
   4.  **For each sub-task, assign the appropriate subagent:**
       - Analyze the sub-task description to understand what technology/domain it involves
       - Analyze the Task tool definition to extract all available subagent_type values with their descriptions to understand what subagents are available for assignment.
@@ -62,10 +66,11 @@ Follow this process precisely.
         - Task intent
         - Tech stack identified in technical-considerations.md
       - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
-      - Use `general-purpose` agent when no specialist clearly matches the task
+      - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
   5.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
   6.  Create a high-level checklist item and its sub-tasks with subagent assignments.
   7.  Repeat this process until all requirements from the specification are covered.
+  8.  For each slice's verification sub-task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing.
 
 - **Example of applying the rule for "User Profile Picture Upload":**
   - **Bad, Horizontal Tasks (DO NOT DO THIS):**
@@ -80,15 +85,22 @@ Follow this process precisely.
       - `[ ] Sub-task: Add avatar_url column to the users table via a migration. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the user API endpoint to return the avatar_url. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the 'ProfileAvatar' component to fetch and display the user's avatar_url, falling back to the placeholder if null. **[Agent: react-expert]**`
+      - `[ ] Sub-task: Run the application. Use chrome MCP to connect the page in Browser. Verify that the profile page shows the correct avatar or placeholder. **[Agent: manual-qa-expert]**`
 
 ## Step 4: Present Draft and Refine
 
 - Present the complete, vertically sliced task list with subagent assignments to the user.
 - Ask for feedback: "Here is a proposed task list, broken down into runnable, incremental slices with subagent assignments. Does this sequence, level of detail, and subagent assignments look correct? We can adjust, split, merge tasks, or reassign subagents as needed."
 - Allow the user to request changes until they are satisfied.
+- If any tasks were assigned to `general-purpose` (because no specialist exists) or verification cannot be performed (missing MCPs/services), present a table:
+
+  | Task/Slice            | Issue                                                    | Recommendation                                       |
+  | --------------------- | -------------------------------------------------------- | ---------------------------------------------------- |
+  | Slice 2: Sub-task 3   | Assigned to `general-purpose` — no TypeScript specialist | Install `typescript-pro` agent for proper delegation |
+  | Slice 3: Verification | Browser MCP not available                                | Install browser MCP to enable UI verification        |
 
 ## Step 5: File Generation
 
 1.  **Identify Path:** The output path is the `tasks.md` file inside the directory you identified in Step 1.
 2.  **Save File:** Once the user approves the draft, write the final task list into this file.
-3.  **Conclude:** Announce the completion and the file's location: "The task list has been created. You can find it at `context/spec/[directory-name]/tasks.md`. Let’s get to work! Execute the next task with `/awos:implement` when you're ready."
+3.  **Conclude:** Announce the completion and the file's location: "The task list has been created. You can find it at `context/spec/[directory-name]/tasks.md`. Let's get to work! Execute the next task with `/awos:implement` when you're ready."

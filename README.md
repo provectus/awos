@@ -188,6 +188,8 @@ Once your project foundation is set, you'll iterate through this cycle for each 
 
 That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product.
 
+**💡 Pro tip:** Check out the [plugins directory](plugins/) for optional extensions like the UI prototyping prompt generator - they can add extra superpowers to your workflow!
+
 ## The `awos` Philosophy
 
 The **`awos`** framework is built on a simple but powerful idea: AI agents, like human developers, need clear context to do great work. Without a structured plan, even the most advanced LLM can act like a confused intern. **`awos`** provides a step-by-step workflow that transforms your vision into a detailed blueprint that AI agents can understand and execute flawlessly. This process ensures the AI's incredible speed is channeled into building the right software, correctly, on the first try.
@@ -215,6 +217,8 @@ The **`awos`** framework is flexible and non-prescriptive when it comes to testi
 - 🤖 **A Set of AI Agents**: A suite of interactive commands (like `/awos:product`, `/awos:roadmap`, and `/awos:implement`). Each command is a specialized agent with a sophisticated prompt that guides you through a specific stage of the development lifecycle, from product definition to task execution.
 
 - 🔌 **Extensibility Hooks**: An advanced system for customization. Hooks and other configuration points allow you to modify and extend the framework to fit your team's specific workflow and needs (more decisions on this is coming soon).
+
+- 🧩 **Plugin Ecosystem**: Optional plugins that extend **`awos`** with additional capabilities beyond the core workflow. ➡️ [View available plugins](plugins/)
 
 ## Customizing `awos`
 

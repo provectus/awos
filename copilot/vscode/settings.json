@@ -1,0 +1,14 @@
+{
+  "chat.promptFilesRecommendations": {
+    "product": true,
+    "roadmap": true,
+    "architecture": true,
+    "spec": true,
+    "tech": true,
+    "tasks": true,
+    "implement": true
+  },
+  "chat.tools.terminal.autoApprove": {
+    ".awos/scripts/": true
+  }
+}

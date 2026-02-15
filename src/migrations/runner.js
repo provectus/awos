@@ -111,20 +111,26 @@ async function executeOperation(
       if (dryRun) {
         if (!sourceExists) {
           log(
-            `  ${style.dim('[DRY-RUN]')} Would skip move (source not found): ${operation.from}`,
+            `  ${style.dim('[DRY-RUN]')} Would skip move (source not found): ${
+              operation.from
+            }`,
             'item'
           );
           return;
         }
         if (targetExists) {
           log(
-            `  ${style.warn('⚠')} ${style.dim('[DRY-RUN]')} Would skip move (target exists): ${operation.to}`,
+            `  ${style.warn('⚠')} ${style.dim(
+              '[DRY-RUN]'
+            )} Would skip move (target exists): ${operation.to}`,
             'item'
           );
           return;
         }
         log(
-          `  ${style.dim('[DRY-RUN]')} Would move: ${operation.from} → ${operation.to}`,
+          `  ${style.dim('[DRY-RUN]')} Would move: ${operation.from} → ${
+            operation.to
+          }`,
           'item'
         );
       } else {
@@ -158,20 +164,26 @@ async function executeOperation(
       if (dryRun) {
         if (!copySourceExists) {
           log(
-            `  ${style.dim('[DRY-RUN]')} Would skip copy (source not found): ${operation.from}`,
+            `  ${style.dim('[DRY-RUN]')} Would skip copy (source not found): ${
+              operation.from
+            }`,
             'item'
           );
           return;
         }
         if (copyTargetExists) {
           log(
-            `  ${style.warn('⚠')} ${style.dim('[DRY-RUN]')} Would skip copy (target exists): ${operation.to}`,
+            `  ${style.warn('⚠')} ${style.dim(
+              '[DRY-RUN]'
+            )} Would skip copy (target exists): ${operation.to}`,
             'item'
           );
           return;
         }
         log(
-          `  ${style.dim('[DRY-RUN]')} Would copy: ${operation.from} → ${operation.to}`,
+          `  ${style.dim('[DRY-RUN]')} Would copy: ${operation.from} → ${
+            operation.to
+          }`,
           'item'
         );
       } else {
@@ -197,7 +209,9 @@ async function executeOperation(
       if (dryRun) {
         if (!(await exists(sourcePath))) {
           log(
-            `  ${style.dim('[DRY-RUN]')} Would skip delete (not found): ${operation.from}`,
+            `  ${style.dim('[DRY-RUN]')} Would skip delete (not found): ${
+              operation.from
+            }`,
             'item'
           );
         } else {

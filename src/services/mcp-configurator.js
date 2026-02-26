@@ -14,7 +14,7 @@ const MCP_FILE = '.mcp.json';
 const MCP_SERVER_NAME = 'awos-recruitment';
 const MCP_SERVER_CONFIG = {
   type: 'http',
-  url: 'http://localhost:8000/mcp',
+  url: 'https://recruitment.awos.provectus.pro/mcp',
 };
 
 /**

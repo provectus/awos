@@ -80,4 +80,6 @@ Follow this process precisely.
 
 1.  **Identify Path:** The output path is the `technical-considerations.md` file inside the directory you identified in Step 1.
 2.  **Save File:** Once the user approves the draft, write the final content into this file.
-3.  **Conclude:** Announce the completion and the file's location: "The technical specification has been saved. You can find it at `context/spec/[directory-name]/technical-considerations.md`. Let’s break it into tasks with `/awos:tasks`"
+3.  **Check for New Capabilities:** Review the technical specification you just saved. Determine whether it introduces technologies, frameworks, tools, or testing approaches that are NOT already covered by the project’s existing architecture and specialist agents.
+    - **If new capabilities are needed:** Conclude with: "The technical specification has been saved to `context/spec/[directory-name]/technical-considerations.md`. This spec introduces new capabilities that may benefit from specialist agents. Run `/awos:hire` to set up the right agents, then break it into tasks with `/awos:tasks`."
+    - **If no new capabilities are needed:** Conclude with: "The technical specification has been saved to `context/spec/[directory-name]/technical-considerations.md`. Let’s break it into tasks with `/awos:tasks`."

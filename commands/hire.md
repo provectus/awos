@@ -77,7 +77,7 @@ Follow this process precisely.
     - `"React TypeScript frontend development"`
     - `"Python FastAPI backend API"`
     - `"AWS Terraform infrastructure deployment"`
-2.  **Handle MCP Unavailability:** If the `awos-recruitment` MCP server is not available or returns errors, announce the limitation: "The awos-recruitment MCP server is not available. I will proceed with generating agent files using general configuration." Skip to **Step 6**.
+2.  **Handle MCP Unavailability:** If the `awos-recruitment` MCP server is not available or returns errors, announce the limitation: "The awos-recruitment MCP server is not available. I will proceed with generating agent files using general configuration. For best results, you should prepare custom skills and agents tailored to your project's specific needs — create skills in `.claude/skills/` and agents in `.claude/agents/`." Skip to **Step 6**.
 3.  **Collect Results:** Gather all found skills, MCPs, and agents from the search results.
 4.  **Present Search Results:** Show the user what was found and confirm installation via `AskUserQuestion`.
 
@@ -133,7 +133,7 @@ Follow this process precisely.
     | Terraform expertise | `aws-infra` | Agent will use general knowledge for IaC tasks |
     | FastAPI patterns | `python-backend` | Agent will use general Python knowledge |
 
-3.  **Reassure:** Advise that agents will still function using their general knowledge — specific skills enhance but are not required for operation.
+3.  **Prompt for Manual Preparation:** Advise the user: "The generated agents will work using general knowledge, but for best results you should prepare custom skills and agents for the gaps listed above. You can create skills in `.claude/skills/` and agents in `.claude/agents/` tailored to your project's specific needs."
 
 ## Step 8: Final Summary
 

@@ -103,6 +103,6 @@ After saving, analyze the architecture decisions and the Task tool definition to
 | [e.g., Terraform]      | Terraform/IaC expert      | ✅ Exists / ⚠️ Missing |
 | [e.g., PostgreSQL]     | Database expert           | ✅ Exists / ⚠️ Missing |
 
-4.  **Recommendations for Missing Agents:** For any ⚠️ Missing, advise: "Consider adding a subagent for [technology]. You can create one in `.claude/agents/`, install from a plugin marketplace, or use `general-purpose` agent as fallback."
+4.  **Recommendations for Missing Agents:** If there are any ⚠️ Missing entries, advise: "Some technologies in your architecture don't have specialist agents yet. Run `/awos:hire` to automatically find, install, and configure the right agents for your stack."
 
-5.  **Conclude:** End the session with: "The architecture has been saved to `context/product/architecture.md`. Next, define the functional specifications by running `/awos:spec`"
+5.  **Conclude:** End the session with: "The architecture has been saved to `context/product/architecture.md`. Next, run `/awos:hire` to set up specialist agents for your stack, then define the functional specifications by running `/awos:spec`."

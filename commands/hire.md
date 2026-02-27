@@ -38,7 +38,7 @@ Follow this process precisely.
 
 1.  **Extract Technologies:** From the architecture and technical considerations, extract every technology, framework, language, database, cloud service, and infrastructure tool mentioned.
 2.  **Group into Domains:** Organize the technologies into logical domains:
-    - **Frontend** (UI frameworks, CSS tools, bundlers)
+    - **Frontend** (UI frameworks, tools, bundlers)
     - **Backend** (server frameworks, languages, APIs)
     - **Database** (databases, ORMs, migration tools)
     - **Infrastructure** (cloud providers, CI/CD, containerization, IaC)

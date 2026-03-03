@@ -1,0 +1,69 @@
+---
+name: security
+title: Security Guardrails
+description: Checks that sensitive files are protected from accidental exposure and AI agents are restricted from reading secrets
+severity: critical
+depends-on: [project-topology]
+---
+
+# Security Guardrails
+
+Audits whether the project protects sensitive data (secrets, credentials, environment files) from accidental exposure — both to version control and to AI agents. This dimension focuses on guardrails and preventive controls, not application-level security (SQL injection, XSS, etc. are covered in software-best-practices).
+
+## Checks
+
+### SEC-01: .env files are gitignored
+
+- **What:** Environment files containing secrets are excluded from version control
+- **How:** Check `.gitignore` for `.env` patterns. Verify that `.env`, `.env.local`, `.env.production`, `.env.*.local` are gitignored. Also check that no `.env` files with actual secrets are tracked in git (`git ls-files '*.env*'`).
+- **Pass:** `.env` patterns are in `.gitignore` AND no `.env` files with secrets are tracked
+- **Warn:** `.gitignore` covers `.env` but some `.env.example` or `.env.template` files exist (acceptable if they contain only placeholders)
+- **Fail:** `.env` files with actual values are tracked in git, OR `.env` is not gitignored
+- **Severity:** critical
+
+### SEC-02: AI agent hooks restrict access to sensitive files
+
+- **What:** Claude Code hooks are configured to prevent AI agents from reading sensitive files (.env, credentials, private keys, etc.)
+- **How:** Read `.claude/settings.json` and check for `hooks` configuration. Look for `PreToolUse` hooks on `Read`, `Glob`, or `Bash` tools that block access to sensitive file patterns. Expected patterns to block include: `.env`, `*.pem`, `*.key`, `credentials*`, `secrets*`, `*secret*`, `*.p12`, `*.pfx`. The hooks should exist and actively deny reads to these patterns.
+- **Pass:** Hooks exist in `.claude/settings.json` that explicitly block AI agent access to sensitive file patterns
+- **Warn:** Some hooks exist but coverage is incomplete (e.g., `.env` is blocked but private keys are not)
+- **Fail:** No hooks restricting agent access to sensitive files, OR `.claude/settings.json` does not exist
+- **Severity:** critical
+
+### SEC-03: .env.example or template exists
+
+- **What:** A template environment file exists so developers know which variables to configure
+- **How:** Check for `.env.example`, `.env.template`, `.env.sample`, or equivalent at the repo root and in each detected service directory. Verify that template files contain only placeholder values (no real secrets).
+- **Pass:** Template env file exists with placeholder values at root and/or service directories
+- **Warn:** Template exists but only at root level (missing for individual services in a monorepo)
+- **Fail:** No template env file found anywhere
+- **Severity:** high
+
+### SEC-04: No secrets in committed files
+
+- **What:** No hardcoded secrets, API keys, or credentials are committed to the repository
+- **How:** Grep for common secret patterns in source files (exclude test fixtures, mocks, and example files):
+  - API key patterns: `api[_-]?key\s*[:=]`, `apikey\s*[:=]`
+  - Secret patterns: `secret\s*[:=]\s*["'][^"']+["']`, `password\s*[:=]\s*["'][^"']+["']`
+  - Token patterns: `token\s*[:=]\s*["'][A-Za-z0-9+/=]{20,}["']`
+  - Private key headers: `-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----`
+  - AWS patterns: `AKIA[0-9A-Z]{16}`
+  Check results against context — connection strings to `localhost` and placeholder values like `changeme`, `TODO`, `xxx` are not real secrets.
+- **Pass:** No hardcoded secrets found in committed files
+- **Warn:** Suspicious patterns found but appear to be placeholders or test values
+- **Fail:** Real secrets or credentials found in committed source code
+- **Severity:** critical
+
+### SEC-05: Sensitive files in .gitignore coverage
+
+- **What:** Common sensitive file types are covered by .gitignore
+- **How:** Check `.gitignore` for coverage of:
+  - Private keys: `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`
+  - Credential files: `credentials.json`, `service-account*.json`
+  - IDE/editor secrets: `.idea/`, `.vscode/settings.json` (may contain tokens)
+  - OS files: `.DS_Store`, `Thumbs.db`
+  - Build artifacts that might contain embedded secrets: `*.jar`, `*.war` (for compiled projects)
+- **Pass:** `.gitignore` covers private keys, credential files, and OS artifacts
+- **Warn:** Some categories are covered but others are missing
+- **Fail:** `.gitignore` is missing or has minimal coverage of sensitive file types
+- **Severity:** high

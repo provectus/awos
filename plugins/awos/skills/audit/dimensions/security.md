@@ -68,14 +68,14 @@ Audits whether the project protects sensitive data (secrets, credentials, enviro
 
 ### SEC-05: Sensitive files in .gitignore coverage
 
-- **What:** Common sensitive file types are covered by .gitignore
-- **How:** Check `.gitignore` for coverage of:
-  - Private keys: `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`
-  - Credential files: `credentials.json`, `service-account*.json`
-  - IDE/editor secrets: `.idea/`, `.vscode/settings.json` (may contain tokens)
-  - OS files: `.DS_Store`, `Thumbs.db`
-  - Build artifacts that might contain embedded secrets: `*.jar`, `*.war` (for compiled projects)
-- **Pass:** `.gitignore` covers private keys, credential files, and OS artifacts
-- **Warn:** Some categories are covered but others are missing
-- **Fail:** `.gitignore` is missing or has minimal coverage of sensitive file types
+- **What:** Sensitive file types relevant to this project's stack are covered by .gitignore
+- **How:**
+  1. Read the topology summary to understand the project's languages, frameworks, and infrastructure
+  2. Based on the detected stack, determine which sensitive file types are relevant (e.g., `*.jks` for Java, `*.pfx` for .NET, `service-account*.json` for GCP projects). Always include OS files (`.DS_Store`, `Thumbs.db`) as universally relevant.
+  3. Check `.gitignore` for coverage of only the relevant patterns
+  4. Do NOT flag missing patterns for file types unrelated to the project's stack
+- **Pass:** `.gitignore` covers all sensitive file types relevant to the detected stack
+- **Warn:** Some relevant categories are covered but others are missing
+- **Fail:** `.gitignore` is missing or has minimal coverage of sensitive file types relevant to this stack
+- **Skip-When:** Project topology could not be determined (no topology artifact available)
 - **Severity:** high

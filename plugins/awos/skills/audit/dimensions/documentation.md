@@ -32,12 +32,20 @@ Audits documentation coverage across the repository. Well-documented projects ar
 
 ### DOC-03: API documentation is available
 
-- **What:** API endpoints are documented via OpenAPI/Swagger specs or equivalent
-- **How:** Glob for `**/swagger/**/*.yaml`, `**/swagger/**/*.yml`, `**/openapi.yaml`, `**/openapi.json`. Also check for generated API docs or Swagger UI configuration.
-- **Pass:** OpenAPI specs exist and cover the project's API surface
-- **Warn:** Specs exist but appear incomplete (few paths defined relative to the number of controllers)
-- **Fail:** No API documentation found
-- **Severity:** high
+- **What:** API endpoints are documented via OpenAPI/Swagger specs or equivalent, proportional to API surface and exposure
+- **How:**
+  1. Read the topology summary to detect API layers (REST controllers, route handlers, GraphQL schemas, API gateway config)
+  2. Estimate the API surface by counting route/endpoint definitions across the codebase
+  3. Determine API exposure:
+     - **Public/external**: API gateway, public-facing services, APIs consumed by third parties or unknown clients
+     - **Internal/closed**: co-located server and client in the same repo, internal microservices, few endpoints
+  4. Glob for `**/swagger/**/*.yaml`, `**/swagger/**/*.yml`, `**/openapi.yaml`, `**/openapi.json`, or equivalent (GraphQL schema files, generated API docs)
+  5. Scale the assessment based on API surface and exposure (see criteria below)
+- **Pass:** OpenAPI/Swagger specs exist and cover the project's API surface
+- **Warn:** Large or public-facing API has no formal spec, OR specs exist but appear incomplete
+- **Fail:** Large public API (many endpoints, external consumers) with no API documentation at all
+- **Skip-When:** Project has no API layer, or has a small closed API (few endpoints with a co-located client)
+- **Severity:** high for large/public APIs, medium for moderate internal APIs
 
 ### DOC-04: No stale documentation
 

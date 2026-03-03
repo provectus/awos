@@ -4,9 +4,10 @@ description: >-
   Audits a codebase against a specific quality dimension. Receives dimension
   checks, output format, and optionally a topology summary via the task prompt.
   Produces a structured per-dimension artifact with check results, evidence,
-  and scores. Use for running individual audit dimensions in separate context
-  windows.
-tools: Read, Grep, Glob, Bash
+  and scores. Use when executing individual dimension audits as part of the
+  /awos:audit workflow or when a single audit dimension needs to run in its
+  own context window.
+tools: Read, Write, Grep, Glob, Bash
 ---
 
 You are a code quality auditor running a single audit dimension.

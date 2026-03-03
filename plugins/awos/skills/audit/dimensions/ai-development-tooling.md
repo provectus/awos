@@ -96,3 +96,21 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Fail:** CLAUDE.md files contain extensive discoverable content, are heavily bloated (300+ lines), or consist mostly of vague/useless content
 - **Skip-When:** No CLAUDE.md files exist in the repo (nothing to evaluate quality of)
 - **Severity:** high
+
+### AI-08: Agent can run and observe the application
+
+- **What:** Claude Code has the tools to run the application and observe results, enabling it to verify its own changes without human involvement
+- **How:**
+  1. Read the topology summary to determine what types of applications/services the repo contains (web UI, API server, CLI tool, library, serverless functions, infrastructure-as-code, mobile app, etc.)
+  2. For each detected application type, check whether the agent has the necessary observation tools:
+     - **Web UI**: Check if a browser MCP is configured (Puppeteer, Playwright, or similar in `.mcp.json`). Without it, the agent can start a dev server but cannot see or interact with the result.
+     - **API/server**: Built-in capability — agent can start the server and use Bash (`curl`, `wget`) to verify endpoints. No additional tooling needed.
+     - **CLI tool / library**: Built-in capability — agent can run commands and import/test directly.
+     - **Serverless functions**: Check for local invoke tooling (SAM CLI, serverless-offline, LocalStack) or a documented workaround in CLAUDE.md/README.
+     - **Infrastructure-as-code**: Check for dry-run capability (`terraform plan`, `cdk diff`, `pulumi preview`) available locally.
+     - **Mobile app**: Usually cannot run locally — check for simulator/emulator instructions or a documented alternative.
+  3. If the setup is non-standard and cannot be inferred from standard tooling files, check that run instructions exist in CLAUDE.md or README.
+- **Pass:** Agent has the tools to run and observe all detected application types, or workarounds are documented
+- **Warn:** Agent can run and observe the primary application type, but some secondary parts of the system lack run/observe capability (e.g., main API is verifiable but an infra module can only be dry-run, or a small admin UI has no browser MCP)
+- **Fail:** Agent cannot run or observe the primary application type — the core of the system is unverifiable (e.g., web-only project with no browser MCP, or no way to run the main service at all)
+- **Severity:** critical

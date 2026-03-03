@@ -14,26 +14,25 @@ Uses the topology artifact to know which layers and service directories exist.
 
 ## Checks
 
-### AI-01: Root CLAUDE.md exists and is actionable
+### AI-01: CLAUDE.md ecosystem provides adequate AI context
 
-- **What:** The repository root has a CLAUDE.md with non-obvious project context for AI agents
-- **How:** Read `CLAUDE.md` at the repo root. Check that it contains: what the project is (1-2 sentences), key commands (build/test/lint/dev), and non-obvious conventions or constraints that an agent cannot discover from code alone. It should NOT contain content discoverable from source files — no directory tree listings, no file inventories, no linter rules that are already in config files, no export listings.
-- **Pass:** Root CLAUDE.md exists with concise, non-obvious instructions (purpose, commands, undiscoverable conventions)
-- **Warn:** Root CLAUDE.md exists but contains significant discoverable content (directory trees, file listings, linter rules already in configs)
-- **Fail:** No root CLAUDE.md found
+- **What:** The combined CLAUDE.md files give AI agents sufficient non-obvious context to work effectively in this project
+- **How:**
+  1. Discover all CLAUDE.md files in the repo: root `CLAUDE.md`, service-level `*/CLAUDE.md`, and `.claude/rules/*.md`
+  2. Read all discovered files and assess whether the **combined ecosystem** covers:
+     - Project purpose (what is this project?)
+     - Key commands (build, test, lint, dev)
+     - Non-obvious conventions and constraints that agents can't discover from code
+     - Cross-service concerns (git workflow, CI, shared patterns)
+     - Module-specific context for complex services (purpose, gotchas, non-obvious behavior)
+  3. Coverage can come from **any level** — a small project with one excellent root CLAUDE.md is fine. A monorepo with thin root + thorough service-level files is also fine. Evaluate the total context, not individual files.
+  4. For multi-service repos: complex modules (non-obvious behavior, gotchas) need context somewhere in the ecosystem. Simple/self-evident modules with clear naming and standard patterns don't require dedicated CLAUDE.md files.
+- **Pass:** Ecosystem covers all essential context — project purpose, key commands, conventions, and complex modules all have context somewhere across the files
+- **Warn:** Minor gaps — e.g., one non-critical module lacks context, or conventions section is thin. The fundamentals (project purpose, key commands) are present and an agent can still work effectively with minor blind spots.
+- **Fail:** Fundamental context is missing — no project purpose anywhere in the ecosystem, OR no key commands documented, OR multiple complex modules completely lack context, OR no CLAUDE.md files exist at all. An agent would not understand what the project is or how to work in it.
 - **Severity:** critical
 
-### AI-02: Service-level CLAUDE.md files exist
-
-- **What:** Each major service/layer has a short CLAUDE.md stating its purpose and non-obvious context
-- **How:** Read the topology artifact to get the list of service directories. For each, check for a CLAUDE.md. It should contain: what this module is for (1-2 sentences) and any non-obvious behaviors, gotchas, or constraints. It should NOT duplicate the root CLAUDE.md, list files, or describe things discoverable from code (types, exports, directory structure).
-- **Pass:** Every detected service directory has a CLAUDE.md with purpose + non-obvious context (typically 1-10 lines)
-- **Warn:** Some service directories have CLAUDE.md, others don't
-- **Fail:** No service-level CLAUDE.md files found
-- **Skip-When:** Topology artifact shows single-service repo with no subdirectories
-- **Severity:** high
-
-### AI-03: Custom slash commands exist
+### AI-02: Custom slash commands exist
 
 - **What:** The project defines custom slash commands for common workflows
 - **How:** Glob for `.claude/commands/*.md` and `.claude/commands/**/*.md`. Check that at least 2 commands exist beyond defaults.
@@ -42,7 +41,7 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Fail:** No custom commands found
 - **Severity:** medium
 
-### AI-04: Skills are configured
+### AI-03: Skills are configured
 
 - **What:** The project uses Claude Code skills for specialized workflows
 - **How:** Glob for `.claude/skills/*/SKILL.md`. Check that at least one skill is defined with valid frontmatter.
@@ -50,7 +49,7 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Fail:** No skills found
 - **Severity:** low
 
-### AI-05: MCP servers configured
+### AI-04: MCP servers configured
 
 - **What:** The project configures MCP (Model Context Protocol) servers for extended tool access
 - **How:** Check for `.mcp.json` or `.claude/mcp.json` at the repo root. Verify it defines at least one server.
@@ -58,7 +57,7 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Fail:** No MCP configuration found
 - **Severity:** low
 
-### AI-06: Hooks are configured
+### AI-05: Hooks are configured
 
 - **What:** The project uses Claude Code hooks for automated guardrails or workflows
 - **How:** Check for `.claude/settings.json` and look for `hooks` configuration. Also check for hook-related entries in any plugin configs.
@@ -66,27 +65,34 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Fail:** No hooks configured
 - **Severity:** low
 
-### AI-07: AI workflow documentation
+### AI-06: AI workflow documentation
 
 - **What:** The project documents how to use AI tools effectively within the codebase
-- **How:** Check CLAUDE.md files for sections about workflow (AWOS, spec-driven, etc.) or AI-specific conventions. Also check for `.claude/` directory structure documentation.
-- **Pass:** CLAUDE.md explicitly documents AI-assisted workflow with steps
+- **How:**
+  1. Check if AWOS is used in the project: look for `.claude/skills/*/SKILL.md` files referencing AWOS, AWOS-related commands in `.claude/commands/`, or AWOS mentions in CLAUDE.md files. If AWOS is present, this check automatically **PASS**es — AWOS inherently provides a structured AI workflow.
+  2. Otherwise, check CLAUDE.md files for sections about AI-assisted workflow, spec-driven development, or AI-specific conventions. Also check for `.claude/` directory structure documentation.
+- **Pass:** AWOS is used in the project, OR CLAUDE.md explicitly documents AI-assisted workflow with steps
 - **Warn:** CLAUDE.md mentions AI tools but without clear workflow guidance
-- **Fail:** No AI workflow documentation found
+- **Fail:** No AI workflow documentation found and no structured AI workflow framework (like AWOS) detected
 - **Severity:** medium
 
-### AI-08: CLAUDE.md files are not bloated with discoverable content
+### AI-07: CLAUDE.md files are meaningful and well-structured
 
-- **What:** CLAUDE.md files contain only non-obvious context that agents cannot discover from code
-- **How:** Read all CLAUDE.md files found in the repo. Flag any that contain content an agent can discover on its own:
-  - Directory tree listings (`├──`, `└──`, or markdown-formatted file trees)
-  - File inventories ("this directory contains X, Y, Z files")
-  - Export listings ("this module exports: ...")
-  - Type/interface definitions copied from source
-  - Linter or formatter rules already present in config files
-  - Prop tables or API signatures that exist in the code
-  Also check line count: a CLAUDE.md over 30 lines likely contains discoverable content.
-- **Pass:** All CLAUDE.md files contain only purpose + non-obvious context, each under 30 lines
-- **Warn:** Some CLAUDE.md files contain minor discoverable content (1-2 instances) or are 30-50 lines
-- **Fail:** CLAUDE.md files contain extensive discoverable content (file trees, export lists, type definitions) or exceed 50 lines
+- **What:** Every CLAUDE.md file contains high-quality, non-obvious content that actually helps AI agents
+- **How:** Read all CLAUDE.md files found in the repo. For each file, evaluate quality using the key test: *"Would removing this line cause Claude to make mistakes?"*
+  1. **Flag bad content** — things an agent can discover on its own or that add no value:
+     - Directory tree listings (`├──`, `└──`, or markdown-formatted file trees)
+     - File inventories ("this directory contains X, Y, Z files")
+     - Export listings, type/interface definitions copied from source
+     - Linter or formatter rules already present in config files
+     - Vague guidance ("write clean code", "follow best practices")
+     - Tutorial-style prose or lengthy explanations
+  2. **Check structure** — should use markdown headers and bullet points, be concrete and specific (e.g., "use 2-space indentation" not "format code properly")
+  3. **Check length** — each file should be under 200 lines (official guideline — longer files reduce Claude's adherence to instructions)
+  4. **Check duplication** — service-level files should not repeat content already in root CLAUDE.md
+  This check only evaluates files that exist — it does not penalize absence (that's AI-01's job).
+- **Pass:** All CLAUDE.md files contain meaningful, non-obvious, well-structured content under 200 lines each
+- **Warn:** Some files have quality issues (minor discoverable content, some vague sections, slightly over 200 lines, or some duplication between levels)
+- **Fail:** CLAUDE.md files contain extensive discoverable content, are heavily bloated (300+ lines), or consist mostly of vague/useless content
+- **Skip-When:** No CLAUDE.md files exist in the repo (nothing to evaluate quality of)
 - **Severity:** high

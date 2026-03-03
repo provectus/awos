@@ -6,7 +6,5 @@
     "name": "Provectus"
   },
   "license": "MIT",
-  "keywords": ["audit", "code-quality", "dimensions"],
-  "skills": "./skills/",
-  "agents": "./agents/"
+  "keywords": ["audit", "code-quality", "dimensions"]
 }

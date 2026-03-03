@@ -33,10 +33,22 @@ Audits whether the project protects sensitive data (secrets, credentials, enviro
 ### SEC-03: .env.example or template exists
 
 - **What:** A template environment file exists so developers know which variables to configure
-- **How:** Check for `.env.example`, `.env.template`, `.env.sample`, or equivalent at the repo root and in each detected service directory. Verify that template files contain only placeholder values (no real secrets).
-- **Pass:** Template env file exists with placeholder values at root and/or service directories
-- **Warn:** Template exists but only at root level (missing for individual services in a monorepo)
-- **Fail:** No template env file found anywhere
+- **How:**
+  1. First, detect whether the project actually uses environment variables. Grep source files for env var access patterns:
+     - Node.js/JS/TS: `process\.env`, `import.*dotenv`, `require.*dotenv`, `config()` from dotenv
+     - Python: `os\.environ`, `os\.getenv`, `dotenv`, `load_dotenv`
+     - Java/Kotlin: `System\.getenv`, `@Value.*\$\{`, `environment\.getProperty`
+     - Go: `os\.Getenv`, `godotenv`
+     - Ruby: `ENV\[`, `dotenv`
+     - General: `.env` references in `docker-compose.yml`, `docker-compose.yaml`, or `Dockerfile` (`env_file:`, `--env-file`)
+  2. If no env var usage is detected, mark this check as **SKIP**
+  3. If env var usage is found, check for `.env.example`, `.env.template`, `.env.sample`, or equivalent at the repo root and in each detected service directory that uses env vars
+  4. Verify that template files contain only placeholder values (no real secrets)
+  For monorepos: only flag services that use env vars but lack a template. Services with no env var usage should be ignored.
+- **Pass:** Template env file exists with placeholder values at root and/or in service directories that use env vars
+- **Warn:** Template exists but only at root level (missing for individual services that use env vars in a monorepo)
+- **Fail:** Project uses environment variables but no template env file found anywhere
+- **Skip-When:** No environment variable usage detected in the project source code or configuration
 - **Severity:** high
 
 ### SEC-04: No secrets in committed files

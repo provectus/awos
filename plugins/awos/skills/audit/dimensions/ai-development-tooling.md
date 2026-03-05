@@ -65,18 +65,7 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Fail:** No hooks configured
 - **Severity:** low
 
-### AI-06: AI workflow documentation
-
-- **What:** The project documents how to use AI tools effectively within the codebase
-- **How:**
-  1. Check if AWOS is used in the project: look for `.claude/skills/*/SKILL.md` files referencing AWOS, AWOS-related commands in `.claude/commands/`, or AWOS mentions in CLAUDE.md files. If AWOS is present, this check automatically **PASS**es — AWOS inherently provides a structured AI workflow.
-  2. Otherwise, check CLAUDE.md files for sections about AI-assisted workflow, spec-driven development, or AI-specific conventions. Also check for `.claude/` directory structure documentation.
-- **Pass:** AWOS is used in the project, OR CLAUDE.md explicitly documents AI-assisted workflow with steps
-- **Warn:** CLAUDE.md mentions AI tools but without clear workflow guidance
-- **Fail:** No AI workflow documentation found and no structured AI workflow framework (like AWOS) detected
-- **Severity:** medium
-
-### AI-07: CLAUDE.md files are meaningful and well-structured
+### AI-06: CLAUDE.md files are meaningful and well-structured
 
 - **What:** Every CLAUDE.md file contains high-quality, non-obvious content that actually helps AI agents
 - **How:** Read all CLAUDE.md files found in the repo. For each file, evaluate quality using the key test: *"Would removing this line cause Claude to make mistakes?"*
@@ -97,7 +86,7 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Skip-When:** No CLAUDE.md files exist in the repo (nothing to evaluate quality of)
 - **Severity:** high
 
-### AI-08: Agent can run and observe the application
+### AI-07: Agent can run and observe the application
 
 - **What:** Claude Code has the tools to run the application and observe results, enabling it to verify its own changes without human involvement
 - **How:**

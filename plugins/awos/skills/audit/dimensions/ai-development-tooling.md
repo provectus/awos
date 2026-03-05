@@ -52,9 +52,12 @@ Uses the topology artifact to know which layers and service directories exist.
 ### AI-04: MCP servers configured
 
 - **What:** The project configures MCP (Model Context Protocol) servers for extended tool access
-- **How:** Check for `.mcp.json` or `.claude/mcp.json` at the repo root. Verify it defines at least one server.
+- **How:**
+  1. Check for `.mcp.json` or `.claude/mcp.json` at the repo root. Verify it defines at least one server.
+  2. If no MCP configuration found, check `.claude/settings.json` for `enabledPlugins` with at least one plugin set to `true` — plugins may provide MCP servers but this cannot be verified from project files alone.
 - **Pass:** MCP configuration exists with 1+ servers defined
-- **Fail:** No MCP configuration found
+- **Warn:** No direct MCP configuration found, but `enabledPlugins` in `.claude/settings.json` includes enabled plugins that may provide MCP servers
+- **Fail:** No MCP configuration and no enabled plugins found
 - **Severity:** low
 
 ### AI-05: Hooks are configured

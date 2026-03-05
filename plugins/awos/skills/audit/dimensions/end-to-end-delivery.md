@@ -37,11 +37,11 @@ For single-layer projects, most checks will auto-SKIP since cross-layer delivery
 ### E2E-03: Spec-to-delivery traceability
 
 - **What:** Specifications link to implementation and implementation references specs
-- **How:** Read the spec-driven-development artifact. If SDD-07 (specs link to implementation) is PASS or WARN, check a sample of 2-3 recent branches to see if commit messages or PR descriptions reference spec documents. Also check if spec files reference the branches that implement them.
+- **How:** Read the spec-driven-development artifact. If SDD-04 (features are implemented through specs) is PASS or WARN, check a sample of 2-3 recent feature branches to see if commit messages or PR descriptions reference spec documents. Also check if spec files' tasks.md have checked-off items that correlate with the branch's changes.
 - **Pass:** Bidirectional tracing exists: specs → branches and branches → specs
 - **Warn:** One-directional tracing only (specs reference branches OR branches reference specs, but not both)
 - **Fail:** No traceability between specifications and implementation
-- **Skip-When:** Spec-driven-development artifact shows SDD-05 as FAIL (no specs directory)
+- **Skip-When:** Spec-driven-development artifact shows SDD-04 as FAIL (no specs or no spec-driven development)
 - **Severity:** high
 
 ### E2E-04: No orphaned artifacts

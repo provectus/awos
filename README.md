@@ -70,12 +70,6 @@ The **`awos`** framework is flexible and non-prescriptive when it comes to testi
 
 [Explore testing strategies and customization options](docs/testing-strategies.md)
 
-## What's Included in `awos`?
-
-- **An Installer**: A simple `npx` command that instantly sets up a new project with all necessary directories, templates, and configuration files.
-- **A Set of AI Agents**: A suite of interactive commands (like `/awos:product`, `/awos:roadmap`, and `/awos:implement`). Each command is a specialized agent that guides you through a specific stage of the development lifecycle.
-- **Extensibility Hooks**: An advanced system for customization. Hooks and other configuration points allow you to modify and extend the framework to fit your team's specific workflow.
-
 ## Customizing `awos`
 
 The **`awos`** framework is designed to be both powerful out-of-the-box and highly customizable.

@@ -20,8 +20,6 @@ The command operates in two modes:
 - **Creation Mode** (no existing definition): Walks you through each section of the product definition template interactively — project name and vision, target audience and personas, success metrics, core features and user journey, and project boundaries (in-scope vs. out-of-scope).
 - **Update Mode** (definition already exists): Presents a menu of sections from your existing definition and lets you update specific parts without redoing the entire document.
 
-The agent ("Poe") uses your initial prompt as a starting point and asks clarifying questions to fill in the template completely.
-
 ## Key behaviors
 
 - **Non-technical language only.** This document describes business goals, user needs, and value — not implementation details. The agent will steer you away from technical language.

@@ -15,6 +15,7 @@ const {
 } = require('../utils/logger');
 const { createDirectories } = require('../services/directory-creator');
 const { executeCopyOperations } = require('../services/file-copier');
+const { configureMcp } = require('../services/mcp-configurator');
 const { runMigrations } = require('../migrations/runner');
 
 /**
@@ -26,7 +27,7 @@ const { runMigrations } = require('../migrations/runner');
  * @returns {Promise<void>}
  */
 async function runSetup({ workingDir, packageRoot, dryRun = false }) {
-  const TOTAL_STEPS = 4;
+  const TOTAL_STEPS = 5;
 
   // Display header
   showHeader(AWOS_ASCII, AWOS_SUBTITLE);
@@ -84,10 +85,21 @@ async function runSetup({ workingDir, packageRoot, dryRun = false }) {
     dryRun,
   });
 
+  // Step 5: Configure MCP
+  showStep(
+    'Configuring MCP',
+    'Setting up MCP server configuration',
+    5,
+    TOTAL_STEPS
+  );
+  const mcpStatistics = await configureMcp({ workingDir, dryRun });
+  clearLine();
+
   // Display summary with combined statistics
   const statistics = {
     ...directoryStatistics,
     ...fileStatistics,
+    ...mcpStatistics,
     migrations: migrationStatistics.applied,
   };
   showSummary(statistics, { dryRun });

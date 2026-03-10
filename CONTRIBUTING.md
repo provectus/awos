@@ -23,6 +23,9 @@ cd awos
 ```
 awos/
 ├── docs/                # AWOS documentation
+│   ├── commands/        # Individual command reference docs
+│   ├── rationale.md
+│   └── testing-strategies.md
 ├── scripts/             # AWOS scripts
 ├── commands/            # AWOS command prompts
 ├── templates/           # Document templates

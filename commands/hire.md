@@ -49,12 +49,12 @@ Follow this process precisely.
 4.  **Map to Agent Roles:** For each domain that has technologies, define an ideal agent role name in kebab-case (e.g., `react-frontend`, `python-backend`, `aws-infra`).
 5.  **Present Needs Analysis:** Show the user a table of identified domains, technologies, and proposed agent roles. Confirm with the user via `AskUserQuestion` before proceeding.
 
-    | Domain | Technologies | Proposed Agent Role |
-    | ------ | ------------ | ------------------- |
-    | Frontend | React, TypeScript, Tailwind | `react-frontend` |
-    | Backend | Python, FastAPI | `python-backend` |
-    | Database | PostgreSQL, SQLAlchemy | `postgres-database` |
-    | Infrastructure | AWS, Terraform, Docker | `aws-infra` |
+    | Domain         | Technologies                | Proposed Agent Role |
+    | -------------- | --------------------------- | ------------------- |
+    | Frontend       | React, TypeScript, Tailwind | `react-frontend`    |
+    | Backend        | Python, FastAPI             | `python-backend`    |
+    | Database       | PostgreSQL, SQLAlchemy      | `postgres-database` |
+    | Infrastructure | AWS, Terraform, Docker      | `aws-infra`         |
 
 ## Step 3: Check What Already Exists
 
@@ -68,11 +68,11 @@ Follow this process precisely.
     - **Missing** — No agent or subagent exists for this domain
 3.  **Present Coverage Table:** Show the user what exists and what is missing.
 
-    | Proposed Role | Status | Existing Agent/Subagent | Gap |
-    | ------------- | ------ | ----------------------- | --- |
-    | `react-frontend` | ✅ Covered | react-expert agent | — |
-    | `python-backend` | ⚠️ Partially Covered | general-purpose | Missing FastAPI skills |
-    | `aws-infra` | ❌ Missing | — | No infrastructure agent |
+    | Proposed Role    | Status               | Existing Agent/Subagent | Gap                     |
+    | ---------------- | -------------------- | ----------------------- | ----------------------- |
+    | `react-frontend` | ✅ Covered           | react-expert agent      | —                       |
+    | `python-backend` | ⚠️ Partially Covered | general-purpose         | Missing FastAPI skills  |
+    | `aws-infra`      | ❌ Missing           | —                       | No infrastructure agent |
 
 ## Step 4: Search the MCP Server
 
@@ -84,10 +84,10 @@ Follow this process precisely.
 3.  **Collect Results:** Gather all found skills, MCPs, and agents from the search results.
 4.  **Present Search Results:** Show the user what was found and confirm installation via `AskUserQuestion`.
 
-    | Role | Found Skills | Found MCPs | Found Agents |
-    | ---- | ------------ | ---------- | ------------ |
-    | `python-backend` | `fastapi-expert` | — | — |
-    | `aws-infra` | `terraform-pro`, `aws-deploy` | `aws-mcp` | `aws-infra-expert` |
+    | Role             | Found Skills                  | Found MCPs | Found Agents       |
+    | ---------------- | ----------------------------- | ---------- | ------------------ |
+    | `python-backend` | `fastapi-expert`              | —          | —                  |
+    | `aws-infra`      | `terraform-pro`, `aws-deploy` | `aws-mcp`  | `aws-infra-expert` |
 
 ## Step 5: Install Found Components
 
@@ -131,10 +131,10 @@ Follow this process precisely.
 1.  **Identify Gaps:** Collect all technologies or skills that were NOT found on the MCP server (either the server was unavailable, or the search returned no results for them).
 2.  **Present Warning Table:** If there are gaps, show the user:
 
-    | Missing Skill | For Agent | Impact |
-    | ------------- | --------- | ------ |
-    | Terraform expertise | `aws-infra` | Agent will use general knowledge for IaC tasks |
-    | FastAPI patterns | `python-backend` | Agent will use general Python knowledge |
+    | Missing Skill       | For Agent        | Impact                                         |
+    | ------------------- | ---------------- | ---------------------------------------------- |
+    | Terraform expertise | `aws-infra`      | Agent will use general knowledge for IaC tasks |
+    | FastAPI patterns    | `python-backend` | Agent will use general Python knowledge        |
 
 3.  **Prompt for Manual Preparation:** Advise the user: "The generated agents will work using general knowledge, but for best results you should prepare custom skills and agents for the gaps listed above. You can create skills in `.claude/skills/` and agents in `.claude/agents/` tailored to your project's specific needs."
 

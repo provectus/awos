@@ -82,6 +82,7 @@ function showSummary(statistics, options) {
   const migrationsApplied = statistics.migrations || 0;
 
   const mcpConfigured = statistics.mcpConfigured || false;
+  const marketplaceConfigured = statistics.marketplaceConfigured || false;
 
   const summaryItems = [
     ['Directories created', directoriesCreated],
@@ -98,6 +99,14 @@ function showSummary(statistics, options) {
   summaryItems.push([
     mcpConfigured ? 'MCP server configured' : 'MCP server already configured',
     mcpConfigured ? 1 : 0,
+  ]);
+
+  // Add marketplace registration status
+  summaryItems.push([
+    marketplaceConfigured
+      ? 'Marketplace registered'
+      : 'Marketplace already registered',
+    marketplaceConfigured ? 1 : 0,
   ]);
 
   showLine();
@@ -132,6 +141,10 @@ function showSummary(statistics, options) {
         labelText = 'Would configure MCP server';
       } else if (label === 'MCP server already configured') {
         labelText = 'MCP server already configured';
+      } else if (label === 'Marketplace registered') {
+        labelText = 'Would register marketplace';
+      } else if (label === 'Marketplace already registered') {
+        labelText = 'Marketplace already registered';
       } else {
         labelText = `Would ${label.toLowerCase()}`;
       }

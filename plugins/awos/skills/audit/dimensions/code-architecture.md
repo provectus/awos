@@ -65,7 +65,7 @@ Uses the topology artifact to know which layers exist and what technologies they
   1. Business/domain logic is mixed with UI rendering (e.g., React components containing fetch calls, SQL queries, and JSX all in one file)
   2. Data access code is interleaved with request handling (e.g., controllers that contain raw SQL or ORM queries inline)
   3. Configuration, business rules, and infrastructure are separated or tangled
-  Look for anti-patterns: 500+ line files that handle multiple concerns, components that directly call APIs AND render AND manage state all inline.
+     Look for anti-patterns: 500+ line files that handle multiple concerns, components that directly call APIs AND render AND manage state all inline.
 - **Pass:** Clear separation — business logic, data access, and presentation/transport live in distinct files or layers
 - **Warn:** Mostly separated, but 1-2 files mix concerns significantly
 - **Fail:** Widespread mixing — most files handle multiple concerns (fetch + render + state + business logic in one file)
@@ -91,7 +91,7 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **How:** For each detected layer, count lines in source files (exclude generated code, migrations, lock files). Flag:
   - Files over 500 lines as candidates for decomposition
   - Files over 1000 lines as definite issues
-  Calculate what percentage of source files exceed 500 lines.
+    Calculate what percentage of source files exceed 500 lines.
 - **Pass:** Less than 5% of source files exceed 500 lines
 - **Warn:** 5-15% of source files exceed 500 lines
 - **Fail:** More than 15% of source files exceed 500 lines, or any file exceeds 2000 lines

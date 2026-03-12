@@ -45,27 +45,27 @@ Each **dimension** is a self-contained `.md` file in `skills/audit/dimensions/` 
 
 Every check produces a status: **PASS**, **WARN**, **FAIL**, or **SKIP**. Deductions scale by severity:
 
-| Severity | Max Points | FAIL | WARN |
-|----------|-----------|------|------|
-| critical | 3         | -3   | -1.5 |
-| high     | 2         | -2   | -1   |
-| medium   | 1         | -1   | -0.5 |
-| low      | 0.5       | -0.5 | -0.25|
+| Severity | Max Points | FAIL | WARN  |
+| -------- | ---------- | ---- | ----- |
+| critical | 3          | -3   | -1.5  |
+| high     | 2          | -2   | -1    |
+| medium   | 1          | -1   | -0.5  |
+| low      | 0.5        | -0.5 | -0.25 |
 
 Dimension scores average into an overall percentage mapped to a letter grade (A: 90-100, B: 75-89, C: 60-74, D: 40-59, F: 0-39).
 
 ## Dimensions
 
-| Dimension | Severity | Dependencies |
-|-----------|----------|-------------|
-| **Project Topology** | medium | — |
-| **Security Guardrails** | critical | project-topology |
-| **AI Development Tooling** | high | project-topology |
+| Dimension                   | Severity | Dependencies     |
+| --------------------------- | -------- | ---------------- |
+| **Project Topology**        | medium   | —                |
+| **Security Guardrails**     | critical | project-topology |
+| **AI Development Tooling**  | high     | project-topology |
 | **Spec-Driven Development** | critical | project-topology |
-| **Documentation Quality** | critical | project-topology |
-| **Code Architecture** | high | project-topology |
-| **Software Best Practices** | high | project-topology |
-| **End-to-End Delivery** | high | all others |
+| **Documentation Quality**   | critical | project-topology |
+| **Code Architecture**       | high     | project-topology |
+| **Software Best Practices** | high     | project-topology |
+| **End-to-End Delivery**     | high     | all others       |
 
 **Project Topology** runs first as a reconnaissance phase — it detects the repo structure, languages, and layers so downstream dimensions can skip irrelevant checks.
 

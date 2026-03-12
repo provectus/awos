@@ -48,8 +48,10 @@ A sticky toolbar below the header with a toggle button: **"Show issues only"**. 
 Implementation: a small inline `<script>` that toggles a CSS class (e.g., `issues-only`) on `<body>`. Use CSS rules:
 
 ```css
-body.issues-only tr[data-status="PASS"],
-body.issues-only tr[data-status="SKIP"] { display: none; }
+body.issues-only tr[data-status='PASS'],
+body.issues-only tr[data-status='SKIP'] {
+  display: none;
+}
 ```
 
 Each check row must have a `data-status` attribute with its status value.

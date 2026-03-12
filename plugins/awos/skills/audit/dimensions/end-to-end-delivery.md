@@ -3,7 +3,16 @@ name: end-to-end-delivery
 title: End-to-End Delivery
 description: Evaluates the project's ability to deliver complete vertical slices across all layers
 severity: high
-depends-on: [project-topology, documentation, security, ai-development-tooling, spec-driven-development, code-architecture, software-best-practices]
+depends-on:
+  [
+    project-topology,
+    documentation,
+    security,
+    ai-development-tooling,
+    spec-driven-development,
+    code-architecture,
+    software-best-practices,
+  ]
 ---
 
 # End-to-End Delivery

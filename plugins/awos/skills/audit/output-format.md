@@ -16,9 +16,9 @@ Each dimension artifact (`{name}.md`) contains:
 
 ## Results
 
-| # | Check | Severity | Status | Evidence |
-|---|-------|----------|--------|----------|
-| 1 | What  | critical | PASS   | proof    |
+| #   | Check | Severity | Status | Evidence |
+| --- | ----- | -------- | ------ | -------- |
+| 1   | What  | critical | PASS   | proof    |
 
 ## {Dimension-Specific Summary}
 
@@ -42,34 +42,33 @@ Write the full report to `context/audits/YYYY-MM-DD/report.md` and also display 
 
 ## Summary
 
-| # | Dimension | Score | Grade | Delta | Critical | High | Medium | Low |
-|---|-----------|-------|-------|-------|----------|------|--------|-----|
-| 1 | Name      | XX%   | X     | +/-N  | 0        | 0    | 0      | 0   |
-| … | …         | …     | …     | …     | …        | …    | …      | …   |
-
+| #   | Dimension | Score | Grade | Delta | Critical | High | Medium | Low |
+| --- | --------- | ----- | ----- | ----- | -------- | ---- | ------ | --- |
+| 1   | Name      | XX%   | X     | +/-N  | 0        | 0    | 0      | 0   |
+| …   | …         | …     | …     | …     | …        | …    | …      | …   |
 
 ## Dimension: [Name]
 
 **Score:** XX% — Grade **X**
 
-| # | Check | Severity | Status | Evidence |
-|---|-------|----------|--------|----------|
-| 1 | What the check verifies | critical | PASS | one-line proof |
-| 2 | What the check verifies | high     | FAIL | what's missing |
-| 3 | What the check verifies | medium   | WARN | partial issue  |
-| 4 | What the check verifies | low      | SKIP | not applicable |
+| #   | Check                   | Severity | Status | Evidence       |
+| --- | ----------------------- | -------- | ------ | -------------- |
+| 1   | What the check verifies | critical | PASS   | one-line proof |
+| 2   | What the check verifies | high     | FAIL   | what's missing |
+| 3   | What the check verifies | medium   | WARN   | partial issue  |
+| 4   | What the check verifies | low      | SKIP   | not applicable |
 
 (Repeat the dimension section for each dimension that was executed.)
 
 ## Top Recommendations
 
-| # | Priority | Effort | Dimension | Recommendation |
-|---|----------|--------|-----------|----------------|
-| 1 | P0       | Low    | Name      | What to fix and why |
-| 2 | P0       | Medium | Name      | What to fix and why |
-| 3 | P1       | Low    | Name      | What to fix and why |
-| 4 | P1       | High   | Name      | What to fix and why |
-| 5 | P2       | Low    | Name      | What to fix and why |
+| #   | Priority | Effort | Dimension | Recommendation      |
+| --- | -------- | ------ | --------- | ------------------- |
+| 1   | P0       | Low    | Name      | What to fix and why |
+| 2   | P0       | Medium | Name      | What to fix and why |
+| 3   | P1       | Low    | Name      | What to fix and why |
+| 4   | P1       | High   | Name      | What to fix and why |
+| 5   | P2       | Low    | Name      | What to fix and why |
 
 Sort by priority (P0 first), then by effort (Low first).
 Limit to the top 10 most impactful recommendations.
@@ -87,6 +86,7 @@ Write actionable recommendations to `context/audits/YYYY-MM-DD/recommendations.m
 ## P0 — Fix Immediately
 
 ### 1. [Short title]
+
 - **Dimension:** [Name]
 - **Check:** [CHECK-ID]
 - **Effort:** Low | Medium | High
@@ -95,16 +95,18 @@ Write actionable recommendations to `context/audits/YYYY-MM-DD/recommendations.m
 ## P1 — Fix Soon
 
 ### 2. [Short title]
+
 …
 
 ## P2 — Improve When Possible
 
 ### 3. [Short title]
+
 …
 ```
 
 Priority mapping:
+
 - **P0:** Critical severity FAILs
 - **P1:** High severity FAILs + Critical WARNs
 - **P2:** Medium/Low FAILs + High/Medium WARNs
-

@@ -7,7 +7,7 @@ description: >-
   files automatically — drop a new .md in dimensions/ to extend. Each dimension
   runs in its own context window for thorough analysis.
 disable-model-invocation: true
-argument-hint: "[dimension-name] or blank for full audit"
+argument-hint: '[dimension-name] or blank for full audit'
 ---
 
 # Code Audit — Orchestrator
@@ -85,15 +85,19 @@ After presenting the report, check the project context and offer next steps usin
 ### Build options
 
 **Always include:**
+
 - "Generate HTML report" — create a standalone HTML version of the audit report
 
 **If AWOS installed + roadmap exists, also include:**
+
 - "Update roadmap with audit findings" — incorporate recommendations into the existing product roadmap
 
 **If AWOS installed + no roadmap, also include:**
+
 - "Create a roadmap informed by audit findings" — start a new roadmap using audit results as input
 
 **If AWOS is NOT installed**, append this note after the question:
+
 > Tip: install AWOS (`npx @provectusinc/awos`) — the best way to make your repo AI-friendly and act on these findings.
 
 ### Execute selected options
@@ -133,10 +137,10 @@ Brief description.
 
 ### Frontmatter Fields
 
-| Field        | Required | Description                                                               |
-| ------------ | -------- | ------------------------------------------------------------------------- |
-| `name`       | yes      | Unique identifier, used for CLI filtering (`/awos:audit my-dimension`)    |
-| `title`      | yes      | Human-readable display name                                               |
-| `description`| yes      | One-line purpose                                                          |
-| `severity`   | yes      | Default severity for all checks. Individual checks can override.          |
-| `depends-on` | no       | Dimension `name`s that must complete first. Omit if no dependencies.      |
+| Field         | Required | Description                                                            |
+| ------------- | -------- | ---------------------------------------------------------------------- |
+| `name`        | yes      | Unique identifier, used for CLI filtering (`/awos:audit my-dimension`) |
+| `title`       | yes      | Human-readable display name                                            |
+| `description` | yes      | One-line purpose                                                       |
+| `severity`    | yes      | Default severity for all checks. Individual checks can override.       |
+| `depends-on`  | no       | Dimension `name`s that must complete first. Omit if no dependencies.   |

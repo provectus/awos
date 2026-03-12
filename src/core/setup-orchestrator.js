@@ -16,7 +16,9 @@ const {
 const { createDirectories } = require('../services/directory-creator');
 const { executeCopyOperations } = require('../services/file-copier');
 const { configureMcp } = require('../services/mcp-configurator');
-const { configureMarketplace } = require('../services/marketplace-configurator');
+const {
+  configureMarketplace,
+} = require('../services/marketplace-configurator');
 const { runMigrations } = require('../migrations/runner');
 
 /**
@@ -103,7 +105,10 @@ async function runSetup({ workingDir, packageRoot, dryRun = false }) {
     6,
     TOTAL_STEPS
   );
-  const marketplaceStatistics = await configureMarketplace({ workingDir, dryRun });
+  const marketplaceStatistics = await configureMarketplace({
+    workingDir,
+    dryRun,
+  });
   clearLine();
 
   // Display summary with combined statistics

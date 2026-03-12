@@ -44,7 +44,7 @@ Audits whether the project protects sensitive data (secrets, credentials, enviro
   2. If no env var usage is detected, mark this check as **SKIP**
   3. If env var usage is found, check for `.env.example`, `.env.template`, `.env.sample`, or equivalent at the repo root and in each detected service directory that uses env vars
   4. Verify that template files contain only placeholder values (no real secrets)
-  For monorepos: only flag services that use env vars but lack a template. Services with no env var usage should be ignored.
+     For monorepos: only flag services that use env vars but lack a template. Services with no env var usage should be ignored.
 - **Pass:** Template env file exists with placeholder values at root and/or in service directories that use env vars
 - **Warn:** Template exists but only at root level (missing for individual services that use env vars in a monorepo)
 - **Fail:** Project uses environment variables but no template env file found anywhere
@@ -60,7 +60,7 @@ Audits whether the project protects sensitive data (secrets, credentials, enviro
   - Token patterns: `token\s*[:=]\s*["'][A-Za-z0-9+/=]{20,}["']`
   - Private key headers: `-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----`
   - AWS patterns: `AKIA[0-9A-Z]{16}`
-  Check results against context — connection strings to `localhost` and placeholder values like `changeme`, `TODO`, `xxx` are not real secrets.
+    Check results against context — connection strings to `localhost` and placeholder values like `changeme`, `TODO`, `xxx` are not real secrets.
 - **Pass:** No hardcoded secrets found in committed files
 - **Warn:** Suspicious patterns found but appear to be placeholders or test values
 - **Fail:** Real secrets or credentials found in committed source code

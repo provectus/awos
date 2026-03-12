@@ -71,7 +71,7 @@ Uses the topology artifact to know which layers and service directories exist.
 ### AI-06: CLAUDE.md files are meaningful and well-structured
 
 - **What:** Every CLAUDE.md file contains high-quality, non-obvious content that actually helps AI agents
-- **How:** Read all CLAUDE.md files found in the repo. For each file, evaluate quality using the key test: *"Would removing this line cause Claude to make mistakes?"*
+- **How:** Read all CLAUDE.md files found in the repo. For each file, evaluate quality using the key test: _"Would removing this line cause Claude to make mistakes?"_
   1. **Flag bad content** — things an agent can discover on its own or that add no value:
      - Directory tree listings (`├──`, `└──`, or markdown-formatted file trees)
      - File inventories ("this directory contains X, Y, Z files")
@@ -82,7 +82,7 @@ Uses the topology artifact to know which layers and service directories exist.
   2. **Check structure** — should use markdown headers and bullet points, be concrete and specific (e.g., "use 2-space indentation" not "format code properly")
   3. **Check length** — each file should be under 200 lines (official guideline — longer files reduce Claude's adherence to instructions)
   4. **Check duplication** — service-level files should not repeat content already in root CLAUDE.md
-  This check only evaluates files that exist — it does not penalize absence (that's AI-01's job).
+     This check only evaluates files that exist — it does not penalize absence (that's AI-01's job).
 - **Pass:** All CLAUDE.md files contain meaningful, non-obvious, well-structured content under 200 lines each
 - **Warn:** Some files have quality issues (minor discoverable content, some vague sections, slightly over 200 lines, or some duplication between levels)
 - **Fail:** CLAUDE.md files contain extensive discoverable content, are heavily bloated (300+ lines), or consist mostly of vague/useless content

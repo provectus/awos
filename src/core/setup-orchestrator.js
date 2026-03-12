@@ -16,6 +16,9 @@ const {
 const { createDirectories } = require('../services/directory-creator');
 const { executeCopyOperations } = require('../services/file-copier');
 const { configureMcp } = require('../services/mcp-configurator');
+const {
+  configureMarketplace,
+} = require('../services/marketplace-configurator');
 const { runMigrations } = require('../migrations/runner');
 
 /**
@@ -27,7 +30,7 @@ const { runMigrations } = require('../migrations/runner');
  * @returns {Promise<void>}
  */
 async function runSetup({ workingDir, packageRoot, dryRun = false }) {
-  const TOTAL_STEPS = 5;
+  const TOTAL_STEPS = 6;
 
   // Display header
   showHeader(AWOS_ASCII, AWOS_SUBTITLE);
@@ -95,11 +98,25 @@ async function runSetup({ workingDir, packageRoot, dryRun = false }) {
   const mcpStatistics = await configureMcp({ workingDir, dryRun });
   clearLine();
 
+  // Step 6: Register Marketplace
+  showStep(
+    'Registering Marketplace',
+    'Adding AWOS plugin marketplace to settings',
+    6,
+    TOTAL_STEPS
+  );
+  const marketplaceStatistics = await configureMarketplace({
+    workingDir,
+    dryRun,
+  });
+  clearLine();
+
   // Display summary with combined statistics
   const statistics = {
     ...directoryStatistics,
     ...fileStatistics,
     ...mcpStatistics,
+    ...marketplaceStatistics,
     migrations: migrationStatistics.applied,
   };
   showSummary(statistics, { dryRun });

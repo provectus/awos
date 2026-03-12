@@ -1,0 +1,10 @@
+{
+  "name": "awos",
+  "version": "1.0.0",
+  "description": "AWOS code quality audit framework",
+  "author": {
+    "name": "Provectus"
+  },
+  "license": "MIT",
+  "keywords": ["audit", "code-quality", "dimensions"]
+}

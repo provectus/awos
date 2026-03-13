@@ -4,10 +4,9 @@
 
 ## What it does
 
-This command creates (or updates) your high-level product definition — the single source of truth for your entire project. It produces two files:
+This command creates (or updates) your high-level product definition — the single source of truth for your entire project. It produces:
 
 - `context/product/product-definition.md` — the full definition covering vision, audience, personas, success metrics, core features, and boundaries.
-- `context/product/product-definition-lite.md` — a one-page summary with the project name, vision, target audience, and core features.
 
 ## Prerequisites
 
@@ -23,7 +22,7 @@ The command operates in two modes:
 ## Key behaviors
 
 - **Non-technical language only.** This document describes business goals, user needs, and value — not implementation details. The agent will steer you away from technical language.
-- **Two outputs, always.** Both the full definition and the lite summary are created/updated together.
+- **Single output.** The full product definition file is created or updated in place.
 - **Idempotent.** You can re-run this command at any time to refine your product definition as your understanding evolves.
 
 ## Common misconceptions

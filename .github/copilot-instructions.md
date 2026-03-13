@@ -81,7 +81,7 @@ The `/awos:implement` command acts as an **engineering manager** that:
 **Template Population:**
 - Commands guide users through interactive sessions to populate templates
 - Support both "Creation Mode" (new documents) and "Update Mode" (existing documents)
-- Generate both full documents and `-lite.md` summary versions
+- Generate a single output document per command
 
 **Task Granularity:**
 - Each task in `tasks.md` must be **runnable and testable**

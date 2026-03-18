@@ -50,14 +50,15 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
      Exclude `node_modules/`, `build/`, `dist/`, `vendor/`, `.venv/`.
      Count discrete test files.
   2. **Declarative test frameworks** (dbt, Terraform, Maestro, etc.): Count
-     individual test *definitions*, not files. A single YAML or config file
+     individual test _definitions_, not files. A single YAML or config file
      may declare many independent test assertions, flows, or checks. Parse
      the relevant format and count each discrete test unit.
 
-  Use the metric appropriate to the stack: test *files* for file-per-test
-  frameworks, test *definitions* for declarative frameworks. Calculate the
+  Use the metric appropriate to the stack: test _files_ for file-per-test
+  frameworks, test _definitions_ for declarative frameworks. Calculate the
   test-coverage ratio: tested source modules / total source modules. A source
   module is "tested" if at least one test (file or definition) targets it.
+
 - **Pass:** Test-coverage ratio >= 60% (at least 60% of source modules have
   associated tests)
 - **Warn:** Test-coverage ratio > 0% but < 60% (some modules lack test

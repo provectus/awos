@@ -39,13 +39,31 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Fail:** Strict mode disabled or excessive type suppressions/`any` usage
 - **Severity:** high
 
-### SBP-04: Test infrastructure exists
+### SBP-04: Test infrastructure exists with adequate coverage
 
-- **What:** The project has a test framework configured and tests written
-- **How:** Glob for test files: `**/*.test.{ts,tsx,js,jsx}`, `**/*Test.kt`, `**/*Spec.kt`. Check for test runner configs and test scripts.
-- **Pass:** Test framework configured and 10+ test files exist
-- **Warn:** Test framework configured but fewer than 10 test files
-- **Fail:** No test infrastructure found
+- **What:** The project has meaningful tests written covering its source modules
+- **How:** Detect test infrastructure based on the project's stack:
+  1. **Traditional test files** (JS/TS/Kotlin/Python/Go/etc.): Glob for
+     `**/*.test.{ts,tsx,js,jsx}`, `**/*.spec.{ts,tsx,js,jsx}`,
+     `**/__tests__/**/*.{ts,tsx,js,jsx}`, `**/*_test.py`, `**/test_*.py`,
+     `**/*Test.kt`, `**/*Spec.kt`, `**/*_test.go`, etc.
+     Exclude `node_modules/`, `build/`, `dist/`, `vendor/`, `.venv/`.
+     Count discrete test files.
+  2. **Declarative test frameworks** (dbt, Terraform, Maestro, etc.): Count
+     individual test _definitions_, not files. A single YAML or config file
+     may declare many independent test assertions, flows, or checks. Parse
+     the relevant format and count each discrete test unit.
+
+  Use the metric appropriate to the stack: test _files_ for file-per-test
+  frameworks, test _definitions_ for declarative frameworks. Calculate the
+  test-coverage ratio: tested source modules / total source modules. A source
+  module is "tested" if at least one test (file or definition) targets it.
+
+- **Pass:** Test-coverage ratio >= 60% (at least 60% of source modules have
+  associated tests)
+- **Warn:** Test-coverage ratio > 0% but < 60% (some modules lack test
+  coverage)
+- **Fail:** No tests found
 - **Severity:** critical
 
 ### SBP-05: CI/CD pipeline exists

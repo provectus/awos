@@ -4,17 +4,16 @@ Extensible, dimension-based code quality audit for Claude Code. Each dimension r
 
 ## Install
 
-From the AWOS marketplace:
+If you installed AWOS (`npx @provectusinc/awos`), the marketplace is already registered. Just enable the plugin:
 
-```bash
-claude plugin marketplace add <org>/awos
-claude plugin install awos
+```
+/plugin install awos@awos-marketplace
 ```
 
-Or directly for local development:
+To register the marketplace manually:
 
-```bash
-claude --plugin-dir ./plugins/awos
+```
+/plugin marketplace add provectus/awos
 ```
 
 ## Usage

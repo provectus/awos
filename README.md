@@ -19,7 +19,9 @@
 npx @provectusinc/awos
 ```
 
-This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, and the `context/` directory where your project documents will live.
+This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, and the `context/` directory where your project documents will live. It also registers the AWOS plugin marketplace in your project settings.
+
+> **Running on an existing codebase?** You can skip the full workflow and go straight to an AI readiness audit. Install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit` to get a scored assessment of your project with actionable recommendations.
 
 ### Step 2: Foundation Setup
 

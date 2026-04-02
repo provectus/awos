@@ -1,6 +1,6 @@
 # AWOS Audit Plugin
 
-Extensible, dimension-based code quality audit for Claude Code. Each dimension runs in its own context window for thorough analysis. Run `/awos:audit` and get a scored report with actionable recommendations.
+Extensible, dimension-based code quality audit for Claude Code. Each dimension runs in its own context window for thorough analysis. Run `/awos:ai-readiness-audit` and get a scored report with actionable recommendations.
 
 ## Install
 
@@ -22,13 +22,13 @@ claude --plugin-dir ./plugins/awos
 Full audit across all dimensions:
 
 ```
-/awos:audit
+/awos:ai-readiness-audit
 ```
 
 Single dimension:
 
 ```
-/awos:audit security
+/awos:ai-readiness-audit security
 ```
 
 ## How It Works
@@ -94,7 +94,7 @@ plugins/awos/
 ├── .claude-plugin/
 │   └── plugin.json              # plugin manifest
 ├── skills/
-│   └── audit/
+│   └── ai-readiness-audit/
 │       ├── SKILL.md             # orchestrator skill
 │       ├── dimensions/          # auto-discovered dimension files
 │       ├── scoring.md           # scoring algorithm

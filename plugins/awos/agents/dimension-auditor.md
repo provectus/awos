@@ -5,7 +5,7 @@ description: >-
   checks, output format, and optionally a topology summary via the task prompt.
   Produces a structured per-dimension artifact with check results, evidence,
   and scores. Use when executing individual dimension audits as part of the
-  /awos:audit workflow or when a single audit dimension needs to run in its
+  /awos:ai-readiness-audit workflow or when a single audit dimension needs to run in its
   own context window.
 tools: Read, Write, Grep, Glob, Bash
 ---

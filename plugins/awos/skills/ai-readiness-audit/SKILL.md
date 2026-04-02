@@ -1,9 +1,9 @@
 ---
-name: audit
+name: ai-readiness-audit
 description: >-
   Run a comprehensive code quality audit across extensible dimensions. Use when
   asked to "audit the code", "run a code audit", "check code quality", "audit
-  this project", or when the /awos:audit command is invoked. Discovers dimension
+  this project", or when the /awos:ai-readiness-audit command is invoked. Discovers dimension
   files automatically — drop a new .md in dimensions/ to extend. Each dimension
   runs in its own context window for thorough analysis.
 disable-model-invocation: true
@@ -137,10 +137,10 @@ Brief description.
 
 ### Frontmatter Fields
 
-| Field         | Required | Description                                                            |
-| ------------- | -------- | ---------------------------------------------------------------------- |
-| `name`        | yes      | Unique identifier, used for CLI filtering (`/awos:audit my-dimension`) |
-| `title`       | yes      | Human-readable display name                                            |
-| `description` | yes      | One-line purpose                                                       |
-| `severity`    | yes      | Default severity for all checks. Individual checks can override.       |
-| `depends-on`  | no       | Dimension `name`s that must complete first. Omit if no dependencies.   |
+| Field         | Required | Description                                                                         |
+| ------------- | -------- | ----------------------------------------------------------------------------------- |
+| `name`        | yes      | Unique identifier, used for CLI filtering (`/awos:ai-readiness-audit my-dimension`) |
+| `title`       | yes      | Human-readable display name                                                         |
+| `description` | yes      | One-line purpose                                                                    |
+| `severity`    | yes      | Default severity for all checks. Individual checks can override.                    |
+| `depends-on`  | no       | Dimension `name`s that must complete first. Omit if no dependencies.                |

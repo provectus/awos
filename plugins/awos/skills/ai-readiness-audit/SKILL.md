@@ -137,10 +137,10 @@ Brief description.
 
 ### Frontmatter Fields
 
-| Field         | Required | Description                                                            |
-| ------------- | -------- | ---------------------------------------------------------------------- |
+| Field         | Required | Description                                                                         |
+| ------------- | -------- | ----------------------------------------------------------------------------------- |
 | `name`        | yes      | Unique identifier, used for CLI filtering (`/awos:ai-readiness-audit my-dimension`) |
-| `title`       | yes      | Human-readable display name                                            |
-| `description` | yes      | One-line purpose                                                       |
-| `severity`    | yes      | Default severity for all checks. Individual checks can override.       |
-| `depends-on`  | no       | Dimension `name`s that must complete first. Omit if no dependencies.   |
+| `title`       | yes      | Human-readable display name                                                         |
+| `description` | yes      | One-line purpose                                                                    |
+| `severity`    | yes      | Default severity for all checks. Individual checks can override.                    |
+| `depends-on`  | no       | Dimension `name`s that must complete first. Omit if no dependencies.                |

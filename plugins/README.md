@@ -18,6 +18,6 @@ To register the marketplace manually:
 
 ## Available Plugins
 
-| Plugin | Command | Description |
-|--------|---------|-------------|
+| Plugin   | Command                    | Description                                                                                                                                                                   |
+| -------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **awos** | `/awos:ai-readiness-audit` | Comprehensive AI readiness audit across 8 dimensions — security, architecture, documentation, AI tooling, and more. Produces a scored report with actionable recommendations. |

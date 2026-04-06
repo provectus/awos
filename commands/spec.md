@@ -13,7 +13,7 @@ The spec must be readable by anyone — a designer, a project manager, a stakeho
 - **Describe what the user sees and does, not what the system does internally.** The spec is about screens, buttons, messages, and workflows — not about data flow, state management, persistence mechanisms, or architecture.
 - **No implementation concepts.** Do not reference how data is stored, transmitted, cached, or structured. Do not mention API calls, payloads, form state, server persistence, database operations, or any internal system behavior.
 - **No code references.** Do not mention file paths, component names, variable names, configuration keys, or technical identifiers from the codebase.
-- **Translate technical input.** When the user provides information using technical language during the interview, rewrite it into user-facing language before adding it to the spec. The spec captures *what the user experiences*, not how the engineer builds it.
+- **Translate technical input.** When the user provides information using technical language during the interview, rewrite it into user-facing language before adding it to the spec. The spec captures _what the user experiences_, not how the engineer builds it.
 - **Test of clarity:** If a sentence only makes sense to someone who has read the source code, rewrite it until it doesn't.
 
 ---

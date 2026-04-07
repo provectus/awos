@@ -91,14 +91,16 @@ For each gap identified in Step 5:
 2. Add `@layer`, `@spec`, `@regression` (if appropriate) annotations using appropriate comment syntax for the language.
 3. Update `context/qa/list-of-tests.md` with the new entry, performing the overlap check:
    - Same behavior, same layer → UPDATE existing entry instead of adding new.
-   - Broader test needing splitting → DEPRECATE old (annotate with `@deprecated`), add focused replacements.
+   - Broader test needing splitting → DEPRECATE old (annotate with `@deprecated` using appropriate comment syntax for the language), add focused replacements.
    - Partial overlap → keep both, annotate relationship in Notes column.
 
 Append net-new entries using this format:
 
+```markdown
 | File | Test Name | Layer | Positive/Negative | @regression | Status | Notes |
 |------|-----------|-------|-------------------|-------------|--------|-------|
 | path/to/test_file.py | test_function_name | unit | negative | yes | OK | |
+```
 
 ## Step 7: Run tests (with user confirmation)
 

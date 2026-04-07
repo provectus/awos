@@ -110,7 +110,7 @@ If tests reveal that the implementation is incomplete:
 ### Step 6: Update `context/qa/list-of-tests.md`
 Before appending new entries, scan the registry for existing tests covering the same behavior/AC in the same layer + spec:
 - **Same behavior, same layer** → UPDATE the existing entry instead of adding a new one.
-- **Broader test that needs splitting** → DEPRECATE the old entry, add focused replacements; annotate old test file with `# @deprecated`.
+- **Broader test that needs splitting** → DEPRECATE the old entry, add focused replacements; annotate old test file with `@deprecated` using the appropriate comment syntax for the language.
 - **Partial overlap** → keep both, note the relationship in the Notes column.
 
 Append only net-new tests. Format:
@@ -121,8 +121,10 @@ Append only net-new tests. Format:
 | path/to/test_file.py | test_function_name | unit | negative | yes | OK | |
 ```
 
-### Step 7: Mark task [x]
-Signal completion to `/awos:implement`.
+### Step 7: Report completion status to `/awos:implement`
+
+- **No gaps found:** All tests pass. Your work is done — `/awos:implement` will mark this task `[x]`.
+- **Gap found (Step 5 triggered):** Do NOT signal completion. Return an incomplete/blocked status so `/awos:implement` knows NOT to mark this task `[x]`. The task stays open until the gap impl sub-task is resolved and tests pass.
 
 ---
 

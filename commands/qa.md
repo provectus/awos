@@ -86,7 +86,7 @@ For each acceptance criterion in the functional spec(s) in scope:
 
 For each gap identified in Step 5:
 
-1. Write the missing test following RED validation discipline:
+1. Write the missing test following RED validation discipline (following `testing-expert` execution mode Step 3):
    - Write test → confirm it FAILS for the right reason → confirm it PASSES.
 2. Add `@layer`, `@spec`, `@regression` (if appropriate) annotations using appropriate comment syntax for the language.
 3. Update `context/qa/list-of-tests.md` with the new entry, performing the overlap check:
@@ -94,9 +94,15 @@ For each gap identified in Step 5:
    - Broader test needing splitting → DEPRECATE old (annotate with `@deprecated`), add focused replacements.
    - Partial overlap → keep both, annotate relationship in Notes column.
 
+Append net-new entries using this format:
+
+| File | Test Name | Layer | Positive/Negative | @regression | Status | Notes |
+|------|-----------|-------|-------------------|-------------|--------|-------|
+| path/to/test_file.py | test_function_name | unit | negative | yes | OK | |
+
 ## Step 7: Run tests (with user confirmation)
 
-1. Count all tests in scope. Notify user using `AskUserQuestion`:
+1. Count all tests in scope. Use `AskUserQuestion` with the following question and options:
    ```
    Ready to run N tests across X specs [unit: A, integration: B, e2e: C, contract: D]
    Regression suite: M tests tagged @regression

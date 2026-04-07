@@ -17,7 +17,6 @@
 | CREATE | `commands/qa.md` | `/awos:qa` full-audit command logic |
 | CREATE | `claude/commands/qa.md` | Thin wrapper pointing to `commands/qa.md` |
 | CREATE | `commands/testing-expert.md` | `testing-expert` agent — planning + execution modes |
-| CREATE | `claude/commands/testing-expert.md` | Thin wrapper making testing-expert invocable as `/awos:testing-expert` |
 | MODIFY | `commands/tasks.md` | Add Step 3b: invoke testing-expert to generate test tasks per slice |
 | CREATE | `templates/qa-context-template.md` | Starter template for `context/qa/list-of-tests.md` |
 | CREATE | `templates/regression-suite-template.md` | Starter template for `context/qa/regression-suite.md` |

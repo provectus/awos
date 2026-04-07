@@ -103,9 +103,12 @@ Follow this process precisely.
       - `[ ] Sub-task: Update the user API endpoint to return the avatar_url. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the 'ProfileAvatar' component to fetch and display the user's avatar_url, falling back to the placeholder if null. **[Agent: react-expert]**`
       - `[ ] Sub-task: Run the application. Use chrome MCP to connect the page in Browser. Verify that the profile page shows the correct avatar or placeholder. **[Agent: manual-qa-expert]**`
-      - `[ ] Unit: avatar_url column default, null handling — positive/negative **[Agent: testing-expert]**`
-      - `[ ] Integration: GET /user returns avatar_url when set, null when not — positive/negative **[Agent: testing-expert]**`
-      - `[ ] E2E: profile page shows avatar when present, placeholder when null **[Agent: testing-expert]**`
+      - `[ ] Unit: avatar_url column default, valid URL stored correctly — positive cases **[Agent: testing-expert]**`
+      - `[ ] Unit: null avatar_url, missing column, type mismatch — negative cases **[Agent: testing-expert]**`
+      - `[ ] Integration: GET /user returns avatar_url when set — positive cases **[Agent: testing-expert]**`
+      - `[ ] Integration: GET /user returns null when avatar_url not set — negative cases **[Agent: testing-expert]**`
+      - `[ ] E2E: profile page shows avatar when avatar_url present — positive cases **[Agent: testing-expert]**`
+      - `[ ] E2E: profile page shows placeholder when avatar_url is null — negative cases **[Agent: testing-expert]**`
 
 ## Step 4: Present Draft and Refine
 

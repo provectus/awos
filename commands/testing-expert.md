@@ -14,6 +14,7 @@ Read the invocation context:
 
 - **Planning Mode** — called by `/awos:tasks` with a functional spec and technical spec but NO existing implementation code. Your job is to return structured test task descriptions for `tasks.md`. You do NOT write test code in this mode.
 - **Execution Mode** — called by `/awos:implement` with a specific test task, the implementation code, and full spec context. Your job is to write, RED-validate, and run real test code.
+- **Direct invocation (no caller context)** — ask the user: "Are you planning test tasks for a spec, or executing a specific test task?" then proceed to the appropriate mode.
 
 ---
 
@@ -48,8 +49,10 @@ For each applicable layer, generate two sub-tasks: one for positive cases, one f
 ```
 - [ ] Unit: [describe positive behaviors] — positive cases **[Agent: testing-expert]**
 - [ ] Unit: [describe negative/error inputs and boundary values] — negative cases **[Agent: testing-expert]**
-- [ ] Integration: [describe service interaction scenarios] **[Agent: testing-expert]**
-- [ ] Contract: [describe schema/interface validations + violation cases] **[Agent: testing-expert]**
+- [ ] Integration: [describe service interaction scenarios — positive cases] **[Agent: testing-expert]**
+- [ ] Integration: [describe downstream failures, auth failures, malformed payloads — negative cases] **[Agent: testing-expert]**
+- [ ] Contract: [describe schema/interface validations — positive cases] **[Agent: testing-expert]**
+- [ ] Contract: [describe schema violations and malformed payload cases — negative cases] **[Agent: testing-expert]**
 - [ ] E2E: [describe full user flow — positive] **[Agent: testing-expert]**
 - [ ] E2E: [describe failure/unhappy path flow — negative] **[Agent: testing-expert]**
 ```
@@ -87,7 +90,7 @@ Write tests following this discipline (borrowed from TDD red-green-refactor):
    - If it passes immediately: the test is not testing new behavior. Revise it until it fails for the right reason.
 3. Proceed to the next test case.
 
-Annotate every test file with:
+Annotate every test file with the following (use the appropriate comment syntax for the language: `#` for Python/Ruby/Shell, `//` for JS/TS/Go/Java, `/* */` for C/C++/C#):
 ```
 # @layer: unit | integration | e2e | contract
 # @spec: [spec-directory-name]
@@ -100,8 +103,9 @@ Run all tests written in this task. All must pass before continuing.
 ### Step 5: Check for implementation gaps
 If tests reveal that the implementation is incomplete:
 - Do NOT modify production code.
-- Report the gap to `/awos:implement` with a clear description.
-- A new impl sub-task will be created; this test task stays open until that sub-task closes.
+- Report the gap by appending a note to this task's entry in `tasks.md`:
+  `<!-- GAP: [description of missing behavior] — impl sub-task needed -->`
+- Do NOT invoke `/awos:implement` directly. Leave this task open (`[ ]`); `/awos:implement` will detect the incomplete task on its next run and create a new impl sub-task to close the gap.
 
 ### Step 6: Update `context/qa/list-of-tests.md`
 Before appending new entries, scan the registry for existing tests covering the same behavior/AC in the same layer + spec:
@@ -112,7 +116,9 @@ Before appending new entries, scan the registry for existing tests covering the 
 Append only net-new tests. Format:
 
 ```markdown
-| path/to/test_file.py | test_function_name | unit | negative | yes | OK |
+| File | Test Name | Layer | Positive/Negative | @regression | Status | Notes |
+|------|-----------|-------|-------------------|-------------|--------|-------|
+| path/to/test_file.py | test_function_name | unit | negative | yes | OK | |
 ```
 
 ### Step 7: Mark task [x]

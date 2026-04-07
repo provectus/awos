@@ -67,6 +67,23 @@ Follow this process precisely.
         - Tech stack identified in technical-considerations.md
       - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
       - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
+  3b. **Generate paired test tasks for each slice (REQUIRED):**
+      - After defining the implementation sub-tasks for a slice, invoke the `testing-expert` agent in **planning mode**.
+      - Pass it: the current slice's implementation sub-task description, `functional-spec.md`, and `technical-considerations.md`.
+      - The `testing-expert` will return a list of test sub-tasks covering the applicable pyramid layers (unit, integration, e2e, contract) with both positive and negative cases.
+      - Insert those test sub-tasks as children of the same slice, after the implementation sub-tasks.
+      - **CRITICAL — Slice Completion Rule:** A slice parent task is only `[x]` when ALL its sub-tasks — both implementation AND all test sub-tasks — are `[x]`. This is enforced by `/awos:implement`'s existing sub-task completion logic.
+      - Example result for a slice:
+        ```
+        - [ ] **Slice 1: User authentication**
+          - [ ] Implement JWT token generation **[Agent: python-expert]**
+          - [ ] Unit: token payload, expiry, signing — positive cases **[Agent: testing-expert]**
+          - [ ] Unit: invalid secret, expired token, malformed input — negative cases **[Agent: testing-expert]**
+          - [ ] Integration: valid/invalid credentials against /auth endpoint — positive cases **[Agent: testing-expert]**
+          - [ ] Integration: downstream failures, auth failures, malformed payloads — negative cases **[Agent: testing-expert]**
+          - [ ] Contract: /auth response schema validation — positive cases **[Agent: testing-expert]**
+          - [ ] Contract: schema violations and malformed payload cases — negative cases **[Agent: testing-expert]**
+        ```
   5.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
   6.  Create a high-level checklist item and its sub-tasks with subagent assignments.
   7.  Repeat this process until all requirements from the specification are covered.
@@ -86,6 +103,9 @@ Follow this process precisely.
       - `[ ] Sub-task: Update the user API endpoint to return the avatar_url. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the 'ProfileAvatar' component to fetch and display the user's avatar_url, falling back to the placeholder if null. **[Agent: react-expert]**`
       - `[ ] Sub-task: Run the application. Use chrome MCP to connect the page in Browser. Verify that the profile page shows the correct avatar or placeholder. **[Agent: manual-qa-expert]**`
+      - `[ ] Unit: avatar_url column default, null handling — positive/negative **[Agent: testing-expert]**`
+      - `[ ] Integration: GET /user returns avatar_url when set, null when not — positive/negative **[Agent: testing-expert]**`
+      - `[ ] E2E: profile page shows avatar when present, placeholder when null **[Agent: testing-expert]**`
 
 ## Step 4: Present Draft and Refine
 

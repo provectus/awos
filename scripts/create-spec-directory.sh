@@ -40,7 +40,7 @@ if (( next > 999 )); then
 fi
 
 NEXT_INDEX=$(printf "%03d" "$next")
-NEW_DIR="$BASE_DIR/$NEXT_INDEX-$SHORT_NAME"
+NEW_DIR="$BASE_DIR$NEXT_INDEX-$SHORT_NAME"
 
 # Create directory
 mkdir -p "$NEW_DIR"

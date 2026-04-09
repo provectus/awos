@@ -12,6 +12,7 @@ depends-on:
     spec-driven-development,
     code-architecture,
     software-best-practices,
+    quality-assurance,
   ]
 ---
 

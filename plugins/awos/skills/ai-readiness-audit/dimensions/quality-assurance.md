@@ -139,7 +139,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **What:** The distribution of tests across tiers follows a healthy pyramid: most tests are unit-level, fewer are integration-level, fewest are E2E
 - **How:** Use findings from QA-02, QA-03, and QA-04 to estimate test counts at each tier. Count test files (or test definitions for declarative stacks) matched by each tier's signals. A healthy pyramid satisfies: unit_count >= integration_count >= e2e_count.
 - **Pass:** unit_count >= integration_count >= e2e_count, or only one tier is present
-- **Warn:** E2E count exceeds unit count but integration layer exists as a buffer between them
+- **Warn:** E2E count exceeds unit count but integration layer exists as a buffer, OR integration count exceeds unit count by less than 2×
 - **Fail:** E2E count > unit count (inverted pyramid), or integration count > unit count by a significant margin (2× or more)
 - **Skip-When:** Fewer than 2 tiers received a Pass result in QA-02, QA-03, or QA-04
 - **Severity:** medium
@@ -212,7 +212,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Pass:** Contract tests present covering at least one service boundary
 - **Warn:** Contract tooling installed but no contract files found
 - **Fail:** No contract testing detected
-- **Skip-When:** Topology shows single-service repo or no inter-service communication patterns detected (TOPO-06 found no communication layer)
+- **Skip-When:** Topology shows single-service repo or no inter-service communication patterns detected
 - **Severity:** high
 
 ---

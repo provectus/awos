@@ -33,7 +33,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 
   **Declarative frameworks** (dbt, Terraform, Maestro YAML): count individual test definitions, not files.
 
-  Calculate the test-coverage ratio: tested source modules / total source modules. A source module is "tested" if at least one test (file or definition) targets it.
+  Calculate the test-coverage ratio: tested source modules / total source modules. A source module is "tested" if at least one test (file or definition) targets it. Establish linkage by naming convention first (e.g., `Button.test.tsx` targets `Button.tsx`, `user_test.go` targets `user.go`); then by directory co-location (test in `tests/unit/` mirrors source in `src/`). If linkage cannot be resolved for most files, fall back to: any tests exist = Warn, no tests = Fail.
 
 - **Pass:** Test-coverage ratio >= 60%
 - **Warn:** Test-coverage ratio > 0% but < 60%
@@ -62,7 +62,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
   - Elixir (ExUnit): `use ExUnit.Case` without `Phoenix.ConnTest`, `Ecto.Adapters.SQL.Sandbox`, `DataCase`, or `ConnCase` imports
   - Dart/Flutter: `**/*_test.dart` located in `test/` directory (not `integration_test/`)
 
-  **Import-based inference:** sample 5 test files — if they import only local project modules and no HTTP clients, DB clients, or external service SDKs, treat them as unit-scoped.
+  **Import-based inference:** sample 5 test files (one per top-level module where possible, or first 5 alphabetically) — if they import only local project modules and no HTTP clients, DB clients, or external service SDKs, treat them as unit-scoped.
 
 - **Pass:** Unit tests detected via any signal above
 - **Warn:** Test files exist but none can be clearly identified as unit-scoped
@@ -141,7 +141,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Pass:** unit_count >= integration_count >= e2e_count, or only one tier is present
 - **Warn:** E2E count exceeds unit count but integration layer exists as a buffer between them
 - **Fail:** E2E count > unit count (inverted pyramid), or integration count > unit count by a significant margin (2× or more)
-- **Skip-When:** Fewer than 2 tiers were detected in QA-02/03/04
+- **Skip-When:** Fewer than 2 tiers received a Pass result in QA-02, QA-03, or QA-04
 - **Severity:** medium
 
 ---
@@ -155,6 +155,8 @@ Audits the depth and structure of the project's testing approach. Checks whether
   - pytest-cov: `pytest-cov` in `requirements*.txt` or `pyproject.toml`; `--cov` flag in `pytest.ini` or `pyproject.toml` `addopts`
   - JaCoCo: `jacoco` plugin in `build.gradle` or `build.gradle.kts`
   - nyc / c8: `.nycrc`, `.nycrc.json`, or `c8` / `nyc` script in `package.json`
+  - Go: `go test -coverprofile` flag in `Makefile`, CI config, or `go test ./... -cover` in CI scripts
+  - Ruby: `simplecov` gem in `Gemfile` or `require 'simplecov'` in `spec_helper.rb` / `.simplecov`
 - **Pass:** Coverage tool configured with thresholds defined
 - **Warn:** Coverage tool present but no thresholds defined, OR no coverage tooling found
 - **Severity:** low
@@ -166,7 +168,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **What:** Tests use a structured approach to create and manage test data, rather than scattering hardcoded inline values across test files
 - **How:** Check for:
   - Fixture directories: `fixtures/`, `__fixtures__/`, `testdata/`, `test/fixtures/`, `spec/fixtures/`
-  - Factory libraries in dependencies: `factory-girl`, `fishery`, `rosie` (JS/TS); `factory_boy` (Python); `FactoryBot` / `factory_bot` (Ruby); `gomock` (Go)
+  - Factory libraries in dependencies: `factory-girl`, `fishery`, `rosie` (JS/TS); `factory_boy` (Python); `FactoryBot` / `factory_bot` (Ruby); `testdata/` fixtures (Go — no dominant factory library; Go projects typically rely on fixture directories)
   - Faker libraries: `faker`, `@faker-js/faker`, `Faker` (PHP), `Bogus` (C#)
   - Seed scripts: `seeds/`, `db/seeds/`, `prisma/seed.*`, `scripts/seed.*`
   - Confirm usage: grep for the detected library/directory name inside test files to verify it is actually used (not just installed)
@@ -206,7 +208,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
   - Pact: `pact/` directory, `**/*.pact.json`, `@pact-foundation/pact` in dependencies, `au.com.dius.pact` in Gradle
   - Spring Cloud Contract: `contracts/` directory with `*.groovy` or `*.yml` contract files
   - Schemathesis / Dredd: `schemathesis` or `dredd` in dependencies with config files
-  - Karate: `**/*.feature` files with contract-style API tests
+  - Karate: `classpath:karate-config.js`, `import com.intuit.karate` in test files, or `karate` artifact in Gradle/Maven dependencies
 - **Pass:** Contract tests present covering at least one service boundary
 - **Warn:** Contract tooling installed but no contract files found
 - **Fail:** No contract testing detected
@@ -227,5 +229,5 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Pass:** Model evaluation tests present with explicit quality metric assertions
 - **Warn:** ML framework imports appear in test files but no metric assertions found (tests exist but don't gate on model quality)
 - **Fail:** No ML model testing detected
-- **Skip-When:** Topology shows no ML layer — no ML framework imports (`sklearn`, `torch`, `tensorflow`, `xgboost`, `transformers`) found in source files
+- **Skip-When:** Topology shows no ML layer — no ML framework imports (`sklearn`, `torch`, `tensorflow`, `xgboost`, `transformers`) found in non-test source files
 - **Severity:** high

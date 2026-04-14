@@ -21,6 +21,7 @@ Read the invocation context:
 # PLANNING MODE
 
 ## Inputs
+
 - `functional-spec.md` from the target spec directory
 - `technical-considerations.md` from the target spec directory
 - The implementation sub-task description for the current slice
@@ -28,12 +29,15 @@ Read the invocation context:
 ## Process
 
 ### Step 1: Discover frameworks
+
 1. Read `context/product/architecture.md` for declared testing stack per layer (unit/integration/e2e/contract).
 2. If not declared, auto-detect from dependency files: `package.json`, `requirements.txt`, `go.mod`, `Gemfile`, `pyproject.toml`, `pom.xml`.
 3. If still not determinable, note "framework TBD — will auto-detect at execution time" in the task description.
 
 ### Step 2: Map acceptance criteria to test layers
+
 For the given implementation sub-task, identify which acceptance criteria it touches. For each criterion, determine which layers apply:
+
 - **Unit** — pure logic, no external dependencies
 - **Integration** — service-to-service or DB interactions
 - **E2E** — full user flow through the UI or API surface
@@ -42,6 +46,7 @@ For the given implementation sub-task, identify which acceptance criteria it tou
 Not every slice needs all four layers. Apply judgment.
 
 ### Step 3: Generate test task descriptions
+
 For each applicable layer, generate two sub-tasks: one for positive cases, one for negative cases.
 
 **Output format** (return this list to `/awos:tasks` for insertion into `tasks.md`):
@@ -64,6 +69,7 @@ Omit layers that genuinely don't apply. Always include negative cases for every 
 # EXECUTION MODE
 
 ## Inputs
+
 - Specific test task description (layer + positive/negative scope)
 - `functional-spec.md` + `technical-considerations.md` for the target spec
 - `context/product/architecture.md`
@@ -73,11 +79,14 @@ Omit layers that genuinely don't apply. Always include negative cases for every 
 ## Process
 
 ### Step 1: Discover frameworks
+
 1. Read `context/product/architecture.md` for declared testing stack per layer.
 2. Fall back to auto-detection via dependency files: `package.json`, `requirements.txt`, `go.mod`, `Gemfile`, `pyproject.toml`, `pom.xml`.
 
 ### Step 2: Plan test cases
+
 Map the task's acceptance criteria to concrete test cases:
+
 - For every positive case, define at least one negative counterpart.
 - Negative cases must include: invalid inputs, boundary values, error paths, permission failures, malformed data — whichever apply to this layer.
 
@@ -91,6 +100,7 @@ Write tests following this discipline (borrowed from TDD red-green-refactor):
 3. Proceed to the next test case.
 
 Annotate every test file with the following (use the appropriate comment syntax for the language: `#` for Python/Ruby/Shell, `//` for JS/TS/Go/Java, `/* */` for C/C++/C#):
+
 ```
 # @layer: unit | integration | e2e | contract
 # @spec: [spec-directory-name]
@@ -98,17 +108,22 @@ Annotate every test file with the following (use the appropriate comment syntax 
 ```
 
 ### Step 4: Confirm GREEN
+
 Run all tests written in this task. All must pass before continuing.
 
 ### Step 5: Check for implementation gaps
+
 If tests reveal that the implementation is incomplete:
+
 - Do NOT modify production code.
 - Report the gap by appending a note to this task's entry in `tasks.md`:
   `<!-- GAP: [description of missing behavior] — impl sub-task needed -->`
 - Do NOT invoke `/awos:implement` directly. Leave this task open (`[ ]`); `/awos:implement` will detect the incomplete task on its next run and create a new impl sub-task to close the gap.
 
 ### Step 6: Update `context/qa/list-of-tests.md`
+
 Before appending new entries, scan the registry for existing tests covering the same behavior/AC in the same layer + spec:
+
 - **Same behavior, same layer** → UPDATE the existing entry instead of adding a new one.
 - **Broader test that needs splitting** → DEPRECATE the old entry, add focused replacements; annotate old test file with `@deprecated` using the appropriate comment syntax for the language.
 - **Partial overlap** → keep both, note the relationship in the Notes column.
@@ -116,9 +131,9 @@ Before appending new entries, scan the registry for existing tests covering the 
 Append only net-new tests. Format:
 
 ```markdown
-| File | Test Name | Layer | Positive/Negative | @regression | Status | Notes |
-|------|-----------|-------|-------------------|-------------|--------|-------|
-| path/to/test_file.py | test_function_name | unit | negative | yes | OK | |
+| File                 | Test Name          | Layer | Positive/Negative | @regression | Status | Notes |
+| -------------------- | ------------------ | ----- | ----------------- | ----------- | ------ | ----- |
+| path/to/test_file.py | test_function_name | unit  | negative          | yes         | OK     |       |
 ```
 
 ### Step 7: Report completion status to `/awos:implement`

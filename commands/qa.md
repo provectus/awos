@@ -54,9 +54,11 @@ Read `context/qa/list-of-tests.md`. If it does not exist, create it from the tem
 For each registered test in scope:
 
 **Existence check:**
+
 - Does the test file still exist in the codebase? If not → flag `MISSING`.
 
 **Spec linkage check:**
+
 - Does the `@spec` annotation reference a spec directory that still exists?
   - YES → OK.
   - Spec directory deleted →
@@ -65,11 +67,13 @@ For each registered test in scope:
     - No match → flag `HUMAN REVIEW` (do NOT auto-deprecate; may be intentional regression coverage).
 
 **Staleness check:**
+
 - Does the test logic match the current implementation?
   - Read the test file and the relevant implementation code.
   - If the implementation has changed in ways that invalidate the test → flag `NEEDS UPDATE` and generate a diff suggestion. Do NOT auto-modify the test.
 
 **Regression tag:**
+
 - If tagged `@regression` → carry forward to the regression-suite.md sync in Step 8.
 
 ## Step 5: Gap analysis
@@ -97,9 +101,9 @@ For each gap identified in Step 5:
 Append net-new entries using this format:
 
 ```markdown
-| File | Test Name | Layer | Positive/Negative | @regression | Status | Notes |
-|------|-----------|-------|-------------------|-------------|--------|-------|
-| path/to/test_file.py | test_function_name | unit | negative | yes | OK | |
+| File                 | Test Name          | Layer | Positive/Negative | @regression | Status | Notes |
+| -------------------- | ------------------ | ----- | ----------------- | ----------- | ------ | ----- |
+| path/to/test_file.py | test_function_name | unit  | negative          | yes         | OK     |       |
 ```
 
 ## Step 7: Run tests (with user confirmation)
@@ -119,6 +123,7 @@ Append net-new entries using this format:
 ## Step 8: Update regression suite
 
 Sync `context/qa/regression-suite.md`:
+
 - Scan all test files in scope for `@regression` annotations.
 - Add newly tagged tests; remove entries for tests that no longer exist or have lost their `@regression` tag.
 - Update "Last updated" date and total count.
@@ -131,14 +136,17 @@ Save to `context/qa/audit-reports/qa-report-YYYY-MM-DD.md`:
 # QA Audit Report — YYYY-MM-DD
 
 ## Scope
+
 [Spec(s) audited]
 
 ## Coverage Summary
-| Spec | Unit | Integration | E2E | Contract | ACs Covered |
-|------|------|-------------|-----|----------|-------------|
-| [spec] | X/Y | X/Y | X/Y | X/Y | X/Y (Z%) |
+
+| Spec   | Unit | Integration | E2E | Contract | ACs Covered |
+| ------ | ---- | ----------- | --- | -------- | ----------- |
+| [spec] | X/Y  | X/Y         | X/Y | X/Y      | X/Y (Z%)    |
 
 ## Flags
+
 - MISSING: [file] — [reason]
 - NEEDS UPDATE: [file]::[test] — [what changed]
 - MISSING LAYER: [spec] — [AC] has no [layer] coverage
@@ -146,15 +154,19 @@ Save to `context/qa/audit-reports/qa-report-YYYY-MM-DD.md`:
 - HUMAN REVIEW: [file]::[test] — spec deleted, no active match found
 
 ## Regression Suite Delta
+
 - Added: N | Removed: N | Total: N
 
 ## Run Results
+
 [If tests were run:]
+
 - Suite: [Full / Regression only]
 - Passed: N | Failed: N | Blocked: N
 - FAILED: [file]::[test] — [brief reason]
 
 ## Recommendation
+
 - [ ] Ready — all critical ACs covered, suite passing
 - [ ] Needs attention — [N] gaps or failures require action
 ```

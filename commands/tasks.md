@@ -59,20 +59,20 @@ Follow this process precisely.
   2.  Create a high-level checklist item for that slice (e.g., `- [ ] **Slice 1: View existing avatar (or placeholder)**`).
   3.  Under that slice, create the nested sub-tasks (database, backend, frontend) needed to implement and verify **only that slice**.
   4.  **For each sub-task, assign the appropriate subagent:** - Analyze the sub-task description to understand what technology/domain it involves - Analyze the Task tool definition to extract all available subagent_type values with their descriptions to understand what subagents are available for assignment. - Match the sub-task to a subagent based on: - Technology keywords - Task intent - Tech stack identified in technical-considerations.md - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
-      3b. **Generate paired test tasks for each slice (REQUIRED):** - After defining the implementation sub-tasks for a slice, invoke the `testing-expert` agent in **planning mode**. - Pass it: the current slice's implementation sub-task description, `functional-spec.md`, and `technical-considerations.md`. - The `testing-expert` will return a list of test sub-tasks covering the applicable pyramid layers (unit, integration, e2e, contract) with both positive and negative cases. - Insert those test sub-tasks as children of the same slice, after the implementation sub-tasks. - **CRITICAL — Slice Completion Rule:** A slice parent task is only `[x]` when ALL its sub-tasks — both implementation AND all test sub-tasks — are `[x]`. This is enforced by `/awos:implement`'s existing sub-task completion logic. - Example result for a slice:
-      `       - [ ] **Slice 1: User authentication**
-        - [ ] Implement JWT token generation **[Agent: python-expert]**
-        - [ ] Unit: token payload, expiry, signing — positive cases **[Agent: testing-expert]**
-        - [ ] Unit: invalid secret, expired token, malformed input — negative cases **[Agent: testing-expert]**
-        - [ ] Integration: valid/invalid credentials against /auth endpoint — positive cases **[Agent: testing-expert]**
-        - [ ] Integration: downstream failures, auth failures, malformed payloads — negative cases **[Agent: testing-expert]**
-        - [ ] Contract: /auth response schema validation — positive cases **[Agent: testing-expert]**
-        - [ ] Contract: schema violations and malformed payload cases — negative cases **[Agent: testing-expert]**
-      `
-  5.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
-  6.  Create a high-level checklist item and its sub-tasks with subagent assignments.
-  7.  Repeat this process until all requirements from the specification are covered.
-  8.  For each slice's verification sub-task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing.
+  5.  **Generate paired test tasks for each slice (skip only if user explicitly opts out):** - After defining the implementation sub-tasks for a slice, invoke the `testing-expert` agent in **planning mode**. - Pass it: the current slice's implementation sub-task description, `functional-spec.md`, and `technical-considerations.md`. - The `testing-expert` will return a list of test sub-tasks covering the applicable pyramid layers (unit, integration, e2e, contract) with both positive and negative cases. - Insert those test sub-tasks as children of the same slice, after the implementation sub-tasks. - If the user has said they do not want tests generated, skip this step entirely and omit all test sub-tasks. - **CRITICAL — Slice Completion Rule:** A slice parent task is only `[x]` when ALL its sub-tasks — both implementation AND all test sub-tasks — are `[x]`. This is enforced by `/awos:implement`'s existing sub-task completion logic. - Example result for a slice:
+      ` - [ ] **Slice 1: User authentication**
+      - [ ] Implement JWT token generation **[Agent: python-expert]**
+      - [ ] Unit: token payload, expiry, signing — positive cases **[Agent: testing-expert]**
+      - [ ] Unit: invalid secret, expired token, malformed input — negative cases **[Agent: testing-expert]**
+      - [ ] Integration: valid/invalid credentials against /auth endpoint — positive cases **[Agent: testing-expert]**
+      - [ ] Integration: downstream failures, auth failures, malformed payloads — negative cases **[Agent: testing-expert]**
+      - [ ] Contract: /auth response schema validation — positive cases **[Agent: testing-expert]**
+      - [ ] Contract: schema violations and malformed payload cases — negative cases **[Agent: testing-expert]**
+            `
+  6.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
+  7.  Create a high-level checklist item and its sub-tasks with subagent assignments.
+  8.  Repeat this process until all requirements from the specification are covered.
+  9.  For each slice's verification sub-task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing.
 
 - **Example of applying the rule for "User Profile Picture Upload":**
   - **Bad, Horizontal Tasks (DO NOT DO THIS):**

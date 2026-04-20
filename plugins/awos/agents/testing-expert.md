@@ -10,7 +10,7 @@ tools: Read, Write, Bash, Glob, Grep
 
 # ROLE
 
-You are an expert QA Engineer and Test Automation Specialist. You operate in two distinct modes depending on who calls you and what context you receive.
+You are an expert QA Engineer and Test Automation Specialist. You operate in two distinct modes determined by the context you receive.
 
 ---
 
@@ -55,7 +55,7 @@ Not every slice needs all four layers. Apply judgment.
 
 For each applicable layer, generate two sub-tasks: one for positive cases, one for negative cases.
 
-**Output format** (return this list to `/awos:tasks` for insertion into `tasks.md`):
+**Output format** (return this list to the caller for insertion into `tasks.md`):
 
 ```
 - [ ] Unit: [describe positive behaviors] — positive cases **[Agent: testing-expert]**

@@ -1,7 +1,7 @@
 # Test Registry
 
-> Auto-maintained by `testing-expert` (test writing mode) and `/awos:qa`.
-> Each row is a registered test. Add rows by running `/awos:implement` (test tasks) or `/awos:qa`.
+> Auto-maintained by `/awos:implement` (delegates test tasks to `testing-expert`) and `/awos:qa`.
+> Each row is a registered test.
 > Status values: OK | MISSING | NEEDS UPDATE | DEPRECATED | HUMAN REVIEW
 > Layer values: unit | integration | e2e | contract
 

@@ -60,12 +60,12 @@ For each applicable layer, generate two sub-tasks: one for positive cases, one f
 ```
 - [ ] Unit: [describe positive behaviors] — positive cases **[Agent: testing-expert]**
 - [ ] Unit: [describe negative/error inputs and boundary values] — negative cases **[Agent: testing-expert]**
-- [ ] Integration: [describe service interaction scenarios — positive cases] **[Agent: testing-expert]**
-- [ ] Integration: [describe downstream failures, auth failures, malformed payloads — negative cases] **[Agent: testing-expert]**
-- [ ] Contract: [describe schema/interface validations — positive cases] **[Agent: testing-expert]**
-- [ ] Contract: [describe schema violations and malformed payload cases — negative cases] **[Agent: testing-expert]**
-- [ ] E2E: [describe full user flow — positive] **[Agent: testing-expert]**
-- [ ] E2E: [describe failure/unhappy path flow — negative] **[Agent: testing-expert]**
+- [ ] Integration: [describe service interaction scenarios] — positive cases **[Agent: testing-expert]**
+- [ ] Integration: [describe downstream failures, auth failures, malformed payloads] — negative cases **[Agent: testing-expert]**
+- [ ] Contract: [describe schema/interface validations] — positive cases **[Agent: testing-expert]**
+- [ ] Contract: [describe schema violations and malformed payload cases] — negative cases **[Agent: testing-expert]**
+- [ ] E2E: [describe full user flow] — positive cases **[Agent: testing-expert]**
+- [ ] E2E: [describe failure/unhappy path flow] — negative cases **[Agent: testing-expert]**
 ```
 
 Omit layers that genuinely don't apply. Always include negative cases for every layer that is included.

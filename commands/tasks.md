@@ -75,14 +75,15 @@ Follow this process precisely.
       - Insert those test sub-tasks as children of the same slice, after the implementation sub-tasks.
       - **CRITICAL — Slice Completion Rule:** A slice parent task is only `[x]` when ALL its sub-tasks — both implementation AND all test sub-tasks — are `[x]`. This is enforced by `/awos:implement`'s existing sub-task completion logic.
       - Example result for a slice:
-      ` - [ ] **Slice 1: User authentication**
-      - [ ] Implement JWT token generation **[Agent: python-expert]**
-      - [ ] Unit: token payload, expiry, signing — positive cases **[Agent: testing-expert]**
-      - [ ] Unit: invalid secret, expired token, malformed input — negative cases **[Agent: testing-expert]**
-      - [ ] Integration: valid/invalid credentials against /auth endpoint — positive cases **[Agent: testing-expert]**
-      - [ ] Integration: downstream failures, auth failures, malformed payloads — negative cases **[Agent: testing-expert]**
-      - [ ] Verify: Start the server, call POST /auth with valid credentials, confirm JWT is returned **[Agent: manual-qa-expert]**
-            `
+        ```
+        - [ ] **Slice 1: User authentication**
+          - [ ] Implement JWT token generation **[Agent: python-expert]**
+          - [ ] Unit: token payload, expiry, signing — positive cases **[Agent: testing-expert]**
+          - [ ] Unit: invalid secret, expired token, malformed input — negative cases **[Agent: testing-expert]**
+          - [ ] Integration: valid/invalid credentials against /auth endpoint — positive cases **[Agent: testing-expert]**
+          - [ ] Integration: downstream failures, auth failures, malformed payloads — negative cases **[Agent: testing-expert]**
+          - [ ] Verify: Start the server, call POST /auth with valid credentials, confirm JWT is returned **[Agent: manual-qa-expert]**
+        ```
   6.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
   7.  Create a high-level checklist item and its sub-tasks with subagent assignments.
   8.  Repeat this process until all requirements from the specification are covered.

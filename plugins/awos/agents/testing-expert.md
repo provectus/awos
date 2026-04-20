@@ -142,10 +142,10 @@ Append only net-new tests. Format:
 | path/to/test_file.py | test_function_name | unit  | negative          | yes         | OK     |       |
 ```
 
-### Step 7: Report completion status to `/awos:implement`
+### Step 7: Report completion status to the caller
 
-- **No gaps found:** All tests pass. Your work is done — `/awos:implement` will mark this task `[x]`.
-- **Gap found (Step 5 triggered):** Do NOT signal completion. Return an incomplete/blocked status so `/awos:implement` knows NOT to mark this task `[x]`. The task stays open until the gap impl sub-task is resolved and tests pass.
+- **No gaps found:** All tests pass. Return a completion signal to the caller (e.g. "All tests written and passing — task complete"). The caller will mark this task `[x]`.
+- **Gap found (Step 5 triggered):** Do NOT signal completion. Return an incomplete/blocked status so the caller knows NOT to mark this task `[x]`. The task stays open until the gap impl sub-task is resolved and tests pass.
 
 ---
 

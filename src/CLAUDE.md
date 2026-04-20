@@ -40,12 +40,13 @@ src/
 
 From `config/setup-config.js`:
 
-| Source             | Destination              |
-| ------------------ | ------------------------ |
-| `commands/`        | `.awos/commands/`        |
-| `templates/`       | `.awos/templates/`       |
-| `scripts/`         | `.awos/scripts/`         |
-| `claude/commands/` | `.claude/commands/awos/` |
+| Source                 | Destination              |
+| ---------------------- | ------------------------ |
+| `commands/`            | `.awos/commands/`        |
+| `templates/`           | `.awos/templates/`       |
+| `scripts/`             | `.awos/scripts/`         |
+| `claude/commands/`     | `.claude/commands/awos/` |
+| `plugins/awos/agents/` | `.claude/agents/`        |
 
 **Why the difference?**
 

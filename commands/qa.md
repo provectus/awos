@@ -88,23 +88,13 @@ For each acceptance criterion in the functional spec(s) in scope:
 
 ## Step 6: Generate missing tests
 
-For each gap identified in Step 5:
+For each gap identified in Step 5, invoke the `Task` tool with `subagent_type: "testing-expert"`. Pass:
 
-1. Write the missing test following RED validation discipline:
-   - Write test → confirm it FAILS for the right reason → confirm it PASSES.
-2. Add `@layer`, `@spec`, `@regression` (if appropriate) annotations using appropriate comment syntax for the language.
-3. Update `context/qa/list-of-tests.md` with the new entry, performing the overlap check:
-   - Same behavior, same layer → UPDATE existing entry instead of adding new.
-   - Broader test needing splitting → DEPRECATE old (annotate with `@deprecated` using appropriate comment syntax for the language), add focused replacements.
-   - Partial overlap → keep both, annotate relationship in Notes column.
+- The gap description (layer, spec, positive/negative scope)
+- The contents of `functional-spec.md` and `technical-considerations.md` for the target spec
+- The relevant implementation source code
 
-Append net-new entries using this format:
-
-```markdown
-| File                 | Test Name          | Layer | Positive/Negative | @regression | Status | Notes |
-| -------------------- | ------------------ | ----- | ----------------- | ----------- | ------ | ----- |
-| path/to/test_file.py | test_function_name | unit  | negative          | yes         | OK     |       |
-```
+`testing-expert` will write the tests with RED validation, add annotations (`@layer`, `@spec`, `@regression`), and update `context/qa/list-of-tests.md`. Do not write tests inline here.
 
 ## Step 7: Run tests (with user confirmation)
 
@@ -181,7 +171,7 @@ Report summary to user and list any flags requiring human attention.
 
 # TODO
 
-- **E2E tests are ephemeral — no CI artifact.** The `/awos:qa` command currently runs E2E tests inline without a dedicated agent. Future work: delegate to a dedicated `e2e-tester` agent and generate rerunnable playwright-cli script files (e.g., `tests/e2e/*.sh` or `.ts`) as a Step 6 output for E2E gaps, so they can be committed and executed in CI without agent interaction.
+- **E2E tests are ephemeral — no CI artifact.** Step 6 delegates E2E gap test generation to `testing-expert`, but the output is an in-session test run, not a committed rerunnable artifact. Future work: have `testing-expert` generate playwright-cli script files (e.g., `tests/e2e/*.sh` or `.ts`) as output for E2E gaps, so they can be committed and executed in CI without agent interaction.
 
 - **QA audit is coverage-by-inspection, not coverage-by-measurement.** Step 5 (gap analysis) reads source files and infers coverage from test file contents. It does not invoke actual coverage tooling (`vitest --coverage`, Istanbul, c8, pytest-cov, etc.). This means untested branches and dead-path gaps are invisible to the audit. Future work: in Step 2, detect available coverage reporters and, in Step 7, run the suite with coverage flags; parse the output to feed real line/branch metrics into the Coverage Summary table.
 

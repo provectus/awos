@@ -73,6 +73,7 @@ Follow this process precisely.
       - [ ] Unit: invalid secret, expired token, malformed input — negative cases **[Agent: testing-expert]**
       - [ ] Integration: valid/invalid credentials against /auth endpoint — positive cases **[Agent: testing-expert]**
       - [ ] Integration: downstream failures, auth failures, malformed payloads — negative cases **[Agent: testing-expert]**
+      - [ ] Verify: Start the server, call POST /auth with valid credentials, confirm JWT is returned **[Agent: manual-qa-expert]**
             `
   6.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
   7.  Create a high-level checklist item and its sub-tasks with subagent assignments.
@@ -90,6 +91,7 @@ Follow this process precisely.
       - `[ ] Sub-task: Place the component on the profile page. **[Agent: react-expert]**`
       - `[ ] Unit: ProfileAvatar renders placeholder when no src provided — positive cases **[Agent: testing-expert]**`
       - `[ ] Unit: ProfileAvatar renders without crashing when src is undefined — negative cases **[Agent: testing-expert]**`
+      - `[ ] Verify: Start the app, open the profile page, confirm placeholder avatar is shown **[Agent: manual-qa-expert]**`
     - `[ ] **Slice 2: Display the user's actual avatar if it exists**`
       - `[ ] Sub-task: Add avatar_url column to the users table via a migration. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the user API endpoint to return the avatar_url. **[Agent: python-expert]**`

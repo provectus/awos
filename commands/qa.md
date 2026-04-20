@@ -181,7 +181,7 @@ Report summary to user and list any flags requiring human attention.
 
 # TODO
 
-- **E2E tests are ephemeral — no CI artifact.** The `/awos:qa` command currently runs E2E tests inline. Future work: delegate to a dedicated `e2e-tester` agent (playwright-cli) to run E2E tests interactively but produces no persistent test scripts. Each run is unrepeatable without a human in the loop. Future work: generate rerunnable playwright-cli script files (e.g., `tests/e2e/*.sh` or `.ts`) as a Step 6 output for E2E gaps, so they can be committed and executed in CI without agent interaction.
+- **E2E tests are ephemeral — no CI artifact.** The `/awos:qa` command currently runs E2E tests inline without a dedicated agent. Future work: delegate to a dedicated `e2e-tester` agent and generate rerunnable playwright-cli script files (e.g., `tests/e2e/*.sh` or `.ts`) as a Step 6 output for E2E gaps, so they can be committed and executed in CI without agent interaction.
 
 - **QA audit is coverage-by-inspection, not coverage-by-measurement.** Step 5 (gap analysis) reads source files and infers coverage from test file contents. It does not invoke actual coverage tooling (`vitest --coverage`, Istanbul, c8, pytest-cov, etc.). This means untested branches and dead-path gaps are invisible to the audit. Future work: in Step 2, detect available coverage reporters and, in Step 7, run the suite with coverage flags; parse the output to feed real line/branch metrics into the Coverage Summary table.
 

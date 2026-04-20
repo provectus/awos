@@ -24,7 +24,7 @@ Read the invocation context:
 
 ---
 
-# PLANNING MODE
+# TASK DESCRIPTION MODE (no implementation code in context)
 
 ## Inputs
 
@@ -72,7 +72,7 @@ Omit layers that genuinely don't apply. Always include negative cases for every 
 
 ---
 
-# EXECUTION MODE
+# TEST WRITING MODE (implementation code present in context)
 
 ## Inputs
 

@@ -73,8 +73,6 @@ Follow this process precisely.
       - [ ] Unit: invalid secret, expired token, malformed input — negative cases **[Agent: testing-expert]**
       - [ ] Integration: valid/invalid credentials against /auth endpoint — positive cases **[Agent: testing-expert]**
       - [ ] Integration: downstream failures, auth failures, malformed payloads — negative cases **[Agent: testing-expert]**
-      - [ ] Contract: /auth response schema validation — positive cases **[Agent: testing-expert]**
-      - [ ] Contract: schema violations and malformed payload cases — negative cases **[Agent: testing-expert]**
             `
   6.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
   7.  Create a high-level checklist item and its sub-tasks with subagent assignments.
@@ -90,6 +88,8 @@ Follow this process precisely.
     - `[ ] **Slice 1: Display a placeholder avatar on the profile page**`
       - `[ ] Sub-task: Add a non-functional 'ProfileAvatar' UI component that shows a static placeholder image. **[Agent: react-expert]**`
       - `[ ] Sub-task: Place the component on the profile page. **[Agent: react-expert]**`
+      - `[ ] Unit: ProfileAvatar renders placeholder when no src provided — positive cases **[Agent: testing-expert]**`
+      - `[ ] Unit: ProfileAvatar renders without crashing when src is undefined — negative cases **[Agent: testing-expert]**`
     - `[ ] **Slice 2: Display the user's actual avatar if it exists**`
       - `[ ] Sub-task: Add avatar_url column to the users table via a migration. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the user API endpoint to return the avatar_url. **[Agent: python-expert]**`
@@ -99,8 +99,6 @@ Follow this process precisely.
       - `[ ] Unit: null avatar_url, missing column, type mismatch — negative cases **[Agent: testing-expert]**`
       - `[ ] Integration: GET /user returns avatar_url when set — positive cases **[Agent: testing-expert]**`
       - `[ ] Integration: GET /user returns null when avatar_url not set — negative cases **[Agent: testing-expert]**`
-      - `[ ] E2E: profile page shows avatar when avatar_url present — positive cases **[Agent: testing-expert]**`
-      - `[ ] E2E: profile page shows placeholder when avatar_url is null — negative cases **[Agent: testing-expert]**`
 
 ## Step 4: Present Draft and Refine
 

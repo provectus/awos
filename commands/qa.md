@@ -90,7 +90,7 @@ For each acceptance criterion in the functional spec(s) in scope:
 
 For each gap identified in Step 5:
 
-1. Write the missing test following RED validation discipline (following `testing-expert` execution mode Step 3):
+1. Write the missing test following RED validation discipline:
    - Write test → confirm it FAILS for the right reason → confirm it PASSES.
 2. Add `@layer`, `@spec`, `@regression` (if appropriate) annotations using appropriate comment syntax for the language.
 3. Update `context/qa/list-of-tests.md` with the new entry, performing the overlap check:
@@ -121,6 +121,8 @@ Append net-new entries using this format:
 4. Run the selected suite. Collect pass/fail results per layer.
 
 ## Step 8: Update regression suite
+
+If `context/qa/regression-suite.md` does not exist, create it from the template at `.awos/templates/regression-suite-template.md` (or create an empty file with a `# Regression Suite` header if the template is absent).
 
 Sync `context/qa/regression-suite.md`:
 
@@ -179,7 +181,7 @@ Report summary to user and list any flags requiring human attention.
 
 # TODO
 
-- **E2E tests are ephemeral — no CI artifact.** The `/awos:qa` command runs E2E tests via the `e2e-tester` agent (playwright-cli) interactively but produces no persistent test scripts. Each run is unrepeatable without a human in the loop. Future work: generate rerunnable playwright-cli script files (e.g., `tests/e2e/*.sh` or `.ts`) as a Step 6 output for E2E gaps, so they can be committed and executed in CI without agent interaction.
+- **E2E tests are ephemeral — no CI artifact.** The `/awos:qa` command currently runs E2E tests inline. Future work: delegate to a dedicated `e2e-tester` agent (playwright-cli) to run E2E tests interactively but produces no persistent test scripts. Each run is unrepeatable without a human in the loop. Future work: generate rerunnable playwright-cli script files (e.g., `tests/e2e/*.sh` or `.ts`) as a Step 6 output for E2E gaps, so they can be committed and executed in CI without agent interaction.
 
 - **QA audit is coverage-by-inspection, not coverage-by-measurement.** Step 5 (gap analysis) reads source files and infers coverage from test file contents. It does not invoke actual coverage tooling (`vitest --coverage`, Istanbul, c8, pytest-cov, etc.). This means untested branches and dead-path gaps are invisible to the audit. Future work: in Step 2, detect available coverage reporters and, in Step 7, run the suite with coverage flags; parse the output to feed real line/branch metrics into the Coverage Summary table.
 

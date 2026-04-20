@@ -58,7 +58,15 @@ Follow this process precisely.
   1.  First, identify the absolute smallest piece of user-visible value from the spec. This is your **Slice 1**.
   2.  Create a high-level checklist item for that slice (e.g., `- [ ] **Slice 1: View existing avatar (or placeholder)**`).
   3.  Under that slice, create the nested sub-tasks (database, backend, frontend) needed to implement and verify **only that slice**.
-  4.  **For each sub-task, assign the appropriate subagent:** - Analyze the sub-task description to understand what technology/domain it involves - Analyze the Task tool definition to extract all available subagent_type values with their descriptions to understand what subagents are available for assignment. - Match the sub-task to a subagent based on: - Technology keywords - Task intent - Tech stack identified in technical-considerations.md - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
+  4.  **For each sub-task, assign the appropriate subagent:**
+      - Analyze the sub-task description to understand what technology/domain it involves
+      - Analyze the Task tool definition to extract all available `subagent_type` values with their descriptions to understand what subagents are available for assignment
+      - Match the sub-task to a subagent based on:
+        - Technology keywords
+        - Task intent
+        - Tech stack identified in `technical-considerations.md`
+      - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
+      - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
   5.  **Generate paired test tasks for each slice (skip only if user explicitly opts out):**
       - If the user has said they do not want tests generated, skip this step entirely and omit all test sub-tasks.
       - After defining the implementation sub-tasks for a slice, use the `Agent` tool with `subagent_type: "testing-expert"`. Read `functional-spec.md` and `technical-considerations.md` and include their contents inline in the prompt, along with the current slice's implementation sub-task description. Do **not** pass any implementation code — `testing-expert` determines its behavior from context: no code → returns test task descriptions; with code → writes and validates real tests.

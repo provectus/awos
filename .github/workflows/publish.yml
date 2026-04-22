@@ -27,14 +27,10 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          # Pinned to 22.21 — Node 22.22.2 ships a broken bundled npm that
-          # crashes `npm install -g npm@latest` with a missing `promise-retry`
-          # module. See actions/runner-images#13883.
-          node-version: '22.21'
+          # Node 24 ships with npm 11.5.1+, which already supports OIDC
+          # trusted publishing — no global npm upgrade needed.
+          node-version: '24'
           # DO NOT use registry-url - it interferes with OIDC
-
-      - name: Upgrade npm to 11.x (required for OIDC)
-        run: npm install -g npm@latest
 
       - name: Configure npm registry
         run: npm config set registry https://registry.npmjs.org/

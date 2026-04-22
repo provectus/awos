@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "AWOS plugins for AI-native development workflows",
-    "version": "2.0.0"
+    "version": "2.1.0"
   },
   "plugins": [
     {
       "name": "awos",
       "source": "./plugins/awos",
       "description": "Comprehensive code quality audit framework with auto-discoverable dimensions",
-      "version": "2.0.0"
+      "version": "2.1.0"
     }
   ]
 }

@@ -1,6 +1,6 @@
 # Test Registry
 
-> Auto-maintained by `/awos:implement` (delegates test tasks to `testing-expert`) and `/awos:qa`.
+> Auto-maintained by `testing-expert` agent (called from the Feature Testing & Regression slice).
 > Each row is a registered test.
 > Status values: OK | MISSING | NEEDS UPDATE | DEPRECATED | HUMAN REVIEW
 > Layer values: unit | integration | e2e | contract

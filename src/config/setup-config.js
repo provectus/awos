@@ -58,12 +58,6 @@ const copyOperations = [
     patterns: ['*'],
     description: 'Claude Code commands',
   },
-  {
-    source: 'plugins/awos/agents',
-    destination: '.claude/agents',
-    patterns: ['testing-expert.md'],
-    description: 'AWOS agent definitions',
-  },
 ];
 
 module.exports = {

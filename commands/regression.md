@@ -45,30 +45,32 @@ After a feature's "Feature Testing & Regression" slice is complete, run this com
      "Run /awos:regression" sub-task are `[x]`
    - All other (implementation) slices are fully `[x]`
    - `functional-spec.md` Status is `Completed` or all tasks done
-   - The spec is NOT already listed in `regression-suite.md` as "fully processed"
+   - The spec directory name does NOT appear as a section header (`## [spec-directory-name] — ...`) in `regression-suite.md`
 3. If multiple candidates found, use `AskUserQuestion` to let user choose.
 4. If no candidate found, stop: "No completed feature specs found ready for regression. Complete all tasks in a spec first."
 
-## Step 2: Extract test candidates from tasks.md
+## Step 2: Extract test candidates from test files
 
-Read `context/spec/[target-spec]/tasks.md`. Find the final slice titled "Feature Testing & Regression".
+Search the codebase for test files containing both `@spec: [target-spec]` and `@regression` annotations. These annotations are written by `testing-expert` during the Feature Testing & Regression slice.
 
-Extract every sub-task that represents a test (lines containing `**[Agent: testing-expert]**` or similar testing agents). For each test, parse:
+For each annotated test function found, extract:
 
-- **Layer** — derived from the sub-task text prefix: "Unit:", "Integration:", "E2E:", "Contract:"
-- **Behavior** — the description after the layer prefix and before "— positive/negative cases"
-- **Polarity** — "positive" or "negative" (from "— positive cases" / "— negative cases")
-- **File** — attempt to find the actual test file path by searching the codebase for test functions matching the behavior description. If not found, mark as "pending discovery"
-- **Regression candidate** — mark all as candidates by default; user will confirm
+- **Layer** — from `@layer: unit|integration|e2e|contract` annotation, or infer from file path/name conventions (`test_unit_*`, `*_integration_test.*`, `*_e2e_*`, etc.)
+- **Behavior** — from `@behavior:` annotation, or the test function docstring, or the test function name (converted from snake_case)
+- **Polarity** — from `@polarity: positive|negative` annotation, or infer from test name suffix (`_positive`, `_negative`, `_invalid`, `_missing`, `_error`, etc.)
+- **File** — the test file path (already known from the search)
+- **Test Name** — the test function name
+
+**Fallback:** If no `@spec`/`@regression` annotations are found in any test file, fall back to reading `context/spec/[target-spec]/tasks.md`. Find the "Feature Testing & Regression" slice and list each `**[Agent: testing-expert]**` sub-task as a single candidate entry, marking Layer/Behavior/Polarity as "pending discovery". Inform the user that annotations were not found.
 
 Build a candidate table:
 
 ```
-| # | Layer       | Behavior                              | Polarity | File                        |
-|---|-------------|---------------------------------------|----------|-----------------------------|
-| 1 | unit        | token payload, expiry, signing        | positive | tests/test_auth.py          |
-| 2 | unit        | invalid secret, expired token         | negative | tests/test_auth.py          |
-| 3 | integration | valid credentials against /auth       | positive | tests/test_auth_integration.py |
+| # | Layer       | Behavior                              | Polarity | File                           | Test Name               |
+|---|-------------|---------------------------------------|----------|--------------------------------|-------------------------|
+| 1 | unit        | token payload, expiry, signing        | positive | tests/test_auth.py             | test_token_payload      |
+| 2 | unit        | invalid secret, expired token         | negative | tests/test_auth.py             | test_invalid_token      |
+| 3 | integration | valid credentials against /auth       | positive | tests/test_auth_integration.py | test_auth_happy_path    |
 ```
 
 ## Step 3: Load existing regression suite and detect duplicates
@@ -214,4 +216,4 @@ Announce summary to user in chat.
 - Always ask for user confirmation before modifying regression-suite.md (Step 4).
 - Always ask for user confirmation before running tests (Step 6).
 - If a test file path cannot be found in the codebase, mark it "pending discovery" in the suite — do not skip it.
-- Do not remove a "DUPLICATE — skip" entry from the suite even if a user later asks — instead flag for human review.
+- Never delete existing entries from `regression-suite.md` under any circumstances — if a user requests deletion, flag it for human review instead.

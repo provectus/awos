@@ -26,6 +26,19 @@ Verify a specification's implementation against its acceptance criteria. For eac
 
 ---
 
+# CONSTRAINTS
+
+- **Step 3 is MANDATORY.** Never skip verification. Never write "the user can verify this manually"
+  unless you have: (a) tried all available verification tools (browser MCP, curl, shell), AND
+  (b) received explicit user approval to skip via AskUserQuestion.
+- **Verification tool fallback order:** browser MCP → curl/shell → AskUserQuestion to skip.
+  If browser MCP is unavailable, try curl or shell commands. Only ask to skip as a last resort.
+- **Do not assume success.** If you cannot verify, STOP and inform the user. Do not mark
+  acceptance criteria as `[x]` without actual verification evidence.
+- **Session length does not excuse skipping.** Even in long sessions, Step 3 must run.
+
+---
+
 # PROCESS
 
 ### Step 1: Identify Target Specification
@@ -46,6 +59,14 @@ For each acceptance criterion in `functional-spec.md`:
 1. **Verify:** Check if the implementation satisfies the criterion
 2. **If met:** Mark it `[x]`
 3. **If NOT met:** Report which criterion failed and what's missing, then stop
+
+**If browser MCP is unavailable:**
+1. Try `curl` or shell commands to verify API endpoints or application state.
+2. Try reading log files or database state if relevant.
+3. If ALL tools fail: use `AskUserQuestion` — "I cannot verify automatically because [reason].
+   Do you want to verify manually and confirm, or should I stop here?"
+   Options: "I verified manually — mark as done" / "Stop — I'll fix the tooling first"
+4. Never proceed to mark criteria `[x]` without one of the above producing evidence.
 
 ### Step 4: Mark as Completed
 

@@ -67,26 +67,37 @@ Follow this process precisely.
         - Tech stack identified in `technical-considerations.md`
       - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
       - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
-  5.  **Generate paired test tasks for each slice (skip only if user explicitly opts out):**
-      - If the user has said they do not want tests generated, skip this step entirely and omit all test sub-tasks.
-      - After defining the implementation sub-tasks for a slice, use the `Task` tool with `subagent_type: "testing-expert"`. Read `functional-spec.md` and `technical-considerations.md` and include their contents inline in the prompt, along with the current slice's implementation sub-task description. Do **not** pass any implementation code — `testing-expert` determines its behavior from context: no code → returns test task descriptions; with code → writes and validates real tests.
-      - `testing-expert` is a generic fallback agent provided by the awos plugin. If `/awos:hire` has installed a project-specific testing agent (e.g. `react-testing`, `python-testing`) for this tech stack, prefer that agent instead — it takes precedence by being in `.claude/agents/`.
-      - `testing-expert` will return a list of test sub-tasks covering the applicable pyramid layers (unit, integration, e2e, contract) with both positive and negative cases. Not every slice needs all four layers — the agent applies judgment based on acceptance criteria.
-      - Insert those test sub-tasks as children of the same slice, after the implementation sub-tasks.
-      - **CRITICAL — Slice Completion Rule:** A slice parent task is only `[x]` when ALL its sub-tasks — both implementation AND all test sub-tasks — are `[x]`. This is enforced by `/awos:implement`'s existing sub-task completion logic.
-      - Example result for a slice:
-        ```
-        - [ ] **Slice 1: User authentication**
-          - [ ] Implement JWT token generation **[Agent: python-expert]**
-          - [ ] Unit: token payload, expiry, signing — positive cases **[Agent: testing-expert]**
-          - [ ] Unit: invalid secret, expired token, malformed input — negative cases **[Agent: testing-expert]**
-          - [ ] Integration: valid/invalid credentials against /auth endpoint — positive cases **[Agent: testing-expert]**
-          - [ ] Integration: downstream failures, auth failures, malformed payloads — negative cases **[Agent: testing-expert]**
-          - [ ] Verify: Start the server, call POST /auth with valid credentials, confirm JWT is returned **[Agent: manual-qa-expert]**
-        ```
-  6.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
-  7.  Create a high-level checklist item and its sub-tasks with subagent assignments.
-  8.  Repeat this process until all requirements from the specification are covered.
+  5.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
+  6.  Create a high-level checklist item and its sub-tasks with subagent assignments.
+  7.  Repeat this process until all requirements from the specification are covered.
+  8.  **Add the Feature Testing & Regression slice (always last):**
+
+      After all implementation slices are defined, append one final slice. This slice is generated automatically — do not ask the user about it.
+
+      ```
+      - [ ] **Slice N: Feature Testing & Regression**
+        > Verifies the complete feature works end-to-end as described in functional-spec.md.
+        > Run AFTER all implementation slices are complete.
+        > **Requires `testing-expert` agent.** If it is not present in `.claude/agents/`,
+        > stop and run `/awos:hire` before executing this slice.
+
+        - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests
+              that verify the entire feature as a whole — not individual slices. Cover applicable
+              layers (unit for pure logic, integration for service interactions, e2e for user flows).
+              Write tests with RED validation (must fail before implementation is confirmed done).
+              Annotate each test with `@spec: [spec-directory]` and `@regression` if suitable
+              for long-term regression. **[Agent: testing-expert]**
+        - [ ] Run all generated tests. All must pass. Fix any failures before proceeding.
+              **[Agent: testing-expert]**
+        - [ ] Run `/awos:regression [spec-directory-name]` to review candidates for the
+              regression suite, resolve duplicates, and optionally execute the full
+              regression suite. Pass the current spec directory name as the argument
+              (e.g., `/awos:regression 003-user-avatar`). Do not run without an argument —
+              auto-detection requires all tasks to be complete, which is not yet the case.
+      ```
+
+      Replace `N` with the actual next slice number. Do not change the wording — agents
+      downstream depend on this exact structure.
   9.  For each slice's verification sub-task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing.
 
 - **Example of applying the rule for "User Profile Picture Upload":**
@@ -98,18 +109,19 @@ Follow this process precisely.
     - `[ ] **Slice 1: Display a placeholder avatar on the profile page**`
       - `[ ] Sub-task: Add a non-functional 'ProfileAvatar' UI component that shows a static placeholder image. **[Agent: react-expert]**`
       - `[ ] Sub-task: Place the component on the profile page. **[Agent: react-expert]**`
-      - `[ ] Unit: ProfileAvatar renders placeholder when no src provided — positive cases **[Agent: testing-expert]**`
-      - `[ ] Unit: ProfileAvatar renders without crashing when src is undefined — negative cases **[Agent: testing-expert]**`
       - `[ ] Verify: Start the app, open the profile page, confirm placeholder avatar is shown **[Agent: manual-qa-expert]**`
     - `[ ] **Slice 2: Display the user's actual avatar if it exists**`
       - `[ ] Sub-task: Add avatar_url column to the users table via a migration. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the user API endpoint to return the avatar_url. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the 'ProfileAvatar' component to fetch and display the user's avatar_url, falling back to the placeholder if null. **[Agent: react-expert]**`
-      - `[ ] Unit: avatar_url column default, valid URL stored correctly — positive cases **[Agent: testing-expert]**`
-      - `[ ] Unit: null avatar_url, missing column, type mismatch — negative cases **[Agent: testing-expert]**`
-      - `[ ] Integration: GET /user returns avatar_url when set — positive cases **[Agent: testing-expert]**`
-      - `[ ] Integration: GET /user returns null when avatar_url not set — negative cases **[Agent: testing-expert]**`
       - `[ ] Sub-task: Run the application. Use chrome MCP to connect the page in Browser. Verify that the profile page shows the correct avatar or placeholder. **[Agent: manual-qa-expert]**`
+    - `[ ] **Slice 3: Feature Testing & Regression**`
+      - `> Verifies the complete feature works end-to-end as described in functional-spec.md.`
+      - `> Run AFTER all implementation slices are complete.`
+      - `> **Requires \`testing-expert\` agent.** If it is not present in \`.claude/agents/\`, stop and run \`/awos:hire\` before executing this slice.`
+      - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows). Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with \`@spec: [spec-directory]\` and \`@regression\` if suitable for long-term regression. **[Agent: testing-expert]**`
+      - `[ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**`
+      - `[ ] Run \`/awos:regression [spec-directory-name]\` to review candidates for the regression suite, resolve duplicates, and optionally execute the full regression suite. Pass the current spec directory name as the argument (e.g., \`/awos:regression 003-user-avatar\`). Do not run without an argument — auto-detection requires all tasks to be complete, which is not yet the case.`
 
 ## Step 4: Present Draft and Refine
 

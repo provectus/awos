@@ -117,9 +117,15 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
   4. Calculate the annotation ratio: annotated sub-tasks / total sub-tasks
   5. Extract all unique agent names. Occasional `general-purpose` assignments are fine for small utility tasks (commits, running linters, config tweaks) — only flag if the majority of implementation sub-tasks use `general-purpose`.
   6. Check for domain mix-ups: frontend agents assigned to backend/database tasks or vice versa. Use keywords in the sub-task description to detect domain (e.g., "migration", "database", "API endpoint" → backend; "component", "UI", "page", "styling" → frontend).
-  7. Check that each slice's verification/testing sub-task is assigned to a QA/tester agent (e.g., `manual-qa-expert`, `testing-expert`, or similar) — not to the same agent that implemented the slice.
-- **Pass:** Majority of sub-tasks have agent assignments with no systematic domain mix-ups and verification tasks are assigned to QA/tester agents
-- **Warn:** Many sub-tasks lack annotations, OR most implementation tasks use `general-purpose`, OR verification tasks lack dedicated QA agent
+  7. Check for QA agent coverage using the AWOS tasks model in use:
+     - **New model (AWOS 2.x):** Look for a final slice titled "Feature Testing & Regression".
+       Verify it has sub-tasks assigned to a QA/tester agent (e.g., `testing-expert`).
+       Implementation slices do NOT require per-slice QA assignments in this model.
+     - **Legacy model:** If no "Feature Testing & Regression" slice is found, check that each
+       slice has at least one verification/testing sub-task assigned to a QA/tester agent
+       (e.g., `manual-qa-expert`, `testing-expert`) — not to the same agent that implemented it.
+- **Pass:** Majority of sub-tasks have agent assignments with no systematic domain mix-ups and verification tasks are assigned to QA/tester agents; OR (new model) a "Feature Testing & Regression" final slice is present with QA agent assignments, regardless of per-slice QA coverage
+- **Warn:** Many sub-tasks lack annotations, OR most implementation tasks use `general-purpose`, OR verification tasks lack dedicated QA agent; OR (new model) "Feature Testing & Regression" slice is present but has no QA agent assignments
 - **Fail:** No agent annotations at all, OR systematic domain mix-ups across multiple specs
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed), or no tasks.md files exist (covered by SDD-05)
 - **Severity:** medium

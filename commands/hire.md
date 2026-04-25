@@ -89,6 +89,28 @@ Follow this process precisely.
     | `python-backend` | `fastapi-expert`              | —          | —                  |
     | `aws-infra`      | `terraform-pro`, `aws-deploy` | `aws-mcp`  | `aws-infra-expert` |
 
+**QA Complement Rule:**
+After searching for each primary tech agent, also search for a complementary
+testing agent. Use the query: "[primary technology] testing QA acceptance".
+
+If `testing-expert` is returned from the registry, always include it in the
+proposals table with label "(Recommended for QA coverage)" alongside the
+primary tech agent — unless a more specific testing agent (e.g. `react-testing`,
+`rust-tester`) is also found, in which case prefer the specific one.
+
+Also: if the tech stack includes any frontend framework (React, Vue, Angular,
+Svelte, etc.), always include the `playwright` MCP in the proposal — it enables
+browser-based E2E testing via the testing-expert agent.
+
+Complementary pairs reference:
+- React / Vue / Angular → `testing-expert` + `playwright` MCP
+- FastAPI / Django / Flask → `testing-expert` + `pytest-best-practices` skill
+  _(if `pytest-best-practices` not found in registry — `testing-expert` covers this)_
+- Any Python backend → `testing-expert` + `pytest-best-practices` skill
+  _(if `pytest-best-practices` not found in registry — `testing-expert` covers this)_
+- Any TypeScript/Node backend → `testing-expert`
+- Terraform / IaC → `testing-expert` (for infra validation)
+
 ## Step 5: Install Found Components
 
 1.  **Install Skills:** For all confirmed skills, run:

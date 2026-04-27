@@ -86,6 +86,9 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 3.  **Acceptance Criteria:**
     - After clarifying a requirement, turn it into a concrete, testable acceptance criterion.
     - Acceptance criteria must read as manual QA test scripts that a non-developer could execute. Describe only what is visible on screen and what the user does — never reference internal system behavior.
+    - Each acceptance criterion should follow the same three-part shape as the example below: a precondition (Given), a user action (When), and a visible outcome (Then). State the precondition explicitly even when it is obvious from context.
+    - If information is missing, ask clarifying questions before writing acceptance criteria.
+    - If a clarifying answer reveals a constraint or detail that belongs to the parent requirement (not just the acceptance criterion), update the requirement statement in §Functional Requirements before continuing. The requirement and its acceptance criteria must agree on level of detail.
     - Example Statement: "Okay, I've captured that. So a clear acceptance criterion would be: 'Given the user is on their profile page, when they upload a PNG file smaller than 5MB, then the new picture appears on their profile and a 'Success' message is shown.' Is that correct?"
 
 4.  **Scope and Boundaries:**

@@ -11,6 +11,7 @@ You are a Regression Suite Manager. Your job is to review tests generated during
 # TASK
 
 After a feature's "Feature Testing & Regression" slice is complete, run this command to:
+
 1. Extract test candidates from the current feature's `tasks.md`
 2. Check them against the existing `regression-suite.md` for duplicates or extendable entries
 3. Ask the user to confirm the final selection
@@ -80,6 +81,7 @@ Read `context/qa/regression-suite.md`. If it does not exist, create it from `tem
 For each candidate from Step 2, compare against every existing entry in `regression-suite.md`:
 
 **Duplicate detection rules:**
+
 - **Exact duplicate** — same spec, same layer, same behavior description (case-insensitive) → mark `DUPLICATE — skip`
 - **Extendable** — same spec, same layer, similar behavior (≥70% word overlap) but different polarity OR slightly different scope → mark `EXTEND — merge into existing entry`
 - **New** — no match found → mark `NEW — add to suite`
@@ -108,6 +110,7 @@ Do you want to proceed with this plan, or adjust it?
 ```
 
 Options:
+
 - **Proceed as proposed** — apply all resolutions as shown
 - **Review manually** — list each NEW/EXTEND one by one and ask approve/skip/modify
 - **Cancel** — exit without changes
@@ -119,18 +122,22 @@ Wait for user confirmation before modifying any files.
 Apply confirmed resolutions:
 
 **For NEW entries** — add under the correct spec section and layer subsection:
+
 ```markdown
 ## [spec-directory-name] — [Feature Title from functional-spec.md]
 
 ### Unit
-| File | Test Name | Behavior | Polarity | Status | Notes |
-|------|-----------|----------|----------|--------|-------|
-| tests/test_auth.py | test_token_payload | token payload, expiry, signing | positive | OK | — |
+
+| File               | Test Name          | Behavior                       | Polarity | Status | Notes |
+| ------------------ | ------------------ | ------------------------------ | -------- | ------ | ----- |
+| tests/test_auth.py | test_token_payload | token payload, expiry, signing | positive | OK     | —     |
 
 ### Integration
+
 ...
 
 ### E2E
+
 ...
 ```
 
@@ -141,9 +148,10 @@ Create the spec section if it doesn't exist. Create layer subsection if it doesn
 **For DUPLICATE entries** — skip. Do not modify anything.
 
 Update the header:
+
 ```markdown
 **Last updated:** YYYY-MM-DD
-**Total:** N tests  ← recalculate: count all rows across all sections
+**Total:** N tests ← recalculate: count all rows across all sections
 ```
 
 ## Step 6: Run regression suite (with user confirmation)
@@ -177,30 +185,38 @@ Save to `context/qa/regression-reports/regression-YYYY-MM-DD-[spec-name].md`:
 # Regression Report — YYYY-MM-DD
 
 ## Feature
+
 [spec-directory-name] — [Feature Title]
 
 ## Suite Delta
+
 - Added: N new tests
 - Extended: M existing entries
 - Skipped (duplicates): K
 
 ## Regression Suite Status
+
 **Total tests in suite:** N
 
 ## Run Results
+
 [If tests were run:]
+
 - Suite: [Full / New tests only]
 - Passed: N | Failed: M | Errors: K | Skipped: J
 
 ### Failed Tests
+
 | File | Test Name | Layer | Error |
-|------|-----------|-------|-------|
+| ---- | --------- | ----- | ----- |
 | ...  | ...       | ...   | ...   |
 
 [If tests were NOT run:]
+
 - Tests were not executed this session. Run manually with [detected command or "your project's test command"].
 
 ## Recommendations
+
 - [ ] [Any failing tests that need attention]
 - [ ] [Suggested follow-up if infrastructure was missing]
 ```

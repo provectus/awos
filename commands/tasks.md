@@ -53,6 +53,7 @@ Follow this process precisely.
   - You must **check and require all needed MCPs, services, and dependencies** for testing. If something is missing, instruct the user to install it.
   - If a slice **cannot be tested**, explain why and **get user approval** before proceeding.
   - A slice **is not complete** unless it is tested or explicitly approved to skip testing.
+  - After a slice is verified and marked complete, **delete all temporary artifacts** generated during that slice's verification — screenshots, recorded videos, generated e2e test scripts, and any other ephemeral files produced by the e2e-tester or browser MCP. Exception: do **not** delete artifacts from the **Feature Testing & Regression** slice — those are intentionally kept for the regression suite.
 
 - **Your Thought Process for Generating Tasks:**
   1.  First, identify the absolute smallest piece of user-visible value from the spec. This is your **Slice 1**.
@@ -67,10 +68,15 @@ Follow this process precisely.
         - Tech stack identified in `technical-considerations.md`
       - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
       - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
-  5.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
-  6.  Create a high-level checklist item and its sub-tasks with subagent assignments.
-  7.  Repeat this process until all requirements from the specification are covered.
-  8.  **Add the Feature Testing & Regression slice (always last):**
+  5.  After the verification sub-task, add a cleanup sub-task as the last item of the slice:
+      ```
+      - [ ] Cleanup: Delete any screenshots, videos, or e2e scripts generated during this slice's verification. **[Agent: general-purpose]**
+      ```
+      Skip this sub-task for the **Feature Testing & Regression** slice — its artifacts are kept intentionally.
+  6.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
+  7.  Create a high-level checklist item and its sub-tasks with subagent assignments.
+  8.  Repeat this process until all requirements from the specification are covered.
+  9.  **Add the Feature Testing & Regression slice (always last):**
 
       After all implementation slices are defined, append one final slice. This slice is generated automatically — do not ask the user about it.
 
@@ -100,7 +106,7 @@ Follow this process precisely.
 
       Replace `N` with the actual next slice number. Do not change the wording — agents
       downstream depend on this exact structure.
-  9.  For each slice's verification sub-task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing.
+  10. For each slice's verification sub-task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing.
 
 - **Example of applying the rule for "User Profile Picture Upload":**
   - **Bad, Horizontal Tasks (DO NOT DO THIS):**
@@ -112,11 +118,13 @@ Follow this process precisely.
       - `[ ] Sub-task: Add a non-functional 'ProfileAvatar' UI component that shows a static placeholder image. **[Agent: react-expert]**`
       - `[ ] Sub-task: Place the component on the profile page. **[Agent: react-expert]**`
       - `[ ] Verify: Start the app, open the profile page, confirm placeholder avatar is shown **[Agent: manual-qa-expert]**`
+      - `[ ] Cleanup: Delete any screenshots, videos, or e2e scripts generated during this slice's verification. **[Agent: general-purpose]**`
     - `[ ] **Slice 2: Display the user's actual avatar if it exists**`
       - `[ ] Sub-task: Add avatar_url column to the users table via a migration. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the user API endpoint to return the avatar_url. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the 'ProfileAvatar' component to fetch and display the user's avatar_url, falling back to the placeholder if null. **[Agent: react-expert]**`
       - `[ ] Sub-task: Run the application. Use chrome MCP to connect the page in Browser. Verify that the profile page shows the correct avatar or placeholder. **[Agent: manual-qa-expert]**`
+      - `[ ] Cleanup: Delete any screenshots, videos, or e2e scripts generated during this slice's verification. **[Agent: general-purpose]**`
     - `[ ] **Slice 3: Feature Testing & Regression**`
       - `> Verifies the complete feature works end-to-end as described in functional-spec.md.`
       - `> Run AFTER all implementation slices are complete.`

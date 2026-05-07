@@ -103,6 +103,7 @@ Svelte, etc.), always include the `playwright` MCP in the proposal — it enable
 browser-based E2E testing via the testing-expert agent.
 
 Complementary pairs reference:
+
 - React / Vue / Angular → `testing-expert` + `playwright` MCP
 - FastAPI / Django / Flask → `testing-expert` + `pytest-best-practices` skill
   _(if `pytest-best-practices` not found in registry — `testing-expert` covers this)_

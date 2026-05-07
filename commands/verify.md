@@ -61,6 +61,7 @@ For each acceptance criterion in `functional-spec.md`:
 3. **If NOT met:** Report which criterion failed and what's missing, then stop
 
 **If browser MCP is unavailable:**
+
 1. Try `curl` or shell commands to verify API endpoints or application state.
 2. Try reading log files or database state if relevant.
 3. If ALL tools fail: use `AskUserQuestion` — "I cannot verify automatically because [reason].

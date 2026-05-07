@@ -53,6 +53,7 @@ Follow this process precisely.
   - You must **check and require all needed MCPs, services, and dependencies** for testing. If something is missing, instruct the user to install it.
   - If a slice **cannot be tested**, explain why and **get user approval** before proceeding.
   - A slice **is not complete** unless it is tested or explicitly approved to skip testing.
+  - After a slice is verified and marked complete, **delete all temporary artifacts** generated during that slice's verification — screenshots, recorded videos, generated e2e test scripts, and any other ephemeral files produced by the e2e-tester or browser MCP. Exception: do **not** delete artifacts from the **Feature Testing & Regression** slice — those are intentionally kept for the regression suite.
 
 - **Your Thought Process for Generating Tasks:**
   1.  First, identify the absolute smallest piece of user-visible value from the spec. This is your **Slice 1**.
@@ -60,17 +61,50 @@ Follow this process precisely.
   3.  Under that slice, create the nested sub-tasks (database, backend, frontend) needed to implement and verify **only that slice**.
   4.  **For each sub-task, assign the appropriate subagent:**
       - Analyze the sub-task description to understand what technology/domain it involves
-      - Analyze the Task tool definition to extract all available subagent_type values with their descriptions to understand what subagents are available for assignment.
+      - Analyze the Task tool definition to extract all available `subagent_type` values with their descriptions to understand what subagents are available for assignment
       - Match the sub-task to a subagent based on:
         - Technology keywords
         - Task intent
-        - Tech stack identified in technical-considerations.md
+        - Tech stack identified in `technical-considerations.md`
       - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
       - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
-  5.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
-  6.  Create a high-level checklist item and its sub-tasks with subagent assignments.
-  7.  Repeat this process until all requirements from the specification are covered.
-  8.  For each slice's verification sub-task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing.
+  5.  After the verification sub-task, add a cleanup sub-task as the last item of the slice:
+      ```
+      - [ ] Cleanup: Delete any screenshots, videos, or e2e scripts generated during this slice's verification. **[Agent: general-purpose]**
+      ```
+      Skip this sub-task for the **Feature Testing & Regression** slice — its artifacts are kept intentionally.
+  6.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
+  7.  Create a high-level checklist item and its sub-tasks with subagent assignments.
+  8.  Repeat this process until all requirements from the specification are covered.
+  9.  **Add the Feature Testing & Regression slice (always last):**
+
+      After all implementation slices are defined, append one final slice. This slice is generated automatically — do not ask the user about it.
+
+      ```
+      - [ ] **Slice N: Feature Testing & Regression**
+        > Verifies the complete feature works end-to-end as described in functional-spec.md.
+        > Run AFTER all implementation slices are complete.
+        > **Requires `testing-expert` agent.** If it is not present in `.claude/agents/`,
+        > stop and run `/awos:hire` before executing this slice.
+
+        - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests
+              that verify the entire feature as a whole — not individual slices. Cover applicable
+              layers (unit for pure logic, integration for service interactions, e2e for user flows).
+              Write tests with RED validation (must fail before implementation is confirmed done).
+              Annotate each test with `@spec: [spec-directory]` and `@regression` if suitable
+              for long-term regression. **[Agent: testing-expert]**
+        - [ ] Run all generated tests. All must pass. Fix any failures before proceeding.
+              **[Agent: testing-expert]**
+        - [ ] Run `/awos:regression [spec-directory-name]` to review candidates for the
+              regression suite, resolve duplicates, and optionally execute the full
+              regression suite. Pass the current spec directory name as the argument
+              (e.g., `/awos:regression 003-user-avatar`). Do not run without an argument —
+              auto-detection requires all tasks to be complete, which is not yet the case.
+      ```
+
+      Replace `N` with the actual next slice number. Do not change the wording — agents
+      downstream depend on this exact structure.
+  10. For each slice's verification sub-task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing.
 
 - **Example of applying the rule for "User Profile Picture Upload":**
   - **Bad, Horizontal Tasks (DO NOT DO THIS):**
@@ -81,11 +115,21 @@ Follow this process precisely.
     - `[ ] **Slice 1: Display a placeholder avatar on the profile page**`
       - `[ ] Sub-task: Add a non-functional 'ProfileAvatar' UI component that shows a static placeholder image. **[Agent: react-expert]**`
       - `[ ] Sub-task: Place the component on the profile page. **[Agent: react-expert]**`
+      - `[ ] Verify: Start the app, open the profile page, confirm placeholder avatar is shown **[Agent: manual-qa-expert]**`
+      - `[ ] Cleanup: Delete any screenshots, videos, or e2e scripts generated during this slice's verification. **[Agent: general-purpose]**`
     - `[ ] **Slice 2: Display the user's actual avatar if it exists**`
       - `[ ] Sub-task: Add avatar_url column to the users table via a migration. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the user API endpoint to return the avatar_url. **[Agent: python-expert]**`
       - `[ ] Sub-task: Update the 'ProfileAvatar' component to fetch and display the user's avatar_url, falling back to the placeholder if null. **[Agent: react-expert]**`
       - `[ ] Sub-task: Run the application. Use chrome MCP to connect the page in Browser. Verify that the profile page shows the correct avatar or placeholder. **[Agent: manual-qa-expert]**`
+      - `[ ] Cleanup: Delete any screenshots, videos, or e2e scripts generated during this slice's verification. **[Agent: general-purpose]**`
+    - `[ ] **Slice 3: Feature Testing & Regression**`
+      - `> Verifies the complete feature works end-to-end as described in functional-spec.md.`
+      - `> Run AFTER all implementation slices are complete.`
+      - `> **Requires \`testing-expert\` agent.** If it is not present in \`.claude/agents/\`, stop and run \`/awos:hire\` before executing this slice.`
+      - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows). Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with \`@spec: [spec-directory]\` and \`@regression\` if suitable for long-term regression. **[Agent: testing-expert]**`
+      - `[ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**`
+      - `[ ] Run \`/awos:regression [spec-directory-name]\` to review candidates for the regression suite, resolve duplicates, and optionally execute the full regression suite. Pass the current spec directory name as the argument (e.g., \`/awos:regression 003-user-avatar\`). Do not run without an argument — auto-detection requires all tasks to be complete, which is not yet the case.`
 
 ## Step 4: Present Draft and Refine
 

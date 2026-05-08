@@ -12,9 +12,9 @@ Audits the integrity and trustworthiness of files that configure and instruct AI
 
 This dimension focuses on the CONTENT and TRUSTWORTHINESS of agent configuration files, not their presence or quality:
 
-- **SEC-02** checks whether hooks *restrict access* to sensitive files (guardrail presence)
-- **AI-01 through AI-07** check whether agent files *exist and are well-structured* (tooling quality)
-- **PAI** checks whether agent files *contain suspicious or malicious content* (integrity)
+- **SEC-02** checks whether hooks _restrict access_ to sensitive files (guardrail presence)
+- **AI-01 through AI-07** check whether agent files _exist and are well-structured_ (tooling quality)
+- **PAI** checks whether agent files _contain suspicious or malicious content_ (integrity)
 
 All checks in this dimension apply only if the project uses AI coding agents. If no agent configuration files are detected, the entire dimension SKIPs.
 
@@ -46,7 +46,7 @@ All checks in this dimension apply only if the project uses AI coding agents. If
      - Pop directional formatting: `\u202C`
      - Invisible separator characters: `\u2062`, `\u2063`, `\u2064`
      - Tag characters: `\U000E0001` through `\U000E007F` (Unicode tag block — can encode hidden ASCII text invisible to humans)
-     Use grep with hex/Unicode patterns or a byte-level scan to detect these characters.
+       Use grep with hex/Unicode patterns or a byte-level scan to detect these characters.
   3. A BOM (`\uFEFF`) at byte position 0 of a file is benign and should not be flagged.
   4. Report each finding with the exact file path, line number, character position, and the Unicode code point found.
 - **Pass:** No invisible Unicode characters found in any prompt/instruction files
@@ -86,8 +86,8 @@ All checks in this dimension apply only if the project uses AI coding agents. If
      - If a hook uses an inline command string, analyze the command directly
      - If a hook references a script that does not exist on disk, flag as WARN (broken reference)
   3. Scan hook commands/scripts for suspicious patterns:
-     - **Network exfiltration:** `curl`, `wget`, `nc `, `netcat`, `ncat` followed by external URLs or IP addresses (not `localhost`/`127.0.0.1`/`::1`). Specifically look for commands piping file contents to network tools: `cat.*\|.*curl`, `<.*curl`, `curl.*-d.*@`, `curl.*--data.*@`, `|.*nc\s`
-     - **Encoding/obfuscation:** `base64`, `xxd`, `openssl enc`, `eval.*\$\(`, ``eval.*\`.*\` `` — commands that decode and execute obfuscated payloads
+     - **Network exfiltration:** `curl`, `wget`, `nc`, `netcat`, `ncat` followed by external URLs or IP addresses (not `localhost`/`127.0.0.1`/`::1`). Specifically look for commands piping file contents to network tools: `cat.*\|.*curl`, `<.*curl`, `curl.*-d.*@`, `curl.*--data.*@`, `\|.*nc\s`
+     - **Encoding/obfuscation:** `base64`, `xxd`, `openssl enc`, `eval.*\$\(`, `eval.*\`.\*\`` — commands that decode and execute obfuscated payloads
      - **Sensitive file access:** reading `.env`, `*.pem`, `*.key`, `credentials*`, `*secret*` files within hook scripts (hooks should check metadata or file existence, not read secret contents)
      - **Environment variable harvesting:** `env\b`, `printenv`, `set\b` piped to network commands or written to files outside the project
      - **Backdoor patterns:** `nohup`, `disown`, `&>/dev/null` combined with network commands (persistent background network activity)
@@ -124,12 +124,15 @@ All checks in this dimension apply only if the project uses AI coding agents. If
 
 - **What:** All AI agent instruction and configuration files are tracked in git, providing an auditable history of changes — untracked files could have been injected without code review
 - **How:**
-  1. Glob for all agent-related files:
+  1. Glob for all agent-related files (same scope as PAI-01, plus configuration files):
      - `.claude/agents/*.md` and `.claude/agents/**/*.md`
      - `.claude/rules/*.md`
-     - `.claude/skills/*/SKILL.md`
+     - `.claude/skills/*/SKILL.md` and `.claude/skills/**/*.md`
      - `.claude/commands/**/*.md`
      - `CLAUDE.md` and `**/CLAUDE.md`
+     - `.cursorrules`, `.cursor/rules/*.md`, `.cursor/rules/*.mdc`
+     - `.github/copilot-instructions.md`
+     - `.aider*`
      - `.claude/settings.json`
      - `.mcp.json`, `.claude/mcp.json`
   2. For each file found, check if it is tracked in git: `git ls-files --error-unmatch <file>` (exit code 0 = tracked)

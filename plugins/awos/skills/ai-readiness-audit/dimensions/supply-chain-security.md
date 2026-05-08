@@ -8,11 +8,11 @@ depends-on: [project-topology]
 
 # Supply Chain Security
 
-Audits the project's resilience to supply chain attacks — compromised or malicious packages entering the dependency tree. Each transitive dependency is an implicit trust decision: the project trusts the maintainer, their CI, their npm/PyPI credentials, and every dependency *they* pull in.
+Audits the project's resilience to supply chain attacks — compromised or malicious packages entering the dependency tree. Each transitive dependency is an implicit trust decision: the project trusts the maintainer, their CI, their npm/PyPI credentials, and every dependency _they_ pull in.
 
 This dimension focuses exclusively on dependency supply chain risks. Related but distinct checks live elsewhere:
 
-- **SBP-07** covers lockfile *presence* and update automation *existence* (Renovate/Dependabot configured)
+- **SBP-07** covers lockfile _presence_ and update automation _existence_ (Renovate/Dependabot configured)
 - **SEC-01 through SEC-05** cover secrets exposure (`.env`, API keys, gitignore)
 
 This dimension goes deeper: lockfiles committed to git with integrity hashes, version pinning discipline, recently published package detection (quarantine), dependency review gates, vulnerability scanning in CI, dependency override auditing, and attack surface from dependency bloat.
@@ -56,7 +56,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
      - **yarn classic (`yarn.lock`):** Check for `integrity` fields on resolved entries
      - **yarn berry (v2+):** Check for `.yarnrc.yml` with `enableImmutableInstalls: true` or checksums in lockfile entries
      - **pip (`requirements.txt`):** Check for `--hash=sha256:...` annotations on dependency lines
-     - **poetry (`poetry.lock`):** Check that `[metadata.content-hash]` exists and package entries contain `files` arrays with `hash` values
+     - **poetry (`poetry.lock`):** Check that the `[metadata]` table contains a `content-hash` key and that package entries contain `files` arrays with `hash` values
      - **Pipfile (`Pipfile.lock`):** JSON format inherently includes hashes — check that `"hashes"` arrays are non-empty on sampled entries
      - **Go (`go.sum`):** Inherently contains hashes (this is its entire purpose) — auto-PASS
      - **Rust (`Cargo.lock`):** Check for `checksum` fields on package entries
@@ -132,8 +132,8 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
   4. **Limitation note:** Branch protection rules (required reviewers, status checks) cannot be verified from repository files alone — they are configured in the GitHub/GitLab UI. Note this limitation in the evidence.
 - **Pass:** Dependency update tool configured with automerge disabled (or restricted to safe types only), AND lockfiles/manifests have CODEOWNERS entries
 - **Warn:** Dependency update tool configured with automerge disabled but no CODEOWNERS on lockfiles/manifests (or vice versa)
-- **Fail:** Automerge enabled globally for dependency updates, OR auto-approve workflow detected for Dependabot PRs, OR no dependency update strategy exists at all
-- **Skip-When:** No dependency update automation detected (no Renovate or Dependabot config found — SBP-07 covers automation presence)
+- **Fail:** Automerge enabled globally for dependency updates, OR auto-approve workflow detected for Dependabot PRs
+- **Skip-When:** No dependency update automation detected (no Renovate or Dependabot config found). The absence of a dependency update strategy is already covered by SBP-07 — this check only evaluates the safety of automation that exists.
 - **Severity:** high
 
 ### SCS-06: Vulnerability scanning in CI

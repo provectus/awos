@@ -8,6 +8,8 @@ depends-on:
     project-topology,
     documentation,
     security,
+    supply-chain-security,
+    prompt-agent-integrity,
     ai-development-tooling,
     spec-driven-development,
     code-architecture,

@@ -69,7 +69,7 @@ Follow this process precisely.
       - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
       - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
   5.  After the verification sub-task, add a cleanup sub-task as the last item of the slice:
-      ```
+      ```md
       - [ ] Cleanup: Delete any screenshots, videos, or e2e scripts generated during this slice's verification. **[Agent: general-purpose]**
       ```
       Skip this sub-task for the **Feature Testing & Regression** slice — its artifacts are kept intentionally.
@@ -80,7 +80,7 @@ Follow this process precisely.
 
       After all implementation slices are defined, append one final slice. This slice is generated automatically — do not ask the user about it.
 
-      ```
+      ```md
       - [ ] **Slice N: Feature Testing & Regression**
         > Verifies the complete feature works end-to-end as described in functional-spec.md.
         > Run AFTER all implementation slices are complete.
@@ -127,7 +127,7 @@ Follow this process precisely.
     - `[ ] **Slice 3: Feature Testing & Regression**`
       - `> Verifies the complete feature works end-to-end as described in functional-spec.md.`
       - `> Run AFTER all implementation slices are complete.`
-      - `> **Requires \`testing-expert\` agent.\*\* If it is not present in \`.claude/agents/\`, stop and run \`/awos:hire\` before executing this slice.`
+      - `> **Requires \`testing-expert\` agent.** If it is not present in \`.claude/agents/\`, stop and run \`/awos:hire\` before executing this slice.`
       - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows). Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with \`@spec: [spec-directory]\` and \`@regression\` if suitable for long-term regression. **[Agent: testing-expert]**`
       - `[ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**`
       - `[ ] Run \`/awos:regression [spec-directory-name]\` to review candidates for the regression suite, resolve duplicates, and optionally execute the full regression suite. Pass the current spec directory name as the argument (e.g., \`/awos:regression 003-user-avatar\`). Do not run without an argument — auto-detection requires all tasks to be complete, which is not yet the case.`

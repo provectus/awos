@@ -52,7 +52,7 @@ After a feature's "Feature Testing & Regression" slice is complete, run this com
 
 ## Step 2: Extract test candidates from test files
 
-Search the codebase for test files containing both `@spec: [target-spec]` and `@regression` annotations. These annotations are written by `testing-expert` during the Feature Testing & Regression slice.
+**Primary source (always try first):** Search the codebase for test files containing both `@spec: [target-spec]` and `@regression` annotations. These annotations are written by `testing-expert` during the Feature Testing & Regression slice.
 
 For each annotated test function found, extract:
 
@@ -62,11 +62,11 @@ For each annotated test function found, extract:
 - **File** — the test file path (already known from the search)
 - **Test Name** — the test function name
 
-**Fallback:** If no `@spec`/`@regression` annotations are found in any test file, fall back to reading `context/spec/[target-spec]/tasks.md`. Find the "Feature Testing & Regression" slice and list each `**[Agent: testing-expert]**` sub-task as a single candidate entry, marking Layer/Behavior/Polarity as "pending discovery". Inform the user that annotations were not found.
+**Fallback (only if primary source returns zero results):** Read `context/spec/[target-spec]/tasks.md`. Find the "Feature Testing & Regression" slice and list each `**[Agent: testing-expert]**` sub-task as a single candidate entry, marking Layer/Behavior/Polarity as "pending discovery". Inform the user that annotations were not found and entries are marked for future discovery.
 
 Build a candidate table:
 
-```
+```markdown
 | # | Layer       | Behavior                              | Polarity | File                           | Test Name               |
 |---|-------------|---------------------------------------|----------|--------------------------------|-------------------------|
 | 1 | unit        | token payload, expiry, signing        | positive | tests/test_auth.py             | test_token_payload      |
@@ -88,7 +88,7 @@ For each candidate from Step 2, compare against every existing entry in `regress
 
 Build a resolution table to show the user:
 
-```
+```markdown
 | # | Candidate Behavior              | Layer | Resolution         | Existing Entry (if any)            |
 |---|----------------------------------|-------|--------------------|------------------------------------|
 | 1 | token payload, expiry, signing  | unit  | NEW                | —                                  |
@@ -100,7 +100,7 @@ Build a resolution table to show the user:
 
 Present the candidate table and resolution table to the user. Use `AskUserQuestion`:
 
-```
+```text
 Found N test candidates from spec [spec-name].
 - X are NEW → will be added to regression suite
 - Y are EXTEND → will be merged into existing entries
@@ -159,7 +159,7 @@ Update the header:
 1. Count all tests currently in `regression-suite.md` (all rows across all sections).
 2. Use `AskUserQuestion`:
 
-   ```
+   ```text
    Regression suite updated: N total tests ([spec] added M new).
 
    Run the regression suite now?

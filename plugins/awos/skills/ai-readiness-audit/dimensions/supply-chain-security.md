@@ -114,8 +114,8 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
   5. **Other ecosystems:** Note the limitation if registry API is not easily queryable and SKIP for those ecosystems.
   6. **Performance guard:** If the project has more than 100 direct dependencies, sample the 30 most recently added (by checking `git log --diff-filter=A -p -- <manifest>` for recently added lines) plus any with suspicious characteristics (names within edit distance 1 of popular packages, very short generic names, or packages with zero/near-zero community adoption).
 - **Pass:** All sampled dependency versions were published more than 7 days ago
-- **Warn:** 1–2 dependencies found published within the last 7 days, but they are well-known packages with established track records (e.g., a patch release of `react`, `lodash`, `django`)
-- **Fail:** Any dependency version published within the last 7 days from an unknown or unverified publisher, OR unable to verify publish dates for the majority of sampled dependencies
+- **Warn:** Unable to verify publish dates for a minority of sampled dependencies due to registry API limitations (e.g., private registry without timestamp API, rate-limited responses)
+- **Fail:** Any sampled dependency version was published within the last 7 days, OR unable to verify publish dates for the majority of sampled dependencies
 - **Skip-When:** No package ecosystem detected, or lockfiles are absent (SCS-01 FAIL — cannot determine exact resolved versions without lockfiles)
 - **Severity:** critical
 
@@ -179,10 +179,12 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
      - Count the total number of overridden packages
      - Check whether each override pins to a specific version or uses a range
      - Cross-reference overridden versions against the quarantine check logic (SCS-04): are any overridden versions published less than 7 days ago?
-     - Check whether overrides are documented with comments explaining why they exist (e.g., `// CVE-2024-1234 fix`, `# security patch for lodash`)
+     - Check whether overrides have documented justification for why they exist. Where justification lives depends on the manifest format:
+       - **Comment-capable formats** (TOML, Ruby, YAML, Gradle Kotlin/Groovy): inline comments alongside the override (e.g., `# CVE-2024-1234 fix`)
+       - **JSON formats** (`package.json`): JSON does not support comments per RFC 8259 — justification should live in adjacent documentation (ADR, security notes, PR description, or a dedicated `overrides.md` / `DEPENDENCY_DECISIONS.md` file)
   3. If no overrides exist, this is a neutral signal — auto-PASS (overrides are not required, just need to be safe when present)
-- **Pass:** No dependency overrides exist, OR overrides exist and all pin to versions older than 7 days with inline comments explaining the reason
-- **Warn:** Overrides exist but lack documentation comments, or the number of overrides is high (10+ packages), suggesting possible maintenance debt
+- **Pass:** No dependency overrides exist, OR overrides exist and all pin to versions older than 7 days with documented justification (inline comments for comment-capable formats, or adjacent documentation for JSON manifests)
+- **Warn:** Overrides exist but lack documented justification, or the number of overrides is high (10+ packages), suggesting possible maintenance debt
 - **Fail:** Overrides pin to versions published within the last 7 days, OR overrides use permissive ranges (`*`, `>=`), OR overrides reference git URLs or arbitrary tarballs without explanation
 - **Skip-When:** Topology shows no package manifests detected
 - **Severity:** high

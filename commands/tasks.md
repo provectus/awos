@@ -82,11 +82,11 @@ Follow this process precisely.
 
       ```md
       - [ ] **Slice N: Feature Testing & Regression**
+
         > Verifies the complete feature works end-to-end as described in functional-spec.md.
         > Run AFTER all implementation slices are complete.
         > **Requires `testing-expert` agent.** If it is not present in `.claude/agents/`,
         > stop and run `/awos:hire` before executing this slice.
-
         - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests
               that verify the entire feature as a whole — not individual slices. Cover applicable
               layers (unit for pure logic, integration for service interactions, e2e for user flows).
@@ -94,14 +94,14 @@ Follow this process precisely.
               Annotate each test with `@spec: [spec-directory]` and `@regression` if suitable
               for long-term regression. **[Agent: testing-expert]**
         - [ ] Run all generated tests. All must pass. Fix any failures before proceeding.
-              **[Agent: testing-expert]**
+            **[Agent: testing-expert]**
         <!-- TODO: enable when feat/regression merges
         - [ ] Run `/awos:regression [spec-directory-name]` to review candidates for the
               regression suite, resolve duplicates, and optionally execute the full
               regression suite. Pass the current spec directory name as the argument
               (e.g., `/awos:regression 003-user-avatar`). Do not run without an argument —
               auto-detection requires all tasks to be complete, which is not yet the case.
-        -->
+              -->
       ```
 
       Replace `N` with the actual next slice number. Do not change the wording — agents

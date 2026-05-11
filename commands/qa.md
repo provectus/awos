@@ -99,7 +99,7 @@ For each gap identified in Step 5, invoke the `Task` tool with `subagent_type: "
 ## Step 7: Run tests (with user confirmation)
 
 1. Count all tests in scope. Use `AskUserQuestion` with the following question and options:
-   ```
+   ```text
    Ready to run N tests across X specs [unit: A, integration: B, e2e: C, contract: D]
    Regression suite: M tests tagged @regression
    ```

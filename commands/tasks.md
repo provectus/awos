@@ -69,7 +69,7 @@ Follow this process precisely.
       - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
       - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
   5.  After the verification sub-task, add a cleanup sub-task as the last item of the slice:
-      ```
+      ```md
       - [ ] Cleanup: Delete any screenshots, videos, or e2e scripts generated during this slice's verification. **[Agent: general-purpose]**
       ```
       Skip this sub-task for the **Feature Testing & Regression** slice — its artifacts are kept intentionally.
@@ -80,7 +80,7 @@ Follow this process precisely.
 
       After all implementation slices are defined, append one final slice. This slice is generated automatically — do not ask the user about it.
 
-      ```
+      ```md
       - [ ] **Slice N: Feature Testing & Regression**
         > Verifies the complete feature works end-to-end as described in functional-spec.md.
         > Run AFTER all implementation slices are complete.

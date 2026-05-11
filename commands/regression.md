@@ -67,11 +67,11 @@ For each annotated test function found, extract:
 Build a candidate table:
 
 ```markdown
-| # | Layer       | Behavior                              | Polarity | File                           | Test Name               |
-|---|-------------|---------------------------------------|----------|--------------------------------|-------------------------|
-| 1 | unit        | token payload, expiry, signing        | positive | tests/test_auth.py             | test_token_payload      |
-| 2 | unit        | invalid secret, expired token         | negative | tests/test_auth.py             | test_invalid_token      |
-| 3 | integration | valid credentials against /auth       | positive | tests/test_auth_integration.py | test_auth_happy_path    |
+| #   | Layer       | Behavior                        | Polarity | File                           | Test Name            |
+| --- | ----------- | ------------------------------- | -------- | ------------------------------ | -------------------- |
+| 1   | unit        | token payload, expiry, signing  | positive | tests/test_auth.py             | test_token_payload   |
+| 2   | unit        | invalid secret, expired token   | negative | tests/test_auth.py             | test_invalid_token   |
+| 3   | integration | valid credentials against /auth | positive | tests/test_auth_integration.py | test_auth_happy_path |
 ```
 
 ## Step 3: Load existing regression suite and detect duplicates
@@ -89,11 +89,11 @@ For each candidate from Step 2, compare against every existing entry in `regress
 Build a resolution table to show the user:
 
 ```markdown
-| # | Candidate Behavior              | Layer | Resolution         | Existing Entry (if any)            |
-|---|----------------------------------|-------|--------------------|------------------------------------|
-| 1 | token payload, expiry, signing  | unit  | NEW                | —                                  |
-| 2 | invalid secret, expired token   | unit  | EXTEND             | "token validation" in 001-user-auth|
-| 3 | valid credentials against /auth | intg  | DUPLICATE — skip   | "auth endpoint happy path"         |
+| #   | Candidate Behavior              | Layer | Resolution       | Existing Entry (if any)             |
+| --- | ------------------------------- | ----- | ---------------- | ----------------------------------- |
+| 1   | token payload, expiry, signing  | unit  | NEW              | —                                   |
+| 2   | invalid secret, expired token   | unit  | EXTEND           | "token validation" in 001-user-auth |
+| 3   | valid credentials against /auth | intg  | DUPLICATE — skip | "auth endpoint happy path"          |
 ```
 
 ## Step 4: User confirmation

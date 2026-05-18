@@ -38,7 +38,7 @@ For each check in the dimension:
 - Never invent evidence. If you cannot find what a check looks for, that is a finding (likely FAIL or WARN)
 - Keep evidence concise: one line per check, with specific file paths or counts
 - If a check references the topology summary and none was provided, mark it SKIP
-- Do not modify any project files — this is a read-only audit
+- Do not modify project source files. Write is restricted to the per-dimension artifact at the output path you were given
 
 ## Output
 

@@ -17,27 +17,6 @@ const path = require('node:path');
 
 const { parse } = require('./helpers/frontmatter');
 
-/**
- * Portable "this test is gated on a contract that hasn't landed yet" helper.
- * `t.todo()` and `t.skip()` are not yet implemented in Bun's node:test shim,
- * so we just log and return — the test still counts as a pass, but the human
- * reading output sees what's pending. When the gated contract lands, the
- * if-branch flips and the real assertion runs.
- */
-function pending(t, msg) {
-  // Prefer real t.todo when available (Node 22+ has it).
-  if (typeof t.todo === 'function') {
-    try {
-      t.todo(msg);
-      return;
-    } catch {
-      // Fall through to console-log fallback (Bun).
-    }
-  }
-  // eslint-disable-next-line no-console
-  console.log(`[lint:pending] ${t.name}: ${msg}`);
-}
-
 const repoRoot = path.resolve(__dirname, '..');
 const commandsDir = path.join(repoRoot, 'commands');
 const wrappersDir = path.join(repoRoot, 'claude', 'commands');
@@ -133,11 +112,9 @@ test('wrapper frontmatter has required keys', () => {
   }
 });
 
-test('wrapper description matches root description', (t) => {
-  // F18 from the alignment audit: at baseline 3b06689, hire.md's wrapper
-  // and root descriptions DIVERGE intentionally — the audit calls this out
-  // as a bug to fix. Mark this as a todo so the gate flips on automatically
-  // when F18 lands and the descriptions converge.
+test('wrapper description matches root description', () => {
+  // F18 from the alignment audit: wrappers must mirror the root command's
+  // description so the slash-command palette shows the canonical text.
   const wrappers = listMarkdown(wrappersDir);
   const mismatches = [];
   for (const w of wrappers) {
@@ -151,16 +128,11 @@ test('wrapper description matches root description', (t) => {
       });
     }
   }
-  if (mismatches.length > 0) {
-    pending(
-      t,
-      `description drift exists (waiting on F18 fix): ${mismatches
-        .map((m) => m.file)
-        .join(', ')}`
-    );
-    return;
-  }
-  assert.deepEqual(mismatches, []);
+  assert.deepEqual(
+    mismatches,
+    [],
+    `wrapper description must match root: ${JSON.stringify(mismatches, null, 2)}`
+  );
 });
 
 test('agent marker pattern is preserved', () => {
@@ -331,12 +303,10 @@ test('every top-level framework directory is referenced by setup-config', () => 
   }
 });
 
-test('implement.md uses XML verification snippets (F5 target)', (t) => {
-  // F5 from the alignment audit will introduce <verification_commands>,
-  // <scope_discipline>, <investigate_before_answering> XML tags inside the
-  // formulated subagent prompt section of implement.md. Until F5 lands the
-  // tags are absent at baseline 3b06689 — keep this as t.todo so the gate
-  // flips on automatically when F5 merges.
+test('implement.md uses XML verification snippets', () => {
+  // F5 from the alignment audit: the formulated subagent prompt in
+  // implement.md must contain the three XML-tagged blocks that pass
+  // scope, hallucination, and verification discipline to the subagent.
   const body = readUtf8(path.join(commandsDir, 'implement.md'));
   const needed = [
     '<verification_commands>',
@@ -344,14 +314,11 @@ test('implement.md uses XML verification snippets (F5 target)', (t) => {
     '<investigate_before_answering>',
   ];
   const missing = needed.filter((tag) => !body.includes(tag));
-  if (missing.length > 0) {
-    pending(
-      t,
-      `F5 hasn't landed yet; implement.md is missing: ${missing.join(', ')}`
-    );
-    return;
-  }
-  assert.deepEqual(missing, []);
+  assert.deepEqual(
+    missing,
+    [],
+    `implement.md is missing required XML snippets: ${missing.join(', ')}`
+  );
 });
 
 test('context/<path> references in prompts are internally consistent', () => {

@@ -201,22 +201,6 @@ test('migration versions are sequential with no gaps or duplicates', async () =>
   );
 });
 
-test('F12 wrapper-import migration (todo until F12 ships)', () => {
-  // Placeholder for the migration that F12 will add — a mass rewrite of
-  // "Refer to the instructions located in this file: .awos/commands/<name>.md"
-  // to `@.awos/commands/<name>.md`. When F12 ships:
-  //  1. Add tests/fixtures/legacy-refer-to-wrapper/ alongside this test.
-  //  2. Verify post-migration that wrapper bodies contain `@.awos/commands/...`.
-  //  3. Verify the migration is idempotent (re-running on already-rewritten
-  //     wrappers is a no-op via skip_if_any).
-  // For now, this test logs and returns — keeping the safety-net inventory
-  // honest about what's outstanding without blocking the suite.
-  // eslint-disable-next-line no-console
-  console.log(
-    '[migration:pending] F12 wrapper-rewrite migration test will land when F12 ships'
-  );
-});
-
 test('migration runs in dry-run without touching disk', async () => {
   const workingDir = await freshTemp();
   await writeFile(

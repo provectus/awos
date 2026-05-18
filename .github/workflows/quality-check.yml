@@ -20,3 +20,21 @@ jobs:
 
       - name: Run prettier check
         run: npx prettier . --check
+
+  # Test suite — non-blocking initially.
+  # Flip `continue-on-error: false` to make this a required gate once it has
+  # been green on two consecutive PRs (see plan PR 4).
+  test:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run tests
+        run: npm test

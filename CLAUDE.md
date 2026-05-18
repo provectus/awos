@@ -22,6 +22,13 @@ bunx prettier . --check
 npx prettier --write .     # auto-format before committing
 bunx prettier --write .
 
+# Run the test suite (no npm deps; node --test built-in):
+npm test                   # all three layers
+npm run test:lint          # static prompt linter
+npm run test:installer     # installer unit tests
+npm run test:fixtures      # end-to-end fixture projects
+bun test tests/            # local cross-runtime sanity check (optional)
+
 # Test installer against a separate project (pick one runner; $AWOS_REPO is the absolute path to this repo):
 cd ~/some-scratch-project
 npx $AWOS_REPO/index.js
@@ -30,7 +37,19 @@ bun $AWOS_REPO/index.js          # direct exec also works
 npx $AWOS_REPO/index.js --dry-run   # preview only
 ```
 
-There is no test suite. The installer runs on **Node 22+ or any recent Bun**. It uses only standard JS built-ins (`fs`, `path`) via CommonJS `require`, which both runtimes support — do not add npm dependencies or runtime-specific APIs without strong justification, as that would break cross-runtime compatibility.
+The installer runs on **Node 22+ or any recent Bun**. It uses only standard JS built-ins (`fs`, `path`) via CommonJS `require`, which both runtimes support — do not add npm dependencies or runtime-specific APIs without strong justification, as that would break cross-runtime compatibility.
+
+## Testing
+
+The repo has a three-layer test suite under `tests/`, all built on Node's `node:test` built-in — no npm dependencies:
+
+1. **Static prompt linter** (`tests/lint-prompts.test.js`) — wrapper/root command symmetry, frontmatter schema, agent-marker presence, slash-command cross-references, audit-dimension DAG, and `setup-config.js`-to-source-tree consistency.
+2. **Installer unit tests** (`tests/installer/*.test.js`) — exercises `src/services/file-copier.js`, `src/migrations/runner.js`, and `src/core/setup-orchestrator.js` against temp directories.
+3. **Fixture projects** (`tests/fixtures.test.js` plus `tests/fixtures/<name>/{before/, expected-after.json}`) — each fixture represents a real-world install scenario (fresh, existing-awos, mid-workflow, pre-migration) and asserts the post-install tree against a manifest of `{ exists, sha256, contains, unchanged }`.
+
+Run with `npm test` locally; CI runs the same on Node 22 (currently non-blocking — see `.github/workflows/quality-check.yml`).
+
+**Rule for audit-driven follow-ups (F1–F19):** any PR that introduces a new structural contract — wrapper frontmatter key, `agent-template.md` schema field, XML tag inside a prompt, migration — must ship its lint rule, installer test, or fixture in the same PR. Coverage tracks contracts, not the audit proposal in the abstract.
 
 ## Architecture: The Two-Folder Customization Model
 

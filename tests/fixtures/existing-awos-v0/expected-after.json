@@ -1,0 +1,8 @@
+{
+  "_comment": "Pre-existing stale .awos/commands/architecture.md must be overwritten by the framework's current content (the contains check pins a substring from the real commands/architecture.md, which the STALE-V0-CONTENT marker is not in).",
+  ".awos/commands/architecture.md": {
+    "exists": true,
+    "contains": "# ROLE",
+    "notContains": "STALE-V0-CONTENT"
+  }
+}

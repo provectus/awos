@@ -1,7 +1,11 @@
 ---
 description: Defines the System Architecture — stack, DBs, infra.
+argument-hint: '[change request, optional]'
+disable-model-invocation: true
 ---
 
-Use `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+@.awos/commands/architecture.md
 
-Refer to the instructions located in this file: .awos/commands/architecture.md
+# Claude Code customizations (these layer on top of the framework defaults above):
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.

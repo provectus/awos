@@ -1,7 +1,11 @@
 ---
 description: Creates the Functional Spec — what the feature does for the user.
+argument-hint: '[topic, optional — defaults to next roadmap item]'
+disable-model-invocation: true
 ---
 
-Use `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+@.awos/commands/spec.md
 
-Refer to the instructions located in this file: .awos/commands/spec.md
+# Claude Code customizations (these layer on top of the framework defaults above):
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.

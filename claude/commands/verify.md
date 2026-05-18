@@ -1,7 +1,11 @@
 ---
 description: Verifies spec completion — checks acceptance criteria, marks Status as Completed.
+argument-hint: '[spec name or index, optional]'
+disable-model-invocation: true
 ---
 
-Use `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+@.awos/commands/verify.md
 
-Refer to the instructions located in this file: .awos/commands/verify.md
+# Claude Code customizations (these layer on top of the framework defaults above):
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.

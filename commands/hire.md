@@ -117,12 +117,12 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
 3.  For **Missing** roles:
     - If a registry agent was successfully installed for this role in Step 5, skip generation — the installed agent already covers the role.
     - Otherwise, generate a new agent file at `.claude/agents/{role-name}.md` from the template. Fill in:
-        - `[agent-name]` → the kebab-case role name
-        - `[When Claude should delegate to this agent]` → trigger phrasing based on domain and technologies
-        - `[domain]` → the domain name (e.g., "frontend", "backend", "infrastructure")
-        - `[technology list]` → comma-separated list of technologies for this domain
-        - `[Responsibility aligned with the agent's domain]` → specific responsibilities derived from the architecture
-      Add any installed skills to the `skills` list. Show the generated file to the user for approval before saving.
+      - `[agent-name]` → the kebab-case role name
+      - `[When Claude should delegate to this agent]` → trigger phrasing based on domain and technologies
+      - `[domain]` → the domain name (e.g., "frontend", "backend", "infrastructure")
+      - `[technology list]` → comma-separated list of technologies for this domain
+      - `[Responsibility aligned with the agent's domain]` → specific responsibilities derived from the architecture
+        Add any installed skills to the `skills` list. Show the generated file to the user for approval before saving.
 4.  For **Partially Covered** roles: read the existing agent file, append newly installed skills to its `skills` list, and show the updated file to the user for approval before saving.
 5.  Write all approved agent files.
 

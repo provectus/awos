@@ -32,41 +32,30 @@ Follow this process precisely.
 
 ### Step 1: Identify the Target Specification and Task
 
-1.  **Analyze User Prompt:** First, analyze the `<user_prompt>`. If it specifies a particular spec or task (e.g., "implement the next task for spec 002" or "run the database migration for the profile picture feature"), use that to identify the target spec directory and/or task.
-2.  **Automatic Mode (Default):** If the `<user_prompt>` is empty, you must automatically find the next task to be done.
-    - Scan the directories in `context/spec/` in order.
-    - Find the first directory that contains a `tasks.md` file with at least one incomplete item (`[ ]`).
-    - Within that file, select the **very first incomplete task** as your target.
-3.  **Clarify if Needed:** If you cannot determine the target (e.g., the prompt is ambiguous or all tasks are done), inform the user and stop. Example: "I can't find any remaining tasks. It looks like all features are implemented!"
+1.  Analyze `<user_prompt>`. If it specifies a spec or task, use that to identify the target spec directory and/or task.
+2.  Otherwise: scan `context/spec/` in order, find the first directory whose `tasks.md` has an incomplete item (`[ ]`), and select the very first incomplete task there.
+3.  If no target can be determined (ambiguous prompt, or all tasks are done), tell the user and stop.
 
 ### Step 2: Load Full Context and Extract Agent Assignment
 
-1.  **Announce the Plan:** Once the target spec and task are identified, state your intention clearly. Example: "Okay, I will now implement the task: **'[The Task Description]'** for the **'[Spec Name]'** feature."
-2.  **Read All Files:** You must load the complete contents of the following three files into your context:
+1.  Load the three context files in parallel:
     - `[target-spec-directory]/functional-spec.md`
     - `[target-spec-directory]/technical-considerations.md`
     - `[target-spec-directory]/tasks.md`
-3.  **Extract Agent Assignment:** Analyze the current task description to identify which subagent should handle the implementation:
-    - Look for the `**[Agent: agent-name]**` pattern in the task description
-    - Extract the agent name (e.g., `python-expert`, `react-expert`, `kotlin-expert`, `testing-expert`, etc.)
-    - If no agent assignment is found, default to `general-purpose` agent
-    - Example: For task `"Add avatar_url column to users table **[Agent: python-expert]**"`, extract `python-expert`
+2.  Extract the agent assignment from the task description:
+    - Look for the `**[Agent: agent-name]**` pattern in the task line (e.g., `python-expert`, `react-expert`, `testing-expert`).
+    - If no assignment is found, default to `general-purpose`.
 
 ### Step 3: Delegate Implementation to a Subagent
 
-- **CRITICAL RULE:** You are **strictly prohibited** from writing, editing, or modifying any production code, configuration files, or database schemas yourself. Your only role is to delegate.
+You do not write or edit code, configuration, or database schemas yourself. Your role is to delegate.
 
-1.  **Formulate Subagent Prompt:** Construct a clear and detailed prompt for a specialized coding subagent. This prompt MUST include:
-    - The full context from the three files you just loaded.
-    - The specific task description that needs to be implemented.
-    - Clear instructions on what code to write or what files to modify.
-    - A definition of success (e.g., "The task is done when the new migration file is created and passes linting.").
-2.  **Execute Delegation with Appropriate Agent:** Call the Task tool to delegate to the domain specialist subagent or general-purpose agent:
-    - Use the agent name extracted in Step 2 as the `subagent_type` parameter
-    - Example: If extracted agent is `python-expert`, use `subagent_type: "python-expert"`
-    - If no agent was found or extracted, use `subagent_type: "general-purpose"`
-    - Pass the formulated prompt with full context to the selected agent
-    - Example announcement: "I am now delegating this task to the **[python-expert]** agent with all the necessary context and instructions."
+1.  Construct a delegation prompt that includes:
+    - The full context from the three files loaded in Step 2.
+    - The specific task description.
+    - Clear instructions on what code to write or files to modify.
+    - A concrete definition of success — what verification commands the subagent must run before reporting completion (tests, lint, typecheck, curl, or a browser-automation MCP if the project has one configured). See Step 4 for the default verification policy.
+2.  Delegate to the agent identified in Step 2, passing the formulated prompt as the task. If no specialist was matched, delegate to `general-purpose`.
 
 ### Step 4: Await and Verify Completion
 

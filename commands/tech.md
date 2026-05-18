@@ -32,20 +32,16 @@ Follow this process precisely.
 
 ### Step 1: Identify the Target Specification
 
-1.  **Analyze User Prompt:** First, analyze the `<user_prompt>`. If it clearly references a spec by its name or index (e.g., "tech spec for 001-user-profile" or "let's plan the profile picture feature"), identify the corresponding directory in `context/spec/`.
-2.  **Ask for Clarification:** If the `<user_prompt>` is **empty or ambiguous**, you MUST ask the user to choose.
-    - List the available spec directories.
-    - Example: "Which specification would you like to create a technical plan for? Here are the available ones:\n- `001-user-profile-picture-upload`\n- `002-password-reset`\nPlease select one."
-    - Do not proceed until the user has selected a valid spec.
+1.  Analyze `<user_prompt>`. If it clearly references a spec by name or index, identify the corresponding directory in `context/spec/`.
+2.  If the prompt is empty or ambiguous, list the available spec directories and ask the user to choose. Do not proceed until a valid spec is selected.
 
 ### Step 2: Gather and Synthesize Context
 
-1.  **Confirm Target:** Once the spec is identified (e.g., `001-user-profile-picture-upload`), announce your task: "Okay, I will now create the technical considerations for **'User Profile Picture Upload'**."
-2.  **Read Documents:** Carefully read the `functional-spec.md` within the chosen directory AND the main `context/product/architecture.md` document.
-3.  **Identify candidate subagents (if applicable):** Determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Subagents advertise themselves via the `description` field exposed by the Agent tool — review those descriptions to identify candidates for delegation. No introspection step is needed.
-4.  **Analyze the codebase:** Delegate the read-only exploration to the built-in `Explore` agent to keep the orchestrator context lean. If the feature spans multiple stacks, spawn one `Explore` call per stack in parallel — issue them in the same tool-use block.
+1.  Read the `functional-spec.md` from the chosen directory and the main `context/product/architecture.md`. Issue both reads in parallel.
+2.  Identify candidate specialist subagents (if applicable): determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Specialist subagents advertise themselves via their description metadata — review those descriptions directly to identify candidates for delegation. No introspection step is needed.
+3.  Analyze the codebase: delegate the read-only exploration to a research subagent if the host tool provides one (in Claude Code: the built-in `Explore` agent) to keep the orchestrator context lean. If the feature spans multiple stacks, run one exploration per stack in parallel.
     - For technology-specific recommendations beyond codebase exploration, delegate to a specialist subagent whose description matches the stack. Run multiple delegations in parallel when the work is independent.
-    - If no specialist exists for a stack, do the analysis yourself after `Explore` reports back, and note the gap so `/awos:hire` can address it.
+    - If no specialist exists for a stack, do the analysis yourself after the exploration reports back, and note the gap so `/awos:hire` can address it.
 
 ### Step 3: Propose and Draft the Technical Plan (Interactive)
 
@@ -63,7 +59,7 @@ Follow this process precisely.
       - For configs: list required env vars and their purpose (no full file contents)
       - For files: specify paths and responsibilities (no full implementations)
       - Reference official docs for exact syntax/requirements rather than duplicating them
-    - **CRITICAL BEHAVIOR:** For each section, you must propose a specific implementation detail based on the architecture, state it as an assumption, and ask for approval.
+    - For each section, propose a specific implementation detail based on the architecture, state it as an assumption, and ask for approval before moving on.
     - Example: "For the database, the functional spec implies we need to store the image location. I'll **assume** we should add a new `avatar_url` (TEXT) column to the `users` table. **Is that assumption correct?**"
     - Example: "For the API, I'll propose a `POST /api/v1/users/me/avatar` endpoint that accepts a multipart/form-data request. **Does that fit the requirements?**"
 
@@ -79,6 +75,6 @@ Follow this process precisely.
 
 1.  **Identify Path:** The output path is the `technical-considerations.md` file inside the directory you identified in Step 1.
 2.  **Save File:** Once the user approves the draft, write the final content into this file.
-3.  **Check for New Capabilities:** Review the technical specification you just saved. Determine whether it introduces technologies, frameworks, tools, or testing approaches that are NOT already covered by the project’s existing architecture and specialist agents.
-    - **If new capabilities are needed:** Build a pre-filled `/awos:hire` command that includes the specific technologies and the spec context. Conclude with: "The technical specification has been saved to `context/spec/[directory-name]/technical-considerations.md`. This spec introduces new capabilities that may benefit from specialist agents. Run the following to set up the right agents, then break it into tasks with `/awos:tasks`:" followed by a code block containing `/awos:hire cover [directory-name]: need [comma-separated list of new technologies/capabilities identified]`.
-    - **If no new capabilities are needed:** Conclude with: "The technical specification has been saved to `context/spec/[directory-name]/technical-considerations.md`. Let’s break it into tasks with `/awos:tasks`."
+3.  Review the saved spec for new technologies, frameworks, tools, or testing approaches not already covered by the project's existing architecture and specialist agents.
+    - If new capabilities are needed: report the saved path and recommend a pre-filled hire command: `/awos:hire cover [directory-name]: need [comma-separated list of new technologies/capabilities]`, followed by `/awos:tasks`.
+    - Otherwise: report the saved path and the next command: `/awos:tasks`.

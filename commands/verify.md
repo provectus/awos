@@ -30,14 +30,14 @@ Verify a specification's implementation against its acceptance criteria. For eac
 
 ### Step 1: Identify Target Specification
 
-1. **Analyze User Prompt:** If specified (e.g., "verify spec 002"), use that spec directory.
-2. **Automatic Mode:** If empty, find the first spec where all tasks in `tasks.md` are `[x]` but Status is not yet `Completed`.
-3. **No Target:** If no eligible spec found, inform user: "No specs ready for verification. Complete all tasks first."
+1. Analyze `<user_prompt>`. If it specifies a spec (e.g. "verify spec 002"), use that spec directory.
+2. Otherwise, find the first spec where all tasks in `tasks.md` are `[x]` but Status is not yet `Completed`.
+3. If no eligible spec is found, tell the user no specs are ready for verification and stop.
 
 ### Step 2: Load Context
 
-1. Read all three files from the target spec directory.
-2. Confirm all tasks in `tasks.md` are `[x]`. If not, stop: "Cannot verify - incomplete tasks remain."
+1. Read `functional-spec.md`, `technical-considerations.md`, and `tasks.md` from the target spec directory in parallel.
+2. Confirm all tasks in `tasks.md` are `[x]`. If not, stop and report which tasks remain.
 
 ### Step 3: Verify and Mark Acceptance Criteria
 

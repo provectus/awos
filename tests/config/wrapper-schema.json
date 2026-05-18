@@ -1,0 +1,10 @@
+{
+  "_comment": "Required and optional frontmatter keys for claude/commands/*.md wrappers. Tighten as the alignment audit lands (F11 adds argument-hint, disable-model-invocation).",
+  "required": ["description"],
+  "optional": [
+    "argument-hint",
+    "disable-model-invocation",
+    "allowed-tools",
+    "model"
+  ]
+}

@@ -87,11 +87,11 @@ Follow this logic precisely.
 
 ### Step 4: Review Subagent Coverage
 
-After saving, analyze the architecture decisions and the Task tool definition to extract all available subagent_type values with their descriptions to check if appropriate subagents exist:
+After saving, identify the technologies in the architecture and check whether subagents with matching descriptions are registered. Subagent `description` fields are Claude's dispatch metadata via the Agent tool — review them directly rather than introspecting tool internals.
 
 1.  **Identify Technologies:** Extract all technologies from the architecture (languages, frameworks, cloud providers, databases, infrastructure tools).
 
-2.  **Check Subagent Coverage:** For each technology, check your available subagents to see if a relevant domain expert exists.
+2.  **Check Subagent Coverage:** For each technology, check the registered subagents to see if a relevant domain expert exists.
 
 3.  **Present Coverage Table:**
 

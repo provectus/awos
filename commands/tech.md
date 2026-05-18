@@ -42,11 +42,10 @@ Follow this process precisely.
 
 1.  **Confirm Target:** Once the spec is identified (e.g., `001-user-profile-picture-upload`), announce your task: "Okay, I will now create the technical considerations for **'User Profile Picture Upload'**."
 2.  **Read Documents:** Carefully read the `functional-spec.md` within the chosen directory AND the main `context/product/architecture.md` document.
-3.  **Identify available subagents (if applicable):** Based on the functional spec and architecture document, determine which technology stack(s) this feature will primarily involve (e.g., Python backend, React frontend, or both). Analyze the Task tool definition to extract all available subagent_type values with their descriptions to check that corresponding subagents exist.
-4.  **Analyze Codebase:** State your intention to review the code: "To ensure the plan is sound, I will also analyze the existing codebase for relevant context, such as existing services, data models, and utility functions."
-    - If subagents are available for the feature's technology stack, delegate the codebase analysis to the appropriate expert(s) using the Task tool with the appropriate `subagent_type` (e.g., "python-expert", "react-expert"). For features spanning multiple technologies, you may delegate to multiple experts sequentially or in parallel.
-    - Ask the expert(s) to analyze existing patterns, architectural conventions, technology-specific best practices, and provide recommendations for the technical approach.
-    - If no subagent is available for the feature's technology, perform the analysis yourself.
+3.  **Identify candidate subagents (if applicable):** Determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Subagents advertise themselves via the `description` field exposed by the Agent tool — review those descriptions to identify candidates for delegation. No introspection step is needed.
+4.  **Analyze the codebase:** Delegate the read-only exploration to the built-in `Explore` agent to keep the orchestrator context lean. If the feature spans multiple stacks, spawn one `Explore` call per stack in parallel — issue them in the same tool-use block.
+    - For technology-specific recommendations beyond codebase exploration, delegate to a specialist subagent whose description matches the stack. Run multiple delegations in parallel when the work is independent.
+    - If no specialist exists for a stack, do the analysis yourself after `Explore` reports back, and note the gap so `/awos:hire` can address it.
 
 ### Step 3: Propose and Draft the Technical Plan (Interactive)
 

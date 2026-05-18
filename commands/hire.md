@@ -58,10 +58,10 @@ Follow this process precisely.
 
 ## Step 3: Check What Already Exists
 
-1.  **Discover Existing Agents and Skills:** Use the built-in Explore agent (via the Task tool with `subagent_type: "Explore"`) to discover all existing agents and skills in the project. The Explore agent should:
+1.  **Discover Existing Agents and Skills:** Use the built-in `Explore` agent (via the Agent tool with `subagent_type: "Explore"`) to discover all existing agents and skills in the project. The `Explore` agent should:
     - Scan `.claude/agents/*.md` and parse YAML frontmatter (name, description, skills)
     - Search for available skills across the project (`.claude/skills/`, plugin-provided skills, any other skill locations)
-    - Analyze the Task tool definition to extract all available `subagent_type` values with their descriptions
+    - Report each registered subagent's name and description so the orchestrator can match domains against them
 2.  **Compare Against Needs:** For each proposed agent role from Step 2, classify coverage:
     - **Covered** — An existing agent or subagent already handles this domain well
     - **Partially Covered** — An agent exists but lacks specific skills for the technologies

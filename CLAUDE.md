@@ -47,32 +47,36 @@ The installer runs on **Node 22+ or any recent Bun**. It uses only standard JS b
 
 ## Testing
 
-The repo has a four-layer test suite under `tests/`, all built on Node's `node:test` built-in — no npm dependencies. See `tests/README.md` for the detailed reference.
+The repo has a four-layer test suite under `tests/`, all built on Node's `node:test` built-in — no npm dependencies. See `tests/README.md` for the detailed reference and the inventory of current scenarios.
 
-1. **Static prompt linter** (`tests/lint-prompts.test.js`) — wrapper/root command symmetry, frontmatter schema, agent-marker presence, slash-command cross-references, audit-dimension DAG, `setup-config.js`-to-source-tree consistency, and substring checks for required prompt patterns (e.g. `.claude/agents/` references in subagent-enumerating commands, XML verification snippets in `implement.md`).
-2. **Installer unit tests** (`tests/installer/*.test.js`) — exercises `src/services/file-copier.js`, `src/migrations/runner.js`, and `src/core/setup-orchestrator.js` against temp directories.
-3. **Fixture projects** (`tests/fixtures.test.js` plus `tests/fixtures/<name>/{before/, expected-after.json}`) — each fixture represents a real-world install scenario (fresh, existing-awos, mid-workflow, pre-migration) and asserts the post-install tree against a manifest of `{ exists, sha256, contains, unchanged }`.
-4. **Session-log E2E** (`bin/awos-e2e-{prepare,verify}.js` + `tests/e2e/scenarios/<name>/`) — human-triggered. `prepare` seeds a temp project from the scenario fixture; the user runs the relevant `/awos:*` command in their own Claude Code session; `verify` parses `~/.claude/projects/<encoded-cwd>/<session>.jsonl` and asserts on the actual tool-call trace Claude produced.
+1. **Static prompt linter** (`tests/lint-prompts.test.js`) — symmetry, frontmatter, marker presence, cross-references, dimension DAG, copy-table consistency, and grep-style checks for required substrings inside prompt bodies.
+2. **Installer unit tests** (`tests/installer/*.test.js`) — exercises the installer services against temp directories.
+3. **Fixture projects** (`tests/fixtures.test.js` + `tests/fixtures/<name>/`) — real installer runs against representative pre-install trees, with manifest-based assertions.
+4. **Session-log E2E** (`bin/awos-e2e-{list,prepare,verify}.js` + `tests/e2e/scenarios/<name>/`) — human-triggered. `prepare` seeds a temp project from a scenario fixture; the user runs the relevant slash command in their own Claude Code session; `verify` parses the session JSONL at `~/.claude/projects/<encoded-cwd>/<session>.jsonl` and asserts on the actual tool-call trace Claude produced.
 
-Layers 1–3 plus the Layer-4 parser unit test run in CI (`npm test`, non-blocking — see `.github/workflows/quality-check.yml`). Layer-4 scenarios are run pre-merge by a human (no CI gate; they need a live Claude Code session).
+Layers 1–3 plus the Layer-4 parser unit test run in CI (`npm test`). Layer-4 scenarios run pre-merge by a human; they are not a CI gate.
 
-### Static vs. behavioral coverage
+### Pick the lowest layer that can express the contract
 
-Layers 1–3 verify that the source files are wired correctly — wrappers exist, frontmatter is valid, the installer copies the right tree. They cannot verify that Claude follows the wiring at runtime. Layer 4 closes that gap: it asserts on the actual tool calls Claude made, recovered from the session log on disk. For example, Layer 1 can assert that `commands/tasks.md` contains the string `.claude/agents/`; only Layer 4 proves that Claude actually issued `Glob`/`Read` against that path during a real `/awos:tasks` run.
+| Contract type                          | Layer | Cost          | Example                             |
+| -------------------------------------- | ----- | ------------- | ----------------------------------- |
+| Surface area (file/string/frontmatter) | 1     | free, instant | "wrapper has key X"                 |
+| Installer mechanics                    | 2     | free, instant | "migration is idempotent"           |
+| End-state of an install                | 3     | free, instant | "tree matches manifest"             |
+| Claude's runtime behavior              | 4     | one human run | "Claude called Tool X with input Y" |
 
-Pick the lowest layer that can express the contract. Static checks are free and instant; behavioral checks cost a human run.
+Layers 1–3 verify the source-of-truth files are wired correctly. They cannot verify Claude follows the wiring at runtime — only Layer 4 can. A typical full coverage story for one contract uses both: Layer 1 asserts the prompt mentions the required pattern; Layer 4 asserts Claude actually acted on it.
 
-### Tests must narrate what they check
+### Tests must narrate what they checked
 
-Output that says `N events found` or `7 pass` tells you the suite ran, not what was validated. Both lint tests and E2E scenarios should produce output a human can read top-to-bottom and understand which contracts were verified.
+Output that says `N events found` or `M pass` tells you the suite ran, not what was validated. Tests should produce output a human can read top-to-bottom and understand which contracts were verified.
 
-For Layer-4 scenarios, wrap each assertion in `await check('what was verified', () => { ... })` from `tests/e2e/expect.js`. Each becomes a streamed `✓` (or `✗` with error excerpt) line in the verify output, with a final `N/M checks passed` summary. The scenario at `tests/e2e/scenarios/tasks-enumerates-agents/assert.js` is the reference shape — copy it when building a new scenario.
+- **Layer 1 lint tests** — `assert.*` failure messages name the contract being violated, not just dump a diff.
+- **Layer 4 scenarios** — each assertion is wrapped in `await check('what was verified', () => { ... })` from `tests/e2e/expect.js`. Each becomes a streamed `✓` (or `✗` with error excerpt) line, with a final `N/M checks passed` summary. Any existing scenario under `tests/e2e/scenarios/` is a reference shape.
 
-For Layer-1 lint tests, the `assert.deepEqual`/`assert.ok` failure messages should name the contract explicitly (e.g. `"commands/${file} must reference '.claude/agents/' as the subagent discovery source"`), not just dump the diff. Anyone debugging a red CI run shouldn't have to open the test source to understand what broke.
+### Adding tests for new contracts
 
-### Rule for new structural or behavioral contracts
-
-Any PR that introduces a contract — wrapper frontmatter key, `agent-template.md` schema field, XML tag inside a prompt, migration, required tool-call pattern in a slash command — must ship its test in the same PR. Surface-area contracts go to Layer 1. Mechanical contracts (installer behavior, migration idempotency) go to Layer 2 or 3. Behavioral contracts ("Claude must actually call X") go to a Layer-4 scenario. Coverage tracks contracts, not the audit proposal in the abstract.
+When a change introduces a contract — frontmatter key, structural marker, migration, required tool-call pattern in a slash command — its test ships in the same PR. Pick the lowest layer in the table above that expresses the contract. Behavioral contracts ("Claude must call X") add a Layer-4 scenario; the static counterpart often also lives at Layer 1 (assert the prompt mentions X). Coverage tracks contracts, not narrative.
 
 ## Architecture: The Two-Folder Customization Model
 

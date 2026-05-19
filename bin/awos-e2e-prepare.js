@@ -78,13 +78,33 @@ async function main() {
   const instructions = await fsPromises.readFile(instructionsPath, 'utf8');
   const rendered = instructions.replace(/\{\{WORKDIR\}\}/g, workdir);
 
+  // Record the most-recent run so `e2e:verify` (no args) can resume it.
+  const statePath = path.join(repoRoot, 'tests', 'e2e', '.last-run.json');
+  await fsPromises.writeFile(
+    statePath,
+    JSON.stringify(
+      { scenario, workdir, preparedAt: prepareTime.toISOString() },
+      null,
+      2
+    ) + '\n',
+    'utf8'
+  );
+
   process.stdout.write(rendered);
   process.stdout.write('\n---\n');
-  process.stdout.write(`Prepared workdir: ${workdir}\n`);
+  process.stdout.write(`Prepared scenario: ${scenario}\n`);
+  process.stdout.write(`Workdir:          ${workdir}\n\n`);
+  process.stdout.write('Next steps:\n');
+  process.stdout.write(`  1. cd ${workdir}\n`);
+  process.stdout.write('  2. claude\n');
+  process.stdout.write('  3. Run the command from INSTRUCTIONS above\n');
+  process.stdout.write('  4. Exit Claude when finished\n\n');
+  process.stdout.write('Then return here and run one of:\n');
   process.stdout.write(
-    `When the Claude session finishes, verify with:\n` +
-      `  npm run e2e:verify ${scenario} ${workdir}\n`
+    '  bun run e2e:verify              # uses this prepare\n'
   );
+  process.stdout.write(`  bun run e2e:verify ${scenario}\n`);
+  process.stdout.write(`  bun run e2e:verify ${scenario} ${workdir}\n`);
 }
 
 main().catch((err) => {

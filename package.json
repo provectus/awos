@@ -13,6 +13,8 @@
     "test:installer": "node --test 'tests/installer/*.test.js'",
     "test:fixtures": "node --test tests/fixtures.test.js",
     "test:e2e": "node --test tests/e2e/session-reader.test.js",
+    "e2e": "node bin/awos-e2e-list.js",
+    "e2e:list": "node bin/awos-e2e-list.js",
     "e2e:prepare": "node bin/awos-e2e-prepare.js",
     "e2e:verify": "node bin/awos-e2e-verify.js"
   },

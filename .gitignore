@@ -2,3 +2,6 @@ node_modules
 .idea
 .DS_Store
 docs/superpowers/
+
+# Local state from `bun run e2e:prepare`; used by `e2e:verify` with no args
+tests/e2e/.last-run.json

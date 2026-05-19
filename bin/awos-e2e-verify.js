@@ -23,15 +23,58 @@ const { findSessionsForCwd, readEvents, extractToolCalls } = require(
 );
 const { makeChecker } = require(path.join(repoRoot, 'tests', 'e2e', 'expect'));
 
+function loadLastRun() {
+  const statePath = path.join(
+    path.resolve(__dirname, '..'),
+    'tests',
+    'e2e',
+    '.last-run.json'
+  );
+  if (!fs.existsSync(statePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
-  const scenario = process.argv[2];
-  const workdir = process.argv[3];
-  if (!scenario || !workdir) {
-    process.stderr.write(
-      'usage: awos-e2e-verify <scenario> <workdir>\n' +
-        '       (workdir is what `awos-e2e-prepare` printed)\n'
+  let scenario = process.argv[2];
+  let workdir = process.argv[3];
+
+  // No args: pull both from the last-run state.
+  if (!scenario && !workdir) {
+    const last = loadLastRun();
+    if (!last) {
+      process.stderr.write(
+        'usage: awos-e2e-verify [<scenario>] [<workdir>]\n' +
+          '  no args:                use the most recent `e2e:prepare`\n' +
+          '  scenario only:          use that scenario, pull workdir from state\n' +
+          '  scenario + workdir:     explicit\n\n' +
+          'No prior prepare on record at tests/e2e/.last-run.json.\n'
+      );
+      process.exit(2);
+    }
+    scenario = last.scenario;
+    workdir = last.workdir;
+    process.stdout.write(
+      `Resuming last prepare: scenario=${scenario}, workdir=${workdir}\n`
     );
-    process.exit(2);
+  }
+
+  // Scenario only: pull workdir from state if it matches.
+  if (scenario && !workdir) {
+    const last = loadLastRun();
+    if (last && last.scenario === scenario) {
+      workdir = last.workdir;
+    } else {
+      process.stderr.write(
+        `error: scenario "${scenario}" given without a workdir, and the last ` +
+          `prepare was ${last ? `for "${last.scenario}"` : 'absent'}.\n` +
+          `  Run \`bun run e2e:prepare ${scenario}\` or pass the workdir explicitly.\n`
+      );
+      process.exit(2);
+    }
   }
 
   const scenarioDir = path.join(

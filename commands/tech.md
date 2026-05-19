@@ -37,7 +37,7 @@ Follow this process precisely.
 
 ### Step 2: Gather and Synthesize Context
 
-1.  Read the `functional-spec.md` from the chosen directory and the main `context/product/architecture.md`. Issue both reads in parallel.
+1.  Read the `functional-spec.md` from the chosen directory and the main `context/product/architecture.md`. These two inputs are independent — issue both `Read` calls in a single tool-use block (parallel tool calls). Sequence reads only when one's output feeds the next.
 2.  Identify candidate specialist subagents: determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Discover registered specialists by scanning `.claude/agents/*.md` (delegate to the built-in `Explore` agent when available, otherwise use `Glob` + `Read`) and parsing each agent's YAML frontmatter (`name`, `description`, `skills`). Match each stack against this concrete list, plus always-available built-ins (`general-purpose`, `Explore`, `Plan`).
 3.  Analyze the codebase: delegate the read-only exploration to the built-in `Explore` agent to keep the orchestrator context lean. If the feature spans multiple stacks, run one exploration per stack in parallel.
     - For technology-specific recommendations beyond codebase exploration, delegate to the specialist whose frontmatter `description` matches the stack (from the list discovered in step 2). Run multiple delegations in parallel when the work is independent.

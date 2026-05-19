@@ -86,25 +86,20 @@ When bumping plugin behavior, update version numbers in **both** `.claude-plugin
 - Prettier config: single quotes, semicolons, 80-col, 2-space, LF endings, `es5` trailing commas. CI fails on format drift.
 - PR labels (`major` / `minor` / `patch`) drive automated release version bumps via release-drafter; defaulting to `patch` when unlabeled.
 
-## Editing Prompts: Align with Anthropic Best Practices
+## Editing Prompts
 
-When changing markdown under `commands/`, `claude/commands/`, `plugins/awos/`, or `templates/agent-template.md`, those files become prompts users run in Claude Code. Follow Anthropic's living guidance — these docs are versioned and shift over time, so re-read before any large rewrite:
+Files under `commands/`, `claude/commands/`, `plugins/awos/`, and `templates/agent-template.md` are prompts. Re-read Anthropic's guidance before any large rewrite — it changes:
 
-- [Claude Code best practices](https://code.claude.com/docs/en/best-practices) — verification, plan mode, context management, subagents, CLAUDE.md
-- [Prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) — XML tags, examples, parallel tool calls, overengineering controls (Opus 4.7 / Sonnet 4.6 era)
-- [Slash commands & skills](https://code.claude.com/docs/en/slash-commands) — custom commands have been merged into skills; frontmatter reference
-- [Sub-agents](https://code.claude.com/docs/en/sub-agents) — the `Task` tool was renamed to `Agent` in Claude Code v2.1.63
-- [Memory / CLAUDE.md](https://code.claude.com/docs/en/memory), [Permission modes](https://code.claude.com/docs/en/permission-modes), [Hooks](https://code.claude.com/docs/en/hooks-guide)
+- <https://code.claude.com/docs/en/best-practices>
+- <https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices>
+- <https://code.claude.com/docs/en/slash-commands>
+- <https://code.claude.com/docs/en/sub-agents>
 
-Concrete rules for this repo:
+Non-obvious rules for this repo:
 
-- **Verification is non-optional.** A prompt that marks a task or acceptance criterion complete must run a real check — tests, lint/typecheck, curl, Playwright MCP for UIs — before doing so. "It compiled" is not verification. When a command delegates to a subagent, the formulated prompt must pass concrete `<verification_commands>` the subagent runs before reporting success.
-- **Dial back aggressive emphasis.** Latest models (Opus 4.6+) overtrigger on `CRITICAL` / `YOU MUST` / `STRICTLY PROHIBITED`. Prefer plain declarative sentences; reserve at most one bold-emphasis rule per file for the one most likely to be ignored.
-- **Use `Agent` (not `Task`)** when naming the delegation tool in prose. Existing `Task(...)` aliases still work but new prompts should use the current name.
-- **Drop the "introspect the Agent tool to extract subagent_type values" pattern.** Subagent `description` fields are the dispatch mechanism — Claude reads them automatically. Telling Claude to enumerate them is fragile meta-work.
-- **Wrapper frontmatter belongs in `claude/commands/*.md`.** At minimum: `argument-hint` and `disable-model-invocation: true` for commands that write files. Use `@.awos/commands/<name>.md` to inline the underlying instructions instead of "Refer to the instructions located in this file:".
+- **Dial back aggressive emphasis.** Opus 4.6+ overtriggers on `CRITICAL` / `YOU MUST` / `STRICTLY PROHIBITED`. Use plain declarative sentences; reserve one bold-emphasis rule per file for the one most likely to be ignored.
+- **Use `Agent`, not `Task`,** when naming the delegation tool. `Task(...)` aliases still work but the tool was renamed in Claude Code v2.1.63.
+- **Don't introspect the Agent tool** to enumerate subagents — its descriptions are the dispatch mechanism, read them directly from `.claude/agents/*.md`.
 - **Prefer the built-in `Explore` and `Plan` subagents** for read-heavy context-gathering. Don't have an orchestrator command read the whole codebase in its own context.
-- **Skip preambles.** State the action and act. No "Great!", "I will now…", "All done!" — modern models trim this naturally; AWOS prompts shouldn't force them back to a 2024 cadence.
-- **For interactive interviews, use the `AskUserQuestion` tool**, not plain numbered lists.
-
-When you propose a change to a prompt, name the rule above (or the Anthropic doc section) you're applying — this anchors reviewers to current guidance rather than habit.
+- **Skip ceremonial preambles** like "Great!", "I will now…", "All done!" — modern models trim them naturally and AWOS prompts shouldn't fight that.
+- **`AskUserQuestion` is Claude-Code-only.** Mention it only in `claude/commands/*.md` wrappers, never in core `commands/*.md`, since other agentic tools don't have it.

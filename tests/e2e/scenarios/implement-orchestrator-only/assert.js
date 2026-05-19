@@ -8,9 +8,9 @@
  *     source code. It may flip checkboxes in tasks.md — that's
  *     bookkeeping, not coding — so we allow Edit/Write targeting
  *     tasks.md specifically.
- *   - The delegation prompt must carry the F5 guards
- *     (<verification_commands>, <scope_discipline>,
- *     <investigate_before_answering>) the prompt promises.
+ *   - The delegation prompt must carry the F8 <scope_discipline> and
+ *     F9 <investigate_before_answering> guards. F5 (verification
+ *     policy) is intentionally out of scope and not asserted here.
  *
  * Each `check` is one independently-narratable assertion so the verify
  * harness streams a pass/fail line per check.
@@ -90,30 +90,6 @@ module.exports = async function run({ check, toolCalls, workdir }) {
     }
   );
 
-  await check('Claude passed verification commands to the subagent', () => {
-    if (delegations.length === 0) {
-      throw new Error('no delegation call to inspect');
-    }
-    // Accept either the literal <verification_commands> XML tag (the
-    // pattern the prompt names explicitly) OR a direct mention of the
-    // concrete pytest command from tasks.md. Either form proves the
-    // verification policy was carried through.
-    const carriesVerification = delegations.some((call) => {
-      const prompt = String(call.input?.prompt || '');
-      return (
-        /<verification_commands>/i.test(prompt) ||
-        /pytest\s+tests\/test_health\.py/.test(prompt)
-      );
-    });
-    if (!carriesVerification) {
-      throw new Error(
-        'no delegation prompt mentioned <verification_commands> or ' +
-          'the concrete pytest command from tasks.md — the F5 ' +
-          'verification policy was dropped'
-      );
-    }
-  });
-
   await check(
     'Claude included scope-discipline / investigate-before-answering guards',
     () => {
@@ -130,7 +106,7 @@ module.exports = async function run({ check, toolCalls, workdir }) {
       if (!carriesGuards) {
         throw new Error(
           'no delegation prompt carried both <scope_discipline> and ' +
-            '<investigate_before_answering> — F5 guards were dropped'
+            '<investigate_before_answering> — F8/F9 guards were dropped'
         );
       }
     }

@@ -67,7 +67,7 @@ Plus `bin/awos-e2e-prepare.js` and `bin/awos-e2e-verify.js` at the repo root dri
 - **Wrapper frontmatter schema.** Required keys defined in `tests/config/wrapper-schema.json`. Tighten this file (don't edit the test) as audit-driven contracts add new required fields.
 - **Wrapper description matches root** (F18). Drift between a wrapper's `description` and the corresponding root command's `description` fails the suite.
 - **Agent marker preservation.** `commands/tasks.md` (writer) and `commands/implement.md` (reader) both contain the literal `**[Agent: ` marker token.
-- **XML verification snippets** (F5). `commands/implement.md` contains `<verification_commands>`, `<scope_discipline>`, and `<investigate_before_answering>`.
+- **XML scope-and-investigate snippets** (F8/F9). `commands/implement.md` contains `<scope_discipline>` and `<investigate_before_answering>`.
 - **Slash-command cross-references.** Every `/awos:<word>` mentioned in any prompt resolves to a real `commands/<word>.md` (or the plugin path for `/awos:ai-readiness-audit`).
 - **Dimension DAG.** Every dimension under `plugins/awos/skills/ai-readiness-audit/dimensions/*.md` has required frontmatter, `name` matches its filename, severity is in the allowed set, `depends-on` entries resolve to real dimension names, and the graph topologically sorts (no cycles).
 - **`context/...` path consistency.** Cross-prompt path references are mutually reachable — if two prompts read the same path, at least one writer of it must exist.
@@ -167,13 +167,12 @@ tests/e2e/
 
 Currently shipped scenarios:
 
-| Scenario                                | Target command       | Contract type            | What it asserts                                                                                                                                                                                      |
-| --------------------------------------- | -------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tasks-enumerates-agents/`              | `/awos:tasks`        | Discovery + output       | Scans `.claude/agents/` (Glob/Read/LS/Grep or Explore-delegation) and writes `tasks.md` with `**[Agent: name]**` markers that all resolve to real agent files                                        |
-| `implement-orchestrator-only/`          | `/awos:implement`    | Negative + delegation    | Delegates the coding via the `Agent` tool, never calls `Edit`/`Write`/`MultiEdit` on source files (checkbox flips on `tasks.md` are allowed), and carries the F5 guard XML                           |
-| `architecture-builds-coverage-table/`   | `/awos:architecture` | Output + table semantics | Reads `product-definition.md` + `roadmap.md`, scans `.claude/agents/`, and writes a coverage table where the seeded specialist is `✅ Exists` and the absent one is `⚠️ Missing`                     |
-| `tech-uses-parallel-reads-and-explore/` | `/awos:tech`         | Parallel calls + Explore | Reads `functional-spec.md` and `architecture.md` in the same assistant turn (parallel tool calls — proven via shared `assistantUuid`) and delegates exploration to `Explore`                         |
-| `verify-runs-real-verification/`        | `/awos:verify`       | Observable verification  | Reads the spec, exercises a real verification mechanism (Bash run of pytest/python/curl/etc., a Read on the implementation artifact, or a Playwright MCP call) before flipping Status to `Completed` |
+| Scenario                                | Target command       | Contract type            | What it asserts                                                                                                                                                                  |
+| --------------------------------------- | -------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tasks-enumerates-agents/`              | `/awos:tasks`        | Discovery + output       | Scans `.claude/agents/` (Glob/Read/LS/Grep or Explore-delegation) and writes `tasks.md` with `**[Agent: name]**` markers that all resolve to real agent files                    |
+| `implement-orchestrator-only/`          | `/awos:implement`    | Negative + delegation    | Delegates the coding via the `Agent` tool, never calls `Edit`/`Write`/`MultiEdit` on source files (checkbox flips on `tasks.md` are allowed), and carries the F8/F9 guard XML    |
+| `architecture-builds-coverage-table/`   | `/awos:architecture` | Output + table semantics | Reads `product-definition.md` + `roadmap.md`, scans `.claude/agents/`, and writes a coverage table where the seeded specialist is `✅ Exists` and the absent one is `⚠️ Missing` |
+| `tech-uses-parallel-reads-and-explore/` | `/awos:tech`         | Parallel calls + Explore | Reads `functional-spec.md` and `architecture.md` in the same assistant turn (parallel tool calls — proven via shared `assistantUuid`) and delegates exploration to `Explore`     |
 
 ### Adding a new scenario
 

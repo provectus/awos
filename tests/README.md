@@ -167,16 +167,25 @@ tests/e2e/
 
 Currently shipped scenarios:
 
-| Scenario                   | What it asserts                                                                                                                                       |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tasks-enumerates-agents/` | `/awos:tasks` scans `.claude/agents/` (Glob/Read/LS/Grep or Explore-delegation against the path) and assigns markers that resolve to real agent files |
+| Scenario                                | Target command       | Contract type            | What it asserts                                                                                                                                                                                      |
+| --------------------------------------- | -------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tasks-enumerates-agents/`              | `/awos:tasks`        | Discovery + output       | Scans `.claude/agents/` (Glob/Read/LS/Grep or Explore-delegation) and writes `tasks.md` with `**[Agent: name]**` markers that all resolve to real agent files                                        |
+| `implement-orchestrator-only/`          | `/awos:implement`    | Negative + delegation    | Delegates the coding via the `Agent` tool, never calls `Edit`/`Write`/`MultiEdit` on source files (checkbox flips on `tasks.md` are allowed), and carries the F5 guard XML                           |
+| `architecture-builds-coverage-table/`   | `/awos:architecture` | Output + table semantics | Reads `product-definition.md` + `roadmap.md`, scans `.claude/agents/`, and writes a coverage table where the seeded specialist is `✅ Exists` and the absent one is `⚠️ Missing`                     |
+| `tech-uses-parallel-reads-and-explore/` | `/awos:tech`         | Parallel calls + Explore | Reads `functional-spec.md` and `architecture.md` in the same assistant turn (parallel tool calls — proven via shared `assistantUuid`) and delegates exploration to `Explore`                         |
+| `verify-runs-real-verification/`        | `/awos:verify`       | Observable verification  | Reads the spec, exercises a real verification mechanism (Bash run of pytest/python/curl/etc., a Read on the implementation artifact, or a Playwright MCP call) before flipping Status to `Completed` |
 
 ### Adding a new scenario
 
-1. `mkdir tests/e2e/scenarios/<name>/{fixture,}`. Put any pre-existing files the scenario needs (agents, partial spec docs, hand-authored CLAUDE.md, etc.) under `fixture/` — it overlays on top of the installer-produced tree, it does not replace it.
-2. Write `INSTRUCTIONS.md`. Use `{{WORKDIR}}` wherever you need the temp directory path; the prepare CLI substitutes it before printing.
-3. Write `assert.js` as a CommonJS module exporting `async function run({ events, toolCalls, workdir })`. Use the helpers in `tests/e2e/expect.js`. Throw on failure with enough context for a human to act.
-4. Smoke-test by running prepare, finishing a session, and running verify. If you want to dry-run without burning an API call, stub a session log under `~/.claude/projects/<encoded-workdir>/sess-fake.jsonl` and run verify directly.
+The recipe:
+
+1. Create `tests/e2e/scenarios/<name>/`.
+2. Add a `fixture/` subtree — anything in it is overlaid on top of the installed AWOS tree during `prepare`. Seed only the pre-existing files the scenario needs (agents, partial spec docs, hand-authored CLAUDE.md, sample source files, etc.) — the installer's own output is already present.
+3. Add `INSTRUCTIONS.md`. Use `{{WORKDIR}}` wherever you need the temp directory path; the prepare CLI substitutes it before printing.
+4. Add `assert.js` as a CommonJS module exporting `async function run({ check, toolCalls, events, workdir })`. Use the helpers in `tests/e2e/expect.js`. Throw on failure with enough context for a human to act.
+5. Wrap every assertion in `await check('what was verified', () => { ... })` so each one gets its own narrated pass/fail line. The harness streams them; "N events found" is not narration.
+
+Smoke-test by running `e2e:prepare`, finishing a session in `claude`, and running `e2e:verify`. If you want to dry-run without burning an API call, stub a session log under `~/.claude/projects/<encoded-workdir>/sess-fake.jsonl` and run verify directly.
 
 ### Constraints
 

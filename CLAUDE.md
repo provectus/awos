@@ -24,12 +24,12 @@ bunx prettier . --check
 npx prettier --write .     # auto-format before committing
 bunx prettier --write .
 
-# Test installer against a separate project (pick one runner):
+# Test installer against a separate project (pick one runner; $AWOS_REPO is the absolute path to this repo):
 cd ~/some-scratch-project
-npx /Users/aleksandrmakarov/code/awos/index.js
-bunx /Users/aleksandrmakarov/code/awos/index.js
-bun /Users/aleksandrmakarov/code/awos/index.js          # direct exec also works
-npx /Users/aleksandrmakarov/code/awos/index.js --dry-run   # preview only
+npx $AWOS_REPO/index.js
+bunx $AWOS_REPO/index.js
+bun $AWOS_REPO/index.js          # direct exec also works
+npx $AWOS_REPO/index.js --dry-run   # preview only
 ```
 
 There is no test suite. The installer runs on **Node 22+ or any recent Bun**. It uses only standard JS built-ins (`fs`, `path`) via CommonJS `require`, which both runtimes support — do not add npm dependencies or runtime-specific APIs without strong justification, as that would break cross-runtime compatibility.

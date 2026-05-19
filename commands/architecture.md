@@ -65,22 +65,16 @@ Follow this logic precisely.
 ### Step 3: Finalization
 
 1.  Write the final content to `context/product/architecture.md`.
-2.  Proceed to **Step 4: Review Subagent Coverage**.
+2.  Proceed to **Step 4: Coverage Hint**.
 
 ---
 
-### Step 4: Populate the Subagent Coverage section
+### Step 4: Coverage Hint
 
-The architecture template ends with a `## Subagent Coverage` section. Fill it in now and save the file again.
+Give the user a quick read on whether the stack already has specialist agents — but do not persist this anywhere. The durable coverage report is owned by `/awos:hire` (see `context/product/agents.md` after that command runs).
 
-1.  **Identify Technologies:** Extract all technologies from the architecture (languages, frameworks, cloud providers, databases, infrastructure tools).
-
-2.  **Discover registered specialists:** Scan `.claude/agents/*.md` (delegate to the built-in `Explore` agent when available, otherwise use `Glob` + `Read`) and parse each agent's YAML frontmatter (`name`, `description`, `skills`). Treat that list, together with always-available built-ins (`general-purpose`, `Explore`, `Plan`), as the universe of available subagents. For each technology, decide whether a registered subagent's description matches the domain.
-
-3.  **Write the coverage table into the file** under the `## Subagent Coverage` heading. Use the exact GitHub-flavored markdown table syntax shown in the template — three pipe-delimited columns (`Technology`, `Recommended Subagent Role`, `Status`), one row per technology. Status cells are `✅ Exists` or `⚠️ Missing`; you may append a short qualifier after a dash (`⚠️ Missing — closest fit: <name>`), but the leading marker must be one of the two literals so the column scans cleanly. Do not use bulleted lists or horizontal-rule delimiters between rows — the table is the contract.
-
-4.  **Save** the updated `architecture.md`.
-
-5.  **Recommendations:** If there are any `⚠️ Missing` rows, tell the user to run `/awos:hire` to find, install, and configure specialist agents for those gaps.
-
-6.  Report the saved path and the next commands: `/awos:hire`, then `/awos:spec`.
+1.  List the technologies in the saved architecture (languages, frameworks, cloud providers, databases, infrastructure tools).
+2.  Look at the names of subagents registered in `.claude/agents/` (if any). Without going deep, note how many of the listed technologies do not appear to have a matching specialist by description.
+3.  Report the saved path and the next commands:
+    - `/awos:hire` (always — it owns the canonical coverage report and installs missing specialists).
+    - `/awos:spec` after `/awos:hire`.

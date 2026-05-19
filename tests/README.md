@@ -44,11 +44,19 @@ tests/
 │   ├── customized-wrapper/
 │   ├── mid-workflow/
 │   └── pre-migration-v1/
+├── e2e/                            # Layer 4: session-log E2E (human-triggered)
+│   ├── session-reader.js           # JSONL parser + findSessionsForCwd
+│   ├── session-reader.test.js      # parser unit tests (runs in CI)
+│   ├── expect.js                   # assertion DSL for scenario assert.js
+│   ├── fixtures/                   # hand-crafted JSONL for parser tests
+│   └── scenarios/                  # one directory per E2E scenario
 └── helpers/
     ├── frontmatter.js              # minimal YAML-frontmatter parser, no deps
     ├── manifest.js                 # load + assert fixture manifests
     └── temp-project.js             # mkdtemp / copyTree / silenced helpers
 ```
+
+Plus `bin/awos-e2e-prepare.js` and `bin/awos-e2e-verify.js` at the repo root drive Layer 4's prepare/verify cycle.
 
 ## Layer 1 — Static prompt linter
 
@@ -111,6 +119,68 @@ Currently shipped fixtures:
 Adding a new fixture: create `tests/fixtures/<name>/`, optionally with a `before/` subtree, plus an `expected-after.json` manifest. The harness picks it up automatically.
 
 Cost: ~65 ms for all five.
+
+## Layer 4 — Session-log E2E (human-triggered)
+
+`tests/e2e/` plus `bin/awos-e2e-prepare.js` and `bin/awos-e2e-verify.js`. Layers 1–3 catch structural regressions in prompt _source_; Layer 4 catches the failure mode they cannot — _Claude doesn't actually follow the prompt_. It parses the JSONL session log Claude Code writes under `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` and asserts on the tool calls Claude really made.
+
+### Why it exists
+
+A prompt that contains `**[Agent: ` somewhere in the source passes the static lint. That tells us the literal token is present; it does not tell us the LLM, given the prompt, will actually scan `.claude/agents/` before deciding which agent to assign. Layer 4 closes that gap by inspecting behavioral evidence.
+
+### Not a CI gate
+
+Each run requires a human in the loop (a real `claude` session inside a temp project). It is a **pre-merge checklist for prompt-touching PRs**, not part of automated CI. Only the parser unit test (`tests/e2e/session-reader.test.js`) runs through `npm test` — it asserts the parser against the checked-in fixture JSONL, which is enough to keep the harness itself honest.
+
+### Running a scenario
+
+```sh
+# 1. Spin a fresh temp project, install AWOS into it, overlay the
+#    scenario's fixture, and print the manual steps.
+npm run e2e:prepare tasks-enumerates-agents
+
+# 2. Open a new terminal, cd into the printed workdir, run `claude`,
+#    and execute the slash command the instructions describe. Let it
+#    finish.
+
+# 3. Back in the original terminal:
+npm run e2e:verify tasks-enumerates-agents <workdir>
+# Exit 0 with a [pass] summary, or exit 1 with the recent tool-call
+# trace and the specific contract that failed.
+```
+
+### Layout
+
+```
+tests/e2e/
+├── session-reader.js              # JSONL parser + findSessionsForCwd
+├── session-reader.test.js         # node:test unit tests against the fixture
+├── expect.js                      # expectToolCall / expectNoToolCall / expectFileExists
+├── fixtures/
+│   └── sample-session.jsonl       # hand-crafted; exercises every event shape
+└── scenarios/
+    └── <scenario-name>/
+        ├── INSTRUCTIONS.md        # rendered to the operator on prepare; {{WORKDIR}} is substituted
+        ├── assert.js              # module.exports = async ({ events, toolCalls, workdir }) => { … }
+        └── fixture/               # overlay on top of the installed AWOS tree
+```
+
+Currently shipped scenarios:
+
+| Scenario                   | What it asserts                                                                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tasks-enumerates-agents/` | `/awos:tasks` scans `.claude/agents/` (Glob/Read/LS/Grep or Explore-delegation against the path) and assigns markers that resolve to real agent files |
+
+### Adding a new scenario
+
+1. `mkdir tests/e2e/scenarios/<name>/{fixture,}`. Put any pre-existing files the scenario needs (agents, partial spec docs, hand-authored CLAUDE.md, etc.) under `fixture/` — it overlays on top of the installer-produced tree, it does not replace it.
+2. Write `INSTRUCTIONS.md`. Use `{{WORKDIR}}` wherever you need the temp directory path; the prepare CLI substitutes it before printing.
+3. Write `assert.js` as a CommonJS module exporting `async function run({ events, toolCalls, workdir })`. Use the helpers in `tests/e2e/expect.js`. Throw on failure with enough context for a human to act.
+4. Smoke-test by running prepare, finishing a session, and running verify. If you want to dry-run without burning an API call, stub a session log under `~/.claude/projects/<encoded-workdir>/sess-fake.jsonl` and run verify directly.
+
+### Constraints
+
+Same as the other layers — no npm dependencies, cross-runtime (the parser and CLIs must work under both Node 22 and Bun), and assertion failures must be informative (include the trace tail, not just "expected X got nothing").
 
 ## Adding tests for new contracts
 

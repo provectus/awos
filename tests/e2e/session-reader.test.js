@@ -24,9 +24,18 @@ const {
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'sample-session.jsonl');
 
-test('encodeCwd converts slashes to dashes (matches Claude Code layout)', () => {
-  assert.equal(encodeCwd('/tmp/awos-e2e-abc'), '-tmp-awos-e2e-abc');
-  assert.equal(encodeCwd('/Users/me/work'), '-Users-me-work');
+test('encodeCwd converts slashes and underscores to dashes', () => {
+  // Use a nonce so the path can't exist; encodeCwd then skips realpath
+  // and exercises the pure transformation.
+  const nonce = Date.now() + '-' + Math.random().toString(36).slice(2);
+  assert.equal(encodeCwd('/Users/me/work-' + nonce), '-Users-me-work-' + nonce);
+  // macOS temp paths look like /private/var/folders/_x/<hash>/T/<dir>;
+  // Claude Code's encoded form is -private-var-folders--x-<hash>-T-<dir>
+  // (note the double dash from `_x/`).
+  assert.equal(
+    encodeCwd('/private/var/folders/_x/abc/T/foo-' + nonce),
+    '-private-var-folders--x-abc-T-foo-' + nonce
+  );
 });
 
 test('readEvents parses every JSON line in order', () => {

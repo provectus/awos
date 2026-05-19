@@ -29,7 +29,18 @@ const path = require('node:path');
  * @returns {string}
  */
 function encodeCwd(cwd) {
-  return cwd.replace(/\//g, '-');
+  // Claude Code converts both `/` and `_` to `-` when forming the project
+  // directory name under ~/.claude/projects/. The macOS-specific gotcha is
+  // that /var/folders/... is a symlink to /private/var/folders/..., and
+  // Claude records the canonical (realpath) form — so resolve the symlink
+  // first when the path exists.
+  let resolved = cwd;
+  try {
+    resolved = fs.realpathSync(cwd);
+  } catch {
+    // Path may not exist (synthetic input for tests); fall back to cwd as-is.
+  }
+  return resolved.replace(/[/_]/g, '-');
 }
 
 /**

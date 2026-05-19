@@ -324,16 +324,15 @@ test('every top-level framework directory is referenced by setup-config', () => 
   }
 });
 
-test('implement.md uses XML verification snippets', () => {
-  // F5 from the alignment audit: the formulated subagent prompt in
-  // implement.md must contain the three XML-tagged blocks that pass
-  // scope, hallucination, and verification discipline to the subagent.
+test('implement.md uses XML scope-and-investigate snippets', () => {
+  // The formulated subagent prompt in implement.md must contain the
+  // scope-discipline (F8: don't over-engineer) and investigate-before-
+  // answering (F9: don't hallucinate) XML blocks. Verification policy
+  // (F5) is intentionally out of scope and not asserted here — teams
+  // that want mandatory verification can add it via wrapper
+  // customization in .claude/commands/awos/implement.md.
   const body = readUtf8(path.join(commandsDir, 'implement.md'));
-  const needed = [
-    '<verification_commands>',
-    '<scope_discipline>',
-    '<investigate_before_answering>',
-  ];
+  const needed = ['<scope_discipline>', '<investigate_before_answering>'];
   const missing = needed.filter((tag) => !body.includes(tag));
   assert.deepEqual(
     missing,

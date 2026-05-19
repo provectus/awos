@@ -143,9 +143,36 @@ function regexReplacer(_key, value) {
   return value;
 }
 
+/**
+ * Build a `check(description, fn)` helper bound to a `report` object.
+ *
+ * Scenario `assert.js` files use `check` to name each individual
+ * assertion so the verify harness can stream a pass/fail line per
+ * check. `report.start(desc)`, `report.pass(desc)`, and
+ * `report.fail(desc, err)` are invoked at the obvious moments.
+ * `check` re-throws on failure so subsequent dependent checks bail.
+ *
+ * @param {{ start?: Function, pass: Function, fail: Function }} report
+ * @returns {(description: string, fn: Function) => Promise<any>}
+ */
+function makeChecker(report) {
+  return async function check(description, fn) {
+    report.start?.(description);
+    try {
+      const result = await fn();
+      report.pass(description);
+      return result;
+    } catch (err) {
+      report.fail(description, err);
+      throw err;
+    }
+  };
+}
+
 module.exports = {
   callMatches,
   expectToolCall,
   expectNoToolCall,
   expectFileExists,
+  makeChecker,
 };

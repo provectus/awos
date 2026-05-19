@@ -21,6 +21,7 @@ const repoRoot = path.resolve(__dirname, '..');
 const { findSessionsForCwd, readEvents, extractToolCalls } = require(
   path.join(repoRoot, 'tests', 'e2e', 'session-reader')
 );
+const { makeChecker } = require(path.join(repoRoot, 'tests', 'e2e', 'expect'));
 
 async function main() {
   const scenario = process.argv[2];
@@ -89,24 +90,41 @@ async function main() {
     process.exit(1);
   }
 
+  process.stdout.write(`\n${scenario}\n`);
+  process.stdout.write(`  session: ${sessionPath}\n`);
+  process.stdout.write(
+    `  events: ${events.length}, tool calls: ${toolCalls.length}\n\n`
+  );
+
+  const stats = { passed: 0, failed: 0 };
+  const report = {
+    pass(description) {
+      stats.passed += 1;
+      process.stdout.write(`  ✓ ${description}\n`);
+    },
+    fail(description, err) {
+      stats.failed += 1;
+      const msg = (err && (err.message || err.toString())) || 'unknown error';
+      process.stdout.write(`  ✗ ${description}\n`);
+      process.stdout.write(`      ${msg.replace(/\n/g, '\n      ')}\n`);
+    },
+  };
+  const check = makeChecker(report);
+
   try {
-    await run({ events, toolCalls, workdir });
-  } catch (err) {
-    process.stderr.write(
-      `\n[FAIL] ${scenario}\n` +
-        `  session: ${sessionPath}\n` +
-        `  tool calls observed: ${toolCalls.length}\n\n` +
-        `  ${err.message || err}\n`
-    );
-    process.exit(1);
+    await run({ check, events, toolCalls, workdir });
+  } catch {
+    // The check helper already printed the failing line; we just need
+    // to short-circuit so subsequent dependent checks don't fire.
   }
 
-  process.stdout.write(
-    `[pass] ${scenario}\n` +
-      `       session: ${sessionPath}\n` +
-      `       events:  ${events.length}\n` +
-      `       tool calls: ${toolCalls.length}\n`
-  );
+  const total = stats.passed + stats.failed;
+  process.stdout.write(`\n  ${stats.passed}/${total} checks passed\n`);
+  if (stats.failed > 0) {
+    process.stdout.write(`[FAIL] ${scenario}\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`[pass] ${scenario}\n`);
 }
 
 main().catch((err) => {

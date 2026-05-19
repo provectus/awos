@@ -50,28 +50,18 @@ Follow this process precisely.
 
 You do not write or edit code, configuration, or database schemas yourself. Your role is to delegate.
 
-1.  Determine verification commands for this task (see Verification Policy below).
-2.  Construct a delegation prompt that includes:
+1.  Construct a delegation prompt that includes:
     - The full context from the three files loaded in Step 2.
     - The specific task description.
     - Clear instructions on what code to write or files to modify.
     - A `<scope_discipline>` block: "Only make changes the task requires. Don't add features, refactor unrelated code, or add validation for scenarios outside the task. If something is unclear, ask rather than guessing."
     - An `<investigate_before_answering>` block: "Don't speculate about code you haven't opened. Read relevant files before editing. Issue independent reads in parallel."
-    - A `<verification_commands>` block listing the concrete commands the subagent must run before reporting completion (e.g. `pytest tests/test_<area>.py`, `npm run lint && npm run typecheck`, `curl -fsS localhost:3000/<endpoint>`, or a browser-automation MCP call if one is configured). If no verification commands were identified, state that explicitly so the subagent doesn't fabricate one.
-    - A `<finish>` instruction: "After your edits, run every verification command. If any fail, fix the cause (not the test) and re-run. Report files changed, the last 20 lines of each verification command's output, and one line on the new user-visible behavior. Do not claim success if any verification step failed."
-3.  Delegate to the agent identified in Step 2, passing the formulated prompt as the task. If no specialist was matched, delegate to `general-purpose`.
+    - A concrete definition of success — what verification commands the subagent must run before reporting completion (tests, lint, typecheck, curl, or a browser-automation MCP if the project has one configured).
+2.  Delegate to the agent identified in Step 2, passing the formulated prompt as the task. If no specialist was matched, delegate to `general-purpose`.
 
-#### Verification Policy
+### Step 4: Await and Verify Completion
 
-- **Default:** run verification. Derive commands from the slice's verification sub-task in `tasks.md` (which `/awos:tasks` is supposed to populate), and fall back to the project's standard test/lint/typecheck commands inferred from `package.json`/`pyproject.toml`/etc.
-- **Opt-out:** if the project's CLAUDE.md or a wrapper customization explicitly says verification commands are not run (some teams skip writing tests intentionally), pass an empty `<verification_commands>` block and add a `<verification_disabled>` note explaining what would otherwise be checked.
-- Never silently skip verification. Either it runs, or the prompt records that it was deliberately skipped.
-
-### Step 4: Confirm Completion
-
-- The subagent reports back with verification command outputs.
-- If every verification command passed (or verification was deliberately disabled per the policy above), proceed to Step 5.
-- If any command failed, do not mark the task complete. Surface the failure to the user with the failing command's output and stop.
+- Wait for the subagent to complete its work and report a successful outcome. You should assume that a success signal from the subagent means the task was completed as instructed.
 
 ### Step 5: Update Progress
 

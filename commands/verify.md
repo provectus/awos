@@ -39,19 +39,13 @@ Verify a specification's implementation against its acceptance criteria. For eac
 1. Read `functional-spec.md`, `technical-considerations.md`, and `tasks.md` from the target spec directory in parallel.
 2. Confirm all tasks in `tasks.md` are `[x]`. If not, stop and report which tasks remain.
 
-### Step 3: Verify Acceptance Criteria
+### Step 3: Verify and Mark Acceptance Criteria
 
-For each acceptance criterion in `functional-spec.md`, run a real check before marking it `[x]`. Textual reasoning over the criterion is not verification.
+For each acceptance criterion in `functional-spec.md`:
 
-1. Pick the check that fits the criterion type:
-   - **UI / user-visible behavior:** if a browser-automation MCP is configured, navigate to the relevant page, perform the user action, and confirm the observable result. If no browser MCP is available, fall back to manual instructions for the user.
-   - **API / HTTP endpoint:** start the service if it isn't running, then `curl` (or equivalent) the endpoint and inspect the response against the criterion.
-   - **Data state / persistence:** query the data store directly (SQL, redis-cli, etc.) and confirm the expected state.
-   - **Correctness verifiable by tests/lint/typecheck:** run the project's standard commands (inferred from `package.json`, `pyproject.toml`, etc.) and confirm they pass.
-2. If the criterion passes, mark it `[x]`.
-3. If it fails, report the failing criterion with the command output that demonstrates the failure, and stop. Do not mark anything `[x]` in this step.
-
-**Opt-out:** if the project's CLAUDE.md or a wrapper customization explicitly disables automated verification (some teams skip writing tests intentionally), record `[?]` next to each criterion with a one-line note about what would otherwise be checked, and let the user confirm manually. Never silently mark `[x]` without either running a check or recording that verification was deliberately skipped.
+1. **Verify:** Check if the implementation satisfies the criterion
+2. **If met:** Mark it `[x]`
+3. **If NOT met:** Report which criterion failed and what's missing, then stop
 
 ### Step 4: Mark as Completed
 

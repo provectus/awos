@@ -149,19 +149,25 @@ test('agent marker pattern is preserved', () => {
 });
 
 test('subagent-enumerating commands tell Claude how to discover agents', () => {
-  // F3 follow-up. Commands that build coverage tables or assign agents to
-  // tasks need a definitive list of registered specialists — not just
-  // auto-dispatch metadata. Per current Anthropic sub-agents docs the
-  // documented enumeration path is the filesystem: scan .claude/agents/*.md
-  // and parse YAML frontmatter (name, description, skills). hire.md already
-  // uses this pattern; architecture.md, tasks.md, and tech.md must too.
-  const enumerators = ['architecture.md', 'tasks.md', 'tech.md', 'hire.md'];
-  for (const file of enumerators) {
+  // F3 follow-up. Commands that produce durable specialist assignments
+  // (Agent markers in tasks.md, the coverage report in agents.md) need
+  // the filesystem enumeration path: scan .claude/agents/*.md and parse
+  // YAML frontmatter. Commands that only give a verbal hint can mention
+  // the path without parsing frontmatter — architecture.md is the
+  // canonical example (its Step 4 explicitly defers the durable report
+  // to /awos:hire).
+  const fullEnumerators = ['tasks.md', 'tech.md', 'hire.md'];
+  const lightReferencers = ['architecture.md'];
+
+  for (const file of [...fullEnumerators, ...lightReferencers]) {
     const body = readUtf8(path.join(commandsDir, file));
     assert.ok(
       body.includes('.claude/agents/'),
       `commands/${file} must reference '.claude/agents/' as the subagent discovery source`
     );
+  }
+  for (const file of fullEnumerators) {
+    const body = readUtf8(path.join(commandsDir, file));
     assert.ok(
       /frontmatter|YAML/.test(body),
       `commands/${file} must tell Claude to parse the discovered agents' frontmatter`

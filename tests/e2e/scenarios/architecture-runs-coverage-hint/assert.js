@@ -1,22 +1,27 @@
 /**
- * Scenario assertion: /awos:architecture builds an honest coverage
- * table.
+ * Scenario assertion: /awos:architecture saves the architecture and
+ * runs a verbal coverage hint, deferring the durable coverage report
+ * to /awos:hire.
  *
- * The contract (from commands/architecture.md, Step 4):
+ * The contract (from commands/architecture.md, Steps 3 and 4):
  *   - Read product-definition.md and roadmap.md as inputs.
- *   - Scan .claude/agents/ to discover specialist subagents.
+ *   - Take a light look at .claude/agents/ to see what specialists
+ *     are registered.
  *   - Write context/product/architecture.md.
- *   - Append a coverage table mapping each architecture technology to a
- *     registered specialist, marked ✅ Exists or ⚠️ Missing.
+ *   - Recommend /awos:hire next — that command owns the durable
+ *     coverage report at context/product/agents.md, not this one.
  *
- * The fixture deliberately seeds python-expert and withholds react-expert.
- * A correctly-following Claude must produce a table where at least one
- * row is ✅ Exists (Python) and at least one is ⚠️ Missing (React).
+ * The architecture file itself MUST NOT contain a coverage table:
+ * the durable report belongs to /awos:hire. Asserting absence keeps
+ * the boundary intact across prompt edits.
  *
  * Each `check` is one independently-narratable assertion.
  */
 
 'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { expectFileExists } = require('../../expect');
 
@@ -61,16 +66,6 @@ function readCallOn(toolCalls, relPathRe) {
 module.exports = async function run({ check, toolCalls, workdir }) {
   const archPath = 'context/product/architecture.md';
 
-  await check('Claude scanned .claude/agents/ for specialist subagents', () => {
-    const hits = discoveryHits(toolCalls);
-    if (hits.length === 0) {
-      throw new Error(
-        'no Glob/Read/LS/Grep against .claude/agents/, and no Agent ' +
-          'delegation mentioning it — coverage table would be guesswork'
-      );
-    }
-  });
-
   await check('Claude read product-definition.md', () => {
     if (!readCallOn(toolCalls, /context\/product\/product-definition\.md$/)) {
       throw new Error(
@@ -89,42 +84,42 @@ module.exports = async function run({ check, toolCalls, workdir }) {
     }
   });
 
+  await check('Claude looked at .claude/agents/ for the coverage hint', () => {
+    const hits = discoveryHits(toolCalls);
+    if (hits.length === 0) {
+      throw new Error(
+        'no Glob/Read/LS/Grep against .claude/agents/, and no Agent ' +
+          'delegation mentioning it — coverage hint would be guesswork'
+      );
+    }
+  });
+
   await check(`architecture.md was written at ${archPath}`, () => {
     expectFileExists(workdir, archPath);
   });
 
-  await check('architecture.md contains a coverage table', () => {
-    // Tolerant header match: prompt template uses
-    //   | Technology | Recommended Subagent Role | Status |
-    // but we accept any markdown table whose header row mentions
-    // "Technology" and a status-ish column. Authors sometimes
-    // restyle these slightly.
-    expectFileExists(
-      workdir,
-      archPath,
-      /\|[^\n]*Technology[^\n]*\|[^\n]*\|[^\n]*\|/i
-    );
-  });
-
   await check(
-    'architecture.md marks at least one technology as ✅ Exists',
+    'architecture.md does not contain a coverage table (that belongs to /awos:hire)',
     () => {
-      // python-expert is in the fixture so the Python row should
-      // resolve. The prompt's example uses the exact emoji ✅; some
-      // models also emit the ASCII "Exists" word — accept either as
-      // the positive signal.
-      expectFileExists(workdir, archPath, /✅\s*Exists|Exists\s*✅/);
-    }
-  );
-
-  await check(
-    'architecture.md marks at least one technology as ⚠️ Missing',
-    () => {
-      // react-expert is intentionally absent so the React/frontend
-      // row should come out as missing. Accept both the prompt's
-      // exact ⚠️ Missing form and a plain "Missing" cell with the
-      // emoji nearby.
-      expectFileExists(workdir, archPath, /⚠️?\s*Missing|Missing\s*⚠️?/);
+      // The new contract: architecture.md is the technology decisions
+      // only. The durable Technology × Specialist × Status coverage
+      // report is owned by /awos:hire and written to
+      // context/product/agents.md. Asserting absence here keeps the
+      // boundary honest across prompt edits.
+      const text = fs.readFileSync(path.join(workdir, archPath), 'utf8');
+      // A markdown table whose header row mentions both "Technology"
+      // and "Status" is the coverage-table shape. If we find that in
+      // architecture.md, the boundary has been crossed.
+      const coverageHeader =
+        /\|[^\n]*Technology[^\n]*\|[^\n]*\|[^\n]*Status[^\n]*\|/i;
+      if (coverageHeader.test(text)) {
+        throw new Error(
+          'architecture.md contains a Technology/Status table — that ' +
+            'report now lives in context/product/agents.md, owned by ' +
+            '/awos:hire (commands/architecture.md Step 4 explicitly ' +
+            'defers it)'
+        );
+      }
     }
   );
 };

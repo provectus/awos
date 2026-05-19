@@ -56,7 +56,7 @@ Follow this process precisely.
   3.  Under that slice, create the nested sub-tasks (database, backend, frontend) needed to implement and verify **only that slice**.
   4.  **For each sub-task, assign the appropriate subagent:**
       - Identify the technology or domain the sub-task involves
-      - Review the descriptions of registered specialist subagents — those descriptions are the host tool's dispatch metadata, so no extra introspection step is needed
+      - Discover registered specialists by scanning `.claude/agents/*.md` (delegate to the built-in `Explore` agent when available, otherwise use `Glob` + `Read`) and parsing each agent's YAML frontmatter (`name`, `description`, `skills`). That list, plus always-available built-ins (`general-purpose`), is the universe to match against — auto-dispatch metadata is not a substitute when the assignment must be definitive.
       - Match the sub-task to a subagent based on:
         - Technology keywords
         - Task intent

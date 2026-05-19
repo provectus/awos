@@ -38,9 +38,9 @@ Follow this process precisely.
 ### Step 2: Gather and Synthesize Context
 
 1.  Read the `functional-spec.md` from the chosen directory and the main `context/product/architecture.md`. Issue both reads in parallel.
-2.  Identify candidate specialist subagents (if applicable): determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Specialist subagents advertise themselves via their description metadata — review those descriptions directly to identify candidates for delegation. No introspection step is needed.
-3.  Analyze the codebase: delegate the read-only exploration to a research subagent if the host tool provides one (in Claude Code: the built-in `Explore` agent) to keep the orchestrator context lean. If the feature spans multiple stacks, run one exploration per stack in parallel.
-    - For technology-specific recommendations beyond codebase exploration, delegate to a specialist subagent whose description matches the stack. Run multiple delegations in parallel when the work is independent.
+2.  Identify candidate specialist subagents: determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Discover registered specialists by scanning `.claude/agents/*.md` (delegate to the built-in `Explore` agent when available, otherwise use `Glob` + `Read`) and parsing each agent's YAML frontmatter (`name`, `description`, `skills`). Match each stack against this concrete list, plus always-available built-ins (`general-purpose`, `Explore`, `Plan`).
+3.  Analyze the codebase: delegate the read-only exploration to the built-in `Explore` agent to keep the orchestrator context lean. If the feature spans multiple stacks, run one exploration per stack in parallel.
+    - For technology-specific recommendations beyond codebase exploration, delegate to the specialist whose frontmatter `description` matches the stack (from the list discovered in step 2). Run multiple delegations in parallel when the work is independent.
     - If no specialist exists for a stack, do the analysis yourself after the exploration reports back, and note the gap so `/awos:hire` can address it.
 
 ### Step 3: Propose and Draft the Technical Plan (Interactive)

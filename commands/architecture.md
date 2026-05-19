@@ -75,7 +75,7 @@ After saving, identify the technologies in the architecture and check whether sp
 
 1.  **Identify Technologies:** Extract all technologies from the architecture (languages, frameworks, cloud providers, databases, infrastructure tools).
 
-2.  **Check Subagent Coverage:** For each technology, check the registered subagents to see if a relevant domain expert exists.
+2.  **Check Subagent Coverage:** Discover registered specialists by scanning `.claude/agents/*.md` (delegate to the built-in `Explore` agent when available, otherwise use `Glob` + `Read`) and parsing each agent's YAML frontmatter (`name`, `description`, `skills`). Treat that list, together with always-available built-ins (`general-purpose`, `Explore`, `Plan`), as the universe of available subagents. For each technology, mark whether a registered subagent's description matches the domain.
 
 3.  **Present Coverage Table:**
 

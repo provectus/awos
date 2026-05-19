@@ -167,12 +167,12 @@ tests/e2e/
 
 Currently shipped scenarios:
 
-| Scenario                                | Target command       | Contract type            | What it asserts                                                                                                                                                                  |
-| --------------------------------------- | -------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tasks-enumerates-agents/`              | `/awos:tasks`        | Discovery + output       | Scans `.claude/agents/` (Glob/Read/LS/Grep or Explore-delegation) and writes `tasks.md` with `**[Agent: name]**` markers that all resolve to real agent files                    |
-| `implement-orchestrator-only/`          | `/awos:implement`    | Negative + delegation    | Delegates the coding via the `Agent` tool, never calls `Edit`/`Write`/`MultiEdit` on source files (checkbox flips on `tasks.md` are allowed), and carries the F8/F9 guard XML    |
-| `architecture-builds-coverage-table/`   | `/awos:architecture` | Output + table semantics | Reads `product-definition.md` + `roadmap.md`, scans `.claude/agents/`, and writes a coverage table where the seeded specialist is `✅ Exists` and the absent one is `⚠️ Missing` |
-| `tech-uses-parallel-reads-and-explore/` | `/awos:tech`         | Parallel calls + Explore | Reads `functional-spec.md` and `architecture.md` in the same assistant turn (parallel tool calls — proven via shared `assistantUuid`) and delegates exploration to `Explore`     |
+| Scenario                                | Target command       | Contract type                | What it asserts                                                                                                                                                                                                                         |
+| --------------------------------------- | -------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tasks-enumerates-agents/`              | `/awos:tasks`        | Discovery + output           | Scans `.claude/agents/` (Glob/Read/LS/Grep or Explore-delegation) and writes `tasks.md` with `**[Agent: name]**` markers that all resolve to real agent files                                                                           |
+| `implement-orchestrator-only/`          | `/awos:implement`    | Negative + delegation        | Delegates the coding via the `Agent` tool, never calls `Edit`/`Write`/`MultiEdit` on source files (checkbox flips on `tasks.md` are allowed), and carries the F8/F9 guard XML                                                           |
+| `architecture-builds-coverage-table/`   | `/awos:architecture` | Output + table semantics     | Reads `product-definition.md` + `roadmap.md`, scans `.claude/agents/`, and writes a coverage table where the seeded specialist is `✅ Exists` and the absent one is `⚠️ Missing`                                                        |
+| `tech-uses-parallel-reads-and-explore/` | `/awos:tech`         | Adjacency + codebase look-up | Reads `functional-spec.md` and `architecture.md` together (parallel tool calls or back-to-back, no unrelated work between them) and examines the existing codebase before drafting (`Explore` delegation or direct `Read` under `src/`) |
 
 ### Adding a new scenario
 

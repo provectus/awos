@@ -60,7 +60,7 @@ async function copyFile({
     await fsPromises.copyFile(sourcePath, destinationPath);
 
     // Log the result
-    const relativePath = destinationPath.replace(targetDir + '/', '');
+    const relativePath = path.relative(targetDir, destinationPath);
 
     if (destinationExists) {
       log(`Updated ${relativePath}`, 'success');
@@ -103,7 +103,7 @@ async function copyDirectory({
 
   // Check if destination directory already exists
   const destinationExists = await pathExists(destinationDir);
-  const relativePath = destinationDir.replace(targetDir + '/', '');
+  const relativePath = path.relative(targetDir, destinationDir);
 
   if (!destinationExists) {
     await fsPromises.mkdir(destinationDir, { recursive: true });

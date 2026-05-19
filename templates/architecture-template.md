@@ -39,3 +39,15 @@
 - **[Component Name, e.g., Logging]:** [Technology Choice]
 - **[Component Name, e.g., Metrics]:** [Technology Choice]
 - **[Component Name]:** [Technology Choice]
+
+---
+
+## Subagent Coverage
+
+Populated by `/awos:architecture` Step 4 after the file is saved. One row per technology identified above. Status is `✅ Exists` when a specialist subagent with a matching description is registered in `.claude/agents/` (or as a built-in), `⚠️ Missing` otherwise.
+
+| Technology               | Recommended Subagent Role | Status                 |
+| ------------------------ | ------------------------- | ---------------------- |
+| [e.g., Python / FastAPI] | Python backend expert     | ✅ Exists / ⚠️ Missing |
+| [e.g., React]            | React / frontend expert   | ✅ Exists / ⚠️ Missing |
+| [e.g., PostgreSQL]       | Database expert           | ✅ Exists / ⚠️ Missing |

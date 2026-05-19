@@ -69,24 +69,18 @@ Follow this logic precisely.
 
 ---
 
-### Step 4: Review Subagent Coverage
+### Step 4: Populate the Subagent Coverage section
 
-After saving, identify the technologies in the architecture and check whether specialist agents with matching descriptions are registered. The host tool's agent-delegation interface exposes those descriptions — review them directly rather than introspecting tool internals.
+The architecture template ends with a `## Subagent Coverage` section. Fill it in now and save the file again.
 
 1.  **Identify Technologies:** Extract all technologies from the architecture (languages, frameworks, cloud providers, databases, infrastructure tools).
 
-2.  **Check Subagent Coverage:** Discover registered specialists by scanning `.claude/agents/*.md` (delegate to the built-in `Explore` agent when available, otherwise use `Glob` + `Read`) and parsing each agent's YAML frontmatter (`name`, `description`, `skills`). Treat that list, together with always-available built-ins (`general-purpose`, `Explore`, `Plan`), as the universe of available subagents. For each technology, mark whether a registered subagent's description matches the domain.
+2.  **Discover registered specialists:** Scan `.claude/agents/*.md` (delegate to the built-in `Explore` agent when available, otherwise use `Glob` + `Read`) and parse each agent's YAML frontmatter (`name`, `description`, `skills`). Treat that list, together with always-available built-ins (`general-purpose`, `Explore`, `Plan`), as the universe of available subagents. For each technology, decide whether a registered subagent's description matches the domain.
 
-3.  **Present Coverage Table:**
+3.  **Write the coverage table into the file** under the `## Subagent Coverage` heading. Use the exact GitHub-flavored markdown table syntax shown in the template — three pipe-delimited columns (`Technology`, `Recommended Subagent Role`, `Status`), one row per technology. Status cells are `✅ Exists` or `⚠️ Missing`; you may append a short qualifier after a dash (`⚠️ Missing — closest fit: <name>`), but the leading marker must be one of the two literals so the column scans cleanly. Do not use bulleted lists or horizontal-rule delimiters between rows — the table is the contract.
 
-| Technology             | Recommended Subagent Role | Status                 |
-| ---------------------- | ------------------------- | ---------------------- |
-| [e.g., Python/FastAPI] | Python backend expert     | ✅ Exists / ⚠️ Missing |
-| [e.g., React]          | React/frontend expert     | ✅ Exists / ⚠️ Missing |
-| [e.g., AWS]            | AWS infrastructure expert | ✅ Exists / ⚠️ Missing |
-| [e.g., Terraform]      | Terraform/IaC expert      | ✅ Exists / ⚠️ Missing |
-| [e.g., PostgreSQL]     | Database expert           | ✅ Exists / ⚠️ Missing |
+4.  **Save** the updated `architecture.md`.
 
-4.  **Recommendations for Missing Agents:** If there are any ⚠️ Missing entries, advise the user to run `/awos:hire` to find, install, and configure specialist agents for the stack.
+5.  **Recommendations:** If there are any `⚠️ Missing` rows, tell the user to run `/awos:hire` to find, install, and configure specialist agents for those gaps.
 
-5.  Report the saved path and the next commands: `/awos:hire`, then `/awos:spec`.
+6.  Report the saved path and the next commands: `/awos:hire`, then `/awos:spec`.

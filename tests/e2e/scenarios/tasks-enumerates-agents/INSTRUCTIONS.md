@@ -11,17 +11,15 @@ The temp project has been seeded with:
 
 ## Steps
 
-1. Open a new terminal and `cd {{WORKDIR}}`.
-2. Run `claude` to start a Claude Code session.
-3. Type: `/awos:tasks 001-test-feature`
-4. Let Claude work to completion. It should:
+1. Open a new terminal: `cd {{WORKDIR}} && claude "/awos:tasks 001-test-feature"`
+2. Let Claude work to completion. It should:
    - Read the functional spec and technical considerations
    - Scan `.claude/agents/*.md` and parse frontmatter
    - Produce `context/spec/001-test-feature/tasks.md` with `**[Agent: python-expert]**` and `**[Agent: react-expert]**` markers on the relevant sub-tasks
-5. When the command finishes, return to this terminal and run:
+3. When the command finishes, return to this terminal and run:
 
    ```sh
-   npm run e2e:verify tasks-enumerates-agents {{WORKDIR}}
+   bun run e2e:verify
    ```
 
 ## What "pass" looks like

@@ -11,14 +11,12 @@ The temp project has been seeded with:
 
 ## Steps
 
-1. Open a new terminal and `cd {{WORKDIR}}`.
-2. Run `claude` to start a Claude Code session.
-3. Type: `/awos:architecture`
-4. Let Claude work to completion. It will be interactive — answer the architecture questions in line with the product definition (Python/FastAPI backend, React frontend, PostgreSQL is fine). Steer it toward a stack where at least React is present and at least Python is present.
-5. When the command finishes, return to this terminal and run:
+1. Open a new terminal: `cd {{WORKDIR}} && claude "/awos:architecture"`
+2. Let Claude work to completion. It will be interactive — answer the architecture questions in line with the product definition (Python/FastAPI backend, React frontend, PostgreSQL is fine). Steer it toward a stack where at least React is present and at least Python is present.
+3. When the command finishes, return to this terminal and run:
 
    ```sh
-   npm run e2e:verify architecture-builds-coverage-table {{WORKDIR}}
+   bun run e2e:verify
    ```
 
 ## What "pass" looks like

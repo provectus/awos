@@ -15,14 +15,12 @@ The temp project has been seeded with:
 
 ## Steps
 
-1. Open a new terminal and `cd {{WORKDIR}}`.
-2. Run `claude` to start a Claude Code session.
-3. Type: `/awos:tech 001-test-feature`
-4. Let Claude work to completion. It will be interactive — answer the high-level approach + per-section questions in line with the architecture (Python/FastAPI, PostgreSQL, JSON column or join table for the tags — either is fine).
-5. When the command finishes, return to this terminal and run:
+1. Open a new terminal: `cd {{WORKDIR}} && claude "/awos:tech 001-test-feature"`
+2. Let Claude work to completion. It will be interactive — answer the high-level approach + per-section questions in line with the architecture (Python/FastAPI, PostgreSQL, JSON column or join table for the tags — either is fine).
+3. When the command finishes, return to this terminal and run:
 
    ```sh
-   npm run e2e:verify tech-uses-parallel-reads-and-explore {{WORKDIR}}
+   bun run e2e:verify
    ```
 
 ## What "pass" looks like

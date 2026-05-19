@@ -12,18 +12,16 @@ The temp project has been seeded with:
 
 ## Steps
 
-1. Open a new terminal and `cd {{WORKDIR}}`.
-2. Run `claude` to start a Claude Code session.
-3. Type: `/awos:implement 001-test-feature`
-4. Let Claude work to completion. It should:
+1. Open a new terminal: `cd {{WORKDIR}} && claude "/awos:implement 001-test-feature"`
+2. Let Claude work to completion. It should:
    - Read the three spec files
    - Extract the `**[Agent: python-expert]**` marker
    - Delegate the actual coding to the `python-expert` subagent via the `Agent` tool
    - The orchestrator itself should not touch `src/` files with `Edit`/`Write`
-5. When the command finishes, return to this terminal and run:
+3. When the command finishes, return to this terminal and run:
 
    ```sh
-   npm run e2e:verify implement-orchestrator-only {{WORKDIR}}
+   bun run e2e:verify
    ```
 
 ## What "pass" looks like

@@ -44,19 +44,13 @@ tests/
 │   ├── customized-wrapper/
 │   ├── mid-workflow/
 │   └── pre-migration-v1/
-├── e2e/                            # Layer 4: session-log E2E (human-triggered)
-│   ├── session-reader.js           # JSONL parser + findSessionsForCwd
-│   ├── session-reader.test.js      # parser unit tests (runs in CI)
-│   ├── expect.js                   # assertion DSL for scenario assert.js
-│   ├── fixtures/                   # hand-crafted JSONL for parser tests
-│   └── scenarios/                  # one directory per E2E scenario
 └── helpers/
     ├── frontmatter.js              # minimal YAML-frontmatter parser, no deps
     ├── manifest.js                 # load + assert fixture manifests
     └── temp-project.js             # mkdtemp / copyTree / silenced helpers
 ```
 
-Plus `bin/awos-e2e-prepare.js` and `bin/awos-e2e-verify.js` at the repo root drive Layer 4's prepare/verify cycle.
+Behavioral end-to-end tests (real `claude` sessions, session-log parsing) live in the separate **`awos-qa`** repository.
 
 ## Layer 1 — Static prompt linter
 
@@ -120,75 +114,11 @@ Adding a new fixture: create `tests/fixtures/<name>/`, optionally with a `before
 
 Cost: ~65 ms for all five.
 
-## Layer 4 — Session-log E2E (human-triggered)
+## Behavioral end-to-end tests live in the `awos-qa` repo
 
-`tests/e2e/` plus `bin/awos-e2e-prepare.js` and `bin/awos-e2e-verify.js`. Layers 1–3 catch structural regressions in prompt _source_; Layer 4 catches the failure mode they cannot — _Claude doesn't actually follow the prompt_. It parses the JSONL session log Claude Code writes under `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` and asserts on the tool calls Claude really made.
+Static lint catches "prompt mentions X"; only running the real LLM catches "Claude actually did X". That second class of test lives in the separate **`awos-qa`** repository, sibling to this one. It drives a Claude Code session against a seeded scratch project and parses the resulting session log to assert on the tool-call trace.
 
-### Why it exists
-
-A prompt that contains `**[Agent: ` somewhere in the source passes the static lint. That tells us the literal token is present; it does not tell us the LLM, given the prompt, will actually scan `.claude/agents/` before deciding which agent to assign. Layer 4 closes that gap by inspecting behavioral evidence.
-
-### Not a CI gate
-
-Each run requires a human in the loop (a real `claude` session inside a temp project). It is a **pre-merge checklist for prompt-touching PRs**, not part of automated CI. Only the parser unit test (`tests/e2e/session-reader.test.js`) runs through `npm test` — it asserts the parser against the checked-in fixture JSONL, which is enough to keep the harness itself honest.
-
-### Running a scenario
-
-```sh
-# 1. Spin a fresh temp project, install AWOS into it, overlay the
-#    scenario's fixture, and print the manual steps.
-npm run e2e:prepare tasks-enumerates-agents
-
-# 2. Open a new terminal, cd into the printed workdir, run `claude`,
-#    and execute the slash command the instructions describe. Let it
-#    finish.
-
-# 3. Back in the original terminal:
-npm run e2e:verify tasks-enumerates-agents <workdir>
-# Exit 0 with a [pass] summary, or exit 1 with the recent tool-call
-# trace and the specific contract that failed.
-```
-
-### Layout
-
-```
-tests/e2e/
-├── session-reader.js              # JSONL parser + findSessionsForCwd
-├── session-reader.test.js         # node:test unit tests against the fixture
-├── expect.js                      # expectToolCall / expectNoToolCall / expectFileExists
-├── fixtures/
-│   └── sample-session.jsonl       # hand-crafted; exercises every event shape
-└── scenarios/
-    └── <scenario-name>/
-        ├── INSTRUCTIONS.md        # rendered to the operator on prepare; {{WORKDIR}} is substituted
-        ├── assert.js              # module.exports = async ({ events, toolCalls, workdir }) => { … }
-        └── fixture/               # overlay on top of the installed AWOS tree
-```
-
-Currently shipped scenarios:
-
-| Scenario                                | Target command       | Contract type                | What it asserts                                                                                                                                                                                                                           |
-| --------------------------------------- | -------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tasks-enumerates-agents/`              | `/awos:tasks`        | Discovery + output           | Scans `.claude/agents/` (Glob/Read/LS/Grep or Explore-delegation) and writes `tasks.md` with `**[Agent: name]**` markers that all resolve to real agent files                                                                             |
-| `implement-orchestrator-only/`          | `/awos:implement`    | Negative + delegation        | Delegates the coding via the `Agent` tool, never calls `Edit`/`Write`/`MultiEdit` on source files (checkbox flips on `tasks.md` are allowed), and carries the `<scope_discipline>` + `<investigate_before_answering>` XML guards          |
-| `architecture-runs-coverage-hint/`      | `/awos:architecture` | Output + boundary            | Reads `product-definition.md` + `roadmap.md`, looks at `.claude/agents/` for the verbal coverage hint, writes `architecture.md`, and does NOT write a coverage table — that report belongs to `/awos:hire` at `context/product/agents.md` |
-| `tech-uses-parallel-reads-and-explore/` | `/awos:tech`         | Adjacency + codebase look-up | Reads `functional-spec.md` and `architecture.md` together (parallel tool calls or back-to-back, no unrelated work between them) and examines the existing codebase before drafting (`Explore` delegation or direct `Read` under `src/`)   |
-
-### Adding a new scenario
-
-The recipe:
-
-1. Create `tests/e2e/scenarios/<name>/`.
-2. Add a `fixture/` subtree — anything in it is overlaid on top of the installed AWOS tree during `prepare`. Seed only the pre-existing files the scenario needs (agents, partial spec docs, hand-authored CLAUDE.md, sample source files, etc.) — the installer's own output is already present.
-3. Add `INSTRUCTIONS.md`. Use `{{WORKDIR}}` wherever you need the temp directory path; the prepare CLI substitutes it before printing.
-4. Add `assert.js` as a CommonJS module exporting `async function run({ check, toolCalls, events, workdir })`. Use the helpers in `tests/e2e/expect.js`. Throw on failure with enough context for a human to act.
-5. Wrap every assertion in `await check('what was verified', () => { ... })` so each one gets its own narrated pass/fail line. The harness streams them; "N events found" is not narration.
-
-Smoke-test by running `e2e:prepare`, finishing a session in `claude`, and running `e2e:verify`. If you want to dry-run without burning an API call, stub a session log under `~/.claude/projects/<encoded-workdir>/sess-fake.jsonl` and run verify directly.
-
-### Constraints
-
-Same as the other layers — no npm dependencies, cross-runtime (the parser and CLIs must work under both Node 22 and Bun), and assertion failures must be informative (include the trace tail, not just "expected X got nothing").
+It's intentionally a separate repo so prompt-author iteration here doesn't pull in the behavioral-test surface area, and so awos-qa can grow other test types (perf, evals, integration) without coupling them to AWOS's release cycle.
 
 ## Adding tests for new contracts
 

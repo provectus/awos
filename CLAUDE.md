@@ -23,17 +23,14 @@ npx prettier --write .     # auto-format before committing
 bunx prettier --write .
 
 # Run the test suite (no npm deps; node --test built-in):
-npm test                   # Layers 1–3 + the Layer-4 parser unit test
+npm test                   # all three layers
 npm run test:lint          # Layer 1 — static prompt linter
 npm run test:installer     # Layer 2 — installer unit tests
 npm run test:fixtures      # Layer 3 — fixture-project end-to-end
-npm run test:e2e           # Layer 4 plumbing — session-log parser unit test
 bun test tests/            # local cross-runtime sanity check (optional)
 
-# Layer 4 — session-log behavioral E2E (human-triggered, real Claude Code):
-npm run e2e:prepare <scenario>             # seed a temp project; prints workdir
-# (open `claude` in that workdir, run the /awos:* command, exit)
-npm run e2e:verify <scenario> <workdir>    # parse session log, assert behavior
+# Behavioral / session-log E2E lives in the awos-qa repository
+# (sibling to this one). See its README for how to run.
 
 # Test installer against a separate project (pick one runner; $AWOS_REPO is the absolute path to this repo):
 cd ~/some-scratch-project
@@ -47,36 +44,23 @@ The installer runs on **Node 22+ or any recent Bun**. It uses only standard JS b
 
 ## Testing
 
-The repo has a four-layer test suite under `tests/`, all built on Node's `node:test` built-in — no npm dependencies. See `tests/README.md` for the detailed reference and the inventory of current scenarios.
+The repo has a three-layer test suite under `tests/`, all built on Node's `node:test` built-in — no npm dependencies. See `tests/README.md` for the detailed reference.
 
 1. **Static prompt linter** (`tests/lint-prompts.test.js`) — symmetry, frontmatter, marker presence, cross-references, dimension DAG, copy-table consistency, and grep-style checks for required substrings inside prompt bodies.
 2. **Installer unit tests** (`tests/installer/*.test.js`) — exercises the installer services against temp directories.
 3. **Fixture projects** (`tests/fixtures.test.js` + `tests/fixtures/<name>/`) — real installer runs against representative pre-install trees, with manifest-based assertions.
-4. **Session-log E2E** (`bin/awos-e2e-{list,prepare,verify}.js` + `tests/e2e/scenarios/<name>/`) — human-triggered. `prepare` seeds a temp project from a scenario fixture; the user runs the relevant slash command in their own Claude Code session; `verify` parses the session JSONL at `~/.claude/projects/<encoded-cwd>/<session>.jsonl` and asserts on the actual tool-call trace Claude produced.
 
-Layers 1–3 plus the Layer-4 parser unit test run in CI (`npm test`). Layer-4 scenarios run pre-merge by a human; they are not a CI gate.
+All three layers run in CI (`npm test`).
 
-### Pick the lowest layer that can express the contract
-
-| Contract type                          | Layer | Cost          | Example                             |
-| -------------------------------------- | ----- | ------------- | ----------------------------------- |
-| Surface area (file/string/frontmatter) | 1     | free, instant | "wrapper has key X"                 |
-| Installer mechanics                    | 2     | free, instant | "migration is idempotent"           |
-| End-state of an install                | 3     | free, instant | "tree matches manifest"             |
-| Claude's runtime behavior              | 4     | one human run | "Claude called Tool X with input Y" |
-
-Layers 1–3 verify the source-of-truth files are wired correctly. They cannot verify Claude follows the wiring at runtime — only Layer 4 can. A typical full coverage story for one contract uses both: Layer 1 asserts the prompt mentions the required pattern; Layer 4 asserts Claude actually acted on it.
+Behavioral end-to-end tests — the ones that run a real Claude Code session against a seeded scratch project and assert on the actual tool-call trace — live in the separate **`awos-qa`** repository (sibling to this one). See its README for how to run them.
 
 ### Tests must narrate what they checked
 
-Output that says `N events found` or `M pass` tells you the suite ran, not what was validated. Tests should produce output a human can read top-to-bottom and understand which contracts were verified.
-
-- **Layer 1 lint tests** — `assert.*` failure messages name the contract being violated, not just dump a diff.
-- **Layer 4 scenarios** — each assertion is wrapped in `await check('what was verified', () => { ... })` from `tests/e2e/expect.js`. Each becomes a streamed `✓` (or `✗` with error excerpt) line, with a final `N/M checks passed` summary. Any existing scenario under `tests/e2e/scenarios/` is a reference shape.
+Output that says `N events found` or `M pass` tells you the suite ran, not what was validated. `assert.*` failure messages should name the contract being violated, not just dump a diff. Anyone reading the test output should understand which contracts were verified without opening the test source.
 
 ### Adding tests for new contracts
 
-When a change introduces a contract — frontmatter key, structural marker, migration, required tool-call pattern in a slash command — its test ships in the same PR. Pick the lowest layer in the table above that expresses the contract. Behavioral contracts ("Claude must call X") add a Layer-4 scenario; the static counterpart often also lives at Layer 1 (assert the prompt mentions X). Coverage tracks contracts, not narrative.
+When a change introduces a structural contract — frontmatter key, marker pattern, migration, copy-table entry — its test ships in the same PR. Surface-area contracts (something a grep can catch) go to Layer 1. Mechanical contracts (installer behavior, migration idempotency) go to Layer 2 or 3. Behavioral contracts ("Claude must actually call X") belong in the `awos-qa` repository.
 
 ## Architecture: The Two-Folder Customization Model
 

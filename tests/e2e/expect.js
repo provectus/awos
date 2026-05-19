@@ -169,10 +169,72 @@ function makeChecker(report) {
   };
 }
 
+/**
+ * Tokens at the start of a Bash command that demonstrate the command
+ * is reading content (not creating, deleting, or just naming the path
+ * in a string). Bash is generic; without this guard a command like
+ * `echo ".claude/agents"` or `mkdir .claude/agents` would falsely
+ * count as access.
+ *
+ * Picked conservatively — common read tools only. Add to this list
+ * when a real-world session uses something not covered.
+ */
+const BASH_READ_TOKENS =
+  /(^|[\s|&;`(])\s*(ls|cat|head|tail|find|grep|rg|wc|tree|file|stat|less|more|awk|sed|jq|yq|tac|column|sort|uniq|diff|cmp)\b/;
+
+/**
+ * Find tool calls whose target path matches `pathRegex`. Used by
+ * scenarios to assert that Claude touched a specific directory or
+ * file by any reasonable mechanism — without locking the assertion
+ * to a single tool.
+ *
+ * Covers:
+ *   Glob/Read/LS/Grep    — direct filesystem tools (path appears in input)
+ *   Bash                  — shell access, but ONLY when the command
+ *                           contains a read-like binary (ls, cat, find,
+ *                           grep, etc.) AND the path. A bare mention of
+ *                           the path (echo, mkdir, rm) doesn't count.
+ *   Agent/Task            — delegation whose prompt mentions the path,
+ *                           or whose subagent_type is Explore (read-only)
+ *
+ * The union is intentionally tolerant: any of these proves the path
+ * was inspected; a stricter check would over-fit to one tool choice.
+ *
+ * @param {Array<object>} toolCalls
+ * @param {RegExp} pathRegex
+ * @returns {Array<object>}
+ */
+function pathAccessCalls(toolCalls, pathRegex) {
+  return toolCalls.filter((call) => {
+    const input = call.input || {};
+    if (call.name === 'Glob')
+      return pathRegex.test(String(input.pattern || ''));
+    if (call.name === 'Read')
+      return pathRegex.test(String(input.file_path || ''));
+    if (call.name === 'LS') return pathRegex.test(String(input.path || ''));
+    if (call.name === 'Grep') {
+      return pathRegex.test(String(input.path || input.glob || ''));
+    }
+    if (call.name === 'Bash') {
+      const cmd = String(input.command || '');
+      return pathRegex.test(cmd) && BASH_READ_TOKENS.test(cmd);
+    }
+    if (call.name === 'Agent' || call.name === 'Task') {
+      return (
+        pathRegex.test(String(input.prompt || '')) ||
+        pathRegex.test(String(input.description || '')) ||
+        /Explore/i.test(String(input.subagent_type || ''))
+      );
+    }
+    return false;
+  });
+}
+
 module.exports = {
   callMatches,
   expectToolCall,
   expectNoToolCall,
   expectFileExists,
   makeChecker,
+  pathAccessCalls,
 };

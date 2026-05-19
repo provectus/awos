@@ -11,37 +11,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { expectToolCall, expectFileExists } = require('../../expect');
+const { expectFileExists, pathAccessCalls } = require('../../expect');
 
 const AGENTS_PATH_RE = /\.claude\/agents/;
-
-/**
- * Return the tool calls that prove Claude looked at `.claude/agents/`,
- * either directly (Glob/Read/LS/Grep on the path) or indirectly (an
- * Agent/Explore delegation whose prompt mentions the path).
- */
-function discoveryHits(toolCalls) {
-  return toolCalls.filter((call) => {
-    const input = call.input || {};
-    if (call.name === 'Glob')
-      return AGENTS_PATH_RE.test(String(input.pattern || ''));
-    if (call.name === 'Read')
-      return AGENTS_PATH_RE.test(String(input.file_path || ''));
-    if (call.name === 'LS')
-      return AGENTS_PATH_RE.test(String(input.path || ''));
-    if (call.name === 'Grep') {
-      return AGENTS_PATH_RE.test(String(input.path || input.glob || ''));
-    }
-    if (call.name === 'Agent' || call.name === 'Task') {
-      return (
-        AGENTS_PATH_RE.test(String(input.prompt || '')) ||
-        AGENTS_PATH_RE.test(String(input.description || '')) ||
-        /Explore/i.test(String(input.subagent_type || ''))
-      );
-    }
-    return false;
-  });
-}
 
 function readAgentCallFor(toolCalls, name) {
   return toolCalls.find(
@@ -61,10 +33,10 @@ module.exports = async function run({ check, toolCalls, workdir }) {
   const absTasksPath = path.join(workdir, tasksPath);
 
   await check('Claude scanned .claude/agents/ for specialist subagents', () => {
-    const hits = discoveryHits(toolCalls);
+    const hits = pathAccessCalls(toolCalls, AGENTS_PATH_RE);
     if (hits.length === 0) {
       throw new Error(
-        'no Glob/Read/LS/Grep against .claude/agents/, and no Agent ' +
+        'no Glob/Read/LS/Grep/Bash against .claude/agents/, and no Agent ' +
           'delegation mentioning it — Claude likely guessed the agent list'
       );
     }

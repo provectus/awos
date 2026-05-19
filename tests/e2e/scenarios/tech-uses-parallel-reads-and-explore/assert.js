@@ -23,38 +23,11 @@
 
 'use strict';
 
-const { expectFileExists } = require('../../expect');
+const { expectFileExists, pathAccessCalls } = require('../../expect');
 
 const AGENTS_PATH_RE = /\.claude\/agents/;
 const FSPEC_PATH_RE = /context\/spec\/001-test-feature\/functional-spec\.md$/;
 const ARCH_PATH_RE = /context\/product\/architecture\.md$/;
-
-/**
- * Reuse the tolerant agent-discovery union from
- * tasks-enumerates-agents/assert.js.
- */
-function discoveryHits(toolCalls) {
-  return toolCalls.filter((call) => {
-    const input = call.input || {};
-    if (call.name === 'Glob')
-      return AGENTS_PATH_RE.test(String(input.pattern || ''));
-    if (call.name === 'Read')
-      return AGENTS_PATH_RE.test(String(input.file_path || ''));
-    if (call.name === 'LS')
-      return AGENTS_PATH_RE.test(String(input.path || ''));
-    if (call.name === 'Grep') {
-      return AGENTS_PATH_RE.test(String(input.path || input.glob || ''));
-    }
-    if (call.name === 'Agent' || call.name === 'Task') {
-      return (
-        AGENTS_PATH_RE.test(String(input.prompt || '')) ||
-        AGENTS_PATH_RE.test(String(input.description || '')) ||
-        /Explore/i.test(String(input.subagent_type || ''))
-      );
-    }
-    return false;
-  });
-}
 
 function readsMatching(toolCalls, pathRe) {
   return toolCalls.filter(
@@ -119,10 +92,10 @@ module.exports = async function run({ check, toolCalls, workdir }) {
   );
 
   await check('Claude scanned .claude/agents/ for specialist subagents', () => {
-    const hits = discoveryHits(toolCalls);
+    const hits = pathAccessCalls(toolCalls, AGENTS_PATH_RE);
     if (hits.length === 0) {
       throw new Error(
-        'no Glob/Read/LS/Grep against .claude/agents/, and no Agent ' +
+        'no Glob/Read/LS/Grep/Bash against .claude/agents/, and no Agent ' +
           'delegation mentioning it'
       );
     }

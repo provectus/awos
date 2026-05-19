@@ -1,7 +1,6 @@
 ---
 description: Creates the Technical Spec — how the feature will be built.
 argument-hint: '[spec name or index]'
-disable-model-invocation: true
 ---
 
 @.awos/commands/tech.md

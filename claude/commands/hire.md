@@ -1,7 +1,6 @@
 ---
 description: Hires specialist agents — finds, installs skills, MCPs, and agents from registry, generates agent files.
 argument-hint: '[focus areas, optional]'
-disable-model-invocation: true
 allowed-tools: Bash(npx *), Bash(bunx *), Read, Write, Glob, Grep
 ---
 

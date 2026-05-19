@@ -1,7 +1,6 @@
 ---
 description: Builds the Product Roadmap — features and their order.
 argument-hint: '[change request, optional]'
-disable-model-invocation: true
 ---
 
 @.awos/commands/roadmap.md

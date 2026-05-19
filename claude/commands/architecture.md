@@ -1,7 +1,6 @@
 ---
 description: Defines the System Architecture — stack, DBs, infra.
 argument-hint: '[change request, optional]'
-disable-model-invocation: true
 ---
 
 @.awos/commands/architecture.md

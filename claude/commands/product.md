@@ -1,7 +1,6 @@
 ---
 description: Defines the Product — what, why, and for who.
 argument-hint: '[initial idea, optional]'
-disable-model-invocation: true
 ---
 
 @.awos/commands/product.md

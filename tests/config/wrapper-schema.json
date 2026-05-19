@@ -1,5 +1,5 @@
 {
-  "_comment": "Required and optional frontmatter keys for claude/commands/*.md wrappers. Tighten as the alignment audit lands (F11 adds argument-hint, disable-model-invocation).",
+  "_comment": "Required and optional frontmatter keys for claude/commands/*.md wrappers. Move keys from `optional` to `required` when a new wrapper-frontmatter contract is introduced.",
   "required": ["description"],
   "optional": [
     "argument-hint",

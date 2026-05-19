@@ -8,9 +8,11 @@
  *     source code. It may flip checkboxes in tasks.md — that's
  *     bookkeeping, not coding — so we allow Edit/Write targeting
  *     tasks.md specifically.
- *   - The delegation prompt must carry the F8 <scope_discipline> and
- *     F9 <investigate_before_answering> guards. F5 (verification
- *     policy) is intentionally out of scope and not asserted here.
+ *   - The delegation prompt must carry the <scope_discipline> and
+ *     <investigate_before_answering> XML guards (the don't-over-engineer
+ *     and don't-hallucinate reminders). A verification-commands block
+ *     is intentionally NOT required here — teams can add that via
+ *     wrapper customization if they want it.
  *
  * Each `check` is one independently-narratable assertion so the verify
  * harness streams a pass/fail line per check.
@@ -106,7 +108,7 @@ module.exports = async function run({ check, toolCalls, workdir }) {
       if (!carriesGuards) {
         throw new Error(
           'no delegation prompt carried both <scope_discipline> and ' +
-            '<investigate_before_answering> — F8/F9 guards were dropped'
+            '<investigate_before_answering> — scope-discipline / investigate-before-answering guards were dropped'
         );
       }
     }

@@ -82,12 +82,12 @@ test('each wrapper includes its root command (either form)', () => {
     );
     assert.ok(
       atImport || referTo,
-      `wrapper ${w} must include either @.awos/commands/${stem}.md (F12 target) or the legacy "Refer to…" line`
+      `wrapper ${w} must include either the @-import form @.awos/commands/${stem}.md (preferred) or the legacy "Refer to…" line`
     );
     if (atImport) counts.atImport++;
     else if (referTo) counts.referTo++;
   }
-  // Surface F12 migration progress in test output.
+  // Surface migration progress (@-import vs legacy "Refer to…") in test output.
   // eslint-disable-next-line no-console
   console.log(
     `[lint] wrapper include forms: @import=${counts.atImport}, refer-to=${counts.referTo}`
@@ -113,8 +113,9 @@ test('wrapper frontmatter has required keys', () => {
 });
 
 test('wrapper description matches root description', () => {
-  // F18 from the alignment audit: wrappers must mirror the root command's
-  // description so the slash-command palette shows the canonical text.
+  // Wrappers must mirror the root command's description so the
+  // slash-command palette shows the canonical text — and so users
+  // editing a wrapper inadvertently don't drift the surfaced help.
   const wrappers = listMarkdown(wrappersDir);
   const mismatches = [];
   for (const w of wrappers) {
@@ -149,13 +150,13 @@ test('agent marker pattern is preserved', () => {
 });
 
 test('subagent-enumerating commands tell Claude how to discover agents', () => {
-  // F3 follow-up. Commands that produce durable specialist assignments
-  // (Agent markers in tasks.md, the coverage report in agents.md) need
-  // the filesystem enumeration path: scan .claude/agents/*.md and parse
-  // YAML frontmatter. Commands that only give a verbal hint can mention
-  // the path without parsing frontmatter — architecture.md is the
-  // canonical example (its Step 4 explicitly defers the durable report
-  // to /awos:hire).
+  // Commands that produce durable specialist assignments (Agent
+  // markers in tasks.md, the coverage report in agents.md) need the
+  // filesystem enumeration path: scan .claude/agents/*.md and parse
+  // YAML frontmatter. Commands that only give a verbal hint can
+  // mention the path without parsing frontmatter — architecture.md
+  // is the canonical example (its Step 4 explicitly defers the
+  // durable report to /awos:hire).
   const fullEnumerators = ['tasks.md', 'tech.md', 'hire.md'];
   const lightReferencers = ['architecture.md'];
 
@@ -331,11 +332,12 @@ test('every top-level framework directory is referenced by setup-config', () => 
 });
 
 test('implement.md uses XML scope-and-investigate snippets', () => {
-  // The formulated subagent prompt in implement.md must contain the
-  // scope-discipline (F8: don't over-engineer) and investigate-before-
-  // answering (F9: don't hallucinate) XML blocks. Verification policy
-  // (F5) is intentionally out of scope and not asserted here — teams
-  // that want mandatory verification can add it via wrapper
+  // The formulated subagent prompt in implement.md must contain two
+  // XML blocks that have outsized impact on subagent behavior:
+  //   <scope_discipline>          — keep the change minimal, don't over-engineer
+  //   <investigate_before_answering> — read the relevant files, don't hallucinate
+  // A verification-commands block is intentionally NOT asserted here.
+  // Teams that want mandatory verification can add it via wrapper
   // customization in .claude/commands/awos/implement.md.
   const body = readUtf8(path.join(commandsDir, 'implement.md'));
   const needed = ['<scope_discipline>', '<investigate_before_answering>'];

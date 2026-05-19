@@ -30,6 +30,5 @@ The verifier looks for evidence of the orchestrator contract:
 
 1. **Delegation happened.** At least one `Agent` (or legacy `Task`) tool call with a `subagent_type` set.
 2. **The orchestrator did not write code itself.** No `Edit`/`Write`/`MultiEdit` calls on source files. Editing `tasks.md` to flip checkboxes is allowed — that is bookkeeping, not coding.
-3. **Verification commands were passed through.** The delegation prompt mentions `<verification_commands>` or the concrete `pytest` command from `tasks.md`.
-4. **F5 guards were attached to the delegation.** The prompt contains both `<scope_discipline>` and `<investigate_before_answering>` blocks (the F5 contract from `commands/implement.md`).
-5. **The Agent marker survived in `tasks.md`.** The orchestrator may flip a checkbox but must not rewrite the marker line.
+3. **Scope-and-investigate guards were attached to the delegation.** The prompt contains both `<scope_discipline>` (don't over-engineer) and `<investigate_before_answering>` (don't hallucinate) XML blocks.
+4. **The Agent marker survived in `tasks.md`.** The orchestrator may flip a checkbox but must not rewrite the marker line.

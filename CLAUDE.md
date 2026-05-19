@@ -23,11 +23,17 @@ npx prettier --write .     # auto-format before committing
 bunx prettier --write .
 
 # Run the test suite (no npm deps; node --test built-in):
-npm test                   # all three layers
-npm run test:lint          # static prompt linter
-npm run test:installer     # installer unit tests
-npm run test:fixtures      # end-to-end fixture projects
+npm test                   # Layers 1–3 + the Layer-4 parser unit test
+npm run test:lint          # Layer 1 — static prompt linter
+npm run test:installer     # Layer 2 — installer unit tests
+npm run test:fixtures      # Layer 3 — fixture-project end-to-end
+npm run test:e2e           # Layer 4 plumbing — session-log parser unit test
 bun test tests/            # local cross-runtime sanity check (optional)
+
+# Layer 4 — session-log behavioral E2E (human-triggered, real Claude Code):
+npm run e2e:prepare <scenario>             # seed a temp project; prints workdir
+# (open `claude` in that workdir, run the /awos:* command, exit)
+npm run e2e:verify <scenario> <workdir>    # parse session log, assert behavior
 
 # Test installer against a separate project (pick one runner; $AWOS_REPO is the absolute path to this repo):
 cd ~/some-scratch-project
@@ -41,15 +47,32 @@ The installer runs on **Node 22+ or any recent Bun**. It uses only standard JS b
 
 ## Testing
 
-The repo has a three-layer test suite under `tests/`, all built on Node's `node:test` built-in — no npm dependencies:
+The repo has a four-layer test suite under `tests/`, all built on Node's `node:test` built-in — no npm dependencies. See `tests/README.md` for the detailed reference.
 
-1. **Static prompt linter** (`tests/lint-prompts.test.js`) — wrapper/root command symmetry, frontmatter schema, agent-marker presence, slash-command cross-references, audit-dimension DAG, and `setup-config.js`-to-source-tree consistency.
+1. **Static prompt linter** (`tests/lint-prompts.test.js`) — wrapper/root command symmetry, frontmatter schema, agent-marker presence, slash-command cross-references, audit-dimension DAG, `setup-config.js`-to-source-tree consistency, and substring checks for required prompt patterns (e.g. `.claude/agents/` references in subagent-enumerating commands, XML verification snippets in `implement.md`).
 2. **Installer unit tests** (`tests/installer/*.test.js`) — exercises `src/services/file-copier.js`, `src/migrations/runner.js`, and `src/core/setup-orchestrator.js` against temp directories.
 3. **Fixture projects** (`tests/fixtures.test.js` plus `tests/fixtures/<name>/{before/, expected-after.json}`) — each fixture represents a real-world install scenario (fresh, existing-awos, mid-workflow, pre-migration) and asserts the post-install tree against a manifest of `{ exists, sha256, contains, unchanged }`.
+4. **Session-log E2E** (`bin/awos-e2e-{prepare,verify}.js` + `tests/e2e/scenarios/<name>/`) — human-triggered. `prepare` seeds a temp project from the scenario fixture; the user runs the relevant `/awos:*` command in their own Claude Code session; `verify` parses `~/.claude/projects/<encoded-cwd>/<session>.jsonl` and asserts on the actual tool-call trace Claude produced.
 
-Run with `npm test` locally; CI runs the same on Node 22 (currently non-blocking — see `.github/workflows/quality-check.yml`).
+Layers 1–3 plus the Layer-4 parser unit test run in CI (`npm test`, non-blocking — see `.github/workflows/quality-check.yml`). Layer-4 scenarios are run pre-merge by a human (no CI gate; they need a live Claude Code session).
 
-**Rule for audit-driven follow-ups (F1–F19):** any PR that introduces a new structural contract — wrapper frontmatter key, `agent-template.md` schema field, XML tag inside a prompt, migration — must ship its lint rule, installer test, or fixture in the same PR. Coverage tracks contracts, not the audit proposal in the abstract.
+### Static vs. behavioral coverage
+
+Layers 1–3 verify that the source files are wired correctly — wrappers exist, frontmatter is valid, the installer copies the right tree. They cannot verify that Claude follows the wiring at runtime. Layer 4 closes that gap: it asserts on the actual tool calls Claude made, recovered from the session log on disk. For example, Layer 1 can assert that `commands/tasks.md` contains the string `.claude/agents/`; only Layer 4 proves that Claude actually issued `Glob`/`Read` against that path during a real `/awos:tasks` run.
+
+Pick the lowest layer that can express the contract. Static checks are free and instant; behavioral checks cost a human run.
+
+### Tests must narrate what they check
+
+Output that says `N events found` or `7 pass` tells you the suite ran, not what was validated. Both lint tests and E2E scenarios should produce output a human can read top-to-bottom and understand which contracts were verified.
+
+For Layer-4 scenarios, wrap each assertion in `await check('what was verified', () => { ... })` from `tests/e2e/expect.js`. Each becomes a streamed `✓` (or `✗` with error excerpt) line in the verify output, with a final `N/M checks passed` summary. The scenario at `tests/e2e/scenarios/tasks-enumerates-agents/assert.js` is the reference shape — copy it when building a new scenario.
+
+For Layer-1 lint tests, the `assert.deepEqual`/`assert.ok` failure messages should name the contract explicitly (e.g. `"commands/${file} must reference '.claude/agents/' as the subagent discovery source"`), not just dump the diff. Anyone debugging a red CI run shouldn't have to open the test source to understand what broke.
+
+### Rule for new structural or behavioral contracts
+
+Any PR that introduces a contract — wrapper frontmatter key, `agent-template.md` schema field, XML tag inside a prompt, migration, required tool-call pattern in a slash command — must ship its test in the same PR. Surface-area contracts go to Layer 1. Mechanical contracts (installer behavior, migration idempotency) go to Layer 2 or 3. Behavioral contracts ("Claude must actually call X") go to a Layer-4 scenario. Coverage tracks contracts, not the audit proposal in the abstract.
 
 ## Architecture: The Two-Folder Customization Model
 

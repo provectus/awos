@@ -99,7 +99,7 @@ Non-obvious rules for this repo:
 
 - **Dial back aggressive emphasis.** Opus 4.6+ overtriggers on `CRITICAL` / `YOU MUST` / `STRICTLY PROHIBITED`. Use plain declarative sentences; reserve one bold-emphasis rule per file for the one most likely to be ignored.
 - **Use `Agent`, not `Task`,** when naming the delegation tool. `Task(...)` aliases still work but the tool was renamed in Claude Code v2.1.63.
-- **Don't introspect the Agent tool** to enumerate subagents — its descriptions are the dispatch mechanism, read them directly from `.claude/agents/*.md`.
+- **Project-local agents come from `.claude/agents/*.md`** — read them directly. Plugin-provided agents (recognized by the `<plugin-name>:` prefix in `subagent_type`, e.g. `python-development:python-pro`) only appear in the Agent tool's description block; read them there. Don't introspect the Agent tool to discover agents that are already on disk.
 - **Prefer the built-in `Explore` and `Plan` subagents** for read-heavy context-gathering. Don't have an orchestrator command read the whole codebase in its own context.
 - **Skip ceremonial preambles** like "Great!", "I will now…", "All done!" — modern models trim them naturally and AWOS prompts shouldn't fight that.
-- **`AskUserQuestion` is Claude-Code-only.** Mention it only in `claude/commands/*.md` wrappers, never in core `commands/*.md`, since other agentic tools don't have it.
+- **`AskUserQuestion` belongs in core `commands/*.md`** under an `# INTERACTION` section. AWOS targets Claude Code only, so the tool is a framework default rather than a host-specific customization — don't duplicate it into the `claude/commands/*.md` wrappers.

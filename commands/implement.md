@@ -62,6 +62,7 @@ You do not write or edit code, configuration, or database schemas yourself. Your
     - Clear instructions on what code to write or files to modify.
     - A `<scope_discipline>` block: "Only make changes the task requires. Don't add features, refactor unrelated code, or add validation for scenarios outside the task. If something is unclear, ask rather than guessing."
     - An `<investigate_before_answering>` block: "Don't speculate about code you haven't opened. Read relevant files before editing. Issue independent reads in parallel."
+    - A `<use_available_skills>` block: "Apply any skills declared in your frontmatter `skills:` list, and any project, user, or plugin skills whose description matches this work. Skills carry project-specific patterns — they should shape your implementation."
     - A concrete definition of success — what verification commands the subagent must run before reporting completion (tests, lint, typecheck, curl, or a browser-automation MCP if the project has one configured).
 2.  Delegate to the agent identified in Step 2 via the `Agent` tool:
 

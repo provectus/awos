@@ -151,8 +151,8 @@ test('agent marker pattern is preserved', () => {
 
 test('subagent-enumerating commands tell Claude how to discover agents', () => {
   // Commands that produce durable specialist assignments (Agent
-  // markers in tasks.md, the coverage report in agents.md) need the
-  // filesystem enumeration path: scan .claude/agents/*.md and parse
+  // markers in tasks.md, the coverage report in hired-agents.md) need
+  // the filesystem enumeration path: scan .claude/agents/*.md and parse
   // YAML frontmatter. Commands that only give a verbal hint can
   // mention the path without parsing frontmatter — architecture.md
   // is the canonical example (its Step 4 explicitly defers the
@@ -331,21 +331,144 @@ test('every top-level framework directory is referenced by setup-config', () => 
   }
 });
 
-test('implement.md uses XML scope-and-investigate snippets', () => {
-  // The formulated subagent prompt in implement.md must contain two
+test('implement.md uses XML scope, investigate, and skills snippets', () => {
+  // The formulated subagent prompt in implement.md must contain three
   // XML blocks that have outsized impact on subagent behavior:
-  //   <scope_discipline>          — keep the change minimal, don't over-engineer
+  //   <scope_discipline>             — keep the change minimal, don't over-engineer
   //   <investigate_before_answering> — read the relevant files, don't hallucinate
+  //   <use_available_skills>         — apply matching project/user/plugin skills
   // A verification-commands block is intentionally NOT asserted here.
   // Teams that want mandatory verification can add it via wrapper
   // customization in .claude/commands/awos/implement.md.
   const body = readUtf8(path.join(commandsDir, 'implement.md'));
-  const needed = ['<scope_discipline>', '<investigate_before_answering>'];
+  const needed = [
+    '<scope_discipline>',
+    '<investigate_before_answering>',
+    '<use_available_skills>',
+  ];
   const missing = needed.filter((tag) => !body.includes(tag));
   assert.deepEqual(
     missing,
     [],
     `implement.md is missing required XML snippets: ${missing.join(', ')}`
+  );
+});
+
+test('every core command declares an INTERACTION section', () => {
+  // The "use AskUserQuestion for multiple-choice" rule lives in core
+  // commands/*.md (not the wrappers), because AWOS targets Claude Code
+  // only. Every core command should declare its own INTERACTION section
+  // that names the tool — so the rule is discoverable from the prompt
+  // itself, not buried in a host-specific wrapper.
+  const roots = listMarkdown(commandsDir);
+  const missing = [];
+  for (const r of roots) {
+    const body = readUtf8(path.join(commandsDir, r));
+    if (!body.includes('# INTERACTION') || !body.includes('AskUserQuestion')) {
+      missing.push(r);
+    }
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    `core commands missing "# INTERACTION" + "AskUserQuestion": ${missing.join(', ')}`
+  );
+});
+
+test('wrappers do not duplicate the AskUserQuestion rule', () => {
+  // Counterpart to the test above: the rule moved from wrappers to
+  // core. If a wrapper still mentions AskUserQuestion the contract has
+  // drifted — fix the wrapper rather than relaxing this assertion.
+  const wrappers = listMarkdown(wrappersDir);
+  const offenders = [];
+  for (const w of wrappers) {
+    const body = readUtf8(path.join(wrappersDir, w));
+    if (body.includes('AskUserQuestion')) offenders.push(w);
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `wrappers that still mention AskUserQuestion (should live in core): ${offenders.join(', ')}`
+  );
+});
+
+test('hired-agents.md is the canonical coverage-report path', () => {
+  // The /awos:hire-owned coverage report was renamed from
+  // context/product/agents.md to context/product/hired-agents.md so
+  // the filename carries both producer (/awos:hire) and content
+  // (registered agents). Lint pins both halves of the rename: at
+  // least one prompt must reference the new path, and no prompt may
+  // still reference the old one.
+  const promptDirs = [commandsDir, wrappersDir, templatesDir];
+  let referencesNew = false;
+  const stalePaths = [];
+  for (const dir of promptDirs) {
+    for (const f of listMarkdown(dir)) {
+      const body = readUtf8(path.join(dir, f));
+      if (body.includes('context/product/hired-agents.md'))
+        referencesNew = true;
+      if (/context\/product\/agents\.md/.test(body)) {
+        stalePaths.push(path.relative(repoRoot, path.join(dir, f)));
+      }
+    }
+  }
+  assert.deepEqual(
+    stalePaths,
+    [],
+    `prompts still reference the pre-rename path context/product/agents.md: ${stalePaths.join(', ')}`
+  );
+  assert.ok(
+    referencesNew,
+    'no prompt references context/product/hired-agents.md — the post-rename canonical path should appear in at least architecture.md and hire.md'
+  );
+});
+
+test('subagent-enumerating commands cover plugin-provided agents', () => {
+  // /awos:tech, /awos:hire, /awos:tasks all assign or report on
+  // specialists. Each must instruct Claude to look beyond
+  // .claude/agents/*.md and also enumerate plugin-provided agents
+  // (recognized by the "plugin-name:" prefix on subagent_type, which
+  // only appears in the Agent tool's description block). Without this,
+  // plugin-shipped specialists are invisible to the orchestrator.
+  const enumerators = ['tech.md', 'hire.md', 'tasks.md'];
+  for (const file of enumerators) {
+    const body = readUtf8(path.join(commandsDir, file));
+    assert.ok(
+      body.includes('plugin-name:'),
+      `commands/${file} must mention the "plugin-name:" prefix used to recognize plugin-provided subagents`
+    );
+    assert.ok(
+      /`?Agent`?\s+tool[’']s\s+description\s+block/i.test(body),
+      `commands/${file} must tell Claude to read the Agent tool's description block to find plugin-provided agents`
+    );
+  }
+});
+
+test('implement.md and tech.md show explicit Agent() invocation syntax', () => {
+  // Both orchestrators delegate work to specialist subagents via the
+  // built-in `Agent` tool. A concrete `Agent(subagent_type=..., ...)`
+  // example in the prompt is what nudges Claude to use the tool rather
+  // than just describe the delegation — and what keeps both prompts
+  // aligned on the same invocation shape.
+  for (const file of ['implement.md', 'tech.md']) {
+    const body = readUtf8(path.join(commandsDir, file));
+    assert.ok(
+      body.includes('Agent(subagent_type='),
+      `commands/${file} must show an Agent(subagent_type=..., ...) invocation example so the subagent delegation step is concrete`
+    );
+  }
+});
+
+test('agent-template.md cues the spawned agent to apply its skills', () => {
+  // /awos:hire writes a `skills:` list into each agent's frontmatter,
+  // and Claude Code attaches those skills when the agent runs. But the
+  // attachment is only useful if the agent's prompt body cues it to
+  // actually apply them. The template body must therefore tell the
+  // agent to consult its frontmatter `skills:` list when working.
+  const body = readUtf8(path.join(templatesDir, 'agent-template.md'));
+  assert.ok(
+    /skills\b[^\n]*\bfrontmatter\b|\bfrontmatter\b[^\n]*\bskills\b/i.test(body),
+    'templates/agent-template.md body must instruct the agent to apply skills declared in its frontmatter'
   );
 });
 

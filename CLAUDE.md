@@ -22,6 +22,16 @@ bunx prettier . --check
 npx prettier --write .     # auto-format before committing
 bunx prettier --write .
 
+# Run the test suite (no npm deps; node --test built-in):
+npm test                   # all three layers
+npm run test:lint          # Layer 1 — static prompt linter
+npm run test:installer     # Layer 2 — installer unit tests
+npm run test:fixtures      # Layer 3 — fixture-project end-to-end
+bun test tests/            # local cross-runtime sanity check (optional)
+
+# Behavioral / session-log E2E lives in the awos-qa repository
+# (sibling to this one). See its README for how to run.
+
 # Test installer against a separate project (pick one runner; $AWOS_REPO is the absolute path to this repo):
 cd ~/some-scratch-project
 npx $AWOS_REPO/index.js
@@ -30,7 +40,27 @@ bun $AWOS_REPO/index.js          # direct exec also works
 npx $AWOS_REPO/index.js --dry-run   # preview only
 ```
 
-There is no test suite. The installer runs on **Node 22+ or any recent Bun**. It uses only standard JS built-ins (`fs`, `path`) via CommonJS `require`, which both runtimes support — do not add npm dependencies or runtime-specific APIs without strong justification, as that would break cross-runtime compatibility.
+The installer runs on **Node 22+ or any recent Bun**. It uses only standard JS built-ins (`fs`, `path`) via CommonJS `require`, which both runtimes support — do not add npm dependencies or runtime-specific APIs without strong justification, as that would break cross-runtime compatibility.
+
+## Testing
+
+The repo has a three-layer test suite under `tests/`, all built on Node's `node:test` built-in — no npm dependencies. See `tests/README.md` for the detailed reference.
+
+1. **Static prompt linter** (`tests/lint-prompts.test.js`) — symmetry, frontmatter, marker presence, cross-references, dimension DAG, copy-table consistency, and grep-style checks for required substrings inside prompt bodies.
+2. **Installer unit tests** (`tests/installer/*.test.js`) — exercises the installer services against temp directories.
+3. **Fixture projects** (`tests/fixtures.test.js` + `tests/fixtures/<name>/`) — real installer runs against representative pre-install trees, with manifest-based assertions.
+
+All three layers run in CI (`npm test`).
+
+Behavioral end-to-end tests — the ones that run a real Claude Code session against a seeded scratch project and assert on the actual tool-call trace — live in the separate **`awos-qa`** repository (sibling to this one). See its README for how to run them.
+
+### Tests must narrate what they checked
+
+Output that says `N events found` or `M pass` tells you the suite ran, not what was validated. `assert.*` failure messages should name the contract being violated, not just dump a diff. Anyone reading the test output should understand which contracts were verified without opening the test source.
+
+### Adding tests for new contracts
+
+When a change introduces a structural contract — frontmatter key, marker pattern, migration, copy-table entry — its test ships in the same PR. Surface-area contracts (something a grep can catch) go to Layer 1. Mechanical contracts (installer behavior, migration idempotency) go to Layer 2 or 3. Behavioral contracts ("Claude must actually call X") belong in the `awos-qa` repository.
 
 ## Architecture: The Two-Folder Customization Model
 

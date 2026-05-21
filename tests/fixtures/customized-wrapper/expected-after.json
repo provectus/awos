@@ -1,0 +1,8 @@
+{
+  "_comment": "OPEN QUESTION (plan §11): docs call .claude/commands/awos/*.md the user-editable customization layer, but file-copier.js unconditionally overwrites. This fixture pins CURRENT behaviour (overwrite). If a follow-up PR decides wrappers should be preserved, flip the contains check and update src/services/file-copier.js together.",
+  ".claude/commands/awos/architecture.md": {
+    "exists": true,
+    "contains": ".awos/commands/architecture.md",
+    "notContains": "CUSTOM-USER-CONTENT"
+  }
+}

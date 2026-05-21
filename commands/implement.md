@@ -66,7 +66,7 @@ You do not write or edit code, configuration, or database schemas yourself. Your
     - A concrete definition of success — what verification commands the subagent must run before reporting completion (tests, lint, typecheck, curl, or a browser-automation MCP if the project has one configured).
 2.  Delegate to the agent identified in Step 2 via the `Agent` tool:
 
-    ```
+    ```text
     Agent(subagent_type="<agent-name>", description="<3-5 word summary>", prompt="<delegation prompt from item 1>")
     ```
 

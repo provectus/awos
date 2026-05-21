@@ -62,8 +62,8 @@ Follow this logic precisely.
 
 1.  Read the existing `architecture.md`, `product-definition.md`, and `roadmap.md`.
 2.  Present the current architecture and ask the user what to change.
-3.  Propose a specific, reasoned change. For example: to support file uploads from the roadmap, propose adding S3 under Data & Persistence.
-4.  Before saving, check whether the change conflicts with existing principles, technologies, or cost/operational constraints. Surface any concern with the user before applying.
+3.  Propose a specific, reasoned change, preferring scalable and cost-effective options. For example: to support file uploads from the roadmap, propose adding S3 under Data & Persistence.
+4.  Before saving, check whether the change conflicts with existing principles, technologies, or cost/operational constraints. For complex changes (e.g., swapping a database), discuss the potential impacts and migration strategy with the user. Surface any concern before applying.
 5.  When all changes are confirmed, proceed to **Step 3: Finalization**.
 
 ---

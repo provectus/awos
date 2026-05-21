@@ -53,7 +53,7 @@ Follow this process precisely.
 3.  Analyze the codebase: delegate the read-only exploration to the built-in `Explore` agent to keep the orchestrator context lean. If the feature spans multiple stacks, run one exploration per stack in parallel.
 4.  For each stack the feature touches, invoke its matched specialist (project-local or plugin-provided, from step 2) via the `Agent` tool. Pass the functional spec, the relevant architecture sections, and the exploration findings as context. Specialists carry skill attachments in their frontmatter, so running them is what makes those skills load — drafting tech-stack sections in the orchestrator bypasses both the specialist and its skills. Run independent specialist calls in parallel.
 
-    ```
+    ```text
     Agent(subagent_type="<agent-name>", description="<3-5 word summary>", prompt="<context + tech-stack questions for this stack>")
     ```
 

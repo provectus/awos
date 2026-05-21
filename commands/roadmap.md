@@ -25,6 +25,12 @@ Your task is to manage the product roadmap file located at `context/product/road
 
 ---
 
+# INTERACTION
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+
+---
+
 # PROCESS
 
 Follow this logic precisely.

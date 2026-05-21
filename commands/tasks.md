@@ -24,6 +24,12 @@ Your goal is to create a markdown file with a comprehensive list of checkbox tas
 
 ---
 
+# INTERACTION
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+
+---
+
 # PROCESS
 
 Follow this process precisely.
@@ -56,7 +62,7 @@ Follow this process precisely.
   3.  Under that slice, create the nested sub-tasks (database, backend, frontend) needed to implement and verify **only that slice**.
   4.  **For each sub-task, assign the appropriate subagent:**
       - Identify the technology or domain the sub-task involves
-      - Discover registered specialists by scanning `.claude/agents/*.md` (delegate to the built-in `Explore` agent when available, otherwise use `Glob` + `Read`) and parsing each agent's YAML frontmatter (`name`, `description`, `skills`). That list, plus always-available built-ins (`general-purpose`), is the universe to match against — auto-dispatch metadata is not a substitute when the assignment must be definitive.
+      - Discover registered specialists from two sources, both routed through the built-in `Explore` agent: (a) scan `.claude/agents/*.md` and parse each agent's YAML frontmatter (`name`, `description`, `skills`) for project-local agents; (b) read the `Agent` tool's description block for plugin-provided agents (those whose `subagent_type` carries a `plugin-name:` prefix, e.g. `python-development:python-pro`). The combined list, plus the always-available built-in `general-purpose`, is the universe to match against — auto-dispatch metadata alone is not a substitute when the assignment must be definitive.
       - Match the sub-task to a subagent based on:
         - Technology keywords
         - Task intent

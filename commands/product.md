@@ -33,6 +33,12 @@ Your primary task is to **fill in** a product definition template using a guided
 
 ---
 
+# INTERACTION
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+
+---
+
 # PROCESS
 
 Follow this logic precisely.

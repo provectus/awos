@@ -26,6 +26,12 @@ Your primary task is to create the technical specification for a given feature. 
 
 ---
 
+# INTERACTION
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+
+---
+
 # PROCESS
 
 Follow this process precisely.
@@ -38,7 +44,12 @@ Follow this process precisely.
 ### Step 2: Gather and Synthesize Context
 
 1.  Read the `functional-spec.md` from the chosen directory and the main `context/product/architecture.md`. These two inputs are independent — issue both `Read` calls in a single tool-use block (parallel tool calls). Sequence reads only when one's output feeds the next.
-2.  Identify candidate specialist subagents: determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Discover registered specialists by scanning `.claude/agents/*.md` (delegate to the built-in `Explore` agent when available, otherwise use `Glob` + `Read`) and parsing each agent's YAML frontmatter (`name`, `description`, `skills`). Match each stack against this concrete list, plus always-available built-ins (`general-purpose`, `Explore`, `Plan`).
+2.  Identify candidate specialist subagents: determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Discover registered specialists from two sources, both routed through the built-in `Explore` agent so the orchestrator context stays lean:
+    - **Project-local agents** — scan `.claude/agents/*.md` and parse each agent's YAML frontmatter (`name`, `description`, `skills`).
+    - **Plugin-provided agents** — read the `Agent` tool's description block to enumerate agents whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`).
+
+    Match each stack against the combined list, plus always-available built-ins (`general-purpose`, `Explore`, `Plan`).
+
 3.  Analyze the codebase: delegate the read-only exploration to the built-in `Explore` agent to keep the orchestrator context lean. If the feature spans multiple stacks, run one exploration per stack in parallel.
     - For technology-specific recommendations beyond codebase exploration, delegate to the specialist whose frontmatter `description` matches the stack (from the list discovered in step 2). Run multiple delegations in parallel when the work is independent.
     - If no specialist exists for a stack, do the analysis yourself after the exploration reports back, and note the gap so `/awos:hire` can address it.

@@ -23,6 +23,12 @@ Your task is to manage the architecture file located at `context/product/archite
 
 ---
 
+# INTERACTION
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+
+---
+
 # PROCESS
 
 Follow this logic precisely.
@@ -71,7 +77,7 @@ Follow this logic precisely.
 
 ### Step 4: Coverage Hint
 
-Give the user a quick read on whether the stack already has specialist agents — but do not persist this anywhere. The durable coverage report is owned by `/awos:hire` (see `context/product/agents.md` after that command runs).
+Give the user a quick read on whether the stack already has specialist agents — but do not persist this anywhere. The durable coverage report is owned by `/awos:hire` (see `context/product/hired-agents.md` after that command runs).
 
 1.  List the technologies in the saved architecture (languages, frameworks, cloud providers, databases, infrastructure tools).
 2.  Look at the names of subagents registered in `.claude/agents/` (if any). Without going deep, note how many of the listed technologies do not appear to have a matching specialist by description.

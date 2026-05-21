@@ -26,6 +26,12 @@ Your goal is to execute the next available task for a given specification. You w
 
 ---
 
+# INTERACTION
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+
+---
+
 # PROCESS
 
 Follow this process precisely.
@@ -57,7 +63,13 @@ You do not write or edit code, configuration, or database schemas yourself. Your
     - A `<scope_discipline>` block: "Only make changes the task requires. Don't add features, refactor unrelated code, or add validation for scenarios outside the task. If something is unclear, ask rather than guessing."
     - An `<investigate_before_answering>` block: "Don't speculate about code you haven't opened. Read relevant files before editing. Issue independent reads in parallel."
     - A concrete definition of success — what verification commands the subagent must run before reporting completion (tests, lint, typecheck, curl, or a browser-automation MCP if the project has one configured).
-2.  Delegate to the agent identified in Step 2, passing the formulated prompt as the task. If no specialist was matched, delegate to `general-purpose`.
+2.  Delegate to the agent identified in Step 2 via the `Agent` tool:
+
+    ```
+    Agent(subagent_type="<agent-name>", description="<3-5 word summary>", prompt="<delegation prompt from item 1>")
+    ```
+
+    Pass the formulated prompt as the `prompt` parameter. If no specialist was matched, set `subagent_type="general-purpose"`.
 
 ### Step 4: Await and Verify Completion
 

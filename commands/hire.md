@@ -24,6 +24,12 @@ Your task is to ensure the project has sufficient specialist agents, skills, and
 
 ---
 
+# INTERACTION
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+
+---
+
 # PROCESS
 
 Follow this process precisely.
@@ -58,10 +64,11 @@ Follow this process precisely.
 
 ## Step 3: Check What Already Exists
 
-1.  Discover existing agents and skills. If the host tool provides a read-only research subagent (in Claude Code: the built-in `Explore` agent), delegate this discovery to it. The discovery should:
-    - Scan `.claude/agents/*.md` and parse YAML frontmatter (name, description, skills)
-    - Search for available skills across the project (`.claude/skills/`, plugin-provided skills, any other skill locations)
-    - Report each registered specialist subagent's name and description so the orchestrator can match domains against them
+1.  Discover existing agents and skills. Delegate this discovery to the built-in `Explore` agent. The discovery should cover both sources:
+    - **Project-local agents** — scan `.claude/agents/*.md` and parse each agent's YAML frontmatter (name, description, skills).
+    - **Plugin-provided agents** — read the `Agent` tool's description block to enumerate agents whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`).
+    - Search for available skills across the project (`.claude/skills/`, plugin-provided skills, any other skill locations).
+    - Report each registered specialist subagent's name and description (project-local and plugin-provided alike) so the orchestrator can match domains against them.
 2.  Compare against the proposed roles from Step 2 and classify coverage:
     - **Covered** — An existing agent or subagent already handles this domain well
     - **Partially Covered** — An agent exists but lacks specific skills for the technologies
@@ -140,7 +147,7 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
 
 ## Step 8: Write Coverage Report
 
-Write `context/product/agents.md` with the post-install state. This file is the canonical, durable coverage report — `/awos:hire` owns it and is the only command that refreshes it. Anyone reading `architecture.md` should follow the pointer back to here, not look for an inline table.
+Write `context/product/hired-agents.md` with the post-install state. This file is the canonical, durable coverage report — `/awos:hire` owns it and is the only command that refreshes it. Anyone reading `architecture.md` should follow the pointer back to here, not look for an inline table.
 
 File structure (GitHub-flavored markdown, exact column headers):
 
@@ -186,7 +193,7 @@ Report:
 - **Agents Updated:** each updated agent and what was added
 - **Skills Installed:** all successfully installed skills
 - **MCPs Installed:** all successfully installed MCPs
-- **Coverage Report:** path to `context/product/agents.md`
+- **Coverage Report:** path to `context/product/hired-agents.md`
 - **Gaps Remaining:** any technologies without specific skill coverage
 
 End with the next command: `/awos:tasks`.

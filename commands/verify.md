@@ -26,6 +26,12 @@ Verify a specification's implementation against its acceptance criteria. For eac
 
 ---
 
+# INTERACTION
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+
+---
+
 # PROCESS
 
 ### Step 1: Identify Target Specification

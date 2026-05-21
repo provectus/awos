@@ -43,7 +43,7 @@ Create this directory. If it already exists, results will be overwritten.
 
 ## Step 5 — Execute Dimensions
 
-For each execution phase, launch all dimensions in the phase **in parallel** using the Task tool with the `dimension-auditor` agent.
+For each execution phase, launch all dimensions in the phase **in parallel** using the Agent tool with the `dimension-auditor` agent.
 
 For each dimension, provide the agent with:
 
@@ -57,9 +57,9 @@ Wait for all dimensions in a phase to complete before starting the next phase.
 
 ### Important
 
-- Launch each dimension as a **separate Task** with `subagent_type: "dimension-auditor"` so each gets its own context window
-- Within a phase, launch all Tasks in a **single message** (parallel execution)
-- The dimension-auditor agent is read-only — it will not modify project files
+- Launch each dimension as a separate Agent call with `subagent_type: "dimension-auditor"` so each gets its own context window
+- Within a phase, launch all Agent calls in a single message (parallel execution)
+- The dimension-auditor agent does not modify project source files; its only write is the per-dimension artifact at the path you provide
 
 ## Step 6 — Compile Report
 

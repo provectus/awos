@@ -35,6 +35,12 @@ Your primary task is to create a new functional specification file. You will det
 
 ---
 
+# INTERACTION
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+
+---
+
 # PROCESS
 
 Follow this process precisely.
@@ -48,12 +54,12 @@ Your first goal is to determine the **topic** - the single, specific feature or 
     - If the `<user_prompt>` tag is **not empty**, this is your **topic**. Announce it: "Okay, let's create a functional specification for: '`<user_prompt>`'."
     - If the `<user_prompt>` tag is **empty**, read `context/product/roadmap.md`, find the **first incomplete checklist item** (`- [ ] ...`), and use it as your **topic**. Announce: "Since no topic was provided, I'll start with the next incomplete item from the roadmap: **'[Name of Roadmap Item]'**."
     - If all roadmap items are complete, stop and inform the user.
-3.  **CRITICAL - Scope Boundary:** You are working on THIS single **topic** only. All other roadmap items are out-of-scope and will be addressed in separate specifications.
+3.  Scope boundary: you are working on this single **topic** only. All other roadmap items are out-of-scope and will be addressed in separate specifications.
 
 ### Step 2: Gather Context and Extract Known Information
 
-- Read the `context/product/product-definition.md` and `context/product/roadmap.md` files to understand the project's overall goals, target audience, and priorities.
-- **CRITICAL - Focus on Your Topic Only:** Extract all information already documented about your **topic**. This includes:
+- Read `context/product/product-definition.md` and `context/product/roadmap.md` to understand goals, target audience, and priorities.
+- Focus on your topic only. Extract all information already documented about it:
   - The purpose and rationale (why it exists)
   - Expected user capabilities (what users will be able to do)
   - Any mentioned constraints or boundaries
@@ -67,7 +73,7 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 - Your questions should emphasize the 'why' - the problem or user pain point this feature is meant to address, and the specific user value it delivers.
 - **Scope Rule:** All questions and discussions must relate ONLY to your **topic**. Do not ask about or discuss functionality from other roadmap items.
 - **Non-Technical Questions Only:** Your questions must be answerable by a product manager or designer — never ask about data models, API design, storage, architecture, state management, caching, or any implementation detail. Frame every question in terms of what the user sees, does, or experiences. If you need to understand a behavior, ask "What should the user see when…?" not "How should the system handle…?"
-- **Never Surface Technical Names:** When you encounter technical identifiers (field names, API response keys, database columns, type names, etc.) in context files, **silently map them to plain-language labels**. Do NOT ask the user to confirm whether a user-facing label corresponds to a technical field name. If you are unsure what a technical term means in user-facing language, ask "What does the user call [plain description of the concept]?" — never expose the raw identifier.
+- **Never Surface Technical Names:** When you encounter technical identifiers (field names, API response keys, database columns, type names, etc.) in context files, silently map them to plain-language labels. Do not ask the user to confirm whether a user-facing label corresponds to a technical field name. If you are unsure what a technical term means in user-facing language, ask "What does the user call [plain description of the concept]?" — never expose the raw identifier.
 - **Self-Check Before Every Question:** Re-read your question. If it contains a code identifier (camelCase, snake_case, PascalCase, or a name that only appears in source code / API schemas), rewrite the question without it. If the question cannot be asked without referencing the identifier, it is a technical question — drop it.
 - You will now fill the template section by section, but you must actively probe for details that are not yet documented.
 
@@ -78,10 +84,10 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 
 2.  **Functional Requirements (The "What"):**
     - Ask the user to describe what needs to be done from a user's perspective.
-    - **CRITICAL BEHAVIOR:** For every piece of information the user gives you, you must "think like a tester" and clarify ambiguities. If the user answers in technical terms, thank them and rewrite the information into plain, user-facing language before including it in the spec.
+    - For every piece of information the user gives you, think like a tester and clarify ambiguities. If the user answers in technical terms, rewrite the information into plain, user-facing language before including it in the spec.
     - If the user says: "The user needs to be able to upload a profile picture."
     - You MUST ask clarifying questions like: "Great. Let's break that down. What file formats should be allowed (e.g., JPG, PNG)? Is there a maximum file size? What should happen after the upload is successful? What specific error message should the user see if it fails?"
-    - **MARK ALL AMBIGUITIES:** If a detail cannot be confirmed by the user, you MUST use the `[NEEDS CLARIFICATION: your specific question]` tag directly in the draft. Example: "The user should see an error message. [NEEDS CLARIFICATION: What should the exact text of the error message be?]"
+    - Mark every unresolved detail with `[NEEDS CLARIFICATION: your specific question]` directly in the draft. Example: "The user should see an error message. [NEEDS CLARIFICATION: What should the exact text of the error message be?]"
 
 3.  **Acceptance Criteria:**
     - After clarifying a requirement, turn it into a concrete, testable acceptance criterion.
@@ -89,10 +95,10 @@ Your first goal is to determine the **topic** - the single, specific feature or 
     - Example Statement: "Okay, I've captured that. So a clear acceptance criterion would be: 'Given the user is on their profile page, when they upload a PNG file smaller than 5MB, then the new picture appears on their profile and a 'Success' message is shown.' Is that correct?"
 
 4.  **Scope and Boundaries:**
-    - Ask the user what should be excluded from THIS specific **topic**.
-    - **Automatically add other roadmap items to Out-of-Scope:** State to the user: "I'm adding the following to Out-of-Scope as they are separate roadmap items: [list other roadmap items]"
+    - Ask the user what should be excluded from this specific **topic**.
+    - Add other roadmap items to Out-of-Scope automatically, and tell the user you've done so.
     - Focus only on clarifying boundaries within the current **topic** itself.
-    - Example: "To keep this focused on [your topic], what related aspects should we explicitly NOT include? For example, should we include [specific feature within this topic]?"
+    - Example: "To keep this focused on [your topic], what related aspects should we explicitly not include? For example, should we include [specific feature within this topic]?"
 
 ### Step 4: Self-Review (Language Check)
 
@@ -107,4 +113,4 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 1.  **Create Short Name:** Once the user approves the draft, generate a short, kebab-case name from the specification's title (e.g., "User Profile Picture Upload" becomes `user-profile-picture-upload`).
 2.  **Execute Directory Script:** Execute the shell script with the short name as a parameter: `.awos/scripts/create-spec-directory.sh [short-name]`. This will create a new directory (e.g., `context/spec/001-user-profile-picture-upload`).
 3.  **Save the File:** Write the final, approved specification content into the `functional-spec.md` file within the newly created directory.
-4.  **Conclude:** Announce the final action and provide the full path to the new file: "Perfect. I have saved the functional specification. You can find it at `context/spec/[directory-name]/functional-spec.md`. Now, it's time to work on the technical considerations with `/awos:tech`"
+4.  Report the saved path and the next command: `/awos:tech`.

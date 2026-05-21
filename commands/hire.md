@@ -24,21 +24,27 @@ Your task is to ensure the project has sufficient specialist agents, skills, and
 
 ---
 
+# INTERACTION
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+
+---
+
 # PROCESS
 
 Follow this process precisely.
 
 ## Step 1: Prerequisite Checks & Context Loading
 
-1.  **Check Architecture:** Verify that `context/product/architecture.md` exists. If it does not, stop immediately. Respond with: "Before we can hire specialist agents, we need a defined architecture. Please run `/awos:architecture` first, then run me again."
-2.  **Find Tech Considerations:** Look for the highest-numbered directory under `context/spec/` that contains a `technical-considerations.md` file. This is optional — if none exists, proceed with the architecture alone.
-3.  **Read Context:** Read the architecture file and, if found, the technical considerations file.
+1.  If `context/product/architecture.md` does not exist, stop and tell the user to run `/awos:architecture` first.
+2.  Look for the highest-numbered directory under `context/spec/` that contains a `technical-considerations.md` file. This input is optional.
+3.  Read the architecture file and, if found, the technical considerations file in parallel.
 
 ## Step 2: Infer Needed Skills & Agents
 
-1.  **Prioritize User Prompt:** If the user provided a prompt in `<user_prompt>`, treat it as the primary directive. Use it to focus on specific technologies, roles, or domains the user explicitly requested. The architecture and technical considerations serve as supplementary context — they fill gaps but do not override the user's intent.
-2.  **Extract Technologies:** From the user prompt (if provided), architecture, and technical considerations, extract every technology, framework, language, database, cloud service, and infrastructure tool mentioned.
-3.  **Group into Domains:** Organize the technologies into logical domains:
+1.  If `<user_prompt>` is non-empty, treat it as the primary directive — focus on the technologies, roles, or domains it names. The architecture and technical considerations fill gaps but do not override the user's intent.
+2.  Extract every technology, framework, language, database, cloud service, and infrastructure tool mentioned in the user prompt (if provided), architecture, and technical considerations.
+3.  Group the technologies into logical domains:
     - **Frontend** (UI frameworks, tools, bundlers)
     - **Backend** (server frameworks, languages, APIs)
     - **Database** (databases, ORMs, migration tools)
@@ -46,8 +52,8 @@ Follow this process precisely.
     - **Testing** (test frameworks, browser automation, QA tools)
     - **Documentation** (doc generators, API docs, knowledge bases)
     - **Solution Ownership** (product management, project tracking, analytics)
-4.  **Map to Agent Roles:** For each domain that has technologies, define an ideal agent role name in kebab-case (e.g., `react-frontend`, `python-backend`, `aws-infra`).
-5.  **Present Needs Analysis:** Show the user a table of identified domains, technologies, and proposed agent roles. Confirm with the user via `AskUserQuestion` before proceeding.
+4.  For each domain that has technologies, define an ideal agent role name in kebab-case (e.g., `react-frontend`, `python-backend`, `aws-infra`).
+5.  Show the user a table of identified domains, technologies, and proposed agent roles, and confirm before proceeding.
 
     | Domain         | Technologies                | Proposed Agent Role |
     | -------------- | --------------------------- | ------------------- |
@@ -58,15 +64,16 @@ Follow this process precisely.
 
 ## Step 3: Check What Already Exists
 
-1.  **Discover Existing Agents and Skills:** Use the built-in Explore agent (via the Task tool with `subagent_type: "Explore"`) to discover all existing agents and skills in the project. The Explore agent should:
-    - Scan `.claude/agents/*.md` and parse YAML frontmatter (name, description, skills)
-    - Search for available skills across the project (`.claude/skills/`, plugin-provided skills, any other skill locations)
-    - Analyze the Task tool definition to extract all available `subagent_type` values with their descriptions
-2.  **Compare Against Needs:** For each proposed agent role from Step 2, classify coverage:
+1.  Discover existing agents and skills. Delegate this discovery to the built-in `Explore` agent. The discovery should cover both sources:
+    - **Project-local agents** — scan `.claude/agents/*.md` and parse each agent's YAML frontmatter (name, description, skills).
+    - **Plugin-provided agents** — read the `Agent` tool's description block to enumerate agents whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`).
+    - Search for available skills across the project (`.claude/skills/`, plugin-provided skills, any other skill locations).
+    - Report each registered specialist subagent's name and description (project-local and plugin-provided alike) so the orchestrator can match domains against them.
+2.  Compare against the proposed roles from Step 2 and classify coverage:
     - **Covered** — An existing agent or subagent already handles this domain well
     - **Partially Covered** — An agent exists but lacks specific skills for the technologies
     - **Missing** — No agent or subagent exists for this domain
-3.  **Present Coverage Table:** Show the user what exists and what is missing.
+3.  Show the user a coverage table:
 
     | Proposed Role    | Status               | Existing Agent/Subagent | Gap                     |
     | ---------------- | -------------------- | ----------------------- | ----------------------- |
@@ -76,13 +83,13 @@ Follow this process precisely.
 
 ## Step 4: Search the MCP Server
 
-1.  **Search for Components:** For each **Missing** or **Partially Covered** role, call the `awos-recruitment` MCP server's `search` tool with a natural-language query built from technology names and domain. Example queries:
+1.  For each **Missing** or **Partially Covered** role, call the `awos-recruitment` MCP server's `search` tool with a natural-language query built from technology names and domain. Issue these searches in parallel — one call per role. Example queries:
     - `"React TypeScript frontend development"`
     - `"Python FastAPI backend API"`
     - `"AWS Terraform infrastructure deployment"`
-2.  **Handle MCP Unavailability:** If the `awos-recruitment` MCP server is not available or returns errors, announce the limitation: "The awos-recruitment MCP server is not available. I will proceed with generating agent files using general configuration. For best results, you should prepare custom skills and agents tailored to your project's specific needs — create skills in `.claude/skills/` and agents in `.claude/agents/`." Skip to **Step 6**.
-3.  **Collect Results:** Gather all found skills, MCPs, and agents from the search results.
-4.  **Present Search Results:** Show the user what was found and confirm installation via `AskUserQuestion`.
+2.  If the `awos-recruitment` MCP server is not available or returns errors, tell the user it is unavailable and that you will proceed with generating agent files using general configuration. Note that they can prepare custom skills and agents in `.claude/skills/` and `.claude/agents/`. Skip to **Step 6**.
+3.  Gather all found skills, MCPs, and agents from the search results.
+4.  Show the user what was found and confirm installation before proceeding.
 
     | Role             | Found Skills                  | Found MCPs | Found Agents       |
     | ---------------- | ----------------------------- | ---------- | ------------------ |
@@ -91,62 +98,102 @@ Follow this process precisely.
 
 ## Step 5: Install Found Components
 
-1.  **Install Skills:** For all confirmed skills, run:
+Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock` is present in the project root, otherwise use `npx`. The commands below show both; pick one.
+
+1.  Install skills:
     ```
     npx @provectusinc/awos-recruitment skill <space-separated skill names>
+    bunx @provectusinc/awos-recruitment skill <space-separated skill names>
     ```
-2.  **Install MCPs:** For all confirmed MCPs, run:
+2.  Install MCPs:
     ```
     npx @provectusinc/awos-recruitment mcp <space-separated mcp names>
+    bunx @provectusinc/awos-recruitment mcp <space-separated mcp names>
     ```
-3.  **Install Agents:** For all confirmed agents, run:
+3.  Install agents:
     ```
     npx @provectusinc/awos-recruitment agent <space-separated agent names>
+    bunx @provectusinc/awos-recruitment agent <space-separated agent names>
     ```
-4.  **Report Results:** Announce successes and failures for each installation.
+4.  Report successes and failures for each installation.
 
 ## Step 6: Generate or Update Agent Files
 
-1.  **Read Template:** Read the agent template from `.awos/templates/agent-template.md`.
-2.  **Create Directory:** Ensure `.claude/agents/` directory exists. Create it if it does not.
-3.  **For Missing Roles — Create or Skip Based on Registry Agents:**
-    - **If a registry agent was successfully installed for this role in Step 5:** Do NOT generate a new agent file from the template. The installed agent already provides full coverage for this role. Move on to the next role.
-    - **If NO registry agent was installed for this role:** Use the template to generate a new agent file at `.claude/agents/{role-name}.md`
-      - Fill in all placeholders:
-        - `[agent-name]` → the kebab-case role name
-        - `[When Claude should delegate to this agent]` → a description of when this agent should be used, based on the domain and technologies
-        - `[domain]` → the domain name (e.g., "frontend", "backend", "infrastructure")
-        - `[technology list]` → comma-separated list of technologies for this domain
-        - `[Responsibility aligned with the agent's domain]` → specific responsibilities derived from the architecture
-      - Add any installed skills to the `skills` list in frontmatter
-      - Show the generated agent file to the user for approval before saving
-4.  **For Partially Covered Roles — Update Existing Agent Files:**
-    - Read the existing agent file
-    - Append newly installed skills to the `skills` list in the YAML frontmatter
-    - Show the updated file to the user for approval before saving
-5.  **Save Files:** Write all approved agent files.
+1.  Read the agent template from `.awos/templates/agent-template.md`.
+2.  Ensure `.claude/agents/` exists; create it if it does not.
+3.  For **Missing** roles:
+    - If a registry agent was successfully installed for this role in Step 5, skip generation — the installed agent already covers the role.
+    - Otherwise, generate a new agent file at `.claude/agents/{role-name}.md` from the template. Fill in:
+      - `[agent-name]` → the kebab-case role name
+      - `[When Claude should delegate to this agent]` → trigger phrasing based on domain and technologies
+      - `[domain]` → the domain name (e.g., "frontend", "backend", "infrastructure")
+      - `[technology list]` → comma-separated list of technologies for this domain
+      - `[Responsibility aligned with the agent's domain]` → specific responsibilities derived from the architecture
+        Add any installed skills to the `skills` list. Show the generated file to the user for approval before saving.
+4.  For **Partially Covered** roles: read the existing agent file, append newly installed skills to its `skills` list, and show the updated file to the user for approval before saving.
+5.  Write all approved agent files.
 
 ## Step 7: Warn About Missing Skills
 
-1.  **Identify Gaps:** Collect all technologies or skills that were NOT found on the MCP server (either the server was unavailable, or the search returned no results for them).
-2.  **Present Warning Table:** If there are gaps, show the user:
+1.  Collect technologies or skills that were not found on the MCP server (server unavailable, or no results).
+2.  If there are gaps, show the user a warning table:
 
     | Missing Skill       | For Agent        | Impact                                         |
     | ------------------- | ---------------- | ---------------------------------------------- |
     | Terraform expertise | `aws-infra`      | Agent will use general knowledge for IaC tasks |
     | FastAPI patterns    | `python-backend` | Agent will use general Python knowledge        |
 
-3.  **Prompt for Manual Preparation:** Advise the user: "The generated agents will work using general knowledge, but for best results you should prepare custom skills and agents for the gaps listed above. You can create skills in `.claude/skills/` and agents in `.claude/agents/` tailored to your project's specific needs."
+3.  Advise the user that the generated agents will work using general knowledge, but custom skills and agents in `.claude/skills/` and `.claude/agents/` will improve results for the gaps above.
 
-## Step 8: Final Summary
+## Step 8: Write Coverage Report
 
-Present a complete summary of all actions taken:
+Write `context/product/hired-agents.md` with the post-install state. This file is the canonical, durable coverage report — `/awos:hire` owns it and is the only command that refreshes it. Anyone reading `architecture.md` should follow the pointer back to here, not look for an inline table.
 
-- **Agents Installed (from Registry):** List each agent installed from the registry and the role it covers
-- **Agents Created (from Template):** List each new agent generated from template with its file path
-- **Agents Updated:** List each updated agent and what was added
-- **Skills Installed:** List all successfully installed skills
-- **MCPs Installed:** List all successfully installed MCPs
-- **Gaps Remaining:** List any technologies without specific skill coverage
+File structure (GitHub-flavored markdown, exact column headers):
 
-Conclude with: "Your specialist agents are ready. Run `/awos:tasks` to assign these agents to implementation tasks."
+```markdown
+# Specialist Agents Coverage
+
+Generated by `/awos:hire` on YYYY-MM-DD. Re-run `/awos:hire` to refresh — this file goes stale as soon as `.claude/agents/` or `context/product/architecture.md` changes.
+
+## Coverage by Technology
+
+| Technology | Recommended Subagent Role | Status | Agent |
+| ---------- | ------------------------- | ------ | ----- |
+
+## Registered Specialist Subagents
+
+| Name | Description | Skills |
+| ---- | ----------- | ------ |
+
+## Gaps
+
+(one bullet per missing or partial coverage row, with the impact)
+```
+
+Rules for the **Coverage by Technology** rows:
+
+- One row per technology identified in `context/product/architecture.md`.
+- `Status` cell must start with one of the literal markers `✅ Covered`, `⚠️ Partial`, or `❌ Missing`. A short qualifier after a dash is fine (`⚠️ Partial — installed agent lacks Terraform skill`).
+- `Agent` is the `name` of the matching subagent (existing or just installed), or `—` if missing.
+
+Rules for the **Registered Specialist Subagents** table:
+
+- One row per subagent currently in `.claude/agents/*.md` after this run completes (including ones installed in Step 5 and ones generated in Step 6).
+- Pull `name`, `description`, and `skills` directly from each agent file's YAML frontmatter.
+
+The **Gaps** section may be empty. If non-empty, each bullet is one line: `- <Technology>: <what's missing> → <suggested action>`.
+
+## Step 9: Final Summary
+
+Report:
+
+- **Agents Installed (from Registry):** each agent installed from the registry and the role it covers
+- **Agents Created (from Template):** each new agent generated from template, with file path
+- **Agents Updated:** each updated agent and what was added
+- **Skills Installed:** all successfully installed skills
+- **MCPs Installed:** all successfully installed MCPs
+- **Coverage Report:** path to `context/product/hired-agents.md`
+- **Gaps Remaining:** any technologies without specific skill coverage
+
+End with the next command: `/awos:tasks`.

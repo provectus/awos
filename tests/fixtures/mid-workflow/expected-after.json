@@ -1,0 +1,18 @@
+{
+  "_comment": "User work in progress under context/spec/ must survive an installer run unchanged.",
+  "context/spec/001-test-feature/functional-spec.md": {
+    "exists": true,
+    "unchanged": true
+  },
+  "context/spec/001-test-feature/technical-considerations.md": {
+    "exists": true,
+    "unchanged": true
+  },
+  "context/spec/001-test-feature/tasks.md": {
+    "exists": true,
+    "unchanged": true,
+    "contains": "**[Agent: python-expert]**"
+  },
+  ".awos/commands/architecture.md": { "exists": true },
+  ".claude/commands/awos/architecture.md": { "exists": true }
+}

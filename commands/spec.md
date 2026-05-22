@@ -108,6 +108,12 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 
 - Present the complete, populated template to the user for a final review. Ask, "Here is the complete draft of the functional specification. Please review it for any inaccuracies or missing details."
 
+### Step 5b: Detect Requirement Overlap (optional change request)
+
+- Cross-reference the draft acceptance criteria against existing requirements sources: `context/product/roadmap.md`, `context/product/product-definition.md`, and the acceptance criteria of prior specs under `context/spec/*/functional-spec.md`.
+- If you find any overlap that is **not** purely additive — i.e. this spec revises, narrows, or contradicts a previously-agreed requirement — follow the instructions in `.awos/commands/change-request.md` to optionally log a change request. Pass a short note as `<user_prompt>` describing the impact, e.g. `"new spec [NNN-slug] revises acceptance criterion in [old-spec-slug] §[section]"`. The change-request skill itself opens with an `AskUserQuestion` skip option, so simply invoke it; the user may decline at that prompt.
+- If the spec is purely additive (no overlap found), do **not** invoke the change-request skill — additive new requirements are already captured by the spec itself.
+
 ### Step 6: File Generation
 
 1.  **Create Short Name:** Once the user approves the draft, generate a short, kebab-case name from the specification's title (e.g., "User Profile Picture Upload" becomes `user-profile-picture-upload`).

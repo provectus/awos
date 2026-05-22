@@ -75,6 +75,7 @@ First, check if the file `context/product/product-definition.md` exists.
 
 ### Step 3: File Generation
 
-1.  Populate the template from `.awos/templates/product-definition-template.md` with the gathered information.
-2.  Write the final content to `context/product/product-definition.md`.
-3.  Report the saved path and the next command: `/awos:roadmap`.
+1.  **Offer Change Request (optional):** Before writing the file, follow the instructions in `.awos/commands/change-request.md` to optionally log a change request capturing what drove this update. Pass a short note as `<user_prompt>` describing the trigger, e.g. `"product-definition.md §[section] — [one-line summary]"`. The change-request skill itself opens with an `AskUserQuestion` skip option, so simply invoke it; the user may decline at that prompt. After it returns (whether logged, skipped, or deferred), continue.
+2.  Populate the template from `.awos/templates/product-definition-template.md` with the gathered information.
+3.  Write the final content to `context/product/product-definition.md`.
+4.  Report the saved path and the next command: `/awos:roadmap`.

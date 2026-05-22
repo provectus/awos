@@ -27,7 +27,9 @@ npm test                   # all three layers
 npm run test:lint          # Layer 1 — static prompt linter
 npm run test:installer     # Layer 2 — installer unit tests
 npm run test:fixtures      # Layer 3 — fixture-project end-to-end
-bun test tests/            # local cross-runtime sanity check (optional)
+npm run test:coverage      # prints per-file coverage table for src/
+npm run test:coverage:gate # fails if coverage drops below env thresholds
+bun test --coverage tests/ # local cross-runtime coverage (Bun version)
 
 # Behavioral / session-log E2E lives in the awos-qa repository
 # (sibling to this one). See its README for how to run.
@@ -51,6 +53,14 @@ The repo has a three-layer test suite under `tests/`, all built on Node's `node:
 3. **Fixture projects** (`tests/fixtures.test.js` + `tests/fixtures/<name>/`) — real installer runs against representative pre-install trees, with manifest-based assertions.
 
 All three layers run in CI (`npm test`).
+
+### Coverage
+
+`npm run test:coverage` runs the full suite under Node 22's built-in `--experimental-test-coverage` and prints a per-file table for `src/**` (the installer entry point `src/index.js` is excluded — it's just CLI plumbing). `npm run test:coverage:gate` adds three threshold flags that fail the run when coverage drops below the configured floor.
+
+CI runs both: a non-blocking **coverage-report** job that just prints the table, and a **coverage-gate** job that enforces thresholds via the repo/workflow variables `COVERAGE_LINES`, `COVERAGE_FUNCTIONS`, `COVERAGE_BRANCHES`. Defaults (currently 85 / 95 / 80) sit a few points below the measured baseline so the gate is green on day one and ratchets up as new tests land. Bump the env vars in repo settings to raise the floor — no code change required.
+
+Local Bun fallback: `bun test --coverage tests/` produces an equivalent table (slightly different column set) when Node isn't installed.
 
 Behavioral end-to-end tests — the ones that run a real Claude Code session against a seeded scratch project and assert on the actual tool-call trace — live in the separate **`awos-qa`** repository (sibling to this one). See its README for how to run them.
 

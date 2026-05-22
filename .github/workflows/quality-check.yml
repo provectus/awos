@@ -38,3 +38,47 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  # Coverage report — always runs, prints the per-file table to the job
+  # log so reviewers can see exactly which lines are uncovered without
+  # rerunning anything locally. Non-blocking (continue-on-error: true)
+  # while teams ratchet up the numbers.
+  coverage-report:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Measure coverage
+        run: npm run test:coverage
+
+  # Coverage gate — fails the job when src/ coverage drops below the
+  # configured thresholds. Defaults are intentionally a few points below
+  # the current measured baseline (lines=85, funcs=95, branches=80) so
+  # the gate is green out of the box and tightens over time. To bump,
+  # set repo / workflow env vars COVERAGE_LINES / COVERAGE_FUNCTIONS /
+  # COVERAGE_BRANCHES.
+  coverage-gate:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      COVERAGE_LINES: ${{ vars.COVERAGE_LINES || '85' }}
+      COVERAGE_FUNCTIONS: ${{ vars.COVERAGE_FUNCTIONS || '95' }}
+      COVERAGE_BRANCHES: ${{ vars.COVERAGE_BRANCHES || '80' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enforce coverage thresholds
+        run: npm run test:coverage:gate

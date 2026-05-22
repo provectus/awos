@@ -107,19 +107,13 @@ test('new framework file auto-discovers (no setup-config edit required)', async 
   );
 });
 
-test('wrapper destinations are OVERWRITTEN by the copier (open question §11)', async () => {
-  // OPEN QUESTION — see plan §11.
-  //
-  // Docs (CLAUDE.md, src/CLAUDE.md) describe .claude/commands/awos/*.md as
-  // the "user customization layer". But file-copier.js:55-57 unconditionally
-  // unlinks and overwrites the destination. This test pins the CURRENT
-  // behaviour (overwrite) so that a future PR which intentionally changes
-  // this policy fails this test and forces the team to update the
-  // assertion in the same commit. The team should resolve the docs-vs-code
-  // tension in a separate follow-up PR; do not "fix" either in this PR.
+test('wrapper destinations are PRESERVED when promptForOverwrite returns false', async () => {
+  // Wrappers under .claude/commands/awos/ are the user customization
+  // layer. If they already exist when the installer runs, the file-copier
+  // must consult the injected promptForOverwrite callback. When the
+  // callback returns false, existing wrappers must survive byte-for-byte.
   const targetDir = await freshTemp();
 
-  // Pre-create the wrapper destination with custom user text.
   const wrapperPath = path.join(
     targetDir,
     '.claude',
@@ -128,30 +122,157 @@ test('wrapper destinations are OVERWRITTEN by the copier (open question §11)', 
     'architecture.md'
   );
   await fsPromises.mkdir(path.dirname(wrapperPath), { recursive: true });
-  const customSentinel = '# USER CUSTOM CONTENT — should it survive?\n';
+  const customSentinel = '# USER CUSTOM CONTENT — must survive update\n';
   await fsPromises.writeFile(wrapperPath, customSentinel, 'utf8');
+
+  const promptCalls = [];
+  await silenced(() =>
+    executeCopyOperations({
+      packageRoot: repoRoot,
+      targetDir,
+      copyOperations,
+      promptForOverwrite: async (info) => {
+        promptCalls.push(info);
+        return false;
+      },
+    })
+  );
+
+  assert.equal(
+    promptCalls.length,
+    1,
+    'promptForOverwrite must be called exactly once when wrapper conflicts exist'
+  );
+  assert.ok(
+    promptCalls[0].files.some((f) => f.endsWith('architecture.md')),
+    'prompt payload must list the conflicting wrapper(s)'
+  );
+  assert.equal(
+    promptCalls[0].operation.destination,
+    '.claude/commands/awos',
+    'prompt payload must identify which destination is at risk'
+  );
+
+  const finalContent = await fsPromises.readFile(wrapperPath, 'utf8');
+  assert.equal(
+    finalContent,
+    customSentinel,
+    'user customization in .claude/commands/awos/architecture.md must survive verbatim when the user declines overwrite'
+  );
+});
+
+test('wrapper destinations ARE overwritten when promptForOverwrite returns true', async () => {
+  // When the user explicitly opts in (returns true), conflicting wrappers
+  // must be replaced with the canonical source content. This is how a
+  // user gets fresh wrappers after intentionally deciding to re-sync.
+  const targetDir = await freshTemp();
+
+  const wrapperPath = path.join(
+    targetDir,
+    '.claude',
+    'commands',
+    'awos',
+    'architecture.md'
+  );
+  await fsPromises.mkdir(path.dirname(wrapperPath), { recursive: true });
+  await fsPromises.writeFile(wrapperPath, '# stale custom\n', 'utf8');
 
   await silenced(() =>
     executeCopyOperations({
       packageRoot: repoRoot,
       targetDir,
       copyOperations,
+      promptForOverwrite: async () => true,
     })
   );
 
   const finalContent = await fsPromises.readFile(wrapperPath, 'utf8');
-  // Current code overwrites — the sentinel is gone.
-  assert.equal(
-    finalContent.includes(customSentinel),
-    false,
-    'wrapper currently gets overwritten — if this assertion ever flips, the docs/code reconciliation has shipped and this test needs updating'
-  );
-  // And the destination now matches the source wrapper.
   const sourceWrapper = await fsPromises.readFile(
     path.join(repoRoot, 'claude', 'commands', 'architecture.md'),
     'utf8'
   );
-  assert.equal(finalContent, sourceWrapper);
+  assert.equal(
+    finalContent,
+    sourceWrapper,
+    'opt-in overwrite must replace the wrapper with the canonical source'
+  );
+});
+
+test('promptForOverwrite is not invoked when no wrapper conflicts exist (fresh install)', async () => {
+  // Fresh installs have no existing wrappers to clobber, so the prompt
+  // must never fire — silent install. This pins the "fresh install = just
+  // create files" half of the spec.
+  const targetDir = await freshTemp();
+
+  let promptCallCount = 0;
+  await silenced(() =>
+    executeCopyOperations({
+      packageRoot: repoRoot,
+      targetDir,
+      copyOperations,
+      promptForOverwrite: async () => {
+        promptCallCount++;
+        return false;
+      },
+    })
+  );
+
+  assert.equal(
+    promptCallCount,
+    0,
+    'fresh install must not trigger promptForOverwrite — no existing wrappers to protect'
+  );
+
+  // And every wrapper from the source landed in place.
+  const sourceWrappers = await fsPromises.readdir(
+    path.join(repoRoot, 'claude', 'commands')
+  );
+  for (const f of sourceWrappers) {
+    assert.ok(
+      exists(path.join(targetDir, '.claude', 'commands', 'awos', f)),
+      `expected fresh-installed wrapper ${f}`
+    );
+  }
+});
+
+test('user opt-out preserves existing wrappers but still installs new ones', async () => {
+  // Per-file granularity: the user's existing wrapper survives, but
+  // wrappers they don't yet have (e.g., a newly added command) get
+  // installed during the same run. This validates that "opt out of
+  // override" does not block fresh additions the user has never seen.
+  const targetDir = await freshTemp();
+
+  const existingWrapper = path.join(
+    targetDir,
+    '.claude',
+    'commands',
+    'awos',
+    'architecture.md'
+  );
+  await fsPromises.mkdir(path.dirname(existingWrapper), { recursive: true });
+  const customSentinel = '# preserved on update\n';
+  await fsPromises.writeFile(existingWrapper, customSentinel, 'utf8');
+
+  await silenced(() =>
+    executeCopyOperations({
+      packageRoot: repoRoot,
+      targetDir,
+      copyOperations,
+      promptForOverwrite: async () => false,
+    })
+  );
+
+  // Existing one survives.
+  assert.equal(
+    await fsPromises.readFile(existingWrapper, 'utf8'),
+    customSentinel,
+    'pre-existing wrapper must survive even when other wrappers in the same op are fresh-installed'
+  );
+  // A non-conflicting source wrapper still lands.
+  assert.ok(
+    exists(path.join(targetDir, '.claude', 'commands', 'awos', 'product.md')),
+    'wrappers the user does not yet have must still be installed when opting out'
+  );
 });
 
 test('dry-run creates zero files', async () => {

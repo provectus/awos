@@ -66,14 +66,16 @@ When a change introduces a structural contract — frontmatter key, marker patte
 
 The installer copies files into **two destination folders** with different semantics — this is load-bearing for the whole UX:
 
-| Source             | Destination              | Semantics                                         |
-| ------------------ | ------------------------ | ------------------------------------------------- |
-| `commands/`        | `.awos/commands/`        | Framework internals. Overwritten on every update. |
-| `templates/`       | `.awos/templates/`       | Framework internals. Overwritten on every update. |
-| `scripts/`         | `.awos/scripts/`         | Framework internals. Overwritten on every update. |
-| `claude/commands/` | `.claude/commands/awos/` | Thin wrappers. User-editable customization layer. |
+| Source             | Destination              | Semantics                                                               |
+| ------------------ | ------------------------ | ----------------------------------------------------------------------- |
+| `commands/`        | `.awos/commands/`        | Framework internals. Overwritten on every update.                       |
+| `templates/`       | `.awos/templates/`       | Framework internals. Overwritten on every update.                       |
+| `scripts/`         | `.awos/scripts/`         | Framework internals. Overwritten on every update.                       |
+| `claude/commands/` | `.claude/commands/awos/` | Thin wrappers. User-editable customization layer — preserved on update. |
 
 Each file in `claude/commands/{name}.md` is a tiny wrapper that points at `.awos/commands/{name}.md`. Users add custom instructions in the wrapper without losing them on update. When you add a new command, you must add both the full prompt in `commands/` AND a wrapper in `claude/commands/`. The copy table is defined in `src/config/setup-config.js`.
+
+**Wrapper-preservation policy.** The `claude/commands` copy operation is marked `preserveOnUpdate: true`. On every install, the file-copier scans `.claude/commands/awos/` for files that already exist and would be clobbered. If any conflicts are found, the installer asks the user before overwriting; opting out leaves the existing wrappers untouched, while wrappers the user has never had (e.g. newly added commands) are still installed. Non-interactive runs (CI, piped, tests) default to **preserve** — silent overwrite of customizations is the bug this policy exists to prevent. CI/scripts that genuinely want a fresh sync can pass `--yes`; `--no` is the explicit form of the safe default. Users who decline overwrite see a pointer to <https://github.com/provectus/awos/tree/main/claude/commands> for manual diffing.
 
 ## Architecture: Document-Centric Workflow
 

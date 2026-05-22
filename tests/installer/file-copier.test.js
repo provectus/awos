@@ -413,7 +413,62 @@ test('dry-run countFiles handles a missing source directory cleanly', async () =
       dryRun: true,
     })
   );
-  assert.equal(stats.filesCopied, 0);
+  assert.equal(
+    stats.filesCopied,
+    0,
+    'dry-run with missing source must report zero copied files'
+  );
+});
+
+test('dry-run with preserveOnUpdate conflicts logs preserve, writes nothing, single-counts skips', async () => {
+  // Closes the dry-run branch in resolvePreserveDecision (file-copier.js
+  // ~lines 280-286). Two contracts pinned: (1) dry-run must not modify
+  // the pre-existing wrapper, and (2) stats.filesSkipped counts each
+  // conflicting file exactly once — earlier code double-counted via both
+  // resolvePreserveDecision and countFiles, inflating the preview.
+  const targetDir = await freshTemp();
+  const wrapperPath = path.join(
+    targetDir,
+    '.claude',
+    'commands',
+    'awos',
+    'architecture.md'
+  );
+  await fsPromises.mkdir(path.dirname(wrapperPath), { recursive: true });
+  const sentinel = '# preserved by dry-run\n';
+  await fsPromises.writeFile(wrapperPath, sentinel, 'utf8');
+
+  let promptCallCount = 0;
+  const stats = await silenced(() =>
+    executeCopyOperations({
+      packageRoot: repoRoot,
+      targetDir,
+      copyOperations,
+      promptForOverwrite: async () => {
+        promptCallCount++;
+        return true; // would overwrite if asked — but dry-run must not ask
+      },
+      dryRun: true,
+    })
+  );
+
+  assert.equal(
+    promptCallCount,
+    0,
+    'dry-run must never invoke promptForOverwrite — preview only'
+  );
+  assert.equal(
+    await fsPromises.readFile(wrapperPath, 'utf8'),
+    sentinel,
+    'dry-run must not modify the pre-existing wrapper on disk'
+  );
+  // The wrapper op has 9 source files (one per command). architecture.md is
+  // the only conflict → filesSkipped == 1 (single-count, not double).
+  assert.equal(
+    stats.filesSkipped,
+    1,
+    'dry-run preserve path must count each conflict exactly once (no double-count between resolvePreserveDecision and countFiles)'
+  );
 });
 
 test('dry-run creates zero files', async () => {

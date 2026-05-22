@@ -44,6 +44,7 @@ jobs:
   # rerunning anything locally. Non-blocking (continue-on-error: true)
   # while teams ratchet up the numbers.
   coverage-report:
+    needs: test
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -61,6 +62,7 @@ jobs:
   # Coverage gate — fails the job when src/ coverage drops below the
   # thresholds hardcoded below. To raise the floor, edit this block.
   coverage-gate:
+    needs: test
     runs-on: ubuntu-latest
     continue-on-error: true
     env:

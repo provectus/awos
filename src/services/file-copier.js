@@ -274,10 +274,10 @@ async function resolvePreserveDecision({
   });
   if (conflicts.length === 0) return new Set();
 
-  // In dry-run we don't ask the user — assume the safe default (preserve)
-  // and count the conflicts under filesSkipped so the preview reflects it.
+  // In dry-run we don't ask the user — assume the safe default (preserve).
+  // countFiles increments stats.filesSkipped for each conflict via the
+  // returned skipPaths set, so we only log here.
   if (dryRun) {
-    for (const _ of conflicts) stats.filesSkipped++;
     log(
       `${style.bold(operation.destination)} - ${conflicts.length} existing file(s) would be preserved (run without --dry-run to choose)`,
       'info'

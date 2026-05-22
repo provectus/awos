@@ -81,6 +81,6 @@ Check if `context/product/` documents need updates based on what was learned dur
 
 ### Step 6: Report
 
-- Success: spec verified and marked complete; report the verified criteria count.
+- Success: spec verified and marked complete; report the verified criteria count. Then suggest capturing a learning tutorial for this increment: `/awos:tutorial NNN-<slug>`.
 - Failure: list the unmet criteria with the command output that demonstrated the failure.
 - Verification disabled: list criteria marked `[?]` so the user knows what still needs manual confirmation.

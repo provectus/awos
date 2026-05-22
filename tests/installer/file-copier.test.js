@@ -471,6 +471,89 @@ test('dry-run with preserveOnUpdate conflicts logs preserve, writes nothing, sin
   );
 });
 
+test('source subdirectories recurse correctly in copy, dry-run count, and conflict scan', async () => {
+  // Three recursion paths in file-copier (copyDirectory, countFiles, and
+  // findConflicts.walk) all need a source that contains a subdirectory
+  // to be exercised. The real framework source tree is flat, so we build
+  // a synthetic one. This single test pins all three recursion branches.
+  const pkgRoot = await freshTemp();
+  const targetDir = await freshTemp();
+  const topDir = path.join(pkgRoot, 'nested');
+  const subDir = path.join(topDir, 'inner');
+  await fsPromises.mkdir(subDir, { recursive: true });
+  await fsPromises.writeFile(path.join(topDir, 'top.md'), '# top\n', 'utf8');
+  await fsPromises.writeFile(path.join(subDir, 'deep.md'), '# deep\n', 'utf8');
+
+  // Pre-create the deep destination to exercise findConflicts walking
+  // into a subdirectory and finding an overlapping file there.
+  const destSubdir = path.join(targetDir, '.synth/nested/inner');
+  await fsPromises.mkdir(destSubdir, { recursive: true });
+  const customSentinel = '# preserved deep\n';
+  await fsPromises.writeFile(
+    path.join(destSubdir, 'deep.md'),
+    customSentinel,
+    'utf8'
+  );
+
+  // 1. Dry-run pass: countFiles must recurse into 'inner/' and report
+  //    one preserved + one fresh.
+  const dryStats = await silenced(() =>
+    executeCopyOperations({
+      packageRoot: pkgRoot,
+      targetDir,
+      copyOperations: [
+        {
+          source: 'nested',
+          destination: '.synth/nested',
+          patterns: ['*'],
+          description: 'synthetic nested op',
+          preserveOnUpdate: true,
+        },
+      ],
+      promptForOverwrite: async () => false,
+      dryRun: true,
+    })
+  );
+  assert.equal(
+    dryStats.filesSkipped,
+    1,
+    'dry-run findConflicts must recurse into inner/ and count deep.md as preserved'
+  );
+
+  // 2. Real pass: copyDirectory must recurse into 'inner/', preserve
+  //    deep.md (conflict) and copy top.md (fresh).
+  const stats = await silenced(() =>
+    executeCopyOperations({
+      packageRoot: pkgRoot,
+      targetDir,
+      copyOperations: [
+        {
+          source: 'nested',
+          destination: '.synth/nested',
+          patterns: ['*'],
+          description: 'synthetic nested op',
+          preserveOnUpdate: true,
+        },
+      ],
+      promptForOverwrite: async () => false,
+    })
+  );
+  assert.equal(
+    await fsPromises.readFile(path.join(destSubdir, 'deep.md'), 'utf8'),
+    customSentinel,
+    'deep.md inside a subdirectory must be preserved when user opts out'
+  );
+  assert.ok(
+    exists(path.join(targetDir, '.synth/nested/top.md')),
+    'top-level fresh file must still be installed in a recursive op'
+  );
+  assert.equal(
+    stats.filesSkipped,
+    1,
+    'real-run skip count must match the single conflict'
+  );
+});
+
 test('dry-run creates zero files', async () => {
   const targetDir = await freshTemp();
 

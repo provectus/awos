@@ -229,7 +229,6 @@ async function executeCopyOperations({
         patterns: operation.patterns,
         description: operation.description,
         stats,
-        dryRun,
       });
     }
   }

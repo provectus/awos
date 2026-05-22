@@ -159,7 +159,7 @@ test('setup preserves customized wrappers when promptForOverwrite returns false'
 });
 
 test('setup overwrites wrappers when promptForOverwrite returns true', async () => {
-  // Opt-in path: when the user (or --yes) approves overwrite, the
+  // Opt-in path: when the user (or --overwrite) approves overwrite, the
   // customized wrapper is replaced with the canonical source.
   const workingDir = await freshTemp();
   const wrapperDir = path.join(workingDir, '.claude', 'commands', 'awos');

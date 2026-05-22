@@ -22,28 +22,29 @@ const { style } = require('../config/constants');
  * Construct the overwrite-prompt callback based on environment/flags.
  *
  * @param {Object} options
- * @param {boolean} [options.forceYes] - Treat every conflict as "overwrite"
- *   without prompting. Set by `--yes`/`-y` for CI or scripted reinstalls.
- * @param {boolean} [options.forceNo]  - Treat every conflict as "preserve"
- *   without prompting. Set by `--no`. Same as the safe non-TTY default,
- *   but explicit.
+ * @param {boolean} [options.forceOverwrite] - Treat every conflict as
+ *   "overwrite" without prompting. Set by `--overwrite` for CI or
+ *   scripted reinstalls.
+ * @param {boolean} [options.forcePreserve]  - Treat every conflict as
+ *   "preserve" without prompting. Set by `--no-overwrite`. Same as the
+ *   safe non-TTY default, but explicit.
  * @param {boolean} [options.isTTY]    - Whether stdin is attached to a
  *   terminal. When false (CI, piped runs, tests) and neither force flag
- *   is set, we default to preserving — losing data silently is worse than
- *   asking the user to rerun with `--yes`.
+ *   is set, we default to preserving — losing data silently is worse
+ *   than asking the user to rerun with `--overwrite`.
  * @param {NodeJS.ReadableStream} [options.input]  - For tests. Defaults to process.stdin.
  * @param {NodeJS.WritableStream} [options.output] - For tests. Defaults to process.stdout.
  * @returns {(info: {operation: Object, files: string[]}) => Promise<boolean>}
  */
 function createDefaultOverwritePrompt({
-  forceYes = false,
-  forceNo = false,
+  forceOverwrite = false,
+  forcePreserve = false,
   isTTY = false,
   input = process.stdin,
   output = process.stdout,
 } = {}) {
-  if (forceYes) return async () => true;
-  if (forceNo) return async () => false;
+  if (forceOverwrite) return async () => true;
+  if (forcePreserve) return async () => false;
   if (!isTTY) return async () => false;
 
   return async ({ operation, files }) => {

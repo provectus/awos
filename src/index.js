@@ -19,16 +19,16 @@ async function main() {
   // Parse command line arguments.
   const argv = process.argv.slice(2);
   const dryRun = argv.includes('--dry-run');
-  const forceYes = argv.includes('--yes') || argv.includes('-y');
-  const forceNo = argv.includes('--no');
+  const forceOverwrite = argv.includes('--overwrite');
+  const forcePreserve = argv.includes('--no-overwrite');
 
   // The prompt fires only for copy operations marked `preserveOnUpdate`
   // (currently just .claude/commands/awos). In TTY mode the user gets an
   // explanation + file list + [y/N] prompt; otherwise we default to
   // preserve so unattended runs never clobber user customization.
   const promptForOverwrite = createDefaultOverwritePrompt({
-    forceYes,
-    forceNo,
+    forceOverwrite,
+    forcePreserve,
     isTTY: Boolean(process.stdin.isTTY),
   });
 

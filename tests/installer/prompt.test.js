@@ -2,9 +2,9 @@
  * Unit tests for src/utils/prompt.js.
  *
  * Exercises the four shapes of overwrite prompt the installer can hand
- * the file-copier: --yes (force overwrite), --no (force preserve),
- * non-TTY (silent preserve), and interactive TTY (real readline prompt
- * driven by an injected input/output pair).
+ * the file-copier: --overwrite (force overwrite), --no-overwrite (force
+ * preserve), non-TTY (silent preserve), and interactive TTY (real
+ * readline prompt driven by an injected input/output pair).
  */
 
 'use strict';
@@ -40,22 +40,26 @@ const sampleFiles = [
   '/tmp/.claude/commands/awos/spec.md',
 ];
 
-test('--yes forces overwrite without touching stdin', async () => {
-  const prompt = createDefaultOverwritePrompt({ forceYes: true });
+test('--overwrite forces overwrite without touching stdin', async () => {
+  const prompt = createDefaultOverwritePrompt({ forceOverwrite: true });
   const decision = await prompt({
     operation: sampleOperation,
     files: sampleFiles,
   });
-  assert.equal(decision, true, '--yes must short-circuit to overwrite');
+  assert.equal(decision, true, '--overwrite must short-circuit to overwrite');
 });
 
-test('--no forces preserve without touching stdin', async () => {
-  const prompt = createDefaultOverwritePrompt({ forceNo: true });
+test('--no-overwrite forces preserve without touching stdin', async () => {
+  const prompt = createDefaultOverwritePrompt({ forcePreserve: true });
   const decision = await prompt({
     operation: sampleOperation,
     files: sampleFiles,
   });
-  assert.equal(decision, false, '--no must short-circuit to preserve');
+  assert.equal(
+    decision,
+    false,
+    '--no-overwrite must short-circuit to preserve'
+  );
 });
 
 test('non-TTY defaults to preserve (safe for CI / piped runs)', async () => {
@@ -134,17 +138,21 @@ test('TTY prompt treats anything other than y/yes as preserve', async () => {
   assert.equal(decision, false, 'ambiguous answers must default to preserve');
 });
 
-test('forceYes wins over forceNo when both are set', async () => {
+test('forceOverwrite wins over forcePreserve when both are set', async () => {
   // Defensive: if a caller accidentally passes both flags, the explicit
   // overwrite request takes precedence. Document this here so any future
   // change to the precedence has to update an assertion.
   const prompt = createDefaultOverwritePrompt({
-    forceYes: true,
-    forceNo: true,
+    forceOverwrite: true,
+    forcePreserve: true,
   });
   const decision = await prompt({
     operation: sampleOperation,
     files: sampleFiles,
   });
-  assert.equal(decision, true, 'forceYes must take precedence over forceNo');
+  assert.equal(
+    decision,
+    true,
+    'forceOverwrite must take precedence over forcePreserve'
+  );
 });

@@ -186,7 +186,7 @@ Show both complete drafts to the user and ask: _"Here are the complete drafts fo
 Announce the save and suggest the next AWOS command in prose — _don't_ auto-invoke anything. Examples:
 
 - _"Tutorial saved to `context/tutorials/NNN-<slug>/`. The next roadmap item is **<next-roadmap-item>** — start its functional spec with `/awos:spec`."_
-- _"Tutorial saved to `context/tutorials/NNN-<slug>/`. All current specs are tutorialised; consider running `/awos:roadmap` if your roadmap has shifted."_
+- _"Tutorial saved to `context/tutorials/NNN-<slug>/`. All current specs are tutorialised; consider running `/awos:roadmap` if your roadmap has shifted, or revisit `/awos:adr` if the increment surfaced architectural decisions worth recording."_
 
 Pick the wording that fits what's actually next on the user's roadmap — read `context/product/roadmap.md` to find the first incomplete item.
 

@@ -154,5 +154,6 @@ Based on the CR's §7 checklist and the impact table, surface the most useful ne
 - CR descopes a roadmap item already marked `[x]` → _"Run `/awos:roadmap` to unmark and annotate the descope."_
 - CR adjusts product-definition scope materially → _"Run `/awos:roadmap` to re-evaluate phase ordering."_
 - CR moves an architectural assumption → _"Run `/awos:architecture` to update the relevant section."_
+- CR introduces, revises, or invalidates an architectural choice → _"Run `/awos:adr` to record the architectural decision and its alternatives, separately from the requirements change."_
 
 Format each as a single line the user can copy.

@@ -22,7 +22,7 @@ This skill is **opt-in**: the very first step gives the user a clean way to skip
 
 **When _not_ to use:**
 
-- The change is purely a requirements / scope shift, not an architectural decision.
+- The change is purely a requirements / scope shift — that's `/awos:change-request`.
 - The change is trivial (a renamed file, a refactor with no architectural implication).
 - No real alternatives were considered. Then the choice is a default, not a decision, and an ADR will be empty.
 

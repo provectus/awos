@@ -71,7 +71,8 @@ Follow this logic precisely.
 ### Step 3: Finalization
 
 1.  Write the final content to `context/product/architecture.md`.
-2.  Proceed to **Step 4: Coverage Hint**.
+2.  **Offer ADR(s) (optional):** If the architecture was meaningfully changed (creation mode, or a material update — not a typo fix), follow the instructions in `.awos/commands/adr.md` to optionally log one or more ADRs capturing the architectural decisions just made (e.g., the chosen tech stack components, deployment target, data store, security posture, region — anything where a real alternative was considered). Pass a short note as `<user_prompt>` describing the trigger, e.g. `"architecture.md §[section] — chose [tech/pattern] over [alternative]"`. The ADR skill itself opens with an `AskUserQuestion` skip option, so simply invoke it; the user may decline or defer at that prompt. After it returns (whether logged, skipped, or deferred), continue.
+3.  Proceed to **Step 4: Coverage Hint**.
 
 ---
 

@@ -27,9 +27,20 @@ const { runMigrations } = require('../migrations/runner');
  * @param {string} config.workingDir - The working directory where setup will be performed
  * @param {string} config.packageRoot - The root directory of the AWOS package
  * @param {boolean} config.dryRun - Run in dry-run mode (preview changes only)
+ * @param {Function} [config.promptForOverwrite] - Async callback invoked by
+ *   the file-copier for operations declared `preserveOnUpdate: true` when it
+ *   finds existing files that would be overwritten. Signature:
+ *   `async ({operation, files}) => boolean`. Defaults to a no-op that returns
+ *   `false`, which is the safe default for non-interactive callers (CI,
+ *   tests, piped runs); the CLI entry point wires a TTY-aware default.
  * @returns {Promise<void>}
  */
-async function runSetup({ workingDir, packageRoot, dryRun = false }) {
+async function runSetup({
+  workingDir,
+  packageRoot,
+  dryRun = false,
+  promptForOverwrite,
+}) {
   const TOTAL_STEPS = 6;
 
   // Display header
@@ -85,6 +96,7 @@ async function runSetup({ workingDir, packageRoot, dryRun = false }) {
     packageRoot,
     targetDir: workingDir,
     copyOperations,
+    promptForOverwrite,
     dryRun,
   });
 

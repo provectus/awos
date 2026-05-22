@@ -27,7 +27,9 @@ npm test                   # all three layers
 npm run test:lint          # Layer 1 — static prompt linter
 npm run test:installer     # Layer 2 — installer unit tests
 npm run test:fixtures      # Layer 3 — fixture-project end-to-end
-bun test tests/            # local cross-runtime sanity check (optional)
+npm run test:coverage      # prints per-file coverage table for src/
+npm run test:coverage:gate # fails if coverage drops below env thresholds
+bun test --coverage tests/ # local cross-runtime coverage (Bun version)
 
 # Behavioral / session-log E2E lives in the awos-qa repository
 # (sibling to this one). See its README for how to run.
@@ -52,6 +54,14 @@ The repo has a three-layer test suite under `tests/`, all built on Node's `node:
 
 All three layers run in CI (`npm test`).
 
+### Coverage
+
+`npm run test:coverage` runs the full suite under Node 22's built-in `--experimental-test-coverage` and prints a per-file table for `src/**` (the installer entry point `src/index.js` is excluded — it's just CLI plumbing). `npm run test:coverage:gate` adds three threshold flags that fail the run when coverage drops below the configured floor.
+
+CI runs both: a non-blocking **coverage-report** job that just prints the table, and a **coverage-gate** job that enforces hardcoded thresholds. To raise the floor, edit `COVERAGE_LINES` / `COVERAGE_FUNCTIONS` / `COVERAGE_BRANCHES` in `.github/workflows/quality-check.yml`.
+
+Local Bun fallback: `bun test --coverage tests/` produces an equivalent table (slightly different column set) when Node isn't installed.
+
 Behavioral end-to-end tests — the ones that run a real Claude Code session against a seeded scratch project and assert on the actual tool-call trace — live in the separate **`awos-qa`** repository (sibling to this one). See its README for how to run them.
 
 ### Tests must narrate what they checked
@@ -66,14 +76,16 @@ When a change introduces a structural contract — frontmatter key, marker patte
 
 The installer copies files into **two destination folders** with different semantics — this is load-bearing for the whole UX:
 
-| Source             | Destination              | Semantics                                         |
-| ------------------ | ------------------------ | ------------------------------------------------- |
-| `commands/`        | `.awos/commands/`        | Framework internals. Overwritten on every update. |
-| `templates/`       | `.awos/templates/`       | Framework internals. Overwritten on every update. |
-| `scripts/`         | `.awos/scripts/`         | Framework internals. Overwritten on every update. |
-| `claude/commands/` | `.claude/commands/awos/` | Thin wrappers. User-editable customization layer. |
+| Source             | Destination              | Semantics                                                               |
+| ------------------ | ------------------------ | ----------------------------------------------------------------------- |
+| `commands/`        | `.awos/commands/`        | Framework internals. Overwritten on every update.                       |
+| `templates/`       | `.awos/templates/`       | Framework internals. Overwritten on every update.                       |
+| `scripts/`         | `.awos/scripts/`         | Framework internals. Overwritten on every update.                       |
+| `claude/commands/` | `.claude/commands/awos/` | Thin wrappers. User-editable customization layer — preserved on update. |
 
 Each file in `claude/commands/{name}.md` is a tiny wrapper that points at `.awos/commands/{name}.md`. Users add custom instructions in the wrapper without losing them on update. When you add a new command, you must add both the full prompt in `commands/` AND a wrapper in `claude/commands/`. The copy table is defined in `src/config/setup-config.js`.
+
+**Wrapper-preservation policy.** The `claude/commands` copy operation is marked `preserveOnUpdate: true`. On every install, the file-copier scans `.claude/commands/awos/` for files that already exist and would be clobbered. If any conflicts are found, the installer asks the user before overwriting; opting out leaves the existing wrappers untouched, while wrappers the user has never had (e.g. newly added commands) are still installed. Non-interactive runs (CI, piped, tests) default to **preserve** — silent overwrite of customizations is the bug this policy exists to prevent. CI/scripts that genuinely want a fresh sync can pass `--overwrite`; `--no-overwrite` is the explicit form of the safe default. Users who decline overwrite see a pointer to <https://github.com/provectus/awos/tree/main/claude/commands> for manual diffing.
 
 ## Architecture: Document-Centric Workflow
 

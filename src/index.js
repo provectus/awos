@@ -6,6 +6,7 @@
 
 const { runSetup } = require('./core/setup-orchestrator');
 const { log } = require('./utils/logger');
+const { createDefaultOverwritePrompt } = require('./utils/prompt');
 
 /**
  * Main application entry point
@@ -15,11 +16,24 @@ async function main() {
   const workingDir = process.cwd();
   const packageRoot = __dirname + '/..';
 
-  // Parse command line arguments
-  const dryRun = process.argv.includes('--dry-run');
+  // Parse command line arguments.
+  const argv = process.argv.slice(2);
+  const dryRun = argv.includes('--dry-run');
+  const forceOverwrite = argv.includes('--overwrite');
+  const forcePreserve = argv.includes('--no-overwrite');
+
+  // The prompt fires only for copy operations marked `preserveOnUpdate`
+  // (currently just .claude/commands/awos). In TTY mode the user gets an
+  // explanation + file list + [y/N] prompt; otherwise we default to
+  // preserve so unattended runs never clobber user customization.
+  const promptForOverwrite = createDefaultOverwritePrompt({
+    forceOverwrite,
+    forcePreserve,
+    isTTY: Boolean(process.stdin.isTTY),
+  });
 
   try {
-    await runSetup({ workingDir, packageRoot, dryRun });
+    await runSetup({ workingDir, packageRoot, dryRun, promptForOverwrite });
   } catch (err) {
     console.error('');
     log(`Error during setup: ${err.message}`, 'error');

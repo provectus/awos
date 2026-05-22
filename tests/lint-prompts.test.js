@@ -331,6 +331,27 @@ test('every top-level framework directory is referenced by setup-config', () => 
   }
 });
 
+test('claude/commands operation is marked preserveOnUpdate', () => {
+  // Wrappers under .claude/commands/awos/ are the user customization
+  // layer — the installer must consult the user before clobbering them on
+  // update. The flag is what tells the file-copier to do conflict
+  // detection + prompt. If this assertion ever fails, the
+  // overwrite-on-every-run regression has been reintroduced.
+  const { copyOperations } = require(
+    path.join(repoRoot, 'src', 'config', 'setup-config.js')
+  );
+  const claudeOp = copyOperations.find((op) => op.source === 'claude/commands');
+  assert.ok(
+    claudeOp,
+    'setup-config must declare the claude/commands copy operation'
+  );
+  assert.equal(
+    claudeOp.preserveOnUpdate,
+    true,
+    'claude/commands operation must set preserveOnUpdate: true so the file-copier prompts before overwriting user wrappers'
+  );
+});
+
 test('implement.md uses XML scope, investigate, and skills snippets', () => {
   // The formulated subagent prompt in implement.md must contain three
   // XML blocks that have outsized impact on subagent behavior:

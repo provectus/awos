@@ -11,7 +11,9 @@
     "test": "node --test 'tests/**/*.test.js'",
     "test:lint": "node --test tests/lint-prompts.test.js",
     "test:installer": "node --test 'tests/installer/*.test.js'",
-    "test:fixtures": "node --test tests/fixtures.test.js"
+    "test:fixtures": "node --test tests/fixtures.test.js",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-exclude='tests/**' --test-coverage-exclude='src/index.js' 'tests/**/*.test.js'",
+    "test:coverage:gate": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-exclude='tests/**' --test-coverage-exclude='src/index.js' --test-coverage-lines=${COVERAGE_LINES:-85} --test-coverage-functions=${COVERAGE_FUNCTIONS:-95} --test-coverage-branches=${COVERAGE_BRANCHES:-80} 'tests/**/*.test.js'"
   },
   "keywords": [],
   "author": "Provectus Inc.",

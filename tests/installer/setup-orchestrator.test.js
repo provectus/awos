@@ -114,6 +114,85 @@ test('running setup twice is idempotent (no errors, identical layout)', async ()
   );
 });
 
+test('setup preserves customized wrappers when promptForOverwrite returns false', async () => {
+  // End-to-end check for the customization-overwrite fix: pre-seed a
+  // customized wrapper, run the full pipeline with an explicit "no"
+  // decision, and confirm both halves of the contract:
+  //   - the customized wrapper survives byte-for-byte
+  //   - other wrappers the user didn't pre-create still get installed
+  const workingDir = await freshTemp();
+  const wrapperDir = path.join(workingDir, '.claude', 'commands', 'awos');
+  await fsPromises.mkdir(wrapperDir, { recursive: true });
+  const customSentinel = '# preserved by promptForOverwrite=false\n';
+  await fsPromises.writeFile(
+    path.join(wrapperDir, 'architecture.md'),
+    customSentinel,
+    'utf8'
+  );
+
+  let promptCallCount = 0;
+  await silenced(() =>
+    runSetup({
+      workingDir,
+      packageRoot: repoRoot,
+      promptForOverwrite: async () => {
+        promptCallCount++;
+        return false;
+      },
+    })
+  );
+
+  assert.equal(
+    promptCallCount,
+    1,
+    'promptForOverwrite must be invoked once when wrapper conflicts exist'
+  );
+  assert.equal(
+    await fsPromises.readFile(path.join(wrapperDir, 'architecture.md'), 'utf8'),
+    customSentinel,
+    'customized wrapper must be preserved when user declines overwrite'
+  );
+  assert.ok(
+    exists(path.join(wrapperDir, 'product.md')),
+    'wrappers the user did not pre-create must still be installed'
+  );
+});
+
+test('setup overwrites wrappers when promptForOverwrite returns true', async () => {
+  // Opt-in path: when the user (or --overwrite) approves overwrite, the
+  // customized wrapper is replaced with the canonical source.
+  const workingDir = await freshTemp();
+  const wrapperDir = path.join(workingDir, '.claude', 'commands', 'awos');
+  await fsPromises.mkdir(wrapperDir, { recursive: true });
+  await fsPromises.writeFile(
+    path.join(wrapperDir, 'architecture.md'),
+    '# stale\n',
+    'utf8'
+  );
+
+  await silenced(() =>
+    runSetup({
+      workingDir,
+      packageRoot: repoRoot,
+      promptForOverwrite: async () => true,
+    })
+  );
+
+  const finalBody = await fsPromises.readFile(
+    path.join(wrapperDir, 'architecture.md'),
+    'utf8'
+  );
+  const sourceBody = await fsPromises.readFile(
+    path.join(repoRoot, 'claude', 'commands', 'architecture.md'),
+    'utf8'
+  );
+  assert.equal(
+    finalBody,
+    sourceBody,
+    'opt-in overwrite must replace wrapper with canonical source'
+  );
+});
+
 test('setup dry-run produces zero on-disk files', async () => {
   const workingDir = await freshTemp();
 

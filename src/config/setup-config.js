@@ -57,6 +57,14 @@ const copyOperations = [
     destination: '.claude/commands/awos',
     patterns: ['*'],
     description: 'Claude Code commands',
+    // Wrappers under .claude/commands/awos/ are the user customization
+    // layer (CLAUDE.md "Two-Folder Customization Model"). On update, the
+    // file-copier scans for files that already exist at the destination
+    // and consults promptForOverwrite before clobbering them. Fresh
+    // installs and never-before-seen wrappers are unaffected.
+    preserveOnUpdate: true,
+    manualUpdateUrl:
+      'https://github.com/provectus/awos/tree/main/claude/commands',
   },
 ];
 

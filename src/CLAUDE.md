@@ -26,39 +26,50 @@ That's it. Simple file copying with a nice UI.
 ```
 src/
 ├── config/
-│   ├── setup-config.js    # Lists what to copy and where
+│   ├── setup-config.js     # Lists what to copy and where (incl. preserveOnUpdate flag)
 │   └── constants.js        # UI styling (colors, ASCII art)
 ├── services/
-│   ├── file-copier.js      # Does the file copying
-│   └── directory-creator.js # Creates directories
+│   ├── file-copier.js      # Does the file copying + preserveOnUpdate conflict scan
+│   ├── directory-creator.js # Creates directories
+│   ├── mcp-configurator.js
+│   └── marketplace-configurator.js
+├── utils/
+│   ├── fs-utils.js
+│   ├── logger.js
+│   ├── pattern-matcher.js
+│   └── prompt.js           # readline-based overwrite prompt (Y/N + explanation)
 ├── core/
-│   └── setup-orchestrator.js # Runs setup steps in order
-└── index.js                 # Entry point, parses CLI args
+│   └── setup-orchestrator.js # Runs setup steps in order, plumbs promptForOverwrite
+└── index.js                 # Entry point, parses CLI args (--dry-run, --overwrite, --no-overwrite)
 ```
 
 ## What Gets Copied Where
 
 From `config/setup-config.js`:
 
-| Source             | Destination              |
-| ------------------ | ------------------------ |
-| `commands/`        | `.awos/commands/`        |
-| `templates/`       | `.awos/templates/`       |
-| `scripts/`         | `.awos/scripts/`         |
-| `claude/commands/` | `.claude/commands/awos/` |
+| Source             | Destination              | preserveOnUpdate |
+| ------------------ | ------------------------ | ---------------- |
+| `commands/`        | `.awos/commands/`        | no               |
+| `templates/`       | `.awos/templates/`       | no               |
+| `scripts/`         | `.awos/scripts/`         | no               |
+| `claude/commands/` | `.claude/commands/awos/` | **yes**          |
 
 **Why the difference?**
 
-- `.awos/` files = Framework internals (user shouldn't edit these)
-- `.claude/` files = User customization layer (user can edit these)
+- `.awos/` files = Framework internals (user shouldn't edit these; overwritten on every run)
+- `.claude/` files = User customization layer (user can edit these; preserved on update unless the user opts back into overwrite)
+
+Operations marked `preserveOnUpdate: true` run a conflict scan in `file-copier.js`. If pre-existing files would be overwritten, it consults the `promptForOverwrite` callback. The default callback (built by `utils/prompt.js`) prints an explanation + file list + manual-update URL in a TTY, or returns `false` (preserve) in non-TTY runs. `--overwrite`/`--no-overwrite` short-circuit the decision.
 
 ## CLI Flags
 
-**`--dry-run`**
+**`--dry-run`** — Shows preview of what will be updated without making changes.
 
-- Shows preview of what will be updated without making changes
+**`--overwrite`** — Forces overwrite of `.claude/commands/awos/*` even when those wrappers already exist. Use in CI or scripted reinstalls when you intentionally want a fresh sync.
 
-Files are updated by default when running the installer. This ensures users always have the latest version of AWOS components.
+**`--no-overwrite`** — Explicit opt-out from overwriting `.claude/commands/awos/*`. Same effect as the safe default for non-TTY runs.
+
+Files under `.awos/` are updated unconditionally — these are framework internals. Files under `.claude/commands/awos/` are the user's customization layer; the installer prompts before overwriting them when they already exist. In non-interactive runs (no TTY), the default is **preserve** to avoid silently clobbering user edits — pass `--overwrite` to override.
 
 ## Common Modifications
 

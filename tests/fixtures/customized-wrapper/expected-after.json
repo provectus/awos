@@ -1,8 +1,12 @@
 {
-  "_comment": "OPEN QUESTION (plan §11): docs call .claude/commands/awos/*.md the user-editable customization layer, but file-copier.js unconditionally overwrites. This fixture pins CURRENT behaviour (overwrite). If a follow-up PR decides wrappers should be preserved, flip the contains check and update src/services/file-copier.js together.",
+  "_comment": "Wrappers in .claude/commands/awos/ are the user customization layer. On update, files that already exist are preserved (no prompt callback is injected for fixture runs → default skip in non-TTY), but new wrappers the user does not yet have are still installed. Locks both halves: architecture.md is preserved verbatim, product.md is freshly installed.",
   ".claude/commands/awos/architecture.md": {
     "exists": true,
-    "contains": ".awos/commands/architecture.md",
-    "notContains": "CUSTOM-USER-CONTENT"
+    "contains": "CUSTOM-USER-CONTENT",
+    "notContains": "@.awos/commands/architecture.md"
+  },
+  ".claude/commands/awos/product.md": {
+    "exists": true,
+    "contains": "@.awos/commands/product.md"
   }
 }

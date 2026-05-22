@@ -81,6 +81,7 @@ test('configureMcp is a no-op when our entry is already present', async () => {
     },
   };
   await fsPromises.writeFile(mcpPath, JSON.stringify(seeded, null, 2) + '\n');
+  const seededBytes = await fsPromises.readFile(mcpPath);
 
   const result = await silenced(() => configureMcp({ workingDir }));
 
@@ -88,6 +89,11 @@ test('configureMcp is a no-op when our entry is already present', async () => {
     result.mcpConfigured,
     false,
     'configureMcp must skip when our entry already exists (idempotency)'
+  );
+  const afterBytes = await fsPromises.readFile(mcpPath);
+  assert.ok(
+    seededBytes.equals(afterBytes),
+    'configureMcp idempotency must leave .mcp.json byte-for-byte unchanged — not even a JSON-equivalent rewrite'
   );
 });
 
@@ -149,6 +155,7 @@ test('configureMarketplace is a no-op when our entry already exists', async () =
     settingsPath,
     JSON.stringify(seeded, null, 2) + '\n'
   );
+  const seededBytes = await fsPromises.readFile(settingsPath);
 
   const result = await silenced(() => configureMarketplace({ workingDir }));
 
@@ -156,5 +163,10 @@ test('configureMarketplace is a no-op when our entry already exists', async () =
     result.marketplaceConfigured,
     false,
     'configureMarketplace must skip when our entry is already registered'
+  );
+  const afterBytes = await fsPromises.readFile(settingsPath);
+  assert.ok(
+    seededBytes.equals(afterBytes),
+    'configureMarketplace idempotency must leave settings.json byte-for-byte unchanged — not even a JSON-equivalent rewrite'
   );
 });

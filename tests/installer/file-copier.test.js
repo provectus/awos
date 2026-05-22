@@ -483,6 +483,16 @@ test('source subdirectories recurse correctly in copy, dry-run count, and confli
   await fsPromises.mkdir(subDir, { recursive: true });
   await fsPromises.writeFile(path.join(topDir, 'top.md'), '# top\n', 'utf8');
   await fsPromises.writeFile(path.join(subDir, 'deep.md'), '# deep\n', 'utf8');
+  // Second file under inner/ that does NOT pre-exist in the destination.
+  // Without this, copyDirectory could short-circuit recursion into inner/
+  // (since the only file there is a conflict that gets skipped) and the
+  // test would still pass. fresh-deep.md proves copyDirectory and
+  // countFiles actually descend and install fresh files inside subdirs.
+  await fsPromises.writeFile(
+    path.join(subDir, 'fresh-deep.md'),
+    '# fresh deep\n',
+    'utf8'
+  );
 
   // Pre-create the deep destination to exercise findConflicts walking
   // into a subdirectory and finding an overlapping file there.
@@ -496,7 +506,7 @@ test('source subdirectories recurse correctly in copy, dry-run count, and confli
   );
 
   // 1. Dry-run pass: countFiles must recurse into 'inner/' and report
-  //    one preserved + one fresh.
+  //    one preserved + two fresh (top.md, inner/fresh-deep.md).
   const dryStats = await silenced(() =>
     executeCopyOperations({
       packageRoot: pkgRoot,
@@ -519,9 +529,15 @@ test('source subdirectories recurse correctly in copy, dry-run count, and confli
     1,
     'dry-run findConflicts must recurse into inner/ and count deep.md as preserved'
   );
+  assert.equal(
+    dryStats.filesCopied,
+    2,
+    'dry-run countFiles must recurse into inner/ and count both top.md and inner/fresh-deep.md as installable'
+  );
 
   // 2. Real pass: copyDirectory must recurse into 'inner/', preserve
-  //    deep.md (conflict) and copy top.md (fresh).
+  //    deep.md (conflict), copy top.md (top-level fresh), and copy
+  //    inner/fresh-deep.md (nested fresh).
   const stats = await silenced(() =>
     executeCopyOperations({
       packageRoot: pkgRoot,
@@ -546,6 +562,10 @@ test('source subdirectories recurse correctly in copy, dry-run count, and confli
   assert.ok(
     exists(path.join(targetDir, '.synth/nested/top.md')),
     'top-level fresh file must still be installed in a recursive op'
+  );
+  assert.ok(
+    exists(path.join(targetDir, '.synth/nested/inner/fresh-deep.md')),
+    'fresh files inside subdirectories must be installed — pins that copyDirectory descends even when the subdir contains a conflict'
   );
   assert.equal(
     stats.filesSkipped,

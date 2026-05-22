@@ -58,7 +58,7 @@ All three layers run in CI (`npm test`).
 
 `npm run test:coverage` runs the full suite under Node 22's built-in `--experimental-test-coverage` and prints a per-file table for `src/**` (the installer entry point `src/index.js` is excluded — it's just CLI plumbing). `npm run test:coverage:gate` adds three threshold flags that fail the run when coverage drops below the configured floor.
 
-CI runs both: a non-blocking **coverage-report** job that just prints the table, and a **coverage-gate** job that enforces thresholds via the repo/workflow variables `COVERAGE_LINES`, `COVERAGE_FUNCTIONS`, `COVERAGE_BRANCHES`. Defaults (currently 85 / 95 / 80) sit a few points below the measured baseline so the gate is green on day one and ratchets up as new tests land. Bump the env vars in repo settings to raise the floor — no code change required.
+CI runs both: a non-blocking **coverage-report** job that just prints the table, and a **coverage-gate** job that enforces hardcoded thresholds. To raise the floor, edit `COVERAGE_LINES` / `COVERAGE_FUNCTIONS` / `COVERAGE_BRANCHES` in `.github/workflows/quality-check.yml`.
 
 Local Bun fallback: `bun test --coverage tests/` produces an equivalent table (slightly different column set) when Node isn't installed.
 

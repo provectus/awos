@@ -59,18 +59,14 @@ jobs:
         run: npm run test:coverage
 
   # Coverage gate — fails the job when src/ coverage drops below the
-  # configured thresholds. Defaults are intentionally a few points below
-  # the current measured baseline (lines=85, funcs=95, branches=80) so
-  # the gate is green out of the box and tightens over time. To bump,
-  # set repo / workflow env vars COVERAGE_LINES / COVERAGE_FUNCTIONS /
-  # COVERAGE_BRANCHES.
+  # thresholds hardcoded below. To raise the floor, edit this block.
   coverage-gate:
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
-      COVERAGE_LINES: ${{ vars.COVERAGE_LINES || '85' }}
-      COVERAGE_FUNCTIONS: ${{ vars.COVERAGE_FUNCTIONS || '95' }}
-      COVERAGE_BRANCHES: ${{ vars.COVERAGE_BRANCHES || '80' }}
+      COVERAGE_LINES: '90'
+      COVERAGE_FUNCTIONS: '100'
+      COVERAGE_BRANCHES: '90'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

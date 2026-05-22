@@ -275,6 +275,147 @@ test('user opt-out preserves existing wrappers but still installs new ones', asy
   );
 });
 
+test('missing source directory is logged and skipped without throwing', async () => {
+  // Defensive path in copyDirectory: a copyOperations entry pointing
+  // at a non-existent source must not crash the install — it logs an
+  // error and continues. We synthesize the failure by pointing the
+  // copier at a packageRoot that does not contain the source dir.
+  const pkgRoot = await freshTemp();
+  const targetDir = await freshTemp();
+
+  const stats = await silenced(() =>
+    executeCopyOperations({
+      packageRoot: pkgRoot,
+      targetDir,
+      copyOperations: [
+        {
+          source: 'does-not-exist',
+          destination: '.awos/ghost',
+          patterns: ['*'],
+          description: 'phantom directory',
+        },
+      ],
+    })
+  );
+
+  assert.equal(
+    stats.filesCopied,
+    0,
+    'missing source must yield zero copies, not a thrown error'
+  );
+});
+
+test('symlinks in the source tree are recreated at the destination', async () => {
+  // The copier has a dedicated symlink branch (entry.isSymbolicLink())
+  // that is otherwise unreachable from the real source tree. Build a
+  // synthetic package root with a symlink inside it to exercise that
+  // branch.
+  const pkgRoot = await freshTemp();
+  const targetDir = await freshTemp();
+  const sourceDir = path.join(pkgRoot, 'sym-source');
+  await fsPromises.mkdir(sourceDir, { recursive: true });
+  await fsPromises.writeFile(
+    path.join(sourceDir, 'real.md'),
+    '# real\n',
+    'utf8'
+  );
+  // Relative symlink so the destination can resolve it after copy.
+  await fsPromises.symlink('real.md', path.join(sourceDir, 'link.md'));
+
+  await silenced(() =>
+    executeCopyOperations({
+      packageRoot: pkgRoot,
+      targetDir,
+      copyOperations: [
+        {
+          source: 'sym-source',
+          destination: '.synth/sym',
+          patterns: ['*'],
+          description: 'synthetic symlink op',
+        },
+      ],
+    })
+  );
+
+  const linkStat = await fsPromises.lstat(
+    path.join(targetDir, '.synth', 'sym', 'link.md')
+  );
+  assert.ok(
+    linkStat.isSymbolicLink(),
+    'link.md must land at the destination as a symlink, not a regular file'
+  );
+});
+
+test('non-matching patterns skip files even when source has matches', async () => {
+  // Patterns are a per-operation filter. A pattern that no source file
+  // matches must result in zero copies. Pins copyFile's early-return
+  // branch and protects against pattern-matcher regressions.
+  const pkgRoot = await freshTemp();
+  const targetDir = await freshTemp();
+  const sourceDir = path.join(pkgRoot, 'mixed');
+  await fsPromises.mkdir(sourceDir, { recursive: true });
+  await fsPromises.writeFile(
+    path.join(sourceDir, 'keep.md'),
+    '# keep\n',
+    'utf8'
+  );
+  await fsPromises.writeFile(
+    path.join(sourceDir, 'skip.txt'),
+    'should be skipped\n',
+    'utf8'
+  );
+
+  await silenced(() =>
+    executeCopyOperations({
+      packageRoot: pkgRoot,
+      targetDir,
+      copyOperations: [
+        {
+          source: 'mixed',
+          destination: '.synth/mixed',
+          patterns: ['*.md'],
+          description: 'md-only',
+        },
+      ],
+    })
+  );
+
+  assert.ok(
+    exists(path.join(targetDir, '.synth/mixed/keep.md')),
+    '*.md pattern must include keep.md'
+  );
+  assert.equal(
+    exists(path.join(targetDir, '.synth/mixed/skip.txt')),
+    false,
+    '*.md pattern must exclude skip.txt — copyFile early-return on pattern miss'
+  );
+});
+
+test('dry-run countFiles handles a missing source directory cleanly', async () => {
+  // Dry-run path (countFiles) has its own missing-source guard. Without
+  // this test the early-return branch is never exercised, leaving an
+  // uncovered guard that could rot.
+  const pkgRoot = await freshTemp();
+  const targetDir = await freshTemp();
+
+  const stats = await silenced(() =>
+    executeCopyOperations({
+      packageRoot: pkgRoot,
+      targetDir,
+      copyOperations: [
+        {
+          source: 'absent',
+          destination: '.awos/absent',
+          patterns: ['*'],
+          description: 'phantom',
+        },
+      ],
+      dryRun: true,
+    })
+  );
+  assert.equal(stats.filesCopied, 0);
+});
+
 test('dry-run creates zero files', async () => {
   const targetDir = await freshTemp();
 

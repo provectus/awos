@@ -1,5 +1,5 @@
 ---
-description: Optional full-audit QA command — coverage analysis, gap detection, regression suite management.
+description: QA health check — inspects existing tests against spec acceptance criteria, detects coverage gaps by applicable pyramid layer, generates missing tests via specialist agents, and produces a structured report.
 ---
 
 # ROLE
@@ -37,17 +37,28 @@ Perform a full QA audit for the target spec(s). Check existing tests for health 
 ## Step 1: Identify scope
 
 1. Read `<user_prompt>`. If it names a spec, target that directory only.
-2. If empty, target all spec directories under `context/spec/`.
+2. If empty, list all spec directories under `context/spec/` that contain
+   `functional-spec.md`. Announce the list and ask: "Found N specs for a full
+   audit: [list]. This will scan all test files and may generate missing tests.
+   Proceed with full audit, or specify a single spec to limit scope?"
+   Wait for user confirmation before proceeding.
 3. Announce: "Running QA audit for: [scope]."
 
 ## Step 2: Discover frameworks
 
 1. Read `context/product/architecture.md` for declared testing stack per layer.
+   - If absent: warn — "architecture.md not found. Without it, gap analysis may
+     falsely flag intentionally excluded layers. Consider running `/awos:arch`
+     first. Continue anyway? (y/n)"
+   - Wait for user confirmation before proceeding without it.
 2. Fall back to auto-detection via dependency files: `package.json`, `requirements.txt`, `go.mod`, `Gemfile`, `pyproject.toml`, `pom.xml`.
 
 ## Step 3: Load test registry
 
-Read `context/qa/list-of-tests.md`. If it does not exist, create it from the template at `.awos/templates/qa-context-template.md` (or create an empty registry if template is absent).
+Read `context/qa/list-of-tests.md` if it exists. This file is auto-maintained by
+`testing-expert` during the Feature Testing & Regression slice of `/awos:tasks` — it is
+absent until at least one spec has completed that slice. If absent, proceed without the
+registered test list; Step 4 will scan live test files directly.
 
 ## Step 4: Audit existing tests
 
@@ -78,23 +89,46 @@ For each registered test in scope:
 
 ## Step 5: Gap analysis
 
-For each acceptance criterion in the functional spec(s) in scope:
+**Before checking any AC, determine applicable layers in two passes:**
 
-1. Check which pyramid layers have coverage (unit / integration / e2e / contract).
-2. Check whether each covered layer has a negative test counterpart.
-3. Record gaps:
-   - Layer with no tests at all → `MISSING LAYER`
-   - Layer with only positive tests → `MISSING NEGATIVE`
+1. **Project-level gate:** Read `architecture.md` (or use auto-detected stack from Step 2)
+   to identify which layers the project actively supports. Exclude unsupported layers from
+   all gap checks. Example: if `architecture.md` documents "no e2e infrastructure" →
+   never report `MISSING LAYER: e2e`.
+
+2. **Per-AC gate:** For each acceptance criterion, determine applicable layers based on
+   its nature:
+   - User-facing flow / UI interaction → e2e applicable (if supported by project)
+   - Service boundary / external integration → integration applicable
+   - Pure business logic / utility → unit applicable
+   - Public API contract → contract applicable (if supported by project)
+
+3. Check coverage only within determined applicable layers:
+   - Applicable layer with no tests → `MISSING LAYER`
+   - Applicable layer with only positive tests → `MISSING NEGATIVE`
 
 ## Step 6: Generate missing tests
 
-For each gap identified in Step 5, invoke the `Task` tool with `subagent_type: "testing-expert"`. Pass:
+Before invoking any agent: verify that `functional-spec.md` exists for the target spec.
+If missing — skip gap generation for that spec and log in the audit report:
+`SPEC INCOMPLETE: [spec-dir] — functional-spec.md missing, gap analysis skipped.`
 
-- The gap description (layer, spec, positive/negative scope)
-- The contents of `functional-spec.md` and `technical-considerations.md` for the target spec
-- The relevant implementation source code
+For each gap identified in Step 5:
 
-`testing-expert` will write the tests with RED validation, add annotations (`@layer`, `@spec`, `@regression`), and update `context/qa/list-of-tests.md`. Do not write tests inline here.
+1. Check `.claude/agents/` for a technology-specific testing agent suited to the gap
+   (e.g. a layer-specific or stack-specific agent).
+2. If found — invoke it via the `Task` tool to **write the test code only**. Pass:
+   - The gap description (layer, spec, positive/negative scope)
+   - The relevant implementation source code
+3. Then invoke `testing-expert` as **coordinator**: pass it the written test and ask it to
+   validate and apply annotations (`@layer`, `@spec`, `@regression`), run RED validation,
+   and update `context/qa/list-of-tests.md`.
+4. If no specialist found — invoke `testing-expert` directly to handle everything. Pass:
+   - The gap description (layer, spec, positive/negative scope)
+   - The contents of `functional-spec.md` and `technical-considerations.md` for the target spec
+   - The relevant implementation source code
+
+Do not write tests inline here.
 
 ## Step 7: Run tests (with user confirmation)
 
@@ -171,11 +205,13 @@ Report summary to user and list any flags requiring human attention.
 
 # TODO
 
+- **Test registry (`list-of-tests.md`) has staleness risk.** The central registry is a practical choice — one file for the agent to read vs. scanning every test file on each run. Staleness is mitigated by the existence check in Step 4. Future work: generate the registry automatically from inline annotations (`@spec`, `@regression`) in test files, making them the source of truth.
+
 - **E2E tests are ephemeral — no CI artifact.** Step 6 delegates E2E gap test generation to `testing-expert`, but the output is an in-session test run, not a committed rerunnable artifact. Future work: have `testing-expert` generate playwright-cli script files (e.g., `tests/e2e/*.sh` or `.ts`) as output for E2E gaps, so they can be committed and executed in CI without agent interaction.
 
 - **QA audit is coverage-by-inspection, not coverage-by-measurement.** Step 5 (gap analysis) reads source files and infers coverage from test file contents. It does not invoke actual coverage tooling (`vitest --coverage`, Istanbul, c8, pytest-cov, etc.). This means untested branches and dead-path gaps are invisible to the audit. Future work: in Step 2, detect available coverage reporters and, in Step 7, run the suite with coverage flags; parse the output to feed real line/branch metrics into the Coverage Summary table.
 
-- **Audit reports are snapshots with no regression baseline or enforcement.** Each `/awos:qa` run produces a dated report, but there is no mechanism to diff successive reports, track coverage trend over time, or fail a build when coverage drops below a threshold. Future work: add a `context/qa/coverage-baseline.md` file that stores the last known layer coverage counts; at the end of Step 9, compare current counts against the baseline and surface regressions explicitly in the Flags section.
+- **Audit reports are snapshots with no regression baseline or enforcement.** Each `/awos:qa` run produces a dated report, but there is no mechanism to diff successive reports, track coverage trend over time, or fail a build when coverage drops below a threshold. Future work: add a `context/qa/coverage-baseline.md` file that stores the last known layer coverage counts; at the end of Step 9, compare current counts against the baseline and surface drops explicitly in the Flags section. Goal is delta detection (did coverage drop?), not enforcing absolute thresholds — absolute numbers are meaningless in isolation.
 
 ---
 

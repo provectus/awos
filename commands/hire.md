@@ -103,14 +103,14 @@ Svelte, etc.), always include the `playwright` MCP in the proposal — it enable
 browser-based E2E testing via the testing-expert agent.
 
 Complementary pairs reference:
+For each stack, search the registry for a technology-specific testing agent.
+If none found, fall back to `testing-expert`.
 
-- React / Vue / Angular → `testing-expert` + `playwright` MCP
-- FastAPI / Django / Flask → `testing-expert` + `pytest-best-practices` skill
-  _(if `pytest-best-practices` not found in registry — `testing-expert` covers this)_
-- Any Python backend → `testing-expert` + `pytest-best-practices` skill
-  _(if `pytest-best-practices` not found in registry — `testing-expert` covers this)_
-- Any TypeScript/Node backend → `testing-expert`
-- Terraform / IaC → `testing-expert` (for infra validation)
+- React / Vue / Angular → + `playwright` CLI for E2E
+- FastAPI / Django / Flask → + `pytest-best-practices` skill _(if not in registry, `testing-expert` covers it)_
+- Other Python backends → + `pytest-best-practices` skill _(if not in registry, `testing-expert` covers it)_
+- TypeScript / Node backend → (no additional skill needed)
+- Terraform / IaC → (for infra validation)
 
 ## Step 5: Install Found Components
 

@@ -106,7 +106,7 @@ primary tech agent — unless a more specific testing agent (e.g. `react-testing
 `rust-tester`) is also found, in which case prefer the specific one.
 
 Also: if the tech stack includes any frontend framework (React, Vue, Angular,
-Svelte, etc.), always include the `playwright` MCP in the proposal — it enables
+Svelte, etc.), always include `playwright` CLI in the proposal — it enables
 browser-based E2E testing via the testing-expert agent.
 
 Complementary pairs reference:
@@ -117,7 +117,7 @@ If none found, fall back to `testing-expert`.
 - FastAPI / Django / Flask → + `pytest-best-practices` skill _(if not in registry, `testing-expert` covers it)_
 - Other Python backends → + `pytest-best-practices` skill _(if not in registry, `testing-expert` covers it)_
 - TypeScript / Node backend → (no additional skill needed)
-- Terraform / IaC → (for infra validation)
+- Terraform / IaC → search for an infra-validation agent _(if not in registry, `testing-expert` covers plan/output validation)_
 
 ## Step 5: Install Found Components
 

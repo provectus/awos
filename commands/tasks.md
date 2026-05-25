@@ -74,10 +74,13 @@ Follow this process precisely.
   5.  **If `SKIP_TESTS = true`**, omit the verification sub-task and the cleanup sub-task for this slice entirely. Skip to generating the next slice.
 
       **If `SKIP_TESTS = false`**, after the verification sub-task, add a cleanup sub-task as the last item of the slice:
+
       ```md
       - [ ] Cleanup: Delete any screenshots, videos, or e2e scripts generated during this slice's verification. **[Agent: general-purpose]**
       ```
+
       Skip this sub-task for the **Feature Testing & Regression** slice — its artifacts are kept intentionally.
+
   6.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
   7.  Create a high-level checklist item and its sub-tasks with subagent assignments.
   8.  Repeat this process until all requirements from the specification are covered.

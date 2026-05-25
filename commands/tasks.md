@@ -30,8 +30,9 @@ Follow this process precisely.
 
 ## Step 1: Identify the Target Specification
 
-1.  **Analyze User Prompt:** Analyze the `<user_prompt>`. If it clearly references a spec by name or index, identify the corresponding directory in `context/spec/`.
-2.  **Ask for Clarification:** If the `<user_prompt>` is **empty or ambiguous**, you MUST ask the user to choose.
+1.  **Detect `--no-tests` flag:** Before anything else, check whether the `<user_prompt>` contains `skip tests` or `--no-tests` (case-insensitive). If found, set an internal flag `SKIP_TESTS = true`. This flag suppresses all verification sub-tasks inside slices and omits the Feature Testing & Regression slice entirely. Strip the flag from the prompt before spec identification.
+2.  **Analyze User Prompt:** Analyze the `<user_prompt>`. If it clearly references a spec by name or index, identify the corresponding directory in `context/spec/`.
+3.  **Ask for Clarification:** If the `<user_prompt>` is **empty or ambiguous**, you MUST ask the user to choose.
     - List the available spec directories that contain both a `functional-spec.md` and `technical-considerations.md`.
     - Example: "Which specification would you like to break down into tasks? Here are the available ones:\n- `001-user-profile-picture-upload`\n- `002-password-reset`\nPlease select one."
     - Do not proceed until the user has selected a valid spec.
@@ -68,7 +69,9 @@ Follow this process precisely.
         - Tech stack identified in `technical-considerations.md`
       - Append the subagent assignment using format: `**[Agent: agent-name]**` at the end of the sub-task description
       - Use `general-purpose` agent when no specialist clearly matches the task — but **track these assignments** for the Recommendations table
-  5.  After the verification sub-task, add a cleanup sub-task as the last item of the slice:
+  5.  **If `SKIP_TESTS = true`**, omit the verification sub-task and the cleanup sub-task for this slice entirely. Skip to generating the next slice.
+
+      **If `SKIP_TESTS = false`**, after the verification sub-task, add a cleanup sub-task as the last item of the slice:
       ```md
       - [ ] Cleanup: Delete any screenshots, videos, or e2e scripts generated during this slice's verification. **[Agent: general-purpose]**
       ```
@@ -76,9 +79,11 @@ Follow this process precisely.
   6.  Next, identify the second-smallest piece of value that builds on the first. This is **Slice 2**.
   7.  Create a high-level checklist item and its sub-tasks with subagent assignments.
   8.  Repeat this process until all requirements from the specification are covered.
-  9.  **Add the Feature Testing & Regression slice (always last):**
+  9.  **Add the Feature Testing & Regression slice (always last, unless `SKIP_TESTS = true`):**
 
-      After all implementation slices are defined, append one final slice. This slice is generated automatically — do not ask the user about it.
+      If `SKIP_TESTS = true`, skip this entire step — do not add the Feature Testing & Regression slice.
+
+      Otherwise, after all implementation slices are defined, append one final slice. This slice is generated automatically — do not ask the user about it.
 
       ```md
       - [ ] **Slice N: Feature Testing & Regression**

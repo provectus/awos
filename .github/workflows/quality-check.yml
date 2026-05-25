@@ -20,3 +20,63 @@ jobs:
 
       - name: Run prettier check
         run: npx prettier . --check
+
+  # Test suite — non-blocking initially.
+  # Flip `continue-on-error: false` to make this a required gate once it has
+  # been green on two consecutive PRs (see plan PR 4).
+  test:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run tests
+        run: npm test
+
+  # Coverage report — always runs, prints the per-file table to the job
+  # log so reviewers can see exactly which lines are uncovered without
+  # rerunning anything locally. Non-blocking (continue-on-error: true)
+  # while teams ratchet up the numbers.
+  coverage-report:
+    needs: test
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Measure coverage
+        run: npm run test:coverage
+
+  # Coverage gate — fails the job when src/ coverage drops below the
+  # thresholds hardcoded below. To raise the floor, edit this block.
+  coverage-gate:
+    needs: test
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      COVERAGE_LINES: '90'
+      COVERAGE_FUNCTIONS: '95'
+      COVERAGE_BRANCHES: '90'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enforce coverage thresholds
+        run: npm run test:coverage:gate

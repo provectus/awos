@@ -26,27 +26,38 @@ Your primary task is to create the technical specification for a given feature. 
 
 ---
 
+# INTERACTION
+
+- Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+
+---
+
 # PROCESS
 
 Follow this process precisely.
 
 ### Step 1: Identify the Target Specification
 
-1.  **Analyze User Prompt:** First, analyze the `<user_prompt>`. If it clearly references a spec by its name or index (e.g., "tech spec for 001-user-profile" or "let's plan the profile picture feature"), identify the corresponding directory in `context/spec/`.
-2.  **Ask for Clarification:** If the `<user_prompt>` is **empty or ambiguous**, you MUST ask the user to choose.
-    - List the available spec directories.
-    - Example: "Which specification would you like to create a technical plan for? Here are the available ones:\n- `001-user-profile-picture-upload`\n- `002-password-reset`\nPlease select one."
-    - Do not proceed until the user has selected a valid spec.
+1.  Analyze `<user_prompt>`. If it clearly references a spec by name or index, identify the corresponding directory in `context/spec/`.
+2.  If the prompt is empty or ambiguous, list the available spec directories and ask the user to choose. Do not proceed until a valid spec is selected.
 
 ### Step 2: Gather and Synthesize Context
 
-1.  **Confirm Target:** Once the spec is identified (e.g., `001-user-profile-picture-upload`), announce your task: "Okay, I will now create the technical considerations for **'User Profile Picture Upload'**."
-2.  **Read Documents:** Carefully read the `functional-spec.md` within the chosen directory AND the main `context/product/architecture.md` document.
-3.  **Identify available subagents (if applicable):** Based on the functional spec and architecture document, determine which technology stack(s) this feature will primarily involve (e.g., Python backend, React frontend, or both). Analyze the Task tool definition to extract all available subagent_type values with their descriptions to check that corresponding subagents exist.
-4.  **Analyze Codebase:** State your intention to review the code: "To ensure the plan is sound, I will also analyze the existing codebase for relevant context, such as existing services, data models, and utility functions."
-    - If subagents are available for the feature's technology stack, delegate the codebase analysis to the appropriate expert(s) using the Task tool with the appropriate `subagent_type` (e.g., "python-expert", "react-expert"). For features spanning multiple technologies, you may delegate to multiple experts sequentially or in parallel.
-    - Ask the expert(s) to analyze existing patterns, architectural conventions, technology-specific best practices, and provide recommendations for the technical approach.
-    - If no subagent is available for the feature's technology, perform the analysis yourself.
+1.  Read the `functional-spec.md` from the chosen directory and the main `context/product/architecture.md`. These two inputs are independent — issue both `Read` calls in a single tool-use block (parallel tool calls). Sequence reads only when one's output feeds the next.
+2.  Identify candidate specialist subagents: determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Discover registered specialists from two sources, both routed through the built-in `Explore` agent so the orchestrator context stays lean:
+    - **Project-local agents** — scan `.claude/agents/*.md` and parse each agent's YAML frontmatter (`name`, `description`, `skills`).
+    - **Plugin-provided agents** — read the `Agent` tool's description block to enumerate agents whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`).
+
+    Match each stack against the combined list, plus always-available built-ins (`general-purpose`, `Explore`, `Plan`).
+
+3.  Analyze the codebase: delegate the read-only exploration to the built-in `Explore` agent to keep the orchestrator context lean. If the feature spans multiple stacks, run one exploration per stack in parallel.
+4.  For each stack the feature touches, invoke its matched specialist (project-local or plugin-provided, from step 2) via the `Agent` tool. Pass the functional spec, the relevant architecture sections, and the exploration findings as context. Specialists carry skill attachments in their frontmatter, so running them is what makes those skills load — drafting tech-stack sections in the orchestrator bypasses both the specialist and its skills. Run independent specialist calls in parallel.
+
+    ```text
+    Agent(subagent_type="<agent-name>", description="<3-5 word summary>", prompt="<context + tech-stack questions for this stack>")
+    ```
+
+    For plugin-provided specialists, `<agent-name>` carries the `plugin-name:` prefix (e.g. `python-development:python-pro`). If no specialist exists for a stack, draft that stack's sections yourself after the exploration reports back, and note the gap so `/awos:hire` can address it.
 
 ### Step 3: Propose and Draft the Technical Plan (Interactive)
 
@@ -64,7 +75,7 @@ Follow this process precisely.
       - For configs: list required env vars and their purpose (no full file contents)
       - For files: specify paths and responsibilities (no full implementations)
       - Reference official docs for exact syntax/requirements rather than duplicating them
-    - **CRITICAL BEHAVIOR:** For each section, you must propose a specific implementation detail based on the architecture, state it as an assumption, and ask for approval.
+    - For each section, propose a specific implementation detail based on the architecture, state it as an assumption, and ask for approval before moving on.
     - Example: "For the database, the functional spec implies we need to store the image location. I'll **assume** we should add a new `avatar_url` (TEXT) column to the `users` table. **Is that assumption correct?**"
     - Example: "For the API, I'll propose a `POST /api/v1/users/me/avatar` endpoint that accepts a multipart/form-data request. **Does that fit the requirements?**"
 
@@ -80,6 +91,6 @@ Follow this process precisely.
 
 1.  **Identify Path:** The output path is the `technical-considerations.md` file inside the directory you identified in Step 1.
 2.  **Save File:** Once the user approves the draft, write the final content into this file.
-3.  **Check for New Capabilities:** Review the technical specification you just saved. Determine whether it introduces technologies, frameworks, tools, or testing approaches that are NOT already covered by the project’s existing architecture and specialist agents.
-    - **If new capabilities are needed:** Build a pre-filled `/awos:hire` command that includes the specific technologies and the spec context. Conclude with: "The technical specification has been saved to `context/spec/[directory-name]/technical-considerations.md`. This spec introduces new capabilities that may benefit from specialist agents. Run the following to set up the right agents, then break it into tasks with `/awos:tasks`:" followed by a code block containing `/awos:hire cover [directory-name]: need [comma-separated list of new technologies/capabilities identified]`.
-    - **If no new capabilities are needed:** Conclude with: "The technical specification has been saved to `context/spec/[directory-name]/technical-considerations.md`. Let’s break it into tasks with `/awos:tasks`."
+3.  Review the saved spec for new technologies, frameworks, tools, or testing approaches not already covered by the project's existing architecture and specialist agents.
+    - If new capabilities are needed: report the saved path and recommend a pre-filled hire command: `/awos:hire cover [directory-name]: need [comma-separated list of new technologies/capabilities]`, followed by `/awos:tasks`.
+    - Otherwise: report the saved path and the next command: `/awos:tasks`.

@@ -34,6 +34,25 @@ awos/
 └── src/                  # AWOS installer source code
 ```
 
+## Running the Test Suite
+
+The repo ships with three test layers under `tests/`, all using Node's `node:test` built-in — no npm dependencies needed.
+
+```bash
+npm test                   # all layers (primary path; CI runs this on Node 22)
+npm run test:lint          # static prompt linter
+npm run test:installer     # installer unit tests
+npm run test:fixtures      # fixture project tests
+
+bun test tests/            # optional local cross-runtime spot-check
+```
+
+Layer 1 (`tests/lint-prompts.test.js`) catches wrapper/root-command drift, dimension DAG breaks, and `setup-config.js` mismatches. Layers 2 and 3 (`tests/installer/`, `tests/fixtures.test.js`) exercise the installer against `fs.mkdtemp()` directories and commit-tracked fixture projects.
+
+When you add a new structural contract — a wrapper frontmatter key, an `agent-template.md` field, a migration, a marker pattern — add its lint rule, installer test, or fixture in the **same PR**. The safety net only works if coverage keeps pace.
+
+To add a fixture: drop a directory under `tests/fixtures/<name>/`, optionally with a `before/` subtree (gets copied to the temp project as the starting state) and an `expected-after.json` manifest listing the files to assert. See existing fixtures for examples.
+
 ## Testing Changes Locally
 
 ### We recommend testing in a Pet Project

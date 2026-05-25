@@ -37,7 +37,11 @@ async function configureMcp({ workingDir, dryRun = false }) {
 
   if (fileExists) {
     const content = await fsPromises.readFile(mcpPath, 'utf-8');
-    config = JSON.parse(content);
+    try {
+      config = JSON.parse(content);
+    } catch (error) {
+      throw new Error(`Invalid JSON in ${MCP_FILE}: ${error.message}`);
+    }
   }
 
   if (!config.mcpServers) {

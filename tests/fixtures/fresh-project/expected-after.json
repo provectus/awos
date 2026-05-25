@@ -1,0 +1,18 @@
+{
+  "_comment": "Fresh install — no before/ tree. Asserts the canonical post-install layout.",
+  ".awos/commands/architecture.md": { "exists": true },
+  ".awos/commands/implement.md": { "exists": true },
+  ".awos/commands/tasks.md": { "exists": true, "contains": "**[Agent: " },
+  ".awos/commands/verify.md": { "exists": true },
+  ".awos/templates/agent-template.md": { "exists": true },
+  ".awos/scripts/create-spec-directory.sh": { "exists": true },
+  ".claude/commands/awos/architecture.md": { "exists": true },
+  ".claude/commands/awos/implement.md": {
+    "exists": true,
+    "contains": ".awos/commands/implement.md"
+  },
+  ".claude/settings.json": { "exists": true, "contains": "awos-marketplace" },
+  ".mcp.json": { "exists": true, "contains": "awos-recruitment" },
+  "context/product": { "exists": true },
+  "context/spec": { "exists": true }
+}

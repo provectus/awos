@@ -1,7 +1,6 @@
 ---
 description: Breaks the Tech Spec into a task list for engineers.
+argument-hint: '[spec name or index, optional]'
 ---
 
-Use `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
-
-Refer to the instructions located in this file: .awos/commands/tasks.md
+@.awos/commands/tasks.md

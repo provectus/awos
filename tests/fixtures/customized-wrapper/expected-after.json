@@ -1,0 +1,12 @@
+{
+  "_comment": "Wrappers in .claude/commands/awos/ are the user customization layer. On update, files that already exist are preserved (no prompt callback is injected for fixture runs → default skip in non-TTY), but new wrappers the user does not yet have are still installed. Locks both halves: architecture.md is preserved verbatim, product.md is freshly installed.",
+  ".claude/commands/awos/architecture.md": {
+    "exists": true,
+    "contains": "CUSTOM-USER-CONTENT",
+    "notContains": "@.awos/commands/architecture.md"
+  },
+  ".claude/commands/awos/product.md": {
+    "exists": true,
+    "contains": "@.awos/commands/product.md"
+  }
+}

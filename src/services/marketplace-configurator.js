@@ -39,7 +39,11 @@ async function configureMarketplace({ workingDir, dryRun = false }) {
 
   if (fileExists) {
     const content = await fsPromises.readFile(settingsPath, 'utf-8');
-    settings = JSON.parse(content);
+    try {
+      settings = JSON.parse(content);
+    } catch (error) {
+      throw new Error(`Invalid JSON in ${SETTINGS_FILE}: ${error.message}`);
+    }
   }
 
   if (!settings.extraKnownMarketplaces) {

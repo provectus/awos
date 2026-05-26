@@ -62,7 +62,7 @@ Follow this process precisely.
   3.  Under that slice, create the nested sub-tasks (database, backend, frontend) needed to implement and verify **only that slice**.
   4.  **For each sub-task, assign the appropriate subagent:**
       - Identify the technology or domain the sub-task involves
-      - Enumerate the universe of available specialist subagents by inspecting the `Agent` tool's description block in your own system prompt. This is an introspection step — no tool call is required, but it is mandatory. Both kinds of agents are listed there: project-local ones (loaded by Claude Code from `.claude/agents/*.md`) and plugin-provided ones. Tell them apart by the `plugin-name:` prefix on `subagent_type` — plugin-provided agents carry it (e.g. `python-development:python-pro`); project-local agents do not. The always-available built-in `general-purpose` is your fallback when no specialist matches.
+      - Enumerate the universe of available specialist subagents by inspecting the `Agent` tool's description block in your own system prompt. This is an introspection step — no tool call is required, but it is mandatory. Both kinds of agents are listed there: project-local ones (declared as files under `.claude/agents/*.md`) and plugin-provided ones. Tell them apart by the `plugin-name:` prefix on `subagent_type` — plugin-provided agents carry it (e.g. `python-development:python-pro`); project-local agents do not. The always-available built-in `general-purpose` is your fallback when no specialist matches.
       - Match the sub-task to a subagent based on:
         - Technology keywords
         - Task intent

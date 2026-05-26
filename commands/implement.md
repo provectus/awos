@@ -36,21 +36,20 @@ Your goal is to execute the pending work for a given specification, one task at 
 
 Follow this process precisely. Steps 2–5 form the per-task loop: repeat them for each task in scope, in document order, until the scope is exhausted. Step 6 runs once after the loop.
 
-### Step 1: Identify the Target Specification and Scope
+### Step 1: Identify the Target Specification and Load Static Context
 
 1.  Analyze `<user_prompt>`. If it names a specific task, set scope to that single task in the spec it belongs to. If it names a spec (without a specific task), set the target spec from the prompt and set scope to "every incomplete (`[ ]`) task in that spec".
 2.  Otherwise (no prompt): scan `context/spec/` in order, find the first directory whose `tasks.md` has an incomplete item (`[ ]`), select it as the target spec, and set scope to "every incomplete task in that spec".
 3.  If no target can be determined (ambiguous prompt, or all tasks are done), tell the user and stop.
-
-### Step 2: Load Full Context and Pick the Next Task
-
-1.  On the first iteration, load all three context files in parallel:
+4.  Load the static spec context once, in parallel:
     - `[target-spec-directory]/functional-spec.md`
     - `[target-spec-directory]/technical-considerations.md`
-    - `[target-spec-directory]/tasks.md`
 
-    On later iterations, reload only `tasks.md` — the spec files don't change. Re-reading `tasks.md` each iteration ensures the next task is selected from the latest on-disk state.
+    These files don't change during the run; Step 3 embeds their content into the delegation prompt for every task.
 
+### Step 2: Read `tasks.md` and Pick the Next Task
+
+1.  Read `[target-spec-directory]/tasks.md`. Re-reading it each iteration ensures the next task is selected from the latest on-disk state.
 2.  Pick the next task in scope. If the user named a single task, that's the only task; once it's done the loop ends. Otherwise pick the first remaining `[ ]` task in document order from the freshly-read `tasks.md`. If no incomplete tasks remain, exit the loop and go to Step 6.
 3.  Extract the agent assignment from the selected task line:
     - Look for the `**[Agent: agent-name]**` pattern in the task line (e.g., `python-expert`, `react-expert`, `testing-expert`).
@@ -62,7 +61,7 @@ Follow this process precisely. Steps 2–5 form the per-task loop: repeat them f
 You do not write or edit code, configuration, or database schemas yourself. Your role is to delegate.
 
 1.  Construct a delegation prompt that includes:
-    - The full context from the three files loaded in Step 2.
+    - The full context from the three files loaded in Steps 1–2 (`functional-spec.md`, `technical-considerations.md`, `tasks.md`).
     - The specific task description.
     - Clear instructions on what code to write or files to modify.
     - A `<scope_discipline>` block: "Only make changes the task requires. Don't add features, refactor unrelated code, or add validation for scenarios outside the task. If something is unclear, ask rather than guessing."

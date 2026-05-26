@@ -62,9 +62,9 @@ Follow this process precisely.
   3.  Under that slice, create the nested sub-tasks (database, backend, frontend) needed to implement and verify **only that slice**.
   4.  **For each sub-task, assign the appropriate subagent:**
       - Identify the technology or domain the sub-task involves
-      - Discover specialists from **both** sources below — finding agents in one does not satisfy the other. Delegate both reads to the built-in `Explore` agent to keep your context lean:
-        - **(a) Project-local agents:** scan `.claude/agents/*.md` and parse each agent's YAML frontmatter (`name`, `description`, `skills`).
-        - **(b) Plugin-provided agents:** read the `Agent` tool's description block and collect every agent whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`).
+      - Discover specialists from **both** sources below — finding agents in one does not satisfy the other:
+        - **(a) Project-local agents:** use `Glob` for `.claude/agents/*.md`, then call the `Read` tool on each matched file (one `Read` per file — do not substitute `Bash` with `head`/`cat`/`find -exec`, even though it would be fewer calls). For each file, extract `name`, `description`, and `skills` from its YAML frontmatter. Filenames alone are not enough — the assignment step needs each agent's description and skill list to make a real match.
+        - **(b) Plugin-provided agents:** inspect the `Agent` tool's description block in your own system prompt and collect every agent whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`). This is an introspection step — no tool call is required, but the step is mandatory.
       - The combined list — agents from (a), from (b), and the always-available built-in `general-purpose` — is the universe to match against. Auto-dispatch metadata alone is not a substitute when the assignment must be definitive.
       - Match the sub-task to a subagent based on:
         - Technology keywords

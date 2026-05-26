@@ -44,9 +44,9 @@ Follow this process precisely.
 ### Step 2: Gather and Synthesize Context
 
 1.  Read the `functional-spec.md` from the chosen directory and the main `context/product/architecture.md`. These two inputs are independent — issue both `Read` calls in a single tool-use block (parallel tool calls). Sequence reads only when one's output feeds the next.
-2.  Identify candidate specialist subagents: determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Discover registered specialists from two sources, both routed through the built-in `Explore` agent so the orchestrator context stays lean:
-    - **Project-local agents** — scan `.claude/agents/*.md` and parse each agent's YAML frontmatter (`name`, `description`, `skills`).
-    - **Plugin-provided agents** — read the `Agent` tool's description block to enumerate agents whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`).
+2.  Identify candidate specialist subagents: determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Discover registered specialists from **both** sources below — finding agents in one does not satisfy the other:
+    - **Project-local agents** — use `Glob` for `.claude/agents/*.md`, then call the `Read` tool on each matched file (one `Read` per file — do not substitute `Bash` with `head`/`cat`/`find -exec`, even though it would be fewer calls). For each file, extract `name`, `description`, and `skills` from its YAML frontmatter. Filenames alone are not enough — the matching step needs each agent's description and skill list.
+    - **Plugin-provided agents** — inspect the `Agent` tool's description block in your own system prompt and collect every agent whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`). This is an introspection step — no tool call is required, but the step is mandatory.
 
     Match each stack against the combined list, plus always-available built-ins (`general-purpose`, `Explore`, `Plan`).
 

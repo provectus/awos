@@ -64,9 +64,9 @@ Follow this process precisely.
 
 ## Step 3: Check What Already Exists
 
-1.  Discover existing agents and skills. Delegate this discovery to the built-in `Explore` agent. The discovery should cover both sources:
-    - **Project-local agents** — scan `.claude/agents/*.md` and parse each agent's YAML frontmatter (name, description, skills).
-    - **Plugin-provided agents** — read the `Agent` tool's description block to enumerate agents whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`).
+1.  Discover existing agents and skills. The discovery covers **both** sources below — finding agents in one does not satisfy the other:
+    - **Project-local agents** — use `Glob` for `.claude/agents/*.md`, then call the `Read` tool on each matched file (one `Read` per file — do not substitute `Bash` with `head`/`cat`/`find -exec`, even though it would be fewer calls). For each file, extract `name`, `description`, and `skills` from its YAML frontmatter. Filenames alone are not enough — the coverage table needs each agent's description and skill list.
+    - **Plugin-provided agents** — inspect the `Agent` tool's description block in your own system prompt and collect every agent whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`). This is an introspection step — no tool call is required, but the step is mandatory.
     - Search for available skills across the project (`.claude/skills/`, plugin-provided skills, any other skill locations).
     - Report each registered specialist subagent's name and description (project-local and plugin-provided alike) so the orchestrator can match domains against them.
 2.  Compare against the proposed roles from Step 2 and classify coverage:

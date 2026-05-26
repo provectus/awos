@@ -64,7 +64,10 @@ Follow this process precisely.
   3.  Under that slice, create the nested tasks (database, backend, frontend) needed to implement and verify **only that slice**.
   4.  **For each task, assign the appropriate subagent:**
       - Identify the technology or domain the task involves
-      - Discover registered specialists from two sources, both routed through the built-in `Explore` agent: (a) scan `.claude/agents/*.md` and parse each agent's YAML frontmatter (`name`, `description`, `skills`) for project-local agents; (b) read the `Agent` tool's description block for plugin-provided agents (those whose `subagent_type` carries a `plugin-name:` prefix, e.g. `python-development:python-pro`). The combined list, plus the always-available built-in `general-purpose`, is the universe to match against — auto-dispatch metadata alone is not a substitute when the assignment must be definitive.
+      - Discover specialists from **both** sources below — finding agents in one does not satisfy the other. Delegate both reads to the built-in `Explore` agent to keep your context lean:
+        - **(a) Project-local agents:** scan `.claude/agents/*.md` and parse each agent's YAML frontmatter (`name`, `description`, `skills`).
+        - **(b) Plugin-provided agents:** read the `Agent` tool's description block and collect every agent whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`).
+      - The combined list — agents from (a), from (b), and the always-available built-in `general-purpose` — is the universe to match against. Auto-dispatch metadata alone is not a substitute when the assignment must be definitive.
       - Match the task to a subagent based on:
         - Technology keywords
         - Task intent

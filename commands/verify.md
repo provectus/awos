@@ -34,13 +34,10 @@ Verify a specification's implementation against its acceptance criteria. For eac
 
 # CONSTRAINTS
 
-- **Step 3 is MANDATORY.** Never skip verification. Never write "the user can verify this manually"
-  unless you have: (a) tried all available verification tools (browser MCP, curl, shell), AND
-  (b) received explicit user approval to skip via AskUserQuestion.
-- **Verification tool fallback order:** browser MCP → curl/shell → AskUserQuestion to skip.
-  If browser MCP is unavailable, try curl or shell commands. Only ask to skip as a last resort.
-- **Do not assume success.** If you cannot verify, STOP and inform the user. Do not mark
-  acceptance criteria as `[x]` without actual verification evidence.
+- **`/awos:verify` is a look-and-feel + spec-freshness check, not a test runner.** Generated test suites belong in the Feature Testing & Regression slice produced by `/awos:tasks` and executed by `/awos:implement`. This command verifies that the implementation matches the spec's acceptance criteria from a user's perspective and that downstream documentation has not drifted.
+- **Step 3 still requires evidence.** Do not mark an acceptance criterion `[x]` without confirming it — either by driving the UI/API yourself or by getting an explicit user confirmation via `AskUserQuestion`. "The user can verify this manually" without a check is not acceptable.
+- **Pick the verification tool by fit, not by a fixed priority.** Browser-automation MCPs/CLIs, `curl`, shell scripts, log/database inspection, and direct user confirmation are all valid — choose whichever proves the criterion fastest and most reliably for the project's stack. Do not assume any specific tool is available; if none of the obvious options work, fall back to `AskUserQuestion` and let the user confirm.
+- **Honour the `skip-tests` mode.** If the spec's `tasks.md` carries the `<!-- skip-tests: true -->` marker (set by `/awos:tasks` when the user opted out of test generation), perform Step 3 as a look-and-feel walk-through only — do not attempt to run or generate test suites, and treat missing test tooling as expected rather than as a verification failure.
 - **Session length does not excuse skipping.** Even in long sessions, Step 3 must run.
 
 ---
@@ -62,18 +59,10 @@ Verify a specification's implementation against its acceptance criteria. For eac
 
 For each acceptance criterion in `functional-spec.md`:
 
-1. **Verify:** Check if the implementation satisfies the criterion
-2. **If met:** Mark it `[x]`
-3. **If NOT met:** Report which criterion failed and what's missing, then stop
-
-**If browser MCP is unavailable:**
-
-1. Try `curl` or shell commands to verify API endpoints or application state.
-2. Try reading log files or database state if relevant.
-3. If ALL tools fail: use `AskUserQuestion` — "I cannot verify automatically because [reason].
-   Do you want to verify manually and confirm, or should I stop here?"
-   Options: "I verified manually — mark as done" / "Stop — I'll fix the tooling first"
-4. Never proceed to mark criteria `[x]` without one of the above producing evidence.
+1. **Verify:** confirm the implementation satisfies the criterion using whichever tool fits the criterion best. Examples (pick by fit, not in this order): drive the UI through a browser-automation MCP or CLI the project already configures; hit an HTTP endpoint with `curl`; run a shell command; inspect logs or the database; ask the user via `AskUserQuestion` when no automated check is possible.
+2. **If met:** mark it `[x]` and briefly record how you confirmed it (e.g. "verified via curl /api/health", "user confirmed in browser").
+3. **If NOT met:** report which criterion failed and what's missing, then stop.
+4. **If no tool can verify the criterion in this environment:** ask the user via `AskUserQuestion` — "I can't verify [criterion] automatically because [reason]. Verify manually and confirm, or stop here?" Options: "I verified manually — mark as done" / "Stop — I'll fix the tooling first". Never mark criteria `[x]` without evidence from one of the paths above.
 
 ### Step 4: Mark as Completed
 

@@ -64,9 +64,9 @@ Follow this process precisely.
 
 ## Step 3: Check What Already Exists
 
-1.  Discover existing agents and skills. Delegate this discovery to the built-in `Explore` agent. The discovery should cover both sources:
-    - **Project-local agents** — scan `.claude/agents/*.md` and parse each agent's YAML frontmatter (name, description, skills).
-    - **Plugin-provided agents** — read the `Agent` tool's description block to enumerate agents whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`).
+1.  Discover existing agents and skills. The discovery covers **both** sources below — finding agents in one does not satisfy the other:
+    - **Project-local agents** — use `Glob` for `.claude/agents/*.md`, then call the `Read` tool on each matched file (one `Read` per file — do not substitute `Bash` with `head`/`cat`/`find -exec`, even though it would be fewer calls). For each file, extract `name`, `description`, and `skills` from its YAML frontmatter. Filenames alone are not enough — the coverage table needs each agent's description and skill list.
+    - **Plugin-provided agents** — inspect the `Agent` tool's description block in your own system prompt and collect every agent whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`). This is an introspection step — no tool call is required, but the step is mandatory.
     - Search for available skills across the project (`.claude/skills/`, plugin-provided skills, any other skill locations).
     - Report each registered specialist subagent's name and description (project-local and plugin-provided alike) so the orchestrator can match domains against them.
 2.  Compare against the proposed roles from Step 2 and classify coverage:
@@ -97,27 +97,16 @@ Follow this process precisely.
     | `aws-infra`      | `terraform-pro`, `aws-deploy` | `aws-mcp`  | `aws-infra-expert` |
 
 **QA Complement Rule:**
-After searching for each primary tech agent, also search for a complementary
-testing agent. Use the query: "[primary technology] testing QA acceptance".
 
-If `testing-expert` is returned from the registry, always include it in the
-proposals table with label "(Recommended for QA coverage)" alongside the
-primary tech agent — unless a more specific testing agent (e.g. `react-testing`,
-`rust-tester`) is also found, in which case prefer the specific one.
+For each primary tech role identified above, search the registry for a complementary QA/testing agent in the same pass — query with the primary technology plus terms like "testing", "QA", or "acceptance" (e.g. `"React TypeScript testing acceptance"`). The intent is to surface any specialist that can write or run tests for that stack.
 
-Also: if the tech stack includes any frontend framework (React, Vue, Angular,
-Svelte, etc.), always include `playwright` CLI in the proposal — it enables
-browser-based E2E testing via the testing-expert agent.
+Pick **one** QA agent per primary role, in this order of preference:
 
-Complementary pairs reference:
-For each stack, search the registry for a technology-specific testing agent.
-If none found, fall back to `testing-expert`.
+1. A technology-specific tester from the registry or already in `.claude/agents/` (e.g. an agent dedicated to the project's actual testing stack — pytest-focused, React-component-focused, etc.).
+2. The generic `testing-expert` from the `awos-recruitment` registry if no technology-specific tester is found.
+3. Otherwise, no QA agent — record the gap in the Step 7 warning table.
 
-- React / Vue / Angular → + `playwright` CLI for E2E
-- FastAPI / Django / Flask → + `pytest-best-practices` skill _(if not in registry, `testing-expert` covers it)_
-- Other Python backends → + `pytest-best-practices` skill _(if not in registry, `testing-expert` covers it)_
-- TypeScript / Node backend → (no additional skill needed)
-- Terraform / IaC → search for an infra-validation agent _(if not in registry, `testing-expert` covers plan/output validation)_
+Do **not** hardcode tool names or runners (Playwright, Cypress, WebdriverIO, Vitest, pytest…) into the proposal. Pick a runner only after the project's actual stack is known — by reading `technical-considerations.md`, the package manifest, or any existing test configuration — and prefer whatever is already configured before suggesting a new one. Optimize for the project's testing efficiency and developer wall-clock time, not for a fixed default.
 
 ## Step 5: Install Found Components
 

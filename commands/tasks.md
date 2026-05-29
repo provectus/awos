@@ -92,14 +92,9 @@ Skip this step if `SKIP_TESTS = true`.
     ```md
     - [ ] **Slice N: Feature Testing & Regression**
 
-      > Verifies the complete feature works end-to-end as described in functional-spec.md.
-      > Run AFTER all implementation slices are complete.
-      > QA agent for this slice: `{qa-agent}` (selected from `.claude/agents/` and the Agent tool's description block).
+      > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
       - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: [spec-directory]` and `@regression` if suitable for long-term regression. **[Agent: {qa-agent}]**
       - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: {qa-agent}]**
-      <!-- TODO: enable when feat/regression merges
-      - [ ] Run `/awos:regression [spec-directory-name]` to review candidates for the regression suite, resolve duplicates, and optionally execute the full regression suite. Pass the current spec directory name as the argument (e.g., `/awos:regression 003-user-avatar`). Do not run without an argument — auto-detection requires all tasks to be complete, which is not yet the case.
-            -->
     ```
 
 - **Example of applying the rule for "User Profile Picture Upload":**
@@ -118,9 +113,7 @@ Skip this step if `SKIP_TESTS = true`.
       - `[ ] Task: Update the 'ProfileAvatar' component to fetch and display the user's avatar_url, falling back to the placeholder if null. **[Agent: react-expert]**`
       - `[ ] Verify: Run the application, drive the profile page through the available browser-automation tool (whichever the project ships — playwright-cli, cypress, the chrome MCP, etc.), confirm the correct avatar or placeholder is shown, and delete any screenshots or recordings produced during the check. **[Agent: manual-qa-expert]**`
     - `[ ] **Slice 3: Feature Testing & Regression**`
-      > Verifies the complete feature works end-to-end as described in functional-spec.md.
-      > Run AFTER all implementation slices are complete.
-      > QA agent for this slice: `testing-expert` (selected from `.claude/agents/` and the Agent tool's description block).
+      > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
       - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with @spec: [spec-directory] and @regression if suitable for long-term regression. **[Agent: testing-expert]**`
       - `[ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**`
 

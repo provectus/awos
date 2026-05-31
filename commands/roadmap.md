@@ -69,5 +69,6 @@ Follow this logic precisely.
 
 ### Step 3: Finalization
 
-1.  Write the final roadmap content to `context/product/roadmap.md`.
-2.  Report the saved path and the next command: `/awos:architecture`.
+1.  **Offer Change Request (optional):** Before writing the file, follow the instructions in `.awos/commands/change-request.md` to optionally log a change request capturing what drove this roadmap update. Pass a short note as `<user_prompt>` describing the trigger, e.g. `"roadmap.md — moved [item] from Phase [N] to Phase [M]"`. The change-request skill itself opens with an `AskUserQuestion` skip option, so simply invoke it; the user may decline at that prompt. After it returns, continue.
+2.  Write the final roadmap content to `context/product/roadmap.md`.
+3.  Report the saved path and the next command: `/awos:architecture`.

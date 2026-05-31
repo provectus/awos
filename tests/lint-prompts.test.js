@@ -150,28 +150,36 @@ test('agent marker pattern is preserved', () => {
 });
 
 test('subagent-enumerating commands tell Claude how to discover agents', () => {
-  // Commands that produce durable specialist assignments (Agent
-  // markers in tasks.md, the coverage report in hired-agents.md) need
-  // the filesystem enumeration path: scan .claude/agents/*.md and parse
-  // YAML frontmatter. Commands that only give a verbal hint can
-  // mention the path without parsing frontmatter — architecture.md
-  // is the canonical example (its Step 4 explicitly defers the
-  // durable report to /awos:hire).
-  const fullEnumerators = ['tasks.md', 'tech.md', 'hire.md'];
-  const lightReferencers = ['architecture.md'];
+  // hire.md actively consumes agent frontmatter — it builds a coverage
+  // table that depends on each agent's `skills:` list, and Step 6
+  // appends newly installed skills back into the file. It is the only
+  // command with a real reason to Read each `.claude/agents/*.md` and
+  // parse YAML frontmatter.
+  //
+  // tasks.md, tech.md, and architecture.md only need to know what
+  // specialist agents exist and what each one covers — enough to pick
+  // an assignee / draft a stack section / hint at coverage. Both
+  // project-local and plugin-provided agents are listed in the Agent
+  // tool's description block at runtime, so introspecting that block
+  // is sufficient. Forcing them to Read the files (as earlier versions
+  // of this test did) over-specified the implementation; the awos-qa
+  // contract is the output (correct `**[Agent: ...]**` markers, no
+  // hallucinations), not the tool sequence used to produce it.
+  const frontmatterReaders = ['hire.md'];
+  const lightReferencers = ['tasks.md', 'tech.md', 'architecture.md'];
 
-  for (const file of [...fullEnumerators, ...lightReferencers]) {
+  for (const file of [...frontmatterReaders, ...lightReferencers]) {
     const body = readUtf8(path.join(commandsDir, file));
     assert.ok(
       body.includes('.claude/agents/'),
       `commands/${file} must reference '.claude/agents/' as the subagent discovery source`
     );
   }
-  for (const file of fullEnumerators) {
+  for (const file of frontmatterReaders) {
     const body = readUtf8(path.join(commandsDir, file));
     assert.ok(
       /frontmatter|YAML/.test(body),
-      `commands/${file} must tell Claude to parse the discovered agents' frontmatter`
+      `commands/${file} must tell Claude to parse the discovered agents' frontmatter (it writes back to the skills: list)`
     );
   }
 });

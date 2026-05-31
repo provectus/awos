@@ -87,6 +87,7 @@ Follow this process precisely.
 
 1.  **Identify Path:** The output path is the `technical-considerations.md` file inside the directory you identified in Step 1.
 2.  **Save File:** Once the user approves the draft, write the final content into this file.
-3.  Review the saved spec for new technologies, frameworks, tools, or testing approaches not already covered by the project's existing architecture and specialist agents.
+3.  **Offer ADR(s) (optional):** Review the saved technical considerations for **architectural choices** that don't already have an ADR — for example, picking a new datastore, a new service, a new pattern, a new vendor, a region, an auth model, or a non-trivial trade-off where a real alternative was considered. For each such choice not already captured, follow the instructions in `.awos/commands/adr.md` to optionally log an ADR. Pass a short note as `<user_prompt>` describing the trigger, e.g. `"technical-considerations.md (spec [name]) — chose [tech/pattern]"`. The ADR skill itself opens with a skip option, so simply invoke it; the user may decline or defer. Skip this step entirely if the tech spec is purely follow-on detail of decisions already covered by existing ADRs.
+4.  Review the saved spec for new technologies, frameworks, tools, or testing approaches not already covered by the project's existing architecture and specialist agents.
     - If new capabilities are needed: report the saved path and recommend a pre-filled hire command: `/awos:hire cover [directory-name]: need [comma-separated list of new technologies/capabilities]`, followed by `/awos:tasks`.
     - Otherwise: report the saved path and the next command: `/awos:tasks`.

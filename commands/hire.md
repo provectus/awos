@@ -96,6 +96,18 @@ Follow this process precisely.
     | `python-backend` | `fastapi-expert`              | —          | —                  |
     | `aws-infra`      | `terraform-pro`, `aws-deploy` | `aws-mcp`  | `aws-infra-expert` |
 
+**QA Complement Rule:**
+
+For each primary tech role identified above, search the registry for a complementary QA/testing agent in the same pass — query with the primary technology plus terms like "testing", "QA", or "acceptance" (e.g. `"React TypeScript testing acceptance"`). The intent is to surface any specialist that can write or run tests for that stack.
+
+Pick **one** QA agent per primary role, in this order of preference:
+
+1. A technology-specific tester from the registry or already in `.claude/agents/` (e.g. an agent dedicated to the project's actual testing stack — pytest-focused, React-component-focused, etc.).
+2. The generic `testing-expert` from the `awos-recruitment` registry if no technology-specific tester is found.
+3. Otherwise, no QA agent — record the gap in the Step 7 warning table.
+
+Do **not** hardcode tool names or runners (Playwright, Cypress, WebdriverIO, Vitest, pytest…) into the proposal. Pick a runner only after the project's actual stack is known — by reading `technical-considerations.md`, the package manifest, or any existing test configuration — and prefer whatever is already configured before suggesting a new one. Optimize for the project's testing efficiency and developer wall-clock time, not for a fixed default.
+
 ## Step 5: Install Found Components
 
 Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock` is present in the project root, otherwise use `npx`. The commands below show both; pick one.

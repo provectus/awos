@@ -201,7 +201,7 @@ test('all /awos:<name> cross-references resolve', () => {
 
   const references = new Set();
   for (const f of allFiles) {
-    const text = readUtf8(f);
+    const text = readUtf8(f).replace(/<!--[\s\S]*?-->/g, '');
     const matches = text.match(/\/awos:[a-z][a-z0-9-]*/g) || [];
     for (const m of matches) references.add(m);
   }
@@ -498,6 +498,162 @@ test('agent-template.md cues the spawned agent to apply its skills', () => {
   assert.ok(
     /skills\b[^\n]*\bfrontmatter\b|\bfrontmatter\b[^\n]*\bskills\b/i.test(body),
     'templates/agent-template.md body must instruct the agent to apply skills declared in its frontmatter'
+  );
+});
+
+test('commands/tasks.md emits a Feature Testing & Regression slice', () => {
+  // The QA pyramid PR makes every spec end with a "Feature Testing &
+  // Regression" slice (unless the user opts out). Downstream tools —
+  // /awos:implement, the SDD-07 audit dimension, the awos-qa scenarios —
+  // grep for this literal slice name. If the slice is renamed or
+  // dropped, the assertion catches the regression before behavior tests
+  // hit it.
+  const body = readUtf8(path.join(commandsDir, 'tasks.md'));
+  assert.ok(
+    body.includes('Feature Testing & Regression'),
+    'commands/tasks.md must reference the literal "Feature Testing & Regression" slice name so SDD-07 and awos-qa can detect it'
+  );
+});
+
+test('commands/tasks.md picks the QA agent with a search-first rule', () => {
+  // Option A: testing-expert is one option among many — not a hard
+  // requirement. tasks.md must (a) instruct the agent to search for a
+  // QA-coded subagent rather than naming testing-expert as required,
+  // (b) offer an AskUserQuestion fallback when none is found, and
+  // (c) not contain the "Requires `testing-expert` agent" hard gate
+  // that the previous draft shipped with.
+  const body = readUtf8(path.join(commandsDir, 'tasks.md'));
+  assert.ok(
+    /Search for a QA-coded subagent/i.test(body),
+    'commands/tasks.md must instruct a search-first QA agent selection (Step 3a)'
+  );
+  assert.ok(
+    body.includes('AskUserQuestion'),
+    'commands/tasks.md must use AskUserQuestion to offer the 3-option fallback when no QA agent is hired'
+  );
+  assert.ok(
+    !/Requires\s+`?testing-expert`?\s+agent\.\s+If it is not present/i.test(
+      body
+    ),
+    'commands/tasks.md must not hard-require testing-expert — the search-first rule replaces that gate'
+  );
+});
+
+test('commands/tasks.md documents the skip-tests opt-out and persists it', () => {
+  // /awos:verify reads tasks.md to decide whether the spec is in
+  // skip-tests mode. The marker shape is part of the contract — if it
+  // moves, verify.md will not detect it. Lock the shape here.
+  const body = readUtf8(path.join(commandsDir, 'tasks.md'));
+  assert.ok(
+    body.includes('<!-- skip-tests: true -->'),
+    'commands/tasks.md must record SKIP_TESTS via the literal "<!-- skip-tests: true -->" marker so /awos:verify can detect it'
+  );
+  assert.ok(
+    /SKIP_TESTS\s*=\s*true/.test(body),
+    'commands/tasks.md must keep the SKIP_TESTS flag wording — Step 1 and Step 3a both gate on it'
+  );
+});
+
+test('commands/verify.md acknowledges the skip-tests marker', () => {
+  // The Slack thread feedback frames /awos:verify as look-and-feel +
+  // spec-freshness rather than a test runner. The skip-tests marker
+  // from /awos:tasks must short-circuit any test-running expectation
+  // in this command — the literal marker string is the join key.
+  const body = readUtf8(path.join(commandsDir, 'verify.md'));
+  assert.ok(
+    body.includes('<!-- skip-tests: true -->'),
+    'commands/verify.md must reference the "<!-- skip-tests: true -->" marker so the two commands agree on the opt-out shape'
+  );
+  assert.ok(
+    /look-and-feel|spec-freshness/i.test(body),
+    'commands/verify.md must frame itself as a look-and-feel / spec-freshness check, not a test runner'
+  );
+});
+
+test('verify.md does not hardcode a verification-tool priority order', () => {
+  // The Slack feedback was explicit: tools should be chosen by fit
+  // and wall-clock time, not a fixed ladder. The previous draft used
+  // an arrow ladder "browser MCP → curl/shell → AskUserQuestion".
+  // Lock that out.
+  const body = readUtf8(path.join(commandsDir, 'verify.md'));
+  assert.ok(
+    !/browser MCP\s*→\s*curl\/shell\s*→/.test(body),
+    'commands/verify.md must not declare a hardcoded "browser MCP → curl/shell → AskUserQuestion" tool priority'
+  );
+  assert.ok(
+    !/fallback order:\s*browser MCP/i.test(body),
+    'commands/verify.md must not name a fixed verification-tool fallback order'
+  );
+});
+
+test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
+  // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
+  // propose a QA agent by searching the registry, not by always
+  // including testing-expert or always recommending Playwright for
+  // any frontend stack. Lock out the prior hard rules so they do not
+  // creep back in.
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    /QA Complement Rule/.test(body),
+    'commands/hire.md must declare a QA Complement Rule section'
+  );
+  assert.ok(
+    !/always include\s+`?testing-expert`?/i.test(body),
+    'commands/hire.md must not declare a blanket "always include testing-expert" rule — the rule is search-first now'
+  );
+  assert.ok(
+    !/always include\s+`?playwright`?/i.test(body),
+    'commands/hire.md must not declare a blanket "always include playwright" rule for any stack — tool choice depends on the project'
+  );
+});
+
+test('setup-config does not auto-populate .claude/agents/', () => {
+  // .claude/agents/ is the user's customization area. The earlier draft
+  // of this PR shipped a `plugins/awos/agents` → `.claude/agents` copy
+  // operation that would silently clobber user-authored subagents on
+  // every install. AWOS-bundled agents (e.g. testing-expert) are hired
+  // through awos-recruitment instead — so the installer must not
+  // create or overwrite anything under .claude/agents/.
+  const { copyOperations } = require(
+    path.join(repoRoot, 'src', 'config', 'setup-config.js')
+  );
+  const offending = copyOperations.find(
+    (op) => op.destination === '.claude/agents'
+  );
+  assert.ok(
+    !offending,
+    'setup-config must not declare a copy operation targeting .claude/agents/ — that directory is user-owned'
+  );
+});
+
+test('templates/qa-context-template.md is not bundled with AWOS core', () => {
+  // The test-registry template was originally shipped with this PR but
+  // ended up unused inside the AWOS repo (the testing-expert agent that
+  // would have populated it lives in awos-recruitment). Lint stops the
+  // file from sneaking back in — if a future PR wants to add a related
+  // template, it should justify the contract first.
+  const file = path.join(templatesDir, 'qa-context-template.md');
+  assert.ok(
+    !fs.existsSync(file),
+    'templates/qa-context-template.md must not exist in AWOS core — it belongs alongside testing-expert in awos-recruitment'
+  );
+});
+
+test('SDD-07 recognizes the dual-model QA coverage', () => {
+  // The audit dimension was updated to recognize both:
+  //   - the new model (Feature Testing & Regression as the final slice)
+  //   - the legacy per-slice Verify-task model
+  // If the wording drifts so that only the legacy model is recognized,
+  // every PR using the new model would warn — and vice versa.
+  const file = path.join(dimensionsDir, 'spec-driven-development.md');
+  const body = readUtf8(file);
+  assert.ok(
+    /Feature Testing & Regression/.test(body),
+    'SDD-07 must reference the new "Feature Testing & Regression" final slice when discussing QA coverage'
+  );
+  assert.ok(
+    /Legacy model/i.test(body),
+    'SDD-07 must still recognize the legacy per-slice QA verification model so older specs are not over-flagged'
   );
 });
 

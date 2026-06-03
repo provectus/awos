@@ -29,6 +29,7 @@ Your primary task is to create the technical specification for a given feature. 
 # INTERACTION
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+- **A skipped or unanswered question — as happens in an unattended `claude -p` run — is never a stop signal. Record your best-fit option as an explicit `**Assumption:**` in the draft and continue through the remaining steps, including writing the deliverable.**
 
 ---
 
@@ -79,14 +80,13 @@ Follow this process precisely.
     - Proactively identify potential issues and propose solutions.
     - Example: "A key risk here is handling large or malicious file uploads. I will add a 'Risk & Mitigation' note to include server-side validation of file type and size, and to process uploads asynchronously. Is there anything else we should be concerned about?"
 
-### Step 4: Final Review
+### Step 4: Write the Deliverable
 
-- Once you have collaboratively filled all sections of the template, present the complete draft to the user for a final review. Ask, "Here is the complete draft of the technical considerations. Please let me know if any changes are needed."
+Write the completed draft to the `technical-considerations.md` file inside the directory identified in Step 1. Write the file whether or not every question was answered — drafting a tech spec is reversible (re-run `/awos:tech` to revise), so the deliverable is never gated behind a confirmation an unattended run cannot answer.
 
-### Step 5: File Generation
+### Step 5: Surface for Review and Recommend Next Step
 
-1.  **Identify Path:** The output path is the `technical-considerations.md` file inside the directory you identified in Step 1.
-2.  **Save File:** Once the user approves the draft, write the final content into this file.
-3.  Review the saved spec for new technologies, frameworks, tools, or testing approaches not already covered by the project's existing architecture and specialist agents.
-    - If new capabilities are needed: report the saved path and recommend a pre-filled hire command: `/awos:hire cover [directory-name]: need [comma-separated list of new technologies/capabilities]`, followed by `/awos:tasks`.
-    - Otherwise: report the saved path and the next command: `/awos:tasks`.
+1.  Report the saved path. Surface any choices that were recorded as assumptions (rather than confirmed by the user) so they are easy to spot and challenge. If the user requests changes, apply them and re-save; otherwise they can revise later by re-running `/awos:tech` against the same spec.
+2.  Review the saved spec for new technologies, frameworks, tools, or testing approaches not already covered by the project's existing architecture and specialist agents.
+    - If new capabilities are needed: recommend a pre-filled hire command: `/awos:hire cover [directory-name]: need [comma-separated list of new technologies/capabilities]`, followed by `/awos:tasks`.
+    - Otherwise: report the next command: `/awos:tasks`.

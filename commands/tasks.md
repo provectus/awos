@@ -29,6 +29,7 @@ A **slice** is the top-level grouping checkbox — a vertical, end-to-end runnab
 # INTERACTION
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+- **A skipped or unanswered question — as happens in an unattended `claude -p` run — is never a stop signal. Fall back to the documented default for that question and continue through the remaining steps, including writing `tasks.md`.**
 
 ---
 
@@ -85,8 +86,9 @@ Skip this step if `SKIP_TESTS = true`.
     - The built-in `general-purpose` agent as the last resort.
 2.  **If no project-specific tester or AWOS testing agent is found,** stop and ask the user via `AskUserQuestion`. Present exactly three options:
     1.  **Install a testing agent now** — run `/awos:hire` to add `testing-expert` (or a more specific tester) from the registry, then re-run `/awos:tasks`.
-    2.  **Generate the slice with `general-purpose`** — proceed and produce the Feature Testing & Regression slice, marking its tasks `**[Agent: general-purpose]**`. Flag this in the Recommendations table.
+    2.  **Generate the slice with `general-purpose`** — proceed and produce the Feature Testing & Regression slice, marking its tasks `**[Agent: general-purpose]**`. Flag this in the Recommendations table. (Default when the question is skipped.)
     3.  **Skip the Feature Testing & Regression slice** — set `SKIP_TESTS = true` for this run only; the user can re-run `/awos:tasks` later once a tester is hired.
+
 3.  **Emit the slice** using the template below. Substitute `{qa-agent}` with the agent name selected above. Substitute `N` with the next slice number. Keep the wording — downstream automations depend on this exact structure.
 
     ```md
@@ -117,20 +119,20 @@ Skip this step if `SKIP_TESTS = true`.
       - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with @spec: [spec-directory] and @regression if suitable for long-term regression. **[Agent: testing-expert]**`
       - `[ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**`
 
-## Step 4: Present Draft and Refine
+## Step 4: Write the Task List
 
-- Present the complete, vertically sliced plan with subagent assignments to the user and ask for feedback.
-- Iterate until the user is satisfied (adjust, split, merge slices or tasks, or reassign subagents as needed).
-- If any tasks were assigned to `general-purpose` (because no specialist exists) or verification cannot be performed (missing MCPs/services), present a table:
-
-  | Task/Slice            | Issue                                                                               | Recommendation                                       |
-  | --------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- |
-  | Slice 2: Task 3       | Assigned to `general-purpose` — no TypeScript specialist                            | Install `typescript-pro` agent for proper delegation |
-  | Slice N (QA)          | Feature Testing & Regression slice uses `general-purpose` — no QA-coded agent hired | Run `/awos:hire` to install `testing-expert`         |
-  | Slice 3: Verification | Browser MCP not available                                                           | Install browser MCP to enable UI verification        |
-
-## Step 5: File Generation
-
-1.  Write the final slice/task list to `tasks.md` in the chosen spec directory.
+1.  Write the complete slice/task list to `tasks.md` in the chosen spec directory. **Write the file without waiting for approval** — generating a task list is reversible (re-run `/awos:tasks` to revise), so the deliverable must never be gated behind a confirmation that an unattended run cannot answer.
 2.  If `SKIP_TESTS = true`, record a one-line note at the top of the generated `tasks.md` so that downstream commands (e.g. `/awos:verify`) can detect the choice: `<!-- skip-tests: true -->`.
-3.  Report the saved path and the next command: `/awos:implement`.
+
+## Step 5: Surface for Review and Recommend Next Step
+
+1.  Report the saved path and present the slice/task plan for review. If the user requests changes (adjust, split, merge slices or tasks, or reassign subagents), apply them and re-save; otherwise they can revise later by re-running `/awos:tasks`.
+2.  If any tasks were assigned to `general-purpose` (because no specialist exists) or verification cannot be performed (missing MCPs/services), surface a table:
+
+    | Task/Slice            | Issue                                                                               | Recommendation                                       |
+    | --------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- |
+    | Slice 2: Task 3       | Assigned to `general-purpose` — no TypeScript specialist                            | Install `typescript-pro` agent for proper delegation |
+    | Slice N (QA)          | Feature Testing & Regression slice uses `general-purpose` — no QA-coded agent hired | Run `/awos:hire` to install `testing-expert`         |
+    | Slice 3: Verification | Browser MCP not available                                                           | Install browser MCP to enable UI verification        |
+
+3.  Report the next command: `/awos:implement`.

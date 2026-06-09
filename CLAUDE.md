@@ -97,10 +97,10 @@ The canonical flow (each command is a markdown prompt under `commands/`):
 
 ```
 /awos:product → /awos:roadmap → /awos:architecture → /awos:hire
-              → /awos:spec → /awos:tech → /awos:tasks → /awos:implement → /awos:verify
+              → /awos:spec → /awos:tech → /awos:tasks → /awos:implement → /awos:verify → /awos:archive
 ```
 
-The first four are run once at project setup; the last five iterate per feature. Each command reads/writes a specific document under `context/` (e.g. `context/product/product-definition.md`, `context/spec/NNN-feature/tasks.md`). The numeric prefix on spec directories is allocated by `scripts/create-spec-directory.sh`.
+`/awos:product` auto-detects brownfield projects and populates `structure.md`; `/awos:architecture` follows up with `decisions.md`. The first four commands are run once at project setup; the last six iterate per feature. `/awos:archive` closes the loop — it extracts learnings into the knowledgebase docs, logs the feature, and removes the spec directory. Each command reads/writes a specific document under `context/` (e.g. `context/product/product-definition.md`, `context/spec/NNN-feature/tasks.md`). The numeric prefix on spec directories is allocated by `scripts/create-spec-directory.sh`.
 
 **Implementation delegation rule:** `/awos:implement` is an orchestrator only — it reads `tasks.md`, extracts the `**[Agent: name]**` marker from each task, and delegates to a subagent. The orchestrator is explicitly prohibited from editing code itself. Preserve this contract when editing `commands/implement.md`.
 

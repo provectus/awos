@@ -39,15 +39,16 @@ These commands establish your project's foundation. Run them once at the start, 
 
 Once your foundation is set, iterate through this cycle for each feature on your roadmap. These commands are designed to be run repeatedly — once per feature.
 
-> **Tip**: Don't hesitate to delete specs after implementation. Completed specs can become outdated and confuse the AI. Your code documentation is the source of truth.
+> **Tip**: Run `/awos:archive` after verifying a feature. It extracts learnings into the knowledgebase, logs the feature, and removes the spec directory so completed specs don't accumulate and confuse the AI.
 
-| Command           | What it does                                                                      | Docs                                  |
-| ----------------- | --------------------------------------------------------------------------------- | ------------------------------------- |
-| `/awos:spec`      | Creates the Functional Spec — what the feature does for the user.                 | [Details](docs/commands/spec.md)      |
-| `/awos:tech`      | Creates the Technical Spec — how the feature will be built.                       | [Details](docs/commands/tech.md)      |
-| `/awos:tasks`     | Breaks the Tech Spec into a task list for engineers.                              | [Details](docs/commands/tasks.md)     |
-| `/awos:implement` | Runs tasks — delegates coding to sub-agents, tracks progress.                     | [Details](docs/commands/implement.md) |
-| `/awos:verify`    | Verifies spec completion — checks acceptance criteria, marks Status as Completed. | [Details](docs/commands/verify.md)    |
+| Command           | What it does                                                                                  | Docs                                  |
+| ----------------- | --------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `/awos:spec`      | Creates the Functional Spec — what the feature does for the user.                             | [Details](docs/commands/spec.md)      |
+| `/awos:tech`      | Creates the Technical Spec — how the feature will be built.                                   | [Details](docs/commands/tech.md)      |
+| `/awos:tasks`     | Breaks the Tech Spec into a task list for engineers.                                          | [Details](docs/commands/tasks.md)     |
+| `/awos:implement` | Runs tasks — delegates coding to sub-agents, tracks progress.                                 | [Details](docs/commands/implement.md) |
+| `/awos:verify`    | Verifies spec completion — checks acceptance criteria, marks Status as Completed.             | [Details](docs/commands/verify.md)    |
+| `/awos:archive`   | Archives a completed spec — extracts learnings, logs the feature, removes the spec directory. | [Details](docs/commands/archive.md)   |
 
 > **When to skip the cycle**: Not every change needs a spec. Hotfixes, simple bugfixes, and small edits don't require the full spec workflow — Claude Code's built-in plan mode handles those just fine.
 

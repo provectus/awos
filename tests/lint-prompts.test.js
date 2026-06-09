@@ -657,6 +657,35 @@ test('SDD-07 recognizes the dual-model QA coverage', () => {
   );
 });
 
+test('commands/scan.md has valid frontmatter and references both templates', () => {
+  const file = path.join(commandsDir, 'scan.md');
+  const body = readUtf8(file);
+  const { data, hasFrontmatter } = parse(body);
+  assert.ok(hasFrontmatter, 'commands/scan.md must have frontmatter');
+  assert.ok(
+    typeof data.description === 'string' && data.description.length > 0,
+    'commands/scan.md frontmatter must have a non-empty description'
+  );
+  assert.ok(
+    body.includes('.awos/templates/structure-template.md'),
+    'commands/scan.md must reference .awos/templates/structure-template.md'
+  );
+  assert.ok(
+    body.includes('.awos/templates/decisions-template.md'),
+    'commands/scan.md must reference .awos/templates/decisions-template.md'
+  );
+});
+
+test('scan templates exist in the templates directory', () => {
+  for (const name of ['structure-template.md', 'decisions-template.md']) {
+    const file = path.join(templatesDir, name);
+    assert.ok(
+      fs.existsSync(file),
+      `templates/${name} must exist — scan.md references it as .awos/templates/${name}`
+    );
+  }
+});
+
 test('context/spec/knowledgebase/ references use only known filenames', () => {
   // The knowledgebase contract defines exactly two files: structure.md and
   // decisions.md. Any prompt that references context/spec/knowledgebase/

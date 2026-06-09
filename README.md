@@ -21,18 +21,19 @@ npx @provectusinc/awos
 
 This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, and the `context/` directory where your project documents will live. It also registers the AWOS plugin marketplace in your project settings.
 
-> **Running on an existing codebase?** Start with an AI readiness audit to understand how AI-friendly your project is. Install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit` to get a scored assessment with actionable recommendations for improvement. [Learn more](plugins/awos/README.md)
+> **Running on an existing codebase?** Run `/awos:scan` first to produce `context/spec/knowledgebase/` documents that give all downstream commands awareness of your existing codebase. Then continue with the foundation setup below. You can also run an AI readiness audit — install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit`. [Learn more](plugins/awos/README.md)
 
 ### Step 2: Foundation Setup
 
 These commands establish your project's foundation. Run them once at the start, and re-run them as your project evolves — requirements change, architecture decisions get refined, and that's normal.
 
-| Command              | What it does                                                                      | Docs                                     |
-| -------------------- | --------------------------------------------------------------------------------- | ---------------------------------------- |
-| `/awos:product`      | Defines the Product — what, why, and for who.                                     | [Details](docs/commands/product.md)      |
-| `/awos:roadmap`      | Builds the Product Roadmap — features and their order.                            | [Details](docs/commands/roadmap.md)      |
-| `/awos:architecture` | Defines the System Architecture — stack, DBs, infra.                              | [Details](docs/commands/architecture.md) |
-| `/awos:hire`         | Hires specialist agents — finds, installs skills and MCPs, generates agent files. | [Details](docs/commands/hire.md)         |
+| Command              | What it does                                                                                  | Docs                                     |
+| -------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `/awos:scan`         | Scans existing codebase — produces structure and decisions documents for brownfield projects. | [Details](docs/commands/scan.md)         |
+| `/awos:product`      | Defines the Product — what, why, and for who.                                                 | [Details](docs/commands/product.md)      |
+| `/awos:roadmap`      | Builds the Product Roadmap — features and their order.                                        | [Details](docs/commands/roadmap.md)      |
+| `/awos:architecture` | Defines the System Architecture — stack, DBs, infra.                                          | [Details](docs/commands/architecture.md) |
+| `/awos:hire`         | Hires specialist agents — finds, installs skills and MCPs, generates agent files.             | [Details](docs/commands/hire.md)         |
 
 ### Step 3: Feature Development Cycle
 

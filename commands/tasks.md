@@ -21,6 +21,7 @@ A **slice** is the top-level grouping checkbox — a vertical, end-to-end runnab
 - **User Prompt (Optional):** <user_prompt>$ARGUMENTS</user_prompt>
 - **Primary Context 1:** The `functional-spec.md` from the chosen spec directory.
 - **Primary Context 2:** The `technical-considerations.md` from the chosen spec directory.
+- **Knowledgebase (Optional):** `context/spec/knowledgebase/decisions.md` — if present, captures non-standard project decisions that override or extend default agent behavior. The Testing Strategy section informs verification tooling choices.
 - **Spec Directories:** Located under `context/spec/`.
 - **Output File:** `context/spec/[chosen-spec-directory]/tasks.md`.
 
@@ -45,7 +46,7 @@ Follow this process precisely.
 
 ## Step 2: Gather and Synthesize Context
 
-1.  Read and synthesize both `functional-spec.md` and `technical-considerations.md` from the chosen directory — issue the reads in parallel. You need to understand both the "what" and the "how."
+1.  Read and synthesize both `functional-spec.md` and `technical-considerations.md` from the chosen directory. If `context/spec/knowledgebase/decisions.md` exists, read it too — the Testing Strategy section informs verification tooling choices. Issue all reads in parallel. You need to understand both the "what" and the "how."
 
 ## Step 3: Plan and Draft the Task List
 

@@ -20,6 +20,7 @@ Your primary task is to create the technical specification for a given feature. 
 - **Template File:** `.awos/templates/technical-considerations-template.md`.
 - **Primary Context 1:** The `functional-spec.md` from the chosen spec directory.
 - **Primary Context 2:** `context/product/architecture.md`.
+- **Knowledgebase (Optional):** `context/spec/knowledgebase/structure.md` and `context/spec/knowledgebase/decisions.md` — if present, provide awareness of the existing codebase layout and non-standard project decisions that override or extend default agent behavior.
 - **Additional Context:** The project's source code.
 - **Spec Directories:** Located under `context/spec/`.
 - **Output File:** The `technical-considerations.md` file inside the chosen spec directory.
@@ -44,7 +45,7 @@ Follow this process precisely.
 
 ### Step 2: Gather and Synthesize Context
 
-1.  Read the `functional-spec.md` from the chosen directory and the main `context/product/architecture.md`. These two inputs are independent — issue both `Read` calls in a single tool-use block (parallel tool calls). Sequence reads only when one's output feeds the next.
+1.  Read the `functional-spec.md` from the chosen directory and the main `context/product/architecture.md`. If `context/spec/knowledgebase/structure.md` or `context/spec/knowledgebase/decisions.md` exist, read them too. These inputs are independent — issue all `Read` calls in a single tool-use block (parallel tool calls). Sequence reads only when one's output feeds the next.
 2.  Identify candidate specialist subagents: determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Enumerate the universe of registered specialists by inspecting the `Agent` tool's description block in your own system prompt. This is an introspection step — no tool call is required, but it is mandatory. Both kinds of agents are listed there: project-local ones (declared as files under `.claude/agents/*.md`) and plugin-provided ones. Tell them apart by the `plugin-name:` prefix on `subagent_type` — plugin-provided agents carry it (e.g. `python-development:python-pro`, `backend-development:backend-architect`); project-local agents do not. Match each stack against this list, plus always-available built-ins (`general-purpose`, `Explore`, `Plan`).
 
 3.  Analyze the codebase: delegate the read-only exploration to the built-in `Explore` agent to keep the orchestrator context lean. If the feature spans multiple stacks, run one exploration per stack in parallel.

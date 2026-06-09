@@ -30,6 +30,7 @@ Your primary task is to create a new functional specification file. You will det
 - **Template File:** `.awos/templates/functional-spec-template.md`.
 - **Context File 1:** `context/product/product-definition.md`.
 - **Context File 2:** `context/product/roadmap.md`.
+- **Knowledgebase (Optional):** `context/spec/knowledgebase/structure.md` — if present, provides awareness of existing features and capabilities.
 - **External Command:** `.awos/scripts/create-spec-directory.sh [short-name]`.
 - **Output File:** `context/spec/[index]-[short-name]/functional-spec.md`.
 

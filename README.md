@@ -21,32 +21,34 @@ npx @provectusinc/awos
 
 This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, and the `context/` directory where your project documents will live. It also registers the AWOS plugin marketplace in your project settings.
 
-> **Running on an existing codebase?** Start with an AI readiness audit to understand how AI-friendly your project is. Install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit` to get a scored assessment with actionable recommendations for improvement. [Learn more](plugins/awos/README.md)
+> **Running on an existing codebase?** Run `/awos:scan` first to produce `context/spec/knowledgebase/` documents that give all downstream commands awareness of your existing codebase. Then continue with the foundation setup below. You can also run an AI readiness audit — install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit`. [Learn more](plugins/awos/README.md)
 
 ### Step 2: Foundation Setup
 
 These commands establish your project's foundation. Run them once at the start, and re-run them as your project evolves — requirements change, architecture decisions get refined, and that's normal.
 
-| Command              | What it does                                                                      | Docs                                     |
-| -------------------- | --------------------------------------------------------------------------------- | ---------------------------------------- |
-| `/awos:product`      | Defines the Product — what, why, and for who.                                     | [Details](docs/commands/product.md)      |
-| `/awos:roadmap`      | Builds the Product Roadmap — features and their order.                            | [Details](docs/commands/roadmap.md)      |
-| `/awos:architecture` | Defines the System Architecture — stack, DBs, infra.                              | [Details](docs/commands/architecture.md) |
-| `/awos:hire`         | Hires specialist agents — finds, installs skills and MCPs, generates agent files. | [Details](docs/commands/hire.md)         |
+| Command              | What it does                                                                                  | Docs                                     |
+| -------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `/awos:scan`         | Scans existing codebase — produces structure and decisions documents for brownfield projects. | [Details](docs/commands/scan.md)         |
+| `/awos:product`      | Defines the Product — what, why, and for who.                                                 | [Details](docs/commands/product.md)      |
+| `/awos:roadmap`      | Builds the Product Roadmap — features and their order.                                        | [Details](docs/commands/roadmap.md)      |
+| `/awos:architecture` | Defines the System Architecture — stack, DBs, infra.                                          | [Details](docs/commands/architecture.md) |
+| `/awos:hire`         | Hires specialist agents — finds, installs skills and MCPs, generates agent files.             | [Details](docs/commands/hire.md)         |
 
 ### Step 3: Feature Development Cycle
 
 Once your foundation is set, iterate through this cycle for each feature on your roadmap. These commands are designed to be run repeatedly — once per feature.
 
-> **Tip**: Don't hesitate to delete specs after implementation. Completed specs can become outdated and confuse the AI. Your code documentation is the source of truth.
+> **Tip**: Run `/awos:archive` after verifying a feature. It extracts learnings into the knowledgebase, logs the feature, and removes the spec directory so completed specs don't accumulate and confuse the AI.
 
-| Command           | What it does                                                                      | Docs                                  |
-| ----------------- | --------------------------------------------------------------------------------- | ------------------------------------- |
-| `/awos:spec`      | Creates the Functional Spec — what the feature does for the user.                 | [Details](docs/commands/spec.md)      |
-| `/awos:tech`      | Creates the Technical Spec — how the feature will be built.                       | [Details](docs/commands/tech.md)      |
-| `/awos:tasks`     | Breaks the Tech Spec into a task list for engineers.                              | [Details](docs/commands/tasks.md)     |
-| `/awos:implement` | Runs tasks — delegates coding to sub-agents, tracks progress.                     | [Details](docs/commands/implement.md) |
-| `/awos:verify`    | Verifies spec completion — checks acceptance criteria, marks Status as Completed. | [Details](docs/commands/verify.md)    |
+| Command           | What it does                                                                                  | Docs                                  |
+| ----------------- | --------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `/awos:spec`      | Creates the Functional Spec — what the feature does for the user.                             | [Details](docs/commands/spec.md)      |
+| `/awos:tech`      | Creates the Technical Spec — how the feature will be built.                                   | [Details](docs/commands/tech.md)      |
+| `/awos:tasks`     | Breaks the Tech Spec into a task list for engineers.                                          | [Details](docs/commands/tasks.md)     |
+| `/awos:implement` | Runs tasks — delegates coding to sub-agents, tracks progress.                                 | [Details](docs/commands/implement.md) |
+| `/awos:verify`    | Verifies spec completion — checks acceptance criteria, marks Status as Completed.             | [Details](docs/commands/verify.md)    |
+| `/awos:archive`   | Archives a completed spec — extracts learnings, logs the feature, removes the spec directory. | [Details](docs/commands/archive.md)   |
 
 > **When to skip the cycle**: Not every change needs a spec. Hotfixes, simple bugfixes, and small edits don't require the full spec workflow — Claude Code's built-in plan mode handles those just fine.
 

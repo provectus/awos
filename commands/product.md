@@ -24,6 +24,7 @@ Your primary task is to **fill in** a product definition template using a guided
     ```
 2.  **Template File:** Use `.awos/templates/product-definition-template.md` as a template.
 3.  **Existing Definition (Optional):** The file `context/product/product-definition.md`, which, if present, triggers "Update Mode".
+4.  **Knowledgebase (Optional):** `context/spec/knowledgebase/structure.md` — if present, provides awareness of the existing codebase.
 
 ---
 
@@ -63,13 +64,14 @@ First, check if the file `context/product/product-definition.md` exists.
 ### Step 2B: Creation Mode
 
 1.  If `<user_prompt>` is non-empty, briefly note that you'll use it as a starting point, then refine from there.
-2.  Walk the user through the sections of the template, explaining each one.
+2.  If `context/spec/knowledgebase/structure.md` exists, read it. Summarize what already exists when presenting context to the user — this helps frame features relative to the current system.
+3.  Walk the user through the sections of the template, explaining each one.
     - **Project Name & Vision:** Ask for the project's name and its core purpose.
     - **Target Audience & Personas:** Ask who the product is for and help create one simple persona.
     - **Success Metrics:** Ask how they will measure the product's impact on the user.
     - **Core Features & User Journey:** Ask for the 3-5 most important high-level features and a simple user workflow.
     - **Project Boundaries:** Ask what is essential for the first version (In-Scope) and what can wait (Out-of-Scope).
-3.  Once all sections are complete, proceed to **Step 3: File Generation**.
+4.  Once all sections are complete, proceed to **Step 3: File Generation**.
 
 ---
 

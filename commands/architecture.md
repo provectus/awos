@@ -20,6 +20,7 @@ Your task is to manage the architecture file located at `context/product/archite
 - **Prerequisite Input 1:** `context/product/product-definition.md` (The "what" and "why").
 - **Prerequisite Input 2:** `context/product/roadmap.md` (The implementation phases).
 - **Primary Input/Output:** `context/product/architecture.md` (The file to create or update).
+- **Knowledgebase (Optional):** `context/spec/knowledgebase/structure.md` and `context/spec/knowledgebase/decisions.md` — if present, provide awareness of the existing codebase layout and non-standard project decisions that override or extend default agent behavior.
 
 ---
 
@@ -36,7 +37,8 @@ Follow this logic precisely.
 ### Step 1: Prerequisite Checks
 
 - If either `context/product/product-definition.md` or `context/product/roadmap.md` is missing, stop and tell the user to run `/awos:product` and `/awos:roadmap` first.
-- Otherwise, proceed to the next step.
+- If `context/spec/knowledgebase/structure.md` exists, read it to understand the existing project layout. The existing structure informs decisions, but architecture.md remains the sole authority on the technology stack.
+- Proceed to the next step.
 
 ### Step 2: Mode Detection
 

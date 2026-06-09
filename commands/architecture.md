@@ -50,13 +50,41 @@ Follow this logic precisely.
 
 ## Scenario 1: Creation Mode
 
-1.  Read and synthesize the product definition and roadmap, paying close attention to features planned for Phase 1.
-2.  Work through the template section by section — not all at once.
+1.  **Brownfield detection:** If `context/spec/knowledgebase/decisions.md` does not exist but `context/spec/knowledgebase/structure.md` exists (produced by `/awos:product`), the project is brownfield — produce the decisions document before continuing:
+
+    a. Read `.awos/templates/decisions-template.md`.
+
+    b. Launch an `Explore` agent:
+
+    ```text
+    Agent(subagent_type="Explore", description="Analyze project decisions", prompt="
+    Explore this codebase and document the non-standard decisions that shaped it. Focus on WHY things were done a certain way, not just what exists. Be thorough and path-specific.
+
+    Analyze:
+    - Architecture patterns (what patterns were chosen and what constraints drove each decision)
+    - Data flow and state management (how data moves between layers, what approach is used and why)
+    - Error handling strategy (how errors propagate, boundary handling, logging approach)
+    - Testing strategy (what framework, where tests live, what gets mocked and why)
+    - Integration points (how modules communicate, API contracts, protocols)
+    - Known constraints and tech debt (constraints that impact new work, deprecated patterns, fragile areas)
+
+    For each finding, explain the decision and its rationale.
+
+    Format your response as a filled-in version of this template:
+
+    [decisions-template content here]
+    ")
+    ```
+
+    Embed the actual template content into the agent's prompt where indicated. Write the result to `context/spec/knowledgebase/decisions.md`.
+
+2.  Read and synthesize the product definition and roadmap, paying close attention to features planned for Phase 1.
+3.  Work through the template section by section — not all at once.
     - For each architectural area, propose a concrete title from the template placeholder.
     - For each component, propose a specific technology with one or more alternatives, justified by the project context.
     - If the user is unsure, ask clarifying questions about team skills, budget, or priorities. Do not proceed until the current section is confirmed.
     - Repeat for every architectural area (Data, Infrastructure, etc.).
-3.  Once all sections are confirmed, proceed to **Step 3: Finalization**.
+4.  Once all sections are confirmed, proceed to **Step 3: Finalization**.
 
 ---
 

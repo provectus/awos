@@ -21,6 +21,7 @@ Your task is to manage the product roadmap file located at `context/product/road
 
 - **Template File:** `.awos/templates/roadmap-template.md`. This is the required structure for the roadmap.
 - **Prerequisite Input:** `context/product/product-definition.md`. This file MUST exist.
+- **Knowledgebase (Optional):** `context/spec/knowledgebase/structure.md` — if present, provides awareness of the existing codebase for brownfield planning.
 - **Primary Input/Output:** `context/product/roadmap.md`. This is the file you will create or update.
 
 ---
@@ -50,7 +51,7 @@ Follow this logic precisely.
 
 ## Scenario 1: Creation Mode
 
-1.  Read `context/product/product-definition.md` and the template at `.awos/templates/roadmap-template.md`.
+1.  Read `context/product/product-definition.md` and the template at `.awos/templates/roadmap-template.md`. If `context/spec/knowledgebase/structure.md` exists, read it too — existing capabilities inform phase sequencing.
 2.  Generate a proposed roadmap by populating the template structure with the product definition's Core Features, grouped into logical sequential phases.
 3.  Present the full draft to the user and ask for feedback.
 4.  Iterate until the user is satisfied, then proceed to **Step 3: Finalization**.

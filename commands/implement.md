@@ -21,6 +21,7 @@ Your goal is to execute the pending work for a given specification until the agr
   - `functional-spec.md`
   - `technical-considerations.md`
   - `tasks.md`
+- **Knowledgebase (Optional):** `context/spec/knowledgebase/decisions.md` — if present, captures non-standard project decisions that override or extend default agent behavior.
 - **Primary Output:** An updated `tasks.md` file with a checkbox marked as complete.
 - **Action:** A call to a subagent to perform the actual coding.
 
@@ -62,6 +63,7 @@ You do not write or edit code, configuration, or database schemas yourself. Your
 
 1.  Construct a delegation prompt that includes:
     - The full context from the three files loaded in Steps 1–2 (`functional-spec.md`, `technical-considerations.md`, `tasks.md`).
+    - If `context/spec/knowledgebase/decisions.md` exists, include its content wrapped in `<project_decisions>` tags.
     - The specific task description.
     - Clear instructions on what code to write or files to modify.
     - A `<scope_discipline>` block: "Only make changes the task requires. Don't add features, refactor unrelated code, or add validation for scenarios outside the task. If something is unclear, ask rather than guessing."

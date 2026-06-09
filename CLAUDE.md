@@ -89,14 +89,18 @@ Each file in `claude/commands/{name}.md` is a tiny wrapper that points at `.awos
 
 ## Architecture: Document-Centric Workflow
 
-AWOS is **spec-driven** — all project state lives in markdown files under `context/` in the user's project, not in chat history. An AI agent can rehydrate full context by reading the files alone. The canonical flow (each command is a markdown prompt under `commands/`):
+AWOS is **spec-driven** — all project state lives in markdown files under `context/` in the user's project, not in chat history. An AI agent can rehydrate full context by reading the files alone.
+
+**Brownfield projects** get automatic codebase awareness: `/awos:product` detects existing source code and auto-populates `context/spec/knowledgebase/` with two documents — `structure.md` (directory layout, module boundaries, data flow) and `decisions.md` (non-standard project decisions that override or extend default agent behavior). These files can also be updated by `/awos:archive` (post-implementation learnings) or populated manually.
+
+The canonical flow (each command is a markdown prompt under `commands/`):
 
 ```
 /awos:product → /awos:roadmap → /awos:architecture → /awos:hire
-              → /awos:spec → /awos:tech → /awos:tasks → /awos:implement → /awos:verify
+              → /awos:spec → /awos:tech → /awos:tasks → /awos:implement → /awos:verify → /awos:archive
 ```
 
-The first four are run once at project setup; the last five iterate per feature. Each command reads/writes a specific document under `context/` (e.g. `context/product/product-definition.md`, `context/spec/NNN-feature/tasks.md`). The numeric prefix on spec directories is allocated by `scripts/create-spec-directory.sh`.
+`/awos:product` auto-detects brownfield projects and populates `structure.md`; `/awos:architecture` follows up with `decisions.md`. The first four commands are run once at project setup; the last six iterate per feature. `/awos:archive` closes the loop — it extracts learnings into the knowledgebase docs, logs the feature, and removes the spec directory. Each command reads/writes a specific document under `context/` (e.g. `context/product/product-definition.md`, `context/spec/NNN-feature/tasks.md`). The numeric prefix on spec directories is allocated by `scripts/create-spec-directory.sh`.
 
 **Implementation delegation rule:** `/awos:implement` is an orchestrator only — it reads `tasks.md`, extracts the `**[Agent: name]**` marker from each task, and delegates to a subagent. The orchestrator is explicitly prohibited from editing code itself. Preserve this contract when editing `commands/implement.md`.
 

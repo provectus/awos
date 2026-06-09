@@ -24,6 +24,7 @@ Your primary task is to **fill in** a product definition template using a guided
     ```
 2.  **Template File:** Use `.awos/templates/product-definition-template.md` as a template.
 3.  **Existing Definition (Optional):** The file `context/product/product-definition.md`, which, if present, triggers "Update Mode".
+4.  **Knowledgebase (Optional):** `context/spec/knowledgebase/structure.md` — if present, provides awareness of the existing codebase.
 
 ---
 
@@ -62,14 +63,40 @@ First, check if the file `context/product/product-definition.md` exists.
 
 ### Step 2B: Creation Mode
 
-1.  If `<user_prompt>` is non-empty, briefly note that you'll use it as a starting point, then refine from there.
-2.  Walk the user through the sections of the template, explaining each one.
+1.  **Brownfield detection:** If `context/spec/knowledgebase/structure.md` does not exist, check whether the project already has source code by looking for common indicators (`src/`, `app/`, `lib/`, `package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml`, or similar). If indicators exist, this is a brownfield project — produce the structure document before continuing:
+
+    a. Read `.awos/templates/structure-template.md`.
+
+    b. Launch an `Explore` agent:
+
+    ```text
+    Agent(subagent_type="Explore", description="Analyze project structure", prompt="
+    Explore this codebase and document its structure. Be thorough and path-specific.
+
+    Analyze:
+    - Directory layout (top-level and one level deep, with purpose of each directory)
+    - Module boundaries (what logical modules exist, their responsibilities, key entry files)
+    - Architectural patterns (MVC, microservices, monorepo, event-driven, etc. — cite evidence)
+    - Data flow (how a request/event moves through the system, from entry point to response)
+    - File placement rules (where do new files of each type go — components, services, tests, configs)
+
+    Format your response as a filled-in version of this template:
+
+    [structure-template content here]
+    ")
+    ```
+
+    Embed the actual template content into the agent's prompt where indicated. Write the result to `context/spec/knowledgebase/structure.md`. The companion document `decisions.md` is produced by `/awos:architecture`.
+
+2.  If `<user_prompt>` is non-empty, briefly note that you'll use it as a starting point, then refine from there.
+3.  If `context/spec/knowledgebase/structure.md` exists (either pre-existing or just produced by step 1), read it. Summarize what already exists when presenting context to the user — this helps frame features relative to the current system.
+4.  Walk the user through the sections of the template, explaining each one.
     - **Project Name & Vision:** Ask for the project's name and its core purpose.
     - **Target Audience & Personas:** Ask who the product is for and help create one simple persona.
     - **Success Metrics:** Ask how they will measure the product's impact on the user.
     - **Core Features & User Journey:** Ask for the 3-5 most important high-level features and a simple user workflow.
     - **Project Boundaries:** Ask what is essential for the first version (In-Scope) and what can wait (Out-of-Scope).
-3.  Once all sections are complete, proceed to **Step 3: File Generation**.
+5.  Once all sections are complete, proceed to **Step 3: File Generation**.
 
 ---
 

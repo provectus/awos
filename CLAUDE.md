@@ -89,7 +89,11 @@ Each file in `claude/commands/{name}.md` is a tiny wrapper that points at `.awos
 
 ## Architecture: Document-Centric Workflow
 
-AWOS is **spec-driven** — all project state lives in markdown files under `context/` in the user's project, not in chat history. An AI agent can rehydrate full context by reading the files alone. The canonical flow (each command is a markdown prompt under `commands/`):
+AWOS is **spec-driven** — all project state lives in markdown files under `context/` in the user's project, not in chat history. An AI agent can rehydrate full context by reading the files alone.
+
+**Brownfield projects** can populate `context/spec/knowledgebase/` with two documents that give downstream commands awareness of the existing codebase: `structure.md` (directory layout, module boundaries, data flow) and `decisions.md` (non-standard project decisions that override or extend default agent behavior). These files are producer-agnostic — they can be populated by `/awos:scan` (codebase scan), `/awos:archive` (post-implementation learnings), or manually.
+
+The canonical flow (each command is a markdown prompt under `commands/`):
 
 ```
 /awos:product → /awos:roadmap → /awos:architecture → /awos:hire

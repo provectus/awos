@@ -75,3 +75,13 @@ For single-layer projects, most checks will auto-SKIP since cross-layer delivery
 - **Fail:** No shared tooling — each layer is completely independent with no unified entry point
 - **Skip-When:** Topology artifact shows single-service repo
 - **Severity:** medium
+
+### E2E-06: Generated delivery flow automation
+
+- **What:** The project has a generated end-to-end delivery flow — a decision record plus a command that drives a ticket through spec, implementation, verification, review, and delivery
+- **How:** Check for `context/product/delivery-flow.md` (the decision record produced by `/awos:flow`) and a flow command at `.claude/commands/implement-ticket.md`. If both exist, spot-check that the decision record's Generation Log is not older than significant changes to the repo's CI/release configuration.
+- **Pass:** Both artifacts exist and the decision record reflects the current toolchain
+- **Warn:** One artifact exists without the other, or the decision record is visibly stale — recommend re-running `/awos:flow`
+- **Fail:** Neither exists — recommend running `/awos:flow` to generate the delivery flow
+- **Skip-When:** Spec-driven-development artifact shows the project does not use AWOS (no `context/` directory)
+- **Severity:** medium

@@ -36,7 +36,7 @@ This command generates automation; it never executes the flow itself. The decisi
 - **A skipped or unanswered question — as happens in an unattended `claude -p` run — is never a stop signal. Fall back to the documented default for that question and continue through the remaining steps, including writing both artifacts.** The defaults: for interview dimensions, the answer inferred from the investigation and team docs (or the most conservative option when nothing was inferred); for re-run reconciliation conflicts, keep the manual edit.
 - Ask the team-documentation question (Step 3) on its own, before any dimension question — its answer can eliminate most of the interview. Never bundle dimension questions into the same `AskUserQuestion` call as the docs question.
 - Mark an option "(Recommended)" only when the investigation gives evidence to prefer it. Factual questions about the team's world (does documentation exist? which tracker do you use?) have nothing to recommend — present those options neutrally; a default is just a default.
-- Each option must be answerable without follow-up typing. Don't split options that all funnel into the same free-text follow-up (e.g. "Yes — Confluence" vs. "Yes — local files" when both just mean "now provide the link/path") — collapse them into one option and let the user supply the specifics via the built-in free-text input.
+- Each option must be answerable without follow-up typing. Don't split options that all funnel into the same free-text follow-up (e.g. "Yes — Confluence" vs. "Yes — local files" when both just mean "now provide the link/path") — collapse them into one option and let the user supply the specifics via the built-in free-text input. When the answer is inherently free-form (a link, a path, a name), don't wrap it in a multiple-choice at all — and never present an option whose description tells the user to pick "Other" instead.
 
 ---
 
@@ -58,14 +58,14 @@ Delegate the read-heavy scan to the built-in `Explore` subagent rather than read
 
 - **Repo signals:** CI configuration (workflows, pipelines), `Makefile`/`Taskfile`/package scripts, `docker-compose`, pre-commit hooks, release/versioning config, git remotes, submodules (`.gitmodules`), sibling-directory or symlink references to other repos, existing `.claude/commands/*.md` (the team may already have branch-prep, worktree, or review commands worth reusing), and how `context/` reaches this repo (local directory, symlink, submodule).
 - **Tooling inventory — for every external service the flow may touch** (ticket tracker, code host, deployment target), record which transports are available:
-  - **CLI tools** on PATH — probe with `command -v` for the obvious candidates (`gh`, `glab`, `az`, `jira`, `acli`, `linear`, etc.) plus whatever the repo signals suggest.
+  - **CLI tools** on PATH — probe with `command -v` for the obvious candidates (`gh`, `glab`, `az`, `aws`, `jira`, `acli`, `linear`, `playwright`, etc.) plus whatever the repo signals suggest (cloud CLIs for the deployment target, browser automation for UI verification gates).
   - **MCP servers** — introspect the tools available in your own context for matching connectors.
   - **Plugins/skills** — installed skills or plugin commands that already wrap the service.
 - **Transport preference:** when both a CLI tool and an MCP server cover the same service, prefer the CLI — it is usually faster and cheaper in tokens. Record the chosen transport per service in the decision record; the generated command uses that transport and names its fallback.
 
 ## Step 3: Collect Team Documentation
 
-Ask the user — as a single, standalone question, before opening any dimension of the interview — whether documentation of the team's existing flow or requirements exists beyond what the investigation already found: `CONTRIBUTING.md`, runbooks, Confluence/Notion pages, wiki links. Two options suffice ("No, that's everything" / "Yes — I'll point you to it"); the user supplies links or paths as free text. Read everything reachable (local files directly; remote pages via available connectors) **before** Step 4, then re-derive the interview: every dimension the docs answer is settled and will not be asked — only confirmed in the Step 4 summary.
+First show the user which process documentation the investigation already found (`README.md`, `CLAUDE.md`, `CONTRIBUTING.md`, runbooks under `docs/`, …) — the question is about what exists beyond that list. Then ask, as a single standalone question before any dimension of the interview, whether more documentation of the team's flow or requirements exists. One listed option suffices ("No — that's everything"); pointers arrive through the built-in free-text input in any form — HTTP links (Confluence, Notion, wiki), local file paths, or a resource name plus identifier (a Slack channel or message, a Google Doc title). Do not follow up with another multiple-choice about where the docs live — take whatever locator the user typed and read it via the matching connector or a direct file read. Read everything reachable **before** Step 4, then re-derive the interview: every dimension the docs answer is settled and will not be asked — only confirmed in the Step 4 summary. Keep every pointer the user provides — Step 5 persists them in the decision record.
 
 ## Step 4: Interview — the Six Dimensions
 
@@ -82,7 +82,7 @@ First settle every dimension the investigation and team docs already answer — 
 
 ## Step 5: Write the Decision Record
 
-Populate `.awos/templates/delivery-flow-template.md` with every decision, rationale, the tooling-inventory table, and pointers to the team docs you read. On a re-run, carry the **Local Customizations** section forward unchanged unless the user explicitly retires an entry, and append to the Generation Log.
+Populate `.awos/templates/delivery-flow-template.md` with every decision, rationale, and the tooling-inventory table. Record every team-doc pointer from Step 3 — found by investigation or provided by the user, in whatever form (URL, path, Slack channel, page title) — in the Team Docs Consulted list, so re-runs and future flow generators can re-read them instead of re-asking. On a re-run, carry the **Local Customizations** section forward unchanged unless the user explicitly retires an entry, and append to the Generation Log.
 
 ## Step 6: Generate or Reconcile the Flow Command
 

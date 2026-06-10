@@ -34,6 +34,9 @@ This command generates automation; it never executes the flow itself. The decisi
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
 - **A skipped or unanswered question — as happens in an unattended `claude -p` run — is never a stop signal. Fall back to the documented default for that question and continue through the remaining steps, including writing both artifacts.** The defaults: for interview dimensions, the answer inferred from the investigation and team docs (or the most conservative option when nothing was inferred); for re-run reconciliation conflicts, keep the manual edit.
+- Ask the team-documentation question (Step 3) on its own, before any dimension question — its answer can eliminate most of the interview. Never bundle dimension questions into the same `AskUserQuestion` call as the docs question.
+- Mark an option "(Recommended)" only when the investigation gives evidence to prefer it. Factual questions about the team's world (does documentation exist? which tracker do you use?) have nothing to recommend — present those options neutrally; a default is just a default.
+- Each option must be answerable without follow-up typing. Don't split options that all funnel into the same free-text follow-up (e.g. "Yes — Confluence" vs. "Yes — local files" when both just mean "now provide the link/path") — collapse them into one option and let the user supply the specifics via the built-in free-text input.
 
 ---
 
@@ -62,11 +65,11 @@ Delegate the read-heavy scan to the built-in `Explore` subagent rather than read
 
 ## Step 3: Collect Team Documentation
 
-Ask the user whether documentation of the team's existing flow or requirements exists — `CONTRIBUTING.md`, runbooks, Confluence/Notion pages, wiki links. Read everything reachable (local files directly; remote pages via available connectors). Use what you learn to pre-fill interview answers: present an inferred answer for confirmation instead of asking an open question.
+Ask the user — as a single, standalone question, before opening any dimension of the interview — whether documentation of the team's existing flow or requirements exists beyond what the investigation already found: `CONTRIBUTING.md`, runbooks, Confluence/Notion pages, wiki links. Two options suffice ("No, that's everything" / "Yes — I'll point you to it"); the user supplies links or paths as free text. Read everything reachable (local files directly; remote pages via available connectors) **before** Step 4, then re-derive the interview: every dimension the docs answer is settled and will not be asked — only confirmed in the Step 4 summary.
 
 ## Step 4: Interview — the Six Dimensions
 
-Walk the user through the dimensions below with `AskUserQuestion`, one round per dimension. Skip any question the investigation or team docs already answered — confirm the inferred answer instead. Record every decision with its rationale.
+First settle every dimension the investigation and team docs already answer — those are not questions anymore. Present one summary of the inferred decisions for confirmation, then ask only the remaining open dimensions with `AskUserQuestion`. Batch independent dimensions into one call (it carries up to four questions); ask separately only when one answer feeds another — e.g. choosing worktrees opens the worktree sub-interview, and a connector choice determines which transport details to ask about. Record every decision with its rationale.
 
 1.  **Feature description source.** Where do tasks come from — Jira, Azure DevOps, Linear, Notion, GitHub/GitLab issues, a local file path, plain prompt text, or a pre-generated spec already under `context/spec/`? Which transport (from the Step 2 inventory) fetches it? If specs can arrive pre-written, the flow needs entry-point detection: inspect the spec directory and resume from the first missing artifact instead of always starting at `/awos:spec`.
 2.  **Git flow.** Base branch policy, branch naming convention, submodule handling, and main-repo vs. worktrees. If the user wants worktrees, run the worktree sub-interview below before committing to it.

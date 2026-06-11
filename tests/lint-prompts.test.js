@@ -754,6 +754,14 @@ test('implement-ticket-template.md carries stage markers and the AWOS chain', ()
     'implement-ticket-template.md must forbid nested `claude -p` calls — permission modes, PATH, and timeouts vary per machine; headless chaining lives at the trigger layer'
   );
   assert.ok(
+    /`Monitor` tool, never foreground `sleep` loops/.test(body),
+    'implement-ticket-template.md must wait on remote gates with the Monitor tool, not blind sleep loops — and its filter must cover failure states, not just success'
+  );
+  assert.ok(
+    /merge cleanly/.test(body) && /re-check mergeability/.test(body),
+    'implement-ticket-template.md must check target-branch conflicts twice: before opening the change request and again before merging (the target moves while gates run)'
+  );
+  assert.ok(
     /do not add run-time focus areas/i.test(body),
     'implement-ticket-template.md review stage must keep the independence rule: the reviewer prompt is fixed at generation time — an orchestrator that just implemented the change must not frame its own review'
   );

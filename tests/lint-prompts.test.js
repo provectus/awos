@@ -657,6 +657,192 @@ test('SDD-07 recognizes the dual-model QA coverage', () => {
   );
 });
 
+test('flow.md wires the delivery-flow generator contract end to end', () => {
+  // /awos:flow generates the project's /implement-ticket command from two
+  // templates and a decision record. The four path references below are the
+  // joints of that contract — if any drifts, generation reads or writes the
+  // wrong file.
+  const body = readUtf8(path.join(commandsDir, 'flow.md'));
+  const requiredRefs = [
+    '.awos/templates/delivery-flow-template.md',
+    '.awos/templates/implement-ticket-template.md',
+    'context/product/delivery-flow.md',
+    '.claude/commands/implement-ticket.md',
+    // Context-strategy introspection must target the full prompts, not the
+    // one-line wrappers in .claude/commands/awos/ (observed live: grepping
+    // the wrappers returned all zeros and confused the interview).
+    '.awos/commands/*.md',
+  ];
+  const missing = requiredRefs.filter((ref) => !body.includes(ref));
+  assert.deepEqual(
+    missing,
+    [],
+    `commands/flow.md must reference its templates and both generated artifacts; missing: ${missing.join(', ')}`
+  );
+  assert.ok(
+    /prefer the CLI/i.test(body),
+    'commands/flow.md must record the CLI-over-MCP transport preference (CLI is usually faster and cheaper in tokens)'
+  );
+  assert.ok(
+    body.includes('`Explore`'),
+    'commands/flow.md must delegate the read-heavy project scan to the built-in Explore subagent, not read the codebase in its own context'
+  );
+  assert.ok(
+    /automatic reviewer/i.test(body),
+    'commands/flow.md must cover automatic reviewers on the code host (CodeRabbit-style bots) — both detection in Step 2 and the wait-and-address gate in the review dimension'
+  );
+  assert.ok(
+    /two to four listed options/i.test(body),
+    'commands/flow.md must state the AskUserQuestion 2–4 option bound — a single-option question is rejected at the schema level (observed live: the Step 3 docs question crashed with InputValidationError)'
+  );
+  assert.ok(
+    !/One listed option suffices/i.test(body),
+    'commands/flow.md must not instruct a single-option AskUserQuestion call — the tool schema requires at least two options'
+  );
+  assert.ok(
+    body.includes('`multiSelect`'),
+    'commands/flow.md must direct combinable answers (review gates, entry points) to multiSelect questions instead of yes/no series or forced single picks'
+  );
+});
+
+test('implement-ticket-template.md carries stage markers and the AWOS chain', () => {
+  // The generated /implement-ticket command is user-owned; /awos:flow re-runs
+  // reconcile manual edits per stage. The HTML-comment stage markers are the
+  // attribution mechanism — without them, regeneration degrades to whole-file
+  // clobbering. The template must also route coding through the AWOS chain
+  // rather than implementing in the main context.
+  const body = readUtf8(
+    path.join(templatesDir, 'implement-ticket-template.md')
+  );
+  assert.ok(
+    body.includes('<!-- awos:flow:stage=') &&
+      body.includes('<!-- /awos:flow:stage -->'),
+    'implement-ticket-template.md must fence every stage with <!-- awos:flow:stage=... --> / <!-- /awos:flow:stage --> markers so /awos:flow re-runs can attribute manual edits per stage'
+  );
+  for (const cmd of [
+    '/awos:spec',
+    '/awos:tech',
+    '/awos:tasks',
+    '/awos:implement',
+    '/awos:verify',
+  ]) {
+    assert.ok(
+      body.includes(cmd),
+      `implement-ticket-template.md must run ${cmd} as part of the generated flow`
+    );
+  }
+  assert.ok(
+    /do not implement tasks in the main context/i.test(body),
+    'implement-ticket-template.md must preserve the orchestrator-only guard — coding goes through /awos:implement subagents'
+  );
+  for (const stage of ['local-review', 'remote-gates', 'merge']) {
+    assert.ok(
+      body.includes(`<!-- awos:flow:stage=${stage} -->`),
+      `implement-ticket-template.md must carry the ${stage} stage — the flow reviews locally before spending CI minutes, waits on remote gates, and covers the merge step, not just PR creation`
+    );
+  }
+  assert.ok(
+    /skipped or unanswered confirmation means do not merge/i.test(body),
+    'implement-ticket-template.md merge stage must keep the per-run confirmation guard as fixed prose — merging is irreversible, so a skipped confirmation is a no (inverse of the #132 skip-default)'
+  );
+  assert.ok(
+    body.includes('flow-log.md'),
+    'implement-ticket-template.md must keep the flow-log contract — each stage appends a summary so fresh sessions resume from disk state'
+  );
+  assert.ok(
+    /never launch a nested headless session/i.test(body),
+    'implement-ticket-template.md must forbid nested `claude -p` calls — permission modes, PATH, and timeouts vary per machine; headless chaining lives at the trigger layer'
+  );
+  assert.ok(
+    /`Monitor` tool, never foreground `sleep` loops/.test(body),
+    'implement-ticket-template.md must wait on remote gates with the Monitor tool, not blind sleep loops — and its filter must cover failure states, not just success'
+  );
+  assert.ok(
+    /merge cleanly/.test(body) && /re-check mergeability/.test(body),
+    'implement-ticket-template.md must check target-branch conflicts twice: before opening the change request and again before merging (the target moves while gates run)'
+  );
+  assert.ok(
+    /do not add run-time focus areas/i.test(body),
+    'implement-ticket-template.md review stage must keep the independence rule: the reviewer prompt is fixed at generation time — an orchestrator that just implemented the change must not frame its own review'
+  );
+  const stageOrder = [
+    'fetch-ticket',
+    'resume-detection',
+    'workspace',
+    'specs',
+    'commit-specs',
+    'implement',
+    'verify',
+    'local-review',
+    'commit-push',
+    'remote-gates',
+    'merge',
+    'delivery',
+    'close-ticket',
+  ];
+  const positions = stageOrder.map((s) =>
+    body.indexOf(`<!-- awos:flow:stage=${s} -->`)
+  );
+  for (let i = 0; i < stageOrder.length; i++) {
+    assert.ok(
+      positions[i] !== -1 && (i === 0 || positions[i] > positions[i - 1]),
+      `implement-ticket-template.md stages must appear in canonical order (${stageOrder.join(' → ')}); '${stageOrder[i]}' is missing or out of place — in particular, verify and local-review precede commit-push (CI minutes are spent on reviewed code only) and merge comes after remote-gates`
+    );
+  }
+});
+
+test('delivery-flow-template.md preserves customizations and the tooling inventory', () => {
+  // Local Customizations is where /awos:flow promotes manual edits the user
+  // chose to keep — losing the section silently re-clobbers them on the next
+  // regeneration. The tooling inventory records the chosen transport
+  // (CLI vs MCP) per external service.
+  const body = readUtf8(path.join(templatesDir, 'delivery-flow-template.md'));
+  assert.ok(
+    /## .*Local Customizations/.test(body),
+    'delivery-flow-template.md must declare a "Local Customizations" section — the regeneration contract depends on it'
+  );
+  assert.ok(
+    /## .*Tooling Inventory/.test(body),
+    'delivery-flow-template.md must declare a "Tooling Inventory" section recording the chosen transport per service'
+  );
+  assert.ok(
+    /\*\*Merge policy:\*\*/.test(body) && /\*\*Post-merge CI:\*\*/.test(body),
+    'delivery-flow-template.md §5 must record the merge policy and post-merge CI fields — the generated merge/ci-monitor stages derive from them'
+  );
+  assert.ok(
+    /## .*Context Strategy/.test(body),
+    'delivery-flow-template.md must declare a "Context Strategy" section — subagent-isolated stages and the flow log are recorded decisions, not ad-hoc behavior'
+  );
+});
+
+test('setup-chain commands point users at /awos:flow', () => {
+  // /awos:flow slots into the run-once setup chain after /awos:hire. Both
+  // upstream commands must surface it, or users never discover the
+  // delivery-flow generator.
+  for (const file of ['hire.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, file));
+    assert.ok(
+      body.includes('/awos:flow'),
+      `commands/${file} must point to /awos:flow as the next setup step after hiring`
+    );
+  }
+});
+
+test('E2E-06 audit check recommends the delivery-flow generator', () => {
+  // The end-to-end-delivery audit dimension checks for the /awos:flow
+  // artifacts and recommends running the command when they are missing.
+  const body = readUtf8(path.join(dimensionsDir, 'end-to-end-delivery.md'));
+  assert.ok(
+    body.includes('E2E-06'),
+    'end-to-end-delivery.md must declare the E2E-06 check for generated delivery flow automation'
+  );
+  assert.ok(
+    body.includes('context/product/delivery-flow.md') &&
+      body.includes('/awos:flow'),
+    'E2E-06 must check for context/product/delivery-flow.md and recommend /awos:flow when delivery automation is missing'
+  );
+});
+
 test('context/<path> references in prompts are internally consistent', () => {
   // Build a writer/reader map by scanning all prompts. A path is considered
   // consistent if every reference to it appears in at least one prompt — i.e.

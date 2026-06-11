@@ -97,9 +97,29 @@ Stage all changed files, excluding `.env`, credentials, and secrets. [Commit mes
 
 <!-- /awos:flow:stage -->
 
+<!-- awos:flow:stage=ci-monitor -->
+
+### Step 10: CI on the Change Request
+
+[Per §4: which pipelines run against the pushed branch or change request, checked via the chosen transport from §7 — e.g. `gh pr checks`, `glab ci status`, the Azure DevOps CLI; for a repo with no remote CI, run the local equivalent (the project's test/lint suite). Per the recorded policy, either wait for the checks and on failure diagnose from the failed job's logs, fix, push, and re-check until green — or report the first results and hand off. Omit this stage if nothing runs on a change request.]
+
+<!-- /awos:flow:stage -->
+
+<!-- awos:flow:stage=merge -->
+
+### Step 11: Merge
+
+[Per §5 merge policy: a human merges — stop here and report the ready-to-merge state — or the flow merges via the chosen transport from §7: the platform's merge capability, or a plain `git merge` + push for a repo without a code host.]
+
+Merging is irreversible. Even when the recorded policy lets the flow merge, ask the user for confirmation in this run, after showing that every gate is green. A skipped or unanswered confirmation means do not merge — report the ready-to-merge state and stop.
+
+[Per §5 post-merge CI: pipelines triggered by the merge on the base branch — watch them via the chosen transport and, per the recorded policy, fix failures forward or report them. Omit if nothing runs on merge.]
+
+<!-- /awos:flow:stage -->
+
 <!-- awos:flow:stage=delivery -->
 
-### Step 10: Deliver
+### Step 12: Deliver
 
 [Per §5: deployment mode, batching/feature flags, approvals, version bumps. Omit what the decisions rule out; stop at the recorded hand-off point for manual or scheduled deployment.]
 
@@ -107,9 +127,9 @@ Stage all changed files, excluding `.env`, credentials, and secrets. [Commit mes
 
 <!-- awos:flow:stage=close-ticket -->
 
-### Step 11: Close the Loop
+### Step 13: Close the Loop
 
-[Per §5's definition of Done: transition the ticket using the chosen transport, attach the recorded evidence (PR link, deploy confirmation), and report the final state to the user.]
+[Per §5's definition of Done: transition the ticket using the chosen transport, attach the recorded evidence (change-request link, merge commit, deploy confirmation), and report the final state to the user.]
 
 <!-- /awos:flow:stage -->
 

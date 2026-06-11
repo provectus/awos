@@ -715,6 +715,16 @@ test('implement-ticket-template.md carries stage markers and the AWOS chain', ()
     /do not implement tasks in the main context/i.test(body),
     'implement-ticket-template.md must preserve the orchestrator-only guard — coding goes through /awos:implement subagents'
   );
+  for (const stage of ['ci-monitor', 'merge']) {
+    assert.ok(
+      body.includes(`<!-- awos:flow:stage=${stage} -->`),
+      `implement-ticket-template.md must carry the ${stage} stage — the flow covers CI checks and the merge step, not just PR creation`
+    );
+  }
+  assert.ok(
+    /skipped or unanswered confirmation means do not merge/i.test(body),
+    'implement-ticket-template.md merge stage must keep the per-run confirmation guard as fixed prose — merging is irreversible, so a skipped confirmation is a no (inverse of the #132 skip-default)'
+  );
 });
 
 test('delivery-flow-template.md preserves customizations and the tooling inventory', () => {
@@ -730,6 +740,10 @@ test('delivery-flow-template.md preserves customizations and the tooling invento
   assert.ok(
     /## .*Tooling Inventory/.test(body),
     'delivery-flow-template.md must declare a "Tooling Inventory" section recording the chosen transport per service'
+  );
+  assert.ok(
+    /\*\*Merge policy:\*\*/.test(body) && /\*\*Post-merge CI:\*\*/.test(body),
+    'delivery-flow-template.md §5 must record the merge policy and post-merge CI fields — the generated merge/ci-monitor stages derive from them'
   );
 });
 

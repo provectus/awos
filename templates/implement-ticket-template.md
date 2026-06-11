@@ -19,6 +19,14 @@ Takes one functional task from [source per §1 of delivery-flow.md] and drives i
 
 `$ARGUMENTS` — [expected ticket reference shape per §1: ID, URL, or file path]. If empty, ask the user.
 
+## Context Discipline
+
+A flow this long degrades in one context window — judgment is worst exactly where it matters most, at review time. Per §8 of delivery-flow.md:
+
+- Run every isolatable stage in a subagent (a subagent can invoke `/awos:*` commands via the Skill tool; its context is discarded on completion). Subagent reports must be terse — paths, verdicts, counts — never full document or review content.
+- After each completed stage, append an entry to `context/spec/{SPEC_NAME}/flow-log.md`: the stage name, what was produced and where (paths, branch, commit, change-request link), any decisions taken along the way, and which stage comes next. The log is the flow's memory outside the context window — a fresh session (after a restart, a crash, or an unattended hand-off between sessions) resumes by reading this one small file instead of re-deriving state from the whole repo. That is what keeps the window small across a long flow: nothing needs to stay in context once it is in the log.
+- Never launch a nested headless session (`claude -p`) from this command — permission modes, PATH, and timeouts differ per machine. Unattended chaining belongs to the trigger setup (§6), outside this command.
+
 <!-- awos:flow:stage=fetch-ticket -->
 
 ### Step 1: Fetch & Normalize the Ticket
@@ -31,7 +39,7 @@ Takes one functional task from [source per §1 of delivery-flow.md] and drives i
 
 ### Step 2: Detect the Entry Point
 
-[Per §1: if a spec directory for this ticket may already exist under `context/spec/`, inspect it and resume from the first missing artifact — skip `/awos:spec` if `functional-spec.md` exists, skip `/awos:tech` if `technical-considerations.md` exists, and so on. Omit this stage entirely if specs never arrive pre-written.]
+If `context/spec/{SPEC_NAME}/flow-log.md` exists, read it first — it names the last completed stage; resume from the next one. [Per §1: if a spec directory for this ticket may already exist under `context/spec/`, inspect it and resume from the first missing artifact — skip `/awos:spec` if `functional-spec.md` exists, skip `/awos:tech` if `technical-considerations.md` exists, and so on. Omit the pre-written-spec handling if specs never arrive pre-written.]
 
 <!-- /awos:flow:stage -->
 
@@ -47,7 +55,7 @@ Takes one functional task from [source per §1 of delivery-flow.md] and drives i
 
 ### Step 4: Generate Specs and Tasks
 
-Run the AWOS commands sequentially, in the main context, passing the normalized ticket as context:
+Run the AWOS commands sequentially, passing the normalized ticket as context. [Per §8: which of the three stay in the main context and which run in a subagent — a command that interviews the user must stay in main; a non-interactive one runs in a subagent returning the artifact path and a one-line verdict.]
 
 1. `/awos:spec` — [approval gate per the team's decision: present for review, or run straight through]
 2. `/awos:tech` — [approval gate]
@@ -69,7 +77,7 @@ Store the spec directory name (e.g. `007-tasks-api`) as `SPEC_NAME`.
 
 ### Step 6: Implement via Subagents
 
-Run `/awos:implement`. It delegates all coding to specialist subagents and tracks progress — do not implement tasks in the main context. Wait for all tasks to complete.
+Run `/awos:implement` [per §8: in the main context if it dispatches subagents itself — a command that dispatches subagents cannot run inside one]. It delegates all coding and tracks progress — do not implement tasks in the main context. Wait for all tasks to complete.
 
 <!-- /awos:flow:stage -->
 
@@ -77,7 +85,7 @@ Run `/awos:implement`. It delegates all coding to specialist subagents and track
 
 ### Step 7: Verify
 
-Run `/awos:verify` to validate the implementation against the spec's acceptance criteria. Address gaps before proceeding.
+Run `/awos:verify` [per §8: in a subagent if it is non-interactive], returning the verdict and the list of gaps. Address gaps before proceeding.
 
 <!-- /awos:flow:stage -->
 
@@ -93,7 +101,13 @@ Stage all changed files, excluding `.env`, credentials, and secrets. [Commit mes
 
 ### Step 9: Review
 
-[Per §4 of delivery-flow.md: the team's gates in their recorded order — static checks, local AI review (delegated to a subagent, findings presented to the user, never auto-fixed), remote PR creation and human review with the wait-or-poll policy, environment/soak/compliance gates. If the flow includes a local AI review with human edits, also diff the user's edits against the original review and suggest CLAUDE.md amendments for generalizable corrections.]
+The review must stay independent of this conversation's authorship bias:
+
+- The reviewer's prompt below is fixed: pass it verbatim. Do not add run-time focus areas drawn from what you implemented or suspect — the author framing the review is the bias.
+- The reviewer subagent writes the review file itself; read back only the verdict and the finding count, never the full review.
+- The agent that applies accepted findings reads the review file and the diff fresh — relay the user's keep/drop decisions, not your own summary of the findings.
+
+[Per §4 of delivery-flow.md: the team's gates in their recorded order — static checks, local AI review (the reviewer subagent's verbatim prompt, derived from §4 at generation time: the diff range, the spec paths, the project's review rules; findings presented to the user, never auto-fixed), remote PR creation and human review with the wait-or-poll policy, environment/soak/compliance gates. If the flow includes a local AI review with human edits, also diff the user's edits against the original review and suggest CLAUDE.md amendments for generalizable corrections.]
 
 <!-- /awos:flow:stage -->
 
@@ -101,7 +115,7 @@ Stage all changed files, excluding `.env`, credentials, and secrets. [Commit mes
 
 ### Step 10: CI on the Change Request
 
-[Per §4: which pipelines run against the pushed branch or change request, checked via the chosen transport from §7 — e.g. `gh pr checks`, `glab ci status`, the Azure DevOps CLI; for a repo with no remote CI, run the local equivalent (the project's test/lint suite). Per the recorded policy, either wait for the checks and on failure diagnose from the failed job's logs, fix, push, and re-check until green — or report the first results and hand off. Omit this stage if nothing runs on a change request.]
+[Per §4: which pipelines run against the pushed branch or change request, checked via the chosen transport from §7 — e.g. `gh pr checks`, `glab ci status`, the Azure DevOps CLI; for a repo with no remote CI, run the local equivalent (the project's test/lint suite). Per the recorded policy, either wait for the checks and on failure delegate diagnosis and the fix to a subagent (per §8) working from the failed job's logs, then push and re-check until green — or report the first results and hand off. Omit this stage if nothing runs on a change request.]
 
 <!-- /awos:flow:stage -->
 

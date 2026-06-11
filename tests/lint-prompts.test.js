@@ -725,6 +725,18 @@ test('implement-ticket-template.md carries stage markers and the AWOS chain', ()
     /skipped or unanswered confirmation means do not merge/i.test(body),
     'implement-ticket-template.md merge stage must keep the per-run confirmation guard as fixed prose — merging is irreversible, so a skipped confirmation is a no (inverse of the #132 skip-default)'
   );
+  assert.ok(
+    body.includes('flow-log.md'),
+    'implement-ticket-template.md must keep the flow-log contract — each stage appends a summary so fresh sessions resume from disk state'
+  );
+  assert.ok(
+    /never launch a nested headless session/i.test(body),
+    'implement-ticket-template.md must forbid nested `claude -p` calls — permission modes, PATH, and timeouts vary per machine; headless chaining lives at the trigger layer'
+  );
+  assert.ok(
+    /do not add run-time focus areas/i.test(body),
+    'implement-ticket-template.md review stage must keep the independence rule: the reviewer prompt is fixed at generation time — an orchestrator that just implemented the change must not frame its own review'
+  );
 });
 
 test('delivery-flow-template.md preserves customizations and the tooling inventory', () => {
@@ -744,6 +756,10 @@ test('delivery-flow-template.md preserves customizations and the tooling invento
   assert.ok(
     /\*\*Merge policy:\*\*/.test(body) && /\*\*Post-merge CI:\*\*/.test(body),
     'delivery-flow-template.md §5 must record the merge policy and post-merge CI fields — the generated merge/ci-monitor stages derive from them'
+  );
+  assert.ok(
+    /## .*Context Strategy/.test(body),
+    'delivery-flow-template.md must declare a "Context Strategy" section — subagent-isolated stages and the flow log are recorded decisions, not ad-hoc behavior'
   );
 });
 

@@ -735,10 +735,10 @@ test('implement-ticket-template.md carries stage markers and the AWOS chain', ()
     /do not implement tasks in the main context/i.test(body),
     'implement-ticket-template.md must preserve the orchestrator-only guard — coding goes through /awos:implement subagents'
   );
-  for (const stage of ['ci-monitor', 'merge']) {
+  for (const stage of ['local-review', 'remote-gates', 'merge']) {
     assert.ok(
       body.includes(`<!-- awos:flow:stage=${stage} -->`),
-      `implement-ticket-template.md must carry the ${stage} stage — the flow covers CI checks and the merge step, not just PR creation`
+      `implement-ticket-template.md must carry the ${stage} stage — the flow reviews locally before spending CI minutes, waits on remote gates, and covers the merge step, not just PR creation`
     );
   }
   assert.ok(
@@ -765,9 +765,9 @@ test('implement-ticket-template.md carries stage markers and the AWOS chain', ()
     'commit-specs',
     'implement',
     'verify',
+    'local-review',
     'commit-push',
-    'review',
-    'ci-monitor',
+    'remote-gates',
     'merge',
     'delivery',
     'close-ticket',
@@ -778,7 +778,7 @@ test('implement-ticket-template.md carries stage markers and the AWOS chain', ()
   for (let i = 0; i < stageOrder.length; i++) {
     assert.ok(
       positions[i] !== -1 && (i === 0 || positions[i] > positions[i - 1]),
-      `implement-ticket-template.md stages must appear in canonical order (${stageOrder.join(' → ')}); '${stageOrder[i]}' is missing or out of place — in particular, verify is the local gate and must precede commit-push, review, and merge`
+      `implement-ticket-template.md stages must appear in canonical order (${stageOrder.join(' → ')}); '${stageOrder[i]}' is missing or out of place — in particular, verify and local-review precede commit-push (CI minutes are spent on reviewed code only) and merge comes after remote-gates`
     );
   }
 });

@@ -26,6 +26,7 @@ A flow this long degrades in one context window — judgment is worst exactly wh
 - Run every isolatable stage in a subagent (a subagent can invoke `/awos:*` commands via the Skill tool; its context is discarded on completion). Subagent reports must be terse — paths, verdicts, counts — never full document or review content.
 - After each completed stage, append an entry to `context/spec/{SPEC_NAME}/flow-log.md`: the stage name, what was produced and where (paths, branch, commit, change-request link), any decisions taken along the way, and which stage comes next. The log is the flow's memory outside the context window — a fresh session (after a restart, a crash, or an unattended hand-off between sessions) resumes by reading this one small file instead of re-deriving state from the whole repo. That is what keeps the window small across a long flow: nothing needs to stay in context once it is in the log.
 - Never launch a nested headless session (`claude -p`) from this command — permission modes, PATH, and timeouts differ per machine. Unattended chaining belongs to the trigger setup (§6), outside this command.
+- Tell every dispatched subagent: tools are functional — do not test them or make exploratory calls; every call needs a purpose. Run each delegated stage on the model tier recorded in §8 — the fast tier for mechanical transport work, the strongest for judgment.
 
 <!-- awos:flow:stage=fetch-ticket -->
 
@@ -39,7 +40,7 @@ A flow this long degrades in one context window — judgment is worst exactly wh
 
 ### Step 2: Detect the Entry Point
 
-If `context/spec/{SPEC_NAME}/flow-log.md` exists, read it first — it names the last completed stage; resume from the next one. [Per §1: if a spec directory for this ticket may already exist under `context/spec/`, inspect it and resume from the first missing artifact — skip `/awos:spec` if `functional-spec.md` exists, skip `/awos:tech` if `technical-considerations.md` exists, and so on. Omit the pre-written-spec handling if specs never arrive pre-written.]
+Start with a cheap preflight on the fast model tier (per §8): is this ticket already delivered — a merged change request, a recorded Done? If so, report that and stop. Then: if `context/spec/{SPEC_NAME}/flow-log.md` exists, read it first — it names the last completed stage; resume from the next one. [Per §1: if a spec directory for this ticket may already exist under `context/spec/`, inspect it and resume from the first missing artifact — skip `/awos:spec` if `functional-spec.md` exists, skip `/awos:tech` if `technical-considerations.md` exists, and so on. Omit the pre-written-spec handling if specs never arrive pre-written.]
 
 <!-- /awos:flow:stage -->
 
@@ -57,9 +58,9 @@ If `context/spec/{SPEC_NAME}/flow-log.md` exists, read it first — it names the
 
 Run the AWOS commands sequentially, passing the normalized ticket as context. [Per §8: which of the three stay in the main context and which run in a subagent — a command that interviews the user must stay in main; a non-interactive one runs in a subagent returning the artifact path and a one-line verdict.]
 
-1. `/awos:spec` — [approval gate per the team's decision: present for review, or run straight through]
-2. `/awos:tech` — [approval gate]
-3. `/awos:tasks` — [approval gate]
+1. `/awos:spec` — [approval gate per §4's gate decision]
+2. `/awos:tech` — [approval gate per §4's gate decision]
+3. `/awos:tasks` — [no gate unless §4 records one] — proceed straight to implementation; the task list stays revisable by re-running `/awos:tasks`.
 
 Store the spec directory name (e.g. `007-tasks-api`) as `SPEC_NAME`.
 
@@ -89,17 +90,9 @@ Run `/awos:verify` [per §8: in a subagent if it is non-interactive], returning 
 
 <!-- /awos:flow:stage -->
 
-<!-- awos:flow:stage=commit-push -->
+<!-- awos:flow:stage=local-review -->
 
-### Step 8: Commit & Push
-
-Stage all changed files, excluding `.env`, credentials, and secrets. [Commit message convention per the team; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
-
-<!-- /awos:flow:stage -->
-
-<!-- awos:flow:stage=review -->
-
-### Step 9: Review
+### Step 8: Local Review
 
 The review must stay independent of this conversation's authorship bias:
 
@@ -107,15 +100,23 @@ The review must stay independent of this conversation's authorship bias:
 - The reviewer subagent writes the review file itself; read back only the verdict and the finding count, never the full review.
 - The agent that applies accepted findings reads the review file and the diff fresh — relay the user's keep/drop decisions, not your own summary of the findings.
 
-[Per §4 of delivery-flow.md: the team's gates in their recorded order — static checks, local AI review (the reviewer subagent's verbatim prompt, derived from §4 at generation time: the diff range, the spec paths, the project's review rules; findings presented to the user, never auto-fixed), change-request creation, the wait for any automatic reviewer recorded in §4 and addressing its findings, human review with the wait-or-poll policy, environment/soak/compliance gates. If the flow includes a local AI review with human edits, also diff the user's edits against the original review and suggest CLAUDE.md amendments for generalizable corrections.]
+[Per §4 of delivery-flow.md: static checks, then the local AI review — the reviewer subagent's verbatim prompt, derived from §4 at generation time: the diff range, the spec paths, the project's review rules; findings presented to the user, never auto-fixed; accepted findings applied before anything is pushed. If §4 includes the human-edit loop, also diff the user's edits against the original review and suggest CLAUDE.md amendments for generalizable corrections. If §4 records change-request-first timing, move this stage after Step 9 instead and run the review concurrently with the remote gates — faster wall-clock, at the cost of an extra CI run on unreviewed code.]
 
 <!-- /awos:flow:stage -->
 
-<!-- awos:flow:stage=ci-monitor -->
+<!-- awos:flow:stage=commit-push -->
 
-### Step 10: CI on the Change Request
+### Step 9: Commit & Push
 
-[Per §4: which pipelines run against the pushed branch or change request, checked via the chosen transport from §7 — e.g. `gh pr checks`, `glab ci status`, the Azure DevOps CLI; for a repo with no remote CI, run the local equivalent (the project's test/lint suite). Per the recorded policy, either wait for the checks and on failure delegate diagnosis and the fix to a subagent (per §8) working from the failed job's logs, then push and re-check until green — or report the first results and hand off. Omit this stage if nothing runs on a change request.]
+Stage all changed files, excluding `.env`, credentials, and secrets. [Commit message convention per the team; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
+
+<!-- /awos:flow:stage -->
+
+<!-- awos:flow:stage=remote-gates -->
+
+### Step 10: Remote Gates
+
+[Per §4: open the change request via the chosen transport from §7. Then wait on every remote gate concurrently rather than in sequence — CI checks (poll at intervals matched to the typical pipeline duration recorded in §4; e.g. `gh pr checks`, `glab ci status`, the Azure DevOps CLI), the automatic reviewer's pass (address its findings), human review (wait-or-poll policy), environment/soak/compliance gates — and join them all before merge. On CI failure, per the recorded policy: delegate diagnosis and the fix to a subagent (per §8) working from the failed job's logs, push, re-check until green — or report the first results and hand off. For a repo with no code host, the local test/lint suite already served as the gate — omit this stage, along with any other gate §4 rules out.]
 
 <!-- /awos:flow:stage -->
 

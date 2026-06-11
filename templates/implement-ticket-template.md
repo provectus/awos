@@ -107,7 +107,7 @@ The review must stay independent of this conversation's authorship bias:
 - The reviewer subagent writes the review file itself; read back only the verdict and the finding count, never the full review.
 - The agent that applies accepted findings reads the review file and the diff fresh — relay the user's keep/drop decisions, not your own summary of the findings.
 
-[Per §4 of delivery-flow.md: the team's gates in their recorded order — static checks, local AI review (the reviewer subagent's verbatim prompt, derived from §4 at generation time: the diff range, the spec paths, the project's review rules; findings presented to the user, never auto-fixed), remote PR creation and human review with the wait-or-poll policy, environment/soak/compliance gates. If the flow includes a local AI review with human edits, also diff the user's edits against the original review and suggest CLAUDE.md amendments for generalizable corrections.]
+[Per §4 of delivery-flow.md: the team's gates in their recorded order — static checks, local AI review (the reviewer subagent's verbatim prompt, derived from §4 at generation time: the diff range, the spec paths, the project's review rules; findings presented to the user, never auto-fixed), change-request creation, the wait for any automatic reviewer recorded in §4 and addressing its findings, human review with the wait-or-poll policy, environment/soak/compliance gates. If the flow includes a local AI review with human edits, also diff the user's edits against the original review and suggest CLAUDE.md amendments for generalizable corrections.]
 
 <!-- /awos:flow:stage -->
 
@@ -143,7 +143,7 @@ Merging is irreversible. Even when the recorded policy lets the flow merge, ask 
 
 ### Step 13: Close the Loop
 
-[Per §5's definition of Done: transition the ticket using the chosen transport, attach the recorded evidence (change-request link, merge commit, deploy confirmation), and report the final state to the user.]
+[Per §5's definition of Done: gather the recorded evidence (change-request link, merge commit, deploy confirmation) and report the final state to the user. When the source has tickets, also transition the ticket using the chosen transport and attach the evidence; omit the transition entirely for ticketless sources — the report to the user is the close.]
 
 <!-- /awos:flow:stage -->
 

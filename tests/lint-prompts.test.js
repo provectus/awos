@@ -668,6 +668,10 @@ test('flow.md wires the delivery-flow generator contract end to end', () => {
     '.awos/templates/implement-ticket-template.md',
     'context/product/delivery-flow.md',
     '.claude/commands/implement-ticket.md',
+    // Context-strategy introspection must target the full prompts, not the
+    // one-line wrappers in .claude/commands/awos/ (observed live: grepping
+    // the wrappers returned all zeros and confused the interview).
+    '.awos/commands/*.md',
   ];
   const missing = requiredRefs.filter((ref) => !body.includes(ref));
   assert.deepEqual(
@@ -682,6 +686,22 @@ test('flow.md wires the delivery-flow generator contract end to end', () => {
   assert.ok(
     body.includes('`Explore`'),
     'commands/flow.md must delegate the read-heavy project scan to the built-in Explore subagent, not read the codebase in its own context'
+  );
+  assert.ok(
+    /automatic reviewer/i.test(body),
+    'commands/flow.md must cover automatic reviewers on the code host (CodeRabbit-style bots) — both detection in Step 2 and the wait-and-address gate in the review dimension'
+  );
+  assert.ok(
+    /two to four listed options/i.test(body),
+    'commands/flow.md must state the AskUserQuestion 2–4 option bound — a single-option question is rejected at the schema level (observed live: the Step 3 docs question crashed with InputValidationError)'
+  );
+  assert.ok(
+    !/One listed option suffices/i.test(body),
+    'commands/flow.md must not instruct a single-option AskUserQuestion call — the tool schema requires at least two options'
+  );
+  assert.ok(
+    body.includes('`multiSelect`'),
+    'commands/flow.md must direct combinable answers (review gates, entry points) to multiSelect questions instead of yes/no series or forced single picks'
   );
 });
 
@@ -737,6 +757,30 @@ test('implement-ticket-template.md carries stage markers and the AWOS chain', ()
     /do not add run-time focus areas/i.test(body),
     'implement-ticket-template.md review stage must keep the independence rule: the reviewer prompt is fixed at generation time — an orchestrator that just implemented the change must not frame its own review'
   );
+  const stageOrder = [
+    'fetch-ticket',
+    'resume-detection',
+    'workspace',
+    'specs',
+    'commit-specs',
+    'implement',
+    'verify',
+    'commit-push',
+    'review',
+    'ci-monitor',
+    'merge',
+    'delivery',
+    'close-ticket',
+  ];
+  const positions = stageOrder.map((s) =>
+    body.indexOf(`<!-- awos:flow:stage=${s} -->`)
+  );
+  for (let i = 0; i < stageOrder.length; i++) {
+    assert.ok(
+      positions[i] !== -1 && (i === 0 || positions[i] > positions[i - 1]),
+      `implement-ticket-template.md stages must appear in canonical order (${stageOrder.join(' → ')}); '${stageOrder[i]}' is missing or out of place — in particular, verify is the local gate and must precede commit-push, review, and merge`
+    );
+  }
 });
 
 test('delivery-flow-template.md preserves customizations and the tooling inventory', () => {

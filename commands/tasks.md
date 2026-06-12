@@ -126,8 +126,10 @@ Skip this step if `SKIP_TESTS = true`.
 
 ## Step 5: Surface for Review and Recommend Next Step
 
-1.  Report the saved path and present the slice/task plan for review. If the user requests changes (adjust, split, merge slices or tasks, or reassign subagents), apply them and re-save; otherwise they can revise later by re-running `/awos:tasks`.
-2.  If any tasks were assigned to `general-purpose` (because no specialist exists) or verification cannot be performed (missing MCPs/services), surface a table:
+1.  Report the saved path and present the slice/task plan for review.
+2.  Ask for review feedback strictly via the `AskUserQuestion` tool (e.g. options "Looks good — keep it as saved" / "I want changes") — never in plain text, which would end a non-interactive turn before the review outcome can be reported. If the user requests changes (adjust, split, merge slices or tasks, or reassign subagents), apply them and re-save; otherwise they can revise later by re-running `/awos:tasks`.
+3.  If the review question goes unanswered (dismissed, or the run is non-interactive), keep the saved file as-is and include this exact line in your final report: `tasks.md saved as drafted — not user-reviewed`. Keep the wording — downstream automations depend on it to tell a reviewed plan from a draft.
+4.  If any tasks were assigned to `general-purpose` (because no specialist exists) or verification cannot be performed (missing MCPs/services), surface a table:
 
     | Task/Slice            | Issue                                                                               | Recommendation                                       |
     | --------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -135,4 +137,4 @@ Skip this step if `SKIP_TESTS = true`.
     | Slice N (QA)          | Feature Testing & Regression slice uses `general-purpose` — no QA-coded agent hired | Run `/awos:hire` to install `testing-expert`         |
     | Slice 3: Verification | Browser MCP not available                                                           | Install browser MCP to enable UI verification        |
 
-3.  Report the next command: `/awos:implement`.
+5.  Report the next command: `/awos:implement`.

@@ -2,3 +2,7 @@ node_modules
 .idea
 .DS_Store
 docs/superpowers/
+tmp/
+
+# pr-review skill drafts (local, not committed)
+review/

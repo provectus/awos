@@ -122,12 +122,16 @@ Skip this step if `SKIP_TESTS = true`.
 ## Step 4: Write the Task List
 
 1.  Write the complete slice/task list to `tasks.md` in the chosen spec directory. **Write the file without waiting for approval** — generating a task list is reversible (re-run `/awos:tasks` to revise), so the deliverable must never be gated behind a confirmation that an unattended run cannot answer.
-2.  If `SKIP_TESTS = true`, record a one-line note at the top of the generated `tasks.md` so that downstream commands (e.g. `/awos:verify`) can detect the choice: `<!-- skip-tests: true -->`.
+2.  Record a one-line marker at the very top of the generated `tasks.md`: `<!-- not-user-reviewed -->`. The file is written before review (Step 5), so it starts as a draft; Step 5 removes this marker once the user has reviewed it. Keep the marker shape exactly — downstream automations grep for it to tell a draft from a reviewed plan.
+3.  If `SKIP_TESTS = true`, record a one-line note at the top of the generated `tasks.md` so that downstream commands (e.g. `/awos:verify`) can detect the choice: `<!-- skip-tests: true -->`.
 
 ## Step 5: Surface for Review and Recommend Next Step
 
-1.  Report the saved path and present the slice/task plan for review. If the user requests changes (adjust, split, merge slices or tasks, or reassign subagents), apply them and re-save; otherwise they can revise later by re-running `/awos:tasks`.
-2.  If any tasks were assigned to `general-purpose` (because no specialist exists) or verification cannot be performed (missing MCPs/services), surface a table:
+1.  Report the saved path and present the slice/task plan for review.
+2.  Ask for review feedback strictly via the `AskUserQuestion` tool (e.g. options "Looks good — keep it as saved" / "I want changes") — never in plain text, which would end a non-interactive turn before the review outcome can be reported.
+3.  **When the user responds** (either "looks good" or after you apply their requested changes and re-save): remove the `<!-- not-user-reviewed -->` marker from the top of `tasks.md`, since the plan has now been reviewed. If they requested changes, apply them — adjust, split, merge slices or tasks, or reassign subagents — and re-save before removing the marker.
+4.  **If the review question goes unanswered** (dismissed, or the run is non-interactive): leave the file exactly as saved, marker included. Its presence is the signal that the plan was written but not reviewed; do not remove it.
+5.  If any tasks were assigned to `general-purpose` (because no specialist exists) or verification cannot be performed (missing MCPs/services), surface a table:
 
     | Task/Slice            | Issue                                                                               | Recommendation                                       |
     | --------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -135,4 +139,4 @@ Skip this step if `SKIP_TESTS = true`.
     | Slice N (QA)          | Feature Testing & Regression slice uses `general-purpose` — no QA-coded agent hired | Run `/awos:hire` to install `testing-expert`         |
     | Slice 3: Verification | Browser MCP not available                                                           | Install browser MCP to enable UI verification        |
 
-3.  Report the next command: `/awos:implement`.
+6.  Report the next command: `/awos:implement`.

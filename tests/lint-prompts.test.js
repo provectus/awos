@@ -657,6 +657,105 @@ test('SDD-07 recognizes the dual-model QA coverage', () => {
   );
 });
 
+// ---------------------------------------------------------------------------
+// Brownfield awareness contracts
+// ---------------------------------------------------------------------------
+
+test('product.md creates context/product/brownfield.md on brownfield detection', () => {
+  // /awos:product is the entry point for brownfield detection. When it finds
+  // source code indicators it must explore the codebase and write accepted
+  // findings to context/product/brownfield.md. Downstream commands (roadmap,
+  // architecture) depend on this file existing to avoid duplicate exploration.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    body.includes('context/product/brownfield.md'),
+    'commands/product.md must reference context/product/brownfield.md as the brownfield findings destination'
+  );
+  assert.ok(
+    /## Product/.test(body),
+    'commands/product.md must write brownfield findings under a "## Product" heading'
+  );
+});
+
+test('roadmap.md reads brownfield.md and appends a Capabilities section', () => {
+  // /awos:roadmap reads the brownfield file produced by /awos:product and
+  // runs its own focused exploration for capabilities. It must append its
+  // findings under a "## Capabilities" heading so /awos:architecture can
+  // see the accumulated context.
+  const body = readUtf8(path.join(commandsDir, 'roadmap.md'));
+  assert.ok(
+    body.includes('context/product/brownfield.md'),
+    'commands/roadmap.md must reference context/product/brownfield.md to consume and extend brownfield findings'
+  );
+  assert.ok(
+    /## Capabilities/.test(body),
+    'commands/roadmap.md must append brownfield findings under a "## Capabilities" heading'
+  );
+});
+
+test('architecture.md reads brownfield.md and appends a Technology section', () => {
+  // /awos:architecture reads the accumulated brownfield file and runs a
+  // focused exploration for the tech stack. It must append its findings
+  // under a "## Technology" heading.
+  const body = readUtf8(path.join(commandsDir, 'architecture.md'));
+  assert.ok(
+    body.includes('context/product/brownfield.md'),
+    'commands/architecture.md must reference context/product/brownfield.md to consume and extend brownfield findings'
+  );
+  assert.ok(
+    /## Technology/.test(body),
+    'commands/architecture.md must append brownfield findings under a "## Technology" heading'
+  );
+});
+
+test('hire.md removes brownfield.md after onboarding completes', () => {
+  // /awos:hire is the last onboarding command. By this point all brownfield
+  // knowledge has been absorbed into product-definition.md, roadmap.md, and
+  // architecture.md. The brownfield file must be cleaned up.
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    body.includes('context/product/brownfield.md'),
+    'commands/hire.md must reference context/product/brownfield.md for cleanup'
+  );
+  assert.ok(
+    /delete|remove/i.test(
+      body.substring(body.indexOf('context/product/brownfield.md'))
+    ),
+    'commands/hire.md must delete context/product/brownfield.md during its final steps'
+  );
+});
+
+test('brownfield exploration passes existing findings to avoid duplicates', () => {
+  // Each downstream exploration (roadmap, architecture) must pass the
+  // current brownfield.md content to the Explore agent so it skips
+  // already-confirmed findings. The literal <existing_findings> tag is
+  // the contract — if renamed, the Explore prompt silently ignores it.
+  for (const cmd of ['roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    assert.ok(
+      body.includes('<existing_findings>'),
+      `commands/${cmd} must pass existing brownfield findings inside <existing_findings> tags to the Explore agent`
+    );
+  }
+});
+
+test('brownfield commands use accept/correct/reject triage for findings', () => {
+  // All three brownfield-aware commands must walk through findings
+  // with the user using the same three-option triage pattern. This
+  // ensures consistent UX across the onboarding flow.
+  for (const cmd of ['product.md', 'roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    assert.ok(
+      /Accept with corrections/i.test(body),
+      `commands/${cmd} must offer "Accept with corrections" as a triage option for brownfield findings`
+    );
+    assert.ok(
+      /Reject/i.test(body),
+      `commands/${cmd} must offer "Reject" as a triage option for brownfield findings`
+    );
+  }
+});
+
 test('context/<path> references in prompts are internally consistent', () => {
   // Build a writer/reader map by scanning all prompts. A path is considered
   // consistent if every reference to it appears in at least one prompt — i.e.

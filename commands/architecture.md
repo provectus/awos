@@ -49,12 +49,42 @@ Follow this logic precisely.
 ## Scenario 1: Creation Mode
 
 1.  Read and synthesize the product definition and roadmap, paying close attention to features planned for Phase 1.
-2.  Work through the template section by section — not all at once.
+2.  **Brownfield context.** Check if `context/product/brownfield.md` exists (produced by `/awos:product` when it detects an existing codebase). If it does:
+
+    a. Read `context/product/brownfield.md`.
+
+    b. Construct the Explore prompt by reading `context/product/brownfield.md` and embedding its full content between `<existing_findings>` and `</existing_findings>` tags. Then launch an `Explore` agent focused on the technology stack:
+
+    ```text
+    Agent(subagent_type="Explore", description="Discover existing tech stack", prompt="
+    Explore this codebase and document the existing technology stack. Focus on:
+    - Languages and frameworks (with versions from config files)
+    - Databases, ORMs, and data stores
+    - Infrastructure (Docker, cloud configs, deployment scripts)
+    - External services and APIs (auth providers, payment, analytics)
+    - Testing frameworks and tools
+    - Build tools, bundlers, CI/CD
+
+    The following findings were already confirmed by the user — do not repeat them:
+
+    <existing_findings>
+    ... brownfield.md contents ...
+    </existing_findings>
+
+    Report only NEW findings not covered above. For each technology found, cite the file paths that evidence it. Be concise — report findings as bullet points.
+    ")
+    ```
+
+    c. Walk through any new findings with `AskUserQuestion` (Accept / Accept with corrections / Reject), same as earlier commands. Append accepted findings to `context/product/brownfield.md` under a `## Technology` heading. For corrected findings, record the corrected version.
+
+    d. Use the confirmed technology findings to pre-fill the architecture template. Frame the section-by-section walkthrough as "here's what you're using — confirm, and tell me what you want to change or add for the roadmap ahead."
+
+3.  Work through the template section by section — not all at once.
     - For each architectural area, propose a concrete title from the template placeholder.
-    - For each component, propose a specific technology with one or more alternatives, justified by the project context.
+    - For each component, propose a specific technology with one or more alternatives, justified by the project context. When brownfield findings provided a known technology, present it as the default.
     - If the user is unsure, ask clarifying questions about team skills, budget, or priorities. Do not proceed until the current section is confirmed.
     - Repeat for every architectural area (Data, Infrastructure, etc.).
-3.  Once all sections are confirmed, proceed to **Step 3: Finalization**.
+4.  Once all sections are confirmed, proceed to **Step 3: Finalization**.
 
 ---
 

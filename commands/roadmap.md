@@ -51,9 +51,36 @@ Follow this logic precisely.
 ## Scenario 1: Creation Mode
 
 1.  Read `context/product/product-definition.md` and the template at `.awos/templates/roadmap-template.md`.
-2.  Generate a proposed roadmap by populating the template structure with the product definition's Core Features, grouped into logical sequential phases.
-3.  Present the full draft to the user and ask for feedback.
-4.  Iterate until the user is satisfied, then proceed to **Step 3: Finalization**.
+2.  **Brownfield context.** Check if `context/product/brownfield.md` exists (produced by `/awos:product` when it detects an existing codebase). If it does:
+
+    a. Read `context/product/brownfield.md`.
+
+    b. Construct the Explore prompt by reading `context/product/brownfield.md` and embedding its full content between `<existing_findings>` and `</existing_findings>` tags. Then launch an `Explore` agent focused on existing capabilities:
+
+    ```text
+    Agent(subagent_type="Explore", description="Assess existing capabilities", prompt="
+    Explore this codebase and assess what's already built. Focus on:
+    - Features that are fully implemented and working (with evidence: routes, UI, tests)
+    - Features that appear partially implemented or scaffolded
+    - TODOs, FIXMEs, or planned features mentioned in code or docs
+
+    The following findings were already confirmed by the user — do not repeat them:
+
+    <existing_findings>
+    ... brownfield.md contents ...
+    </existing_findings>
+
+    Report only NEW findings not covered above. For each finding, cite the file paths that evidence it. Be concise — report findings as bullet points.
+    ")
+    ```
+
+    c. Walk through any new findings with `AskUserQuestion` (Accept / Accept with corrections / Reject), same as `/awos:product` does. Append accepted findings to `context/product/brownfield.md` under a `## Capabilities` heading. For corrected findings, record the corrected version.
+
+    d. Use the full set of confirmed capabilities (from brownfield.md) to anchor the roadmap: existing capabilities are noted as already done, and new phases focus on what comes next. Feed this into the roadmap generation in the next step.
+
+3.  Generate a proposed roadmap by populating the template structure with the product definition's Core Features, grouped into logical sequential phases.
+4.  Present the full draft to the user and ask for feedback.
+5.  Iterate until the user is satisfied, then proceed to **Step 3: Finalization**.
 
 ---
 

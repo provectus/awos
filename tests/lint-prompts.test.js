@@ -703,6 +703,18 @@ test('flow.md wires the delivery-flow generator contract end to end', () => {
     body.includes('`multiSelect`'),
     'commands/flow.md must direct combinable answers (review gates, entry points) to multiSelect questions instead of yes/no series or forced single picks'
   );
+  assert.ok(
+    /Reuse, Replace, or Compose/i.test(body) && /Step 4\.5/.test(body),
+    'commands/flow.md must evaluate existing project automation in Step 4.5 (reuse/replace/compose) rather than adopting or ignoring it unconditionally — discovered automation is compared, and close calls are asked with the evidence'
+  );
+  assert.ok(
+    /drives a large span of the flow autonomously/i.test(body),
+    'commands/flow.md must detect an existing command that overlaps the whole flow and surface the collision instead of generating a competing /implement-ticket'
+  );
+  assert.ok(
+    /\*\*Notifications\.\*\*/.test(body),
+    'commands/flow.md must interview the Notifications dimension — the flow announces transitions so the team stays aware as gates are removed'
+  );
 });
 
 test('implement-ticket-template.md carries stage markers and the AWOS chain', () => {
@@ -812,6 +824,14 @@ test('delivery-flow-template.md preserves customizations and the tooling invento
   assert.ok(
     /## .*Context Strategy/.test(body),
     'delivery-flow-template.md must declare a "Context Strategy" section — subagent-isolated stages and the flow log are recorded decisions, not ad-hoc behavior'
+  );
+  assert.ok(
+    /## .*Notifications/.test(body),
+    'delivery-flow-template.md must declare a "Notifications" section — where the flow announces transitions so the team stays aware as gates are removed'
+  );
+  assert.ok(
+    /Stage automation \(reuse \/ replace \/ compose\)/.test(body),
+    'delivery-flow-template.md must record the per-stage reuse/replace/compose decision for overlapping project automation, so re-runs do not regenerate over a reused command'
   );
 });
 

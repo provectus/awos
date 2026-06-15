@@ -15,6 +15,10 @@ outside brackets survives into the generated command as-is.
 
 Takes one functional task from [source per §1 of delivery-flow.md] and drives it through spec, implementation, verification, review, and delivery until it is Done.
 
+## Notifications
+
+[Per §9 of delivery-flow.md: on each recorded transition (e.g. spec ready, change request opened, gates passed, merged, deployed, blocked-and-waiting), post a short status to the team channel via its §7 transport — so the team stays aware as the flow runs unattended. Omit this section entirely if §9 records "none".]
+
 ## Arguments
 
 `$ARGUMENTS` — [expected ticket reference shape per §1: ID, URL, or file path]. If empty, ask the user.

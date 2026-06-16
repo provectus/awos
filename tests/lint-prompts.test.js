@@ -672,8 +672,23 @@ test('product.md creates context/product/brownfield.md on brownfield detection',
     'commands/product.md must reference context/product/brownfield.md as the brownfield findings destination'
   );
   assert.ok(
-    /## Product/.test(body),
-    'commands/product.md must write brownfield findings under a "## Product" heading'
+    /under a `## Product` heading/.test(body),
+    'commands/product.md must write brownfield findings under a "## Product" heading (anchored to brownfield.md context)'
+  );
+});
+
+test('product.md brownfield detection includes source code indicators', () => {
+  // The whole brownfield entry point depends on product.md checking for
+  // source code indicators. If the indicator list is hollowed out,
+  // brownfield never fires and the entire downstream chain goes dead.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    body.includes('package.json'),
+    'commands/product.md must check for package.json as a brownfield indicator'
+  );
+  assert.ok(
+    body.includes('`src/`'),
+    'commands/product.md must check for src/ as a brownfield indicator'
   );
 });
 
@@ -688,8 +703,8 @@ test('roadmap.md reads brownfield.md and appends a Capabilities section', () => 
     'commands/roadmap.md must reference context/product/brownfield.md to consume and extend brownfield findings'
   );
   assert.ok(
-    /## Capabilities/.test(body),
-    'commands/roadmap.md must append brownfield findings under a "## Capabilities" heading'
+    /under a `## Capabilities` heading/.test(body),
+    'commands/roadmap.md must append brownfield findings under a "## Capabilities" heading (anchored to brownfield.md context)'
   );
 });
 
@@ -703,26 +718,33 @@ test('architecture.md reads brownfield.md and appends a Technology section', () 
     'commands/architecture.md must reference context/product/brownfield.md to consume and extend brownfield findings'
   );
   assert.ok(
-    /## Technology/.test(body),
-    'commands/architecture.md must append brownfield findings under a "## Technology" heading'
+    /under a `## Technology` heading/.test(body),
+    'commands/architecture.md must append brownfield findings under a "## Technology" heading (anchored to brownfield.md context)'
   );
 });
 
-test('hire.md removes brownfield.md after onboarding completes', () => {
+test('hire.md conditionally removes brownfield.md after onboarding completes', () => {
   // /awos:hire is the last onboarding command. By this point all brownfield
   // knowledge has been absorbed into product-definition.md, roadmap.md, and
-  // architecture.md. The brownfield file must be cleaned up.
+  // architecture.md. The brownfield file must be conditionally cleaned up.
   const body = readUtf8(path.join(commandsDir, 'hire.md'));
   assert.ok(
-    body.includes('context/product/brownfield.md'),
-    'commands/hire.md must reference context/product/brownfield.md for cleanup'
+    /If `context\/product\/brownfield\.md` exists, delete it/i.test(body),
+    'commands/hire.md must conditionally delete context/product/brownfield.md (guard + delete in one sentence)'
   );
-  assert.ok(
-    /delete|remove/i.test(
-      body.substring(body.indexOf('context/product/brownfield.md'))
-    ),
-    'commands/hire.md must delete context/product/brownfield.md during its final steps'
-  );
+});
+
+test('brownfield commands launch Explore agents', () => {
+  // The actual mechanism for brownfield awareness is the Explore agent.
+  // Without it, the headings and triage prose are dead letters. Assert
+  // that all three commands invoke the Explore subagent.
+  for (const cmd of ['product.md', 'roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    assert.ok(
+      /subagent_type="Explore"/.test(body),
+      `commands/${cmd} must launch an Explore agent for brownfield analysis`
+    );
+  }
 });
 
 test('brownfield exploration passes existing findings to avoid duplicates', () => {
@@ -730,27 +752,43 @@ test('brownfield exploration passes existing findings to avoid duplicates', () =
   // current brownfield.md content to the Explore agent so it skips
   // already-confirmed findings. The literal <existing_findings> tag is
   // the contract — if renamed, the Explore prompt silently ignores it.
+  // The "Report only NEW" instruction makes the tag actually work.
   for (const cmd of ['roadmap.md', 'architecture.md']) {
     const body = readUtf8(path.join(commandsDir, cmd));
     assert.ok(
       body.includes('<existing_findings>'),
       `commands/${cmd} must pass existing brownfield findings inside <existing_findings> tags to the Explore agent`
     );
+    assert.ok(
+      /Report only NEW/i.test(body),
+      `commands/${cmd} must instruct the Explore agent to report only NEW findings`
+    );
   }
 });
 
-test('brownfield commands use accept/correct/reject triage for findings', () => {
-  // All three brownfield-aware commands must walk through findings
-  // with the user using the same three-option triage pattern. This
-  // ensures consistent UX across the onboarding flow.
+test('product.md does not consume existing_findings (it is the first command)', () => {
+  // product.md is always first in the brownfield chain — it must not
+  // consume <existing_findings> since there are none before it. If it
+  // gained that tag, it would imply a circular dependency.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    !/<existing_findings>/.test(body),
+    'commands/product.md must not contain <existing_findings> — it is the first brownfield command'
+  );
+});
+
+test('brownfield commands use accept/reject triage for findings', () => {
+  // All three brownfield-aware commands must triage findings with the
+  // user offering Accept and Reject options. The user can also provide
+  // free-text via the built-in "Other" field.
   for (const cmd of ['product.md', 'roadmap.md', 'architecture.md']) {
     const body = readUtf8(path.join(commandsDir, cmd));
     assert.ok(
-      /Accept with corrections/i.test(body),
-      `commands/${cmd} must offer "Accept with corrections" as a triage option for brownfield findings`
+      /Accept/.test(body),
+      `commands/${cmd} must offer "Accept" as a triage option for brownfield findings`
     );
     assert.ok(
-      /Reject/i.test(body),
+      /Reject/.test(body),
       `commands/${cmd} must offer "Reject" as a triage option for brownfield findings`
     );
   }

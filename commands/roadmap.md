@@ -67,14 +67,14 @@ Follow this logic precisely.
     The following findings were already confirmed by the user — do not repeat them:
 
     <existing_findings>
-    ... brownfield.md contents ...
+    {paste the full current contents of context/product/brownfield.md here}
     </existing_findings>
 
     Report only NEW findings not covered above. For each finding, cite the file paths that evidence it. Be concise — report findings as bullet points.
     ")
     ```
 
-    c. Walk through any new findings with `AskUserQuestion` (Accept / Accept with corrections / Reject), same as `/awos:product` does. Append accepted findings to `context/product/brownfield.md` under a `## Capabilities` heading. For corrected findings, record the corrected version.
+    c. Triage new findings with `AskUserQuestion`, same as `/awos:product` does — batch by category, offer Accept / Reject, user can provide free-text via "Other". Discard rejected findings. Append accepted findings to `context/product/brownfield.md` under a `## Capabilities` heading.
 
     d. Use the full set of confirmed capabilities (from brownfield.md) to anchor the roadmap: existing capabilities are noted as already done, and new phases focus on what comes next. Feed this into the roadmap generation in the next step.
 

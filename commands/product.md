@@ -78,10 +78,7 @@ First, check if the file `context/product/product-definition.md` exists.
     ")
     ```
 
-    b. Walk through the findings one by one — each discovered entity (purpose, audience signal, feature, journey step) gets its own confirmation. For each finding, use `AskUserQuestion` with three options:
-    - **Accept** — the finding is accurate as stated.
-    - **Accept with corrections** — the finding is directionally right but needs adjustment. If chosen, ask the user for their correction.
-    - **Reject** — the finding is wrong or irrelevant; discard it.
+    b. Triage findings with the user. Group related findings by category (e.g. all features in one call, audience signals in another) and use `AskUserQuestion` to batch up to four per call. For each finding, offer **Accept** and **Reject** as options. The user can also select "Other" to provide free-text feedback — treat it according to intent (correction, substitution, partial accept, or any other reaction). Discard rejected findings.
 
     c. Write all accepted and corrected findings to `context/product/brownfield.md` under a `## Product` heading. For corrected findings, record the corrected version, not the original. Downstream commands (`/awos:roadmap`, `/awos:architecture`) will append their own findings to this file.
 

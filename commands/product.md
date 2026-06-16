@@ -30,6 +30,7 @@ Your primary task is to **fill in** a product definition template using a guided
 # OUTPUTS
 
 1.  **`context/product/product-definition.md`:** The complete, non-technical product definition, created by filling in the template.
+2.  **Optional Output:** `context/product/brownfield.md`. Created on brownfield projects only. Downstream commands (`/awos:roadmap`, `/awos:architecture`) extend and eventually delete this file.
 
 ---
 

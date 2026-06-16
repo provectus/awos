@@ -74,7 +74,7 @@ Follow this logic precisely.
     ")
     ```
 
-    c. Triage new findings with `AskUserQuestion`, same as `/awos:product` does — batch by category, offer Accept / Reject, user can provide free-text via "Other". Discard rejected findings. Append accepted findings to `context/product/brownfield.md` under a `## Capabilities` heading.
+    c. Triage new findings with the user. Group related findings by category and use `AskUserQuestion` to batch up to four per call. For each finding, offer **Accept** and **Reject** as options. The user can also select "Other" to provide free-text feedback — treat it according to intent (correction, substitution, partial accept, or any other reaction). Discard rejected findings. Append accepted and corrected findings to `context/product/brownfield.md` under a `## Capabilities` heading. For corrected findings, record the corrected version, not the original.
 
     d. Use the full set of confirmed capabilities (from brownfield.md) to anchor the roadmap: existing capabilities are noted as already done, and new phases focus on what comes next. Feed this into the roadmap generation in the next step.
 

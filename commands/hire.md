@@ -208,8 +208,4 @@ Report:
 - **Coverage Report:** path to `context/product/hired-agents.md`
 - **Gaps Remaining:** any technologies without specific skill coverage
 
-## Step 10: Brownfield Cleanup
-
-If `context/product/brownfield.md` exists, delete it. By this point all brownfield knowledge has been absorbed into `product-definition.md`, `roadmap.md`, and `architecture.md` — the brownfield file is no longer needed.
-
 End with the next command: `/awos:tasks`.

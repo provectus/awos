@@ -80,7 +80,7 @@ First, check if the file `context/product/product-definition.md` exists.
 
     b. Triage findings with the user. Group related findings by category (e.g. all features in one call, audience signals in another) and use `AskUserQuestion` to batch up to four per call. For each finding, offer **Accept** and **Reject** as options. The user can also select "Other" to provide free-text feedback — treat it according to intent (correction, substitution, partial accept, or any other reaction). Discard rejected findings.
 
-    c. Write all accepted and corrected findings to `context/product/brownfield.md` under a `## Product` heading. For corrected findings, record the corrected version, not the original. Downstream commands (`/awos:roadmap`, `/awos:architecture`) will append their own findings to this file.
+    c. Create `context/product/brownfield.md` with a `## Product` heading. List all accepted and corrected findings under it — for corrected findings, record the corrected version, not the original. If every finding was rejected or the exploration surfaced nothing, still create the file with an empty `## Product` section; downstream commands (`/awos:roadmap`, `/awos:architecture`) key on the file's existence to run their own explorations.
 
 2.  If `<user_prompt>` is non-empty, briefly note that you'll use it as a starting point, then refine from there.
 3.  Walk the user through the sections of the template. When step 1 produced brownfield findings, use the Product section to propose draft answers — frame questions as "does this match what you intend, or would you change it?" rather than asking from a blank slate. The interview still covers every section; the exploration gives better defaults, not fewer questions.

@@ -11,7 +11,7 @@
     {
       "name": "awos",
       "source": "./plugins/awos",
-      "description": "Comprehensive code quality audit framework with auto-discoverable dimensions",
+      "description": "Code quality audit framework with auto-discoverable dimensions, plus the /awos:flow delivery-flow setup assistant",
       "version": "2.2.0"
     }
   ]

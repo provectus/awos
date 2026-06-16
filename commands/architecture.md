@@ -83,5 +83,4 @@ Give the user a quick read on whether the stack already has specialist agents �
 2.  Look at the names of subagents registered in `.claude/agents/` (if any). Without going deep, note how many of the listed technologies do not appear to have a matching specialist by description.
 3.  Report the saved path and the next commands:
     - `/awos:hire` (always — it owns the canonical coverage report and installs missing specialists).
-    - `/awos:flow` after `/awos:hire` — generates the project's `/implement-ticket` delivery flow.
     - `/awos:spec` after that.

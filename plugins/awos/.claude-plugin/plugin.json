@@ -1,10 +1,10 @@
 {
   "name": "awos",
   "version": "2.2.0",
-  "description": "AWOS code quality audit framework",
+  "description": "AWOS code quality audit framework and the /awos:flow delivery-flow setup assistant",
   "author": {
     "name": "Provectus"
   },
   "license": "MIT",
-  "keywords": ["audit", "code-quality", "dimensions"]
+  "keywords": ["audit", "code-quality", "dimensions", "delivery-flow"]
 }

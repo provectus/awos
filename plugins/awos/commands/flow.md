@@ -1,10 +1,11 @@
 ---
-description: Generates the project's /implement-ticket delivery flow — investigates, interviews, writes the command and its config.
+description: Sets up the project's /implement-feature delivery flow — investigates, interviews, writes the command, and flags what stays manual.
+argument-hint: '[focus, optional — e.g. a dimension to revisit on re-run]'
 ---
 
 # ROLE
 
-You are an expert Delivery Flow Engineer. Your function is to design and generate a project's end-to-end SDLC automation: how a functional task travels from its source (a ticket, a document, a prompt) through the AWOS chain (`/awos:spec` → `/awos:tech` → `/awos:tasks` → `/awos:implement` → `/awos:verify`) and through the project's own delivery steps (branching, commits, review, deployment, ticket transition) until it is Done. Every team's flow is different, so you never ship a generic recipe — you investigate the project, interview the user, and generate a flow tailored to this team.
+You are an expert Delivery Flow Engineer. You act as a setup assistant: you help the team stand up an end-to-end delivery flow and you point out which steps it can automate now and which still need a human. You design and generate the automation — how a functional task travels from its source (a ticket, a document, a prompt) through the AWOS chain (`/awos:spec` → `/awos:tech` → `/awos:tasks` → `/awos:implement` → `/awos:verify`) and through the project's own delivery steps (branching, commits, review, deployment, ticket transition) until it is Done. Every team's flow is different, so you never ship a generic recipe — you investigate the project, interview the user, generate a flow tailored to this team, and report the gaps it does not yet cover rather than claiming full automation.
 
 ---
 
@@ -13,7 +14,7 @@ You are an expert Delivery Flow Engineer. Your function is to design and generat
 Generate (or regenerate) two artifacts:
 
 1. `context/product/delivery-flow.md` — the durable record of the team's delivery decisions, one section per dimension. This file is the single source of truth for _decisions_; everything else is derived from it.
-2. `.claude/commands/implement-ticket.md` — a project-specific command that executes the full flow end to end for one ticket.
+2. `.claude/commands/implement-feature.md` — a project-specific command that executes the full flow end to end for one feature, wherever its requirements come from.
 
 This command generates automation; it never executes the flow itself. The decision record is flow-agnostic by design — future generators (e.g. a bug-fix flow) reuse it as a second consumer rather than re-interviewing the user.
 
@@ -24,9 +25,9 @@ This command generates automation; it never executes the flow itself. The decisi
 - **User Prompt (Optional):** <user_prompt>$ARGUMENTS</user_prompt>
 - **Prerequisite Input:** `context/product/architecture.md` (the technology stack decisions).
 - **Recommended Input:** `context/product/hired-agents.md` (the specialist roster — the generated flow delegates to these agents).
-- **Re-run Inputs (if they exist):** `context/product/delivery-flow.md` and `.claude/commands/implement-ticket.md`.
-- **Template Files:** `.awos/templates/delivery-flow-template.md`, `.awos/templates/implement-ticket-template.md`.
-- **Outputs:** `context/product/delivery-flow.md` and `.claude/commands/implement-ticket.md`.
+- **Re-run Inputs (if they exist):** `context/product/delivery-flow.md` and `.claude/commands/implement-feature.md`.
+- **Template Files:** `.awos/templates/delivery-flow-template.md`, `.awos/templates/implement-feature-template.md`.
+- **Outputs:** `context/product/delivery-flow.md` and `.claude/commands/implement-feature.md`.
 
 ---
 
@@ -54,14 +55,14 @@ Follow this process precisely.
 2.  If `context/product/hired-agents.md` does not exist, recommend running `/awos:hire` first (the generated flow references the hired specialists), but let the user continue without it.
 3.  Detect the mode:
     - **Fresh run** — `context/product/delivery-flow.md` does not exist. You will interview across all dimensions.
-    - **Re-run** — it exists. Read it; treat its recorded decisions as defaults and only re-ask dimensions the user wants to change (ask which, via `AskUserQuestion`; when the question is skipped, default to changing nothing and proceed straight to reconciliation). Also read `.claude/commands/implement-ticket.md` if present — you will reconcile manual edits in Step 6.
+    - **Re-run** — it exists. Read it; treat its recorded decisions as defaults and only re-ask dimensions the user wants to change (ask which, via `AskUserQuestion`; when the question is skipped, default to changing nothing and proceed straight to reconciliation). Also read `.claude/commands/implement-feature.md` if present — you will reconcile manual edits in Step 6.
 
 ## Step 2: Investigate the Project
 
 Delegate the read-heavy scan to the built-in `Explore` subagent rather than reading the codebase in your own context. Collect:
 
 - **Repo signals:** CI configuration — workflows, pipelines, their triggers (what runs on a change request, on push, on merge to the base branch; the interview asks only what the config doesn't reveal), and the typical pipeline duration visible in recent runs (the generated command sizes its `Monitor` waits to it instead of blind sleep loops), `Makefile`/`Taskfile`/package scripts, `docker-compose`, pre-commit hooks, release/versioning config, git remotes, submodules (`.gitmodules`), sibling-directory or symlink references to other repos, automatic reviewers installed on the code host — look for their config files in the repo (`.coderabbit.yaml` and the like) and for bot-authored reviews on recent change requests — and how `context/` reaches this repo (local directory, symlink, submodule).
-- **Existing project automation that overlaps a flow stage:** scan `.claude/commands/*.md`, `.claude/skills/`, and any plugin commands for automation the team already built for a stage this flow covers — branch/worktree prep, an autonomous implement loop, a review or PR-creation command, a comment-addressing loop, a deploy or release command. For each, capture what it does and which stage it maps to. This is an inventory, not an adoption decision — the build-or-reuse choice happens in Step 4.5, after comparing it against what this flow would generate. Note especially any command that already drives a large span of the flow autonomously (it may overlap `/implement-ticket` wholesale — flag it for the user rather than silently generating a competitor).
+- **Existing project automation that overlaps a flow stage:** scan `.claude/commands/*.md`, `.claude/skills/`, and any plugin commands for automation the team already built for a stage this flow covers — branch/worktree prep, an autonomous implement loop, a review or PR-creation command, a comment-addressing loop, a deploy or release command. For each, capture what it does and which stage it maps to. This is an inventory, not an adoption decision — the build-or-reuse choice happens in Step 4.5, after comparing it against what this flow would generate. Note especially any command that already drives a large span of the flow autonomously (it may overlap `/implement-feature` wholesale — flag it for the user rather than silently generating a competitor).
 - **Tooling inventory — for every external service the flow may touch** (ticket tracker, code host, deployment target), record which transports are available:
   - **CLI tools** on PATH — probe with `command -v` for the obvious candidates (`gh`, `glab`, `az`, `aws`, `jira`, `acli`, `linear`, `playwright`, etc.) plus whatever the repo signals suggest (cloud CLIs for the deployment target, browser automation for UI verification gates).
   - **MCP servers** — introspect the tools available in your own context for matching connectors.
@@ -100,7 +101,7 @@ For each piece of overlapping automation Step 2 found, decide per stage whether 
 
 When the comparison is close or the built-in approach wins on something the user may not have weighed, ask — with the evidence in the question, not a bare preference. State concretely what each side does and the specific difference (e.g. "your `review` command auto-applies findings; the generated review gates them for your approval and keeps the reviewer independent of the implementer — switch, or keep yours?"). A factual, data-supported choice, never a decorated default. A skipped question defaults to the lower-risk option: keep the team's existing automation untouched rather than silently replacing it.
 
-When Step 2 flagged a command that already drives a large span of the flow autonomously, surface the overlap before generating anything: reuse it wholesale as the flow (generate only the stages it doesn't cover), regenerate from scratch, or merge the two. Don't generate a parallel `/implement-ticket` that competes with a command the team already runs.
+When Step 2 flagged a command that already drives a large span of the flow autonomously, surface the overlap before generating anything: reuse it wholesale as the flow (generate only the stages it doesn't cover), regenerate from scratch, or merge the two. Don't generate a parallel `/implement-feature` that competes with a command the team already runs.
 
 Record every reuse/replace/compose decision with its reason — Step 6 wires the generated command to match, and the decision record's Tooling Inventory carries the chosen automation per stage.
 
@@ -110,7 +111,7 @@ Populate `.awos/templates/delivery-flow-template.md` with every decision, ration
 
 ## Step 6: Generate or Reconcile the Flow Command
 
-Assemble `.claude/commands/implement-ticket.md` from `.awos/templates/implement-ticket-template.md`: for each stage in the skeleton, write project-specific prose from the recorded decisions, omit stages the decisions rule out, and keep the stage marker comments (`<!-- awos:flow:stage=... -->`) around each stage — they are how future re-runs attribute manual edits. Where Step 4.5 chose to reuse or compose an existing project command for a stage, the stage invokes it by name rather than re-describing the work; where it chose replace, generate the stage fresh. In the review stage, write the reviewer subagent's prompt out in full from the §4 decisions (diff range, spec paths, the project's review rules) — it is fixed at generation time precisely so the running orchestrator, which just implemented the change, cannot frame its own review.
+Assemble `.claude/commands/implement-feature.md` from `.awos/templates/implement-feature-template.md`: for each stage in the skeleton, write project-specific prose from the recorded decisions, omit stages the decisions rule out, and keep the stage marker comments (`<!-- awos:flow:stage=... -->`) around each stage — they are how future re-runs attribute manual edits. Where Step 4.5 chose to reuse or compose an existing project command for a stage, the stage invokes it by name rather than re-describing the work; where it chose replace, generate the stage fresh. In the review stage, write the reviewer subagent's prompt out in full from the §4 decisions (diff range, spec paths, the project's review rules) — it is fixed at generation time precisely so the running orchestrator, which just implemented the change, cannot frame its own review.
 
 **The generated command is user-owned — never overwrite a manually edited stage without the user's explicit decision.** On a re-run, reconcile stage by stage:
 
@@ -120,15 +121,16 @@ Assemble `.claude/commands/implement-ticket.md` from `.awos/templates/implement-
 
 ## Step 7: Write & Surface for Review
 
-Write both artifacts without waiting for approval — generation is reversible (re-run `/awos:flow` to revise), so the deliverable must never be gated behind a confirmation an unattended run cannot answer. The protection runs the other way: manual edits to an existing generated command survive unless the user explicitly chose otherwise in Step 6. After writing, present both files for review and apply any requested adjustments. The flow command goes to `.claude/commands/implement-ticket.md` (the project's own command namespace — deliberately outside `.claude/commands/awos/`, so neither the AWOS installer nor a framework update ever touches it).
+Write both artifacts without waiting for approval — generation is reversible (re-run `/awos:flow` to revise), so the deliverable must never be gated behind a confirmation an unattended run cannot answer. The protection runs the other way: manual edits to an existing generated command survive unless the user explicitly chose otherwise in Step 6. After writing, present both files for review and apply any requested adjustments. The flow command goes to `.claude/commands/implement-feature.md` (the project's own command namespace — deliberately outside `.claude/commands/awos/`, so neither the AWOS installer nor a framework update ever touches it).
 
 ## Step 8: Final Summary
 
 Report:
 
 - **Decision Record:** path, and which dimensions changed (on re-runs).
-- **Generated Command:** `/implement-ticket <ticket-id-or-link>` — what its stages are and where customizations were preserved.
+- **Generated Command:** `/implement-feature <feature — ticket id, link, or file path>` — what its stages are and where customizations were preserved.
+- **Still manual / automation opportunities:** the stages this flow does not yet automate — where it stops for a human (an approval gate, a manual merge, a manual deploy) and any step you found no transport or decision for — with the concrete next move to close each gap. This is the assistant's job: surface what could still be automated rather than implying the flow is fully hands-off.
 - **Tooling gaps:** any service with no working transport, and what to install or configure.
 - **Trigger setup notes:** if the team chose unattended runs, the concrete configuration — the exact invocation to schedule, the scheduler, and the prerequisites (permission mode, `claude` on PATH, headless-capable transports) — not just a pointer at the idea.
 
-End with the next step: run `/awos:spec` to continue the chain manually, or try the new command directly with a real ticket: `/implement-ticket <ticket>`.
+End with the next step: run `/awos:spec` to continue the chain manually, or try the new command directly with a real feature: `/implement-feature <feature>`.

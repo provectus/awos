@@ -208,4 +208,4 @@ Report:
 - **Coverage Report:** path to `context/product/hired-agents.md`
 - **Gaps Remaining:** any technologies without specific skill coverage
 
-End with the next command: `/awos:flow` if `context/product/delivery-flow.md` does not exist yet (it generates the project's `/implement-ticket` delivery flow from the roster you just assembled), otherwise `/awos:tasks`.
+End with the next command: `/awos:tasks`.

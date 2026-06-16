@@ -1,6 +1,6 @@
 ---
-description: Implements one ticket end-to-end — fetches it, runs the AWOS chain, and delivers per the team's flow.
-argument-hint: '[ticket ID, link, or file path]'
+description: Implements one feature end-to-end — fetches its requirements, runs the AWOS chain, and delivers per the team's flow.
+argument-hint: '[feature — ticket ID, link, or file path]'
 ---
 
 <!--
@@ -11,9 +11,9 @@ they let re-runs attribute manual edits to specific stages. Fixed prose
 outside brackets survives into the generated command as-is.
 -->
 
-# Implement Ticket End-to-End
+# Implement a Feature End-to-End
 
-Takes one functional task from [source per §1 of delivery-flow.md] and drives it through spec, implementation, verification, review, and delivery until it is Done.
+Takes one feature — its requirements from [source per §1 of delivery-flow.md], wherever they come from — and drives it through spec, implementation, verification, review, and delivery until it is Done.
 
 ## Notifications
 
@@ -44,7 +44,7 @@ A flow this long degrades in one context window — judgment is worst exactly wh
 
 ### Step 2: Detect the Entry Point
 
-Start with a cheap preflight on the fast model tier (per §8): is this ticket already delivered — a merged change request, a recorded Done? If so, report that and stop. Then: if `context/spec/{SPEC_NAME}/flow-log.md` exists, read it first — it names the last completed stage; resume from the next one. [Per §1: if a spec directory for this ticket may already exist under `context/spec/`, inspect it and resume from the first missing artifact — skip `/awos:spec` if `functional-spec.md` exists, skip `/awos:tech` if `technical-considerations.md` exists, and so on. Omit the pre-written-spec handling if specs never arrive pre-written.]
+Start with a cheap preflight on the fast model tier (per §8): is this feature already delivered — a merged change request, a recorded Done? If so, report that and stop. Then: if `context/spec/{SPEC_NAME}/flow-log.md` exists, read it first — it names the last completed stage; resume from the next one. [Per §1: if a spec directory for this feature may already exist under `context/spec/`, inspect it and resume from the first missing artifact — skip `/awos:spec` if `functional-spec.md` exists, skip `/awos:tech` if `technical-considerations.md` exists, and so on. Omit the pre-written-spec handling if specs never arrive pre-written.]
 
 <!-- /awos:flow:stage -->
 

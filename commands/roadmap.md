@@ -21,6 +21,7 @@ Your task is to manage the product roadmap file located at `context/product/road
 
 - **Template File:** `.awos/templates/roadmap-template.md`. This is the required structure for the roadmap.
 - **Prerequisite Input:** `context/product/product-definition.md`. This file MUST exist.
+- **Optional Input:** `context/product/brownfield.md` (produced by `/awos:product` on brownfield projects).
 - **Primary Input/Output:** `context/product/roadmap.md`. This is the file you will create or update.
 
 ---

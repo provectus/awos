@@ -19,6 +19,7 @@ Your task is to manage the architecture file located at `context/product/archite
 - **Template File:** `.awos/templates/architecture-template.md` (The required structure).
 - **Prerequisite Input 1:** `context/product/product-definition.md` (The "what" and "why").
 - **Prerequisite Input 2:** `context/product/roadmap.md` (The implementation phases).
+- **Optional Input:** `context/product/brownfield.md` (produced by `/awos:product`, extended by `/awos:roadmap`; deleted at end of this command).
 - **Primary Input/Output:** `context/product/architecture.md` (The file to create or update).
 
 ---

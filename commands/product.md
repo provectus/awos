@@ -63,7 +63,7 @@ First, check if the file `context/product/product-definition.md` exists.
 
 ### Step 2B: Creation Mode
 
-1.  **Brownfield detection.** Check whether the project already has source code by looking for common indicators (`src/`, `app/`, `lib/`, `package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml`, `Gemfile`, `build.gradle`, `*.csproj`, `Makefile`, `CMakeLists.txt`, `setup.py`, `pyproject.toml`, or similar). If any are found, this is a brownfield project — run a comprehensive exploration before starting the interview:
+1.  **Brownfield detection.** Check whether the project already has source code by looking for common indicators (`src/`, `app/`, `lib/`, `package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml`, `Gemfile`, `build.gradle`, `*.csproj`, `Makefile`, `CMakeLists.txt`, `setup.py`, `pyproject.toml`, or similar). If any are found, ask the user whether to run codebase exploration using `AskUserQuestion` with two options: **Yes, explore the codebase** ("Use existing code as context for the product definition") and **No, start from scratch** ("Treat this as a new project — ignore existing code"). If the user chooses to skip, proceed to step 2 as if no source code was found. Otherwise, run a comprehensive exploration before starting the interview:
 
     a. Launch an `Explore` agent focused on the product domain:
 

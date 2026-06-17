@@ -839,6 +839,17 @@ test('brownfield commands guard exploration on brownfield.md existence', () => {
   }
 });
 
+test('product.md lets the user opt out of brownfield exploration', () => {
+  // Even when source code is detected, the user may want to start from
+  // scratch (e.g. reinitializing a project). product.md must ask before
+  // launching the Explore agent.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    /start from scratch/i.test(body),
+    'commands/product.md must offer a "start from scratch" option to skip brownfield exploration'
+  );
+});
+
 test('product.md creates brownfield.md even when all findings are rejected', () => {
   // product.md must always create brownfield.md when a brownfield project is
   // detected, even if the user rejects every finding. The file acts as a

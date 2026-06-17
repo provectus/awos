@@ -26,7 +26,7 @@ This command generates automation; it never executes the flow itself. The decisi
 - **Prerequisite Input:** `context/product/architecture.md` (the technology stack decisions).
 - **Recommended Input:** `context/product/hired-agents.md` (the specialist roster — the generated flow delegates to these agents).
 - **Re-run Inputs (if they exist):** `context/product/delivery-flow.md` and `.claude/commands/implement-feature.md`.
-- **Template Files:** `.awos/templates/delivery-flow-template.md`, `.awos/templates/implement-feature-template.md`.
+- **Template Files (bundled with this command in the plugin):** `${CLAUDE_PLUGIN_ROOT}/templates/delivery-flow-template.md`, `${CLAUDE_PLUGIN_ROOT}/templates/implement-feature-template.md`.
 - **Outputs:** `context/product/delivery-flow.md` and `.claude/commands/implement-feature.md`.
 
 ---
@@ -107,11 +107,11 @@ Record every reuse/replace/compose decision with its reason — Step 6 wires the
 
 ## Step 5: Write the Decision Record
 
-Populate `.awos/templates/delivery-flow-template.md` with every decision, rationale, and the tooling-inventory table. Record every team-doc pointer from Step 3 — found by investigation or provided by the user, in whatever form (URL, path, Slack channel, page title) — in the Team Docs Consulted list, so re-runs and future flow generators can re-read them instead of re-asking. On a re-run, carry the **Local Customizations** section forward unchanged unless the user explicitly retires an entry, and append to the Generation Log.
+Populate the decision record from `${CLAUDE_PLUGIN_ROOT}/templates/delivery-flow-template.md` with every decision, rationale, and the tooling-inventory table, writing the result to `context/product/delivery-flow.md`. Record every team-doc pointer from Step 3 — found by investigation or provided by the user, in whatever form (URL, path, Slack channel, page title) — in the Team Docs Consulted list, so re-runs and future flow generators can re-read them instead of re-asking. On a re-run, carry the **Local Customizations** section forward unchanged unless the user explicitly retires an entry, and append to the Generation Log.
 
 ## Step 6: Generate or Reconcile the Flow Command
 
-Assemble `.claude/commands/implement-feature.md` from `.awos/templates/implement-feature-template.md`: for each stage in the skeleton, write project-specific prose from the recorded decisions, omit stages the decisions rule out, and keep the stage marker comments (`<!-- awos:flow:stage=... -->`) around each stage — they are how future re-runs attribute manual edits. Where Step 4.5 chose to reuse or compose an existing project command for a stage, the stage invokes it by name rather than re-describing the work; where it chose replace, generate the stage fresh. In the review stage, write the reviewer subagent's prompt out in full from the §4 decisions (diff range, spec paths, the project's review rules) — it is fixed at generation time precisely so the running orchestrator, which just implemented the change, cannot frame its own review.
+Assemble `.claude/commands/implement-feature.md` from `${CLAUDE_PLUGIN_ROOT}/templates/implement-feature-template.md`: for each stage in the skeleton, write project-specific prose from the recorded decisions, omit stages the decisions rule out, and keep the stage marker comments (`<!-- awos:flow:stage=... -->`) around each stage — they are how future re-runs attribute manual edits. Where Step 4.5 chose to reuse or compose an existing project command for a stage, the stage invokes it by name rather than re-describing the work; where it chose replace, generate the stage fresh. In the review stage, write the reviewer subagent's prompt out in full from the §4 decisions (diff range, spec paths, the project's review rules) — it is fixed at generation time precisely so the running orchestrator, which just implemented the change, cannot frame its own review.
 
 **The generated command is user-owned — never overwrite a manually edited stage without the user's explicit decision.** On a re-run, reconcile stage by stage:
 

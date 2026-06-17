@@ -30,6 +30,7 @@ const dimensionsDir = path.join(
 );
 const templatesDir = path.join(repoRoot, 'templates');
 const pluginCommandsDir = path.join(repoRoot, 'plugins', 'awos', 'commands');
+const pluginTemplatesDir = path.join(repoRoot, 'plugins', 'awos', 'templates');
 
 function readUtf8(p) {
   return fs.readFileSync(p, 'utf8');
@@ -671,8 +672,11 @@ test('flow.md wires the delivery-flow generator contract end to end', () => {
   // not via the core installer — workshur asked to keep it out of the main flow.
   const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
   const requiredRefs = [
-    '.awos/templates/delivery-flow-template.md',
-    '.awos/templates/implement-feature-template.md',
+    // Templates ship bundled in the plugin (self-contained), not via the
+    // installer's .awos/templates/ — a plugin user need not re-run the
+    // installer to get the scaffolds.
+    '${CLAUDE_PLUGIN_ROOT}/templates/delivery-flow-template.md',
+    '${CLAUDE_PLUGIN_ROOT}/templates/implement-feature-template.md',
     'context/product/delivery-flow.md',
     '.claude/commands/implement-feature.md',
     // Context-strategy introspection must target the full prompts, not the
@@ -731,7 +735,7 @@ test('implement-feature-template.md carries stage markers and the AWOS chain', (
   // clobbering. The template must also route coding through the AWOS chain
   // rather than implementing in the main context.
   const body = readUtf8(
-    path.join(templatesDir, 'implement-feature-template.md')
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
   );
   assert.ok(
     body.includes('<!-- awos:flow:stage=') &&
@@ -815,7 +819,9 @@ test('delivery-flow-template.md preserves customizations and the tooling invento
   // chose to keep — losing the section silently re-clobbers them on the next
   // regeneration. The tooling inventory records the chosen transport
   // (CLI vs MCP) per external service.
-  const body = readUtf8(path.join(templatesDir, 'delivery-flow-template.md'));
+  const body = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
   assert.ok(
     /## .*Local Customizations/.test(body),
     'delivery-flow-template.md must declare a "Local Customizations" section — the regeneration contract depends on it'

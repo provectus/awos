@@ -101,7 +101,7 @@ Run `/awos:verify` [per §8: in a subagent if it is non-interactive], returning 
 The review must stay independent of this conversation's authorship bias:
 
 - The reviewer's prompt below is fixed: pass it verbatim. Do not add run-time focus areas drawn from what you implemented or suspect — the author framing the review is the bias.
-- The reviewer subagent writes the review file itself; read back only the verdict and the finding count, never the full review.
+- The reviewer subagent writes the review file itself; read back only the verdict and the finding count, never the full review content. Report the review file's path to the user so they can open the full review — the path is cheap to surface and keeps the context window clear of the review body.
 - The agent that applies accepted findings reads the review file and the diff fresh — relay the user's keep/drop decisions, not your own summary of the findings.
 
 [Per §4 of delivery-flow.md: static checks, then the local AI review — the reviewer subagent's verbatim prompt, derived from §4 at generation time: the diff range, the spec paths, the project's review rules; findings presented to the user, never auto-fixed; accepted findings applied before anything is pushed. If §4 includes the human-edit loop, also diff the user's edits against the original review and suggest CLAUDE.md amendments for generalizable corrections. If §4 records change-request-first timing, move this stage after Step 9 instead and run the review concurrently with the remote gates — faster wall-clock, at the cost of an extra CI run on unreviewed code.]

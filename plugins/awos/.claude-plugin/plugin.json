@@ -1,7 +1,7 @@
 {
   "name": "awos",
   "version": "2.2.0",
-  "description": "AWOS code quality audit framework and the /awos:flow delivery-flow setup assistant",
+  "description": "Extends AWOS core with AI-powered delivery automation: audits a project's AI-readiness across quality dimensions (/awos:ai-readiness-audit) and sets up an end-to-end delivery flow tailored to the team (/awos:flow).",
   "author": {
     "name": "Provectus"
   },

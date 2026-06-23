@@ -1,6 +1,6 @@
 # AI-SDLC Readiness — Executive Deliverable (CEO / CTO)
 
-This document defines **what the `/awos:ai-readiness-audit` organization run hands to a CEO/board and a CTO/Head of Engineering**, with concrete examples. It is the presentation layer over the metrics defined in `plugins/awos/skills/ai-readiness-audit/references/ai-sdlc-metrics-catalog.md` and scored by `references/adoption-index.md`. It is design-facing: the org-wide skill is designed (see `ai-sdlc-org-audit.md`) but not yet built, and the numbers below are illustrative mock-ups, not real measurements.
+This document defines **what the `/awos:ai-readiness-audit` organization run hands to a CEO/board and a CTO/Head of Engineering**, with concrete examples. It is the presentation layer over the metrics defined in `plugins/awos/skills/ai-readiness-audit/references/ai-sdlc-metrics-catalog.md`, scored by the additive weighted-category model in `plugins/awos/skills/ai-readiness-audit/scoring.md` against the capability standards in `plugins/awos/skills/ai-readiness-audit/references/standards.toml`. It is design-facing: the org run is a scope of the measurement (specified inline in `SKILL.md` and the report templates, not a separate skill), and the numbers below are illustrative mock-ups, not real measurements.
 
 ## Principles (what makes this board-credible)
 
@@ -8,21 +8,26 @@ This document defines **what the `/awos:ai-readiness-audit` organization run han
 - **Current-state, read against benchmarks.** Measurement is point-in-time, as of today, over a recent trailing period. Before-vs-after-AI comparison is **out of scope** (a future extension); current values are read against public industry benchmark bands (e.g. DORA performance levels), not against the repo's own past.
 - **No money — for now.** No cost source is assumed, so no currency is rendered. Metrics are designed to be **convertible to money given a rate source** (e.g. capacity allocation × loaded rate); that conversion is a future extension, not a principle.
 - **No individual names.** Granularity is repository and organization; people appear only as aggregate active-contributor counts.
-- **Honest confidence, per-metric reliability.** Every number carries a confidence label (HIGH/MED/LOW) from which sources were reachable, and every metric carries a reliability tag — *minimal* (true value ≥ shown), *maximal* (true value ≤ shown), or *not-reliable* (proxy) — with a "where it may deviate" note. In the HTML these appear as **hover hints** on the metric, so the front page stays clean but nothing is overclaimed.
+- **Honest confidence, per-metric reliability.** Every number carries a confidence label (HIGH/MED/LOW) from which sources were reachable, and every metric carries a reliability tag — _minimal_ (true value ≥ shown), _maximal_ (true value ≤ shown), or _not-reliable_ (proxy) — with a "where it may deviate" note. In the HTML these appear as **hover hints** on the metric, so the front page stays clean but nothing is overclaimed.
 - **Gaps are explained, not hidden.** A "Repositories & Connections" view shows which repos were measured, how they were linked, and which integrations were missing and why.
 
 ## Tab 1 — Board / CEO one-pager (example)
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│  AI-SDLC ADOPTION INDEX            55 / 100        target 75         │
+│  AI-SDLC CAPABILITY (portfolio)                                      │
 │                                    confidence: MEDIUM (git + tracker;│
 │                                    no CI connector linked)           │
 ├────────────────────────────────────────────────────────────────────┤
-│  Adoption 70      Delivery 48      Allocation 40                     │
-│  ▓▓▓▓▓▓▓░░░        ▓▓▓▓▓░░░░░        ▓▓▓▓░░░░░░                       │
+│  THREE PORTFOLIO METRICS                                             │
+│   • AI-tooling coverage ......... 67%   (18 / 27 active repos)       │
+│   • Capability score ............ 1,840 pts   (Σ weighted           │
+│       capabilities present; uncapped — rises as the standard grows)  │
+│   • Measurement coverage ........ 58%   (sources reachable across    │
+│       the portfolio; the confidence behind every number above)      │
+│  Coverage % is read relative to today's standards.toml, not a grade.│
 ├────────────────────────────────────────────────────────────────────┤
-│  PORTFOLIO COVERAGE                                                  │
+│  PORTFOLIO REACH                                                     │
 │   • 18 / 27 active repos have AI tooling configured                  │
 │   • avg active contributors / repo / month: 6.3                      │
 ├────────────────────────────────────────────────────────────────────┤
@@ -45,18 +50,18 @@ This document defines **what the `/awos:ai-readiness-audit` organization run han
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-The board one-pager answers three questions: *Is adoption real and broad?* *Where does delivery sit against industry benchmarks?* *Where is the next lever?* Everything else lives one tab deeper. The `*` and "hover for caveats" point to the per-metric reliability hints.
+The board one-pager answers three questions: _Is adoption real and broad?_ _Where does delivery sit against industry benchmarks?_ _Where is the next lever?_ Everything else lives one tab deeper. The `*` and "hover for caveats" point to the per-metric reliability hints.
 
 ## Tab 2 — Head of Engineering view (example)
 
-Per-repo diagnostic table (sorted by index; low-band and low-confidence cells flagged). Values are current-state; each cell's reliability shows on hover.
+Per-repo diagnostic table (sorted by capability score; low-band and low-confidence cells flagged). The capability column shows awarded weighted points and coverage % relative to today's standard — not a grade and not a fixed-ceiling index. Values are current-state; each cell's reliability shows on hover.
 
-| Repo | Index | Lead time | Deploy freq | Change-fail | Complexity (avg CCN / hotspots) | Tooling depth | Confidence |
-| ---- | ----- | --------- | ----------- | ----------- | ------------------------------- | ------------- | ---------- |
-| service-checkout | 72 | ~1d (High) | 4.6/wk (High) | 7%* (High) | 3.8 / 22 | full (CLAUDE.md, skills, MCP, hooks) | HIGH |
-| service-catalog | 61 | ~2d (High) | 2.1/wk (Med) | 11%* (Med) | 4.4 / 31 | partial (CLAUDE.md only) | MEDIUM |
-| platform-iac | 38 | ~6d (Low) ⚠ | 0.6/wk (Low) ⚠ | n/a (no CI) | 6.9 / 48 ⚠ | partial | LOW (no CI) |
-| legacy-billing | 19 | ~14d (Low) ⚠ | 0.2/wk (Low) ⚠ | 18%* (Low) ⚠ | 8.1 / 73 ⚠ | none ⚠ AI-dark | LOW |
+| Repo             | Capability (pts / cov) | Lead time    | Deploy freq    | Change-fail   | Complexity (avg CCN / hotspots) | Tooling depth                        | Confidence  |
+| ---------------- | ---------------------- | ------------ | -------------- | ------------- | ------------------------------- | ------------------------------------ | ----------- |
+| service-checkout | 96 pts / 84%           | ~1d (High)   | 4.6/wk (High)  | 7%\* (High)   | 3.8 / 22                        | full (CLAUDE.md, skills, MCP, hooks) | HIGH        |
+| service-catalog  | 71 pts / 62%           | ~2d (High)   | 2.1/wk (Med)   | 11%\* (Med)   | 4.4 / 31                        | partial (CLAUDE.md only)             | MEDIUM      |
+| platform-iac     | 44 pts / 39% ⚠         | ~6d (Low) ⚠  | 0.6/wk (Low) ⚠ | n/a (no CI)   | 6.9 / 48 ⚠                      | partial                              | LOW (no CI) |
+| legacy-billing   | 22 pts / 19% ⚠         | ~14d (Low) ⚠ | 0.2/wk (Low) ⚠ | 18%\* (Low) ⚠ | 8.1 / 73 ⚠                      | none ⚠ AI-dark                       | LOW         |
 
 Diagnostics surfaced alongside the table:
 
@@ -85,11 +90,11 @@ This is where "why was X measured without integration Y?" and "why don't I see v
 - No per-developer rankings or named-individual productivity.
 - No before/after-AI deltas (out of scope) — current-state read against benchmarks instead.
 - No raw vanity counts presented as outcomes (commit counts, lines written) — these appear only as normalized, contextualized signals.
-- No single blended grade that merges "repo is ready" with "team is delivering well" — the readiness grade (A–F) and the Adoption Index (0–100) stay separate so neither masks the other.
+- No single blended grade and no fixed-ceiling score. Capability is an additive, **uncapped** weighted-category score — you can always earn more as the standard grows — shown with a coverage % relative to today's standard; delivery health is read as benchmark bands; measurement confidence is reported separately. None of the three is collapsed into a letter grade or a 0–100 index, so "the repo is capable," "the team is delivering well," and "we can trust the numbers" never mask one another.
 
-## How it is produced (summary; full design in `ai-sdlc-org-audit.md`)
+## How it is produced (summary; org behavior specified inline in `SKILL.md` + the report templates)
 
-The organization run executes the per-repo `ai-sdlc-adoption` dimension across every in-scope repo (a GitHub/GitLab org, a folder of repos, or a `sources.toml` list), aggregates contributor-weighted portfolio metrics, computes org-only metrics impossible from one repo (coverage, index distribution), and renders one self-contained HTML file with the three tabs above. Code scale/complexity comes from a static scan (languages/LOC, cyclomatic complexity, dependency footprint) per repo, rolled up.
+The organization run is a scope of the measurement: it executes the per-repo `ai-sdlc-adoption` dimension across every in-scope repo (a GitHub/GitLab org, a folder of repos, or a `sources.toml` list), then aggregates the per-repo results into **at most three** contributor-weighted portfolio metrics — AI-tooling coverage, capability score, and measurement coverage — without rolling up the full per-repo metric set. Per-repo detail stays in the drill-down tab. It renders one self-contained HTML file with the three tabs above. Code scale/complexity comes from a static scan (languages/LOC, cyclomatic complexity, dependency footprint) per repo, rolled up.
 
 ## Consulting conversation — talking points this enables
 

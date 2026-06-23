@@ -880,6 +880,47 @@ test('product.md creates brownfield.md even when all findings are rejected', () 
   );
 });
 
+const skillRoot = path.join(
+  repoRoot,
+  'plugins',
+  'awos',
+  'skills',
+  'ai-readiness-audit'
+);
+const referencesDir = path.join(skillRoot, 'references');
+
+test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
+  const p = path.join(referencesDir, 'ai-sdlc-metrics-catalog.md');
+  assert.ok(fs.existsSync(p), 'expected references/ai-sdlc-metrics-catalog.md');
+  const src = readUtf8(p);
+  for (const tier of ['Tier G', 'Tier C', 'Tier I', 'Tier D']) {
+    assert.match(src, new RegExp(tier), `catalog must define ${tier}`);
+  }
+  for (const id of [
+    'ADP-G1',
+    'ADP-G7',
+    'ADP-G9',
+    'ADP-I1',
+    'ADP-I3',
+    'ADP-D1',
+  ]) {
+    assert.match(src, new RegExp(id), `catalog must define ${id}`);
+  }
+  // AI attribution is framed as a lower bound, not the true adoption level.
+  assert.match(src, /lower bound/i);
+  // No-PII, no-money, before/after, and the MTTR-skip rule must be stated.
+  assert.match(src, /repositor/i);
+  assert.match(src, /never.{0,20}(money|currenc)/i);
+  assert.match(src, /before/i);
+  assert.match(src, /after/i);
+  assert.match(src, /MTTR/);
+  assert.match(src, /SKIP/);
+  // Citations present.
+  assert.match(src, /DORA/);
+  assert.match(src, /Jellyfish/);
+  assert.match(src, /Provectus/);
+});
+
 test('context/<path> references in prompts are internally consistent', () => {
   // Build a writer/reader map by scanning all prompts. A path is considered
   // consistent if every reference to it appears in at least one prompt — i.e.

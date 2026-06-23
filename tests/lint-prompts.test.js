@@ -908,17 +908,40 @@ test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
   }
   // AI attribution is framed as a lower bound, not the true adoption level.
   assert.match(src, /lower bound/i);
-  // No-PII, no-money, before/after, and the MTTR-skip rule must be stated.
+  // No-PII, no-money, and the MTTR-skip rule must be stated.
   assert.match(src, /repositor/i);
   assert.match(src, /never.{0,20}(money|currenc)/i);
-  assert.match(src, /before/i);
-  assert.match(src, /after/i);
   assert.match(src, /MTTR/);
   assert.match(src, /SKIP/);
   // Citations present.
   assert.match(src, /DORA/);
   assert.match(src, /Jellyfish/);
   assert.match(src, /Provectus/);
+  // New design: catalog is an index that references the engine + standards.
+  assert.match(src, /standards\.toml/, 'catalog must reference standards.toml');
+  assert.match(
+    src,
+    /collectors?\//,
+    'catalog must reference the collectors/ layer'
+  );
+  assert.match(src, /metrics?\//, 'catalog must reference the metrics/ layer');
+  // Current-state headline + explicit history (not before/after as the frame).
+  assert.match(
+    src,
+    /current[- ]state/i,
+    'catalog headline must be current-state'
+  );
+  assert.match(
+    src,
+    /history|lookback|monthly/i,
+    'catalog must describe explicit history'
+  );
+  // Reliability is per-metric and computed.
+  assert.match(
+    src,
+    /reliabilit/i,
+    'catalog must describe per-metric reliability'
+  );
 });
 
 test('data-sources reference covers detection, schema, linking, adoption-start', () => {

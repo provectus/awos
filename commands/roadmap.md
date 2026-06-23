@@ -22,6 +22,7 @@ Your task is to manage the product roadmap file located at `context/product/road
 - **Template File:** `.awos/templates/roadmap-template.md`. This is the required structure for the roadmap.
 - **Prerequisite Input:** `context/product/product-definition.md`. This file MUST exist.
 - **Optional Input/Output:** `context/product/brownfield.md` (produced by `/awos:product` on brownfield projects; this command appends a `## Capabilities` section).
+- **Optional Input:** `context/sources/sources.md` (produced by the `configure-external-sources` skill; this command reads it for targeted retrieval).
 - **Primary Input/Output:** `context/product/roadmap.md`. This is the file you will create or update.
 
 ---
@@ -82,8 +83,32 @@ Follow this logic precisely.
 
     d. Use the full set of capabilities (from brownfield.md) to anchor the roadmap: existing capabilities are noted as already done, and new phases focus on what comes next. Feed this into the roadmap generation in the next step.
 
-3.  Generate a proposed roadmap by populating the template structure with the product definition's Core Features, grouped into logical sequential phases.
-4.  Proceed to **Step 3: Finalization** — the draft is saved there and then surfaced for review, so it lands on disk even when no one is available to give feedback.
+3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured` (produced by the `configure-external-sources` skill during `/awos:product`), read the source manifest and retrieve roadmap-relevant content from each configured source:
+
+    ```text
+    Agent(subagent_type="Explore", description="Retrieve roadmap-relevant docs", prompt="
+    Use the [Tool name from sources.md] tools to retrieve content from [Scope from sources.md].
+    Focus on roadmap and capability information:
+    - Feature backlogs and planned work
+    - Sprint/iteration history and velocity
+    - User stories and requirements
+    - Partially completed features or work in progress
+    - Priority discussions and feature requests
+
+    The following findings were already confirmed by the user — do not repeat them:
+
+    <existing_findings>
+    {paste full contents of context/product/brownfield.md here, or 'none'}
+    </existing_findings>
+
+    Report only NEW roadmap-relevant findings not covered above. For each finding, note the source. Be concise — bullet points.
+    ")
+    ```
+
+    Record retrieved findings for the draft in substep 4. The findings are triaged with the user in **Step 3: Finalization**, after the roadmap is saved.
+
+4.  Generate a proposed roadmap by populating the template structure with the product definition's Core Features, grouped into logical sequential phases. Fold in brownfield capabilities and any documentation findings from substep 3.
+5.  Proceed to **Step 3: Finalization** — the draft is saved there and then surfaced for review, so it lands on disk even when no one is available to give feedback.
 
 ---
 

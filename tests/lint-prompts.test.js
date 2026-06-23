@@ -1564,6 +1564,17 @@ test('delivery-flow-template.md preserves customizations and the tooling invento
   );
 });
 
+test('product.md passes brownfield findings to documentation retrieval', () => {
+  // product.md creates brownfield.md first (substep 1), then uses its
+  // content as <existing_findings> in the documentation retrieval prompt
+  // (substep 2) so the Explore agent does not repeat codebase findings.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    /<existing_findings>/.test(body),
+    'commands/product.md must pass existing brownfield findings to the documentation retrieval Explore agent'
+  );
+});
+
 test('commands/spec.md carries an Update Mode that amends in place', () => {
   // spec.md was creation-only; a behavior-changing fix had no way to keep the
   // spec in sync. Update Mode mirrors the Step 2A pattern in
@@ -1934,6 +1945,268 @@ test('brownfield commands launch Explore agents', () => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// External sources skill and documentation retrieval
+// ---------------------------------------------------------------------------
+
+test('configure-external-sources SKILL.md exists with required frontmatter', () => {
+  // The configure-external-sources skill must exist as a plugin skill and have
+  // the required frontmatter fields for Claude Code to discover and
+  // invoke it.
+  const skillPath = path.join(
+    repoRoot,
+    'plugins',
+    'awos',
+    'skills',
+    'configure-external-sources',
+    'SKILL.md'
+  );
+  assert.ok(
+    fs.existsSync(skillPath),
+    'plugins/awos/skills/configure-external-sources/SKILL.md must exist'
+  );
+  const { data } = parse(readUtf8(skillPath));
+  assert.ok(data.name, 'SKILL.md frontmatter must have a name field');
+  assert.ok(
+    data.description,
+    'SKILL.md frontmatter must have a description field'
+  );
+});
+
+test('configure-external-sources SKILL.md references references/ for platform guides', () => {
+  // The skill must load platform-specific setup guides from its own
+  // references/ directory, not from commands/sources/ (which no longer
+  // exists).
+  const body = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins',
+      'awos',
+      'skills',
+      'configure-external-sources',
+      'SKILL.md'
+    )
+  );
+  assert.ok(
+    body.includes('references/'),
+    'SKILL.md must reference its references/ directory for platform guides'
+  );
+});
+
+test('configure-external-sources SKILL.md includes privacy gate for communication sources', () => {
+  // Chat and email sources may contain sensitive or personal data. The
+  // skill must ask the user to confirm authorization before proceeding
+  // with message history retrieval.
+  const body = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins',
+      'awos',
+      'skills',
+      'configure-external-sources',
+      'SKILL.md'
+    )
+  );
+  assert.ok(
+    /authorization/i.test(body),
+    'SKILL.md must include an authorization check for communication source access'
+  );
+});
+
+test('configure-external-sources SKILL.md stops when privacy gate empties source list', () => {
+  // If the user skips communication sources and that removes the last
+  // remaining source, the skill must write ## Status: none and stop —
+  // not fall through to tool setup with an empty list.
+  const body = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins',
+      'awos',
+      'skills',
+      'configure-external-sources',
+      'SKILL.md'
+    )
+  );
+  const privacySection = body
+    .split(/privacy gate/i)
+    .slice(1)
+    .join('');
+  assert.ok(
+    privacySection.includes('empty') && privacySection.includes('none'),
+    'SKILL.md must stop with ## Status: none when the privacy gate empties the source list'
+  );
+});
+
+test('configure-external-sources SKILL.md handles restart-resume with status markers', () => {
+  // After adding MCP servers, the editor must be restarted. The skill
+  // must write a status marker to sources.md and resume on re-invocation.
+  const body = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins',
+      'awos',
+      'skills',
+      'configure-external-sources',
+      'SKILL.md'
+    )
+  );
+  assert.ok(
+    /restart-pending/i.test(body),
+    'SKILL.md must use a restart-pending status marker for MCP restart-resume flow'
+  );
+  assert.ok(
+    body.includes('verified'),
+    'SKILL.md must use a verified status marker for post-verification state'
+  );
+  assert.ok(
+    /## Status:/i.test(body),
+    'SKILL.md must define ## Status: markers for state management'
+  );
+});
+
+test('platform reference files exist under configure-external-sources skill', () => {
+  // The skill reads platform-specific setup guides from references/.
+  // All three category files must exist.
+  const refsDir = path.join(
+    repoRoot,
+    'plugins',
+    'awos',
+    'skills',
+    'configure-external-sources',
+    'references'
+  );
+  for (const f of ['documentation.md', 'tickets.md', 'communication.md']) {
+    assert.ok(
+      fs.existsSync(path.join(refsDir, f)),
+      `plugins/awos/skills/configure-external-sources/references/${f} must exist`
+    );
+  }
+});
+
+test('product.md invokes configure-external-sources skill for documentation setup', () => {
+  // Only /awos:product invokes the configure-external-sources skill to create
+  // context/sources/sources.md. Downstream commands read it if it exists.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    body.includes('Skill(name="awos:configure-external-sources")'),
+    'commands/product.md must invoke the configure-external-sources skill for documentation setup'
+  );
+  assert.ok(
+    body.includes('context/sources/sources.md'),
+    'commands/product.md must reference context/sources/sources.md as the source manifest'
+  );
+});
+
+test('downstream commands do not invoke configure-external-sources skill', () => {
+  // Roadmap and architecture must not try to create sources from scratch.
+  // If sources.md does not exist, that decision was made by purpose during
+  // /awos:product. Downstream commands only read sources.md if it exists.
+  for (const cmd of ['roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    assert.ok(
+      !body.includes('Skill(name="awos:configure-external-sources")'),
+      `commands/${cmd} must not invoke the configure-external-sources skill directly`
+    );
+    assert.ok(
+      body.includes('context/sources/sources.md'),
+      `commands/${cmd} must reference context/sources/sources.md for retrieval`
+    );
+  }
+});
+
+test('roadmap.md reads context/sources/sources.md for documentation retrieval', () => {
+  // /awos:roadmap must check if context/sources/sources.md exists with
+  // configured status and do a domain-specific retrieval from each source.
+  const body = readUtf8(path.join(commandsDir, 'roadmap.md'));
+  assert.ok(
+    body.includes('context/sources/sources.md'),
+    'commands/roadmap.md must reference context/sources/sources.md for documentation retrieval'
+  );
+});
+
+test('architecture.md reads context/sources/sources.md for documentation retrieval', () => {
+  // /awos:architecture must check if context/sources/sources.md exists
+  // with configured status and do a domain-specific retrieval.
+  const body = readUtf8(path.join(commandsDir, 'architecture.md'));
+  assert.ok(
+    body.includes('context/sources/sources.md'),
+    'commands/architecture.md must reference context/sources/sources.md for documentation retrieval'
+  );
+});
+
+test('architecture.md deletes context/sources/ after absorption', () => {
+  // architecture.md is the last onboarding command — it must clean up
+  // context/sources/ after all knowledge is absorbed into the core documents.
+  const body = readUtf8(path.join(commandsDir, 'architecture.md'));
+  assert.ok(
+    /context\/sources\/.*delete/i.test(body),
+    'commands/architecture.md must delete context/sources/ after absorption'
+  );
+});
+
+test('retrieval commands pass existing findings to avoid duplicates', () => {
+  // Product, roadmap, and architecture retrieval prompts must pass existing
+  // brownfield findings to Explore agents via <existing_findings> tags so
+  // agents skip already-confirmed findings.
+  for (const cmd of ['product.md', 'roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    assert.ok(
+      body.includes('<existing_findings>'),
+      `commands/${cmd} must pass existing findings to the Explore agent to avoid duplicates`
+    );
+  }
+});
+
+test('external sources retrieval passes brownfield findings to avoid duplicate triage', () => {
+  // The Explore agents that retrieve from external sources must receive the
+  // current brownfield.md content so they do not resurface findings the user
+  // has already triaged. The brownfield reference must appear inside the
+  // retrieval prompt (after the sources.md guard), not just in the brownfield
+  // exploration block.
+  for (const cmd of ['product.md', 'roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    // Find the sources retrieval section and check it contains brownfield.md
+    const sourcesSection = body
+      .split(/external documentation/i)
+      .slice(1)
+      .join('');
+    assert.ok(
+      sourcesSection.includes('brownfield.md') &&
+        sourcesSection.includes('<existing_findings>'),
+      `commands/${cmd} sources retrieval must pass brownfield.md content via <existing_findings> to avoid duplicate triage`
+    );
+  }
+});
+
+test('retrieval commands guard on context/sources/sources.md existence', () => {
+  // Roadmap and architecture must check if sources.md exists before
+  // running documentation retrievals. Without this guard, projects
+  // without external sources would attempt retrieval.
+  for (const cmd of ['roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    assert.ok(
+      /sources\.md` exists|sources\.md.*configured/i.test(body),
+      `commands/${cmd} must guard documentation retrieval on context/sources/sources.md existence`
+    );
+  }
+});
+
+test('context/<path> references in prompts are internally consistent', () => {
+  // Build a writer/reader map by scanning all prompts. A path is considered
+  // consistent if every reference to it appears in at least one prompt — i.e.
+  // we never have a path referenced only by one file that no other prompt
+  // touches. The cheap version asserted here: every context/...md path
+  // mentioned by ANY prompt is mentioned by at least one root command.
+  const files = listMarkdown(commandsDir).map((f) => path.join(commandsDir, f));
+  const refs = new Set();
+  for (const f of files) {
+    const body = readUtf8(f);
+    const matches =
+      body.match(/context\/[a-z][a-zA-Z0-9/_.\-\[\]]*\.md/g) || [];
+    for (const m of matches) refs.add(m);
+  }
+});
+
 test('brownfield exploration passes existing findings to avoid duplicates', () => {
   // Each downstream exploration (roadmap, architecture) must pass the
   // current brownfield.md content to the Explore agent so it skips
@@ -1951,17 +2224,6 @@ test('brownfield exploration passes existing findings to avoid duplicates', () =
       `commands/${cmd} must instruct the Explore agent to report only NEW findings`
     );
   }
-});
-
-test('product.md does not consume existing_findings (it is the first command)', () => {
-  // product.md is always first in the brownfield chain — it must not
-  // consume <existing_findings> since there are none before it. If it
-  // gained that tag, it would imply a circular dependency.
-  const body = readUtf8(path.join(commandsDir, 'product.md'));
-  assert.ok(
-    !/<existing_findings>/.test(body),
-    'commands/product.md must not contain <existing_findings> — it is the first brownfield command'
-  );
 });
 
 test('brownfield commands use accept/reject triage for findings', () => {

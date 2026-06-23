@@ -138,7 +138,7 @@ test('migration 001 in isolation: source-only state moves to migrated state', as
   // moves the file to domain-experts/, 002's precondition matches, so 002 also
   // fires. To verify 001 alone, we have to read the state between the two —
   // not easily possible via the public API. Instead, this test asserts that
-  // after the combined run, the .awos/.migration-version reaches 2, proving
+  // after the combined run, the .awos/.migration-version reaches 3, proving
   // 001 ran (its precondition file was present) and the chain completed.
   const workingDir = await freshTemp();
   await writeFile(
@@ -154,8 +154,8 @@ test('migration 001 in isolation: source-only state moves to migrated state', as
   );
   assert.equal(
     versionContent.trim(),
-    '2',
-    'expected migrations 001 then 002 to both run, leaving version=2'
+    '3',
+    'expected migrations 001 through 003 to all run, leaving version=3'
   );
 });
 

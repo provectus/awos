@@ -90,13 +90,42 @@ First, check if the file `context/product/product-definition.md` exists.
 
     b. Create `context/product/brownfield.md` with a `## Product` heading and record the findings under it. If the exploration surfaced nothing, still create the file with an empty `## Product` section; downstream commands (`/awos:roadmap`, `/awos:architecture`) key on the file's existence to run their own explorations. The findings are triaged with the user later, in **Step 4** — after the definition is saved — so exploration never blocks the write.
 
-3.  Draft every section of the template up front so a complete definition exists before any further back-and-forth — use `<user_prompt>` (when non-empty) as the starting point, fold in any brownfield findings from step 2, and fill the rest from reasonable best-practice assumptions. Never block on a question before the write:
+3.  **External documentation sources.** If `context/sources/sources.md` does not exist and `context/product/brownfield.md` was created in substep 2, use `AskUserQuestion` to ask: "Do you have external documentation (wikis, tickets, chats, email) you'd like to import into the project context?" with options **Yes** and **No**. If yes, invoke the configure-external-sources skill: `Skill(name="awos:configure-external-sources")`. The skill detects platforms, guides MCP/CLI setup, handles restart-resume, collects scope, and writes the result to `context/sources/sources.md`. If the skill triggers an editor restart, stop here.
+
+    If `context/sources/sources.md` already exists with `## Status: configured` (set up in a previous run), skip straight to retrieval.
+
+    If `context/sources/sources.md` exists with `## Status: none`, skip to substep 4 — user previously declined.
+
+    **Retrieval.** Read the source manifest and retrieve product-relevant content from each configured source:
+
+    ```text
+    Agent(subagent_type="Explore", description="Retrieve [platform] docs", prompt="
+    Use the [Tool name from sources.md] tools to retrieve content from [Scope from sources.md].
+    Extract information relevant to product definition:
+    - Product requirements and stated goals
+    - Target audience descriptions
+    - Key decisions about what to build and why
+    - User feedback and pain points
+
+    The following findings were already confirmed by the user — do not repeat them:
+
+    <existing_findings>
+    {paste any existing context/product/brownfield.md content here, or 'none'}
+    </existing_findings>
+
+    Report only product-relevant findings. For each finding, note the source. Be concise — bullet points.
+    ")
+    ```
+
+    Record retrieved findings for the draft in substep 4. The findings are triaged with the user in **Step 4**, after the definition is saved.
+
+4.  Draft every section of the template up front so a complete definition exists before any further back-and-forth — use `<user_prompt>` (when non-empty) as the starting point, fold in any brownfield findings from substep 2 and documentation findings from substep 3, and fill the rest from reasonable best-practice assumptions. Never block on a question before the write:
     - **Project Name & Vision:** the project's name and its core purpose.
     - **Target Audience & Personas:** who the product is for, plus one simple persona.
     - **Success Metrics:** how the product's impact on the user is measured.
     - **Core Features & User Journey:** the 3-5 most important high-level features and a simple user workflow.
     - **Project Boundaries:** what is essential for the first version (In-Scope) and what can wait (Out-of-Scope).
-4.  Proceed to **Step 3: File Generation**. The draft is saved there and refined with the user in **Step 4**, so it lands on disk even when no one is available to answer questions.
+5.  Proceed to **Step 3: File Generation**. The draft is saved there and refined with the user in **Step 4**, so it lands on disk even when no one is available to answer questions.
 
 ---
 

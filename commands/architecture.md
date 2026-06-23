@@ -20,6 +20,7 @@ Your task is to manage the architecture file located at `context/product/archite
 - **Prerequisite Input 1:** `context/product/product-definition.md` (The "what" and "why").
 - **Prerequisite Input 2:** `context/product/roadmap.md` (The implementation phases).
 - **Optional Input:** `context/product/brownfield.md` (produced by `/awos:product`, extended by `/awos:roadmap`; deleted at end of this command).
+- **Optional Input:** `context/sources/sources.md` (produced by the `configure-external-sources` skill; this command reads it for targeted retrieval).
 - **Primary Input/Output:** `context/product/architecture.md` (The file to create or update).
 
 ---
@@ -81,11 +82,36 @@ Follow this logic precisely.
 
     c. Append the new findings to `context/product/brownfield.md` under a `## Technology` heading (for any you revise, record the revised version, not the original). The findings seed the section defaults below and are triaged with the user later, in **Step 3: Finalization** — after the architecture is saved — so exploration never blocks the write.
 
-3.  Draft every architectural area up front so a complete architecture exists before any back-and-forth — never blocking on a question before the write.
+3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured` (produced by the `configure-external-sources` skill during `/awos:product`), read the source manifest and retrieve architecture-relevant content from each configured source:
+
+    ```text
+    Agent(subagent_type="Explore", description="Retrieve architecture docs", prompt="
+    Use the [Tool name from sources.md] tools to retrieve content from [Scope from sources.md].
+    Focus on technical and architectural information:
+    - Architecture decision records (ADRs)
+    - Infrastructure documentation and runbooks
+    - Technical debt discussions
+    - Performance requirements and SLAs
+    - Security requirements and compliance notes
+    - Deployment and operations documentation
+
+    The following findings were already confirmed by the user — do not repeat them:
+
+    <existing_findings>
+    {paste full contents of context/product/brownfield.md here, or 'none'}
+    </existing_findings>
+
+    Report only NEW architecture-relevant findings not covered above. For each finding, note the source. Be concise — bullet points.
+    ")
+    ```
+
+    Record retrieved findings for the draft in substep 4. The findings seed section defaults alongside brownfield findings and are triaged with the user in **Step 3: Finalization**, after the architecture is saved.
+
+4.  Draft every architectural area up front so a complete architecture exists before any back-and-forth — never blocking on a question before the write.
     - For each architectural area, propose a concrete title from the template placeholder.
-    - For each component, propose a specific technology with one or more alternatives, justified by the project context. When brownfield findings provided a known technology, use it as the default; otherwise pick a sensible best-practice default and label it as an assumption.
+    - For each component, propose a specific technology with one or more alternatives, justified by the project context. When brownfield or documentation findings provided a known technology, use it as the default; otherwise pick a sensible best-practice default and label it as an assumption.
     - Cover every architectural area (Data, Infrastructure, etc.).
-4.  Proceed to **Step 3: Finalization**.
+5.  Proceed to **Step 3: Finalization**.
 
 ---
 
@@ -121,4 +147,4 @@ Give the user a quick read on whether the stack already has specialist agents �
 
 ### Step 5: Brownfield Cleanup
 
-If `context/product/brownfield.md` exists, delete it. By this point all brownfield knowledge has been absorbed into `product-definition.md`, `roadmap.md`, and `architecture.md` — the brownfield file is no longer needed.
+If `context/product/brownfield.md` exists, delete it. If `context/sources/` exists, delete it. By this point all external knowledge has been absorbed into `product-definition.md`, `roadmap.md`, and `architecture.md`.

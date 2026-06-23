@@ -921,6 +921,22 @@ test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
   assert.match(src, /Provectus/);
 });
 
+test('data-sources reference covers detection, schema, linking, adoption-start', () => {
+  const p = path.join(referencesDir, 'data-sources.md');
+  assert.ok(fs.existsSync(p), 'expected references/data-sources.md');
+  const src = readUtf8(p);
+  assert.match(src, /sources\.toml/);
+  assert.match(src, /submodule/i);
+  assert.match(src, /symlink/i);
+  assert.match(src, /monorepo/i);
+  assert.match(src, /adoption[_-]?start/i);
+  assert.match(src, /diff-filter=A/); // the inference recipe
+  assert.match(src, /current repo/i); // no-arg default
+  assert.match(src, /AskUserQuestion/); // confirm sources once, at start
+  assert.match(src, /discovery/i); // discovery-first flow
+  assert.match(src, /empiric/i); // many-repos: map repos → links empirically
+});
+
 test('context/<path> references in prompts are internally consistent', () => {
   // Build a writer/reader map by scanning all prompts. A path is considered
   // consistent if every reference to it appears in at least one prompt — i.e.

@@ -1,0 +1,99 @@
+# AI-SDLC Readiness — Executive Deliverable (CEO / CTO)
+
+This document defines **what the `/awos:ai-readiness-audit` organization run hands to a CEO/board and a CTO/Head of Engineering**, with concrete examples. It is the presentation layer over the metrics defined in `plugins/awos/skills/ai-readiness-audit/references/ai-sdlc-metrics-catalog.md` and scored by `references/adoption-index.md`. It is design-facing: the org-wide skill is designed (see `ai-sdlc-org-audit.md`) but not yet built, and the numbers below are illustrative mock-ups, not real measurements.
+
+## Principles (what makes this board-credible)
+
+- **One assessment, two audiences.** The CEO/board gets a single headline with confidence; the CTO/Head of Engineering gets the per-repo diagnostics behind it. Same data, two tabs.
+- **Current-state, read against benchmarks.** Measurement is point-in-time, as of today, over a recent trailing period. Before-vs-after-AI comparison is **out of scope** (a future extension); current values are read against public industry benchmark bands (e.g. DORA performance levels), not against the repo's own past.
+- **No money — for now.** No cost source is assumed, so no currency is rendered. Metrics are designed to be **convertible to money given a rate source** (e.g. capacity allocation × loaded rate); that conversion is a future extension, not a principle.
+- **No individual names.** Granularity is repository and organization; people appear only as aggregate active-contributor counts.
+- **Honest confidence, per-metric reliability.** Every number carries a confidence label (HIGH/MED/LOW) from which sources were reachable, and every metric carries a reliability tag — *minimal* (true value ≥ shown), *maximal* (true value ≤ shown), or *not-reliable* (proxy) — with a "where it may deviate" note. In the HTML these appear as **hover hints** on the metric, so the front page stays clean but nothing is overclaimed.
+- **Gaps are explained, not hidden.** A "Repositories & Connections" view shows which repos were measured, how they were linked, and which integrations were missing and why.
+
+## Tab 1 — Board / CEO one-pager (example)
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  AI-SDLC ADOPTION INDEX            55 / 100        target 75         │
+│                                    confidence: MEDIUM (git + tracker;│
+│                                    no CI connector linked)           │
+├────────────────────────────────────────────────────────────────────┤
+│  Adoption 70      Delivery 48      Allocation 40                     │
+│  ▓▓▓▓▓▓▓░░░        ▓▓▓▓▓░░░░░        ▓▓▓▓░░░░░░                       │
+├────────────────────────────────────────────────────────────────────┤
+│  PORTFOLIO COVERAGE                                                  │
+│   • 18 / 27 active repos have AI tooling configured                  │
+│   • avg active contributors / repo / month: 6.3                      │
+├────────────────────────────────────────────────────────────────────┤
+│  DELIVERY — current, vs DORA benchmark bands   (hover for caveats)   │
+│   • Lead time for change ......... ~1 day      High band             │
+│   • Deployment frequency ......... 4.2 / wk    High band             │
+│   • Change failure rate .......... 9%*         High band   *min.     │
+│   • Maintenance (KTLO) share ..... 41%         healthy split         │
+├────────────────────────────────────────────────────────────────────┤
+│  CODE SCALE & COMPLEXITY                                             │
+│   • 412 KLOC across 6 languages, 27 repos                            │
+│   • Avg cyclomatic complexity 4.1 (healthy)                          │
+│   • High-complexity hotspots: 138 (refactor backlog)                 │
+├────────────────────────────────────────────────────────────────────┤
+│  READ: adoption is broad (tooling in 2/3 of repos) and current       │
+│  delivery sits in DORA's higher bands while complexity stays         │
+│  healthy. Next lever: connect CI to raise confidence from MEDIUM,    │
+│  and close the 9 AI-dark repos. (*change-fail is a lower bound —     │
+│  keyword-detected, so true rate may be higher.)                      │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+The board one-pager answers three questions: *Is adoption real and broad?* *Where does delivery sit against industry benchmarks?* *Where is the next lever?* Everything else lives one tab deeper. The `*` and "hover for caveats" point to the per-metric reliability hints.
+
+## Tab 2 — Head of Engineering view (example)
+
+Per-repo diagnostic table (sorted by index; low-band and low-confidence cells flagged). Values are current-state; each cell's reliability shows on hover.
+
+| Repo | Index | Lead time | Deploy freq | Change-fail | Complexity (avg CCN / hotspots) | Tooling depth | Confidence |
+| ---- | ----- | --------- | ----------- | ----------- | ------------------------------- | ------------- | ---------- |
+| service-checkout | 72 | ~1d (High) | 4.6/wk (High) | 7%* (High) | 3.8 / 22 | full (CLAUDE.md, skills, MCP, hooks) | HIGH |
+| service-catalog | 61 | ~2d (High) | 2.1/wk (Med) | 11%* (Med) | 4.4 / 31 | partial (CLAUDE.md only) | MEDIUM |
+| platform-iac | 38 | ~6d (Low) ⚠ | 0.6/wk (Low) ⚠ | n/a (no CI) | 6.9 / 48 ⚠ | partial | LOW (no CI) |
+| legacy-billing | 19 | ~14d (Low) ⚠ | 0.2/wk (Low) ⚠ | 18%* (Low) ⚠ | 8.1 / 73 ⚠ | none ⚠ AI-dark | LOW |
+
+Diagnostics surfaced alongside the table:
+
+- **AI-dark repos** — active repos with no AI tooling (here: `legacy-billing` + 8 others). The adoption ceiling.
+- **Partial-measurement repos** — which connectors are missing per repo and what metric that suppresses (e.g. `platform-iac` has no CI link ⇒ no CI pass-rate, and change-fail is git-proxy only).
+- **Low-band / low-reliability flags** — cells in DORA's Low band or carrying a not-reliable/low-confidence tag are marked, so engineering investigates rather than the board reading a portfolio average that hides them.
+- **Complexity hotspots** — top high-CCN functions/files per repo (from the complexity scan), as the concrete refactor backlog.
+
+## Tab 3 — Drill-down (example)
+
+Every metric, every repo, fully attributed: metric · current value · reliability tag · confidence · source tier. Plus the **Repositories & Connections** map:
+
+```
+service-checkout      linked: current repo
+  code host: GitHub (gh) ✓   CI: GitHub Actions ✓   tracker: Jira ✓   docs: Confluence ✓   → HIGH
+platform-iac          linked: git submodule
+  code host: GitHub (gh) ✓   CI: — (not detected)   tracker: Jira ✓   docs: —              → LOW
+awos-spec             linked: symlink → ../awos   (orchestrating repo; spec source)
+```
+
+This is where "why was X measured without integration Y?" and "why don't I see values from Z?" get answered: the missing connector and its consequence are printed next to the repo, and each metric value carries its reliability/deviation note on hover.
+
+## What we deliberately do NOT show
+
+- No money, cost, or ROI dollar figures (out of scope until a rate source is provided — the metrics are built to be convertible then).
+- No per-developer rankings or named-individual productivity.
+- No before/after-AI deltas (out of scope) — current-state read against benchmarks instead.
+- No raw vanity counts presented as outcomes (commit counts, lines written) — these appear only as normalized, contextualized signals.
+- No single blended grade that merges "repo is ready" with "team is delivering well" — the readiness grade (A–F) and the Adoption Index (0–100) stay separate so neither masks the other.
+
+## How it is produced (summary; full design in `ai-sdlc-org-audit.md`)
+
+The organization run executes the per-repo `ai-sdlc-adoption` dimension across every in-scope repo (a GitHub/GitLab org, a folder of repos, or a `sources.toml` list), aggregates contributor-weighted portfolio metrics, computes org-only metrics impossible from one repo (coverage, index distribution), and renders one self-contained HTML file with the three tabs above. Code scale/complexity comes from a static scan (languages/LOC, cyclomatic complexity, dependency footprint) per repo, rolled up.
+
+## Consulting conversation — talking points this enables
+
+- "Your AI adoption is real and broad (coverage + tooling depth), not a few enthusiasts" — or the opposite, with the AI-dark list as the engagement scope.
+- "Your current delivery sits in DORA's higher bands, with complexity healthy" — current-state read against industry benchmarks, confidence stated.
+- "Capacity split is healthy / skewed to maintenance" — the work-mix allocation, in FTE share, convertible to money once a rate source is provided.
+- "Here is the next lever" — connect CI to raise confidence, close the AI-dark repos, refactor the named complexity hotspots.

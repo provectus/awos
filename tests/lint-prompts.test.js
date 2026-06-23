@@ -1045,6 +1045,50 @@ test('standards.toml exists and matches the category/band schema', () => {
   );
 });
 
+test('scoring.md uses additive weighted categories, not A-F grades', () => {
+  const p = path.join(skillRoot, 'scoring.md');
+  const src = readUtf8(p);
+  assert.match(src, /additive/i, 'scoring.md must describe additive scoring');
+  assert.match(src, /weight/i, 'scoring.md must describe category weights');
+  assert.match(
+    src,
+    /coverage ratio/i,
+    'scoring.md must define the coverage ratio'
+  );
+  assert.match(
+    src,
+    /standards\.toml/,
+    'scoring.md must reference standards.toml as the weight source'
+  );
+  assert.match(
+    src,
+    /uncapped|no cap|not capped/i,
+    'scoring.md must state the total is uncapped'
+  );
+  // The fixed-ceiling model must be gone.
+  assert.doesNotMatch(
+    src,
+    /Grade Scale/i,
+    'scoring.md must not retain a grade scale'
+  );
+  assert.doesNotMatch(
+    src,
+    /\bA\s*[–-]\s*F\b/i,
+    'scoring.md must not mention A–F grades'
+  );
+  assert.doesNotMatch(
+    src,
+    /clamped to 0\s*[–-]\s*100/i,
+    'scoring.md must not clamp to 0–100'
+  );
+  // Severity demoted to priority only.
+  assert.match(
+    src,
+    /severity[^.\n]*priorit/i,
+    'scoring.md must state severity drives priority only'
+  );
+});
+
 test('context/<path> references in prompts are internally consistent', () => {
   // Build a writer/reader map by scanning all prompts. A path is considered
   // consistent if every reference to it appears in at least one prompt — i.e.

@@ -1,50 +1,65 @@
 # Scoring Algorithm
 
-Each check produces a status:
+This file defines the additive weighted-category scoring model used by the AI-readiness audit. Category weights are declared in `references/standards.toml`; this file defines how those weights are combined into dimension scores, a coverage ratio, and an audit total.
 
-| Status | Meaning                           |
-| ------ | --------------------------------- |
-| PASS   | Check satisfied                   |
-| WARN   | Partial compliance or minor issue |
-| FAIL   | Check not satisfied               |
-| SKIP   | Not applicable to this project    |
+## Status Vocabulary
 
-Deductions are based on check severity (defined in each dimension file):
+Each check produces one of four statuses. Status determines whether the associated category's weight is awarded:
 
-| Check Severity | FAIL deduction | WARN deduction |
-| -------------- | -------------- | -------------- |
-| critical       | 3 pts          | 1.5 pts        |
-| high           | 2 pts          | 1 pt           |
-| medium         | 1 pt           | 0.5 pts        |
-| low            | 0.5 pts        | 0.25 pts       |
+| Status | Meaning                                          | Weight awarded                                                                |
+| ------ | ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| PASS   | Category present and fully satisfied             | Full `weight` from `standards.toml`                                           |
+| WARN   | Partial presence or minor gap                    | Nothing by default (binary award; a category may define a partial rule later) |
+| FAIL   | Category absent or not satisfied                 | Nothing                                                                       |
+| SKIP   | Inapplicable — `applies_when` condition is false | Excluded from the coverage denominator                                        |
 
 ## Per-Dimension Score
 
-```
-max_points = sum of each check's severity weight (critical=3, high=2, medium=1, low=0.5)
-deductions  = sum of FAIL and WARN deductions
-raw_score   = max_points - deductions
-pct         = (raw_score / max_points) * 100   (clamped to 0–100)
-```
-
-## Overall Score
+The dimension score is the sum of weights for all awarded categories whose `applies_when` condition is true:
 
 ```
-overall_pct = average of all dimension percentages
+dimension_score = Σ weight  for each category where status = PASS and applies_when = true
 ```
 
-## Grade Scale
+There are no deductions, no max-points ceiling, and no percentage transformation at this stage. A category that is WARN, FAIL, or SKIP contributes zero.
 
-| Grade | Range    |
-| ----- | -------- |
-| A     | 90 – 100 |
-| B     | 75 – 89  |
-| C     | 60 – 74  |
-| D     | 40 – 59  |
-| F     | 0 – 39   |
+## Coverage Ratio
 
-## Priority Mapping (for recommendations)
+The coverage ratio expresses how much of today's defined standard a project has achieved within a dimension:
 
-- **P0:** Critical severity FAILs
-- **P1:** High severity FAILs + Critical WARNs
-- **P2:** Medium/Low FAILs + High/Medium WARNs
+```
+coverage_ratio = awarded_weight ÷ applicable_defined_weight
+
+where:
+  awarded_weight           = dimension_score (sum of PASS category weights)
+  applicable_defined_weight = Σ weight  of all categories for the dimension where applies_when = true
+```
+
+Display as a percentage labeled **"relative to today's standard"**. This is not a grade — it is a current-state measurement that moves as `standards.toml` gains new categories.
+
+## Audit Total
+
+The audit total is the sum of all dimension scores, uncapped:
+
+```
+audit_total = Σ dimension_score  across all audited dimensions
+```
+
+The total is not capped or normalized. As `standards.toml` gains categories the maximum possible total grows, which keeps the score honest about the expanding standard rather than hiding new gaps behind a ceiling.
+
+## Reliability
+
+Each category carries a `reliability_default` field in `standards.toml` (`minimal`, `maximal`, or `not-reliable`), plus degradation rules computed at runtime from available sources. Reliability is reported beside the score for each metric — it is not part of the score itself.
+
+## Priority Mapping (Recommendations Only)
+
+Severity drives recommendation priority, not points. Every check with a non-PASS status becomes a recommendation at the priority level corresponding to its severity:
+
+| Severity | Priority |
+| -------- | -------- |
+| critical | P0       |
+| high     | P1       |
+| medium   | P2       |
+| low      | P2       |
+
+Severity is a property of the check, not the score. Fixing a P0 item raises `dimension_score` only if the check moves to PASS — not because it carried a higher deduction.

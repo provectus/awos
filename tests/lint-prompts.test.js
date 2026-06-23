@@ -937,6 +937,21 @@ test('data-sources reference covers detection, schema, linking, adoption-start',
   assert.match(src, /empiric/i); // many-repos: map repos → links empirically
 });
 
+test('adoption-index reference defines sub-scores, weights, confidence', () => {
+  const p = path.join(referencesDir, 'adoption-index.md');
+  assert.ok(fs.existsSync(p), 'expected references/adoption-index.md');
+  const src = readUtf8(p);
+  assert.match(src, /0\s*[–-]\s*100/); // 0-100 scale
+  for (const sub of ['Adoption', 'Delivery', 'Allocation']) {
+    assert.match(src, new RegExp(sub), `index must name ${sub} sub-score`);
+  }
+  for (const conf of ['HIGH', 'MEDIUM', 'LOW']) {
+    assert.match(src, new RegExp(conf), `index must define ${conf} confidence`);
+  }
+  assert.match(src, /alongside/i); // separate track, not merged
+  assert.match(src, /baseline/i);
+});
+
 test('context/<path> references in prompts are internally consistent', () => {
   // Build a writer/reader map by scanning all prompts. A path is considered
   // consistent if every reference to it appears in at least one prompt — i.e.

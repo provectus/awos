@@ -944,7 +944,7 @@ test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
   );
 });
 
-test('data-sources reference covers detection, schema, linking, adoption-start', () => {
+test('data-sources reference covers detection, schema, linking, history params', () => {
   const p = path.join(referencesDir, 'data-sources.md');
   assert.ok(fs.existsSync(p), 'expected references/data-sources.md');
   const src = readUtf8(p);
@@ -952,12 +952,35 @@ test('data-sources reference covers detection, schema, linking, adoption-start',
   assert.match(src, /submodule/i);
   assert.match(src, /symlink/i);
   assert.match(src, /monorepo/i);
-  assert.match(src, /adoption[_-]?start/i);
-  assert.match(src, /diff-filter=A/); // the inference recipe
   assert.match(src, /current repo/i); // no-arg default
   assert.match(src, /AskUserQuestion/); // confirm sources once, at start
   assert.match(src, /discovery/i); // discovery-first flow
   assert.match(src, /empiric/i); // many-repos: map repos → links empirically
+  assert.match(
+    src,
+    /standards\.toml/,
+    'data-sources must point at standards.toml for period/history params'
+  );
+  assert.match(
+    src,
+    /monthly|30[- ]day|bucket/i,
+    'data-sources must describe the monthly bucket cadence'
+  );
+  assert.match(
+    src,
+    /2[- ]year|730|lookback/i,
+    'data-sources must describe the 2-year lookback cap'
+  );
+  assert.match(
+    src,
+    /minimal.{0,30}history|min(imum)?[- ]source[- ]history/i,
+    'data-sources must state the minimal-source-history bound'
+  );
+  assert.match(
+    src,
+    /SKIP/,
+    'data-sources must state the SKIP-when-no-source rule'
+  );
 });
 
 test('adoption-index reference defines sub-scores, weights, confidence', () => {

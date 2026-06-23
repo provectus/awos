@@ -1,6 +1,6 @@
 # AI-SDLC Adoption Audit — Data Sources Reference
 
-This document defines how the `ai-readiness-audit` skill resolves, confirms, and reads data sources when computing AI-SDLC adoption metrics. It is consumed by SKILL.md Step 0 (initialization) and the `ai-sdlc-adoption` dimension.
+This document defines how the `ai-readiness-audit` skill resolves, confirms, and reads data sources when computing AI-SDLC adoption metrics. It is consumed by SKILL.md Step 0 (initialization) and the collector layer (`collectors/`).
 
 ---
 
@@ -72,43 +72,32 @@ The optional override file lives at `context/audits/sources.toml` relative to th
 [[repos]]
 path = "."                 # local path or
 url  = "git@github.com:org/service-a.git"
-adoption_start = "2025-09-01"  # optional; else inferred from git history
 
 [sources]
 ci = "github-actions"      # or "gitlab-ci", "none"
 issue_tracker = "jira"     # or "github-issues", "linear", "none"
 docs = "confluence"        # or "coda", "none"
 
-[windows]
-length_days = 180          # before and after window length
+[standards]
+standards_file = "context/audits/standards.toml"   # optional; governs period/history params
 ```
 
-All fields are optional. Omitting `[[repos]]` entirely means "audit the current repo only."
+All fields are optional. Omitting `[[repos]]` entirely means "audit the current repo only." Period and history parameters (`monthly_bucket_days`, `max_lookback_days`) are read from `standards.toml` — see "Period & history" below.
 
 ---
 
-## Adoption-start inference
+## Period & history
 
-When `adoption_start` is absent from `sources.toml` (or the file itself is absent), the skill infers the adoption start date from git history.
+Cadence and lookback cap are governed by `standards.toml [meta]`:
 
-**Recipe** — earliest add-date of AI tooling files in the repo:
+- **`monthly_bucket_days = 30`** — metrics are bucketed in 30-day windows.
+- **`max_lookback_days = 730`** — the 2-year lookback cap; no metric looks further back than this regardless of available history.
 
-```
-git log --diff-filter=A --format=%cs -- CLAUDE.md AGENTS.md .claude/ | tail -1
-```
+**Minimal-source-history rule.** Each metric's available history is bounded by the **minimal available history among its feeding sources** — the shortest `history_available_days` value reported in the collector artifacts for that metric's inputs. A metric cannot claim more historical depth than its least-historical source allows.
 
-This returns the date (`%cs` = short ISO date) on which the first AI-tooling file was added to the repository.
+**Partial source — downgraded reliability.** When one or more of a metric's sources are absent, the metric still computes from the remaining sources, but its reliability is downgraded to reflect the gap. The `metrics/` layer records which sources contributed and marks reliability accordingly.
 
-**Window calculation:**
-
-- Before-window: `[start − length_days, start)` — clamped to available history.
-- After-window: `[start, today]`.
-- `length_days` = `min(requested, history available before start)`.
-
-**No AI tooling found:** if the command returns no output, the repository has no baseline. In this case:
-
-- Adoption metrics report **current-state only** (ramp, not delta).
-- Delivery metrics (cycle time, DORA, etc.) **SKIP** the before/after delta computation entirely.
+**SKIP rule.** A metric SKIPs (is omitted from output) only when **none** of its required sources exist. A metric with at least one contributing source always produces a result, even at low reliability.
 
 ---
 

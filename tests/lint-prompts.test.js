@@ -1089,6 +1089,35 @@ test('scoring.md uses additive weighted categories, not A-F grades', () => {
   );
 });
 
+test('dimension-auditor parses standards.toml and emits weighted points', () => {
+  const p = path.join(
+    repoRoot,
+    'plugins',
+    'awos',
+    'agents',
+    'dimension-auditor.md'
+  );
+  const src = readUtf8(p);
+  assert.match(
+    src,
+    /standards\.toml/,
+    'dimension-auditor must read standards.toml'
+  );
+  assert.match(
+    src,
+    /tomllib|python3/,
+    'dimension-auditor must parse TOML with python3/tomllib'
+  );
+  assert.match(src, /weight/i, 'dimension-auditor must emit category weights');
+  assert.match(
+    src,
+    /coverage ratio/i,
+    'dimension-auditor must emit a coverage ratio'
+  );
+  assert.match(src, /reliabilit/i, 'dimension-auditor must emit reliability');
+  assert.doesNotMatch(src, /grade/i, 'dimension-auditor must not emit a grade');
+});
+
 test('context/<path> references in prompts are internally consistent', () => {
   // Build a writer/reader map by scanning all prompts. A path is considered
   // consistent if every reference to it appears in at least one prompt — i.e.

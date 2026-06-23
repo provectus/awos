@@ -983,6 +983,68 @@ test('data-sources reference covers detection, schema, linking, history params',
   );
 });
 
+test('standards.toml exists and matches the category/band schema', () => {
+  const p = path.join(referencesDir, 'standards.toml');
+  assert.ok(fs.existsSync(p), 'expected references/standards.toml');
+  const src = readUtf8(p);
+  // [meta] cadence + lookback are data, with the exact locked values.
+  assert.match(src, /\[meta\]/, 'standards.toml must have a [meta] table');
+  assert.match(
+    src,
+    /monthly_bucket_days\s*=\s*30/,
+    'meta.monthly_bucket_days must be 30'
+  );
+  assert.match(
+    src,
+    /max_lookback_days\s*=\s*730/,
+    'meta.max_lookback_days must be 730'
+  );
+  assert.match(
+    src,
+    /standards_version\s*=\s*"/,
+    'meta.standards_version must be set'
+  );
+  // At least one category table with every required key.
+  assert.match(
+    src,
+    /\[category\./,
+    'standards.toml must define [category.*] tables'
+  );
+  for (const key of [
+    'code',
+    'metric',
+    'dimension',
+    'weight',
+    'definition',
+    'applies_when',
+    'sources',
+    'reliability_default',
+    'source',
+    'source_year',
+  ]) {
+    assert.match(
+      src,
+      new RegExp('\\n\\s*' + key + '\\s*='),
+      `category tables must declare ${key}`
+    );
+  }
+  // Reliability defaults use the locked vocabulary only.
+  const relTags = src.match(/reliability_default\s*=\s*"([^"]+)"/g) || [];
+  for (const m of relTags) {
+    assert.match(
+      m,
+      /"(minimal|maximal|not-reliable)"/,
+      `reliability_default must be one of minimal|maximal|not-reliable: ${m}`
+    );
+  }
+  // At least one band table for banded metrics.
+  assert.match(
+    src,
+    /\[band\./,
+    'standards.toml must define at least one [band.*] table'
+  );
+});
+
 test('context/<path> references in prompts are internally consistent', () => {
   // Build a writer/reader map by scanning all prompts. A path is considered
   // consistent if every reference to it appears in at least one prompt — i.e.

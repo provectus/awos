@@ -1,0 +1,366 @@
+# standards.toml — capability-category data for the ai-readiness-audit plugin
+#
+# Single source of truth for every scoring category used by the
+# ai-sdlc-adoption metric set (and, in later tasks, by all 11 existing audit
+# dimensions).  Parsed at runtime via `python3 -c 'import tomllib'`.
+# Users may override by pointing sources.toml [standards].standards_file at
+# their own copy of this file.
+#
+# Schema
+# ------
+# [meta]                  — global cadence / lookback constants
+# [category.<slug>]       — one table per scoring category (ten required keys)
+# [band.<slug>]           — one table per banded metric (DORA-style thresholds)
+#
+# Weight-seeding heuristic (deterministic, so Task A.4 is mechanical):
+#   critical → 8   high → 5   medium → 3   low → 1
+# Weights inside category tables are starting values; edit here to retune.
+
+# ---------------------------------------------------------------------------
+# [meta] — global constants
+# ---------------------------------------------------------------------------
+
+[meta]
+monthly_bucket_days = 30
+max_lookback_days = 730
+standards_version = "2026.06"
+# Users override by pointing sources.toml [standards].standards_file at their own copy.
+
+# ---------------------------------------------------------------------------
+# [category.*] — ai-sdlc-adoption metric categories
+#
+# Tier G: git-only signals
+# ---------------------------------------------------------------------------
+
+# ADP-G1: AI tooling depth & breadth
+# One category per detectable tooling layer.  The canonical collector for all
+# tooling-presence signals (CLAUDE.md/AGENTS.md/.claude/skills/commands/hooks/MCP)
+# is the git collector — sources = ["git"] for every ADP-G1 category.
+
+[category.ai_tooling_claude_md]
+code = 101
+metric = "adp_g1_tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 10
+definition = "Repo has a non-trivial CLAUDE.md or AGENTS.md providing agent context"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"   # presence != active use → true usage ≤ shown
+source = "AWOS conventions"
+source_year = 2026
+
+[category.ai_tooling_skills]
+code = 102
+metric = "adp_g1_tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 6
+definition = "Repo defines .claude/skills/*/SKILL.md agent skill files"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"
+source = "AWOS conventions"
+source_year = 2026
+
+[category.ai_tooling_commands]
+code = 103
+metric = "adp_g1_tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 5
+definition = "Repo defines .claude/commands/ custom slash commands"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"
+source = "AWOS conventions"
+source_year = 2026
+
+[category.ai_tooling_hooks]
+code = 104
+metric = "adp_g1_tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 5
+definition = "Repo defines .claude/hooks/ lifecycle hooks"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"
+source = "AWOS conventions"
+source_year = 2026
+
+[category.ai_tooling_mcp]
+code = 105
+metric = "adp_g1_tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 5
+definition = "Repo carries an MCP server config (.mcp.json or equivalent)"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"
+source = "AWOS conventions"
+source_year = 2026
+
+[category.ai_tooling_spec_signals]
+code = 106
+metric = "adp_g1_tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 8
+definition = "Repo has spec-driven adoption signals: spec directories, spec-referencing hooks/scripts, or spec docs"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"
+source = "AWOS conventions"
+source_year = 2026
+
+# ADP-G2: Active monthly contributors
+
+[category.active_contributors]
+code = 201
+metric = "adp_g2_contributors"
+dimension = "ai-sdlc-adoption"
+weight = 3
+definition = "Distinct commit-author count per trailing 30-day bucket (aggregate only, no PII)"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "not-reliable"   # raw count; no direction implied without context
+source = "AWOS conventions"
+source_year = 2026
+
+# ADP-G3: Deployment / merge frequency (DORA banded)
+
+[category.merge_frequency]
+code = 301
+metric = "adp_g3_deploy_frequency"
+dimension = "ai-sdlc-adoption"
+weight = 5
+definition = "Merges into the default branch per week (DORA deployment frequency proxy)"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "not-reliable"   # direction depends on team size; banded comparison is the signal
+source = "DORA State of DevOps"
+source_year = 2024
+
+# ADP-G4: Lead time for change (DORA banded)
+
+[category.lead_time_for_change]
+code = 401
+metric = "adp_g4_lead_time"
+dimension = "ai-sdlc-adoption"
+weight = 5
+definition = "Median time from first commit on a branch to its merge into the default branch"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "not-reliable"   # direction depends on team; banded comparison is the signal
+source = "DORA State of DevOps"
+source_year = 2024
+
+# ADP-G5: PR cycle time (banded)
+
+[category.pr_cycle_time]
+code = 501
+metric = "adp_g5_pr_cycle_time"
+dimension = "ai-sdlc-adoption"
+weight = 3
+definition = "Time from PR open to merge; low-confidence (git-approximation) when no code-host connector is available"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "not-reliable"
+source = "DORA State of DevOps"
+source_year = 2024
+
+# ADP-G6: Code churn & rework
+
+[category.code_churn]
+code = 601
+metric = "adp_g6_churn"
+dimension = "ai-sdlc-adoption"
+weight = 3
+definition = "Insertions+deletions trend and rework-hotspot file count; churn rate trend, not raw size"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "not-reliable"
+source = "AWOS conventions"
+source_year = 2026
+
+# ADP-G7: Change failure rate proxy (DORA banded)
+
+[category.change_failure_rate]
+code = 701
+metric = "adp_g7_change_fail_rate"
+dimension = "ai-sdlc-adoption"
+weight = 5
+definition = "Share of default-branch merges followed within N days by a revert/hotfix commit"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "not-reliable"
+source = "DORA State of DevOps"
+source_year = 2024
+
+# ADP-G8: Review rework cycle (banded)
+
+[category.review_rework]
+code = 801
+metric = "adp_g8_review_rework"
+dimension = "ai-sdlc-adoption"
+weight = 3
+definition = "Review rounds and time-to-resolve-review-threads per PR; proxied from post-open commits when no host data is available"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "not-reliable"
+source = "AWOS conventions"
+source_year = 2026
+
+# ADP-G9: AI-attributed change share (lower bound)
+
+[category.ai_attribution]
+code = 901
+metric = "adp_g9_ai_attribution"
+dimension = "ai-sdlc-adoption"
+weight = 5
+definition = "Share of commits/PRs carrying AI markers (Co-authored-by: trailer, agent label). Always a lower bound — true usage >= shown."
+applies_when = "always"
+sources = ["git"]
+reliability_default = "minimal"   # true usage >= shown: attribution is easily disabled
+source = "AWOS conventions"
+source_year = 2026
+
+# ---------------------------------------------------------------------------
+# Tier C: CI source categories
+# ---------------------------------------------------------------------------
+
+[category.ci_pass_rate]
+code = 1001
+metric = "adp_c1_ci_pass_rate"
+dimension = "ai-sdlc-adoption"
+weight = 5
+definition = "Default-branch CI pass rate; feature-branch failures excluded; treated as supporting evidence, not headline"
+applies_when = "topology.has_ci"
+sources = ["ci"]
+reliability_default = "not-reliable"
+source = "Martin Fowler CI/CD"
+source_year = 2024
+
+[category.pipeline_duration_trend]
+code = 1002
+metric = "adp_c2_pipeline_duration"
+dimension = "ai-sdlc-adoption"
+weight = 3
+definition = "Feedback-loop speed: pipeline duration trend over the lookback window"
+applies_when = "topology.has_ci"
+sources = ["ci"]
+reliability_default = "not-reliable"
+source = "Martin Fowler CI/CD"
+source_year = 2024
+
+# ---------------------------------------------------------------------------
+# Tier I: Issue tracker categories
+# ---------------------------------------------------------------------------
+
+[category.work_mix_allocation]
+code = 1101
+metric = "adp_i1_work_mix"
+dimension = "ai-sdlc-adoption"
+weight = 5
+definition = "Team-FTE share across Growth / KTLO / Support issue types (Jellyfish FTE-allocation model; never money)"
+applies_when = "topology.has_tracker"
+sources = ["tracker"]
+reliability_default = "not-reliable"
+source = "Jellyfish AI Impact"
+source_year = 2024
+
+[category.issue_throughput]
+code = 1102
+metric = "adp_i2_throughput"
+dimension = "ai-sdlc-adoption"
+weight = 3
+definition = "Delivered-issue count and backlog burn-down rate per monthly bucket"
+applies_when = "topology.has_tracker"
+sources = ["tracker"]
+reliability_default = "not-reliable"
+source = "AWOS conventions"
+source_year = 2026
+
+[category.mttr]
+code = 1103
+metric = "adp_i3_mttr"
+dimension = "ai-sdlc-adoption"
+weight = 5
+definition = "Mean time to recovery from incidents; SKIP unless a real incident source (PagerDuty/OpsGenie/incident.io) is explicitly provided"
+applies_when = "topology.has_incident_source"
+sources = ["tracker", "incident"]
+reliability_default = "not-reliable"
+source = "DORA State of DevOps"
+source_year = 2024
+
+# ---------------------------------------------------------------------------
+# Tier D: Docs / wiki categories
+# ---------------------------------------------------------------------------
+
+[category.external_spec_coverage]
+code = 1201
+metric = "adp_d1_spec_coverage"
+dimension = "ai-sdlc-adoption"
+weight = 5
+definition = "External spec/doc coverage & freshness in Confluence/Coda/Notion; strengthens ADP-G1 spec signal"
+applies_when = "topology.has_docs_connector"
+sources = ["docs"]
+reliability_default = "not-reliable"
+source = "AWOS conventions"
+source_year = 2026
+
+# ---------------------------------------------------------------------------
+# [band.*] — thresholds for banded metrics
+# ---------------------------------------------------------------------------
+
+# ADP-G3 / ADP-G4: DORA delivery bands
+
+[band.deploy_frequency]
+metric = "adp_g3_deploy_frequency"
+source = "DORA State of DevOps"
+source_year = 2024
+elite = "multiple per day"
+high = "once per day to once per week"
+medium = "once per week to once per month"
+low = "< once per month"
+
+[band.lead_time_for_change]
+metric = "adp_g4_lead_time"
+source = "DORA State of DevOps"
+source_year = 2024
+elite = "< 1 day"
+high = "< 1 week"
+medium = "< 1 month"
+low = ">= 1 month"
+
+[band.change_failure_rate]
+metric = "adp_g7_change_fail_rate"
+source = "DORA State of DevOps"
+source_year = 2024
+elite = "0–5%"
+high = "5–10%"
+medium = "10–15%"
+low = "> 15%"
+
+[band.mttr]
+metric = "adp_i3_mttr"
+source = "DORA State of DevOps"
+source_year = 2024
+elite = "< 1 hour"
+high = "< 1 day"
+medium = "< 1 week"
+low = ">= 1 week"
+
+[band.ci_pass_rate]
+metric = "adp_c1_ci_pass_rate"
+source = "Martin Fowler CI/CD"
+source_year = 2024
+elite = ">= 99%"
+high = ">= 95%"
+medium = ">= 90%"
+low = "< 90%"
+
+[band.work_mix]
+metric = "adp_i1_work_mix"
+source = "Jellyfish AI Impact"
+source_year = 2024
+elite = "Growth >= 60%"
+high = "Growth >= 45%"
+medium = "Growth >= 30%"
+low = "Growth < 30%"

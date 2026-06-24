@@ -18,9 +18,10 @@ import assert from 'node:assert/strict';
 import { loadStandards } from './helpers.ts';
 import { DETECTORS } from '../cli.ts';
 
-// The 10 scored audit dimensions (project-topology is unscored, excluded).
+// The scored audit dimensions (project-topology is unscored, excluded).
 const AUDIT_DIMENSIONS = new Set([
   'ai-development-tooling',
+  'application-security',
   'code-architecture',
   'documentation',
   'end-to-end-delivery',

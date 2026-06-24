@@ -1268,3 +1268,167 @@ sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
 source_year = 2026
+
+# ---------------------------------------------------------------------------
+# application-security (OWASP ASVS 5.0.0 Level 1 — curated subset)
+# Code range 3000–3099.  detected = static file/config heuristic detector;
+# judgment = rubric evaluated by the dimension-auditor AI agent.
+# ---------------------------------------------------------------------------
+
+# AS-01: TLS enforced — no plain-HTTP fallback
+[category.appsec_tls_enforced]
+code = 3000
+metric = "AS-01"
+dimension = "application-security"
+weight = 8
+method = "detected"
+definition = "The application enforces TLS — no plain-HTTP service URLs are present in config files per ASVS 5.0.0 L1 (V9.1.1)"
+applies_when = "topology.has_http_api"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+source_year = 2025
+
+# AS-02: Security headers present (X-Content-Type-Options, X-Frame-Options, etc.)
+[category.appsec_security_headers]
+code = 3001
+metric = "AS-02"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "HTTP security headers (X-Content-Type-Options, X-Frame-Options, Strict-Transport-Security) are configured per ASVS 5.0.0 L1 (V14.4)"
+applies_when = "topology.has_http_api"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+source_year = 2025
+
+# AS-03: CORS not wildcard
+[category.appsec_cors_not_wildcard]
+code = 3002
+metric = "AS-03"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "CORS is not configured with a wildcard origin ('*') per ASVS 5.0.0 L1 (V14.5.2)"
+applies_when = "topology.has_http_api"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+source_year = 2025
+
+# AS-04: Parameterized SQL / no string-built queries
+[category.appsec_parameterized_sql]
+code = 3003
+metric = "AS-04"
+dimension = "application-security"
+weight = 8
+method = "detected"
+definition = "Database queries use parameterized statements or an ORM; no string-concatenated SQL is detected per ASVS 5.0.0 L1 (V5.3.4)"
+applies_when = "topology.has_db"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+source_year = 2025
+
+# AS-05: Secrets not hardcoded in source
+[category.appsec_no_hardcoded_secrets]
+code = 3004
+metric = "AS-05"
+dimension = "application-security"
+weight = 8
+method = "detected"
+definition = "No hardcoded secrets, API keys, or credentials appear in committed source files per ASVS 5.0.0 L1 (V2.10.3)"
+applies_when = "topology.handles_secrets"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+source_year = 2025
+
+# AS-06: Authentication required on state-changing endpoints
+[category.appsec_auth_on_mutations]
+code = 3005
+metric = "AS-06"
+dimension = "application-security"
+weight = 8
+method = "detected"
+definition = "State-changing HTTP endpoints (POST/PUT/PATCH/DELETE) require authentication; decorator/middleware patterns are present per ASVS 5.0.0 L1 (V1.2.2)"
+applies_when = "topology.uses_auth"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+source_year = 2025
+
+# AS-07: Password / session hygiene signals
+[category.appsec_password_session_hygiene]
+code = 3006
+metric = "AS-07"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "Password hashing uses a strong algorithm (bcrypt/argon2/scrypt) and session tokens are generated with a CSPRNG per ASVS 5.0.0 L1 (V2.4.1, V3.2.1)"
+applies_when = "topology.uses_auth"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+source_year = 2025
+
+# AS-08: Input validation / output encoding present
+[category.appsec_input_validation]
+code = 3007
+metric = "AS-08"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "Request input is validated or sanitized before processing; known validation libraries or decorators are referenced per ASVS 5.0.0 L1 (V5.1.1)"
+applies_when = "topology.has_http_api"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+source_year = 2025
+
+# AS-09: Rate limiting / brute-force protection
+[category.appsec_rate_limiting]
+code = 3008
+metric = "AS-09"
+dimension = "application-security"
+weight = 3
+method = "detected"
+definition = "Authentication and public endpoints show evidence of rate limiting or brute-force protection per ASVS 5.0.0 L1 (V2.2.1)"
+applies_when = "topology.uses_auth"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+source_year = 2025
+
+# AS-10: Authorization correctness (judgment)
+[category.appsec_authorization_correctness]
+code = 3009
+metric = "AS-10"
+dimension = "application-security"
+weight = 8
+method = "judgment"
+definition = "Authorization checks are applied consistently to all protected resources; no privilege-escalation paths are evident per ASVS 5.0.0 L1 (V4.1.1)"
+applies_when = "topology.uses_auth"
+sources = ["audit"]
+reliability_default = "maximal"
+rubric = "Review route/controller handlers: do all state-changing endpoints verify the caller's identity and role before acting? Look for missing auth checks on update/delete paths, IDOR patterns (direct object references without ownership check), and admin actions accessible to unprivileged roles."
+evidence_required = ["list of protected endpoints and their auth middleware/decorator", "any endpoints that bypass the auth layer and the justification", "access-control model (RBAC/ABAC/ownership) — source files where it is enforced"]
+source = "OWASP ASVS"
+source_year = 2025
+
+# AS-11: Insecure design review (judgment)
+[category.appsec_insecure_design]
+code = 3010
+metric = "AS-11"
+dimension = "application-security"
+weight = 5
+method = "judgment"
+definition = "The overall HTTP API design does not exhibit systemic insecure-design patterns per ASVS 5.0.0 L1 (V1.1.1)"
+applies_when = "topology.has_http_api"
+sources = ["audit"]
+reliability_default = "maximal"
+rubric = "Examine the API surface for systemic insecure-design patterns: mass assignment vulnerabilities (binding all request fields to model), missing object-level access control, sensitive data exposure in error messages, lack of security context in the design (no mention of threat model, security requirements, or defense in depth). Score PASS if no systemic issues are evident, WARN if one issue is found, FAIL if two or more are present."
+evidence_required = ["API surface overview (routes, methods, input models)", "error-handling approach and what details are returned to clients", "any existing threat model or security design documentation"]
+source = "OWASP ASVS"
+source_year = 2025

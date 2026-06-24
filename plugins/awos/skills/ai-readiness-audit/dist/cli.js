@@ -681,9 +681,9 @@ function parse(toml, { maxDepth = 1e3, integersAsBigInt } = {}) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/cli.ts
-import { readFileSync as readFileSync28, mkdtempSync } from "node:fs";
+import { readFileSync as readFileSync29, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join as join28, dirname as dirname3 } from "node:path";
+import { join as join29, dirname as dirname3 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // plugins/awos/skills/ai-readiness-audit/collectors/git.ts
@@ -5057,14 +5057,601 @@ var DETECTORS10 = {
   // DOC-04 docs accuracy via referenced path existence
 };
 
+// plugins/awos/skills/ai-readiness-audit/detectors/application_security.ts
+import { readFileSync as readFileSync12 } from "node:fs";
+import { relative as relative12 } from "node:path";
+var TLS_CONFIG_GLOBS = [
+  "*.env",
+  "*.env.*",
+  "*.yaml",
+  "*.yml",
+  "*.toml",
+  "*.ini",
+  "*.cfg",
+  "*.conf",
+  "*.json"
+];
+var PLAIN_HTTP_STRICT_RX = /http:\/\/((?!localhost|127\.|0\.0\.0\.0|::1)[a-zA-Z0-9\-._]+)/i;
+var TLS_CONFIG_IGNORE = [
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".venv",
+  "__pycache__",
+  ".next",
+  "target",
+  "fixtures",
+  "testdata",
+  "__tests__",
+  "test",
+  "tests",
+  "docs",
+  "vendor"
+];
+function detectTlsEnforced(repoPath, _params) {
+  const plainHttpHits = [];
+  const files = iterFiles(repoPath, TLS_CONFIG_GLOBS, TLS_CONFIG_IGNORE);
+  for (const filePath of files) {
+    let content;
+    try {
+      content = readFileSync12(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^\s*(#|\/\/|\/\*|<!--)/.test(line)) continue;
+      if (/example|template|placeholder|localhost|127\.|your[_-]/i.test(line))
+        continue;
+      if (PLAIN_HTTP_STRICT_RX.test(line)) {
+        plainHttpHits.push({
+          file: relative12(repoPath, filePath),
+          line: i + 1,
+          text: line.trim().slice(0, 100)
+        });
+      }
+    }
+    if (plainHttpHits.length >= 10) break;
+  }
+  if (plainHttpHits.length === 0) {
+    return makeResult("PASS", 1, [
+      "no plain-HTTP (http://) service URLs found in config files \u2014 TLS appears enforced"
+    ]);
+  }
+  const evidence = plainHttpHits.map(
+    (h) => `${h.file}:${h.line} plain-HTTP URL: ${h.text}`
+  );
+  if (plainHttpHits.length <= 2) {
+    return makeResult("WARN", plainHttpHits.length, [
+      `${plainHttpHits.length} plain-HTTP URL(s) found \u2014 review whether they are production service URLs`,
+      ...evidence
+    ]);
+  }
+  return makeResult("FAIL", plainHttpHits.length, [
+    `${plainHttpHits.length} plain-HTTP service URL(s) found \u2014 enforce HTTPS for all non-local origins`,
+    ...evidence
+  ]);
+}
+var HEADER_GLOBS = [
+  "*.py",
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.go",
+  "*.java",
+  "*.kt",
+  "*.rb",
+  "*.php",
+  "*.conf",
+  "*.yaml",
+  "*.yml",
+  "*.toml",
+  "*.nginx",
+  "*.htaccess",
+  "Caddyfile"
+];
+var SECURITY_HEADERS = [
+  {
+    name: "X-Content-Type-Options",
+    rx: /x[_-]?content[_-]?type[_-]?options/i
+  },
+  { name: "X-Frame-Options", rx: /x[_-]?frame[_-]?options/i },
+  {
+    name: "Strict-Transport-Security",
+    rx: /strict[_-]?transport[_-]?security|HSTS/i
+  }
+];
+function detectSecurityHeaders(repoPath, _params) {
+  const found = [];
+  for (const { name, rx } of SECURITY_HEADERS) {
+    const hits = grep(repoPath, rx, HEADER_GLOBS);
+    if (hits.length > 0) {
+      found.push(name);
+    }
+  }
+  if (found.length >= 2) {
+    return makeResult("PASS", found.length, [
+      `${found.length} of ${SECURITY_HEADERS.length} security headers configured: ${found.join(", ")}`,
+      ...found.map((h) => `header configured: ${h}`)
+    ]);
+  }
+  if (found.length === 1) {
+    const missing = SECURITY_HEADERS.filter((h) => !found.includes(h.name)).map(
+      (h) => h.name
+    );
+    return makeResult("WARN", found.length, [
+      `only ${found.length} security header found (${found[0]}) \u2014 add ${missing.join(", ")}`,
+      ...missing.map((h) => `missing header: ${h}`)
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    `no HTTP security headers (${SECURITY_HEADERS.map((h) => h.name).join(", ")}) found in source \u2014 configure them in your framework middleware or reverse proxy`
+  ]);
+}
+var CORS_GLOBS = [
+  "*.py",
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.go",
+  "*.java",
+  "*.kt",
+  "*.rb",
+  "*.php",
+  "*.conf",
+  "*.yaml",
+  "*.yml",
+  "*.toml",
+  "*.json"
+];
+var CORS_WILDCARD_RX = /(?:cors[_-]?(?:allowed[_-]?)?origins?|origins?|allow(?:ed)?[_-]?origins?|access.control.allow.origin)[^=\n]{0,30}=\s*\[?\s*['"]?\s*\*\s*['"]?\s*\]?/i;
+var CORS_SCOPED_RX = /(?:origins?|allow(?:ed)?_origins?|access.control.allow.origin|cors)[^=\n]{0,30}=\s*['"\[{]?\s*https?:\/\//i;
+function detectCorsNotWildcard(repoPath, _params) {
+  const wildcardHits = [];
+  const scopedHits = [];
+  const files = iterFiles(repoPath, CORS_GLOBS);
+  for (const filePath of files) {
+    let content;
+    try {
+      content = readFileSync12(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^\s*(#|\/\/|\/\*)/.test(line)) continue;
+      if (CORS_WILDCARD_RX.test(line)) {
+        wildcardHits.push({
+          file: relative12(repoPath, filePath),
+          line: i + 1,
+          text: line.trim().slice(0, 120)
+        });
+      } else if (CORS_SCOPED_RX.test(line)) {
+        scopedHits.push({
+          file: relative12(repoPath, filePath),
+          line: i + 1,
+          text: line.trim().slice(0, 120)
+        });
+      }
+    }
+  }
+  if (wildcardHits.length > 0) {
+    return makeResult("FAIL", wildcardHits.length, [
+      `${wildcardHits.length} wildcard CORS origin ('*') found \u2014 restrict to specific allowed origins`,
+      ...wildcardHits.slice(0, 5).map((h) => `${h.file}:${h.line} ${h.text}`)
+    ]);
+  }
+  if (scopedHits.length > 0) {
+    return makeResult("PASS", scopedHits.length, [
+      `CORS is configured with scoped origins (not '*')`,
+      ...scopedHits.slice(0, 3).map((h) => `${h.file}:${h.line} ${h.text}`)
+    ]);
+  }
+  return makeResult("PASS", 0, [
+    "no CORS wildcard origin found \u2014 either CORS is not configured or origins are restricted"
+  ]);
+}
+var SQL_GLOBS = [
+  "*.py",
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.go",
+  "*.java",
+  "*.kt",
+  "*.rb",
+  "*.php"
+];
+var STRING_SQL_PATTERNS = [
+  // Python: cursor.execute("..." + var) or cursor.execute("..." % var)
+  /(?:execute|query)\s*\(\s*["'].*(?:SELECT|INSERT|UPDATE|DELETE|WHERE)[^"']*["']\s*\+/i,
+  // Python: f-string SQL with variable interpolation
+  /(?:execute|query)\s*\(\s*f["'].*(?:SELECT|INSERT|UPDATE|DELETE|WHERE).*\{[^}]+\}/i,
+  // JavaScript/TypeScript: db.query("..." + var)
+  /(?:db|pool|conn|client|connection)\.(?:query|execute|run)\s*\(\s*["'`].*(?:SELECT|INSERT|UPDATE|DELETE|WHERE)[^"'`]*["'`]\s*\+/i,
+  // Template literal SQL with interpolation
+  /(?:db|pool|conn|client|connection)\.(?:query|execute|run)\s*\(\s*`.*(?:SELECT|INSERT|UPDATE|DELETE|WHERE).*\$\{[^}]+\}/i,
+  // Generic: "SELECT * FROM ... WHERE id=" + variable
+  /["']SELECT[^"']*WHERE[^"']*=["']\s*\+/i
+];
+function detectParameterizedSql(repoPath, _params) {
+  const hits = [];
+  const files = iterFiles(repoPath, SQL_GLOBS);
+  for (const filePath of files) {
+    let content;
+    try {
+      content = readFileSync12(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^\s*(#|\/\/|\/\*)/.test(line)) continue;
+      if (/test|spec|mock|fixture|fake/i.test(
+        relative12(repoPath, filePath).toLowerCase()
+      ))
+        continue;
+      for (const pat of STRING_SQL_PATTERNS) {
+        if (pat.test(line)) {
+          hits.push({
+            file: relative12(repoPath, filePath),
+            line: i + 1,
+            text: line.trim().slice(0, 120)
+          });
+          break;
+        }
+      }
+      if (hits.length >= 15) break;
+    }
+    if (hits.length >= 15) break;
+  }
+  if (hits.length === 0) {
+    return makeResult("PASS", 0, [
+      "no string-concatenated SQL query patterns found \u2014 parameterized queries appear to be used"
+    ]);
+  }
+  const evidence = hits.slice(0, 8).map((h) => `${h.file}:${h.line} possible string-built SQL: ${h.text}`);
+  if (hits.length <= 2) {
+    return makeResult("WARN", hits.length, [
+      `${hits.length} possible string-built SQL pattern(s) found \u2014 review for injection risk`,
+      ...evidence
+    ]);
+  }
+  return makeResult("FAIL", hits.length, [
+    `${hits.length} string-concatenated SQL query pattern(s) found \u2014 use parameterized queries or an ORM`,
+    ...evidence
+  ]);
+}
+var APPSEC_SOURCE_GLOBS = [
+  "*.py",
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.go",
+  "*.java",
+  "*.kt",
+  "*.rb",
+  "*.php",
+  "*.yaml",
+  "*.yml",
+  "*.toml",
+  "*.ini",
+  "*.cfg",
+  "*.conf",
+  "*.json"
+];
+var APPSEC_SECRET_PATTERNS = [
+  // AWS access keys
+  /AKIA[0-9A-Z]{16}/,
+  // Generic key/secret/token/password assignments with non-trivial values
+  /(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|password|passwd|credential|private[_-]?key|client[_-]?secret)\s*[:=]\s*["']([A-Za-z0-9/+\-_.@]{12,})["']/i,
+  // JWT secrets
+  /jwt[_-]?secret\s*[:=]\s*["'][^"']{8,}["']/i,
+  // Database connection strings with embedded passwords
+  /(?:postgresql|mysql|mongodb|redis):\/\/[^:]+:[^@]{6,}@/i
+];
+var APPSEC_PLACEHOLDER_RX = /test|fake|example|dummy|xxx|your[_-]|placeholder|changeme|replace|<[^>]+>|\$\{[^}]+\}|env\(|process\.env|os\.environ|getenv|ENV\[|config\[/i;
+var APPSEC_SECRET_IGNORE = [
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".venv",
+  "__pycache__",
+  ".next",
+  "target",
+  "vendor",
+  "fixtures",
+  "testdata",
+  "__tests__",
+  "test",
+  "tests"
+];
+function detectNoHardcodedSecrets(repoPath, _params) {
+  const files = iterFiles(repoPath, APPSEC_SOURCE_GLOBS, APPSEC_SECRET_IGNORE);
+  const hits = [];
+  for (const filePath of files) {
+    let content;
+    try {
+      content = readFileSync12(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^\s*(#|\/\/|\/\*)/.test(line)) continue;
+      if (APPSEC_PLACEHOLDER_RX.test(line)) continue;
+      for (const pat of APPSEC_SECRET_PATTERNS) {
+        if (!pat.test(line)) continue;
+        hits.push({
+          file: relative12(repoPath, filePath),
+          line: i + 1,
+          pattern: pat.source.slice(0, 40)
+        });
+        break;
+      }
+    }
+    if (hits.length >= 20) break;
+  }
+  if (hits.length === 0) {
+    return makeResult("PASS", 0, [
+      "no hardcoded secret patterns found in source files"
+    ]);
+  }
+  const evidence = hits.slice(0, 8).map((h) => `${h.file}:${h.line} possible secret (pattern: ${h.pattern})`);
+  if (hits.length <= 2) {
+    return makeResult("WARN", hits.length, [
+      `${hits.length} possible hardcoded secret(s) found \u2014 review manually`,
+      ...evidence
+    ]);
+  }
+  return makeResult("FAIL", hits.length, [
+    `${hits.length} possible hardcoded secret(s) found in committed files`,
+    ...evidence
+  ]);
+}
+var ROUTE_GLOBS = [
+  "*.py",
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.go",
+  "*.rb",
+  "*.java",
+  "*.kt",
+  "*.php"
+];
+var MUTATION_ROUTE_RX = /(?:@(?:app|router|blueprint|api)\.(?:post|put|patch|delete)|router\.(?:post|put|patch|delete)|app\.(?:post|put|patch|delete)|Route\("(?:POST|PUT|PATCH|DELETE)"|\[HttpPost\]|\[HttpPut\]|\[HttpPatch\]|\[HttpDelete\]|\.post\s*\(|\.put\s*\(|\.patch\s*\(|\.delete\s*\()/i;
+var AUTH_DECORATOR_RX = /(?:@(?:login_required|auth_required|requires_auth|authenticated|jwt_required|permission_required|IsAuthenticated|Authorize|AuthGuard|UseGuards|Protected|authenticate|require_login|authenticate_user)|authenticate\s*\(|auth\.required|isAuthenticated|requireAuth|authMiddleware|bearerAuth|apiKeyAuth|jwt\.verify|verifyToken|checkAuth)/i;
+function detectAuthOnMutations(repoPath, _params) {
+  const filesWithMutations = [];
+  const filesWithAuth = [];
+  const files = iterFiles(repoPath, ROUTE_GLOBS);
+  for (const filePath of files) {
+    const rel = relative12(repoPath, filePath);
+    if (/test|spec|mock|fixture/i.test(rel.toLowerCase())) continue;
+    let content;
+    try {
+      content = readFileSync12(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const hasMutation = MUTATION_ROUTE_RX.test(content);
+    const hasAuth = AUTH_DECORATOR_RX.test(content);
+    if (hasMutation) filesWithMutations.push(rel);
+    if (hasMutation && hasAuth) filesWithAuth.push(rel);
+  }
+  if (filesWithMutations.length === 0) {
+    return makeResult("SKIP", 0, [
+      "no mutation route definitions (POST/PUT/PATCH/DELETE) found \u2014 auth-on-mutations check skipped"
+    ]);
+  }
+  const coverage = filesWithAuth.length / filesWithMutations.length;
+  if (coverage >= 0.7) {
+    return makeResult("PASS", filesWithAuth.length, [
+      `auth decorators/middleware found in ${filesWithAuth.length}/${filesWithMutations.length} files with mutation routes`,
+      ...filesWithAuth.slice(0, 5).map((f) => `auth + mutations: ${f}`)
+    ]);
+  }
+  if (coverage >= 0.3) {
+    return makeResult("WARN", filesWithAuth.length, [
+      `auth found in only ${filesWithAuth.length}/${filesWithMutations.length} mutation route files \u2014 some endpoints may be unprotected`,
+      ...filesWithMutations.filter((f) => !filesWithAuth.includes(f)).slice(0, 5).map((f) => `mutation routes without auth: ${f}`)
+    ]);
+  }
+  return makeResult("FAIL", filesWithAuth.length, [
+    `auth decorators/middleware absent from ${filesWithMutations.length - filesWithAuth.length}/${filesWithMutations.length} files with mutation routes`,
+    ...filesWithMutations.filter((f) => !filesWithAuth.includes(f)).slice(0, 8).map((f) => `no auth detected: ${f}`)
+  ]);
+}
+var AUTH_GLOBS = [
+  "*.py",
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.go",
+  "*.java",
+  "*.kt",
+  "*.rb",
+  "*.php"
+];
+var STRONG_HASH_RX = /\b(?:bcrypt|argon2|scrypt|passlib|ph\.hash)\b/i;
+var WEAK_HASH_RX = /\b(?:pbkdf2|sha256|sha512)\b.{0,40}(?:password|passwd|hash)/i;
+var INSECURE_HASH_RX = /\b(?:md5|sha1)\b.{0,40}(?:password|passwd|hash)/i;
+var SESSION_CSPRNG_RX = /(?:secrets\.token|os\.urandom|crypto\.randomBytes|SecureRandom|rand\.Read|Random\.new)/i;
+function detectPasswordSessionHygiene(repoPath, _params) {
+  let strongHashFound = false;
+  let weakHashFound = false;
+  let insecureHashFound = false;
+  let csprngFound = false;
+  const evidence = [];
+  const files = iterFiles(repoPath, AUTH_GLOBS);
+  for (const filePath of files) {
+    const rel = relative12(repoPath, filePath);
+    if (/test|spec|mock|fixture/i.test(rel.toLowerCase())) continue;
+    let content;
+    try {
+      content = readFileSync12(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    if (STRONG_HASH_RX.test(content)) {
+      strongHashFound = true;
+      evidence.push(`strong hash algorithm: ${rel}`);
+    }
+    if (WEAK_HASH_RX.test(content)) {
+      weakHashFound = true;
+      evidence.push(`weaker hash algorithm: ${rel}`);
+    }
+    if (INSECURE_HASH_RX.test(content)) {
+      insecureHashFound = true;
+      evidence.push(`insecure hash for password: ${rel}`);
+    }
+    if (SESSION_CSPRNG_RX.test(content)) {
+      csprngFound = true;
+      evidence.push(`CSPRNG session token: ${rel}`);
+    }
+  }
+  const hasAnySignal = strongHashFound || weakHashFound || insecureHashFound || csprngFound;
+  if (!hasAnySignal) {
+    return makeResult("SKIP", 0, [
+      "no password-hashing or session-token patterns found \u2014 hygiene check skipped (may not apply to this project)"
+    ]);
+  }
+  if (insecureHashFound) {
+    return makeResult("FAIL", 0, [
+      "MD5 or SHA1 used for password hashing \u2014 use bcrypt, argon2, or scrypt",
+      ...evidence.filter((e) => e.startsWith("insecure"))
+    ]);
+  }
+  if (strongHashFound) {
+    return makeResult("PASS", 1, [
+      "strong password hashing algorithm (bcrypt/argon2/scrypt) found",
+      ...evidence.slice(0, 5)
+    ]);
+  }
+  return makeResult("WARN", 0, [
+    "only weaker hashing algorithms found \u2014 prefer bcrypt, argon2, or scrypt over pbkdf2/sha256 for passwords",
+    ...evidence.slice(0, 5)
+  ]);
+}
+var HANDLER_GLOBS = [
+  "*.py",
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.go",
+  "*.java",
+  "*.kt",
+  "*.rb",
+  "*.php"
+];
+var VALIDATION_LIBRARY_RX = /\b(?:pydantic|marshmallow|cerberus|voluptuous|wtforms|validator\.js|joi|yup|zod|class-validator|validate\.js|express-validator|@IsString|@IsInt|@IsEmail|@Min|@Max|@Length|@NotNull|@Valid|@Validated|javax\.validation|jakarta\.validation|ActiveRecord::Base\.validates|validates\s*:|govalidator|ozzo-validation)\b/i;
+var MANUAL_VALIDATION_RX = /(?:isinstance\s*\(|typeof\s+\w+\s*===|request\.args\.get|request\.form\.get|req\.body\.|params\[|sanitize|escape\s*\()/i;
+function detectInputValidation(repoPath, _params) {
+  let libraryFound = false;
+  let manualFound = false;
+  const evidence = [];
+  const files = iterFiles(repoPath, HANDLER_GLOBS);
+  for (const filePath of files) {
+    const rel = relative12(repoPath, filePath);
+    if (/test|spec|mock|fixture/i.test(rel.toLowerCase())) continue;
+    let content;
+    try {
+      content = readFileSync12(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    if (VALIDATION_LIBRARY_RX.test(content)) {
+      libraryFound = true;
+      evidence.push(`validation library: ${rel}`);
+    } else if (MANUAL_VALIDATION_RX.test(content)) {
+      manualFound = true;
+    }
+  }
+  if (!libraryFound && !manualFound) {
+    return makeResult("SKIP", 0, [
+      "no input-validation patterns found \u2014 check skipped (may be handled at infrastructure level)"
+    ]);
+  }
+  if (libraryFound) {
+    return makeResult("PASS", 1, [
+      "input validation library or decorator found",
+      ...evidence.slice(0, 5)
+    ]);
+  }
+  return makeResult("WARN", 0, [
+    "only manual input validation signals found \u2014 consider using a validation library (Pydantic, Zod, class-validator, etc.)"
+  ]);
+}
+var RATE_LIMIT_RX = /\b(?:rate[_-]?limit|throttle|slowDown|express-rate-limit|django[_-]?ratelimit|flask[_-]?limiter|Limiter|ratelimiter|redis[_-]?throttle|@Throttle|@RateLimit|Throttling|UserRateThrottle|AnonRateThrottle)\b/i;
+var RATE_CONFIG_GLOBS = [
+  "*.py",
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.go",
+  "*.yaml",
+  "*.yml",
+  "*.toml",
+  "*.conf"
+];
+function detectRateLimiting(repoPath, _params) {
+  const hits = grep(repoPath, RATE_LIMIT_RX, RATE_CONFIG_GLOBS);
+  if (hits.length > 0) {
+    return makeResult("PASS", hits.length, [
+      `rate-limiting configuration found in ${hits.length} location(s)`,
+      ...hits.slice(0, 5).map((h) => `${h.file}:${h.line} ${h.text}`)
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no rate-limiting library or configuration found \u2014 add rate limiting to authentication and public endpoints"
+  ]);
+}
+var DETECTORS11 = {
+  3e3: detectTlsEnforced,
+  // AS-01 TLS enforced
+  3001: detectSecurityHeaders,
+  // AS-02 security headers present
+  3002: detectCorsNotWildcard,
+  // AS-03 CORS not wildcard
+  3003: detectParameterizedSql,
+  // AS-04 parameterized SQL
+  3004: detectNoHardcodedSecrets,
+  // AS-05 no hardcoded secrets
+  3005: detectAuthOnMutations,
+  // AS-06 auth on state-changing endpoints
+  3006: detectPasswordSessionHygiene,
+  // AS-07 password/session hygiene
+  3007: detectInputValidation,
+  // AS-08 input validation present
+  3008: detectRateLimiting
+  // AS-09 rate limiting
+  // 3009: judgment — authorization correctness (no detector)
+  // 3010: judgment — insecure design review (no detector)
+};
+
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g1_tooling_depth.ts
-import { readFileSync as readFileSync13, existsSync as existsSync11 } from "node:fs";
-import { join as join13 } from "node:path";
+import { readFileSync as readFileSync14, existsSync as existsSync12 } from "node:fs";
+import { join as join14 } from "node:path";
 
 // plugins/awos/skills/ai-readiness-audit/metrics/_base.ts
-import { readFileSync as readFileSync12 } from "node:fs";
+import { readFileSync as readFileSync13 } from "node:fs";
 function loadStandards(path) {
-  return parse(readFileSync12(path, "utf8"));
+  return parse(readFileSync13(path, "utf8"));
 }
 function computeReliability(defaultTag, sourcesUsed, sourcesMissing) {
   if (sourcesMissing.length === 0) {
@@ -5145,8 +5732,8 @@ var TOOLING_MAP = [
 ];
 var ALL_CODES = TOOLING_MAP.map((e) => e.code);
 function compute(collectedDir, _standards, _topology) {
-  const gitPath = join13(collectedDir, "git.json");
-  if (!existsSync11(gitPath)) {
+  const gitPath = join14(collectedDir, "git.json");
+  if (!existsSync12(gitPath)) {
     return makeMetricResult(
       "adp_g1_tooling_depth",
       null,
@@ -5157,7 +5744,7 @@ function compute(collectedDir, _standards, _topology) {
       ["git"]
     );
   }
-  const artifact = JSON.parse(readFileSync13(gitPath, "utf8"));
+  const artifact = JSON.parse(readFileSync14(gitPath, "utf8"));
   const raw = artifact?.raw;
   if (!raw || !Array.isArray(raw.tooling_paths)) {
     return makeMetricResult(
@@ -5194,11 +5781,11 @@ function compute(collectedDir, _standards, _topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g2_contributors.ts
-import { readFileSync as readFileSync14, existsSync as existsSync12 } from "node:fs";
-import { join as join14 } from "node:path";
+import { readFileSync as readFileSync15, existsSync as existsSync13 } from "node:fs";
+import { join as join15 } from "node:path";
 function compute2(collectedDir, _standards, _topology) {
-  const gitPath = join14(collectedDir, "git.json");
-  if (!existsSync12(gitPath)) {
+  const gitPath = join15(collectedDir, "git.json");
+  if (!existsSync13(gitPath)) {
     return makeMetricResult(
       "adp_g2_contributors",
       null,
@@ -5209,7 +5796,7 @@ function compute2(collectedDir, _standards, _topology) {
       ["git"]
     );
   }
-  const artifact = JSON.parse(readFileSync14(gitPath, "utf8"));
+  const artifact = JSON.parse(readFileSync15(gitPath, "utf8"));
   const raw = artifact?.raw;
   if (!raw || !Array.isArray(raw.monthly_buckets) || raw.monthly_buckets.length === 0) {
     return makeMetricResult(
@@ -5250,8 +5837,8 @@ function compute2(collectedDir, _standards, _topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g3_deploy_frequency.ts
-import { readFileSync as readFileSync15, existsSync as existsSync13 } from "node:fs";
-import { join as join15 } from "node:path";
+import { readFileSync as readFileSync16, existsSync as existsSync14 } from "node:fs";
+import { join as join16 } from "node:path";
 function doraDeployBand(mergesPerWeek) {
   if (mergesPerWeek >= 7) return "elite";
   if (mergesPerWeek >= 1) return "high";
@@ -5259,8 +5846,8 @@ function doraDeployBand(mergesPerWeek) {
   return "low";
 }
 function compute3(collectedDir, _standards, _topology) {
-  const gitPath = join15(collectedDir, "git.json");
-  if (!existsSync13(gitPath)) {
+  const gitPath = join16(collectedDir, "git.json");
+  if (!existsSync14(gitPath)) {
     return makeMetricResult(
       "adp_g3_deploy_frequency",
       null,
@@ -5271,7 +5858,7 @@ function compute3(collectedDir, _standards, _topology) {
       ["git"]
     );
   }
-  const artifact = JSON.parse(readFileSync15(gitPath, "utf8"));
+  const artifact = JSON.parse(readFileSync16(gitPath, "utf8"));
   const raw = artifact?.raw;
   if (!raw || !Array.isArray(raw.monthly_buckets) || raw.monthly_buckets.length === 0) {
     return makeMetricResult(
@@ -5317,8 +5904,8 @@ function compute3(collectedDir, _standards, _topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g4_lead_time.ts
-import { readFileSync as readFileSync16, existsSync as existsSync14 } from "node:fs";
-import { join as join16 } from "node:path";
+import { readFileSync as readFileSync17, existsSync as existsSync15 } from "node:fs";
+import { join as join17 } from "node:path";
 function median(sorted) {
   const mid = Math.floor(sorted.length / 2);
   if (sorted.length % 2 === 1) return sorted[mid];
@@ -5331,8 +5918,8 @@ function doraLeadTimeBand(hours) {
   return "low";
 }
 function compute4(collectedDir, _standards, _topology) {
-  const gitPath = join16(collectedDir, "git.json");
-  if (!existsSync14(gitPath)) {
+  const gitPath = join17(collectedDir, "git.json");
+  if (!existsSync15(gitPath)) {
     return makeMetricResult(
       "adp_g4_lead_time",
       null,
@@ -5343,7 +5930,7 @@ function compute4(collectedDir, _standards, _topology) {
       ["git"]
     );
   }
-  const artifact = JSON.parse(readFileSync16(gitPath, "utf8"));
+  const artifact = JSON.parse(readFileSync17(gitPath, "utf8"));
   const raw = artifact?.raw;
   if (!raw || !Array.isArray(raw.merge_records) || raw.merge_records.length === 0) {
     return makeMetricResult(
@@ -5427,8 +6014,8 @@ function compute4(collectedDir, _standards, _topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g5_pr_cycle_time.ts
-import { readFileSync as readFileSync17, existsSync as existsSync15 } from "node:fs";
-import { join as join17 } from "node:path";
+import { readFileSync as readFileSync18, existsSync as existsSync16 } from "node:fs";
+import { join as join18 } from "node:path";
 function median2(sorted) {
   const mid = Math.floor(sorted.length / 2);
   if (sorted.length % 2 === 1) return sorted[mid];
@@ -5441,8 +6028,8 @@ function doraCycleTimeBand(hours) {
   return "low";
 }
 function compute5(collectedDir, _standards, _topology) {
-  const gitPath = join17(collectedDir, "git.json");
-  if (!existsSync15(gitPath)) {
+  const gitPath = join18(collectedDir, "git.json");
+  if (!existsSync16(gitPath)) {
     return makeMetricResult(
       "adp_g5_pr_cycle_time",
       null,
@@ -5453,7 +6040,7 @@ function compute5(collectedDir, _standards, _topology) {
       ["git"]
     );
   }
-  const artifact = JSON.parse(readFileSync17(gitPath, "utf8"));
+  const artifact = JSON.parse(readFileSync18(gitPath, "utf8"));
   const raw = artifact?.raw;
   if (!raw || !Array.isArray(raw.merge_records) || raw.merge_records.length === 0) {
     return makeMetricResult(
@@ -5537,11 +6124,11 @@ function compute5(collectedDir, _standards, _topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g6_churn.ts
-import { readFileSync as readFileSync18, existsSync as existsSync16 } from "node:fs";
-import { join as join18 } from "node:path";
+import { readFileSync as readFileSync19, existsSync as existsSync17 } from "node:fs";
+import { join as join19 } from "node:path";
 function compute6(collectedDir, _standards, _topology) {
-  const gitPath = join18(collectedDir, "git.json");
-  if (!existsSync16(gitPath)) {
+  const gitPath = join19(collectedDir, "git.json");
+  if (!existsSync17(gitPath)) {
     return makeMetricResult(
       "adp_g6_churn",
       null,
@@ -5552,7 +6139,7 @@ function compute6(collectedDir, _standards, _topology) {
       ["git"]
     );
   }
-  const artifact = JSON.parse(readFileSync18(gitPath, "utf8"));
+  const artifact = JSON.parse(readFileSync19(gitPath, "utf8"));
   const raw = artifact?.raw;
   if (!raw || typeof raw.numstat_totals !== "object" || raw.numstat_totals === null) {
     return makeMetricResult(
@@ -5580,8 +6167,8 @@ function compute6(collectedDir, _standards, _topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g7_change_fail_rate.ts
-import { readFileSync as readFileSync19, existsSync as existsSync17 } from "node:fs";
-import { join as join19 } from "node:path";
+import { readFileSync as readFileSync20, existsSync as existsSync18 } from "node:fs";
+import { join as join20 } from "node:path";
 function doraChangeFailBand(rate) {
   if (rate < 0.05) return "elite";
   if (rate < 0.1) return "high";
@@ -5589,8 +6176,8 @@ function doraChangeFailBand(rate) {
   return "low";
 }
 function compute7(collectedDir, _standards, _topology) {
-  const gitPath = join19(collectedDir, "git.json");
-  if (!existsSync17(gitPath)) {
+  const gitPath = join20(collectedDir, "git.json");
+  if (!existsSync18(gitPath)) {
     return makeMetricResult(
       "adp_g7_change_fail_rate",
       null,
@@ -5601,7 +6188,7 @@ function compute7(collectedDir, _standards, _topology) {
       ["git"]
     );
   }
-  const artifact = JSON.parse(readFileSync19(gitPath, "utf8"));
+  const artifact = JSON.parse(readFileSync20(gitPath, "utf8"));
   const raw = artifact?.raw;
   if (!raw || typeof raw.total_merges !== "number" || raw.total_merges === 0) {
     return makeMetricResult(
@@ -5632,11 +6219,11 @@ function compute7(collectedDir, _standards, _topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g8_review_rework.ts
-import { readFileSync as readFileSync20, existsSync as existsSync18 } from "node:fs";
-import { join as join20 } from "node:path";
+import { readFileSync as readFileSync21, existsSync as existsSync19 } from "node:fs";
+import { join as join21 } from "node:path";
 function compute8(collectedDir, _standards, _topology) {
-  const gitPath = join20(collectedDir, "git.json");
-  if (!existsSync18(gitPath)) {
+  const gitPath = join21(collectedDir, "git.json");
+  if (!existsSync19(gitPath)) {
     return makeMetricResult(
       "adp_g8_review_rework",
       null,
@@ -5647,7 +6234,7 @@ function compute8(collectedDir, _standards, _topology) {
       ["git"]
     );
   }
-  const artifact = JSON.parse(readFileSync20(gitPath, "utf8"));
+  const artifact = JSON.parse(readFileSync21(gitPath, "utf8"));
   const raw = artifact?.raw;
   if (!raw || !Array.isArray(raw.merge_records) || raw.merge_records.length === 0) {
     return makeMetricResult(
@@ -5677,11 +6264,11 @@ function compute8(collectedDir, _standards, _topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g9_ai_attribution.ts
-import { readFileSync as readFileSync21, existsSync as existsSync19 } from "node:fs";
-import { join as join21 } from "node:path";
+import { readFileSync as readFileSync22, existsSync as existsSync20 } from "node:fs";
+import { join as join22 } from "node:path";
 function compute9(collectedDir, _standards, _topology) {
-  const gitPath = join21(collectedDir, "git.json");
-  if (!existsSync19(gitPath)) {
+  const gitPath = join22(collectedDir, "git.json");
+  if (!existsSync20(gitPath)) {
     return makeMetricResult(
       "adp_g9_ai_attribution",
       null,
@@ -5692,7 +6279,7 @@ function compute9(collectedDir, _standards, _topology) {
       ["git"]
     );
   }
-  const artifact = JSON.parse(readFileSync21(gitPath, "utf8"));
+  const artifact = JSON.parse(readFileSync22(gitPath, "utf8"));
   const raw = artifact?.raw;
   if (!raw || typeof raw.total_commits !== "number" || raw.total_commits === 0) {
     return makeMetricResult(
@@ -5721,8 +6308,8 @@ function compute9(collectedDir, _standards, _topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_c1_ci_pass_rate.ts
-import { readFileSync as readFileSync22, existsSync as existsSync20 } from "node:fs";
-import { join as join22 } from "node:path";
+import { readFileSync as readFileSync23, existsSync as existsSync21 } from "node:fs";
+import { join as join23 } from "node:path";
 function ciPassBand(rate) {
   if (rate >= 0.99) return "elite";
   if (rate >= 0.95) return "high";
@@ -5736,8 +6323,8 @@ function countSuccessful(runs) {
   }).length;
 }
 function compute10(collectedDir, standards, topology) {
-  const ciPath = join22(collectedDir, "ci.json");
-  if (!existsSync20(ciPath)) {
+  const ciPath = join23(collectedDir, "ci.json");
+  if (!existsSync21(ciPath)) {
     return makeMetricResult(
       "adp_c1_ci_pass_rate",
       null,
@@ -5748,7 +6335,7 @@ function compute10(collectedDir, standards, topology) {
       ["ci"]
     );
   }
-  const artifact = JSON.parse(readFileSync22(ciPath, "utf8"));
+  const artifact = JSON.parse(readFileSync23(ciPath, "utf8"));
   if (!artifact?.available) {
     return makeMetricResult(
       "adp_c1_ci_pass_rate",
@@ -5807,8 +6394,8 @@ function compute10(collectedDir, standards, topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_c2_pipeline_duration.ts
-import { readFileSync as readFileSync23, existsSync as existsSync21 } from "node:fs";
-import { join as join23 } from "node:path";
+import { readFileSync as readFileSync24, existsSync as existsSync22 } from "node:fs";
+import { join as join24 } from "node:path";
 function averageDuration(runs) {
   const durations = runs.map((r) => {
     const rec = r;
@@ -5819,8 +6406,8 @@ function averageDuration(runs) {
   return durations.reduce((sum, d) => sum + d, 0) / durations.length;
 }
 function compute11(collectedDir, standards, topology) {
-  const ciPath = join23(collectedDir, "ci.json");
-  if (!existsSync21(ciPath)) {
+  const ciPath = join24(collectedDir, "ci.json");
+  if (!existsSync22(ciPath)) {
     return makeMetricResult(
       "adp_c2_pipeline_duration",
       null,
@@ -5831,7 +6418,7 @@ function compute11(collectedDir, standards, topology) {
       ["ci"]
     );
   }
-  const artifact = JSON.parse(readFileSync23(ciPath, "utf8"));
+  const artifact = JSON.parse(readFileSync24(ciPath, "utf8"));
   if (!artifact?.available) {
     return makeMetricResult(
       "adp_c2_pipeline_duration",
@@ -5886,11 +6473,11 @@ function compute11(collectedDir, standards, topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_d1_spec_coverage.ts
-import { readFileSync as readFileSync24, existsSync as existsSync22 } from "node:fs";
-import { join as join24 } from "node:path";
+import { readFileSync as readFileSync25, existsSync as existsSync23 } from "node:fs";
+import { join as join25 } from "node:path";
 function compute12(collectedDir, standards, topology) {
-  const docsPath = join24(collectedDir, "docs.json");
-  if (!existsSync22(docsPath)) {
+  const docsPath = join25(collectedDir, "docs.json");
+  if (!existsSync23(docsPath)) {
     return makeMetricResult(
       "adp_d1_spec_coverage",
       null,
@@ -5901,7 +6488,7 @@ function compute12(collectedDir, standards, topology) {
       ["docs"]
     );
   }
-  const artifact = JSON.parse(readFileSync24(docsPath, "utf8"));
+  const artifact = JSON.parse(readFileSync25(docsPath, "utf8"));
   if (!artifact?.available) {
     return makeMetricResult(
       "adp_d1_spec_coverage",
@@ -5935,8 +6522,8 @@ function compute12(collectedDir, standards, topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_i1_work_mix.ts
-import { readFileSync as readFileSync25, existsSync as existsSync23 } from "node:fs";
-import { join as join25 } from "node:path";
+import { readFileSync as readFileSync26, existsSync as existsSync24 } from "node:fs";
+import { join as join26 } from "node:path";
 var GROWTH_TYPES = /* @__PURE__ */ new Set([
   "feature",
   "story",
@@ -5951,8 +6538,8 @@ function workMixBand(growthFrac) {
   return "low";
 }
 function compute13(collectedDir, standards, topology) {
-  const trackerPath = join25(collectedDir, "tracker.json");
-  if (!existsSync23(trackerPath)) {
+  const trackerPath = join26(collectedDir, "tracker.json");
+  if (!existsSync24(trackerPath)) {
     return makeMetricResult(
       "adp_i1_work_mix",
       null,
@@ -5963,7 +6550,7 @@ function compute13(collectedDir, standards, topology) {
       ["tracker"]
     );
   }
-  const artifact = JSON.parse(readFileSync25(trackerPath, "utf8"));
+  const artifact = JSON.parse(readFileSync26(trackerPath, "utf8"));
   if (!artifact?.available) {
     return makeMetricResult(
       "adp_i1_work_mix",
@@ -6012,11 +6599,11 @@ function compute13(collectedDir, standards, topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_i2_throughput.ts
-import { readFileSync as readFileSync26, existsSync as existsSync24 } from "node:fs";
-import { join as join26 } from "node:path";
+import { readFileSync as readFileSync27, existsSync as existsSync25 } from "node:fs";
+import { join as join27 } from "node:path";
 function compute14(collectedDir, standards, topology) {
-  const trackerPath = join26(collectedDir, "tracker.json");
-  if (!existsSync24(trackerPath)) {
+  const trackerPath = join27(collectedDir, "tracker.json");
+  if (!existsSync25(trackerPath)) {
     return makeMetricResult(
       "adp_i2_throughput",
       null,
@@ -6027,7 +6614,7 @@ function compute14(collectedDir, standards, topology) {
       ["tracker"]
     );
   }
-  const artifact = JSON.parse(readFileSync26(trackerPath, "utf8"));
+  const artifact = JSON.parse(readFileSync27(trackerPath, "utf8"));
   if (!artifact?.available) {
     return makeMetricResult(
       "adp_i2_throughput",
@@ -6055,8 +6642,8 @@ function compute14(collectedDir, standards, topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_i3_mttr.ts
-import { readFileSync as readFileSync27, existsSync as existsSync25 } from "node:fs";
-import { join as join27 } from "node:path";
+import { readFileSync as readFileSync28, existsSync as existsSync26 } from "node:fs";
+import { join as join28 } from "node:path";
 function mtttrBand(medianHours) {
   if (medianHours < 1) return "elite";
   if (medianHours < 24) return "high";
@@ -6083,19 +6670,19 @@ function computeGitProxyIntervals(mergeRecords) {
   return intervals;
 }
 function compute15(collectedDir, standards, topology) {
-  const gitPath = join27(collectedDir, "git.json");
-  const trackerPath = join27(collectedDir, "tracker.json");
+  const gitPath = join28(collectedDir, "git.json");
+  const trackerPath = join28(collectedDir, "tracker.json");
   let incidentSource = null;
-  if (existsSync25(trackerPath)) {
+  if (existsSync26(trackerPath)) {
     try {
-      const trackerArtifact = JSON.parse(readFileSync27(trackerPath, "utf8"));
+      const trackerArtifact = JSON.parse(readFileSync28(trackerPath, "utf8"));
       if (trackerArtifact?.available && trackerArtifact?.raw?.incident_source) {
         incidentSource = trackerArtifact.raw.incident_source;
       }
     } catch {
     }
   }
-  if (!existsSync25(gitPath)) {
+  if (!existsSync26(gitPath)) {
     if (incidentSource) {
       const categories2 = awardCategories(standards, "adp_i3_mttr", topology);
       const reliability3 = {
@@ -6128,7 +6715,7 @@ function compute15(collectedDir, standards, topology) {
       []
     );
   }
-  const gitArtifact = JSON.parse(readFileSync27(gitPath, "utf8"));
+  const gitArtifact = JSON.parse(readFileSync28(gitPath, "utf8"));
   const raw = gitArtifact?.raw ?? {};
   const mergeRecords = Array.isArray(raw.merge_records) ? raw.merge_records : [];
   const allIntervals = computeGitProxyIntervals(mergeRecords);
@@ -6170,7 +6757,7 @@ var COLLECTORS = {
   tracker: collect3,
   docs: collect4
 };
-var DETECTORS11 = {
+var DETECTORS12 = {
   ...DETECTORS,
   ...DETECTORS2,
   ...DETECTORS3,
@@ -6180,7 +6767,8 @@ var DETECTORS11 = {
   ...DETECTORS7,
   ...DETECTORS8,
   ...DETECTORS9,
-  ...DETECTORS10
+  ...DETECTORS10,
+  ...DETECTORS11
 };
 var METRICS = {
   adp_g1_tooling_depth: compute,
@@ -6249,11 +6837,11 @@ function main() {
         });
         process.exit(1);
       }
-      const fn = DETECTORS11[code];
+      const fn = DETECTORS12[code];
       if (!fn) {
         printJson({
           error: `unknown detector code ${code}`,
-          known: Object.keys(DETECTORS11).map(Number).sort((a, b) => a - b)
+          known: Object.keys(DETECTORS12).map(Number).sort((a, b) => a - b)
         });
         process.exit(1);
       }
@@ -6268,7 +6856,7 @@ function main() {
       }
       let raw;
       try {
-        raw = readFileSync28(tomlPath, "utf8");
+        raw = readFileSync29(tomlPath, "utf8");
       } catch (err) {
         const e = err;
         printJson({
@@ -6302,8 +6890,8 @@ function main() {
       if (preCollectedDir) {
         collectedDir = preCollectedDir;
       } else {
-        const tmpRoot = mkdtempSync(join28(tmpdir(), "awos-metric-"));
-        collectedDir = join28(tmpRoot, "collected");
+        const tmpRoot = mkdtempSync(join29(tmpdir(), "awos-metric-"));
+        collectedDir = join29(tmpRoot, "collected");
         const gitArtifact = collect(repoPath, DEFAULT_PERIOD);
         writeArtifact(gitArtifact, collectedDir);
         if (id.startsWith("adp_c")) {
@@ -6321,7 +6909,7 @@ function main() {
       }
       const cliDir = dirname3(fileURLToPath(import.meta.url));
       const skillRoot = cliDir.endsWith("/dist") || cliDir.endsWith("\\dist") ? dirname3(cliDir) : cliDir;
-      const standardsPath = join28(skillRoot, "references", "standards.toml");
+      const standardsPath = join29(skillRoot, "references", "standards.toml");
       const standards = loadStandards(standardsPath);
       const result = metricFn(collectedDir, standards, {});
       printJson(result);
@@ -6342,7 +6930,7 @@ if (isMain) {
   main();
 }
 export {
-  DETECTORS11 as DETECTORS,
+  DETECTORS12 as DETECTORS,
   METRICS
 };
 /*! Bundled license information:

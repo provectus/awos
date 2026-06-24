@@ -57,6 +57,7 @@ import { DETECTORS as SCS_DETECTORS } from './detectors/supply_chain_security.ts
 import { DETECTORS as PAI_DETECTORS } from './detectors/prompt_agent_integrity.ts';
 import { DETECTORS as QA_DETECTORS } from './detectors/quality_assurance.ts';
 import { DETECTORS as DOC_DETECTORS } from './detectors/documentation.ts';
+import { DETECTORS as AS_DETECTORS } from './detectors/application_security.ts';
 // Adding a detector module is a one-line change per import + one spread below.
 
 import { makeResult, type DetectorResult } from './detectors/_base.ts';
@@ -75,6 +76,7 @@ export const DETECTORS: Record<
   ...PAI_DETECTORS,
   ...QA_DETECTORS,
   ...DOC_DETECTORS,
+  ...AS_DETECTORS,
 };
 
 // ---------------------------------------------------------------------------

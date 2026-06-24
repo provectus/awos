@@ -378,6 +378,51 @@ source = "AWOS conventions"
 source_year = 2026
 
 # ---------------------------------------------------------------------------
+# [category.*] — org-level portfolio rollup categories (ORG.2)
+# Computed by org_rollup.ts from per-repo audit JSONs. Code range 9000–9002.
+# method = "computed". Never aggregate full per-repo metric set — ≤3 only.
+# ---------------------------------------------------------------------------
+
+[category.org_ai_tooling_coverage]
+code = 9000
+metric = "org_ai_tooling_coverage"
+dimension = "org-portfolio"
+weight = 10
+method = "computed"
+definition = "Fraction of portfolio repos with any AI tooling (CLAUDE.md / AGENTS.md / skills / commands / hooks / MCP) present; contributor-weighted"
+applies_when = "always"
+sources = ["org-rollup"]
+reliability_default = "not-reliable"
+source = "AWOS conventions"
+source_year = 2026
+
+[category.org_capability_score]
+code = 9001
+metric = "org_capability_score"
+dimension = "org-portfolio"
+weight = 10
+method = "computed"
+definition = "Sum of awarded category weights across all portfolio repos (Σ weight per repo), normalized by repo count; reflects breadth and depth of AI-SDLC adoption"
+applies_when = "always"
+sources = ["org-rollup"]
+reliability_default = "not-reliable"
+source = "AWOS conventions"
+source_year = 2026
+
+[category.org_measurement_coverage]
+code = 9002
+metric = "org_measurement_coverage"
+dimension = "org-portfolio"
+weight = 10
+method = "computed"
+definition = "Fraction of portfolio repos where at least one data-source collector (git / ci / tracker / docs) returned available=true; contributor-weighted"
+applies_when = "always"
+sources = ["org-rollup"]
+reliability_default = "not-reliable"
+source = "AWOS conventions"
+source_year = 2026
+
+# ---------------------------------------------------------------------------
 # [band.*] — thresholds for banded metrics
 # ---------------------------------------------------------------------------
 

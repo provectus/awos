@@ -10,6 +10,7 @@
  *   node dist/cli.js metric    <id>               <repoPath> [collectedDir]
  *   node dist/cli.js standards <path-to-toml>
  *   node dist/cli.js progress  <elapsed_seconds>  <done> <total>
+ *   node dist/cli.js rollup    <dir-of-per-repo-jsons>
  *
  * The optional [collectedDir] argument to `metric` is the "query-once" path:
  * if supplied, the metric reads pre-written <collectedDir>/<source>.json
@@ -105,6 +106,12 @@ import { compute as computeG12 } from './metrics/adp_g12_deps.ts';
 
 import type { MetricResult } from './metrics/_base.ts';
 import { loadStandards } from './metrics/_base.ts';
+
+// ---------------------------------------------------------------------------
+// Org rollup
+// ---------------------------------------------------------------------------
+import { rollup as orgRollup } from './metrics/org_rollup.ts';
+import type { PerRepoInput } from './metrics/org_rollup.ts';
 
 // ---------------------------------------------------------------------------
 // Progress helper
@@ -326,6 +333,67 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'rollup': {
+      // Aggregate per-repo audit JSONs into ≤3 portfolio metrics.
+      //
+      // Usage:
+      //   node dist/cli.js rollup <dir-of-per-repo-jsons>
+      //
+      // Each JSON file in <dir> must be a valid PerRepoInput object.
+      // The rollup reads all *.json files in the directory, parses them,
+      // and emits the OrgRollupResult to stdout.
+      //
+      // SKILL.md Step 6 org branch can invoke this after all per-repo audits
+      // have written their result JSON to a shared directory.
+      const dirArg = arg1;
+      if (!dirArg) {
+        printJson({
+          error: 'rollup requires <dir-of-per-repo-jsons>',
+          usage: 'node dist/cli.js rollup <dir>',
+        });
+        process.exit(1);
+      }
+      let files: string[];
+      try {
+        const { readdirSync: rd } = await import('node:fs');
+        files = rd(dirArg)
+          .filter((f: string) => f.endsWith('.json'))
+          .map((f: string) => `${dirArg}/${f}`);
+      } catch (err: unknown) {
+        const e = err as NodeJS.ErrnoException;
+        printJson({
+          error: `cannot read rollup directory: ${e.message}`,
+          dir: dirArg,
+        });
+        process.exit(1);
+      }
+      const perRepoResults: PerRepoInput[] = [];
+      for (const f of files) {
+        try {
+          const raw = readFileSync(f, 'utf8');
+          perRepoResults.push(JSON.parse(raw) as PerRepoInput);
+        } catch {
+          // Skip unparseable files — log a warning but continue.
+          process.stderr.write(`rollup: skipping unparseable file ${f}\n`);
+        }
+      }
+      // Load standards for future standards-aware normalization.
+      const cliDirR = dirname(fileURLToPath(import.meta.url));
+      const skillRootR =
+        cliDirR.endsWith('/dist') || cliDirR.endsWith('\\dist')
+          ? dirname(cliDirR)
+          : cliDirR;
+      const standardsPathR = join(skillRootR, 'references', 'standards.toml');
+      let standardsR: Record<string, unknown> = {};
+      try {
+        standardsR = loadStandards(standardsPathR);
+      } catch {
+        // Standards are optional for rollup — compute without weighting.
+      }
+      printJson(orgRollup(perRepoResults, standardsR));
+      break;
+    }
+
     case 'progress': {
       const elapsedStr = arg1;
       const doneStr = arg2;
@@ -352,7 +420,8 @@ async function main(): Promise<void> {
     default: {
       printJson({
         error: `unknown command "${command}"`,
-        usage: 'collect|detect|metric|standards|progress <arg> [repoPath]',
+        usage:
+          'collect|detect|metric|standards|progress|rollup <arg> [repoPath]',
       });
       process.exit(1);
     }

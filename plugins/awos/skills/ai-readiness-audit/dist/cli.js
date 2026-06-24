@@ -10340,6 +10340,79 @@ function compute18(_collectedDir, _standards, _topology, repoPathOverride) {
   );
 }
 
+// plugins/awos/skills/ai-readiness-audit/metrics/org_rollup.ts
+function rollup(perRepoResults, _standards) {
+  if (perRepoResults.length === 0) {
+    return {
+      portfolio_metrics: [
+        makeMetric("org_ai_tooling_coverage", 0, false, 0),
+        makeMetric("org_capability_score", 0, false, 0),
+        makeMetric("org_measurement_coverage", 0, false, 0)
+      ],
+      per_repo: []
+    };
+  }
+  const repos = perRepoResults.map((r) => ({
+    repo: r.repo,
+    contributors: r.contributors ?? null,
+    awarded_weight: r.awarded_weight ?? 0,
+    sources_reachable: r.sources_reachable ?? [],
+    has_ai_tooling: r.has_ai_tooling ?? false
+  }));
+  const allHaveContributors = repos.every(
+    (r) => r.contributors !== null && r.contributors > 0
+  );
+  const weight = (r) => allHaveContributors && r.contributors !== null ? r.contributors : 1;
+  const totalWeight = repos.reduce((s, r) => s + weight(r), 0);
+  const toolingNumerator = repos.filter((r) => r.has_ai_tooling).reduce((s, r) => s + weight(r), 0);
+  const toolingCoverage = totalWeight > 0 ? toolingNumerator / totalWeight : 0;
+  const totalAwarded = repos.reduce((s, r) => s + r.awarded_weight, 0);
+  const capabilityScore = repos.length > 0 ? totalAwarded / repos.length : 0;
+  const measuredNumerator = repos.filter((r) => r.sources_reachable.length > 0).reduce((s, r) => s + weight(r), 0);
+  const measurementCoverage = totalWeight > 0 ? measuredNumerator / totalWeight : 0;
+  const portfolio_metrics = [
+    {
+      metric: "org_ai_tooling_coverage",
+      value: round4(toolingCoverage),
+      description: "Fraction of portfolio repos with any AI tooling present" + (allHaveContributors ? " (contributor-weighted)" : " (equal-weighted)"),
+      contributor_weighted: allHaveContributors,
+      repos_counted: repos.length
+    },
+    {
+      metric: "org_capability_score",
+      value: round4(capabilityScore),
+      description: "Average awarded category-weight score across portfolio repos",
+      contributor_weighted: false,
+      repos_counted: repos.length
+    },
+    {
+      metric: "org_measurement_coverage",
+      value: round4(measurementCoverage),
+      description: "Fraction of portfolio repos with \u22651 reachable data-source collector" + (allHaveContributors ? " (contributor-weighted)" : " (equal-weighted)"),
+      contributor_weighted: allHaveContributors,
+      repos_counted: repos.length
+    }
+  ];
+  return { portfolio_metrics, per_repo: repos };
+}
+function round4(n) {
+  return Math.round(n * 1e4) / 1e4;
+}
+function makeMetric(metric, value, contributor_weighted, repos_counted) {
+  const descriptions = {
+    org_ai_tooling_coverage: "Fraction of portfolio repos with any AI tooling present",
+    org_capability_score: "Average awarded category-weight score across portfolio repos",
+    org_measurement_coverage: "Fraction of portfolio repos with \u22651 reachable data-source collector"
+  };
+  return {
+    metric,
+    value,
+    description: descriptions[metric] ?? metric,
+    contributor_weighted,
+    repos_counted
+  };
+}
+
 // plugins/awos/skills/ai-readiness-audit/progress.ts
 function progress(input) {
   const { elapsed_seconds, done, total } = input;
@@ -10526,6 +10599,48 @@ async function main() {
       printJson(result);
       break;
     }
+    case "rollup": {
+      const dirArg = arg1;
+      if (!dirArg) {
+        printJson({
+          error: "rollup requires <dir-of-per-repo-jsons>",
+          usage: "node dist/cli.js rollup <dir>"
+        });
+        process.exit(1);
+      }
+      let files;
+      try {
+        const { readdirSync: rd } = await import("node:fs");
+        files = rd(dirArg).filter((f) => f.endsWith(".json")).map((f) => `${dirArg}/${f}`);
+      } catch (err2) {
+        const e = err2;
+        printJson({
+          error: `cannot read rollup directory: ${e.message}`,
+          dir: dirArg
+        });
+        process.exit(1);
+      }
+      const perRepoResults = [];
+      for (const f of files) {
+        try {
+          const raw = readFileSync32(f, "utf8");
+          perRepoResults.push(JSON.parse(raw));
+        } catch {
+          process.stderr.write(`rollup: skipping unparseable file ${f}
+`);
+        }
+      }
+      const cliDirR = dirname4(fileURLToPath2(import.meta.url));
+      const skillRootR = cliDirR.endsWith("/dist") || cliDirR.endsWith("\\dist") ? dirname4(cliDirR) : cliDirR;
+      const standardsPathR = join32(skillRootR, "references", "standards.toml");
+      let standardsR = {};
+      try {
+        standardsR = loadStandards(standardsPathR);
+      } catch {
+      }
+      printJson(rollup(perRepoResults, standardsR));
+      break;
+    }
     case "progress": {
       const elapsedStr = arg1;
       const doneStr = arg2;
@@ -10551,7 +10666,7 @@ async function main() {
     default: {
       printJson({
         error: `unknown command "${command}"`,
-        usage: "collect|detect|metric|standards|progress <arg> [repoPath]"
+        usage: "collect|detect|metric|standards|progress|rollup <arg> [repoPath]"
       });
       process.exit(1);
     }

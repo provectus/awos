@@ -14,6 +14,42 @@ argument-hint: '[dimension-name] or blank for full audit'
 
 You are the audit orchestrator. Your job is to coordinate dimension-specific auditors, each running in their own context window, and compile results into a final report.
 
+## Step 0 — Discover Audit Scope (Multi-Repo)
+
+Before discovering dimensions, resolve the repositories that the audit will cover. Follow the discover-first flow defined in `references/data-sources.md`.
+
+### Phase 0a — Auto-discover repositories
+
+Detect the audit scope using three methods (per `data-sources.md`):
+
+1. **Current repo** — always included.
+2. **Monorepo build roots** — packages/apps declared in workspace configs (`pnpm-workspace.yaml`, `turbo.json`, etc.; see project-topology TOPO-01).
+3. **Git submodules** — paths declared in `.gitmodules`.
+4. **Symlinked source directories** — filesystem symlinks inside the repo that point outside the repo root (the AWOS-linked-into-services pattern; see `data-sources.md` "Multi-repo linking").
+
+Also probe connector availability per repo: code host (`gh`/`glab` on PATH or GitHub/GitLab MCP server), CI config files, issue tracker references, docs connectors (Confluence/Coda MCP).
+
+If a `context/audits/sources.toml` file exists, read it — its `[[repos]]` and `[sources]` sections override or extend auto-detection.
+
+### Phase 0b — Confirm scope with a single AskUserQuestion
+
+After auto-discovery completes, present the detected repo set and connectors to the user with a **single `AskUserQuestion`** call. Include:
+
+- The auto-discovered repos with their detected connectors.
+- An option to supply a `sources.toml` path or a flat list of additional repo links.
+- An option to proceed with the auto-discovered set as-is (the headless default).
+
+**Headless default:** when `AskUserQuestion` receives its default answer (no interactive input, e.g. in CI or `--output-format stream-json` mode), proceed using only the auto-discovered repos and connectors — no interactive entry required. This means the audit is always runnable headlessly without any prompting.
+
+Never prompt mid-run after this step.
+
+### Phase 0c — Determine audit mode
+
+- **Single-repo mode** (one repo detected): proceed directly to Step 1 for that repo.
+- **Org mode** (multiple repos detected): fan out the per-repo audit (Steps 1–6) across all repos in parallel. Each repo runs the normal per-dimension flow including `ai-sdlc-adoption`. Collect the per-repo audit result JSONs into `context/audits/YYYY-MM-DD/per-repo/`. After all per-repo audits complete, proceed to the org rollup in Step 6 (org branch).
+
+Contributor counts are always reported in aggregate (never per-person). No money, no PII.
+
 ## Step 1 — Discover Dimensions
 
 1. Read all `*.md` files from the `dimensions/` directory (relative to this SKILL.md)
@@ -101,6 +137,39 @@ After all dimensions complete:
 5. Write the report to `context/audits/YYYY-MM-DD/report.md`
 6. Write prioritized recommendations to `context/audits/YYYY-MM-DD/recommendations.md`
 7. Present the full report to the user
+
+### Step 6 org branch — Portfolio rollup (org mode only)
+
+When the audit ran in org mode (multiple repos, per `references/data-sources.md`), after all per-repo audits are complete, produce the org-level portfolio summary:
+
+1. Each per-repo audit must have written a result JSON to `context/audits/YYYY-MM-DD/per-repo/<repo-name>.json`. Each file must include `repo`, `contributors` (aggregate count, no PII), `awarded_weight` (Σ awarded category weights from that repo), `sources_reachable` (list of collector sources that returned `available=true`), and `has_ai_tooling` (boolean).
+
+2. Invoke the org rollup via the CLI:
+
+   ```
+   node dist/cli.js rollup context/audits/YYYY-MM-DD/per-repo/
+   ```
+
+   This computes **exactly three (≤3) portfolio metrics** — never the full per-repo metric set:
+   - **`org_ai_tooling_coverage`** — fraction of portfolio repos with any AI tooling present (contributor-weighted).
+   - **`org_capability_score`** — average awarded category-weight score across portfolio repos (Σ weight / repo count).
+   - **`org_measurement_coverage`** — fraction of portfolio repos with ≥1 reachable data-source collector (contributor-weighted).
+
+3. Write the org-level result JSON (the source-of-truth, per the JSON-source-of-truth rule) to:
+
+   ```
+   context/audits/YYYY-MM-DD/org-portfolio.json
+   ```
+
+   The JSON structure is `{portfolio_metrics: [...], per_repo: [...]}` as returned by the rollup CLI. Markdown/HTML rendering is done later by reading this file.
+
+4. Present the three portfolio metrics to the user with a brief interpretation:
+   - AI-tooling coverage across the portfolio (fraction of repos, contributor-weighted).
+   - Portfolio capability score (average awarded weight, reflects depth of AI-SDLC adoption).
+   - Measurement coverage (fraction of repos with reachable data sources).
+     Then present the per-repo breakdown table from `per_repo`.
+
+Contributor counts in the org report are always aggregate — no per-person data. No money figures appear in any org output.
 
 ## Step 7 — What's Next?
 

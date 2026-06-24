@@ -1536,3 +1536,119 @@ test('every dimension check maps to a standards.toml category', () => {
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// ORG.1: SKILL.md Step 0 multi-repo discover-first + AskUserQuestion
+// ---------------------------------------------------------------------------
+
+const SKILL_MD_PATH = path.join(
+  repoRoot,
+  'plugins',
+  'awos',
+  'skills',
+  'ai-readiness-audit',
+  'SKILL.md'
+);
+
+test('SKILL.md Step 0 references data-sources.md for multi-repo discovery', () => {
+  // Step 0 must follow the discover-first flow from data-sources.md.
+  // The reference is what ties SKILL.md to the canonical source-resolution spec.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    body.includes('data-sources.md'),
+    'SKILL.md Step 0 must reference data-sources.md (the discover-first multi-repo flow spec)'
+  );
+});
+
+test('SKILL.md Step 0 uses AskUserQuestion to confirm discovered repos', () => {
+  // A single AskUserQuestion at the start of the run is the only prompt
+  // allowed — it confirms the auto-discovered repo set before the audit begins.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    body.includes('AskUserQuestion'),
+    'SKILL.md must use AskUserQuestion to confirm the discovered repo set'
+  );
+});
+
+test('SKILL.md Step 0 describes multi-repo (parallel) discovery', () => {
+  // Org mode fans out per-repo audit agents in parallel. SKILL.md must
+  // document the multi-repo parallel execution so the orchestrator knows
+  // to fan out rather than run sequentially.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /multi.repo|multiple repo|parallel|fan.out/i.test(body),
+    'SKILL.md must describe multi-repo parallel discovery/execution (org mode fan-out)'
+  );
+});
+
+test('SKILL.md Step 0 documents headless default to auto-discovered repos', () => {
+  // In headless / CI mode the audit must run without any prompting,
+  // defaulting to the auto-discovered repos. This must be stated explicitly
+  // so CI operators know the tool is safe to call without user interaction.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /headless default|headless.*auto.discover|auto.discover.*headless/i.test(
+      body
+    ),
+    'SKILL.md must document the headless default behavior (fall back to auto-discovered repos when no interactive input)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// ORG.2: SKILL.md Step 6 org branch — ≤3 portfolio metrics + org rollup
+// ---------------------------------------------------------------------------
+
+test('SKILL.md Step 6 org branch references the org rollup', () => {
+  // The org rollup is invoked by SKILL.md Step 6 via the CLI. The reference
+  // ties the orchestrator to the rollup implementation.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /org.rollup|rollup/i.test(body),
+    'SKILL.md Step 6 org branch must reference the org rollup'
+  );
+  assert.ok(
+    body.includes('node dist/cli.js rollup') ||
+      body.includes('dist/cli.js rollup'),
+    'SKILL.md must show the rollup CLI invocation (node dist/cli.js rollup <dir>)'
+  );
+});
+
+test('SKILL.md Step 6 org branch names the three portfolio metrics', () => {
+  // Exactly three portfolio metrics are computed — no more. All three must
+  // be named so the orchestrator and the user both know what was computed.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    body.includes('org_ai_tooling_coverage'),
+    'SKILL.md must name the "org_ai_tooling_coverage" portfolio metric'
+  );
+  assert.ok(
+    body.includes('org_capability_score'),
+    'SKILL.md must name the "org_capability_score" portfolio metric'
+  );
+  assert.ok(
+    body.includes('org_measurement_coverage'),
+    'SKILL.md must name the "org_measurement_coverage" portfolio metric'
+  );
+});
+
+test('SKILL.md Step 6 states the ≤3 portfolio metrics constraint', () => {
+  // The brief is explicit: "≤3 org metrics" is a hard constraint, not a
+  // style choice. SKILL.md must state it so the orchestrator does not add
+  // more metrics without revisiting the design.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /≤\s*3|<= 3|exactly three|three.*portfolio metric/i.test(body),
+    'SKILL.md must state the ≤3 portfolio metrics constraint (never aggregate the full per-repo set)'
+  );
+});
+
+test('SKILL.md Step 6 org branch emits an org-level JSON artifact', () => {
+  // JSON is the source-of-truth (JSON-source-of-truth rule). SKILL.md must
+  // document that the org rollup result is written to a JSON file before
+  // any MD/HTML rendering.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /org.portfolio\.json|org.*\.json/i.test(body),
+    'SKILL.md must document the org-level JSON artifact (org-portfolio.json)'
+  );
+});

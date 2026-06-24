@@ -1115,7 +1115,7 @@ test('scoring.md uses additive weighted categories, not A-F grades', () => {
   );
 });
 
-test('dimension-auditor parses standards.toml and emits weighted points', () => {
+test('dimension-auditor uses method routing, node-based TOML parse, and emits JSON', () => {
   const p = path.join(
     repoRoot,
     'plugins',
@@ -1129,11 +1129,48 @@ test('dimension-auditor parses standards.toml and emits weighted points', () => 
     /standards\.toml/,
     'dimension-auditor must read standards.toml'
   );
-  assert.match(
+  // TOML is parsed in Node now, not python3/tomllib.
+  assert.doesNotMatch(
     src,
     /tomllib|python3/,
-    'dimension-auditor must parse TOML with python3/tomllib'
+    'dimension-auditor must not shell out to python3/tomllib'
   );
+  assert.match(
+    src,
+    /node .*dist\/|smol-toml|node --import tsx/,
+    'dimension-auditor must parse standards.toml in Node (via node dist/cli.js standards)'
+  );
+  assert.match(
+    src,
+    /\bmethod\b/,
+    'dimension-auditor must read each category method'
+  );
+  assert.match(
+    src,
+    /detectors?\/|dist\//,
+    'dimension-auditor must run the bundled detectors for computed/detected'
+  );
+  assert.match(
+    src,
+    /verbatim|do not (override|re-?judge)|use (its|the detector).{0,20}verdict/i,
+    'dimension-auditor must use the detector verdict verbatim'
+  );
+  assert.match(
+    src,
+    /rubric/i,
+    'dimension-auditor must evaluate the rubric for judgment categories'
+  );
+  assert.match(
+    src,
+    /evidence_required/i,
+    'dimension-auditor must require evidence for judgment categories'
+  );
+  assert.match(
+    src,
+    /<verdict>|XML.{0,30}tag|tag.{0,30}XML/i,
+    'dimension-auditor must use XML tags for judgment verdict output'
+  );
+  assert.match(src, /\.json/, 'dimension-auditor must write a .json artifact');
   assert.match(src, /weight/i, 'dimension-auditor must emit category weights');
   assert.match(
     src,

@@ -6,33 +6,65 @@ Use this template when presenting audit results. Replace placeholders with actua
 
 ### Per-Dimension Artifact Format
 
-Each dimension artifact (`{name}.md`) contains:
+Each dimension artifact is a **JSON file** (`{name}.json`). The `dimension-auditor` agent writes it; `node dist/cli.js render` (a later task) renders it to `report.md` / `report.html`. The auditor never writes markdown.
 
-```markdown
-# {Dimension Title} — Audit Results
+Top-level schema:
 
-**Date:** YYYY-MM-DD
-**Score:** N pts (coverage XX% rel. today's standard)
-**Reliability:** {tag} ({confidence}) — {note}
-
-## Results
-
-| #   | Check | Category | Weight | Status | Reliability                 | Evidence |
-| --- | ----- | -------- | ------ | ------ | --------------------------- | -------- |
-| 1   | What  | 3        | 4      | PASS   | maximal (high) — git native | proof    |
-
-## {Dimension-Specific Summary}
-
-(Structured data for downstream dimensions to consume.
-E.g., Topology Summary with detected layers, languages, structure type.)
+```json
+{
+  "dimension": "<dimension name slug>",
+  "date": "YYYY-MM-DD",
+  "score": <number>,
+  "coverage": <number between 0.0 and 1.0>,
+  "checks": [<per-check records — see below>]
+}
 ```
 
-Column notes:
+Field notes:
 
-- **Category** — numeric code from `standards.toml` (e.g. `3`); `none` for unscored topology checks.
-- **Weight** — the `weight` value for this category in `standards.toml`; `—` for unscored checks.
-- **Status** — `PASS`, `WARN`, `FAIL`, or `SKIP`.
-- **Reliability** — `{tag} ({confidence}) — {note}`, where tag is one of `minimal`, `maximal`, or `not-reliable`. Rows where tag is `minimal` carry a `*` marker (lower-bound measurement).
+- **`score`** — Σ awarded category weights (uncapped, additive).
+- **`coverage`** — `score ÷ Σ weights of applicable categories` (categories whose `applies_when` evaluated to false are excluded from both numerator and denominator).
+- **`checks`** — one record per check block in the dimension file. Nothing is dropped; this JSON is the source of truth.
+
+Per-check record schema (all fields required):
+
+```json
+{
+  "check_id": "CODE-NN",
+  "code": [<numeric category code(s)>],
+  "method": "detected|computed|judgment",
+  "status": "PASS|WARN|FAIL|SKIP",
+  "value": "<detector output value or judgment value>",
+  "evidence": ["<one evidence item per string>"],
+  "weight_awarded": <number>,
+  "weight_max": <number>,
+  "applies": true|false,
+  "reliability": {
+    "tag": "maximal|minimal|not-reliable",
+    "confidence": "high|medium|low",
+    "note": "<source description or 'bounded-by-rubric' for judgment>"
+  },
+  "source": "<source name from standards.toml>",
+  "definition": "<category definition from standards.toml>",
+  "hint": "<definition> · <value-derivation> · <reliability tag (confidence)> · <source (year)> · <method>"
+}
+```
+
+Field notes:
+
+- **`code`** — array of numeric category codes from the check's `**Category:**` line (resolved against `standards.toml`).
+- **`method`** — read from `standards.toml` for the category code. One of `computed`, `detected`, or `judgment`.
+- **`status`** — for `computed`/`detected` checks this comes verbatim from the detector output (`node dist/cli.js detect <code> <repoPath>`); for `judgment` checks it is the auditor's evaluation of the category's `rubric` against its `evidence_required` items.
+- **`value`** — the detector's reported value (for computed/detected) or the judgment conclusion string.
+- **`evidence`** — array of evidence strings (file paths, counts, snippets). For computed/detected, taken verbatim from the detector output.
+- **`weight_awarded`** — equals `weight_max` on PASS; 0 otherwise.
+- **`weight_max`** — the `weight` for this category in `standards.toml`; 0 for categories that are SKIP (`applies` is false).
+- **`applies`** — `true` unless the category's `applies_when` expression evaluated to false for this project.
+- **`reliability.tag`** — starts at the category's `reliability_default` (`maximal`, `minimal`, or `not-reliable`). For judgment checks, the note must include `bounded-by-rubric`.
+- **`source`** / **`definition`** — copied verbatim from the matching `[category.*]` table in `standards.toml`.
+- **`hint`** — five-part human-readable summary for hover tooltips in the HTML report.
+
+Any dimension-specific summary data consumed by downstream dimensions (e.g. the topology output used by later dimensions via `depends-on`) must be included as an additional top-level key in the JSON object alongside `dimension`, `date`, `score`, `coverage`, and `checks`.
 
 ---
 

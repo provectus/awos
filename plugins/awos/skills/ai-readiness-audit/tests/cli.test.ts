@@ -161,3 +161,61 @@ test('collect unknown-source: exits non-zero with error JSON', () => {
   const err = json as Record<string, unknown>;
   assert.ok(typeof err['error'] === 'string', 'error field must be a string');
 });
+
+// ---------------------------------------------------------------------------
+// 'standards' verb — parses standards.toml and emits JSON
+// ---------------------------------------------------------------------------
+
+test('standards: parses standards.toml, emits JSON with expected codes and meta', () => {
+  // Use the canonical standards.toml shipped with this plugin.
+  const standardsPath = join(SKILL, 'references', 'standards.toml');
+
+  const { json, code } = runCli('standards', standardsPath);
+
+  assert.equal(code, 0, 'standards must exit 0');
+  assert.ok(json && typeof json === 'object', 'output must be a JSON object');
+
+  const parsed = json as Record<string, unknown>;
+
+  // [meta] must be present with the locked cadence constants.
+  assert.ok(
+    parsed['meta'] && typeof parsed['meta'] === 'object',
+    'parsed JSON must have a "meta" key'
+  );
+  const meta = parsed['meta'] as Record<string, unknown>;
+  assert.equal(
+    meta['monthly_bucket_days'],
+    30,
+    'meta.monthly_bucket_days must equal 30'
+  );
+
+  // [category.*] tables must be present.
+  assert.ok(
+    parsed['category'] && typeof parsed['category'] === 'object',
+    'parsed JSON must have a "category" key'
+  );
+  const categories = parsed['category'] as Record<string, unknown>;
+  const categoryCodes = Object.values(categories)
+    .filter((v) => v && typeof v === 'object')
+    .map((v) => (v as Record<string, unknown>)['code'])
+    .filter((c) => typeof c === 'number');
+
+  // At minimum the first three ADP-G1 codes (101, 102, 103) must be present.
+  for (const expectedCode of [101, 102, 103]) {
+    assert.ok(
+      categoryCodes.includes(expectedCode),
+      `standards.toml categories must include code ${expectedCode}`
+    );
+  }
+});
+
+test('standards: exits non-zero with error JSON when file does not exist', () => {
+  const { json, code } = runCli('standards', '/no/such/file.toml');
+  assert.notEqual(code, 0, 'standards must exit non-zero when file missing');
+  assert.ok(json && typeof json === 'object', 'must print JSON error');
+  const err = json as Record<string, unknown>;
+  assert.ok(
+    typeof err['error'] === 'string' && err['error'].length > 0,
+    'error field must be a non-empty string'
+  );
+});

@@ -5,10 +5,17 @@
  * Bundled by build-engine.mjs → dist/cli.js (all imports inlined, no external deps).
  *
  * Usage:
- *   node dist/cli.js collect <source> <repoPath>
- *   node dist/cli.js detect  <code>   <repoPath>
- *   node dist/cli.js metric  <id>     <repoPath>
+ *   node dist/cli.js collect   <source>           <repoPath>
+ *   node dist/cli.js detect    <code>             <repoPath>
+ *   node dist/cli.js metric    <id>               <repoPath>
+ *   node dist/cli.js standards <path-to-toml>
  */
+
+// ---------------------------------------------------------------------------
+// Standards parser (smol-toml — bundled, no Python required)
+// ---------------------------------------------------------------------------
+import { parse as parseToml } from 'smol-toml';
+import { readFileSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------
 // Collectors
@@ -142,6 +149,28 @@ function main(): void {
       break;
     }
 
+    case 'standards': {
+      const tomlPath = arg1;
+      if (!tomlPath) {
+        printJson({ error: 'standards requires <path-to-standards.toml>' });
+        process.exit(1);
+      }
+      let raw: string;
+      try {
+        raw = readFileSync(tomlPath, 'utf8');
+      } catch (err: unknown) {
+        const e = err as NodeJS.ErrnoException;
+        printJson({
+          error: `cannot read standards file: ${e.message}`,
+          path: tomlPath,
+        });
+        process.exit(1);
+      }
+      const parsed = parseToml(raw);
+      printJson(parsed);
+      break;
+    }
+
     case 'metric': {
       // No metric modules exist yet.  Print a clear error and exit non-zero.
       // TODO: wire metric modules here when they land.
@@ -157,7 +186,7 @@ function main(): void {
     default: {
       printJson({
         error: `unknown command "${command}"`,
-        usage: 'collect|detect|metric <arg> <repoPath>',
+        usage: 'collect|detect|metric|standards <arg> [repoPath]',
       });
       process.exit(1);
     }

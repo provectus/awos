@@ -7401,7 +7401,7 @@ function detectUnitTests(repoPath, _params) {
     ...evidence
   ]);
 }
-var INTEGRATION_CONTENT_RX = /\b(TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|requests\.post|httpx\.get|httpx\.post|httpx\.AsyncClient|httpx\.Client|asyncpg\.connect|asyncpg\.create_pool|psycopg2?\.connect|create_engine|sessionmaker|AsyncSession|TestClient|ASGITransport|supertest|axios\.get|fetch\()\b/i;
+var INTEGRATION_CONTENT_RX = /(?:\bimport\s+(?:httpx|asyncpg|psycopg(?:2)?|testcontainers)\b|\bfrom\s+(?:httpx|asyncpg|psycopg(?:2)?|sqlalchemy|testcontainers|fastapi\.testclient|starlette\.testclient)\s+import\b|\b(?:TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|requests\.post|httpx\.get|httpx\.post|httpx\.AsyncClient|httpx\.Client|asyncpg\.connect|asyncpg\.create_pool|psycopg2?\.connect|create_engine|sessionmaker|AsyncSession|TestClient|ASGITransport|supertest|axios\.get|fetch\()\b)/i;
 var INTEGRATION_FILE_NAME_RX = /integration|contract|system[_-]test/i;
 var TEST_DOCKER_GLOBS = ["docker-compose*.yml", "docker-compose*.yaml"];
 function detectIntegrationTests(repoPath, _params) {
@@ -7424,6 +7424,26 @@ function detectIntegrationTests(repoPath, _params) {
   }
   if (signals.length < 5) {
     for (const f of allTestFiles.slice(0, 100)) {
+      let content;
+      try {
+        content = readFileSync10(f, "utf8");
+      } catch {
+        continue;
+      }
+      if (INTEGRATION_CONTENT_RX.test(content)) {
+        signals.push(`integration patterns in: ${relative10(repoPath, f)}`);
+        if (signals.length >= 5) break;
+      }
+    }
+  }
+  if (signals.length < 5) {
+    let confFiles = [];
+    try {
+      confFiles = iterFiles(repoPath, ["conftest.py"], SOURCE_IGNORE);
+    } catch {
+      confFiles = [];
+    }
+    for (const f of confFiles.slice(0, 20)) {
       let content;
       try {
         content = readFileSync10(f, "utf8");

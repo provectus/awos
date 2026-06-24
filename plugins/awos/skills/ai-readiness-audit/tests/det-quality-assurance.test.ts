@@ -249,6 +249,52 @@ test('QA-03: TestClient (ASGI transport) in test file is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
+test('QA-03: from httpx import AsyncClient + from asyncpg import (unqualified, conftest) — PASS', () => {
+  // Mirrors the onex-discovery-api pattern: conftest.py uses import-based
+  // unqualified forms only — no httpx.AsyncClient or asyncpg.connect prefix.
+  // The detector must catch this via import signals + conftest scanning.
+  const t = tmp();
+  mkdirSync(join(t, 'tests'));
+  writeFileSync(
+    join(t, 'tests', 'conftest.py'),
+    [
+      'import pytest',
+      'from httpx import ASGITransport, AsyncClient',
+      'from asyncpg import connect',
+      '',
+      '@pytest.fixture',
+      'async def client(app):',
+      '    transport = ASGITransport(app=app)',
+      '    async with AsyncClient(transport=transport, base_url="http://test") as ac:',
+      '        yield ac',
+      '',
+      '@pytest.fixture',
+      'async def db_conn():',
+      '    conn = await connect(dsn="postgresql://localhost/testdb")',
+      '    yield conn',
+      '    await conn.close()',
+    ].join('\n') + '\n'
+  );
+  // test file uses fixtures but has no httpx/asyncpg references itself
+  writeFileSync(
+    join(t, 'tests', 'test_api.py'),
+    [
+      'import pytest',
+      '',
+      'async def test_create(client, db_conn):',
+      '    resp = await client.post("/items", json={"name": "foo"})',
+      '    assert resp.status_code == 201',
+    ].join('\n') + '\n'
+  );
+  const r = detectIntegrationTests(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'import-based httpx/asyncpg in conftest must be detected as integration'
+  );
+  assert.ok((r.value as number) > 0, 'signal count must be positive');
+});
+
 // ---------------------------------------------------------------------------
 // detectE2ETests (2503 — QA-04, detected)
 // ---------------------------------------------------------------------------

@@ -263,13 +263,15 @@ export function detectUnitTests(
 // ---------------------------------------------------------------------------
 
 // Content signals that indicate real I/O integration tests (not mocked):
-//   HTTP clients:  httpx, requests, supertest, TestClient (ASGI), fetch against server
-//   DB drivers:    asyncpg, psycopg, sqlalchemy engine/session, testcontainers
+//   HTTP clients:  httpx (import or qualified), requests, supertest, TestClient (ASGI), fetch against server
+//   DB drivers:    asyncpg (import or qualified), psycopg, sqlalchemy engine/session, testcontainers
 //   App transports: starlette/fastapi TestClient, httptest.NewServer
 //   Framework markers: @SpringBootTest, @DataJpaTest, DatabaseTestCase
+// Covers both qualified calls (httpx.AsyncClient) and import-based unqualified usage
+// (from httpx import AsyncClient; import asyncpg; from sqlalchemy import ...).
 // Note: `requests.get` is intentionally kept broad — in test files it signals real HTTP.
 const INTEGRATION_CONTENT_RX =
-  /\b(TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|requests\.post|httpx\.get|httpx\.post|httpx\.AsyncClient|httpx\.Client|asyncpg\.connect|asyncpg\.create_pool|psycopg2?\.connect|create_engine|sessionmaker|AsyncSession|TestClient|ASGITransport|supertest|axios\.get|fetch\()\b/i;
+  /(?:\bimport\s+(?:httpx|asyncpg|psycopg(?:2)?|testcontainers)\b|\bfrom\s+(?:httpx|asyncpg|psycopg(?:2)?|sqlalchemy|testcontainers|fastapi\.testclient|starlette\.testclient)\s+import\b|\b(?:TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|requests\.post|httpx\.get|httpx\.post|httpx\.AsyncClient|httpx\.Client|asyncpg\.connect|asyncpg\.create_pool|psycopg2?\.connect|create_engine|sessionmaker|AsyncSession|TestClient|ASGITransport|supertest|axios\.get|fetch\()\b)/i;
 
 const INTEGRATION_FILE_NAME_RX = /integration|contract|system[_-]test/i;
 
@@ -316,7 +318,29 @@ export function detectIntegrationTests(
     }
   }
 
-  // Signal 3: docker-compose in tests/ directory
+  // Signal 3: conftest.py / test setup files — real projects often put DB/HTTP fixtures there
+  if (signals.length < 5) {
+    let confFiles: string[] = [];
+    try {
+      confFiles = iterFiles(repoPath, ['conftest.py'], SOURCE_IGNORE);
+    } catch {
+      confFiles = [];
+    }
+    for (const f of confFiles.slice(0, 20)) {
+      let content: string;
+      try {
+        content = readFileSync(f, 'utf8');
+      } catch {
+        continue;
+      }
+      if (INTEGRATION_CONTENT_RX.test(content)) {
+        signals.push(`integration patterns in: ${relative(repoPath, f)}`);
+        if (signals.length >= 5) break;
+      }
+    }
+  }
+
+  // Signal 4: docker-compose in tests/ directory
   const testsDir = join(repoPath, 'tests');
   const testDir2 = join(repoPath, 'test');
   for (const tDir of [testsDir, testDir2]) {

@@ -84,6 +84,9 @@ import { compute as computeG6 } from './metrics/adp_g6_churn.ts';
 import { compute as computeG7 } from './metrics/adp_g7_change_fail_rate.ts';
 import { compute as computeG8 } from './metrics/adp_g8_review_rework.ts';
 import { compute as computeG9 } from './metrics/adp_g9_ai_attribution.ts';
+import { compute as computeC1 } from './metrics/adp_c1_ci_pass_rate.ts';
+import { compute as computeC2 } from './metrics/adp_c2_pipeline_duration.ts';
+import { compute as computeD1 } from './metrics/adp_d1_spec_coverage.ts';
 // Adding a metric module is a one-line change per import + one entry in METRICS below.
 
 import type { MetricResult } from './metrics/_base.ts';
@@ -105,6 +108,9 @@ export const METRICS: Record<string, MetricFn> = {
   adp_g7_change_fail_rate: computeG7,
   adp_g8_review_rework: computeG8,
   adp_g9_ai_attribution: computeG9,
+  adp_c1_ci_pass_rate: computeC1,
+  adp_c2_pipeline_duration: computeC2,
+  adp_d1_spec_coverage: computeD1,
 };
 
 // ---------------------------------------------------------------------------
@@ -231,6 +237,16 @@ function main(): void {
       // Git collector is always run for ADP-G* metrics.
       const gitArtifact = collectGit(repoPath, DEFAULT_PERIOD);
       writeArtifact(gitArtifact as { source: string }, collectedDir);
+      // CI collector is run for ADP-C* metrics.
+      if (id.startsWith('adp_c')) {
+        const ciArtifact = collectCi(repoPath, DEFAULT_PERIOD);
+        writeArtifact(ciArtifact as { source: string }, collectedDir);
+      }
+      // Docs collector is run for ADP-D* metrics.
+      if (id.startsWith('adp_d')) {
+        const docsArtifact = collectDocs(repoPath, DEFAULT_PERIOD);
+        writeArtifact(docsArtifact as { source: string }, collectedDir);
+      }
       // Load standards for category award.
       // import.meta.url resolves to dist/cli.js when bundled, so go one level
       // up from dirname to reach the skill root where references/ lives.

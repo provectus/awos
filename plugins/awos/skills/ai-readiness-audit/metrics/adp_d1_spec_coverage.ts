@@ -1,0 +1,93 @@
+/**
+ * adp_d1_spec_coverage — External doc/spec coverage from a docs connector.
+ *
+ * kind: "coverage"
+ * value: fraction of recently-updated pages out of total (0–1), or null when no pages
+ * band: null (raw coverage fraction reported)
+ * categories_awarded: [1201] when topology.has_docs_connector is true
+ * reliability_default: "not-reliable"
+ *
+ * Availability rule:
+ *   - available=false (no docs connector) → SKIP (sources_used=[])
+ *   - available=true, pages present → OK, compute freshness coverage
+ *   - available=true, pages empty → OK, value=0 (no docs at all is meaningful signal)
+ *
+ * Coverage definition: recently_updated_count / page_count.
+ * Both fields come from the docs artifact raw as computed by the docs collector.
+ *
+ * Source shape: collectedDir/docs.json
+ * Input raw fields: page_count (number), recently_updated_count (number)
+ */
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  awardCategories,
+  computeReliability,
+  makeMetricResult,
+  type MetricResult,
+} from './_base.ts';
+
+export function compute(
+  collectedDir: string,
+  standards: Record<string, unknown>,
+  topology: Record<string, boolean>
+): MetricResult {
+  const docsPath = join(collectedDir, 'docs.json');
+
+  // Docs source absent → SKIP.
+  if (!existsSync(docsPath)) {
+    return makeMetricResult(
+      'adp_d1_spec_coverage',
+      null,
+      'coverage',
+      [],
+      computeReliability('not-reliable', [], ['docs']),
+      [],
+      ['docs']
+    );
+  }
+
+  const artifact = JSON.parse(readFileSync(docsPath, 'utf8'));
+
+  // available=false means no docs connector was provided.
+  if (!artifact?.available) {
+    return makeMetricResult(
+      'adp_d1_spec_coverage',
+      null,
+      'coverage',
+      [],
+      computeReliability('not-reliable', [], ['docs']),
+      [],
+      ['docs']
+    );
+  }
+
+  const raw = artifact?.raw ?? {};
+  const pageCount: number =
+    typeof raw.page_count === 'number' ? raw.page_count : 0;
+  const recentlyUpdatedCount: number =
+    typeof raw.recently_updated_count === 'number'
+      ? raw.recently_updated_count
+      : 0;
+
+  // Freshness coverage: ratio of recently-updated pages.
+  // When page_count is 0, coverage is 0 (no docs is a meaningful finding, not SKIP).
+  const coverage = pageCount > 0 ? recentlyUpdatedCount / pageCount : 0;
+
+  const categories = awardCategories(
+    standards,
+    'adp_d1_spec_coverage',
+    topology
+  );
+  const reliability = computeReliability('not-reliable', ['docs'], []);
+
+  return makeMetricResult(
+    'adp_d1_spec_coverage',
+    coverage,
+    'coverage',
+    categories,
+    reliability,
+    ['docs'],
+    []
+  );
+}

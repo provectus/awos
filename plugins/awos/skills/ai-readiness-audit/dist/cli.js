@@ -681,9 +681,9 @@ function parse(toml, { maxDepth = 1e3, integersAsBigInt } = {}) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/cli.ts
-import { readFileSync as readFileSync22, mkdtempSync } from "node:fs";
+import { readFileSync as readFileSync25, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join as join22, dirname as dirname3 } from "node:path";
+import { join as join25, dirname as dirname3 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // plugins/awos/skills/ai-readiness-audit/collectors/git.ts
@@ -5096,6 +5096,27 @@ function makeMetricResult(metric, value, kind, categoriesAwarded, reliability, s
     status: sourcesUsed.length === 0 ? "SKIP" : "OK"
   };
 }
+function awardCategories(standards, metricName, predicateCtx) {
+  const categoryTable = standards["category"];
+  if (!categoryTable) return [];
+  const awarded = [];
+  for (const cat of Object.values(categoryTable)) {
+    if (cat["metric"] !== metricName) continue;
+    const appliesWhen = cat["applies_when"];
+    if (!appliesWhen || appliesWhen === "always") {
+      awarded.push(cat["code"]);
+      continue;
+    }
+    const topologyMatch = appliesWhen.match(/^topology\.(.+)$/);
+    if (topologyMatch) {
+      const flag = topologyMatch[1];
+      if (predicateCtx[flag]) {
+        awarded.push(cat["code"]);
+      }
+    }
+  }
+  return awarded;
+}
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g1_tooling_depth.ts
 var TOOLING_MAP = [
@@ -5599,6 +5620,220 @@ function compute9(collectedDir, _standards, _topology) {
   );
 }
 
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_c1_ci_pass_rate.ts
+import { readFileSync as readFileSync22, existsSync as existsSync20 } from "node:fs";
+import { join as join22 } from "node:path";
+function ciPassBand(rate) {
+  if (rate >= 0.99) return "elite";
+  if (rate >= 0.95) return "high";
+  if (rate >= 0.9) return "medium";
+  return "low";
+}
+function countSuccessful(runs) {
+  return runs.filter((r) => {
+    const rec = r;
+    return rec["conclusion"] === "success";
+  }).length;
+}
+function compute10(collectedDir, standards, topology) {
+  const ciPath = join22(collectedDir, "ci.json");
+  if (!existsSync20(ciPath)) {
+    return makeMetricResult(
+      "adp_c1_ci_pass_rate",
+      null,
+      "banded",
+      [],
+      computeReliability("not-reliable", [], ["ci"]),
+      [],
+      ["ci"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync22(ciPath, "utf8"));
+  if (!artifact?.available) {
+    return makeMetricResult(
+      "adp_c1_ci_pass_rate",
+      null,
+      "banded",
+      [],
+      computeReliability("not-reliable", [], ["ci"]),
+      [],
+      ["ci"]
+    );
+  }
+  const raw = artifact?.raw ?? {};
+  const runs = Array.isArray(raw.runs) ? raw.runs : [];
+  const configDetected = Boolean(raw.config_detected);
+  if (runs.length === 0) {
+    const categories2 = awardCategories(
+      standards,
+      "adp_c1_ci_pass_rate",
+      topology
+    );
+    const reliability2 = computeReliability("not-reliable", ["ci"], []);
+    const partialReliability = {
+      tag: reliability2.tag,
+      confidence: "MED",
+      note: configDetected ? "CI config detected but no run data available; pass rate cannot be computed" : "CI source available but no run data available; pass rate cannot be computed"
+    };
+    return makeMetricResult(
+      "adp_c1_ci_pass_rate",
+      null,
+      "banded",
+      categories2,
+      partialReliability,
+      ["ci"],
+      []
+    );
+  }
+  const successful = countSuccessful(runs);
+  const rate = successful / runs.length;
+  const band = ciPassBand(rate);
+  const categories = awardCategories(
+    standards,
+    "adp_c1_ci_pass_rate",
+    topology
+  );
+  const reliability = computeReliability("not-reliable", ["ci"], []);
+  return makeMetricResult(
+    "adp_c1_ci_pass_rate",
+    rate,
+    "banded",
+    categories,
+    reliability,
+    ["ci"],
+    [],
+    band
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_c2_pipeline_duration.ts
+import { readFileSync as readFileSync23, existsSync as existsSync21 } from "node:fs";
+import { join as join23 } from "node:path";
+function averageDuration(runs) {
+  const durations = runs.map((r) => {
+    const rec = r;
+    const d = rec["duration_seconds"];
+    return typeof d === "number" && isFinite(d) ? d : null;
+  }).filter((d) => d !== null);
+  if (durations.length === 0) return null;
+  return durations.reduce((sum, d) => sum + d, 0) / durations.length;
+}
+function compute11(collectedDir, standards, topology) {
+  const ciPath = join23(collectedDir, "ci.json");
+  if (!existsSync21(ciPath)) {
+    return makeMetricResult(
+      "adp_c2_pipeline_duration",
+      null,
+      "duration_seconds",
+      [],
+      computeReliability("not-reliable", [], ["ci"]),
+      [],
+      ["ci"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync23(ciPath, "utf8"));
+  if (!artifact?.available) {
+    return makeMetricResult(
+      "adp_c2_pipeline_duration",
+      null,
+      "duration_seconds",
+      [],
+      computeReliability("not-reliable", [], ["ci"]),
+      [],
+      ["ci"]
+    );
+  }
+  const raw = artifact?.raw ?? {};
+  const runs = Array.isArray(raw.runs) ? raw.runs : [];
+  const configDetected = Boolean(raw.config_detected);
+  if (runs.length === 0) {
+    const categories2 = awardCategories(
+      standards,
+      "adp_c2_pipeline_duration",
+      topology
+    );
+    const partialReliability = {
+      tag: "not-reliable",
+      confidence: "MED",
+      note: configDetected ? "CI config detected but no run data available; pipeline duration cannot be computed" : "CI source available but no run data available; pipeline duration cannot be computed"
+    };
+    return makeMetricResult(
+      "adp_c2_pipeline_duration",
+      null,
+      "duration_seconds",
+      categories2,
+      partialReliability,
+      ["ci"],
+      []
+    );
+  }
+  const avgDuration = averageDuration(runs);
+  const categories = awardCategories(
+    standards,
+    "adp_c2_pipeline_duration",
+    topology
+  );
+  const reliability = computeReliability("not-reliable", ["ci"], []);
+  return makeMetricResult(
+    "adp_c2_pipeline_duration",
+    avgDuration,
+    "duration_seconds",
+    categories,
+    reliability,
+    ["ci"],
+    []
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_d1_spec_coverage.ts
+import { readFileSync as readFileSync24, existsSync as existsSync22 } from "node:fs";
+import { join as join24 } from "node:path";
+function compute12(collectedDir, standards, topology) {
+  const docsPath = join24(collectedDir, "docs.json");
+  if (!existsSync22(docsPath)) {
+    return makeMetricResult(
+      "adp_d1_spec_coverage",
+      null,
+      "coverage",
+      [],
+      computeReliability("not-reliable", [], ["docs"]),
+      [],
+      ["docs"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync24(docsPath, "utf8"));
+  if (!artifact?.available) {
+    return makeMetricResult(
+      "adp_d1_spec_coverage",
+      null,
+      "coverage",
+      [],
+      computeReliability("not-reliable", [], ["docs"]),
+      [],
+      ["docs"]
+    );
+  }
+  const raw = artifact?.raw ?? {};
+  const pageCount = typeof raw.page_count === "number" ? raw.page_count : 0;
+  const recentlyUpdatedCount = typeof raw.recently_updated_count === "number" ? raw.recently_updated_count : 0;
+  const coverage = pageCount > 0 ? recentlyUpdatedCount / pageCount : 0;
+  const categories = awardCategories(
+    standards,
+    "adp_d1_spec_coverage",
+    topology
+  );
+  const reliability = computeReliability("not-reliable", ["docs"], []);
+  return makeMetricResult(
+    "adp_d1_spec_coverage",
+    coverage,
+    "coverage",
+    categories,
+    reliability,
+    ["docs"],
+    []
+  );
+}
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
 var COLLECTORS = {
   git: collect,
@@ -5627,7 +5862,10 @@ var METRICS = {
   adp_g6_churn: compute6,
   adp_g7_change_fail_rate: compute7,
   adp_g8_review_rework: compute8,
-  adp_g9_ai_attribution: compute9
+  adp_g9_ai_attribution: compute9,
+  adp_c1_ci_pass_rate: compute10,
+  adp_c2_pipeline_duration: compute11,
+  adp_d1_spec_coverage: compute12
 };
 var DEFAULT_PERIOD = {
   bucket_days: 30,
@@ -5698,7 +5936,7 @@ function main() {
       }
       let raw;
       try {
-        raw = readFileSync22(tomlPath, "utf8");
+        raw = readFileSync25(tomlPath, "utf8");
       } catch (err) {
         const e = err;
         printJson({
@@ -5726,13 +5964,21 @@ function main() {
         });
         process.exit(1);
       }
-      const tmpRoot = mkdtempSync(join22(tmpdir(), "awos-metric-"));
-      const collectedDir = join22(tmpRoot, "collected");
+      const tmpRoot = mkdtempSync(join25(tmpdir(), "awos-metric-"));
+      const collectedDir = join25(tmpRoot, "collected");
       const gitArtifact = collect(repoPath, DEFAULT_PERIOD);
       writeArtifact(gitArtifact, collectedDir);
+      if (id.startsWith("adp_c")) {
+        const ciArtifact = collect2(repoPath, DEFAULT_PERIOD);
+        writeArtifact(ciArtifact, collectedDir);
+      }
+      if (id.startsWith("adp_d")) {
+        const docsArtifact = collect4(repoPath, DEFAULT_PERIOD);
+        writeArtifact(docsArtifact, collectedDir);
+      }
       const cliDir = dirname3(fileURLToPath(import.meta.url));
       const skillRoot = cliDir.endsWith("/dist") || cliDir.endsWith("\\dist") ? dirname3(cliDir) : cliDir;
-      const standardsPath = join22(skillRoot, "references", "standards.toml");
+      const standardsPath = join25(skillRoot, "references", "standards.toml");
       const standards = loadStandards(standardsPath);
       const result = metricFn(collectedDir, standards, {});
       printJson(result);

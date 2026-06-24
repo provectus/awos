@@ -34,7 +34,7 @@ Per-check record schema (all fields required):
   "code": [<numeric category code(s)>],
   "method": "detected|computed|judgment",
   "status": "PASS|WARN|FAIL|SKIP",
-  "value": "<detector output value or judgment value>",
+  "value": "<string | number | null>",
   "evidence": ["<one evidence item per string>"],
   "weight_awarded": <number>,
   "weight_max": <number>,
@@ -52,15 +52,17 @@ Per-check record schema (all fields required):
 
 Field notes:
 
+- **`check_id`** — taken verbatim from the dimension check heading id: the `XXX-NN` token from the `### XXX-NN:` heading (e.g. `SEC-02`, `ARCH-06`, `SDD-04`).
 - **`code`** — array of numeric category codes from the check's `**Category:**` line (resolved against `standards.toml`).
 - **`method`** — read from `standards.toml` for the category code. One of `computed`, `detected`, or `judgment`.
 - **`status`** — for `computed`/`detected` checks this comes verbatim from the detector output (`node dist/cli.js detect <code> <repoPath>`); for `judgment` checks it is the auditor's evaluation of the category's `rubric` against its `evidence_required` items.
-- **`value`** — the detector's reported value (for computed/detected) or the judgment conclusion string.
+- **`value`** — `string | number | null`. Detectors may return a numeric value (e.g. file sizes, counts, ratios); judgment checks return a string conclusion. Use `null` only if the value is genuinely unavailable.
 - **`evidence`** — array of evidence strings (file paths, counts, snippets). For computed/detected, taken verbatim from the detector output.
-- **`weight_awarded`** — equals `weight_max` on PASS; 0 otherwise.
-- **`weight_max`** — the `weight` for this category in `standards.toml`; 0 for categories that are SKIP (`applies` is false).
+- **`weight_awarded`** — equals `weight_max` on PASS; 0 otherwise (WARN, FAIL, SKIP).
+- **`weight_max`** — the `weight` for this category in `standards.toml`, always — even when the check is SKIP (`applies: false`). `applies: false` is the sole signal to exclude a category from the coverage denominator; `weight_max` is never 0 solely because of SKIP.
 - **`applies`** — `true` unless the category's `applies_when` expression evaluated to false for this project.
 - **`reliability.tag`** — starts at the category's `reliability_default` (`maximal`, `minimal`, or `not-reliable`). For judgment checks, the note must include `bounded-by-rubric`.
+- **`reliability.confidence`** — `"high"` for `computed`/`detected` checks (detector output is deterministic); `"medium"` for `judgment` checks (bounded by rubric quality).
 - **`source`** / **`definition`** — copied verbatim from the matching `[category.*]` table in `standards.toml`.
 - **`hint`** — five-part human-readable summary for hover tooltips in the HTML report.
 

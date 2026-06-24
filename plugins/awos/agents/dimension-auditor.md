@@ -54,6 +54,8 @@ For every check block in the dimension file:
 
   The detector returns `{status, value, evidence}`. Use this verdict verbatim — do not re-decide the status. The detector verdict is final; the auditor never overrides it.
 
+  > **Note:** Both `computed` and `detected` audit categories are evaluated via `node dist/cli.js detect <code>`; the `metric` verb (`node dist/cli.js metric <id>`) is used ONLY by the `ai-sdlc-adoption` dimension's own orchestration (it computes ADP metrics from collector artifacts), not in this generic routing.
+
 - **`judgment` method** — gather the category's `evidence_required` items from the repository (read each listed file or pattern), evaluate the category's `rubric`, and emit your verdict inside XML tags:
 
   ```xml
@@ -67,12 +69,15 @@ For every check block in the dimension file:
 
   Parse the XML tags to extract `status`, `value`, `evidence`, and `reasoning`. Tag reliability with a judgment marker (bounded-by-rubric).
 
+  If the XML is malformed, missing, or truncated, record `status: "FAIL"`, `value: "verdict-parse-error"`, and put the raw model text in `evidence` rather than stalling or emitting nulls.
+
 ### Step 3 — Score each check
 
 - On PASS: award the category's `weight` to the dimension score.
 - On WARN, FAIL, or SKIP: award 0 weight.
 - Dimension score = Σ awarded weights (uncapped, additive).
 - Coverage ratio = (Σ awarded weights) ÷ (Σ weights of applicable categories, i.e. not SKIP).
+- `weight_max` is always the category's `weight` from `standards.toml` — even when the check is SKIP (`applies: false`). `applies: false` is the sole signal to exclude a category from the coverage denominator. `weight_awarded` is 0 unless PASS.
 
 ### Step 4 — Build the per-check records
 
@@ -84,7 +89,7 @@ For every check, produce a record with all of the following fields:
   "code": [<numeric category code(s)>],
   "method": "detected|computed|judgment",
   "status": "PASS|WARN|FAIL|SKIP",
-  "value": "<detector or judgment value>",
+  "value": "<string, number, or null>",
   "evidence": ["<evidence items>"],
   "weight_awarded": <number>,
   "weight_max": <number>,
@@ -100,6 +105,13 @@ For every check, produce a record with all of the following fields:
 }
 ```
 
+Field details:
+
+- **`check_id`** — taken verbatim from the dimension check heading id: the `XXX-NN` token from the `### XXX-NN:` heading (e.g. `SEC-02`, `ARCH-06`, `SDD-04`).
+- **`value`** — `string | number | null`. Detectors may return a numeric value (e.g. file sizes, counts, ratios); judgment checks return a string conclusion. Use `null` only if the value is genuinely unavailable.
+- **`weight_max`** — the category's `weight` from `standards.toml`, always. Even when `applies: false` (SKIP), `weight_max` is the full category weight, not 0. `applies: false` is the sole signal to exclude from the coverage denominator.
+- **`weight_awarded`** — equals `weight_max` on PASS; 0 otherwise (WARN, FAIL, SKIP).
+
 The `hint` field is a five-part concatenation:
 
 - definition (from standards.toml)
@@ -108,7 +120,7 @@ The `hint` field is a five-part concatenation:
 - source and source_year from standards.toml
 - method
 
-For `computed` and `detected` checks: derive `reliability` from `reliability_default` in standards.toml. For `judgment` checks: tag reliability as `bounded-by-rubric` in the note.
+For `computed` and `detected` checks: derive `reliability` from `reliability_default` in standards.toml; set `confidence: "high"`. For `judgment` checks: tag reliability as `bounded-by-rubric` in the note; set `confidence: "medium"`.
 
 Nothing is dropped — this JSON is the source of truth from which report.md and report.html are later rendered by `node dist/cli.js render`. The auditor never writes markdown.
 

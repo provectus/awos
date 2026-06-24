@@ -169,3 +169,30 @@ node dist/cli.js collect docs    <repoPath>  → context/audits/<date>/collected
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable (the only valid SKIP condition)
 - **Severity:** high
 - **Category:** 1103
+
+### ADP-G10: Cyclomatic complexity
+
+- **What:** Average and maximum McCabe cyclomatic complexity (CCN) per function across the repository, computed by parsing source files with tree-sitter grammars. Bands: elite ≤5, high ≤10, medium ≤15, low >15.
+- **How:** `node dist/cli.js metric adp_g10_complexity <repoPath> context/audits/<date>/collected`
+- **Pass (OK):** metric returns `status: "OK"` — complexity computed for at least one function in a supported language (JS/TS/TSX/JSX/Python/Go/Java/Ruby/C#/C/C++/Rust/PHP/Kotlin)
+- **Skip:** metric returns `status: "SKIP"` — no source files in supported languages found
+- **Severity:** medium
+- **Category:** 1301
+
+### ADP-G11: Codebase scale (LOC)
+
+- **What:** Lines of code (non-blank) by language across the repository, excluding generated/vendor directories. Provides scale context for other metrics.
+- **How:** `node dist/cli.js metric adp_g11_scale <repoPath> context/audits/<date>/collected`
+- **Pass (OK):** metric returns `status: "OK"` — LOC counted for at least one recognized source file
+- **Skip:** metric returns `status: "SKIP"` — no recognized source files found
+- **Severity:** low
+- **Category:** 1302
+
+### ADP-G12: Dependency manifest counts
+
+- **What:** Count of direct dependencies declared in manifest files (package.json, pyproject.toml, go.mod, Cargo.toml, requirements.txt) up to three directory levels deep.
+- **How:** `node dist/cli.js metric adp_g12_deps <repoPath> context/audits/<date>/collected`
+- **Pass (OK):** metric returns `status: "OK"` — at least one manifest found
+- **Skip:** metric returns `status: "SKIP"` — no recognised manifest file found
+- **Severity:** low
+- **Category:** 1303

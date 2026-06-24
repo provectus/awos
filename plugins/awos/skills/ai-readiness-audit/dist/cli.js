@@ -1,4 +1,2931 @@
 #!/usr/bin/env node
+import { createRequire as __createRequire } from "node:module";
+import { fileURLToPath as __fileURLToPath } from "node:url";
+import { dirname as __dirname2 } from "node:path";
+const __filename = __fileURLToPath(import.meta.url);
+const __dirname = __dirname2(__filename);
+const require = __createRequire(import.meta.url);
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
+var __commonJS = (cb, mod) => function __require2() {
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+
+// node_modules/web-tree-sitter/tree-sitter.js
+var require_tree_sitter = __commonJS({
+  "node_modules/web-tree-sitter/tree-sitter.js"(exports, module) {
+    var Module = typeof Module != "undefined" ? Module : {};
+    var ENVIRONMENT_IS_WEB = typeof window == "object";
+    var ENVIRONMENT_IS_WORKER = typeof importScripts == "function";
+    var ENVIRONMENT_IS_NODE = typeof process == "object" && typeof process.versions == "object" && typeof process.versions.node == "string";
+    if (ENVIRONMENT_IS_NODE) {
+    }
+    var TreeSitter = (function() {
+      var initPromise;
+      var document = typeof window == "object" ? {
+        currentScript: window.document.currentScript
+      } : null;
+      class Parser {
+        constructor() {
+          this.initialize();
+        }
+        initialize() {
+          throw new Error("cannot construct a Parser before calling `init()`");
+        }
+        static init(moduleOptions) {
+          if (initPromise) return initPromise;
+          Module = Object.assign({}, Module, moduleOptions);
+          return initPromise = new Promise((resolveInitPromise) => {
+            var moduleOverrides = Object.assign({}, Module);
+            var arguments_ = [];
+            var thisProgram = "./this.program";
+            var quit_ = (status, toThrow) => {
+              throw toThrow;
+            };
+            var scriptDirectory = "";
+            function locateFile(path) {
+              if (Module["locateFile"]) {
+                return Module["locateFile"](path, scriptDirectory);
+              }
+              return scriptDirectory + path;
+            }
+            var readAsync, readBinary;
+            if (ENVIRONMENT_IS_NODE) {
+              var fs = __require("fs");
+              var nodePath = __require("path");
+              scriptDirectory = __dirname + "/";
+              readBinary = (filename) => {
+                filename = isFileURI(filename) ? new URL(filename) : nodePath.normalize(filename);
+                var ret = fs.readFileSync(filename);
+                return ret;
+              };
+              readAsync = (filename, binary2 = true) => {
+                filename = isFileURI(filename) ? new URL(filename) : nodePath.normalize(filename);
+                return new Promise((resolve, reject) => {
+                  fs.readFile(filename, binary2 ? void 0 : "utf8", (err2, data) => {
+                    if (err2) reject(err2);
+                    else resolve(binary2 ? data.buffer : data);
+                  });
+                });
+              };
+              if (!Module["thisProgram"] && process.argv.length > 1) {
+                thisProgram = process.argv[1].replace(/\\/g, "/");
+              }
+              arguments_ = process.argv.slice(2);
+              if (typeof module != "undefined") {
+                module["exports"] = Module;
+              }
+              quit_ = (status, toThrow) => {
+                process.exitCode = status;
+                throw toThrow;
+              };
+            } else if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
+              if (ENVIRONMENT_IS_WORKER) {
+                scriptDirectory = self.location.href;
+              } else if (typeof document != "undefined" && document.currentScript) {
+                scriptDirectory = document.currentScript.src;
+              }
+              if (scriptDirectory.startsWith("blob:")) {
+                scriptDirectory = "";
+              } else {
+                scriptDirectory = scriptDirectory.substr(0, scriptDirectory.replace(/[?#].*/, "").lastIndexOf("/") + 1);
+              }
+              {
+                if (ENVIRONMENT_IS_WORKER) {
+                  readBinary = (url) => {
+                    var xhr = new XMLHttpRequest();
+                    xhr.open("GET", url, false);
+                    xhr.responseType = "arraybuffer";
+                    xhr.send(null);
+                    return new Uint8Array(
+                      /** @type{!ArrayBuffer} */
+                      xhr.response
+                    );
+                  };
+                }
+                readAsync = (url) => {
+                  if (isFileURI(url)) {
+                    return new Promise((reject, resolve) => {
+                      var xhr = new XMLHttpRequest();
+                      xhr.open("GET", url, true);
+                      xhr.responseType = "arraybuffer";
+                      xhr.onload = () => {
+                        if (xhr.status == 200 || xhr.status == 0 && xhr.response) {
+                          resolve(xhr.response);
+                        }
+                        reject(xhr.status);
+                      };
+                      xhr.onerror = reject;
+                      xhr.send(null);
+                    });
+                  }
+                  return fetch(url, {
+                    credentials: "same-origin"
+                  }).then((response) => {
+                    if (response.ok) {
+                      return response.arrayBuffer();
+                    }
+                    return Promise.reject(new Error(response.status + " : " + response.url));
+                  });
+                };
+              }
+            } else {
+            }
+            var out = Module["print"] || console.log.bind(console);
+            var err = Module["printErr"] || console.error.bind(console);
+            Object.assign(Module, moduleOverrides);
+            moduleOverrides = null;
+            if (Module["arguments"]) arguments_ = Module["arguments"];
+            if (Module["thisProgram"]) thisProgram = Module["thisProgram"];
+            if (Module["quit"]) quit_ = Module["quit"];
+            var dynamicLibraries = Module["dynamicLibraries"] || [];
+            var wasmBinary;
+            if (Module["wasmBinary"]) wasmBinary = Module["wasmBinary"];
+            var wasmMemory;
+            var ABORT = false;
+            var EXITSTATUS;
+            var HEAP8, HEAPU8, HEAP16, HEAPU16, HEAP32, HEAPU32, HEAPF32, HEAPF64;
+            var HEAP_DATA_VIEW;
+            function updateMemoryViews() {
+              var b = wasmMemory.buffer;
+              Module["HEAP_DATA_VIEW"] = HEAP_DATA_VIEW = new DataView(b);
+              Module["HEAP8"] = HEAP8 = new Int8Array(b);
+              Module["HEAP16"] = HEAP16 = new Int16Array(b);
+              Module["HEAPU8"] = HEAPU8 = new Uint8Array(b);
+              Module["HEAPU16"] = HEAPU16 = new Uint16Array(b);
+              Module["HEAP32"] = HEAP32 = new Int32Array(b);
+              Module["HEAPU32"] = HEAPU32 = new Uint32Array(b);
+              Module["HEAPF32"] = HEAPF32 = new Float32Array(b);
+              Module["HEAPF64"] = HEAPF64 = new Float64Array(b);
+            }
+            if (Module["wasmMemory"]) {
+              wasmMemory = Module["wasmMemory"];
+            } else {
+              var INITIAL_MEMORY = Module["INITIAL_MEMORY"] || 33554432;
+              wasmMemory = new WebAssembly.Memory({
+                "initial": INITIAL_MEMORY / 65536,
+                // In theory we should not need to emit the maximum if we want "unlimited"
+                // or 4GB of memory, but VMs error on that atm, see
+                // https://github.com/emscripten-core/emscripten/issues/14130
+                // And in the pthreads case we definitely need to emit a maximum. So
+                // always emit one.
+                "maximum": 2147483648 / 65536
+              });
+            }
+            updateMemoryViews();
+            var __ATPRERUN__ = [];
+            var __ATINIT__ = [];
+            var __ATMAIN__ = [];
+            var __ATPOSTRUN__ = [];
+            var __RELOC_FUNCS__ = [];
+            var runtimeInitialized = false;
+            function preRun() {
+              if (Module["preRun"]) {
+                if (typeof Module["preRun"] == "function") Module["preRun"] = [Module["preRun"]];
+                while (Module["preRun"].length) {
+                  addOnPreRun(Module["preRun"].shift());
+                }
+              }
+              callRuntimeCallbacks(__ATPRERUN__);
+            }
+            function initRuntime() {
+              runtimeInitialized = true;
+              callRuntimeCallbacks(__RELOC_FUNCS__);
+              callRuntimeCallbacks(__ATINIT__);
+            }
+            function preMain() {
+              callRuntimeCallbacks(__ATMAIN__);
+            }
+            function postRun() {
+              if (Module["postRun"]) {
+                if (typeof Module["postRun"] == "function") Module["postRun"] = [Module["postRun"]];
+                while (Module["postRun"].length) {
+                  addOnPostRun(Module["postRun"].shift());
+                }
+              }
+              callRuntimeCallbacks(__ATPOSTRUN__);
+            }
+            function addOnPreRun(cb) {
+              __ATPRERUN__.unshift(cb);
+            }
+            function addOnInit(cb) {
+              __ATINIT__.unshift(cb);
+            }
+            function addOnPostRun(cb) {
+              __ATPOSTRUN__.unshift(cb);
+            }
+            var runDependencies = 0;
+            var runDependencyWatcher = null;
+            var dependenciesFulfilled = null;
+            function getUniqueRunDependency(id) {
+              return id;
+            }
+            function addRunDependency(id) {
+              runDependencies++;
+              Module["monitorRunDependencies"]?.(runDependencies);
+            }
+            function removeRunDependency(id) {
+              runDependencies--;
+              Module["monitorRunDependencies"]?.(runDependencies);
+              if (runDependencies == 0) {
+                if (runDependencyWatcher !== null) {
+                  clearInterval(runDependencyWatcher);
+                  runDependencyWatcher = null;
+                }
+                if (dependenciesFulfilled) {
+                  var callback = dependenciesFulfilled;
+                  dependenciesFulfilled = null;
+                  callback();
+                }
+              }
+            }
+            function abort(what) {
+              Module["onAbort"]?.(what);
+              what = "Aborted(" + what + ")";
+              err(what);
+              ABORT = true;
+              EXITSTATUS = 1;
+              what += ". Build with -sASSERTIONS for more info.";
+              var e = new WebAssembly.RuntimeError(what);
+              throw e;
+            }
+            var dataURIPrefix = "data:application/octet-stream;base64,";
+            var isDataURI = (filename) => filename.startsWith(dataURIPrefix);
+            var isFileURI = (filename) => filename.startsWith("file://");
+            function findWasmBinary() {
+              var f = "tree-sitter.wasm";
+              if (!isDataURI(f)) {
+                return locateFile(f);
+              }
+              return f;
+            }
+            var wasmBinaryFile;
+            function getBinarySync(file) {
+              if (file == wasmBinaryFile && wasmBinary) {
+                return new Uint8Array(wasmBinary);
+              }
+              if (readBinary) {
+                return readBinary(file);
+              }
+              throw "both async and sync fetching of the wasm failed";
+            }
+            function getBinaryPromise(binaryFile) {
+              if (!wasmBinary) {
+                return readAsync(binaryFile).then(
+                  (response) => new Uint8Array(
+                    /** @type{!ArrayBuffer} */
+                    response
+                  ),
+                  // Fall back to getBinarySync if readAsync fails
+                  () => getBinarySync(binaryFile)
+                );
+              }
+              return Promise.resolve().then(() => getBinarySync(binaryFile));
+            }
+            function instantiateArrayBuffer(binaryFile, imports, receiver) {
+              return getBinaryPromise(binaryFile).then((binary2) => WebAssembly.instantiate(binary2, imports)).then(receiver, (reason) => {
+                err(`failed to asynchronously prepare wasm: ${reason}`);
+                abort(reason);
+              });
+            }
+            function instantiateAsync(binary2, binaryFile, imports, callback) {
+              if (!binary2 && typeof WebAssembly.instantiateStreaming == "function" && !isDataURI(binaryFile) && // Don't use streaming for file:// delivered objects in a webview, fetch them synchronously.
+              !isFileURI(binaryFile) && // Avoid instantiateStreaming() on Node.js environment for now, as while
+              // Node.js v18.1.0 implements it, it does not have a full fetch()
+              // implementation yet.
+              // Reference:
+              //   https://github.com/emscripten-core/emscripten/pull/16917
+              !ENVIRONMENT_IS_NODE && typeof fetch == "function") {
+                return fetch(binaryFile, {
+                  credentials: "same-origin"
+                }).then((response) => {
+                  var result = WebAssembly.instantiateStreaming(response, imports);
+                  return result.then(callback, function(reason) {
+                    err(`wasm streaming compile failed: ${reason}`);
+                    err("falling back to ArrayBuffer instantiation");
+                    return instantiateArrayBuffer(binaryFile, imports, callback);
+                  });
+                });
+              }
+              return instantiateArrayBuffer(binaryFile, imports, callback);
+            }
+            function getWasmImports() {
+              return {
+                "env": wasmImports,
+                "wasi_snapshot_preview1": wasmImports,
+                "GOT.mem": new Proxy(wasmImports, GOTHandler),
+                "GOT.func": new Proxy(wasmImports, GOTHandler)
+              };
+            }
+            function createWasm() {
+              var info2 = getWasmImports();
+              function receiveInstance(instance2, module2) {
+                wasmExports = instance2.exports;
+                wasmExports = relocateExports(wasmExports, 1024);
+                var metadata2 = getDylinkMetadata(module2);
+                if (metadata2.neededDynlibs) {
+                  dynamicLibraries = metadata2.neededDynlibs.concat(dynamicLibraries);
+                }
+                mergeLibSymbols(wasmExports, "main");
+                LDSO.init();
+                loadDylibs();
+                addOnInit(wasmExports["__wasm_call_ctors"]);
+                __RELOC_FUNCS__.push(wasmExports["__wasm_apply_data_relocs"]);
+                removeRunDependency("wasm-instantiate");
+                return wasmExports;
+              }
+              addRunDependency("wasm-instantiate");
+              function receiveInstantiationResult(result) {
+                receiveInstance(result["instance"], result["module"]);
+              }
+              if (Module["instantiateWasm"]) {
+                try {
+                  return Module["instantiateWasm"](info2, receiveInstance);
+                } catch (e) {
+                  err(`Module.instantiateWasm callback failed with error: ${e}`);
+                  return false;
+                }
+              }
+              if (!wasmBinaryFile) wasmBinaryFile = findWasmBinary();
+              instantiateAsync(wasmBinary, wasmBinaryFile, info2, receiveInstantiationResult);
+              return {};
+            }
+            var ASM_CONSTS = {};
+            function ExitStatus(status) {
+              this.name = "ExitStatus";
+              this.message = `Program terminated with exit(${status})`;
+              this.status = status;
+            }
+            var GOT = {};
+            var currentModuleWeakSymbols = /* @__PURE__ */ new Set([]);
+            var GOTHandler = {
+              get(obj, symName) {
+                var rtn = GOT[symName];
+                if (!rtn) {
+                  rtn = GOT[symName] = new WebAssembly.Global({
+                    "value": "i32",
+                    "mutable": true
+                  });
+                }
+                if (!currentModuleWeakSymbols.has(symName)) {
+                  rtn.required = true;
+                }
+                return rtn;
+              }
+            };
+            var LE_HEAP_LOAD_F32 = (byteOffset) => HEAP_DATA_VIEW.getFloat32(byteOffset, true);
+            var LE_HEAP_LOAD_F64 = (byteOffset) => HEAP_DATA_VIEW.getFloat64(byteOffset, true);
+            var LE_HEAP_LOAD_I16 = (byteOffset) => HEAP_DATA_VIEW.getInt16(byteOffset, true);
+            var LE_HEAP_LOAD_I32 = (byteOffset) => HEAP_DATA_VIEW.getInt32(byteOffset, true);
+            var LE_HEAP_LOAD_U32 = (byteOffset) => HEAP_DATA_VIEW.getUint32(byteOffset, true);
+            var LE_HEAP_STORE_F32 = (byteOffset, value) => HEAP_DATA_VIEW.setFloat32(byteOffset, value, true);
+            var LE_HEAP_STORE_F64 = (byteOffset, value) => HEAP_DATA_VIEW.setFloat64(byteOffset, value, true);
+            var LE_HEAP_STORE_I16 = (byteOffset, value) => HEAP_DATA_VIEW.setInt16(byteOffset, value, true);
+            var LE_HEAP_STORE_I32 = (byteOffset, value) => HEAP_DATA_VIEW.setInt32(byteOffset, value, true);
+            var LE_HEAP_STORE_U32 = (byteOffset, value) => HEAP_DATA_VIEW.setUint32(byteOffset, value, true);
+            var callRuntimeCallbacks = (callbacks) => {
+              while (callbacks.length > 0) {
+                callbacks.shift()(Module);
+              }
+            };
+            var UTF8Decoder = typeof TextDecoder != "undefined" ? new TextDecoder() : void 0;
+            var UTF8ArrayToString = (heapOrArray, idx, maxBytesToRead) => {
+              var endIdx = idx + maxBytesToRead;
+              var endPtr = idx;
+              while (heapOrArray[endPtr] && !(endPtr >= endIdx)) ++endPtr;
+              if (endPtr - idx > 16 && heapOrArray.buffer && UTF8Decoder) {
+                return UTF8Decoder.decode(heapOrArray.subarray(idx, endPtr));
+              }
+              var str = "";
+              while (idx < endPtr) {
+                var u0 = heapOrArray[idx++];
+                if (!(u0 & 128)) {
+                  str += String.fromCharCode(u0);
+                  continue;
+                }
+                var u1 = heapOrArray[idx++] & 63;
+                if ((u0 & 224) == 192) {
+                  str += String.fromCharCode((u0 & 31) << 6 | u1);
+                  continue;
+                }
+                var u2 = heapOrArray[idx++] & 63;
+                if ((u0 & 240) == 224) {
+                  u0 = (u0 & 15) << 12 | u1 << 6 | u2;
+                } else {
+                  u0 = (u0 & 7) << 18 | u1 << 12 | u2 << 6 | heapOrArray[idx++] & 63;
+                }
+                if (u0 < 65536) {
+                  str += String.fromCharCode(u0);
+                } else {
+                  var ch = u0 - 65536;
+                  str += String.fromCharCode(55296 | ch >> 10, 56320 | ch & 1023);
+                }
+              }
+              return str;
+            };
+            var getDylinkMetadata = (binary2) => {
+              var offset = 0;
+              var end = 0;
+              function getU8() {
+                return binary2[offset++];
+              }
+              function getLEB() {
+                var ret = 0;
+                var mul = 1;
+                while (1) {
+                  var byte = binary2[offset++];
+                  ret += (byte & 127) * mul;
+                  mul *= 128;
+                  if (!(byte & 128)) break;
+                }
+                return ret;
+              }
+              function getString() {
+                var len = getLEB();
+                offset += len;
+                return UTF8ArrayToString(binary2, offset - len, len);
+              }
+              function failIf(condition, message) {
+                if (condition) throw new Error(message);
+              }
+              var name2 = "dylink.0";
+              if (binary2 instanceof WebAssembly.Module) {
+                var dylinkSection = WebAssembly.Module.customSections(binary2, name2);
+                if (dylinkSection.length === 0) {
+                  name2 = "dylink";
+                  dylinkSection = WebAssembly.Module.customSections(binary2, name2);
+                }
+                failIf(dylinkSection.length === 0, "need dylink section");
+                binary2 = new Uint8Array(dylinkSection[0]);
+                end = binary2.length;
+              } else {
+                var int32View = new Uint32Array(new Uint8Array(binary2.subarray(0, 24)).buffer);
+                var magicNumberFound = int32View[0] == 1836278016 || int32View[0] == 6386541;
+                failIf(!magicNumberFound, "need to see wasm magic number");
+                failIf(binary2[8] !== 0, "need the dylink section to be first");
+                offset = 9;
+                var section_size = getLEB();
+                end = offset + section_size;
+                name2 = getString();
+              }
+              var customSection = {
+                neededDynlibs: [],
+                tlsExports: /* @__PURE__ */ new Set(),
+                weakImports: /* @__PURE__ */ new Set()
+              };
+              if (name2 == "dylink") {
+                customSection.memorySize = getLEB();
+                customSection.memoryAlign = getLEB();
+                customSection.tableSize = getLEB();
+                customSection.tableAlign = getLEB();
+                var neededDynlibsCount = getLEB();
+                for (var i2 = 0; i2 < neededDynlibsCount; ++i2) {
+                  var libname = getString();
+                  customSection.neededDynlibs.push(libname);
+                }
+              } else {
+                failIf(name2 !== "dylink.0");
+                var WASM_DYLINK_MEM_INFO = 1;
+                var WASM_DYLINK_NEEDED = 2;
+                var WASM_DYLINK_EXPORT_INFO = 3;
+                var WASM_DYLINK_IMPORT_INFO = 4;
+                var WASM_SYMBOL_TLS = 256;
+                var WASM_SYMBOL_BINDING_MASK = 3;
+                var WASM_SYMBOL_BINDING_WEAK = 1;
+                while (offset < end) {
+                  var subsectionType = getU8();
+                  var subsectionSize = getLEB();
+                  if (subsectionType === WASM_DYLINK_MEM_INFO) {
+                    customSection.memorySize = getLEB();
+                    customSection.memoryAlign = getLEB();
+                    customSection.tableSize = getLEB();
+                    customSection.tableAlign = getLEB();
+                  } else if (subsectionType === WASM_DYLINK_NEEDED) {
+                    var neededDynlibsCount = getLEB();
+                    for (var i2 = 0; i2 < neededDynlibsCount; ++i2) {
+                      libname = getString();
+                      customSection.neededDynlibs.push(libname);
+                    }
+                  } else if (subsectionType === WASM_DYLINK_EXPORT_INFO) {
+                    var count = getLEB();
+                    while (count--) {
+                      var symname = getString();
+                      var flags2 = getLEB();
+                      if (flags2 & WASM_SYMBOL_TLS) {
+                        customSection.tlsExports.add(symname);
+                      }
+                    }
+                  } else if (subsectionType === WASM_DYLINK_IMPORT_INFO) {
+                    var count = getLEB();
+                    while (count--) {
+                      var modname = getString();
+                      var symname = getString();
+                      var flags2 = getLEB();
+                      if ((flags2 & WASM_SYMBOL_BINDING_MASK) == WASM_SYMBOL_BINDING_WEAK) {
+                        customSection.weakImports.add(symname);
+                      }
+                    }
+                  } else {
+                    offset += subsectionSize;
+                  }
+                }
+              }
+              return customSection;
+            };
+            function getValue(ptr, type = "i8") {
+              if (type.endsWith("*")) type = "*";
+              switch (type) {
+                case "i1":
+                  return HEAP8[ptr];
+                case "i8":
+                  return HEAP8[ptr];
+                case "i16":
+                  return LE_HEAP_LOAD_I16((ptr >> 1) * 2);
+                case "i32":
+                  return LE_HEAP_LOAD_I32((ptr >> 2) * 4);
+                case "i64":
+                  abort("to do getValue(i64) use WASM_BIGINT");
+                case "float":
+                  return LE_HEAP_LOAD_F32((ptr >> 2) * 4);
+                case "double":
+                  return LE_HEAP_LOAD_F64((ptr >> 3) * 8);
+                case "*":
+                  return LE_HEAP_LOAD_U32((ptr >> 2) * 4);
+                default:
+                  abort(`invalid type for getValue: ${type}`);
+              }
+            }
+            var newDSO = (name2, handle2, syms) => {
+              var dso = {
+                refcount: Infinity,
+                name: name2,
+                exports: syms,
+                global: true
+              };
+              LDSO.loadedLibsByName[name2] = dso;
+              if (handle2 != void 0) {
+                LDSO.loadedLibsByHandle[handle2] = dso;
+              }
+              return dso;
+            };
+            var LDSO = {
+              loadedLibsByName: {},
+              loadedLibsByHandle: {},
+              init() {
+                newDSO("__main__", 0, wasmImports);
+              }
+            };
+            var ___heap_base = 78112;
+            var zeroMemory = (address, size) => {
+              HEAPU8.fill(0, address, address + size);
+              return address;
+            };
+            var alignMemory = (size, alignment) => Math.ceil(size / alignment) * alignment;
+            var getMemory = (size) => {
+              if (runtimeInitialized) {
+                return zeroMemory(_malloc(size), size);
+              }
+              var ret = ___heap_base;
+              var end = ret + alignMemory(size, 16);
+              ___heap_base = end;
+              GOT["__heap_base"].value = end;
+              return ret;
+            };
+            var isInternalSym = (symName) => ["__cpp_exception", "__c_longjmp", "__wasm_apply_data_relocs", "__dso_handle", "__tls_size", "__tls_align", "__set_stack_limits", "_emscripten_tls_init", "__wasm_init_tls", "__wasm_call_ctors", "__start_em_asm", "__stop_em_asm", "__start_em_js", "__stop_em_js"].includes(symName) || symName.startsWith("__em_js__");
+            var uleb128Encode = (n, target) => {
+              if (n < 128) {
+                target.push(n);
+              } else {
+                target.push(n % 128 | 128, n >> 7);
+              }
+            };
+            var sigToWasmTypes = (sig) => {
+              var typeNames = {
+                "i": "i32",
+                "j": "i64",
+                "f": "f32",
+                "d": "f64",
+                "e": "externref",
+                "p": "i32"
+              };
+              var type = {
+                parameters: [],
+                results: sig[0] == "v" ? [] : [typeNames[sig[0]]]
+              };
+              for (var i2 = 1; i2 < sig.length; ++i2) {
+                type.parameters.push(typeNames[sig[i2]]);
+              }
+              return type;
+            };
+            var generateFuncType = (sig, target) => {
+              var sigRet = sig.slice(0, 1);
+              var sigParam = sig.slice(1);
+              var typeCodes = {
+                "i": 127,
+                // i32
+                "p": 127,
+                // i32
+                "j": 126,
+                // i64
+                "f": 125,
+                // f32
+                "d": 124,
+                // f64
+                "e": 111
+              };
+              target.push(96);
+              uleb128Encode(sigParam.length, target);
+              for (var i2 = 0; i2 < sigParam.length; ++i2) {
+                target.push(typeCodes[sigParam[i2]]);
+              }
+              if (sigRet == "v") {
+                target.push(0);
+              } else {
+                target.push(1, typeCodes[sigRet]);
+              }
+            };
+            var convertJsFunctionToWasm = (func2, sig) => {
+              if (typeof WebAssembly.Function == "function") {
+                return new WebAssembly.Function(sigToWasmTypes(sig), func2);
+              }
+              var typeSectionBody = [1];
+              generateFuncType(sig, typeSectionBody);
+              var bytes = [
+                0,
+                97,
+                115,
+                109,
+                // magic ("\0asm")
+                1,
+                0,
+                0,
+                0,
+                // version: 1
+                1
+              ];
+              uleb128Encode(typeSectionBody.length, bytes);
+              bytes.push(...typeSectionBody);
+              bytes.push(
+                2,
+                7,
+                // import section
+                // (import "e" "f" (func 0 (type 0)))
+                1,
+                1,
+                101,
+                1,
+                102,
+                0,
+                0,
+                7,
+                5,
+                // export section
+                // (export "f" (func 0 (type 0)))
+                1,
+                1,
+                102,
+                0,
+                0
+              );
+              var module2 = new WebAssembly.Module(new Uint8Array(bytes));
+              var instance2 = new WebAssembly.Instance(module2, {
+                "e": {
+                  "f": func2
+                }
+              });
+              var wrappedFunc = instance2.exports["f"];
+              return wrappedFunc;
+            };
+            var wasmTableMirror = [];
+            var wasmTable = new WebAssembly.Table({
+              "initial": 28,
+              "element": "anyfunc"
+            });
+            var getWasmTableEntry = (funcPtr) => {
+              var func2 = wasmTableMirror[funcPtr];
+              if (!func2) {
+                if (funcPtr >= wasmTableMirror.length) wasmTableMirror.length = funcPtr + 1;
+                wasmTableMirror[funcPtr] = func2 = wasmTable.get(funcPtr);
+              }
+              return func2;
+            };
+            var updateTableMap = (offset, count) => {
+              if (functionsInTableMap) {
+                for (var i2 = offset; i2 < offset + count; i2++) {
+                  var item = getWasmTableEntry(i2);
+                  if (item) {
+                    functionsInTableMap.set(item, i2);
+                  }
+                }
+              }
+            };
+            var functionsInTableMap;
+            var getFunctionAddress = (func2) => {
+              if (!functionsInTableMap) {
+                functionsInTableMap = /* @__PURE__ */ new WeakMap();
+                updateTableMap(0, wasmTable.length);
+              }
+              return functionsInTableMap.get(func2) || 0;
+            };
+            var freeTableIndexes = [];
+            var getEmptyTableSlot = () => {
+              if (freeTableIndexes.length) {
+                return freeTableIndexes.pop();
+              }
+              try {
+                wasmTable.grow(1);
+              } catch (err2) {
+                if (!(err2 instanceof RangeError)) {
+                  throw err2;
+                }
+                throw "Unable to grow wasm table. Set ALLOW_TABLE_GROWTH.";
+              }
+              return wasmTable.length - 1;
+            };
+            var setWasmTableEntry = (idx, func2) => {
+              wasmTable.set(idx, func2);
+              wasmTableMirror[idx] = wasmTable.get(idx);
+            };
+            var addFunction = (func2, sig) => {
+              var rtn = getFunctionAddress(func2);
+              if (rtn) {
+                return rtn;
+              }
+              var ret = getEmptyTableSlot();
+              try {
+                setWasmTableEntry(ret, func2);
+              } catch (err2) {
+                if (!(err2 instanceof TypeError)) {
+                  throw err2;
+                }
+                var wrapped = convertJsFunctionToWasm(func2, sig);
+                setWasmTableEntry(ret, wrapped);
+              }
+              functionsInTableMap.set(func2, ret);
+              return ret;
+            };
+            var updateGOT = (exports2, replace) => {
+              for (var symName in exports2) {
+                if (isInternalSym(symName)) {
+                  continue;
+                }
+                var value = exports2[symName];
+                if (symName.startsWith("orig$")) {
+                  symName = symName.split("$")[1];
+                  replace = true;
+                }
+                GOT[symName] ||= new WebAssembly.Global({
+                  "value": "i32",
+                  "mutable": true
+                });
+                if (replace || GOT[symName].value == 0) {
+                  if (typeof value == "function") {
+                    GOT[symName].value = addFunction(value);
+                  } else if (typeof value == "number") {
+                    GOT[symName].value = value;
+                  } else {
+                    err(`unhandled export type for '${symName}': ${typeof value}`);
+                  }
+                }
+              }
+            };
+            var relocateExports = (exports2, memoryBase2, replace) => {
+              var relocated = {};
+              for (var e in exports2) {
+                var value = exports2[e];
+                if (typeof value == "object") {
+                  value = value.value;
+                }
+                if (typeof value == "number") {
+                  value += memoryBase2;
+                }
+                relocated[e] = value;
+              }
+              updateGOT(relocated, replace);
+              return relocated;
+            };
+            var isSymbolDefined = (symName) => {
+              var existing = wasmImports[symName];
+              if (!existing || existing.stub) {
+                return false;
+              }
+              return true;
+            };
+            var dynCallLegacy = (sig, ptr, args2) => {
+              sig = sig.replace(/p/g, "i");
+              var f = Module["dynCall_" + sig];
+              return f(ptr, ...args2);
+            };
+            var dynCall = (sig, ptr, args2 = []) => {
+              if (sig.includes("j")) {
+                return dynCallLegacy(sig, ptr, args2);
+              }
+              var rtn = getWasmTableEntry(ptr)(...args2);
+              return rtn;
+            };
+            var stackSave = () => _emscripten_stack_get_current();
+            var stackRestore = (val) => __emscripten_stack_restore(val);
+            var createInvokeFunction = (sig) => (ptr, ...args2) => {
+              var sp = stackSave();
+              try {
+                return dynCall(sig, ptr, args2);
+              } catch (e) {
+                stackRestore(sp);
+                if (e !== e + 0) throw e;
+                _setThrew(1, 0);
+              }
+            };
+            var resolveGlobalSymbol = (symName, direct = false) => {
+              var sym;
+              if (direct && "orig$" + symName in wasmImports) {
+                symName = "orig$" + symName;
+              }
+              if (isSymbolDefined(symName)) {
+                sym = wasmImports[symName];
+              } else if (symName.startsWith("invoke_")) {
+                sym = wasmImports[symName] = createInvokeFunction(symName.split("_")[1]);
+              }
+              return {
+                sym,
+                name: symName
+              };
+            };
+            var UTF8ToString = (ptr, maxBytesToRead) => ptr ? UTF8ArrayToString(HEAPU8, ptr, maxBytesToRead) : "";
+            var loadWebAssemblyModule = (binary, flags, libName, localScope, handle) => {
+              var metadata = getDylinkMetadata(binary);
+              currentModuleWeakSymbols = metadata.weakImports;
+              function loadModule() {
+                var firstLoad = !handle || !HEAP8[handle + 8];
+                if (firstLoad) {
+                  var memAlign = Math.pow(2, metadata.memoryAlign);
+                  var memoryBase = metadata.memorySize ? alignMemory(getMemory(metadata.memorySize + memAlign), memAlign) : 0;
+                  var tableBase = metadata.tableSize ? wasmTable.length : 0;
+                  if (handle) {
+                    HEAP8[handle + 8] = 1;
+                    LE_HEAP_STORE_U32((handle + 12 >> 2) * 4, memoryBase);
+                    LE_HEAP_STORE_I32((handle + 16 >> 2) * 4, metadata.memorySize);
+                    LE_HEAP_STORE_U32((handle + 20 >> 2) * 4, tableBase);
+                    LE_HEAP_STORE_I32((handle + 24 >> 2) * 4, metadata.tableSize);
+                  }
+                } else {
+                  memoryBase = LE_HEAP_LOAD_U32((handle + 12 >> 2) * 4);
+                  tableBase = LE_HEAP_LOAD_U32((handle + 20 >> 2) * 4);
+                }
+                var tableGrowthNeeded = tableBase + metadata.tableSize - wasmTable.length;
+                if (tableGrowthNeeded > 0) {
+                  wasmTable.grow(tableGrowthNeeded);
+                }
+                var moduleExports;
+                function resolveSymbol(sym) {
+                  var resolved = resolveGlobalSymbol(sym).sym;
+                  if (!resolved && localScope) {
+                    resolved = localScope[sym];
+                  }
+                  if (!resolved) {
+                    resolved = moduleExports[sym];
+                  }
+                  return resolved;
+                }
+                var proxyHandler = {
+                  get(stubs, prop) {
+                    switch (prop) {
+                      case "__memory_base":
+                        return memoryBase;
+                      case "__table_base":
+                        return tableBase;
+                    }
+                    if (prop in wasmImports && !wasmImports[prop].stub) {
+                      return wasmImports[prop];
+                    }
+                    if (!(prop in stubs)) {
+                      var resolved;
+                      stubs[prop] = (...args2) => {
+                        resolved ||= resolveSymbol(prop);
+                        return resolved(...args2);
+                      };
+                    }
+                    return stubs[prop];
+                  }
+                };
+                var proxy = new Proxy({}, proxyHandler);
+                var info = {
+                  "GOT.mem": new Proxy({}, GOTHandler),
+                  "GOT.func": new Proxy({}, GOTHandler),
+                  "env": proxy,
+                  "wasi_snapshot_preview1": proxy
+                };
+                function postInstantiation(module, instance) {
+                  updateTableMap(tableBase, metadata.tableSize);
+                  moduleExports = relocateExports(instance.exports, memoryBase);
+                  if (!flags.allowUndefined) {
+                    reportUndefinedSymbols();
+                  }
+                  function addEmAsm(addr, body) {
+                    var args = [];
+                    var arity = 0;
+                    for (; arity < 16; arity++) {
+                      if (body.indexOf("$" + arity) != -1) {
+                        args.push("$" + arity);
+                      } else {
+                        break;
+                      }
+                    }
+                    args = args.join(",");
+                    var func = `(${args}) => { ${body} };`;
+                    ASM_CONSTS[start] = eval(func);
+                  }
+                  if ("__start_em_asm" in moduleExports) {
+                    var start = moduleExports["__start_em_asm"];
+                    var stop = moduleExports["__stop_em_asm"];
+                    while (start < stop) {
+                      var jsString = UTF8ToString(start);
+                      addEmAsm(start, jsString);
+                      start = HEAPU8.indexOf(0, start) + 1;
+                    }
+                  }
+                  function addEmJs(name, cSig, body) {
+                    var jsArgs = [];
+                    cSig = cSig.slice(1, -1);
+                    if (cSig != "void") {
+                      cSig = cSig.split(",");
+                      for (var i in cSig) {
+                        var jsArg = cSig[i].split(" ").pop();
+                        jsArgs.push(jsArg.replace("*", ""));
+                      }
+                    }
+                    var func = `(${jsArgs}) => ${body};`;
+                    moduleExports[name] = eval(func);
+                  }
+                  for (var name in moduleExports) {
+                    if (name.startsWith("__em_js__")) {
+                      var start = moduleExports[name];
+                      var jsString = UTF8ToString(start);
+                      var parts = jsString.split("<::>");
+                      addEmJs(name.replace("__em_js__", ""), parts[0], parts[1]);
+                      delete moduleExports[name];
+                    }
+                  }
+                  var applyRelocs = moduleExports["__wasm_apply_data_relocs"];
+                  if (applyRelocs) {
+                    if (runtimeInitialized) {
+                      applyRelocs();
+                    } else {
+                      __RELOC_FUNCS__.push(applyRelocs);
+                    }
+                  }
+                  var init = moduleExports["__wasm_call_ctors"];
+                  if (init) {
+                    if (runtimeInitialized) {
+                      init();
+                    } else {
+                      __ATINIT__.push(init);
+                    }
+                  }
+                  return moduleExports;
+                }
+                if (flags.loadAsync) {
+                  if (binary instanceof WebAssembly.Module) {
+                    var instance = new WebAssembly.Instance(binary, info);
+                    return Promise.resolve(postInstantiation(binary, instance));
+                  }
+                  return WebAssembly.instantiate(binary, info).then((result) => postInstantiation(result.module, result.instance));
+                }
+                var module = binary instanceof WebAssembly.Module ? binary : new WebAssembly.Module(binary);
+                var instance = new WebAssembly.Instance(module, info);
+                return postInstantiation(module, instance);
+              }
+              if (flags.loadAsync) {
+                return metadata.neededDynlibs.reduce((chain, dynNeeded) => chain.then(() => loadDynamicLibrary(dynNeeded, flags, localScope)), Promise.resolve()).then(loadModule);
+              }
+              metadata.neededDynlibs.forEach((needed) => loadDynamicLibrary(needed, flags, localScope));
+              return loadModule();
+            };
+            var mergeLibSymbols = (exports2, libName2) => {
+              for (var [sym, exp] of Object.entries(exports2)) {
+                const setImport = (target) => {
+                  if (!isSymbolDefined(target)) {
+                    wasmImports[target] = exp;
+                  }
+                };
+                setImport(sym);
+                const main_alias = "__main_argc_argv";
+                if (sym == "main") {
+                  setImport(main_alias);
+                }
+                if (sym == main_alias) {
+                  setImport("main");
+                }
+                if (sym.startsWith("dynCall_") && !Module.hasOwnProperty(sym)) {
+                  Module[sym] = exp;
+                }
+              }
+            };
+            var asyncLoad = (url, onload, onerror, noRunDep) => {
+              var dep = !noRunDep ? getUniqueRunDependency(`al ${url}`) : "";
+              readAsync(url).then((arrayBuffer) => {
+                onload(new Uint8Array(arrayBuffer));
+                if (dep) removeRunDependency(dep);
+              }, (err2) => {
+                if (onerror) {
+                  onerror();
+                } else {
+                  throw `Loading data file "${url}" failed.`;
+                }
+              });
+              if (dep) addRunDependency(dep);
+            };
+            function loadDynamicLibrary(libName2, flags2 = {
+              global: true,
+              nodelete: true
+            }, localScope2, handle2) {
+              var dso = LDSO.loadedLibsByName[libName2];
+              if (dso) {
+                if (!flags2.global) {
+                  if (localScope2) {
+                    Object.assign(localScope2, dso.exports);
+                  }
+                } else if (!dso.global) {
+                  dso.global = true;
+                  mergeLibSymbols(dso.exports, libName2);
+                }
+                if (flags2.nodelete && dso.refcount !== Infinity) {
+                  dso.refcount = Infinity;
+                }
+                dso.refcount++;
+                if (handle2) {
+                  LDSO.loadedLibsByHandle[handle2] = dso;
+                }
+                return flags2.loadAsync ? Promise.resolve(true) : true;
+              }
+              dso = newDSO(libName2, handle2, "loading");
+              dso.refcount = flags2.nodelete ? Infinity : 1;
+              dso.global = flags2.global;
+              function loadLibData() {
+                if (handle2) {
+                  var data = LE_HEAP_LOAD_U32((handle2 + 28 >> 2) * 4);
+                  var dataSize = LE_HEAP_LOAD_U32((handle2 + 32 >> 2) * 4);
+                  if (data && dataSize) {
+                    var libData = HEAP8.slice(data, data + dataSize);
+                    return flags2.loadAsync ? Promise.resolve(libData) : libData;
+                  }
+                }
+                var libFile = locateFile(libName2);
+                if (flags2.loadAsync) {
+                  return new Promise(function(resolve, reject) {
+                    asyncLoad(libFile, resolve, reject);
+                  });
+                }
+                if (!readBinary) {
+                  throw new Error(`${libFile}: file not found, and synchronous loading of external files is not available`);
+                }
+                return readBinary(libFile);
+              }
+              function getExports() {
+                if (flags2.loadAsync) {
+                  return loadLibData().then((libData) => loadWebAssemblyModule(libData, flags2, libName2, localScope2, handle2));
+                }
+                return loadWebAssemblyModule(loadLibData(), flags2, libName2, localScope2, handle2);
+              }
+              function moduleLoaded(exports2) {
+                if (dso.global) {
+                  mergeLibSymbols(exports2, libName2);
+                } else if (localScope2) {
+                  Object.assign(localScope2, exports2);
+                }
+                dso.exports = exports2;
+              }
+              if (flags2.loadAsync) {
+                return getExports().then((exports2) => {
+                  moduleLoaded(exports2);
+                  return true;
+                });
+              }
+              moduleLoaded(getExports());
+              return true;
+            }
+            var reportUndefinedSymbols = () => {
+              for (var [symName, entry] of Object.entries(GOT)) {
+                if (entry.value == 0) {
+                  var value = resolveGlobalSymbol(symName, true).sym;
+                  if (!value && !entry.required) {
+                    continue;
+                  }
+                  if (typeof value == "function") {
+                    entry.value = addFunction(value, value.sig);
+                  } else if (typeof value == "number") {
+                    entry.value = value;
+                  } else {
+                    throw new Error(`bad export type for '${symName}': ${typeof value}`);
+                  }
+                }
+              }
+            };
+            var loadDylibs = () => {
+              if (!dynamicLibraries.length) {
+                reportUndefinedSymbols();
+                return;
+              }
+              addRunDependency("loadDylibs");
+              dynamicLibraries.reduce((chain, lib) => chain.then(() => loadDynamicLibrary(lib, {
+                loadAsync: true,
+                global: true,
+                nodelete: true,
+                allowUndefined: true
+              })), Promise.resolve()).then(() => {
+                reportUndefinedSymbols();
+                removeRunDependency("loadDylibs");
+              });
+            };
+            var noExitRuntime = Module["noExitRuntime"] || true;
+            function setValue(ptr, value, type = "i8") {
+              if (type.endsWith("*")) type = "*";
+              switch (type) {
+                case "i1":
+                  HEAP8[ptr] = value;
+                  break;
+                case "i8":
+                  HEAP8[ptr] = value;
+                  break;
+                case "i16":
+                  LE_HEAP_STORE_I16((ptr >> 1) * 2, value);
+                  break;
+                case "i32":
+                  LE_HEAP_STORE_I32((ptr >> 2) * 4, value);
+                  break;
+                case "i64":
+                  abort("to do setValue(i64) use WASM_BIGINT");
+                case "float":
+                  LE_HEAP_STORE_F32((ptr >> 2) * 4, value);
+                  break;
+                case "double":
+                  LE_HEAP_STORE_F64((ptr >> 3) * 8, value);
+                  break;
+                case "*":
+                  LE_HEAP_STORE_U32((ptr >> 2) * 4, value);
+                  break;
+                default:
+                  abort(`invalid type for setValue: ${type}`);
+              }
+            }
+            var ___memory_base = new WebAssembly.Global({
+              "value": "i32",
+              "mutable": false
+            }, 1024);
+            var ___stack_pointer = new WebAssembly.Global({
+              "value": "i32",
+              "mutable": true
+            }, 78112);
+            var ___table_base = new WebAssembly.Global({
+              "value": "i32",
+              "mutable": false
+            }, 1);
+            var __abort_js = () => {
+              abort("");
+            };
+            __abort_js.sig = "v";
+            var nowIsMonotonic = 1;
+            var __emscripten_get_now_is_monotonic = () => nowIsMonotonic;
+            __emscripten_get_now_is_monotonic.sig = "i";
+            var __emscripten_memcpy_js = (dest, src, num) => HEAPU8.copyWithin(dest, src, src + num);
+            __emscripten_memcpy_js.sig = "vppp";
+            var _emscripten_date_now = () => Date.now();
+            _emscripten_date_now.sig = "d";
+            var _emscripten_get_now;
+            _emscripten_get_now = () => performance.now();
+            _emscripten_get_now.sig = "d";
+            var getHeapMax = () => (
+              // Stay one Wasm page short of 4GB: while e.g. Chrome is able to allocate
+              // full 4GB Wasm memories, the size will wrap back to 0 bytes in Wasm side
+              // for any code that deals with heap sizes, which would require special
+              // casing all heap size related code to treat 0 specially.
+              2147483648
+            );
+            var growMemory = (size) => {
+              var b = wasmMemory.buffer;
+              var pages = (size - b.byteLength + 65535) / 65536;
+              try {
+                wasmMemory.grow(pages);
+                updateMemoryViews();
+                return 1;
+              } catch (e) {
+              }
+            };
+            var _emscripten_resize_heap = (requestedSize) => {
+              var oldSize = HEAPU8.length;
+              requestedSize >>>= 0;
+              var maxHeapSize = getHeapMax();
+              if (requestedSize > maxHeapSize) {
+                return false;
+              }
+              var alignUp = (x, multiple) => x + (multiple - x % multiple) % multiple;
+              for (var cutDown = 1; cutDown <= 4; cutDown *= 2) {
+                var overGrownHeapSize = oldSize * (1 + 0.2 / cutDown);
+                overGrownHeapSize = Math.min(overGrownHeapSize, requestedSize + 100663296);
+                var newSize = Math.min(maxHeapSize, alignUp(Math.max(requestedSize, overGrownHeapSize), 65536));
+                var replacement = growMemory(newSize);
+                if (replacement) {
+                  return true;
+                }
+              }
+              return false;
+            };
+            _emscripten_resize_heap.sig = "ip";
+            var _fd_close = (fd) => 52;
+            _fd_close.sig = "ii";
+            var convertI32PairToI53Checked = (lo, hi) => hi + 2097152 >>> 0 < 4194305 - !!lo ? (lo >>> 0) + hi * 4294967296 : NaN;
+            function _fd_seek(fd, offset_low, offset_high, whence, newOffset) {
+              var offset = convertI32PairToI53Checked(offset_low, offset_high);
+              return 70;
+            }
+            _fd_seek.sig = "iiiiip";
+            var printCharBuffers = [null, [], []];
+            var printChar = (stream, curr) => {
+              var buffer = printCharBuffers[stream];
+              if (curr === 0 || curr === 10) {
+                (stream === 1 ? out : err)(UTF8ArrayToString(buffer, 0));
+                buffer.length = 0;
+              } else {
+                buffer.push(curr);
+              }
+            };
+            var _fd_write = (fd, iov, iovcnt, pnum) => {
+              var num = 0;
+              for (var i2 = 0; i2 < iovcnt; i2++) {
+                var ptr = LE_HEAP_LOAD_U32((iov >> 2) * 4);
+                var len = LE_HEAP_LOAD_U32((iov + 4 >> 2) * 4);
+                iov += 8;
+                for (var j = 0; j < len; j++) {
+                  printChar(fd, HEAPU8[ptr + j]);
+                }
+                num += len;
+              }
+              LE_HEAP_STORE_U32((pnum >> 2) * 4, num);
+              return 0;
+            };
+            _fd_write.sig = "iippp";
+            function _tree_sitter_log_callback(isLexMessage, messageAddress) {
+              if (currentLogCallback) {
+                const message = UTF8ToString(messageAddress);
+                currentLogCallback(message, isLexMessage !== 0);
+              }
+            }
+            function _tree_sitter_parse_callback(inputBufferAddress, index, row, column, lengthAddress) {
+              const INPUT_BUFFER_SIZE = 10 * 1024;
+              const string = currentParseCallback(index, {
+                row,
+                column
+              });
+              if (typeof string === "string") {
+                setValue(lengthAddress, string.length, "i32");
+                stringToUTF16(string, inputBufferAddress, INPUT_BUFFER_SIZE);
+              } else {
+                setValue(lengthAddress, 0, "i32");
+              }
+            }
+            var runtimeKeepaliveCounter = 0;
+            var keepRuntimeAlive = () => noExitRuntime || runtimeKeepaliveCounter > 0;
+            var _proc_exit = (code) => {
+              EXITSTATUS = code;
+              if (!keepRuntimeAlive()) {
+                Module["onExit"]?.(code);
+                ABORT = true;
+              }
+              quit_(code, new ExitStatus(code));
+            };
+            _proc_exit.sig = "vi";
+            var exitJS = (status, implicit) => {
+              EXITSTATUS = status;
+              _proc_exit(status);
+            };
+            var handleException = (e) => {
+              if (e instanceof ExitStatus || e == "unwind") {
+                return EXITSTATUS;
+              }
+              quit_(1, e);
+            };
+            var lengthBytesUTF8 = (str) => {
+              var len = 0;
+              for (var i2 = 0; i2 < str.length; ++i2) {
+                var c = str.charCodeAt(i2);
+                if (c <= 127) {
+                  len++;
+                } else if (c <= 2047) {
+                  len += 2;
+                } else if (c >= 55296 && c <= 57343) {
+                  len += 4;
+                  ++i2;
+                } else {
+                  len += 3;
+                }
+              }
+              return len;
+            };
+            var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
+              if (!(maxBytesToWrite > 0)) return 0;
+              var startIdx = outIdx;
+              var endIdx = outIdx + maxBytesToWrite - 1;
+              for (var i2 = 0; i2 < str.length; ++i2) {
+                var u = str.charCodeAt(i2);
+                if (u >= 55296 && u <= 57343) {
+                  var u1 = str.charCodeAt(++i2);
+                  u = 65536 + ((u & 1023) << 10) | u1 & 1023;
+                }
+                if (u <= 127) {
+                  if (outIdx >= endIdx) break;
+                  heap[outIdx++] = u;
+                } else if (u <= 2047) {
+                  if (outIdx + 1 >= endIdx) break;
+                  heap[outIdx++] = 192 | u >> 6;
+                  heap[outIdx++] = 128 | u & 63;
+                } else if (u <= 65535) {
+                  if (outIdx + 2 >= endIdx) break;
+                  heap[outIdx++] = 224 | u >> 12;
+                  heap[outIdx++] = 128 | u >> 6 & 63;
+                  heap[outIdx++] = 128 | u & 63;
+                } else {
+                  if (outIdx + 3 >= endIdx) break;
+                  heap[outIdx++] = 240 | u >> 18;
+                  heap[outIdx++] = 128 | u >> 12 & 63;
+                  heap[outIdx++] = 128 | u >> 6 & 63;
+                  heap[outIdx++] = 128 | u & 63;
+                }
+              }
+              heap[outIdx] = 0;
+              return outIdx - startIdx;
+            };
+            var stringToUTF8 = (str, outPtr, maxBytesToWrite) => stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite);
+            var stackAlloc = (sz) => __emscripten_stack_alloc(sz);
+            var stringToUTF8OnStack = (str) => {
+              var size = lengthBytesUTF8(str) + 1;
+              var ret = stackAlloc(size);
+              stringToUTF8(str, ret, size);
+              return ret;
+            };
+            var stringToUTF16 = (str, outPtr, maxBytesToWrite) => {
+              maxBytesToWrite ??= 2147483647;
+              if (maxBytesToWrite < 2) return 0;
+              maxBytesToWrite -= 2;
+              var startPtr = outPtr;
+              var numCharsToWrite = maxBytesToWrite < str.length * 2 ? maxBytesToWrite / 2 : str.length;
+              for (var i2 = 0; i2 < numCharsToWrite; ++i2) {
+                var codeUnit = str.charCodeAt(i2);
+                LE_HEAP_STORE_I16((outPtr >> 1) * 2, codeUnit);
+                outPtr += 2;
+              }
+              LE_HEAP_STORE_I16((outPtr >> 1) * 2, 0);
+              return outPtr - startPtr;
+            };
+            var AsciiToString = (ptr) => {
+              var str = "";
+              while (1) {
+                var ch = HEAPU8[ptr++];
+                if (!ch) return str;
+                str += String.fromCharCode(ch);
+              }
+            };
+            var wasmImports = {
+              /** @export */
+              __heap_base: ___heap_base,
+              /** @export */
+              __indirect_function_table: wasmTable,
+              /** @export */
+              __memory_base: ___memory_base,
+              /** @export */
+              __stack_pointer: ___stack_pointer,
+              /** @export */
+              __table_base: ___table_base,
+              /** @export */
+              _abort_js: __abort_js,
+              /** @export */
+              _emscripten_get_now_is_monotonic: __emscripten_get_now_is_monotonic,
+              /** @export */
+              _emscripten_memcpy_js: __emscripten_memcpy_js,
+              /** @export */
+              emscripten_get_now: _emscripten_get_now,
+              /** @export */
+              emscripten_resize_heap: _emscripten_resize_heap,
+              /** @export */
+              fd_close: _fd_close,
+              /** @export */
+              fd_seek: _fd_seek,
+              /** @export */
+              fd_write: _fd_write,
+              /** @export */
+              memory: wasmMemory,
+              /** @export */
+              tree_sitter_log_callback: _tree_sitter_log_callback,
+              /** @export */
+              tree_sitter_parse_callback: _tree_sitter_parse_callback
+            };
+            var wasmExports = createWasm();
+            var ___wasm_call_ctors = () => (___wasm_call_ctors = wasmExports["__wasm_call_ctors"])();
+            var ___wasm_apply_data_relocs = () => (___wasm_apply_data_relocs = wasmExports["__wasm_apply_data_relocs"])();
+            var _malloc = Module["_malloc"] = (a0) => (_malloc = Module["_malloc"] = wasmExports["malloc"])(a0);
+            var _calloc = Module["_calloc"] = (a0, a1) => (_calloc = Module["_calloc"] = wasmExports["calloc"])(a0, a1);
+            var _realloc = Module["_realloc"] = (a0, a1) => (_realloc = Module["_realloc"] = wasmExports["realloc"])(a0, a1);
+            var _free = Module["_free"] = (a0) => (_free = Module["_free"] = wasmExports["free"])(a0);
+            var _ts_language_symbol_count = Module["_ts_language_symbol_count"] = (a0) => (_ts_language_symbol_count = Module["_ts_language_symbol_count"] = wasmExports["ts_language_symbol_count"])(a0);
+            var _ts_language_state_count = Module["_ts_language_state_count"] = (a0) => (_ts_language_state_count = Module["_ts_language_state_count"] = wasmExports["ts_language_state_count"])(a0);
+            var _ts_language_version = Module["_ts_language_version"] = (a0) => (_ts_language_version = Module["_ts_language_version"] = wasmExports["ts_language_version"])(a0);
+            var _ts_language_field_count = Module["_ts_language_field_count"] = (a0) => (_ts_language_field_count = Module["_ts_language_field_count"] = wasmExports["ts_language_field_count"])(a0);
+            var _ts_language_next_state = Module["_ts_language_next_state"] = (a0, a1, a2) => (_ts_language_next_state = Module["_ts_language_next_state"] = wasmExports["ts_language_next_state"])(a0, a1, a2);
+            var _ts_language_symbol_name = Module["_ts_language_symbol_name"] = (a0, a1) => (_ts_language_symbol_name = Module["_ts_language_symbol_name"] = wasmExports["ts_language_symbol_name"])(a0, a1);
+            var _ts_language_symbol_for_name = Module["_ts_language_symbol_for_name"] = (a0, a1, a2, a3) => (_ts_language_symbol_for_name = Module["_ts_language_symbol_for_name"] = wasmExports["ts_language_symbol_for_name"])(a0, a1, a2, a3);
+            var _strncmp = Module["_strncmp"] = (a0, a1, a2) => (_strncmp = Module["_strncmp"] = wasmExports["strncmp"])(a0, a1, a2);
+            var _ts_language_symbol_type = Module["_ts_language_symbol_type"] = (a0, a1) => (_ts_language_symbol_type = Module["_ts_language_symbol_type"] = wasmExports["ts_language_symbol_type"])(a0, a1);
+            var _ts_language_field_name_for_id = Module["_ts_language_field_name_for_id"] = (a0, a1) => (_ts_language_field_name_for_id = Module["_ts_language_field_name_for_id"] = wasmExports["ts_language_field_name_for_id"])(a0, a1);
+            var _ts_lookahead_iterator_new = Module["_ts_lookahead_iterator_new"] = (a0, a1) => (_ts_lookahead_iterator_new = Module["_ts_lookahead_iterator_new"] = wasmExports["ts_lookahead_iterator_new"])(a0, a1);
+            var _ts_lookahead_iterator_delete = Module["_ts_lookahead_iterator_delete"] = (a0) => (_ts_lookahead_iterator_delete = Module["_ts_lookahead_iterator_delete"] = wasmExports["ts_lookahead_iterator_delete"])(a0);
+            var _ts_lookahead_iterator_reset_state = Module["_ts_lookahead_iterator_reset_state"] = (a0, a1) => (_ts_lookahead_iterator_reset_state = Module["_ts_lookahead_iterator_reset_state"] = wasmExports["ts_lookahead_iterator_reset_state"])(a0, a1);
+            var _ts_lookahead_iterator_reset = Module["_ts_lookahead_iterator_reset"] = (a0, a1, a2) => (_ts_lookahead_iterator_reset = Module["_ts_lookahead_iterator_reset"] = wasmExports["ts_lookahead_iterator_reset"])(a0, a1, a2);
+            var _ts_lookahead_iterator_next = Module["_ts_lookahead_iterator_next"] = (a0) => (_ts_lookahead_iterator_next = Module["_ts_lookahead_iterator_next"] = wasmExports["ts_lookahead_iterator_next"])(a0);
+            var _ts_lookahead_iterator_current_symbol = Module["_ts_lookahead_iterator_current_symbol"] = (a0) => (_ts_lookahead_iterator_current_symbol = Module["_ts_lookahead_iterator_current_symbol"] = wasmExports["ts_lookahead_iterator_current_symbol"])(a0);
+            var _memset = Module["_memset"] = (a0, a1, a2) => (_memset = Module["_memset"] = wasmExports["memset"])(a0, a1, a2);
+            var _memcpy = Module["_memcpy"] = (a0, a1, a2) => (_memcpy = Module["_memcpy"] = wasmExports["memcpy"])(a0, a1, a2);
+            var _ts_parser_delete = Module["_ts_parser_delete"] = (a0) => (_ts_parser_delete = Module["_ts_parser_delete"] = wasmExports["ts_parser_delete"])(a0);
+            var _ts_parser_reset = Module["_ts_parser_reset"] = (a0) => (_ts_parser_reset = Module["_ts_parser_reset"] = wasmExports["ts_parser_reset"])(a0);
+            var _ts_parser_set_language = Module["_ts_parser_set_language"] = (a0, a1) => (_ts_parser_set_language = Module["_ts_parser_set_language"] = wasmExports["ts_parser_set_language"])(a0, a1);
+            var _ts_parser_timeout_micros = Module["_ts_parser_timeout_micros"] = (a0) => (_ts_parser_timeout_micros = Module["_ts_parser_timeout_micros"] = wasmExports["ts_parser_timeout_micros"])(a0);
+            var _ts_parser_set_timeout_micros = Module["_ts_parser_set_timeout_micros"] = (a0, a1, a2) => (_ts_parser_set_timeout_micros = Module["_ts_parser_set_timeout_micros"] = wasmExports["ts_parser_set_timeout_micros"])(a0, a1, a2);
+            var _ts_parser_set_included_ranges = Module["_ts_parser_set_included_ranges"] = (a0, a1, a2) => (_ts_parser_set_included_ranges = Module["_ts_parser_set_included_ranges"] = wasmExports["ts_parser_set_included_ranges"])(a0, a1, a2);
+            var _memmove = Module["_memmove"] = (a0, a1, a2) => (_memmove = Module["_memmove"] = wasmExports["memmove"])(a0, a1, a2);
+            var _memcmp = Module["_memcmp"] = (a0, a1, a2) => (_memcmp = Module["_memcmp"] = wasmExports["memcmp"])(a0, a1, a2);
+            var _ts_query_new = Module["_ts_query_new"] = (a0, a1, a2, a3, a4) => (_ts_query_new = Module["_ts_query_new"] = wasmExports["ts_query_new"])(a0, a1, a2, a3, a4);
+            var _ts_query_delete = Module["_ts_query_delete"] = (a0) => (_ts_query_delete = Module["_ts_query_delete"] = wasmExports["ts_query_delete"])(a0);
+            var _iswspace = Module["_iswspace"] = (a0) => (_iswspace = Module["_iswspace"] = wasmExports["iswspace"])(a0);
+            var _iswalnum = Module["_iswalnum"] = (a0) => (_iswalnum = Module["_iswalnum"] = wasmExports["iswalnum"])(a0);
+            var _ts_query_pattern_count = Module["_ts_query_pattern_count"] = (a0) => (_ts_query_pattern_count = Module["_ts_query_pattern_count"] = wasmExports["ts_query_pattern_count"])(a0);
+            var _ts_query_capture_count = Module["_ts_query_capture_count"] = (a0) => (_ts_query_capture_count = Module["_ts_query_capture_count"] = wasmExports["ts_query_capture_count"])(a0);
+            var _ts_query_string_count = Module["_ts_query_string_count"] = (a0) => (_ts_query_string_count = Module["_ts_query_string_count"] = wasmExports["ts_query_string_count"])(a0);
+            var _ts_query_capture_name_for_id = Module["_ts_query_capture_name_for_id"] = (a0, a1, a2) => (_ts_query_capture_name_for_id = Module["_ts_query_capture_name_for_id"] = wasmExports["ts_query_capture_name_for_id"])(a0, a1, a2);
+            var _ts_query_string_value_for_id = Module["_ts_query_string_value_for_id"] = (a0, a1, a2) => (_ts_query_string_value_for_id = Module["_ts_query_string_value_for_id"] = wasmExports["ts_query_string_value_for_id"])(a0, a1, a2);
+            var _ts_query_predicates_for_pattern = Module["_ts_query_predicates_for_pattern"] = (a0, a1, a2) => (_ts_query_predicates_for_pattern = Module["_ts_query_predicates_for_pattern"] = wasmExports["ts_query_predicates_for_pattern"])(a0, a1, a2);
+            var _ts_query_disable_capture = Module["_ts_query_disable_capture"] = (a0, a1, a2) => (_ts_query_disable_capture = Module["_ts_query_disable_capture"] = wasmExports["ts_query_disable_capture"])(a0, a1, a2);
+            var _ts_tree_copy = Module["_ts_tree_copy"] = (a0) => (_ts_tree_copy = Module["_ts_tree_copy"] = wasmExports["ts_tree_copy"])(a0);
+            var _ts_tree_delete = Module["_ts_tree_delete"] = (a0) => (_ts_tree_delete = Module["_ts_tree_delete"] = wasmExports["ts_tree_delete"])(a0);
+            var _ts_init = Module["_ts_init"] = () => (_ts_init = Module["_ts_init"] = wasmExports["ts_init"])();
+            var _ts_parser_new_wasm = Module["_ts_parser_new_wasm"] = () => (_ts_parser_new_wasm = Module["_ts_parser_new_wasm"] = wasmExports["ts_parser_new_wasm"])();
+            var _ts_parser_enable_logger_wasm = Module["_ts_parser_enable_logger_wasm"] = (a0, a1) => (_ts_parser_enable_logger_wasm = Module["_ts_parser_enable_logger_wasm"] = wasmExports["ts_parser_enable_logger_wasm"])(a0, a1);
+            var _ts_parser_parse_wasm = Module["_ts_parser_parse_wasm"] = (a0, a1, a2, a3, a4) => (_ts_parser_parse_wasm = Module["_ts_parser_parse_wasm"] = wasmExports["ts_parser_parse_wasm"])(a0, a1, a2, a3, a4);
+            var _ts_parser_included_ranges_wasm = Module["_ts_parser_included_ranges_wasm"] = (a0) => (_ts_parser_included_ranges_wasm = Module["_ts_parser_included_ranges_wasm"] = wasmExports["ts_parser_included_ranges_wasm"])(a0);
+            var _ts_language_type_is_named_wasm = Module["_ts_language_type_is_named_wasm"] = (a0, a1) => (_ts_language_type_is_named_wasm = Module["_ts_language_type_is_named_wasm"] = wasmExports["ts_language_type_is_named_wasm"])(a0, a1);
+            var _ts_language_type_is_visible_wasm = Module["_ts_language_type_is_visible_wasm"] = (a0, a1) => (_ts_language_type_is_visible_wasm = Module["_ts_language_type_is_visible_wasm"] = wasmExports["ts_language_type_is_visible_wasm"])(a0, a1);
+            var _ts_tree_root_node_wasm = Module["_ts_tree_root_node_wasm"] = (a0) => (_ts_tree_root_node_wasm = Module["_ts_tree_root_node_wasm"] = wasmExports["ts_tree_root_node_wasm"])(a0);
+            var _ts_tree_root_node_with_offset_wasm = Module["_ts_tree_root_node_with_offset_wasm"] = (a0) => (_ts_tree_root_node_with_offset_wasm = Module["_ts_tree_root_node_with_offset_wasm"] = wasmExports["ts_tree_root_node_with_offset_wasm"])(a0);
+            var _ts_tree_edit_wasm = Module["_ts_tree_edit_wasm"] = (a0) => (_ts_tree_edit_wasm = Module["_ts_tree_edit_wasm"] = wasmExports["ts_tree_edit_wasm"])(a0);
+            var _ts_tree_included_ranges_wasm = Module["_ts_tree_included_ranges_wasm"] = (a0) => (_ts_tree_included_ranges_wasm = Module["_ts_tree_included_ranges_wasm"] = wasmExports["ts_tree_included_ranges_wasm"])(a0);
+            var _ts_tree_get_changed_ranges_wasm = Module["_ts_tree_get_changed_ranges_wasm"] = (a0, a1) => (_ts_tree_get_changed_ranges_wasm = Module["_ts_tree_get_changed_ranges_wasm"] = wasmExports["ts_tree_get_changed_ranges_wasm"])(a0, a1);
+            var _ts_tree_cursor_new_wasm = Module["_ts_tree_cursor_new_wasm"] = (a0) => (_ts_tree_cursor_new_wasm = Module["_ts_tree_cursor_new_wasm"] = wasmExports["ts_tree_cursor_new_wasm"])(a0);
+            var _ts_tree_cursor_delete_wasm = Module["_ts_tree_cursor_delete_wasm"] = (a0) => (_ts_tree_cursor_delete_wasm = Module["_ts_tree_cursor_delete_wasm"] = wasmExports["ts_tree_cursor_delete_wasm"])(a0);
+            var _ts_tree_cursor_reset_wasm = Module["_ts_tree_cursor_reset_wasm"] = (a0) => (_ts_tree_cursor_reset_wasm = Module["_ts_tree_cursor_reset_wasm"] = wasmExports["ts_tree_cursor_reset_wasm"])(a0);
+            var _ts_tree_cursor_reset_to_wasm = Module["_ts_tree_cursor_reset_to_wasm"] = (a0, a1) => (_ts_tree_cursor_reset_to_wasm = Module["_ts_tree_cursor_reset_to_wasm"] = wasmExports["ts_tree_cursor_reset_to_wasm"])(a0, a1);
+            var _ts_tree_cursor_goto_first_child_wasm = Module["_ts_tree_cursor_goto_first_child_wasm"] = (a0) => (_ts_tree_cursor_goto_first_child_wasm = Module["_ts_tree_cursor_goto_first_child_wasm"] = wasmExports["ts_tree_cursor_goto_first_child_wasm"])(a0);
+            var _ts_tree_cursor_goto_last_child_wasm = Module["_ts_tree_cursor_goto_last_child_wasm"] = (a0) => (_ts_tree_cursor_goto_last_child_wasm = Module["_ts_tree_cursor_goto_last_child_wasm"] = wasmExports["ts_tree_cursor_goto_last_child_wasm"])(a0);
+            var _ts_tree_cursor_goto_first_child_for_index_wasm = Module["_ts_tree_cursor_goto_first_child_for_index_wasm"] = (a0) => (_ts_tree_cursor_goto_first_child_for_index_wasm = Module["_ts_tree_cursor_goto_first_child_for_index_wasm"] = wasmExports["ts_tree_cursor_goto_first_child_for_index_wasm"])(a0);
+            var _ts_tree_cursor_goto_first_child_for_position_wasm = Module["_ts_tree_cursor_goto_first_child_for_position_wasm"] = (a0) => (_ts_tree_cursor_goto_first_child_for_position_wasm = Module["_ts_tree_cursor_goto_first_child_for_position_wasm"] = wasmExports["ts_tree_cursor_goto_first_child_for_position_wasm"])(a0);
+            var _ts_tree_cursor_goto_next_sibling_wasm = Module["_ts_tree_cursor_goto_next_sibling_wasm"] = (a0) => (_ts_tree_cursor_goto_next_sibling_wasm = Module["_ts_tree_cursor_goto_next_sibling_wasm"] = wasmExports["ts_tree_cursor_goto_next_sibling_wasm"])(a0);
+            var _ts_tree_cursor_goto_previous_sibling_wasm = Module["_ts_tree_cursor_goto_previous_sibling_wasm"] = (a0) => (_ts_tree_cursor_goto_previous_sibling_wasm = Module["_ts_tree_cursor_goto_previous_sibling_wasm"] = wasmExports["ts_tree_cursor_goto_previous_sibling_wasm"])(a0);
+            var _ts_tree_cursor_goto_descendant_wasm = Module["_ts_tree_cursor_goto_descendant_wasm"] = (a0, a1) => (_ts_tree_cursor_goto_descendant_wasm = Module["_ts_tree_cursor_goto_descendant_wasm"] = wasmExports["ts_tree_cursor_goto_descendant_wasm"])(a0, a1);
+            var _ts_tree_cursor_goto_parent_wasm = Module["_ts_tree_cursor_goto_parent_wasm"] = (a0) => (_ts_tree_cursor_goto_parent_wasm = Module["_ts_tree_cursor_goto_parent_wasm"] = wasmExports["ts_tree_cursor_goto_parent_wasm"])(a0);
+            var _ts_tree_cursor_current_node_type_id_wasm = Module["_ts_tree_cursor_current_node_type_id_wasm"] = (a0) => (_ts_tree_cursor_current_node_type_id_wasm = Module["_ts_tree_cursor_current_node_type_id_wasm"] = wasmExports["ts_tree_cursor_current_node_type_id_wasm"])(a0);
+            var _ts_tree_cursor_current_node_state_id_wasm = Module["_ts_tree_cursor_current_node_state_id_wasm"] = (a0) => (_ts_tree_cursor_current_node_state_id_wasm = Module["_ts_tree_cursor_current_node_state_id_wasm"] = wasmExports["ts_tree_cursor_current_node_state_id_wasm"])(a0);
+            var _ts_tree_cursor_current_node_is_named_wasm = Module["_ts_tree_cursor_current_node_is_named_wasm"] = (a0) => (_ts_tree_cursor_current_node_is_named_wasm = Module["_ts_tree_cursor_current_node_is_named_wasm"] = wasmExports["ts_tree_cursor_current_node_is_named_wasm"])(a0);
+            var _ts_tree_cursor_current_node_is_missing_wasm = Module["_ts_tree_cursor_current_node_is_missing_wasm"] = (a0) => (_ts_tree_cursor_current_node_is_missing_wasm = Module["_ts_tree_cursor_current_node_is_missing_wasm"] = wasmExports["ts_tree_cursor_current_node_is_missing_wasm"])(a0);
+            var _ts_tree_cursor_current_node_id_wasm = Module["_ts_tree_cursor_current_node_id_wasm"] = (a0) => (_ts_tree_cursor_current_node_id_wasm = Module["_ts_tree_cursor_current_node_id_wasm"] = wasmExports["ts_tree_cursor_current_node_id_wasm"])(a0);
+            var _ts_tree_cursor_start_position_wasm = Module["_ts_tree_cursor_start_position_wasm"] = (a0) => (_ts_tree_cursor_start_position_wasm = Module["_ts_tree_cursor_start_position_wasm"] = wasmExports["ts_tree_cursor_start_position_wasm"])(a0);
+            var _ts_tree_cursor_end_position_wasm = Module["_ts_tree_cursor_end_position_wasm"] = (a0) => (_ts_tree_cursor_end_position_wasm = Module["_ts_tree_cursor_end_position_wasm"] = wasmExports["ts_tree_cursor_end_position_wasm"])(a0);
+            var _ts_tree_cursor_start_index_wasm = Module["_ts_tree_cursor_start_index_wasm"] = (a0) => (_ts_tree_cursor_start_index_wasm = Module["_ts_tree_cursor_start_index_wasm"] = wasmExports["ts_tree_cursor_start_index_wasm"])(a0);
+            var _ts_tree_cursor_end_index_wasm = Module["_ts_tree_cursor_end_index_wasm"] = (a0) => (_ts_tree_cursor_end_index_wasm = Module["_ts_tree_cursor_end_index_wasm"] = wasmExports["ts_tree_cursor_end_index_wasm"])(a0);
+            var _ts_tree_cursor_current_field_id_wasm = Module["_ts_tree_cursor_current_field_id_wasm"] = (a0) => (_ts_tree_cursor_current_field_id_wasm = Module["_ts_tree_cursor_current_field_id_wasm"] = wasmExports["ts_tree_cursor_current_field_id_wasm"])(a0);
+            var _ts_tree_cursor_current_depth_wasm = Module["_ts_tree_cursor_current_depth_wasm"] = (a0) => (_ts_tree_cursor_current_depth_wasm = Module["_ts_tree_cursor_current_depth_wasm"] = wasmExports["ts_tree_cursor_current_depth_wasm"])(a0);
+            var _ts_tree_cursor_current_descendant_index_wasm = Module["_ts_tree_cursor_current_descendant_index_wasm"] = (a0) => (_ts_tree_cursor_current_descendant_index_wasm = Module["_ts_tree_cursor_current_descendant_index_wasm"] = wasmExports["ts_tree_cursor_current_descendant_index_wasm"])(a0);
+            var _ts_tree_cursor_current_node_wasm = Module["_ts_tree_cursor_current_node_wasm"] = (a0) => (_ts_tree_cursor_current_node_wasm = Module["_ts_tree_cursor_current_node_wasm"] = wasmExports["ts_tree_cursor_current_node_wasm"])(a0);
+            var _ts_node_symbol_wasm = Module["_ts_node_symbol_wasm"] = (a0) => (_ts_node_symbol_wasm = Module["_ts_node_symbol_wasm"] = wasmExports["ts_node_symbol_wasm"])(a0);
+            var _ts_node_field_name_for_child_wasm = Module["_ts_node_field_name_for_child_wasm"] = (a0, a1) => (_ts_node_field_name_for_child_wasm = Module["_ts_node_field_name_for_child_wasm"] = wasmExports["ts_node_field_name_for_child_wasm"])(a0, a1);
+            var _ts_node_children_by_field_id_wasm = Module["_ts_node_children_by_field_id_wasm"] = (a0, a1) => (_ts_node_children_by_field_id_wasm = Module["_ts_node_children_by_field_id_wasm"] = wasmExports["ts_node_children_by_field_id_wasm"])(a0, a1);
+            var _ts_node_first_child_for_byte_wasm = Module["_ts_node_first_child_for_byte_wasm"] = (a0) => (_ts_node_first_child_for_byte_wasm = Module["_ts_node_first_child_for_byte_wasm"] = wasmExports["ts_node_first_child_for_byte_wasm"])(a0);
+            var _ts_node_first_named_child_for_byte_wasm = Module["_ts_node_first_named_child_for_byte_wasm"] = (a0) => (_ts_node_first_named_child_for_byte_wasm = Module["_ts_node_first_named_child_for_byte_wasm"] = wasmExports["ts_node_first_named_child_for_byte_wasm"])(a0);
+            var _ts_node_grammar_symbol_wasm = Module["_ts_node_grammar_symbol_wasm"] = (a0) => (_ts_node_grammar_symbol_wasm = Module["_ts_node_grammar_symbol_wasm"] = wasmExports["ts_node_grammar_symbol_wasm"])(a0);
+            var _ts_node_child_count_wasm = Module["_ts_node_child_count_wasm"] = (a0) => (_ts_node_child_count_wasm = Module["_ts_node_child_count_wasm"] = wasmExports["ts_node_child_count_wasm"])(a0);
+            var _ts_node_named_child_count_wasm = Module["_ts_node_named_child_count_wasm"] = (a0) => (_ts_node_named_child_count_wasm = Module["_ts_node_named_child_count_wasm"] = wasmExports["ts_node_named_child_count_wasm"])(a0);
+            var _ts_node_child_wasm = Module["_ts_node_child_wasm"] = (a0, a1) => (_ts_node_child_wasm = Module["_ts_node_child_wasm"] = wasmExports["ts_node_child_wasm"])(a0, a1);
+            var _ts_node_named_child_wasm = Module["_ts_node_named_child_wasm"] = (a0, a1) => (_ts_node_named_child_wasm = Module["_ts_node_named_child_wasm"] = wasmExports["ts_node_named_child_wasm"])(a0, a1);
+            var _ts_node_child_by_field_id_wasm = Module["_ts_node_child_by_field_id_wasm"] = (a0, a1) => (_ts_node_child_by_field_id_wasm = Module["_ts_node_child_by_field_id_wasm"] = wasmExports["ts_node_child_by_field_id_wasm"])(a0, a1);
+            var _ts_node_next_sibling_wasm = Module["_ts_node_next_sibling_wasm"] = (a0) => (_ts_node_next_sibling_wasm = Module["_ts_node_next_sibling_wasm"] = wasmExports["ts_node_next_sibling_wasm"])(a0);
+            var _ts_node_prev_sibling_wasm = Module["_ts_node_prev_sibling_wasm"] = (a0) => (_ts_node_prev_sibling_wasm = Module["_ts_node_prev_sibling_wasm"] = wasmExports["ts_node_prev_sibling_wasm"])(a0);
+            var _ts_node_next_named_sibling_wasm = Module["_ts_node_next_named_sibling_wasm"] = (a0) => (_ts_node_next_named_sibling_wasm = Module["_ts_node_next_named_sibling_wasm"] = wasmExports["ts_node_next_named_sibling_wasm"])(a0);
+            var _ts_node_prev_named_sibling_wasm = Module["_ts_node_prev_named_sibling_wasm"] = (a0) => (_ts_node_prev_named_sibling_wasm = Module["_ts_node_prev_named_sibling_wasm"] = wasmExports["ts_node_prev_named_sibling_wasm"])(a0);
+            var _ts_node_descendant_count_wasm = Module["_ts_node_descendant_count_wasm"] = (a0) => (_ts_node_descendant_count_wasm = Module["_ts_node_descendant_count_wasm"] = wasmExports["ts_node_descendant_count_wasm"])(a0);
+            var _ts_node_parent_wasm = Module["_ts_node_parent_wasm"] = (a0) => (_ts_node_parent_wasm = Module["_ts_node_parent_wasm"] = wasmExports["ts_node_parent_wasm"])(a0);
+            var _ts_node_descendant_for_index_wasm = Module["_ts_node_descendant_for_index_wasm"] = (a0) => (_ts_node_descendant_for_index_wasm = Module["_ts_node_descendant_for_index_wasm"] = wasmExports["ts_node_descendant_for_index_wasm"])(a0);
+            var _ts_node_named_descendant_for_index_wasm = Module["_ts_node_named_descendant_for_index_wasm"] = (a0) => (_ts_node_named_descendant_for_index_wasm = Module["_ts_node_named_descendant_for_index_wasm"] = wasmExports["ts_node_named_descendant_for_index_wasm"])(a0);
+            var _ts_node_descendant_for_position_wasm = Module["_ts_node_descendant_for_position_wasm"] = (a0) => (_ts_node_descendant_for_position_wasm = Module["_ts_node_descendant_for_position_wasm"] = wasmExports["ts_node_descendant_for_position_wasm"])(a0);
+            var _ts_node_named_descendant_for_position_wasm = Module["_ts_node_named_descendant_for_position_wasm"] = (a0) => (_ts_node_named_descendant_for_position_wasm = Module["_ts_node_named_descendant_for_position_wasm"] = wasmExports["ts_node_named_descendant_for_position_wasm"])(a0);
+            var _ts_node_start_point_wasm = Module["_ts_node_start_point_wasm"] = (a0) => (_ts_node_start_point_wasm = Module["_ts_node_start_point_wasm"] = wasmExports["ts_node_start_point_wasm"])(a0);
+            var _ts_node_end_point_wasm = Module["_ts_node_end_point_wasm"] = (a0) => (_ts_node_end_point_wasm = Module["_ts_node_end_point_wasm"] = wasmExports["ts_node_end_point_wasm"])(a0);
+            var _ts_node_start_index_wasm = Module["_ts_node_start_index_wasm"] = (a0) => (_ts_node_start_index_wasm = Module["_ts_node_start_index_wasm"] = wasmExports["ts_node_start_index_wasm"])(a0);
+            var _ts_node_end_index_wasm = Module["_ts_node_end_index_wasm"] = (a0) => (_ts_node_end_index_wasm = Module["_ts_node_end_index_wasm"] = wasmExports["ts_node_end_index_wasm"])(a0);
+            var _ts_node_to_string_wasm = Module["_ts_node_to_string_wasm"] = (a0) => (_ts_node_to_string_wasm = Module["_ts_node_to_string_wasm"] = wasmExports["ts_node_to_string_wasm"])(a0);
+            var _ts_node_children_wasm = Module["_ts_node_children_wasm"] = (a0) => (_ts_node_children_wasm = Module["_ts_node_children_wasm"] = wasmExports["ts_node_children_wasm"])(a0);
+            var _ts_node_named_children_wasm = Module["_ts_node_named_children_wasm"] = (a0) => (_ts_node_named_children_wasm = Module["_ts_node_named_children_wasm"] = wasmExports["ts_node_named_children_wasm"])(a0);
+            var _ts_node_descendants_of_type_wasm = Module["_ts_node_descendants_of_type_wasm"] = (a0, a1, a2, a3, a4, a5, a6) => (_ts_node_descendants_of_type_wasm = Module["_ts_node_descendants_of_type_wasm"] = wasmExports["ts_node_descendants_of_type_wasm"])(a0, a1, a2, a3, a4, a5, a6);
+            var _ts_node_is_named_wasm = Module["_ts_node_is_named_wasm"] = (a0) => (_ts_node_is_named_wasm = Module["_ts_node_is_named_wasm"] = wasmExports["ts_node_is_named_wasm"])(a0);
+            var _ts_node_has_changes_wasm = Module["_ts_node_has_changes_wasm"] = (a0) => (_ts_node_has_changes_wasm = Module["_ts_node_has_changes_wasm"] = wasmExports["ts_node_has_changes_wasm"])(a0);
+            var _ts_node_has_error_wasm = Module["_ts_node_has_error_wasm"] = (a0) => (_ts_node_has_error_wasm = Module["_ts_node_has_error_wasm"] = wasmExports["ts_node_has_error_wasm"])(a0);
+            var _ts_node_is_error_wasm = Module["_ts_node_is_error_wasm"] = (a0) => (_ts_node_is_error_wasm = Module["_ts_node_is_error_wasm"] = wasmExports["ts_node_is_error_wasm"])(a0);
+            var _ts_node_is_missing_wasm = Module["_ts_node_is_missing_wasm"] = (a0) => (_ts_node_is_missing_wasm = Module["_ts_node_is_missing_wasm"] = wasmExports["ts_node_is_missing_wasm"])(a0);
+            var _ts_node_is_extra_wasm = Module["_ts_node_is_extra_wasm"] = (a0) => (_ts_node_is_extra_wasm = Module["_ts_node_is_extra_wasm"] = wasmExports["ts_node_is_extra_wasm"])(a0);
+            var _ts_node_parse_state_wasm = Module["_ts_node_parse_state_wasm"] = (a0) => (_ts_node_parse_state_wasm = Module["_ts_node_parse_state_wasm"] = wasmExports["ts_node_parse_state_wasm"])(a0);
+            var _ts_node_next_parse_state_wasm = Module["_ts_node_next_parse_state_wasm"] = (a0) => (_ts_node_next_parse_state_wasm = Module["_ts_node_next_parse_state_wasm"] = wasmExports["ts_node_next_parse_state_wasm"])(a0);
+            var _ts_query_matches_wasm = Module["_ts_query_matches_wasm"] = (a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) => (_ts_query_matches_wasm = Module["_ts_query_matches_wasm"] = wasmExports["ts_query_matches_wasm"])(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+            var _ts_query_captures_wasm = Module["_ts_query_captures_wasm"] = (a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) => (_ts_query_captures_wasm = Module["_ts_query_captures_wasm"] = wasmExports["ts_query_captures_wasm"])(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+            var _iswalpha = Module["_iswalpha"] = (a0) => (_iswalpha = Module["_iswalpha"] = wasmExports["iswalpha"])(a0);
+            var _iswblank = Module["_iswblank"] = (a0) => (_iswblank = Module["_iswblank"] = wasmExports["iswblank"])(a0);
+            var _iswdigit = Module["_iswdigit"] = (a0) => (_iswdigit = Module["_iswdigit"] = wasmExports["iswdigit"])(a0);
+            var _iswlower = Module["_iswlower"] = (a0) => (_iswlower = Module["_iswlower"] = wasmExports["iswlower"])(a0);
+            var _iswupper = Module["_iswupper"] = (a0) => (_iswupper = Module["_iswupper"] = wasmExports["iswupper"])(a0);
+            var _iswxdigit = Module["_iswxdigit"] = (a0) => (_iswxdigit = Module["_iswxdigit"] = wasmExports["iswxdigit"])(a0);
+            var _memchr = Module["_memchr"] = (a0, a1, a2) => (_memchr = Module["_memchr"] = wasmExports["memchr"])(a0, a1, a2);
+            var _strlen = Module["_strlen"] = (a0) => (_strlen = Module["_strlen"] = wasmExports["strlen"])(a0);
+            var _strcmp = Module["_strcmp"] = (a0, a1) => (_strcmp = Module["_strcmp"] = wasmExports["strcmp"])(a0, a1);
+            var _strncat = Module["_strncat"] = (a0, a1, a2) => (_strncat = Module["_strncat"] = wasmExports["strncat"])(a0, a1, a2);
+            var _strncpy = Module["_strncpy"] = (a0, a1, a2) => (_strncpy = Module["_strncpy"] = wasmExports["strncpy"])(a0, a1, a2);
+            var _towlower = Module["_towlower"] = (a0) => (_towlower = Module["_towlower"] = wasmExports["towlower"])(a0);
+            var _towupper = Module["_towupper"] = (a0) => (_towupper = Module["_towupper"] = wasmExports["towupper"])(a0);
+            var _setThrew = (a0, a1) => (_setThrew = wasmExports["setThrew"])(a0, a1);
+            var __emscripten_stack_restore = (a0) => (__emscripten_stack_restore = wasmExports["_emscripten_stack_restore"])(a0);
+            var __emscripten_stack_alloc = (a0) => (__emscripten_stack_alloc = wasmExports["_emscripten_stack_alloc"])(a0);
+            var _emscripten_stack_get_current = () => (_emscripten_stack_get_current = wasmExports["emscripten_stack_get_current"])();
+            var dynCall_jiji = Module["dynCall_jiji"] = (a0, a1, a2, a3, a4) => (dynCall_jiji = Module["dynCall_jiji"] = wasmExports["dynCall_jiji"])(a0, a1, a2, a3, a4);
+            var _orig$ts_parser_timeout_micros = Module["_orig$ts_parser_timeout_micros"] = (a0) => (_orig$ts_parser_timeout_micros = Module["_orig$ts_parser_timeout_micros"] = wasmExports["orig$ts_parser_timeout_micros"])(a0);
+            var _orig$ts_parser_set_timeout_micros = Module["_orig$ts_parser_set_timeout_micros"] = (a0, a1) => (_orig$ts_parser_set_timeout_micros = Module["_orig$ts_parser_set_timeout_micros"] = wasmExports["orig$ts_parser_set_timeout_micros"])(a0, a1);
+            Module["AsciiToString"] = AsciiToString;
+            Module["stringToUTF16"] = stringToUTF16;
+            var calledRun;
+            dependenciesFulfilled = function runCaller() {
+              if (!calledRun) run();
+              if (!calledRun) dependenciesFulfilled = runCaller;
+            };
+            function callMain(args2 = []) {
+              var entryFunction = resolveGlobalSymbol("main").sym;
+              if (!entryFunction) return;
+              args2.unshift(thisProgram);
+              var argc = args2.length;
+              var argv = stackAlloc((argc + 1) * 4);
+              var argv_ptr = argv;
+              args2.forEach((arg) => {
+                LE_HEAP_STORE_U32((argv_ptr >> 2) * 4, stringToUTF8OnStack(arg));
+                argv_ptr += 4;
+              });
+              LE_HEAP_STORE_U32((argv_ptr >> 2) * 4, 0);
+              try {
+                var ret = entryFunction(argc, argv);
+                exitJS(
+                  ret,
+                  /* implicit = */
+                  true
+                );
+                return ret;
+              } catch (e) {
+                return handleException(e);
+              }
+            }
+            function run(args2 = arguments_) {
+              if (runDependencies > 0) {
+                return;
+              }
+              preRun();
+              if (runDependencies > 0) {
+                return;
+              }
+              function doRun() {
+                if (calledRun) return;
+                calledRun = true;
+                Module["calledRun"] = true;
+                if (ABORT) return;
+                initRuntime();
+                preMain();
+                Module["onRuntimeInitialized"]?.();
+                if (shouldRunNow) callMain(args2);
+                postRun();
+              }
+              if (Module["setStatus"]) {
+                Module["setStatus"]("Running...");
+                setTimeout(function() {
+                  setTimeout(function() {
+                    Module["setStatus"]("");
+                  }, 1);
+                  doRun();
+                }, 1);
+              } else {
+                doRun();
+              }
+            }
+            if (Module["preInit"]) {
+              if (typeof Module["preInit"] == "function") Module["preInit"] = [Module["preInit"]];
+              while (Module["preInit"].length > 0) {
+                Module["preInit"].pop()();
+              }
+            }
+            var shouldRunNow = true;
+            if (Module["noInitialRun"]) shouldRunNow = false;
+            run();
+            const C = Module;
+            const INTERNAL = {};
+            const SIZE_OF_INT = 4;
+            const SIZE_OF_CURSOR = 4 * SIZE_OF_INT;
+            const SIZE_OF_NODE = 5 * SIZE_OF_INT;
+            const SIZE_OF_POINT = 2 * SIZE_OF_INT;
+            const SIZE_OF_RANGE = 2 * SIZE_OF_INT + 2 * SIZE_OF_POINT;
+            const ZERO_POINT = {
+              row: 0,
+              column: 0
+            };
+            const QUERY_WORD_REGEX = /[\w-.]*/g;
+            const PREDICATE_STEP_TYPE_CAPTURE = 1;
+            const PREDICATE_STEP_TYPE_STRING = 2;
+            const LANGUAGE_FUNCTION_REGEX = /^_?tree_sitter_\w+/;
+            let VERSION;
+            let MIN_COMPATIBLE_VERSION;
+            let TRANSFER_BUFFER;
+            let currentParseCallback;
+            let currentLogCallback;
+            class ParserImpl {
+              static init() {
+                TRANSFER_BUFFER = C._ts_init();
+                VERSION = getValue(TRANSFER_BUFFER, "i32");
+                MIN_COMPATIBLE_VERSION = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+              }
+              initialize() {
+                C._ts_parser_new_wasm();
+                this[0] = getValue(TRANSFER_BUFFER, "i32");
+                this[1] = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+              }
+              delete() {
+                C._ts_parser_delete(this[0]);
+                C._free(this[1]);
+                this[0] = 0;
+                this[1] = 0;
+              }
+              setLanguage(language) {
+                let address;
+                if (!language) {
+                  address = 0;
+                  language = null;
+                } else if (language.constructor === Language) {
+                  address = language[0];
+                  const version = C._ts_language_version(address);
+                  if (version < MIN_COMPATIBLE_VERSION || VERSION < version) {
+                    throw new Error(`Incompatible language version ${version}. Compatibility range ${MIN_COMPATIBLE_VERSION} through ${VERSION}.`);
+                  }
+                } else {
+                  throw new Error("Argument must be a Language");
+                }
+                this.language = language;
+                C._ts_parser_set_language(this[0], address);
+                return this;
+              }
+              getLanguage() {
+                return this.language;
+              }
+              parse(callback, oldTree, options) {
+                if (typeof callback === "string") {
+                  currentParseCallback = (index, _) => callback.slice(index);
+                } else if (typeof callback === "function") {
+                  currentParseCallback = callback;
+                } else {
+                  throw new Error("Argument must be a string or a function");
+                }
+                if (this.logCallback) {
+                  currentLogCallback = this.logCallback;
+                  C._ts_parser_enable_logger_wasm(this[0], 1);
+                } else {
+                  currentLogCallback = null;
+                  C._ts_parser_enable_logger_wasm(this[0], 0);
+                }
+                let rangeCount = 0;
+                let rangeAddress = 0;
+                if (options?.includedRanges) {
+                  rangeCount = options.includedRanges.length;
+                  rangeAddress = C._calloc(rangeCount, SIZE_OF_RANGE);
+                  let address = rangeAddress;
+                  for (let i2 = 0; i2 < rangeCount; i2++) {
+                    marshalRange(address, options.includedRanges[i2]);
+                    address += SIZE_OF_RANGE;
+                  }
+                }
+                const treeAddress = C._ts_parser_parse_wasm(this[0], this[1], oldTree ? oldTree[0] : 0, rangeAddress, rangeCount);
+                if (!treeAddress) {
+                  currentParseCallback = null;
+                  currentLogCallback = null;
+                  throw new Error("Parsing failed");
+                }
+                const result = new Tree(INTERNAL, treeAddress, this.language, currentParseCallback);
+                currentParseCallback = null;
+                currentLogCallback = null;
+                return result;
+              }
+              reset() {
+                C._ts_parser_reset(this[0]);
+              }
+              getIncludedRanges() {
+                C._ts_parser_included_ranges_wasm(this[0]);
+                const count = getValue(TRANSFER_BUFFER, "i32");
+                const buffer = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+                const result = new Array(count);
+                if (count > 0) {
+                  let address = buffer;
+                  for (let i2 = 0; i2 < count; i2++) {
+                    result[i2] = unmarshalRange(address);
+                    address += SIZE_OF_RANGE;
+                  }
+                  C._free(buffer);
+                }
+                return result;
+              }
+              getTimeoutMicros() {
+                return C._ts_parser_timeout_micros(this[0]);
+              }
+              setTimeoutMicros(timeout) {
+                C._ts_parser_set_timeout_micros(this[0], timeout);
+              }
+              setLogger(callback) {
+                if (!callback) {
+                  callback = null;
+                } else if (typeof callback !== "function") {
+                  throw new Error("Logger callback must be a function");
+                }
+                this.logCallback = callback;
+                return this;
+              }
+              getLogger() {
+                return this.logCallback;
+              }
+            }
+            class Tree {
+              constructor(internal, address, language, textCallback) {
+                assertInternal(internal);
+                this[0] = address;
+                this.language = language;
+                this.textCallback = textCallback;
+              }
+              copy() {
+                const address = C._ts_tree_copy(this[0]);
+                return new Tree(INTERNAL, address, this.language, this.textCallback);
+              }
+              delete() {
+                C._ts_tree_delete(this[0]);
+                this[0] = 0;
+              }
+              edit(edit) {
+                marshalEdit(edit);
+                C._ts_tree_edit_wasm(this[0]);
+              }
+              get rootNode() {
+                C._ts_tree_root_node_wasm(this[0]);
+                return unmarshalNode(this);
+              }
+              rootNodeWithOffset(offsetBytes, offsetExtent) {
+                const address = TRANSFER_BUFFER + SIZE_OF_NODE;
+                setValue(address, offsetBytes, "i32");
+                marshalPoint(address + SIZE_OF_INT, offsetExtent);
+                C._ts_tree_root_node_with_offset_wasm(this[0]);
+                return unmarshalNode(this);
+              }
+              getLanguage() {
+                return this.language;
+              }
+              walk() {
+                return this.rootNode.walk();
+              }
+              getChangedRanges(other) {
+                if (other.constructor !== Tree) {
+                  throw new TypeError("Argument must be a Tree");
+                }
+                C._ts_tree_get_changed_ranges_wasm(this[0], other[0]);
+                const count = getValue(TRANSFER_BUFFER, "i32");
+                const buffer = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+                const result = new Array(count);
+                if (count > 0) {
+                  let address = buffer;
+                  for (let i2 = 0; i2 < count; i2++) {
+                    result[i2] = unmarshalRange(address);
+                    address += SIZE_OF_RANGE;
+                  }
+                  C._free(buffer);
+                }
+                return result;
+              }
+              getIncludedRanges() {
+                C._ts_tree_included_ranges_wasm(this[0]);
+                const count = getValue(TRANSFER_BUFFER, "i32");
+                const buffer = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+                const result = new Array(count);
+                if (count > 0) {
+                  let address = buffer;
+                  for (let i2 = 0; i2 < count; i2++) {
+                    result[i2] = unmarshalRange(address);
+                    address += SIZE_OF_RANGE;
+                  }
+                  C._free(buffer);
+                }
+                return result;
+              }
+            }
+            class Node {
+              constructor(internal, tree) {
+                assertInternal(internal);
+                this.tree = tree;
+              }
+              get typeId() {
+                marshalNode(this);
+                return C._ts_node_symbol_wasm(this.tree[0]);
+              }
+              get grammarId() {
+                marshalNode(this);
+                return C._ts_node_grammar_symbol_wasm(this.tree[0]);
+              }
+              get type() {
+                return this.tree.language.types[this.typeId] || "ERROR";
+              }
+              get grammarType() {
+                return this.tree.language.types[this.grammarId] || "ERROR";
+              }
+              get endPosition() {
+                marshalNode(this);
+                C._ts_node_end_point_wasm(this.tree[0]);
+                return unmarshalPoint(TRANSFER_BUFFER);
+              }
+              get endIndex() {
+                marshalNode(this);
+                return C._ts_node_end_index_wasm(this.tree[0]);
+              }
+              get text() {
+                return getText(this.tree, this.startIndex, this.endIndex);
+              }
+              get parseState() {
+                marshalNode(this);
+                return C._ts_node_parse_state_wasm(this.tree[0]);
+              }
+              get nextParseState() {
+                marshalNode(this);
+                return C._ts_node_next_parse_state_wasm(this.tree[0]);
+              }
+              get isNamed() {
+                marshalNode(this);
+                return C._ts_node_is_named_wasm(this.tree[0]) === 1;
+              }
+              get hasError() {
+                marshalNode(this);
+                return C._ts_node_has_error_wasm(this.tree[0]) === 1;
+              }
+              get hasChanges() {
+                marshalNode(this);
+                return C._ts_node_has_changes_wasm(this.tree[0]) === 1;
+              }
+              get isError() {
+                marshalNode(this);
+                return C._ts_node_is_error_wasm(this.tree[0]) === 1;
+              }
+              get isMissing() {
+                marshalNode(this);
+                return C._ts_node_is_missing_wasm(this.tree[0]) === 1;
+              }
+              get isExtra() {
+                marshalNode(this);
+                return C._ts_node_is_extra_wasm(this.tree[0]) === 1;
+              }
+              equals(other) {
+                return this.id === other.id;
+              }
+              child(index) {
+                marshalNode(this);
+                C._ts_node_child_wasm(this.tree[0], index);
+                return unmarshalNode(this.tree);
+              }
+              namedChild(index) {
+                marshalNode(this);
+                C._ts_node_named_child_wasm(this.tree[0], index);
+                return unmarshalNode(this.tree);
+              }
+              childForFieldId(fieldId) {
+                marshalNode(this);
+                C._ts_node_child_by_field_id_wasm(this.tree[0], fieldId);
+                return unmarshalNode(this.tree);
+              }
+              childForFieldName(fieldName) {
+                const fieldId = this.tree.language.fields.indexOf(fieldName);
+                if (fieldId !== -1) return this.childForFieldId(fieldId);
+                return null;
+              }
+              fieldNameForChild(index) {
+                marshalNode(this);
+                const address = C._ts_node_field_name_for_child_wasm(this.tree[0], index);
+                if (!address) {
+                  return null;
+                }
+                const result = AsciiToString(address);
+                return result;
+              }
+              childrenForFieldName(fieldName) {
+                const fieldId = this.tree.language.fields.indexOf(fieldName);
+                if (fieldId !== -1 && fieldId !== 0) return this.childrenForFieldId(fieldId);
+                return [];
+              }
+              childrenForFieldId(fieldId) {
+                marshalNode(this);
+                C._ts_node_children_by_field_id_wasm(this.tree[0], fieldId);
+                const count = getValue(TRANSFER_BUFFER, "i32");
+                const buffer = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+                const result = new Array(count);
+                if (count > 0) {
+                  let address = buffer;
+                  for (let i2 = 0; i2 < count; i2++) {
+                    result[i2] = unmarshalNode(this.tree, address);
+                    address += SIZE_OF_NODE;
+                  }
+                  C._free(buffer);
+                }
+                return result;
+              }
+              firstChildForIndex(index) {
+                marshalNode(this);
+                const address = TRANSFER_BUFFER + SIZE_OF_NODE;
+                setValue(address, index, "i32");
+                C._ts_node_first_child_for_byte_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              firstNamedChildForIndex(index) {
+                marshalNode(this);
+                const address = TRANSFER_BUFFER + SIZE_OF_NODE;
+                setValue(address, index, "i32");
+                C._ts_node_first_named_child_for_byte_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              get childCount() {
+                marshalNode(this);
+                return C._ts_node_child_count_wasm(this.tree[0]);
+              }
+              get namedChildCount() {
+                marshalNode(this);
+                return C._ts_node_named_child_count_wasm(this.tree[0]);
+              }
+              get firstChild() {
+                return this.child(0);
+              }
+              get firstNamedChild() {
+                return this.namedChild(0);
+              }
+              get lastChild() {
+                return this.child(this.childCount - 1);
+              }
+              get lastNamedChild() {
+                return this.namedChild(this.namedChildCount - 1);
+              }
+              get children() {
+                if (!this._children) {
+                  marshalNode(this);
+                  C._ts_node_children_wasm(this.tree[0]);
+                  const count = getValue(TRANSFER_BUFFER, "i32");
+                  const buffer = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+                  this._children = new Array(count);
+                  if (count > 0) {
+                    let address = buffer;
+                    for (let i2 = 0; i2 < count; i2++) {
+                      this._children[i2] = unmarshalNode(this.tree, address);
+                      address += SIZE_OF_NODE;
+                    }
+                    C._free(buffer);
+                  }
+                }
+                return this._children;
+              }
+              get namedChildren() {
+                if (!this._namedChildren) {
+                  marshalNode(this);
+                  C._ts_node_named_children_wasm(this.tree[0]);
+                  const count = getValue(TRANSFER_BUFFER, "i32");
+                  const buffer = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+                  this._namedChildren = new Array(count);
+                  if (count > 0) {
+                    let address = buffer;
+                    for (let i2 = 0; i2 < count; i2++) {
+                      this._namedChildren[i2] = unmarshalNode(this.tree, address);
+                      address += SIZE_OF_NODE;
+                    }
+                    C._free(buffer);
+                  }
+                }
+                return this._namedChildren;
+              }
+              descendantsOfType(types, startPosition, endPosition) {
+                if (!Array.isArray(types)) types = [types];
+                if (!startPosition) startPosition = ZERO_POINT;
+                if (!endPosition) endPosition = ZERO_POINT;
+                const symbols = [];
+                const typesBySymbol = this.tree.language.types;
+                for (let i2 = 0, n = typesBySymbol.length; i2 < n; i2++) {
+                  if (types.includes(typesBySymbol[i2])) {
+                    symbols.push(i2);
+                  }
+                }
+                const symbolsAddress = C._malloc(SIZE_OF_INT * symbols.length);
+                for (let i2 = 0, n = symbols.length; i2 < n; i2++) {
+                  setValue(symbolsAddress + i2 * SIZE_OF_INT, symbols[i2], "i32");
+                }
+                marshalNode(this);
+                C._ts_node_descendants_of_type_wasm(this.tree[0], symbolsAddress, symbols.length, startPosition.row, startPosition.column, endPosition.row, endPosition.column);
+                const descendantCount = getValue(TRANSFER_BUFFER, "i32");
+                const descendantAddress = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+                const result = new Array(descendantCount);
+                if (descendantCount > 0) {
+                  let address = descendantAddress;
+                  for (let i2 = 0; i2 < descendantCount; i2++) {
+                    result[i2] = unmarshalNode(this.tree, address);
+                    address += SIZE_OF_NODE;
+                  }
+                }
+                C._free(descendantAddress);
+                C._free(symbolsAddress);
+                return result;
+              }
+              get nextSibling() {
+                marshalNode(this);
+                C._ts_node_next_sibling_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              get previousSibling() {
+                marshalNode(this);
+                C._ts_node_prev_sibling_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              get nextNamedSibling() {
+                marshalNode(this);
+                C._ts_node_next_named_sibling_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              get previousNamedSibling() {
+                marshalNode(this);
+                C._ts_node_prev_named_sibling_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              get descendantCount() {
+                marshalNode(this);
+                return C._ts_node_descendant_count_wasm(this.tree[0]);
+              }
+              get parent() {
+                marshalNode(this);
+                C._ts_node_parent_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              descendantForIndex(start2, end = start2) {
+                if (typeof start2 !== "number" || typeof end !== "number") {
+                  throw new Error("Arguments must be numbers");
+                }
+                marshalNode(this);
+                const address = TRANSFER_BUFFER + SIZE_OF_NODE;
+                setValue(address, start2, "i32");
+                setValue(address + SIZE_OF_INT, end, "i32");
+                C._ts_node_descendant_for_index_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              namedDescendantForIndex(start2, end = start2) {
+                if (typeof start2 !== "number" || typeof end !== "number") {
+                  throw new Error("Arguments must be numbers");
+                }
+                marshalNode(this);
+                const address = TRANSFER_BUFFER + SIZE_OF_NODE;
+                setValue(address, start2, "i32");
+                setValue(address + SIZE_OF_INT, end, "i32");
+                C._ts_node_named_descendant_for_index_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              descendantForPosition(start2, end = start2) {
+                if (!isPoint(start2) || !isPoint(end)) {
+                  throw new Error("Arguments must be {row, column} objects");
+                }
+                marshalNode(this);
+                const address = TRANSFER_BUFFER + SIZE_OF_NODE;
+                marshalPoint(address, start2);
+                marshalPoint(address + SIZE_OF_POINT, end);
+                C._ts_node_descendant_for_position_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              namedDescendantForPosition(start2, end = start2) {
+                if (!isPoint(start2) || !isPoint(end)) {
+                  throw new Error("Arguments must be {row, column} objects");
+                }
+                marshalNode(this);
+                const address = TRANSFER_BUFFER + SIZE_OF_NODE;
+                marshalPoint(address, start2);
+                marshalPoint(address + SIZE_OF_POINT, end);
+                C._ts_node_named_descendant_for_position_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              walk() {
+                marshalNode(this);
+                C._ts_tree_cursor_new_wasm(this.tree[0]);
+                return new TreeCursor(INTERNAL, this.tree);
+              }
+              toString() {
+                marshalNode(this);
+                const address = C._ts_node_to_string_wasm(this.tree[0]);
+                const result = AsciiToString(address);
+                C._free(address);
+                return result;
+              }
+            }
+            class TreeCursor {
+              constructor(internal, tree) {
+                assertInternal(internal);
+                this.tree = tree;
+                unmarshalTreeCursor(this);
+              }
+              delete() {
+                marshalTreeCursor(this);
+                C._ts_tree_cursor_delete_wasm(this.tree[0]);
+                this[0] = this[1] = this[2] = 0;
+              }
+              reset(node) {
+                marshalNode(node);
+                marshalTreeCursor(this, TRANSFER_BUFFER + SIZE_OF_NODE);
+                C._ts_tree_cursor_reset_wasm(this.tree[0]);
+                unmarshalTreeCursor(this);
+              }
+              resetTo(cursor) {
+                marshalTreeCursor(this, TRANSFER_BUFFER);
+                marshalTreeCursor(cursor, TRANSFER_BUFFER + SIZE_OF_CURSOR);
+                C._ts_tree_cursor_reset_to_wasm(this.tree[0], cursor.tree[0]);
+                unmarshalTreeCursor(this);
+              }
+              get nodeType() {
+                return this.tree.language.types[this.nodeTypeId] || "ERROR";
+              }
+              get nodeTypeId() {
+                marshalTreeCursor(this);
+                return C._ts_tree_cursor_current_node_type_id_wasm(this.tree[0]);
+              }
+              get nodeStateId() {
+                marshalTreeCursor(this);
+                return C._ts_tree_cursor_current_node_state_id_wasm(this.tree[0]);
+              }
+              get nodeId() {
+                marshalTreeCursor(this);
+                return C._ts_tree_cursor_current_node_id_wasm(this.tree[0]);
+              }
+              get nodeIsNamed() {
+                marshalTreeCursor(this);
+                return C._ts_tree_cursor_current_node_is_named_wasm(this.tree[0]) === 1;
+              }
+              get nodeIsMissing() {
+                marshalTreeCursor(this);
+                return C._ts_tree_cursor_current_node_is_missing_wasm(this.tree[0]) === 1;
+              }
+              get nodeText() {
+                marshalTreeCursor(this);
+                const startIndex = C._ts_tree_cursor_start_index_wasm(this.tree[0]);
+                const endIndex = C._ts_tree_cursor_end_index_wasm(this.tree[0]);
+                return getText(this.tree, startIndex, endIndex);
+              }
+              get startPosition() {
+                marshalTreeCursor(this);
+                C._ts_tree_cursor_start_position_wasm(this.tree[0]);
+                return unmarshalPoint(TRANSFER_BUFFER);
+              }
+              get endPosition() {
+                marshalTreeCursor(this);
+                C._ts_tree_cursor_end_position_wasm(this.tree[0]);
+                return unmarshalPoint(TRANSFER_BUFFER);
+              }
+              get startIndex() {
+                marshalTreeCursor(this);
+                return C._ts_tree_cursor_start_index_wasm(this.tree[0]);
+              }
+              get endIndex() {
+                marshalTreeCursor(this);
+                return C._ts_tree_cursor_end_index_wasm(this.tree[0]);
+              }
+              get currentNode() {
+                marshalTreeCursor(this);
+                C._ts_tree_cursor_current_node_wasm(this.tree[0]);
+                return unmarshalNode(this.tree);
+              }
+              get currentFieldId() {
+                marshalTreeCursor(this);
+                return C._ts_tree_cursor_current_field_id_wasm(this.tree[0]);
+              }
+              get currentFieldName() {
+                return this.tree.language.fields[this.currentFieldId];
+              }
+              get currentDepth() {
+                marshalTreeCursor(this);
+                return C._ts_tree_cursor_current_depth_wasm(this.tree[0]);
+              }
+              get currentDescendantIndex() {
+                marshalTreeCursor(this);
+                return C._ts_tree_cursor_current_descendant_index_wasm(this.tree[0]);
+              }
+              gotoFirstChild() {
+                marshalTreeCursor(this);
+                const result = C._ts_tree_cursor_goto_first_child_wasm(this.tree[0]);
+                unmarshalTreeCursor(this);
+                return result === 1;
+              }
+              gotoLastChild() {
+                marshalTreeCursor(this);
+                const result = C._ts_tree_cursor_goto_last_child_wasm(this.tree[0]);
+                unmarshalTreeCursor(this);
+                return result === 1;
+              }
+              gotoFirstChildForIndex(goalIndex) {
+                marshalTreeCursor(this);
+                setValue(TRANSFER_BUFFER + SIZE_OF_CURSOR, goalIndex, "i32");
+                const result = C._ts_tree_cursor_goto_first_child_for_index_wasm(this.tree[0]);
+                unmarshalTreeCursor(this);
+                return result === 1;
+              }
+              gotoFirstChildForPosition(goalPosition) {
+                marshalTreeCursor(this);
+                marshalPoint(TRANSFER_BUFFER + SIZE_OF_CURSOR, goalPosition);
+                const result = C._ts_tree_cursor_goto_first_child_for_position_wasm(this.tree[0]);
+                unmarshalTreeCursor(this);
+                return result === 1;
+              }
+              gotoNextSibling() {
+                marshalTreeCursor(this);
+                const result = C._ts_tree_cursor_goto_next_sibling_wasm(this.tree[0]);
+                unmarshalTreeCursor(this);
+                return result === 1;
+              }
+              gotoPreviousSibling() {
+                marshalTreeCursor(this);
+                const result = C._ts_tree_cursor_goto_previous_sibling_wasm(this.tree[0]);
+                unmarshalTreeCursor(this);
+                return result === 1;
+              }
+              gotoDescendant(goalDescendantindex) {
+                marshalTreeCursor(this);
+                C._ts_tree_cursor_goto_descendant_wasm(this.tree[0], goalDescendantindex);
+                unmarshalTreeCursor(this);
+              }
+              gotoParent() {
+                marshalTreeCursor(this);
+                const result = C._ts_tree_cursor_goto_parent_wasm(this.tree[0]);
+                unmarshalTreeCursor(this);
+                return result === 1;
+              }
+            }
+            class Language {
+              constructor(internal, address) {
+                assertInternal(internal);
+                this[0] = address;
+                this.types = new Array(C._ts_language_symbol_count(this[0]));
+                for (let i2 = 0, n = this.types.length; i2 < n; i2++) {
+                  if (C._ts_language_symbol_type(this[0], i2) < 2) {
+                    this.types[i2] = UTF8ToString(C._ts_language_symbol_name(this[0], i2));
+                  }
+                }
+                this.fields = new Array(C._ts_language_field_count(this[0]) + 1);
+                for (let i2 = 0, n = this.fields.length; i2 < n; i2++) {
+                  const fieldName = C._ts_language_field_name_for_id(this[0], i2);
+                  if (fieldName !== 0) {
+                    this.fields[i2] = UTF8ToString(fieldName);
+                  } else {
+                    this.fields[i2] = null;
+                  }
+                }
+              }
+              get version() {
+                return C._ts_language_version(this[0]);
+              }
+              get fieldCount() {
+                return this.fields.length - 1;
+              }
+              get stateCount() {
+                return C._ts_language_state_count(this[0]);
+              }
+              fieldIdForName(fieldName) {
+                const result = this.fields.indexOf(fieldName);
+                if (result !== -1) {
+                  return result;
+                } else {
+                  return null;
+                }
+              }
+              fieldNameForId(fieldId) {
+                return this.fields[fieldId] || null;
+              }
+              idForNodeType(type, named) {
+                const typeLength = lengthBytesUTF8(type);
+                const typeAddress = C._malloc(typeLength + 1);
+                stringToUTF8(type, typeAddress, typeLength + 1);
+                const result = C._ts_language_symbol_for_name(this[0], typeAddress, typeLength, named);
+                C._free(typeAddress);
+                return result || null;
+              }
+              get nodeTypeCount() {
+                return C._ts_language_symbol_count(this[0]);
+              }
+              nodeTypeForId(typeId) {
+                const name2 = C._ts_language_symbol_name(this[0], typeId);
+                return name2 ? UTF8ToString(name2) : null;
+              }
+              nodeTypeIsNamed(typeId) {
+                return C._ts_language_type_is_named_wasm(this[0], typeId) ? true : false;
+              }
+              nodeTypeIsVisible(typeId) {
+                return C._ts_language_type_is_visible_wasm(this[0], typeId) ? true : false;
+              }
+              nextState(stateId, typeId) {
+                return C._ts_language_next_state(this[0], stateId, typeId);
+              }
+              lookaheadIterator(stateId) {
+                const address = C._ts_lookahead_iterator_new(this[0], stateId);
+                if (address) return new LookaheadIterable(INTERNAL, address, this);
+                return null;
+              }
+              query(source) {
+                const sourceLength = lengthBytesUTF8(source);
+                const sourceAddress = C._malloc(sourceLength + 1);
+                stringToUTF8(source, sourceAddress, sourceLength + 1);
+                const address = C._ts_query_new(this[0], sourceAddress, sourceLength, TRANSFER_BUFFER, TRANSFER_BUFFER + SIZE_OF_INT);
+                if (!address) {
+                  const errorId = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+                  const errorByte = getValue(TRANSFER_BUFFER, "i32");
+                  const errorIndex = UTF8ToString(sourceAddress, errorByte).length;
+                  const suffix = source.substr(errorIndex, 100).split("\n")[0];
+                  let word = suffix.match(QUERY_WORD_REGEX)[0];
+                  let error;
+                  switch (errorId) {
+                    case 2:
+                      error = new RangeError(`Bad node name '${word}'`);
+                      break;
+                    case 3:
+                      error = new RangeError(`Bad field name '${word}'`);
+                      break;
+                    case 4:
+                      error = new RangeError(`Bad capture name @${word}`);
+                      break;
+                    case 5:
+                      error = new TypeError(`Bad pattern structure at offset ${errorIndex}: '${suffix}'...`);
+                      word = "";
+                      break;
+                    default:
+                      error = new SyntaxError(`Bad syntax at offset ${errorIndex}: '${suffix}'...`);
+                      word = "";
+                      break;
+                  }
+                  error.index = errorIndex;
+                  error.length = word.length;
+                  C._free(sourceAddress);
+                  throw error;
+                }
+                const stringCount = C._ts_query_string_count(address);
+                const captureCount = C._ts_query_capture_count(address);
+                const patternCount = C._ts_query_pattern_count(address);
+                const captureNames = new Array(captureCount);
+                const stringValues = new Array(stringCount);
+                for (let i2 = 0; i2 < captureCount; i2++) {
+                  const nameAddress = C._ts_query_capture_name_for_id(address, i2, TRANSFER_BUFFER);
+                  const nameLength = getValue(TRANSFER_BUFFER, "i32");
+                  captureNames[i2] = UTF8ToString(nameAddress, nameLength);
+                }
+                for (let i2 = 0; i2 < stringCount; i2++) {
+                  const valueAddress = C._ts_query_string_value_for_id(address, i2, TRANSFER_BUFFER);
+                  const nameLength = getValue(TRANSFER_BUFFER, "i32");
+                  stringValues[i2] = UTF8ToString(valueAddress, nameLength);
+                }
+                const setProperties = new Array(patternCount);
+                const assertedProperties = new Array(patternCount);
+                const refutedProperties = new Array(patternCount);
+                const predicates = new Array(patternCount);
+                const textPredicates = new Array(patternCount);
+                for (let i2 = 0; i2 < patternCount; i2++) {
+                  const predicatesAddress = C._ts_query_predicates_for_pattern(address, i2, TRANSFER_BUFFER);
+                  const stepCount = getValue(TRANSFER_BUFFER, "i32");
+                  predicates[i2] = [];
+                  textPredicates[i2] = [];
+                  const steps = [];
+                  let stepAddress = predicatesAddress;
+                  for (let j = 0; j < stepCount; j++) {
+                    const stepType = getValue(stepAddress, "i32");
+                    stepAddress += SIZE_OF_INT;
+                    const stepValueId = getValue(stepAddress, "i32");
+                    stepAddress += SIZE_OF_INT;
+                    if (stepType === PREDICATE_STEP_TYPE_CAPTURE) {
+                      steps.push({
+                        type: "capture",
+                        name: captureNames[stepValueId]
+                      });
+                    } else if (stepType === PREDICATE_STEP_TYPE_STRING) {
+                      steps.push({
+                        type: "string",
+                        value: stringValues[stepValueId]
+                      });
+                    } else if (steps.length > 0) {
+                      if (steps[0].type !== "string") {
+                        throw new Error("Predicates must begin with a literal value");
+                      }
+                      const operator = steps[0].value;
+                      let isPositive = true;
+                      let matchAll = true;
+                      let captureName;
+                      switch (operator) {
+                        case "any-not-eq?":
+                        case "not-eq?":
+                          isPositive = false;
+                        case "any-eq?":
+                        case "eq?":
+                          if (steps.length !== 3) {
+                            throw new Error(`Wrong number of arguments to \`#${operator}\` predicate. Expected 2, got ${steps.length - 1}`);
+                          }
+                          if (steps[1].type !== "capture") {
+                            throw new Error(`First argument of \`#${operator}\` predicate must be a capture. Got "${steps[1].value}"`);
+                          }
+                          matchAll = !operator.startsWith("any-");
+                          if (steps[2].type === "capture") {
+                            const captureName1 = steps[1].name;
+                            const captureName2 = steps[2].name;
+                            textPredicates[i2].push((captures) => {
+                              const nodes1 = [];
+                              const nodes2 = [];
+                              for (const c of captures) {
+                                if (c.name === captureName1) nodes1.push(c.node);
+                                if (c.name === captureName2) nodes2.push(c.node);
+                              }
+                              const compare = (n1, n2, positive) => positive ? n1.text === n2.text : n1.text !== n2.text;
+                              return matchAll ? nodes1.every((n1) => nodes2.some((n2) => compare(n1, n2, isPositive))) : nodes1.some((n1) => nodes2.some((n2) => compare(n1, n2, isPositive)));
+                            });
+                          } else {
+                            captureName = steps[1].name;
+                            const stringValue = steps[2].value;
+                            const matches = (n) => n.text === stringValue;
+                            const doesNotMatch = (n) => n.text !== stringValue;
+                            textPredicates[i2].push((captures) => {
+                              const nodes = [];
+                              for (const c of captures) {
+                                if (c.name === captureName) nodes.push(c.node);
+                              }
+                              const test = isPositive ? matches : doesNotMatch;
+                              return matchAll ? nodes.every(test) : nodes.some(test);
+                            });
+                          }
+                          break;
+                        case "any-not-match?":
+                        case "not-match?":
+                          isPositive = false;
+                        case "any-match?":
+                        case "match?":
+                          if (steps.length !== 3) {
+                            throw new Error(`Wrong number of arguments to \`#${operator}\` predicate. Expected 2, got ${steps.length - 1}.`);
+                          }
+                          if (steps[1].type !== "capture") {
+                            throw new Error(`First argument of \`#${operator}\` predicate must be a capture. Got "${steps[1].value}".`);
+                          }
+                          if (steps[2].type !== "string") {
+                            throw new Error(`Second argument of \`#${operator}\` predicate must be a string. Got @${steps[2].value}.`);
+                          }
+                          captureName = steps[1].name;
+                          const regex = new RegExp(steps[2].value);
+                          matchAll = !operator.startsWith("any-");
+                          textPredicates[i2].push((captures) => {
+                            const nodes = [];
+                            for (const c of captures) {
+                              if (c.name === captureName) nodes.push(c.node.text);
+                            }
+                            const test = (text, positive) => positive ? regex.test(text) : !regex.test(text);
+                            if (nodes.length === 0) return !isPositive;
+                            return matchAll ? nodes.every((text) => test(text, isPositive)) : nodes.some((text) => test(text, isPositive));
+                          });
+                          break;
+                        case "set!":
+                          if (steps.length < 2 || steps.length > 3) {
+                            throw new Error(`Wrong number of arguments to \`#set!\` predicate. Expected 1 or 2. Got ${steps.length - 1}.`);
+                          }
+                          if (steps.some((s) => s.type !== "string")) {
+                            throw new Error(`Arguments to \`#set!\` predicate must be a strings.".`);
+                          }
+                          if (!setProperties[i2]) setProperties[i2] = {};
+                          setProperties[i2][steps[1].value] = steps[2] ? steps[2].value : null;
+                          break;
+                        case "is?":
+                        case "is-not?":
+                          if (steps.length < 2 || steps.length > 3) {
+                            throw new Error(`Wrong number of arguments to \`#${operator}\` predicate. Expected 1 or 2. Got ${steps.length - 1}.`);
+                          }
+                          if (steps.some((s) => s.type !== "string")) {
+                            throw new Error(`Arguments to \`#${operator}\` predicate must be a strings.".`);
+                          }
+                          const properties = operator === "is?" ? assertedProperties : refutedProperties;
+                          if (!properties[i2]) properties[i2] = {};
+                          properties[i2][steps[1].value] = steps[2] ? steps[2].value : null;
+                          break;
+                        case "not-any-of?":
+                          isPositive = false;
+                        case "any-of?":
+                          if (steps.length < 2) {
+                            throw new Error(`Wrong number of arguments to \`#${operator}\` predicate. Expected at least 1. Got ${steps.length - 1}.`);
+                          }
+                          if (steps[1].type !== "capture") {
+                            throw new Error(`First argument of \`#${operator}\` predicate must be a capture. Got "${steps[1].value}".`);
+                          }
+                          for (let i3 = 2; i3 < steps.length; i3++) {
+                            if (steps[i3].type !== "string") {
+                              throw new Error(`Arguments to \`#${operator}\` predicate must be a strings.".`);
+                            }
+                          }
+                          captureName = steps[1].name;
+                          const values = steps.slice(2).map((s) => s.value);
+                          textPredicates[i2].push((captures) => {
+                            const nodes = [];
+                            for (const c of captures) {
+                              if (c.name === captureName) nodes.push(c.node.text);
+                            }
+                            if (nodes.length === 0) return !isPositive;
+                            return nodes.every((text) => values.includes(text)) === isPositive;
+                          });
+                          break;
+                        default:
+                          predicates[i2].push({
+                            operator,
+                            operands: steps.slice(1)
+                          });
+                      }
+                      steps.length = 0;
+                    }
+                  }
+                  Object.freeze(setProperties[i2]);
+                  Object.freeze(assertedProperties[i2]);
+                  Object.freeze(refutedProperties[i2]);
+                }
+                C._free(sourceAddress);
+                return new Query(INTERNAL, address, captureNames, textPredicates, predicates, Object.freeze(setProperties), Object.freeze(assertedProperties), Object.freeze(refutedProperties));
+              }
+              static load(input) {
+                let bytes;
+                if (input instanceof Uint8Array) {
+                  bytes = Promise.resolve(input);
+                } else {
+                  const url = input;
+                  if (typeof process !== "undefined" && process.versions && process.versions.node) {
+                    const fs2 = __require("fs");
+                    bytes = Promise.resolve(fs2.readFileSync(url));
+                  } else {
+                    bytes = fetch(url).then((response) => response.arrayBuffer().then((buffer) => {
+                      if (response.ok) {
+                        return new Uint8Array(buffer);
+                      } else {
+                        const body2 = new TextDecoder("utf-8").decode(buffer);
+                        throw new Error(`Language.load failed with status ${response.status}.
+
+${body2}`);
+                      }
+                    }));
+                  }
+                }
+                return bytes.then((bytes2) => loadWebAssemblyModule(bytes2, {
+                  loadAsync: true
+                })).then((mod) => {
+                  const symbolNames = Object.keys(mod);
+                  const functionName = symbolNames.find((key) => LANGUAGE_FUNCTION_REGEX.test(key) && !key.includes("external_scanner_"));
+                  if (!functionName) {
+                    console.log(`Couldn't find language function in WASM file. Symbols:
+${JSON.stringify(symbolNames, null, 2)}`);
+                  }
+                  const languageAddress = mod[functionName]();
+                  return new Language(INTERNAL, languageAddress);
+                });
+              }
+            }
+            class LookaheadIterable {
+              constructor(internal, address, language) {
+                assertInternal(internal);
+                this[0] = address;
+                this.language = language;
+              }
+              get currentTypeId() {
+                return C._ts_lookahead_iterator_current_symbol(this[0]);
+              }
+              get currentType() {
+                return this.language.types[this.currentTypeId] || "ERROR";
+              }
+              delete() {
+                C._ts_lookahead_iterator_delete(this[0]);
+                this[0] = 0;
+              }
+              resetState(stateId) {
+                return C._ts_lookahead_iterator_reset_state(this[0], stateId);
+              }
+              reset(language, stateId) {
+                if (C._ts_lookahead_iterator_reset(this[0], language[0], stateId)) {
+                  this.language = language;
+                  return true;
+                }
+                return false;
+              }
+              [Symbol.iterator]() {
+                const self2 = this;
+                return {
+                  next() {
+                    if (C._ts_lookahead_iterator_next(self2[0])) {
+                      return {
+                        done: false,
+                        value: self2.currentType
+                      };
+                    }
+                    return {
+                      done: true,
+                      value: ""
+                    };
+                  }
+                };
+              }
+            }
+            class Query {
+              constructor(internal, address, captureNames, textPredicates, predicates, setProperties, assertedProperties, refutedProperties) {
+                assertInternal(internal);
+                this[0] = address;
+                this.captureNames = captureNames;
+                this.textPredicates = textPredicates;
+                this.predicates = predicates;
+                this.setProperties = setProperties;
+                this.assertedProperties = assertedProperties;
+                this.refutedProperties = refutedProperties;
+                this.exceededMatchLimit = false;
+              }
+              delete() {
+                C._ts_query_delete(this[0]);
+                this[0] = 0;
+              }
+              matches(node, { startPosition = ZERO_POINT, endPosition = ZERO_POINT, startIndex = 0, endIndex = 0, matchLimit = 4294967295, maxStartDepth = 4294967295, timeoutMicros = 0 } = {}) {
+                if (typeof matchLimit !== "number") {
+                  throw new Error("Arguments must be numbers");
+                }
+                marshalNode(node);
+                C._ts_query_matches_wasm(this[0], node.tree[0], startPosition.row, startPosition.column, endPosition.row, endPosition.column, startIndex, endIndex, matchLimit, maxStartDepth, timeoutMicros);
+                const rawCount = getValue(TRANSFER_BUFFER, "i32");
+                const startAddress = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+                const didExceedMatchLimit = getValue(TRANSFER_BUFFER + 2 * SIZE_OF_INT, "i32");
+                const result = new Array(rawCount);
+                this.exceededMatchLimit = Boolean(didExceedMatchLimit);
+                let filteredCount = 0;
+                let address = startAddress;
+                for (let i2 = 0; i2 < rawCount; i2++) {
+                  const pattern = getValue(address, "i32");
+                  address += SIZE_OF_INT;
+                  const captureCount = getValue(address, "i32");
+                  address += SIZE_OF_INT;
+                  const captures = new Array(captureCount);
+                  address = unmarshalCaptures(this, node.tree, address, captures);
+                  if (this.textPredicates[pattern].every((p) => p(captures))) {
+                    result[filteredCount] = {
+                      pattern,
+                      captures
+                    };
+                    const setProperties = this.setProperties[pattern];
+                    if (setProperties) result[filteredCount].setProperties = setProperties;
+                    const assertedProperties = this.assertedProperties[pattern];
+                    if (assertedProperties) result[filteredCount].assertedProperties = assertedProperties;
+                    const refutedProperties = this.refutedProperties[pattern];
+                    if (refutedProperties) result[filteredCount].refutedProperties = refutedProperties;
+                    filteredCount++;
+                  }
+                }
+                result.length = filteredCount;
+                C._free(startAddress);
+                return result;
+              }
+              captures(node, { startPosition = ZERO_POINT, endPosition = ZERO_POINT, startIndex = 0, endIndex = 0, matchLimit = 4294967295, maxStartDepth = 4294967295, timeoutMicros = 0 } = {}) {
+                if (typeof matchLimit !== "number") {
+                  throw new Error("Arguments must be numbers");
+                }
+                marshalNode(node);
+                C._ts_query_captures_wasm(this[0], node.tree[0], startPosition.row, startPosition.column, endPosition.row, endPosition.column, startIndex, endIndex, matchLimit, maxStartDepth, timeoutMicros);
+                const count = getValue(TRANSFER_BUFFER, "i32");
+                const startAddress = getValue(TRANSFER_BUFFER + SIZE_OF_INT, "i32");
+                const didExceedMatchLimit = getValue(TRANSFER_BUFFER + 2 * SIZE_OF_INT, "i32");
+                const result = [];
+                this.exceededMatchLimit = Boolean(didExceedMatchLimit);
+                const captures = [];
+                let address = startAddress;
+                for (let i2 = 0; i2 < count; i2++) {
+                  const pattern = getValue(address, "i32");
+                  address += SIZE_OF_INT;
+                  const captureCount = getValue(address, "i32");
+                  address += SIZE_OF_INT;
+                  const captureIndex = getValue(address, "i32");
+                  address += SIZE_OF_INT;
+                  captures.length = captureCount;
+                  address = unmarshalCaptures(this, node.tree, address, captures);
+                  if (this.textPredicates[pattern].every((p) => p(captures))) {
+                    const capture = captures[captureIndex];
+                    const setProperties = this.setProperties[pattern];
+                    if (setProperties) capture.setProperties = setProperties;
+                    const assertedProperties = this.assertedProperties[pattern];
+                    if (assertedProperties) capture.assertedProperties = assertedProperties;
+                    const refutedProperties = this.refutedProperties[pattern];
+                    if (refutedProperties) capture.refutedProperties = refutedProperties;
+                    result.push(capture);
+                  }
+                }
+                C._free(startAddress);
+                return result;
+              }
+              predicatesForPattern(patternIndex) {
+                return this.predicates[patternIndex];
+              }
+              disableCapture(captureName) {
+                const captureNameLength = lengthBytesUTF8(captureName);
+                const captureNameAddress = C._malloc(captureNameLength + 1);
+                stringToUTF8(captureName, captureNameAddress, captureNameLength + 1);
+                C._ts_query_disable_capture(this[0], captureNameAddress, captureNameLength);
+                C._free(captureNameAddress);
+              }
+              didExceedMatchLimit() {
+                return this.exceededMatchLimit;
+              }
+            }
+            function getText(tree, startIndex, endIndex) {
+              const length = endIndex - startIndex;
+              let result = tree.textCallback(startIndex, null, endIndex);
+              startIndex += result.length;
+              while (startIndex < endIndex) {
+                const string = tree.textCallback(startIndex, null, endIndex);
+                if (string && string.length > 0) {
+                  startIndex += string.length;
+                  result += string;
+                } else {
+                  break;
+                }
+              }
+              if (startIndex > endIndex) {
+                result = result.slice(0, length);
+              }
+              return result;
+            }
+            function unmarshalCaptures(query, tree, address, result) {
+              for (let i2 = 0, n = result.length; i2 < n; i2++) {
+                const captureIndex = getValue(address, "i32");
+                address += SIZE_OF_INT;
+                const node = unmarshalNode(tree, address);
+                address += SIZE_OF_NODE;
+                result[i2] = {
+                  name: query.captureNames[captureIndex],
+                  node
+                };
+              }
+              return address;
+            }
+            function assertInternal(x) {
+              if (x !== INTERNAL) throw new Error("Illegal constructor");
+            }
+            function isPoint(point) {
+              return point && typeof point.row === "number" && typeof point.column === "number";
+            }
+            function marshalNode(node) {
+              let address = TRANSFER_BUFFER;
+              setValue(address, node.id, "i32");
+              address += SIZE_OF_INT;
+              setValue(address, node.startIndex, "i32");
+              address += SIZE_OF_INT;
+              setValue(address, node.startPosition.row, "i32");
+              address += SIZE_OF_INT;
+              setValue(address, node.startPosition.column, "i32");
+              address += SIZE_OF_INT;
+              setValue(address, node[0], "i32");
+            }
+            function unmarshalNode(tree, address = TRANSFER_BUFFER) {
+              const id = getValue(address, "i32");
+              address += SIZE_OF_INT;
+              if (id === 0) return null;
+              const index = getValue(address, "i32");
+              address += SIZE_OF_INT;
+              const row = getValue(address, "i32");
+              address += SIZE_OF_INT;
+              const column = getValue(address, "i32");
+              address += SIZE_OF_INT;
+              const other = getValue(address, "i32");
+              const result = new Node(INTERNAL, tree);
+              result.id = id;
+              result.startIndex = index;
+              result.startPosition = {
+                row,
+                column
+              };
+              result[0] = other;
+              return result;
+            }
+            function marshalTreeCursor(cursor, address = TRANSFER_BUFFER) {
+              setValue(address + 0 * SIZE_OF_INT, cursor[0], "i32");
+              setValue(address + 1 * SIZE_OF_INT, cursor[1], "i32");
+              setValue(address + 2 * SIZE_OF_INT, cursor[2], "i32");
+              setValue(address + 3 * SIZE_OF_INT, cursor[3], "i32");
+            }
+            function unmarshalTreeCursor(cursor) {
+              cursor[0] = getValue(TRANSFER_BUFFER + 0 * SIZE_OF_INT, "i32");
+              cursor[1] = getValue(TRANSFER_BUFFER + 1 * SIZE_OF_INT, "i32");
+              cursor[2] = getValue(TRANSFER_BUFFER + 2 * SIZE_OF_INT, "i32");
+              cursor[3] = getValue(TRANSFER_BUFFER + 3 * SIZE_OF_INT, "i32");
+            }
+            function marshalPoint(address, point) {
+              setValue(address, point.row, "i32");
+              setValue(address + SIZE_OF_INT, point.column, "i32");
+            }
+            function unmarshalPoint(address) {
+              const result = {
+                row: getValue(address, "i32") >>> 0,
+                column: getValue(address + SIZE_OF_INT, "i32") >>> 0
+              };
+              return result;
+            }
+            function marshalRange(address, range) {
+              marshalPoint(address, range.startPosition);
+              address += SIZE_OF_POINT;
+              marshalPoint(address, range.endPosition);
+              address += SIZE_OF_POINT;
+              setValue(address, range.startIndex, "i32");
+              address += SIZE_OF_INT;
+              setValue(address, range.endIndex, "i32");
+              address += SIZE_OF_INT;
+            }
+            function unmarshalRange(address) {
+              const result = {};
+              result.startPosition = unmarshalPoint(address);
+              address += SIZE_OF_POINT;
+              result.endPosition = unmarshalPoint(address);
+              address += SIZE_OF_POINT;
+              result.startIndex = getValue(address, "i32") >>> 0;
+              address += SIZE_OF_INT;
+              result.endIndex = getValue(address, "i32") >>> 0;
+              return result;
+            }
+            function marshalEdit(edit) {
+              let address = TRANSFER_BUFFER;
+              marshalPoint(address, edit.startPosition);
+              address += SIZE_OF_POINT;
+              marshalPoint(address, edit.oldEndPosition);
+              address += SIZE_OF_POINT;
+              marshalPoint(address, edit.newEndPosition);
+              address += SIZE_OF_POINT;
+              setValue(address, edit.startIndex, "i32");
+              address += SIZE_OF_INT;
+              setValue(address, edit.oldEndIndex, "i32");
+              address += SIZE_OF_INT;
+              setValue(address, edit.newEndIndex, "i32");
+              address += SIZE_OF_INT;
+            }
+            for (const name2 of Object.getOwnPropertyNames(ParserImpl.prototype)) {
+              Object.defineProperty(Parser.prototype, name2, {
+                value: ParserImpl.prototype[name2],
+                enumerable: false,
+                writable: false
+              });
+            }
+            Parser.Language = Language;
+            Module.onRuntimeInitialized = () => {
+              ParserImpl.init();
+              resolveInitPromise();
+            };
+          });
+        }
+      }
+      return Parser;
+    })();
+    if (typeof exports === "object") {
+      module.exports = TreeSitter;
+    }
+  }
+});
 
 // node_modules/smol-toml/dist/date.js
 var DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2})?[T ]?(?:(\d{2}):\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|[-+]\d{2}:\d{2})?$/i;
@@ -101,15 +3028,15 @@ function makeCodeBlock(string, line, column) {
   let lines = string.split(/\r\n|\n|\r/g);
   let codeblock = "";
   let numberLen = (Math.log10(line + 1) | 0) + 1;
-  for (let i = line - 1; i <= line + 1; i++) {
-    let l = lines[i - 1];
+  for (let i2 = line - 1; i2 <= line + 1; i2++) {
+    let l = lines[i2 - 1];
     if (!l)
       continue;
-    codeblock += i.toString().padEnd(numberLen, " ");
+    codeblock += i2.toString().padEnd(numberLen, " ");
     codeblock += ":  ";
     codeblock += l;
     codeblock += "\n";
-    if (i === line) {
+    if (i2 === line) {
       codeblock += " ".repeat(numberLen + column + 2);
       codeblock += "^\n";
     }
@@ -150,39 +3077,39 @@ function parseString(str, ptr) {
   let parsed = "";
   let sliceStart = ptr;
   let state = 0;
-  for (let i = ptr; i < str.length; i++) {
-    c = str[i];
-    if (isMultiline && (c === "\n" || c === "\r" && str[i + 1] === "\n")) {
+  for (let i2 = ptr; i2 < str.length; i2++) {
+    c = str[i2];
+    if (isMultiline && (c === "\n" || c === "\r" && str[i2 + 1] === "\n")) {
       state = state && 3;
     } else if (c < " " && c !== "	" || c === "\x7F") {
       throw new TomlError("control characters are not allowed in strings", {
         toml: str,
-        ptr: i
+        ptr: i2
       });
-    } else if ((!state || state === 3) && c === first && (!isMultiline || str[i + 1] === first && str[i + 2] === first)) {
+    } else if ((!state || state === 3) && c === first && (!isMultiline || str[i2 + 1] === first && str[i2 + 2] === first)) {
       if (isMultiline) {
-        if (str[i + 3] === first)
-          i++;
-        if (str[i + 3] === first)
-          i++;
+        if (str[i2 + 3] === first)
+          i2++;
+        if (str[i2 + 3] === first)
+          i2++;
       }
       return [
         // If we're in a newline escape still, then there's nothing to add.
         // Also try to avoid concat if there's nothing to add to parsed, or nothing has been added to parsed.
-        state ? parsed : parsed + str.slice(sliceStart, i),
-        i + (isMultiline ? 3 : 1)
+        state ? parsed : parsed + str.slice(sliceStart, i2),
+        i2 + (isMultiline ? 3 : 1)
       ];
     } else if (!state) {
       if (!isLiteral && c === "\\") {
-        parsed += str.slice(sliceStart, sliceStart = i);
+        parsed += str.slice(sliceStart, sliceStart = i2);
         state = 1;
       }
     } else if (state === 1) {
       if (c === "x" || c === "u" || c === "U") {
         let value = 0;
         let len = c === "x" ? 2 : c === "u" ? 4 : 8;
-        for (let j = 0; j < len; j++, i++) {
-          let hex = str.charCodeAt(i + 1);
+        for (let j = 0; j < len; j++, i2++) {
+          let hex = str.charCodeAt(i2 + 1);
           let digit = (
             /* 0-9 */
             hex >= 48 && hex <= 57 ? hex - 48 : (
@@ -194,14 +3121,14 @@ function parseString(str, ptr) {
             )
           );
           if (digit < 0)
-            throw new TomlError("invalid non-hex character in unicode escape", { toml: str, ptr: i + 1 });
+            throw new TomlError("invalid non-hex character in unicode escape", { toml: str, ptr: i2 + 1 });
           value = value << 4 | digit;
         }
         if (value < 0 || value > 1114111 || value >= 55296 && value <= 57343) {
-          throw new TomlError("invalid unicode escape", { toml: str, ptr: i });
+          throw new TomlError("invalid unicode escape", { toml: str, ptr: i2 });
         }
         parsed += String.fromCodePoint(value);
-        sliceStart = i + 1;
+        sliceStart = i2 + 1;
         state = 0;
       } else if (c === " " || c === "	") {
         state = 2;
@@ -223,8 +3150,8 @@ function parseString(str, ptr) {
         else if (c === "\\")
           parsed += "\\";
         else
-          throw new TomlError("unrecognized escape sequence", { toml: str, ptr: i });
-        sliceStart = i + 1;
+          throw new TomlError("unrecognized escape sequence", { toml: str, ptr: i2 });
+        sliceStart = i2 + 1;
         state = 0;
       }
     } else if (c !== " " && c !== "	") {
@@ -235,7 +3162,7 @@ function parseString(str, ptr) {
         });
       }
       state = !isLiteral && c === "\\" ? 1 : 0;
-      sliceStart = i;
+      sliceStart = i2;
     }
   }
   throw new TomlError("unfinished string", { toml: str, ptr });
@@ -292,19 +3219,19 @@ function parseValue(value, toml, ptr, integersAsBigInt) {
 }
 
 // node_modules/smol-toml/dist/util.js
-function indexOfNewline(str, start = 0, end = str.length) {
-  let idx = str.indexOf("\n", start);
+function indexOfNewline(str, start2 = 0, end = str.length) {
+  let idx = str.indexOf("\n", start2);
   if (str[idx - 1] === "\r")
     idx--;
   return idx <= end ? idx : -1;
 }
 function skipComment(str, ptr) {
-  for (let i = ptr; i < str.length; i++) {
-    let c = str[i];
+  for (let i2 = ptr; i2 < str.length; i2++) {
+    let c = str[i2];
     if (c === "\n")
-      return i;
-    if (c === "\r" && str[i + 1] === "\n")
-      return i + 1;
+      return i2;
+    if (c === "\r" && str[i2 + 1] === "\n")
+      return i2 + 1;
     if (c < " " && c !== "	" || c === "\x7F") {
       throw new TomlError("control characters are not allowed in comments", {
         toml: str,
@@ -330,14 +3257,14 @@ function skipUntil(str, ptr, sep, end, banNewLines = false) {
     ptr = indexOfNewline(str, ptr);
     return ptr < 0 ? str.length : ptr;
   }
-  for (let i = ptr; i < str.length; i++) {
-    let c = str[i];
+  for (let i2 = ptr; i2 < str.length; i2++) {
+    let c = str[i2];
     if (c === "#") {
-      i = indexOfNewline(str, i);
+      i2 = indexOfNewline(str, i2);
     } else if (c === sep) {
-      return i + 1;
-    } else if (c === end || banNewLines && (c === "\n" || c === "\r" && str[i + 1] === "\n")) {
-      return i;
+      return i2 + 1;
+    } else if (c === end || banNewLines && (c === "\n" || c === "\r" && str[i2 + 1] === "\n")) {
+      return i2;
     }
   }
   throw new TomlError("cannot find end of structure", {
@@ -494,10 +3421,10 @@ function parseInlineTable(str, ptr, depth, integersAsBigInt) {
       let t = res;
       let hasOwn = false;
       let [key, keyEndPtr] = parseKey(str, ptr - 1);
-      for (let i = 0; i < key.length; i++) {
-        if (i)
+      for (let i2 = 0; i2 < key.length; i2++) {
+        if (i2)
           t = hasOwn ? t[k] : t[k] = {};
-        k = key[i];
+        k = key[i2];
         if ((hasOwn = Object.hasOwn(t, k)) && (typeof t[k] !== "object" || seen.has(t[k]))) {
           throw new TomlError("trying to redefine an already defined value", {
             toml: str,
@@ -562,8 +3489,8 @@ function peekTable(key, table, meta, type) {
   let k;
   let hasOwn = false;
   let state;
-  for (let i = 0; i < key.length; i++) {
-    if (i) {
+  for (let i2 = 0; i2 < key.length; i2++) {
+    if (i2) {
       t = hasOwn ? t[k] : t[k] = {};
       m = (state = m[k]).c;
       if (type === 0 && (state.t === 1 || state.t === 2)) {
@@ -575,7 +3502,7 @@ function peekTable(key, table, meta, type) {
         m = m[l].c;
       }
     }
-    k = key[i];
+    k = key[i2];
     if ((hasOwn = Object.hasOwn(t, k)) && m[k]?.t === 0 && m[k]?.d) {
       return null;
     }
@@ -585,7 +3512,7 @@ function peekTable(key, table, meta, type) {
         Object.defineProperty(m, k, { enumerable: true, configurable: true, writable: true });
       }
       m[k] = {
-        t: i < key.length - 1 && type === 2 ? 3 : type,
+        t: i2 < key.length - 1 && type === 2 ? 3 : type,
         d: false,
         i: 0,
         c: {}
@@ -681,10 +3608,10 @@ function parse(toml, { maxDepth = 1e3, integersAsBigInt } = {}) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/cli.ts
-import { readFileSync as readFileSync29, mkdtempSync } from "node:fs";
+import { readFileSync as readFileSync32, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join as join29, dirname as dirname3 } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join as join32, dirname as dirname4 } from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // plugins/awos/skills/ai-readiness-audit/collectors/git.ts
 import { execFileSync } from "node:child_process";
@@ -715,9 +3642,9 @@ function writeArtifact(artifact, outDir) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/collectors/git.ts
-function run(args, cwd) {
+function run2(args2, cwd) {
   try {
-    return execFileSync("git", args, { cwd, encoding: "utf8" });
+    return execFileSync("git", args2, { cwd, encoding: "utf8" });
   } catch {
     return "";
   }
@@ -729,12 +3656,12 @@ function daysBetween(d1, d2) {
   return Math.round((d2.getTime() - d1.getTime()) / 864e5);
 }
 function getDefaultBranch(cwd) {
-  const out = run(["symbolic-ref", "--short", "HEAD"], cwd).trim();
-  return out || "main";
+  const out2 = run2(["symbolic-ref", "--short", "HEAD"], cwd).trim();
+  return out2 || "main";
 }
 function getTotalCommits(cwd) {
-  const out = run(["rev-list", "--count", "HEAD"], cwd).trim();
-  const n = parseInt(out, 10);
+  const out2 = run2(["rev-list", "--count", "HEAD"], cwd).trim();
+  const n = parseInt(out2, 10);
   return isNaN(n) ? 0 : n;
 }
 function getAiMarkedCommits(cwd) {
@@ -745,7 +3672,7 @@ function getAiMarkedCommits(cwd) {
   ];
   const matchedSHAs = /* @__PURE__ */ new Set();
   for (const pat of patterns) {
-    const out = run(
+    const out2 = run2(
       [
         "log",
         "--all-match",
@@ -755,7 +3682,7 @@ function getAiMarkedCommits(cwd) {
       ],
       cwd
     );
-    for (const sha of out.trim().split("\n").filter(Boolean)) {
+    for (const sha of out2.trim().split("\n").filter(Boolean)) {
       matchedSHAs.add(sha);
     }
   }
@@ -773,12 +3700,12 @@ function getToolingPaths(repoPath) {
   return TOOLING_CANDIDATES.filter((p) => existsSync(join2(repoPath, p)));
 }
 function getMergeStats(cwd) {
-  const allMerges = run(
+  const allMerges = run2(
     ["log", "--first-parent", "--merges", "--format=%H"],
     cwd
   ).trim().split("\n").filter(Boolean);
   const total_merges = allMerges.length;
-  const revertOut = run(
+  const revertOut = run2(
     [
       "log",
       "--first-parent",
@@ -792,7 +3719,7 @@ function getMergeStats(cwd) {
   return { total_merges, revert_merges };
 }
 function getMergeRecords(cwd) {
-  const mergeOut = run(
+  const mergeOut = run2(
     ["log", "--first-parent", "--merges", "--format=%H %cI"],
     cwd
   ).trim().split("\n").filter(Boolean);
@@ -800,7 +3727,7 @@ function getMergeRecords(cwd) {
   for (const line of mergeOut) {
     const [sha, mergedAt] = line.split(" ");
     if (!sha || !mergedAt) continue;
-    const sideOut = run(["log", "--format=%cI", `${sha}^1..${sha}^2`], cwd).trim().split("\n").filter(Boolean);
+    const sideOut = run2(["log", "--format=%cI", `${sha}^1..${sha}^2`], cwd).trim().split("\n").filter(Boolean);
     if (sideOut.length === 0) continue;
     const dates = sideOut.map((d) => new Date(d)).filter((d) => !isNaN(d.getTime()));
     if (dates.length === 0) continue;
@@ -813,7 +3740,7 @@ function getMergeRecords(cwd) {
   return records;
 }
 function buildMonthlyBuckets(cwd, period) {
-  const latestDateStr = run(
+  const latestDateStr = run2(
     ["log", "--all", "--format=%cI", "--max-count=1"],
     cwd
   ).trim();
@@ -824,15 +3751,15 @@ function buildMonthlyBuckets(cwd, period) {
   const since = new Date(
     latestCommitDate.getTime() - lookback * 864e5
   ).toISOString();
-  const logOut = run(
+  const logOut = run2(
     ["log", "--all", `--since=${since}`, "--format=%H	%aN	%cI	%P"],
     cwd
   ).trim().split("\n").filter(Boolean);
   if (logOut.length === 0) return [];
   const rows = [];
   for (const line of logOut) {
-    const parts = line.split("	");
-    const [sha, author, dateStr, parents = ""] = parts;
+    const parts2 = line.split("	");
+    const [sha, author, dateStr, parents = ""] = parts2;
     if (!sha || !author || !dateStr) continue;
     const date = parseDate(dateStr);
     if (isNaN(date.getTime())) continue;
@@ -868,10 +3795,10 @@ function buildMonthlyBuckets(cwd, period) {
   return buckets.reverse();
 }
 function getNumstatTotals(cwd) {
-  const out = run(["log", "--numstat", "--format="], cwd);
+  const out2 = run2(["log", "--numstat", "--format="], cwd);
   let added = 0;
   let deleted = 0;
-  for (const line of out.split("\n")) {
+  for (const line of out2.split("\n")) {
     const m = line.match(/^(\d+)\s+(\d+)\s+/);
     if (m) {
       added += parseInt(m[1], 10);
@@ -881,7 +3808,7 @@ function getNumstatTotals(cwd) {
   return { added, deleted };
 }
 function getHistoryAvailableDays(cwd) {
-  const allDates = run(["log", "--all", "--format=%cI"], cwd).trim().split("\n").filter(Boolean).map((s) => parseDate(s)).filter((d) => !isNaN(d.getTime()));
+  const allDates = run2(["log", "--all", "--format=%cI"], cwd).trim().split("\n").filter(Boolean).map((s) => parseDate(s)).filter((d) => !isNaN(d.getTime()));
   if (allDates.length < 2) return 0;
   const ts = allDates.map((d) => d.getTime());
   const earliest = new Date(Math.min(...ts));
@@ -1048,20 +3975,20 @@ function makeResult(status, value, evidence, method = "detected") {
 }
 function iterFiles(repoPath, globs, ignore = DEFAULT_IGNORE) {
   const pruneArgs = ignore.flatMap((d) => ["-name", d, "-prune", "-o"]);
-  const nameArgs = globs.flatMap((g, i) => {
+  const nameArgs = globs.flatMap((g, i2) => {
     const bare = g.replace(/^\*\*\//, "");
-    return i === 0 ? ["-name", bare] : ["-o", "-name", bare];
+    return i2 === 0 ? ["-name", bare] : ["-o", "-name", bare];
   });
-  const out = execFileSync2(
+  const out2 = execFileSync2(
     "find",
     [repoPath, ...pruneArgs, "(", ...nameArgs, ")", "-type", "f", "-print"],
     { encoding: "utf8" }
   );
-  return out.split("\n").filter(Boolean).sort();
+  return out2.split("\n").filter(Boolean).sort();
 }
-function grep(repoPath, pattern, globs, flags = "") {
+function grep(repoPath, pattern, globs, flags2 = "") {
   const hits = [];
-  const rx = new RegExp(pattern.source, pattern.flags || flags);
+  const rx = new RegExp(pattern.source, pattern.flags || flags2);
   for (const p of iterFiles(repoPath, globs)) {
     let text;
     try {
@@ -1069,11 +3996,11 @@ function grep(repoPath, pattern, globs, flags = "") {
     } catch {
       continue;
     }
-    text.split("\n").forEach((line, i) => {
+    text.split("\n").forEach((line, i2) => {
       if (rx.test(line))
         hits.push({
           file: relative(repoPath, p),
-          line: i + 1,
+          line: i2 + 1,
           text: line.trim()
         });
     });
@@ -1324,13 +4251,13 @@ function analyseFile(repoPath, filePath) {
   const lines = src.split("\n");
   const samples = [];
   const rel = relative2(repoPath, filePath);
-  for (let i = 0; i < lines.length; i++) {
-    if (!EXCEPT_OPENER_RX.test(lines[i])) continue;
-    const body = lines.slice(i + 1, i + 5).join("\n");
-    const isEmptyFirst = lines[i + 1] !== void 0 && EMPTY_BODY_RX.test(lines[i + 1]);
-    const hasHandled = HANDLED_RX.test(body);
+  for (let i2 = 0; i2 < lines.length; i2++) {
+    if (!EXCEPT_OPENER_RX.test(lines[i2])) continue;
+    const body2 = lines.slice(i2 + 1, i2 + 5).join("\n");
+    const isEmptyFirst = lines[i2 + 1] !== void 0 && EMPTY_BODY_RX.test(lines[i2 + 1]);
+    const hasHandled = HANDLED_RX.test(body2);
     const bad = isEmptyFirst || !hasHandled;
-    samples.push({ file: rel, line: i + 1, bad });
+    samples.push({ file: rel, line: i2 + 1, bad });
   }
   return samples;
 }
@@ -1425,17 +4352,17 @@ function detectArchPattern(repoPath, _params) {
       `architecture documentation found: ${found.join(", ")}`
     ]);
   }
-  let out;
+  let out2;
   try {
-    out = execFileSync3(
+    out2 = execFileSync3(
       "find",
       [repoPath, "-maxdepth", "3", "-type", "d", "-print"],
       { encoding: "utf8" }
     );
   } catch {
-    out = "";
+    out2 = "";
   }
-  const dirs = out.split("\n").filter(Boolean).map((d) => basename2(d).toLowerCase());
+  const dirs = out2.split("\n").filter(Boolean).map((d) => basename2(d).toLowerCase());
   const layeredMatches = LAYERED_DIRS.filter((layer) => dirs.includes(layer));
   if (layeredMatches.length >= 3) {
     return makeResult("WARN", layeredMatches.length, [
@@ -1500,19 +4427,19 @@ function detectImportGraph(repoPath, _params) {
       continue;
     }
     const lines = src.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (let i2 = 0; i2 < lines.length; i2++) {
+      const line = lines[i2];
       const m = IMPORT_RX.exec(line);
       if (!m) continue;
       const importPath = (m[1] || m[2] || m[3] || "").trim();
       if (!importPath) continue;
-      const parts = importPath.replace(/^(?:\.\.\/)+/, "").replace(/^\.\//, "").split("/");
-      const targetDir = parts[0].toLowerCase();
+      const parts2 = importPath.replace(/^(?:\.\.\/)+/, "").replace(/^\.\//, "").split("/");
+      const targetDir = parts2[0].toLowerCase();
       const targetTier = getLayerTier(targetDir);
       if (targetTier !== void 0 && targetTier > sourceTier) {
         violations.push({
           file: relPath,
-          line: i + 1,
+          line: i2 + 1,
           importPath,
           sourceLayer: fileDir,
           targetLayer: targetDir
@@ -1609,11 +4536,11 @@ function detectSeparationOfConcerns(repoPath, _params) {
     `${presentationFiles.length} presentation-layer file(s) checked \u2014 no inline data-access calls found`
   ]);
 }
-function classifyName(name) {
-  if (/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(name)) return "snake_case";
-  if (/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name)) return "kebab-case";
-  if (/^[A-Z][A-Za-z0-9]*$/.test(name)) return "PascalCase";
-  if (/^[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$/.test(name)) return "camelCase";
+function classifyName(name2) {
+  if (/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(name2)) return "snake_case";
+  if (/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name2)) return "kebab-case";
+  if (/^[A-Z][A-Za-z0-9]*$/.test(name2)) return "PascalCase";
+  if (/^[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$/.test(name2)) return "camelCase";
   return "other";
 }
 var NAMING_SOURCE_GLOBS = [
@@ -1890,7 +4817,7 @@ var TECH_SIGNALS = [
     name: "postgresql",
     detect: (r) => iterFiles(r, ["*.sql"]).length > 0 || (() => {
       try {
-        const out = execFileSync4(
+        const out2 = execFileSync4(
           "grep",
           [
             "-rl",
@@ -1902,7 +4829,7 @@ var TECH_SIGNALS = [
           ],
           { encoding: "utf8" }
         );
-        return out.trim().length > 0;
+        return out2.trim().length > 0;
       } catch {
         return false;
       }
@@ -1912,7 +4839,7 @@ var TECH_SIGNALS = [
     name: "postgres",
     detect: (r) => iterFiles(r, ["*.sql"]).length > 0 || (() => {
       try {
-        const out = execFileSync4(
+        const out2 = execFileSync4(
           "grep",
           [
             "-rl",
@@ -1924,7 +4851,7 @@ var TECH_SIGNALS = [
           ],
           { encoding: "utf8" }
         );
-        return out.trim().length > 0;
+        return out2.trim().length > 0;
       } catch {
         return false;
       }
@@ -1950,12 +4877,12 @@ var TECH_SIGNALS = [
     name: "kubernetes",
     detect: (r) => {
       try {
-        const out = execFileSync4(
+        const out2 = execFileSync4(
           "grep",
           ["-rl", "--include=*.yaml", "--include=*.yml", "apiVersion:", r],
           { encoding: "utf8" }
         );
-        return out.trim().length > 0;
+        return out2.trim().length > 0;
       } catch {
         return false;
       }
@@ -2033,18 +4960,18 @@ function detectTrunk(repoPath) {
 }
 function listLocalBranches(repoPath) {
   try {
-    const out = execFileSync4("git", ["branch", "--format=%(refname:short)"], {
+    const out2 = execFileSync4("git", ["branch", "--format=%(refname:short)"], {
       cwd: repoPath,
       encoding: "utf8"
     });
-    return out.split("\n").map((b) => b.trim()).filter((b) => b.length > 0 && !TRUNK_BRANCHES.has(b));
+    return out2.split("\n").map((b) => b.trim()).filter((b) => b.length > 0 && !TRUNK_BRANCHES.has(b));
   } catch {
     return [];
   }
 }
 function branchTouchedSpec(repoPath, branch, trunk) {
   try {
-    const out = execFileSync4(
+    const out2 = execFileSync4(
       "git",
       [
         "log",
@@ -2057,7 +4984,7 @@ function branchTouchedSpec(repoPath, branch, trunk) {
       ],
       { cwd: repoPath, encoding: "utf8" }
     );
-    return out.split("\n").some((line) => line.startsWith("context/spec/"));
+    return out2.split("\n").some((line) => line.startsWith("context/spec/"));
   } catch {
     return false;
   }
@@ -2130,7 +5057,7 @@ function listSpecDirs(repoPath) {
   const specBase = join5(repoPath, "context", "spec");
   if (!existsSync3(specBase)) return [];
   try {
-    return readdirSync(specBase).filter((name) => /^\d{3}-/.test(name)).sort().map((name) => join5(specBase, name)).filter((p) => {
+    return readdirSync(specBase).filter((name2) => /^\d{3}-/.test(name2)).sort().map((name2) => join5(specBase, name2)).filter((p) => {
       try {
         return statSync(p).isDirectory();
       } catch {
@@ -2505,11 +5432,11 @@ function detectTrunk2(repoPath) {
 }
 function listFeatureBranches(repoPath) {
   try {
-    const out = execFileSync5("git", ["branch", "--format=%(refname:short)"], {
+    const out2 = execFileSync5("git", ["branch", "--format=%(refname:short)"], {
       cwd: repoPath,
       encoding: "utf8"
     });
-    return out.split("\n").map((b) => b.trim()).filter((b) => b.length > 0 && !TRUNK_NAMES.has(b));
+    return out2.split("\n").map((b) => b.trim()).filter((b) => b.length > 0 && !TRUNK_NAMES.has(b));
   } catch {
     return [];
   }
@@ -2517,7 +5444,7 @@ function listFeatureBranches(repoPath) {
 function branchLayerCount(repoPath, branch, trunk) {
   let paths;
   try {
-    const out = execFileSync5(
+    const out2 = execFileSync5(
       "git",
       [
         "log",
@@ -2530,16 +5457,16 @@ function branchLayerCount(repoPath, branch, trunk) {
       ],
       { cwd: repoPath, encoding: "utf8" }
     );
-    paths = out.split("\n").filter(Boolean);
+    paths = out2.split("\n").filter(Boolean);
   } catch {
     return 0;
   }
   const layers = /* @__PURE__ */ new Set();
   for (const p of paths) {
     const withSlash = "/" + p;
-    for (const { name, patterns } of LAYER_PATTERNS) {
+    for (const { name: name2, patterns } of LAYER_PATTERNS) {
       if (patterns.test(withSlash)) {
-        layers.add(name);
+        layers.add(name2);
         break;
       }
     }
@@ -2608,8 +5535,8 @@ function detectVerticalDelivery(repoPath, _params) {
 }
 var BACKEND_RX = /-backend$|[-_]api$|[-_]server$/i;
 var FRONTEND_RX = /-frontend$|[-_]ui$|[-_]client$|[-_]web$/i;
-function stripLayerSuffix(name) {
-  return name.replace(
+function stripLayerSuffix(name2) {
+  return name2.replace(
     /-backend$|-frontend$|[-_]api$|[-_]server$|[-_]ui$|[-_]client$|[-_]web$/i,
     ""
   ).toLowerCase();
@@ -2617,11 +5544,11 @@ function stripLayerSuffix(name) {
 function detectNoLayerSplit(repoPath, _params) {
   let branches;
   try {
-    const out = execFileSync5("git", ["branch", "--format=%(refname:short)"], {
+    const out2 = execFileSync5("git", ["branch", "--format=%(refname:short)"], {
       cwd: repoPath,
       encoding: "utf8"
     });
-    branches = out.split("\n").map((b) => b.trim()).filter((b) => b.length > 0 && !TRUNK_NAMES.has(b));
+    branches = out2.split("\n").map((b) => b.trim()).filter((b) => b.length > 0 && !TRUNK_NAMES.has(b));
   } catch {
     return makeResult("SKIP", null, [
       "no git branches available \u2014 layer-split detection skipped"
@@ -2980,10 +5907,10 @@ var ENV_EXAMPLE_GLOBS = [
 ];
 function detectEnvExample(repoPath, _params) {
   const found = [];
-  for (const name of ENV_EXAMPLE_GLOBS) {
-    const full = join8(repoPath, name);
+  for (const name2 of ENV_EXAMPLE_GLOBS) {
+    const full = join8(repoPath, name2);
     if (existsSync6(full)) {
-      found.push(name);
+      found.push(name2);
     }
   }
   if (found.length > 0) {
@@ -3050,15 +5977,15 @@ function detectNoSecretsCommitted(repoPath, _params) {
       continue;
     }
     const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (let i2 = 0; i2 < lines.length; i2++) {
+      const line = lines[i2];
       if (/^\s*(#|\/\/|\/\*)/.test(line)) continue;
       for (const pat of SECRET_PATTERNS) {
         if (!pat.test(line)) continue;
         if (PLACEHOLDER_RX.test(line)) continue;
         hits.push({
           file: relative7(repoPath, filePath),
-          line: i + 1,
+          line: i2 + 1,
           pattern: pat.source.slice(0, 40)
         });
         break;
@@ -3111,15 +6038,15 @@ function detectSensitiveFilesGitignored(repoPath, _params) {
   if (covered.length >= 3) {
     return makeResult("PASS", covered.length, [
       `${covered.length} sensitive file type pattern(s) covered in .gitignore`,
-      ...covered.map(({ name }) => `gitignored: ${name}`)
+      ...covered.map(({ name: name2 }) => `gitignored: ${name2}`)
     ]);
   }
   if (covered.length >= 1) {
     const missing = SENSITIVE_PATTERNS.filter(({ rx }) => !rx.test(content));
     return makeResult("WARN", covered.length, [
       `only ${covered.length} sensitive pattern(s) covered \u2014 add *.pem, *.key, *.p12, *.pfx to .gitignore`,
-      ...covered.map(({ name }) => `covered: ${name}`),
-      ...missing.slice(0, 5).map(({ name }) => `not covered: ${name}`)
+      ...covered.map(({ name: name2 }) => `covered: ${name2}`),
+      ...missing.slice(0, 5).map(({ name: name2 }) => `not covered: ${name2}`)
     ]);
   }
   return makeResult("FAIL", 0, [
@@ -3217,9 +6144,9 @@ function detectLockfileIntegrity(repoPath, _params) {
   const withHashes = [];
   const withoutHashes = [];
   for (const filePath of presentLockfiles) {
-    const name = basename4(filePath);
+    const name2 = basename4(filePath);
     const check = LOCKFILE_INTEGRITY_CHECKS.find(
-      ({ name: rx }) => rx.test(name)
+      ({ name: rx }) => rx.test(name2)
     );
     if (!check) continue;
     let content;
@@ -3229,9 +6156,9 @@ function detectLockfileIntegrity(repoPath, _params) {
       continue;
     }
     if (check.integrityRx.test(content)) {
-      withHashes.push(name);
+      withHashes.push(name2);
     } else {
-      withoutHashes.push(name);
+      withoutHashes.push(name2);
     }
   }
   if (withHashes.length > 0) {
@@ -3656,8 +6583,8 @@ var AGENT_FILE_GLOBS = [
 ];
 function listAgentFiles(repoPath) {
   const results = [];
-  for (const name of ["CLAUDE.md", "AGENTS.md", ".mcp.json"]) {
-    const full = join10(repoPath, name);
+  for (const name2 of ["CLAUDE.md", "AGENTS.md", ".mcp.json"]) {
+    const full = join10(repoPath, name2);
     if (existsSync8(full)) results.push(full);
   }
   const claudeDir = join10(repoPath, ".claude");
@@ -3758,14 +6685,14 @@ function detectPromptInjection(repoPath, _params) {
       continue;
     }
     const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      for (const { name, rx } of INJECTION_PATTERNS) {
+    for (let i2 = 0; i2 < lines.length; i2++) {
+      const line = lines[i2];
+      for (const { name: name2, rx } of INJECTION_PATTERNS) {
         if (rx.test(line)) {
           hits.push({
             file: relative9(repoPath, filePath),
-            line: i + 1,
-            pattern: name
+            line: i2 + 1,
+            pattern: name2
           });
           break;
         }
@@ -3842,12 +6769,12 @@ function detectHookScriptSafety(repoPath, _params) {
     } catch {
       continue;
     }
-    const flags = [];
-    for (const { name, rx } of HOOK_RED_FLAGS) {
-      if (rx.test(content)) flags.push(name);
+    const flags2 = [];
+    for (const { name: name2, rx } of HOOK_RED_FLAGS) {
+      if (rx.test(content)) flags2.push(name2);
     }
-    if (flags.length > 0) {
-      flaggedFiles.push({ file: relative9(repoPath, filePath), flags });
+    if (flags2.length > 0) {
+      flaggedFiles.push({ file: relative9(repoPath, filePath), flags: flags2 });
     }
   }
   if (flaggedFiles.length === 0) {
@@ -4037,15 +6964,15 @@ function detectNoSecurityBypass(repoPath, _params) {
       continue;
     }
     const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (let i2 = 0; i2 < lines.length; i2++) {
+      const line = lines[i2];
       if (/^\s*(#|\/\/|<!--)/.test(line)) continue;
-      for (const { name, rx } of BYPASS_PATTERNS) {
+      for (const { name: name2, rx } of BYPASS_PATTERNS) {
         if (rx.test(line)) {
           hits.push({
             file: relative9(repoPath, filePath),
-            line: i + 1,
-            pattern: name
+            line: i2 + 1,
+            pattern: name2
           });
           break;
         }
@@ -4440,10 +7367,10 @@ var COVERAGE_CONFIG_FILES = [
 var COVERAGE_CONTENT_RX = /coverageThreshold|coverage[_-]?report|coverage[_-]?min|(?:\[tool\.coverage)|codecov|nyc|c8\b|--coverage\b/i;
 function detectCoverageConfig(repoPath, _params) {
   const signals = [];
-  for (const name of COVERAGE_CONFIG_FILES) {
-    const full = join11(repoPath, name);
+  for (const name2 of COVERAGE_CONFIG_FILES) {
+    const full = join11(repoPath, name2);
     if (existsSync9(full)) {
-      signals.push(`coverage config: ${name}`);
+      signals.push(`coverage config: ${name2}`);
     }
   }
   const pkgJson = join11(repoPath, "package.json");
@@ -4458,8 +7385,8 @@ function detectCoverageConfig(repoPath, _params) {
       signals.push("coverage settings in package.json");
     }
   }
-  for (const name of ["pyproject.toml", "setup.cfg"]) {
-    const full = join11(repoPath, name);
+  for (const name2 of ["pyproject.toml", "setup.cfg"]) {
+    const full = join11(repoPath, name2);
     if (!existsSync9(full)) continue;
     let content;
     try {
@@ -4468,7 +7395,7 @@ function detectCoverageConfig(repoPath, _params) {
       continue;
     }
     if (/\[tool\.coverage|coverage_report|coveragerc/i.test(content)) {
-      signals.push(`coverage config in ${name}`);
+      signals.push(`coverage config in ${name2}`);
     }
   }
   if (signals.length > 0) {
@@ -4494,16 +7421,16 @@ var FACTORY_CONTENT_RX = /\b(factory_boy|FactoryGirl|FactoryBot|faker|Faker|Test
 var CONFTEST_GLOBS = ["conftest.py", "test_helpers.*", "test-helpers.*"];
 function detectTestDataManagement(repoPath, _params) {
   const signals = [];
-  for (const name of FIXTURE_DIR_NAMES) {
-    const full = join11(repoPath, name);
+  for (const name2 of FIXTURE_DIR_NAMES) {
+    const full = join11(repoPath, name2);
     if (existsSync9(full)) {
-      signals.push(`fixture directory: ${name}/`);
+      signals.push(`fixture directory: ${name2}/`);
       break;
     }
     for (const testRoot of ["test", "tests", "__tests__"]) {
-      const nested = join11(repoPath, testRoot, name);
+      const nested = join11(repoPath, testRoot, name2);
       if (existsSync9(nested)) {
-        signals.push(`fixture directory: ${testRoot}/${name}/`);
+        signals.push(`fixture directory: ${testRoot}/${name2}/`);
         break;
       }
     }
@@ -4590,9 +7517,9 @@ function detectContractTests(repoPath, _params) {
   if (contractConfigs.length > 0) {
     signals.push(`contract config: ${relative10(repoPath, contractConfigs[0])}`);
   }
-  for (const name of CONTRACT_DIR_NAMES) {
-    if (existsSync9(join11(repoPath, name))) {
-      signals.push(`contract directory: ${name}/`);
+  for (const name2 of CONTRACT_DIR_NAMES) {
+    if (existsSync9(join11(repoPath, name2))) {
+      signals.push(`contract directory: ${name2}/`);
       break;
     }
   }
@@ -4727,8 +7654,8 @@ var SETUP_CONTENT_RX = /\b(install|setup|usage|getting[_\s-]started|quick[_\s-]s
 var HEADING_RX = /^#+ |\n#+ |^[=\-~^"'`]+\s*$/m;
 function detectRootReadme(repoPath, _params) {
   let readmePath = null;
-  for (const name of README_NAMES) {
-    const full = join12(repoPath, name);
+  for (const name2 of README_NAMES) {
+    const full = join12(repoPath, name2);
     if (existsSync10(full)) {
       readmePath = full;
       break;
@@ -4953,8 +7880,8 @@ function extractMakeTargets(readmeContent) {
 }
 function loadMakefileTargets(repoPath) {
   const makefileNames = ["Makefile", "makefile", "GNUmakefile"];
-  for (const name of makefileNames) {
-    const full = join12(repoPath, name);
+  for (const name2 of makefileNames) {
+    const full = join12(repoPath, name2);
     if (!existsSync10(full)) continue;
     let content;
     try {
@@ -5100,15 +8027,15 @@ function detectTlsEnforced(repoPath, _params) {
       continue;
     }
     const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (let i2 = 0; i2 < lines.length; i2++) {
+      const line = lines[i2];
       if (/^\s*(#|\/\/|\/\*|<!--)/.test(line)) continue;
       if (/example|template|placeholder|localhost|127\.|your[_-]/i.test(line))
         continue;
       if (PLAIN_HTTP_STRICT_RX.test(line)) {
         plainHttpHits.push({
           file: relative12(repoPath, filePath),
-          line: i + 1,
+          line: i2 + 1,
           text: line.trim().slice(0, 100)
         });
       }
@@ -5166,10 +8093,10 @@ var SECURITY_HEADERS = [
 ];
 function detectSecurityHeaders(repoPath, _params) {
   const found = [];
-  for (const { name, rx } of SECURITY_HEADERS) {
+  for (const { name: name2, rx } of SECURITY_HEADERS) {
     const hits = grep(repoPath, rx, HEADER_GLOBS);
     if (hits.length > 0) {
-      found.push(name);
+      found.push(name2);
     }
   }
   if (found.length >= 2) {
@@ -5222,19 +8149,19 @@ function detectCorsNotWildcard(repoPath, _params) {
       continue;
     }
     const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (let i2 = 0; i2 < lines.length; i2++) {
+      const line = lines[i2];
       if (/^\s*(#|\/\/|\/\*)/.test(line)) continue;
       if (CORS_WILDCARD_RX.test(line)) {
         wildcardHits.push({
           file: relative12(repoPath, filePath),
-          line: i + 1,
+          line: i2 + 1,
           text: line.trim().slice(0, 120)
         });
       } else if (CORS_SCOPED_RX.test(line)) {
         scopedHits.push({
           file: relative12(repoPath, filePath),
-          line: i + 1,
+          line: i2 + 1,
           text: line.trim().slice(0, 120)
         });
       }
@@ -5291,8 +8218,8 @@ function detectParameterizedSql(repoPath, _params) {
       continue;
     }
     const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (let i2 = 0; i2 < lines.length; i2++) {
+      const line = lines[i2];
       if (/^\s*(#|\/\/|\/\*)/.test(line)) continue;
       if (/test|spec|mock|fixture|fake/i.test(
         relative12(repoPath, filePath).toLowerCase()
@@ -5302,7 +8229,7 @@ function detectParameterizedSql(repoPath, _params) {
         if (pat.test(line)) {
           hits.push({
             file: relative12(repoPath, filePath),
-            line: i + 1,
+            line: i2 + 1,
             text: line.trim().slice(0, 120)
           });
           break;
@@ -5386,15 +8313,15 @@ function detectNoHardcodedSecrets(repoPath, _params) {
       continue;
     }
     const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (let i2 = 0; i2 < lines.length; i2++) {
+      const line = lines[i2];
       if (/^\s*(#|\/\/|\/\*)/.test(line)) continue;
       if (APPSEC_PLACEHOLDER_RX.test(line)) continue;
       for (const pat of APPSEC_SECRET_PATTERNS) {
         if (!pat.test(line)) continue;
         hits.push({
           file: relative12(repoPath, filePath),
-          line: i + 1,
+          line: i2 + 1,
           pattern: pat.source.slice(0, 40)
         });
         break;
@@ -6750,6 +9677,669 @@ function compute15(collectedDir, standards, topology) {
   );
 }
 
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g10_complexity.ts
+import { readFileSync as readFileSync29, existsSync as existsSync27, readdirSync as readdirSync4 } from "node:fs";
+import { join as join29, extname, dirname as dirname3 } from "node:path";
+import { fileURLToPath } from "node:url";
+var import_web_tree_sitter = __toESM(require_tree_sitter());
+var CCN_THRESHOLD = 10;
+var MAX_FILE_BYTES = 512 * 1024;
+var EXT_TO_GRAMMAR = {
+  ".js": "tree-sitter-javascript.wasm",
+  ".mjs": "tree-sitter-javascript.wasm",
+  ".cjs": "tree-sitter-javascript.wasm",
+  ".jsx": "tree-sitter-javascript.wasm",
+  ".ts": "tree-sitter-typescript.wasm",
+  ".mts": "tree-sitter-typescript.wasm",
+  ".cts": "tree-sitter-typescript.wasm",
+  ".tsx": "tree-sitter-tsx.wasm",
+  ".py": "tree-sitter-python.wasm",
+  ".go": "tree-sitter-go.wasm",
+  ".java": "tree-sitter-java.wasm",
+  ".rb": "tree-sitter-ruby.wasm",
+  ".cs": "tree-sitter-c_sharp.wasm",
+  ".c": "tree-sitter-c.wasm",
+  ".cpp": "tree-sitter-cpp.wasm",
+  ".cc": "tree-sitter-cpp.wasm",
+  ".cxx": "tree-sitter-cpp.wasm",
+  ".rs": "tree-sitter-rust.wasm",
+  ".php": "tree-sitter-php.wasm",
+  ".kt": "tree-sitter-kotlin.wasm",
+  ".kts": "tree-sitter-kotlin.wasm"
+};
+var DECISION_NODE_TYPES = /* @__PURE__ */ new Set([
+  "if_statement",
+  "elif_clause",
+  // Python
+  "elsif_clause",
+  // Ruby
+  "else_if_clause",
+  // Kotlin
+  "for_statement",
+  "for_in_statement",
+  "for_of_statement",
+  "foreach_statement",
+  // C#
+  "while_statement",
+  "do_statement",
+  "switch_case",
+  "catch_clause",
+  "conditional_expression",
+  // ternary ?:
+  "when_expression"
+  // Kotlin when
+]);
+var FUNCTION_BOUNDARY_TYPES = /* @__PURE__ */ new Set([
+  "function_declaration",
+  "function_definition",
+  "function_expression",
+  // JS: const f = function() {}
+  "arrow_function",
+  "method_definition",
+  "method_declaration",
+  "constructor_declaration",
+  "function_item",
+  // Rust fn
+  "lambda_expression",
+  "closure_expression"
+  // Rust |...| {}
+]);
+var PRUNE_DIRS = /* @__PURE__ */ new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".venv",
+  "__pycache__",
+  ".next",
+  "target",
+  "vendor",
+  ".cache",
+  "coverage"
+]);
+function resolveGrammarsDir() {
+  const metricsDir = dirname3(fileURLToPath(import.meta.url));
+  const distGrammars = join29(metricsDir, "grammars");
+  if (existsSync27(distGrammars)) return distGrammars;
+  const candidates = [
+    join29(
+      metricsDir,
+      "..",
+      "..",
+      "..",
+      "..",
+      "..",
+      "node_modules",
+      "tree-sitter-wasms",
+      "out"
+    ),
+    join29(
+      metricsDir,
+      "..",
+      "..",
+      "..",
+      "..",
+      "node_modules",
+      "tree-sitter-wasms",
+      "out"
+    ),
+    join29(
+      metricsDir,
+      "..",
+      "..",
+      "..",
+      "node_modules",
+      "tree-sitter-wasms",
+      "out"
+    )
+  ];
+  for (const c of candidates) {
+    if (existsSync27(c)) return c;
+  }
+  return distGrammars;
+}
+function resolveCoreWasm() {
+  const metricsDir = dirname3(fileURLToPath(import.meta.url));
+  const distWasm = join29(metricsDir, "tree-sitter.wasm");
+  if (existsSync27(distWasm)) return distWasm;
+  const candidates = [
+    join29(
+      metricsDir,
+      "..",
+      "..",
+      "..",
+      "..",
+      "..",
+      "node_modules",
+      "web-tree-sitter",
+      "tree-sitter.wasm"
+    ),
+    join29(
+      metricsDir,
+      "..",
+      "..",
+      "..",
+      "..",
+      "node_modules",
+      "web-tree-sitter",
+      "tree-sitter.wasm"
+    ),
+    join29(
+      metricsDir,
+      "..",
+      "..",
+      "..",
+      "node_modules",
+      "web-tree-sitter",
+      "tree-sitter.wasm"
+    )
+  ];
+  for (const c of candidates) {
+    if (existsSync27(c)) return c;
+  }
+  return distWasm;
+}
+function walkDir(dir, cb) {
+  let entries;
+  try {
+    entries = readdirSync4(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (PRUNE_DIRS.has(entry.name)) continue;
+      walkDir(join29(dir, entry.name), cb);
+    } else if (entry.isFile()) {
+      cb(join29(dir, entry.name));
+    }
+  }
+}
+function countDecisions(node) {
+  let count = 0;
+  function visit(n) {
+    if (DECISION_NODE_TYPES.has(n.type)) count++;
+    if (n.type === "binary_expression") {
+      for (let i2 = 0; i2 < n.childCount; i2++) {
+        const child = n.child(i2);
+        if (child && (child.type === "&&" || child.type === "||" || child.type === "and" || child.type === "or")) {
+          count++;
+        }
+      }
+    }
+    for (let i2 = 0; i2 < n.childCount; i2++) {
+      const child = n.child(i2);
+      if (!child) continue;
+      if (FUNCTION_BOUNDARY_TYPES.has(child.type) && child.isNamed) continue;
+      visit(child);
+    }
+  }
+  visit(node);
+  return count;
+}
+function collectFunctions(node, out2) {
+  if (FUNCTION_BOUNDARY_TYPES.has(node.type) && node.isNamed) {
+    out2.push(node);
+  }
+  for (let i2 = 0; i2 < node.childCount; i2++) {
+    const child = node.child(i2);
+    if (child) collectFunctions(child, out2);
+  }
+}
+function bandFromAvg(avg) {
+  if (avg <= 5) return "elite";
+  if (avg <= 10) return "high";
+  if (avg <= 15) return "medium";
+  return "low";
+}
+function makeSkip() {
+  return makeMetricResult(
+    "adp_g10_complexity",
+    null,
+    "computed",
+    [],
+    computeReliability("not-reliable", [], ["scale"]),
+    [],
+    ["scale"]
+  );
+}
+async function compute16(_collectedDir, _standards, _topology, repoPathOverride) {
+  const repoPath = repoPathOverride ?? _collectedDir;
+  if (!existsSync27(repoPath)) return makeSkip();
+  const grammarsDir = resolveGrammarsDir();
+  const coreWasmPath = resolveCoreWasm();
+  const Parser2 = import_web_tree_sitter.default;
+  if (!Parser2 || typeof Parser2.init !== "function") return makeSkip();
+  try {
+    if (!existsSync27(coreWasmPath)) return makeSkip();
+    const wasmBinary2 = readFileSync29(coreWasmPath);
+    await Parser2.init({
+      wasmBinary: wasmBinary2,
+      locateFile: () => coreWasmPath
+    });
+  } catch {
+    return makeSkip();
+  }
+  const languageCache = /* @__PURE__ */ new Map();
+  async function loadLanguage(grammarFile) {
+    if (languageCache.has(grammarFile)) return languageCache.get(grammarFile);
+    const grammarPath = join29(grammarsDir, grammarFile);
+    if (!existsSync27(grammarPath)) {
+      languageCache.set(grammarFile, null);
+      return null;
+    }
+    try {
+      const grammarBytes = readFileSync29(grammarPath);
+      const lang = await Parser2.Language.load(new Uint8Array(grammarBytes));
+      languageCache.set(grammarFile, lang);
+      return lang;
+    } catch {
+      languageCache.set(grammarFile, null);
+      return null;
+    }
+  }
+  const filePaths = [];
+  walkDir(repoPath, (p) => {
+    if (EXT_TO_GRAMMAR[extname(p).toLowerCase()]) filePaths.push(p);
+  });
+  if (filePaths.length === 0) return makeSkip();
+  const parser = new Parser2();
+  let totalCcn = 0;
+  let maxCcn = 0;
+  let hotspotCount = 0;
+  let functionsAnalysed = 0;
+  let filesAnalysed = 0;
+  let filesSkipped = 0;
+  for (const filePath of filePaths) {
+    const ext = extname(filePath).toLowerCase();
+    const grammarFile = EXT_TO_GRAMMAR[ext];
+    if (!grammarFile) {
+      filesSkipped++;
+      continue;
+    }
+    const lang = await loadLanguage(grammarFile);
+    if (!lang) {
+      filesSkipped++;
+      continue;
+    }
+    let source;
+    try {
+      const buf = readFileSync29(filePath);
+      if (buf.length > MAX_FILE_BYTES) {
+        filesSkipped++;
+        continue;
+      }
+      source = buf.toString("utf8");
+    } catch {
+      filesSkipped++;
+      continue;
+    }
+    try {
+      parser.setLanguage(lang);
+      const tree = parser.parse(source);
+      if (!tree) {
+        filesSkipped++;
+        continue;
+      }
+      const fns = [];
+      collectFunctions(tree.rootNode, fns);
+      filesAnalysed++;
+      if (fns.length === 0) {
+        const ccn = 1 + countDecisions(tree.rootNode);
+        totalCcn += ccn;
+        functionsAnalysed++;
+        if (ccn > maxCcn) maxCcn = ccn;
+        if (ccn > CCN_THRESHOLD) hotspotCount++;
+      } else {
+        for (const fn of fns) {
+          const ccn = 1 + countDecisions(fn);
+          totalCcn += ccn;
+          functionsAnalysed++;
+          if (ccn > maxCcn) maxCcn = ccn;
+          if (ccn > CCN_THRESHOLD) hotspotCount++;
+        }
+      }
+      tree.delete();
+    } catch {
+      filesSkipped++;
+    }
+  }
+  parser.delete();
+  if (functionsAnalysed === 0) return makeSkip();
+  const avgCcn = totalCcn / functionsAnalysed;
+  const band = bandFromAvg(avgCcn);
+  const value = {
+    avg_ccn: Math.round(avgCcn * 100) / 100,
+    max_ccn: maxCcn,
+    hotspot_count: hotspotCount,
+    functions_analysed: functionsAnalysed,
+    files_analysed: filesAnalysed,
+    files_skipped: filesSkipped,
+    band
+  };
+  return makeMetricResult(
+    "adp_g10_complexity",
+    value,
+    "computed",
+    [1301],
+    computeReliability("not-reliable", ["scale"], []),
+    ["scale"],
+    [],
+    band
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g11_scale.ts
+import { readFileSync as readFileSync30, existsSync as existsSync28, readdirSync as readdirSync5 } from "node:fs";
+import { join as join30, extname as extname2 } from "node:path";
+var EXT_TO_LANG = {
+  ".js": "JavaScript",
+  ".mjs": "JavaScript",
+  ".cjs": "JavaScript",
+  ".ts": "TypeScript",
+  ".mts": "TypeScript",
+  ".cts": "TypeScript",
+  ".tsx": "TSX",
+  ".jsx": "JSX",
+  ".py": "Python",
+  ".go": "Go",
+  ".java": "Java",
+  ".rb": "Ruby",
+  ".cs": "C#",
+  ".c": "C",
+  ".cpp": "C++",
+  ".cc": "C++",
+  ".cxx": "C++",
+  ".rs": "Rust",
+  ".php": "PHP",
+  ".kt": "Kotlin",
+  ".kts": "Kotlin"
+};
+var PRUNE_DIRS2 = /* @__PURE__ */ new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".venv",
+  "__pycache__",
+  ".next",
+  "target",
+  "vendor",
+  ".cache",
+  "coverage"
+]);
+function countLines2(content) {
+  return content.split("\n").filter((l) => l.trim().length > 0).length;
+}
+function walkDir2(dir, cb) {
+  let entries;
+  try {
+    entries = readdirSync5(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (PRUNE_DIRS2.has(entry.name)) continue;
+      walkDir2(join30(dir, entry.name), cb);
+    } else if (entry.isFile()) {
+      cb(join30(dir, entry.name));
+    }
+  }
+}
+function compute17(_collectedDir, _standards, _topology, repoPathOverride) {
+  const repoPath = repoPathOverride ?? _collectedDir;
+  if (!existsSync28(repoPath)) {
+    return makeMetricResult(
+      "adp_g11_scale",
+      null,
+      "computed",
+      [],
+      computeReliability("not-reliable", [], ["scale"]),
+      [],
+      ["scale"]
+    );
+  }
+  const byLanguage = {};
+  let totalLoc = 0;
+  let fileCount = 0;
+  walkDir2(repoPath, (filePath) => {
+    const ext = extname2(filePath).toLowerCase();
+    const lang = EXT_TO_LANG[ext];
+    if (!lang) return;
+    let content;
+    try {
+      content = readFileSync30(filePath, "utf8");
+    } catch {
+      return;
+    }
+    const loc = countLines2(content);
+    totalLoc += loc;
+    fileCount += 1;
+    if (!byLanguage[lang]) {
+      byLanguage[lang] = { files: 0, loc: 0 };
+    }
+    byLanguage[lang].files += 1;
+    byLanguage[lang].loc += loc;
+  });
+  if (fileCount === 0) {
+    return makeMetricResult(
+      "adp_g11_scale",
+      null,
+      "computed",
+      [],
+      computeReliability("not-reliable", [], ["scale"]),
+      [],
+      ["scale"]
+    );
+  }
+  const value = {
+    total_loc: totalLoc,
+    file_count: fileCount,
+    by_language: byLanguage
+  };
+  const reliability = computeReliability("not-reliable", ["scale"], []);
+  return makeMetricResult(
+    "adp_g11_scale",
+    value,
+    "computed",
+    [1302],
+    reliability,
+    ["scale"],
+    []
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g12_deps.ts
+import { readFileSync as readFileSync31, existsSync as existsSync29, readdirSync as readdirSync6 } from "node:fs";
+import { join as join31, basename as basename7 } from "node:path";
+var PRUNE_DIRS3 = /* @__PURE__ */ new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".venv",
+  "__pycache__",
+  ".next",
+  "target",
+  "vendor",
+  ".cache",
+  "coverage"
+]);
+var MANIFEST_NAMES = /* @__PURE__ */ new Set([
+  "package.json",
+  "pyproject.toml",
+  "go.mod",
+  "Cargo.toml",
+  "requirements.txt"
+]);
+function findManifests(dir, depth = 0) {
+  if (depth > 3) return [];
+  const found = [];
+  let entries;
+  try {
+    entries = readdirSync6(dir, { withFileTypes: true });
+  } catch {
+    return found;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (PRUNE_DIRS3.has(entry.name)) continue;
+      found.push(...findManifests(join31(dir, entry.name), depth + 1));
+    } else if (entry.isFile() && MANIFEST_NAMES.has(entry.name)) {
+      found.push(join31(dir, entry.name));
+    }
+  }
+  return found;
+}
+function parsePackageJson(content) {
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return 0;
+  }
+  const deps = Object.keys(
+    parsed.dependencies ?? {}
+  );
+  const devDeps = Object.keys(
+    parsed.devDependencies ?? {}
+  );
+  return deps.length + devDeps.length;
+}
+function parsePyprojectToml(content) {
+  const lines = content.split("\n");
+  let inDepsSection = false;
+  let count = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("[")) {
+      inDepsSection = trimmed === "[project.dependencies]" || trimmed === "[tool.poetry.dependencies]" || trimmed === "[tool.poetry.dev-dependencies]" || trimmed === "[project.optional-dependencies]";
+      continue;
+    }
+    if (!inDepsSection) continue;
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
+      count++;
+    } else if (trimmed.includes("=") && !trimmed.startsWith("[")) {
+      count++;
+    }
+  }
+  return count;
+}
+function parseGoMod(content) {
+  let count = 0;
+  let inRequireBlock = false;
+  for (const rawLine of content.split("\n")) {
+    const line = rawLine.trim();
+    if (line === "require (") {
+      inRequireBlock = true;
+      continue;
+    }
+    if (inRequireBlock && line === ")") {
+      inRequireBlock = false;
+      continue;
+    }
+    if (inRequireBlock) {
+      if (!line || line.startsWith("//")) continue;
+      if (!line.includes("// indirect")) count++;
+    } else if (line.startsWith("require ") && !line.startsWith("require (")) {
+      const rest = line.slice("require ".length).trim();
+      if (rest && !rest.includes("// indirect")) count++;
+    }
+  }
+  return count;
+}
+function parseCargoToml(content) {
+  const lines = content.split("\n");
+  let inDeps = false;
+  let count = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("[")) {
+      inDeps = trimmed === "[dependencies]" || trimmed === "[dev-dependencies]";
+      continue;
+    }
+    if (!inDeps) continue;
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    if (trimmed.includes("=")) count++;
+  }
+  return count;
+}
+function parseRequirementsTxt(content) {
+  return content.split("\n").filter((l) => {
+    const t = l.trim();
+    return t.length > 0 && !t.startsWith("#") && !t.startsWith("-r ");
+  }).length;
+}
+function parseManifest(filePath, content) {
+  const name2 = basename7(filePath);
+  switch (name2) {
+    case "package.json":
+      return parsePackageJson(content);
+    case "pyproject.toml":
+      return parsePyprojectToml(content);
+    case "go.mod":
+      return parseGoMod(content);
+    case "Cargo.toml":
+      return parseCargoToml(content);
+    case "requirements.txt":
+      return parseRequirementsTxt(content);
+    default:
+      return 0;
+  }
+}
+function compute18(_collectedDir, _standards, _topology, repoPathOverride) {
+  const repoPath = repoPathOverride ?? _collectedDir;
+  if (!existsSync29(repoPath)) {
+    return makeMetricResult(
+      "adp_g12_deps",
+      null,
+      "computed",
+      [],
+      computeReliability("not-reliable", [], ["scale"]),
+      [],
+      ["scale"]
+    );
+  }
+  const manifests = findManifests(repoPath);
+  if (manifests.length === 0) {
+    return makeMetricResult(
+      "adp_g12_deps",
+      null,
+      "computed",
+      [],
+      computeReliability("not-reliable", [], ["scale"]),
+      [],
+      ["scale"]
+    );
+  }
+  const byManifest = {};
+  let total = 0;
+  for (const manifest of manifests) {
+    let content;
+    try {
+      content = readFileSync31(manifest, "utf8");
+    } catch {
+      continue;
+    }
+    const count = parseManifest(manifest, content);
+    byManifest[manifest] = count;
+    total += count;
+  }
+  const value = { total_direct_deps: total, by_manifest: byManifest };
+  const reliability = computeReliability("not-reliable", ["scale"], []);
+  return makeMetricResult(
+    "adp_g12_deps",
+    value,
+    "computed",
+    [1303],
+    reliability,
+    ["scale"],
+    []
+  );
+}
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
 var COLLECTORS = {
   git: collect,
@@ -6785,7 +10375,10 @@ var METRICS = {
   adp_d1_spec_coverage: compute12,
   adp_i1_work_mix: compute13,
   adp_i2_throughput: compute14,
-  adp_i3_mttr: compute15
+  adp_i3_mttr: compute15,
+  adp_g10_complexity: compute16,
+  adp_g11_scale: compute17,
+  adp_g12_deps: compute18
 };
 var DEFAULT_PERIOD = {
   bucket_days: 30,
@@ -6795,7 +10388,7 @@ var DEFAULT_PERIOD = {
 function printJson(value) {
   process.stdout.write(JSON.stringify(value, null, 2) + "\n");
 }
-function main() {
+async function main() {
   const [, , command, arg1, arg2] = process.argv;
   if (!command) {
     printJson({
@@ -6856,9 +10449,9 @@ function main() {
       }
       let raw;
       try {
-        raw = readFileSync29(tomlPath, "utf8");
-      } catch (err) {
-        const e = err;
+        raw = readFileSync32(tomlPath, "utf8");
+      } catch (err2) {
+        const e = err2;
         printJson({
           error: `cannot read standards file: ${e.message}`,
           path: tomlPath
@@ -6886,12 +10479,15 @@ function main() {
         });
         process.exit(1);
       }
+      const isScaleMetric = id === "adp_g10_complexity" || id === "adp_g11_scale" || id === "adp_g12_deps";
       let collectedDir;
       if (preCollectedDir) {
         collectedDir = preCollectedDir;
+      } else if (isScaleMetric) {
+        collectedDir = repoPath;
       } else {
-        const tmpRoot = mkdtempSync(join29(tmpdir(), "awos-metric-"));
-        collectedDir = join29(tmpRoot, "collected");
+        const tmpRoot = mkdtempSync(join32(tmpdir(), "awos-metric-"));
+        collectedDir = join32(tmpRoot, "collected");
         const gitArtifact = collect(repoPath, DEFAULT_PERIOD);
         writeArtifact(gitArtifact, collectedDir);
         if (id.startsWith("adp_c")) {
@@ -6907,11 +10503,11 @@ function main() {
           writeArtifact(trackerArtifact, collectedDir);
         }
       }
-      const cliDir = dirname3(fileURLToPath(import.meta.url));
-      const skillRoot = cliDir.endsWith("/dist") || cliDir.endsWith("\\dist") ? dirname3(cliDir) : cliDir;
-      const standardsPath = join29(skillRoot, "references", "standards.toml");
+      const cliDir = dirname4(fileURLToPath2(import.meta.url));
+      const skillRoot = cliDir.endsWith("/dist") || cliDir.endsWith("\\dist") ? dirname4(cliDir) : cliDir;
+      const standardsPath = join32(skillRoot, "references", "standards.toml");
       const standards = loadStandards(standardsPath);
-      const result = metricFn(collectedDir, standards, {});
+      const result = await metricFn(collectedDir, standards, {}, repoPath);
       printJson(result);
       break;
     }
@@ -6924,10 +10520,13 @@ function main() {
     }
   }
 }
-var isMain = typeof process !== "undefined" && process.argv[1] !== void 0 && (process.argv[1] === fileURLToPath(import.meta.url) || // When bundled as dist/cli.js the resolved path is the bundle itself.
+var isMain = typeof process !== "undefined" && process.argv[1] !== void 0 && (process.argv[1] === fileURLToPath2(import.meta.url) || // When bundled as dist/cli.js the resolved path is the bundle itself.
 process.argv[1].endsWith("/dist/cli.js") || process.argv[1].endsWith("\\dist\\cli.js"));
 if (isMain) {
-  main();
+  main().catch((err2) => {
+    process.stderr.write(String(err2) + "\n");
+    process.exit(1);
+  });
 }
 export {
   DETECTORS12 as DETECTORS,

@@ -97,16 +97,22 @@ import { compute as computeD1 } from './metrics/adp_d1_spec_coverage.ts';
 import { compute as computeI1 } from './metrics/adp_i1_work_mix.ts';
 import { compute as computeI2 } from './metrics/adp_i2_throughput.ts';
 import { compute as computeI3 } from './metrics/adp_i3_mttr.ts';
+import { compute as computeG10 } from './metrics/adp_g10_complexity.ts';
+import { compute as computeG11 } from './metrics/adp_g11_scale.ts';
+import { compute as computeG12 } from './metrics/adp_g12_deps.ts';
 // Adding a metric module is a one-line change per import + one entry in METRICS below.
 
 import type { MetricResult } from './metrics/_base.ts';
 import { loadStandards } from './metrics/_base.ts';
 
+// MetricFn may return a MetricResult synchronously or a Promise<MetricResult>
+// (adp_g10_complexity is async — requires wasm init).
 type MetricFn = (
   collectedDir: string,
   standards: Record<string, unknown>,
-  topology: Record<string, boolean>
-) => MetricResult;
+  topology: Record<string, boolean>,
+  repoPath?: string
+) => MetricResult | Promise<MetricResult>;
 
 export const METRICS: Record<string, MetricFn> = {
   adp_g1_tooling_depth: computeG1,
@@ -124,6 +130,9 @@ export const METRICS: Record<string, MetricFn> = {
   adp_i1_work_mix: computeI1,
   adp_i2_throughput: computeI2,
   adp_i3_mttr: computeI3,
+  adp_g10_complexity: computeG10,
+  adp_g11_scale: computeG11,
+  adp_g12_deps: computeG12,
 };
 
 // ---------------------------------------------------------------------------
@@ -148,7 +157,7 @@ function printJson(value: unknown): void {
   process.stdout.write(JSON.stringify(value, null, 2) + '\n');
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const [, , command, arg1, arg2] = process.argv;
 
   if (!command) {
@@ -252,12 +261,23 @@ function main(): void {
         process.exit(1);
       }
 
+      // Scale-based metrics (G10/G11/G12) scan the repo directly and do not
+      // need a collector artifact.  They receive repoPath as the 4th argument.
+      const isScaleMetric =
+        id === 'adp_g10_complexity' ||
+        id === 'adp_g11_scale' ||
+        id === 'adp_g12_deps';
+
       let collectedDir: string;
 
       if (preCollectedDir) {
         // Query-once path: use the caller-supplied collected/ directory.
         // No inline collection — artifacts were already written by `collect` verbs.
         collectedDir = preCollectedDir;
+      } else if (isScaleMetric) {
+        // Scale metrics don't need a collector artifact — they scan repoPath directly.
+        // Use repoPath as collectedDir; the metric ignores it and uses the override.
+        collectedDir = repoPath;
       } else {
         // Inline path (backward-compatible): run required collectors into a temp dir.
         const tmpRoot = mkdtempSync(join(tmpdir(), 'awos-metric-'));
@@ -294,7 +314,8 @@ function main(): void {
           : cliDir;
       const standardsPath = join(skillRoot, 'references', 'standards.toml');
       const standards = loadStandards(standardsPath);
-      const result = metricFn(collectedDir, standards, {});
+      // Await in case the metric is async (e.g. adp_g10_complexity uses wasm init).
+      const result = await metricFn(collectedDir, standards, {}, repoPath);
       printJson(result);
       break;
     }
@@ -319,5 +340,8 @@ const isMain =
     process.argv[1].endsWith('\\dist\\cli.js'));
 
 if (isMain) {
-  main();
+  main().catch((err) => {
+    process.stderr.write(String(err) + '\n');
+    process.exit(1);
+  });
 }

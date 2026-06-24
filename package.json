@@ -28,6 +28,8 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "smol-toml": "^1.7.0"
+    "smol-toml": "^1.7.0",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.24.0"
   }
 }

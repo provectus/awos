@@ -14,6 +14,7 @@
 import { build } from 'esbuild';
 import {
   readdirSync,
+  existsSync,
   rmSync,
   statSync,
   copyFileSync,
@@ -66,6 +67,24 @@ await build({
   platform: 'node',
   format: 'esm',
   target: 'node22',
+  // Inject CommonJS globals (__dirname, __filename) into the bundle.
+  // web-tree-sitter@0.24 is a CJS module that uses __dirname to locate
+  // the core wasm file.  Without this, the bundled ESM context has no
+  // __dirname, causing Parser.init() to fail at runtime.
+  banner: {
+    js: [
+      // Inject CommonJS globals that web-tree-sitter@0.24 (a CJS module) needs
+      // when bundled into an ESM context by esbuild.  Without these:
+      //   - __dirname is undefined → scriptDirectory = "undefined/"
+      //   - require("fs") throws "Dynamic require is not supported"
+      'import { createRequire as __createRequire } from "node:module";',
+      'import { fileURLToPath as __fileURLToPath } from "node:url";',
+      'import { dirname as __dirname2 } from "node:path";',
+      'const __filename = __fileURLToPath(import.meta.url);',
+      'const __dirname = __dirname2(__filename);',
+      'const require = __createRequire(import.meta.url);',
+    ].join('\n'),
+  },
 });
 
 console.log('build-engine: bundled cli.ts → dist/cli.js');
@@ -81,10 +100,61 @@ writeFileSync(
 console.log('build-engine: wrote dist/package.json (type: module)');
 
 // ---------------------------------------------------------------------------
-// 4. .wasm copy hook (no-op for now; web-tree-sitter support lands later)
+// 4. Copy web-tree-sitter core wasm → dist/tree-sitter.wasm
 // ---------------------------------------------------------------------------
-const wasmFiles = readdirSync(skillRoot).filter((f) => f.endsWith('.wasm'));
-for (const wasm of wasmFiles) {
-  copyFileSync(join(skillRoot, wasm), join(distDir, basename(wasm)));
-  console.log(`build-engine: copied ${wasm} → dist/${wasm}`);
+// web-tree-sitter@0.24 ships tree-sitter.wasm; @0.26 ships web-tree-sitter.wasm.
+// Check for both names so the build works if the version is ever upgraded.
+const wtsDir = join(repoRoot, 'node_modules', 'web-tree-sitter');
+const webTreeSitterWasmCandidates = [
+  join(wtsDir, 'tree-sitter.wasm'), // 0.24 and earlier
+  join(wtsDir, 'web-tree-sitter.wasm'), // 0.26+
+];
+const webTreeSitterWasm = webTreeSitterWasmCandidates.find(existsSync);
+if (webTreeSitterWasm) {
+  copyFileSync(webTreeSitterWasm, join(distDir, 'tree-sitter.wasm'));
+  console.log(
+    `build-engine: copied ${webTreeSitterWasm.split('/').pop()} → dist/tree-sitter.wasm`
+  );
+} else {
+  console.warn(
+    'build-engine: WARNING — tree-sitter core wasm not found; adp_g10_complexity will SKIP'
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 5. Copy tree-sitter-wasms grammar files → dist/grammars/
+// ---------------------------------------------------------------------------
+const BUNDLED_GRAMMARS = [
+  'tree-sitter-javascript.wasm',
+  'tree-sitter-typescript.wasm',
+  'tree-sitter-tsx.wasm',
+  'tree-sitter-python.wasm',
+  'tree-sitter-go.wasm',
+  'tree-sitter-java.wasm',
+  'tree-sitter-ruby.wasm',
+  'tree-sitter-c_sharp.wasm',
+  'tree-sitter-c.wasm',
+  'tree-sitter-cpp.wasm',
+  'tree-sitter-rust.wasm',
+  'tree-sitter-php.wasm',
+  'tree-sitter-kotlin.wasm',
+];
+
+const grammarsSourceDir = join(
+  repoRoot,
+  'node_modules',
+  'tree-sitter-wasms',
+  'out'
+);
+const grammarsDestDir = join(distDir, 'grammars');
+mkdirSync(grammarsDestDir, { recursive: true });
+
+for (const grammar of BUNDLED_GRAMMARS) {
+  const src = join(grammarsSourceDir, grammar);
+  if (existsSync(src)) {
+    copyFileSync(src, join(grammarsDestDir, grammar));
+    console.log(`build-engine: copied ${grammar} → dist/grammars/${grammar}`);
+  } else {
+    console.warn(`build-engine: WARNING — grammar not found: ${grammar}`);
+  }
 }

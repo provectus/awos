@@ -328,6 +328,80 @@ source = "AWOS conventions"
 source_year = 2026
 
 # ---------------------------------------------------------------------------
+# Tier G: code complexity / scale / dependency metrics (ADP-G10–G12)
+# Code block 1300–1399. method = "computed". All three are ai-sdlc-adoption.
+# ---------------------------------------------------------------------------
+
+# ADP-G10: Cyclomatic complexity (via web-tree-sitter AST)
+
+[category.cyclomatic_complexity]
+code = 1301
+metric = "adp_g10_complexity"
+dimension = "ai-sdlc-adoption"
+weight = 5
+method = "computed"
+definition = "Average and maximum cyclomatic complexity (CCN) per function, plus high-complexity hotspot count above threshold. Computed via AST decision-point counting for all bundled languages; files in unbundled languages are skipped."
+applies_when = "always"
+sources = ["scale"]
+reliability_default = "not-reliable"
+source = "McCabe 1976"
+source_year = 2024
+
+# ADP-G11: Lines of code and scale
+
+[category.loc_scale]
+code = 1302
+metric = "adp_g11_scale"
+dimension = "ai-sdlc-adoption"
+weight = 3
+method = "computed"
+definition = "Total source-file line count (LOC), per-language breakdown, and file count; a scale signal for contextualising other metrics"
+applies_when = "always"
+sources = ["scale"]
+reliability_default = "not-reliable"
+source = "AWOS conventions"
+source_year = 2026
+
+# ADP-G12: Direct dependency count (manifest-based)
+
+[category.dependency_count]
+code = 1303
+metric = "adp_g12_deps"
+dimension = "ai-sdlc-adoption"
+weight = 3
+method = "computed"
+definition = "Direct-dependency count from package manifests (package.json / pyproject.toml / go.mod / Cargo.toml / requirements.txt). SKIP when no supported manifest is found."
+applies_when = "always"
+sources = ["scale"]
+reliability_default = "not-reliable"
+source = "AWOS conventions"
+source_year = 2026
+
+# ---------------------------------------------------------------------------
+# [band.*] — thresholds for banded metrics
+# ---------------------------------------------------------------------------
+
+# ADP-G10: Cyclomatic complexity bands (McCabe 1976 thresholds)
+
+[band.cyclomatic_complexity]
+metric = "adp_g10_complexity"
+source = "McCabe 1976"
+source_year = 2024
+elite = "avg_ccn <= 5"
+high = "avg_ccn <= 10"
+medium = "avg_ccn <= 15"
+low = "avg_ccn > 15"
+
+[band.complexity_hotspots]
+metric = "adp_g10_complexity"
+source = "McCabe 1976"
+source_year = 2024
+elite = "hotspots = 0"
+high = "hotspots <= 5"
+medium = "hotspots <= 20"
+low = "hotspots > 20"
+
+# ---------------------------------------------------------------------------
 # [band.*] — thresholds for banded metrics
 # ---------------------------------------------------------------------------
 

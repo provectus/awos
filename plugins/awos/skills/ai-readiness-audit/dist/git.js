@@ -50,7 +50,13 @@ function getAiMarkedCommits(cwd) {
   const matchedSHAs = /* @__PURE__ */ new Set();
   for (const pat of patterns) {
     const out = run(
-      ["log", "--all-match", "--regexp-ignore-case", `--grep=${pat}`, "--format=%H"],
+      [
+        "log",
+        "--all-match",
+        "--regexp-ignore-case",
+        `--grep=${pat}`,
+        "--format=%H"
+      ],
       cwd
     );
     for (const sha of out.trim().split("\n").filter(Boolean)) {
@@ -71,10 +77,19 @@ function getToolingPaths(repoPath) {
   return TOOLING_CANDIDATES.filter((p) => existsSync(join(repoPath, p)));
 }
 function getMergeStats(cwd) {
-  const allMerges = run(["log", "--first-parent", "--merges", "--format=%H"], cwd).trim().split("\n").filter(Boolean);
+  const allMerges = run(
+    ["log", "--first-parent", "--merges", "--format=%H"],
+    cwd
+  ).trim().split("\n").filter(Boolean);
   const total_merges = allMerges.length;
   const revertOut = run(
-    ["log", "--first-parent", "--merges", "--grep=^Revert\\|hotfix\\|rollback", "--format=%H"],
+    [
+      "log",
+      "--first-parent",
+      "--merges",
+      "--grep=^Revert\\|hotfix\\|rollback",
+      "--format=%H"
+    ],
     cwd
   ).trim().split("\n").filter(Boolean);
   const revert_merges = revertOut.length;
@@ -89,7 +104,6 @@ function getMergeRecords(cwd) {
   for (const line of mergeOut) {
     const [sha, mergedAt] = line.split(" ");
     if (!sha || !mergedAt) continue;
-    const rangeOut = run(["log", "--format=%cI", `${sha}^2..${sha}^2`, "--first-parent"], cwd);
     const sideOut = run(["log", "--format=%cI", `${sha}^1..${sha}^2`], cwd).trim().split("\n").filter(Boolean);
     if (sideOut.length === 0) continue;
     const dates = sideOut.map((d) => new Date(d)).filter((d) => !isNaN(d.getTime()));
@@ -103,8 +117,17 @@ function getMergeRecords(cwd) {
   return records;
 }
 function buildMonthlyBuckets(cwd, period) {
+  const latestDateStr = run(
+    ["log", "--all", "--format=%cI", "--max-count=1"],
+    cwd
+  ).trim();
+  if (!latestDateStr) return [];
+  const latestCommitDate = parseDate(latestDateStr);
+  if (isNaN(latestCommitDate.getTime())) return [];
   const lookback = period.lookback_days;
-  const since = new Date(Date.now() - lookback * 864e5).toISOString();
+  const since = new Date(
+    latestCommitDate.getTime() - lookback * 864e5
+  ).toISOString();
   const logOut = run(
     ["log", "--all", `--since=${since}`, "--format=%H	%aN	%cI	%P"],
     cwd
@@ -117,7 +140,12 @@ function buildMonthlyBuckets(cwd, period) {
     if (!sha || !author || !dateStr) continue;
     const date = parseDate(dateStr);
     if (isNaN(date.getTime())) continue;
-    rows.push({ sha, author, date, isMerge: parents.trim().split(" ").length > 1 });
+    rows.push({
+      sha,
+      author,
+      date,
+      isMerge: parents.trim().split(" ").length > 1
+    });
   }
   if (rows.length === 0) return [];
   const newest = new Date(Math.max(...rows.map((r) => r.date.getTime())));
@@ -127,7 +155,9 @@ function buildMonthlyBuckets(cwd, period) {
   let bucketEnd = newest;
   while (bucketEnd >= oldest) {
     const bucketStart = new Date(bucketEnd.getTime() - bucketMs);
-    const inBucket = rows.filter((r) => r.date > bucketStart && r.date <= bucketEnd);
+    const inBucket = rows.filter(
+      (r) => r.date > bucketStart && r.date <= bucketEnd
+    );
     if (inBucket.length > 0) {
       const authors = new Set(inBucket.map((r) => r.author)).size;
       buckets.push({
@@ -183,7 +213,13 @@ function collect(repoPath, period) {
     monthly_buckets,
     numstat_totals
   };
-  return makeArtifact("git", true, null, { ...period, history_available_days }, raw);
+  return makeArtifact(
+    "git",
+    true,
+    null,
+    { ...period, history_available_days },
+    raw
+  );
 }
 export {
   collect

@@ -29,13 +29,6 @@ function daysBetween(d1: Date, d2: Date): number {
   return Math.round((d2.getTime() - d1.getTime()) / 86_400_000);
 }
 
-/** Return number of lines of output (trimmed), or 0 when empty. */
-function countLines(out: string): number {
-  const t = out.trim();
-  if (!t) return 0;
-  return t.split('\n').length;
-}
-
 // ---------------------------------------------------------------------------
 // Individual fact collectors
 // ---------------------------------------------------------------------------
@@ -144,12 +137,7 @@ function getMergeRecords(cwd: string): MergeRecord[] {
     const [sha, mergedAt] = line.split(' ');
     if (!sha || !mergedAt) continue;
 
-    // Identify the commits on the merged-in side (second parent..merge).
-    const rangeOut = run(
-      ['log', '--format=%cI', `${sha}^2..${sha}^2`, '--first-parent'],
-      cwd
-    );
-    // Simpler: get all commits reachable from MERGE_HEAD (^2) but not from first parent.
+    // Get all commits reachable from MERGE_HEAD (^2) but not from first parent.
     const sideOut = run(['log', '--format=%cI', `${sha}^1..${sha}^2`], cwd)
       .trim()
       .split('\n')
@@ -184,11 +172,24 @@ interface Bucket {
 }
 
 function buildMonthlyBuckets(cwd: string, period: Period): Bucket[] {
+  // First find the latest commit date to use as the window anchor.
+  // This makes bucket boundaries a pure function of git history (no wall-clock).
+  const latestDateStr = run(
+    ['log', '--all', '--format=%cI', '--max-count=1'],
+    cwd
+  ).trim();
+  if (!latestDateStr) return [];
+  const latestCommitDate = parseDate(latestDateStr);
+  if (isNaN(latestCommitDate.getTime())) return [];
+
+  // Compute since from the latest commit date, not Date.now().
+  const lookback = period.lookback_days;
+  const since = new Date(
+    latestCommitDate.getTime() - lookback * 86_400_000
+  ).toISOString();
+
   // Fetch all commits within lookback window: sha, author, date, is-merge.
   // We use --format="%H %aN %cI %P" — P lists parent SHAs (2+ = merge).
-  const lookback = period.lookback_days;
-  const since = new Date(Date.now() - lookback * 86_400_000).toISOString();
-
   const logOut = run(
     ['log', '--all', `--since=${since}`, '--format=%H\t%aN\t%cI\t%P'],
     cwd

@@ -1,0 +1,238 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  detectCustomCommands,
+  detectClaudeSkills,
+  detectMcpConfig,
+  detectClaudeHooks,
+  detectCanRunApp,
+  DETECTORS,
+} from '../detectors/ai_development_tooling.ts';
+
+function tmp(): string {
+  return mkdtempSync(join(tmpdir(), 'ai-tooling-'));
+}
+
+// ---------------------------------------------------------------------------
+// detectCustomCommands — category 2001 (AI-02, method: detected)
+// ---------------------------------------------------------------------------
+
+test('detectCustomCommands: .claude/commands dir present → PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.claude', 'commands'), { recursive: true });
+  writeFileSync(join(t, '.claude', 'commands', 'foo.md'), '# foo\n');
+  const r = detectCustomCommands(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'expected PASS when .claude/commands/ has files'
+  );
+  assert.ok(r.evidence.some((e) => e.includes('foo.md')));
+  assert.equal(r.method, 'detected');
+});
+
+test('detectCustomCommands: .claude/commands dir empty → FAIL', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.claude', 'commands'), { recursive: true });
+  const r = detectCustomCommands(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'expected FAIL when .claude/commands/ has no files'
+  );
+});
+
+test('detectCustomCommands: no .claude dir → FAIL', () => {
+  const t = tmp();
+  const r = detectCustomCommands(t);
+  assert.equal(r.status, 'FAIL');
+});
+
+// ---------------------------------------------------------------------------
+// detectClaudeSkills — category 2002 (AI-03, method: detected)
+// ---------------------------------------------------------------------------
+
+test('detectClaudeSkills: SKILL.md present under .claude/skills → PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.claude', 'skills', 'my-skill'), { recursive: true });
+  writeFileSync(
+    join(t, '.claude', 'skills', 'my-skill', 'SKILL.md'),
+    '# My Skill\n'
+  );
+  const r = detectClaudeSkills(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'expected PASS when SKILL.md exists under .claude/skills/'
+  );
+  assert.ok(r.evidence.some((e) => e.includes('SKILL.md')));
+  assert.equal(r.method, 'detected');
+});
+
+test('detectClaudeSkills: no SKILL.md → FAIL', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.claude', 'skills', 'empty-skill'), { recursive: true });
+  const r = detectClaudeSkills(t);
+  assert.equal(r.status, 'FAIL', 'expected FAIL when no SKILL.md present');
+});
+
+test('detectClaudeSkills: multiple skills → PASS with count', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.claude', 'skills', 'skill-a'), { recursive: true });
+  mkdirSync(join(t, '.claude', 'skills', 'skill-b'), { recursive: true });
+  writeFileSync(join(t, '.claude', 'skills', 'skill-a', 'SKILL.md'), '# A\n');
+  writeFileSync(join(t, '.claude', 'skills', 'skill-b', 'SKILL.md'), '# B\n');
+  const r = detectClaudeSkills(t);
+  assert.equal(r.status, 'PASS');
+  assert.equal(r.value, 2, 'expected value to be the count of SKILL.md files');
+});
+
+// ---------------------------------------------------------------------------
+// detectMcpConfig — category 2003 (AI-04, method: detected)
+// ---------------------------------------------------------------------------
+
+test('detectMcpConfig: .mcp.json present → PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, '.mcp.json'), '{"mcpServers":{}}\n');
+  const r = detectMcpConfig(t);
+  assert.equal(r.status, 'PASS', 'expected PASS when .mcp.json present');
+  assert.ok(r.evidence.some((e) => e.includes('.mcp.json')));
+  assert.equal(r.method, 'detected');
+});
+
+test('detectMcpConfig: no .mcp.json → FAIL', () => {
+  const t = tmp();
+  const r = detectMcpConfig(t);
+  assert.equal(r.status, 'FAIL');
+});
+
+test('detectMcpConfig: .claude/mcp.json also counts → PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.claude'), { recursive: true });
+  writeFileSync(join(t, '.claude', 'mcp.json'), '{"mcpServers":{}}\n');
+  const r = detectMcpConfig(t);
+  assert.equal(r.status, 'PASS', 'expected PASS when .claude/mcp.json present');
+});
+
+// ---------------------------------------------------------------------------
+// detectClaudeHooks — category 2004 (AI-05, method: detected)
+// ---------------------------------------------------------------------------
+
+test('detectClaudeHooks: .claude/hooks dir with files → PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.claude', 'hooks'), { recursive: true });
+  writeFileSync(join(t, '.claude', 'hooks', 'pre-tool-use.sh'), '#!/bin/sh\n');
+  const r = detectClaudeHooks(t);
+  assert.equal(r.status, 'PASS', 'expected PASS when .claude/hooks/ has files');
+  assert.ok(r.evidence.some((e) => e.includes('pre-tool-use.sh')));
+  assert.equal(r.method, 'detected');
+});
+
+test('detectClaudeHooks: settings.json with hooks key → PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.claude'), { recursive: true });
+  writeFileSync(
+    join(t, '.claude', 'settings.json'),
+    JSON.stringify({ hooks: { PreToolUse: [] } })
+  );
+  const r = detectClaudeHooks(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'expected PASS when settings.json contains "hooks" key'
+  );
+});
+
+test('detectClaudeHooks: no hooks → FAIL', () => {
+  const t = tmp();
+  const r = detectClaudeHooks(t);
+  assert.equal(r.status, 'FAIL');
+});
+
+// ---------------------------------------------------------------------------
+// detectCanRunApp — category 2006 (AI-07, method: detected)
+// ---------------------------------------------------------------------------
+
+test('detectCanRunApp: Makefile present → PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'Makefile'), 'run:\n\tnode index.js\n');
+  const r = detectCanRunApp(t);
+  assert.equal(r.status, 'PASS', 'expected PASS when Makefile present');
+  assert.ok(r.evidence.some((e) => e.toLowerCase().includes('makefile')));
+  assert.equal(r.method, 'detected');
+});
+
+test('detectCanRunApp: docker-compose.yml present → PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'docker-compose.yml'),
+    'services:\n  app:\n    image: node\n'
+  );
+  const r = detectCanRunApp(t);
+  assert.equal(r.status, 'PASS');
+});
+
+test('detectCanRunApp: package.json with scripts.start → PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'package.json'),
+    JSON.stringify({ scripts: { start: 'node index.js' } })
+  );
+  const r = detectCanRunApp(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'expected PASS when package.json has a start script'
+  );
+});
+
+test('detectCanRunApp: no run mechanism → FAIL', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'README.md'), '# project\n');
+  const r = detectCanRunApp(t);
+  assert.equal(r.status, 'FAIL');
+});
+
+// ---------------------------------------------------------------------------
+// DETECTORS map
+// ---------------------------------------------------------------------------
+
+test('DETECTORS map contains codes 2001, 2002, 2003, 2004, 2006', () => {
+  assert.ok(
+    2001 in DETECTORS,
+    'DETECTORS must include 2001 (detectCustomCommands)'
+  );
+  assert.ok(
+    2002 in DETECTORS,
+    'DETECTORS must include 2002 (detectClaudeSkills)'
+  );
+  assert.ok(2003 in DETECTORS, 'DETECTORS must include 2003 (detectMcpConfig)');
+  assert.ok(
+    2004 in DETECTORS,
+    'DETECTORS must include 2004 (detectClaudeHooks)'
+  );
+  assert.ok(2006 in DETECTORS, 'DETECTORS must include 2006 (detectCanRunApp)');
+});
+
+test('judgment codes 2000 and 2005 are NOT in DETECTORS', () => {
+  assert.ok(
+    !(2000 in DETECTORS),
+    'judgment code 2000 must not be in DETECTORS'
+  );
+  assert.ok(
+    !(2005 in DETECTORS),
+    'judgment code 2005 must not be in DETECTORS'
+  );
+});
+
+test('DETECTORS[2003] returns same result as detectMcpConfig', () => {
+  const t = tmp();
+  writeFileSync(join(t, '.mcp.json'), '{"mcpServers":{}}\n');
+  const direct = detectMcpConfig(t);
+  const viaMap = DETECTORS[2003](t);
+  assert.equal(viaMap.status, direct.status);
+  assert.equal(viaMap.method, 'detected');
+});

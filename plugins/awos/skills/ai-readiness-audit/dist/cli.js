@@ -1404,6 +1404,592 @@ var DETECTORS3 = {
   // SDD-07 agent annotations in tasks.md
 };
 
+// plugins/awos/skills/ai-readiness-audit/detectors/ai_development_tooling.ts
+import { existsSync as existsSync4, readFileSync as readFileSync5 } from "node:fs";
+import { join as join5, relative as relative5 } from "node:path";
+function detectCustomCommands(repoPath, _params) {
+  const commandsDir = join5(repoPath, ".claude", "commands");
+  if (!existsSync4(commandsDir)) {
+    return makeResult("FAIL", 0, [
+      "no .claude/commands/ directory found \u2014 no custom slash commands defined"
+    ]);
+  }
+  const files = iterFiles(commandsDir, ["*.md"]);
+  if (files.length > 0) {
+    const names = files.map((p) => relative5(repoPath, p));
+    return makeResult("PASS", files.length, [
+      `${files.length} custom command file(s) found under .claude/commands/`,
+      ...names.slice(0, 10).map((n) => `command: ${n}`)
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no custom command files found in .claude/commands/ \u2014 define slash commands for common workflows"
+  ]);
+}
+function detectClaudeSkills(repoPath, _params) {
+  const skillsRoot = join5(repoPath, ".claude", "skills");
+  if (!existsSync4(skillsRoot)) {
+    return makeResult("FAIL", 0, [
+      "no .claude/skills/ directory found \u2014 no Claude Code skills configured"
+    ]);
+  }
+  const files = iterFiles(skillsRoot, ["SKILL.md"]);
+  if (files.length > 0) {
+    const names = files.map((p) => relative5(repoPath, p));
+    return makeResult("PASS", files.length, [
+      `${files.length} SKILL.md file(s) found under .claude/skills/`,
+      ...names.slice(0, 10).map((n) => `skill: ${n}`)
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no SKILL.md files found under .claude/skills/ \u2014 no Claude Code skills configured"
+  ]);
+}
+var MCP_CONFIG_PATHS = [".mcp.json", ".claude/mcp.json"];
+function detectMcpConfig(repoPath, _params) {
+  const found = [];
+  for (const relPath of MCP_CONFIG_PATHS) {
+    if (existsSync4(join5(repoPath, relPath))) {
+      found.push(relPath);
+    }
+  }
+  if (found.length > 0) {
+    return makeResult("PASS", found.length, [
+      `MCP configuration found: ${found.join(", ")}`,
+      ...found.map((f) => `MCP config: ${f}`)
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no MCP configuration found (.mcp.json or .claude/mcp.json) \u2014 no MCP servers configured"
+  ]);
+}
+function detectClaudeHooks(repoPath, _params) {
+  const hooksDir = join5(repoPath, ".claude", "hooks");
+  if (existsSync4(hooksDir)) {
+    const hookFiles = iterFiles(hooksDir, [
+      "*.sh",
+      "*.js",
+      "*.ts",
+      "*.py",
+      "*.bash"
+    ]);
+    if (hookFiles.length > 0) {
+      const names = hookFiles.map((p) => relative5(repoPath, p));
+      return makeResult("PASS", hookFiles.length, [
+        `${hookFiles.length} hook file(s) found in .claude/hooks/`,
+        ...names.slice(0, 10).map((n) => `hook file: ${n}`)
+      ]);
+    }
+  }
+  const settingsFiles = [
+    join5(repoPath, ".claude", "settings.json"),
+    join5(repoPath, ".claude", "settings.local.json")
+  ];
+  for (const settingsPath of settingsFiles) {
+    if (!existsSync4(settingsPath)) continue;
+    let content;
+    try {
+      content = readFileSync5(settingsPath, "utf8");
+    } catch {
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      if (/"hooks"\s*:/.test(content)) {
+        return makeResult("PASS", 1, [
+          `"hooks" key found in ${relative5(repoPath, settingsPath)}`
+        ]);
+      }
+      continue;
+    }
+    if (parsed !== null && typeof parsed === "object" && "hooks" in parsed) {
+      return makeResult("PASS", 1, [
+        `"hooks" key configured in ${relative5(repoPath, settingsPath)}`
+      ]);
+    }
+  }
+  return makeResult("FAIL", 0, [
+    'no Claude Code hooks found \u2014 neither .claude/hooks/ files nor "hooks" key in settings'
+  ]);
+}
+var ROOT_RUN_FILES = [
+  "Makefile",
+  "docker-compose.yml",
+  "docker-compose.yaml",
+  "run.sh",
+  "start.sh",
+  "justfile",
+  "Justfile",
+  "Taskfile.yml",
+  "Taskfile.yaml"
+];
+function hasPackageJsonRunScript(repoPath) {
+  const pkgPath = join5(repoPath, "package.json");
+  if (!existsSync4(pkgPath)) return false;
+  let pkg;
+  try {
+    pkg = JSON.parse(readFileSync5(pkgPath, "utf8"));
+  } catch {
+    return false;
+  }
+  if (pkg === null || typeof pkg !== "object") return false;
+  const scripts = pkg.scripts;
+  if (scripts === null || typeof scripts !== "object") return false;
+  return "start" in scripts || "dev" in scripts;
+}
+function detectCanRunApp(repoPath, _params) {
+  const found = [];
+  for (const f of ROOT_RUN_FILES) {
+    if (existsSync4(join5(repoPath, f))) {
+      found.push(f);
+    }
+  }
+  if (hasPackageJsonRunScript(repoPath)) {
+    found.push("package.json (start/dev script)");
+  }
+  if (found.length > 0) {
+    return makeResult("PASS", found.length, [
+      `run mechanism(s) found: ${found.join(", ")}`,
+      ...found.map((f) => `run signal: ${f}`)
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no run mechanism found \u2014 no Makefile, docker-compose, or package.json start script; Claude Code cannot run the application without human involvement"
+  ]);
+}
+var DETECTORS4 = {
+  2001: detectCustomCommands,
+  // AI-02 custom slash commands
+  2002: detectClaudeSkills,
+  // AI-03 Claude Code skills
+  2003: detectMcpConfig,
+  // AI-04 MCP server config
+  2004: detectClaudeHooks,
+  // AI-05 Claude Code hooks
+  2006: detectCanRunApp
+  // AI-07 agent can run/observe app
+};
+
+// plugins/awos/skills/ai-readiness-audit/detectors/end_to_end_delivery.ts
+import { existsSync as existsSync5, readFileSync as readFileSync6, statSync as statSync2 } from "node:fs";
+import { join as join6, relative as relative6 } from "node:path";
+import { execFileSync as execFileSync5 } from "node:child_process";
+var TRUNK_NAMES = /* @__PURE__ */ new Set(["main", "master", "develop", "development"]);
+var LAYER_PATTERNS = [
+  {
+    name: "api/backend",
+    patterns: /\/(api|backend|server|services?|routes?|controllers?|handlers?|endpoints?)\//i
+  },
+  {
+    name: "frontend/ui",
+    patterns: /\/(frontend|ui|web|client|app|pages?|components?|views?)\//i
+  },
+  {
+    name: "database",
+    patterns: /\/(db|database|migrations?|schemas?|sql|models?)\//i
+  },
+  {
+    name: "infra",
+    patterns: /\/(infra|infrastructure|terraform|k8s|kubernetes|helm|deploy)\//i
+  }
+];
+function detectTrunk2(repoPath) {
+  for (const candidate of ["main", "master", "develop", "development"]) {
+    try {
+      execFileSync5("git", ["rev-parse", "--verify", candidate], {
+        cwd: repoPath,
+        encoding: "utf8"
+      });
+      return candidate;
+    } catch {
+    }
+  }
+  return "main";
+}
+function listFeatureBranches(repoPath) {
+  try {
+    const out = execFileSync5("git", ["branch", "--format=%(refname:short)"], {
+      cwd: repoPath,
+      encoding: "utf8"
+    });
+    return out.split("\n").map((b) => b.trim()).filter((b) => b.length > 0 && !TRUNK_NAMES.has(b));
+  } catch {
+    return [];
+  }
+}
+function branchLayerCount(repoPath, branch, trunk) {
+  let paths;
+  try {
+    const out = execFileSync5(
+      "git",
+      [
+        "log",
+        branch,
+        "--not",
+        trunk,
+        "--name-only",
+        "--format=",
+        "--diff-filter=ACDMR"
+      ],
+      { cwd: repoPath, encoding: "utf8" }
+    );
+    paths = out.split("\n").filter(Boolean);
+  } catch {
+    return 0;
+  }
+  const layers = /* @__PURE__ */ new Set();
+  for (const p of paths) {
+    const withSlash = "/" + p;
+    for (const { name, patterns } of LAYER_PATTERNS) {
+      if (patterns.test(withSlash)) {
+        layers.add(name);
+        break;
+      }
+    }
+  }
+  return layers.size;
+}
+function detectVerticalDelivery(repoPath, _params) {
+  const branches = listFeatureBranches(repoPath);
+  if (branches.length === 0) {
+    return makeResult(
+      "SKIP",
+      null,
+      ["no feature branches found \u2014 vertical delivery ratio not computable"],
+      "computed"
+    );
+  }
+  const trunk = detectTrunk2(repoPath);
+  const verticalBranches = [];
+  const singleLayerBranches = [];
+  for (const branch of branches) {
+    const layerCount = branchLayerCount(repoPath, branch, trunk);
+    if (layerCount >= 2) {
+      verticalBranches.push(branch);
+    } else {
+      singleLayerBranches.push(branch);
+    }
+  }
+  const total = branches.length;
+  const ratio = Math.round(verticalBranches.length / total * 1e10) / 1e10;
+  const evidence = [
+    `${verticalBranches.length}/${total} feature branches touch \u2265 2 layers (ratio: ${Math.round(ratio * 100)}%)`,
+    ...verticalBranches.slice(0, 10).map((b) => `vertical branch: ${b}`),
+    ...singleLayerBranches.slice(0, 5).map((b) => `single-layer branch: ${b}`)
+  ];
+  if (ratio >= 0.5) {
+    return makeResult(
+      "PASS",
+      ratio,
+      [
+        `${Math.round(ratio * 100)}% of feature branches touch multiple layers (threshold: 50%)`,
+        ...evidence
+      ],
+      "computed"
+    );
+  }
+  if (ratio >= 0.25) {
+    return makeResult(
+      "WARN",
+      ratio,
+      [
+        `only ${Math.round(ratio * 100)}% of feature branches touch multiple layers (below 50%)`,
+        ...evidence
+      ],
+      "computed"
+    );
+  }
+  return makeResult(
+    "FAIL",
+    ratio,
+    [
+      `only ${Math.round(ratio * 100)}% of feature branches touch multiple layers (threshold: 50%)`,
+      ...evidence
+    ],
+    "computed"
+  );
+}
+var BACKEND_RX = /-backend$|[-_]api$|[-_]server$/i;
+var FRONTEND_RX = /-frontend$|[-_]ui$|[-_]client$|[-_]web$/i;
+function stripLayerSuffix(name) {
+  return name.replace(
+    /-backend$|-frontend$|[-_]api$|[-_]server$|[-_]ui$|[-_]client$|[-_]web$/i,
+    ""
+  ).toLowerCase();
+}
+function detectNoLayerSplit(repoPath, _params) {
+  let branches;
+  try {
+    const out = execFileSync5("git", ["branch", "--format=%(refname:short)"], {
+      cwd: repoPath,
+      encoding: "utf8"
+    });
+    branches = out.split("\n").map((b) => b.trim()).filter((b) => b.length > 0 && !TRUNK_NAMES.has(b));
+  } catch {
+    return makeResult("SKIP", null, [
+      "no git branches available \u2014 layer-split detection skipped"
+    ]);
+  }
+  if (branches.length === 0) {
+    return makeResult("SKIP", null, [
+      "no feature branches found \u2014 layer-split detection skipped"
+    ]);
+  }
+  const backendBranches = branches.filter((b) => BACKEND_RX.test(b));
+  const frontendBranches = branches.filter((b) => FRONTEND_RX.test(b));
+  const pairedRoots = [];
+  for (const b of backendBranches) {
+    const root = stripLayerSuffix(b);
+    const hasFrontendPair = frontendBranches.some(
+      (f) => stripLayerSuffix(f) === root
+    );
+    if (hasFrontendPair) {
+      pairedRoots.push(root);
+    }
+  }
+  if (pairedRoots.length === 0) {
+    return makeResult("PASS", 0, [
+      "no paired backend/frontend branch split patterns detected",
+      `${branches.length} feature branch(es) inspected`
+    ]);
+  }
+  const evidence = [
+    `${pairedRoots.length} paired layer-split branch pattern(s) detected`,
+    ...pairedRoots.slice(0, 10).map((r) => `split pattern root: ${r}`)
+  ];
+  if (pairedRoots.length >= 3) {
+    return makeResult("FAIL", pairedRoots.length, [
+      `${pairedRoots.length} feature(s) split into separate backend/frontend branches \u2014 vertical delivery anti-pattern`,
+      ...evidence
+    ]);
+  }
+  return makeResult("WARN", pairedRoots.length, [
+    `${pairedRoots.length} feature(s) split into separate backend/frontend branches`,
+    ...evidence
+  ]);
+}
+var IMPL_PATH_RX = /\b(src|app|lib|packages?)\//i;
+var SPEC_REF_RX = /context\/spec\/\d{3}-|(?<!\/)spec\/\d{3}-/;
+function detectBidirectionalLinks(repoPath, _params) {
+  const specBase = join6(repoPath, "context", "spec");
+  if (!existsSync5(specBase)) {
+    return makeResult("FAIL", 0, [
+      "no context/spec/ directory found \u2014 spec\u2194impl bidirectional links not possible"
+    ]);
+  }
+  let specFiles = [];
+  try {
+    specFiles = iterFiles(specBase, ["*.md"]);
+  } catch {
+    specFiles = [];
+  }
+  if (specFiles.length === 0) {
+    return makeResult("FAIL", 0, [
+      "no spec markdown files found \u2014 bidirectional links not detectable"
+    ]);
+  }
+  let specRefsImpl = false;
+  const specImplEvidence = [];
+  for (const f of specFiles) {
+    let content;
+    try {
+      content = readFileSync6(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (IMPL_PATH_RX.test(content)) {
+      specRefsImpl = true;
+      specImplEvidence.push(`spec\u2192impl reference in: ${relative6(repoPath, f)}`);
+      if (specImplEvidence.length >= 3) break;
+    }
+  }
+  const SOURCE_GLOBS3 = [
+    "*.ts",
+    "*.tsx",
+    "*.js",
+    "*.jsx",
+    "*.py",
+    "*.go",
+    "*.java",
+    "*.kt"
+  ];
+  let implRefsSpec = false;
+  const implSpecEvidence = [];
+  let sourceFiles = [];
+  try {
+    sourceFiles = iterFiles(repoPath, SOURCE_GLOBS3);
+  } catch {
+    sourceFiles = [];
+  }
+  for (const f of sourceFiles) {
+    let content;
+    try {
+      content = readFileSync6(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (SPEC_REF_RX.test(content)) {
+      implRefsSpec = true;
+      implSpecEvidence.push(`impl\u2192spec reference in: ${relative6(repoPath, f)}`);
+      if (implSpecEvidence.length >= 3) break;
+    }
+  }
+  const evidence = [...specImplEvidence, ...implSpecEvidence];
+  if (specRefsImpl && implRefsSpec) {
+    return makeResult("PASS", 2, [
+      "bidirectional spec\u2194impl cross-references detected",
+      ...evidence
+    ]);
+  }
+  if (specRefsImpl || implRefsSpec) {
+    return makeResult("WARN", 1, [
+      "only one direction of spec\u2194impl cross-references found",
+      specRefsImpl ? "spec files reference implementation paths" : "no spec files reference implementation paths",
+      implRefsSpec ? "implementation files reference spec directories" : "no implementation files reference spec directories",
+      ...evidence
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no bidirectional spec\u2194impl cross-references found",
+    `${specFiles.length} spec file(s) found but none reference implementation paths`,
+    `${sourceFiles.length} source file(s) found but none reference context/spec/`
+  ]);
+}
+var API_DIRS = [
+  "api",
+  "routes",
+  "server",
+  "backend",
+  "controllers",
+  "handlers",
+  "endpoints"
+];
+var UI_DIRS = ["frontend", "ui", "web", "client"];
+var DB_FILES_GLOBS = ["*.sql", "schema.prisma", "*.prisma"];
+var DB_DIRS = ["migrations", "db", "database", "models"];
+function hasAnyDir(repoPath, dirs) {
+  for (const d of dirs) {
+    if (existsSync5(join6(repoPath, d)) && statSync2(join6(repoPath, d)).isDirectory()) {
+      return d;
+    }
+  }
+  return null;
+}
+function detectLayerCoverage(repoPath, _params) {
+  const apiDir = hasAnyDir(repoPath, API_DIRS);
+  const hasApi = apiDir !== null;
+  const uiDir = hasAnyDir(repoPath, UI_DIRS);
+  let hasUi = uiDir !== null;
+  let uiSignal = uiDir ? `directory: ${uiDir}/` : null;
+  if (!hasUi) {
+    let uiFiles = [];
+    try {
+      uiFiles = iterFiles(repoPath, ["*.tsx", "*.jsx"]);
+    } catch {
+      uiFiles = [];
+    }
+    if (uiFiles.length > 0) {
+      hasUi = true;
+      uiSignal = `${uiFiles.length} .tsx/.jsx file(s)`;
+    }
+  }
+  const dbDir = hasAnyDir(repoPath, DB_DIRS);
+  let hasDb = dbDir !== null;
+  let dbSignal = dbDir ? `directory: ${dbDir}/` : null;
+  if (!hasDb) {
+    let dbFiles = [];
+    try {
+      dbFiles = iterFiles(repoPath, DB_FILES_GLOBS);
+    } catch {
+      dbFiles = [];
+    }
+    if (dbFiles.length > 0) {
+      hasDb = true;
+      dbSignal = `${dbFiles.length} schema/SQL file(s)`;
+    }
+  }
+  const layerCount = [hasApi, hasUi, hasDb].filter(Boolean).length;
+  if (layerCount < 2) {
+    return makeResult("SKIP", layerCount, [
+      "fewer than 2 distinct layers detected \u2014 single-layer project, E2E-04 not applicable",
+      hasApi ? `API layer: ${apiDir}/` : "API layer: not detected",
+      hasUi ? `UI layer: ${uiSignal}` : "UI layer: not detected",
+      hasDb ? `DB layer: ${dbSignal}` : "DB layer: not detected"
+    ]);
+  }
+  const evidence = [
+    hasApi ? `API layer: ${apiDir}/` : "API layer: not detected",
+    hasUi ? `UI layer: ${uiSignal}` : "UI layer: not detected",
+    hasDb ? `DB layer: ${dbSignal}` : "DB layer: not detected"
+  ];
+  if (layerCount === 3) {
+    return makeResult("PASS", layerCount, [
+      "API, UI, and DB layers all detected \u2014 full vertical coverage",
+      ...evidence
+    ]);
+  }
+  return makeResult("WARN", layerCount, [
+    `only ${layerCount} of 3 layers detected \u2014 partial vertical coverage`,
+    ...evidence
+  ]);
+}
+var ROOT_TOOLING_FILES = [
+  "Makefile",
+  "docker-compose.yml",
+  "docker-compose.yaml",
+  "Taskfile.yml",
+  "Taskfile.yaml",
+  "justfile",
+  "Justfile",
+  ".gitlab-ci.yml",
+  ".gitlab-ci.yaml"
+];
+var CI_DIRS = [".github/workflows", ".circleci", ".buildkite", ".drone"];
+function detectCrossLayerTooling(repoPath, _params) {
+  const found = [];
+  for (const f of ROOT_TOOLING_FILES) {
+    if (existsSync5(join6(repoPath, f))) {
+      found.push(f);
+    }
+  }
+  for (const ciDir of CI_DIRS) {
+    const ciDirPath = join6(repoPath, ciDir);
+    if (!existsSync5(ciDirPath)) continue;
+    let ciFiles = [];
+    try {
+      ciFiles = iterFiles(ciDirPath, ["*.yml", "*.yaml"]);
+    } catch {
+      ciFiles = [];
+    }
+    if (ciFiles.length > 0) {
+      found.push(`${ciDir}/ (${ciFiles.length} workflow file(s))`);
+    }
+  }
+  if (found.length > 0) {
+    return makeResult("PASS", found.length, [
+      `cross-layer tooling found: ${found.join(", ")}`,
+      ...found.map((f) => `tooling: ${f}`)
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no cross-layer tooling found \u2014 no Makefile, docker-compose, or shared CI config at repo root"
+  ]);
+}
+var DETECTORS5 = {
+  2300: detectVerticalDelivery,
+  // E2E-01 vertical delivery (computed)
+  2301: detectNoLayerSplit,
+  // E2E-02 no paired layer-split branches
+  2302: detectBidirectionalLinks,
+  // E2E-03 spec↔impl bidirectional links
+  2303: detectLayerCoverage,
+  // E2E-04 API + UI + DB layer coverage
+  2304: detectCrossLayerTooling
+  // E2E-05 cross-layer unified tooling
+};
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
 var COLLECTORS = {
   git: collect,
@@ -1411,11 +1997,12 @@ var COLLECTORS = {
   tracker: collect3,
   docs: collect4
 };
-var DETECTORS4 = {
+var DETECTORS6 = {
   ...DETECTORS,
   ...DETECTORS2,
-  ...DETECTORS3
-  // ...FOO_DETECTORS,  // ← template for future modules
+  ...DETECTORS3,
+  ...DETECTORS4,
+  ...DETECTORS5
 };
 var DEFAULT_PERIOD = {
   bucket_days: 30,
@@ -1467,11 +2054,11 @@ function main() {
         });
         process.exit(1);
       }
-      const fn = DETECTORS4[code];
+      const fn = DETECTORS6[code];
       if (!fn) {
         printJson({
           error: `unknown detector code ${code}`,
-          known: Object.keys(DETECTORS4).map(Number).sort((a, b) => a - b)
+          known: Object.keys(DETECTORS6).map(Number).sort((a, b) => a - b)
         });
         process.exit(1);
       }

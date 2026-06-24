@@ -34,10 +34,8 @@ const COLLECTORS: Record<
 import { DETECTORS as SBP_DETECTORS } from './detectors/software_best_practices.ts';
 import { DETECTORS as CODE_ARCH_DETECTORS } from './detectors/code_architecture.ts';
 import { DETECTORS as SDD_DETECTORS } from './detectors/spec_driven_development.ts';
-// TODO: when additional detector modules land (e.g. B.7 dimensions), add one
-// import line per module and spread it into DETECTORS below:
-//   import { DETECTORS as FOO_DETECTORS } from './detectors/foo.ts';
-//
+import { DETECTORS as AI_TOOLING_DETECTORS } from './detectors/ai_development_tooling.ts';
+import { DETECTORS as E2E_DETECTORS } from './detectors/end_to_end_delivery.ts';
 // Adding a detector module is a one-line change per import + one spread below.
 
 import { makeResult, type DetectorResult } from './detectors/_base.ts';
@@ -49,7 +47,8 @@ const DETECTORS: Record<
   ...SBP_DETECTORS,
   ...CODE_ARCH_DETECTORS,
   ...SDD_DETECTORS,
-  // ...FOO_DETECTORS,  // ← template for future modules
+  ...AI_TOOLING_DETECTORS,
+  ...E2E_DETECTORS,
 };
 
 // ---------------------------------------------------------------------------

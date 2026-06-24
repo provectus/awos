@@ -1057,6 +1057,19 @@ reliability_default = "maximal"
 source = "AWOS audit"
 source_year = 2026
 
+[category.sbp_except_clause_syntax]
+code = 2706
+metric = "SBP-06"
+dimension = "software-best-practices"
+weight = 5
+method = "detected"
+definition = "No Python-2 except-clause syntax (except A, B:) — a SyntaxError on Python 3"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
 # --- spec-driven-development (7 checks) ---
 
 [category.spec_driven_development_sdd_01]

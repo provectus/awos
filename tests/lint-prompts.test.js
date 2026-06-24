@@ -1652,3 +1652,49 @@ test('SKILL.md Step 6 org branch emits an org-level JSON artifact', () => {
     'SKILL.md must document the org-level JSON artifact (org-portfolio.json)'
   );
 });
+
+// ---------------------------------------------------------------------------
+// POL.1+2+3: report-template.md and output-format.md describe the renderer
+// ---------------------------------------------------------------------------
+
+test('report-template.md references the render verb (cli.js render)', () => {
+  const src = readUtf8(path.join(skillRoot, 'report-template.md'));
+  assert.ok(
+    src.includes('cli.js render') ||
+      src.includes('cli render') ||
+      /render\b/.test(src),
+    'report-template.md must reference the "render" verb (node dist/cli.js render) — report.md/report.html are produced by the renderer, not hand-written'
+  );
+});
+
+test('report-template.md names the three HTML tabs: Board, Head of Engineering, Drill-down', () => {
+  const src = readUtf8(path.join(skillRoot, 'report-template.md'));
+  assert.ok(
+    /Board|CEO/i.test(src),
+    'report-template.md must name the Board / CEO tab'
+  );
+  assert.ok(
+    /Head.of.Engineering|Head-of-Engineering/i.test(src),
+    'report-template.md must name the Head of Engineering tab'
+  );
+  assert.ok(
+    /Drill.down|Drill-down/i.test(src),
+    'report-template.md must name the Drill-down tab'
+  );
+});
+
+test('report-template.md specifies per-number title= hover hint', () => {
+  const src = readUtf8(path.join(skillRoot, 'report-template.md'));
+  assert.ok(
+    src.includes('title='),
+    'report-template.md must specify that every rendered number carries a title= hover hint attribute (POL.3)'
+  );
+});
+
+test('output-format.md states that reports are produced by cli.js render (not hand-written)', () => {
+  const src = readUtf8(path.join(skillRoot, 'output-format.md'));
+  assert.ok(
+    src.includes('node dist/cli.js render') || src.includes('cli.js render'),
+    'output-format.md must state that report.md / report.html are produced by "node dist/cli.js render" — the auditor never writes markdown/HTML directly'
+  );
+});

@@ -114,6 +114,12 @@ import { rollup as orgRollup } from './metrics/org_rollup.ts';
 import type { PerRepoInput } from './metrics/org_rollup.ts';
 
 // ---------------------------------------------------------------------------
+// Renderer
+// ---------------------------------------------------------------------------
+import { renderMarkdown, renderHtml } from './render.ts';
+import type { AuditJson } from './render.ts';
+
+// ---------------------------------------------------------------------------
 // Progress helper
 // ---------------------------------------------------------------------------
 import { progress } from './progress.ts';
@@ -176,7 +182,8 @@ async function main(): Promise<void> {
   if (!command) {
     printJson({
       error: 'no command given',
-      usage: 'collect|detect|metric <arg> <repoPath>',
+      usage:
+        'collect|detect|metric|standards|progress|rollup|render <arg> [repoPath]',
     });
     process.exit(1);
   }
@@ -417,11 +424,66 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'render': {
+      // Render an aggregated audit JSON → report.md or report.html.
+      //
+      // Usage:
+      //   node dist/cli.js render <audit.json> --format md
+      //   node dist/cli.js render <audit.json> --format html
+      //
+      // The audit JSON is the single source of truth (produced by SKILL.md
+      // Step 6). The renderer is pure and deterministic — no clocks, no LLM.
+      const auditPath = arg1;
+      if (!auditPath) {
+        printJson({
+          error: 'render requires <audit.json>',
+          usage: 'node dist/cli.js render <audit.json> --format md|html',
+        });
+        process.exit(1);
+      }
+      // Parse --format flag from remaining argv
+      const remainingArgs = process.argv.slice(4);
+      const fmtIdx = remainingArgs.indexOf('--format');
+      const format = fmtIdx !== -1 ? remainingArgs[fmtIdx + 1] : 'md';
+      if (format !== 'md' && format !== 'html') {
+        printJson({
+          error: `render --format must be "md" or "html", got "${format}"`,
+        });
+        process.exit(1);
+      }
+      let rawAudit: string;
+      try {
+        rawAudit = readFileSync(auditPath, 'utf8');
+      } catch (err: unknown) {
+        const e = err as NodeJS.ErrnoException;
+        printJson({
+          error: `cannot read audit JSON: ${e.message}`,
+          path: auditPath,
+        });
+        process.exit(1);
+      }
+      let audit: AuditJson;
+      try {
+        audit = JSON.parse(rawAudit) as AuditJson;
+      } catch (err: unknown) {
+        const e = err as Error;
+        printJson({
+          error: `audit JSON is not valid JSON: ${e.message}`,
+          path: auditPath,
+        });
+        process.exit(1);
+      }
+      const output =
+        format === 'html' ? renderHtml(audit) : renderMarkdown(audit);
+      process.stdout.write(output + '\n');
+      break;
+    }
+
     default: {
       printJson({
         error: `unknown command "${command}"`,
         usage:
-          'collect|detect|metric|standards|progress|rollup <arg> [repoPath]',
+          'collect|detect|metric|standards|progress|rollup|render <arg> [repoPath]',
       });
       process.exit(1);
     }

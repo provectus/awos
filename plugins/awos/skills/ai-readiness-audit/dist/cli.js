@@ -7096,9 +7096,9 @@ function detectTestInfrastructure(repoPath, _params) {
     );
   }
   const ratio = testCount / sourceCount;
-  const pct = Math.round(ratio * 100);
+  const pct2 = Math.round(ratio * 100);
   const evidence = [
-    `${testCount} test file(s) found for ${sourceCount} source module(s) (${pct}% ratio)`,
+    `${testCount} test file(s) found for ${sourceCount} source module(s) (${pct2}% ratio)`,
     ...testFiles.slice(0, 5).map((f) => `test file: ${relative10(repoPath, f)}`)
   ];
   if (ratio >= 0.6) {
@@ -7106,7 +7106,7 @@ function detectTestInfrastructure(repoPath, _params) {
       "PASS",
       ratio,
       [
-        `test coverage proxy: ${pct}% \u2014 meaningful tests covering \u2265 60% of source modules`,
+        `test coverage proxy: ${pct2}% \u2014 meaningful tests covering \u2265 60% of source modules`,
         ...evidence
       ],
       "computed"
@@ -7117,7 +7117,7 @@ function detectTestInfrastructure(repoPath, _params) {
       "WARN",
       ratio,
       [
-        `test coverage proxy: ${pct}% \u2014 partial test coverage (below 60% threshold)`,
+        `test coverage proxy: ${pct2}% \u2014 partial test coverage (below 60% threshold)`,
         ...evidence
       ],
       "computed"
@@ -7127,7 +7127,7 @@ function detectTestInfrastructure(repoPath, _params) {
     "FAIL",
     ratio,
     [
-      `test coverage proxy: ${pct}% \u2014 insufficient test coverage (below 30% threshold)`,
+      `test coverage proxy: ${pct2}% \u2014 insufficient test coverage (below 30% threshold)`,
       ...evidence
     ],
     "computed"
@@ -10413,10 +10413,509 @@ function makeMetric(metric, value, contributor_weighted, repos_counted) {
   };
 }
 
+// plugins/awos/skills/ai-readiness-audit/render.ts
+function pct(ratio) {
+  return (ratio * 100).toFixed(1) + "%";
+}
+function titleLabel(dim) {
+  return dim.dimension.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+function metricLabel(metric) {
+  const labels = {
+    org_ai_tooling_coverage: "AI-tooling coverage",
+    org_capability_score: "Capability score",
+    org_measurement_coverage: "Measurement coverage"
+  };
+  return labels[metric] ?? metric;
+}
+function statusCounts(dim) {
+  let fail = 0, warn = 0, pass = 0, skip = 0;
+  for (const c of dim.checks) {
+    if (c.status === "FAIL") fail++;
+    else if (c.status === "WARN") warn++;
+    else if (c.status === "PASS") pass++;
+    else skip++;
+  }
+  return { fail, warn, pass, skip };
+}
+function sparkline(series) {
+  const bars = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588"];
+  const values = series.map((e) => e.value).filter((v) => v !== null);
+  if (values.length === 0) return "(no data)";
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min;
+  return series.map((e) => {
+    if (e.value === null) return "\xB7";
+    if (range === 0) return bars[3];
+    const idx = Math.round((e.value - min) / range * (bars.length - 1));
+    return bars[Math.max(0, Math.min(bars.length - 1, idx))];
+  }).join("");
+}
+function renderMarkdown(audit) {
+  const lines = [];
+  const isOrg = Array.isArray(audit.portfolio_metrics) && audit.portfolio_metrics.length > 0;
+  lines.push("# AI-SDLC Readiness Audit Report");
+  lines.push("");
+  lines.push(`**Date:** ${audit.date}`);
+  lines.push(`**Project:** ${audit.project}`);
+  if (isOrg) {
+    lines.push(`**Mode:** Organization (${audit.per_repo?.length ?? 0} repos)`);
+  }
+  lines.push(`**Audit Total:** ${audit.audit_total} pts`);
+  lines.push(
+    `**Coverage Ratio:** ${pct(audit.coverage)} rel. today's standard`
+  );
+  lines.push("");
+  if (isOrg && audit.portfolio_metrics) {
+    lines.push("## Portfolio Metrics (Org)");
+    lines.push("");
+    lines.push("| Metric | Value | Description | Repos Counted | Weighted |");
+    lines.push("| ------ | ----- | ----------- | ------------- | -------- |");
+    for (const m of audit.portfolio_metrics) {
+      const val = m.metric === "org_capability_score" ? m.value.toFixed(2) + " pts" : pct(m.value);
+      lines.push(
+        `| ${metricLabel(m.metric)} | ${val} | ${m.description} | ${m.repos_counted} | ${m.contributor_weighted ? "contributor-weighted" : "equal-weighted"} |`
+      );
+    }
+    lines.push("");
+  }
+  lines.push("## Summary");
+  lines.push("");
+  lines.push(
+    "| # | Dimension | Points | Coverage | FAIL | WARN | PASS | SKIP |"
+  );
+  lines.push(
+    "| - | --------- | ------ | -------- | ---- | ---- | ---- | ---- |"
+  );
+  let rowNum = 1;
+  for (const dim of audit.dimensions) {
+    const counts = statusCounts(dim);
+    lines.push(
+      `| ${rowNum++} | ${titleLabel(dim)} | ${dim.score} | ${pct(dim.coverage)} | ${counts.fail} | ${counts.warn} | ${counts.pass} | ${counts.skip} |`
+    );
+  }
+  lines.push("");
+  for (const dim of audit.dimensions) {
+    lines.push(`## Dimension: ${titleLabel(dim)}`);
+    lines.push("");
+    lines.push(
+      `**Score:** ${dim.score} pts (coverage ${pct(dim.coverage)} rel. today's standard)`
+    );
+    lines.push("");
+    lines.push(
+      "| # | Check ID | Method | Weight Awarded | Weight Max | Status | Reliability | Value | Hint |"
+    );
+    lines.push(
+      "| - | -------- | ------ | -------------- | ---------- | ------ | ----------- | ----- | ---- |"
+    );
+    let checkNum = 1;
+    let hasMinimal = false;
+    for (const c of dim.checks) {
+      const reliabilityStr = c.applies ? `${c.reliability.tag} (${c.reliability.confidence})${c.reliability.tag === "minimal" ? " *" : ""}` : "\u2014";
+      if (c.reliability.tag === "minimal" && c.applies) hasMinimal = true;
+      const valueStr = c.value !== null && c.value !== void 0 ? String(c.value) : "\u2014";
+      const seriesStr = c.value_series && c.value_series.length > 0 ? ` \\[${sparkline(c.value_series)}\\]` : "";
+      const hint = c.hint ?? "\u2014";
+      lines.push(
+        `| ${checkNum++} | ${c.check_id} | ${c.method} | ${c.weight_awarded} | ${c.weight_max} | ${c.status} | ${reliabilityStr} | ${valueStr}${seriesStr} | ${hint} |`
+      );
+    }
+    lines.push("");
+    if (hasMinimal) {
+      lines.push("`*` lower-bound measurement (reliability tag: `minimal`).");
+      lines.push("");
+    }
+  }
+  if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
+    lines.push("## Repositories & Connections");
+    lines.push("");
+    lines.push(
+      "| Repo | Contributors | Awarded Weight | Sources Reachable | AI Tooling |"
+    );
+    lines.push(
+      "| ---- | ------------ | -------------- | ----------------- | ---------- |"
+    );
+    for (const r of audit.per_repo) {
+      const contributors = r.contributors !== null ? String(r.contributors) : "\u2014";
+      const sources = r.sources_reachable.length > 0 ? r.sources_reachable.join(", ") : "(none)";
+      lines.push(
+        `| ${r.repo} | ${contributors} | ${r.awarded_weight} | ${sources} | ${r.has_ai_tooling ? "yes" : "no"} |`
+      );
+    }
+    lines.push("");
+  }
+  lines.push("## Recommendations");
+  lines.push("");
+  const failChecks = [];
+  const warnChecks = [];
+  for (const dim of audit.dimensions) {
+    for (const c of dim.checks) {
+      if (c.status === "FAIL") failChecks.push({ dim, check: c });
+      else if (c.status === "WARN") warnChecks.push({ dim, check: c });
+    }
+  }
+  if (failChecks.length === 0 && warnChecks.length === 0) {
+    lines.push("No failing or warning checks. Audit is fully green.");
+  } else {
+    lines.push("| # | Priority | Dimension | Check | Status | Hint |");
+    lines.push("| - | -------- | --------- | ----- | ------ | ---- |");
+    let rec = 1;
+    for (const { dim, check: c } of failChecks.slice(0, 10)) {
+      lines.push(
+        `| ${rec++} | P0 | ${titleLabel(dim)} | ${c.check_id} | FAIL | ${c.hint} |`
+      );
+    }
+    for (const { dim, check: c } of warnChecks.slice(
+      0,
+      Math.max(0, 10 - failChecks.length)
+    )) {
+      lines.push(
+        `| ${rec++} | P1 | ${titleLabel(dim)} | ${c.check_id} | WARN | ${c.hint} |`
+      );
+    }
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function hintSpan(value, hint, extraClass = "") {
+  const cls = extraClass ? ` class="${esc(extraClass)}"` : "";
+  return `<span${cls} title="${esc(hint)}">${esc(value)}</span>`;
+}
+function sparklineSvg(series) {
+  const w = 4;
+  const gap = 1;
+  const maxH = 20;
+  const values = series.map((e) => e.value).filter((v) => v !== null);
+  const min = values.length > 0 ? Math.min(...values) : 0;
+  const max = values.length > 0 ? Math.max(...values) : 0;
+  const range = max - min;
+  const svgW = series.length * (w + gap) - gap;
+  const rects = series.map((e, i2) => {
+    const h = e.value === null ? 2 : range === 0 ? maxH / 2 : Math.max(
+      4,
+      Math.round((e.value - min) / range * (maxH - 4)) + 4
+    );
+    const x = i2 * (w + gap);
+    const y = maxH - h;
+    const fill = e.value === null ? "#d1d5db" : "#6366f1";
+    const label = `${e.bucket_start}: ${e.value !== null ? String(e.value) : "n/a"}`;
+    return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"><title>${esc(label)}</title></rect>`;
+  }).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${maxH}" style="vertical-align:middle;margin-left:4px" aria-label="sparkline">${rects}</svg>`;
+}
+function statusBadge(status) {
+  const colors = {
+    PASS: "#22c55e",
+    WARN: "#eab308",
+    FAIL: "#ef4444",
+    SKIP: "#9ca3af"
+  };
+  const bg = colors[status] ?? "#9ca3af";
+  return `<span class="badge" style="background:${bg};color:#fff;padding:1px 6px;border-radius:3px;font-size:.75em;font-weight:600">${esc(status)}</span>`;
+}
+var STATUS_COLOR = {
+  PASS: "#f0fdf4",
+  WARN: "#fefce8",
+  FAIL: "#fef2f2",
+  SKIP: "#f9fafb"
+};
+function renderHtml(audit) {
+  const isOrg = Array.isArray(audit.portfolio_metrics) && audit.portfolio_metrics.length > 0;
+  const css = `
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#1e293b;font-size:14px;line-height:1.5}
+.container{max-width:960px;margin:0 auto;padding:24px}
+h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
+h2{font-size:1.15rem;font-weight:600;margin:20px 0 8px}
+h3{font-size:1rem;font-weight:600;margin:12px 0 4px}
+.meta{color:#64748b;font-size:.85rem;margin-bottom:16px}
+.meta span{margin-right:16px}
+/* tabs */
+.tabs{display:flex;gap:2px;margin-bottom:0;border-bottom:2px solid #e2e8f0}
+.tab-btn{padding:8px 18px;border:none;background:none;cursor:pointer;font-size:.875rem;font-weight:500;color:#64748b;border-bottom:2px solid transparent;margin-bottom:-2px}
+.tab-btn.active{color:#4f46e5;border-bottom-color:#4f46e5;font-weight:600}
+.tab-pane{display:none;padding:20px 0}
+.tab-pane.active{display:block}
+/* filter toolbar */
+.toolbar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e2e8f0;padding:8px 0;margin-bottom:12px;z-index:10;display:flex;gap:8px;align-items:center}
+.toolbar button{padding:5px 12px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:.8rem}
+.toolbar button.active{background:#4f46e5;color:#fff;border-color:#4f46e5}
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:.82rem;margin-bottom:16px}
+th{background:#f1f5f9;text-align:left;padding:6px 8px;border-bottom:2px solid #e2e8f0;font-weight:600}
+td{padding:5px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+tr:nth-child(even) td{background:#f8fafc}
+tr[data-status='PASS'] td{background:#f0fdf4}
+tr[data-status='WARN'] td{background:#fefce8}
+tr[data-status='FAIL'] td{background:#fef2f2}
+tr[data-status='SKIP'] td{background:#f9fafb}
+/* issues-only filter */
+body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{display:none}
+/* details/summary */
+details{border:1px solid #e2e8f0;border-radius:6px;margin-bottom:8px;overflow:hidden}
+summary{padding:10px 12px;cursor:pointer;font-weight:600;background:#f8fafc;user-select:none;list-style:none;display:flex;justify-content:space-between;align-items:center}
+summary::after{content:"\u25B8";font-size:.9em;color:#94a3b8}
+details[open] summary::after{content:"\u25BE"}
+.details-body{padding:12px}
+/* metric cards */
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px}
+.metric-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px}
+.metric-card .metric-val{font-size:1.6rem;font-weight:700;color:#4f46e5;margin:4px 0}
+.metric-card .metric-desc{font-size:.78rem;color:#64748b}
+/* capability headline (single-repo) */
+.capability-headline{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin-bottom:16px}
+.capability-headline .score{font-size:2.2rem;font-weight:800;color:#4f46e5}
+.capability-headline .coverage{font-size:1rem;color:#64748b;margin-top:2px}
+/* reliability */
+.rel-minimal{color:#d97706}
+.rel-not-reliable{color:#dc2626}
+/* hint span */
+span[title]{cursor:help;text-decoration:underline dotted #94a3b8;text-underline-offset:2px}
+/* badge */
+.badge{display:inline-block}
+/* low-coverage rows in summary */
+tr.low-cov td{background:#fff7ed}
+/* print */
+@media print{
+  .tabs{display:none}
+  .toolbar{display:none}
+  .tab-pane{display:block!important}
+  details{border:none}
+  details[open] summary::after,summary::after{display:none}
+  details>*{display:block!important}
+  summary{background:none;padding:4px 0}
+}
+`;
+  function tab1() {
+    const rows = [];
+    if (isOrg && audit.portfolio_metrics) {
+      rows.push("<h2>Portfolio Metrics</h2>");
+      rows.push('<div class="metric-grid">');
+      for (const m of audit.portfolio_metrics) {
+        const val = m.metric === "org_capability_score" ? m.value.toFixed(2) + " pts" : pct(m.value);
+        const hintText = `${m.description} \xB7 ${m.contributor_weighted ? "contributor-weighted" : "equal-weighted"} \xB7 ${m.repos_counted} repos`;
+        rows.push(`<div class="metric-card">
+  <div class="metric-name">${esc(metricLabel(m.metric))}</div>
+  <div class="metric-val">${hintSpan(val, hintText)}</div>
+  <div class="metric-desc">${esc(m.description)}<br>${m.repos_counted} repos \xB7 ${m.contributor_weighted ? "contributor-weighted" : "equal-weighted"}</div>
+</div>`);
+      }
+      rows.push("</div>");
+      if (audit.per_repo && audit.per_repo.length > 0) {
+        const withTooling = audit.per_repo.filter(
+          (r) => r.has_ai_tooling
+        ).length;
+        const withSources = audit.per_repo.filter(
+          (r) => r.sources_reachable.length > 0
+        ).length;
+        rows.push("<h2>Portfolio Reach</h2>");
+        rows.push(
+          `<p>${withTooling} / ${audit.per_repo.length} repos have AI tooling. ${withSources} / ${audit.per_repo.length} repos had at least one reachable data source.</p>`
+        );
+      }
+    } else {
+      const scoreHint = `Audit total: \u03A3 awarded category weights across all dimensions. Coverage: ${pct(audit.coverage)} relative to today's standards.toml.`;
+      rows.push('<div class="capability-headline">');
+      rows.push("<div>AI-SDLC Capability</div>");
+      rows.push(
+        `<div class="score">${hintSpan(String(audit.audit_total) + " pts", scoreHint)}</div>`
+      );
+      rows.push(
+        `<div class="coverage">Coverage: ${hintSpan(pct(audit.coverage), "Fraction of applicable category weights awarded \xB7 score \xF7 \u03A3 applicable weights \xB7 \u2014 \xB7 standards.toml \xB7 computed")}</div>`
+      );
+      rows.push("</div>");
+    }
+    rows.push(
+      `<div class="meta"><span><strong>Date:</strong> ${esc(audit.date)}</span><span><strong>Project:</strong> ${esc(audit.project)}</span></div>`
+    );
+    return rows.join("\n");
+  }
+  function tab2() {
+    const rows = [];
+    rows.push("<h2>Dimension Summary</h2>");
+    if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
+      rows.push(
+        "<table><thead><tr><th>Repo</th><th>Awarded Weight</th><th>Sources Reachable</th><th>AI Tooling</th><th>Contributors</th></tr></thead><tbody>"
+      );
+      for (const r of audit.per_repo) {
+        const sourceList = r.sources_reachable.length > 0 ? r.sources_reachable.join(", ") : "<em>none</em>";
+        const hintText = `Repo: ${r.repo} \xB7 awarded_weight: ${r.awarded_weight} \xB7 sources: ${r.sources_reachable.join(",") || "none"} \xB7 has_ai_tooling: ${r.has_ai_tooling}`;
+        rows.push(`<tr>
+  <td>${esc(r.repo)}</td>
+  <td>${hintSpan(String(r.awarded_weight), hintText)}</td>
+  <td>${sourceList}</td>
+  <td>${r.has_ai_tooling ? "\u2713" : "\u2717"}</td>
+  <td>${r.contributors !== null ? hintSpan(String(r.contributors), "Aggregate active-contributor count (no PII)") : "\u2014"}</td>
+</tr>`);
+      }
+      rows.push("</tbody></table>");
+    }
+    rows.push(
+      "<table><thead><tr><th>#</th><th>Dimension</th><th>Points</th><th>Coverage</th><th>Reliability</th><th>FAIL</th><th>WARN</th><th>PASS</th><th>SKIP</th></tr></thead><tbody>"
+    );
+    let n = 1;
+    for (const dim of audit.dimensions) {
+      const counts = statusCounts(dim);
+      const covPct = pct(dim.coverage);
+      const lowCov = dim.coverage < 0.4 ? ' class="low-cov"' : "";
+      const anyMinimal = dim.checks.some(
+        (c) => c.applies && c.reliability.tag === "minimal"
+      );
+      const relStr = anyMinimal ? "minimal *" : "maximal";
+      const relHint = `Dimension reliability: ${relStr}. ${anyMinimal ? "At least one check is a lower-bound measurement." : ""}`;
+      rows.push(`<tr${lowCov}>
+  <td>${n++}</td>
+  <td><strong>${esc(titleLabel(dim))}</strong></td>
+  <td>${hintSpan(String(dim.score) + " pts", `Score: \u03A3 awarded weights = ${dim.score} \xB7 coverage: ${covPct} \xB7 dimension: ${dim.dimension} \xB7 standards.toml \xB7 computed`)}</td>
+  <td>${hintSpan(covPct, `Coverage ratio = score / \u03A3 applicable weights = ${covPct} \xB7 dimension: ${dim.dimension} \xB7 standards.toml \xB7 computed`)}</td>
+  <td>${hintSpan(relStr, relHint)}</td>
+  <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
+  <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
+  <td>${counts.pass}</td>
+  <td>${counts.skip}</td>
+</tr>`);
+    }
+    rows.push("</tbody></table>");
+    if (audit.dimensions.some(
+      (d) => d.checks.some((c) => c.applies && c.reliability.tag === "minimal")
+    )) {
+      rows.push(
+        '<p style="font-size:.8rem;color:#64748b"><em>* lower-bound measurement</em></p>'
+      );
+    }
+    return rows.join("\n");
+  }
+  function tab3() {
+    const rows = [];
+    rows.push(
+      '<div class="toolbar"><button id="issues-btn" onclick="toggleIssues(this)">Show issues only</button></div>'
+    );
+    for (const dim of audit.dimensions) {
+      rows.push(`<details>`);
+      const counts = statusCounts(dim);
+      rows.push(
+        `<summary>${esc(titleLabel(dim))} \u2014 ${hintSpan(String(dim.score) + " pts", `\u03A3 awarded weights. Coverage: ${pct(dim.coverage)} rel. today's standard. Dimension: ${dim.dimension}`)} \xB7 coverage ${hintSpan(pct(dim.coverage), `Coverage ratio = ${pct(dim.coverage)}; excludes N/A checks. Source: standards.toml \xB7 computed`)} \xB7 FAIL:${counts.fail} WARN:${counts.warn}</summary>`
+      );
+      rows.push('<div class="details-body">');
+      rows.push(
+        "<table><thead><tr><th>#</th><th>Check</th><th>Method</th><th>Wt</th><th>Status</th><th>Reliability</th><th>Value</th><th>Evidence</th></tr></thead><tbody>"
+      );
+      let ckn = 1;
+      let hasMinimal = false;
+      for (const c of dim.checks) {
+        const rowBg = STATUS_COLOR[c.status] ?? "#fff";
+        const relClass = c.reliability.tag === "minimal" ? "rel-minimal" : c.reliability.tag === "not-reliable" ? "rel-not-reliable" : "";
+        if (c.reliability.tag === "minimal" && c.applies) hasMinimal = true;
+        const relLabel = c.applies ? `${c.reliability.tag} (${c.reliability.confidence})${c.reliability.tag === "minimal" ? " *" : ""}` : "\u2014";
+        const relHint = c.reliability.note ?? c.hint;
+        const valueStr = c.value !== null && c.value !== void 0 ? String(c.value) : "\u2014";
+        const seriesSvg = c.value_series && c.value_series.length > 0 ? sparklineSvg(c.value_series) : "";
+        const evidence = c.evidence.length > 0 ? c.evidence.join("<br>") : "\u2014";
+        rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
+  <td>${ckn++}</td>
+  <td title="${esc(c.hint)}"><strong>${esc(c.check_id)}</strong><br><span style="font-size:.75rem;color:#64748b">${esc(c.definition)}</span></td>
+  <td>${esc(c.method)}</td>
+  <td>${hintSpan(String(c.weight_awarded) + "/" + String(c.weight_max), c.hint)}</td>
+  <td>${statusBadge(c.status)}</td>
+  <td class="${relClass}">${hintSpan(relLabel, relHint)}</td>
+  <td>${hintSpan(valueStr, c.hint)}${seriesSvg}</td>
+  <td style="font-size:.75rem;max-width:200px;word-break:break-word">${evidence}</td>
+</tr>`);
+      }
+      rows.push("</tbody></table>");
+      if (hasMinimal) {
+        rows.push(
+          '<p style="font-size:.78rem;color:#64748b">* lower-bound measurement (reliability tag: minimal).</p>'
+        );
+      }
+      rows.push("</div></details>");
+    }
+    rows.push("<h2>Repositories &amp; Connections</h2>");
+    if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
+      rows.push(
+        "<table><thead><tr><th>Repo</th><th>Contributors</th><th>Sources</th><th>AI Tooling</th><th>Awarded Weight</th></tr></thead><tbody>"
+      );
+      for (const r of audit.per_repo) {
+        const hintText = `Repo: ${r.repo} \xB7 contributors: ${r.contributors ?? "unknown"} \xB7 sources: ${r.sources_reachable.join(",") || "none"} \xB7 has_ai_tooling: ${r.has_ai_tooling} \xB7 awarded_weight: ${r.awarded_weight}`;
+        const sources = r.sources_reachable.length > 0 ? r.sources_reachable.map(esc).join(", ") : "<em>none detected</em>";
+        rows.push(`<tr>
+  <td>${esc(r.repo)}</td>
+  <td>${r.contributors !== null ? hintSpan(String(r.contributors), "Aggregate active-contributor count \u2014 no per-person data") : "\u2014"}</td>
+  <td>${sources}</td>
+  <td>${r.has_ai_tooling ? "\u2713 yes" : "\u2717 no"}</td>
+  <td>${hintSpan(String(r.awarded_weight), hintText)}</td>
+</tr>`);
+      }
+      rows.push("</tbody></table>");
+    } else {
+      rows.push(
+        `<p>Single-repo audit. Project: <strong>${esc(audit.project)}</strong>. ${audit.dimensions.length} dimension(s) evaluated.</p>`
+      );
+    }
+    return rows.join("\n");
+  }
+  const inlineJs = `
+function showTab(idx){
+  document.querySelectorAll('.tab-btn').forEach(function(b,i){b.classList.toggle('active',i===idx)});
+  document.querySelectorAll('.tab-pane').forEach(function(p,i){p.classList.toggle('active',i===idx)});
+}
+function toggleIssues(btn){
+  var active=document.body.classList.toggle('issues-only');
+  btn.textContent=active?'Show all':'Show issues only';
+  btn.classList.toggle('active',active);
+}
+`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI-SDLC Audit \u2014 ${esc(audit.project)} \u2014 ${esc(audit.date)}</title>
+<style>${css}</style>
+</head>
+<body>
+<div class="container">
+<h1>AI-SDLC Readiness Audit</h1>
+<div class="meta">
+  <span><strong>Date:</strong> ${esc(audit.date)}</span>
+  <span><strong>Project:</strong> ${esc(audit.project)}</span>
+  <span><strong>Total:</strong> ${hintSpan(String(audit.audit_total) + " pts", "Audit total: \u03A3 awarded category weights across all dimensions. Uncapped \u2014 rises as the standard grows.")}
+  <span><strong>Coverage:</strong> ${hintSpan(pct(audit.coverage), "Coverage ratio: score \xF7 \u03A3 applicable category weights. Not a grade \u2014 read relative to today's standards.toml.")}</span>
+  ${isOrg ? `<span><strong>Mode:</strong> Organization (${audit.per_repo?.length ?? 0} repos)</span>` : ""}
+</div>
+
+<div class="tabs" role="tablist">
+  <button class="tab-btn active" onclick="showTab(0)" role="tab">Board / CEO</button>
+  <button class="tab-btn" onclick="showTab(1)" role="tab">Head of Engineering</button>
+  <button class="tab-btn" onclick="showTab(2)" role="tab">Drill-down</button>
+</div>
+
+<div class="tab-pane active" id="tab-board">
+${tab1()}
+</div>
+
+<div class="tab-pane" id="tab-hoe">
+${tab2()}
+</div>
+
+<div class="tab-pane" id="tab-drill">
+${tab3()}
+</div>
+
+</div>
+<script>${inlineJs}</script>
+</body>
+</html>`;
+}
+
 // plugins/awos/skills/ai-readiness-audit/progress.ts
 function progress(input) {
   const { elapsed_seconds, done, total } = input;
-  const pct = total > 0 ? done / total : 0;
+  const pct2 = total > 0 ? done / total : 0;
   let eta_seconds;
   if (done === 0) {
     eta_seconds = null;
@@ -10425,7 +10924,7 @@ function progress(input) {
   } else {
     eta_seconds = elapsed_seconds / done * (total - done);
   }
-  return { pct, eta_seconds, elapsed_seconds };
+  return { pct: pct2, eta_seconds, elapsed_seconds };
 }
 
 // plugins/awos/skills/ai-readiness-audit/cli.ts
@@ -10481,7 +10980,7 @@ async function main() {
   if (!command) {
     printJson({
       error: "no command given",
-      usage: "collect|detect|metric <arg> <repoPath>"
+      usage: "collect|detect|metric|standards|progress|rollup|render <arg> [repoPath]"
     });
     process.exit(1);
   }
@@ -10663,10 +11162,54 @@ async function main() {
       printJson(progress({ elapsed_seconds, done, total }));
       break;
     }
+    case "render": {
+      const auditPath = arg1;
+      if (!auditPath) {
+        printJson({
+          error: "render requires <audit.json>",
+          usage: "node dist/cli.js render <audit.json> --format md|html"
+        });
+        process.exit(1);
+      }
+      const remainingArgs = process.argv.slice(4);
+      const fmtIdx = remainingArgs.indexOf("--format");
+      const format = fmtIdx !== -1 ? remainingArgs[fmtIdx + 1] : "md";
+      if (format !== "md" && format !== "html") {
+        printJson({
+          error: `render --format must be "md" or "html", got "${format}"`
+        });
+        process.exit(1);
+      }
+      let rawAudit;
+      try {
+        rawAudit = readFileSync32(auditPath, "utf8");
+      } catch (err2) {
+        const e = err2;
+        printJson({
+          error: `cannot read audit JSON: ${e.message}`,
+          path: auditPath
+        });
+        process.exit(1);
+      }
+      let audit;
+      try {
+        audit = JSON.parse(rawAudit);
+      } catch (err2) {
+        const e = err2;
+        printJson({
+          error: `audit JSON is not valid JSON: ${e.message}`,
+          path: auditPath
+        });
+        process.exit(1);
+      }
+      const output = format === "html" ? renderHtml(audit) : renderMarkdown(audit);
+      process.stdout.write(output + "\n");
+      break;
+    }
     default: {
       printJson({
         error: `unknown command "${command}"`,
-        usage: "collect|detect|metric|standards|progress|rollup <arg> [repoPath]"
+        usage: "collect|detect|metric|standards|progress|rollup|render <arg> [repoPath]"
       });
       process.exit(1);
     }

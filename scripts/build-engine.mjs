@@ -1,19 +1,23 @@
 #!/usr/bin/env node
 /**
- * build-engine.mjs — thin esbuild driver for the ai-readiness-audit engine.
+ * build-engine.mjs — esbuild driver for the ai-readiness-audit engine.
  *
- * Bundles every entrypoint under the skill root to dist/*.js.
- * Format: ESM, platform: node, bundled.
- * Copies any .wasm files alongside the bundle (for future web-tree-sitter support).
+ * Bundles cli.ts (single entrypoint) → dist/cli.js with all imports inlined.
+ * Format: ESM, platform: node, target: node22.
+ *
+ * Before building, CLEANS dist/ (removes every file except .gitkeep) so that
+ * stale flat + nested artefacts from the old multi-entrypoint layout disappear.
+ *
+ * .wasm hook is present but a no-op until web-tree-sitter is wired.
  */
 
 import { build } from 'esbuild';
 import {
   readdirSync,
+  rmSync,
+  statSync,
   copyFileSync,
   mkdirSync,
-  existsSync,
-  writeFileSync,
 } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,45 +32,48 @@ const skillRoot = join(
 );
 const distDir = join(skillRoot, 'dist');
 
+// ---------------------------------------------------------------------------
+// 1. Clean dist/ — remove everything except .gitkeep
+// ---------------------------------------------------------------------------
 mkdirSync(distDir, { recursive: true });
 
-// Collect entrypoints: top-level .ts files in collectors/, detectors/, metrics/.
-const layers = ['collectors', 'detectors', 'metrics'];
-const entryPoints = [];
-
-for (const layer of layers) {
-  const layerDir = join(skillRoot, layer);
-  if (!existsSync(layerDir)) continue;
-  for (const f of readdirSync(layerDir)) {
-    if (f.endsWith('.ts') && !f.endsWith('.test.ts')) {
-      entryPoints.push(join(layerDir, f));
+function cleanDir(dir) {
+  for (const entry of readdirSync(dir)) {
+    if (entry === '.gitkeep') continue;
+    const full = join(dir, entry);
+    const st = statSync(full);
+    if (st.isDirectory()) {
+      rmSync(full, { recursive: true, force: true });
+    } else {
+      rmSync(full, { force: true });
     }
   }
 }
 
-if (entryPoints.length === 0) {
-  // No entrypoints yet — write a sentinel so CI can verify the bundle step runs.
-  writeFileSync(join(distDir, 'engine.js'), '// engine bundle placeholder\n');
-  console.log(
-    'build-engine: no entrypoints yet — wrote dist/engine.js placeholder'
-  );
-} else {
-  await build({
-    entryPoints,
-    outdir: distDir,
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    target: 'node22',
-  });
+cleanDir(distDir);
+console.log('build-engine: cleaned dist/ (preserved .gitkeep)');
 
-  // Copy any .wasm files from the skill tree into dist/ for future use.
-  const wasmFiles = readdirSync(skillRoot).filter((f) => f.endsWith('.wasm'));
-  for (const wasm of wasmFiles) {
-    copyFileSync(join(skillRoot, wasm), join(distDir, basename(wasm)));
-  }
+// ---------------------------------------------------------------------------
+// 2. Bundle cli.ts → dist/cli.js
+// ---------------------------------------------------------------------------
+const entryPoint = join(skillRoot, 'cli.ts');
 
-  console.log(
-    `build-engine: bundled ${entryPoints.length} entrypoint(s) to dist/`
-  );
+await build({
+  entryPoints: [entryPoint],
+  outfile: join(distDir, 'cli.js'),
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node22',
+});
+
+console.log('build-engine: bundled cli.ts → dist/cli.js');
+
+// ---------------------------------------------------------------------------
+// 3. .wasm copy hook (no-op for now; web-tree-sitter support lands later)
+// ---------------------------------------------------------------------------
+const wasmFiles = readdirSync(skillRoot).filter((f) => f.endsWith('.wasm'));
+for (const wasm of wasmFiles) {
+  copyFileSync(join(skillRoot, wasm), join(distDir, basename(wasm)));
+  console.log(`build-engine: copied ${wasm} → dist/${wasm}`);
 }

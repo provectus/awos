@@ -6184,6 +6184,8 @@ function main() {
     case "metric": {
       const id = arg1;
       const repoPath = arg2;
+      const [, , , , , arg3] = process.argv;
+      const preCollectedDir = arg3;
       if (!id || !repoPath) {
         printJson({ error: "metric requires <id> and <repoPath>" });
         process.exit(1);
@@ -6196,21 +6198,26 @@ function main() {
         });
         process.exit(1);
       }
-      const tmpRoot = mkdtempSync(join28(tmpdir(), "awos-metric-"));
-      const collectedDir = join28(tmpRoot, "collected");
-      const gitArtifact = collect(repoPath, DEFAULT_PERIOD);
-      writeArtifact(gitArtifact, collectedDir);
-      if (id.startsWith("adp_c")) {
-        const ciArtifact = collect2(repoPath, DEFAULT_PERIOD);
-        writeArtifact(ciArtifact, collectedDir);
-      }
-      if (id.startsWith("adp_d")) {
-        const docsArtifact = collect4(repoPath, DEFAULT_PERIOD);
-        writeArtifact(docsArtifact, collectedDir);
-      }
-      if (id.startsWith("adp_i")) {
-        const trackerArtifact = collect3(repoPath, DEFAULT_PERIOD);
-        writeArtifact(trackerArtifact, collectedDir);
+      let collectedDir;
+      if (preCollectedDir) {
+        collectedDir = preCollectedDir;
+      } else {
+        const tmpRoot = mkdtempSync(join28(tmpdir(), "awos-metric-"));
+        collectedDir = join28(tmpRoot, "collected");
+        const gitArtifact = collect(repoPath, DEFAULT_PERIOD);
+        writeArtifact(gitArtifact, collectedDir);
+        if (id.startsWith("adp_c")) {
+          const ciArtifact = collect2(repoPath, DEFAULT_PERIOD);
+          writeArtifact(ciArtifact, collectedDir);
+        }
+        if (id.startsWith("adp_d")) {
+          const docsArtifact = collect4(repoPath, DEFAULT_PERIOD);
+          writeArtifact(docsArtifact, collectedDir);
+        }
+        if (id.startsWith("adp_i")) {
+          const trackerArtifact = collect3(repoPath, DEFAULT_PERIOD);
+          writeArtifact(trackerArtifact, collectedDir);
+        }
       }
       const cliDir = dirname3(fileURLToPath(import.meta.url));
       const skillRoot = cliDir.endsWith("/dist") || cliDir.endsWith("\\dist") ? dirname3(cliDir) : cliDir;

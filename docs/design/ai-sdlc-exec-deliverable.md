@@ -9,6 +9,7 @@ This document defines **what the `/awos:ai-readiness-audit` organization run han
 - **No money — for now.** No cost source is assumed, so no currency is rendered. Metrics are designed to be **convertible to money given a rate source** (e.g. capacity allocation × loaded rate); that conversion is a future extension, not a principle.
 - **No individual names.** Granularity is repository and organization; people appear only as aggregate active-contributor counts.
 - **Honest confidence, per-metric reliability.** Every number carries a confidence label (HIGH/MED/LOW) from which sources were reachable, and every metric carries a reliability tag — _minimal_ (true value ≥ shown), _maximal_ (true value ≤ shown), or _not-reliable_ (proxy) — with a "where it may deviate" note. In the HTML these appear as **hover hints** on the metric, so the front page stays clean but nothing is overclaimed.
+- **Reproducible by construction.** Each measurement declares its _method_: _computed_ (a number derived deterministically from repository artifacts) and _detected_ (a deterministic code/config signal) yield the **same result on every run of the same repo**; only _judgment_ items rely on a model, and those are bounded by a fixed rubric and labeled as such. The hover hint names the method, so the board can tell at a glance which numbers are mechanical and which are bounded judgment — the headline does not drift between runs.
 - **Gaps are explained, not hidden.** A "Repositories & Connections" view shows which repos were measured, how they were linked, and which integrations were missing and why.
 
 ## Tab 1 — Board / CEO one-pager (example)
@@ -69,6 +70,7 @@ Diagnostics surfaced alongside the table:
 - **Partial-measurement repos** — which connectors are missing per repo and what metric that suppresses (e.g. `platform-iac` has no CI link ⇒ no CI pass-rate, and change-fail is git-proxy only).
 - **Low-band / low-reliability flags** — cells in DORA's Low band or carrying a not-reliable/low-confidence tag are marked, so engineering investigates rather than the board reading a portfolio average that hides them.
 - **Complexity hotspots** — top high-CCN functions/files per repo (from the complexity scan), as the concrete refactor backlog.
+- **Security posture (two lenses)** — _agent-safety_ (is it safe to run agents here: guardrails blocking secret reads, hook/MCP trust) and _application-security_ (OWASP ASVS baseline: authz, injection, transport, secrets-in-code). These gate how much autonomy can be granted to AI agents and how safely AI-speed output can be absorbed; a weak posture caps adoption regardless of tooling coverage.
 
 ## Tab 3 — Drill-down (example)
 
@@ -102,3 +104,4 @@ The organization run is a scope of the measurement: it executes the per-repo `ai
 - "Your current delivery sits in DORA's higher bands, with complexity healthy" — current-state read against industry benchmarks, confidence stated.
 - "Capacity split is healthy / skewed to maintenance" — the work-mix allocation, in FTE share, convertible to money once a rate source is provided.
 - "Here is the next lever" — connect CI to raise confidence, close the AI-dark repos, refactor the named complexity hotspots.
+- "Security sets your autonomy ceiling" — agent-safety guardrails plus an OWASP-ASVS application-security baseline determine how much you can safely hand to AI agents. AI velocity multiplies whatever security debt already exists, so the gates (CI vulnerability scanning, the ASVS floor, agent guardrails) are what let adoption scale without scaling risk.

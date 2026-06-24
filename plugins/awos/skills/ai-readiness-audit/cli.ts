@@ -7,8 +7,13 @@
  * Usage:
  *   node dist/cli.js collect   <source>           <repoPath>
  *   node dist/cli.js detect    <code>             <repoPath>
- *   node dist/cli.js metric    <id>               <repoPath>
+ *   node dist/cli.js metric    <id>               <repoPath> [collectedDir]
  *   node dist/cli.js standards <path-to-toml>
+ *
+ * The optional [collectedDir] argument to `metric` is the "query-once" path:
+ * if supplied, the metric reads pre-written <collectedDir>/<source>.json
+ * artifacts instead of running collectors inline.  Omit for the original
+ * self-collect behavior.
  */
 
 // ---------------------------------------------------------------------------
@@ -225,6 +230,13 @@ function main(): void {
     case 'metric': {
       const id = arg1;
       const repoPath = arg2;
+      // Optional 3rd argument: a pre-populated collected/ directory.
+      // When provided, no inline collection is performed — the metric reads
+      // the existing <collectedDir>/<source>.json artifacts directly.
+      // This is the "query-once" path used by the ai-sdlc-adoption orchestrator.
+      const [, , , , , arg3] = process.argv;
+      const preCollectedDir: string | undefined = arg3;
+
       if (!id || !repoPath) {
         printJson({ error: 'metric requires <id> and <repoPath>' });
         process.exit(1);
@@ -237,27 +249,37 @@ function main(): void {
         });
         process.exit(1);
       }
-      // Run required collectors inline, writing artifacts into a temp dir.
-      const tmpRoot = mkdtempSync(join(tmpdir(), 'awos-metric-'));
-      const collectedDir = join(tmpRoot, 'collected');
-      // Git collector is always run for ADP-G* metrics.
-      const gitArtifact = collectGit(repoPath, DEFAULT_PERIOD);
-      writeArtifact(gitArtifact as { source: string }, collectedDir);
-      // CI collector is run for ADP-C* metrics.
-      if (id.startsWith('adp_c')) {
-        const ciArtifact = collectCi(repoPath, DEFAULT_PERIOD);
-        writeArtifact(ciArtifact as { source: string }, collectedDir);
+
+      let collectedDir: string;
+
+      if (preCollectedDir) {
+        // Query-once path: use the caller-supplied collected/ directory.
+        // No inline collection — artifacts were already written by `collect` verbs.
+        collectedDir = preCollectedDir;
+      } else {
+        // Inline path (backward-compatible): run required collectors into a temp dir.
+        const tmpRoot = mkdtempSync(join(tmpdir(), 'awos-metric-'));
+        collectedDir = join(tmpRoot, 'collected');
+        // Git collector is always run for ADP-G* metrics.
+        const gitArtifact = collectGit(repoPath, DEFAULT_PERIOD);
+        writeArtifact(gitArtifact as { source: string }, collectedDir);
+        // CI collector is run for ADP-C* metrics.
+        if (id.startsWith('adp_c')) {
+          const ciArtifact = collectCi(repoPath, DEFAULT_PERIOD);
+          writeArtifact(ciArtifact as { source: string }, collectedDir);
+        }
+        // Docs collector is run for ADP-D* metrics.
+        if (id.startsWith('adp_d')) {
+          const docsArtifact = collectDocs(repoPath, DEFAULT_PERIOD);
+          writeArtifact(docsArtifact as { source: string }, collectedDir);
+        }
+        // Tracker collector is run for ADP-I* metrics (also git for MTTR proxy).
+        if (id.startsWith('adp_i')) {
+          const trackerArtifact = collectTracker(repoPath, DEFAULT_PERIOD);
+          writeArtifact(trackerArtifact as { source: string }, collectedDir);
+        }
       }
-      // Docs collector is run for ADP-D* metrics.
-      if (id.startsWith('adp_d')) {
-        const docsArtifact = collectDocs(repoPath, DEFAULT_PERIOD);
-        writeArtifact(docsArtifact as { source: string }, collectedDir);
-      }
-      // Tracker collector is run for ADP-I* metrics (also git for MTTR proxy).
-      if (id.startsWith('adp_i')) {
-        const trackerArtifact = collectTracker(repoPath, DEFAULT_PERIOD);
-        writeArtifact(trackerArtifact as { source: string }, collectedDir);
-      }
+
       // Load standards for category award.
       // import.meta.url resolves to dist/cli.js when bundled, so go one level
       // up from dirname to reach the skill root where references/ lives.

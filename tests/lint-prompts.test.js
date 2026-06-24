@@ -515,6 +515,63 @@ test('commands/tasks.md emits a Feature Testing & Regression slice', () => {
   );
 });
 
+test('ai-sdlc-adoption dimension exists with correct frontmatter and required body references', () => {
+  const dimFile = path.join(dimensionsDir, 'ai-sdlc-adoption.md');
+  assert.ok(
+    fs.existsSync(dimFile),
+    'dimensions/ai-sdlc-adoption.md must exist'
+  );
+  const body = readUtf8(dimFile);
+  const { data, hasFrontmatter } = parse(body);
+
+  assert.ok(hasFrontmatter, 'ai-sdlc-adoption.md must have frontmatter');
+  assert.equal(
+    data.name,
+    'ai-sdlc-adoption',
+    'frontmatter name must be "ai-sdlc-adoption"'
+  );
+  assert.ok(
+    Array.isArray(data['depends-on']),
+    'frontmatter depends-on must be an array'
+  );
+  for (const dep of [
+    'project-topology',
+    'ai-development-tooling',
+    'spec-driven-development',
+  ]) {
+    assert.ok(
+      data['depends-on'].includes(dep),
+      `frontmatter depends-on must include "${dep}"`
+    );
+  }
+
+  // Body must instruct the orchestrator to collect via the bundled dispatcher.
+  assert.ok(
+    body.includes('node dist/cli.js collect'),
+    'body must reference "node dist/cli.js collect" (per-source collection command)'
+  );
+  // Body must instruct the orchestrator to run metrics via the bundled dispatcher.
+  assert.ok(
+    body.includes('node dist/cli.js metric'),
+    'body must reference "node dist/cli.js metric" (metric invocation command)'
+  );
+  // Body must describe the shared collected/ directory (query-once pattern).
+  assert.ok(
+    body.includes('collected/'),
+    'body must reference "collected/" (the shared query-once artifact directory)'
+  );
+  // Body must reference the standards data file as the source of category metadata.
+  assert.ok(
+    body.includes('standards.toml'),
+    'body must reference standards.toml as the category metadata source'
+  );
+  // Body must describe emission of the per-dimension .json artifact.
+  assert.ok(
+    body.includes('.json'),
+    'body must describe emission of a .json artifact (the per-dimension source-of-truth)'
+  );
+});
+
 test('commands/tasks.md picks the QA agent with a search-first rule', () => {
   // Option A: testing-expert is one option among many — not a hard
   // requirement. tasks.md must (a) instruct the agent to search for a

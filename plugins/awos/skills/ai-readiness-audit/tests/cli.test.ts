@@ -219,3 +219,72 @@ test('standards: exits non-zero with error JSON when file does not exist', () =>
     'error field must be a non-empty string'
   );
 });
+
+// ---------------------------------------------------------------------------
+// 'metric' query-once path — collectedDir argument reads pre-written artifacts
+// ---------------------------------------------------------------------------
+
+test('metric adp_g2_contributors: query-once path reads pre-collected git.json', () => {
+  const tmpRepo = mkdtempSync(join(tmpdir(), 'awos-cli-queryonce-'));
+  const collectedDir = join(tmpRepo, 'collected');
+  try {
+    // Init a minimal git repo.
+    execFileSync('git', ['init', '--quiet', tmpRepo]);
+    execFileSync('git', [
+      '-C',
+      tmpRepo,
+      'config',
+      'user.email',
+      'test@example.com',
+    ]);
+    execFileSync('git', ['-C', tmpRepo, 'config', 'user.name', 'Test']);
+    writeFileSync(join(tmpRepo, 'README.md'), '# test\n');
+    execFileSync('git', ['-C', tmpRepo, 'add', '.']);
+    execFileSync('git', ['-C', tmpRepo, 'commit', '--quiet', '-m', 'init']);
+
+    // Step 1: collect git artifact via the collect verb.
+    const { json: artifact, code: collectCode } = runCli(
+      'collect',
+      'git',
+      tmpRepo
+    );
+    assert.equal(collectCode, 0, 'collect git must exit 0');
+    mkdirSync(collectedDir, { recursive: true });
+    writeFileSync(
+      join(collectedDir, 'git.json'),
+      JSON.stringify(artifact, null, 2)
+    );
+
+    // Step 2: run metric with pre-collected dir (query-once path).
+    const { json: result, code: metricCode } = runCli(
+      'metric',
+      'adp_g2_contributors',
+      tmpRepo,
+      collectedDir
+    );
+
+    assert.equal(metricCode, 0, 'metric adp_g2_contributors must exit 0');
+    assert.ok(
+      result && typeof result === 'object',
+      'output must be a JSON object'
+    );
+    const r = result as Record<string, unknown>;
+    assert.equal(
+      r['metric'],
+      'adp_g2_contributors',
+      'metric field must be "adp_g2_contributors"'
+    );
+    assert.equal(
+      r['status'],
+      'OK',
+      'status must be OK when git artifact is present'
+    );
+    assert.ok(
+      Array.isArray(r['categories_awarded']) &&
+        (r['categories_awarded'] as number[]).includes(201),
+      'categories_awarded must include code 201'
+    );
+  } finally {
+    rmSync(tmpRepo, { recursive: true, force: true });
+  }
+});

@@ -681,14 +681,19 @@ function parse(toml, { maxDepth = 1e3, integersAsBigInt } = {}) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/cli.ts
-import { readFileSync as readFileSync12 } from "node:fs";
+import { readFileSync as readFileSync17, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join as join17, dirname as dirname3 } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // plugins/awos/skills/ai-readiness-audit/collectors/git.ts
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join as join2 } from "node:path";
 
 // plugins/awos/skills/ai-readiness-audit/collectors/_base.ts
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 function makeArtifact(source, available, reasonIfAbsent, period, raw) {
   return {
     source,
@@ -701,6 +706,12 @@ function makeArtifact(source, available, reasonIfAbsent, period, raw) {
     },
     raw
   };
+}
+function writeArtifact(artifact, outDir) {
+  mkdirSync(outDir, { recursive: true });
+  const path = join(outDir, `${artifact.source}.json`);
+  writeFileSync(path, JSON.stringify(artifact, null, 2));
+  return path;
 }
 
 // plugins/awos/skills/ai-readiness-audit/collectors/git.ts
@@ -759,7 +770,7 @@ var TOOLING_CANDIDATES = [
   ".mcp.json"
 ];
 function getToolingPaths(repoPath) {
-  return TOOLING_CANDIDATES.filter((p) => existsSync(join(repoPath, p)));
+  return TOOLING_CANDIDATES.filter((p) => existsSync(join2(repoPath, p)));
 }
 function getMergeStats(cwd) {
   const allMerges = run(
@@ -909,7 +920,7 @@ function collect(repoPath, period) {
 
 // plugins/awos/skills/ai-readiness-audit/collectors/ci.ts
 import { existsSync as existsSync2 } from "node:fs";
-import { join as join2 } from "node:path";
+import { join as join3 } from "node:path";
 var CI_CONFIG_CANDIDATES = [
   ".github/workflows",
   ".gitlab-ci.yml",
@@ -917,7 +928,7 @@ var CI_CONFIG_CANDIDATES = [
 ];
 function detectCiConfig(repoPath) {
   for (const candidate of CI_CONFIG_CANDIDATES) {
-    if (existsSync2(join2(repoPath, candidate))) {
+    if (existsSync2(join3(repoPath, candidate))) {
       return candidate;
     }
   }
@@ -1763,11 +1774,11 @@ var DETECTORS2 = {
 
 // plugins/awos/skills/ai-readiness-audit/detectors/spec_driven_development.ts
 import { readFileSync as readFileSync4, existsSync as existsSync3, readdirSync, statSync } from "node:fs";
-import { join as join4, relative as relative4 } from "node:path";
+import { join as join5, relative as relative4 } from "node:path";
 import { execFileSync as execFileSync4 } from "node:child_process";
 function detectAwosInstalled(repoPath, _params) {
-  const hasAwos = existsSync3(join4(repoPath, ".awos"));
-  const hasContext = existsSync3(join4(repoPath, "context"));
+  const hasAwos = existsSync3(join5(repoPath, ".awos"));
+  const hasContext = existsSync3(join5(repoPath, "context"));
   if (hasAwos && hasContext) {
     return makeResult("PASS", 2, [
       ".awos/ directory present \u2014 AWOS framework installed",
@@ -1809,7 +1820,7 @@ function detectProductContextDocs(repoPath, _params) {
   for (const candidates of FOUNDATIONAL_DOC_CANDIDATES) {
     let matched = false;
     for (const candidate of candidates) {
-      const fullPath = join4(repoPath, candidate);
+      const fullPath = join5(repoPath, candidate);
       if (existsSync3(fullPath) && isSubstantive(fullPath)) {
         found.push(candidate);
         matched = true;
@@ -1858,7 +1869,7 @@ var TECH_SIGNALS = [
   {
     name: "react",
     detect: (r) => iterFiles(r, ["*.tsx", "*.jsx"]).length > 0 || (() => {
-      const pkg = join4(r, "package.json");
+      const pkg = join5(r, "package.json");
       if (!existsSync3(pkg)) return false;
       try {
         return readFileSync4(pkg, "utf8").includes('"react"');
@@ -1869,7 +1880,7 @@ var TECH_SIGNALS = [
   },
   {
     name: "node",
-    detect: (r) => existsSync3(join4(r, "package.json")) || iterFiles(r, ["*.js"]).length > 0
+    detect: (r) => existsSync3(join5(r, "package.json")) || iterFiles(r, ["*.js"]).length > 0
   },
   {
     name: "javascript",
@@ -1953,9 +1964,9 @@ var TECH_SIGNALS = [
 ];
 function findArchDoc(repoPath) {
   for (const candidate of [
-    join4(repoPath, "context", "architecture", "architecture.md"),
-    join4(repoPath, "context", "product", "architecture.md"),
-    join4(repoPath, "ARCHITECTURE.md")
+    join5(repoPath, "context", "architecture", "architecture.md"),
+    join5(repoPath, "context", "product", "architecture.md"),
+    join5(repoPath, "ARCHITECTURE.md")
   ]) {
     if (existsSync3(candidate)) return candidate;
   }
@@ -2116,10 +2127,10 @@ var SPEC_TRIAD = [
   "tasks.md"
 ];
 function listSpecDirs(repoPath) {
-  const specBase = join4(repoPath, "context", "spec");
+  const specBase = join5(repoPath, "context", "spec");
   if (!existsSync3(specBase)) return [];
   try {
-    return readdirSync(specBase).filter((name) => /^\d{3}-/.test(name)).sort().map((name) => join4(specBase, name)).filter((p) => {
+    return readdirSync(specBase).filter((name) => /^\d{3}-/.test(name)).sort().map((name) => join5(specBase, name)).filter((p) => {
       try {
         return statSync(p).isDirectory();
       } catch {
@@ -2139,8 +2150,8 @@ function detectSpecTriadComplete(repoPath, _params) {
   }
   const statuses = [];
   for (const dir of specDirs) {
-    const present = SPEC_TRIAD.filter((f) => existsSync3(join4(dir, f)));
-    const missing = SPEC_TRIAD.filter((f) => !existsSync3(join4(dir, f)));
+    const present = SPEC_TRIAD.filter((f) => existsSync3(join5(dir, f)));
+    const missing = SPEC_TRIAD.filter((f) => !existsSync3(join5(dir, f)));
     statuses.push({ dir: relative4(repoPath, dir), present, missing });
   }
   const empty = statuses.filter((s) => s.present.length === 0);
@@ -2185,7 +2196,7 @@ function detectStaleSpecs(repoPath, _params) {
   const active = [];
   const done = [];
   for (const dir of specDirs) {
-    const tasksPath = join4(dir, "tasks.md");
+    const tasksPath = join5(dir, "tasks.md");
     if (!existsSync3(tasksPath)) continue;
     let content;
     try {
@@ -2228,7 +2239,7 @@ function detectAgentAnnotations(repoPath, _params) {
   let totalTasks = 0;
   let annotatedTasks = 0;
   for (const dir of specDirs) {
-    const tasksPath = join4(dir, "tasks.md");
+    const tasksPath = join5(dir, "tasks.md");
     if (!existsSync3(tasksPath)) continue;
     let content;
     try {
@@ -2290,9 +2301,9 @@ var DETECTORS3 = {
 
 // plugins/awos/skills/ai-readiness-audit/detectors/ai_development_tooling.ts
 import { existsSync as existsSync4, readFileSync as readFileSync5 } from "node:fs";
-import { join as join5, relative as relative5 } from "node:path";
+import { join as join6, relative as relative5 } from "node:path";
 function detectCustomCommands(repoPath, _params) {
-  const commandsDir = join5(repoPath, ".claude", "commands");
+  const commandsDir = join6(repoPath, ".claude", "commands");
   if (!existsSync4(commandsDir)) {
     return makeResult("FAIL", 0, [
       "no .claude/commands/ directory found \u2014 no custom slash commands defined"
@@ -2311,7 +2322,7 @@ function detectCustomCommands(repoPath, _params) {
   ]);
 }
 function detectClaudeSkills(repoPath, _params) {
-  const skillsRoot = join5(repoPath, ".claude", "skills");
+  const skillsRoot = join6(repoPath, ".claude", "skills");
   if (!existsSync4(skillsRoot)) {
     return makeResult("FAIL", 0, [
       "no .claude/skills/ directory found \u2014 no Claude Code skills configured"
@@ -2333,7 +2344,7 @@ var MCP_CONFIG_PATHS = [".mcp.json", ".claude/mcp.json"];
 function detectMcpConfig(repoPath, _params) {
   const found = [];
   for (const relPath of MCP_CONFIG_PATHS) {
-    if (existsSync4(join5(repoPath, relPath))) {
+    if (existsSync4(join6(repoPath, relPath))) {
       found.push(relPath);
     }
   }
@@ -2348,7 +2359,7 @@ function detectMcpConfig(repoPath, _params) {
   ]);
 }
 function detectClaudeHooks(repoPath, _params) {
-  const hooksDir = join5(repoPath, ".claude", "hooks");
+  const hooksDir = join6(repoPath, ".claude", "hooks");
   if (existsSync4(hooksDir)) {
     const hookFiles = iterFiles(hooksDir, [
       "*.sh",
@@ -2366,8 +2377,8 @@ function detectClaudeHooks(repoPath, _params) {
     }
   }
   const settingsFiles = [
-    join5(repoPath, ".claude", "settings.json"),
-    join5(repoPath, ".claude", "settings.local.json")
+    join6(repoPath, ".claude", "settings.json"),
+    join6(repoPath, ".claude", "settings.local.json")
   ];
   for (const settingsPath of settingsFiles) {
     if (!existsSync4(settingsPath)) continue;
@@ -2410,7 +2421,7 @@ var ROOT_RUN_FILES = [
   "Taskfile.yaml"
 ];
 function hasPackageJsonRunScript(repoPath) {
-  const pkgPath = join5(repoPath, "package.json");
+  const pkgPath = join6(repoPath, "package.json");
   if (!existsSync4(pkgPath)) return false;
   let pkg;
   try {
@@ -2426,7 +2437,7 @@ function hasPackageJsonRunScript(repoPath) {
 function detectCanRunApp(repoPath, _params) {
   const found = [];
   for (const f of ROOT_RUN_FILES) {
-    if (existsSync4(join5(repoPath, f))) {
+    if (existsSync4(join6(repoPath, f))) {
       found.push(f);
     }
   }
@@ -2458,7 +2469,7 @@ var DETECTORS4 = {
 
 // plugins/awos/skills/ai-readiness-audit/detectors/end_to_end_delivery.ts
 import { existsSync as existsSync5, readFileSync as readFileSync6, statSync as statSync2 } from "node:fs";
-import { join as join6, relative as relative6 } from "node:path";
+import { join as join7, relative as relative6 } from "node:path";
 import { execFileSync as execFileSync5 } from "node:child_process";
 var TRUNK_NAMES = /* @__PURE__ */ new Set(["main", "master", "develop", "development"]);
 var LAYER_PATTERNS = [
@@ -2657,7 +2668,7 @@ function detectNoLayerSplit(repoPath, _params) {
 var IMPL_PATH_RX = /\b(src|app|lib|packages?)\//i;
 var SPEC_REF_RX = /context\/spec\/\d{3}-|(?<!\/)spec\/\d{3}-/;
 function detectBidirectionalLinks(repoPath, _params) {
-  const specBase = join6(repoPath, "context", "spec");
+  const specBase = join7(repoPath, "context", "spec");
   if (!existsSync5(specBase)) {
     return makeResult("FAIL", 0, [
       "no context/spec/ directory found \u2014 spec\u2194impl bidirectional links not possible"
@@ -2755,7 +2766,7 @@ var DB_FILES_GLOBS = ["*.sql", "schema.prisma", "*.prisma"];
 var DB_DIRS = ["migrations", "db", "database", "models"];
 function hasAnyDir(repoPath, dirs) {
   for (const d of dirs) {
-    if (existsSync5(join6(repoPath, d)) && statSync2(join6(repoPath, d)).isDirectory()) {
+    if (existsSync5(join7(repoPath, d)) && statSync2(join7(repoPath, d)).isDirectory()) {
       return d;
     }
   }
@@ -2834,12 +2845,12 @@ var CI_DIRS = [".github/workflows", ".circleci", ".buildkite", ".drone"];
 function detectCrossLayerTooling(repoPath, _params) {
   const found = [];
   for (const f of ROOT_TOOLING_FILES) {
-    if (existsSync5(join6(repoPath, f))) {
+    if (existsSync5(join7(repoPath, f))) {
       found.push(f);
     }
   }
   for (const ciDir of CI_DIRS) {
-    const ciDirPath = join6(repoPath, ciDir);
+    const ciDirPath = join7(repoPath, ciDir);
     if (!existsSync5(ciDirPath)) continue;
     let ciFiles = [];
     try {
@@ -2876,10 +2887,10 @@ var DETECTORS5 = {
 
 // plugins/awos/skills/ai-readiness-audit/detectors/security.ts
 import { readFileSync as readFileSync7, existsSync as existsSync6 } from "node:fs";
-import { join as join7, relative as relative7 } from "node:path";
+import { join as join8, relative as relative7 } from "node:path";
 var ENV_GITIGNORE_RX = /^\s*(\.env(\.\*)?|\*\.env|\*\*\/\.env|\/\.env)\s*(?:#.*)?$/m;
 function detectEnvGitignored(repoPath, _params) {
-  const gitignorePath = join7(repoPath, ".gitignore");
+  const gitignorePath = join8(repoPath, ".gitignore");
   if (!existsSync6(gitignorePath)) {
     return makeResult("FAIL", 0, [
       "no .gitignore file found \u2014 .env files are not excluded from version control"
@@ -2904,8 +2915,8 @@ var HOOK_FILES_GLOBS = ["*.sh", "*.js", "*.ts", "*.py", "*.bash"];
 var HOOK_SENSITIVE_RX = /\.env|secret|credential|\.pem|\.key/i;
 function detectAgentSafetyHooks(repoPath, _params) {
   const settingsPaths = [
-    join7(repoPath, ".claude", "settings.json"),
-    join7(repoPath, ".claude", "settings.local.json")
+    join8(repoPath, ".claude", "settings.json"),
+    join8(repoPath, ".claude", "settings.local.json")
   ];
   for (const sp of settingsPaths) {
     if (!existsSync6(sp)) continue;
@@ -2932,7 +2943,7 @@ function detectAgentSafetyHooks(repoPath, _params) {
       ]);
     }
   }
-  const hooksDir = join7(repoPath, ".claude", "hooks");
+  const hooksDir = join8(repoPath, ".claude", "hooks");
   if (existsSync6(hooksDir)) {
     const hookFiles = iterFiles(hooksDir, HOOK_FILES_GLOBS);
     for (const f of hookFiles) {
@@ -2970,7 +2981,7 @@ var ENV_EXAMPLE_GLOBS = [
 function detectEnvExample(repoPath, _params) {
   const found = [];
   for (const name of ENV_EXAMPLE_GLOBS) {
-    const full = join7(repoPath, name);
+    const full = join8(repoPath, name);
     if (existsSync6(full)) {
       found.push(name);
     }
@@ -3084,7 +3095,7 @@ var SENSITIVE_PATTERNS = [
   { name: "kubeconfig", rx: /^\s*kubeconfig\s*(?:#.*)?$/m }
 ];
 function detectSensitiveFilesGitignored(repoPath, _params) {
-  const gitignorePath = join7(repoPath, ".gitignore");
+  const gitignorePath = join8(repoPath, ".gitignore");
   if (!existsSync6(gitignorePath)) {
     return makeResult("FAIL", 0, [
       "no .gitignore file found \u2014 sensitive file types are not excluded from version control"
@@ -3130,7 +3141,7 @@ var DETECTORS6 = {
 
 // plugins/awos/skills/ai-readiness-audit/detectors/supply_chain_security.ts
 import { readFileSync as readFileSync8, existsSync as existsSync7 } from "node:fs";
-import { join as join8, relative as relative8, basename as basename4 } from "node:path";
+import { join as join9, relative as relative8, basename as basename4 } from "node:path";
 var LOCKFILES2 = [
   "pnpm-lock.yaml",
   "yarn.lock",
@@ -3387,7 +3398,7 @@ function detectDependencyAutomationReview(repoPath, _params) {
   const foundFiles = [];
   let automergeEnabled = false;
   for (const relPath of [...DEPENDABOT_PATHS, ...RENOVATE_PATHS]) {
-    const full = join8(repoPath, relPath);
+    const full = join9(repoPath, relPath);
     if (!existsSync7(full)) continue;
     foundFiles.push(relPath);
     let content;
@@ -3422,7 +3433,7 @@ var VULN_SCANNER_RX = /\b(pip-audit|safety\s|snyk|trivy|grype|osv-scanner|depend
 function detectVulnerabilityScanning(repoPath, _params) {
   const scanners = [];
   for (const ciDir of CI_DIRS2) {
-    const ciDirPath = join8(repoPath, ciDir);
+    const ciDirPath = join9(repoPath, ciDir);
     if (!existsSync7(ciDirPath)) continue;
     let files = [];
     try {
@@ -3444,7 +3455,7 @@ function detectVulnerabilityScanning(repoPath, _params) {
     }
   }
   for (const p of DEPENDABOT_PATHS) {
-    const full = join8(repoPath, p);
+    const full = join9(repoPath, p);
     if (!existsSync7(full)) continue;
     let content;
     try {
@@ -3619,7 +3630,7 @@ var DETECTORS7 = {
 
 // plugins/awos/skills/ai-readiness-audit/detectors/prompt_agent_integrity.ts
 import { readFileSync as readFileSync9, existsSync as existsSync8 } from "node:fs";
-import { join as join9, relative as relative9 } from "node:path";
+import { join as join10, relative as relative9 } from "node:path";
 import { execFileSync as execFileSync6 } from "node:child_process";
 function isInvisibleCodePoint(cp) {
   return cp >= 8203 && cp <= 8207 || cp >= 8232 && cp <= 8238 || cp >= 8288 && cp <= 8303 || cp === 173 || cp === 65279 || cp >= 917504 && cp <= 917631;
@@ -3646,10 +3657,10 @@ var AGENT_FILE_GLOBS = [
 function listAgentFiles(repoPath) {
   const results = [];
   for (const name of ["CLAUDE.md", "AGENTS.md", ".mcp.json"]) {
-    const full = join9(repoPath, name);
+    const full = join10(repoPath, name);
     if (existsSync8(full)) results.push(full);
   }
-  const claudeDir = join9(repoPath, ".claude");
+  const claudeDir = join10(repoPath, ".claude");
   if (existsSync8(claudeDir)) {
     try {
       const files = iterFiles(claudeDir, AGENT_FILE_GLOBS);
@@ -3803,7 +3814,7 @@ var HOOK_RED_FLAGS = [
 ];
 var HOOK_SCRIPT_GLOBS = ["*.sh", "*.bash", "*.js", "*.ts", "*.py"];
 function detectHookScriptSafety(repoPath, _params) {
-  const hooksDir = join9(repoPath, ".claude", "hooks");
+  const hooksDir = join10(repoPath, ".claude", "hooks");
   if (!existsSync8(hooksDir)) {
     return makeResult(
       "SKIP",
@@ -3863,7 +3874,7 @@ var HTTP_REMOTE_RX = /http:\/\/(?!localhost|127\.0\.0\.1)/;
 var EMBEDDED_CRED_RX = /https?:\/\/[^@\s]{3,}:[^@\s]{3,}@/;
 var API_KEY_IN_URL_RX = /[?&](?:api_?key|token|secret|password)=[A-Za-z0-9]{8,}/i;
 function detectMcpEndpointSafety(repoPath, _params) {
-  const mcpPath = join9(repoPath, ".mcp.json");
+  const mcpPath = join10(repoPath, ".mcp.json");
   if (!existsSync8(mcpPath)) {
     return makeResult("SKIP", null, [
       "no .mcp.json found \u2014 PAI-04 not applicable"
@@ -3995,8 +4006,8 @@ var BYPASS_PATTERNS = [
 ];
 var COMMAND_SKILL_GLOBS = ["*.md", "*.sh", "*.ts", "*.js", "*.py", "*.bash"];
 function detectNoSecurityBypass(repoPath, _params) {
-  const commandsDir = join9(repoPath, ".claude", "commands");
-  const skillsDir = join9(repoPath, ".claude", "skills");
+  const commandsDir = join10(repoPath, ".claude", "commands");
+  const skillsDir = join10(repoPath, ".claude", "skills");
   const hasCmds = existsSync8(commandsDir);
   const hasSkills = existsSync8(skillsDir);
   if (!hasCmds && !hasSkills) {
@@ -4076,7 +4087,7 @@ var DETECTORS8 = {
 
 // plugins/awos/skills/ai-readiness-audit/detectors/quality_assurance.ts
 import { readFileSync as readFileSync10, existsSync as existsSync9 } from "node:fs";
-import { join as join10, relative as relative10, basename as basename5 } from "node:path";
+import { join as join11, relative as relative10, basename as basename5 } from "node:path";
 var TEST_FILE_GLOBS = [
   "*.test.ts",
   "*.test.tsx",
@@ -4267,8 +4278,8 @@ function detectIntegrationTests(repoPath, _params) {
       }
     }
   }
-  const testsDir = join10(repoPath, "tests");
-  const testDir2 = join10(repoPath, "test");
+  const testsDir = join11(repoPath, "tests");
+  const testDir2 = join11(repoPath, "test");
   for (const tDir of [testsDir, testDir2]) {
     if (!existsSync9(tDir)) continue;
     let dcFiles = [];
@@ -4430,12 +4441,12 @@ var COVERAGE_CONTENT_RX = /coverageThreshold|coverage[_-]?report|coverage[_-]?mi
 function detectCoverageConfig(repoPath, _params) {
   const signals = [];
   for (const name of COVERAGE_CONFIG_FILES) {
-    const full = join10(repoPath, name);
+    const full = join11(repoPath, name);
     if (existsSync9(full)) {
       signals.push(`coverage config: ${name}`);
     }
   }
-  const pkgJson = join10(repoPath, "package.json");
+  const pkgJson = join11(repoPath, "package.json");
   if (existsSync9(pkgJson)) {
     let content;
     try {
@@ -4448,7 +4459,7 @@ function detectCoverageConfig(repoPath, _params) {
     }
   }
   for (const name of ["pyproject.toml", "setup.cfg"]) {
-    const full = join10(repoPath, name);
+    const full = join11(repoPath, name);
     if (!existsSync9(full)) continue;
     let content;
     try {
@@ -4484,13 +4495,13 @@ var CONFTEST_GLOBS = ["conftest.py", "test_helpers.*", "test-helpers.*"];
 function detectTestDataManagement(repoPath, _params) {
   const signals = [];
   for (const name of FIXTURE_DIR_NAMES) {
-    const full = join10(repoPath, name);
+    const full = join11(repoPath, name);
     if (existsSync9(full)) {
       signals.push(`fixture directory: ${name}/`);
       break;
     }
     for (const testRoot of ["test", "tests", "__tests__"]) {
-      const nested = join10(repoPath, testRoot, name);
+      const nested = join11(repoPath, testRoot, name);
       if (existsSync9(nested)) {
         signals.push(`fixture directory: ${testRoot}/${name}/`);
         break;
@@ -4580,7 +4591,7 @@ function detectContractTests(repoPath, _params) {
     signals.push(`contract config: ${relative10(repoPath, contractConfigs[0])}`);
   }
   for (const name of CONTRACT_DIR_NAMES) {
-    if (existsSync9(join10(repoPath, name))) {
+    if (existsSync9(join11(repoPath, name))) {
       signals.push(`contract directory: ${name}/`);
       break;
     }
@@ -4704,7 +4715,7 @@ var DETECTORS9 = {
 
 // plugins/awos/skills/ai-readiness-audit/detectors/documentation.ts
 import { readFileSync as readFileSync11, existsSync as existsSync10, readdirSync as readdirSync3 } from "node:fs";
-import { join as join11, relative as relative11, dirname as dirname2 } from "node:path";
+import { join as join12, relative as relative11, dirname as dirname2 } from "node:path";
 var README_NAMES = [
   "README.md",
   "README.rst",
@@ -4717,7 +4728,7 @@ var HEADING_RX = /^#+ |\n#+ |^[=\-~^"'`]+\s*$/m;
 function detectRootReadme(repoPath, _params) {
   let readmePath = null;
   for (const name of README_NAMES) {
-    const full = join11(repoPath, name);
+    const full = join12(repoPath, name);
     if (existsSync10(full)) {
       readmePath = full;
       break;
@@ -4803,7 +4814,7 @@ function detectServiceReadmes(repoPath, _params) {
   }
   const serviceDirs = [];
   for (const dirName of topDirs) {
-    const dirPath = join11(repoPath, dirName);
+    const dirPath = join12(repoPath, dirName);
     let srcFiles = [];
     try {
       srcFiles = iterFiles(dirPath, SERVICE_SOURCE_GLOBS, [
@@ -4818,7 +4829,7 @@ function detectServiceReadmes(repoPath, _params) {
       srcFiles = [];
     }
     if (srcFiles.length < 5) continue;
-    const hasReadme = existsSync10(join11(dirPath, "README.md"));
+    const hasReadme = existsSync10(join12(dirPath, "README.md"));
     serviceDirs.push({ path: dirPath, name: dirName, hasReadme });
   }
   if (serviceDirs.length === 0) {
@@ -4943,7 +4954,7 @@ function extractMakeTargets(readmeContent) {
 function loadMakefileTargets(repoPath) {
   const makefileNames = ["Makefile", "makefile", "GNUmakefile"];
   for (const name of makefileNames) {
-    const full = join11(repoPath, name);
+    const full = join12(repoPath, name);
     if (!existsSync10(full)) continue;
     let content;
     try {
@@ -4977,7 +4988,7 @@ function extractLocalLinks(readmeContent) {
   return [...new Set(links)].sort();
 }
 function detectDocsAccuracy(repoPath, _params) {
-  const readmePath = join11(repoPath, "README.md");
+  const readmePath = join12(repoPath, "README.md");
   if (!existsSync10(readmePath)) {
     return makeResult("SKIP", null, [
       "no README.md found \u2014 docs accuracy check (DOC-04) skipped"
@@ -4996,7 +5007,7 @@ function detectDocsAccuracy(repoPath, _params) {
   const makeTargetsInReadme = extractMakeTargets(readmeContent);
   if (makeTargetsInReadme.length > 0) {
     const makefileTargets = loadMakefileTargets(repoPath);
-    const hasMakefile = existsSync10(join11(repoPath, "Makefile")) || existsSync10(join11(repoPath, "makefile")) || existsSync10(join11(repoPath, "GNUmakefile"));
+    const hasMakefile = existsSync10(join12(repoPath, "Makefile")) || existsSync10(join12(repoPath, "makefile")) || existsSync10(join12(repoPath, "GNUmakefile"));
     for (const target of makeTargetsInReadme) {
       if (!hasMakefile) {
         missing.push({ kind: "make-target", ref: `make ${target}` });
@@ -5010,7 +5021,7 @@ function detectDocsAccuracy(repoPath, _params) {
   const localLinks = extractLocalLinks(readmeContent);
   for (const link of localLinks) {
     const readmeDir = dirname2(readmePath);
-    const resolved = join11(readmeDir, link);
+    const resolved = join12(readmeDir, link);
     if (existsSync10(resolved)) {
       present.push({ kind: "path", ref: link });
     } else {
@@ -5046,8 +5057,287 @@ var DETECTORS10 = {
   // DOC-04 docs accuracy via referenced path existence
 };
 
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g1_tooling_depth.ts
+import { readFileSync as readFileSync13, existsSync as existsSync11 } from "node:fs";
+import { join as join13 } from "node:path";
+
+// plugins/awos/skills/ai-readiness-audit/metrics/_base.ts
+import { readFileSync as readFileSync12 } from "node:fs";
+function loadStandards(path) {
+  return parse(readFileSync12(path, "utf8"));
+}
+function computeReliability(defaultTag, sourcesUsed, sourcesMissing) {
+  if (sourcesMissing.length === 0) {
+    return { tag: defaultTag, confidence: "HIGH", note: null };
+  }
+  if (sourcesUsed.length > 0) {
+    return {
+      tag: defaultTag,
+      confidence: "MED",
+      note: `missing sources: ${sourcesMissing.join(", ")}`
+    };
+  }
+  return {
+    tag: defaultTag,
+    confidence: "LOW",
+    note: `missing sources: ${sourcesMissing.join(", ")}`
+  };
+}
+function makeMetricResult(metric, value, kind, categoriesAwarded, reliability, sourcesUsed, sourcesMissing, band = null) {
+  return {
+    metric,
+    value,
+    kind,
+    band,
+    categories_awarded: [...categoriesAwarded],
+    reliability,
+    sources_used: [...sourcesUsed],
+    sources_missing: [...sourcesMissing],
+    status: sourcesUsed.length === 0 ? "SKIP" : "OK"
+  };
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g1_tooling_depth.ts
+var TOOLING_MAP = [
+  { paths: ["CLAUDE.md", "AGENTS.md"], code: 101 },
+  { paths: [".claude/skills"], code: 102 },
+  { paths: [".claude/commands"], code: 103 },
+  { paths: [".claude/hooks"], code: 104 },
+  { paths: [".mcp.json"], code: 105 },
+  // Code 106: spec signals — context/, .awos/, or scripts/ in tooling_paths
+  // (git collector does not include these but we detect them via the paths list)
+  {
+    paths: ["context/", ".awos/", "scripts/", "context", ".awos", "scripts"],
+    code: 106
+  }
+];
+var ALL_CODES = TOOLING_MAP.map((e) => e.code);
+function compute(collectedDir, _standards, _topology) {
+  const gitPath = join13(collectedDir, "git.json");
+  if (!existsSync11(gitPath)) {
+    return makeMetricResult(
+      "adp_g1_tooling_depth",
+      null,
+      "coverage",
+      [],
+      computeReliability("maximal", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync13(gitPath, "utf8"));
+  const raw = artifact?.raw;
+  if (!raw || !Array.isArray(raw.tooling_paths)) {
+    return makeMetricResult(
+      "adp_g1_tooling_depth",
+      null,
+      "coverage",
+      [],
+      computeReliability("maximal", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const toolingPaths = raw.tooling_paths;
+  const awarded = [];
+  for (const entry of TOOLING_MAP) {
+    const present = entry.paths.some(
+      (p) => toolingPaths.some((tp) => tp === p || tp.startsWith(p.replace(/\/$/, "")))
+    );
+    if (present) {
+      awarded.push(entry.code);
+    }
+  }
+  const coverage = ALL_CODES.length > 0 ? awarded.length / ALL_CODES.length : 0;
+  const reliability = computeReliability("maximal", ["git"], []);
+  return makeMetricResult(
+    "adp_g1_tooling_depth",
+    coverage,
+    "coverage",
+    awarded,
+    reliability,
+    ["git"],
+    []
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g2_contributors.ts
+import { readFileSync as readFileSync14, existsSync as existsSync12 } from "node:fs";
+import { join as join14 } from "node:path";
+function compute2(collectedDir, _standards, _topology) {
+  const gitPath = join14(collectedDir, "git.json");
+  if (!existsSync12(gitPath)) {
+    return makeMetricResult(
+      "adp_g2_contributors",
+      null,
+      "computed",
+      [],
+      computeReliability("not-reliable", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync14(gitPath, "utf8"));
+  const raw = artifact?.raw;
+  if (!raw || !Array.isArray(raw.monthly_buckets) || raw.monthly_buckets.length === 0) {
+    return makeMetricResult(
+      "adp_g2_contributors",
+      null,
+      "computed",
+      [],
+      computeReliability("not-reliable", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const buckets = raw.monthly_buckets;
+  const avg = buckets.reduce((sum, b) => sum + (b.authors ?? 0), 0) / buckets.length;
+  const reliability = computeReliability("not-reliable", ["git"], []);
+  return makeMetricResult(
+    "adp_g2_contributors",
+    avg,
+    "computed",
+    [201],
+    reliability,
+    ["git"],
+    []
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g3_deploy_frequency.ts
+import { readFileSync as readFileSync15, existsSync as existsSync13 } from "node:fs";
+import { join as join15 } from "node:path";
+function doraDeployBand(mergesPerWeek) {
+  if (mergesPerWeek >= 7) return "elite";
+  if (mergesPerWeek >= 1) return "high";
+  if (mergesPerWeek >= 0.25) return "medium";
+  return "low";
+}
+function compute3(collectedDir, _standards, _topology) {
+  const gitPath = join15(collectedDir, "git.json");
+  if (!existsSync13(gitPath)) {
+    return makeMetricResult(
+      "adp_g3_deploy_frequency",
+      null,
+      "banded",
+      [],
+      computeReliability("not-reliable", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync15(gitPath, "utf8"));
+  const raw = artifact?.raw;
+  if (!raw || !Array.isArray(raw.monthly_buckets) || raw.monthly_buckets.length === 0) {
+    return makeMetricResult(
+      "adp_g3_deploy_frequency",
+      null,
+      "banded",
+      [],
+      computeReliability("not-reliable", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const buckets = raw.monthly_buckets;
+  const bucketDays = artifact?.period?.bucket_days ?? 30;
+  const totalMerges = buckets.reduce((sum, b) => sum + (b.merges ?? 0), 0);
+  const totalDays = buckets.length * bucketDays;
+  const totalWeeks = totalDays / 7;
+  const mergesPerWeek = totalWeeks > 0 ? totalMerges / totalWeeks : 0;
+  const band = doraDeployBand(mergesPerWeek);
+  const reliability = computeReliability("not-reliable", ["git"], []);
+  return makeMetricResult(
+    "adp_g3_deploy_frequency",
+    mergesPerWeek,
+    "banded",
+    [301],
+    reliability,
+    ["git"],
+    [],
+    band
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g4_lead_time.ts
+import { readFileSync as readFileSync16, existsSync as existsSync14 } from "node:fs";
+import { join as join16 } from "node:path";
+function median(sorted) {
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid];
+  return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+function doraLeadTimeBand(hours) {
+  if (hours < 24) return "elite";
+  if (hours < 168) return "high";
+  if (hours < 720) return "medium";
+  return "low";
+}
+function compute4(collectedDir, _standards, _topology) {
+  const gitPath = join16(collectedDir, "git.json");
+  if (!existsSync14(gitPath)) {
+    return makeMetricResult(
+      "adp_g4_lead_time",
+      null,
+      "banded",
+      [],
+      computeReliability("minimal", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync16(gitPath, "utf8"));
+  const raw = artifact?.raw;
+  if (!raw || !Array.isArray(raw.merge_records) || raw.merge_records.length === 0) {
+    return makeMetricResult(
+      "adp_g4_lead_time",
+      null,
+      "banded",
+      [],
+      computeReliability("minimal", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const records = raw.merge_records;
+  const leadTimesHours = [];
+  for (const r of records) {
+    const mergedAt = new Date(r.merged_at).getTime();
+    const firstCommit = new Date(r.branch_first_commit_at).getTime();
+    if (isNaN(mergedAt) || isNaN(firstCommit)) continue;
+    const diffHours = (mergedAt - firstCommit) / 36e5;
+    if (diffHours >= 0) {
+      leadTimesHours.push(diffHours);
+    }
+  }
+  if (leadTimesHours.length === 0) {
+    return makeMetricResult(
+      "adp_g4_lead_time",
+      null,
+      "banded",
+      [],
+      computeReliability("minimal", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  leadTimesHours.sort((a, b) => a - b);
+  const medianHours = median(leadTimesHours);
+  const band = doraLeadTimeBand(medianHours);
+  const reliability = computeReliability("minimal", ["git"], []);
+  return makeMetricResult(
+    "adp_g4_lead_time",
+    medianHours,
+    "banded",
+    [401],
+    reliability,
+    ["git"],
+    [],
+    band
+  );
+}
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
-import { fileURLToPath } from "node:url";
 var COLLECTORS = {
   git: collect,
   ci: collect2,
@@ -5065,6 +5355,12 @@ var DETECTORS11 = {
   ...DETECTORS8,
   ...DETECTORS9,
   ...DETECTORS10
+};
+var METRICS = {
+  adp_g1_tooling_depth: compute,
+  adp_g2_contributors: compute2,
+  adp_g3_deploy_frequency: compute3,
+  adp_g4_lead_time: compute4
 };
 var DEFAULT_PERIOD = {
   bucket_days: 30,
@@ -5135,7 +5431,7 @@ function main() {
       }
       let raw;
       try {
-        raw = readFileSync12(tomlPath, "utf8");
+        raw = readFileSync17(tomlPath, "utf8");
       } catch (err) {
         const e = err;
         printJson({
@@ -5150,12 +5446,30 @@ function main() {
     }
     case "metric": {
       const id = arg1;
-      printJson({
-        error: `unknown metric "${id ?? "(none)"}"`,
-        status: "ERROR",
-        note: "metric modules are not yet implemented; they will be wired here when they land"
-      });
-      process.exit(1);
+      const repoPath = arg2;
+      if (!id || !repoPath) {
+        printJson({ error: "metric requires <id> and <repoPath>" });
+        process.exit(1);
+      }
+      const metricFn = METRICS[id];
+      if (!metricFn) {
+        printJson({
+          error: `unknown metric "${id}"`,
+          known: Object.keys(METRICS).sort()
+        });
+        process.exit(1);
+      }
+      const tmpRoot = mkdtempSync(join17(tmpdir(), "awos-metric-"));
+      const collectedDir = join17(tmpRoot, "collected");
+      const gitArtifact = collect(repoPath, DEFAULT_PERIOD);
+      writeArtifact(gitArtifact, collectedDir);
+      const cliDir = dirname3(fileURLToPath(import.meta.url));
+      const skillRoot = cliDir.endsWith("/dist") || cliDir.endsWith("\\dist") ? dirname3(cliDir) : cliDir;
+      const standardsPath = join17(skillRoot, "references", "standards.toml");
+      const standards = loadStandards(standardsPath);
+      const result = metricFn(collectedDir, standards, {});
+      printJson(result);
+      break;
     }
     default: {
       printJson({
@@ -5172,7 +5486,8 @@ if (isMain) {
   main();
 }
 export {
-  DETECTORS11 as DETECTORS
+  DETECTORS11 as DETECTORS,
+  METRICS
 };
 /*! Bundled license information:
 

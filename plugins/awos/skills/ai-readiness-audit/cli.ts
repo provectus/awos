@@ -15,7 +15,10 @@
 // Standards parser (smol-toml — bundled, no Python required)
 // ---------------------------------------------------------------------------
 import { parse as parseToml } from 'smol-toml';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
 // Collectors
@@ -24,6 +27,7 @@ import { collect as collectGit } from './collectors/git.ts';
 import { collect as collectCi } from './collectors/ci.ts';
 import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
+import { writeArtifact } from './collectors/_base.ts';
 
 const COLLECTORS: Record<
   string,
@@ -66,6 +70,31 @@ export const DETECTORS: Record<
   ...PAI_DETECTORS,
   ...QA_DETECTORS,
   ...DOC_DETECTORS,
+};
+
+// ---------------------------------------------------------------------------
+// Metric modules
+// ---------------------------------------------------------------------------
+import { compute as computeG1 } from './metrics/adp_g1_tooling_depth.ts';
+import { compute as computeG2 } from './metrics/adp_g2_contributors.ts';
+import { compute as computeG3 } from './metrics/adp_g3_deploy_frequency.ts';
+import { compute as computeG4 } from './metrics/adp_g4_lead_time.ts';
+// Adding a metric module is a one-line change per import + one entry in METRICS below.
+
+import type { MetricResult } from './metrics/_base.ts';
+import { loadStandards } from './metrics/_base.ts';
+
+type MetricFn = (
+  collectedDir: string,
+  standards: Record<string, unknown>,
+  topology: Record<string, boolean>
+) => MetricResult;
+
+export const METRICS: Record<string, MetricFn> = {
+  adp_g1_tooling_depth: computeG1,
+  adp_g2_contributors: computeG2,
+  adp_g3_deploy_frequency: computeG3,
+  adp_g4_lead_time: computeG4,
 };
 
 // ---------------------------------------------------------------------------
@@ -172,15 +201,41 @@ function main(): void {
     }
 
     case 'metric': {
-      // No metric modules exist yet.  Print a clear error and exit non-zero.
-      // TODO: wire metric modules here when they land.
       const id = arg1;
-      printJson({
-        error: `unknown metric "${id ?? '(none)'}"`,
-        status: 'ERROR',
-        note: 'metric modules are not yet implemented; they will be wired here when they land',
-      });
-      process.exit(1);
+      const repoPath = arg2;
+      if (!id || !repoPath) {
+        printJson({ error: 'metric requires <id> and <repoPath>' });
+        process.exit(1);
+      }
+      const metricFn = METRICS[id];
+      if (!metricFn) {
+        printJson({
+          error: `unknown metric "${id}"`,
+          known: Object.keys(METRICS).sort(),
+        });
+        process.exit(1);
+      }
+      // Run required collectors inline, writing artifacts into a temp dir.
+      const tmpRoot = mkdtempSync(join(tmpdir(), 'awos-metric-'));
+      const collectedDir = join(tmpRoot, 'collected');
+      // Git collector is always run for ADP-G* metrics.
+      const gitArtifact = collectGit(repoPath, DEFAULT_PERIOD);
+      writeArtifact(gitArtifact as { source: string }, collectedDir);
+      // Load standards for category award.
+      // import.meta.url resolves to dist/cli.js when bundled, so go one level
+      // up from dirname to reach the skill root where references/ lives.
+      const cliDir = dirname(fileURLToPath(import.meta.url));
+      // When running from source (tsx), cliDir is the skill root itself.
+      // When bundled (dist/cli.js), cliDir is dist/ — one level below the skill root.
+      const skillRoot =
+        cliDir.endsWith('/dist') || cliDir.endsWith('\\dist')
+          ? dirname(cliDir)
+          : cliDir;
+      const standardsPath = join(skillRoot, 'references', 'standards.toml');
+      const standards = loadStandards(standardsPath);
+      const result = metricFn(collectedDir, standards, {});
+      printJson(result);
+      break;
     }
 
     default: {
@@ -194,9 +249,6 @@ function main(): void {
 }
 
 // Only run as CLI entry point — skip when imported as a module (e.g. by tests).
-// fileURLToPath is safe to call here because cli.ts always runs under Node/tsx.
-import { fileURLToPath } from 'node:url';
-
 const isMain =
   typeof process !== 'undefined' &&
   process.argv[1] !== undefined &&

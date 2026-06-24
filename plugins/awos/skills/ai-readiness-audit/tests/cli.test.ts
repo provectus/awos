@@ -136,17 +136,17 @@ test('collect git: artifact has source === "git" and required fields', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 'metric' command — exits non-zero with a clear error (no metrics yet)
+// 'metric' command — exits non-zero with a clear error for unknown metric id
 // ---------------------------------------------------------------------------
 
-test('metric <id>: exits non-zero with error JSON (no metric modules yet)', () => {
+test('metric <id>: exits non-zero with error JSON for unknown metric id', () => {
   const { json, code } = runCli('metric', 'ADP-I1', '/tmp');
-  assert.notEqual(code, 0, 'metric must exit non-zero');
+  assert.notEqual(code, 0, 'unknown metric id must exit non-zero');
   assert.ok(json && typeof json === 'object', 'must print JSON error');
   const err = json as Record<string, unknown>;
   assert.ok(
     typeof err['error'] === 'string' && err['error'].length > 0,
-    'error field must be a non-empty string'
+    'error field must be a non-empty string naming the unknown metric'
   );
 });
 

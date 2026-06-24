@@ -1043,6 +1043,32 @@ test('standards.toml exists and matches the category/band schema', () => {
     /\[band\./,
     'standards.toml must define at least one [band.*] table'
   );
+  // Every category declares a method from the locked vocabulary.
+  const methods = src.match(/\n\s*method\s*=\s*"([^"]+)"/g) || [];
+  const categoryCount = (src.match(/^\[category\./gm) || []).length;
+  assert.equal(
+    methods.length,
+    categoryCount,
+    'every [category.*] must declare a method= line'
+  );
+  for (const m of methods) {
+    assert.match(
+      m,
+      /"(computed|detected|judgment)"/,
+      `method must be computed|detected|judgment: ${m}`
+    );
+  }
+  // Judgment categories must carry a rubric (evidence_required checked by the engine schema test).
+  assert.match(
+    src,
+    /method\s*=\s*"judgment"/,
+    'at least one judgment category expected'
+  );
+  assert.match(
+    src,
+    /\n\s*rubric\s*=\s*"/,
+    'judgment categories must declare a rubric'
+  );
 });
 
 test('scoring.md uses additive weighted categories, not A-F grades', () => {

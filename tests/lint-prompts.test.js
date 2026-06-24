@@ -1376,6 +1376,50 @@ test('SKILL.md sums weighted categories and emits no grade', () => {
   );
 });
 
+test('SKILL.md emits progress + ETA (interactive + headless, wait-excluded)', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  // Must invoke the bundled progress helper via the CLI dispatcher.
+  assert.ok(
+    src.includes('node dist/cli.js progress'),
+    'SKILL.md must call "node dist/cli.js progress" after each dimension/phase completes'
+  );
+  // Must mention ETA as a concept.
+  assert.match(
+    src,
+    /\bETA\b/,
+    'SKILL.md must mention ETA for the progress line'
+  );
+  // Must describe the percent-complete output.
+  assert.match(
+    src,
+    /pct|percent complete|% complete|\bpct\b/i,
+    'SKILL.md must describe the % complete output from the progress helper'
+  );
+  // Must state that the timer pauses across AskUserQuestion calls.
+  assert.match(
+    src,
+    /AskUserQuestion/,
+    'SKILL.md must reference AskUserQuestion in the context of pausing the elapsed timer'
+  );
+  assert.match(
+    src,
+    /pause|subtract|exclud/i,
+    'SKILL.md must state the timer pauses/subtracts user-wait time across AskUserQuestion'
+  );
+  // Must mention headless stream-json support.
+  assert.match(
+    src,
+    /stream-json/,
+    'SKILL.md must mention --output-format stream-json for headless progress emission'
+  );
+  // Must document the artifact-count fallback for headless observability.
+  assert.match(
+    src,
+    /\.json.*wc|wc.*\.json|artifact.*count|count.*artifact/i,
+    'SKILL.md must describe the artifact-count fallback (count *.json files vs total) for headless progress'
+  );
+});
+
 test('report templates use weighted points + reliability, not grades', () => {
   for (const f of ['output-format.md', 'report-template.md']) {
     const src = readUtf8(path.join(skillRoot, f));

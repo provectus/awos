@@ -43,6 +43,34 @@ Create this directory. If it already exists, results will be overwritten.
 
 ## Step 5 — Execute Dimensions
 
+### Progress & ETA
+
+Before launching any dimensions, compute the total work count:
+
+```
+total = number of dimensions to run (after any $ARGUMENTS filter)
+```
+
+Derive this from the dimension set discovered in Step 1 — it equals the number of dimension files that will actually execute (not the raw count in `references/standards.toml`, which holds category records, not dimension files). For a full audit this is typically the count of all `.md` files in `dimensions/`. Record a wall-clock start time (`start_ms = Date.now()`).
+
+The elapsed timer runs in wall-clock seconds **excluding time spent waiting on the user**. Pause and subtract the timer across every `AskUserQuestion` call: capture the timestamp before presenting the question and add `(Date.now() - pause_start) / 1000` to a running `wait_seconds` total. The elapsed you pass to `progress` is always `(Date.now() - start_ms) / 1000 - wait_seconds`.
+
+After each dimension (or phase, when phases complete as a batch) finishes, emit a progress line:
+
+```
+node dist/cli.js progress <elapsed_seconds> <done> <total>
+```
+
+The output is a JSON object with `pct` (fraction 0–1), `eta_seconds`, and `elapsed_seconds`. Print it to the user as a single readable line, for example:
+
+```
+[Audit] 4/13 dimensions complete — 31% — ETA ~3 min remaining
+```
+
+ETA is a wall-clock UX estimate, not a scored or deterministic metric. When `done === 0` the ETA is not yet available; when `done === total` it reports 0.
+
+**Headless mode (`--output-format stream-json`):** emit the same progress JSON as a stream-json line after each phase completes, so CI pipelines and automation can track progress without a terminal. If stream access is not available, an equivalent artifact-count fallback is always observable: count the `.json` files written to `context/audits/YYYY-MM-DD/` and compare against `total` — each completed dimension writes exactly one `.json` artifact, so `ls context/audits/YYYY-MM-DD/*.json | wc -l` gives `done`.
+
 For each execution phase, launch all dimensions in the phase **in parallel** using the Agent tool with the `dimension-auditor` agent.
 
 For each dimension, provide the agent with:

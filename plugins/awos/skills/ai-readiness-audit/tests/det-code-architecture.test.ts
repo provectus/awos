@@ -180,6 +180,35 @@ test('ARCH-02: PASS with clean architecture src/ with no violations', () => {
   assert.equal(r.status, 'PASS', 'clean api→domain should yield PASS');
 });
 
+test('ARCH-02: FAIL when models/ imports from routes/ via multi-level relative path (../../routes/x)', () => {
+  // Regression: the old code stripped only ONE leading ../ so '../../routes/index'
+  // became '../routes/index' → first segment '..' → no tier match → violation missed.
+  // The fix strips ALL leading ../ segments before splitting.
+  const t = tmp();
+  mkdirSync(join(t, 'src'));
+  mkdirSync(join(t, 'src', 'models'));
+  mkdirSync(join(t, 'src', 'routes'));
+  writeFileSync(
+    join(t, 'src', 'routes', 'index.ts'),
+    'export const router = {};\n'
+  );
+  // models/ importing from routes/ via a two-level relative path
+  writeFileSync(
+    join(t, 'src', 'models', 'user.ts'),
+    "import { router } from '../../routes/index';\nexport interface User { id: string; }\n"
+  );
+  const r = detectImportGraph(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'models importing routes via ../../routes/x must be detected as a layer violation (FAIL)'
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('models')),
+    'evidence should mention the models layer'
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectSeparationOfConcerns — code 2103 (ARCH-04, detected)
 //
@@ -198,7 +227,8 @@ test('ARCH-04: PASS when route files have no data-access calls', () => {
     [
       "import { UserService } from '../services/user';",
       'export function getUser(req, res) {',
-      '  const user = UserService.findById(req.params.id);',
+      '  // Calls a service method — no direct DB/ORM access in the route',
+      '  const user = UserService.getUser(req.params.id);',
       '  res.json(user);',
       '}',
     ].join('\n') + '\n'
@@ -282,6 +312,60 @@ test('ARCH-04: FAIL when controller has 3 ORM calls (Python style)', () => {
     r.status,
     'FAIL',
     '3 db.session.query calls in controllers/ should yield FAIL'
+  );
+});
+
+test('ARCH-04: PASS when route file only uses Array.prototype.find() — not a DB call', () => {
+  // Regression: ORM_STATIC_RX formerly matched bare `.find(` which is also
+  // Array.prototype.find(), a completely idiomatic JS idiom that has nothing
+  // to do with data access. The fix requires findOne/findAll/findBy… or a
+  // Django `.objects.` prefix, so Array.find() is never counted.
+  //
+  // This fixture is deliberately crafted to match NONE of the data-access
+  // patterns: no db/conn/cursor/session/repo prefix, no .objects., no
+  // findOne/findAll/findBy…, no raw SQL. It must stay PASS.
+  const t = tmp();
+  mkdirSync(join(t, 'routes'));
+  writeFileSync(
+    join(t, 'routes', 'items.ts'),
+    [
+      "import { items } from '../data/items';",
+      'export function getItem(req, res) {',
+      '  // Use Array.prototype.find — this is NOT a DB/ORM call',
+      '  const item = items.find(x => x.id === req.params.id);',
+      '  res.json(item ?? null);',
+      '}',
+    ].join('\n') + '\n'
+  );
+  const r = detectSeparationOfConcerns(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'Array.prototype.find() must not be counted as a data-access call (should yield PASS)'
+  );
+});
+
+test('ARCH-04: WARN/FAIL when route file has real ORM calls (Model.findAll / db.query)', () => {
+  // Confirm that genuine ORM calls (Model.findAll, db.query) are still detected
+  // now that bare Array.find() is excluded.
+  const t = tmp();
+  mkdirSync(join(t, 'routes'));
+  writeFileSync(
+    join(t, 'routes', 'orders.ts'),
+    [
+      "import { db } from '../db';",
+      "import { Order } from '../models/order';",
+      'export async function listOrders(req, res) {',
+      '  const orders = await Order.findAll({ where: { userId: req.user.id } });',
+      '  const count = await db.query("SELECT COUNT(*) FROM orders");',
+      '  res.json({ orders, count });',
+      '}',
+    ].join('\n') + '\n'
+  );
+  const r = detectSeparationOfConcerns(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `real ORM/DB calls in routes/ should yield WARN or FAIL, got ${r.status}`
   );
 });
 

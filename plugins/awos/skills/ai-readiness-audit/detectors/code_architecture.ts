@@ -184,10 +184,15 @@ export function detectImportGraph(
       const importPath = (m[1] || m[2] || m[3] || '').trim();
       if (!importPath) continue;
 
-      // Extract the target directory from the import path
-      // e.g. '../routes/user' → 'routes'
+      // Extract the target directory from the import path.
+      // Strip ALL leading ../ segments so that deep relative imports like
+      // '../../routes/index' resolve to 'routes' correctly (not '..' which
+      // has no tier match and silently drops the violation).
+      // Known limitation: aliased/absolute imports (@/…, ~/…, src/…) are
+      // not tier-checked — no false positives but possible false negatives.
+      // Known limitation: the grep approach catches one import per line only.
       const parts = importPath
-        .replace(/^\.\.\//, '')
+        .replace(/^(?:\.\.\/)+/, '')
         .replace(/^\.\//, '')
         .split('/');
       const targetDir = parts[0].toLowerCase();
@@ -261,9 +266,13 @@ const PRESENTATION_DIRS = [
 const DATA_ACCESS_RX =
   /\b(?:db|conn|cursor|session|repository|repo)\s*\.\s*(?:query|execute|find|findOne|findAll|filter|get|update|delete|insert|save|add|commit|remove|all|fetchone|fetchall|fetch_one|fetch_all|run)\s*\(/i;
 
-// ORM-style: ModelName.objects.filter / ModelName.find etc.
+// ORM-style: ModelName.objects.filter / Model.findOne / Model.findAll / Model.findBy…
+// Bare `.find(` is intentionally excluded — it matches Array.prototype.find()
+// which is idiomatic JS and not a DB/ORM call. We require either the Django
+// `.objects.` accessor or a qualified findOne/findAll/findBy… variant so that
+// code like `items.find(x => x.id === id)` is never counted as data access.
 const ORM_STATIC_RX =
-  /\b\w+\s*\.\s*(?:objects\s*\.\s*(?:filter|get|all|exclude|create|update|delete)\s*\(|find(?:One|All|By)?\s*\()/i;
+  /\b\w+\s*\.\s*(?:objects\s*\.\s*(?:filter|get|all|exclude|create|update|delete)\s*\(|find(?:One|All|By\w+)\s*\()/i;
 
 // Raw SQL strings
 const RAW_SQL_RX = /(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP)\s+\w+/i;

@@ -611,7 +611,7 @@ function detectImportGraph(repoPath, _params) {
       if (!m) continue;
       const importPath = (m[1] || m[2] || m[3] || "").trim();
       if (!importPath) continue;
-      const parts = importPath.replace(/^\.\.\//, "").replace(/^\.\//, "").split("/");
+      const parts = importPath.replace(/^(?:\.\.\/)+/, "").replace(/^\.\//, "").split("/");
       const targetDir = parts[0].toLowerCase();
       const targetTier = getLayerTier(targetDir);
       if (targetTier !== void 0 && targetTier > sourceTier) {
@@ -651,7 +651,7 @@ var PRESENTATION_DIRS = [
   "page"
 ];
 var DATA_ACCESS_RX = /\b(?:db|conn|cursor|session|repository|repo)\s*\.\s*(?:query|execute|find|findOne|findAll|filter|get|update|delete|insert|save|add|commit|remove|all|fetchone|fetchall|fetch_one|fetch_all|run)\s*\(/i;
-var ORM_STATIC_RX = /\b\w+\s*\.\s*(?:objects\s*\.\s*(?:filter|get|all|exclude|create|update|delete)\s*\(|find(?:One|All|By)?\s*\()/i;
+var ORM_STATIC_RX = /\b\w+\s*\.\s*(?:objects\s*\.\s*(?:filter|get|all|exclude|create|update|delete)\s*\(|find(?:One|All|By\w+)\s*\()/i;
 var RAW_SQL_RX = /(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP)\s+\w+/i;
 function countDataAccessCalls(content) {
   const lines = content.split("\n");
@@ -917,10 +917,7 @@ function isSubstantive(filePath) {
 var FOUNDATIONAL_DOC_CANDIDATES = [
   ["context/product/product-definition.md"],
   ["context/product/roadmap.md"],
-  [
-    "context/architecture/architecture.md",
-    "context/product/architecture.md"
-  ]
+  ["context/architecture/architecture.md", "context/product/architecture.md"]
 ];
 function detectProductContextDocs(repoPath, _params) {
   const found = [];
@@ -1000,7 +997,14 @@ var TECH_SIGNALS = [
       try {
         const out = execFileSync4(
           "grep",
-          ["-rl", "--include=*.py", "--include=*.ts", "--include=*.js", "psycopg2", r],
+          [
+            "-rl",
+            "--include=*.py",
+            "--include=*.ts",
+            "--include=*.js",
+            "psycopg2",
+            r
+          ],
           { encoding: "utf8" }
         );
         return out.trim().length > 0;
@@ -1015,7 +1019,14 @@ var TECH_SIGNALS = [
       try {
         const out = execFileSync4(
           "grep",
-          ["-rl", "--include=*.py", "--include=*.ts", "--include=*.js", "psycopg", r],
+          [
+            "-rl",
+            "--include=*.py",
+            "--include=*.ts",
+            "--include=*.js",
+            "psycopg",
+            r
+          ],
           { encoding: "utf8" }
         );
         return out.trim().length > 0;
@@ -1114,11 +1125,10 @@ function detectArchTechMatch(repoPath, _params) {
 var TRUNK_BRANCHES = /* @__PURE__ */ new Set(["main", "master", "develop", "development"]);
 function listLocalBranches(repoPath) {
   try {
-    const out = execFileSync4(
-      "git",
-      ["branch", "--format=%(refname:short)"],
-      { cwd: repoPath, encoding: "utf8" }
-    );
+    const out = execFileSync4("git", ["branch", "--format=%(refname:short)"], {
+      cwd: repoPath,
+      encoding: "utf8"
+    });
     return out.split("\n").map((b) => b.trim()).filter((b) => b.length > 0 && !TRUNK_BRANCHES.has(b));
   } catch {
     return [];
@@ -1234,7 +1244,9 @@ function listSpecDirs(repoPath) {
 function detectSpecTriadComplete(repoPath, _params) {
   const specDirs = listSpecDirs(repoPath);
   if (specDirs.length === 0) {
-    return makeResult("PASS", 0, ["no spec directories found \u2014 triad check skipped"]);
+    return makeResult("PASS", 0, [
+      "no spec directories found \u2014 triad check skipped"
+    ]);
   }
   const statuses = [];
   for (const dir of specDirs) {
@@ -1276,7 +1288,9 @@ var UNCHECKED_RX = /^\s*-\s*\[ \]/m;
 function detectStaleSpecs(repoPath, _params) {
   const specDirs = listSpecDirs(repoPath);
   if (specDirs.length === 0) {
-    return makeResult("PASS", 0, ["no spec directories found \u2014 stale-spec check skipped"]);
+    return makeResult("PASS", 0, [
+      "no spec directories found \u2014 stale-spec check skipped"
+    ]);
   }
   const stale = [];
   const active = [];

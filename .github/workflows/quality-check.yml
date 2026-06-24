@@ -83,6 +83,12 @@ jobs:
       - name: Build engine bundle
         run: npm run build:engine
 
+      # The bundle is committed (shipped to users — they run dist/cli.js, not a
+      # local build). Fail if a rebuild diverges from what was committed, so a
+      # source edit can never ship with a stale bundle.
+      - name: Verify committed bundle is in sync with source
+        run: git diff --exit-code -- plugins/awos/skills/ai-readiness-audit/dist
+
       - name: Run engine tests
         run: node --import tsx --test "plugins/awos/skills/ai-readiness-audit/**/*.test.ts"
 

@@ -1426,6 +1426,17 @@ test('SKILL.md emits progress + ETA (interactive + headless, wait-excluded)', ()
   );
 });
 
+test('SKILL.md preflights a node runtime before running the engine', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  // The engine is a prebuilt Node bundle; the orchestrator must verify node is
+  // on PATH so engine calls fail loudly with guidance, not mid-audit.
+  assert.match(
+    src,
+    /command -v node|preflight/i,
+    'SKILL.md must preflight that a node runtime is on PATH before invoking the engine'
+  );
+});
+
 test('report templates use weighted points + reliability, not grades', () => {
   for (const f of ['output-format.md', 'report-template.md']) {
     const src = readUtf8(path.join(skillRoot, f));

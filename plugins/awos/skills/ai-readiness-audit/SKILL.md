@@ -113,6 +113,8 @@ Before launching any dimension agents, resolve the absolute engine path once so 
 ENGINE="${CLAUDE_SKILL_DIR}/dist/cli.js"
 ```
 
+**Engine preflight:** the engine is a prebuilt Node bundle — confirm a `node` runtime is on PATH before running any audit (`command -v node`). If `node` is absent, stop and tell the user to install Node (the audit cannot compute deterministic metrics without it); do not silently fall back to LLM-estimated values. The bundle runs under any `node` on PATH, including a Bun-provided `node` shim.
+
 For each execution phase, launch all dimensions in the phase **in parallel** using the Agent tool with the `dimension-auditor` agent.
 
 For each dimension, provide the agent with:

@@ -122,6 +122,37 @@ The plugin uses an **auto-discovery** architecture: each audit dimension is a st
 
 When bumping plugin behavior, update version numbers in **both** `.claude-plugin/marketplace.json` and `plugins/awos/.claude-plugin/plugin.json`.
 
+### Measurement engine (TypeScript)
+
+Scoring is additive and weighted, not A–F/0–100. Each capability **category** lives in `references/standards.toml` (numeric code, weight, definition, applicability, source bands); a dimension's score is the sum of weights for present-and-applicable categories, the audit total is the sum across dimensions, and nothing is capped. A secondary **coverage ratio** (awarded ÷ currently-defined applicable weight) is shown for intuition, and each metric carries a per-run **reliability** tag (`minimal`/`maximal`/`not-reliable` + confidence) computed from which sources were available.
+
+The deterministic compute is a **TypeScript engine** under `plugins/awos/skills/ai-readiness-audit/`, not the Python the design docs sketch. Layers:
+
+- `collectors/*.ts` — one per source (`git`, `ci`, `tracker`, `docs`); each queries its source once and emits a shared JSON artifact. Git is always available; absent sources SKIP with a reason.
+- `detectors/*.ts` and `metrics/*.ts` — compute purely from collector artifacts and map to `standards.toml` categories. Complexity/scale metrics parse source with bundled tree-sitter `.wasm` grammars.
+- `cli.ts` — the single dispatcher (`collect`/`detect`/`metric`/`standards`/`progress`/`render`/`rollup`).
+- `render.ts` — deterministic JSON → Markdown/HTML renderer (single-repo + 3-tab org report); `report.md`/`report.html` are rendered from the JSON source of truth, never hand-written.
+- `progress.ts` — pure progress/ETA helper (wall-clock, user-wait excluded).
+
+The engine is bundled by `scripts/build-engine.mjs` into `dist/cli.js` (esbuild, all imports inlined) plus `dist/grammars/*.wasm`. **`dist/` is committed and shipped** — users run the prebuilt `dist/cli.js`; they do not build. So after editing any engine `.ts`, run `npm run build:engine` and commit the regenerated `dist/`. CI rebuilds and runs `git diff --exit-code` on `dist/`, failing the build if the committed bundle is stale.
+
+At audit runtime `SKILL.md` orchestrates: Step 0 discovers repos (single-repo or org mode) and confirms scope with one `AskUserQuestion` whose **headless default** proceeds on the auto-discovered set (no prompt needed); dimension auditors shell `node "$ENGINE" …` to compute; the orchestrator (no engine compute of its own) sums the per-dimension JSON and renders the report. The engine runs under any `node` on PATH, so it requires a Node runtime present — `SKILL.md` preflights `command -v node`.
+
+Run headless against a target repo: `claude -p "/awos:ai-readiness-audit" --output-format stream-json --verbose`. Progress is emitted after each dimension/phase via `node "$ENGINE" progress <elapsed> <done> <total>` (a `pct`/`eta_seconds` line, also a stream-json line in headless mode); the always-available fallback is counting completed `.json` artifacts in `context/audits/YYYY-MM-DD/` against the total.
+
+### Running the engine tests
+
+The engine has its own test layer (`plugins/awos/skills/ai-readiness-audit/**/*.test.ts`), run with Node's `node:test` + `tsx`. These need dev dependencies, so `npm ci` first (the markdown/installer layers have no deps, the engine layer does):
+
+```sh
+npm ci                 # installs tsx, esbuild, typescript, etc.
+npm run build:engine   # regenerate dist/ (required if any engine .ts changed)
+npm run test:engine    # node --import tsx --test over the engine test files
+npm test               # full suite: markdown/installer layers + test:engine
+```
+
+These commands assume `node`/`npm` resolve to a real Node toolchain (as on CI and a fresh clone). The engine layer relies on `node:test`, which a Bun `node` shim does not implement — if your global `node` is Bun, invoke the real Node binary directly.
+
 ## Conventions
 
 - Framework files are markdown. Treat them as prompts: clarity, structure, and explicit role/task/process sections matter more than terseness.

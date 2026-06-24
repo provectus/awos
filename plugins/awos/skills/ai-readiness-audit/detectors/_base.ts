@@ -1,0 +1,85 @@
+import { readFileSync } from 'node:fs';
+import { relative, join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+
+export const VALID_STATUS = new Set(['PASS', 'WARN', 'FAIL', 'SKIP']);
+export const DEFAULT_IGNORE = [
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  '.venv',
+  '__pycache__',
+  '.next',
+  'target',
+];
+
+export interface DetectorResult {
+  status: string;
+  value: unknown;
+  evidence: string[];
+  method: string;
+}
+
+export function makeResult(
+  status: string,
+  value: unknown,
+  evidence: string[],
+  method = 'detected'
+): DetectorResult {
+  if (!VALID_STATUS.has(status)) {
+    throw new Error(
+      `status must be one of ${[...VALID_STATUS].sort()}, got ${status}`
+    );
+  }
+  return { status, value, evidence: [...evidence], method };
+}
+
+// Use `find` for a fast, deterministic file walk (Unix host assumed); fall back is a JS walk.
+export function iterFiles(
+  repoPath: string,
+  globs: string[],
+  ignore = DEFAULT_IGNORE
+): string[] {
+  const pruneArgs = ignore.flatMap((d) => ['-name', d, '-prune', '-o']);
+  const nameArgs = globs.flatMap((g, i) => {
+    // Strip leading **/ glob prefix to get the bare filename pattern for find -name
+    const bare = g.replace(/^\*\*\//, '');
+    return i === 0 ? ['-name', bare] : ['-o', '-name', bare];
+  });
+  const out = execFileSync(
+    'find',
+    [repoPath, ...pruneArgs, '(', ...nameArgs, ')', '-type', 'f', '-print'],
+    { encoding: 'utf8' }
+  );
+  return out.split('\n').filter(Boolean).sort();
+}
+
+export function grep(
+  repoPath: string,
+  pattern: RegExp,
+  globs: string[],
+  flags = ''
+): Array<{ file: string; line: number; text: string }> {
+  const hits: Array<{ file: string; line: number; text: string }> = [];
+  const rx = new RegExp(pattern.source, pattern.flags || flags);
+  for (const p of iterFiles(repoPath, globs)) {
+    let text: string;
+    try {
+      text = readFileSync(p, 'utf8');
+    } catch {
+      continue;
+    }
+    text.split('\n').forEach((line, i) => {
+      if (rx.test(line))
+        hits.push({
+          file: relative(repoPath, p),
+          line: i + 1,
+          text: line.trim(),
+        });
+    });
+  }
+  return hits.sort((a, b) =>
+    a.file === b.file ? a.line - b.line : a.file < b.file ? -1 : 1
+  );
+}

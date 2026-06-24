@@ -1146,6 +1146,31 @@ test('context/<path> references in prompts are internally consistent', () => {
   }
 });
 
+test('SKILL.md sums weighted categories and emits no grade', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /standards\.toml/,
+    'SKILL.md Step 5 must pass standards.toml to auditors'
+  );
+  assert.match(src, /sum|total/i, 'SKILL.md Step 6 must sum weighted points');
+  assert.match(
+    src,
+    /coverage ratio/i,
+    'SKILL.md must report an audit-level coverage ratio'
+  );
+  assert.doesNotMatch(
+    src,
+    /average of all dimension percentages/i,
+    'SKILL.md must not average percentages'
+  );
+  assert.doesNotMatch(
+    src,
+    /Grade \*\*X\*\*|— Grade/i,
+    'SKILL.md must not present a grade'
+  );
+});
+
 test('every dimension check maps to a standards.toml category', () => {
   const standards = readUtf8(path.join(referencesDir, 'standards.toml'));
   const definedCodes = new Set(

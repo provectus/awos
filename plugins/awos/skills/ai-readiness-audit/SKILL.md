@@ -51,7 +51,8 @@ For each dimension, provide the agent with:
 2. **The output format** (read from `output-format.md` in this skill directory — the "Per-Dimension Artifact Format" section)
 3. **The scoring rules** (read from `scoring.md` in this skill directory)
 4. **The output path:** `context/audits/YYYY-MM-DD/{name}.md`
-5. **Topology summary** (for Phase 2+ dimensions): read from `context/audits/YYYY-MM-DD/project-topology.md` — the "Topology Summary" section written by the topology auditor
+5. **The standards file:** `references/standards.toml` (and the user override path from `sources.toml`, if any) — the dimension-auditor reads category weights and period parameters from this file
+6. **Topology summary** (for Phase 2+ dimensions): read from `context/audits/YYYY-MM-DD/project-topology.md` — the "Topology Summary" section written by the topology auditor
 
 Wait for all dimensions in a phase to complete before starting the next phase.
 
@@ -66,8 +67,8 @@ Wait for all dimensions in a phase to complete before starting the next phase.
 After all dimensions complete:
 
 1. Read all per-dimension artifacts from `context/audits/YYYY-MM-DD/`
-2. Compute the overall score: average of all dimension percentages (using the scoring algorithm from `scoring.md`)
-3. If a previous audit was found in Step 4, compute per-dimension deltas
+2. Sum awarded category weights across all dimensions into `audit_total` (uncapped). Compute an audit-level coverage ratio = total awarded weight ÷ total applicable-defined weight across all dimensions, labeled "relative to today's standard" (from `references/standards.toml`). Do not compute a grade or a 0–100 score.
+3. If a previous audit was found in Step 4, compute per-dimension deltas as point and coverage-ratio deltas (not grade deltas)
 4. Compile the full report using the report template from `output-format.md`
 5. Write the report to `context/audits/YYYY-MM-DD/report.md`
 6. Write prioritized recommendations to `context/audits/YYYY-MM-DD/recommendations.md`
@@ -102,7 +103,7 @@ After presenting the report, check the project context and offer next steps usin
 
 ### Execute selected options
 
-- **HTML report:** Read the HTML report specification from `report-template.md` in this skill directory. Generate `context/audits/YYYY-MM-DD/report.html` — a single self-contained HTML file (inline CSS, no external dependencies). Include: overall score/grade, per-dimension summary table, detailed checklists, recommendations, issue-only filter toggle.
+- **HTML report:** Read the HTML report specification from `report-template.md` in this skill directory. Generate `context/audits/YYYY-MM-DD/report.html` — a single self-contained HTML file (inline CSS, no external dependencies). Include: audit total (points) + coverage ratio, per-dimension summary table, detailed checklists, recommendations, issue-only filter toggle.
 - **Roadmap (update or create):** Tell the user to run `/awos:roadmap` and reference the audit recommendations at `context/audits/YYYY-MM-DD/recommendations.md` as input.
 
 ## Adding New Dimensions

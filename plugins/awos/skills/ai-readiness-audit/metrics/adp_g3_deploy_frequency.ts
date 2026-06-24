@@ -25,9 +25,11 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  capBucketsByHistory,
   computeReliability,
   makeMetricResult,
   type MetricResult,
+  type ValueSeriesEntry,
 } from './_base.ts';
 
 /** Map merges-per-week to a DORA band label. */
@@ -74,8 +76,18 @@ export function compute(
     );
   }
 
-  const buckets: Array<{ merges: number }> = raw.monthly_buckets;
   const bucketDays: number = artifact?.period?.bucket_days ?? 30;
+  const historyAvailableDays: number =
+    artifact?.period?.history_available_days ?? 0;
+
+  const allBuckets: Array<{ bucket_start: string; merges: number }> =
+    raw.monthly_buckets;
+  const buckets = capBucketsByHistory(
+    allBuckets,
+    historyAvailableDays,
+    bucketDays
+  );
+
   const totalMerges = buckets.reduce((sum, b) => sum + (b.merges ?? 0), 0);
   const totalDays = buckets.length * bucketDays;
   const totalWeeks = totalDays / 7;
@@ -83,6 +95,12 @@ export function compute(
 
   const band = doraDeployBand(mergesPerWeek);
   const reliability = computeReliability('not-reliable', ['git'], []);
+
+  const bucketWeeks = bucketDays / 7;
+  const value_series: ValueSeriesEntry[] = buckets.map((b) => ({
+    bucket_start: b.bucket_start,
+    value: bucketWeeks > 0 ? (b.merges ?? 0) / bucketWeeks : null,
+  }));
 
   return makeMetricResult(
     'adp_g3_deploy_frequency',
@@ -92,6 +110,7 @@ export function compute(
     reliability,
     ['git'],
     [],
-    band
+    band,
+    value_series
   );
 }

@@ -5083,8 +5083,8 @@ function computeReliability(defaultTag, sourcesUsed, sourcesMissing) {
     note: `missing sources: ${sourcesMissing.join(", ")}`
   };
 }
-function makeMetricResult(metric, value, kind, categoriesAwarded, reliability, sourcesUsed, sourcesMissing, band = null) {
-  return {
+function makeMetricResult(metric, value, kind, categoriesAwarded, reliability, sourcesUsed, sourcesMissing, band = null, valueSeries) {
+  const result = {
     metric,
     value,
     kind,
@@ -5095,6 +5095,17 @@ function makeMetricResult(metric, value, kind, categoriesAwarded, reliability, s
     sources_missing: [...sourcesMissing],
     status: sourcesUsed.length === 0 ? "SKIP" : "OK"
   };
+  if (valueSeries !== void 0) {
+    result.value_series = valueSeries;
+  }
+  return result;
+}
+function capBucketsByHistory(buckets, maxDays, bucketDays) {
+  if (maxDays <= 0 || bucketDays <= 0) return buckets;
+  const maxBuckets = Math.floor(maxDays / bucketDays);
+  if (maxBuckets <= 0) return [];
+  if (buckets.length <= maxBuckets) return buckets;
+  return buckets.slice(buckets.length - maxBuckets);
 }
 function awardCategories(standards, metricName, predicateCtx) {
   const categoryTable = standards["category"];
@@ -5211,8 +5222,19 @@ function compute2(collectedDir, _standards, _topology) {
       ["git"]
     );
   }
-  const buckets = raw.monthly_buckets;
+  const historyAvailableDays = artifact?.period?.history_available_days ?? 0;
+  const bucketDays = artifact?.period?.bucket_days ?? 30;
+  const allBuckets = raw.monthly_buckets;
+  const buckets = capBucketsByHistory(
+    allBuckets,
+    historyAvailableDays,
+    bucketDays
+  );
   const avg = buckets.reduce((sum, b) => sum + (b.authors ?? 0), 0) / buckets.length;
+  const value_series = buckets.map((b) => ({
+    bucket_start: b.bucket_start,
+    value: b.authors ?? null
+  }));
   const reliability = computeReliability("not-reliable", ["git"], []);
   return makeMetricResult(
     "adp_g2_contributors",
@@ -5221,7 +5243,9 @@ function compute2(collectedDir, _standards, _topology) {
     [201],
     reliability,
     ["git"],
-    []
+    [],
+    null,
+    value_series
   );
 }
 
@@ -5260,14 +5284,25 @@ function compute3(collectedDir, _standards, _topology) {
       ["git"]
     );
   }
-  const buckets = raw.monthly_buckets;
   const bucketDays = artifact?.period?.bucket_days ?? 30;
+  const historyAvailableDays = artifact?.period?.history_available_days ?? 0;
+  const allBuckets = raw.monthly_buckets;
+  const buckets = capBucketsByHistory(
+    allBuckets,
+    historyAvailableDays,
+    bucketDays
+  );
   const totalMerges = buckets.reduce((sum, b) => sum + (b.merges ?? 0), 0);
   const totalDays = buckets.length * bucketDays;
   const totalWeeks = totalDays / 7;
   const mergesPerWeek = totalWeeks > 0 ? totalMerges / totalWeeks : 0;
   const band = doraDeployBand(mergesPerWeek);
   const reliability = computeReliability("not-reliable", ["git"], []);
+  const bucketWeeks = bucketDays / 7;
+  const value_series = buckets.map((b) => ({
+    bucket_start: b.bucket_start,
+    value: bucketWeeks > 0 ? (b.merges ?? 0) / bucketWeeks : null
+  }));
   return makeMetricResult(
     "adp_g3_deploy_frequency",
     mergesPerWeek,
@@ -5276,7 +5311,8 @@ function compute3(collectedDir, _standards, _topology) {
     reliability,
     ["git"],
     [],
-    band
+    band,
+    value_series
   );
 }
 
@@ -5346,6 +5382,37 @@ function compute4(collectedDir, _standards, _topology) {
   const medianHours = median(leadTimesHours);
   const band = doraLeadTimeBand(medianHours);
   const reliability = computeReliability("minimal", ["git"], []);
+  const historyAvailableDays = artifact?.period?.history_available_days ?? 0;
+  const bucketDays = artifact?.period?.bucket_days ?? 30;
+  const bucketMs = bucketDays * 864e5;
+  const value_series = [];
+  if (Array.isArray(raw.monthly_buckets) && raw.monthly_buckets.length > 0) {
+    const allBuckets = raw.monthly_buckets;
+    const cappedBuckets = capBucketsByHistory(
+      allBuckets,
+      historyAvailableDays,
+      bucketDays
+    );
+    for (const bucket of cappedBuckets) {
+      const bucketStart = new Date(bucket.bucket_start).getTime();
+      const bucketEnd = bucketStart + bucketMs;
+      const bucketLeadTimes = [];
+      for (const r of records) {
+        const mergedAt = new Date(r.merged_at).getTime();
+        if (isNaN(mergedAt) || mergedAt <= bucketStart || mergedAt > bucketEnd)
+          continue;
+        const firstCommit = new Date(r.branch_first_commit_at).getTime();
+        if (isNaN(firstCommit)) continue;
+        const diffHours = (mergedAt - firstCommit) / 36e5;
+        if (diffHours >= 0) bucketLeadTimes.push(diffHours);
+      }
+      bucketLeadTimes.sort((a, b) => a - b);
+      value_series.push({
+        bucket_start: bucket.bucket_start,
+        value: bucketLeadTimes.length > 0 ? median(bucketLeadTimes) : null
+      });
+    }
+  }
   return makeMetricResult(
     "adp_g4_lead_time",
     medianHours,
@@ -5354,7 +5421,8 @@ function compute4(collectedDir, _standards, _topology) {
     reliability,
     ["git"],
     [],
-    band
+    band,
+    value_series.length > 0 ? value_series : void 0
   );
 }
 
@@ -5424,6 +5492,37 @@ function compute5(collectedDir, _standards, _topology) {
   const medianHours = median2(cycleTimesHours);
   const band = doraCycleTimeBand(medianHours);
   const reliability = computeReliability("not-reliable", ["git"], []);
+  const historyAvailableDays = artifact?.period?.history_available_days ?? 0;
+  const bucketDays = artifact?.period?.bucket_days ?? 30;
+  const bucketMs = bucketDays * 864e5;
+  const value_series = [];
+  if (Array.isArray(raw.monthly_buckets) && raw.monthly_buckets.length > 0) {
+    const allBuckets = raw.monthly_buckets;
+    const cappedBuckets = capBucketsByHistory(
+      allBuckets,
+      historyAvailableDays,
+      bucketDays
+    );
+    for (const bucket of cappedBuckets) {
+      const bucketStart = new Date(bucket.bucket_start).getTime();
+      const bucketEnd = bucketStart + bucketMs;
+      const bucketCycleTimes = [];
+      for (const r of records) {
+        const mergedAt = new Date(r.merged_at).getTime();
+        if (isNaN(mergedAt) || mergedAt <= bucketStart || mergedAt > bucketEnd)
+          continue;
+        const firstCommit = new Date(r.branch_first_commit_at).getTime();
+        if (isNaN(firstCommit)) continue;
+        const diffHours = (mergedAt - firstCommit) / 36e5;
+        if (diffHours >= 0) bucketCycleTimes.push(diffHours);
+      }
+      bucketCycleTimes.sort((a, b) => a - b);
+      value_series.push({
+        bucket_start: bucket.bucket_start,
+        value: bucketCycleTimes.length > 0 ? median2(bucketCycleTimes) : null
+      });
+    }
+  }
   return makeMetricResult(
     "adp_g5_pr_cycle_time",
     medianHours,
@@ -5432,7 +5531,8 @@ function compute5(collectedDir, _standards, _topology) {
     reliability,
     ["git"],
     [],
-    band
+    band,
+    value_series.length > 0 ? value_series : void 0
   );
 }
 

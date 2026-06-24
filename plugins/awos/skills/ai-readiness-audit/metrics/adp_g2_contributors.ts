@@ -14,9 +14,11 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  capBucketsByHistory,
   computeReliability,
   makeMetricResult,
   type MetricResult,
+  type ValueSeriesEntry,
 } from './_base.ts';
 
 export function compute(
@@ -55,9 +57,25 @@ export function compute(
     );
   }
 
-  const buckets: Array<{ authors: number }> = raw.monthly_buckets;
+  const historyAvailableDays: number =
+    artifact?.period?.history_available_days ?? 0;
+  const bucketDays: number = artifact?.period?.bucket_days ?? 30;
+
+  const allBuckets: Array<{ bucket_start: string; authors: number }> =
+    raw.monthly_buckets;
+  const buckets = capBucketsByHistory(
+    allBuckets,
+    historyAvailableDays,
+    bucketDays
+  );
+
   const avg =
     buckets.reduce((sum, b) => sum + (b.authors ?? 0), 0) / buckets.length;
+
+  const value_series: ValueSeriesEntry[] = buckets.map((b) => ({
+    bucket_start: b.bucket_start,
+    value: b.authors ?? null,
+  }));
 
   const reliability = computeReliability('not-reliable', ['git'], []);
 
@@ -68,6 +86,8 @@ export function compute(
     [201],
     reliability,
     ['git'],
-    []
+    [],
+    null,
+    value_series
   );
 }

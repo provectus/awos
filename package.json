@@ -27,9 +27,6 @@
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },
-  "allowScripts": {
-    "esbuild@0.28.1": true
-  },
   "dependencies": {
     "smol-toml": "^1.7.0"
   }

@@ -8,7 +8,13 @@
  */
 
 import { build } from 'esbuild';
-import { readdirSync, copyFileSync, mkdirSync, existsSync } from 'node:fs';
+import {
+  readdirSync,
+  copyFileSync,
+  mkdirSync,
+  existsSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,9 +46,7 @@ for (const layer of layers) {
 
 if (entryPoints.length === 0) {
   // No entrypoints yet — write a sentinel so CI can verify the bundle step runs.
-  import('node:fs').then(({ writeFileSync }) => {
-    writeFileSync(join(distDir, 'engine.js'), '// engine bundle placeholder\n');
-  });
+  writeFileSync(join(distDir, 'engine.js'), '// engine bundle placeholder\n');
   console.log(
     'build-engine: no entrypoints yet — wrote dist/engine.js placeholder'
   );

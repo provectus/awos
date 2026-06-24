@@ -1,6 +1,6 @@
 // plugins/awos/skills/ai-readiness-audit/collectors/_base.ts
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 function makeArtifact(source, available, reasonIfAbsent, period, raw) {
   return {
     source,
@@ -9,9 +9,9 @@ function makeArtifact(source, available, reasonIfAbsent, period, raw) {
     period: {
       bucket_days: period.bucket_days,
       lookback_days: period.lookback_days,
-      history_available_days: period.history_available_days,
+      history_available_days: period.history_available_days
     },
-    raw,
+    raw
   };
 }
 function writeArtifact(artifact, outDir) {
@@ -20,4 +20,7 @@ function writeArtifact(artifact, outDir) {
   writeFileSync(path, JSON.stringify(artifact, null, 2));
   return path;
 }
-export { makeArtifact, writeArtifact };
+export {
+  makeArtifact,
+  writeArtifact
+};

@@ -522,3 +522,26 @@ test('renderHtml: tab switching JS present (showTab function)', () => {
     'HTML must include the showTab JS function for tab switching'
   );
 });
+
+test('renderHtml (drill-down): code and source columns present in Tab 3 check rows', () => {
+  const html = renderHtml(singleRepoFixture());
+  // Tab 3 (Drill-down) must render the category code number and the source
+  // string for each check so engineers can trace checks back to standards.toml.
+  assert.ok(
+    html.includes('<th>Code</th>'),
+    'HTML Drill-down tab must have a "Code" column header for the category numeric code'
+  );
+  assert.ok(
+    html.includes('<th>Source</th>'),
+    'HTML Drill-down tab must have a "Source" column header for the source name from standards.toml'
+  );
+  // The fixture check uses code=[101] and source="git native"
+  assert.ok(
+    html.includes('101'),
+    'HTML Drill-down tab must render the numeric category code (101 from fixture)'
+  );
+  assert.ok(
+    html.includes('git native'),
+    'HTML Drill-down tab must render the source string (git native from fixture)'
+  );
+});

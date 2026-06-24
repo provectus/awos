@@ -2,10 +2,10 @@
 
 This document defines how the `ai-readiness-audit` skill resolves, confirms, and reads data sources when computing AI-SDLC adoption metrics. It is consumed by SKILL.md Step 0 (initialization) and the collector layer (`collectors/`).
 
-The engine is TypeScript (Node/esbuild), bundled to `dist/cli.js`. Collectors are invoked as:
+The engine is TypeScript (Node/esbuild), bundled to `dist/cli.js` inside the plugin directory. When invoked by the skill orchestrator (whose working directory is the user's repo), collectors are called with the absolute path `${CLAUDE_SKILL_DIR}/dist/cli.js`:
 
 ```
-node dist/cli.js collect <source> <repoPath>
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" collect <source> <repoPath>
 ```
 
 Supported sources: `git`, `ci`, `tracker`, `docs` — implemented in `collectors/git.ts`, `collectors/ci.ts`, `collectors/tracker.ts`, and `collectors/docs.ts` respectively. Each collector writes one artifact to `context/audits/<date>/collected/<source>.json`.
@@ -99,7 +99,7 @@ All fields are optional. Omitting `[[repos]]` entirely means "audit the current 
 Each collector (`collectors/git.ts`, `collectors/ci.ts`, `collectors/tracker.ts`, `collectors/docs.ts`) is dispatched via:
 
 ```
-node dist/cli.js collect <source> <repoPath>
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" collect <source> <repoPath>
 ```
 
 It writes one JSON file to `context/audits/<date>/collected/<source>.json`. The `collected/` directory is the sole interface between collectors and metrics — metric modules read only from those files and never invoke sources directly.

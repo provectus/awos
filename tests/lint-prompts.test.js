@@ -547,13 +547,17 @@ test('ai-sdlc-adoption dimension exists with correct frontmatter and required bo
 
   // Body must instruct the orchestrator to collect via the bundled dispatcher.
   assert.ok(
-    body.includes('node dist/cli.js collect'),
-    'body must reference "node dist/cli.js collect" (per-source collection command)'
+    body.includes('node dist/cli.js collect') ||
+      body.includes('cli.js" collect') ||
+      body.includes('cli path>" collect'),
+    'body must reference the collect engine command (per-source collection command)'
   );
   // Body must instruct the orchestrator to run metrics via the bundled dispatcher.
   assert.ok(
-    body.includes('node dist/cli.js metric'),
-    'body must reference "node dist/cli.js metric" (metric invocation command)'
+    body.includes('node dist/cli.js metric') ||
+      body.includes('cli.js" metric') ||
+      body.includes('cli path>" metric'),
+    'body must reference the metric engine command (metric invocation command)'
   );
   // Body must describe the shared collected/ directory (query-once pattern).
   assert.ok(
@@ -1380,8 +1384,10 @@ test('SKILL.md emits progress + ETA (interactive + headless, wait-excluded)', ()
   const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
   // Must invoke the bundled progress helper via the CLI dispatcher.
   assert.ok(
-    src.includes('node dist/cli.js progress'),
-    'SKILL.md must call "node dist/cli.js progress" after each dimension/phase completes'
+    src.includes('node dist/cli.js progress') ||
+      src.includes('CLAUDE_SKILL_DIR}/dist/cli.js" progress') ||
+      /dist\/cli\.js["']?\s+progress/.test(src),
+    'SKILL.md must call the progress CLI helper after each dimension/phase completes'
   );
   // Must mention ETA as a concept.
   assert.match(
@@ -1608,8 +1614,9 @@ test('SKILL.md Step 6 org branch references the org rollup', () => {
   );
   assert.ok(
     body.includes('node dist/cli.js rollup') ||
-      body.includes('dist/cli.js rollup'),
-    'SKILL.md must show the rollup CLI invocation (node dist/cli.js rollup <dir>)'
+      body.includes('dist/cli.js rollup') ||
+      /dist\/cli\.js["']?\s+rollup/.test(body),
+    'SKILL.md must show the rollup CLI invocation (node dist/cli.js rollup <dir> or with absolute path)'
   );
 });
 
@@ -1725,8 +1732,9 @@ test('SKILL.md Step 6 renders report.md via cli.js render --format md', () => {
   const src = readUtf8(SKILL_MD_PATH);
   assert.ok(
     src.includes('node dist/cli.js render') ||
-      src.includes('dist/cli.js render'),
-    'SKILL.md Step 6 must invoke "node dist/cli.js render" to produce report.md (never hand-write it)'
+      src.includes('dist/cli.js render') ||
+      /dist\/cli\.js["']?\s+render/.test(src),
+    'SKILL.md Step 6 must invoke the render CLI command to produce report.md (never hand-write it)'
   );
   assert.ok(
     /--format md/.test(src),
@@ -1775,5 +1783,104 @@ test('SKILL.md Step 7 headless HTML always produced (never skipped)', () => {
   assert.ok(
     /always produc|never skip/i.test(src),
     'SKILL.md Step 7 must state that report.html is always produced in headless runs (never skipped)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// ENGINE-PATH: no bare "node dist/cli.js" in prompt files
+// ---------------------------------------------------------------------------
+
+test('no prompt file uses a bare "node dist/cli.js" as an engine invocation in code blocks', () => {
+  // All engine calls in code blocks in prompt files must use the absolute path form
+  // so they resolve at audit runtime (cwd = user's repo, not plugin dir).
+  // SKILL.md uses ${CLAUDE_SKILL_DIR}/dist/cli.js (skill context).
+  // dimension-auditor.md and per-dimension files use the engine CLI path
+  // passed by the orchestrator via "<engine cli path>".
+  //
+  // This guard checks fenced code block lines only (lines between ``` fences)
+  // so prose mentions like "never use a bare `node dist/cli.js`" are not flagged.
+  const auditSkillRoot = path.join(
+    repoRoot,
+    'plugins',
+    'awos',
+    'skills',
+    'ai-readiness-audit'
+  );
+  const agentsDir = path.join(repoRoot, 'plugins', 'awos', 'agents');
+  const promptFiles = [];
+  const collectMd = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, entry.name);
+      if (entry.isFile() && entry.name.endsWith('.md')) promptFiles.push(p);
+      else if (entry.isDirectory() && entry.name !== 'dist') collectMd(p);
+    }
+  };
+  collectMd(auditSkillRoot);
+  collectMd(agentsDir);
+
+  const offenders = [];
+  for (const f of promptFiles) {
+    const body = readUtf8(f);
+    const lines = body.split('\n');
+    let inCodeBlock = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^```/.test(line)) {
+        inCodeBlock = !inCodeBlock;
+        continue;
+      }
+      // Only flag bare invocations inside code blocks (actual commands, not prose)
+      if (inCodeBlock && /^\s*node\s+dist\/cli\.js\b/.test(line)) {
+        offenders.push(
+          `${path.relative(repoRoot, f)}:${i + 1}: ${line.trim()}`
+        );
+      }
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `prompt code blocks must not contain bare "node dist/cli.js" — use \${CLAUDE_SKILL_DIR}/dist/cli.js (SKILL.md) or the passed engine CLI path (agents/dimensions):\n${offenders.join('\n')}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// TOPOLOGY-FLAGS: project-topology.md lists all topology.<flag> predicates
+// ---------------------------------------------------------------------------
+
+test('project-topology.md lists all topology.* flag names used in standards.toml', () => {
+  // The dimension-auditor evaluates applies_when expressions verbatim from
+  // standards.toml. project-topology.md must enumerate every topology.*
+  // predicate so the auditor can read them as booleans rather than inferring
+  // from prose. If a new predicate is added to standards.toml, this test
+  // forces a matching entry in project-topology.md.
+  const standardsSrc = readUtf8(path.join(referencesDir, 'standards.toml'));
+  const topologySrc = readUtf8(path.join(dimensionsDir, 'project-topology.md'));
+
+  // Extract topology.<flag> predicates from standards.toml.
+  const predicates = new Set(
+    (standardsSrc.match(/topology\.[a-z_]+/g) || []).map((m) =>
+      m.replace('topology.', '')
+    )
+  );
+  assert.ok(
+    predicates.size > 0,
+    'standards.toml must define at least one topology.* applies_when predicate'
+  );
+
+  const missing = [];
+  for (const flag of predicates) {
+    if (
+      !topologySrc.includes('`' + flag + '`') &&
+      !topologySrc.includes(flag + ':')
+    ) {
+      missing.push(flag);
+    }
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    `project-topology.md must list every topology.* predicate from standards.toml (missing: ${missing.join(', ')})`
   );
 });

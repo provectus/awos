@@ -679,7 +679,7 @@ tr.low-cov td{background:#fff7ed}
       );
       rows.push('<div class="details-body">');
       rows.push(
-        '<table><thead><tr><th>#</th><th>Check</th><th>Method</th><th>Wt</th><th>Status</th><th>Reliability</th><th>Value</th><th>Evidence</th></tr></thead><tbody>'
+        '<table><thead><tr><th>#</th><th>Check</th><th>Code</th><th>Source</th><th>Method</th><th>Wt</th><th>Status</th><th>Reliability</th><th>Value</th><th>Evidence</th></tr></thead><tbody>'
       );
       let ckn = 1;
       let hasMinimal = false;
@@ -703,9 +703,13 @@ tr.low-cov td{background:#fff7ed}
             ? sparklineSvg(c.value_series)
             : '';
         const evidence = c.evidence.length > 0 ? c.evidence.join('<br>') : '—';
+        const codeStr = c.code && c.code.length > 0 ? c.code.join(', ') : '—';
+        const sourceStr = c.source ? esc(c.source) : '—';
         rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
   <td>${ckn++}</td>
   <td title="${esc(c.hint)}"><strong>${esc(c.check_id)}</strong><br><span style="font-size:.75rem;color:#64748b">${esc(c.definition)}</span></td>
+  <td style="font-size:.75rem;color:#64748b">${esc(codeStr)}</td>
+  <td style="font-size:.75rem;color:#64748b">${sourceStr}</td>
   <td>${esc(c.method)}</td>
   <td>${hintSpan(String(c.weight_awarded) + '/' + String(c.weight_max), c.hint)}</td>
   <td>${statusBadge(c.status)}</td>

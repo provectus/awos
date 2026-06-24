@@ -85,3 +85,39 @@ At the end of the artifact, write a structured summary block that later dimensio
 - **Communication:** [REST via OpenAPI, gRPC, GraphQL, message queues, etc.] | not detected
 - **Service directories:** [dir1], [dir2], …
 ```
+
+## Topology Flags
+
+After the Topology Summary, write a `## Topology Flags` section with a structured boolean block. Downstream dimensions and the dimension-auditor evaluate `applies_when` expressions in `references/standards.toml` verbatim against these flags — the flag names must match exactly. For every flag, record `true` or `false` and a brief parenthetical explanation.
+
+```markdown
+## Topology Flags
+
+- `handles_secrets`: true|false (e.g. vault config / .env.example / secret manager client detected)
+- `has_ai_agent_files`: true|false (e.g. .claude/agents/\*.md / AGENTS.md / CLAUDE.md present)
+- `has_api`: true|false (e.g. any API layer detected — REST, gRPC, GraphQL, or generic router)
+- `has_ci`: true|false (e.g. .github/workflows/, .gitlab-ci.yml, Jenkinsfile, or similar found)
+- `has_claude_md`: true|false (e.g. CLAUDE.md or .claude/CLAUDE.md present)
+- `has_commands_or_skills`: true|false (e.g. .claude/commands/ or skills/ directory present)
+- `has_db`: true|false (e.g. migration dirs, ORM config, or docker-compose storage service found)
+- `has_dependency_automation`: true|false (e.g. Dependabot, Renovate, or similar config found)
+- `has_docs_connector`: true|false (e.g. Confluence/Coda CLI on PATH or MCP server in session)
+- `has_hooks`: true|false (e.g. .claude/settings.json hooks or pre-commit hooks detected)
+- `has_http_api`: true|false (e.g. FastAPI, Express, Django REST, Spring MVC, or similar found)
+- `has_incident_source`: true|false (e.g. PagerDuty/OpsGenie reference or incident tracker detected)
+- `has_lockfiles`: true|false (e.g. package-lock.json, yarn.lock, pnpm-lock.yaml, Cargo.lock found)
+- `has_mcp_config`: true|false (e.g. .claude/settings.json mcpServers block or mcp.json present)
+- `has_ml_layer`: true|false (e.g. torch, tensorflow, scikit-learn, huggingface, or model files found)
+- `has_multiple_layers`: true|false (e.g. two or more distinct application layers detected)
+- `has_package_ecosystem`: true|false (e.g. package.json, pyproject.toml, go.mod, Cargo.toml, or pom.xml found)
+- `has_package_manifests`: true|false (e.g. same as has_package_ecosystem — at least one manifest found)
+- `has_topology`: true|false (always true — this dimension always runs and produces topology data)
+- `has_tracker`: true|false (e.g. Jira project key, Linear URL, GitHub Issues link found in docs/scripts)
+- `is_monorepo`: true|false (e.g. two or more independent build roots detected in workspace)
+- `is_multi_service`: true|false (e.g. multiple independently deployable services detected)
+- `is_not_library`: true|false (e.g. project has a runnable service entry point, not a pure library)
+- `uses_auth`: true|false (e.g. OAuth, JWT, session middleware, or auth library import detected)
+- `uses_env_vars`: true|false (e.g. process.env / os.environ / .env file or dotenv library found)
+```
+
+The dimension-auditor for every downstream dimension that declares `depends-on: [project-topology]` reads the `## Topology Flags` block verbatim. It uses the boolean values directly when evaluating each `applies_when = "topology.<flag>"` expression in `references/standards.toml` — it does NOT infer from the prose Topology Summary.

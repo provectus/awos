@@ -20,7 +20,8 @@ You will receive via the task prompt:
 2. **Path to `references/standards.toml`** — used to resolve category weights, method, applicability, reliability defaults, rubric, and evidence_required
 3. **Target repo path** — the absolute path to the repository being audited
 4. **Output path** — where to write the JSON artifact (e.g. `context/audits/2025-01-15/security.json`)
-5. **Topology summary** (optional) — structured output from the project-topology dimension, provided when this dimension declares a `depends-on: [project-topology]` dependency; used to evaluate `applies_when` expressions
+5. **Engine CLI path** — the absolute path to `dist/cli.js` inside the plugin directory (e.g. `/path/to/plugin/dist/cli.js`), passed by the orchestrator. Use this path for all engine invocations: `node "<engine cli path>" standards|detect|metric|collect …`. Never use a bare `node dist/cli.js` — the agent's working directory is the user's repo, not the plugin directory.
+6. **Topology summary** (optional) — structured output from the project-topology dimension, provided when this dimension declares a `depends-on: [project-topology]` dependency; used to evaluate `applies_when` expressions
 
 ## Execution
 
@@ -29,12 +30,12 @@ You will receive via the task prompt:
 Run:
 
 ```bash
-node dist/cli.js standards <path/to/standards.toml>
+node "<engine cli path>" standards <path/to/standards.toml>
 ```
 
-Parse the printed JSON. This gives you every `[category.*]` table, each carrying: `code`, `method`, `weight`, `applies_when`, `reliability_default`, `source`, `source_year`, `definition`, and (for judgment categories) `rubric` and `evidence_required`.
+where `<engine cli path>` is the absolute path passed to you by the orchestrator (e.g. `/path/to/plugin/dist/cli.js`). Parse the printed JSON. This gives you every `[category.*]` table, each carrying: `code`, `method`, `weight`, `applies_when`, `reliability_default`, `source`, `source_year`, `definition`, and (for judgment categories) `rubric` and `evidence_required`.
 
-The bundled `dist/cli.js standards` verb is the single TOML parse path — no other runtime or library is needed.
+The bundled engine CLI is the single TOML parse path — no other runtime or library is needed.
 
 ### Step 2 — For each check, route by method
 
@@ -42,19 +43,19 @@ For every check block in the dimension file:
 
 1. Read the check's `**Category:**` line to extract the numeric code(s).
 2. For each code, look it up in the standards JSON from Step 1. Read its `method` field (`computed`, `detected`, or `judgment`).
-3. Evaluate `applies_when` against the topology summary (if provided). The value `"always"` means the category always applies. Any other expression: evaluate it against the topology data; if false, mark the category `SKIP` — excluded from both the awarded total and the applicable-weight denominator.
+3. Evaluate `applies_when` against the topology summary (if provided). The value `"always"` means the category always applies. Any other expression (e.g. `"topology.has_http_api"`) — look up the boolean value for that flag in the `## Topology Flags` section of the topology summary; read it verbatim (do NOT infer from the prose Topology Summary). If the flag is `false` or missing, mark the category `SKIP` — excluded from both the awarded total and the applicable-weight denominator.
 
 **Routing rules:**
 
 - **`computed` or `detected` method** — run:
 
   ```bash
-  node dist/cli.js detect <code> <repoPath>
+  node "<engine cli path>" detect <code> <repoPath>
   ```
 
   The detector returns `{status, value, evidence}`. Use this verdict verbatim — do not re-decide the status. The detector verdict is final; the auditor never overrides it.
 
-  > **Note:** Both `computed` and `detected` audit categories are evaluated via `node dist/cli.js detect <code>`; the `metric` verb (`node dist/cli.js metric <id>`) is used ONLY by the `ai-sdlc-adoption` dimension's own orchestration (it computes ADP metrics from collector artifacts), not in this generic routing.
+  > **Note:** Both `computed` and `detected` audit categories are evaluated via `node "<engine cli path>" detect <code>`; the `metric` verb (`node "<engine cli path>" metric <id>`) is used ONLY by the `ai-sdlc-adoption` dimension's own orchestration (it computes ADP metrics from collector artifacts), not in this generic routing.
 
 - **`judgment` method** — gather the category's `evidence_required` items from the repository (read each listed file or pattern), evaluate the category's `rubric`, and emit your verdict inside XML tags:
 
@@ -101,7 +102,8 @@ For every check, produce a record with all of the following fields:
   },
   "source": "<source name from standards.toml>",
   "definition": "<category definition from standards.toml>",
-  "hint": "<definition> · <value-derivation> · <reliability> · <source (year)> · <method>"
+  "hint": "<definition> · <value-derivation> · <reliability> · <source (year)> · <method>",
+  "value_series": [{ "bucket_start": "YYYY-MM-DD", "value": <number | null> }]
 }
 ```
 
@@ -109,6 +111,7 @@ Field details:
 
 - **`check_id`** — taken verbatim from the dimension check heading id: the `XXX-NN` token from the `### XXX-NN:` heading (e.g. `SEC-02`, `ARCH-06`, `SDD-04`).
 - **`value`** — `string | number | null`. Detectors may return a numeric value (e.g. file sizes, counts, ratios); judgment checks return a string conclusion. Use `null` only if the value is genuinely unavailable.
+- **`value_series`** — optional array of `{ bucket_start: "YYYY-MM-DD", value: number | null }` objects representing per-bucket time-series data (e.g. monthly contributor counts, CI pass rates). Emitted by metric-backed checks in the `ai-sdlc-adoption` dimension. When present, the renderer renders it as a sparkline (Unicode in Markdown, SVG in HTML). Omit the field entirely for checks that do not produce a time series.
 - **`weight_max`** — the category's `weight` from `standards.toml`, always. Even when `applies: false` (SKIP), `weight_max` is the full category weight, not 0. `applies: false` is the sole signal to exclude from the coverage denominator.
 - **`weight_awarded`** — equals `weight_max` on PASS; 0 otherwise (WARN, FAIL, SKIP).
 

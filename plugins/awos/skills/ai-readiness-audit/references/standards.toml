@@ -2,7 +2,7 @@
 #
 # Single source of truth for every scoring category used by the
 # ai-sdlc-adoption metric set (and, in later tasks, by all 11 existing audit
-# dimensions).  Parsed at runtime via `python3 -c 'import tomllib'`.
+# dimensions).  Parsed at runtime via `node dist/cli.js standards` (smol-toml).
 # Users may override by pointing sources.toml [standards].standards_file at
 # their own copy of this file.
 #

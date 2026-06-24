@@ -46,7 +46,8 @@ Per-check record schema (all fields required):
   },
   "source": "<source name from standards.toml>",
   "definition": "<category definition from standards.toml>",
-  "hint": "<definition> · <value-derivation> · <reliability tag (confidence)> · <source (year)> · <method>"
+  "hint": "<definition> · <value-derivation> · <reliability tag (confidence)> · <source (year)> · <method>",
+  "value_series": [{ "bucket_start": "YYYY-MM-DD", "value": <number | null> }]
 }
 ```
 
@@ -65,6 +66,7 @@ Field notes:
 - **`reliability.confidence`** — `"high"` for `computed`/`detected` checks (detector output is deterministic); `"medium"` for `judgment` checks (bounded by rubric quality).
 - **`source`** / **`definition`** — copied verbatim from the matching `[category.*]` table in `standards.toml`.
 - **`hint`** — five-part human-readable summary for hover tooltips in the HTML report.
+- **`value_series`** — optional. Array of `{ bucket_start: "YYYY-MM-DD", value: number | null }` objects representing per-bucket time-series data (e.g. monthly contributor counts, CI pass rate per 30-day window). Emitted only by metric-backed checks in the `ai-sdlc-adoption` dimension. When present, `node dist/cli.js render` renders the series as a Unicode sparkline in Markdown and an inline SVG sparkline in HTML. Omit the field entirely for checks that produce no time series.
 
 Any dimension-specific summary data consumed by downstream dimensions (e.g. the topology output used by later dimensions via `depends-on`) must be included as an additional top-level key in the JSON object alongside `dimension`, `date`, `score`, `coverage`, and `checks`.
 

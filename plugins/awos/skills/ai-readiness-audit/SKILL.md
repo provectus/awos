@@ -94,7 +94,7 @@ The elapsed timer runs in wall-clock seconds **excluding time spent waiting on t
 After each dimension (or phase, when phases complete as a batch) finishes, emit a progress line:
 
 ```
-node dist/cli.js progress <elapsed_seconds> <done> <total>
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" progress <elapsed_seconds> <done> <total>
 ```
 
 The output is a JSON object with `pct` (fraction 0–1), `eta_seconds`, and `elapsed_seconds`. Print it to the user as a single readable line, for example:
@@ -107,6 +107,12 @@ ETA is a wall-clock UX estimate, not a scored or deterministic metric. When `don
 
 **Headless mode (`--output-format stream-json`):** emit the same progress JSON as a stream-json line after each phase completes, so CI pipelines and automation can track progress without a terminal. If stream access is not available, an equivalent artifact-count fallback is always observable: count the `.json` files written to `context/audits/YYYY-MM-DD/` and compare against `total` — each completed dimension writes exactly one `.json` artifact, so `ls context/audits/YYYY-MM-DD/*.json | wc -l` gives `done`.
 
+Before launching any dimension agents, resolve the absolute engine path once so it can be passed to each agent (agents do not inherit `${CLAUDE_SKILL_DIR}`):
+
+```
+ENGINE="${CLAUDE_SKILL_DIR}/dist/cli.js"
+```
+
 For each execution phase, launch all dimensions in the phase **in parallel** using the Agent tool with the `dimension-auditor` agent.
 
 For each dimension, provide the agent with:
@@ -116,7 +122,8 @@ For each dimension, provide the agent with:
 3. **The scoring rules** (read from `scoring.md` in this skill directory)
 4. **The output path:** `context/audits/YYYY-MM-DD/{name}.json`
 5. **The standards file:** `references/standards.toml` (and the user override path from `sources.toml`, if any) — the dimension-auditor reads category weights and period parameters from this file
-6. **Topology summary** (for Phase 2+ dimensions): read from `context/audits/YYYY-MM-DD/project-topology.md` — the "Topology Summary" section written by the topology auditor
+6. **Engine CLI path:** the absolute path `$ENGINE` resolved above — tell the agent to invoke the engine as `node "<engine cli path>"` (e.g. `node "/path/to/dist/cli.js" standards ...`). The agent must use this path for all engine calls (`standards`, `detect`, `metric`, `collect`) — never a bare `node dist/cli.js`.
+7. **Topology summary** (for Phase 2+ dimensions): read from `context/audits/YYYY-MM-DD/project-topology.md` — the "Topology Summary" section written by the topology auditor
 
 Wait for all dimensions in a phase to complete before starting the next phase.
 
@@ -144,7 +151,7 @@ After all dimensions complete:
 4. Render the markdown report from the JSON source of truth:
 
    ```
-   node dist/cli.js render context/audits/YYYY-MM-DD/audit.json --format md > context/audits/YYYY-MM-DD/report.md
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format md > context/audits/YYYY-MM-DD/report.md
    ```
 
 5. Write prioritized recommendations to `context/audits/YYYY-MM-DD/recommendations.md`.
@@ -159,7 +166,7 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
 2. Invoke the org rollup via the CLI:
 
    ```
-   node dist/cli.js rollup context/audits/YYYY-MM-DD/per-repo/
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" rollup context/audits/YYYY-MM-DD/per-repo/
    ```
 
    This computes **exactly three (≤3) portfolio metrics** — never the full per-repo metric set:
@@ -167,15 +174,21 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
    - **`org_capability_score`** — average awarded category-weight score across portfolio repos (Σ weight / repo count).
    - **`org_measurement_coverage`** — fraction of portfolio repos with ≥1 reachable data-source collector (contributor-weighted).
 
-3. Write the org-level result JSON (the source-of-truth, per the JSON-source-of-truth rule) to:
+3. Build the org audit JSON by merging the rollup output with a minimal audit envelope and write it to:
 
    ```
    context/audits/YYYY-MM-DD/org-portfolio.json
    ```
 
-   The JSON structure is `{portfolio_metrics: [...], per_repo: [...]}` as returned by the rollup CLI. Markdown/HTML rendering is done later by reading this file.
+   The JSON structure must contain `portfolio_metrics`, `per_repo`, `date`, `project`, `audit_total` (average awarded weight across repos), `coverage` (average coverage ratio), and `dimensions` (aggregated dimension data from all per-repo audits). This shape satisfies the renderer's `AuditJson` schema so the renderer can produce both org markdown and HTML from this single file.
 
-4. Present the three portfolio metrics to the user with a brief interpretation:
+4. Render the org report from the org audit JSON:
+
+   ```
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/org-portfolio.json --format md > context/audits/YYYY-MM-DD/report.md
+   ```
+
+5. Present the three portfolio metrics to the user with a brief interpretation:
    - AI-tooling coverage across the portfolio (fraction of repos, contributor-weighted).
    - Portfolio capability score (average awarded weight, reflects depth of AI-SDLC adoption).
    - Measurement coverage (fraction of repos with reachable data sources).
@@ -192,7 +205,7 @@ After presenting the report, check the project context and offer next steps usin
 When `AskUserQuestion` receives its default answer (non-interactive, e.g. CI or `--output-format stream-json`), automatically generate the HTML report — never skip it:
 
 ```
-node dist/cli.js render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html
 ```
 
 `report.html` is always produced in headless runs. The orchestrator never hand-writes it; the renderer produces it from `audit.json`.
@@ -224,7 +237,7 @@ node dist/cli.js render context/audits/YYYY-MM-DD/audit.json --format html > con
 
 ### Execute selected options
 
-- **HTML report:** Render from the JSON source of truth using the CLI: `node dist/cli.js render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html`. The renderer reads the HTML report specification from `report-template.md`. The output is a single self-contained HTML file (inline CSS, no external dependencies) including: audit total (points) + coverage ratio, per-dimension summary table, detailed checklists, recommendations, issue-only filter toggle.
+- **HTML report:** Render from the JSON source of truth using the CLI: `node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html`. The renderer reads the HTML report specification from `report-template.md`. The output is a single self-contained HTML file (inline CSS, no external dependencies) including: audit total (points) + coverage ratio, per-dimension summary table, detailed checklists, recommendations, issue-only filter toggle.
 - **Roadmap (update or create):** Tell the user to run `/awos:roadmap` and reference the audit recommendations at `context/audits/YYYY-MM-DD/recommendations.md` as input.
 
 ## Adding New Dimensions

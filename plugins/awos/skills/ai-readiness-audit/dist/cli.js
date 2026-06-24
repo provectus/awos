@@ -10340,6 +10340,21 @@ function compute18(_collectedDir, _standards, _topology, repoPathOverride) {
   );
 }
 
+// plugins/awos/skills/ai-readiness-audit/progress.ts
+function progress(input) {
+  const { elapsed_seconds, done, total } = input;
+  const pct = total > 0 ? done / total : 0;
+  let eta_seconds;
+  if (done === 0) {
+    eta_seconds = null;
+  } else if (done >= total) {
+    eta_seconds = 0;
+  } else {
+    eta_seconds = elapsed_seconds / done * (total - done);
+  }
+  return { pct, eta_seconds, elapsed_seconds };
+}
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
 var COLLECTORS = {
   git: collect,
@@ -10511,10 +10526,32 @@ async function main() {
       printJson(result);
       break;
     }
+    case "progress": {
+      const elapsedStr = arg1;
+      const doneStr = arg2;
+      const [, , , , , totalStr] = process.argv;
+      if (!elapsedStr || !doneStr || !totalStr) {
+        printJson({
+          error: "progress requires <elapsed_seconds> <done> <total>"
+        });
+        process.exit(1);
+      }
+      const elapsed_seconds = Number(elapsedStr);
+      const done = Number(doneStr);
+      const total = Number(totalStr);
+      if (isNaN(elapsed_seconds) || isNaN(done) || isNaN(total)) {
+        printJson({
+          error: "progress: all arguments must be numbers"
+        });
+        process.exit(1);
+      }
+      printJson(progress({ elapsed_seconds, done, total }));
+      break;
+    }
     default: {
       printJson({
         error: `unknown command "${command}"`,
-        usage: "collect|detect|metric|standards <arg> [repoPath]"
+        usage: "collect|detect|metric|standards|progress <arg> [repoPath]"
       });
       process.exit(1);
     }

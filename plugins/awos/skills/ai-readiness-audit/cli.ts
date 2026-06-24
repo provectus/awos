@@ -9,6 +9,7 @@
  *   node dist/cli.js detect    <code>             <repoPath>
  *   node dist/cli.js metric    <id>               <repoPath> [collectedDir]
  *   node dist/cli.js standards <path-to-toml>
+ *   node dist/cli.js progress  <elapsed_seconds>  <done> <total>
  *
  * The optional [collectedDir] argument to `metric` is the "query-once" path:
  * if supplied, the metric reads pre-written <collectedDir>/<source>.json
@@ -104,6 +105,11 @@ import { compute as computeG12 } from './metrics/adp_g12_deps.ts';
 
 import type { MetricResult } from './metrics/_base.ts';
 import { loadStandards } from './metrics/_base.ts';
+
+// ---------------------------------------------------------------------------
+// Progress helper
+// ---------------------------------------------------------------------------
+import { progress } from './progress.ts';
 
 // MetricFn may return a MetricResult synchronously or a Promise<MetricResult>
 // (adp_g10_complexity is async — requires wasm init).
@@ -320,10 +326,33 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'progress': {
+      const elapsedStr = arg1;
+      const doneStr = arg2;
+      const [, , , , , totalStr] = process.argv;
+      if (!elapsedStr || !doneStr || !totalStr) {
+        printJson({
+          error: 'progress requires <elapsed_seconds> <done> <total>',
+        });
+        process.exit(1);
+      }
+      const elapsed_seconds = Number(elapsedStr);
+      const done = Number(doneStr);
+      const total = Number(totalStr);
+      if (isNaN(elapsed_seconds) || isNaN(done) || isNaN(total)) {
+        printJson({
+          error: 'progress: all arguments must be numbers',
+        });
+        process.exit(1);
+      }
+      printJson(progress({ elapsed_seconds, done, total }));
+      break;
+    }
+
     default: {
       printJson({
         error: `unknown command "${command}"`,
-        usage: 'collect|detect|metric|standards <arg> [repoPath]',
+        usage: 'collect|detect|metric|standards|progress <arg> [repoPath]',
       });
       process.exit(1);
     }

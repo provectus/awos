@@ -1196,6 +1196,34 @@ test('report templates use weighted points + reliability, not grades', () => {
   );
 });
 
+test('plugin.json version matches the awos marketplace entry and equals 2.2.0', () => {
+  const pluginManifest = JSON.parse(
+    readUtf8(
+      path.join(repoRoot, 'plugins', 'awos', '.claude-plugin', 'plugin.json')
+    )
+  );
+  const marketplace = JSON.parse(
+    readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
+  );
+  const awosEntry = marketplace.plugins.find(
+    (p) => p.name === 'awos' || (p.source && p.source.includes('plugins/awos'))
+  );
+  assert.ok(
+    awosEntry,
+    'marketplace.json must contain a plugins entry for awos (matched by name="awos" or source referencing plugins/awos)'
+  );
+  assert.equal(
+    pluginManifest.version,
+    awosEntry.version,
+    `plugins/awos/.claude-plugin/plugin.json version ("${pluginManifest.version}") must match the awos marketplace entry version ("${awosEntry.version}") — bump both together`
+  );
+  assert.equal(
+    pluginManifest.version,
+    '2.2.0',
+    `plugins/awos/.claude-plugin/plugin.json version must be "2.2.0" (weighted-category scoring bump), got "${pluginManifest.version}"`
+  );
+});
+
 test('every dimension check maps to a standards.toml category', () => {
   const standards = readUtf8(path.join(referencesDir, 'standards.toml'));
   const definedCodes = new Set(

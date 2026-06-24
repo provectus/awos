@@ -45,7 +45,7 @@ import { DETECTORS as DOC_DETECTORS } from './detectors/documentation.ts';
 
 import { makeResult, type DetectorResult } from './detectors/_base.ts';
 
-const DETECTORS: Record<
+export const DETECTORS: Record<
   number,
   (repoPath: string, params?: unknown) => DetectorResult
 > = {
@@ -164,4 +164,18 @@ function main(): void {
   }
 }
 
-main();
+// Only run as CLI entry point — skip when imported as a module (e.g. by tests).
+// fileURLToPath is safe to call here because cli.ts always runs under Node/tsx.
+import { fileURLToPath } from 'node:url';
+
+const isMain =
+  typeof process !== 'undefined' &&
+  process.argv[1] !== undefined &&
+  (process.argv[1] === fileURLToPath(import.meta.url) ||
+    // When bundled as dist/cli.js the resolved path is the bundle itself.
+    process.argv[1].endsWith('/dist/cli.js') ||
+    process.argv[1].endsWith('\\dist\\cli.js'));
+
+if (isMain) {
+  main();
+}

@@ -3,6 +3,281 @@ import { basename, relative } from 'node:path';
 import { readFileSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------
+// detectLinting — category 2700 (method: detected, SBP-01)
+//
+// PASS if any recognised linter config file is present.
+// Evidence = which config file(s) were found.
+// ---------------------------------------------------------------------------
+
+const LINTER_CONFIGS = [
+  // JavaScript / TypeScript
+  'eslint.config.js',
+  'eslint.config.mjs',
+  'eslint.config.cjs',
+  'eslint.config.ts',
+  '.eslintrc',
+  '.eslintrc.js',
+  '.eslintrc.cjs',
+  '.eslintrc.yaml',
+  '.eslintrc.yml',
+  '.eslintrc.json',
+  'tslint.json',
+  // Python
+  '.flake8',
+  '.pylintrc',
+  'pylintrc',
+  // Ruby
+  '.rubocop.yml',
+  // Go
+  '.golangci.yml',
+  '.golangci.yaml',
+  '.golangci.toml',
+];
+
+// pyproject.toml needs special handling: grep for [tool.ruff] or [tool.pylint]
+const PYPROJECT_LINTER_RX = /^\[tool\.(ruff|pylint|flake8)\]/m;
+
+export function detectLinting(
+  repoPath: string,
+  _params?: unknown
+): ReturnType<typeof makeResult> {
+  const found = iterFiles(repoPath, LINTER_CONFIGS).map((p) => basename(p));
+  if (found.length) {
+    const uniq = [...new Set(found)].sort();
+    return makeResult(
+      'PASS',
+      uniq.length,
+      uniq.map((n) => `linter config found: ${n}`)
+    );
+  }
+  // Check pyproject.toml for [tool.ruff] / [tool.pylint] / [tool.flake8]
+  const pyprojects = iterFiles(repoPath, ['pyproject.toml']);
+  for (const p of pyprojects) {
+    try {
+      const content = readFileSync(p, 'utf8');
+      if (PYPROJECT_LINTER_RX.test(content)) {
+        return makeResult('PASS', 1, [
+          `linter config found in ${relative(repoPath, p)} ([tool.ruff] or [tool.pylint])`,
+        ]);
+      }
+    } catch {
+      // skip unreadable files
+    }
+  }
+  return makeResult('FAIL', 0, ['no linter configuration found']);
+}
+
+// ---------------------------------------------------------------------------
+// detectFormatting — category 2701 (method: detected, SBP-02)
+//
+// PASS if a formatter config or pre-commit formatting hook is present.
+// ---------------------------------------------------------------------------
+
+const FORMATTER_CONFIGS = [
+  // Prettier
+  '.prettierrc',
+  '.prettierrc.js',
+  '.prettierrc.cjs',
+  '.prettierrc.mjs',
+  '.prettierrc.json',
+  '.prettierrc.json5',
+  '.prettierrc.yaml',
+  '.prettierrc.yml',
+  '.prettierrc.toml',
+  'prettier.config.js',
+  'prettier.config.cjs',
+  'prettier.config.mjs',
+  'prettier.config.ts',
+  // Rust
+  'rustfmt.toml',
+  '.rustfmt.toml',
+];
+
+// pyproject.toml: [tool.black], [tool.ruff.format]
+const PYPROJECT_FORMATTER_RX = /^\[tool\.(black|ruff\.format)\]/m;
+
+// pre-commit hooks: formatters invoked as hooks
+const PRECOMMIT_FORMATTER_RX =
+  /\b(prettier|black|ruff|gofmt|rustfmt|clang-format|autopep8|isort)\b/;
+
+export function detectFormatting(
+  repoPath: string,
+  _params?: unknown
+): ReturnType<typeof makeResult> {
+  const found = iterFiles(repoPath, FORMATTER_CONFIGS).map((p) => basename(p));
+  if (found.length) {
+    const uniq = [...new Set(found)].sort();
+    return makeResult(
+      'PASS',
+      uniq.length,
+      uniq.map((n) => `formatter config found: ${n}`)
+    );
+  }
+  // Check pyproject.toml for [tool.black] / [tool.ruff.format]
+  const pyprojects = iterFiles(repoPath, ['pyproject.toml']);
+  for (const p of pyprojects) {
+    try {
+      const content = readFileSync(p, 'utf8');
+      if (PYPROJECT_FORMATTER_RX.test(content)) {
+        return makeResult('PASS', 1, [
+          `formatter config found in ${relative(repoPath, p)} ([tool.black] or [tool.ruff.format])`,
+        ]);
+      }
+    } catch {
+      // skip unreadable files
+    }
+  }
+  // Check pre-commit config for a formatting hook
+  const precommit = iterFiles(repoPath, ['.pre-commit-config.yaml']);
+  for (const p of precommit) {
+    try {
+      const content = readFileSync(p, 'utf8');
+      if (PRECOMMIT_FORMATTER_RX.test(content)) {
+        return makeResult('PASS', 1, [
+          `formatting hook found in ${relative(repoPath, p)}`,
+        ]);
+      }
+    } catch {
+      // skip unreadable files
+    }
+  }
+  return makeResult('FAIL', 0, ['no formatter configuration found']);
+}
+
+// ---------------------------------------------------------------------------
+// detectTypeSafety — category 2702 (method: detected, SBP-03)
+//
+// For TypeScript projects: PASS if tsconfig.json has strict or noImplicitAny;
+// WARN if tsconfig exists without those flags; FAIL if no typed-language config.
+// Also checks mypy, pyright (Python) and sorbet (Ruby).
+// ---------------------------------------------------------------------------
+
+const TYPE_SAFETY_CONFIGS = [
+  'mypy.ini',
+  '.mypy.ini',
+  'pyrightconfig.json',
+  'sorbet',
+];
+
+const TSCONFIG_STRICT_RX = /"strict"\s*:\s*true|"noImplicitAny"\s*:\s*true/;
+
+export function detectTypeSafety(
+  repoPath: string,
+  _params?: unknown
+): ReturnType<typeof makeResult> {
+  // Check for mypy.ini / pyrightconfig.json / sorbet
+  const pyTyping = iterFiles(repoPath, TYPE_SAFETY_CONFIGS);
+  if (pyTyping.length) {
+    const names = pyTyping.map((p) => basename(p)).sort();
+    return makeResult(
+      'PASS',
+      names.length,
+      names.map((n) => `type-safety config found: ${n}`)
+    );
+  }
+  // Check pyproject.toml for [tool.mypy]
+  const pyprojects = iterFiles(repoPath, ['pyproject.toml']);
+  for (const p of pyprojects) {
+    try {
+      const content = readFileSync(p, 'utf8');
+      if (/^\[tool\.mypy\]/m.test(content)) {
+        return makeResult('PASS', 1, [
+          `type-safety config found in ${relative(repoPath, p)} ([tool.mypy])`,
+        ]);
+      }
+    } catch {
+      // skip unreadable files
+    }
+  }
+  // Check tsconfig.json for strict / noImplicitAny
+  const tsconfigs = iterFiles(repoPath, ['tsconfig.json', 'tsconfig.*.json']);
+  if (tsconfigs.length) {
+    const strictConfigs: string[] = [];
+    for (const p of tsconfigs) {
+      try {
+        const content = readFileSync(p, 'utf8');
+        if (TSCONFIG_STRICT_RX.test(content)) {
+          strictConfigs.push(relative(repoPath, p));
+        }
+      } catch {
+        // skip unreadable files
+      }
+    }
+    if (strictConfigs.length) {
+      return makeResult(
+        'PASS',
+        strictConfigs.length,
+        strictConfigs.map((n) => `strict TypeScript config: ${n}`)
+      );
+    }
+    // tsconfig exists but no strict flags
+    return makeResult('WARN', 0, [
+      `tsconfig.json found but strict / noImplicitAny not enabled (${tsconfigs.map((p) => relative(repoPath, p)).join(', ')})`,
+    ]);
+  }
+  return makeResult('FAIL', 0, ['no type-safety configuration found']);
+}
+
+// ---------------------------------------------------------------------------
+// detectCiCd — category 2703 (method: detected, SBP-05)
+//
+// PASS if any recognised CI/CD pipeline config file or directory is present.
+// Uses iterFiles with bare filename patterns (stripped of path components)
+// since _base.ts's iterFiles uses `find -name` (filename only, not path).
+// For files in known subdirectories (.github/workflows, .circleci) we match
+// the filename and then verify the parent directory in the result path.
+// ---------------------------------------------------------------------------
+
+// Root-level CI config filenames (no path filtering needed)
+const CICD_ROOT_FILES = [
+  '.gitlab-ci.yml',
+  '.gitlab-ci.yaml',
+  'Jenkinsfile',
+  'azure-pipelines.yml',
+  'azure-pipelines.yaml',
+];
+
+// Filename patterns that live inside known CI subdirectories
+// We find all .yml/.yaml/config.yml and filter by path below.
+const CICD_SUBDIR_FILENAMES = ['*.yml', '*.yaml'];
+
+export function detectCiCd(
+  repoPath: string,
+  _params?: unknown
+): ReturnType<typeof makeResult> {
+  // Check root-level named CI files
+  const found = iterFiles(repoPath, CICD_ROOT_FILES);
+  if (found.length) {
+    const names = [...new Set(found.map((p) => relative(repoPath, p)))].sort();
+    return makeResult(
+      'PASS',
+      names.length,
+      names.map((n) => `CI/CD config found: ${n}`)
+    );
+  }
+  // Check .github/workflows/*.yml and .circleci/config.yml
+  const yamlFiles = iterFiles(repoPath, CICD_SUBDIR_FILENAMES);
+  const ciFiles = yamlFiles.filter((p) => {
+    const rel = relative(repoPath, p);
+    return (
+      rel.startsWith('.github/workflows/') ||
+      rel.startsWith('.circleci/') ||
+      rel.startsWith('.github\\workflows\\') ||
+      rel.startsWith('.circleci\\')
+    );
+  });
+  if (ciFiles.length) {
+    const names = ciFiles.map((p) => relative(repoPath, p)).sort();
+    return makeResult(
+      'PASS',
+      names.length,
+      names.map((n) => `CI/CD workflow found: ${n}`)
+    );
+  }
+  return makeResult('FAIL', 0, ['no CI/CD pipeline configuration found']);
+}
+
+// ---------------------------------------------------------------------------
 // detectExceptClauseDefect — category 2706 (method: detected)
 //
 // Python-2 multi-exception clause: `except A, B:` is a SyntaxError on Py3.
@@ -184,6 +459,10 @@ export const DETECTORS: Record<
   number,
   (repoPath: string, params?: unknown) => ReturnType<typeof makeResult>
 > = {
+  2700: detectLinting, // SBP-01 linting configured
+  2701: detectFormatting, // SBP-02 formatting automated
+  2702: detectTypeSafety, // SBP-03 type safety enforced
+  2703: detectCiCd, // SBP-05 CI/CD pipeline exists
   2704: detectErrorHandling, // SBP-06 error-handling consistency
   2705: detectLockfiles, // SBP-07 dependency lockfiles
   2706: detectExceptClauseDefect, // SBP-06 sibling: Python-2 except-clause syntax

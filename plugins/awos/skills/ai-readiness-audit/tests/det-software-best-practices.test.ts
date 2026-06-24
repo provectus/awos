@@ -7,6 +7,10 @@ import {
   detectExceptClauseDefect,
   detectLockfiles,
   detectErrorHandling,
+  detectLinting,
+  detectFormatting,
+  detectTypeSafety,
+  detectCiCd,
   DETECTORS,
 } from '../detectors/software_best_practices.ts';
 
@@ -171,7 +175,195 @@ test('comment-only match is PASS (# except A, B: is a comment)', () => {
 // DETECTORS map
 // ---------------------------------------------------------------------------
 
-test('DETECTORS map contains codes 2704, 2705, 2706', () => {
+// ---------------------------------------------------------------------------
+// detectLinting (2700)
+// ---------------------------------------------------------------------------
+
+test('detectLinting: .eslintrc.json is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, '.eslintrc.json'), '{"rules":{}}\n');
+  const r = detectLinting(t);
+  assert.equal(r.status, 'PASS');
+  assert.ok(r.evidence.some((e) => e.includes('.eslintrc.json')));
+  assert.equal(r.method, 'detected');
+});
+
+test('detectLinting: eslint.config.js is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'eslint.config.js'), 'export default [];\n');
+  assert.equal(detectLinting(t).status, 'PASS');
+});
+
+test('detectLinting: pyproject.toml with [tool.ruff] is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'pyproject.toml'), '[tool.ruff]\nline-length = 88\n');
+  assert.equal(detectLinting(t).status, 'PASS');
+});
+
+test('detectLinting: .pylintrc is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, '.pylintrc'), '[MASTER]\n');
+  assert.equal(detectLinting(t).status, 'PASS');
+});
+
+test('detectLinting: no config is FAIL', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'main.py'), 'print(1)\n');
+  assert.equal(detectLinting(t).status, 'FAIL');
+});
+
+// ---------------------------------------------------------------------------
+// detectFormatting (2701)
+// ---------------------------------------------------------------------------
+
+test('detectFormatting: .prettierrc is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, '.prettierrc'), '{"singleQuote":true}\n');
+  const r = detectFormatting(t);
+  assert.equal(r.status, 'PASS');
+  assert.ok(r.evidence.some((e) => e.includes('.prettierrc')));
+  assert.equal(r.method, 'detected');
+});
+
+test('detectFormatting: prettier.config.js is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'prettier.config.js'), 'module.exports = {};\n');
+  assert.equal(detectFormatting(t).status, 'PASS');
+});
+
+test('detectFormatting: pyproject.toml with [tool.black] is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'pyproject.toml'), '[tool.black]\nline-length = 88\n');
+  assert.equal(detectFormatting(t).status, 'PASS');
+});
+
+test('detectFormatting: pre-commit hook with prettier is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, '.pre-commit-config.yaml'),
+    'repos:\n  - repo: https://github.com/prettier/prettier\n    hooks:\n      - id: prettier\n'
+  );
+  assert.equal(detectFormatting(t).status, 'PASS');
+});
+
+test('detectFormatting: no config is FAIL', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'index.ts'), 'export const x = 1;\n');
+  assert.equal(detectFormatting(t).status, 'FAIL');
+});
+
+// ---------------------------------------------------------------------------
+// detectTypeSafety (2702)
+// ---------------------------------------------------------------------------
+
+test('detectTypeSafety: tsconfig with strict:true is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'tsconfig.json'),
+    '{"compilerOptions":{"strict":true}}\n'
+  );
+  const r = detectTypeSafety(t);
+  assert.equal(r.status, 'PASS');
+  assert.ok(r.evidence.some((e) => e.includes('tsconfig.json')));
+  assert.equal(r.method, 'detected');
+});
+
+test('detectTypeSafety: tsconfig with noImplicitAny:true is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'tsconfig.json'),
+    '{"compilerOptions":{"noImplicitAny":true}}\n'
+  );
+  assert.equal(detectTypeSafety(t).status, 'PASS');
+});
+
+test('detectTypeSafety: tsconfig without strict is WARN', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'tsconfig.json'),
+    '{"compilerOptions":{"target":"es2020"}}\n'
+  );
+  assert.equal(detectTypeSafety(t).status, 'WARN');
+});
+
+test('detectTypeSafety: mypy.ini is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'mypy.ini'), '[mypy]\nstrict = true\n');
+  assert.equal(detectTypeSafety(t).status, 'PASS');
+});
+
+test('detectTypeSafety: pyproject.toml with [tool.mypy] is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'pyproject.toml'), '[tool.mypy]\nstrict = true\n');
+  assert.equal(detectTypeSafety(t).status, 'PASS');
+});
+
+test('detectTypeSafety: no config is FAIL', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'readme.md'), '# project\n');
+  assert.equal(detectTypeSafety(t).status, 'FAIL');
+});
+
+// ---------------------------------------------------------------------------
+// detectCiCd (2703)
+// ---------------------------------------------------------------------------
+
+test('detectCiCd: .github/workflows/*.yml is PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.github', 'workflows'), { recursive: true });
+  writeFileSync(join(t, '.github', 'workflows', 'ci.yml'), 'on: push\n');
+  const r = detectCiCd(t);
+  assert.equal(r.status, 'PASS');
+  assert.ok(r.evidence.some((e) => e.includes('ci.yml')));
+  assert.equal(r.method, 'detected');
+});
+
+test('detectCiCd: .gitlab-ci.yml is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, '.gitlab-ci.yml'), 'stages:\n  - test\n');
+  assert.equal(detectCiCd(t).status, 'PASS');
+});
+
+test('detectCiCd: Jenkinsfile is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'Jenkinsfile'), 'pipeline {}\n');
+  assert.equal(detectCiCd(t).status, 'PASS');
+});
+
+test('detectCiCd: .circleci/config.yml is PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.circleci'), { recursive: true });
+  writeFileSync(join(t, '.circleci', 'config.yml'), 'version: 2.1\n');
+  assert.equal(detectCiCd(t).status, 'PASS');
+});
+
+test('detectCiCd: azure-pipelines.yml is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'azure-pipelines.yml'), 'trigger: [main]\n');
+  assert.equal(detectCiCd(t).status, 'PASS');
+});
+
+test('detectCiCd: no CI config is FAIL', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'index.ts'), 'export const x = 1;\n');
+  assert.equal(detectCiCd(t).status, 'FAIL');
+});
+
+// ---------------------------------------------------------------------------
+// DETECTORS map
+// ---------------------------------------------------------------------------
+
+test('DETECTORS map contains codes 2700, 2701, 2702, 2703, 2704, 2705, 2706', () => {
+  assert.ok(2700 in DETECTORS, 'DETECTORS must include 2700 (detectLinting)');
+  assert.ok(
+    2701 in DETECTORS,
+    'DETECTORS must include 2701 (detectFormatting)'
+  );
+  assert.ok(
+    2702 in DETECTORS,
+    'DETECTORS must include 2702 (detectTypeSafety)'
+  );
+  assert.ok(2703 in DETECTORS, 'DETECTORS must include 2703 (detectCiCd)');
   assert.ok(
     2704 in DETECTORS,
     'DETECTORS must include 2704 (detectErrorHandling)'

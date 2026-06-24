@@ -392,6 +392,199 @@ function grep(repoPath, pattern, globs, flags = "") {
 // plugins/awos/skills/ai-readiness-audit/detectors/software_best_practices.ts
 import { basename, relative as relative2 } from "node:path";
 import { readFileSync as readFileSync2 } from "node:fs";
+var LINTER_CONFIGS = [
+  // JavaScript / TypeScript
+  "eslint.config.js",
+  "eslint.config.mjs",
+  "eslint.config.cjs",
+  "eslint.config.ts",
+  ".eslintrc",
+  ".eslintrc.js",
+  ".eslintrc.cjs",
+  ".eslintrc.yaml",
+  ".eslintrc.yml",
+  ".eslintrc.json",
+  "tslint.json",
+  // Python
+  ".flake8",
+  ".pylintrc",
+  "pylintrc",
+  // Ruby
+  ".rubocop.yml",
+  // Go
+  ".golangci.yml",
+  ".golangci.yaml",
+  ".golangci.toml"
+];
+var PYPROJECT_LINTER_RX = /^\[tool\.(ruff|pylint|flake8)\]/m;
+function detectLinting(repoPath, _params) {
+  const found = iterFiles(repoPath, LINTER_CONFIGS).map((p) => basename(p));
+  if (found.length) {
+    const uniq = [...new Set(found)].sort();
+    return makeResult(
+      "PASS",
+      uniq.length,
+      uniq.map((n) => `linter config found: ${n}`)
+    );
+  }
+  const pyprojects = iterFiles(repoPath, ["pyproject.toml"]);
+  for (const p of pyprojects) {
+    try {
+      const content = readFileSync2(p, "utf8");
+      if (PYPROJECT_LINTER_RX.test(content)) {
+        return makeResult("PASS", 1, [
+          `linter config found in ${relative2(repoPath, p)} ([tool.ruff] or [tool.pylint])`
+        ]);
+      }
+    } catch {
+    }
+  }
+  return makeResult("FAIL", 0, ["no linter configuration found"]);
+}
+var FORMATTER_CONFIGS = [
+  // Prettier
+  ".prettierrc",
+  ".prettierrc.js",
+  ".prettierrc.cjs",
+  ".prettierrc.mjs",
+  ".prettierrc.json",
+  ".prettierrc.json5",
+  ".prettierrc.yaml",
+  ".prettierrc.yml",
+  ".prettierrc.toml",
+  "prettier.config.js",
+  "prettier.config.cjs",
+  "prettier.config.mjs",
+  "prettier.config.ts",
+  // Rust
+  "rustfmt.toml",
+  ".rustfmt.toml"
+];
+var PYPROJECT_FORMATTER_RX = /^\[tool\.(black|ruff\.format)\]/m;
+var PRECOMMIT_FORMATTER_RX = /\b(prettier|black|ruff|gofmt|rustfmt|clang-format|autopep8|isort)\b/;
+function detectFormatting(repoPath, _params) {
+  const found = iterFiles(repoPath, FORMATTER_CONFIGS).map((p) => basename(p));
+  if (found.length) {
+    const uniq = [...new Set(found)].sort();
+    return makeResult(
+      "PASS",
+      uniq.length,
+      uniq.map((n) => `formatter config found: ${n}`)
+    );
+  }
+  const pyprojects = iterFiles(repoPath, ["pyproject.toml"]);
+  for (const p of pyprojects) {
+    try {
+      const content = readFileSync2(p, "utf8");
+      if (PYPROJECT_FORMATTER_RX.test(content)) {
+        return makeResult("PASS", 1, [
+          `formatter config found in ${relative2(repoPath, p)} ([tool.black] or [tool.ruff.format])`
+        ]);
+      }
+    } catch {
+    }
+  }
+  const precommit = iterFiles(repoPath, [".pre-commit-config.yaml"]);
+  for (const p of precommit) {
+    try {
+      const content = readFileSync2(p, "utf8");
+      if (PRECOMMIT_FORMATTER_RX.test(content)) {
+        return makeResult("PASS", 1, [
+          `formatting hook found in ${relative2(repoPath, p)}`
+        ]);
+      }
+    } catch {
+    }
+  }
+  return makeResult("FAIL", 0, ["no formatter configuration found"]);
+}
+var TYPE_SAFETY_CONFIGS = [
+  "mypy.ini",
+  ".mypy.ini",
+  "pyrightconfig.json",
+  "sorbet"
+];
+var TSCONFIG_STRICT_RX = /"strict"\s*:\s*true|"noImplicitAny"\s*:\s*true/;
+function detectTypeSafety(repoPath, _params) {
+  const pyTyping = iterFiles(repoPath, TYPE_SAFETY_CONFIGS);
+  if (pyTyping.length) {
+    const names = pyTyping.map((p) => basename(p)).sort();
+    return makeResult(
+      "PASS",
+      names.length,
+      names.map((n) => `type-safety config found: ${n}`)
+    );
+  }
+  const pyprojects = iterFiles(repoPath, ["pyproject.toml"]);
+  for (const p of pyprojects) {
+    try {
+      const content = readFileSync2(p, "utf8");
+      if (/^\[tool\.mypy\]/m.test(content)) {
+        return makeResult("PASS", 1, [
+          `type-safety config found in ${relative2(repoPath, p)} ([tool.mypy])`
+        ]);
+      }
+    } catch {
+    }
+  }
+  const tsconfigs = iterFiles(repoPath, ["tsconfig.json", "tsconfig.*.json"]);
+  if (tsconfigs.length) {
+    const strictConfigs = [];
+    for (const p of tsconfigs) {
+      try {
+        const content = readFileSync2(p, "utf8");
+        if (TSCONFIG_STRICT_RX.test(content)) {
+          strictConfigs.push(relative2(repoPath, p));
+        }
+      } catch {
+      }
+    }
+    if (strictConfigs.length) {
+      return makeResult(
+        "PASS",
+        strictConfigs.length,
+        strictConfigs.map((n) => `strict TypeScript config: ${n}`)
+      );
+    }
+    return makeResult("WARN", 0, [
+      `tsconfig.json found but strict / noImplicitAny not enabled (${tsconfigs.map((p) => relative2(repoPath, p)).join(", ")})`
+    ]);
+  }
+  return makeResult("FAIL", 0, ["no type-safety configuration found"]);
+}
+var CICD_ROOT_FILES = [
+  ".gitlab-ci.yml",
+  ".gitlab-ci.yaml",
+  "Jenkinsfile",
+  "azure-pipelines.yml",
+  "azure-pipelines.yaml"
+];
+var CICD_SUBDIR_FILENAMES = ["*.yml", "*.yaml"];
+function detectCiCd(repoPath, _params) {
+  const found = iterFiles(repoPath, CICD_ROOT_FILES);
+  if (found.length) {
+    const names = [...new Set(found.map((p) => relative2(repoPath, p)))].sort();
+    return makeResult(
+      "PASS",
+      names.length,
+      names.map((n) => `CI/CD config found: ${n}`)
+    );
+  }
+  const yamlFiles = iterFiles(repoPath, CICD_SUBDIR_FILENAMES);
+  const ciFiles = yamlFiles.filter((p) => {
+    const rel = relative2(repoPath, p);
+    return rel.startsWith(".github/workflows/") || rel.startsWith(".circleci/") || rel.startsWith(".github\\workflows\\") || rel.startsWith(".circleci\\");
+  });
+  if (ciFiles.length) {
+    const names = ciFiles.map((p) => relative2(repoPath, p)).sort();
+    return makeResult(
+      "PASS",
+      names.length,
+      names.map((n) => `CI/CD workflow found: ${n}`)
+    );
+  }
+  return makeResult("FAIL", 0, ["no CI/CD pipeline configuration found"]);
+}
 var PY2_EXCEPT = /except\s+[A-Za-z_][\w.]*(\s*,\s*[A-Za-z_][\w.]*)+\s*:/;
 function detectExceptClauseDefect(repoPath, _params) {
   const hits = grep(repoPath, PY2_EXCEPT, ["**/*.py"]);
@@ -486,6 +679,14 @@ function detectErrorHandling(repoPath, _params) {
   ]);
 }
 var DETECTORS = {
+  2700: detectLinting,
+  // SBP-01 linting configured
+  2701: detectFormatting,
+  // SBP-02 formatting automated
+  2702: detectTypeSafety,
+  // SBP-03 type safety enforced
+  2703: detectCiCd,
+  // SBP-05 CI/CD pipeline exists
   2704: detectErrorHandling,
   // SBP-06 error-handling consistency
   2705: detectLockfiles,
@@ -4163,6 +4364,7 @@ var DETECTORS10 = {
 };
 
 // plugins/awos/skills/ai-readiness-audit/cli.ts
+import { fileURLToPath } from "node:url";
 var COLLECTORS = {
   git: collect,
   ci: collect2,
@@ -4260,4 +4462,11 @@ function main() {
     }
   }
 }
-main();
+var isMain = typeof process !== "undefined" && process.argv[1] !== void 0 && (process.argv[1] === fileURLToPath(import.meta.url) || // When bundled as dist/cli.js the resolved path is the bundle itself.
+process.argv[1].endsWith("/dist/cli.js") || process.argv[1].endsWith("\\dist\\cli.js"));
+if (isMain) {
+  main();
+}
+export {
+  DETECTORS11 as DETECTORS
+};

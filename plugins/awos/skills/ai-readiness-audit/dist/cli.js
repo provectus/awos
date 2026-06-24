@@ -2733,6 +2733,1435 @@ var DETECTORS7 = {
   // SCS-08 dependency attack surface (computed)
 };
 
+// plugins/awos/skills/ai-readiness-audit/detectors/prompt_agent_integrity.ts
+import { readFileSync as readFileSync9, existsSync as existsSync8 } from "node:fs";
+import { join as join9, relative as relative9 } from "node:path";
+import { execFileSync as execFileSync6 } from "node:child_process";
+function isInvisibleCodePoint(cp) {
+  return cp >= 8203 && cp <= 8207 || cp >= 8232 && cp <= 8238 || cp >= 8288 && cp <= 8303 || cp === 173 || cp === 65279 || cp >= 917504 && cp <= 917631;
+}
+function countInvisible(content) {
+  let count = 0;
+  for (const ch of content) {
+    const cp = ch.codePointAt(0);
+    if (cp !== void 0 && isInvisibleCodePoint(cp)) count++;
+  }
+  return count;
+}
+var AGENT_FILE_GLOBS = [
+  "CLAUDE.md",
+  "AGENTS.md",
+  "*.md",
+  "*.json",
+  "*.sh",
+  "*.ts",
+  "*.js",
+  "*.bash",
+  "*.py"
+];
+function listAgentFiles(repoPath) {
+  const results = [];
+  for (const name of ["CLAUDE.md", "AGENTS.md", ".mcp.json"]) {
+    const full = join9(repoPath, name);
+    if (existsSync8(full)) results.push(full);
+  }
+  const claudeDir = join9(repoPath, ".claude");
+  if (existsSync8(claudeDir)) {
+    try {
+      const files = iterFiles(claudeDir, AGENT_FILE_GLOBS);
+      results.push(...files);
+    } catch {
+    }
+  }
+  return [...new Set(results)].sort();
+}
+function detectInvisibleUnicode(repoPath, _params) {
+  const agentFiles = listAgentFiles(repoPath);
+  if (agentFiles.length === 0) {
+    return makeResult(
+      "SKIP",
+      null,
+      ["no AI agent instruction files found \u2014 PAI-01 not applicable"],
+      "detected"
+    );
+  }
+  const hitFiles = [];
+  for (const filePath of agentFiles) {
+    let content;
+    try {
+      content = readFileSync9(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const count = countInvisible(content);
+    if (count > 0) {
+      hitFiles.push({ file: relative9(repoPath, filePath), count });
+    }
+  }
+  if (hitFiles.length === 0) {
+    return makeResult("PASS", 0, [
+      `${agentFiles.length} AI agent file(s) scanned \u2014 no invisible Unicode characters found`
+    ]);
+  }
+  const maxCount = Math.max(...hitFiles.map((h) => h.count));
+  const evidence = hitFiles.map(
+    (h) => `${h.file}: ${h.count} invisible Unicode code point(s) (U+200B/U+200D/U+FEFF/tag range)`
+  );
+  if (hitFiles.length >= 3 || maxCount >= 5) {
+    return makeResult("FAIL", hitFiles.length, [
+      `${hitFiles.length} agent file(s) contain invisible Unicode characters \u2014 potential hidden-instruction attack`,
+      ...evidence
+    ]);
+  }
+  return makeResult("WARN", hitFiles.length, [
+    `${hitFiles.length} agent file(s) contain invisible Unicode characters \u2014 review for hidden content`,
+    ...evidence
+  ]);
+}
+var INJECTION_PATTERNS = [
+  {
+    name: "override-instructions",
+    rx: /ignore\s+(previous|above|all)\s+(instructions?|rules?|guidelines?)/i
+  },
+  {
+    name: "new-instructions-override",
+    rx: /^#+ new instructions:|^new system prompt:|^override:\s/im
+  },
+  {
+    name: "exfiltrate-curl",
+    rx: /\bcurl\s+https?:\/\/(?!localhost|127\.0\.0\.1)/i
+  },
+  {
+    name: "exfiltrate-post",
+    rx: /\b(?:POST|fetch|axios\.post|requests\.post)\s*\(\s*["']https?:\/\/(?!localhost|127\.0\.0\.1)/i
+  },
+  {
+    name: "jailbreak-dan",
+    rx: /\b(?:DAN\s+mode|act\s+as\s+DAN|you\s+are\s+now\s+(?:DAN|an\s+AI\s+without))/i
+  },
+  {
+    name: "hidden-html-instruction",
+    rx: /<!--\s*(?:ignore|system|override|instruction)/i
+  }
+];
+function detectPromptInjection(repoPath, _params) {
+  const agentFiles = listAgentFiles(repoPath);
+  if (agentFiles.length === 0) {
+    return makeResult(
+      "SKIP",
+      null,
+      ["no AI agent instruction files found \u2014 PAI-02 not applicable"],
+      "detected"
+    );
+  }
+  const hits = [];
+  for (const filePath of agentFiles) {
+    let content;
+    try {
+      content = readFileSync9(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      for (const { name, rx } of INJECTION_PATTERNS) {
+        if (rx.test(line)) {
+          hits.push({
+            file: relative9(repoPath, filePath),
+            line: i + 1,
+            pattern: name
+          });
+          break;
+        }
+      }
+    }
+    if (hits.length >= 20) break;
+  }
+  if (hits.length === 0) {
+    return makeResult("PASS", 0, [
+      `${agentFiles.length} agent file(s) scanned \u2014 no prompt injection patterns found`
+    ]);
+  }
+  const evidence = hits.slice(0, 10).map((h) => `${h.file}:${h.line} [${h.pattern}]`);
+  if (hits.length >= 3) {
+    return makeResult("FAIL", hits.length, [
+      `${hits.length} prompt injection pattern(s) found in agent instruction files`,
+      ...evidence
+    ]);
+  }
+  return makeResult("WARN", hits.length, [
+    `${hits.length} possible prompt injection pattern(s) found \u2014 review manually`,
+    ...evidence
+  ]);
+}
+var HOOK_RED_FLAGS = [
+  {
+    name: "exfiltrate-curl-wget",
+    rx: /\b(curl|wget)\s+(?:-[a-zA-Z]+\s+)*https?:\/\/(?!localhost|127\.0\.0\.1)/
+  },
+  {
+    name: "eval-exec-dynamic",
+    rx: /\beval\s+["'`]?\s*\$[({]/
+  },
+  {
+    name: "base64-pipe-shell",
+    rx: /base64\s+(?:-[a-zA-Z]+\s+)?(?:\S+\s+)?[|]\s*(?:sh|bash|zsh|exec)\b/i
+  },
+  {
+    name: "netcat-exfiltration",
+    rx: /\b(nc|ncat)\s+(?!-[lL])\S+\s+\d{2,5}/
+  },
+  {
+    name: "download-execute",
+    rx: /(?:curl|wget)\s+[^|]*\|\s*(?:sh|bash|zsh|python|node|ruby)/i
+  }
+];
+var HOOK_SCRIPT_GLOBS = ["*.sh", "*.bash", "*.js", "*.ts", "*.py"];
+function detectHookScriptSafety(repoPath, _params) {
+  const hooksDir = join9(repoPath, ".claude", "hooks");
+  if (!existsSync8(hooksDir)) {
+    return makeResult(
+      "SKIP",
+      null,
+      ["no .claude/hooks/ directory found \u2014 PAI-03 not applicable"],
+      "detected"
+    );
+  }
+  let hookFiles = [];
+  try {
+    hookFiles = iterFiles(hooksDir, HOOK_SCRIPT_GLOBS);
+  } catch {
+    hookFiles = [];
+  }
+  if (hookFiles.length === 0) {
+    return makeResult("PASS", 0, [
+      "no hook scripts found in .claude/hooks/ \u2014 PAI-03 not applicable"
+    ]);
+  }
+  const flaggedFiles = [];
+  for (const filePath of hookFiles) {
+    let content;
+    try {
+      content = readFileSync9(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const flags = [];
+    for (const { name, rx } of HOOK_RED_FLAGS) {
+      if (rx.test(content)) flags.push(name);
+    }
+    if (flags.length > 0) {
+      flaggedFiles.push({ file: relative9(repoPath, filePath), flags });
+    }
+  }
+  if (flaggedFiles.length === 0) {
+    return makeResult("PASS", hookFiles.length, [
+      `${hookFiles.length} hook script(s) scanned \u2014 no exfiltration or obfuscation patterns found`
+    ]);
+  }
+  const evidence = flaggedFiles.map(
+    (f) => `${f.file}: suspicious patterns [${f.flags.join(", ")}]`
+  );
+  if (flaggedFiles.length >= 3) {
+    return makeResult("FAIL", flaggedFiles.length, [
+      `${flaggedFiles.length} hook script(s) contain exfiltration or obfuscation patterns`,
+      ...evidence
+    ]);
+  }
+  return makeResult("WARN", flaggedFiles.length, [
+    `${flaggedFiles.length} hook script(s) contain suspicious patterns \u2014 review manually`,
+    ...evidence
+  ]);
+}
+var BARE_IP_RX = /https?:\/\/(?!localhost|127\.0\.0\.1)\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/;
+var HTTP_REMOTE_RX = /http:\/\/(?!localhost|127\.0\.0\.1)/;
+var EMBEDDED_CRED_RX = /https?:\/\/[^@\s]{3,}:[^@\s]{3,}@/;
+var API_KEY_IN_URL_RX = /[?&](?:api_?key|token|secret|password)=[A-Za-z0-9]{8,}/i;
+function detectMcpEndpointSafety(repoPath, _params) {
+  const mcpPath = join9(repoPath, ".mcp.json");
+  if (!existsSync8(mcpPath)) {
+    return makeResult("SKIP", null, [
+      "no .mcp.json found \u2014 PAI-04 not applicable"
+    ]);
+  }
+  let content;
+  try {
+    content = readFileSync9(mcpPath, "utf8");
+  } catch {
+    return makeResult("SKIP", null, [
+      ".mcp.json could not be read \u2014 PAI-04 skipped"
+    ]);
+  }
+  const issues = [];
+  if (BARE_IP_RX.test(content)) {
+    issues.push(
+      "bare IP address found in MCP endpoint URL \u2014 use hostname instead"
+    );
+  }
+  if (HTTP_REMOTE_RX.test(content)) {
+    issues.push(
+      "HTTP (non-HTTPS) remote endpoint found in .mcp.json \u2014 use HTTPS for remote servers"
+    );
+  }
+  if (EMBEDDED_CRED_RX.test(content)) {
+    issues.push(
+      "embedded credentials (user:pass@host) found in MCP URL \u2014 use environment variables instead"
+    );
+  }
+  if (API_KEY_IN_URL_RX.test(content)) {
+    issues.push(
+      "API key or token embedded in MCP URL query string \u2014 use environment variables instead"
+    );
+  }
+  if (issues.length === 0) {
+    return makeResult("PASS", 1, [
+      ".mcp.json uses safe endpoints (HTTPS or localhost only, no embedded credentials)"
+    ]);
+  }
+  return makeResult("FAIL", issues.length, [
+    `${issues.length} MCP endpoint safety issue(s) found in .mcp.json`,
+    ...issues
+  ]);
+}
+function isGitTracked(repoPath, filePath) {
+  try {
+    execFileSync6("git", ["ls-files", "--error-unmatch", filePath], {
+      cwd: repoPath,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function detectAgentFilesTracked(repoPath, _params) {
+  const agentFiles = listAgentFiles(repoPath);
+  if (agentFiles.length === 0) {
+    return makeResult(
+      "SKIP",
+      null,
+      ["no AI agent instruction files found \u2014 PAI-05 not applicable"],
+      "detected"
+    );
+  }
+  try {
+    execFileSync6("git", ["rev-parse", "--git-dir"], {
+      cwd: repoPath,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+  } catch {
+    return makeResult("SKIP", null, [
+      "not a git repository \u2014 git provenance check (PAI-05) skipped"
+    ]);
+  }
+  const untracked = [];
+  const tracked = [];
+  for (const filePath of agentFiles) {
+    if (isGitTracked(repoPath, filePath)) {
+      tracked.push(relative9(repoPath, filePath));
+    } else {
+      untracked.push(relative9(repoPath, filePath));
+    }
+  }
+  if (untracked.length === 0) {
+    return makeResult("PASS", tracked.length, [
+      `all ${tracked.length} AI agent file(s) are tracked in git \u2014 auditable change history`
+    ]);
+  }
+  const evidence = untracked.map((f) => `untracked: ${f}`);
+  if (untracked.length >= 3) {
+    return makeResult("FAIL", untracked.length, [
+      `${untracked.length} AI agent file(s) are not tracked in git \u2014 changes bypass code review`,
+      ...evidence
+    ]);
+  }
+  return makeResult("WARN", untracked.length, [
+    `${untracked.length} AI agent file(s) are not tracked in git \u2014 add to git for auditability`,
+    ...evidence
+  ]);
+}
+var BYPASS_PATTERNS = [
+  {
+    name: "bypass-security",
+    rx: /\b(?:bypass|skip|disable|circumvent)\s+(?:security|auth|authentication|authorization|ssl|tls|https?)\b/i
+  },
+  {
+    name: "read-env-secrets",
+    rx: /\b(?:cat|read|open|access)\s+\.env\b|read\s+(?:secrets?|credentials?)\b/i
+  },
+  {
+    name: "chmod-world-writable",
+    rx: /chmod\s+(?:0?777|a\+rwx|ugo\+rwx)/
+  },
+  {
+    name: "git-no-verify",
+    rx: /git\s+commit\s+.*--no-verify|git\s+push\s+.*--no-verify/
+  },
+  {
+    name: "rm-root-destructive",
+    rx: /rm\s+-[a-zA-Z]*r[a-zA-Z]*f?\s+\/(?:\s|$)|rm\s+-rf\s+\//
+  },
+  {
+    name: "disable-ssl-verify",
+    rx: /--no-check-certificate|ssl_verify\s*=\s*false|verify\s*=\s*false|insecure\s+https?/i
+  }
+];
+var COMMAND_SKILL_GLOBS = ["*.md", "*.sh", "*.ts", "*.js", "*.py", "*.bash"];
+function detectNoSecurityBypass(repoPath, _params) {
+  const commandsDir = join9(repoPath, ".claude", "commands");
+  const skillsDir = join9(repoPath, ".claude", "skills");
+  const hasCmds = existsSync8(commandsDir);
+  const hasSkills = existsSync8(skillsDir);
+  if (!hasCmds && !hasSkills) {
+    return makeResult(
+      "SKIP",
+      null,
+      [
+        "no .claude/commands/ or .claude/skills/ directories found \u2014 PAI-06 not applicable"
+      ],
+      "detected"
+    );
+  }
+  const allFiles = [];
+  for (const dir of [commandsDir, skillsDir]) {
+    if (!existsSync8(dir)) continue;
+    try {
+      allFiles.push(...iterFiles(dir, COMMAND_SKILL_GLOBS));
+    } catch {
+    }
+  }
+  const hits = [];
+  for (const filePath of allFiles) {
+    let content;
+    try {
+      content = readFileSync9(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^\s*(#|\/\/|<!--)/.test(line)) continue;
+      for (const { name, rx } of BYPASS_PATTERNS) {
+        if (rx.test(line)) {
+          hits.push({
+            file: relative9(repoPath, filePath),
+            line: i + 1,
+            pattern: name
+          });
+          break;
+        }
+      }
+    }
+    if (hits.length >= 20) break;
+  }
+  if (hits.length === 0) {
+    return makeResult("PASS", allFiles.length, [
+      `${allFiles.length} command/skill file(s) scanned \u2014 no security bypass instructions found`
+    ]);
+  }
+  const evidence = hits.slice(0, 10).map((h) => `${h.file}:${h.line} [${h.pattern}]`);
+  if (hits.length >= 3) {
+    return makeResult("FAIL", hits.length, [
+      `${hits.length} security bypass pattern(s) found in command/skill files`,
+      ...evidence
+    ]);
+  }
+  return makeResult("WARN", hits.length, [
+    `${hits.length} possible security bypass pattern(s) found \u2014 review manually`,
+    ...evidence
+  ]);
+}
+var DETECTORS8 = {
+  2400: detectInvisibleUnicode,
+  // PAI-01 no invisible Unicode in agent files
+  2401: detectPromptInjection,
+  // PAI-02 no prompt injection patterns
+  2402: detectHookScriptSafety,
+  // PAI-03 hook script safety (SKIP if no hooks)
+  2403: detectMcpEndpointSafety,
+  // PAI-04 MCP endpoint safety (SKIP if no .mcp.json)
+  2404: detectAgentFilesTracked,
+  // PAI-05 agent files tracked in git
+  2405: detectNoSecurityBypass
+  // PAI-06 no security bypass in commands/skills
+};
+
+// plugins/awos/skills/ai-readiness-audit/detectors/quality_assurance.ts
+import { readFileSync as readFileSync10, existsSync as existsSync9 } from "node:fs";
+import { join as join10, relative as relative10, basename as basename5 } from "node:path";
+var TEST_FILE_GLOBS = [
+  "*.test.ts",
+  "*.test.tsx",
+  "*.test.js",
+  "*.test.jsx",
+  "*.spec.ts",
+  "*.spec.tsx",
+  "*.spec.js",
+  "*.spec.jsx",
+  "test_*.py",
+  "*_test.py",
+  "*_test.go",
+  "*_test.java",
+  "*Test.java",
+  "*Test.kt",
+  "*Spec.kt"
+];
+var SOURCE_FILE_GLOBS = [
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.py",
+  "*.go",
+  "*.java",
+  "*.kt",
+  "*.rb",
+  "*.php"
+];
+var SOURCE_IGNORE = [
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".venv",
+  "__pycache__",
+  ".next",
+  "target",
+  "vendor",
+  ".tox"
+];
+var INTEGRATION_DIR_RX = /\/(integration(?:[_-]?tests?)?|e2e[_-]?tests?|system[_-]?tests?|functional[_-]?tests?)\//i;
+var INTEGRATION_FILE_RX = /[_.-](integration|contract|integration_test|it)[._-]/i;
+var E2E_CONTENT_RX = /\b(playwright|cypress|puppeteer|selenium|webdriver|nightwatch|testcafe|detox|appium|supertest)\b/i;
+var E2E_GLOBS = [
+  "playwright.config.ts",
+  "playwright.config.js",
+  "cypress.json",
+  "cypress.config.ts",
+  "cypress.config.js",
+  "nightwatch.conf.js",
+  "wdio.conf.ts",
+  "wdio.conf.js",
+  "testcafe.config.js"
+];
+function detectTestInfrastructure(repoPath, _params) {
+  let testFiles = [];
+  try {
+    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
+  } catch {
+    testFiles = [];
+  }
+  let allSourceFiles = [];
+  try {
+    allSourceFiles = iterFiles(repoPath, SOURCE_FILE_GLOBS, SOURCE_IGNORE);
+  } catch {
+    allSourceFiles = [];
+  }
+  const testFileSet = new Set(testFiles);
+  const pureSourceFiles = allSourceFiles.filter((f) => !testFileSet.has(f));
+  const testCount = testFiles.length;
+  const sourceCount = pureSourceFiles.length;
+  if (sourceCount === 0) {
+    return makeResult(
+      "SKIP",
+      null,
+      ["no source files found \u2014 test infrastructure check skipped"],
+      "computed"
+    );
+  }
+  const ratio = testCount / sourceCount;
+  const pct = Math.round(ratio * 100);
+  const evidence = [
+    `${testCount} test file(s) found for ${sourceCount} source module(s) (${pct}% ratio)`,
+    ...testFiles.slice(0, 5).map((f) => `test file: ${relative10(repoPath, f)}`)
+  ];
+  if (ratio >= 0.6) {
+    return makeResult(
+      "PASS",
+      ratio,
+      [
+        `test coverage proxy: ${pct}% \u2014 meaningful tests covering \u2265 60% of source modules`,
+        ...evidence
+      ],
+      "computed"
+    );
+  }
+  if (ratio >= 0.3) {
+    return makeResult(
+      "WARN",
+      ratio,
+      [
+        `test coverage proxy: ${pct}% \u2014 partial test coverage (below 60% threshold)`,
+        ...evidence
+      ],
+      "computed"
+    );
+  }
+  return makeResult(
+    "FAIL",
+    ratio,
+    [
+      `test coverage proxy: ${pct}% \u2014 insufficient test coverage (below 30% threshold)`,
+      ...evidence
+    ],
+    "computed"
+  );
+}
+var UNIT_DIR_RX = /\/(unit[_-]?tests?|__tests?__|spec)\//i;
+var MOCK_CONTENT_RX = /\b(mock|stub|spy|jest\.fn|MagicMock|unittest\.mock|double|sinon|vitest\.fn)\b/i;
+function detectUnitTests(repoPath, _params) {
+  let testFiles = [];
+  try {
+    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
+  } catch {
+    testFiles = [];
+  }
+  if (testFiles.length === 0) {
+    return makeResult("FAIL", 0, [
+      "no test files found \u2014 unit tests not detected"
+    ]);
+  }
+  const unitSignals = [];
+  for (const f of testFiles.slice(0, 50)) {
+    const rel = relative10(repoPath, f);
+    if (UNIT_DIR_RX.test("/" + rel)) {
+      unitSignals.push(`unit dir: ${rel}`);
+      continue;
+    }
+    let content;
+    try {
+      content = readFileSync10(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (MOCK_CONTENT_RX.test(content)) {
+      unitSignals.push(`mock/stub patterns in: ${rel}`);
+    }
+  }
+  const evidence = unitSignals.length > 0 ? unitSignals.slice(0, 10) : testFiles.slice(0, 5).map((f) => `test file: ${relative10(repoPath, f)}`);
+  return makeResult("PASS", testFiles.length, [
+    `${testFiles.length} test file(s) found \u2014 unit test tier detected`,
+    ...evidence
+  ]);
+}
+var INTEGRATION_CONTENT_RX = /\b(TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|supertest|axios\.get\(|fetch\()\b/i;
+var INTEGRATION_FILE_NAME_RX = /integration|contract|system[_-]test/i;
+var TEST_DOCKER_GLOBS = ["docker-compose*.yml", "docker-compose*.yaml"];
+function detectIntegrationTests(repoPath, _params) {
+  const signals = [];
+  let allTestFiles = [];
+  try {
+    allTestFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
+  } catch {
+    allTestFiles = [];
+  }
+  for (const f of allTestFiles) {
+    const rel = relative10(repoPath, f);
+    if (INTEGRATION_DIR_RX.test("/" + rel)) {
+      signals.push(`integration dir: ${rel}`);
+    }
+    if (INTEGRATION_FILE_NAME_RX.test(basename5(f))) {
+      signals.push(`integration file name: ${rel}`);
+    }
+    if (signals.length >= 5) break;
+  }
+  if (signals.length < 5) {
+    for (const f of allTestFiles.slice(0, 100)) {
+      let content;
+      try {
+        content = readFileSync10(f, "utf8");
+      } catch {
+        continue;
+      }
+      if (INTEGRATION_CONTENT_RX.test(content)) {
+        signals.push(`integration patterns in: ${relative10(repoPath, f)}`);
+        if (signals.length >= 5) break;
+      }
+    }
+  }
+  const testsDir = join10(repoPath, "tests");
+  const testDir2 = join10(repoPath, "test");
+  for (const tDir of [testsDir, testDir2]) {
+    if (!existsSync9(tDir)) continue;
+    let dcFiles = [];
+    try {
+      dcFiles = iterFiles(tDir, TEST_DOCKER_GLOBS);
+    } catch {
+      dcFiles = [];
+    }
+    if (dcFiles.length > 0) {
+      signals.push(
+        `docker-compose in tests dir: ${relative10(repoPath, dcFiles[0])}`
+      );
+    }
+  }
+  if (signals.length === 0) {
+    return makeResult("FAIL", 0, [
+      "no integration test signals found \u2014 add tests that exercise real databases, HTTP calls, or message queues"
+    ]);
+  }
+  return makeResult("PASS", signals.length, [
+    `integration test tier detected (${signals.length} signal(s))`,
+    ...signals.slice(0, 10)
+  ]);
+}
+var E2E_DIR_RX = /\/(e2e[_-]?tests?|acceptance[_-]?tests?|ui[_-]?tests?)\//i;
+function detectE2ETests(repoPath, _params) {
+  const signals = [];
+  for (const glob of E2E_GLOBS) {
+    const matches = iterFiles(repoPath, [glob]);
+    if (matches.length > 0) {
+      signals.push(`E2E config: ${relative10(repoPath, matches[0])}`);
+    }
+  }
+  let testFiles = [];
+  try {
+    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
+  } catch {
+    testFiles = [];
+  }
+  for (const f of testFiles) {
+    const rel = relative10(repoPath, f);
+    if (E2E_DIR_RX.test("/" + rel)) {
+      signals.push(`e2e dir: ${rel}`);
+      if (signals.length >= 5) break;
+    }
+  }
+  if (signals.length < 5) {
+    for (const f of testFiles.slice(0, 100)) {
+      let content;
+      try {
+        content = readFileSync10(f, "utf8");
+      } catch {
+        continue;
+      }
+      if (E2E_CONTENT_RX.test(content)) {
+        signals.push(`E2E framework in: ${relative10(repoPath, f)}`);
+        if (signals.length >= 5) break;
+      }
+    }
+  }
+  if (signals.length === 0) {
+    return makeResult("FAIL", 0, [
+      "no end-to-end test signals found \u2014 add E2E tests with Playwright, Cypress, or similar"
+    ]);
+  }
+  return makeResult("PASS", signals.length, [
+    `E2E test tier detected (${signals.length} signal(s))`,
+    ...signals.slice(0, 10)
+  ]);
+}
+function detectTestPyramid(repoPath, _params) {
+  let testFiles = [];
+  try {
+    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
+  } catch {
+    testFiles = [];
+  }
+  if (testFiles.length === 0) {
+    return makeResult(
+      "SKIP",
+      null,
+      ["no test files found \u2014 pyramid shape not computable"],
+      "computed"
+    );
+  }
+  let unitCount = 0;
+  let integrationCount = 0;
+  let e2eCount = 0;
+  for (const f of testFiles) {
+    const rel = "/" + relative10(repoPath, f);
+    if (E2E_DIR_RX.test(rel)) {
+      e2eCount++;
+      continue;
+    }
+    if (INTEGRATION_DIR_RX.test(rel) || INTEGRATION_FILE_RX.test(basename5(f))) {
+      integrationCount++;
+      continue;
+    }
+    let isE2E = false;
+    try {
+      const content = readFileSync10(f, "utf8");
+      isE2E = E2E_CONTENT_RX.test(content);
+    } catch {
+    }
+    if (isE2E) {
+      e2eCount++;
+    } else {
+      unitCount++;
+    }
+  }
+  const evidence = [
+    `unit: ${unitCount} | integration: ${integrationCount} | e2e: ${e2eCount}`
+  ];
+  const unitDominates = unitCount > integrationCount;
+  const e2eSmallest = e2eCount === 0 || integrationCount >= e2eCount;
+  if (unitDominates && e2eSmallest) {
+    return makeResult(
+      "PASS",
+      unitCount,
+      [`test pyramid shape is healthy`, ...evidence],
+      "computed"
+    );
+  }
+  if (!unitDominates && unitCount > 0) {
+    return makeResult(
+      "WARN",
+      integrationCount,
+      [
+        `test pyramid may be inverted \u2014 integration (${integrationCount}) meets or exceeds unit (${unitCount})`,
+        ...evidence
+      ],
+      "computed"
+    );
+  }
+  return makeResult(
+    "FAIL",
+    0,
+    [
+      `test pyramid is inverted \u2014 unit (${unitCount}) is not the largest tier`,
+      ...evidence
+    ],
+    "computed"
+  );
+}
+var COVERAGE_CONFIG_FILES = [
+  ".nycrc",
+  ".nycrc.json",
+  ".c8rc",
+  ".coveragerc",
+  "codecov.yml",
+  ".codecov.yml",
+  "jest.config.ts",
+  "jest.config.js",
+  "jest.config.json",
+  "vitest.config.ts",
+  "vitest.config.js"
+];
+var COVERAGE_CONTENT_RX = /coverageThreshold|coverage[_-]?report|coverage[_-]?min|(?:\[tool\.coverage)|codecov|nyc|c8\b|--coverage\b/i;
+function detectCoverageConfig(repoPath, _params) {
+  const signals = [];
+  for (const name of COVERAGE_CONFIG_FILES) {
+    const full = join10(repoPath, name);
+    if (existsSync9(full)) {
+      signals.push(`coverage config: ${name}`);
+    }
+  }
+  const pkgJson = join10(repoPath, "package.json");
+  if (existsSync9(pkgJson)) {
+    let content;
+    try {
+      content = readFileSync10(pkgJson, "utf8");
+    } catch {
+      content = "";
+    }
+    if (COVERAGE_CONTENT_RX.test(content)) {
+      signals.push("coverage settings in package.json");
+    }
+  }
+  for (const name of ["pyproject.toml", "setup.cfg"]) {
+    const full = join10(repoPath, name);
+    if (!existsSync9(full)) continue;
+    let content;
+    try {
+      content = readFileSync10(full, "utf8");
+    } catch {
+      continue;
+    }
+    if (/\[tool\.coverage|coverage_report|coveragerc/i.test(content)) {
+      signals.push(`coverage config in ${name}`);
+    }
+  }
+  if (signals.length > 0) {
+    return makeResult("PASS", signals.length, [
+      `coverage measurement configured (${signals.length} signal(s))`,
+      ...signals
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no test coverage configuration found \u2014 add jest/vitest coverage, .coveragerc, or codecov"
+  ]);
+}
+var FIXTURE_DIR_NAMES = [
+  "fixtures",
+  "testdata",
+  "test-data",
+  "test_data",
+  "__fixtures__",
+  "factories",
+  "factory"
+];
+var FACTORY_CONTENT_RX = /\b(factory_boy|FactoryGirl|FactoryBot|faker|Faker|TestDataBuilder|test[_-]?factory|data[_-]?builder|use_factory|create_factory|generate_fake)\b/i;
+var CONFTEST_GLOBS = ["conftest.py", "test_helpers.*", "test-helpers.*"];
+function detectTestDataManagement(repoPath, _params) {
+  const signals = [];
+  for (const name of FIXTURE_DIR_NAMES) {
+    const full = join10(repoPath, name);
+    if (existsSync9(full)) {
+      signals.push(`fixture directory: ${name}/`);
+      break;
+    }
+    for (const testRoot of ["test", "tests", "__tests__"]) {
+      const nested = join10(repoPath, testRoot, name);
+      if (existsSync9(nested)) {
+        signals.push(`fixture directory: ${testRoot}/${name}/`);
+        break;
+      }
+    }
+    if (signals.length > 0) break;
+  }
+  let testFiles = [];
+  try {
+    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
+  } catch {
+    testFiles = [];
+  }
+  for (const f of testFiles.slice(0, 80)) {
+    let content;
+    try {
+      content = readFileSync10(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (FACTORY_CONTENT_RX.test(content)) {
+      signals.push(`factory/faker patterns in: ${relative10(repoPath, f)}`);
+      if (signals.length >= 3) break;
+    }
+  }
+  const confFiles = iterFiles(repoPath, CONFTEST_GLOBS, SOURCE_IGNORE);
+  if (confFiles.length > 0) {
+    signals.push(`test setup/helper file: ${relative10(repoPath, confFiles[0])}`);
+  }
+  if (signals.length > 0) {
+    return makeResult("PASS", signals.length, [
+      `structured test data management detected (${signals.length} signal(s))`,
+      ...signals
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no structured test data management found \u2014 add fixtures/ directory, factory patterns, or conftest.py"
+  ]);
+}
+var MOCK_IMPORT_RX = /\b(?:jest\.mock|vi\.mock|sinon|mockery|unittest\.mock|from\s+unittest\s+import\s+mock|from\s+unittest\.mock|pytest[_-]mock|testify\/mock|mockito|EasyMock|Mockery|mocker\.patch|mock\.patch|@MockBean|@Mock\b)\b/i;
+function detectMockingIsolation(repoPath, _params) {
+  let testFiles = [];
+  try {
+    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
+  } catch {
+    testFiles = [];
+  }
+  if (testFiles.length === 0) {
+    return makeResult("FAIL", 0, [
+      "no test files found \u2014 mocking/isolation not detectable"
+    ]);
+  }
+  const signals = [];
+  for (const f of testFiles.slice(0, 100)) {
+    let content;
+    try {
+      content = readFileSync10(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (MOCK_IMPORT_RX.test(content)) {
+      signals.push(`mock/stub usage in: ${relative10(repoPath, f)}`);
+      if (signals.length >= 5) break;
+    }
+  }
+  if (signals.length > 0) {
+    return makeResult("PASS", signals.length, [
+      `mocking/stubbing patterns detected in ${signals.length} test file(s)`,
+      ...signals
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no mocking/stubbing patterns found in test files \u2014 tests may have real I/O dependencies"
+  ]);
+}
+var CONTRACT_CONFIG_GLOBS = ["pact.config.*", "*.pact.ts", "*.pact.js"];
+var CONTRACT_DIR_NAMES = ["pacts", "contracts", "contract-tests"];
+var CONTRACT_CONTENT_RX = /\b(?:Pact|pact|PactV[23]|InteractionBuilder|spring[_-]cloud[_-]contract|provider[_-]?verification|consumer[_-]?contract|@PactTestFor|@Provider|messageProvider)\b/i;
+function detectContractTests(repoPath, _params) {
+  const signals = [];
+  const contractConfigs = iterFiles(
+    repoPath,
+    CONTRACT_CONFIG_GLOBS,
+    SOURCE_IGNORE
+  );
+  if (contractConfigs.length > 0) {
+    signals.push(`contract config: ${relative10(repoPath, contractConfigs[0])}`);
+  }
+  for (const name of CONTRACT_DIR_NAMES) {
+    if (existsSync9(join10(repoPath, name))) {
+      signals.push(`contract directory: ${name}/`);
+      break;
+    }
+  }
+  if (signals.length < 3) {
+    let testFiles = [];
+    try {
+      testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
+    } catch {
+      testFiles = [];
+    }
+    for (const f of testFiles.slice(0, 100)) {
+      let content;
+      try {
+        content = readFileSync10(f, "utf8");
+      } catch {
+        continue;
+      }
+      if (CONTRACT_CONTENT_RX.test(content)) {
+        signals.push(`Pact/contract patterns in: ${relative10(repoPath, f)}`);
+        if (signals.length >= 3) break;
+      }
+    }
+  }
+  if (signals.length > 0) {
+    return makeResult("PASS", signals.length, [
+      `contract testing detected (${signals.length} signal(s))`,
+      ...signals
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no consumer-driven contract test signals found \u2014 add Pact or Spring Cloud Contract for multi-service verification"
+  ]);
+}
+var ML_SOURCE_RX = /\b(?:sklearn|torch|tensorflow|keras|transformers|xgboost|lightgbm|catboost|mlflow|pandas|numpy)\b/i;
+var ML_TEST_CONTENT_RX = /\b(?:assert.*(?:accuracy|f1[_-]score|precision|recall|rmse|mae|auc|roc_auc)|evidently|deepchecks|great_expectations|mlflow\.evaluate|ModelCard|alibi|check_model|model_performance)\b/i;
+var ML_TEST_FILE_RX = /(?:test[_-]model|model[_-]test|test[_-]ml|ml[_-]test|test[_-]metrics)/i;
+function detectMlIterationTests(repoPath, _params) {
+  let hasML = false;
+  const sourceSample = iterFiles(
+    repoPath,
+    ["*.py", "*.ipynb"],
+    SOURCE_IGNORE
+  ).slice(0, 50);
+  for (const f of sourceSample) {
+    let content;
+    try {
+      content = readFileSync10(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (ML_SOURCE_RX.test(content)) {
+      hasML = true;
+      break;
+    }
+  }
+  if (!hasML) {
+    return makeResult(
+      "SKIP",
+      null,
+      ["no ML framework usage detected \u2014 QA-10 not applicable"],
+      "detected"
+    );
+  }
+  const signals = [];
+  let testFiles = [];
+  try {
+    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
+  } catch {
+    testFiles = [];
+  }
+  for (const f of testFiles.slice(0, 100)) {
+    const rel = relative10(repoPath, f);
+    if (ML_TEST_FILE_RX.test(basename5(f))) {
+      signals.push(`ML test file: ${rel}`);
+      if (signals.length >= 5) break;
+    }
+    let content;
+    try {
+      content = readFileSync10(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (ML_TEST_CONTENT_RX.test(content)) {
+      signals.push(`ML quality assertions in: ${rel}`);
+      if (signals.length >= 5) break;
+    }
+  }
+  if (signals.length > 0) {
+    return makeResult("PASS", signals.length, [
+      `ML iteration testing detected (${signals.length} signal(s))`,
+      ...signals
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "ML framework detected but no quality metric testing found \u2014 add evidently, deepchecks, or assert metric thresholds"
+  ]);
+}
+var DETECTORS9 = {
+  2500: detectTestInfrastructure,
+  // QA-01 test infrastructure + coverage proxy (computed)
+  2501: detectUnitTests,
+  // QA-02 unit test tier (detected)
+  2502: detectIntegrationTests,
+  // QA-03 integration test tier (detected)
+  2503: detectE2ETests,
+  // QA-04 E2E test tier (detected)
+  2504: detectTestPyramid,
+  // QA-05 pyramid shape (computed)
+  2505: detectCoverageConfig,
+  // QA-06 coverage reporting config (detected)
+  2506: detectTestDataManagement,
+  // QA-07 test data management (detected)
+  2507: detectMockingIsolation,
+  // QA-08 test isolation/mocking (detected)
+  2508: detectContractTests,
+  // QA-09 contract testing (detected)
+  2509: detectMlIterationTests
+  // QA-10 ML iteration testing (detected)
+};
+
+// plugins/awos/skills/ai-readiness-audit/detectors/documentation.ts
+import { readFileSync as readFileSync11, existsSync as existsSync10, readdirSync as readdirSync3 } from "node:fs";
+import { join as join11, relative as relative11, dirname as dirname2 } from "node:path";
+var README_NAMES = [
+  "README.md",
+  "README.rst",
+  "README.txt",
+  "Readme.md",
+  "readme.md"
+];
+var SETUP_CONTENT_RX = /\b(install|setup|usage|getting[_\s-]started|quick[_\s-]start|run|build|deploy|prerequisite|requirement)\b/i;
+var HEADING_RX = /^#+ |\n#+ |^[=\-~^"'`]+\s*$/m;
+function detectRootReadme(repoPath, _params) {
+  let readmePath = null;
+  for (const name of README_NAMES) {
+    const full = join11(repoPath, name);
+    if (existsSync10(full)) {
+      readmePath = full;
+      break;
+    }
+  }
+  if (!readmePath) {
+    return makeResult("FAIL", 0, [
+      "no README file found at repository root \u2014 a new developer has no entry point"
+    ]);
+  }
+  let content;
+  try {
+    content = readFileSync11(readmePath, "utf8");
+  } catch {
+    return makeResult("WARN", 0, [
+      `README found but could not be read: ${relative11(repoPath, readmePath)}`
+    ]);
+  }
+  const relPath = relative11(repoPath, readmePath);
+  if (content.length <= 200) {
+    return makeResult("WARN", content.length, [
+      `${relPath} is too short (${content.length} bytes) \u2014 missing setup instructions`
+    ]);
+  }
+  if (!SETUP_CONTENT_RX.test(content)) {
+    return makeResult("WARN", content.length, [
+      `${relPath} exists but contains no setup/install/usage instructions`
+    ]);
+  }
+  if (!HEADING_RX.test(content)) {
+    return makeResult("WARN", content.length, [
+      `${relPath} lacks a Markdown heading structure \u2014 may not be well-organised`
+    ]);
+  }
+  return makeResult("PASS", content.length, [
+    `${relPath} present with headings and setup instructions (${content.length} bytes)`
+  ]);
+}
+var SKIP_DIRS = /* @__PURE__ */ new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".venv",
+  "__pycache__",
+  ".next",
+  "target",
+  "vendor",
+  ".github",
+  ".claude",
+  ".awos",
+  "docs",
+  "doc",
+  "assets",
+  "static",
+  "public",
+  "resources"
+]);
+var SERVICE_SOURCE_GLOBS = [
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.py",
+  "*.go",
+  "*.java",
+  "*.kt"
+];
+function detectServiceReadmes(repoPath, _params) {
+  let topDirs = [];
+  try {
+    const entries = readdirSync3(repoPath, { withFileTypes: true });
+    topDirs = entries.filter(
+      (e) => e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith(".")
+    ).map((e) => e.name).sort();
+  } catch {
+    topDirs = [];
+  }
+  if (topDirs.length === 0) {
+    return makeResult("SKIP", null, [
+      "no top-level service directories found \u2014 single-service project, DOC-02 not applicable"
+    ]);
+  }
+  const serviceDirs = [];
+  for (const dirName of topDirs) {
+    const dirPath = join11(repoPath, dirName);
+    let srcFiles = [];
+    try {
+      srcFiles = iterFiles(dirPath, SERVICE_SOURCE_GLOBS, [
+        "node_modules",
+        ".venv",
+        "__pycache__",
+        "dist",
+        "build",
+        "target"
+      ]);
+    } catch {
+      srcFiles = [];
+    }
+    if (srcFiles.length < 5) continue;
+    const hasReadme = existsSync10(join11(dirPath, "README.md"));
+    serviceDirs.push({ path: dirPath, name: dirName, hasReadme });
+  }
+  if (serviceDirs.length === 0) {
+    return makeResult("SKIP", null, [
+      "no multi-service directory structure detected \u2014 DOC-02 not applicable"
+    ]);
+  }
+  const withReadme = serviceDirs.filter((d) => d.hasReadme);
+  const ratio = withReadme.length / serviceDirs.length;
+  const evidence = [
+    `${withReadme.length}/${serviceDirs.length} service directories have README.md`,
+    ...serviceDirs.map(
+      (d) => `${d.name}/: ${d.hasReadme ? "README present" : "README MISSING"}`
+    )
+  ];
+  if (ratio >= 0.8) {
+    return makeResult("PASS", withReadme.length, evidence);
+  }
+  if (ratio >= 0.5) {
+    return makeResult("WARN", withReadme.length, [
+      `only ${withReadme.length}/${serviceDirs.length} service directories have README.md`,
+      ...evidence.slice(1)
+    ]);
+  }
+  return makeResult("FAIL", withReadme.length, [
+    `only ${withReadme.length}/${serviceDirs.length} service directories have README.md \u2014 most are missing docs`,
+    ...evidence.slice(1)
+  ]);
+}
+var API_DOC_GLOBS = [
+  "openapi.yaml",
+  "openapi.yml",
+  "openapi.json",
+  "swagger.yaml",
+  "swagger.yml",
+  "swagger.json",
+  "asyncapi.yaml",
+  "asyncapi.yml",
+  "api-docs.yaml",
+  "api-docs.json"
+];
+var API_SOURCE_RX = /\b(@RestController|@app\.route|@router\.|router\.get|router\.post|app\.get|app\.post|FastAPI\(|express\(\)|flask\.Flask\(|gin\.Default\(|chi\.NewRouter|http\.HandleFunc)\b/i;
+var AUTO_DOCS_RX = /FastAPI\(|app\s*=\s*FastAPI\(|springdoc|springfox/i;
+function detectApiDocs(repoPath, _params) {
+  const apiSourceFiles = iterFiles(
+    repoPath,
+    ["*.py", "*.ts", "*.js", "*.java", "*.kt", "*.go"],
+    [
+      "node_modules",
+      ".venv",
+      "__pycache__",
+      "dist",
+      "build",
+      "target",
+      "tests",
+      "test"
+    ]
+  );
+  let hasApiSource = false;
+  for (const f of apiSourceFiles.slice(0, 100)) {
+    let content;
+    try {
+      content = readFileSync11(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (API_SOURCE_RX.test(content)) {
+      hasApiSource = true;
+      break;
+    }
+  }
+  if (!hasApiSource) {
+    return makeResult("SKIP", null, [
+      "no API source patterns detected \u2014 DOC-03 not applicable"
+    ]);
+  }
+  const signals = [];
+  const apiDocFiles = iterFiles(repoPath, API_DOC_GLOBS);
+  if (apiDocFiles.length > 0) {
+    signals.push(
+      ...apiDocFiles.slice(0, 5).map((f) => `API spec: ${relative11(repoPath, f)}`)
+    );
+  }
+  for (const f of apiSourceFiles.slice(0, 50)) {
+    let content;
+    try {
+      content = readFileSync11(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (AUTO_DOCS_RX.test(content)) {
+      signals.push(`auto-docs framework in: ${relative11(repoPath, f)}`);
+      break;
+    }
+  }
+  if (signals.length > 0) {
+    return makeResult("PASS", signals.length, [
+      `API documentation present (${signals.length} signal(s))`,
+      ...signals
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "API source detected but no API documentation found \u2014 add OpenAPI/Swagger spec or use FastAPI auto-docs"
+  ]);
+}
+var MAKE_TARGET_RX = /`make\s+([a-zA-Z0-9_-]+)`|\bmake\s+([a-zA-Z0-9_-]+)\b/g;
+var MAKEFILE_TARGET_RX = /^([a-zA-Z0-9_-][a-zA-Z0-9_.-]*):/gm;
+var LOCAL_LINK_RX = /\[(?:[^\]]+)\]\((?!https?:\/\/)(?!#)([^)]+)\)/g;
+var BACKTICK_PATH_RX = /`((?:\.\/|\.\.\/|\/)[^`\s]+)`/g;
+function extractMakeTargets(readmeContent) {
+  const targets = /* @__PURE__ */ new Set();
+  let m;
+  MAKE_TARGET_RX.lastIndex = 0;
+  while ((m = MAKE_TARGET_RX.exec(readmeContent)) !== null) {
+    const target = m[1] ?? m[2];
+    if (target && target !== "install" && target.length > 0) {
+      targets.add(target);
+    }
+  }
+  return [...targets].sort();
+}
+function loadMakefileTargets(repoPath) {
+  const makefileNames = ["Makefile", "makefile", "GNUmakefile"];
+  for (const name of makefileNames) {
+    const full = join11(repoPath, name);
+    if (!existsSync10(full)) continue;
+    let content;
+    try {
+      content = readFileSync11(full, "utf8");
+    } catch {
+      continue;
+    }
+    const targets = /* @__PURE__ */ new Set();
+    let m;
+    MAKEFILE_TARGET_RX.lastIndex = 0;
+    while ((m = MAKEFILE_TARGET_RX.exec(content)) !== null) {
+      targets.add(m[1]);
+    }
+    return targets;
+  }
+  return /* @__PURE__ */ new Set();
+}
+function extractLocalLinks(readmeContent) {
+  const links = [];
+  let m;
+  LOCAL_LINK_RX.lastIndex = 0;
+  while ((m = LOCAL_LINK_RX.exec(readmeContent)) !== null) {
+    const target = m[1].split("#")[0].trim();
+    if (target.length > 0) links.push(target);
+  }
+  BACKTICK_PATH_RX.lastIndex = 0;
+  while ((m = BACKTICK_PATH_RX.exec(readmeContent)) !== null) {
+    const p = m[1].trim();
+    if (p.length > 0) links.push(p);
+  }
+  return [...new Set(links)].sort();
+}
+function detectDocsAccuracy(repoPath, _params) {
+  const readmePath = join11(repoPath, "README.md");
+  if (!existsSync10(readmePath)) {
+    return makeResult("SKIP", null, [
+      "no README.md found \u2014 docs accuracy check (DOC-04) skipped"
+    ]);
+  }
+  let readmeContent;
+  try {
+    readmeContent = readFileSync11(readmePath, "utf8");
+  } catch {
+    return makeResult("SKIP", null, [
+      "README.md could not be read \u2014 DOC-04 skipped"
+    ]);
+  }
+  const missing = [];
+  const present = [];
+  const makeTargetsInReadme = extractMakeTargets(readmeContent);
+  if (makeTargetsInReadme.length > 0) {
+    const makefileTargets = loadMakefileTargets(repoPath);
+    const hasMakefile = existsSync10(join11(repoPath, "Makefile")) || existsSync10(join11(repoPath, "makefile")) || existsSync10(join11(repoPath, "GNUmakefile"));
+    for (const target of makeTargetsInReadme) {
+      if (!hasMakefile) {
+        missing.push({ kind: "make-target", ref: `make ${target}` });
+      } else if (!makefileTargets.has(target)) {
+        missing.push({ kind: "make-target", ref: `make ${target}` });
+      } else {
+        present.push({ kind: "make-target", ref: `make ${target}` });
+      }
+    }
+  }
+  const localLinks = extractLocalLinks(readmeContent);
+  for (const link of localLinks) {
+    const readmeDir = dirname2(readmePath);
+    const resolved = join11(readmeDir, link);
+    if (existsSync10(resolved)) {
+      present.push({ kind: "path", ref: link });
+    } else {
+      missing.push({ kind: "path", ref: link });
+    }
+  }
+  if (missing.length === 0) {
+    return makeResult("PASS", present.length, [
+      `${present.length} README reference(s) verified \u2014 all referenced items exist`,
+      ...present.slice(0, 10).map((r) => `verified: ${r.ref}`)
+    ]);
+  }
+  const evidence = missing.map((r) => `missing: ${r.ref} (${r.kind})`);
+  if (missing.length <= 2) {
+    return makeResult("WARN", missing.length, [
+      `${missing.length} README reference(s) point to non-existent items \u2014 docs may be stale`,
+      ...evidence
+    ]);
+  }
+  return makeResult("FAIL", missing.length, [
+    `${missing.length} README reference(s) point to non-existent items \u2014 documentation is out of date`,
+    ...evidence
+  ]);
+}
+var DETECTORS10 = {
+  2200: detectRootReadme,
+  // DOC-01 root README with substance (detected)
+  2201: detectServiceReadmes,
+  // DOC-02 service-level READMEs (detected)
+  2202: detectApiDocs,
+  // DOC-03 API documentation (detected)
+  2203: detectDocsAccuracy
+  // DOC-04 docs accuracy via referenced path existence
+};
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
 var COLLECTORS = {
   git: collect,
@@ -2740,14 +4169,17 @@ var COLLECTORS = {
   tracker: collect3,
   docs: collect4
 };
-var DETECTORS8 = {
+var DETECTORS11 = {
   ...DETECTORS,
   ...DETECTORS2,
   ...DETECTORS3,
   ...DETECTORS4,
   ...DETECTORS5,
   ...DETECTORS6,
-  ...DETECTORS7
+  ...DETECTORS7,
+  ...DETECTORS8,
+  ...DETECTORS9,
+  ...DETECTORS10
 };
 var DEFAULT_PERIOD = {
   bucket_days: 30,
@@ -2799,11 +4231,11 @@ function main() {
         });
         process.exit(1);
       }
-      const fn = DETECTORS8[code];
+      const fn = DETECTORS11[code];
       if (!fn) {
         printJson({
           error: `unknown detector code ${code}`,
-          known: Object.keys(DETECTORS8).map(Number).sort((a, b) => a - b)
+          known: Object.keys(DETECTORS11).map(Number).sort((a, b) => a - b)
         });
         process.exit(1);
       }

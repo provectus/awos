@@ -38,6 +38,9 @@ import { DETECTORS as AI_TOOLING_DETECTORS } from './detectors/ai_development_to
 import { DETECTORS as E2E_DETECTORS } from './detectors/end_to_end_delivery.ts';
 import { DETECTORS as SEC_DETECTORS } from './detectors/security.ts';
 import { DETECTORS as SCS_DETECTORS } from './detectors/supply_chain_security.ts';
+import { DETECTORS as PAI_DETECTORS } from './detectors/prompt_agent_integrity.ts';
+import { DETECTORS as QA_DETECTORS } from './detectors/quality_assurance.ts';
+import { DETECTORS as DOC_DETECTORS } from './detectors/documentation.ts';
 // Adding a detector module is a one-line change per import + one spread below.
 
 import { makeResult, type DetectorResult } from './detectors/_base.ts';
@@ -53,6 +56,9 @@ const DETECTORS: Record<
   ...E2E_DETECTORS,
   ...SEC_DETECTORS,
   ...SCS_DETECTORS,
+  ...PAI_DETECTORS,
+  ...QA_DETECTORS,
+  ...DOC_DETECTORS,
 };
 
 // ---------------------------------------------------------------------------

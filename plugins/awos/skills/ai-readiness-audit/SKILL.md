@@ -114,7 +114,7 @@ For each dimension, provide the agent with:
 1. **The full dimension file content** (read from `dimensions/{name}.md`)
 2. **The output format** (read from `output-format.md` in this skill directory — the "Per-Dimension Artifact Format" section)
 3. **The scoring rules** (read from `scoring.md` in this skill directory)
-4. **The output path:** `context/audits/YYYY-MM-DD/{name}.md`
+4. **The output path:** `context/audits/YYYY-MM-DD/{name}.json`
 5. **The standards file:** `references/standards.toml` (and the user override path from `sources.toml`, if any) — the dimension-auditor reads category weights and period parameters from this file
 6. **Topology summary** (for Phase 2+ dimensions): read from `context/audits/YYYY-MM-DD/project-topology.md` — the "Topology Summary" section written by the topology auditor
 
@@ -130,13 +130,25 @@ Wait for all dimensions in a phase to complete before starting the next phase.
 
 After all dimensions complete:
 
-1. Read all per-dimension artifacts from `context/audits/YYYY-MM-DD/`
-2. Sum awarded category weights across all dimensions into `audit_total` (uncapped). Compute an audit-level coverage ratio = total awarded weight ÷ total applicable-defined weight across all dimensions, labeled "relative to today's standard" (from `references/standards.toml`). Do not compute a grade or a 0–100 score.
-3. If a previous audit was found in Step 4, compute per-dimension deltas as point and coverage-ratio deltas (not grade deltas)
-4. Compile the full report using the report template from `output-format.md`
-5. Write the report to `context/audits/YYYY-MM-DD/report.md`
-6. Write prioritized recommendations to `context/audits/YYYY-MM-DD/recommendations.md`
-7. Present the full report to the user
+1. Read all per-dimension JSON artifacts from `context/audits/YYYY-MM-DD/<dimension>.json`.
+2. Aggregate them into a single `context/audits/YYYY-MM-DD/audit.json` file with this top-level structure:
+   - `date` — the audit date (YYYY-MM-DD)
+   - `project` — the repo name or directory being audited
+   - `audit_total` — Σ awarded category weights across all dimensions (uncapped)
+   - `coverage` — total awarded weight ÷ total applicable-defined weight across all dimensions (the audit-level coverage ratio, labeled "relative to today's standard" from `references/standards.toml`). Do not compute a grade or a 0–100 score.
+   - `dimensions` — array of the per-dimension JSON objects (one per dimension file)
+3. If a previous audit was found in Step 4, add per-dimension deltas (point and coverage-ratio deltas, not grade deltas) inside each dimension object.
+
+**The orchestrator never hand-writes `report.md` or `report.html`** — those files are always produced by the renderer. This is the data-loss guarantee: JSON is the source of truth; markdown and HTML are derived outputs.
+
+4. Render the markdown report from the JSON source of truth:
+
+   ```
+   node dist/cli.js render context/audits/YYYY-MM-DD/audit.json --format md > context/audits/YYYY-MM-DD/report.md
+   ```
+
+5. Write prioritized recommendations to `context/audits/YYYY-MM-DD/recommendations.md`.
+6. Present the full report to the user by reading and displaying `context/audits/YYYY-MM-DD/report.md`.
 
 ### Step 6 org branch — Portfolio rollup (org mode only)
 
@@ -175,6 +187,18 @@ Contributor counts in the org report are always aggregate — no per-person data
 
 After presenting the report, check the project context and offer next steps using `AskUserQuestion` with `multiSelect: true`.
 
+### Headless mode (no interactive input)
+
+When `AskUserQuestion` receives its default answer (non-interactive, e.g. CI or `--output-format stream-json`), automatically generate the HTML report — never skip it:
+
+```
+node dist/cli.js render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html
+```
+
+`report.html` is always produced in headless runs. The orchestrator never hand-writes it; the renderer produces it from `audit.json`.
+
+### Interactive mode
+
 ### Detect context
 
 - **AWOS installed:** `.awos/commands/` directory exists
@@ -200,7 +224,7 @@ After presenting the report, check the project context and offer next steps usin
 
 ### Execute selected options
 
-- **HTML report:** Read the HTML report specification from `report-template.md` in this skill directory. Generate `context/audits/YYYY-MM-DD/report.html` — a single self-contained HTML file (inline CSS, no external dependencies). Include: audit total (points) + coverage ratio, per-dimension summary table, detailed checklists, recommendations, issue-only filter toggle.
+- **HTML report:** Render from the JSON source of truth using the CLI: `node dist/cli.js render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html`. The renderer reads the HTML report specification from `report-template.md`. The output is a single self-contained HTML file (inline CSS, no external dependencies) including: audit total (points) + coverage ratio, per-dimension summary table, detailed checklists, recommendations, issue-only filter toggle.
 - **Roadmap (update or create):** Tell the user to run `/awos:roadmap` and reference the audit recommendations at `context/audits/YYYY-MM-DD/recommendations.md` as input.
 
 ## Adding New Dimensions

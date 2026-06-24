@@ -1698,3 +1698,82 @@ test('output-format.md states that reports are produced by cli.js render (not ha
     'output-format.md must state that report.md / report.html are produced by "node dist/cli.js render" — the auditor never writes markdown/HTML directly'
   );
 });
+
+// ---------------------------------------------------------------------------
+// POL-B: SKILL.md Step 6 aggregates JSON → audit.json + renders MD;
+//         Step 7 headless auto-generates HTML
+// ---------------------------------------------------------------------------
+
+test('SKILL.md Step 6 aggregates per-dimension JSON into audit.json', () => {
+  // JSON is the source of truth (global constraint). Step 6 must aggregate
+  // per-dimension artifacts into a single audit.json before producing any
+  // rendered output. The orchestrator must never hand-write report.md.
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    src.includes('audit.json'),
+    'SKILL.md Step 6 must reference audit.json as the aggregated result artifact'
+  );
+  assert.ok(
+    /per.dimension.*json|<dimension>\.json|dimensions?\.json/i.test(src),
+    'SKILL.md Step 6 must describe reading per-dimension JSON artifacts before aggregating'
+  );
+});
+
+test('SKILL.md Step 6 renders report.md via cli.js render --format md', () => {
+  // The orchestrator must call the renderer for markdown output, not write it
+  // by hand. The render command + --format md flag are the canonical invocation.
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    src.includes('node dist/cli.js render') ||
+      src.includes('dist/cli.js render'),
+    'SKILL.md Step 6 must invoke "node dist/cli.js render" to produce report.md (never hand-write it)'
+  );
+  assert.ok(
+    /--format md/.test(src),
+    'SKILL.md Step 6 must pass "--format md" to the renderer for the markdown report'
+  );
+  assert.ok(
+    /report\.md/.test(src),
+    'SKILL.md Step 6 must name the output file report.md'
+  );
+});
+
+test('SKILL.md Step 6 states the data-loss guarantee (no hand-written report)', () => {
+  // The explicit "never hand-writes" guarantee is what prevents the orchestrator
+  // from bypassing the renderer and losing structured data.
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /never hand.writ|not hand.writ|source of truth.*json|json.*source of truth/i.test(
+      src
+    ),
+    'SKILL.md must state the data-loss guarantee: orchestrator never hand-writes report.md/report.html (JSON is source of truth)'
+  );
+});
+
+test('SKILL.md Step 7 headless auto-generates report.html via --format html', () => {
+  // Headless runs are first-class. When AskUserQuestion receives its default
+  // answer, SKILL.md must automatically generate the HTML — never skip it.
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /headless.*auto.*html|headless.*html.*auto|auto.*generat.*html/i.test(src),
+    'SKILL.md Step 7 must state that headless runs automatically generate report.html'
+  );
+  assert.ok(
+    /--format html/.test(src),
+    'SKILL.md Step 7 must show "--format html" as the HTML render flag'
+  );
+  assert.ok(
+    /report\.html/.test(src),
+    'SKILL.md Step 7 must name the output file report.html'
+  );
+});
+
+test('SKILL.md Step 7 headless HTML always produced (never skipped)', () => {
+  // The "never skip" contract is the key headless guarantee. Lint pins it
+  // so future edits do not accidentally make HTML optional in headless mode.
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /always produc|never skip/i.test(src),
+    'SKILL.md Step 7 must state that report.html is always produced in headless runs (never skipped)'
+  );
+});

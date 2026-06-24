@@ -681,9 +681,9 @@ function parse(toml, { maxDepth = 1e3, integersAsBigInt } = {}) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/cli.ts
-import { readFileSync as readFileSync25, mkdtempSync } from "node:fs";
+import { readFileSync as readFileSync28, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join as join25, dirname as dirname3 } from "node:path";
+import { join as join28, dirname as dirname3 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // plugins/awos/skills/ai-readiness-audit/collectors/git.ts
@@ -5834,6 +5834,235 @@ function compute12(collectedDir, standards, topology) {
   );
 }
 
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_i1_work_mix.ts
+import { readFileSync as readFileSync25, existsSync as existsSync23 } from "node:fs";
+import { join as join25 } from "node:path";
+var GROWTH_TYPES = /* @__PURE__ */ new Set([
+  "feature",
+  "story",
+  "enhancement",
+  "task",
+  "improvement"
+]);
+function workMixBand(growthFrac) {
+  if (growthFrac >= 0.6) return "elite";
+  if (growthFrac >= 0.45) return "high";
+  if (growthFrac >= 0.3) return "medium";
+  return "low";
+}
+function compute13(collectedDir, standards, topology) {
+  const trackerPath = join25(collectedDir, "tracker.json");
+  if (!existsSync23(trackerPath)) {
+    return makeMetricResult(
+      "adp_i1_work_mix",
+      null,
+      "banded",
+      [],
+      computeReliability("not-reliable", [], ["tracker"]),
+      [],
+      ["tracker"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync25(trackerPath, "utf8"));
+  if (!artifact?.available) {
+    return makeMetricResult(
+      "adp_i1_work_mix",
+      null,
+      "banded",
+      [],
+      computeReliability("not-reliable", [], ["tracker"]),
+      [],
+      ["tracker"]
+    );
+  }
+  const raw = artifact?.raw ?? {};
+  const typeCounts = typeof raw.type_counts === "object" && raw.type_counts !== null ? raw.type_counts : {};
+  const total = Object.values(typeCounts).reduce(
+    (sum, n) => sum + n,
+    0
+  );
+  if (total === 0) {
+    const categories2 = awardCategories(standards, "adp_i1_work_mix", topology);
+    const reliability2 = computeReliability("not-reliable", ["tracker"], []);
+    return makeMetricResult(
+      "adp_i1_work_mix",
+      null,
+      "banded",
+      categories2,
+      reliability2,
+      ["tracker"],
+      []
+    );
+  }
+  const growthCount = Object.entries(typeCounts).filter(([type]) => GROWTH_TYPES.has(type.toLowerCase())).reduce((sum, [, n]) => sum + n, 0);
+  const growthFrac = growthCount / total;
+  const band = workMixBand(growthFrac);
+  const categories = awardCategories(standards, "adp_i1_work_mix", topology);
+  const reliability = computeReliability("not-reliable", ["tracker"], []);
+  return makeMetricResult(
+    "adp_i1_work_mix",
+    growthFrac,
+    "banded",
+    categories,
+    reliability,
+    ["tracker"],
+    [],
+    band
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_i2_throughput.ts
+import { readFileSync as readFileSync26, existsSync as existsSync24 } from "node:fs";
+import { join as join26 } from "node:path";
+function compute14(collectedDir, standards, topology) {
+  const trackerPath = join26(collectedDir, "tracker.json");
+  if (!existsSync24(trackerPath)) {
+    return makeMetricResult(
+      "adp_i2_throughput",
+      null,
+      "rate",
+      [],
+      computeReliability("not-reliable", [], ["tracker"]),
+      [],
+      ["tracker"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync26(trackerPath, "utf8"));
+  if (!artifact?.available) {
+    return makeMetricResult(
+      "adp_i2_throughput",
+      null,
+      "rate",
+      [],
+      computeReliability("not-reliable", [], ["tracker"]),
+      [],
+      ["tracker"]
+    );
+  }
+  const raw = artifact?.raw ?? {};
+  const resolvedCount = typeof raw.resolved_count === "number" ? raw.resolved_count : 0;
+  const categories = awardCategories(standards, "adp_i2_throughput", topology);
+  const reliability = computeReliability("not-reliable", ["tracker"], []);
+  return makeMetricResult(
+    "adp_i2_throughput",
+    resolvedCount,
+    "rate",
+    categories,
+    reliability,
+    ["tracker"],
+    []
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_i3_mttr.ts
+import { readFileSync as readFileSync27, existsSync as existsSync25 } from "node:fs";
+import { join as join27 } from "node:path";
+function mtttrBand(medianHours) {
+  if (medianHours < 1) return "elite";
+  if (medianHours < 24) return "high";
+  if (medianHours < 168) return "medium";
+  return "low";
+}
+function median3(values) {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid];
+  return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+function computeGitProxyIntervals(mergeRecords) {
+  const intervals = [];
+  for (const rec of mergeRecords) {
+    const mergedAt = new Date(rec.merged_at);
+    const firstCommit = new Date(rec.branch_first_commit_at);
+    if (isNaN(mergedAt.getTime()) || isNaN(firstCommit.getTime())) continue;
+    const diffMs = mergedAt.getTime() - firstCommit.getTime();
+    if (diffMs < 0) continue;
+    intervals.push(diffMs / 36e5);
+  }
+  return intervals;
+}
+function compute15(collectedDir, standards, topology) {
+  const gitPath = join27(collectedDir, "git.json");
+  const trackerPath = join27(collectedDir, "tracker.json");
+  let incidentSource = null;
+  if (existsSync25(trackerPath)) {
+    try {
+      const trackerArtifact = JSON.parse(readFileSync27(trackerPath, "utf8"));
+      if (trackerArtifact?.available && trackerArtifact?.raw?.incident_source) {
+        incidentSource = trackerArtifact.raw.incident_source;
+      }
+    } catch {
+    }
+  }
+  if (!existsSync25(gitPath)) {
+    if (incidentSource) {
+      const categories2 = awardCategories(standards, "adp_i3_mttr", topology);
+      const reliability3 = {
+        tag: "not-reliable",
+        confidence: "HIGH",
+        note: null
+      };
+      return makeMetricResult(
+        "adp_i3_mttr",
+        null,
+        "banded",
+        categories2,
+        reliability3,
+        ["tracker"],
+        ["git"]
+      );
+    }
+    const reliability2 = {
+      tag: "not-reliable",
+      confidence: "LOW",
+      note: "git-proxy, true value may differ; no git history found"
+    };
+    return makeMetricResult(
+      "adp_i3_mttr",
+      null,
+      "banded",
+      [],
+      reliability2,
+      ["git"],
+      []
+    );
+  }
+  const gitArtifact = JSON.parse(readFileSync27(gitPath, "utf8"));
+  const raw = gitArtifact?.raw ?? {};
+  const mergeRecords = Array.isArray(raw.merge_records) ? raw.merge_records : [];
+  const allIntervals = computeGitProxyIntervals(mergeRecords);
+  const medianHours = median3(allIntervals);
+  let reliability;
+  if (incidentSource) {
+    reliability = {
+      tag: "not-reliable",
+      confidence: "HIGH",
+      note: null
+    };
+  } else {
+    reliability = {
+      tag: "not-reliable",
+      confidence: allIntervals.length > 0 ? "MED" : "LOW",
+      note: "git-proxy, true value may differ"
+    };
+  }
+  const band = medianHours !== null ? mtttrBand(medianHours) : null;
+  const categories = awardCategories(standards, "adp_i3_mttr", topology);
+  const sourcesUsed = incidentSource ? ["git", "tracker"] : ["git"];
+  const sourcesMissing = [];
+  return makeMetricResult(
+    "adp_i3_mttr",
+    medianHours,
+    "banded",
+    categories,
+    reliability,
+    sourcesUsed,
+    sourcesMissing,
+    band
+  );
+}
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
 var COLLECTORS = {
   git: collect,
@@ -5865,7 +6094,10 @@ var METRICS = {
   adp_g9_ai_attribution: compute9,
   adp_c1_ci_pass_rate: compute10,
   adp_c2_pipeline_duration: compute11,
-  adp_d1_spec_coverage: compute12
+  adp_d1_spec_coverage: compute12,
+  adp_i1_work_mix: compute13,
+  adp_i2_throughput: compute14,
+  adp_i3_mttr: compute15
 };
 var DEFAULT_PERIOD = {
   bucket_days: 30,
@@ -5936,7 +6168,7 @@ function main() {
       }
       let raw;
       try {
-        raw = readFileSync25(tomlPath, "utf8");
+        raw = readFileSync28(tomlPath, "utf8");
       } catch (err) {
         const e = err;
         printJson({
@@ -5964,8 +6196,8 @@ function main() {
         });
         process.exit(1);
       }
-      const tmpRoot = mkdtempSync(join25(tmpdir(), "awos-metric-"));
-      const collectedDir = join25(tmpRoot, "collected");
+      const tmpRoot = mkdtempSync(join28(tmpdir(), "awos-metric-"));
+      const collectedDir = join28(tmpRoot, "collected");
       const gitArtifact = collect(repoPath, DEFAULT_PERIOD);
       writeArtifact(gitArtifact, collectedDir);
       if (id.startsWith("adp_c")) {
@@ -5976,9 +6208,13 @@ function main() {
         const docsArtifact = collect4(repoPath, DEFAULT_PERIOD);
         writeArtifact(docsArtifact, collectedDir);
       }
+      if (id.startsWith("adp_i")) {
+        const trackerArtifact = collect3(repoPath, DEFAULT_PERIOD);
+        writeArtifact(trackerArtifact, collectedDir);
+      }
       const cliDir = dirname3(fileURLToPath(import.meta.url));
       const skillRoot = cliDir.endsWith("/dist") || cliDir.endsWith("\\dist") ? dirname3(cliDir) : cliDir;
-      const standardsPath = join25(skillRoot, "references", "standards.toml");
+      const standardsPath = join28(skillRoot, "references", "standards.toml");
       const standards = loadStandards(standardsPath);
       const result = metricFn(collectedDir, standards, {});
       printJson(result);

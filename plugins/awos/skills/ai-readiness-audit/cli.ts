@@ -87,6 +87,9 @@ import { compute as computeG9 } from './metrics/adp_g9_ai_attribution.ts';
 import { compute as computeC1 } from './metrics/adp_c1_ci_pass_rate.ts';
 import { compute as computeC2 } from './metrics/adp_c2_pipeline_duration.ts';
 import { compute as computeD1 } from './metrics/adp_d1_spec_coverage.ts';
+import { compute as computeI1 } from './metrics/adp_i1_work_mix.ts';
+import { compute as computeI2 } from './metrics/adp_i2_throughput.ts';
+import { compute as computeI3 } from './metrics/adp_i3_mttr.ts';
 // Adding a metric module is a one-line change per import + one entry in METRICS below.
 
 import type { MetricResult } from './metrics/_base.ts';
@@ -111,6 +114,9 @@ export const METRICS: Record<string, MetricFn> = {
   adp_c1_ci_pass_rate: computeC1,
   adp_c2_pipeline_duration: computeC2,
   adp_d1_spec_coverage: computeD1,
+  adp_i1_work_mix: computeI1,
+  adp_i2_throughput: computeI2,
+  adp_i3_mttr: computeI3,
 };
 
 // ---------------------------------------------------------------------------
@@ -246,6 +252,11 @@ function main(): void {
       if (id.startsWith('adp_d')) {
         const docsArtifact = collectDocs(repoPath, DEFAULT_PERIOD);
         writeArtifact(docsArtifact as { source: string }, collectedDir);
+      }
+      // Tracker collector is run for ADP-I* metrics (also git for MTTR proxy).
+      if (id.startsWith('adp_i')) {
+        const trackerArtifact = collectTracker(repoPath, DEFAULT_PERIOD);
+        writeArtifact(trackerArtifact as { source: string }, collectedDir);
       }
       // Load standards for category award.
       // import.meta.url resolves to dist/cli.js when bundled, so go one level

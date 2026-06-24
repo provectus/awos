@@ -148,10 +148,11 @@ After all dimensions complete:
 
 **The orchestrator never hand-writes `report.md` or `report.html`** — those files are always produced by the renderer. This is the data-loss guarantee: JSON is the source of truth; markdown and HTML are derived outputs.
 
-4. Render the markdown report from the JSON source of truth:
+4. Render the report from the JSON source of truth — **always produce BOTH `report.md` and the self-contained `report.html`** here. The HTML is the headline deliverable; it is generated unconditionally in this step, never gated on Step 7 or on interactivity, so headless runs always produce it:
 
    ```
-   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format md > context/audits/YYYY-MM-DD/report.md
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format md   > context/audits/YYYY-MM-DD/report.md
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html
    ```
 
 5. Write prioritized recommendations to `context/audits/YYYY-MM-DD/recommendations.md`.
@@ -182,10 +183,11 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
 
    The JSON structure must contain `portfolio_metrics`, `per_repo`, `date`, `project`, `audit_total` (average awarded weight across repos), `coverage` (average coverage ratio), and `dimensions` (aggregated dimension data from all per-repo audits). This shape satisfies the renderer's `AuditJson` schema so the renderer can produce both org markdown and HTML from this single file.
 
-4. Render the org report from the org audit JSON:
+4. Render the org report from the org audit JSON — **always produce BOTH `report.md` and `report.html`** (unconditional, never gated on Step 7):
 
    ```
-   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/org-portfolio.json --format md > context/audits/YYYY-MM-DD/report.md
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/org-portfolio.json --format md   > context/audits/YYYY-MM-DD/report.md
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/org-portfolio.json --format html > context/audits/YYYY-MM-DD/report.html
    ```
 
 5. Present the three portfolio metrics to the user with a brief interpretation:

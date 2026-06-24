@@ -14,7 +14,7 @@ Generate a single self-contained HTML file with all styles inlined. No external 
   <style>/* all styles inline */</style>
 </head>
 <body>
-  <header>   <!-- overall score, grade, date, delta -->
+  <header>   <!-- audit total points, coverage ratio, date, delta -->
   <section>  <!-- summary table -->
   <section>  <!-- per-dimension details (one per dimension) -->
   <section>  <!-- recommendations -->
@@ -28,12 +28,13 @@ Generate a single self-contained HTML file with all styles inlined. No external 
 
 - Project name (repo directory name)
 - Audit date
-- Overall score as a large number with the letter grade
-- If a previous audit exists: delta badge (e.g., "+5 vs 2026-02-15")
+- Audit total as a large number (e.g., **142 pts**)
+- Coverage ratio (e.g., **coverage 67% rel. today's standard**)
+- If a previous audit exists: delta badge (e.g., "+12 pts vs 2026-02-15")
 
 ### Summary Table
 
-A table with columns: #, Dimension, Score (%), Grade, Delta, Critical/High/Medium/Low issue counts. One row per dimension. Highlight rows with grade D or F.
+A table with columns: #, Dimension, Points, Coverage, Delta, Critical/High/Medium/Low issue counts. One row per dimension. Highlight rows where coverage is below 40% (low-coverage rows) so they stand out — no alphabetic scoring is shown.
 
 ### Filter Controls
 
@@ -60,10 +61,13 @@ Each check row must have a `data-status` attribute with its status value.
 
 For each dimension, a collapsible section (`<details>`) containing:
 
-- Dimension title and score/grade
-- Results table: #, Check, Severity, Status, Evidence
+- Dimension title and score (e.g., **N pts — coverage XX% rel. today's standard**)
+- Dimension-level reliability summary line (tag, confidence, note)
+- Results table: #, Check, Category, Weight, Status, Reliability, Evidence
 - Each `<tr>` has a `data-status` attribute (`PASS`, `WARN`, `FAIL`, or `SKIP`) for filtering
 - Color-code status cells: green for PASS, yellow for WARN, red for FAIL, gray for SKIP
+- Render the Reliability cell as `<span title="<note>">tag (CONF)</span>` so hovering shows the detail note. Also include plain inline text after the span so it is readable without hover (e.g., `<span title="proxy metric — lower bound">minimal (low)</span> *`).
+- Add a visible `*` marker on rows where reliability tag is `minimal` (lower-bound measurement). Include a footnote below the table: `* lower-bound measurement`.
 
 ### Recommendations
 
@@ -73,9 +77,9 @@ A table with columns: #, Priority, Effort, Dimension, Recommendation. Sorted by 
 
 - Clean, minimal design — white background, comfortable reading width (max 900px centered)
 - Use a system font stack: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
-- Grade colors: A = green, B = blue, C = orange, D = red, F = dark red
 - Status colors: PASS = `#22c55e`, WARN = `#eab308`, FAIL = `#ef4444`, SKIP = `#9ca3af`
 - Severity badges: small colored pills — critical = red, high = orange, medium = yellow, low = gray
+- Low-coverage row highlight: background `#fff7ed` (a light amber) on summary rows where coverage < 40%
 - Zebra-striped table rows for readability
 - Responsive — readable on mobile without horizontal scroll
 - Print-friendly: use `@media print` to hide collapsible toggles and expand all sections

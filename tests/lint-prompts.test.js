@@ -1171,6 +1171,31 @@ test('SKILL.md sums weighted categories and emits no grade', () => {
   );
 });
 
+test('report templates use weighted points + reliability, not grades', () => {
+  for (const f of ['output-format.md', 'report-template.md']) {
+    const src = readUtf8(path.join(skillRoot, f));
+    assert.match(src, /weight/i, `${f} must show category weights`);
+    assert.match(src, /coverage ratio/i, `${f} must show the coverage ratio`);
+    assert.match(src, /reliabilit/i, `${f} must show reliability`);
+    assert.doesNotMatch(
+      src,
+      /Grade \*\*X\*\*|Letter grade|— Grade/i,
+      `${f} must not present a letter grade`
+    );
+  }
+  const html = readUtf8(path.join(skillRoot, 'report-template.md'));
+  assert.match(
+    html,
+    /title=/,
+    'HTML template must use title= hover hints for reliability'
+  );
+  assert.doesNotMatch(
+    html,
+    /Grade colors:/i,
+    'HTML template must drop the A–F grade color CSS'
+  );
+});
+
 test('every dimension check maps to a standards.toml category', () => {
   const standards = readUtf8(path.join(referencesDir, 'standards.toml'));
   const definedCodes = new Set(

@@ -12,19 +12,27 @@ Each dimension artifact (`{name}.md`) contains:
 # {Dimension Title} — Audit Results
 
 **Date:** YYYY-MM-DD
-**Score:** XX% — Grade **X**
+**Score:** N pts (coverage XX% rel. today's standard)
+**Reliability:** {tag} ({confidence}) — {note}
 
 ## Results
 
-| #   | Check | Severity | Status | Evidence |
-| --- | ----- | -------- | ------ | -------- |
-| 1   | What  | critical | PASS   | proof    |
+| #   | Check | Category | Weight | Status | Reliability                 | Evidence |
+| --- | ----- | -------- | ------ | ------ | --------------------------- | -------- |
+| 1   | What  | 3        | 4      | PASS   | maximal (high) — git native | proof    |
 
 ## {Dimension-Specific Summary}
 
 (Structured data for downstream dimensions to consume.
 E.g., Topology Summary with detected layers, languages, structure type.)
 ```
+
+Column notes:
+
+- **Category** — numeric code from `standards.toml` (e.g. `3`); `none` for unscored topology checks.
+- **Weight** — the `weight` value for this category in `standards.toml`; `—` for unscored checks.
+- **Status** — `PASS`, `WARN`, `FAIL`, or `SKIP`.
+- **Reliability** — `{tag} ({confidence}) — {note}`, where tag is one of `minimal`, `maximal`, or `not-reliable`. Rows where tag is `minimal` carry a `*` marker (lower-bound measurement).
 
 ---
 
@@ -37,26 +45,30 @@ Write the full report to `context/audits/YYYY-MM-DD/report.md` and also display 
 
 **Date:** YYYY-MM-DD
 **Scope:** [all dimensions | single dimension name]
-**Overall Score:** XX% — Grade **X**
-**Previous Audit:** [YYYY-MM-DD — XX% Grade X | none]
+**Audit Total:** N pts
+**Coverage Ratio:** XX% rel. today's standard
+**Previous Audit:** [YYYY-MM-DD — N pts, XX% | none]
 
 ## Summary
 
-| #   | Dimension | Score | Grade | Delta | Critical | High | Medium | Low |
-| --- | --------- | ----- | ----- | ----- | -------- | ---- | ------ | --- |
-| 1   | Name      | XX%   | X     | +/-N  | 0        | 0    | 0      | 0   |
-| …   | …         | …     | …     | …     | …        | …    | …      | …   |
+| #   | Dimension | Points | Coverage | Delta | Critical | High | Medium | Low |
+| --- | --------- | ------ | -------- | ----- | -------- | ---- | ------ | --- |
+| 1   | Name      | N      | XX%      | +/-N  | 0        | 0    | 0      | 0   |
+| …   | …         | …      | …        | …     | …        | …    | …      | …   |
 
 ## Dimension: [Name]
 
-**Score:** XX% — Grade **X**
+**Score:** N pts (coverage XX% rel. today's standard)
+**Reliability:** {tag} ({confidence}) — {note}
 
-| #   | Check                   | Severity | Status | Evidence       |
-| --- | ----------------------- | -------- | ------ | -------------- |
-| 1   | What the check verifies | critical | PASS   | one-line proof |
-| 2   | What the check verifies | high     | FAIL   | what's missing |
-| 3   | What the check verifies | medium   | WARN   | partial issue  |
-| 4   | What the check verifies | low      | SKIP   | not applicable |
+| #   | Check                   | Category | Weight | Status | Reliability                 | Evidence       |
+| --- | ----------------------- | -------- | ------ | ------ | --------------------------- | -------------- |
+| 1   | What the check verifies | 3        | 4      | PASS   | maximal (high) — git native | one-line proof |
+| 2   | What the check verifies | 1        | 6      | FAIL   | minimal (low) — proxy \*    | what's missing |
+| 3   | What the check verifies | 2        | 3      | WARN   | not-reliable — no data      | partial issue  |
+| 4   | What the check verifies | none     | —      | SKIP   | —                           | not applicable |
+
+`*` marks a lower-bound measurement (reliability tag: `minimal`).
 
 (Repeat the dimension section for each dimension that was executed.)
 

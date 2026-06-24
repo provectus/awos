@@ -877,6 +877,514 @@ var DETECTORS2 = {
   // ARCH-06 file sizes (computed)
 };
 
+// plugins/awos/skills/ai-readiness-audit/detectors/spec_driven_development.ts
+import { readFileSync as readFileSync4, existsSync as existsSync3, readdirSync, statSync } from "node:fs";
+import { join as join4, relative as relative4 } from "node:path";
+import { execFileSync as execFileSync4 } from "node:child_process";
+function detectAwosInstalled(repoPath, _params) {
+  const hasAwos = existsSync3(join4(repoPath, ".awos"));
+  const hasContext = existsSync3(join4(repoPath, "context"));
+  if (hasAwos && hasContext) {
+    return makeResult("PASS", 2, [
+      ".awos/ directory present \u2014 AWOS framework installed",
+      "context/ directory present \u2014 spec workspace initialised"
+    ]);
+  }
+  if (hasAwos) {
+    return makeResult("WARN", 1, [
+      ".awos/ directory present but context/ is missing \u2014 AWOS installed but workspace not initialised"
+    ]);
+  }
+  if (hasContext) {
+    return makeResult("WARN", 1, [
+      "context/ directory present but .awos/ is missing \u2014 workspace exists but AWOS framework not installed"
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "neither .awos/ nor context/ found \u2014 AWOS framework is not installed"
+  ]);
+}
+var MIN_SUBSTANTIVE_LINES = 5;
+function isSubstantive(filePath) {
+  try {
+    const content = readFileSync4(filePath, "utf8");
+    const nonBlankLines = content.split("\n").filter((l) => l.trim().length > 0);
+    return nonBlankLines.length > MIN_SUBSTANTIVE_LINES;
+  } catch {
+    return false;
+  }
+}
+var FOUNDATIONAL_DOC_CANDIDATES = [
+  ["context/product/product-definition.md"],
+  ["context/product/roadmap.md"],
+  [
+    "context/architecture/architecture.md",
+    "context/product/architecture.md"
+  ]
+];
+function detectProductContextDocs(repoPath, _params) {
+  const found = [];
+  const missing = [];
+  for (const candidates of FOUNDATIONAL_DOC_CANDIDATES) {
+    let matched = false;
+    for (const candidate of candidates) {
+      const fullPath = join4(repoPath, candidate);
+      if (existsSync3(fullPath) && isSubstantive(fullPath)) {
+        found.push(candidate);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      missing.push(candidates[0]);
+    }
+  }
+  const count = found.length;
+  const evidence = [
+    ...found.map((f) => `present and substantive: ${f}`),
+    ...missing.map((m) => `missing or trivial: ${m}`)
+  ];
+  if (count === 3) {
+    return makeResult("PASS", count, [
+      "all 3 foundational AWOS documents present with substantive content",
+      ...evidence
+    ]);
+  }
+  if (count === 2) {
+    return makeResult("WARN", count, [
+      "2 of 3 foundational AWOS documents present",
+      ...evidence
+    ]);
+  }
+  return makeResult("FAIL", count, [
+    `only ${count} of 3 foundational AWOS documents present`,
+    ...evidence
+  ]);
+}
+var TECH_SIGNALS = [
+  {
+    name: "typescript",
+    detect: (r) => iterFiles(r, ["*.ts", "*.tsx", "tsconfig.json"]).length > 0
+  },
+  {
+    name: "python",
+    detect: (r) => iterFiles(r, ["*.py"]).length > 0
+  },
+  {
+    name: "django",
+    detect: (r) => iterFiles(r, ["manage.py", "settings.py", "urls.py"]).length > 0
+  },
+  {
+    name: "react",
+    detect: (r) => iterFiles(r, ["*.tsx", "*.jsx"]).length > 0 || (() => {
+      const pkg = join4(r, "package.json");
+      if (!existsSync3(pkg)) return false;
+      try {
+        return readFileSync4(pkg, "utf8").includes('"react"');
+      } catch {
+        return false;
+      }
+    })()
+  },
+  {
+    name: "node",
+    detect: (r) => existsSync3(join4(r, "package.json")) || iterFiles(r, ["*.js"]).length > 0
+  },
+  {
+    name: "javascript",
+    detect: (r) => iterFiles(r, ["*.js", "*.jsx"]).length > 0
+  },
+  {
+    name: "postgresql",
+    detect: (r) => iterFiles(r, ["*.sql"]).length > 0 || (() => {
+      try {
+        const out = execFileSync4(
+          "grep",
+          ["-rl", "--include=*.py", "--include=*.ts", "--include=*.js", "psycopg2", r],
+          { encoding: "utf8" }
+        );
+        return out.trim().length > 0;
+      } catch {
+        return false;
+      }
+    })()
+  },
+  {
+    name: "postgres",
+    detect: (r) => iterFiles(r, ["*.sql"]).length > 0 || (() => {
+      try {
+        const out = execFileSync4(
+          "grep",
+          ["-rl", "--include=*.py", "--include=*.ts", "--include=*.js", "psycopg", r],
+          { encoding: "utf8" }
+        );
+        return out.trim().length > 0;
+      } catch {
+        return false;
+      }
+    })()
+  },
+  {
+    name: "go",
+    detect: (r) => iterFiles(r, ["*.go", "go.mod"]).length > 0
+  },
+  {
+    name: "java",
+    detect: (r) => iterFiles(r, ["*.java"]).length > 0
+  },
+  {
+    name: "docker",
+    detect: (r) => iterFiles(r, ["Dockerfile", "docker-compose.yml", "docker-compose.yaml"]).length > 0
+  },
+  {
+    name: "terraform",
+    detect: (r) => iterFiles(r, ["*.tf"]).length > 0
+  },
+  {
+    name: "kubernetes",
+    detect: (r) => {
+      try {
+        const out = execFileSync4(
+          "grep",
+          ["-rl", "--include=*.yaml", "--include=*.yml", "apiVersion:", r],
+          { encoding: "utf8" }
+        );
+        return out.trim().length > 0;
+      } catch {
+        return false;
+      }
+    }
+  }
+];
+function findArchDoc(repoPath) {
+  for (const candidate of [
+    join4(repoPath, "context", "architecture", "architecture.md"),
+    join4(repoPath, "context", "product", "architecture.md"),
+    join4(repoPath, "ARCHITECTURE.md")
+  ]) {
+    if (existsSync3(candidate)) return candidate;
+  }
+  return null;
+}
+function detectArchTechMatch(repoPath, _params) {
+  const archDoc = findArchDoc(repoPath);
+  if (!archDoc) {
+    return makeResult("PASS", 0, [
+      "no architecture document found \u2014 tech-match check skipped"
+    ]);
+  }
+  let content;
+  try {
+    content = readFileSync4(archDoc, "utf8").toLowerCase();
+  } catch {
+    return makeResult("PASS", 0, ["could not read architecture document"]);
+  }
+  const unverified = [];
+  const verified = [];
+  for (const signal of TECH_SIGNALS) {
+    if (!content.includes(signal.name.toLowerCase())) continue;
+    if (signal.detect(repoPath)) {
+      verified.push(signal.name);
+    } else {
+      unverified.push(signal.name);
+    }
+  }
+  const evidence = [
+    `architecture document: ${relative4(repoPath, archDoc)}`,
+    ...verified.map((t) => `verified in codebase: ${t}`),
+    ...unverified.map((t) => `mentioned but not evidenced in codebase: ${t}`)
+  ];
+  if (unverified.length >= 3) {
+    return makeResult("FAIL", unverified.length, [
+      `${unverified.length} technology mention(s) in architecture doc not evidenced in codebase`,
+      ...evidence
+    ]);
+  }
+  if (unverified.length >= 1) {
+    return makeResult("WARN", unverified.length, [
+      `${unverified.length} technology mention(s) in architecture doc not evidenced in codebase`,
+      ...evidence
+    ]);
+  }
+  return makeResult("PASS", 0, [
+    "all technology mentions in architecture doc are evidenced in the codebase",
+    ...evidence
+  ]);
+}
+var TRUNK_BRANCHES = /* @__PURE__ */ new Set(["main", "master", "develop", "development"]);
+function listLocalBranches(repoPath) {
+  try {
+    const out = execFileSync4(
+      "git",
+      ["branch", "--format=%(refname:short)"],
+      { cwd: repoPath, encoding: "utf8" }
+    );
+    return out.split("\n").map((b) => b.trim()).filter((b) => b.length > 0 && !TRUNK_BRANCHES.has(b));
+  } catch {
+    return [];
+  }
+}
+function branchTouchedSpec(repoPath, branch) {
+  try {
+    const out = execFileSync4(
+      "git",
+      [
+        "log",
+        branch,
+        "--not",
+        "main",
+        "--name-only",
+        "--format=",
+        "--diff-filter=ACDMR"
+      ],
+      { cwd: repoPath, encoding: "utf8" }
+    );
+    return out.split("\n").some((line) => line.startsWith("context/spec/"));
+  } catch {
+    try {
+      const out = execFileSync4(
+        "git",
+        ["log", branch, "--name-only", "--format=", "--diff-filter=ACDMR"],
+        { cwd: repoPath, encoding: "utf8" }
+      );
+      return out.split("\n").some((line) => line.startsWith("context/spec/"));
+    } catch {
+      return false;
+    }
+  }
+}
+function detectBranchSpecRatio(repoPath, _params) {
+  const branches = listLocalBranches(repoPath);
+  if (branches.length === 0) {
+    return makeResult(
+      "SKIP",
+      null,
+      ["no feature branches found \u2014 branch\u2192spec ratio not computable"],
+      "computed"
+    );
+  }
+  const specBranches = [];
+  const plainBranches = [];
+  for (const branch of branches) {
+    if (branchTouchedSpec(repoPath, branch)) {
+      specBranches.push(branch);
+    } else {
+      plainBranches.push(branch);
+    }
+  }
+  const total = branches.length;
+  const ratio = Math.round(specBranches.length / total * 1e10) / 1e10;
+  const evidence = [
+    `${specBranches.length}/${total} feature branches touched context/spec/ (ratio: ${Math.round(ratio * 100)}%)`,
+    ...specBranches.slice(0, 10).map((b) => `spec branch: ${b}`),
+    ...plainBranches.slice(0, 10).map((b) => `plain branch: ${b}`)
+  ];
+  if (ratio >= 0.7) {
+    return makeResult(
+      "PASS",
+      ratio,
+      [
+        `${Math.round(ratio * 100)}% of feature branches used spec workflow (threshold: 70%)`,
+        ...evidence
+      ],
+      "computed"
+    );
+  }
+  if (ratio >= 0.4) {
+    return makeResult(
+      "WARN",
+      ratio,
+      [
+        `${Math.round(ratio * 100)}% of feature branches used spec workflow (below 70% threshold)`,
+        ...evidence
+      ],
+      "computed"
+    );
+  }
+  return makeResult(
+    "FAIL",
+    ratio,
+    [
+      `only ${Math.round(ratio * 100)}% of feature branches used spec workflow (threshold: 70%)`,
+      ...evidence
+    ],
+    "computed"
+  );
+}
+var SPEC_TRIAD = [
+  "functional-spec.md",
+  "technical-considerations.md",
+  "tasks.md"
+];
+function listSpecDirs(repoPath) {
+  const specBase = join4(repoPath, "context", "spec");
+  if (!existsSync3(specBase)) return [];
+  try {
+    return readdirSync(specBase).filter((name) => /^\d{3}-/.test(name)).map((name) => join4(specBase, name)).filter((p) => {
+      try {
+        return statSync(p).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+function detectSpecTriadComplete(repoPath, _params) {
+  const specDirs = listSpecDirs(repoPath);
+  if (specDirs.length === 0) {
+    return makeResult("PASS", 0, ["no spec directories found \u2014 triad check skipped"]);
+  }
+  const statuses = [];
+  for (const dir of specDirs) {
+    const present = SPEC_TRIAD.filter((f) => existsSync3(join4(dir, f)));
+    const missing = SPEC_TRIAD.filter((f) => !existsSync3(join4(dir, f)));
+    statuses.push({ dir: relative4(repoPath, dir), present, missing });
+  }
+  const empty = statuses.filter((s) => s.present.length === 0);
+  const incomplete = statuses.filter(
+    (s) => s.present.length > 0 && s.missing.length > 0
+  );
+  const complete = statuses.filter((s) => s.missing.length === 0);
+  const evidence = [
+    `${complete.length}/${specDirs.length} spec dirs have all 3 files`,
+    ...incomplete.map(
+      (s) => `incomplete: ${s.dir} \u2014 missing: ${s.missing.join(", ")}`
+    ),
+    ...empty.map((s) => `empty: ${s.dir} \u2014 has none of the 3 required files`)
+  ];
+  if (empty.length > 0) {
+    return makeResult("FAIL", empty.length, [
+      `${empty.length} spec dir(s) have none of the 3 required files`,
+      ...evidence
+    ]);
+  }
+  if (incomplete.length > 0) {
+    return makeResult("WARN", incomplete.length, [
+      `${incomplete.length} spec dir(s) are incomplete (have some but not all 3 files)`,
+      ...evidence
+    ]);
+  }
+  return makeResult("PASS", specDirs.length, [
+    `all ${specDirs.length} spec dir(s) have the complete triad`,
+    ...evidence
+  ]);
+}
+var TASK_LINE_RX = /^\s*-\s*\[[ xX]\]/m;
+var UNCHECKED_RX = /^\s*-\s*\[ \]/m;
+function detectStaleSpecs(repoPath, _params) {
+  const specDirs = listSpecDirs(repoPath);
+  if (specDirs.length === 0) {
+    return makeResult("PASS", 0, ["no spec directories found \u2014 stale-spec check skipped"]);
+  }
+  const stale = [];
+  const active = [];
+  const done = [];
+  for (const dir of specDirs) {
+    const tasksPath = join4(dir, "tasks.md");
+    if (!existsSync3(tasksPath)) continue;
+    let content;
+    try {
+      content = readFileSync4(tasksPath, "utf8");
+    } catch {
+      continue;
+    }
+    const hasTasks = TASK_LINE_RX.test(content);
+    if (!hasTasks) {
+      stale.push(relative4(repoPath, dir));
+    } else if (UNCHECKED_RX.test(content)) {
+      active.push(relative4(repoPath, dir));
+    } else {
+      done.push(relative4(repoPath, dir));
+    }
+  }
+  const evidence = [
+    ...active.map((d) => `active (has open tasks): ${d}`),
+    ...done.map((d) => `done (all tasks complete): ${d}`),
+    ...stale.map((d) => `stale (tasks.md has no task items): ${d}`)
+  ];
+  if (stale.length === 0) {
+    return makeResult("PASS", 0, ["no stale specs found", ...evidence]);
+  }
+  if (stale.length === 1) {
+    return makeResult("WARN", stale.length, [
+      `1 stale spec detected (tasks.md is an empty stub)`,
+      ...evidence
+    ]);
+  }
+  return makeResult("FAIL", stale.length, [
+    `${stale.length} stale specs detected (tasks.md empty stubs)`,
+    ...evidence
+  ]);
+}
+var TASK_CHECKBOX_RX = /^\s*-\s*\[[ xX]\]/;
+var AGENT_ANNOTATION_RX = /\*\*\[Agent:\s*[^\]]+\]\*\*/;
+function detectAgentAnnotations(repoPath, _params) {
+  const specDirs = listSpecDirs(repoPath);
+  let totalTasks = 0;
+  let annotatedTasks = 0;
+  for (const dir of specDirs) {
+    const tasksPath = join4(dir, "tasks.md");
+    if (!existsSync3(tasksPath)) continue;
+    let content;
+    try {
+      content = readFileSync4(tasksPath, "utf8");
+    } catch {
+      continue;
+    }
+    for (const line of content.split("\n")) {
+      if (TASK_CHECKBOX_RX.test(line)) {
+        totalTasks++;
+        if (AGENT_ANNOTATION_RX.test(line)) {
+          annotatedTasks++;
+        }
+      }
+    }
+  }
+  if (totalTasks === 0) {
+    return makeResult("SKIP", null, [
+      "no task checkbox lines found in any tasks.md \u2014 agent-annotation check skipped"
+    ]);
+  }
+  const ratio = Math.round(annotatedTasks / totalTasks * 1e10) / 1e10;
+  const evidence = [
+    `${annotatedTasks}/${totalTasks} task lines have **[Agent: ...]** annotations (${Math.round(ratio * 100)}%)`
+  ];
+  if (ratio >= 0.7) {
+    return makeResult("PASS", ratio, [
+      `${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: 70%)`,
+      ...evidence
+    ]);
+  }
+  if (ratio >= 0.4) {
+    return makeResult("WARN", ratio, [
+      `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (below 70%)`,
+      ...evidence
+    ]);
+  }
+  return makeResult("FAIL", ratio, [
+    `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: 70%)`,
+    ...evidence
+  ]);
+}
+var DETECTORS3 = {
+  2800: detectAwosInstalled,
+  // SDD-01 AWOS installed
+  2801: detectProductContextDocs,
+  // SDD-02 foundational product docs
+  2802: detectArchTechMatch,
+  // SDD-03 tech choices match codebase
+  2803: detectBranchSpecRatio,
+  // SDD-04 branch→spec ratio (computed)
+  2804: detectSpecTriadComplete,
+  // SDD-05 spec triad completeness
+  2805: detectStaleSpecs,
+  // SDD-06 no stale specs
+  2806: detectAgentAnnotations
+  // SDD-07 agent annotations in tasks.md
+};
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
 var COLLECTORS = {
   git: collect,
@@ -884,9 +1392,10 @@ var COLLECTORS = {
   tracker: collect3,
   docs: collect4
 };
-var DETECTORS3 = {
+var DETECTORS4 = {
   ...DETECTORS,
-  ...DETECTORS2
+  ...DETECTORS2,
+  ...DETECTORS3
   // ...FOO_DETECTORS,  // ← template for future modules
 };
 var DEFAULT_PERIOD = {
@@ -939,11 +1448,11 @@ function main() {
         });
         process.exit(1);
       }
-      const fn = DETECTORS3[code];
+      const fn = DETECTORS4[code];
       if (!fn) {
         printJson({
           error: `unknown detector code ${code}`,
-          known: Object.keys(DETECTORS3).map(Number).sort((a, b) => a - b)
+          known: Object.keys(DETECTORS4).map(Number).sort((a, b) => a - b)
         });
         process.exit(1);
       }

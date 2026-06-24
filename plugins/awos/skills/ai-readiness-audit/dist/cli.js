@@ -392,12 +392,13 @@ function grep(repoPath, pattern, globs, flags = "") {
 // plugins/awos/skills/ai-readiness-audit/detectors/software_best_practices.ts
 import { basename, relative as relative2 } from "node:path";
 import { readFileSync as readFileSync2 } from "node:fs";
-var PY2_EXCEPT = /except\s+[A-Za-z_][\w.]*\s*,\s*[A-Za-z_][\w.]*\s*:/;
+var PY2_EXCEPT = /except\s+[A-Za-z_][\w.]*(\s*,\s*[A-Za-z_][\w.]*)+\s*:/;
 function detectExceptClauseDefect(repoPath, _params) {
   const hits = grep(repoPath, PY2_EXCEPT, ["**/*.py"]);
-  if (hits.length) {
-    const ev = hits.map((h) => `${h.file}:${h.line} ${h.text}`);
-    return makeResult("FAIL", hits.length, ev);
+  const realHits = hits.filter((h) => !/^\s*#/.test(h.text));
+  if (realHits.length) {
+    const ev = realHits.map((h) => `${h.file}:${h.line} ${h.text}`);
+    return makeResult("FAIL", realHits.length, ev);
   }
   return makeResult("PASS", 0, ["no Python-2 except-clause syntax found"]);
 }
@@ -453,8 +454,7 @@ var SOURCE_GLOBS = [
   "*.js",
   "*.jsx",
   "*.java",
-  "*.kt",
-  "*.go"
+  "*.kt"
 ];
 function detectErrorHandling(repoPath, _params) {
   const files = iterFiles(repoPath, SOURCE_GLOBS);

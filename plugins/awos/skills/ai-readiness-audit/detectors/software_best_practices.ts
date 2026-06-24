@@ -9,16 +9,21 @@ import { readFileSync } from 'node:fs';
 // Excludes the valid `except E as name:` and `except (A, B):` forms.
 // ---------------------------------------------------------------------------
 
-const PY2_EXCEPT = /except\s+[A-Za-z_][\w.]*\s*,\s*[A-Za-z_][\w.]*\s*:/;
+// Matches `except A, B:` and `except A, B, C:` (two or more comma-separated names).
+// The two-name case is a subset, so no regression against the original pattern.
+// Known limitation: matches inside string literals can still false-positive (no parser; acceptable for a detected heuristic).
+const PY2_EXCEPT = /except\s+[A-Za-z_][\w.]*(\s*,\s*[A-Za-z_][\w.]*)+\s*:/;
 
 export function detectExceptClauseDefect(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
   const hits = grep(repoPath, PY2_EXCEPT, ['**/*.py']);
-  if (hits.length) {
-    const ev = hits.map((h) => `${h.file}:${h.line} ${h.text}`);
-    return makeResult('FAIL', hits.length, ev);
+  // Drop lines whose first non-whitespace character is `#` (Python comments).
+  const realHits = hits.filter((h) => !/^\s*#/.test(h.text));
+  if (realHits.length) {
+    const ev = realHits.map((h) => `${h.file}:${h.line} ${h.text}`);
+    return makeResult('FAIL', realHits.length, ev);
   }
   return makeResult('PASS', 0, ['no Python-2 except-clause syntax found']);
 }
@@ -62,12 +67,15 @@ export function detectLockfiles(
 // Deterministic heuristic over catch/except blocks in source files.
 //
 // Algorithm:
-//   For each Python / JS / TS / Java / Kotlin / Go source file:
+//   For each Python / JS / TS / Java / Kotlin source file:
 //     - Scan lines for catch/except block openers.
 //     - A block is classified as "bad" (empty or unhandled) when the first
 //       non-blank body line is ONLY `pass`, `{}`, a bare closing brace, or
 //       when no log/raise/throw/return keyword appears within the next 4
 //       lines of the opener.
+//
+// Note: Go is intentionally excluded — its `if err != nil` idiom does not
+// use try/catch/except syntax, so Go files would contribute no signal.
 //
 // Scoring (over all catch blocks found across the repo):
 //   bad_ratio = bad_count / total_count
@@ -127,7 +135,6 @@ const SOURCE_GLOBS = [
   '*.jsx',
   '*.java',
   '*.kt',
-  '*.go',
 ];
 
 export function detectErrorHandling(

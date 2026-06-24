@@ -116,20 +116,26 @@ test('all-logged catch blocks is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
-test('mixed catch blocks is WARN', () => {
+test('mixed catch blocks is WARN (1 bad out of 4 → ~25% → WARN)', () => {
   const t = tmp();
-  // One file with logged, one with empty
-  writeFileSync(
-    join(t, 'good.py'),
-    `try:\n    f()\nexcept Exception as e:\n    logger.error(e)\n`
-  );
+  // 3 properly handled blocks + 1 empty = 25% bad → between 0.1 and 0.5 → WARN
+  for (let i = 0; i < 3; i++) {
+    writeFileSync(
+      join(t, `good${i}.py`),
+      `try:\n    f()\nexcept Exception as e:\n    logger.error(e)\n`
+    );
+  }
   writeFileSync(
     join(t, 'bad.py'),
     `try:\n    f()\nexcept Exception:\n    pass\n`
   );
   const r = detectErrorHandling(t);
-  // Mixed → WARN or FAIL depending on ratio; with 50% bad, should be WARN
-  assert.ok(['WARN', 'FAIL'].includes(r.status));
+  // 1/4 = 25% bad → WARN
+  assert.equal(
+    r.status,
+    'WARN',
+    'expected WARN when bad ratio is between 10% and 50%'
+  );
 });
 
 test('no code files returns PASS (nothing to check)', () => {
@@ -137,6 +143,28 @@ test('no code files returns PASS (nothing to check)', () => {
   writeFileSync(join(t, 'readme.md'), '# hi\n');
   const r = detectErrorHandling(t);
   assert.equal(r.status, 'PASS');
+});
+
+test('detects 3+-name Python-2 except clause (e.g. except A, B, C:)', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'multi.py'),
+    'try:\n    f()\nexcept ValueError, TypeError, IOError:\n    pass\n'
+  );
+  const r = detectExceptClauseDefect(t);
+  assert.equal(r.status, 'FAIL', 'three-name except clause should be FAIL');
+  assert.ok(r.evidence.some((e) => e.includes('multi.py')));
+});
+
+test('comment-only match is PASS (# except A, B: is a comment)', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'commented.py'), '# except A, B:\nprint("ok")\n');
+  const r = detectExceptClauseDefect(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'line starting with # should not trigger FAIL'
+  );
 });
 
 // ---------------------------------------------------------------------------

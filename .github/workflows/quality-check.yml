@@ -59,6 +59,30 @@ jobs:
       - name: Measure coverage
         run: npm run test:coverage
 
+  # Node/TypeScript engine — builds the esbuild bundle and runs the
+  # node:test/tsx engine test suite. Non-blocking until green on two
+  # consecutive PRs (flip continue-on-error: false then).
+  node-engine:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build engine bundle
+        run: npm run build:engine
+
+      - name: Run engine tests
+        run: node --import tsx --test "plugins/awos/skills/ai-readiness-audit/**/*.test.ts"
+
   # Coverage gate — fails the job when src/ coverage drops below the
   # thresholds hardcoded below. To raise the floor, edit this block.
   coverage-gate:

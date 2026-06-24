@@ -1224,6 +1224,27 @@ test('plugin.json version matches the awos marketplace entry and equals 2.2.0', 
   );
 });
 
+test('TS engine scaffold present (package.json/tsconfig + collectors/detectors/metrics/tests dirs)', () => {
+  const skill = path.join(
+    repoRoot,
+    'plugins',
+    'awos',
+    'skills',
+    'ai-readiness-audit'
+  );
+  assert.ok(
+    fs.existsSync(path.join(repoRoot, 'tsconfig.json')),
+    'tsconfig.json must exist'
+  );
+  assert.ok(
+    fs.existsSync(path.join(repoRoot, 'package.json')),
+    'package.json must exist'
+  );
+  for (const d of ['collectors', 'detectors', 'metrics', 'tests']) {
+    assert.ok(fs.existsSync(path.join(skill, d)), `${d}/ dir must exist`);
+  }
+});
+
 test('every dimension check maps to a standards.toml category', () => {
   const standards = readUtf8(path.join(referencesDir, 'standards.toml'));
   const definedCodes = new Set(

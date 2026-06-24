@@ -494,6 +494,328 @@ var DETECTORS = {
   // SBP-06 sibling: Python-2 except-clause syntax
 };
 
+// plugins/awos/skills/ai-readiness-audit/detectors/code_architecture.ts
+import { readFileSync as readFileSync3 } from "node:fs";
+import { basename as basename2, dirname, relative as relative3 } from "node:path";
+import { execFileSync as execFileSync3 } from "node:child_process";
+var ARCH_DOC_PATTERNS = ["ARCHITECTURE.md", "ARCHITECTURE.rst", "architecture.md", "architecture.rst"];
+var LAYERED_DIRS = [
+  "routes",
+  "controllers",
+  "handlers",
+  "services",
+  "repositories",
+  "models",
+  "domain",
+  "infra",
+  "infrastructure",
+  "application",
+  "api",
+  "lib",
+  "core",
+  "adapters",
+  "ports",
+  "usecases"
+];
+function detectArchPattern(repoPath, _params) {
+  const archDocs = iterFiles(repoPath, ARCH_DOC_PATTERNS);
+  if (archDocs.length > 0) {
+    const found = archDocs.map((p) => relative3(repoPath, p));
+    return makeResult("PASS", archDocs.length, [
+      `architecture documentation found: ${found.join(", ")}`
+    ]);
+  }
+  let out;
+  try {
+    out = execFileSync3(
+      "find",
+      [repoPath, "-maxdepth", "3", "-type", "d", "-print"],
+      { encoding: "utf8" }
+    );
+  } catch {
+    out = "";
+  }
+  const dirs = out.split("\n").filter(Boolean).map((d) => basename2(d).toLowerCase());
+  const layeredMatches = LAYERED_DIRS.filter((layer) => dirs.includes(layer));
+  if (layeredMatches.length >= 3) {
+    return makeResult("WARN", layeredMatches.length, [
+      `recognizable layered directory structure detected (${layeredMatches.length} canonical dirs: ${layeredMatches.join(", ")}) but no explicit architecture document`
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no architecture documentation or recognizable layered directory structure found"
+  ]);
+}
+var LAYER_TIERS = {
+  models: 0,
+  model: 0,
+  domain: 0,
+  entities: 0,
+  entity: 0,
+  repositories: 1,
+  repository: 1,
+  repos: 1,
+  repo: 1,
+  services: 2,
+  service: 2,
+  usecases: 2,
+  usecase: 2,
+  controllers: 3,
+  controller: 3,
+  handlers: 4,
+  handler: 4,
+  routes: 5,
+  route: 5,
+  api: 5
+};
+var IMPORT_RX = /(?:import\s+.*?from\s+['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\)|from\s+([^\s]+)\s+import)/;
+var SOURCE_GLOBS2 = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.py"];
+function getLayerTier(dir) {
+  const lower = dir.toLowerCase();
+  for (const [key, tier] of Object.entries(LAYER_TIERS)) {
+    if (lower === key) return tier;
+  }
+  for (const [key, tier] of Object.entries(LAYER_TIERS)) {
+    if (lower.startsWith(key)) return tier;
+  }
+  return void 0;
+}
+function detectImportGraph(repoPath, _params) {
+  const files = iterFiles(repoPath, SOURCE_GLOBS2);
+  if (files.length === 0) {
+    return makeResult("PASS", 0, ["no source files found \u2014 no import violations possible"]);
+  }
+  const violations = [];
+  for (const filePath of files) {
+    const relPath = relative3(repoPath, filePath);
+    const fileDir = basename2(dirname(relPath)).toLowerCase();
+    const sourceTier = getLayerTier(fileDir);
+    if (sourceTier === void 0) continue;
+    let src;
+    try {
+      src = readFileSync3(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const lines = src.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const m = IMPORT_RX.exec(line);
+      if (!m) continue;
+      const importPath = (m[1] || m[2] || m[3] || "").trim();
+      if (!importPath) continue;
+      const parts = importPath.replace(/^\.\.\//, "").replace(/^\.\//, "").split("/");
+      const targetDir = parts[0].toLowerCase();
+      const targetTier = getLayerTier(targetDir);
+      if (targetTier !== void 0 && targetTier > sourceTier) {
+        violations.push({
+          file: relPath,
+          line: i + 1,
+          importPath,
+          sourceLayer: fileDir,
+          targetLayer: targetDir
+        });
+      }
+    }
+  }
+  if (violations.length === 0) {
+    return makeResult("PASS", 0, ["no import layer violations detected"]);
+  }
+  const evidence = violations.slice(0, 10).map((v) => `${v.file}:${v.line} layer violation: ${v.sourceLayer}/ imports from ${v.targetLayer}/ (${v.importPath})`);
+  return makeResult("FAIL", violations.length, [
+    `${violations.length} import layer violation(s) detected`,
+    ...evidence
+  ]);
+}
+var PRESENTATION_DIRS = ["routes", "route", "controllers", "controller", "handlers", "handler", "views", "view", "templates", "template", "pages", "page"];
+var DATA_ACCESS_RX = /\b(?:db|conn|cursor|session|repository|repo)\s*\.\s*(?:query|execute|find|findOne|findAll|filter|get|update|delete|insert|save|add|commit|remove|all|fetchone|fetchall|fetch_one|fetch_all|run)\s*\(/i;
+var ORM_STATIC_RX = /\b\w+\s*\.\s*(?:objects\s*\.\s*(?:filter|get|all|exclude|create|update|delete)\s*\(|find(?:One|All|By)?\s*\()/i;
+var RAW_SQL_RX = /(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP)\s+\w+/i;
+function countDataAccessCalls(content) {
+  const lines = content.split("\n");
+  let count = 0;
+  for (const line of lines) {
+    if (/^\s*(?:#|\/\/|\/\*)/.test(line)) continue;
+    if (DATA_ACCESS_RX.test(line) || ORM_STATIC_RX.test(line) || RAW_SQL_RX.test(line)) {
+      count++;
+    }
+  }
+  return count;
+}
+function detectSeparationOfConcerns(repoPath, _params) {
+  const files = iterFiles(repoPath, SOURCE_GLOBS2);
+  const presentationFiles = files.filter((f) => {
+    const dir = basename2(dirname(relative3(repoPath, f))).toLowerCase();
+    return PRESENTATION_DIRS.some((pd) => dir === pd || dir.startsWith(pd));
+  });
+  if (presentationFiles.length === 0) {
+    return makeResult("PASS", 0, ["no route/controller/handler files found \u2014 separation of concerns not checkable"]);
+  }
+  const failFiles = [];
+  const warnFiles = [];
+  for (const filePath of presentationFiles) {
+    const relPath = relative3(repoPath, filePath);
+    let content;
+    try {
+      content = readFileSync3(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const count = countDataAccessCalls(content);
+    if (count >= 3) {
+      failFiles.push({ file: relPath, count });
+    } else if (count >= 1) {
+      warnFiles.push({ file: relPath, count });
+    }
+  }
+  if (failFiles.length > 0) {
+    const evidence = failFiles.map((f) => `${f.file}: ${f.count} inline data-access call(s) in presentation layer`);
+    return makeResult("FAIL", failFiles.length, [
+      `${failFiles.length} presentation-layer file(s) have >= 3 inline data-access calls`,
+      ...evidence
+    ]);
+  }
+  if (warnFiles.length > 0) {
+    const evidence = warnFiles.map((f) => `${f.file}: ${f.count} inline data-access call(s) in presentation layer`);
+    return makeResult("WARN", warnFiles.length, [
+      `${warnFiles.length} presentation-layer file(s) have 1-2 inline data-access calls`,
+      ...evidence
+    ]);
+  }
+  return makeResult("PASS", presentationFiles.length, [
+    `${presentationFiles.length} presentation-layer file(s) checked \u2014 no inline data-access calls found`
+  ]);
+}
+function classifyName(name) {
+  if (/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(name)) return "snake_case";
+  if (/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name)) return "kebab-case";
+  if (/^[A-Z][A-Za-z0-9]*$/.test(name)) return "PascalCase";
+  if (/^[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$/.test(name)) return "camelCase";
+  return "other";
+}
+var NAMING_SOURCE_GLOBS = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.py", "*.java", "*.kt", "*.go", "*.rb"];
+function detectNamingConventions(repoPath, _params) {
+  const files = iterFiles(repoPath, NAMING_SOURCE_GLOBS);
+  const relevantFiles = files.filter((f) => {
+    const base = basename2(f).replace(/\.[^.]+$/, "");
+    return !["index", "__init__", "main", "app", "setup", "config"].includes(base);
+  });
+  if (relevantFiles.length === 0) {
+    return makeResult("PASS", 0, ["no source files found \u2014 naming convention check skipped"]);
+  }
+  const counts = {
+    snake_case: 0,
+    "kebab-case": 0,
+    camelCase: 0,
+    PascalCase: 0,
+    other: 0
+  };
+  for (const f of relevantFiles) {
+    const base = basename2(f).replace(/\.[^.]+$/, "");
+    counts[classifyName(base)]++;
+  }
+  const total = relevantFiles.length;
+  const conventions = ["snake_case", "kebab-case", "camelCase", "PascalCase"];
+  const dominant = conventions.reduce((best, c) => counts[c] > counts[best] ? c : best, conventions[0]);
+  const dominantCount = counts[dominant];
+  const ratio = dominantCount / total;
+  const evidence = [
+    `dominant convention: ${dominant} (${dominantCount}/${total} = ${Math.round(ratio * 100)}%)`,
+    ...conventions.filter((c) => counts[c] > 0).map((c) => `  ${c}: ${counts[c]} file(s)`)
+  ];
+  if (ratio >= 0.9) {
+    return makeResult("PASS", ratio, evidence);
+  }
+  if (ratio >= 0.7) {
+    return makeResult("WARN", ratio, [
+      `inconsistent file naming: dominant convention ${dominant} at ${Math.round(ratio * 100)}% (below 90% threshold)`,
+      ...evidence
+    ]);
+  }
+  return makeResult("FAIL", ratio, [
+    `inconsistent file naming: dominant convention ${dominant} at only ${Math.round(ratio * 100)}% (below 70% threshold)`,
+    ...evidence
+  ]);
+}
+var FILE_SIZE_GLOBS = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.py", "*.java", "*.kt", "*.go", "*.rb", "*.cs"];
+var LOC_THRESHOLD = 300;
+function countLines(filePath) {
+  try {
+    const content = readFileSync3(filePath, "utf8");
+    return content.split("\n").length;
+  } catch {
+    return 0;
+  }
+}
+function detectFileSizes(repoPath, _params) {
+  const files = iterFiles(repoPath, FILE_SIZE_GLOBS);
+  if (files.length === 0) {
+    return makeResult(
+      "PASS",
+      0,
+      ["no source files found \u2014 file-size check skipped"],
+      "computed"
+    );
+  }
+  const oversized = [];
+  for (const filePath of files) {
+    const lines = countLines(filePath);
+    if (lines > LOC_THRESHOLD) {
+      oversized.push({ file: relative3(repoPath, filePath), lines });
+    }
+  }
+  const total = files.length;
+  const ratio = Math.round(oversized.length / total * 1e10) / 1e10;
+  const evidence = [
+    `${oversized.length}/${total} source files exceed ${LOC_THRESHOLD} lines`,
+    ...oversized.slice(0, 10).map((f) => `${f.file}: ${f.lines} lines`)
+  ];
+  if (ratio > 0.3) {
+    return makeResult(
+      "FAIL",
+      ratio,
+      [
+        `${Math.round(ratio * 100)}% of source files exceed ${LOC_THRESHOLD} lines (threshold: 30%)`,
+        ...evidence
+      ],
+      "computed"
+    );
+  }
+  if (ratio > 0.1) {
+    return makeResult(
+      "WARN",
+      ratio,
+      [
+        `${Math.round(ratio * 100)}% of source files exceed ${LOC_THRESHOLD} lines (threshold: 10%)`,
+        ...evidence
+      ],
+      "computed"
+    );
+  }
+  return makeResult(
+    "PASS",
+    ratio,
+    [
+      `${Math.round(ratio * 100)}% of source files exceed ${LOC_THRESHOLD} lines \u2014 within threshold`,
+      ...evidence
+    ],
+    "computed"
+  );
+}
+var DETECTORS2 = {
+  2100: detectArchPattern,
+  // ARCH-01 declared/recognizable pattern
+  2101: detectImportGraph,
+  // ARCH-02 import direction / no tangled cross-imports
+  // 2102 intentionally omitted — ARCH-03 is method=judgment
+  2103: detectSeparationOfConcerns,
+  // ARCH-04 separation of concerns
+  2104: detectNamingConventions,
+  // ARCH-05 consistent naming conventions
+  2105: detectFileSizes
+  // ARCH-06 file sizes (computed)
+};
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
 var COLLECTORS = {
   git: collect,
@@ -501,8 +823,9 @@ var COLLECTORS = {
   tracker: collect3,
   docs: collect4
 };
-var DETECTORS2 = {
-  ...DETECTORS
+var DETECTORS3 = {
+  ...DETECTORS,
+  ...DETECTORS2
   // ...FOO_DETECTORS,  // ← template for future modules
 };
 var DEFAULT_PERIOD = {
@@ -555,11 +878,11 @@ function main() {
         });
         process.exit(1);
       }
-      const fn = DETECTORS2[code];
+      const fn = DETECTORS3[code];
       if (!fn) {
         printJson({
           error: `unknown detector code ${code}`,
-          known: Object.keys(DETECTORS2).map(Number).sort((a, b) => a - b)
+          known: Object.keys(DETECTORS3).map(Number).sort((a, b) => a - b)
         });
         process.exit(1);
       }

@@ -32,6 +32,7 @@ const COLLECTORS: Record<
 // Detectors
 // ---------------------------------------------------------------------------
 import { DETECTORS as SBP_DETECTORS } from './detectors/software_best_practices.ts';
+import { DETECTORS as CODE_ARCH_DETECTORS } from './detectors/code_architecture.ts';
 // TODO: when additional detector modules land (e.g. B.7 dimensions), add one
 // import line per module and spread it into DETECTORS below:
 //   import { DETECTORS as FOO_DETECTORS } from './detectors/foo.ts';
@@ -45,6 +46,7 @@ const DETECTORS: Record<
   (repoPath: string, params?: unknown) => DetectorResult
 > = {
   ...SBP_DETECTORS,
+  ...CODE_ARCH_DETECTORS,
   // ...FOO_DETECTORS,  // ← template for future modules
 };
 

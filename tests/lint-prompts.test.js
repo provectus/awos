@@ -999,6 +999,59 @@ test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
     /reliabilit/i,
     'catalog must describe per-metric reliability'
   );
+  // Each metric row must name its real metrics/<id>.ts file.
+  for (const id of [
+    'adp_g1_tooling_depth',
+    'adp_g2_contributors',
+    'adp_g3_deploy_frequency',
+    'adp_g4_lead_time',
+    'adp_g5_pr_cycle_time',
+    'adp_g6_churn',
+    'adp_g7_change_fail_rate',
+    'adp_g8_review_rework',
+    'adp_g9_ai_attribution',
+    'adp_c1_ci_pass_rate',
+    'adp_c2_pipeline_duration',
+    'adp_d1_spec_coverage',
+    'adp_i1_work_mix',
+    'adp_i2_throughput',
+    'adp_i3_mttr',
+  ]) {
+    assert.match(
+      src,
+      new RegExp(`metrics/${id}\\.ts`),
+      `catalog must name metrics/${id}.ts`
+    );
+  }
+  // Each collector must be referenced by its real TS filename.
+  for (const col of [
+    'collectors/git.ts',
+    'collectors/ci.ts',
+    'collectors/tracker.ts',
+    'collectors/docs.ts',
+  ]) {
+    assert.match(
+      src,
+      new RegExp(col.replace('/', '\\/')),
+      `catalog must name ${col}`
+    );
+  }
+  // No stale Python filenames.
+  assert.doesNotMatch(
+    src,
+    /collectors\/[\w.]+\.py\b/,
+    'catalog must not name any .py collector'
+  );
+  assert.doesNotMatch(
+    src,
+    /metrics\/[\w.]+\.py\b/,
+    'catalog must not name any .py metric'
+  );
+  assert.doesNotMatch(
+    src,
+    /\.py\b/,
+    'catalog must not contain any .py references'
+  );
 });
 
 test('data-sources reference covers detection, schema, linking, history params', () => {
@@ -1037,6 +1090,38 @@ test('data-sources reference covers detection, schema, linking, history params',
     src,
     /SKIP/,
     'data-sources must state the SKIP-when-no-source rule'
+  );
+  // Must name the real TS collector files, not Python ones.
+  for (const col of [
+    'collectors/git.ts',
+    'collectors/ci.ts',
+    'collectors/tracker.ts',
+    'collectors/docs.ts',
+  ]) {
+    assert.match(
+      src,
+      new RegExp(col.replace('/', '\\/')),
+      `data-sources must name ${col}`
+    );
+  }
+  // Must reference the bundled CLI entry point.
+  assert.match(src, /dist\/cli\.js/, 'data-sources must reference dist/cli.js');
+  // Must reference the collected/ artifact directory.
+  assert.match(
+    src,
+    /collected\//,
+    'data-sources must reference the collected/ artifact dir'
+  );
+  // No stale Python filenames.
+  assert.doesNotMatch(
+    src,
+    /collectors\/[\w.]+\.py\b/,
+    'data-sources must not name any .py collector'
+  );
+  assert.doesNotMatch(
+    src,
+    /\.py\b/,
+    'data-sources must not contain any .py references'
   );
 });
 

@@ -2,6 +2,14 @@
 
 This document defines how the `ai-readiness-audit` skill resolves, confirms, and reads data sources when computing AI-SDLC adoption metrics. It is consumed by SKILL.md Step 0 (initialization) and the collector layer (`collectors/`).
 
+The engine is TypeScript (Node/esbuild), bundled to `dist/cli.js`. Collectors are invoked as:
+
+```
+node dist/cli.js collect <source> <repoPath>
+```
+
+Supported sources: `git`, `ci`, `tracker`, `docs` — implemented in `collectors/git.ts`, `collectors/ci.ts`, `collectors/tracker.ts`, and `collectors/docs.ts` respectively. Each collector writes one artifact to `context/audits/<date>/collected/<source>.json`.
+
 ---
 
 ## Default behavior
@@ -83,6 +91,36 @@ standards_file = "context/audits/standards.toml"   # optional; governs period/hi
 ```
 
 All fields are optional. Omitting `[[repos]]` entirely means "audit the current repo only." Period and history parameters (`monthly_bucket_days`, `max_lookback_days`) are read from `standards.toml` — see "Period & history" below.
+
+---
+
+## Collector artifacts
+
+Each collector (`collectors/git.ts`, `collectors/ci.ts`, `collectors/tracker.ts`, `collectors/docs.ts`) is dispatched via:
+
+```
+node dist/cli.js collect <source> <repoPath>
+```
+
+It writes one JSON file to `context/audits/<date>/collected/<source>.json`. The `collected/` directory is the sole interface between collectors and metrics — metric modules read only from those files and never invoke sources directly.
+
+Artifact schema:
+
+```json
+{
+  "source": "git",
+  "available": true,
+  "reason_if_absent": null,
+  "period": {
+    "bucket_days": 30,
+    "lookback_days": 730,
+    "history_available_days": 400
+  },
+  "raw": { "...": "source-specific payload" }
+}
+```
+
+When a source is unavailable, `available` is `false` and `reason_if_absent` carries a human-readable explanation. Metrics receiving an absent artifact SKIP their computation and surface the reason in the report.
 
 ---
 

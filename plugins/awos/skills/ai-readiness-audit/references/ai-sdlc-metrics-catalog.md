@@ -1,6 +1,8 @@
 # AI-SDLC Metrics Catalog
 
-This document is the metric index for the `ai-sdlc-adoption` audit dimension. Each metric is computed by a `metrics/*.py` script that reads only from `collectors/*.py` artifacts, and maps to capability categories defined in `references/standards.toml`. The **headline is current-state**: the latest completed monthly (30-day) bucket. Metrics also expose an explicit monthly history up to 2 years back, bounded by the minimal source history available (see `data-sources.md`). Values are never expressed in money or currency. Contributor data surfaces only as aggregate counts — never attributed to named individuals.
+This document is the metric index for the `ai-sdlc-adoption` audit dimension. Each metric is implemented as a `metrics/<id>.ts` module that reads only from `collectors/*.ts` artifacts, and maps to capability categories defined in `references/standards.toml`. The **headline is current-state**: the latest completed monthly (30-day) bucket. Metrics also expose an explicit monthly history up to 2 years back, bounded by the minimal source history available (see `data-sources.md`). Values are never expressed in money or currency. Contributor data surfaces only as aggregate counts — never attributed to named individuals.
+
+The engine is TypeScript, bundled via esbuild into `dist/cli.js` and run with `node`. No Python is used in the metrics layer.
 
 ---
 
@@ -8,17 +10,17 @@ This document is the metric index for the `ai-sdlc-adoption` audit dimension. Ea
 
 Tier G requires only local git history. It is always attempted because git is the one source every codebase has. DORA research (Accelerate, 2018) established deployment frequency, lead time, change-fail rate, and MTTR as the four delivery keys; three of those keys are git-derivable. Martin Fowler's canonical CI/CD writing reinforces that commit frequency and merge frequency are the cheapest leading indicators of flow health.
 
-| ID     | Metric                                   | What it proves                                                                                                                    | Collector(s)                                   | Category/Band                       | Kind     |
-| ------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------- | -------- |
-| ADP-G1 | AI tooling depth & breadth               | Company-wide adoption, not lone individuals. Absence ⇒ either individual-only use (bad sign) or "all in management decks" (vapor) | `collectors/git.py`, `collectors/fs.py`        | `tooling-coverage` (standards.toml) | coverage |
-| ADP-G2 | Active monthly contributors              | Team-size proxy and adoption breadth, without naming anyone                                                                       | `collectors/git.py`                            | `team-breadth`                      | raw      |
-| ADP-G3 | Deployment/merge frequency (DORA)        | Delivery flow                                                                                                                     | `collectors/git.py`                            | `delivery-flow`                     | banded   |
-| ADP-G4 | Lead time for change (DORA)              | Speed from first commit to landing                                                                                                | `collectors/git.py`                            | `delivery-flow`                     | banded   |
-| ADP-G5 | PR cycle time                            | Review/landing speed                                                                                                              | `collectors/git.py`, `collectors/code_host.py` | `delivery-flow`                     | banded   |
-| ADP-G6 | Code churn & rework                      | Whether speed is rewrite-thrash or durable                                                                                        | `collectors/git.py`                            | `code-quality`                      | raw      |
-| ADP-G7 | Change failure rate (proxy)              | Stability (DORA stability key)                                                                                                    | `collectors/git.py`                            | `stability`                         | banded   |
-| ADP-G8 | Review rework cycle                      | AI typically clears review comments faster than humans                                                                            | `collectors/git.py`, `collectors/code_host.py` | `delivery-flow`                     | banded   |
-| ADP-G9 | AI-attributed change share (lower bound) | A cheap floor on real AI usage — actual usage is **≥** this, since attribution is easily disabled                                 | `collectors/git.py`                            | `ai-attribution`                    | coverage |
+| ID     | Metric                                   | What it proves                                                                                                                    | Implementation                       | Collector(s)        | Category/Band                       | Kind     |
+| ------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------- | ----------------------------------- | -------- |
+| ADP-G1 | AI tooling depth & breadth               | Company-wide adoption, not lone individuals. Absence ⇒ either individual-only use (bad sign) or "all in management decks" (vapor) | `metrics/adp_g1_tooling_depth.ts`    | `collectors/git.ts` | `tooling-coverage` (standards.toml) | coverage |
+| ADP-G2 | Active monthly contributors              | Team-size proxy and adoption breadth, without naming anyone                                                                       | `metrics/adp_g2_contributors.ts`     | `collectors/git.ts` | `team-breadth`                      | raw      |
+| ADP-G3 | Deployment/merge frequency (DORA)        | Delivery flow                                                                                                                     | `metrics/adp_g3_deploy_frequency.ts` | `collectors/git.ts` | `delivery-flow`                     | banded   |
+| ADP-G4 | Lead time for change (DORA)              | Speed from first commit to landing                                                                                                | `metrics/adp_g4_lead_time.ts`        | `collectors/git.ts` | `delivery-flow`                     | banded   |
+| ADP-G5 | PR cycle time                            | Review/landing speed                                                                                                              | `metrics/adp_g5_pr_cycle_time.ts`    | `collectors/git.ts` | `delivery-flow`                     | banded   |
+| ADP-G6 | Code churn & rework                      | Whether speed is rewrite-thrash or durable                                                                                        | `metrics/adp_g6_churn.ts`            | `collectors/git.ts` | `code-quality`                      | raw      |
+| ADP-G7 | Change failure rate (proxy)              | Stability (DORA stability key)                                                                                                    | `metrics/adp_g7_change_fail_rate.ts` | `collectors/git.ts` | `stability`                         | banded   |
+| ADP-G8 | Review rework cycle                      | AI typically clears review comments faster than humans                                                                            | `metrics/adp_g8_review_rework.ts`    | `collectors/git.ts` | `delivery-flow`                     | banded   |
+| ADP-G9 | AI-attributed change share (lower bound) | A cheap floor on real AI usage — actual usage is **≥** this, since attribution is easily disabled                                 | `metrics/adp_g9_ai_attribution.ts`   | `collectors/git.ts` | `ai-attribution`                    | coverage |
 
 **Computation notes (Tier G):**
 
@@ -38,10 +40,10 @@ Tier G requires only local git history. It is always attempted because git is th
 
 Tier C activates only when a CI connector or accessible CI logs can be resolved for the repository. Default-branch pipeline data is the relevant signal; feature-branch failures are normal and excluded. Teams may tolerate occasional flaky failures, so CI pass rate is treated as supporting evidence, not a headline metric.
 
-| ID     | Metric                      | What it proves                                                                                                                  | Collector(s)       | Category/Band                      | Kind   |
-| ------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ---------------------------------- | ------ |
-| ADP-C1 | Default-branch CI pass rate | Pipeline health — **default/`main`-style branches only**; feature-branch failures are normal; treat as supporting, not headline | `collectors/ci.py` | `pipeline-health` (standards.toml) | banded |
-| ADP-C2 | Pipeline duration trend     | Feedback-loop speed                                                                                                             | `collectors/ci.py` | `delivery-flow`                    | raw    |
+| ID     | Metric                      | What it proves                                                                                                                  | Implementation                        | Collector(s)       | Category/Band                      | Kind   |
+| ------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------ | ---------------------------------- | ------ |
+| ADP-C1 | Default-branch CI pass rate | Pipeline health — **default/`main`-style branches only**; feature-branch failures are normal; treat as supporting, not headline | `metrics/adp_c1_ci_pass_rate.ts`      | `collectors/ci.ts` | `pipeline-health` (standards.toml) | banded |
+| ADP-C2 | Pipeline duration trend     | Feedback-loop speed                                                                                                             | `metrics/adp_c2_pipeline_duration.ts` | `collectors/ci.ts` | `delivery-flow`                    | raw    |
 
 ---
 
@@ -49,11 +51,11 @@ Tier C activates only when a CI connector or accessible CI logs can be resolved 
 
 Tier I activates when a Jira, Linear, or equivalent issue-tracker connector is resolvable. Work-mix data here follows the Jellyfish AI Impact model: effort is expressed in team-FTE share, never in money.
 
-| ID     | Metric                                         | What it proves                                                                                                                    | Collector(s)                                      | Category/Band               | Kind   |
-| ------ | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------------- | ------ |
-| ADP-I1 | Work-mix allocation                            | Freed capacity shifts toward Growth, away from KTLO/Support — in **team-FTE share, never money** (Jellyfish FTE-allocation model) | `collectors/tracker.py`                           | `work-mix` (standards.toml) | banded |
-| ADP-I2 | Delivered-issue throughput & backlog burn-down | Output and debt-clearing                                                                                                          | `collectors/tracker.py`                           | `delivery-flow`             | raw    |
-| ADP-I3 | MTTR                                           | Recovery speed — **SKIP unless a real incident source is provided**; do not infer from re-fixes of the same issue ID              | `collectors/tracker.py`, `collectors/incident.py` | `stability`                 | banded |
+| ID     | Metric                                         | What it proves                                                                                                                    | Implementation                 | Collector(s)            | Category/Band               | Kind   |
+| ------ | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ----------------------- | --------------------------- | ------ |
+| ADP-I1 | Work-mix allocation                            | Freed capacity shifts toward Growth, away from KTLO/Support — in **team-FTE share, never money** (Jellyfish FTE-allocation model) | `metrics/adp_i1_work_mix.ts`   | `collectors/tracker.ts` | `work-mix` (standards.toml) | banded |
+| ADP-I2 | Delivered-issue throughput & backlog burn-down | Output and debt-clearing                                                                                                          | `metrics/adp_i2_throughput.ts` | `collectors/tracker.ts` | `delivery-flow`             | raw    |
+| ADP-I3 | MTTR                                           | Recovery speed — **SKIP unless a real incident source is provided**; do not infer from re-fixes of the same issue ID              | `metrics/adp_i3_mttr.ts`       | `collectors/tracker.ts` | `stability`                 | banded |
 
 ---
 
@@ -61,15 +63,15 @@ Tier I activates when a Jira, Linear, or equivalent issue-tracker connector is r
 
 Tier D activates when a docs connector (Confluence, Coda, Notion, or similar) is resolvable. Its single metric strengthens the spec-signal from ADP-G1 by confirming that specs exist and are kept current outside the repository as well as inside it.
 
-| ID     | Metric                                 | What it proves                                                                                | Collector(s)         | Category/Band                       | Kind     |
-| ------ | -------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------- | ----------------------------------- | -------- |
-| ADP-D1 | External spec/doc coverage & freshness | Spec-driven adoption even when specs live outside the repo — strengthens ADP-G1's spec signal | `collectors/docs.py` | `tooling-coverage` (standards.toml) | coverage |
+| ID     | Metric                                 | What it proves                                                                                | Implementation                    | Collector(s)         | Category/Band                       | Kind     |
+| ------ | -------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------- | -------------------- | ----------------------------------- | -------- |
+| ADP-D1 | External spec/doc coverage & freshness | Spec-driven adoption even when specs live outside the repo — strengthens ADP-G1's spec signal | `metrics/adp_d1_spec_coverage.ts` | `collectors/docs.ts` | `tooling-coverage` (standards.toml) | coverage |
 
 ---
 
 ## Cross-cutting rules
 
-**Record shape.** Each metric emitted by a `metrics/*.py` script carries the following fields:
+**Record shape.** Each metric emitted by a `metrics/<id>.ts` module carries the following fields:
 
 ```
 value            – the current-state scalar or ratio

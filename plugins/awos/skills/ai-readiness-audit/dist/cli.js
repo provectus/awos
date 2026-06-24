@@ -4126,6 +4126,28 @@ var TYPE_SAFETY_CONFIGS = [
   "sorbet"
 ];
 var TSCONFIG_STRICT_RX = /"strict"\s*:\s*true|"noImplicitAny"\s*:\s*true/;
+var PY_DEF_RX = /^\s*(?:async\s+)?def\s+\w+\s*\(/;
+var PY_DEF_ANNOTATED_RX = /^\s*(?:async\s+)?def\s+\w+\s*\(.*\)\s*->/;
+function samplePythonAnnotationRatio(repoPath) {
+  const pyFiles = iterFiles(repoPath, ["*.py"]).slice(0, 20);
+  if (pyFiles.length === 0) return null;
+  let totalDefs = 0;
+  let annotatedDefs = 0;
+  for (const f of pyFiles) {
+    try {
+      const lines = readFileSync2(f, "utf8").split("\n");
+      for (const line of lines) {
+        if (PY_DEF_RX.test(line)) {
+          totalDefs++;
+          if (PY_DEF_ANNOTATED_RX.test(line)) annotatedDefs++;
+        }
+      }
+    } catch {
+    }
+  }
+  if (totalDefs === 0) return null;
+  return annotatedDefs / totalDefs;
+}
 function detectTypeSafety(repoPath, _params) {
   const pyTyping = iterFiles(repoPath, TYPE_SAFETY_CONFIGS);
   if (pyTyping.length) {
@@ -4148,6 +4170,12 @@ function detectTypeSafety(repoPath, _params) {
     } catch {
     }
   }
+  const pyTypedFiles = iterFiles(repoPath, ["py.typed"]);
+  if (pyTypedFiles.length) {
+    return makeResult("PASS", pyTypedFiles.length, [
+      `py.typed marker found (PEP 561 typed package): ${pyTypedFiles.map((p) => relative2(repoPath, p)).join(", ")}`
+    ]);
+  }
   const tsconfigs = iterFiles(repoPath, ["tsconfig.json", "tsconfig.*.json"]);
   if (tsconfigs.length) {
     const strictConfigs = [];
@@ -4169,6 +4197,23 @@ function detectTypeSafety(repoPath, _params) {
     }
     return makeResult("WARN", 0, [
       `tsconfig.json found but strict / noImplicitAny not enabled (${tsconfigs.map((p) => relative2(repoPath, p)).join(", ")})`
+    ]);
+  }
+  const ratio = samplePythonAnnotationRatio(repoPath);
+  if (ratio !== null) {
+    const pct2 = Math.round(ratio * 100);
+    if (ratio >= 0.6) {
+      return makeResult("PASS", pct2, [
+        `${pct2}% of Python function signatures carry return-type annotations (no mypy/pyright config, but well-typed)`
+      ]);
+    }
+    if (ratio >= 0.25) {
+      return makeResult("WARN", pct2, [
+        `${pct2}% of Python function signatures carry return-type annotations \u2014 some typing present but not enforced by a type checker`
+      ]);
+    }
+    return makeResult("FAIL", pct2, [
+      `${pct2}% of Python function signatures carry return-type annotations \u2014 project appears essentially untyped`
     ]);
   }
   return makeResult("FAIL", 0, ["no type-safety configuration found"]);
@@ -4194,7 +4239,7 @@ function detectCiCd(repoPath, _params) {
   const yamlFiles = iterFiles(repoPath, CICD_SUBDIR_FILENAMES);
   const ciFiles = yamlFiles.filter((p) => {
     const rel = relative2(repoPath, p);
-    return rel.startsWith(".github/workflows/") || rel.startsWith(".circleci/") || rel.startsWith(".github\\workflows\\") || rel.startsWith(".circleci\\");
+    return rel.startsWith(".github/workflows/") || rel.startsWith(".circleci/") || rel.startsWith("pipelines/") || rel.startsWith(".azure-pipelines/") || rel.startsWith(".github\\workflows\\") || rel.startsWith(".circleci\\") || rel.startsWith("pipelines\\") || rel.startsWith(".azure-pipelines\\");
   });
   if (ciFiles.length) {
     const names = ciFiles.map((p) => relative2(repoPath, p)).sort();
@@ -5227,7 +5272,13 @@ var DETECTORS3 = {
 };
 
 // plugins/awos/skills/ai-readiness-audit/detectors/ai_development_tooling.ts
-import { existsSync as existsSync4, readFileSync as readFileSync5 } from "node:fs";
+import {
+  existsSync as existsSync4,
+  readFileSync as readFileSync5,
+  lstatSync,
+  readdirSync as readdirSync2,
+  realpathSync
+} from "node:fs";
 import { join as join6, relative as relative5 } from "node:path";
 function detectCustomCommands(repoPath, _params) {
   const commandsDir = join6(repoPath, ".claude", "commands");
@@ -5248,6 +5299,13 @@ function detectCustomCommands(repoPath, _params) {
     "no custom command files found in .claude/commands/ \u2014 define slash commands for common workflows"
   ]);
 }
+function tryRealpath(p) {
+  try {
+    return realpathSync(p);
+  } catch {
+    return null;
+  }
+}
 function detectClaudeSkills(repoPath, _params) {
   const skillsRoot = join6(repoPath, ".claude", "skills");
   if (!existsSync4(skillsRoot)) {
@@ -5255,11 +5313,40 @@ function detectClaudeSkills(repoPath, _params) {
       "no .claude/skills/ directory found \u2014 no Claude Code skills configured"
     ]);
   }
-  const files = iterFiles(skillsRoot, ["SKILL.md"]);
-  if (files.length > 0) {
-    const names = files.map((p) => relative5(repoPath, p));
-    return makeResult("PASS", files.length, [
-      `${files.length} SKILL.md file(s) found under .claude/skills/`,
+  const realSkillsRoot = tryRealpath(skillsRoot) ?? skillsRoot;
+  const scanTargets = /* @__PURE__ */ new Set([realSkillsRoot]);
+  try {
+    for (const entry of readdirSync2(realSkillsRoot)) {
+      const entryPath = join6(realSkillsRoot, entry);
+      let stat;
+      try {
+        stat = lstatSync(entryPath);
+      } catch {
+        continue;
+      }
+      if (stat.isSymbolicLink()) {
+        const resolved = tryRealpath(entryPath);
+        if (resolved) scanTargets.add(resolved);
+      }
+    }
+  } catch {
+  }
+  const allFiles = [];
+  for (const target of scanTargets) {
+    for (const f of iterFiles(target, ["SKILL.md"])) {
+      allFiles.push(f);
+    }
+  }
+  if (allFiles.length > 0) {
+    const names = allFiles.map((p) => {
+      try {
+        return relative5(repoPath, p);
+      } catch {
+        return p;
+      }
+    });
+    return makeResult("PASS", allFiles.length, [
+      `${allFiles.length} SKILL.md file(s) found under .claude/skills/`,
       ...names.slice(0, 10).map((n) => `skill: ${n}`)
     ]);
   }
@@ -6178,6 +6265,116 @@ function detectLockfileIntegrity(repoPath, _params) {
     "lockfiles present but none matched known integrity-check format \u2014 skipped"
   ]);
 }
+function parsePyprojectDeps(content) {
+  const deps = [];
+  function extractInlineArray(text, start2) {
+    const items = [];
+    let i2 = start2 + 1;
+    while (i2 < text.length && text[i2] !== "]") {
+      if (/[\s,]/.test(text[i2])) {
+        i2++;
+        continue;
+      }
+      if (text[i2] === '"' || text[i2] === "'") {
+        const quote = text[i2];
+        let j2 = i2 + 1;
+        while (j2 < text.length && text[j2] !== quote) j2++;
+        items.push(text.slice(i2 + 1, j2));
+        i2 = j2 + 1;
+        continue;
+      }
+      let j = i2;
+      while (j < text.length && text[j] !== "," && text[j] !== "]") j++;
+      const raw = text.slice(i2, j).trim();
+      if (raw) items.push(raw);
+      i2 = j;
+    }
+    return items;
+  }
+  const lines = content.split("\n");
+  let section = null;
+  let accumulating = false;
+  let accumBuf = "";
+  function flushAccum() {
+    if (!accumBuf) return;
+    const closeIdx = accumBuf.indexOf("]");
+    if (closeIdx !== -1) {
+      const full = accumBuf.slice(0, closeIdx + 1);
+      const openIdx = full.indexOf("[");
+      if (openIdx !== -1) {
+        deps.push(...extractInlineArray(full, openIdx));
+      }
+      accumBuf = "";
+      accumulating = false;
+    }
+  }
+  for (let li = 0; li < lines.length; li++) {
+    const raw = lines[li];
+    const line = raw.trimEnd();
+    if (accumulating) {
+      accumBuf += line + "\n";
+      flushAccum();
+      continue;
+    }
+    const secMatch = line.match(/^\s*\[([^\]]+)\]/);
+    if (secMatch) {
+      const hdr = secMatch[1].trim();
+      if (hdr === "project") {
+        section = "project";
+      } else if (hdr === "project.optional-dependencies" || hdr === "tool.uv.optional-dependencies") {
+        section = "project.optional-dependencies";
+      } else if (hdr === "dependency-groups" || hdr === "tool.uv") {
+        section = "dependency-groups";
+      } else if (hdr.startsWith("tool.") || hdr.startsWith("[")) {
+        section = null;
+      } else {
+        section = null;
+      }
+      continue;
+    }
+    if (section === null) continue;
+    if (section === "project") {
+      const m = line.match(/^\s*dependencies\s*=\s*(\[.*)/);
+      if (m) {
+        const rest = m[1];
+        if (rest.includes("]")) {
+          deps.push(...extractInlineArray(rest, 0));
+        } else {
+          accumBuf = rest + "\n";
+          accumulating = true;
+        }
+      }
+    } else if (section === "project.optional-dependencies") {
+      const m = line.match(/^\s*[a-zA-Z0-9_-]+\s*=\s*(\[.*)/);
+      if (m) {
+        const rest = m[1];
+        if (rest.includes("]")) {
+          deps.push(...extractInlineArray(rest, 0));
+        } else {
+          accumBuf = rest + "\n";
+          accumulating = true;
+        }
+      }
+    } else if (section === "dependency-groups") {
+      const m = line.match(/^\s*[a-zA-Z0-9_-]+\s*=\s*(\[.*)/);
+      if (m) {
+        const rest = m[1];
+        if (rest.includes("]")) {
+          deps.push(...extractInlineArray(rest, 0));
+        } else {
+          accumBuf = rest + "\n";
+          accumulating = true;
+        }
+      }
+    }
+  }
+  return deps;
+}
+function isPep508Ranged(spec) {
+  const versionPart = spec.replace(/^[^;]+;.*$/, "$1").split(";")[0];
+  if (/==\s*[\d]/.test(versionPart)) return false;
+  return true;
+}
 function countPackageJsonRanges(content) {
   let pkg;
   try {
@@ -6259,6 +6456,25 @@ function detectPinnedVersions(repoPath, _params) {
     if (counts.ranged > 0) {
       evidence.push(
         `${relative8(repoPath, f)}: ${counts.ranged}/${counts.total} unpinned deps`
+      );
+    }
+  }
+  const pyprojectFiles = iterFiles(repoPath, ["pyproject.toml"]);
+  for (const f of pyprojectFiles) {
+    let content;
+    try {
+      content = readFileSync8(f, "utf8");
+    } catch {
+      continue;
+    }
+    const specifiers = parsePyprojectDeps(content);
+    if (specifiers.length === 0) continue;
+    const ranged = specifiers.filter(isPep508Ranged).length;
+    totalDeps += specifiers.length;
+    rangedDeps += ranged;
+    if (ranged > 0) {
+      evidence.push(
+        `${relative8(repoPath, f)}: ${ranged}/${specifiers.length} unpinned deps`
       );
     }
   }
@@ -6494,6 +6710,21 @@ function detectDependencyAttackSurface(repoPath, _params) {
     if (count > 0) {
       totalDeps += count;
       sources.push(`${relative8(repoPath, f)}: ${count} entries`);
+    }
+  }
+  const pyprojectFiles2 = iterFiles(repoPath, ["pyproject.toml"]);
+  for (const f of pyprojectFiles2) {
+    if (sources.some((s) => s.startsWith(relative8(repoPath, f)))) continue;
+    let content;
+    try {
+      content = readFileSync8(f, "utf8");
+    } catch {
+      continue;
+    }
+    const specifiers = parsePyprojectDeps(content);
+    if (specifiers.length > 0) {
+      totalDeps += specifiers.length;
+      sources.push(`${relative8(repoPath, f)}: ${specifiers.length} deps`);
     }
   }
   if (totalDeps === 0) {
@@ -7170,7 +7401,7 @@ function detectUnitTests(repoPath, _params) {
     ...evidence
   ]);
 }
-var INTEGRATION_CONTENT_RX = /\b(TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|supertest|axios\.get\(|fetch\()\b/i;
+var INTEGRATION_CONTENT_RX = /\b(TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|requests\.post|httpx\.get|httpx\.post|httpx\.AsyncClient|httpx\.Client|asyncpg\.connect|asyncpg\.create_pool|psycopg2?\.connect|create_engine|sessionmaker|AsyncSession|TestClient|ASGITransport|supertest|axios\.get|fetch\()\b/i;
 var INTEGRATION_FILE_NAME_RX = /integration|contract|system[_-]test/i;
 var TEST_DOCKER_GLOBS = ["docker-compose*.yml", "docker-compose*.yaml"];
 function detectIntegrationTests(repoPath, _params) {
@@ -7641,7 +7872,7 @@ var DETECTORS9 = {
 };
 
 // plugins/awos/skills/ai-readiness-audit/detectors/documentation.ts
-import { readFileSync as readFileSync11, existsSync as existsSync10, readdirSync as readdirSync3 } from "node:fs";
+import { readFileSync as readFileSync11, existsSync as existsSync10, readdirSync as readdirSync4 } from "node:fs";
 import { join as join12, relative as relative11, dirname as dirname2 } from "node:path";
 var README_NAMES = [
   "README.md",
@@ -7727,7 +7958,7 @@ var SERVICE_SOURCE_GLOBS = [
 function detectServiceReadmes(repoPath, _params) {
   let topDirs = [];
   try {
-    const entries = readdirSync3(repoPath, { withFileTypes: true });
+    const entries = readdirSync4(repoPath, { withFileTypes: true });
     topDirs = entries.filter(
       (e) => e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith(".")
     ).map((e) => e.name).sort();
@@ -9678,7 +9909,7 @@ function compute15(collectedDir, standards, topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g10_complexity.ts
-import { readFileSync as readFileSync29, existsSync as existsSync27, readdirSync as readdirSync4 } from "node:fs";
+import { readFileSync as readFileSync29, existsSync as existsSync27, readdirSync as readdirSync5 } from "node:fs";
 import { join as join29, extname, dirname as dirname3 } from "node:path";
 import { fileURLToPath } from "node:url";
 var import_web_tree_sitter = __toESM(require_tree_sitter());
@@ -9842,7 +10073,7 @@ function resolveCoreWasm() {
 function walkDir(dir, cb) {
   let entries;
   try {
-    entries = readdirSync4(dir, { withFileTypes: true });
+    entries = readdirSync5(dir, { withFileTypes: true });
   } catch {
     return;
   }
@@ -10030,7 +10261,7 @@ async function compute16(_collectedDir, _standards, _topology, repoPathOverride)
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g11_scale.ts
-import { readFileSync as readFileSync30, existsSync as existsSync28, readdirSync as readdirSync5 } from "node:fs";
+import { readFileSync as readFileSync30, existsSync as existsSync28, readdirSync as readdirSync6 } from "node:fs";
 import { join as join30, extname as extname2 } from "node:path";
 var EXT_TO_LANG = {
   ".js": "JavaScript",
@@ -10074,7 +10305,7 @@ function countLines2(content) {
 function walkDir2(dir, cb) {
   let entries;
   try {
-    entries = readdirSync5(dir, { withFileTypes: true });
+    entries = readdirSync6(dir, { withFileTypes: true });
   } catch {
     return;
   }
@@ -10151,7 +10382,7 @@ function compute17(_collectedDir, _standards, _topology, repoPathOverride) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g12_deps.ts
-import { readFileSync as readFileSync31, existsSync as existsSync29, readdirSync as readdirSync6 } from "node:fs";
+import { readFileSync as readFileSync31, existsSync as existsSync29, readdirSync as readdirSync7 } from "node:fs";
 import { join as join31, basename as basename7 } from "node:path";
 var PRUNE_DIRS3 = /* @__PURE__ */ new Set([
   ".git",
@@ -10178,7 +10409,7 @@ function findManifests(dir, depth = 0) {
   const found = [];
   let entries;
   try {
-    entries = readdirSync6(dir, { withFileTypes: true });
+    entries = readdirSync7(dir, { withFileTypes: true });
   } catch {
     return found;
   }

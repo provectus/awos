@@ -1,5 +1,11 @@
 import { makeResult, iterFiles } from './_base.ts';
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  lstatSync,
+  readdirSync,
+  realpathSync,
+} from 'node:fs';
 import { join, relative } from 'node:path';
 
 // ---------------------------------------------------------------------------
@@ -39,6 +45,16 @@ export function detectCustomCommands(
 // FAIL otherwise.
 // ---------------------------------------------------------------------------
 
+// Resolve a path to its real (symlink-free) path. Returns null if the path
+// does not exist or cannot be resolved (e.g. broken symlink).
+function tryRealpath(p: string): string | null {
+  try {
+    return realpathSync(p);
+  } catch {
+    return null;
+  }
+}
+
 export function detectClaudeSkills(
   repoPath: string,
   _params?: unknown
@@ -49,11 +65,53 @@ export function detectClaudeSkills(
       'no .claude/skills/ directory found — no Claude Code skills configured',
     ]);
   }
-  const files = iterFiles(skillsRoot, ['SKILL.md']);
-  if (files.length > 0) {
-    const names = files.map((p) => relative(repoPath, p));
-    return makeResult('PASS', files.length, [
-      `${files.length} SKILL.md file(s) found under .claude/skills/`,
+
+  // Resolve .claude/skills itself if it is a symlink, so `find` can follow
+  // into the real directory tree. `find` with -type f does not follow symlinks
+  // by default, so we must hand it the resolved real path.
+  const realSkillsRoot = tryRealpath(skillsRoot) ?? skillsRoot;
+
+  // Also resolve each immediate child of the skills directory that may itself
+  // be a symlink (e.g. .claude/skills/my-skill → /some/other/path/my-skill).
+  // Collect all real paths to scan; deduplicate to avoid double-counting.
+  const scanTargets = new Set<string>([realSkillsRoot]);
+  try {
+    for (const entry of readdirSync(realSkillsRoot)) {
+      const entryPath = join(realSkillsRoot, entry);
+      let stat: ReturnType<typeof lstatSync>;
+      try {
+        stat = lstatSync(entryPath);
+      } catch {
+        continue;
+      }
+      if (stat.isSymbolicLink()) {
+        const resolved = tryRealpath(entryPath);
+        if (resolved) scanTargets.add(resolved);
+      }
+    }
+  } catch {
+    // readdirSync failed — fall through with just realSkillsRoot
+  }
+
+  const allFiles: string[] = [];
+  for (const target of scanTargets) {
+    for (const f of iterFiles(target, ['SKILL.md'])) {
+      allFiles.push(f);
+    }
+  }
+
+  if (allFiles.length > 0) {
+    // Build display names relative to repoPath where possible; fall back to
+    // the absolute path for skills resolved outside the repo tree.
+    const names = allFiles.map((p) => {
+      try {
+        return relative(repoPath, p);
+      } catch {
+        return p;
+      }
+    });
+    return makeResult('PASS', allFiles.length, [
+      `${allFiles.length} SKILL.md file(s) found under .claude/skills/`,
       ...names.slice(0, 10).map((n) => `skill: ${n}`),
     ]);
   }

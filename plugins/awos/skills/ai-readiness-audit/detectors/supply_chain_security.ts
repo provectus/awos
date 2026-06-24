@@ -183,6 +183,163 @@ export function detectLockfileIntegrity(
 
 const RANGED_RX = /["']?\s*(?:\^|~=?|>=|>|!= ?|\*|x\s*(?:\.|$))\s*\d/;
 
+// ---------------------------------------------------------------------------
+// parsePyprojectDeps — minimal TOML section scanner for pyproject.toml
+//
+// Recognises PEP-621 [project] dependencies and [project.optional-dependencies]
+// tables, plus uv's [dependency-groups] table. Returns a flat list of
+// dependency specifier strings (e.g. "requests>=2.0", "boto3==1.34.0").
+// Does NOT require smol-toml or any third-party parser.
+// ---------------------------------------------------------------------------
+
+function parsePyprojectDeps(content: string): string[] {
+  const deps: string[] = [];
+
+  // TOML inline-array value extractor: given "key = [...]" text starting
+  // at the opening `[`, collect all quoted or unquoted items.
+  function extractInlineArray(text: string, start: number): string[] {
+    const items: string[] = [];
+    let i = start + 1; // skip '['
+    while (i < text.length && text[i] !== ']') {
+      // skip whitespace and commas
+      if (/[\s,]/.test(text[i])) {
+        i++;
+        continue;
+      }
+      // quoted string
+      if (text[i] === '"' || text[i] === "'") {
+        const quote = text[i];
+        let j = i + 1;
+        while (j < text.length && text[j] !== quote) j++;
+        items.push(text.slice(i + 1, j));
+        i = j + 1;
+        continue;
+      }
+      // unquoted value (shouldn't happen in PEP-508 but handle gracefully)
+      let j = i;
+      while (j < text.length && text[j] !== ',' && text[j] !== ']') j++;
+      const raw = text.slice(i, j).trim();
+      if (raw) items.push(raw);
+      i = j;
+    }
+    return items;
+  }
+
+  // Split into lines for section-header tracking
+  const lines = content.split('\n');
+  type Section =
+    | 'project'
+    | 'project.optional-dependencies'
+    | 'dependency-groups'
+    | null;
+  let section: Section = null;
+
+  // Multi-line array accumulation
+  let accumulating = false;
+  let accumBuf = '';
+
+  function flushAccum() {
+    if (!accumBuf) return;
+    const closeIdx = accumBuf.indexOf(']');
+    if (closeIdx !== -1) {
+      const full = accumBuf.slice(0, closeIdx + 1);
+      const openIdx = full.indexOf('[');
+      if (openIdx !== -1) {
+        deps.push(...extractInlineArray(full, openIdx));
+      }
+      accumBuf = '';
+      accumulating = false;
+    }
+  }
+
+  for (let li = 0; li < lines.length; li++) {
+    const raw = lines[li];
+    const line = raw.trimEnd();
+
+    // If we're mid-accumulation, append and check
+    if (accumulating) {
+      accumBuf += line + '\n';
+      flushAccum();
+      continue;
+    }
+
+    // Section headers
+    const secMatch = line.match(/^\s*\[([^\]]+)\]/);
+    if (secMatch) {
+      const hdr = secMatch[1].trim();
+      if (hdr === 'project') {
+        section = 'project';
+      } else if (
+        hdr === 'project.optional-dependencies' ||
+        hdr === 'tool.uv.optional-dependencies'
+      ) {
+        section = 'project.optional-dependencies';
+      } else if (hdr === 'dependency-groups' || hdr === 'tool.uv') {
+        section = 'dependency-groups';
+      } else if (hdr.startsWith('tool.') || hdr.startsWith('[')) {
+        section = null;
+      } else {
+        section = null;
+      }
+      continue;
+    }
+
+    if (section === null) continue;
+
+    if (section === 'project') {
+      // [project] dependencies = [...]
+      const m = line.match(/^\s*dependencies\s*=\s*(\[.*)/);
+      if (m) {
+        const rest = m[1];
+        if (rest.includes(']')) {
+          deps.push(...extractInlineArray(rest, 0));
+        } else {
+          // Multi-line — accumulate
+          accumBuf = rest + '\n';
+          accumulating = true;
+        }
+      }
+    } else if (section === 'project.optional-dependencies') {
+      // any_key = [...]
+      const m = line.match(/^\s*[a-zA-Z0-9_-]+\s*=\s*(\[.*)/);
+      if (m) {
+        const rest = m[1];
+        if (rest.includes(']')) {
+          deps.push(...extractInlineArray(rest, 0));
+        } else {
+          accumBuf = rest + '\n';
+          accumulating = true;
+        }
+      }
+    } else if (section === 'dependency-groups') {
+      // group_name = [...] — uv dependency-groups
+      const m = line.match(/^\s*[a-zA-Z0-9_-]+\s*=\s*(\[.*)/);
+      if (m) {
+        const rest = m[1];
+        if (rest.includes(']')) {
+          deps.push(...extractInlineArray(rest, 0));
+        } else {
+          accumBuf = rest + '\n';
+          accumulating = true;
+        }
+      }
+    }
+  }
+
+  return deps;
+}
+
+// Given a PEP-508 specifier string, determine whether it is "ranged"
+// (i.e. NOT pinned with ==). Returns true if ranged.
+function isPep508Ranged(spec: string): boolean {
+  // A spec is pinned only if it contains == (exact version).
+  // No specifier at all → ranged. >=, >, ~=, ^, != → ranged.
+  // Handle "package[extra]>=1.0" forms.
+  const versionPart = spec.replace(/^[^;]+;.*$/, '$1').split(';')[0]; // strip env markers
+  if (/==\s*[\d]/.test(versionPart)) return false; // pinned
+  return true; // no specifier or ranged specifier
+}
+
 function countPackageJsonRanges(content: string): {
   total: number;
   ranged: number;
@@ -281,6 +438,29 @@ export function detectPinnedVersions(
     if (counts.ranged > 0) {
       evidence.push(
         `${relative(repoPath, f)}: ${counts.ranged}/${counts.total} unpinned deps`
+      );
+    }
+  }
+
+  // pyproject.toml — PEP-621 [project] dependencies and optional-dependencies,
+  // plus uv [dependency-groups]. Covers projects that use uv/PEP-621 without
+  // a separate requirements.txt.
+  const pyprojectFiles = iterFiles(repoPath, ['pyproject.toml']);
+  for (const f of pyprojectFiles) {
+    let content: string;
+    try {
+      content = readFileSync(f, 'utf8');
+    } catch {
+      continue;
+    }
+    const specifiers = parsePyprojectDeps(content);
+    if (specifiers.length === 0) continue;
+    const ranged = specifiers.filter(isPep508Ranged).length;
+    totalDeps += specifiers.length;
+    rangedDeps += ranged;
+    if (ranged > 0) {
+      evidence.push(
+        `${relative(repoPath, f)}: ${ranged}/${specifiers.length} unpinned deps`
       );
     }
   }
@@ -655,6 +835,25 @@ export function detectDependencyAttackSurface(
     if (count > 0) {
       totalDeps += count;
       sources.push(`${relative(repoPath, f)}: ${count} entries`);
+    }
+  }
+
+  // pyproject.toml — PEP-621 [project] dependencies / optional-dependencies
+  // and uv [dependency-groups]. Covers uv/PEP-621 projects that have no
+  // requirements.txt.
+  const pyprojectFiles2 = iterFiles(repoPath, ['pyproject.toml']);
+  for (const f of pyprojectFiles2) {
+    if (sources.some((s) => s.startsWith(relative(repoPath, f)))) continue; // already counted
+    let content: string;
+    try {
+      content = readFileSync(f, 'utf8');
+    } catch {
+      continue;
+    }
+    const specifiers = parsePyprojectDeps(content);
+    if (specifiers.length > 0) {
+      totalDeps += specifiers.length;
+      sources.push(`${relative(repoPath, f)}: ${specifiers.length} deps`);
     }
   }
 

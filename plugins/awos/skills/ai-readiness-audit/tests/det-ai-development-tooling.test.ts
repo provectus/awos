@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -88,6 +88,51 @@ test('detectClaudeSkills: multiple skills → PASS with count', () => {
   const r = detectClaudeSkills(t);
   assert.equal(r.status, 'PASS');
   assert.equal(r.value, 2, 'expected value to be the count of SKILL.md files');
+});
+
+test('detectClaudeSkills: .claude/skills is a symlink to a dir containing SKILL.md → PASS', () => {
+  // Create a real skills directory outside the repo tree, then symlink
+  // .claude/skills → that real directory.
+  const t = tmp();
+  const realSkillsDir = tmp(); // real dir lives outside the project tree
+  mkdirSync(join(realSkillsDir, 'foo'), { recursive: true });
+  writeFileSync(join(realSkillsDir, 'foo', 'SKILL.md'), '# Foo\n');
+
+  mkdirSync(join(t, '.claude'), { recursive: true });
+  symlinkSync(realSkillsDir, join(t, '.claude', 'skills'));
+
+  const r = detectClaudeSkills(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'expected PASS when .claude/skills is a symlink to a dir with SKILL.md inside'
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('SKILL.md')),
+    'evidence must mention SKILL.md'
+  );
+});
+
+test('detectClaudeSkills: individual skill subdir is a symlink → PASS', () => {
+  // .claude/skills/ is a real directory, but .claude/skills/bar is a symlink
+  // pointing to a real skill directory that contains SKILL.md.
+  const t = tmp();
+  const realSkillDir = tmp(); // real skill dir with SKILL.md
+  writeFileSync(join(realSkillDir, 'SKILL.md'), '# Bar\n');
+
+  mkdirSync(join(t, '.claude', 'skills'), { recursive: true });
+  symlinkSync(realSkillDir, join(t, '.claude', 'skills', 'bar'));
+
+  const r = detectClaudeSkills(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'expected PASS when an individual skill subdir is a symlink to a dir with SKILL.md'
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('SKILL.md')),
+    'evidence must mention SKILL.md'
+  );
 });
 
 // ---------------------------------------------------------------------------

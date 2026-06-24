@@ -150,6 +150,105 @@ test('QA-03: TestContainers import in test file is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
+test('QA-03: httpx + DB fixture in test file (no integration dir/marker) is PASS', () => {
+  // Regression: real integration tests using httpx + asyncpg without an
+  // explicit "integration/" directory or @pytest.mark.integration must
+  // still be detected via content signals.
+  const t = tmp();
+  mkdirSync(join(t, 'tests'));
+  // A conftest that sets up a real DB connection — DB fixture signal
+  writeFileSync(
+    join(t, 'tests', 'conftest.py'),
+    [
+      'import pytest',
+      'import asyncpg',
+      '',
+      '@pytest.fixture',
+      'async def db_pool():',
+      '    pool = await asyncpg.create_pool(dsn="postgresql://localhost/testdb")',
+      '    yield pool',
+      '    await pool.close()',
+    ].join('\n') + '\n'
+  );
+  // A test that uses httpx.AsyncClient against a real ASGI app
+  writeFileSync(
+    join(t, 'tests', 'test_api.py'),
+    [
+      'import pytest',
+      'import httpx',
+      'from myapp import app',
+      '',
+      '@pytest.mark.anyio',
+      'async def test_create_item(db_pool):',
+      '    async with httpx.AsyncClient(app=app, base_url="http://test") as client:',
+      '        resp = await client.post("/items", json={"name": "foo"})',
+      '    assert resp.status_code == 201',
+    ].join('\n') + '\n'
+  );
+  const r = detectIntegrationTests(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'httpx + asyncpg test must be detected as integration'
+  );
+  assert.ok((r.value as number) > 0, 'signal count must be positive');
+});
+
+test('QA-03: pure mock unit test (no real I/O) is NOT counted as integration — stays FAIL', () => {
+  // A test that only uses MagicMock / jest.fn — no real HTTP or DB client.
+  // The overall result should be FAIL because no integration signals are present.
+  const t = tmp();
+  writeFileSync(
+    join(t, 'test_unit.py'),
+    [
+      'from unittest.mock import MagicMock, patch',
+      '',
+      'def test_service_calls_repo():',
+      '    repo = MagicMock()',
+      '    repo.find.return_value = {"id": 1}',
+      '    service = MyService(repo)',
+      '    result = service.get(1)',
+      '    repo.find.assert_called_once_with(1)',
+    ].join('\n') + '\n'
+  );
+  const r = detectIntegrationTests(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'pure mock unit test must not be detected as integration'
+  );
+});
+
+test('QA-03: httpx.AsyncClient in test file alone is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'test_http.py'),
+    'import httpx\nasync def test_endpoint():\n    async with httpx.AsyncClient() as c:\n        r = await c.get("http://localhost:8000/health")\n    assert r.status_code == 200\n'
+  );
+  const r = detectIntegrationTests(t);
+  assert.equal(r.status, 'PASS');
+});
+
+test('QA-03: sqlalchemy create_engine in test file is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'test_db.py'),
+    'from sqlalchemy import create_engine\ndef test_schema():\n    engine = create_engine("postgresql://localhost/db")\n    with engine.connect() as conn:\n        conn.execute("SELECT 1")\n'
+  );
+  const r = detectIntegrationTests(t);
+  assert.equal(r.status, 'PASS');
+});
+
+test('QA-03: TestClient (ASGI transport) in test file is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'test_asgi.py'),
+    'from starlette.testclient import TestClient\nfrom myapp import app\ndef test_homepage():\n    client = TestClient(app)\n    response = client.get("/")\n    assert response.status_code == 200\n'
+  );
+  const r = detectIntegrationTests(t);
+  assert.equal(r.status, 'PASS');
+});
+
 // ---------------------------------------------------------------------------
 // detectE2ETests (2503 — QA-04, detected)
 // ---------------------------------------------------------------------------

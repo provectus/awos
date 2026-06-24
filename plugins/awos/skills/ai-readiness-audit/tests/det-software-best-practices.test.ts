@@ -304,6 +304,84 @@ test('detectTypeSafety: no config is FAIL', () => {
   assert.equal(detectTypeSafety(t).status, 'FAIL');
 });
 
+test('detectTypeSafety: py.typed marker (PEP 561) is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'py.typed'), '');
+  writeFileSync(join(t, 'main.py'), 'def foo(): pass\n');
+  const r = detectTypeSafety(t);
+  assert.equal(r.status, 'PASS', 'py.typed marker should be PASS');
+  assert.ok(r.evidence.some((e) => e.includes('py.typed')));
+});
+
+test('detectTypeSafety: well-annotated Python (≥60% return types, no mypy config) is PASS', () => {
+  const t = tmp();
+  // 4 annotated defs + 0 unannotated = 100% → PASS
+  const content =
+    [
+      'def load_data(path: str) -> list[str]:',
+      '    return []',
+      'def process(items: list[str]) -> dict[str, int]:',
+      '    return {}',
+      'def validate(x: int) -> bool:',
+      '    return True',
+      'def transform(s: str) -> str:',
+      '    return s.upper()',
+    ].join('\n') + '\n';
+  writeFileSync(join(t, 'pipeline.py'), content);
+  const r = detectTypeSafety(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'Python with ≥60% annotated return types and no mypy config should be PASS'
+  );
+});
+
+test('detectTypeSafety: partially-annotated Python (25-59%) is WARN', () => {
+  const t = tmp();
+  // 1 annotated + 3 unannotated = 25% → WARN
+  const content =
+    [
+      'def load_data(path):',
+      '    return []',
+      'def process(items):',
+      '    return {}',
+      'def validate(x):',
+      '    return True',
+      'def transform(s: str) -> str:',
+      '    return s.upper()',
+    ].join('\n') + '\n';
+  writeFileSync(join(t, 'pipeline.py'), content);
+  const r = detectTypeSafety(t);
+  assert.equal(
+    r.status,
+    'WARN',
+    'Python with 25% annotated return types and no mypy config should be WARN'
+  );
+});
+
+test('detectTypeSafety: unannotated Python (<25%) is FAIL', () => {
+  const t = tmp();
+  // 0 annotated + 4 unannotated = 0% → FAIL
+  const content =
+    [
+      'def load_data(path):',
+      '    return []',
+      'def process(items):',
+      '    return {}',
+      'def validate(x):',
+      '    return True',
+      'def transform(s):',
+      '    return s',
+    ].join('\n') + '\n';
+  writeFileSync(join(t, 'pipeline.py'), content);
+  const r = detectTypeSafety(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'Python with 0% annotated return types and no mypy config should be FAIL'
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectCiCd (2703)
 // ---------------------------------------------------------------------------
@@ -347,6 +425,38 @@ test('detectCiCd: no CI config is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'index.ts'), 'export const x = 1;\n');
   assert.equal(detectCiCd(t).status, 'FAIL');
+});
+
+test('detectCiCd: pipelines/pr.yml (Azure DevOps convention) is PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'pipelines'), { recursive: true });
+  writeFileSync(
+    join(t, 'pipelines', 'pr.yml'),
+    'trigger:\n  branches:\n    include:\n      - main\npool:\n  vmImage: ubuntu-latest\n'
+  );
+  const r = detectCiCd(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'pipelines/pr.yml should be recognised as CI/CD'
+  );
+  assert.ok(r.evidence.some((e) => e.includes('pr.yml')));
+});
+
+test('detectCiCd: .azure-pipelines/ci.yml is PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.azure-pipelines'), { recursive: true });
+  writeFileSync(
+    join(t, '.azure-pipelines', 'ci.yml'),
+    'trigger: [main]\npool:\n  vmImage: ubuntu-latest\n'
+  );
+  const r = detectCiCd(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    '.azure-pipelines/ configs should be recognised as CI/CD'
+  );
+  assert.ok(r.evidence.some((e) => e.includes('ci.yml')));
 });
 
 // ---------------------------------------------------------------------------

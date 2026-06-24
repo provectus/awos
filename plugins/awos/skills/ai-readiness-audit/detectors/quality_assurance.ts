@@ -262,8 +262,14 @@ export function detectUnitTests(
 // FAIL  if no integration signals found.
 // ---------------------------------------------------------------------------
 
+// Content signals that indicate real I/O integration tests (not mocked):
+//   HTTP clients:  httpx, requests, supertest, TestClient (ASGI), fetch against server
+//   DB drivers:    asyncpg, psycopg, sqlalchemy engine/session, testcontainers
+//   App transports: starlette/fastapi TestClient, httptest.NewServer
+//   Framework markers: @SpringBootTest, @DataJpaTest, DatabaseTestCase
+// Note: `requests.get` is intentionally kept broad — in test files it signals real HTTP.
 const INTEGRATION_CONTENT_RX =
-  /\b(TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|supertest|axios\.get\(|fetch\()\b/i;
+  /\b(TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|requests\.post|httpx\.get|httpx\.post|httpx\.AsyncClient|httpx\.Client|asyncpg\.connect|asyncpg\.create_pool|psycopg2?\.connect|create_engine|sessionmaker|AsyncSession|TestClient|ASGITransport|supertest|axios\.get|fetch\()\b/i;
 
 const INTEGRATION_FILE_NAME_RX = /integration|contract|system[_-]test/i;
 

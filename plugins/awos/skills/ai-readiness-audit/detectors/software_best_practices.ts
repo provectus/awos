@@ -150,6 +150,14 @@ export function detectFormatting(
 // For TypeScript projects: PASS if tsconfig.json has strict or noImplicitAny;
 // WARN if tsconfig exists without those flags; FAIL if no typed-language config.
 // Also checks mypy, pyright (Python) and sorbet (Ruby).
+//
+// For Python projects without a mypy/pyright config: samples up to 20 .py files
+// and measures what fraction of `def` signatures carry return-type annotations
+// (`-> T:`). Thresholds:
+//   ≥ 60% annotated → PASS  (well-typed without a formal config)
+//   ≥ 25% annotated → WARN  (some typing, but not enforced)
+//   <  25%          → FAIL  (essentially untyped)
+// py.typed marker (PEP 561) also counts as PASS.
 // ---------------------------------------------------------------------------
 
 const TYPE_SAFETY_CONFIGS = [
@@ -160,6 +168,34 @@ const TYPE_SAFETY_CONFIGS = [
 ];
 
 const TSCONFIG_STRICT_RX = /"strict"\s*:\s*true|"noImplicitAny"\s*:\s*true/;
+
+// Matches any `def name(...):` line (with or without return annotation).
+const PY_DEF_RX = /^\s*(?:async\s+)?def\s+\w+\s*\(/;
+// Matches `def name(...) -> Something:` (has a return annotation).
+const PY_DEF_ANNOTATED_RX = /^\s*(?:async\s+)?def\s+\w+\s*\(.*\)\s*->/;
+
+function samplePythonAnnotationRatio(repoPath: string): number | null {
+  const pyFiles = iterFiles(repoPath, ['*.py']).slice(0, 20);
+  if (pyFiles.length === 0) return null;
+
+  let totalDefs = 0;
+  let annotatedDefs = 0;
+  for (const f of pyFiles) {
+    try {
+      const lines = readFileSync(f, 'utf8').split('\n');
+      for (const line of lines) {
+        if (PY_DEF_RX.test(line)) {
+          totalDefs++;
+          if (PY_DEF_ANNOTATED_RX.test(line)) annotatedDefs++;
+        }
+      }
+    } catch {
+      // skip unreadable files
+    }
+  }
+  if (totalDefs === 0) return null;
+  return annotatedDefs / totalDefs;
+}
 
 export function detectTypeSafety(
   repoPath: string,
@@ -189,6 +225,13 @@ export function detectTypeSafety(
       // skip unreadable files
     }
   }
+  // Check for PEP 561 py.typed marker (typed package declaration)
+  const pyTypedFiles = iterFiles(repoPath, ['py.typed']);
+  if (pyTypedFiles.length) {
+    return makeResult('PASS', pyTypedFiles.length, [
+      `py.typed marker found (PEP 561 typed package): ${pyTypedFiles.map((p) => relative(repoPath, p)).join(', ')}`,
+    ]);
+  }
   // Check tsconfig.json for strict / noImplicitAny
   const tsconfigs = iterFiles(repoPath, ['tsconfig.json', 'tsconfig.*.json']);
   if (tsconfigs.length) {
@@ -213,6 +256,24 @@ export function detectTypeSafety(
     // tsconfig exists but no strict flags
     return makeResult('WARN', 0, [
       `tsconfig.json found but strict / noImplicitAny not enabled (${tsconfigs.map((p) => relative(repoPath, p)).join(', ')})`,
+    ]);
+  }
+  // No formal type-safety config found — sample Python annotation coverage
+  const ratio = samplePythonAnnotationRatio(repoPath);
+  if (ratio !== null) {
+    const pct = Math.round(ratio * 100);
+    if (ratio >= 0.6) {
+      return makeResult('PASS', pct, [
+        `${pct}% of Python function signatures carry return-type annotations (no mypy/pyright config, but well-typed)`,
+      ]);
+    }
+    if (ratio >= 0.25) {
+      return makeResult('WARN', pct, [
+        `${pct}% of Python function signatures carry return-type annotations — some typing present but not enforced by a type checker`,
+      ]);
+    }
+    return makeResult('FAIL', pct, [
+      `${pct}% of Python function signatures carry return-type annotations — project appears essentially untyped`,
     ]);
   }
   return makeResult('FAIL', 0, ['no type-safety configuration found']);
@@ -255,15 +316,20 @@ export function detectCiCd(
       names.map((n) => `CI/CD config found: ${n}`)
     );
   }
-  // Check .github/workflows/*.yml and .circleci/config.yml
+  // Check .github/workflows/*.yml, .circleci/config.yml,
+  // pipelines/*.yml (Azure DevOps convention), and .azure-pipelines/
   const yamlFiles = iterFiles(repoPath, CICD_SUBDIR_FILENAMES);
   const ciFiles = yamlFiles.filter((p) => {
     const rel = relative(repoPath, p);
     return (
       rel.startsWith('.github/workflows/') ||
       rel.startsWith('.circleci/') ||
+      rel.startsWith('pipelines/') ||
+      rel.startsWith('.azure-pipelines/') ||
       rel.startsWith('.github\\workflows\\') ||
-      rel.startsWith('.circleci\\')
+      rel.startsWith('.circleci\\') ||
+      rel.startsWith('pipelines\\') ||
+      rel.startsWith('.azure-pipelines\\')
     );
   });
   if (ciFiles.length) {

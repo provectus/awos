@@ -414,6 +414,135 @@ test('SCS-08: >200 direct deps is FAIL', () => {
 });
 
 // ---------------------------------------------------------------------------
+// uv / PEP-621 pyproject.toml recognition
+// ---------------------------------------------------------------------------
+
+test('SCS-01: uv.lock is recognised as a lockfile (PASS)', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'uv.lock'), 'version = 1\n');
+  const r = detectScsLockfiles(t);
+  assert.equal(r.status, 'PASS');
+  assert.ok(r.evidence.some((e) => e.includes('uv.lock')));
+});
+
+test('SCS-02: uv.lock with sha256 hashes is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'uv.lock'),
+    'version = 1\n[[package]]\nname = "requests"\nhash = "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"\n'
+  );
+  const r = detectLockfileIntegrity(t);
+  assert.equal(r.status, 'PASS');
+  assert.equal(r.method, 'detected');
+});
+
+test('SCS-03: pyproject.toml [project] with >= deps is FAIL (not SKIP)', () => {
+  // 3 ranged out of 4 total = 75% → FAIL
+  const t = tmp();
+  writeFileSync(
+    join(t, 'pyproject.toml'),
+    [
+      '[project]',
+      'name = "myapp"',
+      'version = "1.0.0"',
+      'dependencies = [',
+      '    "requests>=2.28.0",',
+      '    "boto3>=1.26.0",',
+      '    "pydantic>=2.0",',
+      '    "click==8.1.7",',
+      ']',
+    ].join('\n') + '\n'
+  );
+  writeFileSync(join(t, 'uv.lock'), 'version = 1\n');
+  const r = detectPinnedVersions(t);
+  // Must not be SKIP — pyproject.toml was found
+  assert.notEqual(r.status, 'SKIP', 'expected non-SKIP for pyproject.toml');
+  assert.equal(r.status, 'FAIL', 'expected FAIL: 75% ranged deps');
+  assert.equal(r.method, 'detected');
+});
+
+test('SCS-03: pyproject.toml [project] with all == pinned is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'pyproject.toml'),
+    [
+      '[project]',
+      'name = "myapp"',
+      'version = "1.0.0"',
+      'dependencies = ["requests==2.31.0", "boto3==1.34.0", "click==8.1.7"]',
+    ].join('\n') + '\n'
+  );
+  const r = detectPinnedVersions(t);
+  assert.notEqual(r.status, 'SKIP');
+  assert.equal(r.status, 'PASS');
+});
+
+test('SCS-03: pyproject.toml with optional-dependencies also counted', () => {
+  // 2 ranged (>=) out of 3 total = 67% → FAIL
+  const t = tmp();
+  writeFileSync(
+    join(t, 'pyproject.toml'),
+    [
+      '[project]',
+      'name = "myapp"',
+      'version = "1.0.0"',
+      'dependencies = ["click==8.1.7"]',
+      '',
+      '[project.optional-dependencies]',
+      'dev = ["pytest>=7.0", "ruff>=0.1"]',
+    ].join('\n') + '\n'
+  );
+  const r = detectPinnedVersions(t);
+  assert.notEqual(r.status, 'SKIP');
+  assert.equal(r.status, 'FAIL');
+});
+
+test('SCS-08: pyproject.toml [project] dependencies counted (not SKIP)', () => {
+  // 4 direct deps — should be PASS (≤ 100)
+  const t = tmp();
+  writeFileSync(
+    join(t, 'pyproject.toml'),
+    [
+      '[project]',
+      'name = "myapp"',
+      'version = "1.0.0"',
+      'dependencies = [',
+      '    "requests>=2.28.0",',
+      '    "boto3==1.26.0",',
+      '    "pydantic>=2.0",',
+      '    "click==8.1.7",',
+      ']',
+    ].join('\n') + '\n'
+  );
+  writeFileSync(join(t, 'uv.lock'), 'version = 1\n');
+  const r = detectDependencyAttackSurface(t);
+  assert.notEqual(r.status, 'SKIP', 'pyproject.toml should be counted');
+  assert.equal(r.status, 'PASS');
+  assert.equal(r.value, 4);
+});
+
+test('SCS-08: pyproject.toml with dependency-groups counted', () => {
+  // 2 main + 2 dev = 4 total → PASS
+  const t = tmp();
+  writeFileSync(
+    join(t, 'pyproject.toml'),
+    [
+      '[project]',
+      'name = "myapp"',
+      'version = "1.0.0"',
+      'dependencies = ["requests>=2.28.0", "boto3==1.26.0"]',
+      '',
+      '[dependency-groups]',
+      'dev = ["pytest>=7.0", "ruff>=0.1"]',
+    ].join('\n') + '\n'
+  );
+  const r = detectDependencyAttackSurface(t);
+  assert.notEqual(r.status, 'SKIP');
+  assert.equal(r.status, 'PASS');
+  assert.equal(r.value, 4);
+});
+
+// ---------------------------------------------------------------------------
 // DETECTORS map
 // ---------------------------------------------------------------------------
 

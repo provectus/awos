@@ -1990,6 +1990,749 @@ var DETECTORS5 = {
   // E2E-05 cross-layer unified tooling
 };
 
+// plugins/awos/skills/ai-readiness-audit/detectors/security.ts
+import { readFileSync as readFileSync7, existsSync as existsSync6 } from "node:fs";
+import { join as join7, relative as relative7 } from "node:path";
+var ENV_GITIGNORE_RX = /^\s*(\.env(\.\*)?|\*\.env|\*\*\/\.env|\/\.env)\s*(?:#.*)?$/m;
+function detectEnvGitignored(repoPath, _params) {
+  const gitignorePath = join7(repoPath, ".gitignore");
+  if (!existsSync6(gitignorePath)) {
+    return makeResult("FAIL", 0, [
+      "no .gitignore file found \u2014 .env files are not excluded from version control"
+    ]);
+  }
+  let content;
+  try {
+    content = readFileSync7(gitignorePath, "utf8");
+  } catch {
+    return makeResult("FAIL", 0, [".gitignore could not be read"]);
+  }
+  if (ENV_GITIGNORE_RX.test(content)) {
+    return makeResult("PASS", 1, [
+      ".gitignore covers .env files \u2014 environment secrets excluded from version control"
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    ".gitignore exists but does not cover .env files \u2014 add .env or .env.* to .gitignore"
+  ]);
+}
+var HOOK_FILES_GLOBS = ["*.sh", "*.js", "*.ts", "*.py", "*.bash"];
+var HOOK_SENSITIVE_RX = /\.env|secret|credential|\.pem|\.key/i;
+function detectAgentSafetyHooks(repoPath, _params) {
+  const settingsPaths = [
+    join7(repoPath, ".claude", "settings.json"),
+    join7(repoPath, ".claude", "settings.local.json")
+  ];
+  for (const sp of settingsPaths) {
+    if (!existsSync6(sp)) continue;
+    let content;
+    try {
+      content = readFileSync7(sp, "utf8");
+    } catch {
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      if (/"hooks"\s*:/.test(content)) {
+        return makeResult("PASS", 1, [
+          `hooks key found in ${relative7(repoPath, sp)} \u2014 agent reads guarded by pre-tool hooks`
+        ]);
+      }
+      continue;
+    }
+    if (parsed !== null && typeof parsed === "object" && "hooks" in parsed) {
+      return makeResult("PASS", 1, [
+        `hooks configured in ${relative7(repoPath, sp)} \u2014 agent file-read actions can be controlled`
+      ]);
+    }
+  }
+  const hooksDir = join7(repoPath, ".claude", "hooks");
+  if (existsSync6(hooksDir)) {
+    const hookFiles = iterFiles(hooksDir, HOOK_FILES_GLOBS);
+    for (const f of hookFiles) {
+      let src;
+      try {
+        src = readFileSync7(f, "utf8");
+      } catch {
+        continue;
+      }
+      if (HOOK_SENSITIVE_RX.test(src)) {
+        return makeResult("PASS", 1, [
+          `hook script references sensitive file patterns: ${relative7(repoPath, f)}`
+        ]);
+      }
+    }
+    if (hookFiles.length > 0) {
+      return makeResult("WARN", hookFiles.length, [
+        `${hookFiles.length} hook file(s) found but none explicitly reference .env/secret patterns`,
+        ...hookFiles.slice(0, 5).map((f) => `hook: ${relative7(repoPath, f)}`)
+      ]);
+    }
+  }
+  return makeResult("FAIL", 0, [
+    "no Claude Code hooks configured \u2014 AI agents are not blocked from reading sensitive files"
+  ]);
+}
+var ENV_EXAMPLE_GLOBS = [
+  ".env.example",
+  ".env.template",
+  ".env.sample",
+  ".env.dist",
+  "env.example",
+  "env.template"
+];
+function detectEnvExample(repoPath, _params) {
+  const found = [];
+  for (const name of ENV_EXAMPLE_GLOBS) {
+    const full = join7(repoPath, name);
+    if (existsSync6(full)) {
+      found.push(name);
+    }
+  }
+  if (found.length > 0) {
+    return makeResult("PASS", found.length, [
+      `environment template file(s) found: ${found.join(", ")}`,
+      ...found.map((f) => `env template: ${f}`)
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no .env.example or .env.template file found \u2014 developers have no reference for required environment variables"
+  ]);
+}
+var SECRET_PATTERNS = [
+  // AWS access/secret keys (long alphanumeric tokens)
+  /AKIA[0-9A-Z]{16}/,
+  // Generic assignment: key/secret/token/password/credential = "non-trivial-value"
+  /(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|password|passwd|credential|private[_-]?key)\s*[:=]\s*["']([A-Za-z0-9/+\-_.]{12,})["']/i
+];
+var PLACEHOLDER_RX = /test|fake|example|dummy|xxx|your[_-]|placeholder|changeme|replace|<[^>]+>|\$\{[^}]+\}|env\(|process\.env|os\.environ|getenv/i;
+var SOURCE_GLOBS_SEC = [
+  "*.py",
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.java",
+  "*.kt",
+  "*.go",
+  "*.rb",
+  "*.php",
+  "*.env",
+  "*.yaml",
+  "*.yml",
+  "*.json",
+  "*.toml",
+  "*.ini",
+  "*.cfg",
+  "*.conf"
+];
+var SEC_IGNORE = [
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".venv",
+  "__pycache__",
+  ".next",
+  "target",
+  "vendor",
+  "fixtures",
+  "testdata",
+  "__tests__",
+  "test",
+  "tests"
+];
+function detectNoSecretsCommitted(repoPath, _params) {
+  const files = iterFiles(repoPath, SOURCE_GLOBS_SEC, SEC_IGNORE);
+  const hits = [];
+  for (const filePath of files) {
+    let content;
+    try {
+      content = readFileSync7(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^\s*(#|\/\/|\/\*)/.test(line)) continue;
+      for (const pat of SECRET_PATTERNS) {
+        if (!pat.test(line)) continue;
+        if (PLACEHOLDER_RX.test(line)) continue;
+        hits.push({
+          file: relative7(repoPath, filePath),
+          line: i + 1,
+          pattern: pat.source.slice(0, 40)
+        });
+        break;
+      }
+    }
+    if (hits.length >= 20) break;
+  }
+  if (hits.length === 0) {
+    return makeResult("PASS", 0, [
+      "no hardcoded secret patterns found in tracked source files"
+    ]);
+  }
+  const evidence = hits.slice(0, 10).map((h) => `${h.file}:${h.line} possible secret (pattern: ${h.pattern})`);
+  if (hits.length <= 2) {
+    return makeResult("WARN", hits.length, [
+      `${hits.length} possible secret pattern(s) found \u2014 review manually`,
+      ...evidence
+    ]);
+  }
+  return makeResult("FAIL", hits.length, [
+    `${hits.length} possible hardcoded secret pattern(s) found in committed files`,
+    ...evidence
+  ]);
+}
+var SENSITIVE_PATTERNS = [
+  { name: "*.pem", rx: /^\s*\*\.pem\s*(?:#.*)?$/m },
+  { name: "*.key", rx: /^\s*\*\.key\s*(?:#.*)?$/m },
+  { name: "*.p12", rx: /^\s*\*\.p12\s*(?:#.*)?$/m },
+  { name: "*.pfx", rx: /^\s*\*\.pfx\s*(?:#.*)?$/m },
+  { name: "*.jks", rx: /^\s*\*\.jks\s*(?:#.*)?$/m },
+  { name: "*.keystore", rx: /^\s*\*\.keystore\s*(?:#.*)?$/m },
+  { name: "credentials.json", rx: /^\s*credentials\.json\s*(?:#.*)?$/m },
+  { name: "secrets.yaml", rx: /^\s*(secrets\.yaml|secrets\.yml)\s*(?:#.*)?$/m },
+  { name: "kubeconfig", rx: /^\s*kubeconfig\s*(?:#.*)?$/m }
+];
+function detectSensitiveFilesGitignored(repoPath, _params) {
+  const gitignorePath = join7(repoPath, ".gitignore");
+  if (!existsSync6(gitignorePath)) {
+    return makeResult("FAIL", 0, [
+      "no .gitignore file found \u2014 sensitive file types are not excluded from version control"
+    ]);
+  }
+  let content;
+  try {
+    content = readFileSync7(gitignorePath, "utf8");
+  } catch {
+    return makeResult("FAIL", 0, [".gitignore could not be read"]);
+  }
+  const covered = SENSITIVE_PATTERNS.filter(({ rx }) => rx.test(content));
+  if (covered.length >= 3) {
+    return makeResult("PASS", covered.length, [
+      `${covered.length} sensitive file type pattern(s) covered in .gitignore`,
+      ...covered.map(({ name }) => `gitignored: ${name}`)
+    ]);
+  }
+  if (covered.length >= 1) {
+    const missing = SENSITIVE_PATTERNS.filter(({ rx }) => !rx.test(content));
+    return makeResult("WARN", covered.length, [
+      `only ${covered.length} sensitive pattern(s) covered \u2014 add *.pem, *.key, *.p12, *.pfx to .gitignore`,
+      ...covered.map(({ name }) => `covered: ${name}`),
+      ...missing.slice(0, 5).map(({ name }) => `not covered: ${name}`)
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no sensitive file type patterns (*.pem, *.key, *.p12, *.pfx \u2026) found in .gitignore"
+  ]);
+}
+var DETECTORS6 = {
+  2600: detectEnvGitignored,
+  // SEC-01 .env gitignored
+  2601: detectAgentSafetyHooks,
+  // SEC-02 agent safety hooks
+  2602: detectEnvExample,
+  // SEC-03 .env.example present
+  2603: detectNoSecretsCommitted,
+  // SEC-04 no secrets committed
+  2604: detectSensitiveFilesGitignored
+  // SEC-05 sensitive file types gitignored
+};
+
+// plugins/awos/skills/ai-readiness-audit/detectors/supply_chain_security.ts
+import { readFileSync as readFileSync8, existsSync as existsSync7 } from "node:fs";
+import { join as join8, relative as relative8, basename as basename4 } from "node:path";
+var LOCKFILES2 = [
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  "package-lock.json",
+  "gradle.lockfile",
+  "poetry.lock",
+  "uv.lock",
+  "Cargo.lock",
+  "go.sum",
+  "Gemfile.lock",
+  "composer.lock",
+  "mix.lock",
+  "pdm.lock",
+  "requirements.txt",
+  // pip freeze output commonly committed as lockfile
+  "pip.lock"
+];
+function detectScsLockfiles(repoPath, _params) {
+  const found = iterFiles(repoPath, LOCKFILES2).map((p) => basename4(p));
+  if (found.length > 0) {
+    const uniq = [...new Set(found)].sort();
+    return makeResult(
+      "PASS",
+      uniq.length,
+      uniq.map((n) => `lockfile present: ${n}`)
+    );
+  }
+  return makeResult("FAIL", 0, ["no dependency lockfile found"]);
+}
+var LOCKFILE_INTEGRITY_CHECKS = [
+  {
+    name: /package-lock\.json$/,
+    integrityRx: /"integrity"\s*:\s*"sha\d+-/
+  },
+  {
+    name: /pnpm-lock\.yaml$/,
+    integrityRx: /^\s*integrity:\s*sha\d+-/m
+  },
+  {
+    name: /yarn\.lock$/,
+    integrityRx: /^\s+(checksum|integrity):\s/m
+  },
+  {
+    name: /poetry\.lock$/,
+    integrityRx: /hash\s*=\s*"sha256:/m
+  },
+  {
+    name: /Cargo\.lock$/,
+    integrityRx: /^checksum\s*=\s*"/m
+  },
+  {
+    name: /uv\.lock$/,
+    integrityRx: /hash\s*=\s*"sha256:/m
+  },
+  {
+    name: /go\.sum$/,
+    // go.sum lines are always hashes — the file is the integrity manifest.
+    integrityRx: /\s+h1:/
+  },
+  {
+    name: /Gemfile\.lock$/,
+    integrityRx: /^\s+[A-Za-z0-9+/]+=$/m
+  }
+];
+function detectLockfileIntegrity(repoPath, _params) {
+  const lockfileNames = LOCKFILES2.filter((n) => !n.includes("requirements"));
+  const presentLockfiles = iterFiles(repoPath, lockfileNames);
+  if (presentLockfiles.length === 0) {
+    return makeResult("SKIP", 0, [
+      "no lockfiles found \u2014 lockfile integrity check skipped"
+    ]);
+  }
+  const withHashes = [];
+  const withoutHashes = [];
+  for (const filePath of presentLockfiles) {
+    const name = basename4(filePath);
+    const check = LOCKFILE_INTEGRITY_CHECKS.find(
+      ({ name: rx }) => rx.test(name)
+    );
+    if (!check) continue;
+    let content;
+    try {
+      content = readFileSync8(filePath, "utf8");
+    } catch {
+      continue;
+    }
+    if (check.integrityRx.test(content)) {
+      withHashes.push(name);
+    } else {
+      withoutHashes.push(name);
+    }
+  }
+  if (withHashes.length > 0) {
+    return makeResult("PASS", withHashes.length, [
+      `${withHashes.length} lockfile(s) include cryptographic integrity hashes`,
+      ...withHashes.map((n) => `lockfile with hashes: ${n}`),
+      ...withoutHashes.map((n) => `lockfile without hashes: ${n}`)
+    ]);
+  }
+  if (withoutHashes.length > 0) {
+    return makeResult("WARN", 0, [
+      `${withoutHashes.length} lockfile(s) found but none include integrity hashes`,
+      ...withoutHashes.map((n) => `lockfile without hashes: ${n}`)
+    ]);
+  }
+  return makeResult("SKIP", 0, [
+    "lockfiles present but none matched known integrity-check format \u2014 skipped"
+  ]);
+}
+function countPackageJsonRanges(content) {
+  let pkg;
+  try {
+    pkg = JSON.parse(content);
+  } catch {
+    return { total: 0, ranged: 0 };
+  }
+  if (pkg === null || typeof pkg !== "object") return { total: 0, ranged: 0 };
+  const rec = pkg;
+  const depGroups = [
+    rec["dependencies"],
+    rec["devDependencies"],
+    rec["peerDependencies"],
+    rec["optionalDependencies"]
+  ].filter(
+    (g) => g !== null && typeof g === "object"
+  );
+  let total = 0;
+  let ranged = 0;
+  for (const group of depGroups) {
+    for (const ver of Object.values(group)) {
+      if (typeof ver !== "string") continue;
+      total++;
+      if (/^\^|^~|^>=|^>|^\*|^x$/.test(ver.trim())) ranged++;
+    }
+  }
+  return { total, ranged };
+}
+function countRequirementsTxtRanges(content) {
+  const lines = content.split("\n").filter((l) => {
+    const t = l.trim();
+    return t.length > 0 && !t.startsWith("#") && !t.startsWith("-");
+  });
+  let total = 0;
+  let ranged = 0;
+  for (const line of lines) {
+    if (!/[A-Za-z]/.test(line)) continue;
+    total++;
+    if (!/==\s*[\d]/.test(line)) ranged++;
+  }
+  return { total, ranged };
+}
+function detectPinnedVersions(repoPath, _params) {
+  let totalDeps = 0;
+  let rangedDeps = 0;
+  const evidence = [];
+  const pkgJsonFiles = iterFiles(repoPath, ["package.json"]);
+  for (const f of pkgJsonFiles) {
+    if (f.includes("node_modules")) continue;
+    let content;
+    try {
+      content = readFileSync8(f, "utf8");
+    } catch {
+      continue;
+    }
+    const counts = countPackageJsonRanges(content);
+    totalDeps += counts.total;
+    rangedDeps += counts.ranged;
+    if (counts.ranged > 0) {
+      evidence.push(
+        `${relative8(repoPath, f)}: ${counts.ranged}/${counts.total} ranged deps`
+      );
+    }
+  }
+  const reqFiles = iterFiles(repoPath, [
+    "requirements.txt",
+    "requirements*.txt"
+  ]);
+  for (const f of reqFiles) {
+    let content;
+    try {
+      content = readFileSync8(f, "utf8");
+    } catch {
+      continue;
+    }
+    const counts = countRequirementsTxtRanges(content);
+    totalDeps += counts.total;
+    rangedDeps += counts.ranged;
+    if (counts.ranged > 0) {
+      evidence.push(
+        `${relative8(repoPath, f)}: ${counts.ranged}/${counts.total} unpinned deps`
+      );
+    }
+  }
+  if (totalDeps === 0) {
+    return makeResult("SKIP", 0, [
+      "no package manifests found \u2014 pinned-version check skipped"
+    ]);
+  }
+  const ratio = rangedDeps / totalDeps;
+  if (ratio >= 0.3) {
+    return makeResult(
+      "FAIL",
+      rangedDeps,
+      [
+        `${rangedDeps}/${totalDeps} dependencies use open-ended version ranges (${Math.round(ratio * 100)}%)`,
+        ...evidence
+      ],
+      "detected"
+    );
+  }
+  if (ratio >= 0.1) {
+    return makeResult(
+      "WARN",
+      rangedDeps,
+      [
+        `${rangedDeps}/${totalDeps} dependencies use open-ended version ranges (${Math.round(ratio * 100)}%)`,
+        ...evidence
+      ],
+      "detected"
+    );
+  }
+  return makeResult(
+    "PASS",
+    totalDeps - rangedDeps,
+    [
+      `${totalDeps - rangedDeps}/${totalDeps} dependencies are pinned to exact versions`,
+      ...evidence
+    ],
+    "detected"
+  );
+}
+function detectScsQuarantineAge(repoPath, _params) {
+  return makeResult(
+    "SKIP",
+    null,
+    [
+      "SCS-04 (quarantine-age) requires live registry API calls to resolve per-version publish timestamps",
+      "This check is non-deterministic offline \u2014 it is intentionally skipped by the static detector",
+      "To evaluate: query npm/PyPI/crates.io registry APIs and verify each pinned version is \u22657 days old"
+    ],
+    "computed"
+  );
+}
+var DEPENDABOT_PATHS = [".github/dependabot.yml", ".github/dependabot.yaml"];
+var RENOVATE_PATHS = [
+  "renovate.json",
+  "renovate.json5",
+  ".renovaterc",
+  ".renovaterc.json",
+  ".github/renovate.json"
+];
+var AUTOMERGE_ENABLED_RX = /"automerge"\s*:\s*true|automerge:\s*true/;
+function detectDependencyAutomationReview(repoPath, _params) {
+  const foundFiles = [];
+  let automergeEnabled = false;
+  for (const relPath of [...DEPENDABOT_PATHS, ...RENOVATE_PATHS]) {
+    const full = join8(repoPath, relPath);
+    if (!existsSync7(full)) continue;
+    foundFiles.push(relPath);
+    let content;
+    try {
+      content = readFileSync8(full, "utf8");
+    } catch {
+      continue;
+    }
+    if (AUTOMERGE_ENABLED_RX.test(content)) {
+      automergeEnabled = true;
+    }
+  }
+  if (foundFiles.length === 0) {
+    return makeResult("FAIL", 0, [
+      "no dependency automation configuration found (Dependabot or Renovate) \u2014 automated dependency review not configured"
+    ]);
+  }
+  if (automergeEnabled) {
+    return makeResult("WARN", foundFiles.length, [
+      "dependency automation configured but automerge is enabled \u2014 updates may merge without human review",
+      ...foundFiles.map((f) => `config: ${f}`)
+    ]);
+  }
+  return makeResult("PASS", foundFiles.length, [
+    `dependency automation configured with review required: ${foundFiles.join(", ")}`,
+    ...foundFiles.map((f) => `config: ${f}`)
+  ]);
+}
+var CI_WORKFLOW_GLOBS = ["*.yml", "*.yaml"];
+var CI_DIRS2 = [".github/workflows", ".circleci", ".buildkite", ".drone"];
+var VULN_SCANNER_RX = /\b(pip-audit|safety\s|snyk|trivy|grype|osv-scanner|dependency-check|dependabot|audit\s+--json|npm\s+audit|yarn\s+audit|pnpm\s+audit)\b/i;
+function detectVulnerabilityScanning(repoPath, _params) {
+  const scanners = [];
+  for (const ciDir of CI_DIRS2) {
+    const ciDirPath = join8(repoPath, ciDir);
+    if (!existsSync7(ciDirPath)) continue;
+    let files = [];
+    try {
+      files = iterFiles(ciDirPath, CI_WORKFLOW_GLOBS);
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      let content;
+      try {
+        content = readFileSync8(f, "utf8");
+      } catch {
+        continue;
+      }
+      const match = content.match(VULN_SCANNER_RX);
+      if (match) {
+        scanners.push(`${relative8(repoPath, f)} (${match[1]})`);
+      }
+    }
+  }
+  for (const p of DEPENDABOT_PATHS) {
+    const full = join8(repoPath, p);
+    if (!existsSync7(full)) continue;
+    let content;
+    try {
+      content = readFileSync8(full, "utf8");
+    } catch {
+      continue;
+    }
+    if (/package-ecosystem/i.test(content)) {
+      scanners.push(`${p} (Dependabot security-updates)`);
+    }
+  }
+  if (scanners.length > 0) {
+    return makeResult("PASS", scanners.length, [
+      `vulnerability scanning configured in ${scanners.length} location(s)`,
+      ...scanners.slice(0, 10).map((s) => `scanner: ${s}`)
+    ]);
+  }
+  return makeResult("FAIL", 0, [
+    "no vulnerability scanning found in CI workflows \u2014 add pip-audit, Snyk, Trivy, or Grype to your CI pipeline"
+  ]);
+}
+var OVERRIDE_PACKAGE_JSON_RX = /"(resolutions|overrides)"\s*:/;
+var PNPM_OVERRIDES_RX = /"pnpm"\s*:\s*\{[^}]*"overrides"\s*:/s;
+function detectDependencyOverrides(repoPath, _params) {
+  const foundOverrides = [];
+  const pkgJsonFiles = iterFiles(repoPath, ["package.json"]);
+  for (const f of pkgJsonFiles) {
+    if (f.includes("node_modules")) continue;
+    let content;
+    try {
+      content = readFileSync8(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (OVERRIDE_PACKAGE_JSON_RX.test(content) || PNPM_OVERRIDES_RX.test(content)) {
+      foundOverrides.push(`${relative8(repoPath, f)}: overrides/resolutions`);
+    }
+  }
+  const cargoFiles = iterFiles(repoPath, ["Cargo.toml"]);
+  for (const f of cargoFiles) {
+    let content;
+    try {
+      content = readFileSync8(f, "utf8");
+    } catch {
+      continue;
+    }
+    if (/^\[patch\s*\./m.test(content)) {
+      foundOverrides.push(`${relative8(repoPath, f)}: [patch.*] section`);
+    }
+  }
+  if (foundOverrides.length === 0) {
+    return makeResult("PASS", 0, [
+      "no dependency overrides/resolutions/patches found \u2014 clean dependency tree"
+    ]);
+  }
+  return makeResult("WARN", foundOverrides.length, [
+    `${foundOverrides.length} dependency override(s) found \u2014 review for suspicious or recently-published pins`,
+    ...foundOverrides
+  ]);
+}
+function countPackageJsonDeps(content) {
+  let pkg;
+  try {
+    pkg = JSON.parse(content);
+  } catch {
+    return 0;
+  }
+  if (pkg === null || typeof pkg !== "object") return 0;
+  const rec = pkg;
+  const deps = rec["dependencies"];
+  const devDeps = rec["devDependencies"];
+  const depCount = deps !== null && typeof deps === "object" ? Object.keys(deps).length : 0;
+  const devCount = devDeps !== null && typeof devDeps === "object" ? Object.keys(devDeps).length : 0;
+  return depCount + devCount;
+}
+function countRequirementsDeps(content) {
+  return content.split("\n").filter((l) => {
+    const t = l.trim();
+    return t.length > 0 && !t.startsWith("#") && !t.startsWith("-");
+  }).length;
+}
+function detectDependencyAttackSurface(repoPath, _params) {
+  let totalDeps = 0;
+  const sources = [];
+  const pkgJsonFiles = iterFiles(repoPath, ["package.json"]);
+  for (const f of pkgJsonFiles) {
+    if (f.includes("node_modules")) continue;
+    let content;
+    try {
+      content = readFileSync8(f, "utf8");
+    } catch {
+      continue;
+    }
+    const count = countPackageJsonDeps(content);
+    if (count > 0) {
+      totalDeps += count;
+      sources.push(`${relative8(repoPath, f)}: ${count} deps`);
+    }
+  }
+  const reqFiles = iterFiles(repoPath, ["requirements.txt"]);
+  for (const f of reqFiles) {
+    let content;
+    try {
+      content = readFileSync8(f, "utf8");
+    } catch {
+      continue;
+    }
+    const count = countRequirementsDeps(content);
+    if (count > 0) {
+      totalDeps += count;
+      sources.push(`${relative8(repoPath, f)}: ${count} entries`);
+    }
+  }
+  if (totalDeps === 0) {
+    return makeResult(
+      "SKIP",
+      null,
+      ["no package manifests found \u2014 dependency attack surface check skipped"],
+      "computed"
+    );
+  }
+  if (totalDeps <= 100) {
+    return makeResult(
+      "PASS",
+      totalDeps,
+      [
+        `${totalDeps} total direct dependencies \u2014 within healthy range (\u2264 100)`,
+        ...sources
+      ],
+      "computed"
+    );
+  }
+  if (totalDeps <= 200) {
+    return makeResult(
+      "WARN",
+      totalDeps,
+      [
+        `${totalDeps} total direct dependencies \u2014 large attack surface (101\u2013200); review for unused deps`,
+        ...sources
+      ],
+      "computed"
+    );
+  }
+  return makeResult(
+    "FAIL",
+    totalDeps,
+    [
+      `${totalDeps} total direct dependencies \u2014 excessive attack surface (> 200); audit and prune`,
+      ...sources
+    ],
+    "computed"
+  );
+}
+var DETECTORS7 = {
+  2900: detectScsLockfiles,
+  // SCS-01 lockfiles committed
+  2901: detectLockfileIntegrity,
+  // SCS-02 lockfile integrity hashes
+  2902: detectPinnedVersions,
+  // SCS-03 pinned dependency versions (detected)
+  2903: detectScsQuarantineAge,
+  // SCS-04 quarantine age (SKIP — requires live registry)
+  2904: detectDependencyAutomationReview,
+  // SCS-05 dependency automation with review
+  2905: detectVulnerabilityScanning,
+  // SCS-06 vulnerability scanning in CI
+  2906: detectDependencyOverrides,
+  // SCS-07 dependency overrides/patches
+  2907: detectDependencyAttackSurface
+  // SCS-08 dependency attack surface (computed)
+};
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
 var COLLECTORS = {
   git: collect,
@@ -1997,12 +2740,14 @@ var COLLECTORS = {
   tracker: collect3,
   docs: collect4
 };
-var DETECTORS6 = {
+var DETECTORS8 = {
   ...DETECTORS,
   ...DETECTORS2,
   ...DETECTORS3,
   ...DETECTORS4,
-  ...DETECTORS5
+  ...DETECTORS5,
+  ...DETECTORS6,
+  ...DETECTORS7
 };
 var DEFAULT_PERIOD = {
   bucket_days: 30,
@@ -2054,11 +2799,11 @@ function main() {
         });
         process.exit(1);
       }
-      const fn = DETECTORS6[code];
+      const fn = DETECTORS8[code];
       if (!fn) {
         printJson({
           error: `unknown detector code ${code}`,
-          known: Object.keys(DETECTORS6).map(Number).sort((a, b) => a - b)
+          known: Object.keys(DETECTORS8).map(Number).sort((a, b) => a - b)
         });
         process.exit(1);
       }

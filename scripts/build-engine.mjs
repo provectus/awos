@@ -18,6 +18,7 @@ import {
   statSync,
   copyFileSync,
   mkdirSync,
+  writeFileSync,
 } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,7 +71,17 @@ await build({
 console.log('build-engine: bundled cli.ts → dist/cli.js');
 
 // ---------------------------------------------------------------------------
-// 3. .wasm copy hook (no-op for now; web-tree-sitter support lands later)
+// 3. Write dist/package.json with {"type":"module"} so node treats dist/cli.js
+//    as an ES module and suppresses the MODULE_TYPELESS_PACKAGE_JSON warning.
+// ---------------------------------------------------------------------------
+writeFileSync(
+  join(distDir, 'package.json'),
+  JSON.stringify({ type: 'module' }) + '\n'
+);
+console.log('build-engine: wrote dist/package.json (type: module)');
+
+// ---------------------------------------------------------------------------
+// 4. .wasm copy hook (no-op for now; web-tree-sitter support lands later)
 // ---------------------------------------------------------------------------
 const wasmFiles = readdirSync(skillRoot).filter((f) => f.endsWith('.wasm'));
 for (const wasm of wasmFiles) {

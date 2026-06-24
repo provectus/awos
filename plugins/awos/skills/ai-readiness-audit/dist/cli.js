@@ -498,7 +498,12 @@ var DETECTORS = {
 import { readFileSync as readFileSync3 } from "node:fs";
 import { basename as basename2, dirname, relative as relative3 } from "node:path";
 import { execFileSync as execFileSync3 } from "node:child_process";
-var ARCH_DOC_PATTERNS = ["ARCHITECTURE.md", "ARCHITECTURE.rst", "architecture.md", "architecture.rst"];
+var ARCH_DOC_PATTERNS = [
+  "ARCHITECTURE.md",
+  "ARCHITECTURE.rst",
+  "architecture.md",
+  "architecture.rst"
+];
 var LAYERED_DIRS = [
   "routes",
   "controllers",
@@ -583,7 +588,9 @@ function getLayerTier(dir) {
 function detectImportGraph(repoPath, _params) {
   const files = iterFiles(repoPath, SOURCE_GLOBS2);
   if (files.length === 0) {
-    return makeResult("PASS", 0, ["no source files found \u2014 no import violations possible"]);
+    return makeResult("PASS", 0, [
+      "no source files found \u2014 no import violations possible"
+    ]);
   }
   const violations = [];
   for (const filePath of files) {
@@ -621,13 +628,28 @@ function detectImportGraph(repoPath, _params) {
   if (violations.length === 0) {
     return makeResult("PASS", 0, ["no import layer violations detected"]);
   }
-  const evidence = violations.slice(0, 10).map((v) => `${v.file}:${v.line} layer violation: ${v.sourceLayer}/ imports from ${v.targetLayer}/ (${v.importPath})`);
+  const evidence = violations.slice(0, 10).map(
+    (v) => `${v.file}:${v.line} layer violation: ${v.sourceLayer}/ imports from ${v.targetLayer}/ (${v.importPath})`
+  );
   return makeResult("FAIL", violations.length, [
     `${violations.length} import layer violation(s) detected`,
     ...evidence
   ]);
 }
-var PRESENTATION_DIRS = ["routes", "route", "controllers", "controller", "handlers", "handler", "views", "view", "templates", "template", "pages", "page"];
+var PRESENTATION_DIRS = [
+  "routes",
+  "route",
+  "controllers",
+  "controller",
+  "handlers",
+  "handler",
+  "views",
+  "view",
+  "templates",
+  "template",
+  "pages",
+  "page"
+];
 var DATA_ACCESS_RX = /\b(?:db|conn|cursor|session|repository|repo)\s*\.\s*(?:query|execute|find|findOne|findAll|filter|get|update|delete|insert|save|add|commit|remove|all|fetchone|fetchall|fetch_one|fetch_all|run)\s*\(/i;
 var ORM_STATIC_RX = /\b\w+\s*\.\s*(?:objects\s*\.\s*(?:filter|get|all|exclude|create|update|delete)\s*\(|find(?:One|All|By)?\s*\()/i;
 var RAW_SQL_RX = /(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP)\s+\w+/i;
@@ -649,7 +671,9 @@ function detectSeparationOfConcerns(repoPath, _params) {
     return PRESENTATION_DIRS.some((pd) => dir === pd || dir.startsWith(pd));
   });
   if (presentationFiles.length === 0) {
-    return makeResult("PASS", 0, ["no route/controller/handler files found \u2014 separation of concerns not checkable"]);
+    return makeResult("PASS", 0, [
+      "no route/controller/handler files found \u2014 separation of concerns not checkable"
+    ]);
   }
   const failFiles = [];
   const warnFiles = [];
@@ -669,14 +693,18 @@ function detectSeparationOfConcerns(repoPath, _params) {
     }
   }
   if (failFiles.length > 0) {
-    const evidence = failFiles.map((f) => `${f.file}: ${f.count} inline data-access call(s) in presentation layer`);
+    const evidence = failFiles.map(
+      (f) => `${f.file}: ${f.count} inline data-access call(s) in presentation layer`
+    );
     return makeResult("FAIL", failFiles.length, [
       `${failFiles.length} presentation-layer file(s) have >= 3 inline data-access calls`,
       ...evidence
     ]);
   }
   if (warnFiles.length > 0) {
-    const evidence = warnFiles.map((f) => `${f.file}: ${f.count} inline data-access call(s) in presentation layer`);
+    const evidence = warnFiles.map(
+      (f) => `${f.file}: ${f.count} inline data-access call(s) in presentation layer`
+    );
     return makeResult("WARN", warnFiles.length, [
       `${warnFiles.length} presentation-layer file(s) have 1-2 inline data-access calls`,
       ...evidence
@@ -693,15 +721,29 @@ function classifyName(name) {
   if (/^[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$/.test(name)) return "camelCase";
   return "other";
 }
-var NAMING_SOURCE_GLOBS = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.py", "*.java", "*.kt", "*.go", "*.rb"];
+var NAMING_SOURCE_GLOBS = [
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.py",
+  "*.java",
+  "*.kt",
+  "*.go",
+  "*.rb"
+];
 function detectNamingConventions(repoPath, _params) {
   const files = iterFiles(repoPath, NAMING_SOURCE_GLOBS);
   const relevantFiles = files.filter((f) => {
     const base = basename2(f).replace(/\.[^.]+$/, "");
-    return !["index", "__init__", "main", "app", "setup", "config"].includes(base);
+    return !["index", "__init__", "main", "app", "setup", "config"].includes(
+      base
+    );
   });
   if (relevantFiles.length === 0) {
-    return makeResult("PASS", 0, ["no source files found \u2014 naming convention check skipped"]);
+    return makeResult("PASS", 0, [
+      "no source files found \u2014 naming convention check skipped"
+    ]);
   }
   const counts = {
     snake_case: 0,
@@ -715,8 +757,16 @@ function detectNamingConventions(repoPath, _params) {
     counts[classifyName(base)]++;
   }
   const total = relevantFiles.length;
-  const conventions = ["snake_case", "kebab-case", "camelCase", "PascalCase"];
-  const dominant = conventions.reduce((best, c) => counts[c] > counts[best] ? c : best, conventions[0]);
+  const conventions = [
+    "snake_case",
+    "kebab-case",
+    "camelCase",
+    "PascalCase"
+  ];
+  const dominant = conventions.reduce(
+    (best, c) => counts[c] > counts[best] ? c : best,
+    conventions[0]
+  );
   const dominantCount = counts[dominant];
   const ratio = dominantCount / total;
   const evidence = [
@@ -737,7 +787,18 @@ function detectNamingConventions(repoPath, _params) {
     ...evidence
   ]);
 }
-var FILE_SIZE_GLOBS = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.py", "*.java", "*.kt", "*.go", "*.rb", "*.cs"];
+var FILE_SIZE_GLOBS = [
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.py",
+  "*.java",
+  "*.kt",
+  "*.go",
+  "*.rb",
+  "*.cs"
+];
 var LOC_THRESHOLD = 300;
 function countLines(filePath) {
   try {

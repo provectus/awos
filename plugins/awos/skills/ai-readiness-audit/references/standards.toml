@@ -225,6 +225,8 @@ source_year = 2026
 # Tier C: CI source categories
 # ---------------------------------------------------------------------------
 
+# ci_pass_rate uses reliability_default = "not-reliable" rather than "maximal" because
+# it is a ratio metric (percentage), not a presence signal — true usage is not bounded above by the observed value.
 [category.ci_pass_rate]
 code = 1001
 metric = "adp_c1_ci_pass_rate"
@@ -364,3 +366,802 @@ elite = "Growth >= 60%"
 high = "Growth >= 45%"
 medium = "Growth >= 30%"
 low = "Growth < 30%"
+
+# ---------------------------------------------------------------------------
+# [category.*] — audit dimension check categories (Task A.4)
+# One category per check in each of the 10 scored dimensions.
+# project-topology is UNSCORED — no categories for its checks.
+# Code blocks: 2000–2099 ai-development-tooling, 2100–2199 code-architecture,
+#   2200–2299 documentation, 2300–2399 end-to-end-delivery,
+#   2400–2499 prompt-agent-integrity, 2500–2599 quality-assurance,
+#   2600–2699 security, 2700–2799 software-best-practices,
+#   2800–2899 spec-driven-development, 2900–2999 supply-chain-security.
+# ---------------------------------------------------------------------------
+
+# --- ai-development-tooling (7 checks) ---
+
+[category.ai_development_tooling_ai_01]
+code = 2000
+metric = "AI-01"
+dimension = "ai-development-tooling"
+weight = 8
+definition = "The combined CLAUDE.md ecosystem gives AI agents sufficient non-obvious context to work effectively in the project"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.ai_development_tooling_ai_02]
+code = 2001
+metric = "AI-02"
+dimension = "ai-development-tooling"
+weight = 3
+definition = "The project defines custom slash commands for common workflows"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.ai_development_tooling_ai_03]
+code = 2002
+metric = "AI-03"
+dimension = "ai-development-tooling"
+weight = 1
+definition = "The project uses Claude Code skills for specialized workflows"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.ai_development_tooling_ai_04]
+code = 2003
+metric = "AI-04"
+dimension = "ai-development-tooling"
+weight = 1
+definition = "The project configures MCP servers for extended tool access"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.ai_development_tooling_ai_05]
+code = 2004
+metric = "AI-05"
+dimension = "ai-development-tooling"
+weight = 1
+definition = "The project uses Claude Code hooks for automated guardrails or workflows"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.ai_development_tooling_ai_06]
+code = 2005
+metric = "AI-06"
+dimension = "ai-development-tooling"
+weight = 5
+definition = "Every CLAUDE.md file contains high-quality, non-obvious content that actually helps AI agents"
+applies_when = "topology.has_claude_md"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.ai_development_tooling_ai_07]
+code = 2006
+metric = "AI-07"
+dimension = "ai-development-tooling"
+weight = 8
+definition = "Claude Code has the tools to run the application and observe results without human involvement"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+# --- code-architecture (6 checks) ---
+
+[category.code_architecture_arch_01]
+code = 2100
+metric = "ARCH-01"
+dimension = "code-architecture"
+weight = 5
+definition = "The project follows a declared or recognizable architectural pattern"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.code_architecture_arch_02]
+code = 2101
+metric = "ARCH-02"
+dimension = "code-architecture"
+weight = 5
+definition = "Code modules have clear boundaries and no tangled cross-imports"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.code_architecture_arch_03]
+code = 2102
+metric = "ARCH-03"
+dimension = "code-architecture"
+weight = 3
+definition = "Modules and directories serve a single clear purpose rather than being catch-all dumping grounds"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.code_architecture_arch_04]
+code = 2103
+metric = "ARCH-04"
+dimension = "code-architecture"
+weight = 5
+definition = "Business logic, data access, and presentation are separated — not mixed in the same files"
+applies_when = "topology.is_not_library"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.code_architecture_arch_05]
+code = 2104
+metric = "ARCH-05"
+dimension = "code-architecture"
+weight = 3
+definition = "The project follows consistent naming conventions for files and directories"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.code_architecture_arch_06]
+code = 2105
+metric = "ARCH-06"
+dimension = "code-architecture"
+weight = 3
+definition = "Source files are reasonably sized, indicating proper decomposition"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+# --- documentation (4 checks) ---
+
+[category.documentation_doc_01]
+code = 2200
+metric = "DOC-01"
+dimension = "documentation"
+weight = 8
+definition = "The repository has a top-level README.md with setup instructions a new developer could follow"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.documentation_doc_02]
+code = 2201
+metric = "DOC-02"
+dimension = "documentation"
+weight = 5
+definition = "Each major service directory has its own README.md with build and run instructions"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.documentation_doc_03]
+code = 2202
+metric = "DOC-03"
+dimension = "documentation"
+weight = 5
+definition = "API endpoints are documented via OpenAPI/Swagger specs or equivalent, proportional to API surface"
+applies_when = "topology.has_api"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.documentation_doc_04]
+code = 2203
+metric = "DOC-04"
+dimension = "documentation"
+weight = 3
+definition = "Documentation references match current code reality — sampled claims are accurate"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+# --- end-to-end-delivery (5 checks) ---
+
+[category.end_to_end_delivery_e2e_01]
+code = 2300
+metric = "E2E-01"
+dimension = "end-to-end-delivery"
+weight = 5
+definition = "Feature branches touch multiple layers in a single branch, indicating vertical delivery"
+applies_when = "topology.is_monorepo"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.end_to_end_delivery_e2e_02]
+code = 2301
+metric = "E2E-02"
+dimension = "end-to-end-delivery"
+weight = 3
+definition = "Branches are not split by layer (no paired *-backend/*-frontend branch patterns)"
+applies_when = "topology.is_monorepo"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.end_to_end_delivery_e2e_03]
+code = 2302
+metric = "E2E-03"
+dimension = "end-to-end-delivery"
+weight = 5
+definition = "Specifications link to implementation and implementation references specs bidirectionally"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.end_to_end_delivery_e2e_04]
+code = 2303
+metric = "E2E-04"
+dimension = "end-to-end-delivery"
+weight = 3
+definition = "API definitions have corresponding UI consumers and database schemas have corresponding API layers"
+applies_when = "topology.has_multiple_layers"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.end_to_end_delivery_e2e_05]
+code = 2304
+metric = "E2E-05"
+dimension = "end-to-end-delivery"
+weight = 3
+definition = "The project has cross-layer tooling (unified Makefile, docker-compose, shared CI) enabling full-stack development"
+applies_when = "topology.is_monorepo"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+# --- prompt-agent-integrity (6 checks) ---
+
+[category.prompt_agent_integrity_pai_01]
+code = 2400
+metric = "PAI-01"
+dimension = "prompt-agent-integrity"
+weight = 8
+definition = "AI agent instruction files contain no invisible Unicode characters that could hide malicious instructions"
+applies_when = "topology.has_ai_agent_files"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.prompt_agent_integrity_pai_02]
+code = 2401
+metric = "PAI-02"
+dimension = "prompt-agent-integrity"
+weight = 8
+definition = "Agent instruction files contain no prompt injection patterns attempting to override behavior or exfiltrate data"
+applies_when = "topology.has_ai_agent_files"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.prompt_agent_integrity_pai_03]
+code = 2402
+metric = "PAI-03"
+dimension = "prompt-agent-integrity"
+weight = 8
+definition = "Hook scripts contain only legitimate automation with no exfiltration, obfuscation, or download-and-execute patterns"
+applies_when = "topology.has_hooks"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.prompt_agent_integrity_pai_04]
+code = 2403
+metric = "PAI-04"
+dimension = "prompt-agent-integrity"
+weight = 8
+definition = "MCP server configurations reference trusted, verifiable endpoints with no bare IPs, HTTP remote URLs, or embedded credentials"
+applies_when = "topology.has_mcp_config"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.prompt_agent_integrity_pai_05]
+code = 2404
+metric = "PAI-05"
+dimension = "prompt-agent-integrity"
+weight = 5
+definition = "All AI agent instruction and configuration files are tracked in git, providing auditable change history"
+applies_when = "topology.has_ai_agent_files"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.prompt_agent_integrity_pai_06]
+code = 2405
+metric = "PAI-06"
+dimension = "prompt-agent-integrity"
+weight = 8
+definition = "Skill and command files contain no instructions to bypass security controls, access secrets, or modify security configuration"
+applies_when = "topology.has_commands_or_skills"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+# --- quality-assurance (10 checks) ---
+
+[category.quality_assurance_qa_01]
+code = 2500
+metric = "QA-01"
+dimension = "quality-assurance"
+weight = 8
+definition = "The project has meaningful tests covering at least 60% of its source modules"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.quality_assurance_qa_02]
+code = 2501
+metric = "QA-02"
+dimension = "quality-assurance"
+weight = 5
+definition = "The project has tests that verify individual units of logic in isolation, without real I/O or external dependencies"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.quality_assurance_qa_03]
+code = 2502
+metric = "QA-03"
+dimension = "quality-assurance"
+weight = 5
+definition = "The project has tests that verify interactions between components across real databases, HTTP calls, or message queues"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.quality_assurance_qa_04]
+code = 2503
+metric = "QA-04"
+dimension = "quality-assurance"
+weight = 5
+definition = "The project has end-to-end tests exercising complete user flows through a real UI, API surface, or CLI"
+applies_when = "topology.is_not_library"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.quality_assurance_qa_05]
+code = 2504
+metric = "QA-05"
+dimension = "quality-assurance"
+weight = 3
+definition = "Test distribution follows a healthy pyramid: most tests unit-level, fewer integration, fewest E2E"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.quality_assurance_qa_06]
+code = 2505
+metric = "QA-06"
+dimension = "quality-assurance"
+weight = 1
+definition = "The project measures what percentage of source code is exercised by tests, optionally enforcing a minimum threshold"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.quality_assurance_qa_07]
+code = 2506
+metric = "QA-07"
+dimension = "quality-assurance"
+weight = 1
+definition = "Tests use a structured approach to create and manage test data rather than scattering hardcoded inline values"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.quality_assurance_qa_08]
+code = 2507
+metric = "QA-08"
+dimension = "quality-assurance"
+weight = 3
+definition = "Unit and integration tests use mocking/stubbing to isolate the code under test from external dependencies"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.quality_assurance_qa_09]
+code = 2508
+metric = "QA-09"
+dimension = "quality-assurance"
+weight = 5
+definition = "Service boundaries are verified through consumer-driven contract tests ensuring producers do not break consumers"
+applies_when = "topology.is_multi_service"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.quality_assurance_qa_10]
+code = 2509
+metric = "QA-10"
+dimension = "quality-assurance"
+weight = 5
+definition = "ML models are tested for quality metrics as part of the development cycle, not just functional correctness"
+applies_when = "topology.has_ml_layer"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+# --- security (5 checks) ---
+
+[category.security_sec_01]
+code = 2600
+metric = "SEC-01"
+dimension = "security"
+weight = 8
+definition = "Environment files containing secrets are excluded from version control via .gitignore"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.security_sec_02]
+code = 2601
+metric = "SEC-02"
+dimension = "security"
+weight = 8
+definition = "Claude Code hooks are configured to prevent AI agents from reading sensitive files"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.security_sec_03]
+code = 2602
+metric = "SEC-03"
+dimension = "security"
+weight = 5
+definition = "A template environment file exists so developers know which variables to configure"
+applies_when = "topology.uses_env_vars"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.security_sec_04]
+code = 2603
+metric = "SEC-04"
+dimension = "security"
+weight = 8
+definition = "No hardcoded secrets, API keys, or credentials are committed to the repository"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.security_sec_05]
+code = 2604
+metric = "SEC-05"
+dimension = "security"
+weight = 5
+definition = "Sensitive file types relevant to the detected stack are covered by .gitignore"
+applies_when = "topology.has_topology"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+# --- software-best-practices (6 checks) ---
+
+[category.software_best_practices_sbp_01]
+code = 2700
+metric = "SBP-01"
+dimension = "software-best-practices"
+weight = 5
+definition = "Code linters are configured for all major languages in the project with runnable scripts"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.software_best_practices_sbp_02]
+code = 2701
+metric = "SBP-02"
+dimension = "software-best-practices"
+weight = 3
+definition = "Code formatting is automated and consistent via formatters with scripts or pre-commit hooks"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.software_best_practices_sbp_03]
+code = 2702
+metric = "SBP-03"
+dimension = "software-best-practices"
+weight = 5
+definition = "The project uses strong typing where available — strict mode in TypeScript or minimal suppressions in Kotlin"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.software_best_practices_sbp_05]
+code = 2703
+metric = "SBP-05"
+dimension = "software-best-practices"
+weight = 5
+definition = "Automated build, test, and deploy pipeline is configured with build and test stages"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.software_best_practices_sbp_06]
+code = 2704
+metric = "SBP-06"
+dimension = "software-best-practices"
+weight = 5
+definition = "The codebase follows consistent error handling — errors are logged or propagated, not silently swallowed"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.software_best_practices_sbp_07]
+code = 2705
+metric = "SBP-07"
+dimension = "software-best-practices"
+weight = 3
+definition = "Dependencies are locked with lockfiles and dependency update automation is configured"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+# --- spec-driven-development (7 checks) ---
+
+[category.spec_driven_development_sdd_01]
+code = 2800
+metric = "SDD-01"
+dimension = "spec-driven-development"
+weight = 8
+definition = "AWOS framework is installed in the project providing the spec-driven development workflow"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.spec_driven_development_sdd_02]
+code = 2801
+metric = "SDD-02"
+dimension = "spec-driven-development"
+weight = 5
+definition = "The three foundational AWOS documents exist with substantive content: product definition, roadmap, and architecture"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.spec_driven_development_sdd_03]
+code = 2802
+metric = "SDD-03"
+dimension = "spec-driven-development"
+weight = 5
+definition = "Technology choices declared in architecture.md match what is actually used in the codebase"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.spec_driven_development_sdd_04]
+code = 2803
+metric = "SDD-04"
+dimension = "spec-driven-development"
+weight = 8
+definition = "Significant features are built through the AWOS spec workflow, not ad-hoc prompting — 70%+ of feature branches touched spec files"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.spec_driven_development_sdd_05]
+code = 2804
+metric = "SDD-05"
+dimension = "spec-driven-development"
+weight = 5
+definition = "Each spec directory contains the full AWOS spec triad: functional-spec.md, technical-considerations.md, and tasks.md"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.spec_driven_development_sdd_06]
+code = 2805
+metric = "SDD-06"
+dimension = "spec-driven-development"
+weight = 3
+definition = "Specs that have progressed past Draft are actively being worked on, not abandoned mid-workflow"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.spec_driven_development_sdd_07]
+code = 2806
+metric = "SDD-07"
+dimension = "spec-driven-development"
+weight = 3
+definition = "Tasks in tasks.md files are annotated with meaningful agent assignments using the AWOS format"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+# --- supply-chain-security (8 checks) ---
+
+[category.supply_chain_security_scs_01]
+code = 2900
+metric = "SCS-01"
+dimension = "supply-chain-security"
+weight = 8
+definition = "Lockfiles exist and are tracked by git, ensuring all developers and CI use identical resolved dependency trees"
+applies_when = "topology.has_package_ecosystem"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.supply_chain_security_scs_02]
+code = 2901
+metric = "SCS-02"
+dimension = "supply-chain-security"
+weight = 5
+definition = "Lockfiles include cryptographic integrity hashes verifying downloaded packages match resolved dependencies"
+applies_when = "topology.has_lockfiles"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.supply_chain_security_scs_03]
+code = 2902
+metric = "SCS-03"
+dimension = "supply-chain-security"
+weight = 5
+definition = "Dependency versions use exact pinning — not wildcards, open-ended ranges, or caret/tilde ranges allowing silent re-resolution"
+applies_when = "topology.has_package_manifests"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.supply_chain_security_scs_04]
+code = 2903
+metric = "SCS-04"
+dimension = "supply-chain-security"
+weight = 8
+definition = "All resolved dependency versions have been published for at least 7 days, reducing supply chain attack exposure"
+applies_when = "topology.has_package_ecosystem"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.supply_chain_security_scs_05]
+code = 2904
+metric = "SCS-05"
+dimension = "supply-chain-security"
+weight = 5
+definition = "Dependency update PRs require human review before merging, preventing automated merging of potentially compromised updates"
+applies_when = "topology.has_dependency_automation"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.supply_chain_security_scs_06]
+code = 2905
+metric = "SCS-06"
+dimension = "supply-chain-security"
+weight = 8
+definition = "The CI/CD pipeline includes automated vulnerability scanning of dependencies catching known CVEs before production"
+applies_when = "topology.has_ci"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.supply_chain_security_scs_07]
+code = 2906
+metric = "SCS-07"
+dimension = "supply-chain-security"
+weight = 5
+definition = "Dependency version overrides are tracked, minimal, and do not pin to recently published or suspicious versions"
+applies_when = "topology.has_package_manifests"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.supply_chain_security_scs_08]
+code = 2907
+metric = "SCS-08"
+dimension = "supply-chain-security"
+weight = 3
+definition = "The dependency tree is not excessively bloated — direct-to-transitive ratio is within healthy range for the ecosystem"
+applies_when = "topology.has_lockfiles"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026

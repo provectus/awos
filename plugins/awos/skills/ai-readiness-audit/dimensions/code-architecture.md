@@ -31,6 +31,7 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Warn:** A pattern is partially recognizable but inconsistently applied (some areas follow it, others don't)
 - **Fail:** No recognizable pattern — flat file structure or random nesting with no clear organization principle
 - **Severity:** high
+- **Category:** 2100
 
 ### ARCH-02: Module boundaries are respected
 
@@ -44,6 +45,7 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Warn:** 1-2 import violations found in the sample, but the general direction is consistent
 - **Fail:** Widespread tangled imports — no clear direction, modules import each other freely
 - **Severity:** high
+- **Category:** 2101
 
 ### ARCH-03: Single Responsibility Principle in modules
 
@@ -57,6 +59,7 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Warn:** 1-2 overly broad modules found, but most are well-scoped
 - **Fail:** Multiple god modules or catch-all directories with mixed concerns
 - **Severity:** medium
+- **Category:** 2102
 
 ### ARCH-04: Separation of concerns across layers
 
@@ -71,6 +74,7 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Fail:** Widespread mixing — most files handle multiple concerns (fetch + render + state + business logic in one file)
 - **Skip-When:** Topology shows the project is a library (libraries may legitimately have simpler structure)
 - **Severity:** high
+- **Category:** 2103
 
 ### ARCH-05: Consistent file and directory naming conventions
 
@@ -84,6 +88,7 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Warn:** Mostly consistent but with 3-5 deviations
 - **Fail:** No consistent naming convention — mixed patterns with no clear standard
 - **Severity:** medium
+- **Category:** 2104
 
 ### ARCH-06: Reasonable file sizes
 
@@ -96,3 +101,4 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Warn:** 5-15% of source files exceed 500 lines
 - **Fail:** More than 15% of source files exceed 500 lines, or any file exceeds 2000 lines
 - **Severity:** medium
+- **Category:** 2105

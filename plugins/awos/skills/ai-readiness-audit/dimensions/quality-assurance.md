@@ -39,6 +39,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Warn:** Test-coverage ratio > 0% but < 60%
 - **Fail:** No tests found
 - **Severity:** critical
+- **Category:** 2500
 
 ---
 
@@ -68,6 +69,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Warn:** Test files exist but none can be clearly identified as unit-scoped
 - **Fail:** No unit test signals detected
 - **Severity:** high
+- **Category:** 2501
 
 ---
 
@@ -94,6 +96,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Warn:** Tests appear to hit real dependencies (DB/HTTP imports in test files) but no explicit integration markers found
 - **Fail:** No integration test signals detected
 - **Severity:** high
+- **Category:** 2502
 
 ---
 
@@ -131,6 +134,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Fail:** No E2E signals detected
 - **Skip-When:** Topology shows library (no runnable entry point)
 - **Severity:** high
+- **Category:** 2503
 
 ---
 
@@ -143,6 +147,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Fail:** E2E count > unit count (inverted pyramid), or integration count > unit count by a significant margin (2× or more)
 - **Skip-When:** Fewer than 2 tiers received a Pass result in QA-02, QA-03, or QA-04
 - **Severity:** medium
+- **Category:** 2504
 
 ---
 
@@ -160,6 +165,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Pass:** Coverage tool configured with thresholds defined
 - **Warn:** Coverage tool present but no thresholds defined, OR no coverage tooling found
 - **Severity:** low
+- **Category:** 2505
 
 ---
 
@@ -176,6 +182,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Warn:** One approach present but sparse (library installed but used in fewer than 3 test files)
 - **Fail:** No test data strategy — tests use only hardcoded inline values
 - **Severity:** low
+- **Category:** 2506
 
 ---
 
@@ -198,6 +205,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Warn:** Library present but used in fewer than 2 of the 5 sampled files
 - **Fail:** No mocking infrastructure detected
 - **Severity:** medium
+- **Category:** 2507
 
 ---
 
@@ -214,6 +222,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Fail:** No contract testing detected
 - **Skip-When:** Topology shows single-service repo or no inter-service communication patterns detected
 - **Severity:** high
+- **Category:** 2508
 
 ---
 
@@ -231,3 +240,4 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Fail:** No ML model testing detected
 - **Skip-When:** Topology shows no ML layer — no ML framework imports (`sklearn`, `torch`, `tensorflow`, `xgboost`, `transformers`) found in non-test source files
 - **Severity:** high
+- **Category:** 2509

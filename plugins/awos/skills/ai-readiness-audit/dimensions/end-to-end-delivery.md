@@ -35,6 +35,7 @@ For single-layer projects, most checks will auto-SKIP since cross-layer delivery
 - **Fail:** <25% of feature branches are cross-layer (most are single-layer)
 - **Skip-When:** Topology artifact shows single-service repo (not a monorepo)
 - **Severity:** high
+- **Category:** 2300
 
 ### E2E-02: No layer-split branching pattern
 
@@ -45,6 +46,7 @@ For single-layer projects, most checks will auto-SKIP since cross-layer delivery
 - **Fail:** Systematic pattern of layer-split branches (3+ pairs)
 - **Skip-When:** Topology artifact shows single-service repo
 - **Severity:** medium
+- **Category:** 2301
 
 ### E2E-03: Spec-to-delivery traceability
 
@@ -55,6 +57,7 @@ For single-layer projects, most checks will auto-SKIP since cross-layer delivery
 - **Fail:** No traceability between specifications and implementation
 - **Skip-When:** Spec-driven-development artifact shows SDD-04 as FAIL (no specs or no spec-driven development)
 - **Severity:** high
+- **Category:** 2302
 
 ### E2E-04: No orphaned artifacts
 
@@ -65,6 +68,7 @@ For single-layer projects, most checks will auto-SKIP since cross-layer delivery
 - **Fail:** Significant orphaned artifacts (entire API surface with no UI consumer, or schema with no API)
 - **Skip-When:** Topology artifact shows only one layer detected
 - **Severity:** medium
+- **Category:** 2303
 
 ### E2E-05: Shared ownership enablers
 
@@ -75,3 +79,4 @@ For single-layer projects, most checks will auto-SKIP since cross-layer delivery
 - **Fail:** No shared tooling — each layer is completely independent with no unified entry point
 - **Skip-When:** Topology artifact shows single-service repo
 - **Severity:** medium
+- **Category:** 2304

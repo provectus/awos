@@ -20,6 +20,7 @@ Audits whether the project protects sensitive data (secrets, credentials, enviro
 - **Warn:** `.gitignore` covers `.env` but some `.env.example` or `.env.template` files exist (acceptable if they contain only placeholders)
 - **Fail:** `.env` files with actual values are tracked in git, OR `.env` is not gitignored
 - **Severity:** critical
+- **Category:** 2600
 
 ### SEC-02: AI agent hooks restrict access to sensitive files
 
@@ -29,6 +30,7 @@ Audits whether the project protects sensitive data (secrets, credentials, enviro
 - **Warn:** Some hooks exist but coverage is incomplete (e.g., `.env` is blocked but private keys are not)
 - **Fail:** No hooks restricting agent access to sensitive files, OR `.claude/settings.json` does not exist
 - **Severity:** critical
+- **Category:** 2601
 
 ### SEC-03: .env.example or template exists
 
@@ -50,6 +52,7 @@ Audits whether the project protects sensitive data (secrets, credentials, enviro
 - **Fail:** Project uses environment variables but no template env file found anywhere
 - **Skip-When:** No environment variable usage detected in the project source code or configuration
 - **Severity:** high
+- **Category:** 2602
 
 ### SEC-04: No secrets in committed files
 
@@ -65,6 +68,7 @@ Audits whether the project protects sensitive data (secrets, credentials, enviro
 - **Warn:** Suspicious patterns found but appear to be placeholders or test values
 - **Fail:** Real secrets or credentials found in committed source code
 - **Severity:** critical
+- **Category:** 2603
 
 ### SEC-05: Sensitive files in .gitignore coverage
 
@@ -79,3 +83,4 @@ Audits whether the project protects sensitive data (secrets, credentials, enviro
 - **Fail:** `.gitignore` is missing or has minimal coverage of sensitive file types relevant to this stack
 - **Skip-When:** Project topology could not be determined (no topology artifact available)
 - **Severity:** high
+- **Category:** 2604

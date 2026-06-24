@@ -1145,3 +1145,46 @@ test('context/<path> references in prompts are internally consistent', () => {
     );
   }
 });
+
+test('every dimension check maps to a standards.toml category', () => {
+  const standards = readUtf8(path.join(referencesDir, 'standards.toml'));
+  const definedCodes = new Set(
+    (standards.match(/\bcode\s*=\s*(\d+)/g) || []).map(
+      (m) => m.match(/(\d+)/)[1]
+    )
+  );
+  const files = listMarkdown(dimensionsDir);
+  for (const f of files) {
+    const body = readUtf8(path.join(dimensionsDir, f));
+    const isTopology = f === 'project-topology.md';
+    // Split into check blocks by the "### CODE-NN:" headings.
+    const blocks = body.split(/^### /m).slice(1);
+    for (const block of blocks) {
+      const head = block.split('\n', 1)[0];
+      const catLine = (block.match(/\*\*Category:\*\*\s*(.+)/) || [])[1];
+      assert.ok(
+        catLine,
+        `${f}: check "${head}" must declare a **Category:** line`
+      );
+      if (isTopology) {
+        assert.match(
+          catLine,
+          /none/i,
+          `${f}: topology checks must be Category: none (unscored)`
+        );
+      } else {
+        const codes = catLine.match(/\d+/g) || [];
+        assert.ok(
+          codes.length > 0,
+          `${f}: check "${head}" must name at least one numeric category code`
+        );
+        for (const c of codes) {
+          assert.ok(
+            definedCodes.has(c),
+            `${f}: check "${head}" references undefined standards.toml code ${c}`
+          );
+        }
+      }
+    }
+  }
+});

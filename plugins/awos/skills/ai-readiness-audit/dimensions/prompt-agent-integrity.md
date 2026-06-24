@@ -54,6 +54,7 @@ All checks in this dimension apply only if the project uses AI coding agents. If
 - **Fail:** Invisible Unicode characters found in English-language instruction files, especially directional overrides (`\u202E`, `\u202D`) or tag characters (`\U000E0001`–`\U000E007F`)
 - **Skip-When:** No prompt/instruction files found (project does not use AI coding agents)
 - **Severity:** critical
+- **Category:** 2400
 
 ### PAI-02: No prompt injection patterns in agent instruction files
 
@@ -75,6 +76,7 @@ All checks in this dimension apply only if the project uses AI coding agents. If
 - **Fail:** Clear offensive prompt injection patterns found — instructions to exfiltrate data, disable security controls, override system behavior, or read sensitive files
 - **Skip-When:** No prompt/instruction files found
 - **Severity:** critical
+- **Category:** 2401
 
 ### PAI-03: Hook scripts do not contain suspicious commands
 
@@ -98,6 +100,7 @@ All checks in this dimension apply only if the project uses AI coding agents. If
 - **Fail:** Hook scripts contain clear exfiltration patterns, obfuscated code execution, download-and-execute chains, or access to sensitive file contents
 - **Skip-When:** No hooks configured in `.claude/settings.json` (AI-05 would be FAIL), or `.claude/settings.json` does not exist
 - **Severity:** critical
+- **Category:** 2402
 
 ### PAI-04: MCP server configurations point to trusted endpoints
 
@@ -119,6 +122,7 @@ All checks in this dimension apply only if the project uses AI coding agents. If
 - **Fail:** MCP servers point to `http://` remote URLs, bare IP addresses, contain embedded credentials in URLs, reference unknown/unverifiable packages with no clear MCP naming convention, or use download-and-execute patterns in stdio commands
 - **Skip-When:** No MCP configuration found (AI-04 would be FAIL or WARN)
 - **Severity:** critical
+- **Category:** 2403
 
 ### PAI-05: Agent and configuration files have git provenance
 
@@ -148,6 +152,7 @@ All checks in this dimension apply only if the project uses AI coding agents. If
 - **Fail:** Critical configuration files (`.claude/settings.json`, `.mcp.json`) are untracked and not gitignored, OR multiple agent/rule files are untracked with no apparent reason (not gitignored, not personal configs)
 - **Skip-When:** No agent configuration files found (project does not use AI coding agents)
 - **Severity:** high
+- **Category:** 2404
 
 ### PAI-06: Skill and command files do not contain security bypass instructions
 
@@ -172,3 +177,4 @@ All checks in this dimension apply only if the project uses AI coding agents. If
 - **Fail:** Command/skill files contain instructions to disable security controls, access secrets, or modify security configuration. Also FAIL if skill files pass user arguments directly into shell commands without sanitization.
 - **Skip-When:** No command or skill files found
 - **Severity:** critical
+- **Category:** 2405

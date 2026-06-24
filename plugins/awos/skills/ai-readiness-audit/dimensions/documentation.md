@@ -20,6 +20,7 @@ Audits documentation coverage across the repository. Well-documented projects ar
 - **Warn:** README.md exists but is missing setup steps or is clearly outdated
 - **Fail:** README.md is missing or is an empty placeholder
 - **Severity:** critical
+- **Category:** 2200
 
 ### DOC-02: Service-level READMEs exist
 
@@ -29,6 +30,7 @@ Audits documentation coverage across the repository. Well-documented projects ar
 - **Warn:** Some service directories are missing READMEs
 - **Fail:** No service-level READMEs exist
 - **Severity:** high
+- **Category:** 2201
 
 ### DOC-03: API documentation is available
 
@@ -46,6 +48,7 @@ Audits documentation coverage across the repository. Well-documented projects ar
 - **Fail:** Large public API (many endpoints, external consumers) with no API documentation at all
 - **Skip-When:** Project has no API layer, or has a small closed API (few endpoints with a co-located client)
 - **Severity:** high for large/public APIs, medium for moderate internal APIs
+- **Category:** 2202
 
 ### DOC-04: No stale documentation
 
@@ -55,3 +58,4 @@ Audits documentation coverage across the repository. Well-documented projects ar
 - **Warn:** 1-2 sampled claims are inaccurate or outdated
 - **Fail:** 3+ sampled claims are inaccurate
 - **Severity:** medium
+- **Category:** 2203

@@ -45,6 +45,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** No lockfiles found for a detected package ecosystem, OR lockfiles exist but none are tracked in git
 - **Skip-When:** Topology shows no package ecosystem detected (e.g., pure infrastructure-as-code project with no application dependencies)
 - **Severity:** critical
+- **Category:** 2900
 
 ### SCS-02: Lockfiles contain integrity hashes
 
@@ -73,6 +74,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** Any registry-sourced dependency entry lacks an integrity hash, OR the lockfile format does not support hashes (e.g., npm `lockfileVersion: 1`), OR lockfile entries have empty or missing hash fields
 - **Skip-When:** No lockfiles detected (SCS-01 is FAIL or SKIP), or the only detected ecosystem does not support integrity hashes in lockfiles
 - **Severity:** high
+- **Category:** 2901
 
 ### SCS-03: No permissive version ranges in dependency manifests
 
@@ -102,6 +104,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** Any dependency uses `"*"`, `">="` without upper bound, bare name without version, or other unbounded range. Also FAIL if `^`/`~` is used without a committed lockfile (SCS-01 is not PASS).
 - **Skip-When:** Topology shows no package manifests detected
 - **Severity:** high
+- **Category:** 2902
 
 ### SCS-04: No recently published dependency versions (quarantine check)
 
@@ -118,6 +121,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** Any sampled dependency version was published within the last 7 days, OR unable to verify publish dates for the majority of sampled dependencies
 - **Skip-When:** No package ecosystem detected, or lockfiles are absent (SCS-01 FAIL — cannot determine exact resolved versions without lockfiles)
 - **Severity:** critical
+- **Category:** 2903
 
 ### SCS-05: Dependency review process enforces approval
 
@@ -135,6 +139,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** Automerge enabled globally for dependency updates, OR auto-approve workflow detected for Dependabot PRs
 - **Skip-When:** No dependency update automation detected (no Renovate or Dependabot config found). The absence of a dependency update strategy is already covered by SBP-07 — this check only evaluates the safety of automation that exists.
 - **Severity:** high
+- **Category:** 2904
 
 ### SCS-06: Vulnerability scanning in CI
 
@@ -161,6 +166,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** No vulnerability scanning detected in any CI configuration
 - **Skip-When:** No CI configuration files found (CI absence is already flagged by SBP-05)
 - **Severity:** critical
+- **Category:** 2905
 
 ### SCS-07: Dependency overrides are reviewed and justified
 
@@ -188,6 +194,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** Overrides pin to versions published within the last 7 days, OR overrides use permissive ranges (`*`, `>=`), OR overrides reference git URLs or arbitrary tarballs without explanation
 - **Skip-When:** Topology shows no package manifests detected
 - **Severity:** high
+- **Category:** 2906
 
 ### SCS-08: Dependency count and attack surface
 
@@ -203,3 +210,4 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** Dependency ratio exceeds 2x the healthy range, or total transitive dependency count exceeds ecosystem thresholds (1000 JS / 200 Python / 100 Go / 500 Rust)
 - **Skip-When:** Topology shows no package ecosystem detected, or lockfile is absent (cannot count transitive dependencies without a resolved lockfile)
 - **Severity:** medium
+- **Category:** 2907

@@ -24,6 +24,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Warn:** AWOS partially installed — some directories or command files missing (e.g., `.awos/` exists but `.claude/commands/awos/` is missing, or fewer than 5 commands found)
 - **Fail:** AWOS not installed — `.awos/commands/` directory does not exist or contains no `.md` files
 - **Severity:** critical
+- **Category:** 2800
 
 ### SDD-02: Product context documents are complete
 
@@ -38,6 +39,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Fail:** One or more of the three foundational documents is missing entirely
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed)
 - **Severity:** high
+- **Category:** 2801
 
 ### SDD-03: Architecture document reflects codebase reality
 
@@ -55,6 +57,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Fail:** Major drift — a core technology (primary database, main framework, cloud provider) is listed but not used, OR a core technology in use is entirely absent from the architecture document
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed), or `context/product/architecture.md` does not exist (covered by SDD-02)
 - **Severity:** high
+- **Category:** 2802
 
 ### SDD-04: Features are implemented through specs
 
@@ -69,6 +72,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Fail:** Fewer than 30% of feature branches touched spec files, OR zero spec directories exist despite active development
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed)
 - **Severity:** critical
+- **Category:** 2803
 
 ### SDD-05: Spec directories are structurally complete
 
@@ -89,6 +93,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Fail:** Fewer than 50% of spec directories are complete, OR most directories are skeletons
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed), or no spec directories exist (covered by SDD-04)
 - **Severity:** high
+- **Category:** 2804
 
 ### SDD-06: No stale or abandoned specs
 
@@ -106,6 +111,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Fail:** 3+ stale specs, OR more than half of non-Draft specs show no task progress
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed), or no spec directories exist, or all specs are Draft (too early to detect staleness)
 - **Severity:** medium
+- **Category:** 2805
 
 ### SDD-07: Tasks have meaningful agent assignments
 
@@ -125,6 +131,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Fail:** No agent annotations at all, OR systematic domain mix-ups across multiple specs
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed), or no tasks.md files exist (covered by SDD-05)
 - **Severity:** medium
+- **Category:** 2806
 
 ## SDD Summary
 

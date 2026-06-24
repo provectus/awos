@@ -20,6 +20,7 @@ All checks produce PASS (detected) or SKIP (not detected) — there are no FAIL 
 - **Pass:** Structure type identified (monorepo | single-service | library)
 - **Fail:** N/A — always produces a result
 - **Severity:** medium
+- **Category:** none (recon, unscored)
 
 ### TOPO-02: Application layer inventory
 
@@ -28,6 +29,7 @@ All checks produce PASS (detected) or SKIP (not detected) — there are no FAIL 
 - **Pass:** At least one layer detected with type, framework, and path
 - **Fail:** N/A — always produces a result
 - **Severity:** medium
+- **Category:** none (recon, unscored)
 
 ### TOPO-03: Database and storage detection
 
@@ -36,6 +38,7 @@ All checks produce PASS (detected) or SKIP (not detected) — there are no FAIL 
 - **Pass:** Storage systems detected — record types and tools
 - **Skip:** No storage layer found
 - **Severity:** medium
+- **Category:** none (recon, unscored)
 
 ### TOPO-04: Infrastructure layer detection
 
@@ -44,6 +47,7 @@ All checks produce PASS (detected) or SKIP (not detected) — there are no FAIL 
 - **Pass:** Infrastructure layer detected — record tools
 - **Skip:** No infrastructure-as-code found
 - **Severity:** medium
+- **Category:** none (recon, unscored)
 
 ### TOPO-05: Language inventory
 
@@ -52,6 +56,7 @@ All checks produce PASS (detected) or SKIP (not detected) — there are no FAIL 
 - **Pass:** Language inventory compiled with file counts
 - **Fail:** N/A — always produces a result
 - **Severity:** medium
+- **Category:** none (recon, unscored)
 
 ### TOPO-06: Inter-layer communication patterns
 
@@ -60,6 +65,7 @@ All checks produce PASS (detected) or SKIP (not detected) — there are no FAIL 
 - **Pass:** Communication patterns identified
 - **Skip:** Single-layer project or no inter-layer communication found
 - **Severity:** medium
+- **Category:** none (recon, unscored)
 
 ## Topology Summary
 

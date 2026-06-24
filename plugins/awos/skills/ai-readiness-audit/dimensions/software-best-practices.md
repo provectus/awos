@@ -20,6 +20,7 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Warn:** Linters configured but missing for one language
 - **Fail:** No linting configuration found
 - **Severity:** high
+- **Category:** 2700
 
 ### SBP-02: Formatting is automated
 
@@ -29,6 +30,7 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Warn:** Formatters configured but no automation (manual only)
 - **Fail:** No formatting tools configured
 - **Severity:** medium
+- **Category:** 2701
 
 ### SBP-03: Type safety is enforced
 
@@ -38,6 +40,7 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Warn:** Some strict flags enabled but not full strict mode
 - **Fail:** Strict mode disabled or excessive type suppressions/`any` usage
 - **Severity:** high
+- **Category:** 2702
 
 > _Test infrastructure and coverage are evaluated in the **Quality Assurance** dimension (`quality-assurance.md`), which provides a full testing pyramid analysis._
 
@@ -49,6 +52,7 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Warn:** CI pipeline exists but is missing test or quality gate stages
 - **Fail:** No CI/CD configuration found
 - **Severity:** high
+- **Category:** 2703
 
 ### SBP-06: Error handling patterns are consistent
 
@@ -58,6 +62,7 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Warn:** Mixed patterns — some errors handled well, some silently swallowed
 - **Fail:** Widespread silent error swallowing (empty catch blocks, no logging)
 - **Severity:** high
+- **Category:** 2704
 
 ### SBP-07: Dependencies are managed
 
@@ -67,3 +72,4 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Warn:** Lock files present but no automated update strategy
 - **Fail:** No lock files found
 - **Severity:** medium
+- **Category:** 2705

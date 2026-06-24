@@ -1123,6 +1123,19 @@ function detectArchTechMatch(repoPath, _params) {
   ]);
 }
 var TRUNK_BRANCHES = /* @__PURE__ */ new Set(["main", "master", "develop", "development"]);
+function detectTrunk(repoPath) {
+  for (const candidate of ["main", "master", "develop", "development"]) {
+    try {
+      execFileSync4("git", ["rev-parse", "--verify", candidate], {
+        cwd: repoPath,
+        encoding: "utf8"
+      });
+      return candidate;
+    } catch {
+    }
+  }
+  return "main";
+}
 function listLocalBranches(repoPath) {
   try {
     const out = execFileSync4("git", ["branch", "--format=%(refname:short)"], {
@@ -1134,7 +1147,7 @@ function listLocalBranches(repoPath) {
     return [];
   }
 }
-function branchTouchedSpec(repoPath, branch) {
+function branchTouchedSpec(repoPath, branch, trunk) {
   try {
     const out = execFileSync4(
       "git",
@@ -1142,7 +1155,7 @@ function branchTouchedSpec(repoPath, branch) {
         "log",
         branch,
         "--not",
-        "main",
+        trunk,
         "--name-only",
         "--format=",
         "--diff-filter=ACDMR"
@@ -1151,16 +1164,7 @@ function branchTouchedSpec(repoPath, branch) {
     );
     return out.split("\n").some((line) => line.startsWith("context/spec/"));
   } catch {
-    try {
-      const out = execFileSync4(
-        "git",
-        ["log", branch, "--name-only", "--format=", "--diff-filter=ACDMR"],
-        { cwd: repoPath, encoding: "utf8" }
-      );
-      return out.split("\n").some((line) => line.startsWith("context/spec/"));
-    } catch {
-      return false;
-    }
+    return false;
   }
 }
 function detectBranchSpecRatio(repoPath, _params) {
@@ -1173,10 +1177,11 @@ function detectBranchSpecRatio(repoPath, _params) {
       "computed"
     );
   }
+  const trunk = detectTrunk(repoPath);
   const specBranches = [];
   const plainBranches = [];
   for (const branch of branches) {
-    if (branchTouchedSpec(repoPath, branch)) {
+    if (branchTouchedSpec(repoPath, branch, trunk)) {
       specBranches.push(branch);
     } else {
       plainBranches.push(branch);
@@ -1230,7 +1235,7 @@ function listSpecDirs(repoPath) {
   const specBase = join4(repoPath, "context", "spec");
   if (!existsSync3(specBase)) return [];
   try {
-    return readdirSync(specBase).filter((name) => /^\d{3}-/.test(name)).map((name) => join4(specBase, name)).filter((p) => {
+    return readdirSync(specBase).filter((name) => /^\d{3}-/.test(name)).sort().map((name) => join4(specBase, name)).filter((p) => {
       try {
         return statSync(p).isDirectory();
       } catch {

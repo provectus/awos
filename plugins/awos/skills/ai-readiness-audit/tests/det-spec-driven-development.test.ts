@@ -23,9 +23,9 @@ function tmp(): string {
   return mkdtempSync(join(tmpdir(), 'sdd-'));
 }
 
-/** Initialise a bare git repo in dir and create an initial empty commit on main. */
-function gitInit(dir: string): void {
-  execFileSync('git', ['init', '-b', 'main', dir]);
+/** Initialise a bare git repo in dir and create an initial empty commit on the given trunk branch. */
+function gitInitOnTrunk(dir: string, trunk: string): void {
+  execFileSync('git', ['init', '-b', trunk, dir]);
   execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: dir });
   execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir });
   writeFileSync(join(dir, '.gitkeep'), '');
@@ -33,13 +33,24 @@ function gitInit(dir: string): void {
   execFileSync('git', ['commit', '-m', 'init'], { cwd: dir });
 }
 
+/** Initialise a bare git repo in dir and create an initial empty commit on main. */
+function gitInit(dir: string): void {
+  gitInitOnTrunk(dir, 'main');
+}
+
 /**
- * Create a branch, touch a file, commit, and return to main.
+ * Create a branch, touch a file, commit, and return to trunk.
  * If specFile is provided the commit will also touch that path
  * (under context/spec/) so it counts as a spec branch.
  * specFile is a repo-relative path e.g. "context/spec/001-alpha/functional-spec.md".
+ * trunk defaults to 'main'.
  */
-function addBranch(dir: string, branchName: string, specFile?: string): void {
+function addBranch(
+  dir: string,
+  branchName: string,
+  specFile?: string,
+  trunk: string = 'main'
+): void {
   execFileSync('git', ['checkout', '-b', branchName], { cwd: dir });
   writeFileSync(join(dir, `${branchName}.txt`), branchName);
   execFileSync('git', ['add', `${branchName}.txt`], { cwd: dir });
@@ -51,7 +62,7 @@ function addBranch(dir: string, branchName: string, specFile?: string): void {
     execFileSync('git', ['add', specFile], { cwd: dir });
   }
   execFileSync('git', ['commit', '-m', `feat: ${branchName}`], { cwd: dir });
-  execFileSync('git', ['checkout', 'main'], { cwd: dir });
+  execFileSync('git', ['checkout', trunk], { cwd: dir });
 }
 
 // ---------------------------------------------------------------------------
@@ -217,21 +228,24 @@ test('SDD-03: PASS when architecture doc mentions tech that is present in codeba
   assert.equal(r.status, 'PASS', 'mentioned tech present in codebase → PASS');
 });
 
-test('SDD-03: WARN when 1-2 tech mentions cannot be verified in codebase', () => {
+test('SDD-03: WARN when exactly 2 tech mentions cannot be verified in codebase', () => {
   const t = tmp();
   mkdirSync(join(t, 'context', 'architecture'), { recursive: true });
-  // Mentions Python and Django but no Python files present
+  // Architecture mentions TypeScript (verified by index.ts), Python and Java (both unverified).
+  // Exactly 2 unverified techs → WARN (1-2 unverified threshold, not FAIL which needs 3+).
+  // Note: "Django" is avoided because it contains the substring "go" which would also
+  // trigger the Go signal, inflating the unverified count to 3+ → FAIL.
   writeFileSync(
     join(t, 'context', 'architecture', 'architecture.md'),
-    '# Architecture\n\nWe use Python, Django, and PostgreSQL.\n'
+    '# Architecture\n\nWe use TypeScript, Python, and Java.\n'
   );
+  // Codebase has a .ts file → TypeScript verified; no .py → Python unverified; no .java → Java unverified
   writeFileSync(join(t, 'index.ts'), 'console.log("hello");\n');
   const r = detectArchTechMatch(t);
-  // Python and Django unverified, PostgreSQL possibly unverified → WARN or FAIL
-  // At minimum: Python and Django not found → 2 mismatches → WARN
-  assert.ok(
-    r.status === 'WARN' || r.status === 'FAIL',
-    `expected WARN or FAIL for unverified tech, got ${r.status}`
+  assert.equal(
+    r.status,
+    'WARN',
+    `expected WARN for exactly 2 unverified techs (Python, Java), got ${r.status}`
   );
 });
 
@@ -321,6 +335,40 @@ test('SDD-04: exact counts pinned — 2 spec branches / 5 total = 0.40 → WARN 
   // 2/5 = 0.40 — exactly at WARN threshold (< 0.70, >= 0.40)
   assert.equal(r.status, 'WARN', '2/5 = 0.40 → WARN');
   assert.equal(r.value, 0.4, 'ratio must be exactly 0.4');
+});
+
+test('SDD-04: master-trunk repo computes correct ratio (no ancestor inflation)', () => {
+  // Regression: detectTrunk() must find "master" so --not master is used,
+  // preventing the full ancestor history from being included in the diff.
+  const t = tmp();
+  gitInitOnTrunk(t, 'master');
+  // 2 spec branches, 2 plain → ratio = 0.5 → WARN (not inflated to 1.0)
+  addBranch(
+    t,
+    'feat-spec-a',
+    'context/spec/001-a/functional-spec.md',
+    'master'
+  );
+  addBranch(
+    t,
+    'feat-spec-b',
+    'context/spec/002-b/functional-spec.md',
+    'master'
+  );
+  addBranch(t, 'feat-plain-x', undefined, 'master');
+  addBranch(t, 'feat-plain-y', undefined, 'master');
+  const r = detectBranchSpecRatio(t);
+  assert.equal(
+    r.status,
+    'WARN',
+    'master-trunk: 2/4 = 0.5 → WARN (not inflated to PASS)'
+  );
+  assert.equal(
+    r.value,
+    0.5,
+    'master-trunk: ratio must be exactly 0.5 (not inflated to 1.0)'
+  );
+  assert.equal(r.method, 'computed');
 });
 
 // ---------------------------------------------------------------------------

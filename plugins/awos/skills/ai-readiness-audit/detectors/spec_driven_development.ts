@@ -349,9 +349,10 @@ export function detectArchTechMatch(
 //
 // Algorithm:
 //   1. List all local branches except main/master/develop.
-//   2. For each branch, run: git log <branch> --not main --name-only --format=""
+//   2. Detect the actual trunk (main → master → develop → development).
+//   3. For each branch, run: git log <branch> --not <trunk> --name-only --format=""
 //      and check if any changed path starts with "context/spec/".
-//   3. ratio = branches_touching_spec / total_feature_branches
+//   4. ratio = branches_touching_spec / total_feature_branches
 //
 // PASS  if ratio >= 0.70
 // WARN  if 0.40 <= ratio < 0.70
@@ -360,6 +361,22 @@ export function detectArchTechMatch(
 // ---------------------------------------------------------------------------
 
 const TRUNK_BRANCHES = new Set(['main', 'master', 'develop', 'development']);
+
+/** Detect the actual trunk branch by probing common names in order. */
+function detectTrunk(repoPath: string): string {
+  for (const candidate of ['main', 'master', 'develop', 'development']) {
+    try {
+      execFileSync('git', ['rev-parse', '--verify', candidate], {
+        cwd: repoPath,
+        encoding: 'utf8',
+      });
+      return candidate;
+    } catch {
+      // try next candidate
+    }
+  }
+  return 'main'; // fallback — no exclusion will apply if branch absent
+}
 
 function listLocalBranches(repoPath: string): string[] {
   try {
@@ -376,7 +393,11 @@ function listLocalBranches(repoPath: string): string[] {
   }
 }
 
-function branchTouchedSpec(repoPath: string, branch: string): boolean {
+function branchTouchedSpec(
+  repoPath: string,
+  branch: string,
+  trunk: string
+): boolean {
   try {
     // Get all file paths changed in commits on this branch (not on trunk)
     const out = execFileSync(
@@ -385,7 +406,7 @@ function branchTouchedSpec(repoPath: string, branch: string): boolean {
         'log',
         branch,
         '--not',
-        'main',
+        trunk,
         '--name-only',
         '--format=',
         '--diff-filter=ACDMR',
@@ -394,17 +415,7 @@ function branchTouchedSpec(repoPath: string, branch: string): boolean {
     );
     return out.split('\n').some((line) => line.startsWith('context/spec/'));
   } catch {
-    // Fall back: try without --not main in case main doesn't exist
-    try {
-      const out = execFileSync(
-        'git',
-        ['log', branch, '--name-only', '--format=', '--diff-filter=ACDMR'],
-        { cwd: repoPath, encoding: 'utf8' }
-      );
-      return out.split('\n').some((line) => line.startsWith('context/spec/'));
-    } catch {
-      return false;
-    }
+    return false;
   }
 }
 
@@ -423,11 +434,12 @@ export function detectBranchSpecRatio(
     );
   }
 
+  const trunk = detectTrunk(repoPath);
   const specBranches: string[] = [];
   const plainBranches: string[] = [];
 
   for (const branch of branches) {
-    if (branchTouchedSpec(repoPath, branch)) {
+    if (branchTouchedSpec(repoPath, branch, trunk)) {
       specBranches.push(branch);
     } else {
       plainBranches.push(branch);
@@ -502,6 +514,7 @@ function listSpecDirs(repoPath: string): string[] {
   try {
     return readdirSync(specBase)
       .filter((name) => /^\d{3}-/.test(name))
+      .sort()
       .map((name) => join(specBase, name))
       .filter((p) => {
         try {

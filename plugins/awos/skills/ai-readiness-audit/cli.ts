@@ -79,6 +79,11 @@ import { compute as computeG1 } from './metrics/adp_g1_tooling_depth.ts';
 import { compute as computeG2 } from './metrics/adp_g2_contributors.ts';
 import { compute as computeG3 } from './metrics/adp_g3_deploy_frequency.ts';
 import { compute as computeG4 } from './metrics/adp_g4_lead_time.ts';
+import { compute as computeG5 } from './metrics/adp_g5_pr_cycle_time.ts';
+import { compute as computeG6 } from './metrics/adp_g6_churn.ts';
+import { compute as computeG7 } from './metrics/adp_g7_change_fail_rate.ts';
+import { compute as computeG8 } from './metrics/adp_g8_review_rework.ts';
+import { compute as computeG9 } from './metrics/adp_g9_ai_attribution.ts';
 // Adding a metric module is a one-line change per import + one entry in METRICS below.
 
 import type { MetricResult } from './metrics/_base.ts';
@@ -95,6 +100,11 @@ export const METRICS: Record<string, MetricFn> = {
   adp_g2_contributors: computeG2,
   adp_g3_deploy_frequency: computeG3,
   adp_g4_lead_time: computeG4,
+  adp_g5_pr_cycle_time: computeG5,
+  adp_g6_churn: computeG6,
+  adp_g7_change_fail_rate: computeG7,
+  adp_g8_review_rework: computeG8,
+  adp_g9_ai_attribution: computeG9,
 };
 
 // ---------------------------------------------------------------------------

@@ -681,9 +681,9 @@ function parse(toml, { maxDepth = 1e3, integersAsBigInt } = {}) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/cli.ts
-import { readFileSync as readFileSync17, mkdtempSync } from "node:fs";
+import { readFileSync as readFileSync22, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join as join17, dirname as dirname3 } from "node:path";
+import { join as join22, dirname as dirname3 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // plugins/awos/skills/ai-readiness-audit/collectors/git.ts
@@ -5337,6 +5337,268 @@ function compute4(collectedDir, _standards, _topology) {
   );
 }
 
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g5_pr_cycle_time.ts
+import { readFileSync as readFileSync17, existsSync as existsSync15 } from "node:fs";
+import { join as join17 } from "node:path";
+function median2(sorted) {
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid];
+  return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+function doraCycleTimeBand(hours) {
+  if (hours < 24) return "elite";
+  if (hours < 168) return "high";
+  if (hours < 720) return "medium";
+  return "low";
+}
+function compute5(collectedDir, _standards, _topology) {
+  const gitPath = join17(collectedDir, "git.json");
+  if (!existsSync15(gitPath)) {
+    return makeMetricResult(
+      "adp_g5_pr_cycle_time",
+      null,
+      "banded",
+      [],
+      computeReliability("not-reliable", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync17(gitPath, "utf8"));
+  const raw = artifact?.raw;
+  if (!raw || !Array.isArray(raw.merge_records) || raw.merge_records.length === 0) {
+    return makeMetricResult(
+      "adp_g5_pr_cycle_time",
+      null,
+      "banded",
+      [],
+      computeReliability("not-reliable", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const records = raw.merge_records;
+  const cycleTimesHours = [];
+  for (const r of records) {
+    const mergedAt = new Date(r.merged_at).getTime();
+    const firstCommit = new Date(r.branch_first_commit_at).getTime();
+    if (isNaN(mergedAt) || isNaN(firstCommit)) continue;
+    const diffHours = (mergedAt - firstCommit) / 36e5;
+    if (diffHours >= 0) {
+      cycleTimesHours.push(diffHours);
+    }
+  }
+  if (cycleTimesHours.length === 0) {
+    return makeMetricResult(
+      "adp_g5_pr_cycle_time",
+      null,
+      "banded",
+      [],
+      computeReliability("not-reliable", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  cycleTimesHours.sort((a, b) => a - b);
+  const medianHours = median2(cycleTimesHours);
+  const band = doraCycleTimeBand(medianHours);
+  const reliability = computeReliability("not-reliable", ["git"], []);
+  return makeMetricResult(
+    "adp_g5_pr_cycle_time",
+    medianHours,
+    "banded",
+    [501],
+    reliability,
+    ["git"],
+    [],
+    band
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g6_churn.ts
+import { readFileSync as readFileSync18, existsSync as existsSync16 } from "node:fs";
+import { join as join18 } from "node:path";
+function compute6(collectedDir, _standards, _topology) {
+  const gitPath = join18(collectedDir, "git.json");
+  if (!existsSync16(gitPath)) {
+    return makeMetricResult(
+      "adp_g6_churn",
+      null,
+      "computed",
+      [],
+      computeReliability("not-reliable", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync18(gitPath, "utf8"));
+  const raw = artifact?.raw;
+  if (!raw || typeof raw.numstat_totals !== "object" || raw.numstat_totals === null) {
+    return makeMetricResult(
+      "adp_g6_churn",
+      null,
+      "computed",
+      [],
+      computeReliability("not-reliable", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const { added, deleted } = raw.numstat_totals;
+  const totalChurn = (added ?? 0) + (deleted ?? 0);
+  const reliability = computeReliability("not-reliable", ["git"], []);
+  return makeMetricResult(
+    "adp_g6_churn",
+    totalChurn,
+    "computed",
+    [601],
+    reliability,
+    ["git"],
+    []
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g7_change_fail_rate.ts
+import { readFileSync as readFileSync19, existsSync as existsSync17 } from "node:fs";
+import { join as join19 } from "node:path";
+function doraChangeFailBand(rate) {
+  if (rate < 0.05) return "elite";
+  if (rate < 0.1) return "high";
+  if (rate < 0.15) return "medium";
+  return "low";
+}
+function compute7(collectedDir, _standards, _topology) {
+  const gitPath = join19(collectedDir, "git.json");
+  if (!existsSync17(gitPath)) {
+    return makeMetricResult(
+      "adp_g7_change_fail_rate",
+      null,
+      "banded",
+      [],
+      computeReliability("minimal", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync19(gitPath, "utf8"));
+  const raw = artifact?.raw;
+  if (!raw || typeof raw.total_merges !== "number" || raw.total_merges === 0) {
+    return makeMetricResult(
+      "adp_g7_change_fail_rate",
+      null,
+      "banded",
+      [],
+      computeReliability("minimal", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const totalMerges = raw.total_merges;
+  const revertMerges = raw.revert_merges ?? 0;
+  const rate = revertMerges / totalMerges;
+  const band = doraChangeFailBand(rate);
+  const reliability = computeReliability("minimal", ["git"], []);
+  return makeMetricResult(
+    "adp_g7_change_fail_rate",
+    rate,
+    "banded",
+    [701],
+    reliability,
+    ["git"],
+    [],
+    band
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g8_review_rework.ts
+import { readFileSync as readFileSync20, existsSync as existsSync18 } from "node:fs";
+import { join as join20 } from "node:path";
+function compute8(collectedDir, _standards, _topology) {
+  const gitPath = join20(collectedDir, "git.json");
+  if (!existsSync18(gitPath)) {
+    return makeMetricResult(
+      "adp_g8_review_rework",
+      null,
+      "computed",
+      [],
+      computeReliability("not-reliable", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync20(gitPath, "utf8"));
+  const raw = artifact?.raw;
+  if (!raw || !Array.isArray(raw.merge_records) || raw.merge_records.length === 0) {
+    return makeMetricResult(
+      "adp_g8_review_rework",
+      null,
+      "computed",
+      [],
+      computeReliability("not-reliable", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const totalMerges = raw.merge_records.length;
+  const totalCommits = raw.total_commits ?? 0;
+  const commitsPerPr = totalMerges > 0 ? totalCommits / totalMerges : 0;
+  const reworkProxy = Math.max(0, commitsPerPr - 1);
+  const reliability = computeReliability("not-reliable", ["git"], []);
+  return makeMetricResult(
+    "adp_g8_review_rework",
+    reworkProxy,
+    "computed",
+    [801],
+    reliability,
+    ["git"],
+    []
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/metrics/adp_g9_ai_attribution.ts
+import { readFileSync as readFileSync21, existsSync as existsSync19 } from "node:fs";
+import { join as join21 } from "node:path";
+function compute9(collectedDir, _standards, _topology) {
+  const gitPath = join21(collectedDir, "git.json");
+  if (!existsSync19(gitPath)) {
+    return makeMetricResult(
+      "adp_g9_ai_attribution",
+      null,
+      "computed",
+      [],
+      computeReliability("minimal", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const artifact = JSON.parse(readFileSync21(gitPath, "utf8"));
+  const raw = artifact?.raw;
+  if (!raw || typeof raw.total_commits !== "number" || raw.total_commits === 0) {
+    return makeMetricResult(
+      "adp_g9_ai_attribution",
+      null,
+      "computed",
+      [],
+      computeReliability("minimal", [], ["git"]),
+      [],
+      ["git"]
+    );
+  }
+  const totalCommits = raw.total_commits;
+  const aiMarkedCommits = raw.ai_marked_commits ?? 0;
+  const attributionRate = aiMarkedCommits / totalCommits;
+  const reliability = computeReliability("minimal", ["git"], []);
+  return makeMetricResult(
+    "adp_g9_ai_attribution",
+    attributionRate,
+    "computed",
+    [901],
+    reliability,
+    ["git"],
+    []
+  );
+}
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
 var COLLECTORS = {
   git: collect,
@@ -5360,7 +5622,12 @@ var METRICS = {
   adp_g1_tooling_depth: compute,
   adp_g2_contributors: compute2,
   adp_g3_deploy_frequency: compute3,
-  adp_g4_lead_time: compute4
+  adp_g4_lead_time: compute4,
+  adp_g5_pr_cycle_time: compute5,
+  adp_g6_churn: compute6,
+  adp_g7_change_fail_rate: compute7,
+  adp_g8_review_rework: compute8,
+  adp_g9_ai_attribution: compute9
 };
 var DEFAULT_PERIOD = {
   bucket_days: 30,
@@ -5431,7 +5698,7 @@ function main() {
       }
       let raw;
       try {
-        raw = readFileSync17(tomlPath, "utf8");
+        raw = readFileSync22(tomlPath, "utf8");
       } catch (err) {
         const e = err;
         printJson({
@@ -5459,13 +5726,13 @@ function main() {
         });
         process.exit(1);
       }
-      const tmpRoot = mkdtempSync(join17(tmpdir(), "awos-metric-"));
-      const collectedDir = join17(tmpRoot, "collected");
+      const tmpRoot = mkdtempSync(join22(tmpdir(), "awos-metric-"));
+      const collectedDir = join22(tmpRoot, "collected");
       const gitArtifact = collect(repoPath, DEFAULT_PERIOD);
       writeArtifact(gitArtifact, collectedDir);
       const cliDir = dirname3(fileURLToPath(import.meta.url));
       const skillRoot = cliDir.endsWith("/dist") || cliDir.endsWith("\\dist") ? dirname3(cliDir) : cliDir;
-      const standardsPath = join17(skillRoot, "references", "standards.toml");
+      const standardsPath = join22(skillRoot, "references", "standards.toml");
       const standards = loadStandards(standardsPath);
       const result = metricFn(collectedDir, standards, {});
       printJson(result);

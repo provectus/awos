@@ -88,7 +88,7 @@ At the end of the artifact, write a structured summary block that later dimensio
 
 ## Topology Flags
 
-After the Topology Summary, write a `## Topology Flags` section with a structured boolean block. Downstream dimensions and the dimension-auditor evaluate `applies_when` expressions in `references/standards.toml` verbatim against these flags — the flag names must match exactly. For every flag, record `true` or `false` and a brief parenthetical explanation.
+The engine computes these topology flags deterministically (`topology.ts`) from the repository, and `audit-core` uses them to evaluate the `applies_when` expressions in `references/standards.toml`. The flags are documented here for reference (the names must match the `applies_when` expressions exactly):
 
 ```markdown
 ## Topology Flags
@@ -120,4 +120,4 @@ After the Topology Summary, write a `## Topology Flags` section with a structure
 - `uses_env_vars`: true|false (e.g. process.env / os.environ / .env file or dotenv library found)
 ```
 
-The dimension-auditor for every downstream dimension that declares `depends-on: [project-topology]` reads the `## Topology Flags` block verbatim. It uses the boolean values directly when evaluating each `applies_when = "topology.<flag>"` expression in `references/standards.toml` — it does NOT infer from the prose Topology Summary.
+Every category that declares `applies_when = "topology.<flag>"` in `references/standards.toml` is gated on these engine-computed flags: `audit-core` evaluates the expression directly, and a false flag marks the category SKIP (excluded from the coverage denominator).

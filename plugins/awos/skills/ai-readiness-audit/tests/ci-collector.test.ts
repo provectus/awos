@@ -53,3 +53,41 @@ test('ci collector: connector provided → available=true even with no local CI 
   assert.equal(art.available, true);
   assert.equal(art.reason_if_absent, null);
 });
+
+// Regression: the gate previously only knew GitHub Actions / GitLab / Jenkins,
+// so CircleCI- and Azure-only repos were misreported as "no CI". The canonical
+// platform list (ci_platforms.ts) now covers them — these pin that.
+function repoWithDir(dir: string): string {
+  const r = mkdtempSync(join(tmpdir(), 'ci-'));
+  const d = join(r, ...dir.split('/'));
+  mkdirSync(d, { recursive: true });
+  writeFileSync(join(d, 'config.yml'), 'jobs: {}\n');
+  return r;
+}
+
+function repoWithFile(name: string): string {
+  const r = mkdtempSync(join(tmpdir(), 'ci-'));
+  writeFileSync(join(r, name), 'pipeline: {}\n');
+  return r;
+}
+
+for (const dir of ['.circleci', '.azure-pipelines', '.buildkite', '.teamcity']) {
+  test(`ci collector: ${dir}/ directory → available=true (was a false "no CI")`, () => {
+    const art = collect(repoWithDir(dir), PERIOD);
+    assert.equal(art.available, true, `${dir} should count as CI config`);
+    assert.equal((art.raw as any).config_detected, true);
+  });
+}
+
+for (const file of [
+  'azure-pipelines.yml',
+  '.gitlab-ci.yaml',
+  '.travis.yml',
+  'bitbucket-pipelines.yml',
+]) {
+  test(`ci collector: ${file} root file → available=true`, () => {
+    const art = collect(repoWithFile(file), PERIOD);
+    assert.equal(art.available, true, `${file} should count as CI config`);
+    assert.equal((art.raw as any).config_detected, true);
+  });
+}

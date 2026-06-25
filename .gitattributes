@@ -1,0 +1,3 @@
+plugins/awos/skills/ai-readiness-audit/dist/cli.js linguist-generated=true -diff
+plugins/awos/skills/ai-readiness-audit/dist/package.json linguist-generated=true
+*.wasm binary

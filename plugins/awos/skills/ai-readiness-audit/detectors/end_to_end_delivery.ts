@@ -2,6 +2,7 @@ import { makeResult, iterFiles } from './_base.ts';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { CI_DIRS } from '../ci_platforms.ts';
 
 // ---------------------------------------------------------------------------
 // detectVerticalDelivery — category 2300 (E2E-01, method: computed)
@@ -547,8 +548,6 @@ const ROOT_TOOLING_FILES = [
   '.gitlab-ci.yml',
   '.gitlab-ci.yaml',
 ];
-
-const CI_DIRS = ['.github/workflows', '.circleci', '.buildkite', '.drone'];
 
 export function detectCrossLayerTooling(
   repoPath: string,

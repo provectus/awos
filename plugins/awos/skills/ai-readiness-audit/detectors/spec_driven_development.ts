@@ -141,7 +141,10 @@ export function detectProductContextDocs(
 //   Go         → *.go
 //   Java       → *.java
 //   Docker     → Dockerfile, docker-compose.yml
-//   Terraform  → *.tf
+//   IaC        → Terraform (*.tf), CloudFormation (*.template.* / AWSTemplateFormatVersion),
+//                Bicep (*.bicep), ARM (azuredeploy.json), Pulumi (Pulumi.yaml), CDK (cdk.json),
+//                Ansible (ansible.cfg / playbook.yml), Kustomize (kustomization.yaml),
+//                Serverless (serverless.yml), Helm (Chart.yaml)
 //   Kubernetes → *.yaml in k8s/ or kube/, *.yml containing "apiVersion:"
 //
 // PASS if ≤ 0 unverified mentions OR no architecture document.
@@ -258,6 +261,63 @@ const TECH_SIGNALS: TechSignal[] = [
     name: 'terraform',
     detect: (r) => iterFiles(r, ['*.tf']).length > 0,
   },
+  {
+    name: 'cloudformation',
+    detect: (r) => {
+      if (
+        iterFiles(r, ['*.template.yaml', '*.template.yml', '*.template.json'])
+          .length > 0
+      )
+        return true;
+      try {
+        return (
+          execFileSync(
+            'grep',
+            [
+              '-rl',
+              '--include=*.yaml',
+              '--include=*.yml',
+              '--include=*.json',
+              'AWSTemplateFormatVersion',
+              r,
+            ],
+            { encoding: 'utf8' }
+          ).trim().length > 0
+        );
+      } catch {
+        return false;
+      }
+    },
+  },
+  { name: 'bicep', detect: (r) => iterFiles(r, ['*.bicep']).length > 0 },
+  {
+    name: 'arm',
+    detect: (r) =>
+      iterFiles(r, ['azuredeploy.json', 'azuredeploy.parameters.json']).length >
+      0,
+  },
+  {
+    name: 'pulumi',
+    detect: (r) => iterFiles(r, ['Pulumi.yaml', 'Pulumi.yml']).length > 0,
+  },
+  { name: 'cdk', detect: (r) => iterFiles(r, ['cdk.json']).length > 0 },
+  {
+    name: 'ansible',
+    detect: (r) =>
+      iterFiles(r, ['ansible.cfg', 'playbook.yml', 'playbook.yaml', 'site.yml'])
+        .length > 0,
+  },
+  {
+    name: 'kustomize',
+    detect: (r) =>
+      iterFiles(r, ['kustomization.yaml', 'kustomization.yml']).length > 0,
+  },
+  {
+    name: 'serverless',
+    detect: (r) =>
+      iterFiles(r, ['serverless.yml', 'serverless.yaml']).length > 0,
+  },
+  { name: 'helm', detect: (r) => iterFiles(r, ['Chart.yaml']).length > 0 },
   {
     name: 'kubernetes',
     detect: (r) => {

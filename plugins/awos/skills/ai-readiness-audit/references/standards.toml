@@ -1391,7 +1391,7 @@ source_year = 2026
 # ---------------------------------------------------------------------------
 # application-security (OWASP ASVS 5.0.0 Level 1 — curated subset)
 # Code range 3000–3099.  detected = static file/config heuristic detector;
-# judgment = rubric evaluated by the dimension-auditor AI agent.
+# judgment = rubric evaluated by the orchestrator's Step 6 judgment patch.
 # ---------------------------------------------------------------------------
 
 # AS-01: TLS enforced — no plain-HTTP fallback

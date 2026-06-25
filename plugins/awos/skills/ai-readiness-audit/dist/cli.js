@@ -3608,9 +3608,9 @@ function parse(toml, { maxDepth = 1e3, integersAsBigInt } = {}) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/cli.ts
-import { readFileSync as readFileSync32, mkdtempSync } from "node:fs";
+import { readFileSync as readFileSync34, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join as join32, dirname as dirname4 } from "node:path";
+import { join as join34, dirname as dirname5 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // plugins/awos/skills/ai-readiness-audit/collectors/git.ts
@@ -3845,31 +3845,74 @@ function collect(repoPath, period) {
   );
 }
 
-// plugins/awos/skills/ai-readiness-audit/collectors/ci.ts
-import { existsSync as existsSync2 } from "node:fs";
+// plugins/awos/skills/ai-readiness-audit/ci_platforms.ts
+import { existsSync as existsSync2, readdirSync } from "node:fs";
 import { join as join3 } from "node:path";
-var CI_CONFIG_CANDIDATES = [
+var CI_DIRS = [
   ".github/workflows",
-  ".gitlab-ci.yml",
-  "Jenkinsfile"
+  // GitHub Actions
+  ".circleci",
+  // CircleCI
+  ".azure-pipelines",
+  // Azure Pipelines / Azure DevOps
+  ".buildkite",
+  // Buildkite
+  ".drone",
+  // Drone (directory variant)
+  ".teamcity"
+  // TeamCity
 ];
-function detectCiConfig(repoPath) {
+var CI_FILES = [
+  ".gitlab-ci.yml",
+  // GitLab CI
+  ".gitlab-ci.yaml",
+  "Jenkinsfile",
+  // Jenkins
+  "azure-pipelines.yml",
+  // Azure Pipelines (root-file convention)
+  "azure-pipelines.yaml",
+  ".travis.yml",
+  // Travis CI
+  ".travis.yaml",
+  "bitbucket-pipelines.yml",
+  // Bitbucket Pipelines
+  "bitbucket-pipelines.yaml",
+  ".drone.yml",
+  // Drone (single-file variant)
+  ".drone.yaml"
+];
+var CI_CONFIG_CANDIDATES = [...CI_DIRS, ...CI_FILES];
+function detectCiConfigPath(repoPath) {
   for (const candidate of CI_CONFIG_CANDIDATES) {
-    if (existsSync2(join3(repoPath, candidate))) {
-      return candidate;
+    if (existsSync2(join3(repoPath, candidate))) return candidate;
+  }
+  const pipelines = join3(repoPath, "pipelines");
+  try {
+    if (existsSync2(pipelines) && readdirSync(pipelines).some(
+      (f) => f.endsWith(".yml") || f.endsWith(".yaml")
+    )) {
+      return "pipelines/";
     }
+  } catch {
   }
   return null;
 }
+function isCiWorkflowPath(rel) {
+  return CI_DIRS.some(
+    (dir) => rel.startsWith(`${dir}/`) || rel.startsWith(`${dir}\\`)
+  );
+}
+
+// plugins/awos/skills/ai-readiness-audit/collectors/ci.ts
 function collect2(repoPath, period, connector) {
-  const configPath = detectCiConfig(repoPath);
+  const configPath = detectCiConfigPath(repoPath);
   const hasConfig = configPath !== null;
   const hasConnector = connector !== void 0 && connector !== null;
   if (!hasConfig && !hasConnector) {
     return makeArtifact(
       "ci",
       false,
-      "no CI config (.github/workflows, .gitlab-ci.yml, Jenkinsfile) or connector found",
+      "no CI config (GitHub Actions, GitLab, Jenkins, CircleCI, Azure Pipelines, Buildkite, Drone, TeamCity, Travis, Bitbucket) or connector found",
       { ...period, history_available_days: period.history_available_days },
       {}
     );
@@ -4218,16 +4261,9 @@ function detectTypeSafety(repoPath, _params) {
   }
   return makeResult("FAIL", 0, ["no type-safety configuration found"]);
 }
-var CICD_ROOT_FILES = [
-  ".gitlab-ci.yml",
-  ".gitlab-ci.yaml",
-  "Jenkinsfile",
-  "azure-pipelines.yml",
-  "azure-pipelines.yaml"
-];
 var CICD_SUBDIR_FILENAMES = ["*.yml", "*.yaml"];
 function detectCiCd(repoPath, _params) {
-  const found = iterFiles(repoPath, CICD_ROOT_FILES);
+  const found = iterFiles(repoPath, CI_FILES);
   if (found.length) {
     const names = [...new Set(found.map((p) => relative2(repoPath, p)))].sort();
     return makeResult(
@@ -4239,7 +4275,7 @@ function detectCiCd(repoPath, _params) {
   const yamlFiles = iterFiles(repoPath, CICD_SUBDIR_FILENAMES);
   const ciFiles = yamlFiles.filter((p) => {
     const rel = relative2(repoPath, p);
-    return rel.startsWith(".github/workflows/") || rel.startsWith(".circleci/") || rel.startsWith("pipelines/") || rel.startsWith(".azure-pipelines/") || rel.startsWith(".github\\workflows\\") || rel.startsWith(".circleci\\") || rel.startsWith("pipelines\\") || rel.startsWith(".azure-pipelines\\");
+    return isCiWorkflowPath(rel) || rel.startsWith("pipelines/") || rel.startsWith("pipelines\\");
   });
   if (ciFiles.length) {
     const names = ciFiles.map((p) => relative2(repoPath, p)).sort();
@@ -4745,7 +4781,7 @@ var DETECTORS2 = {
 };
 
 // plugins/awos/skills/ai-readiness-audit/detectors/spec_driven_development.ts
-import { readFileSync as readFileSync4, existsSync as existsSync3, readdirSync, statSync } from "node:fs";
+import { readFileSync as readFileSync4, existsSync as existsSync3, readdirSync as readdirSync2, statSync } from "node:fs";
 import { join as join5, relative as relative4 } from "node:path";
 import { execFileSync as execFileSync4 } from "node:child_process";
 function detectAwosInstalled(repoPath, _params) {
@@ -4918,6 +4954,52 @@ var TECH_SIGNALS = [
     name: "terraform",
     detect: (r) => iterFiles(r, ["*.tf"]).length > 0
   },
+  {
+    name: "cloudformation",
+    detect: (r) => {
+      if (iterFiles(r, ["*.template.yaml", "*.template.yml", "*.template.json"]).length > 0)
+        return true;
+      try {
+        return execFileSync4(
+          "grep",
+          [
+            "-rl",
+            "--include=*.yaml",
+            "--include=*.yml",
+            "--include=*.json",
+            "AWSTemplateFormatVersion",
+            r
+          ],
+          { encoding: "utf8" }
+        ).trim().length > 0;
+      } catch {
+        return false;
+      }
+    }
+  },
+  { name: "bicep", detect: (r) => iterFiles(r, ["*.bicep"]).length > 0 },
+  {
+    name: "arm",
+    detect: (r) => iterFiles(r, ["azuredeploy.json", "azuredeploy.parameters.json"]).length > 0
+  },
+  {
+    name: "pulumi",
+    detect: (r) => iterFiles(r, ["Pulumi.yaml", "Pulumi.yml"]).length > 0
+  },
+  { name: "cdk", detect: (r) => iterFiles(r, ["cdk.json"]).length > 0 },
+  {
+    name: "ansible",
+    detect: (r) => iterFiles(r, ["ansible.cfg", "playbook.yml", "playbook.yaml", "site.yml"]).length > 0
+  },
+  {
+    name: "kustomize",
+    detect: (r) => iterFiles(r, ["kustomization.yaml", "kustomization.yml"]).length > 0
+  },
+  {
+    name: "serverless",
+    detect: (r) => iterFiles(r, ["serverless.yml", "serverless.yaml"]).length > 0
+  },
+  { name: "helm", detect: (r) => iterFiles(r, ["Chart.yaml"]).length > 0 },
   {
     name: "kubernetes",
     detect: (r) => {
@@ -5102,7 +5184,7 @@ function listSpecDirs(repoPath) {
   const specBase = join5(repoPath, "context", "spec");
   if (!existsSync3(specBase)) return [];
   try {
-    return readdirSync(specBase).filter((name2) => /^\d{3}-/.test(name2)).sort().map((name2) => join5(specBase, name2)).filter((p) => {
+    return readdirSync2(specBase).filter((name2) => /^\d{3}-/.test(name2)).sort().map((name2) => join5(specBase, name2)).filter((p) => {
       try {
         return statSync(p).isDirectory();
       } catch {
@@ -5276,7 +5358,7 @@ import {
   existsSync as existsSync4,
   readFileSync as readFileSync5,
   lstatSync,
-  readdirSync as readdirSync2,
+  readdirSync as readdirSync3,
   realpathSync
 } from "node:fs";
 import { join as join6, relative as relative5 } from "node:path";
@@ -5316,7 +5398,7 @@ function detectClaudeSkills(repoPath, _params) {
   const realSkillsRoot = tryRealpath(skillsRoot) ?? skillsRoot;
   const scanTargets = /* @__PURE__ */ new Set([realSkillsRoot]);
   try {
-    for (const entry of readdirSync2(realSkillsRoot)) {
+    for (const entry of readdirSync3(realSkillsRoot)) {
       const entryPath = join6(realSkillsRoot, entry);
       let stat;
       try {
@@ -5855,7 +5937,6 @@ var ROOT_TOOLING_FILES = [
   ".gitlab-ci.yml",
   ".gitlab-ci.yaml"
 ];
-var CI_DIRS = [".github/workflows", ".circleci", ".buildkite", ".drone"];
 function detectCrossLayerTooling(repoPath, _params) {
   const found = [];
   for (const f of ROOT_TOOLING_FILES) {
@@ -6571,11 +6652,10 @@ function detectDependencyAutomationReview(repoPath, _params) {
   ]);
 }
 var CI_WORKFLOW_GLOBS = ["*.yml", "*.yaml"];
-var CI_DIRS2 = [".github/workflows", ".circleci", ".buildkite", ".drone"];
 var VULN_SCANNER_RX = /\b(pip-audit|safety\s|snyk|trivy|grype|osv-scanner|dependency-check|dependabot|audit\s+--json|npm\s+audit|yarn\s+audit|pnpm\s+audit)\b/i;
 function detectVulnerabilityScanning(repoPath, _params) {
   const scanners = [];
-  for (const ciDir of CI_DIRS2) {
+  for (const ciDir of CI_DIRS) {
     const ciDirPath = join9(repoPath, ciDir);
     if (!existsSync7(ciDirPath)) continue;
     let files = [];
@@ -7892,7 +7972,7 @@ var DETECTORS9 = {
 };
 
 // plugins/awos/skills/ai-readiness-audit/detectors/documentation.ts
-import { readFileSync as readFileSync11, existsSync as existsSync10, readdirSync as readdirSync4 } from "node:fs";
+import { readFileSync as readFileSync11, existsSync as existsSync10, readdirSync as readdirSync5 } from "node:fs";
 import { join as join12, relative as relative11, dirname as dirname2 } from "node:path";
 var README_NAMES = [
   "README.md",
@@ -7978,7 +8058,7 @@ var SERVICE_SOURCE_GLOBS = [
 function detectServiceReadmes(repoPath, _params) {
   let topDirs = [];
   try {
-    const entries = readdirSync4(repoPath, { withFileTypes: true });
+    const entries = readdirSync5(repoPath, { withFileTypes: true });
     topDirs = entries.filter(
       (e) => e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith(".")
     ).map((e) => e.name).sort();
@@ -9929,7 +10009,7 @@ function compute15(collectedDir, standards, topology) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g10_complexity.ts
-import { readFileSync as readFileSync29, existsSync as existsSync27, readdirSync as readdirSync5 } from "node:fs";
+import { readFileSync as readFileSync29, existsSync as existsSync27, readdirSync as readdirSync6 } from "node:fs";
 import { join as join29, extname, dirname as dirname3 } from "node:path";
 import { fileURLToPath } from "node:url";
 var import_web_tree_sitter = __toESM(require_tree_sitter());
@@ -10093,7 +10173,7 @@ function resolveCoreWasm() {
 function walkDir(dir, cb) {
   let entries;
   try {
-    entries = readdirSync5(dir, { withFileTypes: true });
+    entries = readdirSync6(dir, { withFileTypes: true });
   } catch {
     return;
   }
@@ -10281,7 +10361,7 @@ async function compute16(_collectedDir, _standards, _topology, repoPathOverride)
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g11_scale.ts
-import { readFileSync as readFileSync30, existsSync as existsSync28, readdirSync as readdirSync6 } from "node:fs";
+import { readFileSync as readFileSync30, existsSync as existsSync28, readdirSync as readdirSync7 } from "node:fs";
 import { join as join30, extname as extname2 } from "node:path";
 var EXT_TO_LANG = {
   ".js": "JavaScript",
@@ -10325,7 +10405,7 @@ function countLines2(content) {
 function walkDir2(dir, cb) {
   let entries;
   try {
-    entries = readdirSync6(dir, { withFileTypes: true });
+    entries = readdirSync7(dir, { withFileTypes: true });
   } catch {
     return;
   }
@@ -10402,7 +10482,7 @@ function compute17(_collectedDir, _standards, _topology, repoPathOverride) {
 }
 
 // plugins/awos/skills/ai-readiness-audit/metrics/adp_g12_deps.ts
-import { readFileSync as readFileSync31, existsSync as existsSync29, readdirSync as readdirSync7 } from "node:fs";
+import { readFileSync as readFileSync31, existsSync as existsSync29, readdirSync as readdirSync8 } from "node:fs";
 import { join as join31, basename as basename7 } from "node:path";
 var PRUNE_DIRS3 = /* @__PURE__ */ new Set([
   ".git",
@@ -10429,7 +10509,7 @@ function findManifests(dir, depth = 0) {
   const found = [];
   let entries;
   try {
-    entries = readdirSync7(dir, { withFileTypes: true });
+    entries = readdirSync8(dir, { withFileTypes: true });
   } catch {
     return found;
   }
@@ -11350,6 +11430,413 @@ function progress(input) {
   return { pct: pct2, eta_seconds, elapsed_seconds };
 }
 
+// plugins/awos/skills/ai-readiness-audit/audit_core.ts
+import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync2, readFileSync as readFileSync33, readdirSync as readdirSync9 } from "node:fs";
+import { join as join33, basename as basename8, dirname as dirname4 } from "node:path";
+
+// plugins/awos/skills/ai-readiness-audit/topology.ts
+import { existsSync as existsSync30, readFileSync as readFileSync32 } from "node:fs";
+import { join as join32 } from "node:path";
+function anyPath(repoPath, names) {
+  return names.some((n) => existsSync30(join32(repoPath, n)));
+}
+var CODE_GLOBS = [
+  "*.py",
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.jsx",
+  "*.go",
+  "*.java",
+  "*.rb",
+  "*.cs",
+  "*.php",
+  "*.kt"
+];
+function codeMatches(repoPath, pattern) {
+  try {
+    return grep(repoPath, pattern, CODE_GLOBS).length > 0;
+  } catch {
+    return false;
+  }
+}
+function anyGlob(repoPath, globs) {
+  try {
+    return iterFiles(repoPath, globs).length > 0;
+  } catch {
+    return false;
+  }
+}
+function readIfExists(repoPath, rel) {
+  try {
+    return readFileSync32(join32(repoPath, rel), "utf8");
+  } catch {
+    return "";
+  }
+}
+var PKG_MANIFESTS = [
+  "package.json",
+  "pyproject.toml",
+  "setup.py",
+  "go.mod",
+  "Cargo.toml",
+  "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
+  "composer.json",
+  "Gemfile"
+];
+var LOCKFILES3 = [
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+  "Cargo.lock",
+  "poetry.lock",
+  "uv.lock",
+  "Gemfile.lock",
+  "go.sum",
+  "composer.lock"
+];
+function computeTopology(repoPath, connectors) {
+  const settings = readIfExists(repoPath, ".claude/settings.json");
+  const hasPackageEcosystem = anyPath(repoPath, PKG_MANIFESTS);
+  const hasHttpApi = codeMatches(
+    repoPath,
+    /\b(fastapi|flask|django|express|@nestjs|gin-gonic|fiber|spring(framework|boot)?|sinatra|rails|actix_web|axum|aiohttp|starlette)\b/i
+  );
+  const hasApi = hasHttpApi || anyGlob(repoPath, ["openapi.json", "openapi.yaml", "swagger.json"]) || codeMatches(repoPath, /\b(graphql|grpc|@grpc|protobuf|router\.(get|post|put))\b/i);
+  const manifestHits = (() => {
+    try {
+      return iterFiles(repoPath, [
+        "package.json",
+        "pyproject.toml",
+        "go.mod",
+        "Cargo.toml",
+        "pom.xml"
+      ]).length;
+    } catch {
+      return 0;
+    }
+  })();
+  const isMonorepo = anyPath(repoPath, [
+    "pnpm-workspace.yaml",
+    "turbo.json",
+    "lerna.json",
+    "nx.json"
+  ]) || manifestHits >= 2;
+  const flags2 = {
+    has_topology: true,
+    has_ci: detectCiConfigPath(repoPath) !== null,
+    has_claude_md: anyPath(repoPath, ["CLAUDE.md", ".claude/CLAUDE.md"]) || anyGlob(repoPath, ["CLAUDE.md"]),
+    has_ai_agent_files: anyPath(repoPath, ["AGENTS.md", "CLAUDE.md", ".claude"]) || anyGlob(repoPath, ["AGENTS.md", "CLAUDE.md"]),
+    has_commands_or_skills: anyPath(repoPath, [
+      ".claude/commands",
+      ".claude/skills",
+      "skills"
+    ]),
+    has_hooks: /"hooks"\s*:/.test(settings) || anyPath(repoPath, [".pre-commit-config.yaml", ".husky"]),
+    has_mcp_config: anyPath(repoPath, [".mcp.json", "mcp.json"]) || /"mcpServers"\s*:/.test(settings),
+    has_lockfiles: anyPath(repoPath, LOCKFILES3),
+    has_package_ecosystem: hasPackageEcosystem,
+    has_package_manifests: hasPackageEcosystem,
+    has_dependency_automation: anyPath(repoPath, [
+      ".github/dependabot.yml",
+      ".github/dependabot.yaml",
+      "renovate.json",
+      ".renovaterc",
+      ".renovaterc.json"
+    ]),
+    has_db: anyPath(repoPath, [
+      "migrations",
+      "alembic.ini",
+      "alembic",
+      "prisma",
+      "db/migrate"
+    ]) || codeMatches(
+      repoPath,
+      /\b(sqlalchemy|piccolo|prisma|typeorm|sequelize|mongoose|gorm|psycopg2?|asyncpg|knex|django\.db)\b/i
+    ),
+    has_http_api: hasHttpApi,
+    has_api: hasApi,
+    has_ml_layer: codeMatches(
+      repoPath,
+      /\b(torch|tensorflow|sklearn|scikit-learn|transformers|keras|xgboost|lightgbm|huggingface)\b/i
+    ) || anyGlob(repoPath, ["*.ipynb", "*.pt", "*.h5", "*.onnx", "*.pkl"]),
+    uses_auth: codeMatches(
+      repoPath,
+      /\b(jwt|oauth2?|passport|keycloak|auth0|@login_required|authenticate|bearer\s+token|rbac)\b/i
+    ),
+    uses_env_vars: anyPath(repoPath, [".env", ".env.example"]) || anyGlob(repoPath, [".env", ".env.*"]) || codeMatches(repoPath, /\b(os\.environ|os\.getenv|process\.env|dotenv|godotenv)\b/),
+    handles_secrets: anyPath(repoPath, [".env"]) || anyGlob(repoPath, [".env", ".env.*"]) || codeMatches(
+      repoPath,
+      /\b(keyvault|secretsmanager|secret_?manager|hashicorp.?vault|SECRET_KEY|API_KEY|getSecret)\b/i
+    ),
+    is_monorepo: isMonorepo,
+    is_multi_service: anyGlob(repoPath, ["docker-compose.yml", "docker-compose.yaml"]) ? /services\s*:/.test(
+      readIfExists(repoPath, "docker-compose.yml") || readIfExists(repoPath, "docker-compose.yaml")
+    ) : (() => {
+      try {
+        return iterFiles(repoPath, ["Dockerfile"]).length >= 2;
+      } catch {
+        return false;
+      }
+    })(),
+    has_multiple_layers: isMonorepo || [
+      anyPath(repoPath, ["frontend", "web", "ui", "client"]),
+      anyPath(repoPath, ["backend", "api", "server", "src"]),
+      anyPath(repoPath, ["infra", "infrastructure", "terraform", "deploy"])
+    ].filter(Boolean).length >= 2,
+    is_not_library: hasApi || anyPath(repoPath, ["Dockerfile", "docker-compose.yml"]) || anyGlob(repoPath, ["main.py", "main.go", "app.py", "server.ts", "index.ts", "manage.py"]),
+    // Connector-dependent — repo alone cannot prove these. Default false; the
+    // orchestrator flips them true after a successful MCP connector fetch.
+    has_tracker: Boolean(connectors?.has_tracker),
+    has_docs_connector: Boolean(connectors?.has_docs_connector),
+    has_incident_source: Boolean(connectors?.has_incident_source)
+  };
+  return flags2;
+}
+
+// plugins/awos/skills/ai-readiness-audit/audit_core.ts
+var PERIOD = {
+  bucket_days: 30,
+  lookback_days: 730,
+  history_available_days: 0
+};
+async function auditCore(repoPath, outDir, detectors, metrics, standardsPath) {
+  const start2 = Date.now();
+  const standards = loadStandards(standardsPath);
+  const cats = standards.category;
+  const date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  mkdirSync2(outDir, { recursive: true });
+  const skillRoot = dirname4(dirname4(standardsPath));
+  const checkIdByCode = parseCheckIds(join33(skillRoot, "dimensions"));
+  const collectedDir = join33(outDir, "collected");
+  for (const art of [
+    collect(repoPath, PERIOD),
+    collect2(repoPath, PERIOD),
+    collect3(repoPath, PERIOD),
+    collect4(repoPath, PERIOD)
+  ]) {
+    writeArtifact(art, collectedDir);
+  }
+  const topology = computeTopology(repoPath);
+  const metricIds = /* @__PURE__ */ new Set();
+  for (const c of Object.values(cats)) {
+    if (c.dimension === "org-portfolio" || c.method === "judgment") continue;
+    if (detectors[c.code] === void 0 && c.metric) metricIds.add(c.metric);
+  }
+  const awarded = /* @__PURE__ */ new Set();
+  const skippedByMetric = /* @__PURE__ */ new Set();
+  for (const id of metricIds) {
+    const fn = metrics[id];
+    if (!fn) continue;
+    let res;
+    try {
+      res = await fn(collectedDir, standards, topology, repoPath);
+    } catch (err2) {
+      process.stderr.write(`audit-core: metric ${id} threw: ${String(err2)}
+`);
+      continue;
+    }
+    for (const code of res.categories_awarded ?? []) {
+      awarded.add(code);
+    }
+    if (res.status === "SKIP") {
+      for (const c of Object.values(cats)) {
+        if (c.metric === id) skippedByMetric.add(c.code);
+      }
+    }
+  }
+  const byDimension = {};
+  let detected = 0;
+  let computed = 0;
+  let judgmentPending = 0;
+  let skipped = 0;
+  for (const [key, c] of Object.entries(cats)) {
+    if (c.dimension === "org-portfolio") continue;
+    const rec = buildCheck(
+      key,
+      c,
+      detectors,
+      repoPath,
+      awarded,
+      skippedByMetric,
+      topology,
+      checkIdByCode
+    );
+    (byDimension[c.dimension] ??= []).push(rec);
+    if (rec.status === "PENDING_JUDGMENT") judgmentPending++;
+    else if (rec.status === "SKIP") skipped++;
+    else if (c.method === "computed") computed++;
+    else detected++;
+  }
+  let auditTotal = 0;
+  let auditApplicable = 0;
+  const dimensions = [];
+  for (const [dimension, checks] of Object.entries(byDimension)) {
+    const score = checks.reduce((s, c) => s + c.weight_awarded, 0);
+    const applicable = checks.filter((c) => c.applies).reduce((s, c) => s + c.weight_max, 0);
+    auditTotal += score;
+    auditApplicable += applicable;
+    const dim = {
+      dimension,
+      date,
+      score,
+      coverage: applicable > 0 ? score / applicable : 0,
+      checks
+    };
+    writeFileSync2(join33(outDir, `${dimension}.json`), JSON.stringify(dim, null, 2));
+    dimensions.push(dim);
+  }
+  const audit = {
+    date,
+    project: basename8(repoPath),
+    audit_total: auditTotal,
+    coverage: auditApplicable > 0 ? auditTotal / auditApplicable : 0,
+    dimensions
+  };
+  writeFileSync2(join33(outDir, "audit.json"), JSON.stringify(audit, null, 2));
+  return {
+    audit_total: auditTotal,
+    categories: detected + computed + judgmentPending + skipped,
+    detected,
+    computed,
+    judgment_pending: judgmentPending,
+    skipped,
+    duration_ms: Date.now() - start2
+  };
+}
+function aggregate(outDir) {
+  const files = readdirSync9(outDir).filter(
+    (f) => f.endsWith(".json") && f !== "audit.json" && f !== "org-portfolio.json"
+  );
+  let total = 0;
+  let applicable = 0;
+  const dimensions = [];
+  for (const f of files) {
+    let dim;
+    try {
+      dim = JSON.parse(readFileSync33(join33(outDir, f), "utf8"));
+    } catch {
+      continue;
+    }
+    const checks = dim.checks;
+    if (!Array.isArray(checks)) continue;
+    const score = checks.reduce((s, c) => s + (c.weight_awarded || 0), 0);
+    const appl = checks.filter((c) => c.applies).reduce((s, c) => s + (c.weight_max || 0), 0);
+    dim.score = score;
+    dim.coverage = appl > 0 ? score / appl : 0;
+    writeFileSync2(join33(outDir, f), JSON.stringify(dim, null, 2));
+    total += score;
+    applicable += appl;
+    dimensions.push(dim);
+  }
+  let existing = {};
+  try {
+    existing = JSON.parse(readFileSync33(join33(outDir, "audit.json"), "utf8"));
+  } catch {
+  }
+  const audit = {
+    date: existing.date ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10),
+    project: existing.project ?? basename8(outDir),
+    audit_total: total,
+    coverage: applicable > 0 ? total / applicable : 0,
+    dimensions
+  };
+  for (const block of ["headline", "insights", "recommendations"]) {
+    if (existing[block] !== void 0) audit[block] = existing[block];
+  }
+  writeFileSync2(join33(outDir, "audit.json"), JSON.stringify(audit, null, 2));
+}
+function parseCheckIds(dimensionsDir) {
+  const map = /* @__PURE__ */ new Map();
+  let files;
+  try {
+    files = readdirSync9(dimensionsDir).filter((f) => f.endsWith(".md"));
+  } catch {
+    return map;
+  }
+  const headingRe = /^###\s+([A-Z]+-\d+)\s*:/;
+  const categoryRe = /^[-*]\s*\*\*Category:\*\*\s*([\d,\s]+)/;
+  for (const file of files) {
+    let text;
+    try {
+      text = readFileSync33(join33(dimensionsDir, file), "utf8");
+    } catch {
+      continue;
+    }
+    let current = null;
+    for (const line of text.split("\n")) {
+      const h = line.match(headingRe);
+      if (h) {
+        current = h[1];
+        continue;
+      }
+      const cat = line.match(categoryRe);
+      if (cat && current) {
+        for (const codeStr of cat[1].split(",")) {
+          const code = Number(codeStr.trim());
+          if (Number.isInteger(code) && !map.has(code)) map.set(code, current);
+        }
+      }
+    }
+  }
+  return map;
+}
+function appliesGatedOff(c, topology) {
+  const aw = c.applies_when;
+  if (!aw || aw === "always") return false;
+  const m = aw.match(/^topology\.(.+)$/);
+  return m ? !topology[m[1]] : false;
+}
+function buildCheck(key, c, detectors, repoPath, awarded, skippedByMetric, topology, checkIdByCode) {
+  let status;
+  let value = null;
+  let evidence = [];
+  if (appliesGatedOff(c, topology)) {
+    status = "SKIP";
+    value = `applies_when ${c.applies_when} is false`;
+  } else if (c.method === "judgment") {
+    status = "PENDING_JUDGMENT";
+  } else if (detectors[c.code] !== void 0) {
+    let r;
+    try {
+      r = detectors[c.code](repoPath);
+    } catch (err2) {
+      r = { status: "FAIL", value: `detector-error: ${String(err2)}`, evidence: [], method: c.method };
+    }
+    status = r.status;
+    value = r.value;
+    evidence = r.evidence;
+  } else {
+    if (awarded.has(c.code)) status = "PASS";
+    else if (skippedByMetric.has(c.code)) status = "SKIP";
+    else status = "FAIL";
+  }
+  const applies = status !== "SKIP";
+  const weightAwarded = status === "PASS" ? c.weight : 0;
+  return {
+    check_id: checkIdByCode.get(c.code) ?? key,
+    code: [c.code],
+    method: c.method,
+    status,
+    value,
+    evidence,
+    weight_awarded: weightAwarded,
+    weight_max: c.weight,
+    applies,
+    reliability: {
+      tag: c.reliability_default ?? "unknown",
+      confidence: c.method === "judgment" ? "medium" : "high",
+      note: null
+    },
+    source: c.source ?? "",
+    definition: c.definition ?? "",
+    hint: `${c.definition ?? ""} \xB7 ${c.method} \xB7 ${c.source ?? ""} (${c.source_year ?? ""})`,
+    plain: c.definition ?? ""
+  };
+}
+
 // plugins/awos/skills/ai-readiness-audit/cli.ts
 var COLLECTORS = {
   git: collect,
@@ -11370,6 +11857,10 @@ var DETECTORS12 = {
   ...DETECTORS10,
   ...DETECTORS11
 };
+function resolveSkillRoot() {
+  const cliDir = dirname5(fileURLToPath2(import.meta.url));
+  return cliDir.endsWith("/dist") || cliDir.endsWith("\\dist") ? dirname5(cliDir) : cliDir;
+}
 var METRICS = {
   adp_g1_tooling_depth: compute,
   adp_g2_contributors: compute2,
@@ -11459,7 +11950,7 @@ async function main() {
       }
       let raw;
       try {
-        raw = readFileSync32(tomlPath, "utf8");
+        raw = readFileSync34(tomlPath, "utf8");
       } catch (err2) {
         const e = err2;
         printJson({
@@ -11496,8 +11987,8 @@ async function main() {
       } else if (isScaleMetric) {
         collectedDir = repoPath;
       } else {
-        const tmpRoot = mkdtempSync(join32(tmpdir(), "awos-metric-"));
-        collectedDir = join32(tmpRoot, "collected");
+        const tmpRoot = mkdtempSync(join34(tmpdir(), "awos-metric-"));
+        collectedDir = join34(tmpRoot, "collected");
         const gitArtifact = collect(repoPath, DEFAULT_PERIOD);
         writeArtifact(gitArtifact, collectedDir);
         if (id.startsWith("adp_c")) {
@@ -11513,9 +12004,9 @@ async function main() {
           writeArtifact(trackerArtifact, collectedDir);
         }
       }
-      const cliDir = dirname4(fileURLToPath2(import.meta.url));
-      const skillRoot = cliDir.endsWith("/dist") || cliDir.endsWith("\\dist") ? dirname4(cliDir) : cliDir;
-      const standardsPath = join32(skillRoot, "references", "standards.toml");
+      const cliDir = dirname5(fileURLToPath2(import.meta.url));
+      const skillRoot = cliDir.endsWith("/dist") || cliDir.endsWith("\\dist") ? dirname5(cliDir) : cliDir;
+      const standardsPath = join34(skillRoot, "references", "standards.toml");
       const standards = loadStandards(standardsPath);
       const result = await metricFn(collectedDir, standards, {}, repoPath);
       printJson(result);
@@ -11545,16 +12036,16 @@ async function main() {
       const perRepoResults = [];
       for (const f of files) {
         try {
-          const raw = readFileSync32(f, "utf8");
+          const raw = readFileSync34(f, "utf8");
           perRepoResults.push(JSON.parse(raw));
         } catch {
           process.stderr.write(`rollup: skipping unparseable file ${f}
 `);
         }
       }
-      const cliDirR = dirname4(fileURLToPath2(import.meta.url));
-      const skillRootR = cliDirR.endsWith("/dist") || cliDirR.endsWith("\\dist") ? dirname4(cliDirR) : cliDirR;
-      const standardsPathR = join32(skillRootR, "references", "standards.toml");
+      const cliDirR = dirname5(fileURLToPath2(import.meta.url));
+      const skillRootR = cliDirR.endsWith("/dist") || cliDirR.endsWith("\\dist") ? dirname5(cliDirR) : cliDirR;
+      const standardsPathR = join34(skillRootR, "references", "standards.toml");
       let standardsR = {};
       try {
         standardsR = loadStandards(standardsPathR);
@@ -11605,7 +12096,7 @@ async function main() {
       }
       let rawAudit;
       try {
-        rawAudit = readFileSync32(auditPath, "utf8");
+        rawAudit = readFileSync34(auditPath, "utf8");
       } catch (err2) {
         const e = err2;
         printJson({
@@ -11629,10 +12120,38 @@ async function main() {
       process.stdout.write(output + "\n");
       break;
     }
+    case "audit-core": {
+      const repoPath = arg1;
+      const outDir = arg2;
+      if (!repoPath || !outDir) {
+        printJson({ error: "audit-core requires <repoPath> <outDir>" });
+        process.exit(1);
+      }
+      const standardsPath = join34(resolveSkillRoot(), "references", "standards.toml");
+      const summary = await auditCore(
+        repoPath,
+        outDir,
+        DETECTORS12,
+        METRICS,
+        standardsPath
+      );
+      printJson(summary);
+      break;
+    }
+    case "aggregate": {
+      const dir = arg1;
+      if (!dir) {
+        printJson({ error: "aggregate requires <auditsDir>" });
+        process.exit(1);
+      }
+      aggregate(dir);
+      printJson({ aggregated: dir });
+      break;
+    }
     default: {
       printJson({
         error: `unknown command "${command}"`,
-        usage: "collect|detect|metric|standards|progress|rollup|render <arg> [repoPath]"
+        usage: "collect|detect|metric|standards|progress|rollup|render|audit-core <arg> [repoPath]"
       });
       process.exit(1);
     }

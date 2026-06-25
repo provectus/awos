@@ -32,13 +32,13 @@ Single dimension:
 
 ## How It Works
 
-Each **dimension** is a self-contained `.md` file in `skills/audit/dimensions/` with YAML frontmatter declaring its dependencies. The orchestrator:
+Each **dimension** is a self-contained `.md` file in `skills/ai-readiness-audit/dimensions/` defining its checks and their category codes. Scoring runs in the engine:
 
-1. Auto-discovers all dimension files and builds a dependency DAG
-2. Groups dimensions into execution phases
-3. Launches each dimension as a **separate agent** with its own context window (via the `dimension-auditor` agent)
-4. Within each phase, all dimensions run **in parallel**
-5. Compiles results into a scored report with an overall grade
+1. The orchestrator runs one deterministic command — `node dist/cli.js audit-core <repo> <out>`
+2. The engine evaluates project-topology first (its flags gate other categories), then every `detected`/`computed` category across all dimensions, in one pass
+3. It writes each `<dimension>.json` plus the aggregated `audit.json`
+4. The orchestrator fills only the LLM-only slice (the few `judgment` categories, the tracker/docs connector metrics) and authors the plain-language report blocks
+5. The renderer produces `report.md` + `report.html` from `audit.json` (additive weighted scoring — no letter grade)
 
 ### Scoring
 
@@ -95,12 +95,12 @@ plugins/awos/
 ├── skills/
 │   └── ai-readiness-audit/
 │       ├── SKILL.md             # orchestrator skill
-│       ├── dimensions/          # auto-discovered dimension files
+│       ├── dimensions/          # dimension files (checks + category codes)
+│       ├── audit_core.ts        # single deterministic scoring pass
+│       ├── topology.ts          # deterministic project-topology flags
 │       ├── scoring.md           # scoring algorithm
 │       ├── output-format.md     # artifact format spec
 │       └── report-template.md   # HTML report spec
-├── agents/
-│   └── dimension-auditor.md     # generic agent for any dimension
 └── README.md
 ```
 

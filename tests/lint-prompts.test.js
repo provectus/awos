@@ -1261,70 +1261,33 @@ test('scoring.md uses additive weighted categories, not A-F grades', () => {
   );
 });
 
-test('dimension-auditor uses method routing, node-based TOML parse, and emits JSON', () => {
-  const p = path.join(
-    repoRoot,
-    'plugins',
-    'awos',
-    'agents',
-    'dimension-auditor.md'
-  );
-  const src = readUtf8(p);
+test('SKILL.md scores via a single audit-core pass — no per-dimension fan-out', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  // Deterministic scoring is one engine command (audit-core), not 11 subagents.
   assert.match(
     src,
-    /standards\.toml/,
-    'dimension-auditor must read standards.toml'
+    /dist\/cli\.js["']?\s+audit-core/,
+    'SKILL.md must invoke the audit-core engine pass via the bundled CLI'
   );
-  // TOML is parsed in Node now, not python3/tomllib.
+  // The per-dimension subagent fan-out and its agent are retired.
   assert.doesNotMatch(
     src,
-    /tomllib|python3/,
-    'dimension-auditor must not shell out to python3/tomllib'
+    /dimension-auditor/,
+    'SKILL.md must not reference the retired dimension-auditor agent'
   );
-  assert.match(
+  // The retired agent file must not exist (its presence reintroduces the fan-out).
+  assert.ok(
+    !fs.existsSync(
+      path.join(repoRoot, 'plugins', 'awos', 'agents', 'dimension-auditor.md')
+    ),
+    'the dimension-auditor agent must be retired (agents/dimension-auditor.md removed)'
+  );
+  // The orchestrator must never average dimensions into a grade.
+  assert.doesNotMatch(
     src,
-    /node .*dist\/|smol-toml|node --import tsx/,
-    'dimension-auditor must parse standards.toml in Node (via node dist/cli.js standards)'
+    /grade [A-F]\b|letter grade/i,
+    'SKILL.md must not describe letter-grade scoring'
   );
-  assert.match(
-    src,
-    /\bmethod\b/,
-    'dimension-auditor must read each category method'
-  );
-  assert.match(
-    src,
-    /detectors?\/|dist\//,
-    'dimension-auditor must run the bundled detectors for computed/detected'
-  );
-  assert.match(
-    src,
-    /verbatim|do not (override|re-?judge)|use (its|the detector).{0,20}verdict/i,
-    'dimension-auditor must use the detector verdict verbatim'
-  );
-  assert.match(
-    src,
-    /rubric/i,
-    'dimension-auditor must evaluate the rubric for judgment categories'
-  );
-  assert.match(
-    src,
-    /evidence_required/i,
-    'dimension-auditor must require evidence for judgment categories'
-  );
-  assert.match(
-    src,
-    /<verdict>|XML.{0,30}tag|tag.{0,30}XML/i,
-    'dimension-auditor must use XML tags for judgment verdict output'
-  );
-  assert.match(src, /\.json/, 'dimension-auditor must write a .json artifact');
-  assert.match(src, /weight/i, 'dimension-auditor must emit category weights');
-  assert.match(
-    src,
-    /coverage ratio/i,
-    'dimension-auditor must emit a coverage ratio'
-  );
-  assert.match(src, /reliabilit/i, 'dimension-auditor must emit reliability');
-  assert.doesNotMatch(src, /grade/i, 'dimension-auditor must not emit a grade');
 });
 
 test('context/<path> references in prompts are internally consistent', () => {
@@ -1730,7 +1693,7 @@ test('output-format.md states that reports are produced by cli.js render (not ha
 
 // ---------------------------------------------------------------------------
 // POL-B: SKILL.md Step 6 aggregates JSON → audit.json + renders MD;
-//         Step 7 headless auto-generates HTML
+//         Step 6 unconditionally renders HTML (incl. headless)
 // ---------------------------------------------------------------------------
 
 test('SKILL.md Step 6 aggregates per-dimension JSON into audit.json', () => {
@@ -1780,31 +1743,32 @@ test('SKILL.md Step 6 states the data-loss guarantee (no hand-written report)', 
   );
 });
 
-test('SKILL.md Step 7 headless auto-generates report.html via --format html', () => {
-  // Headless runs are first-class. When AskUserQuestion receives its default
-  // answer, SKILL.md must automatically generate the HTML — never skip it.
+test('SKILL.md Step 6 unconditionally renders report.html via --format html', () => {
+  // HTML is the headline deliverable. Step 6 produces it for every run,
+  // including headless — generated unconditionally, never gated on Step 7 or
+  // on interactivity. (Moving it out of Step 6 is the regression this pins.)
   const src = readUtf8(SKILL_MD_PATH);
   assert.ok(
-    /headless.*auto.*html|headless.*html.*auto|auto.*generat.*html/i.test(src),
-    'SKILL.md Step 7 must state that headless runs automatically generate report.html'
+    /unconditional|always produce both|headless runs always produce/i.test(src),
+    'SKILL.md Step 6 must state report.html is generated unconditionally (incl. headless), never gated on interactivity'
   );
   assert.ok(
     /--format html/.test(src),
-    'SKILL.md Step 7 must show "--format html" as the HTML render flag'
+    'SKILL.md Step 6 must show "--format html" as the HTML render flag'
   );
   assert.ok(
     /report\.html/.test(src),
-    'SKILL.md Step 7 must name the output file report.html'
+    'SKILL.md Step 6 must name the output file report.html'
   );
 });
 
-test('SKILL.md Step 7 headless HTML always produced (never skipped)', () => {
+test('SKILL.md Step 6 HTML always produced (never gated/skipped)', () => {
   // The "never skip" contract is the key headless guarantee. Lint pins it
   // so future edits do not accidentally make HTML optional in headless mode.
   const src = readUtf8(SKILL_MD_PATH);
   assert.ok(
-    /always produc|never skip/i.test(src),
-    'SKILL.md Step 7 must state that report.html is always produced in headless runs (never skipped)'
+    /always produc|never skip|never gated|unconditional/i.test(src),
+    'SKILL.md Step 6 must state that report.html is always produced (never skipped/gated)'
   );
 });
 

@@ -46,23 +46,17 @@ Never prompt mid-run after this step.
 ### Phase 0c — Determine audit mode
 
 - **Single-repo mode** (one repo detected): proceed directly to Step 1 for that repo.
-- **Org mode** (multiple repos detected): fan out the per-repo audit (Steps 1–6) across all repos in parallel. Each repo runs the normal per-dimension flow including `ai-sdlc-adoption`. Collect the per-repo audit result JSONs into `context/audits/YYYY-MM-DD/per-repo/`. After all per-repo audits complete, proceed to the org rollup in Step 6 (org branch).
+- **Org mode** (multiple repos detected): run the per-repo audit (Steps 1–6) across all repos in parallel. Each repo runs the normal single-repo flow — the Step 5 `audit-core` pass plus the Step 6 patch/render. Collect the per-repo audit result JSONs into `context/audits/YYYY-MM-DD/per-repo/`. After all per-repo audits complete, proceed to the org rollup in Step 6 (org branch).
 
 Contributor counts are always reported in aggregate (never per-person). No money, no PII.
 
-## Step 1 — Discover Dimensions
+## Step 1 — Dimensions are the engine's job, not yours
 
-1. Read all `*.md` files from the `dimensions/` directory (relative to this SKILL.md)
-2. Parse YAML frontmatter from each file to extract: `name`, `title`, `severity`, `depends-on`
-3. If `$ARGUMENTS` is provided and non-empty, filter to only the dimension whose `name` matches `$ARGUMENTS`. If no match, list available dimensions and stop.
+The set of dimensions, every category in them, the topology flags that gate them, and the order they run in **all live inside the `audit-core` command** (Step 5). It reads `references/standards.toml` and the `dimensions/*.md` files itself, evaluates project-topology first, and scores every dimension in one deterministic pass.
 
-## Step 2 — Build Dependency DAG
+So you do **not**: enumerate the dimension files, parse `depends-on`, build a dependency DAG, group work into "Phase 1 / Phase 2", or spawn a subagent per dimension. There is no per-dimension auditor. Auditing a codebase here means **running one command** (Step 5) and then filling a small gap (Step 6) — it does not mean reading the repo and writing findings by hand.
 
-1. Build a dependency graph from the `depends-on` fields
-2. Group dimensions into execution phases:
-   - **Phase 1:** Dimensions with no `depends-on` (roots of the DAG)
-   - **Phase N:** Dimensions whose `depends-on` are all completed in prior phases
-3. Phases are computed dynamically — adding or removing dimension files automatically updates the DAG
+If `$ARGUMENTS` names a single dimension, still run the full `audit-core` pass (it is fast and topology-gated) and present only that dimension's section. If `$ARGUMENTS` matches no dimension, list the available dimensions and stop.
 
 ## Step 3 — Prepare Artifacts Directory
 
@@ -70,93 +64,63 @@ Contributor counts are always reported in aggregate (never per-person). No money
 context/audits/YYYY-MM-DD/
 ```
 
-Create this directory. If it already exists, results will be overwritten.
+`audit-core` (Step 5) creates this directory. If it already exists, results are overwritten.
 
 ## Step 4 — Check for Previous Audit
 
 1. Scan `context/audits/` for previous audit directories (date-named folders other than today)
 2. If a previous audit exists, read its `report.md` to extract per-dimension scores for delta comparison later
 
-## Step 5 — Execute Dimensions
+## Step 5 — Compute Deterministic Scores (one engine pass)
+
+All deterministic scoring — every `detected` and `computed` category across all dimensions, plus the project-topology flags that gate them — runs in a single engine command. There is **no per-dimension subagent fan-out**: delegating ~100 engine calls across many subagents is exactly what an unsupervised run drops, so the engine does the whole deterministic pass itself, in one process, in seconds.
+
+**Engine preflight:** confirm a `node` runtime is on PATH (`command -v node`). If `node` is absent, stop and tell the user to install Node — the audit cannot compute deterministic metrics without it. The bundle runs under any `node` on PATH, including a Bun-provided `node` shim.
+
+Run the deterministic pass. It creates the artifacts directory and writes every `context/audits/YYYY-MM-DD/<dimension>.json`, the aggregated `context/audits/YYYY-MM-DD/audit.json`, and the `collected/<source>.json` artifacts:
+
+```
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" audit-core "<repoPath>" "context/audits/YYYY-MM-DD"
+```
+
+It prints a one-line summary (`audit_total`, counts of `detected`/`computed`/`judgment_pending`/`skipped`, `duration_ms`). Two slices are deliberately left for Step 6 — and **only** these two:
+
+- the 5 `judgment` checks, emitted with `status: "PENDING_JUDGMENT"`;
+- the tracker/docs **connector** metrics, emitted `SKIP` when no connector is reachable.
+
+Every other check is final and engine-computed. Do not re-score, re-grade, or "verify" a `detected`/`computed` check by hand — the detector verdict is authoritative.
 
 ### Progress & ETA
 
-Before launching any dimensions, compute the total work count:
-
-```
-total = number of dimensions to run (after any $ARGUMENTS filter)
-```
-
-Derive this from the dimension set discovered in Step 1 — it equals the number of dimension files that will actually execute (not the raw count in `references/standards.toml`, which holds category records, not dimension files). For a full audit this is typically the count of all `.md` files in `dimensions/`. Record a wall-clock start time (`start_ms = Date.now()`).
-
-The elapsed timer runs in wall-clock seconds **excluding time spent waiting on the user**. Pause and subtract the timer across every `AskUserQuestion` call: capture the timestamp before presenting the question and add `(Date.now() - pause_start) / 1000` to a running `wait_seconds` total. The elapsed you pass to `progress` is always `(Date.now() - start_ms) / 1000 - wait_seconds`.
-
-After each dimension (or phase, when phases complete as a batch) finishes, emit a progress line:
+Report coarse progress for the user across the run. The deterministic Step 5 pass is the bulk of the scoring and finishes in seconds; Step 6's judgment + narrative authoring is the longer tail. Emit progress with the bundled helper:
 
 ```
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" progress <elapsed_seconds> <done> <total>
 ```
 
-The output is a JSON object with `pct` (fraction 0–1), `eta_seconds`, and `elapsed_seconds`. Print it to the user as a single readable line, for example:
+It returns `pct` (fraction 0–1 complete) and `eta_seconds`; print a single readable line such as `[Audit] scoring complete — 70% — ETA ~1 min remaining`. ETA is a wall-clock UX estimate, not a scored or deterministic metric. Exclude time spent waiting on the user from the elapsed timer — pause it across every `AskUserQuestion` call (Step 0 scope confirmation, Step 7 next-steps) and subtract that wait before passing `elapsed_seconds`. In headless mode (`--output-format stream-json`) emit the same JSON as a stream line; the artifact-count fallback is always observable too (`ls context/audits/YYYY-MM-DD/*.json | wc -l`).
+
+## Step 6 — Patch the LLM-only slice, then render
+
+`audit.json` already holds the full deterministic result. Fill only what the engine cannot, then render. Never re-score a `detected`/`computed` check, and never hand-write `report.md`/`report.html`.
+
+1. **Judgment checks (5).** For each check with `status: "PENDING_JUDGMENT"`, read its category rubric and `evidence_required` from `references/standards.toml` and the dimension file, gather the evidence from the repo, decide `PASS`/`WARN`/`FAIL`, and edit that check record in its `context/audits/YYYY-MM-DD/<dimension>.json` (set `status`, `value`, `evidence`, and `weight_awarded` = the category weight on PASS, else 0).
+
+2. **Connector metrics (only when a connector is reachable).** If a tracker (Jira/Linear) or docs (Confluence/Coda) MCP server is available, fetch the data, transform it to the collector's connector shape, write the artifact into `context/audits/YYYY-MM-DD/collected/`, re-run the affected metric (`node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric <id> "<repoPath>" "context/audits/YYYY-MM-DD/collected"`), and patch the affected check records. With no connector, leave them `SKIP` — that is correct, not a failure.
+
+3. **Re-aggregate** so `audit.json` reflects the patches (recomputes every dimension score + the audit totals from the per-dimension files; preserves report blocks):
 
 ```
-[Audit] 4/13 dimensions complete — 31% — ETA ~3 min remaining
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
 ```
-
-ETA is a wall-clock UX estimate, not a scored or deterministic metric. When `done === 0` the ETA is not yet available; when `done === total` it reports 0.
-
-**Headless mode (`--output-format stream-json`):** emit the same progress JSON as a stream-json line after each phase completes, so CI pipelines and automation can track progress without a terminal. If stream access is not available, an equivalent artifact-count fallback is always observable: count the `.json` files written to `context/audits/YYYY-MM-DD/` and compare against `total` — each completed dimension writes exactly one `.json` artifact, so `ls context/audits/YYYY-MM-DD/*.json | wc -l` gives `done`.
-
-Before launching any dimension agents, resolve the absolute engine path once so it can be passed to each agent (agents do not inherit `${CLAUDE_SKILL_DIR}`):
-
-```
-ENGINE="${CLAUDE_SKILL_DIR}/dist/cli.js"
-```
-
-**Engine preflight:** the engine is a prebuilt Node bundle — confirm a `node` runtime is on PATH before running any audit (`command -v node`). If `node` is absent, stop and tell the user to install Node (the audit cannot compute deterministic metrics without it); do not silently fall back to LLM-estimated values. The bundle runs under any `node` on PATH, including a Bun-provided `node` shim.
-
-For each execution phase, launch all dimensions in the phase **in parallel** using the Agent tool with the `dimension-auditor` agent.
-
-For each dimension, provide the agent with:
-
-1. **The full dimension file content** (read from `dimensions/{name}.md`)
-2. **The output format** (read from `output-format.md` in this skill directory — the "Per-Dimension Artifact Format" section)
-3. **The scoring rules** (read from `scoring.md` in this skill directory)
-4. **The output path:** `context/audits/YYYY-MM-DD/{name}.json`
-5. **The standards file:** `references/standards.toml` (and the user override path from `sources.toml`, if any) — the dimension-auditor reads category weights and period parameters from this file
-6. **Engine CLI path:** the absolute path `$ENGINE` resolved above — tell the agent to invoke the engine as `node "<engine cli path>"` (e.g. `node "/path/to/dist/cli.js" standards ...`). The agent must use this path for all engine calls (`standards`, `detect`, `metric`, `collect`) — never a bare `node dist/cli.js`.
-7. **Topology summary** (for Phase 2+ dimensions): read from `context/audits/YYYY-MM-DD/project-topology.md` — the "Topology Summary" section written by the topology auditor
-
-Wait for all dimensions in a phase to complete before starting the next phase.
-
-### Important
-
-- Launch each dimension as a separate Agent call with `subagent_type: "dimension-auditor"` so each gets its own context window
-- Within a phase, launch all Agent calls in a single message (parallel execution)
-- The dimension-auditor agent does not modify project source files; its only write is the per-dimension artifact at the path you provide
-
-## Step 6 — Compile Report
-
-After all dimensions complete:
-
-1. Read all per-dimension JSON artifacts from `context/audits/YYYY-MM-DD/<dimension>.json`.
-2. Aggregate them into a single `context/audits/YYYY-MM-DD/audit.json` file with this top-level structure:
-   - `date` — the audit date (YYYY-MM-DD)
-   - `project` — the repo name or directory being audited
-   - `audit_total` — Σ awarded category weights across all dimensions (uncapped)
-   - `coverage` — total awarded weight ÷ total applicable-defined weight across all dimensions (the audit-level coverage ratio, labeled "relative to today's standard" from `references/standards.toml`). Do not compute a grade or a 0–100 score.
-   - `dimensions` — array of the per-dimension JSON objects (one per dimension file)
-3. If a previous audit was found in Step 4, add per-dimension deltas (point and coverage-ratio deltas, not grade deltas) inside each dimension object.
 
 4. **Author the plain-language report blocks into `audit.json`.** The renderer is deterministic and contains no LLM — the narrative a CEO reads is authored _here_, by you, and stored in the JSON so the renderer only formats it. Add three optional top-level fields (schema in `output-format.md` → "Report blocks"):
 
    - `headline` — the executive band. Transcribe values **verbatim** from the dimension checks (cite the `check_id`); never invent numbers. `delivery[]` = the DORA quartet (deployment frequency `ADP-G3`, lead time `ADP-G4`, change-fail `ADP-G7`, MTTR `ADP-I3`) as `{label, display_value, band, check_id}` — read the band ("DORA-banded (high)") from each check's `hint`. `scale[]` = code size/complexity (`ADP-G11`, `ADP-G10`, deps `ADP-G12`). `reach` = `{ai_tooling, contributors}` (`ADP-G1`/`ADP-G2`).
-   - `insights[]` — 3–6 thematic cards, the "READ": `{theme, severity, weak_areas[], so_what, improves}`. Plain language for a non-technical stakeholder — name the weak areas and say what improves if they are fixed. This is the synthesis the board reads first.
+   - `insights[]` — 3–6 thematic cards, the "READ": `{theme, severity, weak_areas[], so_what, improves}`. Plain language for a non-technical stakeholder — name the weak areas and say what improves if they are fixed.
    - `recommendations[]` — the prioritized fixes as `{id, priority (P0/P1/P2), title, dimension, check_id, effort, detail}`. `detail` is a plain-language paragraph. Transcribe each from a real FAIL/WARN check.
 
-   Every check you reference should also carry a one-sentence non-technical `plain` field (written by the dimension-auditor; see `output-format.md`). If any are missing, the renderer falls back to the check `definition`.
-
-**The orchestrator never hand-writes `report.md` or `report.html`** — those files are always produced by the renderer. This is the data-loss guarantee: JSON (including the blocks you authored in step 4) is the source of truth; markdown and HTML are derived outputs.
+**The orchestrator never hand-writes `report.md` or `report.html`** — those files are always produced by the renderer. This is the data-loss guarantee: JSON is the source of truth; markdown and HTML are derived outputs.
 
 5. Render the report from the JSON source of truth — **always produce BOTH `report.md` and the self-contained `report.html`** here. The HTML is the headline deliverable; it is generated unconditionally in this step, never gated on Step 7 or on interactivity, so headless runs always produce it:
 
@@ -212,19 +176,15 @@ Contributor counts in the org report are always aggregate — no per-person data
 
 ## Step 7 — What's Next?
 
-After presenting the report, check the project context and offer next steps using `AskUserQuestion` with `multiSelect: true`.
+After presenting the report, offer follow-up next steps. Both `report.md` and `report.html` were already produced in Step 6 — Step 7 never (re-)generates the report; it only offers what to do next.
 
 ### Headless mode (no interactive input)
 
-When `AskUserQuestion` receives its default answer (non-interactive, e.g. CI or `--output-format stream-json`), automatically generate the HTML report — never skip it:
-
-```
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html
-```
-
-`report.html` is always produced in headless runs. The orchestrator never hand-writes it; the renderer produces it from `audit.json`.
+When `AskUserQuestion` receives its default answer (non-interactive, e.g. CI or `--output-format stream-json`), there is nothing to ask and nothing to render — the reports already exist from Step 6. Finish by pointing the user at `context/audits/YYYY-MM-DD/report.html` and `recommendations.md`. Never hand-write or re-render a report.
 
 ### Interactive mode
+
+Offer next steps using `AskUserQuestion` with `multiSelect: true`. The HTML report already exists (Step 6), so it is not an option here — offer only roadmap follow-ups.
 
 ### Detect context
 
@@ -233,15 +193,11 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.js
 
 ### Build options
 
-**Always include:**
-
-- "Generate HTML report" — create a standalone HTML version of the audit report
-
-**If AWOS installed + roadmap exists, also include:**
+**If AWOS installed + roadmap exists:**
 
 - "Update roadmap with audit findings" — incorporate recommendations into the existing product roadmap
 
-**If AWOS installed + no roadmap, also include:**
+**If AWOS installed + no roadmap:**
 
 - "Create a roadmap informed by audit findings" — start a new roadmap using audit results as input
 
@@ -251,7 +207,6 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.js
 
 ### Execute selected options
 
-- **HTML report:** Render from the JSON source of truth using the CLI: `node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html`. The renderer reads the HTML report specification from `report-template.md`. The output is a single self-contained HTML file (inline CSS+JS, no external dependencies): **one scrolling page** — an executive band (capability total + coverage, DORA delivery bands, code scale/complexity, reach) the CEO reads first, then the top insights, then "what to improve" (the prioritized recommendations in plain language), then the dimension summary table. Each dimension row drills into a hash-routed sub-page (`#dim/<key>`) with its check table and a wide Evidence column; the browser Back button returns to the overview. Tooltips are instant and plain-language. There are no audience tabs.
 - **Roadmap (update or create):** Tell the user to run `/awos:roadmap` and reference the audit recommendations at `context/audits/YYYY-MM-DD/recommendations.md` as input.
 
 ## Adding New Dimensions

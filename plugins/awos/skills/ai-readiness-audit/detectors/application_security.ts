@@ -819,8 +819,9 @@ export function detectRateLimiting(
 // ---------------------------------------------------------------------------
 // DETECTORS — maps each application-security code to its function.
 // Codes 3009 (authorization-correctness) and 3010 (insecure-design) are
-// judgment categories — they have no detector (the auditor evaluates them
-// via rubric + evidence_required in the dimension-auditor context window).
+// judgment categories — they have no detector (audit-core emits them as
+// PENDING_JUDGMENT; the orchestrator's Step 6 judgment patch evaluates them
+// via rubric + evidence_required).
 // ---------------------------------------------------------------------------
 
 export const DETECTORS: Record<

@@ -1,6 +1,7 @@
 import { makeResult, iterFiles } from './_base.ts';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, relative, basename } from 'node:path';
+import { CI_DIRS } from '../ci_platforms.ts';
 
 // ---------------------------------------------------------------------------
 // detectScsLockfiles — category 2900 (SCS-01, method: detected)
@@ -623,7 +624,6 @@ export function detectDependencyAutomationReview(
 // ---------------------------------------------------------------------------
 
 const CI_WORKFLOW_GLOBS = ['*.yml', '*.yaml'];
-const CI_DIRS = ['.github/workflows', '.circleci', '.buildkite', '.drone'];
 
 const VULN_SCANNER_RX =
   /\b(pip-audit|safety\s|snyk|trivy|grype|osv-scanner|dependency-check|dependabot|audit\s+--json|npm\s+audit|yarn\s+audit|pnpm\s+audit)\b/i;

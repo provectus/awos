@@ -124,6 +124,19 @@ import type { AuditJson } from './render.ts';
 // ---------------------------------------------------------------------------
 import { progress } from './progress.ts';
 
+// ---------------------------------------------------------------------------
+// audit-core (deterministic single-pass audit)
+// ---------------------------------------------------------------------------
+import { auditCore, aggregate } from './audit_core.ts';
+
+/** Resolve the skill root (where references/ lives) from the bundle location. */
+function resolveSkillRoot(): string {
+  const cliDir = dirname(fileURLToPath(import.meta.url));
+  return cliDir.endsWith('/dist') || cliDir.endsWith('\\dist')
+    ? dirname(cliDir)
+    : cliDir;
+}
+
 // MetricFn may return a MetricResult synchronously or a Promise<MetricResult>
 // (adp_g10_complexity is async — requires wasm init).
 type MetricFn = (
@@ -479,11 +492,46 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'audit-core': {
+      // Deterministic single-pass audit: runs every detected/computed category
+      // and writes <out>/<dimension>.json + <out>/audit.json. Judgment categories
+      // are emitted as PENDING_JUDGMENT; connector metrics SKIP without a connector.
+      const repoPath = arg1;
+      const outDir = arg2;
+      if (!repoPath || !outDir) {
+        printJson({ error: 'audit-core requires <repoPath> <outDir>' });
+        process.exit(1);
+      }
+      const standardsPath = join(resolveSkillRoot(), 'references', 'standards.toml');
+      const summary = await auditCore(
+        repoPath,
+        outDir,
+        DETECTORS,
+        METRICS,
+        standardsPath
+      );
+      printJson(summary);
+      break;
+    }
+
+    case 'aggregate': {
+      // Re-sum audit.json from the per-dimension files after judgment/connector
+      // patches. Preserves authored report blocks; run before render.
+      const dir = arg1;
+      if (!dir) {
+        printJson({ error: 'aggregate requires <auditsDir>' });
+        process.exit(1);
+      }
+      aggregate(dir);
+      printJson({ aggregated: dir });
+      break;
+    }
+
     default: {
       printJson({
         error: `unknown command "${command}"`,
         usage:
-          'collect|detect|metric|standards|progress|rollup|render <arg> [repoPath]',
+          'collect|detect|metric|standards|progress|rollup|render|audit-core <arg> [repoPath]',
       });
       process.exit(1);
     }

@@ -1,26 +1,5 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { makeArtifact, type Period } from './_base.ts';
-
-// ---------------------------------------------------------------------------
-// CI config detection
-// ---------------------------------------------------------------------------
-
-/** Paths that indicate a CI configuration file or directory in the repo. */
-const CI_CONFIG_CANDIDATES = [
-  '.github/workflows',
-  '.gitlab-ci.yml',
-  'Jenkinsfile',
-];
-
-function detectCiConfig(repoPath: string): string | null {
-  for (const candidate of CI_CONFIG_CANDIDATES) {
-    if (existsSync(join(repoPath, candidate))) {
-      return candidate;
-    }
-  }
-  return null;
-}
+import { detectCiConfigPath } from '../ci_platforms.ts';
 
 // ---------------------------------------------------------------------------
 // Connector shape
@@ -66,7 +45,7 @@ export function collect(
   period: Period,
   connector?: CiConnector
 ) {
-  const configPath = detectCiConfig(repoPath);
+  const configPath = detectCiConfigPath(repoPath);
   const hasConfig = configPath !== null;
   const hasConnector = connector !== undefined && connector !== null;
 
@@ -74,7 +53,7 @@ export function collect(
     return makeArtifact(
       'ci',
       false,
-      'no CI config (.github/workflows, .gitlab-ci.yml, Jenkinsfile) or connector found',
+      'no CI config (GitHub Actions, GitLab, Jenkins, CircleCI, Azure Pipelines, Buildkite, Drone, TeamCity, Travis, Bitbucket) or connector found',
       { ...period, history_available_days: period.history_available_days },
       {} as CiRaw
     );

@@ -1,6 +1,7 @@
 import { makeResult, grep, iterFiles } from './_base.ts';
 import { basename, relative } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { CI_FILES, isCiWorkflowPath } from '../ci_platforms.ts';
 
 // ---------------------------------------------------------------------------
 // detectLinting — category 2700 (method: detected, SBP-01)
@@ -289,25 +290,17 @@ export function detectTypeSafety(
 // the filename and then verify the parent directory in the result path.
 // ---------------------------------------------------------------------------
 
-// Root-level CI config filenames (no path filtering needed)
-const CICD_ROOT_FILES = [
-  '.gitlab-ci.yml',
-  '.gitlab-ci.yaml',
-  'Jenkinsfile',
-  'azure-pipelines.yml',
-  'azure-pipelines.yaml',
-];
-
-// Filename patterns that live inside known CI subdirectories
-// We find all .yml/.yaml/config.yml and filter by path below.
+// Root-level named CI config files come from the canonical platform list.
+// Filename patterns that live inside known CI subdirectories — we find all
+// .yml/.yaml and filter by path below.
 const CICD_SUBDIR_FILENAMES = ['*.yml', '*.yaml'];
 
 export function detectCiCd(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  // Check root-level named CI files
-  const found = iterFiles(repoPath, CICD_ROOT_FILES);
+  // Check root-level named CI files (Jenkinsfile, .gitlab-ci.yml, etc.)
+  const found = iterFiles(repoPath, CI_FILES);
   if (found.length) {
     const names = [...new Set(found.map((p) => relative(repoPath, p)))].sort();
     return makeResult(
@@ -316,20 +309,16 @@ export function detectCiCd(
       names.map((n) => `CI/CD config found: ${n}`)
     );
   }
-  // Check .github/workflows/*.yml, .circleci/config.yml,
-  // pipelines/*.yml (Azure DevOps convention), and .azure-pipelines/
+  // Check workflow files inside known CI directories (.github/workflows,
+  // .circleci, .azure-pipelines, .buildkite, .drone, .teamcity) plus the
+  // Azure DevOps `pipelines/` convention.
   const yamlFiles = iterFiles(repoPath, CICD_SUBDIR_FILENAMES);
   const ciFiles = yamlFiles.filter((p) => {
     const rel = relative(repoPath, p);
     return (
-      rel.startsWith('.github/workflows/') ||
-      rel.startsWith('.circleci/') ||
+      isCiWorkflowPath(rel) ||
       rel.startsWith('pipelines/') ||
-      rel.startsWith('.azure-pipelines/') ||
-      rel.startsWith('.github\\workflows\\') ||
-      rel.startsWith('.circleci\\') ||
-      rel.startsWith('pipelines\\') ||
-      rel.startsWith('.azure-pipelines\\')
+      rel.startsWith('pipelines\\')
     );
   });
   if (ciFiles.length) {

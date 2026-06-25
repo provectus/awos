@@ -6,7 +6,7 @@ Use this template when presenting audit results. Replace placeholders with actua
 
 ### Per-Dimension Artifact Format
 
-Each dimension artifact is a **JSON file** (`{name}.json`). The `dimension-auditor` agent writes it; `node dist/cli.js render <audit.json> --format md` and `node dist/cli.js render <audit.json> --format html` render the aggregated audit JSON to `report.md` / `report.html` respectively. The auditor never writes Markdown or HTML — JSON is the source of truth.
+Each dimension artifact is a **JSON file** (`{name}.json`). The `audit-core` engine pass writes it; `node dist/cli.js render <audit.json> --format md` and `node dist/cli.js render <audit.json> --format html` render the aggregated audit JSON to `report.md` / `report.html` respectively. The engine never writes Markdown or HTML — JSON is the source of truth.
 
 Top-level schema:
 

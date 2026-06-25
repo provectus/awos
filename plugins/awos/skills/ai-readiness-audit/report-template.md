@@ -1,6 +1,6 @@
 # HTML Report Template
 
-**The renderer is the implementation.** `report.md` and `report.html` are produced by running `node dist/cli.js render <audit.json> --format md|html`. The LLM never writes Markdown or HTML directly — the dimension-auditor writes per-dimension JSON, and the orchestrator authors the plain-language report blocks (`headline`, `insights`, `recommendations`) into `audit.json`. The renderer reads the JSON and emits both formats deterministically. See `docs/design/2026-06-25-report-redesign-design.md`.
+**The renderer is the implementation.** `report.md` and `report.html` are produced by running `node dist/cli.js render <audit.json> --format md|html`. The LLM never writes Markdown or HTML directly — the `audit-core` engine pass writes the per-dimension JSON, and the orchestrator authors the plain-language report blocks (`headline`, `insights`, `recommendations`) into `audit.json`. The renderer reads the JSON and emits both formats deterministically. See `docs/design/2026-06-25-report-redesign-design.md`.
 
 ## One scrolling page (no audience tabs)
 

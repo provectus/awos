@@ -9,7 +9,7 @@ Repeatable, provenance-tagged test runs of the `/awos:ai-readiness-audit` skill 
 
 ## The three traps it neutralizes
 
-1. **`claude -p` does not read your worktree.** `awos-marketplace` is a _directory_ source pointing at the **main checkout**; the plugin is served from a version-pinned cache `~/.claude/plugins/cache/awos-marketplace/awos/<version>/`. Worktree edits are invisible until they reach that cache. The harness deploys the worktree's `plugins/awos/` there **all-or-nothing**: stage a full copy, SHA-verify, then atomically swap it in via `os.rename` (no rsync, no half-updated cache), and SHA-verify again after the swap.
+1. **`claude -p` does not read your worktree.** `awos-marketplace` is a _directory_ source, and `claude` serves the plugin **live from its `installLocation`** (the main checkout) — **not** from the version caches under `~/.claude/plugins/cache/awos-marketplace/awos/<version>/`. (Deploying to those caches, which an earlier version of this harness did, was never loaded — every test silently ran the main checkout's old plugin.) So the harness repoints the marketplace's `source.path` + `installLocation` (in `known_marketplaces.json` and `settings.json`) at the worktree and runs `claude plugin marketplace update`, then **restores the originals in a `finally` block** — a failed or interrupted run still restores. The repoint affects any project using `awos` for the duration of the run. `--no-deploy` skips it (use whatever the marketplace currently serves).
 2. **The output dir is a hardcoded date** (`context/audits/YYYY-MM-DD/`). Same-day re-runs overwrite, and `SKILL.md` Step 4 reads _other_ date-folders as a "previous audit" delta baseline. The harness controls this via `--phase` (below) and archives output elsewhere; comparison is done from the archive.
 3. **The skill never reports tokens.** Measured by the harness from the final `stream-json` `result` event (`total_cost_usd`, `usage`, `duration_ms`, `num_turns`) into `run-meta.json`. Sub-agent usage rolls into that one session total.
 
@@ -34,11 +34,11 @@ python3 $H/run_audit_test.py --target ~/code/onex-discovery-api --phase second -
 # Compare the two newest runs (or pass two run dirs):
 python3 $H/compare_audit_runs.py --target onex-discovery-api
 
-# Preview without launching claude or touching the target (still deploys the cache):
+# Preview without launching claude or touching the target or the marketplace:
 python3 $H/run_audit_test.py --target ~/code/onex-discovery-api --dry-run
 ```
 
-Other flags: `--worktree <path>` (skill under test; default = the checkout this script lives in), `--no-deploy` (use the already-deployed cache), `--claude-flags "<flags>"` (default `--dangerously-skip-permissions`).
+Other flags: `--worktree <path>` (skill under test; default = the checkout this script lives in), `--no-deploy` (don't repoint the marketplace — use whatever it currently serves), `--claude-flags "<flags>"` (default `--dangerously-skip-permissions`).
 
 ## Org mode — pin nothing
 
@@ -62,9 +62,17 @@ The script is the primary measure. If you instead run the audit **interactively*
   _preexisting/     anything stashed out of the target before blanking (safety, never deleted)
 ```
 
-## Restoring the cache to the shipped plugin
+## Marketplace repoint is auto-restored
 
-The deploy overwrites the main-checkout's cached plugin with worktree code; it's self-healing — every run re-deploys, and `claude plugin marketplace update awos-marketplace` restores the main checkout's version.
+Each run records the original `awos-marketplace` `source.path` + `installLocation`, repoints them at the worktree, and restores them in a `finally` block — so a normal or failed run leaves your marketplace pointing back at the main checkout. If a run is hard-killed (SIGKILL) mid-flight, the marketplace may be left pointing at the worktree; recover with:
+
+```sh
+# inspect — should be your main checkout, not a worktree
+python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.claude/plugins/known_marketplaces.json')))['awos-marketplace']['installLocation'])"
+# if it shows a worktree, repoint by hand then refresh:
+#   edit ~/.claude/plugins/known_marketplaces.json + ~/.claude/settings.json back to the main checkout, then:
+claude plugin marketplace update awos-marketplace
+```
 
 ## Security note
 

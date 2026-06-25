@@ -5,10 +5,12 @@ run_audit_test.py — repeatable test harness for the /awos:ai-readiness-audit s
 Pipeline per run:
   1. Provenance — which awos commit/branch(+dirty) the skill-under-test is from, which
      target repo(+commit), claude version, UTC timestamp.
-  2. Deploy — copy the worktree's plugins/awos/ into the marketplace cache that `claude`
-     loads (the cache is otherwise served from the *main* checkout, so worktree edits are
-     invisible). All-or-nothing: stage a full copy, SHA-verify it, then atomically swap it
-     into place via os.rename. A failure never leaves a half-updated cache.
+  2. Serve the worktree — the awos-marketplace is a *directory source*; `claude` serves
+     the plugin live from its installLocation (the main checkout), NOT from the version
+     caches. So we repoint the marketplace's source.path + installLocation at the worktree
+     and `claude plugin marketplace update`, then RESTORE the originals in a finally block
+     after the run (and a failed run still restores). Deploying to the caches — the old
+     approach — was never loaded by claude. `--no-deploy` skips the repoint.
   3. Prepare target context/audits/ for the chosen --phase:
        first  → blank slate, NO previous audit (tests the empty case).
        second → seed a previous audit from the archive (tests the delta case).
@@ -97,52 +99,59 @@ def sha256(path):
 
 
 # ---------------------------------------------------------------------------
-def resolve_cache_dir():
-    """The cache dir `claude` actually loads: version is declared by the marketplace's
-    directory source (the main checkout), files are served from cache/<version>/."""
-    with open(SETTINGS) as f:
-        s = json.load(f)
-    mkt = s.get("extraKnownMarketplaces", {}).get(MARKET_NAME, {})
-    src = mkt.get("source", {}).get("path", "")
-    if not src:
-        die(f"marketplace '{MARKET_NAME}' not a directory source in {SETTINGS}")
-    pj = os.path.join(src, "plugins/awos/.claude-plugin/plugin.json")
-    try:
-        ver = json.load(open(pj))["version"]
-    except Exception as e:
-        die(f"cannot read awos version from {pj}: {e}")
-    return os.path.join(CACHE_BASE, ver), ver, src
+KM_PATH = os.path.join(HOME, ".claude/plugins/known_marketplaces.json")
 
 
-def deploy_skill(worktree, cache_dir):
-    """All-or-nothing deploy: full copy to a staging sibling, SHA-verify, atomic swap."""
-    plugin_src = os.path.join(worktree, "plugins/awos")
-    src_skill = os.path.join(plugin_src, "skills/ai-readiness-audit/SKILL.md")
-    if not os.path.isfile(src_skill):
-        die(f"worktree has no SKILL.md at {src_skill}")
-    want = sha256(src_skill)
+# The awos-marketplace is a DIRECTORY source: `claude` serves the plugin live from
+# its installLocation/source.path, NOT from the version caches under
+# cache/awos-marketplace/awos/<version>/. So to test worktree code we repoint the
+# marketplace at the worktree and refresh, then restore afterwards. (Deploying to
+# the version caches — the old approach — was never loaded.)
 
-    staging = cache_dir + f".staging.{os.getpid()}"
-    old = cache_dir + f".old.{os.getpid()}"
-    for p in (staging, old):
-        shutil.rmtree(p, ignore_errors=True)
+def _marketplace_paths():
+    """Current awos-marketplace source.path + installLocation, from both config files."""
+    km = json.load(open(KM_PATH))
+    s = json.load(open(SETTINGS))
+    m = km.get(MARKET_NAME, {})
+    return {
+        "km_source_path": m.get("source", {}).get("path"),
+        "km_install": m.get("installLocation"),
+        "settings_source_path": (s.get("extraKnownMarketplaces", {})
+                                 .get(MARKET_NAME, {}).get("source", {}).get("path")),
+    }
 
-    shutil.copytree(plugin_src, staging)  # full copy; not live until swap
-    got = sha256(os.path.join(staging, "skills/ai-readiness-audit/SKILL.md"))
-    if got != want:
-        shutil.rmtree(staging, ignore_errors=True)
-        die(f"staging copy SHA mismatch (want {want}, got {got}) — aborted before swap", 1)
 
-    os.makedirs(CACHE_BASE, exist_ok=True)
-    if os.path.exists(cache_dir):
-        os.rename(cache_dir, old)        # atomic
-    os.rename(staging, cache_dir)        # atomic
-    shutil.rmtree(old, ignore_errors=True)
+def _set_marketplace_paths(source_path, install):
+    km = json.load(open(KM_PATH))
+    s = json.load(open(SETTINGS))
+    if MARKET_NAME not in km:
+        die(f"marketplace '{MARKET_NAME}' not in {KM_PATH}")
+    km[MARKET_NAME].setdefault("source", {})["path"] = source_path
+    km[MARKET_NAME]["installLocation"] = install
+    (s.setdefault("extraKnownMarketplaces", {}).setdefault(MARKET_NAME, {})
+     .setdefault("source", {}))["path"] = source_path
+    json.dump(km, open(KM_PATH, "w"), indent=2)
+    json.dump(s, open(SETTINGS, "w"), indent=2)
+    subprocess.run(["claude", "plugin", "marketplace", "update", MARKET_NAME],
+                   capture_output=True, text=True)
 
-    final = sha256(os.path.join(cache_dir, "skills/ai-readiness-audit/SKILL.md"))
-    if final != want:
-        die(f"post-swap verification failed (SHA {final} != {want})", 1)
-    return want
+
+def repoint_marketplace(worktree):
+    """Point awos-marketplace at the worktree and refresh so `claude` serves the
+    worktree's plugin. Returns the original paths for restore. Verifies the worktree
+    is a valid marketplace + has a built engine."""
+    skill = os.path.join(worktree, "plugins/awos/skills/ai-readiness-audit/SKILL.md")
+    if not os.path.isfile(os.path.join(worktree, ".claude-plugin/marketplace.json")):
+        die(f"worktree is not a marketplace (no .claude-plugin/marketplace.json): {worktree}")
+    if not os.path.isfile(skill):
+        die(f"worktree has no SKILL.md at {skill}")
+    orig = _marketplace_paths()
+    _set_marketplace_paths(worktree, worktree)
+    return orig, sha256(skill)
+
+
+def restore_marketplace(orig):
+    _set_marketplace_paths(orig["km_source_path"], orig["km_install"])
 
 
 # ---------------------------------------------------------------------------
@@ -301,11 +310,11 @@ def main():
                     help="phase=second: date folder for the seed (default derive, !=today)")
     ap.add_argument("--label", default="", help="note recorded in run-meta + dir name")
     ap.add_argument("--build", action="store_true",
-                    help="run `npm run build:engine` in worktree before deploy")
+                    help="run `npm run build:engine` in worktree before the run")
     ap.add_argument("--claude-flags", default="--dangerously-skip-permissions",
                     help="extra flags passed to claude (space-separated)")
     ap.add_argument("--no-deploy", action="store_true",
-                    help="skip cache deploy (use already-deployed skill)")
+                    help="don't repoint the marketplace — use whatever it currently serves")
     ap.add_argument("--dry-run", action="store_true",
                     help="do everything except launch claude")
     args = ap.parse_args()
@@ -352,16 +361,7 @@ def main():
     if not os.path.isfile(engine):
         die("dist/cli.js missing — run with --build")
 
-    cache_dir, cache_ver, mkt_src = resolve_cache_dir()
-    deployed_sha = None
-    if args.no_deploy:
-        log(f"▶ --no-deploy: using already-deployed cache {cache_dir}")
-    else:
-        log(f"▶ deploy worktree skill -> cache {cache_dir} (resolved version {cache_ver})")
-        deployed_sha = deploy_skill(worktree, cache_dir)
-        log(f"  ✓ atomic swap verified (SKILL.md {deployed_sha})")
-
-    # resolve seed if phase=second
+    # resolve seed if phase=second (read-only)
     seed_from = None
     if args.phase == "second":
         if args.seed_from == "auto":
@@ -375,54 +375,69 @@ def main():
         resolve_seed_output(seed_from)  # validate it has an audit.json (read-only)
 
     if args.dry_run:
-        log("▶ --dry-run: target left untouched, no archive dir created")
-        log(f"  would deploy : {cache_dir} (sha {deployed_sha})")
-        log(f"  would run    : claude -p /awos:ai-readiness-audit (cwd={target})")
-        log(f"  would archive: {run_dir}")
+        log("▶ --dry-run: target + marketplace left untouched")
+        log(f"  would repoint {MARKET_NAME} -> {worktree} (+ restore after)")
+        log(f"  would run     : claude -p /awos:ai-readiness-audit (cwd={target})")
+        log(f"  would archive : {run_dir}")
         return
 
-    os.makedirs(run_dir, exist_ok=True)
-    log("▶ preparing target context/audits/")
-    seeded_date = prepare_target(target, args.phase, run_dir, seed_from,
-                                 args.seed_date, today)
-
-    claude_flags = args.claude_flags.split() if args.claude_flags else []
-    run_log = os.path.join(run_dir, "run.jsonl")
-    result, rc = stream_run(target, claude_flags, run_log)
-
-    # archive produced output
-    audits = os.path.join(target, "context/audits")
-    out_dir = os.path.join(audits, today)
-    if not os.path.isdir(out_dir):
-        dd = date_dirs(audits)
-        # newest date dir that isn't the seeded previous one
-        dd = [d for d in dd if d != seeded_date]
-        out_dir = os.path.join(audits, dd[-1]) if dd else ""
-    if out_dir and os.path.isdir(out_dir):
-        shutil.copytree(out_dir, os.path.join(run_dir, "audit-output"))
-        log(f"▶ archived audit output -> {run_dir}/audit-output")
-        summary = summarize_output(os.path.join(run_dir, "audit-output"))
+    deployed_sha = None
+    orig_market = None
+    if args.no_deploy:
+        log("▶ --no-deploy: using whatever the marketplace currently serves")
     else:
-        log(f"⚠ no audit output dir found under {audits} (audit may have failed)")
-        summary = {}
+        log(f"▶ repointing {MARKET_NAME} -> worktree (+ refresh)")
+        orig_market, deployed_sha = repoint_marketplace(worktree)
+        log(f"  ✓ marketplace served from worktree (SKILL.md {deployed_sha})")
 
-    meta = {
-        "timestamp_utc": ts, "label": args.label, "phase": args.phase,
-        "seeded_previous_date": seeded_date,
-        "seed_from": seed_from,
-        "claude_version": claude_ver, "claude_rc": rc,
-        "skill_under_test": {"repo": "awos", "worktree": worktree, "commit": awos_sha,
-                             "short": awos_short, "branch": awos_branch,
-                             "dirty": awos_dirty, "deployed_cache": cache_dir,
-                             "deployed_sha": deployed_sha},
-        "target": {"name": tgt_name, "path": target, "commit": tgt_short,
-                   "branch": tgt_branch, "dirty": tgt_dirty},
-        "usage": result.get("usage"), "modelUsage": result.get("modelUsage"),
-        "total_cost_usd": result.get("total_cost_usd"),
-        "duration_ms": result.get("duration_ms"), "num_turns": result.get("num_turns"),
-        "is_error": result.get("is_error"), "summary": summary,
-    }
-    json.dump(meta, open(os.path.join(run_dir, "run-meta.json"), "w"), indent=2)
+    try:
+        os.makedirs(run_dir, exist_ok=True)
+        log("▶ preparing target context/audits/")
+        seeded_date = prepare_target(target, args.phase, run_dir, seed_from,
+                                     args.seed_date, today)
+
+        claude_flags = args.claude_flags.split() if args.claude_flags else []
+        run_log = os.path.join(run_dir, "run.jsonl")
+        result, rc = stream_run(target, claude_flags, run_log)
+
+        # archive produced output
+        audits = os.path.join(target, "context/audits")
+        out_dir = os.path.join(audits, today)
+        if not os.path.isdir(out_dir):
+            dd = date_dirs(audits)
+            # newest date dir that isn't the seeded previous one
+            dd = [d for d in dd if d != seeded_date]
+            out_dir = os.path.join(audits, dd[-1]) if dd else ""
+        if out_dir and os.path.isdir(out_dir):
+            shutil.copytree(out_dir, os.path.join(run_dir, "audit-output"))
+            log(f"▶ archived audit output -> {run_dir}/audit-output")
+            summary = summarize_output(os.path.join(run_dir, "audit-output"))
+        else:
+            log(f"⚠ no audit output dir found under {audits} (audit may have failed)")
+            summary = {}
+
+        meta = {
+            "timestamp_utc": ts, "label": args.label, "phase": args.phase,
+            "seeded_previous_date": seeded_date,
+            "seed_from": seed_from,
+            "claude_version": claude_ver, "claude_rc": rc,
+            "skill_under_test": {"repo": "awos", "worktree": worktree, "commit": awos_sha,
+                                 "short": awos_short, "branch": awos_branch,
+                                 "dirty": awos_dirty,
+                                 "served_via": "marketplace-repoint",
+                                 "deployed_sha": deployed_sha},
+            "target": {"name": tgt_name, "path": target, "commit": tgt_short,
+                       "branch": tgt_branch, "dirty": tgt_dirty},
+            "usage": result.get("usage"), "modelUsage": result.get("modelUsage"),
+            "total_cost_usd": result.get("total_cost_usd"),
+            "duration_ms": result.get("duration_ms"), "num_turns": result.get("num_turns"),
+            "is_error": result.get("is_error"), "summary": summary,
+        }
+        json.dump(meta, open(os.path.join(run_dir, "run-meta.json"), "w"), indent=2)
+    finally:
+        if orig_market is not None:
+            log(f"▶ restoring {MARKET_NAME} to original ({orig_market['km_install']})")
+            restore_marketplace(orig_market)
 
     u = result.get("usage") or {}
     log("\n== run-meta ==")

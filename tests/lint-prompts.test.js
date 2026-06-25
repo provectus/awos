@@ -1452,8 +1452,8 @@ test('report templates use weighted points + reliability, not grades', () => {
   const html = readUtf8(path.join(skillRoot, 'report-template.md'));
   assert.match(
     html,
-    /title=/,
-    'HTML template must use title= hover hints for reliability'
+    /tooltip/i,
+    'HTML template must describe tooltips carrying the reliability/hint detail'
   );
   assert.doesNotMatch(
     html,
@@ -1685,27 +1685,38 @@ test('report-template.md references the render verb (cli.js render)', () => {
   );
 });
 
-test('report-template.md names the three HTML tabs: Board, Head of Engineering, Drill-down', () => {
+test('report-template.md describes the single-page layout: overview + drill-down sub-pages (no audience tabs)', () => {
   const src = readUtf8(path.join(skillRoot, 'report-template.md'));
   assert.ok(
-    /Board|CEO/i.test(src),
-    'report-template.md must name the Board / CEO tab'
+    /one scrolling page|single self-contained page/i.test(src) &&
+      /no audience tabs|no .*tabs/i.test(src),
+    'report-template.md must describe a single scrolling page, not three audience tabs'
   );
   assert.ok(
-    /Head.of.Engineering|Head-of-Engineering/i.test(src),
-    'report-template.md must name the Head of Engineering tab'
+    /#dim\/|drill-down sub-page/i.test(src),
+    'report-template.md must describe hash-routed drill-down sub-pages (#dim/<key>)'
   );
   assert.ok(
-    /Drill.down|Drill-down/i.test(src),
-    'report-template.md must name the Drill-down tab'
+    /Back\/Forward|browser Back/i.test(src),
+    'report-template.md must state the browser Back button returns from a sub-page to the overview'
+  );
+  assert.ok(
+    /executive band/i.test(src) &&
+      /insights/i.test(src) &&
+      /what to improve|recommendations/i.test(src),
+    'report-template.md must name the executive band, insights, and recommendations sections'
   );
 });
 
-test('report-template.md specifies per-number title= hover hint', () => {
+test('report-template.md specifies instant plain-first tooltips (not native title= delay)', () => {
   const src = readUtf8(path.join(skillRoot, 'report-template.md'));
   assert.ok(
-    src.includes('title='),
-    'report-template.md must specify that every rendered number carries a title= hover hint attribute (POL.3)'
+    /\.tip|tipbox/.test(src) && /instant/i.test(src),
+    'report-template.md must specify instant CSS tooltips (.tip/.tipbox), not the delayed native title= attribute'
+  );
+  assert.ok(
+    /plain-language|plain language|lead.*plain/i.test(src),
+    'report-template.md must state tooltips lead with the plain-language explanation'
   );
 });
 

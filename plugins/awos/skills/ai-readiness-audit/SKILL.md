@@ -148,17 +148,25 @@ After all dimensions complete:
    - `dimensions` — array of the per-dimension JSON objects (one per dimension file)
 3. If a previous audit was found in Step 4, add per-dimension deltas (point and coverage-ratio deltas, not grade deltas) inside each dimension object.
 
-**The orchestrator never hand-writes `report.md` or `report.html`** — those files are always produced by the renderer. This is the data-loss guarantee: JSON is the source of truth; markdown and HTML are derived outputs.
+4. **Author the plain-language report blocks into `audit.json`.** The renderer is deterministic and contains no LLM — the narrative a CEO reads is authored _here_, by you, and stored in the JSON so the renderer only formats it. Add three optional top-level fields (schema in `output-format.md` → "Report blocks"):
 
-4. Render the report from the JSON source of truth — **always produce BOTH `report.md` and the self-contained `report.html`** here. The HTML is the headline deliverable; it is generated unconditionally in this step, never gated on Step 7 or on interactivity, so headless runs always produce it:
+   - `headline` — the executive band. Transcribe values **verbatim** from the dimension checks (cite the `check_id`); never invent numbers. `delivery[]` = the DORA quartet (deployment frequency `ADP-G3`, lead time `ADP-G4`, change-fail `ADP-G7`, MTTR `ADP-I3`) as `{label, display_value, band, check_id}` — read the band ("DORA-banded (high)") from each check's `hint`. `scale[]` = code size/complexity (`ADP-G11`, `ADP-G10`, deps `ADP-G12`). `reach` = `{ai_tooling, contributors}` (`ADP-G1`/`ADP-G2`).
+   - `insights[]` — 3–6 thematic cards, the "READ": `{theme, severity, weak_areas[], so_what, improves}`. Plain language for a non-technical stakeholder — name the weak areas and say what improves if they are fixed. This is the synthesis the board reads first.
+   - `recommendations[]` — the prioritized fixes as `{id, priority (P0/P1/P2), title, dimension, check_id, effort, detail}`. `detail` is a plain-language paragraph. Transcribe each from a real FAIL/WARN check.
+
+   Every check you reference should also carry a one-sentence non-technical `plain` field (written by the dimension-auditor; see `output-format.md`). If any are missing, the renderer falls back to the check `definition`.
+
+**The orchestrator never hand-writes `report.md` or `report.html`** — those files are always produced by the renderer. This is the data-loss guarantee: JSON (including the blocks you authored in step 4) is the source of truth; markdown and HTML are derived outputs.
+
+5. Render the report from the JSON source of truth — **always produce BOTH `report.md` and the self-contained `report.html`** here. The HTML is the headline deliverable; it is generated unconditionally in this step, never gated on Step 7 or on interactivity, so headless runs always produce it:
 
    ```
    node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format md   > context/audits/YYYY-MM-DD/report.md
    node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html
    ```
 
-5. Write prioritized recommendations to `context/audits/YYYY-MM-DD/recommendations.md`.
-6. Present the full report to the user by reading and displaying `context/audits/YYYY-MM-DD/report.md`.
+6. Write `context/audits/YYYY-MM-DD/recommendations.md` — the same prioritized recommendations you authored into `audit.recommendations` in step 4, in long-form Markdown (this file is the input `/awos:roadmap` consumes). Keep the two in sync; they come from one authoring pass.
+7. Present the full report to the user by reading and displaying `context/audits/YYYY-MM-DD/report.md`.
 
 ### Step 6 org branch — Portfolio rollup (org mode only)
 
@@ -184,6 +192,8 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
    ```
 
    The JSON structure must contain `portfolio_metrics`, `per_repo`, `date`, `project`, `audit_total` (average awarded weight across repos), `coverage` (average coverage ratio), and `dimensions` (aggregated dimension data from all per-repo audits). This shape satisfies the renderer's `AuditJson` schema so the renderer can produce both org markdown and HTML from this single file.
+
+   Also author the plain-language report blocks (`headline`, `insights[]`, `recommendations[]`) into `org-portfolio.json` exactly as in single-repo Step 6.4 — at portfolio altitude: `headline.reach` summarises tooling coverage across repos, `insights[]` are portfolio-level themes (e.g. the AI-dark repos, the connector gaps), and `recommendations[]` name the repos/checks driving them. The renderer formats them; it does not synthesize them.
 
 4. Render the org report from the org audit JSON — **always produce BOTH `report.md` and `report.html`** (unconditional, never gated on Step 7):
 
@@ -241,7 +251,7 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.js
 
 ### Execute selected options
 
-- **HTML report:** Render from the JSON source of truth using the CLI: `node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html`. The renderer reads the HTML report specification from `report-template.md`. The output is a single self-contained HTML file (inline CSS, no external dependencies) including: audit total (points) + coverage ratio, per-dimension summary table, detailed checklists, recommendations, issue-only filter toggle.
+- **HTML report:** Render from the JSON source of truth using the CLI: `node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html`. The renderer reads the HTML report specification from `report-template.md`. The output is a single self-contained HTML file (inline CSS+JS, no external dependencies): **one scrolling page** — an executive band (capability total + coverage, DORA delivery bands, code scale/complexity, reach) the CEO reads first, then the top insights, then "what to improve" (the prioritized recommendations in plain language), then the dimension summary table. Each dimension row drills into a hash-routed sub-page (`#dim/<key>`) with its check table and a wide Evidence column; the browser Back button returns to the overview. Tooltips are instant and plain-language. There are no audience tabs.
 - **Roadmap (update or create):** Tell the user to run `/awos:roadmap` and reference the audit recommendations at `context/audits/YYYY-MM-DD/recommendations.md` as input.
 
 ## Adding New Dimensions

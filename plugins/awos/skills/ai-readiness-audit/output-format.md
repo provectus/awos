@@ -47,6 +47,7 @@ Per-check record schema (all fields required):
   "source": "<source name from standards.toml>",
   "definition": "<category definition from standards.toml>",
   "hint": "<definition> · <value-derivation> · <reliability tag (confidence)> · <source (year)> · <method>",
+  "plain": "<one-sentence non-technical explanation of what this check verifies>",
   "value_series": [{ "bucket_start": "YYYY-MM-DD", "value": <number | null> }]
 }
 ```
@@ -65,10 +66,66 @@ Field notes:
 - **`reliability.tag`** — starts at the category's `reliability_default` (`maximal`, `minimal`, or `not-reliable`). For judgment checks, the note must include `bounded-by-rubric`.
 - **`reliability.confidence`** — `"high"` for `computed`/`detected` checks (detector output is deterministic); `"medium"` for `judgment` checks (bounded by rubric quality).
 - **`source`** / **`definition`** — copied verbatim from the matching `[category.*]` table in `standards.toml`.
-- **`hint`** — five-part human-readable summary for hover tooltips in the HTML report.
+- **`hint`** — five-part human-readable summary; shown as small print inside the HTML tooltip (the specialist detail).
+- **`plain`** — one plain-language sentence a non-technical stakeholder understands ("Blocks AI agents from opening secret files like `.env` before they run a command."). The HTML tooltip leads with this, demoting `hint` to small print below it. Optional but recommended on every check; when absent the renderer falls back to `definition`.
 - **`value_series`** — optional. Array of `{ bucket_start: "YYYY-MM-DD", value: number | null }` objects representing per-bucket time-series data (e.g. monthly contributor counts, CI pass rate per 30-day window). Emitted only by metric-backed checks in the `ai-sdlc-adoption` dimension. When present, `node dist/cli.js render` renders the series as a Unicode sparkline in Markdown and an inline SVG sparkline in HTML. Omit the field entirely for checks that produce no time series.
 
 Any dimension-specific summary data consumed by downstream dimensions (e.g. the topology output used by later dimensions via `depends-on`) must be included as an additional top-level key in the JSON object alongside `dimension`, `date`, `score`, `coverage`, and `checks`.
+
+---
+
+### Report blocks (authored into `audit.json`)
+
+The renderer is deterministic and contains no LLM. The plain-language narrative a CEO reads is authored by the **orchestrator** (SKILL.md Step 6.4) and stored as three optional top-level keys in `audit.json` (and `org-portfolio.json`). All are optional — the renderer degrades to the capability headline + a mechanical FAIL/WARN recommendation list when they are absent.
+
+```json
+{
+  "headline": {
+    "delivery": [
+      {
+        "label": "Deployment frequency",
+        "display_value": "1.9 / wk",
+        "band": "High",
+        "reliability": "maximal",
+        "check_id": "ADP-G3"
+      }
+    ],
+    "scale": [
+      {
+        "label": "Source size",
+        "display_value": "30,058 LOC · Python",
+        "check_id": "ADP-G11"
+      }
+    ],
+    "reach": {
+      "ai_tooling": "AI agent config present (partial)",
+      "contributors": "5.3 active / month"
+    }
+  },
+  "insights": [
+    {
+      "theme": "Secrets & supply-chain hygiene",
+      "severity": "high|medium|low",
+      "weak_areas": ["Security", "Supply Chain Security"],
+      "so_what": "Plain 'what this means' for a non-technical reader.",
+      "improves": "Plain 'what gets better if fixed'."
+    }
+  ],
+  "recommendations": [
+    {
+      "id": 1,
+      "priority": "P0|P1|P2",
+      "title": "Plain-language fix title",
+      "dimension": "Security",
+      "check_id": "SEC-02",
+      "effort": "Low|Medium|High",
+      "detail": "Plain-language paragraph: what to do and why."
+    }
+  ]
+}
+```
+
+Authoring integrity: `headline` numbers and `recommendations` are **transcribed verbatim** from real checks (cite the `check_id`); the DORA `band` is read from the check's `hint` ("DORA-banded (high)"). The orchestrator never invents numbers — it selects and phrases. `recommendations[]` here and the long-form `recommendations.md` come from one authoring pass and must stay in sync.
 
 ---
 

@@ -10669,7 +10669,13 @@ function pct(ratio) {
   return (ratio * 100).toFixed(1) + "%";
 }
 function titleLabel(dim) {
-  return dim.dimension.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return labelize(dim.dimension);
+}
+function labelize(slug) {
+  return slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+function dimKey(dim) {
+  return dim.dimension;
 }
 function metricLabel(metric) {
   const labels = {
@@ -10689,6 +10695,9 @@ function statusCounts(dim) {
   }
   return { fail, warn, pass, skip };
 }
+function plainLead(c) {
+  return c.plain && c.plain.trim().length > 0 ? c.plain : c.definition;
+}
 function sparkline(series) {
   const bars = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588"];
   const values = series.map((e) => e.value).filter((v) => v !== null);
@@ -10702,6 +10711,41 @@ function sparkline(series) {
     const idx = Math.round((e.value - min) / range * (bars.length - 1));
     return bars[Math.max(0, Math.min(bars.length - 1, idx))];
   }).join("");
+}
+function derivedRecommendations(audit) {
+  const recs = [];
+  let id = 1;
+  const fails = [];
+  const warns = [];
+  for (const dim of audit.dimensions) {
+    for (const c of dim.checks) {
+      if (c.status === "FAIL") fails.push({ dim, c });
+      else if (c.status === "WARN") warns.push({ dim, c });
+    }
+  }
+  for (const { dim, c } of fails.slice(0, 10)) {
+    recs.push({
+      id: id++,
+      priority: "P0",
+      title: plainLead(c),
+      dimension: titleLabel(dim),
+      check_id: c.check_id,
+      effort: "\u2014",
+      detail: c.hint
+    });
+  }
+  for (const { dim, c } of warns.slice(0, Math.max(0, 10 - fails.length))) {
+    recs.push({
+      id: id++,
+      priority: "P1",
+      title: plainLead(c),
+      dimension: titleLabel(dim),
+      check_id: c.check_id,
+      effort: "\u2014",
+      detail: c.hint
+    });
+  }
+  return recs;
 }
 function renderMarkdown(audit) {
   const lines = [];
@@ -10718,6 +10762,34 @@ function renderMarkdown(audit) {
     `**Coverage Ratio:** ${pct(audit.coverage)} rel. today's standard`
   );
   lines.push("");
+  if (audit.headline) {
+    const h = audit.headline;
+    if (h.delivery && h.delivery.length > 0) {
+      lines.push("## Delivery");
+      lines.push("");
+      lines.push("| Metric | Value | Band |");
+      lines.push("| ------ | ----- | ---- |");
+      for (const d of h.delivery) {
+        lines.push(`| ${d.label} | ${d.display_value} | ${d.band ?? "\u2014"} |`);
+      }
+      lines.push("");
+    }
+    if (h.scale && h.scale.length > 0) {
+      lines.push("## Code Scale & Complexity");
+      lines.push("");
+      for (const s of h.scale) {
+        lines.push(`- **${s.label}:** ${s.display_value}`);
+      }
+      lines.push("");
+    }
+    if (h.reach && (h.reach.ai_tooling || h.reach.contributors)) {
+      lines.push("## Reach");
+      lines.push("");
+      if (h.reach.ai_tooling) lines.push(`- ${h.reach.ai_tooling}`);
+      if (h.reach.contributors) lines.push(`- ${h.reach.contributors}`);
+      lines.push("");
+    }
+  }
   if (isOrg && audit.portfolio_metrics) {
     lines.push("## Portfolio Metrics (Org)");
     lines.push("");
@@ -10730,6 +10802,21 @@ function renderMarkdown(audit) {
       );
     }
     lines.push("");
+  }
+  if (audit.insights && audit.insights.length > 0) {
+    lines.push("## Top Insights");
+    lines.push("");
+    for (const ins of audit.insights) {
+      const sev = ins.severity.toUpperCase();
+      lines.push(`### ${ins.theme} (${sev})`);
+      lines.push("");
+      lines.push(`- **What this means:** ${ins.so_what}`);
+      lines.push(`- **What improves if fixed:** ${ins.improves}`);
+      if (ins.weak_areas.length > 0) {
+        lines.push(`- **Weak areas:** ${ins.weak_areas.join(", ")}`);
+      }
+      lines.push("");
+    }
   }
   lines.push("## Summary");
   lines.push("");
@@ -10747,6 +10834,31 @@ function renderMarkdown(audit) {
     );
   }
   lines.push("");
+  const recs = audit.recommendations && audit.recommendations.length > 0 ? audit.recommendations : derivedRecommendations(audit);
+  lines.push("## Recommendations");
+  lines.push("");
+  if (recs.length === 0) {
+    lines.push("No failing or warning checks. Audit is fully green.");
+  } else {
+    lines.push("| # | Priority | Dimension | Check | Effort | What to do |");
+    lines.push("| - | -------- | --------- | ----- | ------ | ---------- |");
+    for (const r of recs) {
+      lines.push(
+        `| ${r.id} | ${r.priority} | ${r.dimension} | ${r.check_id} | ${r.effort} | ${r.title} |`
+      );
+    }
+    lines.push("");
+    if (audit.recommendations && audit.recommendations.length > 0) {
+      for (const r of audit.recommendations) {
+        lines.push(
+          `**${r.priority} \xB7 ${r.id}. ${r.title}** (${r.dimension} \xB7 ${r.check_id} \xB7 effort ${r.effort})`
+        );
+        lines.push("");
+        lines.push(r.detail);
+        lines.push("");
+      }
+    }
+  }
   for (const dim of audit.dimensions) {
     lines.push(`## Dimension: ${titleLabel(dim)}`);
     lines.push("");
@@ -10796,45 +10908,14 @@ function renderMarkdown(audit) {
     }
     lines.push("");
   }
-  lines.push("## Recommendations");
-  lines.push("");
-  const failChecks = [];
-  const warnChecks = [];
-  for (const dim of audit.dimensions) {
-    for (const c of dim.checks) {
-      if (c.status === "FAIL") failChecks.push({ dim, check: c });
-      else if (c.status === "WARN") warnChecks.push({ dim, check: c });
-    }
-  }
-  if (failChecks.length === 0 && warnChecks.length === 0) {
-    lines.push("No failing or warning checks. Audit is fully green.");
-  } else {
-    lines.push("| # | Priority | Dimension | Check | Status | Hint |");
-    lines.push("| - | -------- | --------- | ----- | ------ | ---- |");
-    let rec = 1;
-    for (const { dim, check: c } of failChecks.slice(0, 10)) {
-      lines.push(
-        `| ${rec++} | P0 | ${titleLabel(dim)} | ${c.check_id} | FAIL | ${c.hint} |`
-      );
-    }
-    for (const { dim, check: c } of warnChecks.slice(
-      0,
-      Math.max(0, 10 - failChecks.length)
-    )) {
-      lines.push(
-        `| ${rec++} | P1 | ${titleLabel(dim)} | ${c.check_id} | WARN | ${c.hint} |`
-      );
-    }
-  }
-  lines.push("");
   return lines.join("\n");
 }
 function esc(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
-function hintSpan(value, hint, extraClass = "") {
-  const cls = extraClass ? ` class="${esc(extraClass)}"` : "";
-  return `<span${cls} title="${esc(hint)}">${esc(value)}</span>`;
+function tip(value, plain, meta = "") {
+  const metaHtml = meta ? `<span class="tipmeta">${esc(meta)}</span>` : "";
+  return `<span class="tip" tabindex="0">${esc(value)}<span class="tipbox"><b>${esc(plain)}</b>${metaHtml}</span></span>`;
 }
 function sparklineSvg(series) {
   const w = 4;
@@ -10874,137 +10955,213 @@ var STATUS_COLOR = {
   FAIL: "#fef2f2",
   SKIP: "#f9fafb"
 };
+var BAND_COLOR = {
+  elite: "#16a34a",
+  high: "#22c55e",
+  medium: "#eab308",
+  low: "#ef4444"
+};
+var SEVERITY_COLOR = {
+  high: "#ef4444",
+  medium: "#eab308",
+  low: "#6366f1"
+};
+var PRIORITY_COLOR = {
+  P0: "#ef4444",
+  P1: "#eab308",
+  P2: "#6366f1"
+};
 function renderHtml(audit) {
   const isOrg = Array.isArray(audit.portfolio_metrics) && audit.portfolio_metrics.length > 0;
   const css = `
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#1e293b;font-size:14px;line-height:1.5}
-.container{max-width:960px;margin:0 auto;padding:24px}
+.container{max-width:980px;margin:0 auto;padding:24px}
 h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
-h2{font-size:1.15rem;font-weight:600;margin:20px 0 8px}
-h3{font-size:1rem;font-weight:600;margin:12px 0 4px}
-.meta{color:#64748b;font-size:.85rem;margin-bottom:16px}
+h2{font-size:1.15rem;font-weight:600;margin:24px 0 10px}
+h3{font-size:.95rem;font-weight:600;margin:0 0 6px;color:#475569}
+.meta{color:#64748b;font-size:.85rem;margin-bottom:8px}
 .meta span{margin-right:16px}
-/* tabs */
-.tabs{display:flex;gap:2px;margin-bottom:0;border-bottom:2px solid #e2e8f0}
-.tab-btn{padding:8px 18px;border:none;background:none;cursor:pointer;font-size:.875rem;font-weight:500;color:#64748b;border-bottom:2px solid transparent;margin-bottom:-2px}
-.tab-btn.active{color:#4f46e5;border-bottom-color:#4f46e5;font-weight:600}
-.tab-pane{display:none;padding:20px 0}
-.tab-pane.active{display:block}
-/* filter toolbar */
-.toolbar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e2e8f0;padding:8px 0;margin-bottom:12px;z-index:10;display:flex;gap:8px;align-items:center}
-.toolbar button{padding:5px 12px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:.8rem}
-.toolbar button.active{background:#4f46e5;color:#fff;border-color:#4f46e5}
+a{color:#4f46e5;text-decoration:none}
+a:hover{text-decoration:underline}
+/* executive band */
+.exec{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px 20px;margin-bottom:20px}
+.cap-score{font-size:2.2rem;font-weight:800;color:#4f46e5;line-height:1.1}
+.cap-cov{font-size:.95rem;color:#64748b;margin-top:2px}
+.exec-blocks{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-top:16px}
+.exec-col{border-top:1px solid #eef2f7;padding-top:12px}
+.kv{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:3px 0;font-size:.85rem}
+.kv .k{color:#475569}
+.kv .v{font-weight:600;text-align:right}
+.band{display:inline-block;color:#fff;font-size:.68rem;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle}
+/* metric cards (org) */
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:12px 0}
+.metric-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px}
+.metric-card .metric-val{font-size:1.6rem;font-weight:700;color:#4f46e5;margin:4px 0}
+.metric-card .metric-desc{font-size:.78rem;color:#64748b}
+/* insights */
+.insights{display:grid;gap:12px;margin-bottom:8px}
+.insight{background:#fff;border:1px solid #e2e8f0;border-left-width:4px;border-radius:8px;padding:12px 16px}
+.insight .theme{font-weight:700;margin-bottom:4px}
+.insight .so{margin-bottom:4px}
+.insight .improves{color:#475569}
+.insight .areas{font-size:.78rem;color:#94a3b8;margin-top:6px}
+/* recommendations */
+.rec{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.rec .rec-head{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.rec .prio{color:#fff;font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:4px}
+.rec .rec-title{font-weight:600}
+.rec .rec-where{font-size:.75rem;color:#94a3b8}
+.rec .rec-detail{font-size:.85rem;color:#475569;margin-top:6px}
 /* tables */
 table{width:100%;border-collapse:collapse;font-size:.82rem;margin-bottom:16px}
 th{background:#f1f5f9;text-align:left;padding:6px 8px;border-bottom:2px solid #e2e8f0;font-weight:600}
-td{padding:5px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
-tr:nth-child(even) td{background:#f8fafc}
+td{padding:6px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
 tr[data-status='PASS'] td{background:#f0fdf4}
 tr[data-status='WARN'] td{background:#fefce8}
 tr[data-status='FAIL'] td{background:#fef2f2}
 tr[data-status='SKIP'] td{background:#f9fafb}
+tr.low-cov td{background:#fff7ed}
+/* dimension summary rows are clickable */
+tr.dim-row{cursor:pointer}
+tr.dim-row:hover td{background:#eef2ff}
+/* check table: fixed layout so Evidence gets the room it needs */
+table.checks{table-layout:fixed}
+table.checks td.evidence{font-size:.78rem;white-space:normal;overflow-wrap:anywhere;word-break:break-word;color:#334155}
+table.checks td.check b{font-size:.82rem}
+table.checks td.check .plain{display:block;font-size:.75rem;color:#64748b;margin-top:2px}
 /* issues-only filter */
 body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{display:none}
-/* details/summary */
-details{border:1px solid #e2e8f0;border-radius:6px;margin-bottom:8px;overflow:hidden}
-summary{padding:10px 12px;cursor:pointer;font-weight:600;background:#f8fafc;user-select:none;list-style:none;display:flex;justify-content:space-between;align-items:center}
-summary::after{content:"\u25B8";font-size:.9em;color:#94a3b8}
-details[open] summary::after{content:"\u25BE"}
-.details-body{padding:12px}
-/* metric cards */
-.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px}
-.metric-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px}
-.metric-card .metric-val{font-size:1.6rem;font-weight:700;color:#4f46e5;margin:4px 0}
-.metric-card .metric-desc{font-size:.78rem;color:#64748b}
-/* capability headline (single-repo) */
-.capability-headline{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin-bottom:16px}
-.capability-headline .score{font-size:2.2rem;font-weight:800;color:#4f46e5}
-.capability-headline .coverage{font-size:1rem;color:#64748b;margin-top:2px}
-/* reliability */
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.toolbar button{padding:5px 12px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:.8rem}
+.toolbar button.active{background:#4f46e5;color:#fff;border-color:#4f46e5}
+.backlink{display:inline-block;margin-bottom:10px;font-size:.85rem}
+.dim-head{font-size:.9rem;color:#64748b;margin-bottom:12px}
+/* reliability colours */
 .rel-minimal{color:#d97706}
 .rel-not-reliable{color:#dc2626}
-/* hint span */
-span[title]{cursor:help;text-decoration:underline dotted #94a3b8;text-underline-offset:2px}
-/* badge */
+/* instant plain-first tooltip */
+.tip{position:relative;cursor:help;border-bottom:1px dotted #94a3b8;outline:none}
+.tip>.tipbox{display:none;position:absolute;left:0;top:calc(100% + 4px);z-index:60;width:max-content;max-width:320px;background:#1e293b;color:#f8fafc;padding:8px 10px;border-radius:6px;font-size:.75rem;font-weight:400;line-height:1.45;white-space:normal;box-shadow:0 6px 18px rgba(0,0,0,.22)}
+.tip:hover>.tipbox,.tip:focus>.tipbox,.tip:focus-within>.tipbox{display:block}
+.tipbox b{display:block;margin-bottom:4px;font-weight:700}
+.tipbox .tipmeta{color:#cbd5e1;font-size:.7rem}
 .badge{display:inline-block}
-/* low-coverage rows in summary */
-tr.low-cov td{background:#fff7ed}
-/* print */
+.dim-page{display:none}
+/* print: show everything, drop interactive chrome */
 @media print{
-  .tabs{display:none}
   .toolbar{display:none}
-  .tab-pane{display:block!important}
-  details{border:none}
-  details[open] summary::after,summary::after{display:none}
-  details>*{display:block!important}
-  summary{background:none;padding:4px 0}
+  .backlink{display:none}
+  .dim-page{display:block!important}
+  #overview{display:block!important}
+  .tip>.tipbox{display:none!important}
 }
 `;
-  function tab1() {
+  function execBand() {
     const rows = [];
+    rows.push('<div class="exec">');
     if (isOrg && audit.portfolio_metrics) {
-      rows.push("<h2>Portfolio Metrics</h2>");
       rows.push('<div class="metric-grid">');
       for (const m of audit.portfolio_metrics) {
         const val = m.metric === "org_capability_score" ? m.value.toFixed(2) + " pts" : pct(m.value);
-        const hintText = `${m.description} \xB7 ${m.contributor_weighted ? "contributor-weighted" : "equal-weighted"} \xB7 ${m.repos_counted} repos`;
         rows.push(`<div class="metric-card">
   <div class="metric-name">${esc(metricLabel(m.metric))}</div>
-  <div class="metric-val">${hintSpan(val, hintText)}</div>
-  <div class="metric-desc">${esc(m.description)}<br>${m.repos_counted} repos \xB7 ${m.contributor_weighted ? "contributor-weighted" : "equal-weighted"}</div>
+  <div class="metric-val">${tip(val, m.description, `${m.repos_counted} repos \xB7 ${m.contributor_weighted ? "contributor-weighted" : "equal-weighted"}`)}</div>
+  <div class="metric-desc">${esc(m.description)}</div>
 </div>`);
       }
       rows.push("</div>");
-      if (audit.per_repo && audit.per_repo.length > 0) {
-        const withTooling = audit.per_repo.filter(
-          (r) => r.has_ai_tooling
-        ).length;
-        const withSources = audit.per_repo.filter(
-          (r) => r.sources_reachable.length > 0
-        ).length;
-        rows.push("<h2>Portfolio Reach</h2>");
-        rows.push(
-          `<p>${withTooling} / ${audit.per_repo.length} repos have AI tooling. ${withSources} / ${audit.per_repo.length} repos had at least one reachable data source.</p>`
-        );
-      }
     } else {
-      const scoreHint = `Audit total: \u03A3 awarded category weights across all dimensions. Coverage: ${pct(audit.coverage)} relative to today's standards.toml.`;
-      rows.push('<div class="capability-headline">');
-      rows.push("<div>AI-SDLC Capability</div>");
       rows.push(
-        `<div class="score">${hintSpan(String(audit.audit_total) + " pts", scoreHint)}</div>`
+        `<div class="cap-score">${tip(String(audit.audit_total) + " pts", "Total AI-SDLC capability \u2014 the sum of all capabilities the project has in place. It is uncapped and rises as the standard grows; it is not a grade out of 100.", "\u03A3 awarded category weights across all dimensions \xB7 standards.toml")}</div>`
       );
       rows.push(
-        `<div class="coverage">Coverage: ${hintSpan(pct(audit.coverage), "Fraction of applicable category weights awarded \xB7 score \xF7 \u03A3 applicable weights \xB7 \u2014 \xB7 standards.toml \xB7 computed")}</div>`
+        `<div class="cap-cov">Coverage ${tip(pct(audit.coverage), "How much of today's expected capability is in place. Read it as 'we have X% of what the current standard asks for', not as a school grade.", "score \xF7 \u03A3 applicable category weights \xB7 standards.toml")}</div>`
       );
-      rows.push("</div>");
     }
-    rows.push(
-      `<div class="meta"><span><strong>Date:</strong> ${esc(audit.date)}</span><span><strong>Project:</strong> ${esc(audit.project)}</span></div>`
-    );
+    const h = audit.headline;
+    const blocks = [];
+    if (h?.delivery && h.delivery.length > 0) {
+      const items = h.delivery.map((d) => {
+        const bandHtml = d.band ? `<span class="band" style="background:${BAND_COLOR[d.band.toLowerCase()] ?? "#94a3b8"}">${esc(d.band)}</span>` : "";
+        return `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${esc(d.display_value)}${bandHtml}</span></div>`;
+      }).join("");
+      blocks.push(
+        `<div class="exec-col"><h3>Delivery (vs DORA bands)</h3>${items}</div>`
+      );
+    }
+    if (h?.scale && h.scale.length > 0) {
+      const items = h.scale.map(
+        (s) => `<div class="kv"><span class="k">${esc(s.label)}</span><span class="v">${esc(s.display_value)}</span></div>`
+      ).join("");
+      blocks.push(
+        `<div class="exec-col"><h3>Code scale &amp; complexity</h3>${items}</div>`
+      );
+    }
+    const reachItems = [];
+    if (h?.reach?.ai_tooling)
+      reachItems.push(
+        `<div class="kv"><span class="k">AI tooling</span><span class="v">${esc(h.reach.ai_tooling)}</span></div>`
+      );
+    if (h?.reach?.contributors)
+      reachItems.push(
+        `<div class="kv"><span class="k">Contributors</span><span class="v">${esc(h.reach.contributors)}</span></div>`
+      );
+    if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
+      const withTooling = audit.per_repo.filter((r) => r.has_ai_tooling).length;
+      reachItems.push(
+        `<div class="kv"><span class="k">Repos with AI tooling</span><span class="v">${withTooling} / ${audit.per_repo.length}</span></div>`
+      );
+    }
+    if (reachItems.length > 0) {
+      blocks.push(
+        `<div class="exec-col"><h3>Reach</h3>${reachItems.join("")}</div>`
+      );
+    }
+    if (blocks.length > 0) {
+      rows.push(`<div class="exec-blocks">${blocks.join("")}</div>`);
+    }
+    rows.push("</div>");
     return rows.join("\n");
   }
-  function tab2() {
-    const rows = [];
-    rows.push("<h2>Dimension Summary</h2>");
-    if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
-      rows.push(
-        "<table><thead><tr><th>Repo</th><th>Awarded Weight</th><th>Sources Reachable</th><th>AI Tooling</th><th>Contributors</th></tr></thead><tbody>"
-      );
-      for (const r of audit.per_repo) {
-        const sourceList = r.sources_reachable.length > 0 ? r.sources_reachable.join(", ") : "<em>none</em>";
-        const hintText = `Repo: ${r.repo} \xB7 awarded_weight: ${r.awarded_weight} \xB7 sources: ${r.sources_reachable.join(",") || "none"} \xB7 has_ai_tooling: ${r.has_ai_tooling}`;
-        rows.push(`<tr>
-  <td>${esc(r.repo)}</td>
-  <td>${hintSpan(String(r.awarded_weight), hintText)}</td>
-  <td>${sourceList}</td>
-  <td>${r.has_ai_tooling ? "\u2713" : "\u2717"}</td>
-  <td>${r.contributors !== null ? hintSpan(String(r.contributors), "Aggregate active-contributor count (no PII)") : "\u2014"}</td>
-</tr>`);
-      }
-      rows.push("</tbody></table>");
+  function insightsSection() {
+    if (!audit.insights || audit.insights.length === 0) return "";
+    const rows = ["<h2>Top insights</h2>", '<div class="insights">'];
+    for (const ins of audit.insights) {
+      const color = SEVERITY_COLOR[ins.severity] ?? "#6366f1";
+      const areas = ins.weak_areas.length > 0 ? `<div class="areas">Weak: ${esc(ins.weak_areas.join(", "))}</div>` : "";
+      rows.push(`<div class="insight" style="border-left-color:${color}">
+  <div class="theme">${esc(ins.theme)}</div>
+  <div class="so">${esc(ins.so_what)}</div>
+  <div class="improves">\u2192 ${esc(ins.improves)}</div>
+  ${areas}
+</div>`);
     }
+    rows.push("</div>");
+    return rows.join("\n");
+  }
+  function recommendationsSection() {
+    const recs = audit.recommendations && audit.recommendations.length > 0 ? audit.recommendations : derivedRecommendations(audit);
+    if (recs.length === 0) {
+      return "<h2>What to improve</h2><p>No failing or warning checks. Audit is fully green.</p>";
+    }
+    const rows = ["<h2>What to improve</h2>"];
+    for (const r of recs) {
+      const prioColor = PRIORITY_COLOR[r.priority] ?? "#6366f1";
+      const detail = r.detail ? `<div class="rec-detail">${esc(r.detail)}</div>` : "";
+      rows.push(`<div class="rec">
+  <div class="rec-head">
+    <span class="prio" style="background:${prioColor}">${esc(r.priority)}</span>
+    <span class="rec-title">${esc(r.title)}</span>
+    <span class="rec-where">${esc(r.dimension)} \xB7 ${esc(r.check_id)} \xB7 effort ${esc(r.effort)}</span>
+  </div>
+  ${detail}
+</div>`);
+    }
+    return rows.join("\n");
+  }
+  function dimensionSummary() {
+    const rows = ["<h2>Dimensions</h2>"];
     rows.push(
       "<table><thead><tr><th>#</th><th>Dimension</th><th>Points</th><th>Coverage</th><th>Reliability</th><th>FAIL</th><th>WARN</th><th>PASS</th><th>SKIP</th></tr></thead><tbody>"
     );
@@ -11012,18 +11169,19 @@ tr.low-cov td{background:#fff7ed}
     for (const dim of audit.dimensions) {
       const counts = statusCounts(dim);
       const covPct = pct(dim.coverage);
-      const lowCov = dim.coverage < 0.4 ? ' class="low-cov"' : "";
+      const lowCov = dim.coverage < 0.4 ? " low-cov" : "";
       const anyMinimal = dim.checks.some(
         (c) => c.applies && c.reliability.tag === "minimal"
       );
       const relStr = anyMinimal ? "minimal *" : "maximal";
-      const relHint = `Dimension reliability: ${relStr}. ${anyMinimal ? "At least one check is a lower-bound measurement." : ""}`;
-      rows.push(`<tr${lowCov}>
+      const key = dimKey(dim);
+      const href = `#dim/${esc(key)}`;
+      rows.push(`<tr class="dim-row${lowCov}" onclick="location.hash='dim/${esc(key)}'">
   <td>${n++}</td>
-  <td><strong>${esc(titleLabel(dim))}</strong></td>
-  <td>${hintSpan(String(dim.score) + " pts", `Score: \u03A3 awarded weights = ${dim.score} \xB7 coverage: ${covPct} \xB7 dimension: ${dim.dimension} \xB7 standards.toml \xB7 computed`)}</td>
-  <td>${hintSpan(covPct, `Coverage ratio = score / \u03A3 applicable weights = ${covPct} \xB7 dimension: ${dim.dimension} \xB7 standards.toml \xB7 computed`)}</td>
-  <td>${hintSpan(relStr, relHint)}</td>
+  <td><a href="${href}"><strong>${esc(titleLabel(dim))}</strong></a></td>
+  <td>${tip(String(dim.score) + " pts", `Capability earned in this area: ${dim.score} points.`, `coverage ${covPct} \xB7 ${esc(dim.dimension)} \xB7 standards.toml`)}</td>
+  <td>${tip(covPct, `Share of this area's expected capability that is in place.`, `score \xF7 \u03A3 applicable weights \xB7 ${esc(dim.dimension)}`)}</td>
+  <td>${tip(relStr, anyMinimal ? "Some numbers here are lower bounds \u2014 the true value may be higher." : "Numbers here are upper-bound reliable for what was reachable.", "")}</td>
   <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
   <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
   <td>${counts.pass}</td>
@@ -11031,78 +11189,88 @@ tr.low-cov td{background:#fff7ed}
 </tr>`);
     }
     rows.push("</tbody></table>");
-    if (audit.dimensions.some(
-      (d) => d.checks.some((c) => c.applies && c.reliability.tag === "minimal")
-    )) {
-      rows.push(
-        '<p style="font-size:.8rem;color:#64748b"><em>* lower-bound measurement</em></p>'
-      );
-    }
     return rows.join("\n");
   }
-  function tab3() {
+  function dimensionPage(dim) {
+    const key = dimKey(dim);
+    const counts = statusCounts(dim);
+    const covPct = pct(dim.coverage);
     const rows = [];
+    rows.push(`<section class="dim-page" id="page-${esc(key)}">`);
+    rows.push('<a class="backlink" href="#">\u2190 Back to overview</a>');
+    rows.push(`<h2>${esc(titleLabel(dim))}</h2>`);
     rows.push(
-      '<div class="toolbar"><button id="issues-btn" onclick="toggleIssues(this)">Show issues only</button></div>'
+      `<div class="dim-head">${tip(String(dim.score) + " pts", `Capability earned in this area: ${dim.score} points.`, "\u03A3 awarded weights \xB7 standards.toml")} \xB7 coverage ${tip(covPct, `Share of this area's expected capability that is in place.`, "score \xF7 \u03A3 applicable weights")} \xB7 FAIL ${counts.fail} \xB7 WARN ${counts.warn} \xB7 PASS ${counts.pass} \xB7 SKIP ${counts.skip}</div>`
     );
-    for (const dim of audit.dimensions) {
-      rows.push(`<details>`);
-      const counts = statusCounts(dim);
-      rows.push(
-        `<summary>${esc(titleLabel(dim))} \u2014 ${hintSpan(String(dim.score) + " pts", `\u03A3 awarded weights. Coverage: ${pct(dim.coverage)} rel. today's standard. Dimension: ${dim.dimension}`)} \xB7 coverage ${hintSpan(pct(dim.coverage), `Coverage ratio = ${pct(dim.coverage)}; excludes N/A checks. Source: standards.toml \xB7 computed`)} \xB7 FAIL:${counts.fail} WARN:${counts.warn}</summary>`
-      );
-      rows.push('<div class="details-body">');
-      rows.push(
-        "<table><thead><tr><th>#</th><th>Check</th><th>Code</th><th>Source</th><th>Method</th><th>Wt</th><th>Status</th><th>Reliability</th><th>Value</th><th>Evidence</th></tr></thead><tbody>"
-      );
-      let ckn = 1;
-      let hasMinimal = false;
-      for (const c of dim.checks) {
-        const rowBg = STATUS_COLOR[c.status] ?? "#fff";
-        const relClass = c.reliability.tag === "minimal" ? "rel-minimal" : c.reliability.tag === "not-reliable" ? "rel-not-reliable" : "";
-        if (c.reliability.tag === "minimal" && c.applies) hasMinimal = true;
-        const relLabel = c.applies ? `${c.reliability.tag} (${c.reliability.confidence})${c.reliability.tag === "minimal" ? " *" : ""}` : "\u2014";
-        const relHint = c.reliability.note ?? c.hint;
-        const valueStr = c.value !== null && c.value !== void 0 ? String(c.value) : "\u2014";
-        const seriesSvg = c.value_series && c.value_series.length > 0 ? sparklineSvg(c.value_series) : "";
-        const evidence = c.evidence.length > 0 ? c.evidence.join("<br>") : "\u2014";
-        const codeStr = c.code && c.code.length > 0 ? c.code.join(", ") : "\u2014";
-        const sourceStr = c.source ? esc(c.source) : "\u2014";
-        rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
-  <td>${ckn++}</td>
-  <td title="${esc(c.hint)}"><strong>${esc(c.check_id)}</strong><br><span style="font-size:.75rem;color:#64748b">${esc(c.definition)}</span></td>
-  <td style="font-size:.75rem;color:#64748b">${esc(codeStr)}</td>
-  <td style="font-size:.75rem;color:#64748b">${sourceStr}</td>
-  <td>${esc(c.method)}</td>
-  <td>${hintSpan(String(c.weight_awarded) + "/" + String(c.weight_max), c.hint)}</td>
-  <td>${statusBadge(c.status)}</td>
-  <td class="${relClass}">${hintSpan(relLabel, relHint)}</td>
-  <td>${hintSpan(valueStr, c.hint)}${seriesSvg}</td>
-  <td style="font-size:.75rem;max-width:200px;word-break:break-word">${evidence}</td>
-</tr>`);
+    const dimLabel = titleLabel(dim);
+    const dimRecs = (audit.recommendations ?? []).filter(
+      (r) => r.dimension === dimLabel || r.dimension === dim.dimension
+    );
+    if (dimRecs.length > 0) {
+      rows.push("<h3>What to improve here</h3>");
+      for (const r of dimRecs) {
+        const prioColor = PRIORITY_COLOR[r.priority] ?? "#6366f1";
+        rows.push(`<div class="rec">
+  <div class="rec-head"><span class="prio" style="background:${prioColor}">${esc(r.priority)}</span><span class="rec-title">${esc(r.title)}</span><span class="rec-where">${esc(r.check_id)} \xB7 effort ${esc(r.effort)}</span></div>
+  ${r.detail ? `<div class="rec-detail">${esc(r.detail)}</div>` : ""}
+</div>`);
       }
-      rows.push("</tbody></table>");
-      if (hasMinimal) {
-        rows.push(
-          '<p style="font-size:.78rem;color:#64748b">* lower-bound measurement (reliability tag: minimal).</p>'
-        );
-      }
-      rows.push("</div></details>");
     }
-    rows.push("<h2>Repositories &amp; Connections</h2>");
+    rows.push(
+      '<div class="toolbar"><button onclick="toggleIssues(this)">Show issues only</button></div>'
+    );
+    rows.push(
+      '<table class="checks"><colgroup><col style="width:3%"><col style="width:24%"><col style="width:8%"><col style="width:7%"><col style="width:10%"><col style="width:13%"><col style="width:35%"></colgroup>'
+    );
+    rows.push(
+      "<thead><tr><th>#</th><th>Check</th><th>Status</th><th>Wt</th><th>Reliability</th><th>Value</th><th>Evidence</th></tr></thead><tbody>"
+    );
+    let ckn = 1;
+    let hasMinimal = false;
+    for (const c of dim.checks) {
+      const rowBg = STATUS_COLOR[c.status] ?? "#fff";
+      const relClass = c.reliability.tag === "minimal" ? "rel-minimal" : c.reliability.tag === "not-reliable" ? "rel-not-reliable" : "";
+      if (c.reliability.tag === "minimal" && c.applies) hasMinimal = true;
+      const relLabel = c.applies ? `${c.reliability.tag} (${c.reliability.confidence})${c.reliability.tag === "minimal" ? " *" : ""}` : "\u2014";
+      const relTipPlain = c.reliability.tag === "minimal" ? "This is a lower bound \u2014 the real value may be higher." : c.reliability.tag === "not-reliable" ? "A rough proxy \u2014 treat as indicative, not exact." : "Reliable for what was reachable.";
+      const valueStr = c.value !== null && c.value !== void 0 ? String(c.value) : "\u2014";
+      const seriesSvg = c.value_series && c.value_series.length > 0 ? sparklineSvg(c.value_series) : "";
+      const evidence = c.evidence.length > 0 ? c.evidence.map(esc).join("<br>") : "\u2014";
+      const codeStr = c.code && c.code.length > 0 ? c.code.join(", ") : "\u2014";
+      const checkMeta = `${esc(c.definition)} \u2014 source: ${esc(c.source || "\u2014")} \xB7 method: ${esc(c.method)} \xB7 category ${esc(codeStr)}`;
+      rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
+  <td>${ckn++}</td>
+  <td class="check"><span class="tip" tabindex="0"><b>${esc(c.check_id)}</b><span class="tipbox"><b>${esc(plainLead(c))}</b><span class="tipmeta">${checkMeta}</span></span></span><span class="plain">${esc(plainLead(c))}</span></td>
+  <td>${statusBadge(c.status)}</td>
+  <td>${tip(String(c.weight_awarded) + "/" + String(c.weight_max), `Earned ${c.weight_awarded} of a possible ${c.weight_max} points for this check.`, "")}</td>
+  <td class="${relClass}">${tip(relLabel, relTipPlain, c.reliability.note ?? "")}</td>
+  <td>${valueStr}${seriesSvg}</td>
+  <td class="evidence">${evidence}</td>
+</tr>`);
+    }
+    rows.push("</tbody></table>");
+    if (hasMinimal) {
+      rows.push(
+        '<p style="font-size:.78rem;color:#64748b">* lower-bound measurement (reliability tag: minimal).</p>'
+      );
+    }
+    rows.push("</section>");
+    return rows.join("\n");
+  }
+  function reposSection() {
+    const rows = ["<h2>Repositories &amp; Connections</h2>"];
     if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
       rows.push(
         "<table><thead><tr><th>Repo</th><th>Contributors</th><th>Sources</th><th>AI Tooling</th><th>Awarded Weight</th></tr></thead><tbody>"
       );
       for (const r of audit.per_repo) {
-        const hintText = `Repo: ${r.repo} \xB7 contributors: ${r.contributors ?? "unknown"} \xB7 sources: ${r.sources_reachable.join(",") || "none"} \xB7 has_ai_tooling: ${r.has_ai_tooling} \xB7 awarded_weight: ${r.awarded_weight}`;
         const sources = r.sources_reachable.length > 0 ? r.sources_reachable.map(esc).join(", ") : "<em>none detected</em>";
         rows.push(`<tr>
   <td>${esc(r.repo)}</td>
-  <td>${r.contributors !== null ? hintSpan(String(r.contributors), "Aggregate active-contributor count \u2014 no per-person data") : "\u2014"}</td>
+  <td>${r.contributors !== null ? tip(String(r.contributors), "Aggregate active-contributor count \u2014 no per-person data.", "") : "\u2014"}</td>
   <td>${sources}</td>
   <td>${r.has_ai_tooling ? "\u2713 yes" : "\u2717 no"}</td>
-  <td>${hintSpan(String(r.awarded_weight), hintText)}</td>
+  <td>${tip(String(r.awarded_weight), `Capability points earned by this repo: ${r.awarded_weight}.`, "")}</td>
 </tr>`);
       }
       rows.push("</tbody></table>");
@@ -11114,16 +11282,26 @@ tr.low-cov td{background:#fff7ed}
     return rows.join("\n");
   }
   const inlineJs = `
-function showTab(idx){
-  document.querySelectorAll('.tab-btn').forEach(function(b,i){b.classList.toggle('active',i===idx)});
-  document.querySelectorAll('.tab-pane').forEach(function(p,i){p.classList.toggle('active',i===idx)});
+function route(){
+  var h=location.hash.replace(/^#/,'');
+  var isDim=h.indexOf('dim/')===0;
+  var ov=document.getElementById('overview');
+  document.querySelectorAll('.dim-page').forEach(function(p){p.style.display='none'});
+  if(isDim){
+    var el=document.getElementById('page-'+h.slice(4));
+    if(el){ov.style.display='none';el.style.display='block';window.scrollTo(0,0);return;}
+  }
+  ov.style.display='block';
 }
 function toggleIssues(btn){
   var active=document.body.classList.toggle('issues-only');
   btn.textContent=active?'Show all':'Show issues only';
   btn.classList.toggle('active',active);
 }
+window.addEventListener('hashchange',route);
+route();
 `;
+  const dimPages = audit.dimensions.map((d) => dimensionPage(d)).join("\n");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11138,28 +11316,18 @@ function toggleIssues(btn){
 <div class="meta">
   <span><strong>Date:</strong> ${esc(audit.date)}</span>
   <span><strong>Project:</strong> ${esc(audit.project)}</span>
-  <span><strong>Total:</strong> ${hintSpan(String(audit.audit_total) + " pts", "Audit total: \u03A3 awarded category weights across all dimensions. Uncapped \u2014 rises as the standard grows.")}
-  <span><strong>Coverage:</strong> ${hintSpan(pct(audit.coverage), "Coverage ratio: score \xF7 \u03A3 applicable category weights. Not a grade \u2014 read relative to today's standards.toml.")}</span>
   ${isOrg ? `<span><strong>Mode:</strong> Organization (${audit.per_repo?.length ?? 0} repos)</span>` : ""}
 </div>
 
-<div class="tabs" role="tablist">
-  <button class="tab-btn active" onclick="showTab(0)" role="tab">Board / CEO</button>
-  <button class="tab-btn" onclick="showTab(1)" role="tab">Head of Engineering</button>
-  <button class="tab-btn" onclick="showTab(2)" role="tab">Drill-down</button>
+<div id="overview">
+${execBand()}
+${insightsSection()}
+${recommendationsSection()}
+${dimensionSummary()}
+${reposSection()}
 </div>
 
-<div class="tab-pane active" id="tab-board">
-${tab1()}
-</div>
-
-<div class="tab-pane" id="tab-hoe">
-${tab2()}
-</div>
-
-<div class="tab-pane" id="tab-drill">
-${tab3()}
-</div>
+${dimPages}
 
 </div>
 <script>${inlineJs}</script>

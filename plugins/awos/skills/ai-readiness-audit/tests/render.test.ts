@@ -1,26 +1,28 @@
 /**
  * render.test.ts — deterministic JSON→Markdown/HTML renderer tests.
  *
- * Contracts verified:
+ * The report is ONE scrolling page (no audience tabs). Contracts verified:
  *
- * Markdown (POL.1):
- *   - Contains a Hint column header in every per-dimension check table
- *   - Contains every dimension name
- *   - Contains the five hint-part labels (definition/derivation/reliability/source/method)
- *     inside at least one check's hint cell
+ * Markdown:
+ *   - Hint column header in every per-dimension check table
+ *   - Every dimension name present
+ *   - Five hint-part labels present in at least one check's hint cell
  *   - value_series rendered as sparkline notation
+ *   - Insights section rendered from audit.insights
+ *   - Recommendations rendered from audit.recommendations (plain detail), with a
+ *     mechanical FAIL/WARN fallback when the field is absent
  *
- * HTML (POL.2 + POL.3):
- *   - Contains the three tab labels: "Board / CEO", "Head of Engineering", "Drill-down"
- *   - Every scored number is wrapped with title= (spot-check: audit_total and coverage)
- *   - data-status attributes present on check rows
- *   - Issues-only filter toggle present (onclick=toggleIssues)
- *   - @media print rule present
- *   - Default-closed <details> (no `open` attribute)
- *   - Org mode: ≤3 portfolio metrics rendered + Repositories & Connections section
- *   - Org mode: per_repo table present
- *   - Single-repo mode: capability headline present
- *   - value_series rendered as inline SVG sparkline
+ * HTML:
+ *   - Single page: an #overview region + one .dim-page per dimension (drill-down)
+ *   - Dimension summary rows link to the hash-routed sub-page (#dim/<key>)
+ *   - Hash router + browser-Back affordance (route() + Back link to #)
+ *   - Instant plain-first tooltips (.tip/.tipbox) — NOT native title= delay
+ *   - Executive band: capability headline + delivery/scale/reach from audit.headline
+ *   - Top insights cards + "What to improve" recommendations
+ *   - Drill-down check table is fixed-layout with a wide Evidence column
+ *   - data-status attributes, issues-only filter, @media print, SVG sparkline
+ *   - Graceful degradation when headline/insights/recommendations/plain are absent
+ *   - Org mode: ≤3 portfolio metrics + Repositories & Connections + per_repo
  */
 
 import { test } from 'node:test';
@@ -40,6 +42,7 @@ function makeCheck(
     weight_max: number;
     applies: boolean;
     reliability_tag: string;
+    plain: string;
     value_series: Array<{ bucket_start: string; value: number | null }>;
   }> = {}
 ): import('../render.ts').Check {
@@ -64,17 +67,75 @@ function makeCheck(
     source: 'git native',
     definition: 'Claude.md presence and quality',
     hint: `Claude.md presence · detected from .claude/CLAUDE.md · ${tag} (high) · git native (2024) · detected`,
+    plain: overrides.plain,
     value_series: overrides.value_series,
   };
 }
 
-/** Build a minimal single-repo AuditJson fixture. */
+/** Single-repo fixture WITH the plain-language blocks (headline/insights/recs). */
 function singleRepoFixture(): AuditJson {
   return {
     date: '2026-01-15',
     project: 'service-checkout',
     audit_total: 85,
     coverage: 0.74,
+    headline: {
+      delivery: [
+        {
+          label: 'Deployment frequency',
+          display_value: '4.2 / wk',
+          band: 'High',
+          reliability: 'maximal',
+          check_id: 'ADP-G3',
+        },
+        {
+          label: 'Change failure rate',
+          display_value: '9%',
+          band: 'High',
+          reliability: 'minimal',
+          check_id: 'ADP-G7',
+        },
+      ],
+      scale: [
+        {
+          label: 'Source size',
+          display_value: '30,058 LOC · 1 language',
+          check_id: 'ADP-G11',
+        },
+        {
+          label: 'Avg complexity',
+          display_value: 'CCN 1.66 (healthy)',
+          check_id: 'ADP-G10',
+        },
+      ],
+      reach: {
+        ai_tooling: 'AI agent config present (partial)',
+        contributors: '5.3 active contributors / month',
+      },
+    },
+    insights: [
+      {
+        theme: 'Secrets & supply-chain hygiene',
+        severity: 'high',
+        weak_areas: ['Security', 'Supply Chain Security'],
+        so_what:
+          'AI agents can read .env and there is no CVE scan in CI, so a vulnerable dependency could ship unnoticed.',
+        improves:
+          'A deny-hook plus a pip-audit step closes the biggest low-effort gap.',
+      },
+    ],
+    recommendations: [
+      {
+        id: 1,
+        priority: 'P0',
+        title: 'Add AI-agent guardrails that block reading secret files',
+        dimension: 'Security',
+        check_id: 'SEC-02',
+        effort: 'Low',
+        detail:
+          'Add a permissions.deny entry to .claude/settings.json denying Read access to .env, *.pem, *.key.',
+      },
+    ],
     dimensions: [
       {
         dimension: 'ai-development-tooling',
@@ -87,6 +148,7 @@ function singleRepoFixture(): AuditJson {
             status: 'PASS',
             weight_awarded: 5,
             weight_max: 5,
+            plain: 'A project guide for AI agents is present.',
           }),
           makeCheck({
             check_id: 'AI-02',
@@ -139,7 +201,34 @@ function singleRepoFixture(): AuditJson {
   };
 }
 
-/** Build an org-mode AuditJson fixture with portfolio_metrics + per_repo. */
+/** Bare single-repo fixture WITHOUT plain-language blocks — tests graceful degradation. */
+function bareFixture(): AuditJson {
+  return {
+    date: '2026-01-15',
+    project: 'bare-repo',
+    audit_total: 50,
+    coverage: 0.5,
+    dimensions: [
+      {
+        dimension: 'security',
+        date: '2026-01-15',
+        score: 50,
+        coverage: 0.5,
+        checks: [
+          makeCheck({ check_id: 'SEC-01', status: 'PASS' }),
+          makeCheck({
+            check_id: 'SEC-02',
+            status: 'FAIL',
+            weight_awarded: 0,
+            weight_max: 8,
+          }),
+        ],
+      },
+    ],
+  };
+}
+
+/** Org-mode fixture with portfolio_metrics + per_repo. */
 function orgFixture(): AuditJson {
   return {
     date: '2026-01-15',
@@ -221,24 +310,21 @@ function orgFixture(): AuditJson {
 }
 
 // ---------------------------------------------------------------------------
-// Markdown tests (POL.1)
+// Markdown tests
 // ---------------------------------------------------------------------------
 
 test('renderMarkdown: contains a Hint column in per-dimension check table', () => {
   const md = renderMarkdown(singleRepoFixture());
   assert.ok(
     md.includes('| Hint |'),
-    'Markdown check table must have a "Hint" column header for the five-part hint'
+    'Markdown check table must keep a "Hint" column header for the five-part hint'
   );
 });
 
 test('renderMarkdown: contains every dimension name', () => {
   const md = renderMarkdown(singleRepoFixture());
   assert.ok(
-    md.includes('Ai Development Tooling') ||
-      md.includes('AI Development Tooling') ||
-      md.includes('Ai-development-tooling') ||
-      /ai.development.tooling/i.test(md),
+    /ai.development.tooling/i.test(md),
     'Markdown must include the ai-development-tooling dimension'
   );
   assert.ok(
@@ -247,10 +333,8 @@ test('renderMarkdown: contains every dimension name', () => {
   );
 });
 
-test('renderMarkdown: hint string content (five parts) present in check rows', () => {
+test('renderMarkdown: five-part hint content present in check rows', () => {
   const md = renderMarkdown(singleRepoFixture());
-  // The hint string contains parts like "detected" (method), "git native" (source)
-  // and "maximal" (reliability tag) — all come from our fixture hint string
   assert.ok(
     md.includes('detected'),
     'Markdown hint column must contain "detected" (the check method)'
@@ -265,51 +349,77 @@ test('renderMarkdown: hint string content (five parts) present in check rows', (
   );
 });
 
-test('renderMarkdown: check_ids are present in the table', () => {
+test('renderMarkdown: check_ids present in the table', () => {
   const md = renderMarkdown(singleRepoFixture());
   assert.ok(md.includes('AI-01'), 'Markdown must contain check_id AI-01');
   assert.ok(md.includes('SEC-02'), 'Markdown must contain check_id SEC-02');
 });
 
-test('renderMarkdown: audit_total and coverage are present', () => {
+test('renderMarkdown: audit_total and coverage present', () => {
   const md = renderMarkdown(singleRepoFixture());
   assert.ok(
-    md.includes('85 pts') || md.includes('85'),
+    md.includes('85 pts'),
     'Markdown must include audit_total (85 pts)'
   );
   assert.ok(
-    md.includes('74.0%') || md.includes('74%'),
-    'Markdown must include coverage ratio'
+    md.includes('74.0%'),
+    'Markdown must include coverage ratio (74.0%)'
   );
 });
 
-test('renderMarkdown: SKIP rows are present (not dropped)', () => {
+test('renderMarkdown: SKIP rows present (no data dropped)', () => {
   const md = renderMarkdown(singleRepoFixture());
   assert.ok(
     md.includes('AI-03') && md.includes('SKIP'),
-    'Markdown must include SKIP rows — no data is dropped (POL.1 no data loss)'
+    'Markdown must include SKIP rows — no data is dropped'
   );
 });
 
 test('renderMarkdown: value_series rendered as sparkline notation', () => {
   const md = renderMarkdown(singleRepoFixture());
-  // The sparkline is rendered as escaped bracket notation \[...\] or just sparkline chars
-  // from sparkline() which uses Unicode block chars
   assert.ok(
     /[▁▂▃▄▅▆▇█]/.test(md),
     'Markdown must include Unicode sparkline characters for checks with value_series'
   );
 });
 
-test('renderMarkdown: recommendations section present with FAIL entry', () => {
+test('renderMarkdown: Top Insights section rendered from audit.insights', () => {
+  const md = renderMarkdown(singleRepoFixture());
+  assert.ok(
+    md.includes('## Top Insights'),
+    'Markdown must render a Top Insights section when audit.insights is present'
+  );
+  assert.ok(
+    md.includes('Secrets & supply-chain hygiene'),
+    'Markdown insights must include the authored theme'
+  );
+  assert.ok(
+    md.includes('What improves if fixed'),
+    'Markdown insights must surface the "what improves" narrative'
+  );
+});
+
+test('renderMarkdown: recommendations rendered from audit.recommendations with plain detail', () => {
   const md = renderMarkdown(singleRepoFixture());
   assert.ok(
     md.includes('## Recommendations'),
     'Markdown must have a Recommendations section'
   );
   assert.ok(
-    md.includes('P0') && md.includes('FAIL'),
-    'Recommendations must list P0 for FAIL checks'
+    md.includes('Add AI-agent guardrails that block reading secret files'),
+    'Recommendations must use the authored plain-language title'
+  );
+  assert.ok(
+    md.includes('permissions.deny'),
+    'Recommendations must include the authored plain-language detail paragraph'
+  );
+});
+
+test('renderMarkdown: recommendations fall back to FAIL/WARN derivation when absent', () => {
+  const md = renderMarkdown(bareFixture());
+  assert.ok(
+    md.includes('## Recommendations') && md.includes('P0'),
+    'Without audit.recommendations, Markdown must derive P0 entries from FAIL checks'
   );
 });
 
@@ -320,52 +430,146 @@ test('renderMarkdown (org): portfolio metrics present', () => {
     'Org markdown must have a Portfolio Metrics section'
   );
   assert.ok(
-    md.includes('AI-tooling coverage') ||
-      md.includes('org_ai_tooling_coverage'),
+    md.includes('AI-tooling coverage'),
     'Org markdown must include the tooling coverage metric'
   );
   assert.ok(
-    md.includes('Repositories & Connections') || md.includes('Repositories'),
+    md.includes('Repositories & Connections'),
     'Org markdown must include a Repositories & Connections section'
   );
 });
 
 // ---------------------------------------------------------------------------
-// HTML tests (POL.2 + POL.3)
+// HTML tests — single page
 // ---------------------------------------------------------------------------
 
-test('renderHtml: contains three tab labels — Board / CEO, Head of Engineering, Drill-down', () => {
+test('renderHtml: single page — an #overview region and no audience tabs', () => {
   const html = renderHtml(singleRepoFixture());
   assert.ok(
-    html.includes('Board / CEO'),
-    'HTML must contain the "Board / CEO" tab label'
+    html.includes('id="overview"'),
+    'HTML must have a single #overview region (one scrolling page)'
   );
   assert.ok(
-    html.includes('Head of Engineering'),
-    'HTML must contain the "Head of Engineering" tab label'
-  );
-  assert.ok(
-    html.includes('Drill-down'),
-    'HTML must contain the "Drill-down" tab label'
+    !html.includes('Board / CEO') &&
+      !html.includes('Head of Engineering') &&
+      !html.includes('>Drill-down<'),
+    'HTML must NOT contain the old "for whom" audience tabs'
   );
 });
 
-test('renderHtml: audit_total and coverage are wrapped with title= (POL.3)', () => {
+test('renderHtml: one drill-down sub-page per dimension, id=page-<key>', () => {
   const html = renderHtml(singleRepoFixture());
-  // The number 85 should appear in a span with a title attribute
-  const titlePattern = /title="[^"]*"[^>]*>(?:[^<]*)?85/;
   assert.ok(
-    titlePattern.test(html) || (html.includes('title=') && html.includes('85')),
-    'HTML must wrap the audit_total number in a span with a title= hint attribute (POL.3)'
+    html.includes('class="dim-page" id="page-ai-development-tooling"'),
+    'HTML must render a drill-down sub-page for ai-development-tooling'
   );
-  // Coverage percentage must also have a title=
   assert.ok(
-    html.includes('title=') && (html.includes('74.0%') || html.includes('74%')),
-    'HTML must wrap the coverage percentage in a span with a title= hint attribute (POL.3)'
+    html.includes('class="dim-page" id="page-security"'),
+    'HTML must render a drill-down sub-page for security'
   );
 });
 
-test('renderHtml: data-status attributes present on check rows in Tab 3', () => {
+test('renderHtml: dimension summary rows link to hash-routed sub-pages', () => {
+  const html = renderHtml(singleRepoFixture());
+  assert.ok(
+    html.includes('href="#dim/security"'),
+    'Dimension summary must link each dimension to its #dim/<key> sub-page'
+  );
+});
+
+test('renderHtml: browser-Back affordance — hash router + Back link to overview', () => {
+  const html = renderHtml(singleRepoFixture());
+  assert.ok(
+    html.includes("addEventListener('hashchange'") &&
+      html.includes('function route('),
+    'HTML must wire a hashchange router so browser Back/Forward navigate sub-pages'
+  );
+  assert.ok(
+    html.includes('href="#">← Back to overview</a>') ||
+      html.includes('Back to overview'),
+    'Each sub-page must offer a Back-to-overview link'
+  );
+});
+
+test('renderHtml: tooltips are instant plain-first (.tip/.tipbox), NOT native title=', () => {
+  const html = renderHtml(singleRepoFixture());
+  assert.ok(
+    html.includes('class="tip"') && html.includes('class="tipbox"'),
+    'HTML must use CSS .tip/.tipbox tooltips for instant hover (no native title delay)'
+  );
+  assert.ok(
+    !html.includes(' title="'),
+    'HTML must NOT use the native title= attribute for hints (it has a ~1.5s delay)'
+  );
+});
+
+test('renderHtml: tooltip leads with the plain-language explanation', () => {
+  const html = renderHtml(singleRepoFixture());
+  assert.ok(
+    html.includes('A project guide for AI agents is present.'),
+    "HTML must surface the check's plain-language sentence in its tooltip"
+  );
+});
+
+test('renderHtml: executive band — capability headline plus delivery/scale/reach', () => {
+  const html = renderHtml(singleRepoFixture());
+  assert.ok(
+    html.includes('class="exec"') && html.includes('85 pts'),
+    'HTML must show the capability headline (85 pts) in the executive band'
+  );
+  assert.ok(
+    html.includes('Delivery (vs DORA bands)') && html.includes('4.2 / wk'),
+    'Executive band must render the DORA delivery block from audit.headline'
+  );
+  assert.ok(
+    html.includes('Code scale') && html.includes('30,058 LOC'),
+    'Executive band must render the code-scale block from audit.headline'
+  );
+  assert.ok(
+    html.includes('5.3 active contributors / month'),
+    'Executive band must render the reach block from audit.headline'
+  );
+});
+
+test('renderHtml: top insights cards rendered from audit.insights', () => {
+  const html = renderHtml(singleRepoFixture());
+  assert.ok(
+    html.includes('Top insights') &&
+      html.includes('Secrets &amp; supply-chain hygiene'),
+    'HTML must render insight cards (the narrative READ) from audit.insights'
+  );
+});
+
+test('renderHtml: "What to improve" recommendations rendered with plain detail', () => {
+  const html = renderHtml(singleRepoFixture());
+  assert.ok(
+    html.includes('What to improve') &&
+      html.includes('Add AI-agent guardrails that block reading secret files'),
+    'HTML must render a What-to-improve section from audit.recommendations'
+  );
+  assert.ok(
+    html.includes('permissions.deny'),
+    'Recommendation cards must include the authored plain-language detail'
+  );
+});
+
+test('renderHtml: drill-down check table is fixed-layout with a wide Evidence column', () => {
+  const html = renderHtml(singleRepoFixture());
+  assert.ok(
+    html.includes('table class="checks"') && html.includes('<colgroup>'),
+    'Check table must use a fixed layout (colgroup) so columns get explicit widths'
+  );
+  assert.ok(
+    html.includes('class="evidence"'),
+    'Evidence must be its own wide column, not a cramped equal-width cell'
+  );
+  assert.ok(
+    html.includes('width:35%'),
+    'Evidence column must be allocated the widest share of the table'
+  );
+});
+
+test('renderHtml: data-status attributes present on check rows', () => {
   const html = renderHtml(singleRepoFixture());
   assert.ok(
     html.includes('data-status="PASS"'),
@@ -384,16 +588,12 @@ test('renderHtml: data-status attributes present on check rows in Tab 3', () => 
 test('renderHtml: issues-only filter toggle present', () => {
   const html = renderHtml(singleRepoFixture());
   assert.ok(
-    html.includes('toggleIssues'),
-    'HTML must include the toggleIssues function for the issues-only filter'
-  );
-  assert.ok(
-    html.includes('issues-only'),
-    'HTML must include the CSS class "issues-only" used by the filter toggle'
+    html.includes('toggleIssues') && html.includes('issues-only'),
+    'HTML must include the issues-only filter toggle'
   );
   assert.ok(
     html.includes('Show issues only'),
-    'HTML must have a "Show issues only" button label for the filter toggle'
+    'HTML must have a "Show issues only" button label'
   );
 });
 
@@ -401,106 +601,37 @@ test('renderHtml: @media print rule present', () => {
   const html = renderHtml(singleRepoFixture());
   assert.ok(
     html.includes('@media print'),
-    'HTML must include @media print rules to expand all sections and hide toggles'
-  );
-});
-
-test('renderHtml: <details> sections default-closed (no open attribute)', () => {
-  const html = renderHtml(singleRepoFixture());
-  // Check that <details> appears but <details open> does not
-  const detailsCount = (html.match(/<details/g) ?? []).length;
-  const openCount = (html.match(/<details open/g) ?? []).length;
-  assert.ok(detailsCount > 0, 'HTML must have at least one <details> element');
-  assert.equal(
-    openCount,
-    0,
-    '<details> sections must default-closed (no "open" attribute) — users expand them explicitly'
-  );
-});
-
-test('renderHtml (single-repo): capability headline score present in Tab 1', () => {
-  const html = renderHtml(singleRepoFixture());
-  // Single-repo Tab 1 shows the capability headline with the score
-  assert.ok(
-    html.includes('AI-SDLC Capability') || html.includes('capability'),
-    'Single-repo HTML Tab 1 must include a capability headline'
-  );
-  assert.ok(
-    html.includes('85'),
-    'Single-repo HTML Tab 1 must include the capability score (85 pts)'
-  );
-});
-
-test('renderHtml (org): ≤3 portfolio metrics in Tab 1', () => {
-  const html = renderHtml(orgFixture());
-  assert.ok(
-    html.includes('Portfolio Metrics'),
-    'Org HTML Tab 1 must include a Portfolio Metrics section'
-  );
-  // All three canonical metrics must appear
-  assert.ok(
-    html.includes('AI-tooling coverage') ||
-      html.includes('org_ai_tooling_coverage'),
-    'Org HTML must include the org_ai_tooling_coverage metric'
-  );
-  assert.ok(
-    html.includes('Capability score') || html.includes('org_capability_score'),
-    'Org HTML must include the org_capability_score metric'
-  );
-  assert.ok(
-    html.includes('Measurement coverage') ||
-      html.includes('org_measurement_coverage'),
-    'Org HTML must include the org_measurement_coverage metric'
-  );
-  // Must not show more than 3 metric cards
-  const metricCardCount = (html.match(/class="metric-card"/g) ?? []).length;
-  assert.ok(
-    metricCardCount <= 3,
-    `Org HTML Tab 1 must show ≤3 portfolio metric cards, found ${metricCardCount}`
-  );
-});
-
-test('renderHtml (org): Repositories & Connections section in Tab 3', () => {
-  const html = renderHtml(orgFixture());
-  assert.ok(
-    html.includes('Repositories') && html.includes('Connections'),
-    'Org HTML Tab 3 must include a "Repositories & Connections" section'
-  );
-  // Per-repo entries must be present
-  assert.ok(
-    html.includes('org/service-a'),
-    'Org HTML Repositories section must list org/service-a'
-  );
-  assert.ok(
-    html.includes('org/legacy'),
-    'Org HTML Repositories section must list org/legacy'
+    'HTML must include @media print rules to expand sub-pages and hide chrome'
   );
 });
 
 test('renderHtml: value_series rendered as inline SVG sparkline', () => {
   const html = renderHtml(singleRepoFixture());
-  // AI-04 has value_series with 3 buckets
   assert.ok(
-    html.includes('<svg') && html.includes('sparkline'),
-    'HTML must render value_series as an inline SVG sparkline (aria-label="sparkline")'
-  );
-  assert.ok(
-    html.includes('<rect'),
-    'HTML sparkline SVG must contain <rect> elements'
+    html.includes('<svg') &&
+      html.includes('sparkline') &&
+      html.includes('<rect'),
+    'HTML must render value_series as an inline SVG sparkline'
   );
 });
 
-test('renderHtml: check hint strings appear in title= attributes', () => {
-  const html = renderHtml(singleRepoFixture());
-  // The hint from our fixture: "Claude.md presence · detected from .claude/CLAUDE.md · ..."
-  // It appears in the title= of the check weight cell and the check_id cell
+test('renderHtml: graceful degradation — bare audit renders without throwing', () => {
+  const html = renderHtml(bareFixture());
   assert.ok(
-    html.includes('Claude.md presence'),
-    'HTML must embed check hint strings in title= attributes for weighted cells'
+    html.includes('50 pts') && html.includes('class="exec"'),
+    'Without headline/insights/recommendations, HTML must still render the capability headline'
+  );
+  assert.ok(
+    html.includes('What to improve') && html.includes('P0'),
+    'Without audit.recommendations, HTML must fall back to derived FAIL/WARN recommendations'
+  );
+  assert.ok(
+    !html.includes('Top insights'),
+    'Without audit.insights, HTML must omit the insights section entirely'
   );
 });
 
-test('renderHtml: is a valid HTML document (has doctype, html, head, body)', () => {
+test('renderHtml: valid HTML document (doctype, html, head, body)', () => {
   const html = renderHtml(singleRepoFixture());
   assert.ok(
     html.startsWith('<!DOCTYPE html>'),
@@ -515,33 +646,35 @@ test('renderHtml: is a valid HTML document (has doctype, html, head, body)', () 
   assert.ok(html.includes('</html>'), 'HTML must close the html tag');
 });
 
-test('renderHtml: tab switching JS present (showTab function)', () => {
-  const html = renderHtml(singleRepoFixture());
+test('renderHtml (org): ≤3 portfolio metrics in the executive band', () => {
+  const html = renderHtml(orgFixture());
   assert.ok(
-    html.includes('showTab'),
-    'HTML must include the showTab JS function for tab switching'
+    html.includes('AI-tooling coverage'),
+    'Org HTML must include the org_ai_tooling_coverage metric'
+  );
+  assert.ok(
+    html.includes('Capability score'),
+    'Org HTML must include the org_capability_score metric'
+  );
+  assert.ok(
+    html.includes('Measurement coverage'),
+    'Org HTML must include the org_measurement_coverage metric'
+  );
+  const metricCardCount = (html.match(/class="metric-card"/g) ?? []).length;
+  assert.ok(
+    metricCardCount <= 3,
+    `Org HTML must show ≤3 portfolio metric cards, found ${metricCardCount}`
   );
 });
 
-test('renderHtml (drill-down): code and source columns present in Tab 3 check rows', () => {
-  const html = renderHtml(singleRepoFixture());
-  // Tab 3 (Drill-down) must render the category code number and the source
-  // string for each check so engineers can trace checks back to standards.toml.
+test('renderHtml (org): Repositories & Connections section with per-repo rows', () => {
+  const html = renderHtml(orgFixture());
   assert.ok(
-    html.includes('<th>Code</th>'),
-    'HTML Drill-down tab must have a "Code" column header for the category numeric code'
+    html.includes('Repositories') && html.includes('Connections'),
+    'Org HTML must include a "Repositories & Connections" section'
   );
   assert.ok(
-    html.includes('<th>Source</th>'),
-    'HTML Drill-down tab must have a "Source" column header for the source name from standards.toml'
-  );
-  // The fixture check uses code=[101] and source="git native"
-  assert.ok(
-    html.includes('101'),
-    'HTML Drill-down tab must render the numeric category code (101 from fixture)'
-  );
-  assert.ok(
-    html.includes('git native'),
-    'HTML Drill-down tab must render the source string (git native from fixture)'
+    html.includes('org/service-a') && html.includes('org/legacy'),
+    'Org HTML Repositories section must list each repo'
   );
 });

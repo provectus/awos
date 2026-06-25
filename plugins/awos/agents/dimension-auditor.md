@@ -103,6 +103,7 @@ For every check, produce a record with all of the following fields:
   "source": "<source name from standards.toml>",
   "definition": "<category definition from standards.toml>",
   "hint": "<definition> · <value-derivation> · <reliability> · <source (year)> · <method>",
+  "plain": "<one-sentence non-technical explanation of what this check verifies>",
   "value_series": [{ "bucket_start": "YYYY-MM-DD", "value": <number | null> }]
 }
 ```
@@ -122,6 +123,8 @@ The `hint` field is a five-part concatenation:
 - reliability tag and confidence
 - source and source_year from standards.toml
 - method
+
+The `plain` field is one plain-language sentence a non-technical stakeholder understands — what the check looks for and why it matters, with no jargon, standards codes, or abbreviations (e.g. "Blocks AI agents from opening secret files like `.env` before they run a command."). The HTML report leads each tooltip with `plain` and demotes the five-part `hint` to small print. Write it for every check.
 
 For `computed` and `detected` checks: derive `reliability` from `reliability_default` in standards.toml; set `confidence: "high"`. For `judgment` checks: tag reliability as `bounded-by-rubric` in the note; set `confidence: "medium"`.
 

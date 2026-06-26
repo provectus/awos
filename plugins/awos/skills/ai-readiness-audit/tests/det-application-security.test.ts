@@ -140,11 +140,14 @@ test('AS-03: CORS scoped origins passes', () => {
   assert.equal(r.status, 'PASS');
 });
 
-test('AS-03: no CORS config is PASS (neutral)', () => {
+test('AS-03: no CORS config is SKIP (N/A)', () => {
+  // Absence of CORS configuration is not "safe" — it's not applicable.
+  // Browsers default to same-origin when no CORS header is set, so there
+  // is nothing to grade. This was previously returning PASS (the bug).
   const t = tmp();
   writeFileSync(join(t, 'main.py'), 'print("hello world")\n');
   const r = detectCorsNotWildcard(t);
-  assert.equal(r.status, 'PASS');
+  assert.equal(r.status, 'SKIP');
 });
 
 test('AS-03: allowed_origins wildcard is FAIL', () => {

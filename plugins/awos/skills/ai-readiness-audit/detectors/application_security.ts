@@ -191,8 +191,11 @@ export function detectSecurityHeaders(
 // ---------------------------------------------------------------------------
 // detectCorsNotWildcard — category 3002 (AS-03, method: detected)
 //
-// PASS if no CORS wildcard origin ('*') is found in config or source.
-// FAIL if an explicit '*' is used as a CORS allowed origin.
+// Three-state result:
+//   FAIL  — wildcard origin ('*') found; anyone can call this API.
+//   PASS  — CORS configured with specific origins (not '*').
+//   SKIP  — no CORS construct found at all; browsers enforce same-origin by
+//           default so the check is not applicable.
 // ---------------------------------------------------------------------------
 
 const CORS_GLOBS = [
@@ -222,12 +225,19 @@ const CORS_WILDCARD_RX =
 const CORS_SCOPED_RX =
   /(?:origins?|allow(?:ed)?_origins?|access.control.allow.origin|cors)[^=\n]{0,30}=\s*['"\[{]?\s*https?:\/\//i;
 
+// Broader presence signal — any recognizable CORS keyword (middleware, decorator,
+// header, or config key), used to distinguish "CORS not configured" from
+// "CORS configured but origin format not recognized by the above patterns".
+const CORS_PRESENCE_RX =
+  /CORSMiddleware|@CrossOrigin|\bcors\s*\(|add_cors_headers|cors_headers|cors_allowed_origins|CORS_ALLOWED|cors_origin\b|Access-Control-Allow-Origin/i;
+
 export function detectCorsNotWildcard(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
   const wildcardHits: Array<{ file: string; line: number; text: string }> = [];
   const scopedHits: Array<{ file: string; line: number; text: string }> = [];
+  let corsFound = false;
 
   const files = iterFiles(repoPath, CORS_GLOBS);
 
@@ -244,17 +254,21 @@ export function detectCorsNotWildcard(
       const line = lines[i];
       if (/^\s*(#|\/\/|\/\*)/.test(line)) continue;
       if (CORS_WILDCARD_RX.test(line)) {
+        corsFound = true;
         wildcardHits.push({
           file: relative(repoPath, filePath),
           line: i + 1,
           text: line.trim().slice(0, 120),
         });
       } else if (CORS_SCOPED_RX.test(line)) {
+        corsFound = true;
         scopedHits.push({
           file: relative(repoPath, filePath),
           line: i + 1,
           text: line.trim().slice(0, 120),
         });
+      } else if (CORS_PRESENCE_RX.test(line)) {
+        corsFound = true;
       }
     }
   }
@@ -273,9 +287,15 @@ export function detectCorsNotWildcard(
     ]);
   }
 
-  // No CORS configuration found — neutral; can't tell if it's missing or handled elsewhere.
+  if (!corsFound) {
+    return makeResult('SKIP', null, [
+      'no CORS configuration found — browsers default to same-origin; check is not applicable',
+    ]);
+  }
+
+  // CORS keyword detected but origin format not matched by wildcard or scoped patterns.
   return makeResult('PASS', 0, [
-    'no CORS wildcard origin found — either CORS is not configured or origins are restricted',
+    'CORS configuration detected but origin constraints not recognized — review manually',
   ]);
 }
 

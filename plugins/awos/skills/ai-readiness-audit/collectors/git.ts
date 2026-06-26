@@ -6,6 +6,10 @@ import {
   ALL_COMMIT_ATTRIBUTION,
   ALL_TOOL_CONFIG_DIRS,
   ALL_INSTRUCTION_FILES,
+  ALL_RULE_COMMAND_DIRS,
+  ALL_SKILL_DIRS,
+  ALL_HOOK_PATHS,
+  ALL_MCP_CONFIG_PATHS,
 } from '../agent_tools.ts';
 
 // ---------------------------------------------------------------------------
@@ -64,8 +68,17 @@ function getAiMarkedCommits(cwd: string): number {
   return matchedSHAs.size;
 }
 
-/** Paths that indicate AI tooling configuration in the repo. */
-const TOOLING_CANDIDATES = [...ALL_INSTRUCTION_FILES, ...ALL_TOOL_CONFIG_DIRS];
+/** Paths that indicate AI tooling configuration in the repo — full union across all supported tools. */
+const TOOLING_CANDIDATES = [
+  ...new Set([
+    ...ALL_INSTRUCTION_FILES,
+    ...ALL_RULE_COMMAND_DIRS,
+    ...ALL_SKILL_DIRS,
+    ...ALL_HOOK_PATHS,
+    ...ALL_MCP_CONFIG_PATHS,
+    ...ALL_TOOL_CONFIG_DIRS,
+  ]),
+];
 
 function getToolingPaths(repoPath: string): string[] {
   return TOOLING_CANDIDATES.filter((p) => existsSync(join(repoPath, p)));

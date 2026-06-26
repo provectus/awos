@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -46,6 +47,45 @@ test('detectVerticalDelivery: single-layer repo (no multi-layer dirs) → SKIP',
   // conveniently returns SKIP for the right reason.
   const r = detectVerticalDelivery(t);
   assert.equal(r.status, 'SKIP', 'expected SKIP for single-layer repo');
+});
+
+test('detectVerticalDelivery: real git repo with feature branch but single source layer → SKIP via layer-count gate', () => {
+  // This test exercises the layerCount < 2 gate specifically — distinct from
+  // the no-branches gate. We need a real git repo so the branch list is
+  // non-empty, but the repo has only one architectural layer (no api/frontend/db dirs).
+  const t = tmp();
+  mkdirSync(join(t, 'src'), { recursive: true });
+  writeFileSync(join(t, 'src', 'main.py'), 'print("hello")\n');
+
+  // Init a real git repo with a feature branch
+  const git = (args: string[]) =>
+    execFileSync('git', args, { cwd: t, encoding: 'utf8', stdio: 'pipe' });
+  try {
+    git(['init']);
+    git(['config', 'user.email', 'test@test.com']);
+    git(['config', 'user.name', 'Test']);
+    git(['add', '.']);
+    git(['commit', '-m', 'initial']);
+    git(['checkout', '-b', 'feat/single-layer-feature']);
+    writeFileSync(join(t, 'src', 'utils.py'), 'def helper(): pass\n');
+    git(['add', '.']);
+    git(['commit', '-m', 'add utils']);
+    git(['checkout', 'master']);
+  } catch {
+    // If git is unavailable, skip this test gracefully
+    return;
+  }
+
+  const r = detectVerticalDelivery(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    'expected SKIP via layer-count gate when repo has feature branches but only one source layer'
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('layer') || e.includes('architectural')),
+    `evidence should mention layers; got: ${r.evidence.join('; ')}`
+  );
 });
 
 // ---------------------------------------------------------------------------

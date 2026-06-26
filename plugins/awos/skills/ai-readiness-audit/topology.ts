@@ -14,7 +14,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { iterFiles, grep } from './detectors/_base.ts';
 import { detectCiConfigPath } from './ci_platforms.ts';
-import { ALL_INSTRUCTION_FILES, ALL_TOOL_CONFIG_DIRS } from './agent_tools.ts';
+import {
+  ALL_INSTRUCTION_FILES,
+  ALL_TOOL_CONFIG_DIRS,
+  ALL_RULE_COMMAND_DIRS,
+  ALL_SKILL_DIRS,
+  ALL_MCP_CONFIG_PATHS,
+} from './agent_tools.ts';
+import { ALL_SOURCE_GLOBS } from './languages.ts';
 
 export type TopologyFlags = Record<string, boolean>;
 
@@ -23,20 +30,8 @@ function anyPath(repoPath: string, names: string[]): boolean {
   return names.some((n) => existsSync(join(repoPath, n)));
 }
 
-/** True if any source file matches the pattern (bounded to common code globs). */
-const CODE_GLOBS = [
-  '*.py',
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.go',
-  '*.java',
-  '*.rb',
-  '*.cs',
-  '*.php',
-  '*.kt',
-];
+/** True if any source file matches the pattern — full language registry. */
+const CODE_GLOBS = ALL_SOURCE_GLOBS;
 
 function codeMatches(repoPath: string, pattern: RegExp): boolean {
   try {
@@ -136,25 +131,24 @@ export function computeTopology(
   const flags: TopologyFlags = {
     has_topology: true,
     has_ci: detectCiConfigPath(repoPath) !== null,
-    has_claude_md:
-      anyPath(repoPath, ['CLAUDE.md', '.claude/CLAUDE.md']) ||
-      anyGlob(repoPath, ['CLAUDE.md']),
+    // has_ai_agent_files and has_agent_instruction_files are semantically
+    // identical (both used by standards.toml). Both are kept but share the
+    // same registry-driven expression. Pending future consolidation.
     has_ai_agent_files:
-      anyPath(repoPath, ['AGENTS.md', 'CLAUDE.md', '.claude']) ||
-      anyGlob(repoPath, ['AGENTS.md', 'CLAUDE.md']),
+      anyPath(repoPath, [...ALL_INSTRUCTION_FILES, ...ALL_TOOL_CONFIG_DIRS]) ||
+      anyGlob(repoPath, ALL_INSTRUCTION_FILES),
     has_agent_instruction_files:
       anyPath(repoPath, [...ALL_INSTRUCTION_FILES, ...ALL_TOOL_CONFIG_DIRS]) ||
       anyGlob(repoPath, ALL_INSTRUCTION_FILES),
     has_commands_or_skills: anyPath(repoPath, [
-      '.claude/commands',
-      '.claude/skills',
-      'skills',
+      ...ALL_RULE_COMMAND_DIRS,
+      ...ALL_SKILL_DIRS,
     ]),
     has_hooks:
       /"hooks"\s*:/.test(settings) ||
       anyPath(repoPath, ['.pre-commit-config.yaml', '.husky']),
     has_mcp_config:
-      anyPath(repoPath, ['.mcp.json', 'mcp.json']) ||
+      anyPath(repoPath, ALL_MCP_CONFIG_PATHS) ||
       /"mcpServers"\s*:/.test(settings),
     has_lockfiles: anyPath(repoPath, LOCKFILES),
     has_package_ecosystem: hasPackageEcosystem,

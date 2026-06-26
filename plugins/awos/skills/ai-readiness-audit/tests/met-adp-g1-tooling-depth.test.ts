@@ -23,6 +23,37 @@ function makeTmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'g1-'));
 }
 
+test('adp_g1: GEMINI.md + .cursor/commands → codes 101 and 103 awarded (not 0)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    tooling_paths: ['GEMINI.md', '.cursor/commands'],
+    monthly_buckets: [],
+    merge_records: [],
+    total_commits: 3,
+    ai_marked_commits: 0,
+    total_merges: 0,
+    revert_merges: 0,
+    numstat_totals: { added: 0, deleted: 0 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.status,
+    'OK',
+    'status must be OK when git source present'
+  );
+  assert.ok(
+    result.categories_awarded.includes(101),
+    `categories_awarded must include 101 for GEMINI.md; got ${result.categories_awarded}`
+  );
+  assert.ok(
+    result.categories_awarded.includes(103),
+    `categories_awarded must include 103 for .cursor/commands; got ${result.categories_awarded}`
+  );
+  assert.ok((result.value as number) > 0, 'Gemini-only repo must not score 0');
+});
+
 test('adp_g1: CLAUDE.md present → code 101 awarded, status OK, kind coverage', () => {
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(tmp, 'git', {

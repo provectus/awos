@@ -10,13 +10,12 @@
  * Input raw fields: tooling_paths (string[])
  *
  * Category mapping (tooling_paths → category codes):
- *   CLAUDE.md or AGENTS.md  → 101
- *   .claude/skills           → 102
- *   .claude/commands         → 103
- *   .claude/hooks            → 104
- *   .mcp.json                → 105
- *   spec signals (context/,
- *     .awos/, or scripts/)   → 106 (inferred from tooling_paths)
+ *   101 → ANY instruction file (CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, …)
+ *   102 → ANY skill directory (.claude/skills, …)
+ *   103 → ANY rule/command directory (.claude/commands, .cursor/rules, …)
+ *   104 → ANY hook path (.claude/hooks, .kiro/hooks, …)
+ *   105 → ANY MCP config path (.mcp.json, .cursor/mcp.json, .kiro/settings/mcp.json, …)
+ *   106 → AWOS spec signals (context/, .awos/, or scripts/) — kept as-is
  *
  * SKIP: if git.json is absent or tooling_paths is missing.
  */
@@ -27,15 +26,22 @@ import {
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
+import {
+  ALL_INSTRUCTION_FILES,
+  ALL_SKILL_DIRS,
+  ALL_RULE_COMMAND_DIRS,
+  ALL_HOOK_PATHS,
+  ALL_MCP_CONFIG_PATHS,
+} from '../agent_tools.ts';
 
-// Tooling path → category code mapping.
-// Order matters only for readability; all are checked independently.
+// Tooling path → category code mapping built from the tool registry.
+// Code 106 is kept exactly as-is (AWOS spec signals not in the registry).
 const TOOLING_MAP: Array<{ paths: string[]; code: number }> = [
-  { paths: ['CLAUDE.md', 'AGENTS.md'], code: 101 },
-  { paths: ['.claude/skills'], code: 102 },
-  { paths: ['.claude/commands'], code: 103 },
-  { paths: ['.claude/hooks'], code: 104 },
-  { paths: ['.mcp.json'], code: 105 },
+  { paths: ALL_INSTRUCTION_FILES, code: 101 },
+  { paths: ALL_SKILL_DIRS, code: 102 },
+  { paths: ALL_RULE_COMMAND_DIRS, code: 103 },
+  { paths: ALL_HOOK_PATHS, code: 104 },
+  { paths: ALL_MCP_CONFIG_PATHS, code: 105 },
   // Code 106: spec signals — context/, .awos/, or scripts/ in tooling_paths
   // (git collector does not include these but we detect them via the paths list)
   {

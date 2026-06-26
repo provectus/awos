@@ -144,7 +144,7 @@ Detector and `applies_when="topology.is_multi_service"` are correct, but the che
 
 ### 5.9 SDD-05 — small weight, partial credit
 
-`standards.toml` SDD-05 (code 2804, weight 5) is all-or-nothing: every spec dir must contain the full triad (functional-spec / technical-considerations / tasks). Small features legitimately skip artifacts. Fix: cut weight 5→2 and award partial credit proportional to artifacts present rather than WARN-on-any-incomplete, so a mostly-complete spec set isn't scored like an empty one.
+`standards.toml` SDD-05 (code 2804, weight 5) is all-or-nothing: every spec dir must contain the full triad (functional-spec / technical-considerations / tasks). Small features legitimately skip artifacts. Fix: cut weight 5→2, soften the status (a partially-complete spec set is WARN, not FAIL — only an empty dir FAILs), and surface the present/total ratio (e.g. "2/3 artifacts present (missing: tasks.md)") in evidence so partial completeness is legible. Note: the engine's `detected`-check scoring awards full weight or zero — there is no fractional-weight path — so partial completeness is reflected in status, evidence, and the reduced (now small) stakes rather than in proportional points. (Fully proportional point-scoring would require a value-weighted scoring path in the engine; deferred as a future enhancement.)
 
 ## 6. Detector bugs
 

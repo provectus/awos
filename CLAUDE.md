@@ -153,7 +153,7 @@ npm run test:engine    # node --import tsx --test over the engine test files
 npm test               # full suite: markdown/installer layers + test:engine
 ```
 
-These commands assume `node`/`npm` resolve to a real Node toolchain (as on CI and a fresh clone). The engine layer relies on `node:test`, which a Bun `node` shim does not implement — if your global `node` is Bun, invoke the real Node binary directly.
+These commands assume `node`/`npm` resolve to a real Node toolchain (as on CI and a fresh clone), since the engine layer relies on `node:test`.
 
 ## Conventions
 

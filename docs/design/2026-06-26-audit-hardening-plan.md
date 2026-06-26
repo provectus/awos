@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Engine source lives under `plugins/awos/skills/ai-readiness-audit/`. After editing any `.ts`, run `npm run build:engine` then `npm run test:engine`, and commit the regenerated `dist/`. CI runs `git diff --exit-code` on `dist/` — a stale bundle fails the build.
-- Use the real Node toolchain, not the Bun shim: prefix Node/npm commands with the real binary dir, e.g. `PATH="/opt/homebrew/bin:$PATH" npm run test:engine`. The engine tests rely on `node:test`, which the Bun `node` shim does not implement.
+- Run engine commands with a real Node toolchain (the engine tests rely on `node:test`).
 - Never run the AWOS installer in this repo.
 - Prettier is CI-enforced: single quotes, semicolons, 80-col for code, 2-space, LF, `es5` trailing commas. Run `PATH="/opt/homebrew/bin:$PATH" npx prettier --write .` on changed files before each commit.
 - Markdown prose is NOT hard-wrapped at 80 columns (except YAML frontmatter). One logical line per paragraph/bullet.

@@ -13,7 +13,7 @@ Harden the `plugins/awos/skills/ai-readiness-audit/` plugin so it (1) is correct
 
 ## Constraints and invariants
 
-- The engine is TypeScript bundled to `dist/cli.js`. `dist/` is committed and shipped; CI rebuilds and runs `git diff --exit-code` on it. Every engine-touching commit must end with `npm run build:engine`, `npm run test:engine`, and a committed `dist/`. Use the real Node toolchain (`/opt/homebrew/bin/node`), not the Bun `node` shim, because the engine tests rely on `node:test`.
+- The engine is TypeScript bundled to `dist/cli.js`. `dist/` is committed and shipped; CI rebuilds and runs `git diff --exit-code` on it. Every engine-touching commit must end with `npm run build:engine`, `npm run test:engine`, and a committed `dist/`. Run these with a real Node toolchain (the engine tests rely on `node:test`).
 - The report renderer (`render.ts`) is deterministic and contains no LLM. Anything the report must display has to be present in `audit.json`; the renderer only formats it. New report content therefore requires the data to be threaded into the JSON at `audit-core`/`aggregate` time.
 - Scoring is additive/weighted, never capped. Broadening detectors changes how many files/signals are found, which moves ratios and therefore scores. Each coverage change must update the affected engine tests in the same commit, and score deltas on the fixture repos must be reported, not silently absorbed.
 - Markdown prose in this repo is not hard-wrapped at 80 columns.
@@ -60,15 +60,15 @@ Build an **agentic-tool registry** that mirrors the language registry (Commit C)
 
 ```ts
 interface AgentToolDef {
-  id: string;                 // 'cursor'
-  displayName: string;        // 'Cursor'
+  id: string; // 'cursor'
+  displayName: string; // 'Cursor'
   instructionFiles: string[]; // top-level guidance files, e.g. ['CLAUDE.md']
-  ruleOrCommandDirs: string[];// rules/commands/prompts dirs
-  skillDirs: string[];        // skill dirs (empty if N/A)
-  mcpConfigPaths: string[];   // MCP config files (empty if N/A)
-  hookPaths: string[];        // hook dirs/files (empty if N/A)
-  configDirs: string[];       // any other tool config dirs (for tooling-presence)
-  commitAttribution: RegExp[];// commit trailer / author patterns
+  ruleOrCommandDirs: string[]; // rules/commands/prompts dirs
+  skillDirs: string[]; // skill dirs (empty if N/A)
+  mcpConfigPaths: string[]; // MCP config files (empty if N/A)
+  hookPaths: string[]; // hook dirs/files (empty if N/A)
+  configDirs: string[]; // any other tool config dirs (for tooling-presence)
+  commitAttribution: RegExp[]; // commit trailer / author patterns
 }
 ```
 
@@ -115,12 +115,12 @@ A registry describing each language's conventions:
 
 ```ts
 interface LanguageDef {
-  id: string;            // 'python'
-  displayName: string;   // 'Python'
+  id: string; // 'python'
+  displayName: string; // 'Python'
   sourceGlobs: string[]; // ['*.py']
   testFileGlobs: string[];
   testDirNames: string[];
-  depFiles: string[];    // ['requirements.txt','pyproject.toml','Pipfile','poetry.lock']
+  depFiles: string[]; // ['requirements.txt','pyproject.toml','Pipfile','poetry.lock']
   importRx?: RegExp;
 }
 ```

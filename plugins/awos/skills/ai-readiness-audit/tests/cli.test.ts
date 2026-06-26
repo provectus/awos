@@ -4,12 +4,9 @@
  * Runs against the BUNDLED file, not the TypeScript sources, so build:engine
  * must be run before this test suite executes.
  *
- * Node path: hardcoded to /opt/homebrew/bin/node because the system `node`
- * on this machine is a Bun shim.  In CI, `node` is real Node so the hardcode
- * is safe (the path won't exist and execFileSync will throw with a clear error,
- * which is better than silently running Bun).
- * TODO: switch to process.execPath when CI guarantees a real-Node shim at the
- * default $PATH position (or pass via env NODE_BIN=/opt/homebrew/bin/node).
+ * Node path: the subprocess is spawned with the same Node binary that runs
+ * this test (`process.execPath`), so it stays portable across CI and local
+ * runs. Override with the NODE_BIN env var when a different binary is required.
  */
 
 import { test } from 'node:test';
@@ -24,7 +21,7 @@ import { tmpdir } from 'node:os';
 // Constants
 // ---------------------------------------------------------------------------
 
-const NODE = '/opt/homebrew/bin/node';
+const NODE = process.env.NODE_BIN || process.execPath;
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(SKILL, 'dist', 'cli.js');
 

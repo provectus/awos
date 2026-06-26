@@ -119,3 +119,32 @@ test('detectLinkedRepos ignores a symlink pointing inside the repo', () => {
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test('linked repo named from target repo root, not the symlink leaf', () => {
+  const root = mkdtempSync(join(tmpdir(), 'awos-link-root-'));
+  try {
+    // sibling "repo" with a .git marker
+    const sibling = join(root, 'onex-discovery-awos');
+    mkdirSync(join(sibling, '.git'), { recursive: true });
+    mkdirSync(join(sibling, '.claude', 'skills'), { recursive: true });
+    // the audited repo with .claude/skills -> ../onex-discovery-awos/.claude/skills
+    const repo = join(root, 'onex-discovery-api');
+    mkdirSync(join(repo, '.claude'), { recursive: true });
+    symlinkSync(
+      join(sibling, '.claude', 'skills'),
+      join(repo, '.claude', 'skills')
+    );
+
+    const linked = detectLinkedRepos(repo);
+    assert.ok(
+      linked.some((r) => r.name === 'onex-discovery-awos'),
+      `expected name onex-discovery-awos; got ${JSON.stringify(linked)}`
+    );
+    assert.ok(
+      !linked.some((r) => r.name === 'skills'),
+      'must not be named "skills"'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

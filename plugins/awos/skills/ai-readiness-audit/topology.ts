@@ -18,7 +18,7 @@ import {
   readdirSync,
   realpathSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import { iterFiles, grep } from './detectors/_base.ts';
 import { detectCiConfigPath } from './ci_platforms.ts';
 import {
@@ -409,6 +409,32 @@ export interface LinkedRepo {
 }
 
 /**
+ * Name a linked repo from a resolved target path: prefer the nearest ancestor
+ * dir containing a `.git` entry (its basename); else the segment before the
+ * first dotfile/tool-config segment; else the leaf.
+ */
+function linkedRepoName(realTarget: string): string {
+  // 1. nearest ancestor with a .git
+  let dir = realTarget;
+  for (let i = 0; i < 12; i++) {
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    try {
+      if (existsSync(join(dir, '.git'))) return basename(dir);
+    } catch {
+      /* ignore */
+    }
+    dir = parent;
+  }
+  // 2. segment before the first dotfile segment
+  const segs = realTarget.split(/[\\/]/).filter(Boolean);
+  const dotIdx = segs.findIndex((s) => s.startsWith('.'));
+  if (dotIdx > 0) return segs[dotIdx - 1];
+  // 3. leaf
+  return segs[segs.length - 1] ?? realTarget;
+}
+
+/**
  * Detect linked (externally-referenced) repositories by scanning:
  *  1. `.gitmodules` — each `url =` entry is a submodule.
  *  2. Symlinks under agent-tool config dirs (e.g. `.claude/`, `.cursor/`)
@@ -471,11 +497,7 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
             // the name but record it only if it looks like an absolute outside path.
             const rawTarget = readlinkSync(p);
             if (!rawTarget.startsWith(realRepoRoot)) {
-              const segs = rawTarget
-                .replace(/\/+$/, '')
-                .split(/[\\/]/)
-                .filter(Boolean);
-              const name = segs[segs.length - 1] ?? rawTarget;
+              const name = linkedRepoName(rawTarget.replace(/\/+$/, ''));
               if (!found.has(name)) {
                 found.set(name, { name, kind: 'symlink', via });
               }
@@ -487,8 +509,7 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
             !realTarget.startsWith(realRepoRoot + '/') &&
             realTarget !== realRepoRoot
           ) {
-            const segs = realTarget.split(/[\\/]/).filter(Boolean);
-            const name = segs[segs.length - 1] ?? realTarget;
+            const name = linkedRepoName(realTarget);
             if (!found.has(name)) {
               found.set(name, { name, kind: 'symlink', via });
             }

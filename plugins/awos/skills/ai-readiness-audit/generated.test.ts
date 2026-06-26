@@ -26,3 +26,22 @@ test('isGeneratedPath leaves hand-written source alone', () => {
   }
   assert.ok(GENERATED_GLOBS.length > 0, 'GENERATED_GLOBS must be non-empty');
 });
+
+test('isGeneratedPath ignores Python env/cache and common build dirs', () => {
+  for (const p of [
+    '.venv/lib/python3.12/site-packages/foo.py',
+    'venv/x.py',
+    'env/x.py',
+    'site-packages/pkg/a.py',
+    '.tox/py312/x.py',
+    '.mypy_cache/x.json',
+    '.pytest_cache/v/cache',
+    '.ruff_cache/x',
+    '.gradle/x',
+    '.terraform/x',
+  ]) {
+    assert.equal(isGeneratedPath(p), true, `expected generated/ignored: ${p}`);
+  }
+  // real source stays detected
+  assert.equal(isGeneratedPath('src/app/main.py'), false);
+});

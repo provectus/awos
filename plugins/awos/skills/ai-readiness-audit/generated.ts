@@ -29,6 +29,20 @@ const DIR_MARKERS = [
   'build',
   '.next',
   'node_modules',
+  // Python virtualenvs, installed packages, and tool caches
+  '.venv',
+  'venv',
+  'env',
+  'site-packages',
+  '.tox',
+  '.nox',
+  '.mypy_cache',
+  '.pytest_cache',
+  '.ruff_cache',
+  '.eggs',
+  // other ecosystem build/cache dirs
+  '.gradle',
+  '.terraform',
 ];
 
 /** True if a repo-relative path looks generated or vendored. */

@@ -1,13 +1,12 @@
 ---
 name: ai-readiness-audit
 description: >-
-  Run a comprehensive code quality audit across extensible dimensions. Use when
-  asked to "audit the code", "run a code audit", "check code quality", "audit
-  this project", or when the /awos:ai-readiness-audit command is invoked. Discovers dimension
-  files automatically — drop a new .md in dimensions/ to extend. Each dimension
-  runs in its own context window for thorough analysis.
+  Command-invoked AI-SDLC readiness audit. Runs the deterministic scoring
+  engine across all dimensions in one pass and compiles a report. Invoked by
+  the /awos:ai-readiness-audit command; not auto-triggered. Dimensions are
+  discovered automatically from dimensions/ — drop a new .md to extend.
 disable-model-invocation: true
-argument-hint: '[dimension-name] or blank for full audit'
+argument-hint: '[dimension] — omit for a full audit'
 ---
 
 # Code Audit — Orchestrator
@@ -23,7 +22,7 @@ Before discovering dimensions, resolve the repositories that the audit will cove
 Detect the audit scope using three methods (per `data-sources.md`):
 
 1. **Current repo** — always included.
-2. **Monorepo build roots** — packages/apps declared in workspace configs (`pnpm-workspace.yaml`, `turbo.json`, etc.; see project-topology TOPO-01).
+2. **Monorepo build roots** — packages/apps declared in workspace configs (`pnpm-workspace.yaml`, `turbo.json`, etc.; see `dimensions/project-topology.md` → TOPO-01).
 3. **Git submodules** — paths declared in `.gitmodules`.
 4. **Symlinked source directories** — filesystem symlinks inside the repo that point outside the repo root (the AWOS-linked-into-services pattern; see `data-sources.md` "Multi-repo linking").
 

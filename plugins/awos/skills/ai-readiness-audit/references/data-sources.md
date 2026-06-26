@@ -18,9 +18,13 @@ When invoked with no arguments, the skill audits the **current repo** (the worki
 
 Linked repositories are resolved automatically using three methods:
 
-1. **Monorepo build roots** — packages and apps listed in monorepo build config (workspace roots, `pnpm-workspace.yaml`, `turbo.json`, etc.; see project-topology TOPO-01).
+1. **Monorepo build roots** — packages and apps listed in monorepo build config (workspace roots, `pnpm-workspace.yaml`, `turbo.json`, etc.; see `dimensions/project-topology.md` → TOPO-01).
 2. **Git submodules** — paths declared in `.gitmodules`.
 3. **Symlinked source directories** — filesystem symlinks inside the repo that point to a path outside the repo root. This covers the pattern where an AWOS orchestrating repo is symlinked into service repos — see "One Orchestrating Repo: Spec-Driven Development Across a Live Multi-Repo Product" (Provectus on Medium).
+
+### Monorepo & linked-repo detection (TOPO-01)
+
+The monorepo flag (`dimensions/project-topology.md` → TOPO-01) is set when a workspace manifest is present at the repo root — any of `pnpm-workspace.yaml`, `package.json` with a `workspaces` field, `turbo.json`, `nx.json`, `lerna.json`, `pants.toml`, `WORKSPACE`/`MODULE.bazel`, or a Cargo/Go workspace declaration. When set, packages/apps declared by that manifest are treated as additional build roots for the audit. Git submodules (`.gitmodules`) and in-repo symlinks pointing outside the repo root are linked in the same way. This flag gates the `applies_when` of the end-to-end-delivery checks.
 
 ---
 

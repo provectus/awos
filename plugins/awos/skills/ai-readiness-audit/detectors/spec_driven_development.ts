@@ -623,9 +623,10 @@ export function detectSpecTriadComplete(
   const evidence = [
     `${complete.length}/${specDirs.length} spec dirs have all 3 files`,
     ...incomplete.map(
-      (s) => `incomplete: ${s.dir} — missing: ${s.missing.join(', ')}`
+      (s) =>
+        `${s.dir} — ${s.present.length}/3 spec-triad artifacts present (missing: ${s.missing.join(', ')})`
     ),
-    ...empty.map((s) => `empty: ${s.dir} — has none of the 3 required files`),
+    ...empty.map((s) => `${s.dir} — 0/3 spec-triad artifacts present`),
   ];
 
   if (empty.length > 0) {

@@ -202,6 +202,13 @@ export interface PerRepoSummary {
   has_ai_tooling: boolean;
 }
 
+export interface SourceSummary {
+  source: string;
+  available: boolean;
+  reason_if_absent: string | null;
+  history_available_days: number | null;
+}
+
 export interface AuditJson {
   date: string;
   project: string;
@@ -215,7 +222,17 @@ export interface AuditJson {
   // org-mode fields (optional)
   portfolio_metrics?: PortfolioMetric[];
   per_repo?: PerRepoSummary[];
+  // collector availability
+  sources?: SourceSummary[];
 }
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Module-level constants
+// ---------------------------------------------------------------------------
+
+/** Days threshold below which a source's history is flagged as limited. */
+const LIMITED_HISTORY_DAYS = 30;
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -229,10 +246,42 @@ function titleLabel(dim: DimensionArtifact): string {
   return labelize(dim.dimension);
 }
 
-function labelize(slug: string): string {
+const ACRONYMS = new Set([
+  'ai',
+  'sdlc',
+  'ci',
+  'cd',
+  'api',
+  'ui',
+  'ux',
+  'db',
+  'mcp',
+  'e2e',
+  'tls',
+  'cors',
+  'sql',
+  'ml',
+  'dora',
+  'pii',
+  'qa',
+  'sbom',
+  'csrf',
+  'xss',
+  'http',
+  'https',
+  'url',
+  'cli',
+  'llm',
+]);
+
+export function labelize(slug: string): string {
   return slug
     .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .map((w) =>
+      ACRONYMS.has(w.toLowerCase())
+        ? w.toUpperCase()
+        : w.charAt(0).toUpperCase() + w.slice(1)
+    )
     .join(' ');
 }
 
@@ -553,6 +602,36 @@ export function renderMarkdown(audit: AuditJson): string {
     lines.push('');
   }
 
+  // Connections & Sources
+  if (audit.sources && audit.sources.length > 0) {
+    lines.push('## Connections & Sources');
+    lines.push('');
+    const connected = audit.sources.filter((s) => s.available);
+    const missed = audit.sources.filter((s) => !s.available);
+    if (connected.length > 0) {
+      lines.push('**Connected:**');
+      lines.push('');
+      for (const s of connected) {
+        const limitedNote =
+          s.history_available_days !== null &&
+          s.history_available_days < LIMITED_HISTORY_DAYS
+            ? ` (limited history ~${s.history_available_days} days)`
+            : '';
+        lines.push(`- ${s.source}${limitedNote}`);
+      }
+      lines.push('');
+    }
+    if (missed.length > 0) {
+      lines.push('**Missed / limited:**');
+      lines.push('');
+      for (const s of missed) {
+        const reason = s.reason_if_absent ? ` — ${s.reason_if_absent}` : '';
+        lines.push(`- ${s.source}${reason}`);
+      }
+      lines.push('');
+    }
+  }
+
   return lines.join('\n');
 }
 
@@ -688,7 +767,7 @@ a:hover{text-decoration:underline}
 .exec{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px 20px;margin-bottom:20px}
 .cap-score{font-size:2.2rem;font-weight:800;color:#4f46e5;line-height:1.1}
 .cap-cov{font-size:.95rem;color:#64748b;margin-top:2px}
-.exec-blocks{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-top:16px}
+.exec-blocks{display:flex;flex-direction:column;gap:18px;margin-top:16px}
 .exec-col{border-top:1px solid #eef2f7;padding-top:12px}
 .kv{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:3px 0;font-size:.85rem}
 .kv .k{color:#475569}
@@ -1042,6 +1121,37 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
     return rows.join('\n');
   }
 
+  // ─── Connections & Sources section ─────────────────────────────────────────
+  function connectionsSection(): string {
+    if (!audit.sources || audit.sources.length === 0) return '';
+    const rows: string[] = ['<h2>Connections &amp; Sources</h2>'];
+    const connected = audit.sources.filter((s) => s.available);
+    const missed = audit.sources.filter((s) => !s.available);
+    if (connected.length > 0) {
+      rows.push('<h3>Connected</h3><ul>');
+      for (const s of connected) {
+        const limitedNote =
+          s.history_available_days !== null &&
+          s.history_available_days < LIMITED_HISTORY_DAYS
+            ? ` <em>(limited history ~${s.history_available_days} days)</em>`
+            : '';
+        rows.push(`<li>${esc(s.source)}${limitedNote}</li>`);
+      }
+      rows.push('</ul>');
+    }
+    if (missed.length > 0) {
+      rows.push('<h3>Missed / limited</h3><ul>');
+      for (const s of missed) {
+        const reason = s.reason_if_absent
+          ? ` — ${esc(s.reason_if_absent)}`
+          : '';
+        rows.push(`<li>${esc(s.source)}${reason}</li>`);
+      }
+      rows.push('</ul>');
+    }
+    return rows.join('\n');
+  }
+
   // ─── Inline JS — hash routing + issues filter ──────────────────────────────
   const inlineJs = `
 function route(){
@@ -1090,6 +1200,7 @@ ${insightsSection()}
 ${recommendationsSection()}
 ${dimensionSummary()}
 ${reposSection()}
+${connectionsSection()}
 </div>
 
 ${dimPages}

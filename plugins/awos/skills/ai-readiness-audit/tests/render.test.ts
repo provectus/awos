@@ -27,7 +27,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderMarkdown, renderHtml } from '../render.ts';
+import { renderMarkdown, renderHtml, labelize } from '../render.ts';
 import type { AuditJson } from '../render.ts';
 
 // ---------------------------------------------------------------------------
@@ -677,4 +677,44 @@ test('renderHtml (org): Repositories & Connections section with per-repo rows', 
     html.includes('org/service-a') && html.includes('org/legacy'),
     'Org HTML Repositories section must list each repo'
   );
+});
+
+test('labelize uppercases known acronyms', () => {
+  assert.equal(labelize('ai-sdlc-adoption'), 'AI SDLC Adoption');
+  assert.equal(labelize('ai-development-tooling'), 'AI Development Tooling');
+  assert.equal(labelize('code-architecture'), 'Code Architecture');
+});
+
+test('report renders connections and missed-sources section', () => {
+  const audit: AuditJson = {
+    date: '2026-01-15',
+    project: 'test-repo',
+    audit_total: 50,
+    coverage: 0.5,
+    dimensions: [],
+    sources: [
+      {
+        source: 'git',
+        available: true,
+        reason_if_absent: null,
+        history_available_days: 400,
+      },
+      {
+        source: 'ci',
+        available: false,
+        reason_if_absent: 'no CI config or connector found',
+        history_available_days: null,
+      },
+      {
+        source: 'tracker',
+        available: true,
+        reason_if_absent: null,
+        history_available_days: 14,
+      },
+    ],
+  };
+  const md = renderMarkdown(audit);
+  assert.match(md, /Connections & Sources/);
+  assert.match(md, /no CI config or connector found/);
+  assert.match(md, /14 days|limited history/i);
 });

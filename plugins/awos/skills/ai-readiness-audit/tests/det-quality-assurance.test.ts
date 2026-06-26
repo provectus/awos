@@ -633,20 +633,17 @@ test('QA-06: tox.ini with pytest-cov returns PASS', () => {
 });
 
 test('QA-04: Vitest reference in test file is detected as E2E signal', () => {
-  // Vitest is now in E2E/integration content patterns
+  // vitest is in E2E_CONTENT_RX — a file importing it must yield PASS
   const t = tmp();
   writeFileSync(
     join(t, 'app.spec.ts'),
     'import { vitest } from "vitest";\ntest("x", () => {});\n'
   );
-  // vitest is added to E2E_CONTENT_RX — it may or may not be detected
-  // depending on implementation; at minimum the test file itself is found
   const r = detectE2ETests(t);
-  // Either PASS (vitest hit) or FAIL (not in E2E_CONTENT_RX) is acceptable
-  // The key check is that no exception is thrown
-  assert.ok(
-    ['PASS', 'FAIL'].includes(r.status),
-    'must not throw on vitest ref'
+  assert.equal(
+    r.status,
+    'PASS',
+    'vitest import should be detected as an E2E signal'
   );
 });
 

@@ -67,6 +67,7 @@ await build({
   platform: 'node',
   format: 'esm',
   target: 'node22',
+  minify: true,
   // Inject CommonJS globals (__dirname, __filename) into the bundle.
   // web-tree-sitter@0.24 is a CJS module that uses __dirname to locate
   // the core wasm file.  Without this, the bundled ESM context has no

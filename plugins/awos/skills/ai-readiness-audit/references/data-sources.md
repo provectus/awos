@@ -73,6 +73,8 @@ Each subagent:
 - Probes which connectors are reachable (see Connector detection above).
 - Reads in-repo signals — CI config, tracker references in docs or scripts, doc links — to infer each repo's sources.
 
+Dispatch this discovery work with a fast model (Haiku) — it is mechanical file/PATH probing.
+
 ### Phase 2 — One confirmation prompt
 
 After the discovery round completes, use `AskUserQuestion` **once, at the start of the run**, to confirm the detected sources and fill any gaps. Never prompt mid-run.

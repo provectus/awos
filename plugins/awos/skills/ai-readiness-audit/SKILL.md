@@ -49,6 +49,8 @@ Never prompt mid-run after this step.
 
 Contributor counts are always reported in aggregate (never per-person). No money, no PII.
 
+Dispatch this discovery work with a fast model (Haiku) — it is mechanical file/PATH probing.
+
 ## Step 1 — Dimensions are the engine's job, not yours
 
 The set of dimensions, every category in them, the topology flags that gate them, and the order they run in **all live inside the `audit-core` command** (Step 5). It reads `references/standards.toml` and the `dimensions/*.md` files itself, evaluates project-topology first, and scores every dimension in one deterministic pass.
@@ -100,6 +102,8 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" progress <elapsed_seconds> <done> <total>
 It returns `pct` (fraction 0–1 complete) and `eta_seconds`; print a single readable line such as `[Audit] scoring complete — 70% — ETA ~1 min remaining`. ETA is a wall-clock UX estimate, not a scored or deterministic metric. Exclude time spent waiting on the user from the elapsed timer — pause it across every `AskUserQuestion` call (Step 0 scope confirmation, Step 7 next-steps) and subtract that wait before passing `elapsed_seconds`. In headless mode (`--output-format stream-json`) emit the same JSON as a stream line; the artifact-count fallback is always observable too (`ls context/audits/YYYY-MM-DD/*.json | wc -l`).
 
 ## Step 6 — Patch the LLM-only slice, then render
+
+Use a mid-tier model (Sonnet) for the judgment checks and narrative authoring — moderate reasoning, single pass.
 
 `audit.json` already holds the full deterministic result. Fill only what the engine cannot, then render. Never re-score a `detected`/`computed` check, and never hand-write `report.md`/`report.html`.
 

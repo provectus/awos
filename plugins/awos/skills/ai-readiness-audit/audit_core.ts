@@ -40,6 +40,8 @@ const PERIOD: Period = {
   history_available_days: 0,
 };
 
+const COLLECTOR_SOURCES = ['git', 'ci', 'tracker', 'docs'] as const;
+
 type DetectorFn = (repoPath: string, params?: unknown) => DetectorResult;
 type MetricFn = (
   collectedDir: string,
@@ -117,6 +119,28 @@ export async function auditCore(
   ]) {
     writeArtifact(art as { source: string }, collectedDir);
   }
+
+  // Build sources block from collector artifacts.
+  const sources = COLLECTOR_SOURCES.map((src) => {
+    try {
+      const art = JSON.parse(
+        readFileSync(join(collectedDir, `${src}.json`), 'utf8')
+      );
+      return {
+        source: src,
+        available: Boolean(art.available),
+        reason_if_absent: art.reason_if_absent ?? null,
+        history_available_days: art.period?.history_available_days ?? null,
+      };
+    } catch {
+      return {
+        source: src,
+        available: false,
+        reason_if_absent: 'collector artifact not found',
+        history_available_days: null,
+      };
+    }
+  });
 
   // 2. Deterministic topology flags. Connector-dependent flags default to
   //    absent; the orchestrator re-runs with connectors during the patch phase.
@@ -208,6 +232,7 @@ export async function auditCore(
     audit_total: auditTotal,
     coverage: auditApplicable > 0 ? auditTotal / auditApplicable : 0,
     dimensions,
+    sources,
   };
   writeFileSync(join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
 
@@ -267,6 +292,25 @@ export function aggregate(outDir: string): void {
   } catch {
     /* no prior audit.json */
   }
+
+  // Re-derive sources from collected/ artifacts (derived like dimension sums).
+  const collectedDirAgg = join(outDir, 'collected');
+  const derivedSources = COLLECTOR_SOURCES.map((src) => {
+    try {
+      const art = JSON.parse(
+        readFileSync(join(collectedDirAgg, `${src}.json`), 'utf8')
+      );
+      return {
+        source: src,
+        available: Boolean(art.available),
+        reason_if_absent: art.reason_if_absent ?? null,
+        history_available_days: art.period?.history_available_days ?? null,
+      };
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+
   const audit: Record<string, unknown> = {
     date: existing.date ?? new Date().toISOString().slice(0, 10),
     project: existing.project ?? basename(outDir),
@@ -276,6 +320,13 @@ export function aggregate(outDir: string): void {
   };
   for (const block of ['headline', 'insights', 'recommendations']) {
     if (existing[block] !== undefined) audit[block] = existing[block];
+  }
+  // Prefer re-derived sources when collected/ artifacts are present; fall back
+  // to the previously stored sources block so it is never silently dropped.
+  if (derivedSources.length > 0) {
+    audit.sources = derivedSources;
+  } else if (existing.sources !== undefined) {
+    audit.sources = existing.sources;
   }
   writeFileSync(join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
 }

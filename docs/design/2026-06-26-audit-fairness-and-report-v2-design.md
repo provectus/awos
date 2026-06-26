@@ -95,7 +95,7 @@ Covered in §5; it's both a fairness and a transparency fix.
 
 This is likely a **small family** rather than one number, since "documented" means different things at different scopes:
 
-- **Public/exported-symbol coverage** — fraction of *exported/public* definitions that are documented (the highest-value signal; an unexported helper needs a doc far less than a public API).
+- **Public/exported-symbol coverage** — fraction of _exported/public_ definitions that are documented (the highest-value signal; an unexported helper needs a doc far less than a public API).
 - **Overall definition coverage** — fraction of all definitions documented (secondary, lower weight).
 - Optionally a **module/file-header coverage** sub-signal.
 

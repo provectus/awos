@@ -147,8 +147,14 @@ export function isLocalOnlyAgentFile(repoRelPath: string): boolean {
   );
 }
 
-export function detectAgentTools(repoPath: string): AgentToolDef[] {
-  return AGENT_TOOLS.filter((t) => {
+export interface DetectedAgentTool {
+  def: AgentToolDef;
+  evidence: string;
+}
+
+export function detectAgentTools(repoPath: string): DetectedAgentTool[] {
+  const out: DetectedAgentTool[] = [];
+  for (const t of AGENT_TOOLS) {
     const paths = [
       ...t.instructionFiles,
       ...t.ruleOrCommandDirs,
@@ -157,6 +163,8 @@ export function detectAgentTools(repoPath: string): AgentToolDef[] {
       ...t.hookPaths,
       ...t.configDirs,
     ];
-    return paths.some((p) => existsSync(join(repoPath, p)));
-  });
+    const hit = paths.find((p) => existsSync(join(repoPath, p)));
+    if (hit) out.push({ def: t, evidence: hit });
+  }
+  return out;
 }

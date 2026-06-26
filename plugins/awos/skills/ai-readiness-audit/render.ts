@@ -219,11 +219,16 @@ export interface SourceSummary {
 // Re-exported so callers that previously imported LinkedRepo from render.ts continue to work.
 export type { LinkedRepo };
 
+export interface TechItem {
+  name: string;
+  evidence: string;
+}
+
 export interface TechStack {
-  languages: string[];
-  agent_tools: string[];
-  ci: string[];
-  frameworks: string[];
+  languages: TechItem[];
+  agent_tools: TechItem[];
+  ci: TechItem[];
+  frameworks: TechItem[];
 }
 
 export interface DetectionConflict {
@@ -648,6 +653,7 @@ export function renderMarkdown(audit: AuditJson): string {
       for (const s of connected) {
         const limitedNote =
           s.history_available_days !== null &&
+          s.history_available_days > 0 &&
           s.history_available_days < LIMITED_HISTORY_DAYS
             ? ` (limited history ~${s.history_available_days} days)`
             : '';
@@ -690,20 +696,22 @@ export function renderMarkdown(audit: AuditJson): string {
     if (hasAny) {
       lines.push('## Tech Stack');
       lines.push('');
+      const mdItems = (items: TechItem[]) =>
+        items.map((i) => `${i.name} — ${i.evidence}`).join(', ');
       if (ts.languages.length > 0) {
-        lines.push('**Languages:** ' + ts.languages.join(', '));
+        lines.push('**Languages:** ' + mdItems(ts.languages));
         lines.push('');
       }
       if (ts.agent_tools.length > 0) {
-        lines.push('**Agent Tools:** ' + ts.agent_tools.join(', '));
+        lines.push('**Agent Tools:** ' + mdItems(ts.agent_tools));
         lines.push('');
       }
       if (ts.ci.length > 0) {
-        lines.push('**CI:** ' + ts.ci.join(', '));
+        lines.push('**CI:** ' + mdItems(ts.ci));
         lines.push('');
       }
       if (ts.frameworks.length > 0) {
-        lines.push('**Frameworks:** ' + ts.frameworks.join(', '));
+        lines.push('**Frameworks:** ' + mdItems(ts.frameworks));
         lines.push('');
       }
     }
@@ -1212,6 +1220,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
         for (const s of connected) {
           const limitedNote =
             s.history_available_days !== null &&
+            s.history_available_days > 0 &&
             s.history_available_days < LIMITED_HISTORY_DAYS
               ? ` <em>(limited history ~${s.history_available_days} days)</em>`
               : '';
@@ -1255,11 +1264,13 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
     if (!ts) return '';
     const rows: string[] = ['<h2>Tech Stack</h2>'];
 
-    function listGroup(label: string, items: string[]): void {
+    function techItemsHtml(items: TechItem[]): string {
+      return items.map((i) => tip(i.name, i.evidence, '')).join(', ');
+    }
+
+    function listGroup(label: string, items: TechItem[]): void {
       if (items.length === 0) return;
-      rows.push(`<h3>${esc(label)}</h3><ul>`);
-      for (const item of items) rows.push(`<li>${esc(item)}</li>`);
-      rows.push('</ul>');
+      rows.push(`<h3>${esc(label)}</h3><p>${techItemsHtml(items)}</p>`);
     }
 
     listGroup('Languages', ts.languages);

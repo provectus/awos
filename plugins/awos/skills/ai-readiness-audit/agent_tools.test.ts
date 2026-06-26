@@ -38,7 +38,7 @@ test('detectAgentTools finds present tools by any attribute', () => {
   writeFileSync(join(dir, 'GEMINI.md'), '# gemini');
   mkdirSync(join(dir, '.windsurf'), { recursive: true });
   const found = detectAgentTools(dir)
-    .map((t) => t.id)
+    .map((t) => t.def.id)
     .sort();
   assert.deepEqual(found, ['gemini', 'windsurf']);
 });

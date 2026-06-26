@@ -1,7 +1,7 @@
 // render.test.ts — unit tests for the deterministic JSON → Markdown renderer.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderMarkdown } from './render.ts';
+import { renderMarkdown, renderHtml } from './render.ts';
 import type { AuditJson } from './render.ts';
 
 /** Minimal valid audit fixture — extend per test. */
@@ -19,10 +19,13 @@ function makeAudit(overrides: Partial<AuditJson> = {}): AuditJson {
 test('renderMarkdown includes Tech Stack section when tech_stack is present', () => {
   const audit = makeAudit({
     tech_stack: {
-      languages: ['Python', 'TypeScript'],
-      agent_tools: ['Claude Code'],
-      ci: ['GitHub Actions'],
-      frameworks: ['FastAPI'],
+      languages: [
+        { name: 'Python', evidence: 'src/main.py' },
+        { name: 'TypeScript', evidence: 'src/index.ts' },
+      ],
+      agent_tools: [{ name: 'Claude Code', evidence: '.claude' }],
+      ci: [{ name: 'GitHub Actions', evidence: '.github/workflows/ci.yml' }],
+      frameworks: [{ name: 'FastAPI', evidence: 'pyproject.toml' }],
     },
   });
   const md = renderMarkdown(audit);
@@ -90,4 +93,47 @@ test('renderMarkdown shows "None detected." when linked_repos is absent', () => 
     md.includes('None detected.'),
     'Linked Repositories section must say "None detected." when absent from audit JSON'
   );
+});
+
+test('tech stack renders names with evidence tooltips and no ~0 days', () => {
+  const audit = {
+    date: '2026-06-26',
+    project: 'x',
+    audit_total: 0,
+    coverage: 0,
+    dimensions: [],
+    sources: [
+      {
+        source: 'git',
+        available: true,
+        reason_if_absent: null,
+        history_available_days: 120,
+      },
+    ],
+    linked_repos: [
+      { name: 'onex-discovery-awos', kind: 'symlink', via: '.claude/skills' },
+    ],
+    tech_stack: {
+      languages: [
+        { name: 'Python', evidence: '149 .py files · pyproject.toml' },
+      ],
+      agent_tools: [{ name: 'Claude Code', evidence: '.claude' }],
+      ci: [{ name: 'Azure DevOps', evidence: 'azure-pipelines.yml' }],
+      frameworks: [
+        { name: 'FastAPI', evidence: 'dependency "fastapi" in a manifest' },
+      ],
+    },
+  };
+  const html = renderHtml(audit as any);
+  assert.ok(html.includes('149 .py files'), 'language evidence shown');
+  assert.ok(
+    html.includes('dependency &quot;fastapi&quot;') ||
+      html.includes('dependency "fastapi"'),
+    'framework evidence shown'
+  );
+  assert.ok(
+    html.includes('onex-discovery-awos'),
+    'linked repo by repo-root name'
+  );
+  assert.ok(!/~0 days/.test(html), 'never render ~0 days');
 });

@@ -337,10 +337,19 @@ export async function auditCore(
   const linkedRepos = detectLinkedRepos(repoPath);
   const ciPath = detectCiConfigPath(repoPath);
   const techStack = {
-    languages: detectLanguages(repoPath).map((l) => l.def.displayName),
-    agent_tools: detectAgentTools(repoPath).map((t) => t.displayName),
-    ci: ciPath ? [ciDisplayName(ciPath)] : [],
-    frameworks: detectFrameworks(repoPath).map((f) => f.name),
+    languages: detectLanguages(repoPath).map((l) => ({
+      name: l.def.displayName,
+      evidence: l.evidence,
+    })),
+    agent_tools: detectAgentTools(repoPath).map((t) => ({
+      name: t.def.displayName,
+      evidence: t.evidence,
+    })),
+    ci: ciPath ? [{ name: ciDisplayName(ciPath), evidence: ciPath }] : [],
+    frameworks: detectFrameworks(repoPath).map((f) => ({
+      name: f.name,
+      evidence: f.evidence,
+    })),
   };
   const detectionConflicts = computeDetectionConflicts(repoPath);
 

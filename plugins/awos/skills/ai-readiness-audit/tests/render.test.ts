@@ -825,10 +825,10 @@ test('connections renders Linked repositories even when none, and a Tech Stack s
     ],
     linked_repos: [],
     tech_stack: {
-      languages: ['Python'],
-      agent_tools: ['Claude Code'],
-      ci: ['Azure DevOps'],
-      frameworks: ['FastAPI'],
+      languages: [{ name: 'Python', evidence: 'src/main.py' }],
+      agent_tools: [{ name: 'Claude Code', evidence: '.claude' }],
+      ci: [{ name: 'Azure DevOps', evidence: 'azure-pipelines.yml' }],
+      frameworks: [{ name: 'FastAPI', evidence: 'pyproject.toml' }],
     },
   };
   const html = renderHtml(audit as any);

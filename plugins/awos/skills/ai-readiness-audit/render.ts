@@ -787,6 +787,10 @@ export function renderHtml(audit: AuditJson): string {
   // ─── CSS ──────────────────────────────────────────────────────────────────
   const css = `
 *{box-sizing:border-box;margin:0;padding:0}
+ul{margin:.4em 0 .6em 1.4em}
+li{margin:.2em 0}
+summary{cursor:pointer}
+details{margin-bottom:8px}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#1e293b;font-size:14px;line-height:1.5}
 .container{max-width:980px;margin:0 auto;padding:24px}
 h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
@@ -961,16 +965,11 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
     const rows: string[] = ['<h2>Top insights</h2>', '<div class="insights">'];
     for (const ins of audit.insights) {
       const color = SEVERITY_COLOR[ins.severity] ?? '#6366f1';
-      const areas =
-        ins.weak_areas.length > 0
-          ? `<div class="areas">Weak: ${esc(ins.weak_areas.join(', '))}</div>`
-          : '';
-      rows.push(`<div class="insight" style="border-left-color:${color}">
-  <div class="theme">${esc(ins.theme)}</div>
+      rows.push(`<details class="insight" style="border-left-color:${color}">
+  <summary><span class="theme">${esc(ins.theme)}</span>${ins.weak_areas.length ? ` <span class="areas">Weak: ${esc(ins.weak_areas.join(', '))}</span>` : ''}</summary>
   <div class="so">${esc(ins.so_what)}</div>
   <div class="improves">→ ${esc(ins.improves)}</div>
-  ${areas}
-</div>`);
+</details>`);
     }
     rows.push('</div>');
     return rows.join('\n');
@@ -988,17 +987,10 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
     const rows: string[] = ['<h2>What to improve</h2>'];
     for (const r of recs) {
       const prioColor = PRIORITY_COLOR[r.priority] ?? '#6366f1';
-      const detail = r.detail
-        ? `<div class="rec-detail">${esc(r.detail)}</div>`
-        : '';
-      rows.push(`<div class="rec">
-  <div class="rec-head">
-    <span class="prio" style="background:${prioColor}">${esc(r.priority)}</span>
-    <span class="rec-title">${esc(r.title)}</span>
-    <span class="rec-where">${esc(r.dimension)} · ${esc(r.check_id)} · effort ${esc(r.effort)}</span>
-  </div>
-  ${detail}
-</div>`);
+      rows.push(`<details class="rec">
+  <summary><span class="prio" style="background:${prioColor}">${esc(r.priority)}</span> <span class="rec-title">${esc(r.title)}</span> <span class="rec-where">${esc(r.dimension)} · ${esc(r.check_id)} · effort ${esc(r.effort)}</span></summary>
+  ${r.detail ? `<div class="rec-detail">${esc(r.detail)}</div>` : ''}
+</details>`);
     }
     return rows.join('\n');
   }
@@ -1256,9 +1248,10 @@ function route(){
   document.querySelectorAll('.dim-page').forEach(function(p){p.style.display='none'});
   if(isDim){
     var el=document.getElementById('page-'+h.slice(4));
-    if(el){ov.style.display='none';el.style.display='block';window.scrollTo(0,0);return;}
+    if(el){window.__ovScroll=window.scrollY;ov.style.display='none';el.style.display='block';window.scrollTo(0,0);return;}
   }
   ov.style.display='block';
+  if(typeof window.__ovScroll==='number'){window.scrollTo(0,window.__ovScroll);}
 }
 function toggleIssues(btn){
   var active=document.body.classList.toggle('issues-only');

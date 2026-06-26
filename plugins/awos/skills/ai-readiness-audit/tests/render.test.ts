@@ -765,6 +765,49 @@ test('report renders connections and missed-sources section', () => {
   assert.match(md, /14 days|limited history/i);
 });
 
+test('insights and recommendations render as collapsible accordions; lists have indentation', () => {
+  const audit = {
+    date: '2026-06-26',
+    project: 'x',
+    audit_total: 0,
+    coverage: 0,
+    dimensions: [],
+    insights: [
+      {
+        theme: 'Strong context, weak guardrails',
+        severity: 'high',
+        weak_areas: ['AI-05', 'SEC-02'],
+        so_what: 'risky',
+        improves: 'add hooks',
+      },
+    ],
+    recommendations: [
+      {
+        id: 1,
+        priority: 'P0',
+        title: 'Add CVE scanning',
+        dimension: 'supply-chain-security',
+        check_id: 'SCS-06',
+        effort: 'S',
+        detail: 'use a scanner',
+      },
+    ],
+  };
+  const html = renderHtml(audit as any);
+  assert.ok(
+    html.includes('<details') && html.includes('<summary'),
+    'insights/recs use <details>/<summary>'
+  );
+  assert.ok(
+    html.includes('AI-05') && html.includes('SCS-06'),
+    'summary shows tags'
+  );
+  assert.ok(
+    /ul\s*\{[^}]*margin/i.test(html) || /ul\s*\{[^}]*padding-left/i.test(html),
+    'ul has indentation CSS'
+  );
+});
+
 test('connections renders Linked repositories even when none, and a Tech Stack section', () => {
   const audit = {
     date: '2026-06-26',

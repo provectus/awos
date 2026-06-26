@@ -4,7 +4,7 @@
 export const FRAMEWORK_AUTH_PATTERNS: RegExp[] = [
   // FastAPI / Starlette dependency injection
   /Depends\(\s*[A-Za-z_][\w.]*(?:current_user|get_current_user|require_[a-z_]+|auth[\w]*|verify_[a-z_]+)/i,
-  /Security\(\s*[A-Za-z_][\w.]*\)/,
+  /Security\(\s*[A-Za-z_][\w.]*(?:current_user|get_current_user|require_[a-z_]+|auth[\w]*|verify_[a-z_]+|scopes)/i,
   // NestJS guards
   /@UseGuards\(/,
   // Spring Security

@@ -18,8 +18,17 @@ test('framework auth patterns recognize DI/guard/decorator idioms', () => {
   );
   assert.ok(hasAuth('[Authorize]'), 'ASP.NET attribute');
   assert.ok(hasAuth('@login_required'), 'Flask/Django decorator');
+  assert.ok(
+    hasAuth('user = Security(get_current_user, scopes=["me"])'),
+    'FastAPI Security with auth dependency'
+  );
 });
 
 test('framework auth patterns do not match unrelated code', () => {
   assert.equal(hasAuth('def add(a, b):\n    return a + b'), false);
+  assert.equal(
+    FRAMEWORK_AUTH_PATTERNS.some((rx) => rx.test('Security(app_config)')),
+    false,
+    'bare Security(app_config) must not match — not an auth dependency'
+  );
 });

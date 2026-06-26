@@ -193,45 +193,73 @@ test('SEC-04: comment-only match is not flagged', () => {
 // detectSensitiveFilesGitignored (2604 — SEC-05)
 // ---------------------------------------------------------------------------
 
-test('SEC-05: .gitignore with *.pem, *.key, *.p12, *.pfx is PASS', () => {
+// Old behavior: PASS if .gitignore covered ≥3 patterns regardless of file presence.
+// New contract: relevance-gated — only types with matching files in repo are checked.
+// These tests now use actual secret files to exercise the new paths.
+
+test('SEC-05: actual *.pem and *.key files covered in .gitignore is PASS', () => {
   const t = tmp();
+  writeFileSync(join(t, 'server.pem'), 'KEY\n');
+  writeFileSync(join(t, 'client.key'), 'KEY\n');
   writeFileSync(join(t, '.gitignore'), '*.pem\n*.key\n*.p12\n*.pfx\n');
   const r = detectSensitiveFilesGitignored(t);
   assert.equal(r.status, 'PASS');
-  assert.ok(r.value >= 4);
+  assert.ok(
+    (r.value as number) >= 2,
+    `expected value ≥ 2 (relevant types covered), got ${r.value}`
+  );
   assert.equal(r.method, 'detected');
 });
 
-test('SEC-05: .gitignore with only *.pem is WARN (1 pattern)', () => {
+test('SEC-05: *.pem in .gitignore but Dockerfile without .dockerignore is WARN', () => {
   const t = tmp();
+  writeFileSync(join(t, 'server.pem'), 'KEY\n');
   writeFileSync(join(t, '.gitignore'), '*.pem\nnode_modules/\n');
+  writeFileSync(join(t, 'Dockerfile'), 'FROM x\nCOPY . /app\n');
   const r = detectSensitiveFilesGitignored(t);
-  assert.equal(r.status, 'WARN');
+  assert.equal(
+    r.status,
+    'WARN',
+    `git-covered but Docker-exposed *.pem must be WARN; got ${r.status}`
+  );
 });
 
-test('SEC-05: .gitignore with no sensitive patterns is FAIL', () => {
+test('SEC-05: .gitignore present but missing *.pem entry when file exists is FAIL', () => {
   const t = tmp();
+  writeFileSync(join(t, 'server.pem'), 'KEY\n');
   writeFileSync(join(t, '.gitignore'), 'node_modules/\ndist/\n*.log\n');
   const r = detectSensitiveFilesGitignored(t);
-  assert.equal(r.status, 'FAIL');
+  assert.equal(
+    r.status,
+    'FAIL',
+    `*.pem file present but not gitignored must be FAIL; got ${r.status}`
+  );
 });
 
-test('SEC-05: no .gitignore is FAIL', () => {
+test('SEC-05: no .gitignore when a *.pem file is present is FAIL', () => {
   const t = tmp();
-  writeFileSync(join(t, 'main.py'), 'print(1)\n');
+  writeFileSync(join(t, 'server.pem'), 'KEY\n');
   const r = detectSensitiveFilesGitignored(t);
-  assert.equal(r.status, 'FAIL');
+  assert.equal(
+    r.status,
+    'FAIL',
+    `no .gitignore + *.pem file must be FAIL; got ${r.status}`
+  );
 });
 
-test('SEC-05: credentials.json gitignored counts as a pattern', () => {
+test('SEC-05: credentials.json file covered in .gitignore is PASS with evidence', () => {
   const t = tmp();
+  writeFileSync(join(t, 'credentials.json'), '{"type":"service_account"}\n');
   writeFileSync(
     join(t, '.gitignore'),
     '*.pem\n*.key\ncredentials.json\n*.p12\n'
   );
   const r = detectSensitiveFilesGitignored(t);
   assert.equal(r.status, 'PASS');
-  assert.ok(r.evidence.some((e) => e.includes('credentials.json')));
+  assert.ok(
+    r.evidence.some((e) => e.includes('credentials.json')),
+    `evidence must mention credentials.json; got ${JSON.stringify(r.evidence)}`
+  );
 });
 
 // ---------------------------------------------------------------------------

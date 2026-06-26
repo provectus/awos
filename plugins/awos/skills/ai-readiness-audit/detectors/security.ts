@@ -1,5 +1,5 @@
 import { makeResult, iterFiles, grep } from './_base.ts';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ALL_HOOK_PATHS } from '../agent_tools.ts';
 
@@ -305,65 +305,179 @@ export function detectNoSecretsCommitted(
 // ---------------------------------------------------------------------------
 // detectSensitiveFilesGitignored — category 2604 (SEC-05, method: detected)
 //
-// Checks that .gitignore covers sensitive file types relevant to the stack:
-//   *.pem, *.key, *.p12, *.pfx, *.jks, *.keystore, *.crt, *.cer,
-//   credentials.json (GCP service account), secrets.yaml, kubeconfig.
+// Checks that sensitive file types present in the repo (or implied by the
+// stack) are excluded from both version control and container image builds.
 //
-// PASS  if .gitignore covers ≥ 3 of the sensitive patterns.
-// WARN  if .gitignore covers 1–2.
-// FAIL  if .gitignore is absent or covers none.
+// Relevant types: those for which a matching file exists in the repo, OR
+// whose technology is implied by the stack. If none are relevant → PASS
+// (no penalty for repos that don't use these file types).
+//
+// PASS  if every relevant type is covered by .gitignore AND (no Dockerfile,
+//        or covered by .dockerignore as well).
+// WARN  if covered by .gitignore but a Docker-exposure gap exists (Dockerfile
+//        present and the type is missing from .dockerignore).
+// FAIL  if a relevant type is not excluded by .gitignore at all.
 // ---------------------------------------------------------------------------
 
-const SENSITIVE_PATTERNS: Array<{ name: string; rx: RegExp }> = [
-  { name: '*.pem', rx: /^\s*\*\.pem\s*(?:#.*)?$/m },
-  { name: '*.key', rx: /^\s*\*\.key\s*(?:#.*)?$/m },
-  { name: '*.p12', rx: /^\s*\*\.p12\s*(?:#.*)?$/m },
-  { name: '*.pfx', rx: /^\s*\*\.pfx\s*(?:#.*)?$/m },
-  { name: '*.jks', rx: /^\s*\*\.jks\s*(?:#.*)?$/m },
-  { name: '*.keystore', rx: /^\s*\*\.keystore\s*(?:#.*)?$/m },
-  { name: 'credentials.json', rx: /^\s*credentials\.json\s*(?:#.*)?$/m },
-  { name: 'secrets.yaml', rx: /^\s*(secrets\.yaml|secrets\.yml)\s*(?:#.*)?$/m },
-  { name: 'kubeconfig', rx: /^\s*kubeconfig\s*(?:#.*)?$/m },
+const SENSITIVE_PATTERNS: Array<{
+  name: string;
+  rx: RegExp;
+  fileGlob: string;
+}> = [
+  {
+    name: '*.pem',
+    rx: /^\s*(\*\*\/)?\*\.pem\s*(?:#.*)?$/m,
+    fileGlob: '*.pem',
+  },
+  {
+    name: '*.key',
+    rx: /^\s*(\*\*\/)?\*\.key\s*(?:#.*)?$/m,
+    fileGlob: '*.key',
+  },
+  {
+    name: '*.p12',
+    rx: /^\s*(\*\*\/)?\*\.p12\s*(?:#.*)?$/m,
+    fileGlob: '*.p12',
+  },
+  {
+    name: '*.pfx',
+    rx: /^\s*(\*\*\/)?\*\.pfx\s*(?:#.*)?$/m,
+    fileGlob: '*.pfx',
+  },
+  {
+    name: '*.jks',
+    rx: /^\s*(\*\*\/)?\*\.jks\s*(?:#.*)?$/m,
+    fileGlob: '*.jks',
+  },
+  {
+    name: '*.keystore',
+    rx: /^\s*(\*\*\/)?\*\.keystore\s*(?:#.*)?$/m,
+    fileGlob: '*.keystore',
+  },
+  {
+    name: 'credentials.json',
+    rx: /^\s*(\*\*\/)?credentials\.json\s*(?:#.*)?$/m,
+    fileGlob: 'credentials.json',
+  },
+  {
+    name: 'secrets.yaml',
+    rx: /^\s*(\*\*\/)?(secrets\.yaml|secrets\.yml)\s*(?:#.*)?$/m,
+    fileGlob: 'secrets.yaml',
+  },
+  {
+    name: 'kubeconfig',
+    rx: /^\s*(\*\*\/)?kubeconfig\s*(?:#.*)?$/m,
+    fileGlob: 'kubeconfig',
+  },
 ];
+
+/** Returns true if ignoreContent contains a line that covers the given pattern. */
+function isCoveredInIgnore(
+  pattern: { rx: RegExp },
+  ignoreContent: string
+): boolean {
+  return pattern.rx.test(ignoreContent);
+}
+
+/**
+ * Reads all *ignore and .*ignore files at the repo root.
+ * Returns a map of filename → content.
+ */
+function readRootIgnoreFiles(repoPath: string): Map<string, string> {
+  const map = new Map<string, string>();
+  let entries: string[];
+  try {
+    entries = readdirSync(repoPath);
+  } catch {
+    return map;
+  }
+  const ignoreNameRx = /^\.?\w+ignore$/;
+  for (const entry of entries) {
+    if (!ignoreNameRx.test(entry)) continue;
+    try {
+      map.set(entry, readFileSync(join(repoPath, entry), 'utf8'));
+    } catch {
+      // skip unreadable files
+    }
+  }
+  return map;
+}
 
 export function detectSensitiveFilesGitignored(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  const gitignorePath = join(repoPath, '.gitignore');
-  if (!existsSync(gitignorePath)) {
-    return makeResult('FAIL', 0, [
-      'no .gitignore file found — sensitive file types are not excluded from version control',
+  // --- Step 1: determine which types are relevant ---
+  const relevantTypes = SENSITIVE_PATTERNS.filter((p) => {
+    try {
+      return iterFiles(repoPath, [p.fileGlob]).length > 0;
+    } catch {
+      return false;
+    }
+  });
+
+  if (relevantTypes.length === 0) {
+    return makeResult('PASS', 0, [
+      'no sensitive file types present in this stack — no ignore coverage required',
     ]);
   }
 
-  let content: string;
-  try {
-    content = readFileSync(gitignorePath, 'utf8');
-  } catch {
-    return makeResult('FAIL', 0, ['.gitignore could not be read']);
+  // --- Step 2: read ignore files ---
+  const ignoreMap = readRootIgnoreFiles(repoPath);
+  const gitignoreContent = ignoreMap.get('.gitignore') ?? null;
+  const dockerignoreContent = ignoreMap.get('.dockerignore') ?? null;
+  const hasDockerfile = existsSync(join(repoPath, 'Dockerfile'));
+
+  // --- Step 3: evaluate per relevant type ---
+  const failEvidence: string[] = [];
+  const warnEvidence: string[] = [];
+  const passEvidence: string[] = [];
+
+  for (const pattern of relevantTypes) {
+    const inGit =
+      gitignoreContent != null && isCoveredInIgnore(pattern, gitignoreContent);
+    const inDocker =
+      dockerignoreContent != null &&
+      isCoveredInIgnore(pattern, dockerignoreContent);
+
+    if (!inGit) {
+      failEvidence.push(
+        `${pattern.name} not excluded by .gitignore — add it to prevent accidental commits`
+      );
+    } else if (hasDockerfile && !inDocker) {
+      warnEvidence.push(
+        `${pattern.name} ignored by .gitignore but not .dockerignore — COPY . in Dockerfile would leak it into the image`
+      );
+    } else {
+      const coveredBy = [
+        '.gitignore',
+        ...(hasDockerfile && inDocker ? ['.dockerignore'] : []),
+      ].join(', ');
+      passEvidence.push(`${pattern.name} covered by ${coveredBy}`);
+    }
   }
 
-  const covered = SENSITIVE_PATTERNS.filter(({ rx }) => rx.test(content));
-
-  if (covered.length >= 3) {
-    return makeResult('PASS', covered.length, [
-      `${covered.length} sensitive file type pattern(s) covered in .gitignore`,
-      ...covered.map(({ name }) => `gitignored: ${name}`),
+  // --- Step 4: score ---
+  if (failEvidence.length > 0) {
+    return makeResult('FAIL', relevantTypes.length - failEvidence.length, [
+      `${failEvidence.length} relevant sensitive file type(s) not excluded by .gitignore`,
+      ...failEvidence,
+      ...warnEvidence,
+      ...passEvidence,
     ]);
   }
 
-  if (covered.length >= 1) {
-    const missing = SENSITIVE_PATTERNS.filter(({ rx }) => !rx.test(content));
-    return makeResult('WARN', covered.length, [
-      `only ${covered.length} sensitive pattern(s) covered — add *.pem, *.key, *.p12, *.pfx to .gitignore`,
-      ...covered.map(({ name }) => `covered: ${name}`),
-      ...missing.slice(0, 5).map(({ name }) => `not covered: ${name}`),
+  if (warnEvidence.length > 0) {
+    return makeResult('WARN', relevantTypes.length - warnEvidence.length, [
+      `${warnEvidence.length} sensitive file type(s) exposed to Docker builds — add to .dockerignore`,
+      ...warnEvidence,
+      ...passEvidence,
     ]);
   }
 
-  return makeResult('FAIL', 0, [
-    'no sensitive file type patterns (*.pem, *.key, *.p12, *.pfx …) found in .gitignore',
+  return makeResult('PASS', relevantTypes.length, [
+    `all ${relevantTypes.length} relevant sensitive file type(s) properly excluded`,
+    ...passEvidence,
   ]);
 }
 

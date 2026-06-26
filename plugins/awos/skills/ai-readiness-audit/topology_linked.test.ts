@@ -1,7 +1,13 @@
 // topology_linked.test.ts — detectLinkedRepos unit tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  symlinkSync,
+  rmSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { detectLinkedRepos } from './topology.ts';
@@ -56,6 +62,58 @@ test('detectLinkedRepos sets kind=submodule and via=.gitmodules', () => {
       found!.via,
       '.gitmodules',
       'linked repo via must be ".gitmodules" for .gitmodules entries'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('detectLinkedRepos finds a nested symlink pointing outside the repo', () => {
+  // Simulates .claude/skills/<name> → <outside-repo-dir>
+  const base = mkdtempSync(join(tmpdir(), 'awos-linked-nested-'));
+  const repo = join(base, 'repo');
+  const outsideRepo = join(base, 'other-repo-x');
+  try {
+    mkdirSync(repo);
+    mkdirSync(outsideRepo);
+    // Create .claude/skills/ nested dir
+    mkdirSync(join(repo, '.claude'), { recursive: true });
+    mkdirSync(join(repo, '.claude', 'skills'), { recursive: true });
+    // Create a symlink at .claude/skills/foo → ../../other-repo-x (outside repo)
+    symlinkSync(outsideRepo, join(repo, '.claude', 'skills', 'foo'));
+
+    const linked = detectLinkedRepos(repo);
+    assert.ok(
+      linked.some((r) => r.name === 'other-repo-x'),
+      `detectLinkedRepos must find a nested symlink pointing outside the repo, got ${JSON.stringify(linked)}`
+    );
+    const found = linked.find((r) => r.name === 'other-repo-x');
+    assert.equal(
+      found!.kind,
+      'symlink',
+      'nested out-of-repo symlink must have kind="symlink"'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('detectLinkedRepos ignores a symlink pointing inside the repo', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-linked-inrepo-'));
+  try {
+    // Create a target directory inside the repo
+    mkdirSync(join(repo, 'local-module'), { recursive: true });
+    // Create .claude/ and a symlink that points to something inside the repo
+    mkdirSync(join(repo, '.claude'), { recursive: true });
+    symlinkSync(
+      join(repo, 'local-module'),
+      join(repo, '.claude', 'inside-link')
+    );
+
+    const linked = detectLinkedRepos(repo);
+    assert.ok(
+      !linked.some((r) => r.name === 'local-module'),
+      `detectLinkedRepos must NOT record an in-repo symlink, got ${JSON.stringify(linked)}`
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });

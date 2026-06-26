@@ -16,6 +16,7 @@ import {
   lstatSync,
   readlinkSync,
   readdirSync,
+  realpathSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { iterFiles, grep } from './detectors/_base.ts';
@@ -221,7 +222,7 @@ export function computeTopology(
           if (serviceCount >= 2) return true;
         }
       }
-      // Otherwise multi-service only when there are 2+ Dockerfiles in distinct dirs.
+      // Otherwise multi-service when 2+ Dockerfiles exist anywhere in the repo.
       try {
         return iterFiles(repoPath, ['Dockerfile']).length >= 2;
       } catch {
@@ -355,32 +356,80 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
     found.set(name, { name, kind: 'submodule', via: '.gitmodules' });
   }
 
-  // 2. Symlinks under agent-tool config dirs pointing outside the repo.
-  for (const dir of ALL_TOOL_CONFIG_DIRS) {
-    const base = join(repoPath, dir);
+  // 2. Symlinks under agent-tool config dirs whose resolved target is OUTSIDE
+  //    the repo root. Recurses up to 2 levels deep so nested paths like
+  //    `.claude/skills/<name>` are found. Symlinks pointing within the repo
+  //    (e.g. local convenience links) are ignored.
+  //    The repo root is resolved via realpathSync to handle /tmp → /private/tmp
+  //    style platform aliases before comparison.
+  const realRepoRoot = (() => {
+    try {
+      return realpathSync(repoPath).replace(/\/+$/, '');
+    } catch {
+      return repoPath.replace(/\/+$/, '');
+    }
+  })();
+
+  function scanDirForOutsideSymlinks(
+    dirPath: string,
+    viaPrefix: string,
+    depth: number
+  ): void {
     let entries: string[] = [];
     try {
-      entries = readdirSync(base);
+      entries = readdirSync(dirPath);
     } catch {
-      continue;
+      return;
     }
     for (const e of entries) {
-      const p = join(base, e);
+      const p = join(dirPath, e);
+      const via = `${viaPrefix}/${e}`;
       try {
-        if (lstatSync(p).isSymbolicLink()) {
-          const target = readlinkSync(p);
-          // Heuristic: use the last non-trivial segment of the symlink target as the name.
-          const segments = target
-            .replace(/\/+$/, '')
-            .split(/[\\/]/)
-            .filter(Boolean);
-          const name = segments[segments.length - 1] ?? target;
-          found.set(name, { name, kind: 'symlink', via: `${dir}/${e}` });
+        const stat = lstatSync(p);
+        if (stat.isSymbolicLink()) {
+          // Resolve the target and check whether it lands outside the repo root.
+          let realTarget: string;
+          try {
+            realTarget = realpathSync(p).replace(/\/+$/, '');
+          } catch {
+            // Dangling symlink — target doesn't exist; use the raw link value for
+            // the name but record it only if it looks like an absolute outside path.
+            const rawTarget = readlinkSync(p);
+            if (!rawTarget.startsWith(realRepoRoot)) {
+              const segs = rawTarget
+                .replace(/\/+$/, '')
+                .split(/[\\/]/)
+                .filter(Boolean);
+              const name = segs[segs.length - 1] ?? rawTarget;
+              if (!found.has(name)) {
+                found.set(name, { name, kind: 'symlink', via });
+              }
+            }
+            continue;
+          }
+          // Only record if the resolved target is outside the repo root.
+          if (
+            !realTarget.startsWith(realRepoRoot + '/') &&
+            realTarget !== realRepoRoot
+          ) {
+            const segs = realTarget.split(/[\\/]/).filter(Boolean);
+            const name = segs[segs.length - 1] ?? realTarget;
+            if (!found.has(name)) {
+              found.set(name, { name, kind: 'symlink', via });
+            }
+          }
+        } else if (stat.isDirectory() && depth > 0) {
+          // Recurse one more level; never follow symlink-directories (lstatSync used).
+          scanDirForOutsideSymlinks(p, via, depth - 1);
         }
       } catch {
-        /* not readable — skip */
+        /* unreadable entry — skip */
       }
     }
+  }
+
+  for (const dir of ALL_TOOL_CONFIG_DIRS) {
+    scanDirForOutsideSymlinks(join(repoPath, dir), dir, 1);
   }
 
   return [...found.values()];

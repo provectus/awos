@@ -80,6 +80,36 @@ export function detectCiConfigPath(repoPath: string): string | null {
 }
 
 /**
+ * Return a human-readable platform name for a detected CI config path.
+ * Used in user-facing messages when a config is found but no run data is present.
+ */
+export function ciPlatformName(configPath: string): string {
+  if (configPath.startsWith('.github/workflows')) return 'GitHub Actions';
+  if (configPath.startsWith('.circleci')) return 'CircleCI';
+  if (
+    configPath.startsWith('.azure-pipelines') ||
+    configPath.startsWith('azure-pipelines.')
+  )
+    return 'Azure Pipelines';
+  if (configPath.startsWith('.buildkite')) return 'Buildkite';
+  if (configPath.startsWith('.drone')) return 'Drone';
+  if (configPath.startsWith('.teamcity')) return 'TeamCity';
+  if (
+    configPath.startsWith('.concourse') ||
+    configPath.startsWith('ci/pipeline.')
+  )
+    return 'Concourse CI';
+  if (configPath.startsWith('.woodpecker')) return 'Woodpecker CI';
+  if (configPath.startsWith('.gitlab-ci.')) return 'GitLab CI';
+  if (configPath === 'Jenkinsfile') return 'Jenkins';
+  if (configPath.startsWith('.travis.')) return 'Travis CI';
+  if (configPath.startsWith('bitbucket-pipelines.'))
+    return 'Bitbucket Pipelines';
+  if (configPath.startsWith('pipelines/')) return 'Azure Pipelines';
+  return 'CI';
+}
+
+/**
  * True when a repo-relative path lives inside a known CI directory. Handles both
  * POSIX and Windows path separators so it works on `relative()` output anywhere.
  */

@@ -7,9 +7,9 @@
  * categories_awarded: [1002] when topology.has_ci is true and data available
  * reliability_default: "not-reliable"
  *
- * Partial-source rule (mirrors adp_c1_ci_pass_rate):
+ * Source rules (mirrors adp_c1_ci_pass_rate):
  *   - available=false (no CI config, no connector) → SKIP (sources_used=[])
- *   - available=true, config_detected=true, runs=[] → OK + MED reliability + note
+ *   - available=false (config detected, no run history) → SKIP (collector sets available=false for config-only)
  *   - available=true, runs present → OK + HIGH reliability, compute avg duration
  *
  * Each run record is expected to have: duration_seconds (number).

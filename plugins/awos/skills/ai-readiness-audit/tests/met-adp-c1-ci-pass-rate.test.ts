@@ -4,7 +4,7 @@
  * Contracts verified:
  * - CI absent (available=false) → SKIP, sources_used=[], sources_missing=['ci']
  * - CI file missing entirely → SKIP
- * - CI config present, runs=[] (partial) → OK + MED reliability + note (NOT SKIP)
+ * - CI config-only (available=false, runs=[]) → SKIP (collector sets available=false; no longer an OK partial case)
  * - CI with runs, all success → elite band, rate=1.0, status=OK, categories=[1001] when has_ci
  * - CI with mixed runs → correct rate and band
  * - CI with no success runs → low band, rate=0
@@ -60,38 +60,35 @@ test('adp_c1: SKIP when ci artifact has available=false', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Partial-source test: config present, runs absent → OK + MED reliability
+// Config-only test: config present, runs absent → SKIP (available=false)
+// The collector now sets available=false for config-only repos (no run history).
 // ---------------------------------------------------------------------------
 
-test('adp_c1: OK + MED reliability when config_detected=true but runs=[]', () => {
+test('adp_c1: SKIP when config_detected=true but runs=[] and available=false (config-only)', () => {
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(
     tmp,
     'ci',
     { config_detected: true, config_path: '.github/workflows', runs: [] },
-    true // available=true
+    false // available=false — the new collector output for config-only repos
   );
   const result = compute(collectedDir, standards, { has_ci: true });
 
   assert.equal(
     result.status,
-    'OK',
-    'must be OK (not SKIP) when config is detected but no runs'
+    'SKIP',
+    'must SKIP when ci available=false (config detected but no run history)'
   );
-  assert.equal(
-    result.reliability.confidence,
-    'MED',
-    'reliability must be downgraded to MED when no run data'
+  assert.deepEqual(
+    result.sources_used,
+    [],
+    'sources_used must be empty on SKIP'
   );
-  assert.ok(
-    result.reliability.note !== null && result.reliability.note.length > 0,
-    'reliability note must explain the downgrade'
+  assert.deepEqual(
+    result.sources_missing,
+    ['ci'],
+    'sources_missing must include ci on SKIP'
   );
-  assert.equal(result.value, null, 'value must be null when no runs');
-  assert.equal(result.band, null, 'band must be null when no runs');
-  assert.deepEqual(result.sources_used, ['ci'], 'sources_used must include ci');
-  assert.deepEqual(result.sources_missing, [], 'sources_missing must be empty');
-  assert.equal(result.kind, 'banded', 'kind must be banded');
 });
 
 // ---------------------------------------------------------------------------

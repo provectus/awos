@@ -13,10 +13,9 @@
  *   medium → >= 90%  (rate >= 0.90)
  *   low    → < 90%   (rate < 0.90)
  *
- * Partial-source rule (critical):
+ * Source rules:
  *   - available=false (no CI config, no connector) → SKIP (sources_used=[])
- *   - available=true, config_detected=true, runs=[] → OK + MED reliability + note
- *     (config is evidence CI exists; no run data to compute a rate, value=null, no band)
+ *   - available=false (config detected, no run history) → SKIP (collector sets available=false for config-only)
  *   - available=true, runs present → OK + HIGH reliability, compute rate + band
  *
  * Source shape: collectedDir/ci.json

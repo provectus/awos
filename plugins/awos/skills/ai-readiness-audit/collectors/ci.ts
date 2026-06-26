@@ -1,5 +1,5 @@
 import { makeArtifact, type Period } from './_base.ts';
-import { detectCiConfigPath } from '../ci_platforms.ts';
+import { detectCiConfigPath, ciPlatformName } from '../ci_platforms.ts';
 
 // ---------------------------------------------------------------------------
 // Connector shape
@@ -22,8 +22,7 @@ export interface CiRaw {
   config_detected: boolean;
   /** Path of the detected config (relative to repoPath), or null. */
   config_path: string | null;
-  /** Run records from the connector, or empty when the connector supplied
-   *  no run data (partial state — downgraded reliability, never SKIP). */
+  /** Run records from the connector. Non-empty only when `available=true`. */
   runs: unknown[];
 }
 
@@ -35,10 +34,11 @@ export interface CiRaw {
  * Collect CI data for a repository.
  *
  * Availability rules:
- * - `available=false` + `reason_if_absent` when neither a local CI config nor
- *   a connector is present.
- * - `available=true` when either condition is met. Config-present-but-no-runs
- *   is partial data (downgraded reliability downstream), not an absence.
+ * - `available=false` when no CI config and no connector are present.
+ * - `available=false` when a CI config exists but no run history is available
+ *   (config-only, or connector returned empty runs). The reason names the
+ *   platform and prompts the caller to supply a CI connector.
+ * - `available=true` only when actual run records are present.
  */
 export function collect(
   repoPath: string,
@@ -66,6 +66,19 @@ export function collect(
     config_path: configPath,
     runs,
   };
+
+  // Config present but no run data (no connector, or connector has no runs).
+  // Detected but not connected — supply a CI connector for pipeline metrics.
+  if (runs.length === 0) {
+    const platform = configPath ? ciPlatformName(configPath) : 'CI';
+    return makeArtifact(
+      'ci',
+      false,
+      `${platform} config detected but no run history — supply a CI connector (e.g. Azure DevOps/GitHub Actions API) for pipeline metrics`,
+      period,
+      raw
+    );
+  }
 
   return makeArtifact('ci', true, null, period, raw);
 }

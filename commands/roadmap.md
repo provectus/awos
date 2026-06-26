@@ -29,6 +29,9 @@ Your task is to manage the product roadmap file located at `context/product/road
 # INTERACTION
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+- A skipped or unanswered question is never a stop signal. Fall back to the documented default for that question and continue through the remaining steps, including writing `context/product/roadmap.md`.
+
+<!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
 ---
 
@@ -80,8 +83,7 @@ Follow this logic precisely.
     d. Use the full set of confirmed capabilities (from brownfield.md) to anchor the roadmap: existing capabilities are noted as already done, and new phases focus on what comes next. Feed this into the roadmap generation in the next step.
 
 3.  Generate a proposed roadmap by populating the template structure with the product definition's Core Features, grouped into logical sequential phases.
-4.  Present the full draft to the user and ask for feedback.
-5.  Iterate until the user is satisfied, then proceed to **Step 3: Finalization**.
+4.  Proceed to **Step 3: Finalization** — the draft is saved there and then surfaced for review, so it lands on disk even when no one is available to give feedback.
 
 ---
 
@@ -97,5 +99,6 @@ Follow this logic precisely.
 
 ### Step 3: Finalization
 
-1.  Write the final roadmap content to `context/product/roadmap.md`.
-2.  Report the saved path and the next command: `/awos:architecture`.
+1.  Write the roadmap content to `context/product/roadmap.md`. **Write the file without waiting for approval** — a roadmap is reversible (re-run `/awos:roadmap` to revise), so the deliverable is never gated behind a confirmation an unattended run cannot answer.
+2.  Report the saved path, then present the roadmap for review. If the user requests changes, apply them and re-save; otherwise they can revise later by re-running `/awos:roadmap`.
+3.  Report the next command: `/awos:architecture`.

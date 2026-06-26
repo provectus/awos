@@ -7,6 +7,7 @@ import {
   ALL_RULE_COMMAND_DIRS,
   ALL_SKILL_DIRS,
   ALL_TOOL_CONFIG_DIRS,
+  isLocalOnlyAgentFile,
 } from '../agent_tools.ts';
 
 // ---------------------------------------------------------------------------
@@ -93,7 +94,9 @@ function listAgentFiles(repoPath: string): string[] {
     }
   }
 
-  return [...new Set(results)].sort();
+  return [...new Set(results)]
+    .filter((f) => !isLocalOnlyAgentFile(f.replace(repoPath + '/', '')))
+    .sort();
 }
 
 export function detectInvisibleUnicode(

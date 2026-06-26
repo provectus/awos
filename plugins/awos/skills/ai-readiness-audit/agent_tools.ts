@@ -11,6 +11,7 @@ export interface AgentToolDef {
   hookPaths: string[];
   configDirs: string[];
   commitAttribution: RegExp[];
+  localOnlyFiles: string[];
 }
 
 export const AGENT_TOOLS: AgentToolDef[] = [
@@ -24,6 +25,7 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     hookPaths: ['.claude/hooks'],
     configDirs: ['.claude'],
     commitAttribution: [/Co-authored-by:.*Claude/i, /claude@anthropic/i],
+    localOnlyFiles: ['.claude/settings.local.json'],
   },
   {
     id: 'cursor',
@@ -35,6 +37,7 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     hookPaths: [],
     configDirs: ['.cursor'],
     commitAttribution: [/Co-authored-by:.*Cursor/i],
+    localOnlyFiles: [],
   },
   {
     id: 'copilot',
@@ -46,6 +49,7 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     hookPaths: [],
     configDirs: [],
     commitAttribution: [/Co-authored-by:.*Copilot/i, /copilot.*\[bot\]/i],
+    localOnlyFiles: [],
   },
   {
     id: 'codex',
@@ -57,6 +61,7 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     hookPaths: [],
     configDirs: ['.codex'],
     commitAttribution: [/Co-authored-by:.*Codex/i],
+    localOnlyFiles: [],
   },
   {
     id: 'gemini',
@@ -68,6 +73,7 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     hookPaths: [],
     configDirs: ['.gemini'],
     commitAttribution: [/Co-authored-by:.*Gemini/i],
+    localOnlyFiles: [],
   },
   {
     id: 'kiro',
@@ -79,6 +85,7 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     hookPaths: ['.kiro/hooks'],
     configDirs: ['.kiro'],
     commitAttribution: [/Co-authored-by:.*Kiro/i],
+    localOnlyFiles: [],
   },
   {
     id: 'windsurf',
@@ -90,6 +97,7 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     hookPaths: [],
     configDirs: ['.windsurf'],
     commitAttribution: [/Co-authored-by:.*(Windsurf|Cascade)/i],
+    localOnlyFiles: [],
   },
   {
     id: 'cline',
@@ -101,6 +109,7 @@ export const AGENT_TOOLS: AgentToolDef[] = [
     hookPaths: [],
     configDirs: ['.cline'],
     commitAttribution: [/Co-authored-by:.*Cline/i],
+    localOnlyFiles: [],
   },
 ];
 
@@ -123,6 +132,20 @@ export const ALL_TOOL_CONFIG_DIRS = uniq(
 export const ALL_COMMIT_ATTRIBUTION = AGENT_TOOLS.flatMap(
   (t) => t.commitAttribution
 );
+
+export const ALL_LOCAL_ONLY_FILES = uniq(
+  AGENT_TOOLS.flatMap((t) => t.localOnlyFiles)
+);
+
+/** True if a repo-relative path is an agent file expected to be git-ignored. */
+export function isLocalOnlyAgentFile(repoRelPath: string): boolean {
+  const p = repoRelPath.replace(/\\/g, '/');
+  return (
+    ALL_LOCAL_ONLY_FILES.includes(p) ||
+    /(^|\/)settings\.local\.json$/.test(p) ||
+    /(^|\/)[^/]*\.local\.(json|toml|ya?ml)$/.test(p)
+  );
+}
 
 export function detectAgentTools(repoPath: string): AgentToolDef[] {
   return AGENT_TOOLS.filter((t) => {

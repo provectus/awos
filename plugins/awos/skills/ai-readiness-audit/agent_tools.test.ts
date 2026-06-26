@@ -8,6 +8,8 @@ import {
   ALL_INSTRUCTION_FILES,
   ALL_MCP_CONFIG_PATHS,
   detectAgentTools,
+  ALL_LOCAL_ONLY_FILES,
+  isLocalOnlyAgentFile,
 } from './agent_tools.ts';
 
 test('registry covers exactly the eight supported tools', () => {
@@ -39,4 +41,21 @@ test('detectAgentTools finds present tools by any attribute', () => {
     .map((t) => t.id)
     .sort();
   assert.deepEqual(found, ['gemini', 'windsurf']);
+});
+
+test('local-only agent files are recognized and excluded from tracking checks', () => {
+  assert.ok(
+    ALL_LOCAL_ONLY_FILES.length > 0,
+    'registry must declare local-only files'
+  );
+  assert.equal(
+    isLocalOnlyAgentFile('.claude/settings.local.json'),
+    true,
+    'Claude local settings must be treated as local-only (expected untracked)'
+  );
+  assert.equal(
+    isLocalOnlyAgentFile('.claude/settings.json'),
+    false,
+    'shared settings must NOT be local-only'
+  );
 });

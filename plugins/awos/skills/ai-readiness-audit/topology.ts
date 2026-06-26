@@ -264,6 +264,65 @@ export function computeTopology(
 }
 
 // ---------------------------------------------------------------------------
+// Framework detection
+// ---------------------------------------------------------------------------
+
+/** Ordered list of framework/stack-component signals. Each entry maps a source
+ *  code pattern to a clean display name. `rx` entries are matched against all
+ *  source files via `codeMatches`; `paths` entries use `anyPath` to check for
+ *  well-known repo layout directories. */
+type FrameworkSignal =
+  | { name: string; rx: RegExp }
+  | { name: string; paths: string[] };
+
+const FRAMEWORK_SIGNALS: FrameworkSignal[] = [
+  // HTTP web frameworks (mirrors the has_http_api regex, one signal per framework)
+  { name: 'FastAPI', rx: /\bfastapi\b/i },
+  { name: 'Flask', rx: /\bflask\b/i },
+  { name: 'Django', rx: /\bdjango\b/i },
+  { name: 'Express', rx: /\bexpress\b/i },
+  { name: 'NestJS', rx: /nestjs/i },
+  { name: 'Spring Boot', rx: /\bspring(?:framework|boot)?\b/i },
+  { name: 'Gin', rx: /gin-gonic/i },
+  { name: 'Fiber', rx: /\bfiber\b/i },
+  { name: 'Sinatra', rx: /\bsinatra\b/i },
+  { name: 'Rails', rx: /\brails\b/i },
+  { name: 'Actix', rx: /\bactix_web\b/i },
+  { name: 'Axum', rx: /\baxum\b/i },
+  { name: 'aiohttp', rx: /\baiohttp\b/i },
+  { name: 'Starlette', rx: /\bstarlette\b/i },
+  // API stack components (mirrors the supplemental has_api regex)
+  { name: 'GraphQL', rx: /\bgraphql\b/i },
+  { name: 'gRPC', rx: /\b(?:grpc|protobuf)\b/i },
+];
+
+/**
+ * Return the display names of frameworks and notable stack components detected
+ * in the repository source, in stable declaration order, deduped.
+ *
+ * Uses the same `codeMatches`/`anyPath`/`anyGlob` helpers as the topology
+ * flags — additive; does not change any existing flag behavior.
+ */
+export function detectFrameworks(repoPath: string): string[] {
+  const names: string[] = [];
+  for (const signal of FRAMEWORK_SIGNALS) {
+    if ('rx' in signal) {
+      if (codeMatches(repoPath, signal.rx)) names.push(signal.name);
+    } else {
+      if (anyPath(repoPath, signal.paths)) names.push(signal.name);
+    }
+  }
+  // AWOS: both a context/ directory and either .awos or context/spec must exist.
+  if (
+    anyPath(repoPath, ['context']) &&
+    anyPath(repoPath, ['.awos', 'context/spec'])
+  ) {
+    names.push('AWOS');
+  }
+  return names;
+}
+
+// ---------------------------------------------------------------------------
 // Linked repository detection
 // ---------------------------------------------------------------------------
 

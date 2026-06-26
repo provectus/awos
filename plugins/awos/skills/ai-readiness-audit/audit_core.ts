@@ -27,6 +27,7 @@ import { loadStandards } from './metrics/_base.ts';
 import {
   computeTopology,
   detectLinkedRepos,
+  detectFrameworks,
   type TopologyFlags,
 } from './topology.ts';
 import { detectLanguages, LANGUAGES } from './languages.ts';
@@ -339,7 +340,7 @@ export async function auditCore(
     languages: detectLanguages(repoPath).map((l) => l.displayName),
     agent_tools: detectAgentTools(repoPath).map((t) => t.displayName),
     ci: ciPath ? [ciDisplayName(ciPath)] : [],
-    frameworks: [] as string[], // TODO: extract from topology framework signals
+    frameworks: detectFrameworks(repoPath),
   };
   const detectionConflicts = computeDetectionConflicts(repoPath);
 

@@ -111,6 +111,10 @@
  * =============================================================================
  */
 
+// LinkedRepo is defined once in topology.ts; imported here for local use and
+// re-exported below to preserve render.ts's public API surface.
+import type { LinkedRepo } from './topology.ts';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -212,11 +216,8 @@ export interface SourceSummary {
   history_available_days: number | null;
 }
 
-export interface LinkedRepo {
-  name: string;
-  kind: 'symlink' | 'submodule';
-  via: string;
-}
+// Re-exported so callers that previously imported LinkedRepo from render.ts continue to work.
+export type { LinkedRepo };
 
 export interface TechStack {
   languages: string[];
@@ -662,6 +663,49 @@ export function renderMarkdown(audit: AuditJson): string {
         lines.push(`- ${s.source}${reason}`);
       }
       lines.push('');
+    }
+  }
+
+  // Linked Repositories — always rendered so the reader can see it was checked.
+  lines.push('## Linked Repositories');
+  lines.push('');
+  const linked = audit.linked_repos ?? [];
+  if (linked.length > 0) {
+    for (const r of linked) {
+      lines.push(`- ${r.name} (${r.kind} via ${r.via})`);
+    }
+  } else {
+    lines.push('None detected.');
+  }
+  lines.push('');
+
+  // Tech Stack
+  if (audit.tech_stack) {
+    const ts = audit.tech_stack;
+    const hasAny =
+      ts.languages.length > 0 ||
+      ts.agent_tools.length > 0 ||
+      ts.ci.length > 0 ||
+      ts.frameworks.length > 0;
+    if (hasAny) {
+      lines.push('## Tech Stack');
+      lines.push('');
+      if (ts.languages.length > 0) {
+        lines.push('**Languages:** ' + ts.languages.join(', '));
+        lines.push('');
+      }
+      if (ts.agent_tools.length > 0) {
+        lines.push('**Agent Tools:** ' + ts.agent_tools.join(', '));
+        lines.push('');
+      }
+      if (ts.ci.length > 0) {
+        lines.push('**CI:** ' + ts.ci.join(', '));
+        lines.push('');
+      }
+      if (ts.frameworks.length > 0) {
+        lines.push('**Frameworks:** ' + ts.frameworks.join(', '));
+        lines.push('');
+      }
     }
   }
 

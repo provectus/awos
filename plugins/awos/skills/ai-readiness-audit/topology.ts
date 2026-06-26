@@ -198,21 +198,30 @@ export function computeTopology(
         /\b(keyvault|secretsmanager|secret_?manager|hashicorp.?vault|SECRET_KEY|API_KEY|getSecret)\b/i
       ),
     is_monorepo: isMonorepo,
-    is_multi_service: anyGlob(repoPath, [
-      'docker-compose.yml',
-      'docker-compose.yaml',
-    ])
-      ? /services\s*:/.test(
-          readIfExists(repoPath, 'docker-compose.yml') ||
-            readIfExists(repoPath, 'docker-compose.yaml')
-        )
-      : (() => {
-          try {
-            return iterFiles(repoPath, ['Dockerfile']).length >= 2;
-          } catch {
-            return false;
+    is_multi_service: (() => {
+      const composeText =
+        readIfExists(repoPath, 'docker-compose.yml') ||
+        readIfExists(repoPath, 'docker-compose.yaml');
+      if (composeText) {
+        // Count entries under a top-level `services:` block (2+ → multi-service).
+        // Walk lines; stop at next non-indented key so volumes/networks don't inflate count.
+        const m = composeText.match(/^services:[ \t]*\n([\s\S]*)/m);
+        if (m) {
+          let serviceCount = 0;
+          for (const line of m[1].split('\n')) {
+            if (/^\S/.test(line) && line.trim() !== '') break;
+            if (/^\s{2}\w[\w.-]*:[ \t]*$/.test(line)) serviceCount++;
           }
-        })(),
+          if (serviceCount >= 2) return true;
+        }
+      }
+      // Otherwise multi-service only when there are 2+ Dockerfiles in distinct dirs.
+      try {
+        return iterFiles(repoPath, ['Dockerfile']).length >= 2;
+      } catch {
+        return false;
+      }
+    })(),
     has_multiple_layers:
       isMonorepo ||
       [

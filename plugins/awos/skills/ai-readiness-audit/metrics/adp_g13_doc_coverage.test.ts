@@ -161,6 +161,34 @@ test('doc-coverage detects Javadoc on public Java methods and classes', async ()
   }
 });
 
+test('doc-coverage does not penalize 2204 when repo has no public/exported definitions', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-no-public-'));
+  try {
+    // Only private helpers (prefixed with _) — all documented, none public.
+    writeFileSync(
+      join(dir, 'helpers.py'),
+      'def _internal():\n    """Internal helper."""\n    return 1\n\ndef _another():\n    """Another helper."""\n    return 2\n'
+    );
+    const res = await compute(dir, {}, { has_python: true }, dir);
+    assert.notEqual(
+      res.status,
+      'SKIP',
+      'metric must not SKIP when Python files with documentable defs are present'
+    );
+    assert.ok(
+      !(res.categories_awarded as number[]).includes(2204),
+      `2204 (DOC-05) must not be awarded when there are no public defs, got ${JSON.stringify(res.categories_awarded)}`
+    );
+    // Both private helpers are documented — overall coverage = 1.0 ≥ 0.6 → 2205 awarded.
+    assert.ok(
+      (res.categories_awarded as number[]).includes(2205),
+      `2205 (DOC-06) must be awarded when all definitions are documented, got ${JSON.stringify(res.categories_awarded)}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('doc-coverage detects KDoc on public Kotlin functions', async () => {
   const documented = mkdtempSync(join(tmpdir(), 'awos-doc-kt-yes-'));
   const bare = mkdtempSync(join(tmpdir(), 'awos-doc-kt-no-'));

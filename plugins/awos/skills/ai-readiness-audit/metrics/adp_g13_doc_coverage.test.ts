@@ -88,3 +88,96 @@ test('doc-coverage detects JSDoc on exported TypeScript functions', async () => 
     rmSync(bare, { recursive: true, force: true });
   }
 });
+
+test('doc-coverage detects JSDoc on exported JavaScript functions', async () => {
+  const documented = mkdtempSync(join(tmpdir(), 'awos-doc-js-yes-'));
+  const bare = mkdtempSync(join(tmpdir(), 'awos-doc-js-no-'));
+  try {
+    writeFileSync(
+      join(documented, 'a.js'),
+      '/** Adds two numbers. */\nexport function add(a, b) {\n  return a + b;\n}\n'
+    );
+    writeFileSync(
+      join(bare, 'a.js'),
+      'export function add(a, b) {\n  return a + b;\n}\n'
+    );
+    const hi = await compute(documented, {}, {}, documented);
+    const lo = await compute(bare, {}, {}, bare);
+    assert.ok(
+      Number(hi.value) > Number(lo.value),
+      `documented JS must score higher: ${hi.value} vs ${lo.value}`
+    );
+  } finally {
+    rmSync(documented, { recursive: true, force: true });
+    rmSync(bare, { recursive: true, force: true });
+  }
+});
+
+test('doc-coverage detects doc-comments on exported Go functions', async () => {
+  const documented = mkdtempSync(join(tmpdir(), 'awos-doc-go-yes-'));
+  const bare = mkdtempSync(join(tmpdir(), 'awos-doc-go-no-'));
+  try {
+    writeFileSync(
+      join(documented, 'a.go'),
+      'package main\n\n// Add adds two numbers.\nfunc Add(a int, b int) int {\n\treturn a + b\n}\n'
+    );
+    writeFileSync(
+      join(bare, 'a.go'),
+      'package main\n\nfunc Add(a int, b int) int {\n\treturn a + b\n}\n'
+    );
+    const hi = await compute(documented, {}, {}, documented);
+    const lo = await compute(bare, {}, {}, bare);
+    assert.ok(
+      Number(hi.value) > Number(lo.value),
+      `documented Go must score higher: ${hi.value} vs ${lo.value}`
+    );
+  } finally {
+    rmSync(documented, { recursive: true, force: true });
+    rmSync(bare, { recursive: true, force: true });
+  }
+});
+
+test('doc-coverage detects Javadoc on public Java methods and classes', async () => {
+  const documented = mkdtempSync(join(tmpdir(), 'awos-doc-java-yes-'));
+  const bare = mkdtempSync(join(tmpdir(), 'awos-doc-java-no-'));
+  try {
+    writeFileSync(
+      join(documented, 'Calculator.java'),
+      '/** A calculator. */\npublic class Calculator {\n    /** Adds two numbers. */\n    public int add(int a, int b) {\n        return a + b;\n    }\n}\n'
+    );
+    writeFileSync(
+      join(bare, 'Calculator.java'),
+      'public class Calculator {\n    public int add(int a, int b) {\n        return a + b;\n    }\n}\n'
+    );
+    const hi = await compute(documented, {}, {}, documented);
+    const lo = await compute(bare, {}, {}, bare);
+    assert.ok(
+      Number(hi.value) > Number(lo.value),
+      `documented Java must score higher: ${hi.value} vs ${lo.value}`
+    );
+  } finally {
+    rmSync(documented, { recursive: true, force: true });
+    rmSync(bare, { recursive: true, force: true });
+  }
+});
+
+test('doc-coverage detects KDoc on public Kotlin functions', async () => {
+  const documented = mkdtempSync(join(tmpdir(), 'awos-doc-kt-yes-'));
+  const bare = mkdtempSync(join(tmpdir(), 'awos-doc-kt-no-'));
+  try {
+    writeFileSync(
+      join(documented, 'a.kt'),
+      '/** Adds two numbers. */\nfun add(a: Int, b: Int): Int = a + b\n'
+    );
+    writeFileSync(join(bare, 'a.kt'), 'fun add(a: Int, b: Int): Int = a + b\n');
+    const hi = await compute(documented, {}, {}, documented);
+    const lo = await compute(bare, {}, {}, bare);
+    assert.ok(
+      Number(hi.value) > Number(lo.value),
+      `documented Kotlin must score higher: ${hi.value} vs ${lo.value}`
+    );
+  } finally {
+    rmSync(documented, { recursive: true, force: true });
+    rmSync(bare, { recursive: true, force: true });
+  }
+});

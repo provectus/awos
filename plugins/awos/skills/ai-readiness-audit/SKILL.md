@@ -109,7 +109,13 @@ Use a mid-tier model (Sonnet) for the judgment checks and narrative authoring �
 
 1. **Judgment checks (5).** For each check with `status: "PENDING_JUDGMENT"`, read its category rubric and `evidence_required` from `references/standards.toml` and the dimension file, gather the evidence from the repo, decide `PASS`/`WARN`/`FAIL`, and edit that check record in its `context/audits/YYYY-MM-DD/<dimension>.json` (set `status`, `value`, `evidence`, and `weight_awarded` = the category weight on PASS, else 0).
 
-2. **Connector metrics (only when a connector is reachable).** If a tracker (Jira/Linear) or docs (Confluence/Coda) MCP server is available, fetch the data, transform it to the collector's connector shape, write the artifact into `context/audits/YYYY-MM-DD/collected/`, re-run the affected metric (`node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric <id> "<repoPath>" "context/audits/YYYY-MM-DD/collected"`), and patch the affected check records. With no connector, leave them `SKIP` — that is correct, not a failure.
+2. **Connector metrics — data-source resolution.** For every non-git source (tracker, docs, incident, and any reachable MCP/integration that maps to a collector):
+
+   - **Attempt to fetch.** Try the MCP call or API request.
+   - **On success** — map the returned records into the exact connector shape in `references/connector-shapes.md`, write the artifact to `context/audits/YYYY-MM-DD/collected/<source>.json`, re-run the affected metric (`node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric <id> "<repoPath>" "context/audits/YYYY-MM-DD/collected"`), and patch the affected check records. Mapping reachable data into the documented shape is not fabrication.
+   - **On failure or unclear mapping** (auth error, unfamiliar schema, broken dependency, empty result, closed port) — do not silently skip. In interactive mode, use `AskUserQuestion` with three options: mark unavailable (record the reason) / retry with guidance / show how to fix (link to `references/connector-shapes.md`). **In headless `claude -p` runs** (no interactive user), default to marking the source unavailable and record the failure reason plus a remediation hint in the report's `missed_sources` list.
+
+   Never drop a reachable source without a recorded reason. With no connector reachable at all, leave the check `SKIP` — that is correct, not a failure.
 
 3. **Re-aggregate** so `audit.json` reflects the patches (recomputes every dimension score + the audit totals from the per-dimension files; preserves report blocks):
 

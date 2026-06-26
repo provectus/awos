@@ -260,3 +260,22 @@ test('DETECTORS[2602] dispatches to detectEnvExample', () => {
   const viaMap = DETECTORS[2602](t);
   assert.equal(viaMap.status, direct.status);
 });
+
+// ---------------------------------------------------------------------------
+// Multi-tool registry tests (B4)
+// ---------------------------------------------------------------------------
+
+test('SEC-02: .kiro/hooks directory with hook file → PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.kiro', 'hooks'), { recursive: true });
+  writeFileSync(
+    join(t, '.kiro', 'hooks', 'pre-save.sh'),
+    '#!/bin/sh\necho hook\n'
+  );
+  const r = detectAgentSafetyHooks(t);
+  // Hooks exist but don't mention .env — expect WARN (hooks present, no sensitive refs)
+  assert.ok(
+    r.status === 'PASS' || r.status === 'WARN',
+    `expected PASS or WARN when .kiro/hooks has files, got ${r.status}`
+  );
+});

@@ -195,7 +195,10 @@ export async function auditCore(
       coverage: applicable > 0 ? score / applicable : 0,
       checks,
     };
-    writeFileSync(join(outDir, `${dimension}.json`), JSON.stringify(dim, null, 2));
+    writeFileSync(
+      join(outDir, `${dimension}.json`),
+      JSON.stringify(dim, null, 2)
+    );
     dimensions.push(dim);
   }
 
@@ -232,7 +235,8 @@ export async function auditCore(
  */
 export function aggregate(outDir: string): void {
   const files = readdirSync(outDir).filter(
-    (f) => f.endsWith('.json') && f !== 'audit.json' && f !== 'org-portfolio.json'
+    (f) =>
+      f.endsWith('.json') && f !== 'audit.json' && f !== 'org-portfolio.json'
   );
   let total = 0;
   let applicable = 0;
@@ -345,7 +349,12 @@ function buildCheck(
     try {
       r = detectors[c.code](repoPath);
     } catch (err) {
-      r = { status: 'FAIL', value: `detector-error: ${String(err)}`, evidence: [], method: c.method };
+      r = {
+        status: 'FAIL',
+        value: `detector-error: ${String(err)}`,
+        evidence: [],
+        method: c.method,
+      };
     }
     status = r.status;
     value = r.value;

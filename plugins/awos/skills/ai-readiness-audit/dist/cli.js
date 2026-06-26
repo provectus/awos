@@ -3641,6 +3641,116 @@ function writeArtifact(artifact, outDir) {
   return path;
 }
 
+// plugins/awos/skills/ai-readiness-audit/agent_tools.ts
+var AGENT_TOOLS = [
+  {
+    id: "claude",
+    displayName: "Claude Code",
+    instructionFiles: ["CLAUDE.md"],
+    ruleOrCommandDirs: [".claude/commands"],
+    skillDirs: [".claude/skills"],
+    mcpConfigPaths: [".mcp.json", ".claude/mcp.json"],
+    hookPaths: [".claude/hooks"],
+    configDirs: [".claude"],
+    commitAttribution: [/Co-authored-by:.*Claude/i, /claude@anthropic/i]
+  },
+  {
+    id: "cursor",
+    displayName: "Cursor",
+    instructionFiles: [".cursorrules"],
+    ruleOrCommandDirs: [".cursor/rules", ".cursor/commands"],
+    skillDirs: [],
+    mcpConfigPaths: [".cursor/mcp.json"],
+    hookPaths: [],
+    configDirs: [".cursor"],
+    commitAttribution: [/Co-authored-by:.*Cursor/i]
+  },
+  {
+    id: "copilot",
+    displayName: "GitHub Copilot",
+    instructionFiles: [".github/copilot-instructions.md"],
+    ruleOrCommandDirs: [".github/prompts", ".github/instructions"],
+    skillDirs: [],
+    mcpConfigPaths: [],
+    hookPaths: [],
+    configDirs: [],
+    commitAttribution: [/Co-authored-by:.*Copilot/i, /copilot.*\[bot\]/i]
+  },
+  {
+    id: "codex",
+    displayName: "OpenAI Codex",
+    instructionFiles: ["AGENTS.md"],
+    ruleOrCommandDirs: [".codex/prompts"],
+    skillDirs: [],
+    mcpConfigPaths: [".codex/config.toml"],
+    hookPaths: [],
+    configDirs: [".codex"],
+    commitAttribution: [/Co-authored-by:.*Codex/i]
+  },
+  {
+    id: "gemini",
+    displayName: "Gemini CLI",
+    instructionFiles: ["GEMINI.md"],
+    ruleOrCommandDirs: [".gemini/commands"],
+    skillDirs: [],
+    mcpConfigPaths: [".gemini/settings.json"],
+    hookPaths: [],
+    configDirs: [".gemini"],
+    commitAttribution: [/Co-authored-by:.*Gemini/i]
+  },
+  {
+    id: "kiro",
+    displayName: "Kiro",
+    instructionFiles: [],
+    ruleOrCommandDirs: [".kiro/steering", ".kiro/specs"],
+    skillDirs: [],
+    mcpConfigPaths: [".kiro/settings/mcp.json"],
+    hookPaths: [".kiro/hooks"],
+    configDirs: [".kiro"],
+    commitAttribution: [/Co-authored-by:.*Kiro/i]
+  },
+  {
+    id: "windsurf",
+    displayName: "Windsurf",
+    instructionFiles: [".windsurfrules"],
+    ruleOrCommandDirs: [".windsurf/rules", ".windsurf/workflows"],
+    skillDirs: [],
+    mcpConfigPaths: [".windsurf/mcp_config.json"],
+    hookPaths: [],
+    configDirs: [".windsurf"],
+    commitAttribution: [/Co-authored-by:.*(Windsurf|Cascade)/i]
+  },
+  {
+    id: "cline",
+    displayName: "Cline",
+    instructionFiles: [".clinerules"],
+    ruleOrCommandDirs: [],
+    skillDirs: [],
+    mcpConfigPaths: [".cline/mcp.json"],
+    hookPaths: [],
+    configDirs: [".cline"],
+    commitAttribution: [/Co-authored-by:.*Cline/i]
+  }
+];
+var uniq = (xs) => [...new Set(xs)];
+var ALL_INSTRUCTION_FILES = uniq(
+  AGENT_TOOLS.flatMap((t) => t.instructionFiles)
+);
+var ALL_RULE_COMMAND_DIRS = uniq(
+  AGENT_TOOLS.flatMap((t) => t.ruleOrCommandDirs)
+);
+var ALL_SKILL_DIRS = uniq(AGENT_TOOLS.flatMap((t) => t.skillDirs));
+var ALL_MCP_CONFIG_PATHS = uniq(
+  AGENT_TOOLS.flatMap((t) => t.mcpConfigPaths)
+);
+var ALL_HOOK_PATHS = uniq(AGENT_TOOLS.flatMap((t) => t.hookPaths));
+var ALL_TOOL_CONFIG_DIRS = uniq(
+  AGENT_TOOLS.flatMap((t) => t.configDirs)
+);
+var ALL_COMMIT_ATTRIBUTION = AGENT_TOOLS.flatMap(
+  (t) => t.commitAttribution
+);
+
 // plugins/awos/skills/ai-readiness-audit/collectors/git.ts
 function run2(args2, cwd) {
   try {
@@ -3665,21 +3775,10 @@ function getTotalCommits(cwd) {
   return isNaN(n) ? 0 : n;
 }
 function getAiMarkedCommits(cwd) {
-  const patterns = [
-    "Co-authored-by: Claude",
-    "Co-authored-by:.*[Aa]ssistant",
-    "Co-authored-by:.*claude@anthropic"
-  ];
   const matchedSHAs = /* @__PURE__ */ new Set();
-  for (const pat of patterns) {
+  for (const pat of ALL_COMMIT_ATTRIBUTION) {
     const out2 = run2(
-      [
-        "log",
-        "--all-match",
-        "--regexp-ignore-case",
-        `--grep=${pat}`,
-        "--format=%H"
-      ],
+      ["log", "--regexp-ignore-case", `--grep=${pat.source}`, "--format=%H"],
       cwd
     );
     for (const sha of out2.trim().split("\n").filter(Boolean)) {
@@ -3688,14 +3787,7 @@ function getAiMarkedCommits(cwd) {
   }
   return matchedSHAs.size;
 }
-var TOOLING_CANDIDATES = [
-  "CLAUDE.md",
-  "AGENTS.md",
-  ".claude/skills",
-  ".claude/commands",
-  ".claude/hooks",
-  ".mcp.json"
-];
+var TOOLING_CANDIDATES = [...ALL_INSTRUCTION_FILES, ...ALL_TOOL_CONFIG_DIRS];
 function getToolingPaths(repoPath) {
   return TOOLING_CANDIDATES.filter((p) => existsSync(join2(repoPath, p)));
 }
@@ -4084,11 +4176,11 @@ var PYPROJECT_LINTER_RX = /^\[tool\.(ruff|pylint|flake8)\]/m;
 function detectLinting(repoPath, _params) {
   const found = iterFiles(repoPath, LINTER_CONFIGS).map((p) => basename(p));
   if (found.length) {
-    const uniq = [...new Set(found)].sort();
+    const uniq2 = [...new Set(found)].sort();
     return makeResult(
       "PASS",
-      uniq.length,
-      uniq.map((n) => `linter config found: ${n}`)
+      uniq2.length,
+      uniq2.map((n) => `linter config found: ${n}`)
     );
   }
   const pyprojects = iterFiles(repoPath, ["pyproject.toml"]);
@@ -4129,11 +4221,11 @@ var PRECOMMIT_FORMATTER_RX = /\b(prettier|black|ruff|gofmt|rustfmt|clang-format|
 function detectFormatting(repoPath, _params) {
   const found = iterFiles(repoPath, FORMATTER_CONFIGS).map((p) => basename(p));
   if (found.length) {
-    const uniq = [...new Set(found)].sort();
+    const uniq2 = [...new Set(found)].sort();
     return makeResult(
       "PASS",
-      uniq.length,
-      uniq.map((n) => `formatter config found: ${n}`)
+      uniq2.length,
+      uniq2.map((n) => `formatter config found: ${n}`)
     );
   }
   const pyprojects = iterFiles(repoPath, ["pyproject.toml"]);
@@ -4310,11 +4402,11 @@ var LOCKFILES = [
 function detectLockfiles(repoPath, _params) {
   const found = iterFiles(repoPath, LOCKFILES).map((p) => basename(p));
   if (found.length) {
-    const uniq = [...new Set(found)].sort();
+    const uniq2 = [...new Set(found)].sort();
     return makeResult(
       "PASS",
-      uniq.length,
-      uniq.map((n) => `lock file present: ${n}`)
+      uniq2.length,
+      uniq2.map((n) => `lock file present: ${n}`)
     );
   }
   return makeResult("FAIL", 0, ["no dependency lock file found"]);
@@ -5363,22 +5455,26 @@ import {
 } from "node:fs";
 import { join as join6, relative as relative5 } from "node:path";
 function detectCustomCommands(repoPath, _params) {
-  const commandsDir = join6(repoPath, ".claude", "commands");
-  if (!existsSync4(commandsDir)) {
-    return makeResult("FAIL", 0, [
-      "no .claude/commands/ directory found \u2014 no custom slash commands defined"
-    ]);
+  const allFiles = [];
+  const foundDirs = [];
+  for (const relDir of ALL_RULE_COMMAND_DIRS) {
+    const dir = join6(repoPath, relDir);
+    if (!existsSync4(dir)) continue;
+    const files = iterFiles(dir, ["*.md"]);
+    if (files.length > 0) {
+      allFiles.push(...files);
+      foundDirs.push(relDir);
+    }
   }
-  const files = iterFiles(commandsDir, ["*.md"]);
-  if (files.length > 0) {
-    const names = files.map((p) => relative5(repoPath, p));
-    return makeResult("PASS", files.length, [
-      `${files.length} custom command file(s) found under .claude/commands/`,
+  if (allFiles.length > 0) {
+    const names = allFiles.map((p) => relative5(repoPath, p));
+    return makeResult("PASS", allFiles.length, [
+      `${allFiles.length} custom command/rule file(s) found under ${foundDirs.join(", ")}`,
       ...names.slice(0, 10).map((n) => `command: ${n}`)
     ]);
   }
   return makeResult("FAIL", 0, [
-    "no custom command files found in .claude/commands/ \u2014 define slash commands for common workflows"
+    "no custom command or rule files found in any agentic tool directory \u2014 define workflows for common tasks"
   ]);
 }
 function tryRealpath(p) {
@@ -5389,34 +5485,32 @@ function tryRealpath(p) {
   }
 }
 function detectClaudeSkills(repoPath, _params) {
-  const skillsRoot = join6(repoPath, ".claude", "skills");
-  if (!existsSync4(skillsRoot)) {
-    return makeResult("FAIL", 0, [
-      "no .claude/skills/ directory found \u2014 no Claude Code skills configured"
-    ]);
-  }
-  const realSkillsRoot = tryRealpath(skillsRoot) ?? skillsRoot;
-  const scanTargets = /* @__PURE__ */ new Set([realSkillsRoot]);
-  try {
-    for (const entry of readdirSync3(realSkillsRoot)) {
-      const entryPath = join6(realSkillsRoot, entry);
-      let stat;
-      try {
-        stat = lstatSync(entryPath);
-      } catch {
-        continue;
-      }
-      if (stat.isSymbolicLink()) {
-        const resolved = tryRealpath(entryPath);
-        if (resolved) scanTargets.add(resolved);
-      }
-    }
-  } catch {
-  }
   const allFiles = [];
-  for (const target of scanTargets) {
-    for (const f of iterFiles(target, ["SKILL.md"])) {
-      allFiles.push(f);
+  for (const relSkillsRoot of ALL_SKILL_DIRS) {
+    const skillsRoot = join6(repoPath, relSkillsRoot);
+    if (!existsSync4(skillsRoot)) continue;
+    const realSkillsRoot = tryRealpath(skillsRoot) ?? skillsRoot;
+    const scanTargets = /* @__PURE__ */ new Set([realSkillsRoot]);
+    try {
+      for (const entry of readdirSync3(realSkillsRoot)) {
+        const entryPath = join6(realSkillsRoot, entry);
+        let stat;
+        try {
+          stat = lstatSync(entryPath);
+        } catch {
+          continue;
+        }
+        if (stat.isSymbolicLink()) {
+          const resolved = tryRealpath(entryPath);
+          if (resolved) scanTargets.add(resolved);
+        }
+      }
+    } catch {
+    }
+    for (const target of scanTargets) {
+      for (const f of iterFiles(target, ["SKILL.md"])) {
+        allFiles.push(f);
+      }
     }
   }
   if (allFiles.length > 0) {
@@ -5428,18 +5522,17 @@ function detectClaudeSkills(repoPath, _params) {
       }
     });
     return makeResult("PASS", allFiles.length, [
-      `${allFiles.length} SKILL.md file(s) found under .claude/skills/`,
+      `${allFiles.length} SKILL.md file(s) found`,
       ...names.slice(0, 10).map((n) => `skill: ${n}`)
     ]);
   }
   return makeResult("FAIL", 0, [
-    "no SKILL.md files found under .claude/skills/ \u2014 no Claude Code skills configured"
+    "no SKILL.md files found under any agentic tool skills directory"
   ]);
 }
-var MCP_CONFIG_PATHS = [".mcp.json", ".claude/mcp.json"];
 function detectMcpConfig(repoPath, _params) {
   const found = [];
-  for (const relPath of MCP_CONFIG_PATHS) {
+  for (const relPath of ALL_MCP_CONFIG_PATHS) {
     if (existsSync4(join6(repoPath, relPath))) {
       found.push(relPath);
     }
@@ -5451,12 +5544,13 @@ function detectMcpConfig(repoPath, _params) {
     ]);
   }
   return makeResult("FAIL", 0, [
-    "no MCP configuration found (.mcp.json or .claude/mcp.json) \u2014 no MCP servers configured"
+    "no MCP configuration found \u2014 no MCP servers configured for any agentic coding tool"
   ]);
 }
 function detectClaudeHooks(repoPath, _params) {
-  const hooksDir = join6(repoPath, ".claude", "hooks");
-  if (existsSync4(hooksDir)) {
+  for (const relHooksDir of ALL_HOOK_PATHS) {
+    const hooksDir = join6(repoPath, relHooksDir);
+    if (!existsSync4(hooksDir)) continue;
     const hookFiles = iterFiles(hooksDir, [
       "*.sh",
       "*.js",
@@ -5467,7 +5561,7 @@ function detectClaudeHooks(repoPath, _params) {
     if (hookFiles.length > 0) {
       const names = hookFiles.map((p) => relative5(repoPath, p));
       return makeResult("PASS", hookFiles.length, [
-        `${hookFiles.length} hook file(s) found in .claude/hooks/`,
+        `${hookFiles.length} hook file(s) found in ${relHooksDir}`,
         ...names.slice(0, 10).map((n) => `hook file: ${n}`)
       ]);
     }
@@ -5502,7 +5596,7 @@ function detectClaudeHooks(repoPath, _params) {
     }
   }
   return makeResult("FAIL", 0, [
-    'no Claude Code hooks found \u2014 neither .claude/hooks/ files nor "hooks" key in settings'
+    "no agentic coding tool hooks found \u2014 no lifecycle hooks or settings hooks configured"
   ]);
 }
 var ROOT_RUN_FILES = [
@@ -6038,8 +6132,9 @@ function detectAgentSafetyHooks(repoPath, _params) {
       ]);
     }
   }
-  const hooksDir = join8(repoPath, ".claude", "hooks");
-  if (existsSync6(hooksDir)) {
+  for (const relHooksDir of ALL_HOOK_PATHS) {
+    const hooksDir = join8(repoPath, relHooksDir);
+    if (!existsSync6(hooksDir)) continue;
     const hookFiles = iterFiles(hooksDir, HOOK_FILES_GLOBS);
     for (const f of hookFiles) {
       let src;
@@ -6056,13 +6151,13 @@ function detectAgentSafetyHooks(repoPath, _params) {
     }
     if (hookFiles.length > 0) {
       return makeResult("WARN", hookFiles.length, [
-        `${hookFiles.length} hook file(s) found but none explicitly reference .env/secret patterns`,
+        `${hookFiles.length} hook file(s) found in ${relHooksDir} but none explicitly reference .env/secret patterns`,
         ...hookFiles.slice(0, 5).map((f) => `hook: ${relative7(repoPath, f)}`)
       ]);
     }
   }
   return makeResult("FAIL", 0, [
-    "no Claude Code hooks configured \u2014 AI agents are not blocked from reading sensitive files"
+    "no agentic coding tool hooks configured \u2014 agents are not blocked from reading sensitive files"
   ]);
 }
 var ENV_EXAMPLE_GLOBS = [
@@ -6257,11 +6352,11 @@ var LOCKFILES2 = [
 function detectScsLockfiles(repoPath, _params) {
   const found = iterFiles(repoPath, LOCKFILES2).map((p) => basename4(p));
   if (found.length > 0) {
-    const uniq = [...new Set(found)].sort();
+    const uniq2 = [...new Set(found)].sort();
     return makeResult(
       "PASS",
-      uniq.length,
-      uniq.map((n) => `lockfile present: ${n}`)
+      uniq2.length,
+      uniq2.map((n) => `lockfile present: ${n}`)
     );
   }
   return makeResult("FAIL", 0, ["no dependency lockfile found"]);
@@ -6894,14 +6989,17 @@ var AGENT_FILE_GLOBS = [
 ];
 function listAgentFiles(repoPath) {
   const results = [];
-  for (const name2 of ["CLAUDE.md", "AGENTS.md", ".mcp.json"]) {
+  for (const name2 of ALL_INSTRUCTION_FILES) {
     const full = join10(repoPath, name2);
     if (existsSync8(full)) results.push(full);
   }
-  const claudeDir = join10(repoPath, ".claude");
-  if (existsSync8(claudeDir)) {
+  const mcpJson = join10(repoPath, ".mcp.json");
+  if (existsSync8(mcpJson)) results.push(mcpJson);
+  for (const relDir of ALL_TOOL_CONFIG_DIRS) {
+    const toolDir = join10(repoPath, relDir);
+    if (!existsSync8(toolDir)) continue;
     try {
-      const files = iterFiles(claudeDir, AGENT_FILE_GLOBS);
+      const files = iterFiles(toolDir, AGENT_FILE_GLOBS);
       results.push(...files);
     } catch {
     }
@@ -7244,23 +7342,23 @@ var BYPASS_PATTERNS = [
 ];
 var COMMAND_SKILL_GLOBS = ["*.md", "*.sh", "*.ts", "*.js", "*.py", "*.bash"];
 function detectNoSecurityBypass(repoPath, _params) {
-  const commandsDir = join10(repoPath, ".claude", "commands");
-  const skillsDir = join10(repoPath, ".claude", "skills");
-  const hasCmds = existsSync8(commandsDir);
-  const hasSkills = existsSync8(skillsDir);
-  if (!hasCmds && !hasSkills) {
+  const dirsToScan = [...ALL_RULE_COMMAND_DIRS, ...ALL_SKILL_DIRS];
+  const existingDirs = dirsToScan.filter(
+    (rel) => existsSync8(join10(repoPath, rel))
+  );
+  if (existingDirs.length === 0) {
     return makeResult(
       "SKIP",
       null,
       [
-        "no .claude/commands/ or .claude/skills/ directories found \u2014 PAI-06 not applicable"
+        "no agentic tool command or skill directories found \u2014 PAI-06 not applicable"
       ],
       "detected"
     );
   }
   const allFiles = [];
-  for (const dir of [commandsDir, skillsDir]) {
-    if (!existsSync8(dir)) continue;
+  for (const rel of existingDirs) {
+    const dir = join10(repoPath, rel);
     try {
       allFiles.push(...iterFiles(dir, COMMAND_SKILL_GLOBS));
     } catch {
@@ -11529,6 +11627,7 @@ function computeTopology(repoPath, connectors) {
     has_ci: detectCiConfigPath(repoPath) !== null,
     has_claude_md: anyPath(repoPath, ["CLAUDE.md", ".claude/CLAUDE.md"]) || anyGlob(repoPath, ["CLAUDE.md"]),
     has_ai_agent_files: anyPath(repoPath, ["AGENTS.md", "CLAUDE.md", ".claude"]) || anyGlob(repoPath, ["AGENTS.md", "CLAUDE.md"]),
+    has_agent_instruction_files: anyPath(repoPath, [...ALL_INSTRUCTION_FILES, ...ALL_TOOL_CONFIG_DIRS]) || anyGlob(repoPath, ALL_INSTRUCTION_FILES),
     has_commands_or_skills: anyPath(repoPath, [
       ".claude/commands",
       ".claude/skills",
@@ -11685,7 +11784,10 @@ async function auditCore(repoPath, outDir, detectors, metrics, standardsPath) {
       coverage: applicable > 0 ? score / applicable : 0,
       checks
     };
-    writeFileSync2(join33(outDir, `${dimension}.json`), JSON.stringify(dim, null, 2));
+    writeFileSync2(
+      join33(outDir, `${dimension}.json`),
+      JSON.stringify(dim, null, 2)
+    );
     dimensions.push(dim);
   }
   const audit = {
@@ -11803,7 +11905,12 @@ function buildCheck(key, c, detectors, repoPath, awarded, skippedByMetric, topol
     try {
       r = detectors[c.code](repoPath);
     } catch (err2) {
-      r = { status: "FAIL", value: `detector-error: ${String(err2)}`, evidence: [], method: c.method };
+      r = {
+        status: "FAIL",
+        value: `detector-error: ${String(err2)}`,
+        evidence: [],
+        method: c.method
+      };
     }
     status = r.status;
     value = r.value;
@@ -12127,7 +12234,11 @@ async function main() {
         printJson({ error: "audit-core requires <repoPath> <outDir>" });
         process.exit(1);
       }
-      const standardsPath = join34(resolveSkillRoot(), "references", "standards.toml");
+      const standardsPath = join34(
+        resolveSkillRoot(),
+        "references",
+        "standards.toml"
+      );
       const summary = await auditCore(
         repoPath,
         outDir,

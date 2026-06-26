@@ -2,6 +2,12 @@ import { makeResult, iterFiles } from './_base.ts';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import {
+  ALL_INSTRUCTION_FILES,
+  ALL_RULE_COMMAND_DIRS,
+  ALL_SKILL_DIRS,
+  ALL_TOOL_CONFIG_DIRS,
+} from '../agent_tools.ts';
 
 // ---------------------------------------------------------------------------
 // detectInvisibleUnicode — category 2400 (PAI-01, method: detected)
@@ -65,17 +71,22 @@ const AGENT_FILE_GLOBS = [
 function listAgentFiles(repoPath: string): string[] {
   const results: string[] = [];
 
-  // Root-level CLAUDE.md / AGENTS.md / .mcp.json
-  for (const name of ['CLAUDE.md', 'AGENTS.md', '.mcp.json']) {
+  // Root-level instruction files for all supported agentic tools
+  for (const name of ALL_INSTRUCTION_FILES) {
     const full = join(repoPath, name);
     if (existsSync(full)) results.push(full);
   }
 
-  // Everything under .claude/
-  const claudeDir = join(repoPath, '.claude');
-  if (existsSync(claudeDir)) {
+  // Also check .mcp.json at root (MCP config is cross-tool)
+  const mcpJson = join(repoPath, '.mcp.json');
+  if (existsSync(mcpJson)) results.push(mcpJson);
+
+  // Everything under each tool's config directory
+  for (const relDir of ALL_TOOL_CONFIG_DIRS) {
+    const toolDir = join(repoPath, relDir);
+    if (!existsSync(toolDir)) continue;
     try {
-      const files = iterFiles(claudeDir, AGENT_FILE_GLOBS);
+      const files = iterFiles(toolDir, AGENT_FILE_GLOBS);
       results.push(...files);
     } catch {
       // ignore scan errors
@@ -595,26 +606,25 @@ export function detectNoSecurityBypass(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  const commandsDir = join(repoPath, '.claude', 'commands');
-  const skillsDir = join(repoPath, '.claude', 'skills');
+  const dirsToScan = [...ALL_RULE_COMMAND_DIRS, ...ALL_SKILL_DIRS];
+  const existingDirs = dirsToScan.filter((rel) =>
+    existsSync(join(repoPath, rel))
+  );
 
-  const hasCmds = existsSync(commandsDir);
-  const hasSkills = existsSync(skillsDir);
-
-  if (!hasCmds && !hasSkills) {
+  if (existingDirs.length === 0) {
     return makeResult(
       'SKIP',
       null,
       [
-        'no .claude/commands/ or .claude/skills/ directories found — PAI-06 not applicable',
+        'no agentic tool command or skill directories found — PAI-06 not applicable',
       ],
       'detected'
     );
   }
 
   const allFiles: string[] = [];
-  for (const dir of [commandsDir, skillsDir]) {
-    if (!existsSync(dir)) continue;
+  for (const rel of existingDirs) {
+    const dir = join(repoPath, rel);
     try {
       allFiles.push(...iterFiles(dir, COMMAND_SKILL_GLOBS));
     } catch {

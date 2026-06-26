@@ -94,6 +94,7 @@ The engine computes these topology flags deterministically (`topology.ts`) from 
 ## Topology Flags
 
 - `handles_secrets`: true|false (e.g. vault config / .env.example / secret manager client detected)
+- `has_agent_instruction_files`: true|false (e.g. any agent instruction file present — CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, .github/copilot-instructions.md, or equivalent for any supported agentic coding tool)
 - `has_ai_agent_files`: true|false (e.g. .claude/agents/\*.md / AGENTS.md / CLAUDE.md present)
 - `has_api`: true|false (e.g. any API layer detected — REST, gRPC, GraphQL, or generic router)
 - `has_ci`: true|false (e.g. .github/workflows/, .gitlab-ci.yml, Jenkinsfile, or similar found)

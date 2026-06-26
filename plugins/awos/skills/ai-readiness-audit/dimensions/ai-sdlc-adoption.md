@@ -145,7 +145,7 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 
 ### ADP-I1: Work-mix allocation
 
-- **What:** Team-FTE share across Growth / KTLO / Support issue types (Jellyfish FTE-allocation model; never money, never per-person)
+- **What:** Team-FTE share across Growth / KTLO / Support issue types (DX Core 4 FTE-allocation model; never money, never per-person)
 - **How:** `node "<engine cli path>" metric adp_i1_work_mix <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — work-mix computed from tracker artifact
 - **Skip-When:** `has_tracker` is false (no issue tracker source detected)

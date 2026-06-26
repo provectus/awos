@@ -7,11 +7,18 @@ import {
   realpathSync,
 } from 'node:fs';
 import { join, relative } from 'node:path';
+import {
+  ALL_RULE_COMMAND_DIRS,
+  ALL_SKILL_DIRS,
+  ALL_MCP_CONFIG_PATHS,
+  ALL_HOOK_PATHS,
+} from '../agent_tools.ts';
 
 // ---------------------------------------------------------------------------
 // detectCustomCommands — category 2001 (AI-02, method: detected)
 //
-// PASS if .claude/commands/ exists and contains at least one *.md file.
+// PASS if any agentic tool commands/rules directory exists and contains at
+// least one *.md file.
 // FAIL otherwise.
 // ---------------------------------------------------------------------------
 
@@ -19,22 +26,28 @@ export function detectCustomCommands(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  const commandsDir = join(repoPath, '.claude', 'commands');
-  if (!existsSync(commandsDir)) {
-    return makeResult('FAIL', 0, [
-      'no .claude/commands/ directory found — no custom slash commands defined',
-    ]);
+  const allFiles: string[] = [];
+  const foundDirs: string[] = [];
+
+  for (const relDir of ALL_RULE_COMMAND_DIRS) {
+    const dir = join(repoPath, relDir);
+    if (!existsSync(dir)) continue;
+    const files = iterFiles(dir, ['*.md']);
+    if (files.length > 0) {
+      allFiles.push(...files);
+      foundDirs.push(relDir);
+    }
   }
-  const files = iterFiles(commandsDir, ['*.md']);
-  if (files.length > 0) {
-    const names = files.map((p) => relative(repoPath, p));
-    return makeResult('PASS', files.length, [
-      `${files.length} custom command file(s) found under .claude/commands/`,
+
+  if (allFiles.length > 0) {
+    const names = allFiles.map((p) => relative(repoPath, p));
+    return makeResult('PASS', allFiles.length, [
+      `${allFiles.length} custom command/rule file(s) found under ${foundDirs.join(', ')}`,
       ...names.slice(0, 10).map((n) => `command: ${n}`),
     ]);
   }
   return makeResult('FAIL', 0, [
-    'no custom command files found in .claude/commands/ — define slash commands for common workflows',
+    'no custom command or rule files found in any agentic tool directory — define workflows for common tasks',
   ]);
 }
 
@@ -59,50 +72,40 @@ export function detectClaudeSkills(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  const skillsRoot = join(repoPath, '.claude', 'skills');
-  if (!existsSync(skillsRoot)) {
-    return makeResult('FAIL', 0, [
-      'no .claude/skills/ directory found — no Claude Code skills configured',
-    ]);
-  }
-
-  // Resolve .claude/skills itself if it is a symlink, so `find` can follow
-  // into the real directory tree. `find` with -type f does not follow symlinks
-  // by default, so we must hand it the resolved real path.
-  const realSkillsRoot = tryRealpath(skillsRoot) ?? skillsRoot;
-
-  // Also resolve each immediate child of the skills directory that may itself
-  // be a symlink (e.g. .claude/skills/my-skill → /some/other/path/my-skill).
-  // Collect all real paths to scan; deduplicate to avoid double-counting.
-  const scanTargets = new Set<string>([realSkillsRoot]);
-  try {
-    for (const entry of readdirSync(realSkillsRoot)) {
-      const entryPath = join(realSkillsRoot, entry);
-      let stat: ReturnType<typeof lstatSync>;
-      try {
-        stat = lstatSync(entryPath);
-      } catch {
-        continue;
-      }
-      if (stat.isSymbolicLink()) {
-        const resolved = tryRealpath(entryPath);
-        if (resolved) scanTargets.add(resolved);
-      }
-    }
-  } catch {
-    // readdirSync failed — fall through with just realSkillsRoot
-  }
-
   const allFiles: string[] = [];
-  for (const target of scanTargets) {
-    for (const f of iterFiles(target, ['SKILL.md'])) {
-      allFiles.push(f);
+
+  for (const relSkillsRoot of ALL_SKILL_DIRS) {
+    const skillsRoot = join(repoPath, relSkillsRoot);
+    if (!existsSync(skillsRoot)) continue;
+
+    const realSkillsRoot = tryRealpath(skillsRoot) ?? skillsRoot;
+    const scanTargets = new Set<string>([realSkillsRoot]);
+    try {
+      for (const entry of readdirSync(realSkillsRoot)) {
+        const entryPath = join(realSkillsRoot, entry);
+        let stat: ReturnType<typeof lstatSync>;
+        try {
+          stat = lstatSync(entryPath);
+        } catch {
+          continue;
+        }
+        if (stat.isSymbolicLink()) {
+          const resolved = tryRealpath(entryPath);
+          if (resolved) scanTargets.add(resolved);
+        }
+      }
+    } catch {
+      // readdirSync failed — fall through with just realSkillsRoot
+    }
+
+    for (const target of scanTargets) {
+      for (const f of iterFiles(target, ['SKILL.md'])) {
+        allFiles.push(f);
+      }
     }
   }
 
   if (allFiles.length > 0) {
-    // Build display names relative to repoPath where possible; fall back to
-    // the absolute path for skills resolved outside the repo tree.
     const names = allFiles.map((p) => {
       try {
         return relative(repoPath, p);
@@ -111,31 +114,29 @@ export function detectClaudeSkills(
       }
     });
     return makeResult('PASS', allFiles.length, [
-      `${allFiles.length} SKILL.md file(s) found under .claude/skills/`,
+      `${allFiles.length} SKILL.md file(s) found`,
       ...names.slice(0, 10).map((n) => `skill: ${n}`),
     ]);
   }
   return makeResult('FAIL', 0, [
-    'no SKILL.md files found under .claude/skills/ — no Claude Code skills configured',
+    'no SKILL.md files found under any agentic tool skills directory',
   ]);
 }
 
 // ---------------------------------------------------------------------------
 // detectMcpConfig — category 2003 (AI-04, method: detected)
 //
-// PASS if any of the recognised MCP config files exist:
-//   .mcp.json, .claude/mcp.json
+// PASS if any recognised MCP config file exists across all supported agentic
+// coding tools.
 // FAIL otherwise.
 // ---------------------------------------------------------------------------
-
-const MCP_CONFIG_PATHS = ['.mcp.json', '.claude/mcp.json'];
 
 export function detectMcpConfig(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
   const found: string[] = [];
-  for (const relPath of MCP_CONFIG_PATHS) {
+  for (const relPath of ALL_MCP_CONFIG_PATHS) {
     if (existsSync(join(repoPath, relPath))) {
       found.push(relPath);
     }
@@ -147,7 +148,7 @@ export function detectMcpConfig(
     ]);
   }
   return makeResult('FAIL', 0, [
-    'no MCP configuration found (.mcp.json or .claude/mcp.json) — no MCP servers configured',
+    'no MCP configuration found — no MCP servers configured for any agentic coding tool',
   ]);
 }
 
@@ -165,9 +166,10 @@ export function detectClaudeHooks(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  // Check for hook files in .claude/hooks/
-  const hooksDir = join(repoPath, '.claude', 'hooks');
-  if (existsSync(hooksDir)) {
+  // Check for hook files in any agentic tool hooks directory
+  for (const relHooksDir of ALL_HOOK_PATHS) {
+    const hooksDir = join(repoPath, relHooksDir);
+    if (!existsSync(hooksDir)) continue;
     const hookFiles = iterFiles(hooksDir, [
       '*.sh',
       '*.js',
@@ -178,13 +180,13 @@ export function detectClaudeHooks(
     if (hookFiles.length > 0) {
       const names = hookFiles.map((p) => relative(repoPath, p));
       return makeResult('PASS', hookFiles.length, [
-        `${hookFiles.length} hook file(s) found in .claude/hooks/`,
+        `${hookFiles.length} hook file(s) found in ${relHooksDir}`,
         ...names.slice(0, 10).map((n) => `hook file: ${n}`),
       ]);
     }
   }
 
-  // Check for "hooks" key in settings files
+  // Check for "hooks" key in settings files (Claude Code .claude/settings.json)
   const settingsFiles = [
     join(repoPath, '.claude', 'settings.json'),
     join(repoPath, '.claude', 'settings.local.json'),
@@ -221,7 +223,7 @@ export function detectClaudeHooks(
   }
 
   return makeResult('FAIL', 0, [
-    'no Claude Code hooks found — neither .claude/hooks/ files nor "hooks" key in settings',
+    'no agentic coding tool hooks found — no lifecycle hooks or settings hooks configured',
   ]);
 }
 

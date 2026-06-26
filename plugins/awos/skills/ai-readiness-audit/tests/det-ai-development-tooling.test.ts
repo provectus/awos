@@ -281,3 +281,31 @@ test('DETECTORS[2003] returns same result as detectMcpConfig', () => {
   assert.equal(viaMap.status, direct.status);
   assert.equal(viaMap.method, 'detected');
 });
+
+// ---------------------------------------------------------------------------
+// Multi-tool registry tests (B3)
+// ---------------------------------------------------------------------------
+
+test('detectCustomCommands: .cursor/commands dir present → PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.cursor', 'commands'), { recursive: true });
+  writeFileSync(join(t, '.cursor', 'commands', 'build.md'), '# build');
+  const r = detectCustomCommands(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'expected PASS when .cursor/commands/ has files'
+  );
+});
+
+test('detectMcpConfig: .cursor/mcp.json present → PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.cursor'), { recursive: true });
+  writeFileSync(join(t, '.cursor', 'mcp.json'), '{}');
+  const r = detectMcpConfig(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'expected PASS when .cursor/mcp.json present'
+  );
+});

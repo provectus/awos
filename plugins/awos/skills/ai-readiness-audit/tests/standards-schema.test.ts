@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { loadStandards } from './helpers.ts';
+import { computeTopology } from '../topology.ts';
 
 const VALID = new Set(['computed', 'detected', 'judgment']);
 const categories = () => loadStandards().category as Record<string, any>;
@@ -36,4 +40,25 @@ test('non-judgment categories carry no rubric', () => {
       );
     }
   }
+});
+
+test('every topology.* applies_when flag is computed by topology.ts', () => {
+  const tmpDir = mkdtempSync(join(tmpdir(), 'topology-guard-'));
+  const topologyFlags = computeTopology(tmpDir);
+  const missing: string[] = [];
+  for (const [slug, cat] of Object.entries(categories())) {
+    const aw: string | undefined = (cat as any).applies_when;
+    if (typeof aw === 'string') {
+      const m = aw.match(/^topology\.(\w+)$/);
+      if (m) {
+        const flagName = m[1];
+        if (!(flagName in topologyFlags)) {
+          missing.push(
+            `${slug}: applies_when references topology.${flagName} which is not computed in topology.ts`
+          );
+        }
+      }
+    }
+  }
+  assert.deepEqual(missing, [], missing.join('\n'));
 });

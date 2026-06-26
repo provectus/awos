@@ -502,7 +502,11 @@ async function main(): Promise<void> {
         printJson({ error: 'audit-core requires <repoPath> <outDir>' });
         process.exit(1);
       }
-      const standardsPath = join(resolveSkillRoot(), 'references', 'standards.toml');
+      const standardsPath = join(
+        resolveSkillRoot(),
+        'references',
+        'standards.toml'
+      );
       const summary = await auditCore(
         repoPath,
         outDir,

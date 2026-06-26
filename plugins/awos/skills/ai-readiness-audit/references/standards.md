@@ -56,9 +56,9 @@ The TOML is parsed in Node via `smol-toml` (no Python required for the test laye
 
 **`reliability_default`** reflects the intrinsic reliability ceiling for the signal:
 
-- `"maximal"` — presence does not imply active use; true usage is at most what is shown (e.g. a CLAUDE.md file exists but may not be actively followed).
+- `"maximal"` — presence does not imply active use; true usage is at most what is shown (e.g. an agent instruction file exists but may not be actively followed).
 - `"minimal"` — the measurement is a floor; true value is at least what is shown (e.g. ADP-G9 AI-attribution counts only commits with explicit markers — real usage is ≥ this).
-- `"not-reliable"` — the metric is a proxy or trend indicator; banded comparison against DORA/Jellyfish thresholds is the signal, not the raw number.
+- `"not-reliable"` — the metric is a proxy or trend indicator; banded comparison against DORA/DX Core 4 thresholds is the signal, not the raw number.
 
 ### `[band.<slug>]`
 

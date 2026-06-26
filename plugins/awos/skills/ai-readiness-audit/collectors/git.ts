@@ -2,6 +2,11 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeArtifact, type Period } from './_base.ts';
+import {
+  ALL_COMMIT_ATTRIBUTION,
+  ALL_TOOL_CONFIG_DIRS,
+  ALL_INSTRUCTION_FILES,
+} from '../agent_tools.ts';
 
 // ---------------------------------------------------------------------------
 // Shell helper
@@ -44,23 +49,12 @@ function getTotalCommits(cwd: string): number {
   return isNaN(n) ? 0 : n;
 }
 
-/** Count commits that carry Co-authored-by: Claude/assistant trailers. */
+/** Count commits that carry AI agent attribution trailers (any supported tool). */
 function getAiMarkedCommits(cwd: string): number {
-  const patterns = [
-    'Co-authored-by: Claude',
-    'Co-authored-by:.*[Aa]ssistant',
-    'Co-authored-by:.*claude@anthropic',
-  ];
   const matchedSHAs = new Set<string>();
-  for (const pat of patterns) {
+  for (const pat of ALL_COMMIT_ATTRIBUTION) {
     const out = run(
-      [
-        'log',
-        '--all-match',
-        '--regexp-ignore-case',
-        `--grep=${pat}`,
-        '--format=%H',
-      ],
+      ['log', '--regexp-ignore-case', `--grep=${pat.source}`, '--format=%H'],
       cwd
     );
     for (const sha of out.trim().split('\n').filter(Boolean)) {
@@ -71,14 +65,7 @@ function getAiMarkedCommits(cwd: string): number {
 }
 
 /** Paths that indicate AI tooling configuration in the repo. */
-const TOOLING_CANDIDATES = [
-  'CLAUDE.md',
-  'AGENTS.md',
-  '.claude/skills',
-  '.claude/commands',
-  '.claude/hooks',
-  '.mcp.json',
-];
+const TOOLING_CANDIDATES = [...ALL_INSTRUCTION_FILES, ...ALL_TOOL_CONFIG_DIRS];
 
 function getToolingPaths(repoPath: string): string[] {
   return TOOLING_CANDIDATES.filter((p) => existsSync(join(repoPath, p)));

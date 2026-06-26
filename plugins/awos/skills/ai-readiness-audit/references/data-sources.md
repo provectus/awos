@@ -10,6 +10,21 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" collect <source> <repoPath>
 
 Supported sources: `git`, `ci`, `tracker`, `docs` — implemented in `collectors/git.ts`, `collectors/ci.ts`, `collectors/tracker.ts`, and `collectors/docs.ts` respectively. Each collector writes one artifact to `context/audits/<date>/collected/<source>.json`.
 
+The git collector recognizes tooling signals and AI commit attribution across all eight supported agentic coding tools:
+
+| Tool            | Instruction file(s)                    | Key config paths                          |
+| --------------- | -------------------------------------- | ----------------------------------------- |
+| Claude Code     | `CLAUDE.md`                            | `.claude/`, `.mcp.json`, `.claude/mcp.json` |
+| Cursor          | `.cursorrules`                         | `.cursor/rules/`, `.cursor/commands/`, `.cursor/mcp.json` |
+| GitHub Copilot  | `.github/copilot-instructions.md`      | `.github/prompts/`, `.github/instructions/` |
+| OpenAI Codex    | `AGENTS.md`                            | `.codex/prompts/`, `.codex/config.toml` |
+| Gemini CLI      | `GEMINI.md`                            | `.gemini/commands/`, `.gemini/settings.json` |
+| Kiro            | _(none)_                               | `.kiro/steering/`, `.kiro/specs/`, `.kiro/hooks/`, `.kiro/settings/mcp.json` |
+| Windsurf        | `.windsurfrules`                       | `.windsurf/rules/`, `.windsurf/workflows/`, `.windsurf/mcp_config.json` |
+| Cline           | `.clinerules`                          | `.cline/mcp.json` |
+
+This table is derived from `agent_tools.ts` — the single registry that drives the git collector, all detectors, and the tooling-depth metric (ADP-G1).
+
 ---
 
 ## Default behavior

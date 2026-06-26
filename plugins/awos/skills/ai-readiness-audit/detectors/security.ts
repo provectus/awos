@@ -1,6 +1,7 @@
 import { makeResult, iterFiles, grep } from './_base.ts';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { ALL_HOOK_PATHS } from '../agent_tools.ts';
 
 // ---------------------------------------------------------------------------
 // detectEnvGitignored — category 2600 (SEC-01, method: detected)
@@ -64,7 +65,7 @@ export function detectAgentSafetyHooks(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  // Check .claude/settings.json / settings.local.json for hooks key
+  // Check settings files for hooks key (Claude Code only for now)
   const settingsPaths = [
     join(repoPath, '.claude', 'settings.json'),
     join(repoPath, '.claude', 'settings.local.json'),
@@ -100,9 +101,10 @@ export function detectAgentSafetyHooks(
     }
   }
 
-  // Check .claude/hooks/ directory for scripts that guard sensitive files
-  const hooksDir = join(repoPath, '.claude', 'hooks');
-  if (existsSync(hooksDir)) {
+  // Check all agentic tool hook directories for scripts that guard sensitive files
+  for (const relHooksDir of ALL_HOOK_PATHS) {
+    const hooksDir = join(repoPath, relHooksDir);
+    if (!existsSync(hooksDir)) continue;
     const hookFiles = iterFiles(hooksDir, HOOK_FILES_GLOBS);
     for (const f of hookFiles) {
       let src: string;
@@ -120,14 +122,14 @@ export function detectAgentSafetyHooks(
     if (hookFiles.length > 0) {
       // Hooks exist but none clearly guard sensitive files — still better than nothing
       return makeResult('WARN', hookFiles.length, [
-        `${hookFiles.length} hook file(s) found but none explicitly reference .env/secret patterns`,
+        `${hookFiles.length} hook file(s) found in ${relHooksDir} but none explicitly reference .env/secret patterns`,
         ...hookFiles.slice(0, 5).map((f) => `hook: ${relative(repoPath, f)}`),
       ]);
     }
   }
 
   return makeResult('FAIL', 0, [
-    'no Claude Code hooks configured — AI agents are not blocked from reading sensitive files',
+    'no agentic coding tool hooks configured — agents are not blocked from reading sensitive files',
   ]);
 }
 

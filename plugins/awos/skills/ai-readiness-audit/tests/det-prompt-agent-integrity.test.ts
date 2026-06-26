@@ -412,3 +412,18 @@ test('DETECTORS[2403] dispatches to detectMcpEndpointSafety — no .mcp.json = S
   const r = DETECTORS[2403](t);
   assert.equal(r.status, 'SKIP');
 });
+
+// ---------------------------------------------------------------------------
+// Multi-tool registry tests (B4)
+// ---------------------------------------------------------------------------
+
+test('PAI-01: GEMINI.md with no invisible chars → not SKIP (agent files found)', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'GEMINI.md'), '# gemini instructions');
+  const res = detectInvisibleUnicode(t);
+  assert.notEqual(
+    res.status,
+    'SKIP',
+    'GEMINI.md should be found as an agent file'
+  );
+});

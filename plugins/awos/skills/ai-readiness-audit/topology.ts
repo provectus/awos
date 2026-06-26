@@ -14,6 +14,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { iterFiles, grep } from './detectors/_base.ts';
 import { detectCiConfigPath } from './ci_platforms.ts';
+import { ALL_INSTRUCTION_FILES, ALL_TOOL_CONFIG_DIRS } from './agent_tools.ts';
 
 export type TopologyFlags = Record<string, boolean>;
 
@@ -105,7 +106,10 @@ export function computeTopology(
   const hasApi =
     hasHttpApi ||
     anyGlob(repoPath, ['openapi.json', 'openapi.yaml', 'swagger.json']) ||
-    codeMatches(repoPath, /\b(graphql|grpc|@grpc|protobuf|router\.(get|post|put))\b/i);
+    codeMatches(
+      repoPath,
+      /\b(graphql|grpc|@grpc|protobuf|router\.(get|post|put))\b/i
+    );
 
   // Two or more independent build roots (manifests in subdirectories) → monorepo.
   const manifestHits = (() => {
@@ -138,6 +142,9 @@ export function computeTopology(
     has_ai_agent_files:
       anyPath(repoPath, ['AGENTS.md', 'CLAUDE.md', '.claude']) ||
       anyGlob(repoPath, ['AGENTS.md', 'CLAUDE.md']),
+    has_agent_instruction_files:
+      anyPath(repoPath, [...ALL_INSTRUCTION_FILES, ...ALL_TOOL_CONFIG_DIRS]) ||
+      anyGlob(repoPath, ALL_INSTRUCTION_FILES),
     has_commands_or_skills: anyPath(repoPath, [
       '.claude/commands',
       '.claude/skills',
@@ -185,7 +192,10 @@ export function computeTopology(
     uses_env_vars:
       anyPath(repoPath, ['.env', '.env.example']) ||
       anyGlob(repoPath, ['.env', '.env.*']) ||
-      codeMatches(repoPath, /\b(os\.environ|os\.getenv|process\.env|dotenv|godotenv)\b/),
+      codeMatches(
+        repoPath,
+        /\b(os\.environ|os\.getenv|process\.env|dotenv|godotenv)\b/
+      ),
     handles_secrets:
       anyPath(repoPath, ['.env']) ||
       anyGlob(repoPath, ['.env', '.env.*']) ||
@@ -194,19 +204,21 @@ export function computeTopology(
         /\b(keyvault|secretsmanager|secret_?manager|hashicorp.?vault|SECRET_KEY|API_KEY|getSecret)\b/i
       ),
     is_monorepo: isMonorepo,
-    is_multi_service:
-      anyGlob(repoPath, ['docker-compose.yml', 'docker-compose.yaml'])
-        ? /services\s*:/.test(
-            readIfExists(repoPath, 'docker-compose.yml') ||
-              readIfExists(repoPath, 'docker-compose.yaml')
-          )
-        : (() => {
-            try {
-              return iterFiles(repoPath, ['Dockerfile']).length >= 2;
-            } catch {
-              return false;
-            }
-          })(),
+    is_multi_service: anyGlob(repoPath, [
+      'docker-compose.yml',
+      'docker-compose.yaml',
+    ])
+      ? /services\s*:/.test(
+          readIfExists(repoPath, 'docker-compose.yml') ||
+            readIfExists(repoPath, 'docker-compose.yaml')
+        )
+      : (() => {
+          try {
+            return iterFiles(repoPath, ['Dockerfile']).length >= 2;
+          } catch {
+            return false;
+          }
+        })(),
     has_multiple_layers:
       isMonorepo ||
       [
@@ -217,7 +229,14 @@ export function computeTopology(
     is_not_library:
       hasApi ||
       anyPath(repoPath, ['Dockerfile', 'docker-compose.yml']) ||
-      anyGlob(repoPath, ['main.py', 'main.go', 'app.py', 'server.ts', 'index.ts', 'manage.py']),
+      anyGlob(repoPath, [
+        'main.py',
+        'main.go',
+        'app.py',
+        'server.ts',
+        'index.ts',
+        'manage.py',
+      ]),
     // Connector-dependent — repo alone cannot prove these. Default false; the
     // orchestrator flips them true after a successful MCP connector fetch.
     has_tracker: Boolean(connectors?.has_tracker),

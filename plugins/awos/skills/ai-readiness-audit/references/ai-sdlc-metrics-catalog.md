@@ -24,7 +24,7 @@ Tier G requires only local git history. It is always attempted because git is th
 
 **Computation notes (Tier G):**
 
-- **ADP-G1** — Reuse `ai-development-tooling` + `spec-driven-development` evidence: presence/coverage of `CLAUDE.md`/`AGENTS.md`, `.claude/{skills,commands,hooks}`, MCP config, and spec signals (spec dirs, spec-referencing hooks/scripts, or docs). Report a coverage ratio across detected layers/linked repos.
+- **ADP-G1** — Reuse `ai-development-tooling` + `spec-driven-development` evidence: presence/coverage of agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`, etc.), agentic tool dirs (`.claude/`, `.cursor/`, `.kiro/`, etc.), skills, commands, hooks, MCP config, and spec signals (spec dirs, spec-referencing hooks/scripts, or docs). Report a coverage ratio across detected layers/linked repos.
 - **ADP-G2** — Distinct commit-author count per trailing 30-day bucket. Surface only the count: `git log --since=<bucket> --format=%aN | sort -u | wc -l`.
 - **ADP-G3** — Merges into the default branch per week: `git log --first-parent --merges <default> --since=<win>` (fallback: first-parent commits/week).
 - **ADP-G4** — Per merged branch, median of (merge-commit date − branch first-commit date).
@@ -32,7 +32,7 @@ Tier G requires only local git history. It is always attempted because git is th
 - **ADP-G6** — `git log --numstat` aggregate insertions+deletions per commit (trend); rework hotspots = files changed >N times within the window (high re-touch = churn). Report churn rate trend, not raw size.
 - **ADP-G7** — Share of default-branch merges followed within N days by a revert/hotfix: count `^Revert"`, `hotfix`, `rollback` first-parent commits ÷ total merges.
 - **ADP-G8** — If host review data available: review rounds and time-to-resolve-review-threads per PR; else commits pushed after branch open as a proxy, labeled low-confidence.
-- **ADP-G9** — Share of commits/PRs carrying AI markers (`Co-authored-by: Claude`/assistant trailers, agent commit/PR labels): `git log --grep` over trailers ÷ total. Label explicitly as a **minimum**; never present as the true adoption level.
+- **ADP-G9** — Share of commits/PRs carrying AI markers (attribution trailers from any supported agentic tool — `Co-authored-by: Claude`, `Co-authored-by: Cursor`, `Co-authored-by: Gemini`, etc.): `git log --grep` over trailers ÷ total. Label explicitly as a **minimum**; never present as the true adoption level.
 
 ---
 
@@ -49,11 +49,11 @@ Tier C activates only when a CI connector or accessible CI logs can be resolved 
 
 ## Tier I — issue tracker (when a tracker connector is resolvable)
 
-Tier I activates when a Jira, Linear, or equivalent issue-tracker connector is resolvable. Work-mix data here follows the Jellyfish AI Impact model: effort is expressed in team-FTE share, never in money.
+Tier I activates when a Jira, Linear, or equivalent issue-tracker connector is resolvable. Work-mix data here follows the DX Core 4 model: effort is expressed in team-FTE share, never in money.
 
 | ID     | Metric                                         | What it proves                                                                                                                    | Implementation                 | Collector(s)            | Category/Band               | Kind   |
 | ------ | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ----------------------- | --------------------------- | ------ |
-| ADP-I1 | Work-mix allocation                            | Freed capacity shifts toward Growth, away from KTLO/Support — in **team-FTE share, never money** (Jellyfish FTE-allocation model) | `metrics/adp_i1_work_mix.ts`   | `collectors/tracker.ts` | `work-mix` (standards.toml) | banded |
+| ADP-I1 | Work-mix allocation                            | Freed capacity shifts toward Growth, away from KTLO/Support — in **team-FTE share, never money** (DX Core 4 FTE-allocation model) | `metrics/adp_i1_work_mix.ts`   | `collectors/tracker.ts` | `work-mix` (standards.toml) | banded |
 | ADP-I2 | Delivered-issue throughput & backlog burn-down | Output and debt-clearing                                                                                                          | `metrics/adp_i2_throughput.ts` | `collectors/tracker.ts` | `delivery-flow`             | raw    |
 | ADP-I3 | MTTR                                           | Recovery speed — **SKIP unless a real incident source is provided**; do not infer from re-fixes of the same issue ID              | `metrics/adp_i3_mttr.ts`       | `collectors/tracker.ts` | `stability`                 | banded |
 
@@ -96,14 +96,14 @@ status           – "ok" | "skip" | "partial"
 
 **Reliability is per-metric and computed.** Each metric script assigns a reliability tag (`high` / `medium` / `low-confidence`) based on the collectors that were available. When a fallback path is taken (e.g., ADP-G5 approximated from git rather than the code-host API), the reliability tag is `low-confidence` and a note is included. The `reliability` field is always present — never omitted.
 
-**Vendor-neutral measurement frame.** The delivery measurement frame follows the DORA four keys (deployment frequency, lead time for change, change failure rate, MTTR). The only AI-direction claim cited here is the DORA/Google stability finding: AI-assisted teams show improved stability metrics. No AI throughput direction is asserted. Work-mix framing follows the Jellyfish AI Impact model (FTE allocation). Spec-driven adoption framing follows Provectus Agentic SDLC practices (tokens expressed as share, not money). CI/CD feedback-loop framing follows Martin Fowler's canonical CI/CD writing.
+**Vendor-neutral measurement frame.** The delivery measurement frame follows the DORA four keys (deployment frequency, lead time for change, change failure rate, MTTR). The only AI-direction claim cited here is the DORA/Google stability finding: AI-assisted teams show improved stability metrics. No AI throughput direction is asserted. Work-mix framing follows the DX Core 4 model (FTE allocation). Spec-driven adoption framing follows Provectus Agentic SDLC practices (tokens expressed as share, not money). CI/CD feedback-loop framing follows Martin Fowler's canonical CI/CD writing.
 
 ---
 
 ## Citations
 
 - **DORA four keys** — Forsgren, Humble, Kim, _Accelerate_ (2018) and the annual DORA State of DevOps reports. Deployment frequency, lead time for change, change failure rate, and MTTR define the delivery measurement frame used by Tier G and Tier I metrics.
-- **DORA/Google stability finding re: AI** — DORA State of DevOps 2024: teams using AI assistance show improved stability (change failure rate, MTTR). This is the only AI-direction claim in this catalog; no throughput direction is asserted.
+- **DORA/Google stability finding re: AI** — DORA State of DevOps 2025: teams using AI assistance show improved stability (change failure rate, MTTR). This is the only AI-direction claim in this catalog; no throughput direction is asserted.
 - **Martin Fowler on CI/CD** — Fowler's canonical articles on Continuous Integration and Continuous Delivery establish commit frequency and merge frequency as leading indicators of flow health, underpinning ADP-G2 and ADP-G3.
 - **Provectus Agentic SDLC** — Provectus internal board metric framing: adoption signals expressed as tooling coverage ratios and spec-linkage ratios; token consumption expressed as a share ratio, never in dollar terms.
-- **Jellyfish AI Impact** — Jellyfish engineering analytics research on AI impact measurement: FTE-allocation model for work-mix (Growth / KTLO / Support). Underpins ADP-I1.
+- **DX Core 4** — DX engineering productivity research on developer experience and AI impact measurement: FTE-allocation model for work-mix (Growth / KTLO / Support). Underpins ADP-I1.

@@ -43,7 +43,7 @@ metric = "adp_g1_tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 10
 method = "detected"
-definition = "Repo has a non-trivial CLAUDE.md or AGENTS.md providing agent context"
+definition = "Repo has a non-trivial agent instruction file (CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md or equivalent) providing AI agent context"
 applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"   # presence != active use → true usage ≤ shown
@@ -56,7 +56,7 @@ metric = "adp_g1_tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 6
 method = "detected"
-definition = "Repo defines .claude/skills/*/SKILL.md agent skill files"
+definition = "Repo defines agent skill files (e.g. .claude/skills/*/SKILL.md or equivalent for other AI coding tools)"
 applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
@@ -69,7 +69,7 @@ metric = "adp_g1_tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "detected"
-definition = "Repo defines .claude/commands/ custom slash commands"
+definition = "Repo defines custom commands or rule files for an agentic coding tool (e.g. .claude/commands/, .cursor/rules/, .gemini/commands/)"
 applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
@@ -82,7 +82,7 @@ metric = "adp_g1_tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "detected"
-definition = "Repo defines .claude/hooks/ lifecycle hooks"
+definition = "Repo defines lifecycle hooks for an agentic coding tool (e.g. .claude/hooks/, .kiro/hooks/)"
 applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
@@ -143,7 +143,7 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # direction depends on team size; banded comparison is the signal
 source = "DORA State of DevOps"
-source_year = 2024
+source_year = 2025
 
 # ADP-G4: Lead time for change (DORA banded)
 
@@ -158,7 +158,7 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # direction depends on team; banded comparison is the signal
 source = "DORA State of DevOps"
-source_year = 2024
+source_year = 2025
 
 # ADP-G5: PR cycle time (banded)
 
@@ -173,7 +173,7 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"
 source = "DORA State of DevOps"
-source_year = 2024
+source_year = 2025
 
 # ADP-G6: Code churn & rework
 
@@ -203,7 +203,7 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"
 source = "DORA State of DevOps"
-source_year = 2024
+source_year = 2025
 
 # ADP-G8: Review rework cycle (banded)
 
@@ -252,7 +252,7 @@ applies_when = "topology.has_ci"
 sources = ["ci"]
 reliability_default = "not-reliable"
 source = "Martin Fowler CI/CD"
-source_year = 2024
+source_year = 2025
 
 [category.pipeline_duration_trend]
 code = 1002
@@ -265,7 +265,7 @@ applies_when = "topology.has_ci"
 sources = ["ci"]
 reliability_default = "not-reliable"
 source = "Martin Fowler CI/CD"
-source_year = 2024
+source_year = 2025
 
 # ---------------------------------------------------------------------------
 # Tier I: Issue tracker categories
@@ -277,12 +277,12 @@ metric = "adp_i1_work_mix"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "computed"
-definition = "Team-FTE share across Growth / KTLO / Support issue types (Jellyfish FTE-allocation model; never money)"
+definition = "Team-FTE share across Growth / KTLO / Support issue types (FTE-allocation model; never money)"
 applies_when = "topology.has_tracker"
 sources = ["tracker"]
 reliability_default = "not-reliable"
-source = "Jellyfish AI Impact"
-source_year = 2024
+source = "DX Core 4"
+source_year = 2025
 
 [category.issue_throughput]
 code = 1102
@@ -308,7 +308,7 @@ applies_when = "topology.has_incident_source"
 sources = ["tracker", "incident"]
 reliability_default = "not-reliable"
 source = "DORA State of DevOps"
-source_year = 2024
+source_year = 2025
 
 # ---------------------------------------------------------------------------
 # Tier D: Docs / wiki categories
@@ -345,7 +345,7 @@ applies_when = "always"
 sources = ["scale"]
 reliability_default = "not-reliable"
 source = "McCabe 1976"
-source_year = 2024
+source_year = 1976
 
 # ADP-G11: Lines of code and scale
 
@@ -389,7 +389,7 @@ metric = "org_ai_tooling_coverage"
 dimension = "org-portfolio"
 weight = 10
 method = "computed"
-definition = "Fraction of portfolio repos with any AI tooling (CLAUDE.md / AGENTS.md / skills / commands / hooks / MCP) present; contributor-weighted"
+definition = "Fraction of portfolio repos with any AI tooling (agent instruction file / skills / commands / hooks / MCP config) present; contributor-weighted"
 applies_when = "always"
 sources = ["org-rollup"]
 reliability_default = "not-reliable"
@@ -431,7 +431,7 @@ source_year = 2026
 [band.cyclomatic_complexity]
 metric = "adp_g10_complexity"
 source = "McCabe 1976"
-source_year = 2024
+source_year = 1976
 elite = "avg_ccn <= 5"
 high = "avg_ccn <= 10"
 medium = "avg_ccn <= 15"
@@ -440,7 +440,7 @@ low = "avg_ccn > 15"
 [band.complexity_hotspots]
 metric = "adp_g10_complexity"
 source = "McCabe 1976"
-source_year = 2024
+source_year = 1976
 elite = "hotspots = 0"
 high = "hotspots <= 5"
 medium = "hotspots <= 20"
@@ -455,7 +455,7 @@ low = "hotspots > 20"
 [band.deploy_frequency]
 metric = "adp_g3_deploy_frequency"
 source = "DORA State of DevOps"
-source_year = 2024
+source_year = 2025
 elite = "multiple per day"
 high = "once per day to once per week"
 medium = "once per week to once per month"
@@ -464,7 +464,7 @@ low = "< once per month"
 [band.lead_time_for_change]
 metric = "adp_g4_lead_time"
 source = "DORA State of DevOps"
-source_year = 2024
+source_year = 2025
 elite = "< 1 day"
 high = "< 1 week"
 medium = "< 1 month"
@@ -473,7 +473,7 @@ low = ">= 1 month"
 [band.change_failure_rate]
 metric = "adp_g7_change_fail_rate"
 source = "DORA State of DevOps"
-source_year = 2024
+source_year = 2025
 elite = "0–5%"
 high = "5–10%"
 medium = "10–15%"
@@ -482,7 +482,7 @@ low = "> 15%"
 [band.mttr]
 metric = "adp_i3_mttr"
 source = "DORA State of DevOps"
-source_year = 2024
+source_year = 2025
 elite = "< 1 hour"
 high = "< 1 day"
 medium = "< 1 week"
@@ -491,7 +491,7 @@ low = ">= 1 week"
 [band.ci_pass_rate]
 metric = "adp_c1_ci_pass_rate"
 source = "Martin Fowler CI/CD"
-source_year = 2024
+source_year = 2025
 elite = ">= 99%"
 high = ">= 95%"
 medium = ">= 90%"
@@ -499,8 +499,8 @@ low = "< 90%"
 
 [band.work_mix]
 metric = "adp_i1_work_mix"
-source = "Jellyfish AI Impact"
-source_year = 2024
+source = "DX Core 4"
+source_year = 2025
 elite = "Growth >= 60%"
 high = "Growth >= 45%"
 medium = "Growth >= 30%"
@@ -525,9 +525,9 @@ metric = "AI-01"
 dimension = "ai-development-tooling"
 weight = 8
 method = "judgment"
-rubric = "Read all CLAUDE.md files (root, service-level, .claude/rules/). PASS if the combined ecosystem covers project-specific non-obvious context (architecture decisions, conventions, gotchas) that an agent cannot discover on its own from the source code. WARN if the files exist but contain only boilerplate, directory trees, or obvious facts. FAIL if no CLAUDE.md ecosystem exists or all content is trivially discoverable by reading the code."
-evidence_required = ["list of all CLAUDE.md files found", "sample of 3+ non-obvious facts each provides", "assessment of whether any file contains only boilerplate"]
-definition = "The combined CLAUDE.md ecosystem gives AI agents sufficient non-obvious context to work effectively in the project"
+rubric = "Read all agent instruction files (CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, .github/copilot-instructions.md, etc.). PASS if the combined ecosystem covers project-specific non-obvious context (architecture decisions, conventions, gotchas) that an agent cannot discover on its own from the source code. WARN if the files exist but contain only boilerplate, directory trees, or obvious facts. FAIL if no agent instruction files exist or all content is trivially discoverable by reading the code."
+evidence_required = ["list of all agent instruction files found", "sample of 3+ non-obvious facts each provides", "assessment of whether any file contains only boilerplate"]
+definition = "The combined agent instruction file ecosystem gives AI agents sufficient non-obvious context to work effectively in the project"
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
@@ -553,7 +553,7 @@ metric = "AI-03"
 dimension = "ai-development-tooling"
 weight = 1
 method = "detected"
-definition = "The project uses Claude Code skills for specialized workflows"
+definition = "The project uses agentic coding tool skills for specialized workflows"
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
@@ -579,7 +579,7 @@ metric = "AI-05"
 dimension = "ai-development-tooling"
 weight = 1
 method = "detected"
-definition = "The project uses Claude Code hooks for automated guardrails or workflows"
+definition = "The project uses agentic coding tool hooks for automated guardrails or workflows"
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
@@ -592,10 +592,10 @@ metric = "AI-06"
 dimension = "ai-development-tooling"
 weight = 5
 method = "judgment"
-rubric = "For each CLAUDE.md file, apply the key test: would removing this line cause an AI agent to make mistakes? PASS if every file has >= 3 non-obvious, project-specific instructions that pass this test. WARN if some files pass but at least one contains only boilerplate (directory trees, obvious naming conventions, copy-pasted framework docs). FAIL if files are uniformly boilerplate or trivially derivable from reading the codebase."
-evidence_required = ["list of CLAUDE.md files evaluated", "for each file: 1-3 sample lines flagged as non-obvious vs. boilerplate", "overall verdict per file (passes key test or not)"]
-definition = "Every CLAUDE.md file contains high-quality, non-obvious content that actually helps AI agents"
-applies_when = "topology.has_claude_md"
+rubric = "For each agent instruction file, apply the key test: would removing this line cause an AI agent to make mistakes? PASS if every file has >= 3 non-obvious, project-specific instructions that pass this test. WARN if some files pass but at least one contains only boilerplate (directory trees, obvious naming conventions, copy-pasted framework docs). FAIL if files are uniformly boilerplate or trivially derivable from reading the codebase."
+evidence_required = ["list of agent instruction files evaluated", "for each file: 1-3 sample lines flagged as non-obvious vs. boilerplate", "overall verdict per file (passes key test or not)"]
+definition = "Every agent instruction file contains high-quality, non-obvious content that actually helps AI agents"
+applies_when = "topology.has_agent_instruction_files"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
@@ -607,7 +607,7 @@ metric = "AI-07"
 dimension = "ai-development-tooling"
 weight = 8
 method = "detected"
-definition = "Claude Code has the tools to run the application and observe results without human involvement"
+definition = "The agentic coding tool has the means to run the application and observe results without human involvement"
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
@@ -1050,7 +1050,7 @@ metric = "SEC-02"
 dimension = "security"
 weight = 8
 method = "detected"
-definition = "Claude Code hooks are configured to prevent AI agents from reading sensitive files"
+definition = "Agentic coding tool hooks are configured to prevent agents from reading sensitive files"
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"

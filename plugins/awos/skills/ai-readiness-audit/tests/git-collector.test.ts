@@ -70,3 +70,22 @@ test('git collector history bound', () => {
   const art = collect(repo(), PERIOD);
   assert.ok(art.period.history_available_days >= 30); // ~Jan→Feb span
 });
+
+test('git collector counts non-Claude AI commits and tooling', () => {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-')), 'repo2');
+  mkdirSync(r);
+  git(r, ['init', '-q', '-b', 'main']);
+  writeFileSync(join(r, 'GEMINI.md'), '# gemini\n');
+  git(r, ['add', '-A']);
+  git(r, [
+    'commit',
+    '-qm',
+    'feat: init\n\nCo-authored-by: Cursor <cursor@cursor.com>',
+  ]);
+  const art = collect(r, PERIOD);
+  assert.ok(art.raw.ai_marked_commits >= 1, 'Cursor-attributed commit counted');
+  assert.ok(
+    art.raw.tooling_paths.includes('GEMINI.md'),
+    'GEMINI.md surfaced as tooling'
+  );
+});

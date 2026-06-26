@@ -976,7 +976,7 @@ test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
   assert.match(src, /SKIP/);
   // Citations present.
   assert.match(src, /DORA/);
-  assert.match(src, /Jellyfish/);
+  assert.match(src, /DX Core 4/);
   assert.match(src, /Provectus/);
   // New design: catalog is an index that references the engine + standards.
   assert.match(src, /standards\.toml/, 'catalog must reference standards.toml');

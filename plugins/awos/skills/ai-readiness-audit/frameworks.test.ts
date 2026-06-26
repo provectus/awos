@@ -32,3 +32,48 @@ test('framework auth patterns do not match unrelated code', () => {
     'bare Security(app_config) must not match — not an auth dependency'
   );
 });
+
+test('AS-06 narrow: @require_premium and @require_feature_flag do not match', () => {
+  assert.equal(
+    hasAuth('@require_premium'),
+    false,
+    '@require_premium must not match — not an auth decorator'
+  );
+  assert.equal(
+    hasAuth('@require_feature_flag'),
+    false,
+    '@require_feature_flag must not match — not an auth decorator'
+  );
+});
+
+test('AS-06 narrow: authenticate in comment/prose does not match', () => {
+  assert.equal(
+    hasAuth('# authenticate the user later'),
+    false,
+    'bare "authenticate" in a comment must not match — call form required'
+  );
+  assert.equal(
+    hasAuth('// We will authenticate via OAuth'),
+    false,
+    'authenticate in a comment must not match'
+  );
+});
+
+test('AS-06 narrow: authenticate() call and @require_role DO match', () => {
+  assert.ok(
+    hasAuth('authenticate(user, password)'),
+    'authenticate() call must match'
+  );
+  assert.ok(
+    hasAuth('@require_role'),
+    '@require_role must match — it is auth-specific'
+  );
+  assert.ok(
+    hasAuth('@require_permission'),
+    '@require_permission must match — it is auth-specific'
+  );
+  assert.ok(
+    hasAuth('@require_scope'),
+    '@require_scope must match — it is auth-specific'
+  );
+});

@@ -12,6 +12,9 @@ export const FRAMEWORK_AUTH_PATTERNS: RegExp[] = [
   // ASP.NET
   /\[Authorize(?:\([^)]*\))?\]/,
   // Generic decorator/middleware idioms (Flask/Django/Express/etc.)
-  /@(?:login_required|auth_required|requires_auth|authenticated|jwt_required|permission_classes|require_[a-z_]+)/i,
-  /\b(?:authenticate|isAuthenticated|requireAuth|authMiddleware|bearerAuth|apiKeyAuth|verifyToken|checkAuth|jwt\.verify|auth\.required)\b/i,
+  // require_[a-z_]+ is intentionally narrowed to auth-specific names to avoid
+  // matching @require_premium, @require_feature_flag, and other non-auth decorators.
+  /@(?:login_required|auth_required|requires_auth|authenticated|jwt_required|permission_classes|require_auth|require_login|require_user|require_role|require_permission|require_scope)/i,
+  // bare `authenticate` is changed to a call form to avoid matching comments/prose.
+  /\b(?:authenticate\s*\(|isAuthenticated|requireAuth|authMiddleware|bearerAuth|apiKeyAuth|verifyToken|checkAuth|jwt\.verify|auth\.required)\b/i,
 ];

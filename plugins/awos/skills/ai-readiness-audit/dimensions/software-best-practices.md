@@ -34,11 +34,11 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 
 ### SBP-03: Type safety is enforced
 
-- **What:** The project uses strong typing where available
-- **How:** For TypeScript: check `tsconfig.json` for `strict: true` or equivalent strict flags. For Kotlin: this is inherent to the language — check that `@Suppress` annotations are minimal.
-- **Pass:** Strict mode enabled (TS) or minimal type suppressions (Kotlin)
-- **Warn:** Some strict flags enabled but not full strict mode
-- **Fail:** Strict mode disabled or excessive type suppressions/`any` usage
+- **What:** The project uses strong typing where the language supports it
+- **How:** Check for strict-mode type config (e.g., `tsconfig.json` with `strict: true` for TypeScript, strict flags in other typed languages) or a high ratio of type annotations in sampled source files.
+- **Pass:** Strong typing is enabled or demonstrated across the codebase
+- **Warn:** Some typed configurations present but not comprehensively applied
+- **Fail:** No type safety mechanisms detected or widespread use of type-suppression directives
 - **Severity:** high
 - **Category:** 2702
 

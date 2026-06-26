@@ -29,12 +29,13 @@
  * SKIP: if repoPath cannot be read or no recognized source files are found.
  */
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { join, extname, basename } from 'node:path';
+import { join, extname, basename, relative } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
+import { isGeneratedPath } from '../generated.ts';
 
 // Extension → language name mapping.
 const EXT_TO_LANG: Record<string, string> = {
@@ -131,6 +132,7 @@ export function compute(
   let fileCount = 0;
 
   walkDir(repoPath, (filePath) => {
+    if (isGeneratedPath(relative(repoPath, filePath))) return;
     const ext = extname(filePath).toLowerCase();
     const lang = EXT_TO_LANG[ext];
     if (!lang) return;

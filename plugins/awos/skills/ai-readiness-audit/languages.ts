@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, extname } from 'node:path';
 
 export interface LanguageDef {
   id: string;
@@ -9,6 +9,7 @@ export interface LanguageDef {
   testDirNames: string[];
   depFiles: string[];
   importRx?: RegExp;
+  sizeThreshold?: number;
 }
 
 export const LANGUAGES: LanguageDef[] = [
@@ -55,6 +56,7 @@ export const LANGUAGES: LanguageDef[] = [
     testDirNames: ['test', 'tests'],
     depFiles: ['go.mod', 'go.sum'],
     importRx: /import\s+(?:\(\s*)?["]([^"]+)["]/,
+    sizeThreshold: 500,
   },
   {
     id: 'java',
@@ -69,6 +71,7 @@ export const LANGUAGES: LanguageDef[] = [
       'settings.gradle',
     ],
     importRx: /import\s+([\w.]+);/,
+    sizeThreshold: 500,
   },
   {
     id: 'kotlin',
@@ -83,6 +86,7 @@ export const LANGUAGES: LanguageDef[] = [
       'settings.gradle.kts',
     ],
     importRx: /import\s+([\w.]+)/,
+    sizeThreshold: 450,
   },
   {
     id: 'ruby',
@@ -133,6 +137,7 @@ export const LANGUAGES: LanguageDef[] = [
       'Directory.Packages.props',
     ],
     importRx: /using\s+([\w.]+);/,
+    sizeThreshold: 500,
   },
   {
     id: 'rust',
@@ -160,6 +165,7 @@ export const LANGUAGES: LanguageDef[] = [
     testDirNames: ['test', 'tests'],
     depFiles: ['build.sbt', 'build.sc'],
     importRx: /import\s+([\w.]+)/,
+    sizeThreshold: 450,
   },
   {
     id: 'dart',
@@ -183,4 +189,15 @@ export function detectLanguages(repoPath: string): LanguageDef[] {
   return LANGUAGES.filter((l) =>
     l.depFiles.some((f) => !f.includes('*') && existsSync(join(repoPath, f)))
   );
+}
+
+const DEFAULT_SIZE_THRESHOLD = 300;
+
+/** Per-language max reasonable file size (lines); falls back to 300. */
+export function sizeThresholdForFile(repoRelPath: string): number {
+  const ext = extname(repoRelPath).toLowerCase();
+  const lang = LANGUAGES.find((l) =>
+    l.sourceGlobs.some((g) => g.toLowerCase().endsWith(ext))
+  );
+  return lang?.sizeThreshold ?? DEFAULT_SIZE_THRESHOLD;
 }

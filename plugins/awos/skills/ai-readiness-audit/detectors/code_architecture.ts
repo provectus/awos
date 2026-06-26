@@ -2,7 +2,8 @@ import { makeResult, iterFiles } from './_base.ts';
 import { readFileSync } from 'node:fs';
 import { basename, dirname, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { ALL_SOURCE_GLOBS } from '../languages.ts';
+import { ALL_SOURCE_GLOBS, sizeThresholdForFile } from '../languages.ts';
+import { isGeneratedPath } from '../generated.ts';
 
 // ---------------------------------------------------------------------------
 // detectArchPattern — category 2100 (ARCH-01, method: detected)
@@ -492,7 +493,6 @@ export function detectNamingConventions(
 // ---------------------------------------------------------------------------
 
 const FILE_SIZE_GLOBS = ALL_SOURCE_GLOBS;
-const LOC_THRESHOLD = 300;
 
 function countLines(filePath: string): number {
   try {
@@ -519,20 +519,34 @@ export function detectFileSizes(
   }
 
   const oversized: Array<{ file: string; lines: number }> = [];
+  let checkedCount = 0;
 
   for (const filePath of files) {
+    const relPath = relative(repoPath, filePath);
+    if (isGeneratedPath(relPath)) continue;
+    checkedCount++;
     const lines = countLines(filePath);
-    if (lines > LOC_THRESHOLD) {
-      oversized.push({ file: relative(repoPath, filePath), lines });
+    const threshold = sizeThresholdForFile(relPath);
+    if (lines > threshold) {
+      oversized.push({ file: relPath, lines });
     }
   }
 
-  const total = files.length;
+  if (checkedCount === 0) {
+    return makeResult(
+      'PASS',
+      0,
+      ['no non-generated source files found — file-size check skipped'],
+      'computed'
+    );
+  }
+
+  const total = checkedCount;
   // Round to 10 decimal places to avoid floating-point noise
   const ratio = Math.round((oversized.length / total) * 1e10) / 1e10;
 
   const evidence = [
-    `${oversized.length}/${total} source files exceed ${LOC_THRESHOLD} lines`,
+    `${oversized.length}/${total} source files exceed their per-language size threshold`,
     ...oversized.slice(0, 10).map((f) => `${f.file}: ${f.lines} lines`),
   ];
 
@@ -541,7 +555,7 @@ export function detectFileSizes(
       'FAIL',
       ratio,
       [
-        `${Math.round(ratio * 100)}% of source files exceed ${LOC_THRESHOLD} lines (threshold: 30%)`,
+        `${Math.round(ratio * 100)}% of source files exceed their per-language size threshold (threshold: 30%)`,
         ...evidence,
       ],
       'computed'
@@ -552,7 +566,7 @@ export function detectFileSizes(
       'WARN',
       ratio,
       [
-        `${Math.round(ratio * 100)}% of source files exceed ${LOC_THRESHOLD} lines (threshold: 10%)`,
+        `${Math.round(ratio * 100)}% of source files exceed their per-language size threshold (threshold: 10%)`,
         ...evidence,
       ],
       'computed'
@@ -562,7 +576,7 @@ export function detectFileSizes(
     'PASS',
     ratio,
     [
-      `${Math.round(ratio * 100)}% of source files exceed ${LOC_THRESHOLD} lines — within threshold`,
+      `${Math.round(ratio * 100)}% of source files exceed their per-language size threshold — within threshold`,
       ...evidence,
     ],
     'computed'

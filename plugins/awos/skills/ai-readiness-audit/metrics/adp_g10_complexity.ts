@@ -34,13 +34,14 @@
  * CCN_THRESHOLD: 10 (McCabe classic threshold for "high complexity" hotspots).
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, extname, dirname } from 'node:path';
+import { join, extname, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   computeReliability,
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
+import { isGeneratedPath } from '../generated.ts';
 
 // Static import of web-tree-sitter (bundled by esbuild as CJS→ESM).
 // web-tree-sitter@0.24 exports the Parser class as module.exports (CJS default).
@@ -409,6 +410,7 @@ export async function compute(
   // neither analysed nor counted as skipped.
   const filePaths: string[] = [];
   walkDir(repoPath, (p) => {
+    if (isGeneratedPath(relative(repoPath, p))) return;
     if (EXT_TO_GRAMMAR[extname(p).toLowerCase()]) filePaths.push(p);
   });
 

@@ -3951,8 +3951,12 @@ var CI_DIRS = [
   // Buildkite
   ".drone",
   // Drone (directory variant)
-  ".teamcity"
+  ".teamcity",
   // TeamCity
+  ".concourse",
+  // Concourse CI
+  ".woodpecker"
+  // Woodpecker CI (directory variant)
 ];
 var CI_FILES = [
   ".gitlab-ci.yml",
@@ -3971,7 +3975,13 @@ var CI_FILES = [
   "bitbucket-pipelines.yaml",
   ".drone.yml",
   // Drone (single-file variant)
-  ".drone.yaml"
+  ".drone.yaml",
+  ".woodpecker.yml",
+  // Woodpecker CI (single-file variants)
+  ".woodpecker.yaml",
+  "ci/pipeline.yml",
+  // Concourse CI pipeline (file convention)
+  "ci/pipeline.yaml"
 ];
 var CI_CONFIG_CANDIDATES = [...CI_DIRS, ...CI_FILES];
 function detectCiConfigPath(repoPath) {
@@ -4176,11 +4186,11 @@ var PYPROJECT_LINTER_RX = /^\[tool\.(ruff|pylint|flake8)\]/m;
 function detectLinting(repoPath, _params) {
   const found = iterFiles(repoPath, LINTER_CONFIGS).map((p) => basename(p));
   if (found.length) {
-    const uniq2 = [...new Set(found)].sort();
+    const uniq3 = [...new Set(found)].sort();
     return makeResult(
       "PASS",
-      uniq2.length,
-      uniq2.map((n) => `linter config found: ${n}`)
+      uniq3.length,
+      uniq3.map((n) => `linter config found: ${n}`)
     );
   }
   const pyprojects = iterFiles(repoPath, ["pyproject.toml"]);
@@ -4221,11 +4231,11 @@ var PRECOMMIT_FORMATTER_RX = /\b(prettier|black|ruff|gofmt|rustfmt|clang-format|
 function detectFormatting(repoPath, _params) {
   const found = iterFiles(repoPath, FORMATTER_CONFIGS).map((p) => basename(p));
   if (found.length) {
-    const uniq2 = [...new Set(found)].sort();
+    const uniq3 = [...new Set(found)].sort();
     return makeResult(
       "PASS",
-      uniq2.length,
-      uniq2.map((n) => `formatter config found: ${n}`)
+      uniq3.length,
+      uniq3.map((n) => `formatter config found: ${n}`)
     );
   }
   const pyprojects = iterFiles(repoPath, ["pyproject.toml"]);
@@ -4402,11 +4412,11 @@ var LOCKFILES = [
 function detectLockfiles(repoPath, _params) {
   const found = iterFiles(repoPath, LOCKFILES).map((p) => basename(p));
   if (found.length) {
-    const uniq2 = [...new Set(found)].sort();
+    const uniq3 = [...new Set(found)].sort();
     return makeResult(
       "PASS",
-      uniq2.length,
-      uniq2.map((n) => `lock file present: ${n}`)
+      uniq3.length,
+      uniq3.map((n) => `lock file present: ${n}`)
     );
   }
   return makeResult("FAIL", 0, ["no dependency lock file found"]);
@@ -4493,11 +4503,192 @@ var DETECTORS = {
 import { readFileSync as readFileSync3 } from "node:fs";
 import { basename as basename2, dirname, relative as relative3 } from "node:path";
 import { execFileSync as execFileSync3 } from "node:child_process";
+
+// plugins/awos/skills/ai-readiness-audit/languages.ts
+var LANGUAGES = [
+  {
+    id: "javascript",
+    displayName: "JavaScript",
+    sourceGlobs: ["*.js", "*.jsx", "*.mjs", "*.cjs"],
+    testFileGlobs: ["*.test.js", "*.test.jsx", "*.spec.js", "*.spec.jsx"],
+    testDirNames: ["__tests__", "test", "tests"],
+    depFiles: ["package.json"],
+    importRx: /(?:import\s.*from\s+['"]([^'"]+)['"]|require\(\s*['"]([^'"]+)['"]\s*\))/
+  },
+  {
+    id: "typescript",
+    displayName: "TypeScript",
+    sourceGlobs: ["*.ts", "*.tsx"],
+    testFileGlobs: ["*.test.ts", "*.test.tsx", "*.spec.ts", "*.spec.tsx"],
+    testDirNames: ["__tests__", "test", "tests"],
+    depFiles: ["package.json", "tsconfig.json"],
+    importRx: /import\s.*from\s+['"]([^'"]+)['"]/
+  },
+  {
+    id: "python",
+    displayName: "Python",
+    sourceGlobs: ["*.py"],
+    testFileGlobs: ["test_*.py", "*_test.py"],
+    testDirNames: ["tests", "test"],
+    depFiles: [
+      "requirements.txt",
+      "pyproject.toml",
+      "Pipfile",
+      "poetry.lock",
+      "setup.cfg",
+      "setup.py"
+    ],
+    importRx: /(?:from\s+(\S+)\s+import|import\s+(\S+))/
+  },
+  {
+    id: "go",
+    displayName: "Go",
+    sourceGlobs: ["*.go"],
+    testFileGlobs: ["*_test.go"],
+    testDirNames: ["test", "tests"],
+    depFiles: ["go.mod", "go.sum"],
+    importRx: /import\s+(?:\(\s*)?["]([^"]+)["]/
+  },
+  {
+    id: "java",
+    displayName: "Java",
+    sourceGlobs: ["*.java"],
+    testFileGlobs: ["*Test.java", "Test*.java", "*Tests.java"],
+    testDirNames: ["test", "tests"],
+    depFiles: [
+      "pom.xml",
+      "build.gradle",
+      "build.gradle.kts",
+      "settings.gradle"
+    ],
+    importRx: /import\s+([\w.]+);/
+  },
+  {
+    id: "kotlin",
+    displayName: "Kotlin",
+    sourceGlobs: ["*.kt", "*.kts"],
+    testFileGlobs: ["*Test.kt", "*Spec.kt", "*Tests.kt"],
+    testDirNames: ["test", "tests"],
+    depFiles: [
+      "build.gradle.kts",
+      "build.gradle",
+      "pom.xml",
+      "settings.gradle.kts"
+    ],
+    importRx: /import\s+([\w.]+)/
+  },
+  {
+    id: "ruby",
+    displayName: "Ruby",
+    sourceGlobs: ["*.rb"],
+    testFileGlobs: ["*_spec.rb", "*_test.rb"],
+    testDirNames: ["spec", "test"],
+    depFiles: ["Gemfile", "Gemfile.lock", "*.gemspec"],
+    importRx: /require(?:_relative)?\s+['"]([^'"]+)['"]/
+  },
+  {
+    id: "php",
+    displayName: "PHP",
+    sourceGlobs: ["*.php"],
+    testFileGlobs: ["*Test.php"],
+    testDirNames: ["tests", "test"],
+    depFiles: ["composer.json", "composer.lock"],
+    importRx: /(?:use|require|include)\s+([\w\\]+)/
+  },
+  {
+    id: "c",
+    displayName: "C",
+    sourceGlobs: ["*.c", "*.h"],
+    testFileGlobs: ["*_test.c", "test_*.c"],
+    testDirNames: ["test", "tests"],
+    depFiles: ["Makefile", "CMakeLists.txt", "conanfile.txt"],
+    importRx: /#include\s+["<]([^">]+)[">]/
+  },
+  {
+    id: "cpp",
+    displayName: "C++",
+    sourceGlobs: ["*.cpp", "*.cc", "*.cxx", "*.hpp", "*.hh"],
+    testFileGlobs: ["*_test.cpp", "*_test.cc", "test_*.cpp"],
+    testDirNames: ["test", "tests"],
+    depFiles: ["CMakeLists.txt", "conanfile.txt", "vcpkg.json", "Makefile"],
+    importRx: /#include\s+["<]([^">]+)[">]/
+  },
+  {
+    id: "csharp",
+    displayName: "C#",
+    sourceGlobs: ["*.cs"],
+    testFileGlobs: ["*Test.cs", "*Tests.cs"],
+    testDirNames: ["test", "tests"],
+    depFiles: [
+      "*.csproj",
+      "*.sln",
+      "packages.config",
+      "Directory.Packages.props"
+    ],
+    importRx: /using\s+([\w.]+);/
+  },
+  {
+    id: "rust",
+    displayName: "Rust",
+    sourceGlobs: ["*.rs"],
+    testFileGlobs: ["*_test.rs"],
+    testDirNames: ["tests"],
+    depFiles: ["Cargo.toml", "Cargo.lock"],
+    importRx: /use\s+([\w:]+)/
+  },
+  {
+    id: "swift",
+    displayName: "Swift",
+    sourceGlobs: ["*.swift"],
+    testFileGlobs: ["*Tests.swift", "*Test.swift"],
+    testDirNames: ["Tests", "tests"],
+    depFiles: ["Package.swift", "*.xcodeproj", "Podfile"],
+    importRx: /import\s+(\w+)/
+  },
+  {
+    id: "scala",
+    displayName: "Scala",
+    sourceGlobs: ["*.scala", "*.sc"],
+    testFileGlobs: ["*Spec.scala", "*Test.scala"],
+    testDirNames: ["test", "tests"],
+    depFiles: ["build.sbt", "build.sc"],
+    importRx: /import\s+([\w.]+)/
+  },
+  {
+    id: "dart",
+    displayName: "Dart",
+    sourceGlobs: ["*.dart"],
+    testFileGlobs: ["*_test.dart"],
+    testDirNames: ["test", "tests"],
+    depFiles: ["pubspec.yaml", "pubspec.lock"],
+    importRx: /import\s+['"]([^'"]+)['"]/
+  }
+];
+var uniq2 = (xs) => [...new Set(xs)];
+var ALL_SOURCE_GLOBS = uniq2(LANGUAGES.flatMap((l) => l.sourceGlobs));
+var ALL_TEST_GLOBS = uniq2(LANGUAGES.flatMap((l) => l.testFileGlobs));
+var ALL_TEST_DIRS = uniq2(LANGUAGES.flatMap((l) => l.testDirNames));
+var ALL_DEP_FILES = uniq2(LANGUAGES.flatMap((l) => l.depFiles));
+
+// plugins/awos/skills/ai-readiness-audit/detectors/code_architecture.ts
 var ARCH_DOC_PATTERNS = [
   "ARCHITECTURE.md",
   "ARCHITECTURE.rst",
+  "ARCHITECTURE.txt",
+  "ARCHITECTURE.adoc",
   "architecture.md",
-  "architecture.rst"
+  "architecture.rst",
+  "architecture.txt",
+  "architecture.adoc",
+  "docs/architecture.md",
+  "docs/architecture.rst",
+  "docs/architecture.txt",
+  "docs/architecture.adoc",
+  "docs/ARCHITECTURE.md",
+  "docs/ARCHITECTURE.rst",
+  "docs/ARCHITECTURE.txt",
+  "docs/ARCHITECTURE.adoc",
+  "design/*.md"
 ];
 var LAYERED_DIRS = [
   "routes",
@@ -4569,7 +4760,7 @@ var LAYER_TIERS = {
   api: 5
 };
 var IMPORT_RX = /(?:import\s+.*?from\s+['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\)|from\s+([^\s]+)\s+import)/;
-var SOURCE_GLOBS2 = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.py"];
+var SOURCE_GLOBS2 = ALL_SOURCE_GLOBS;
 function getLayerTier(dir) {
   const lower = dir.toLowerCase();
   for (const [key, tier] of Object.entries(LAYER_TIERS)) {
@@ -4716,17 +4907,7 @@ function classifyName(name2) {
   if (/^[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$/.test(name2)) return "camelCase";
   return "other";
 }
-var NAMING_SOURCE_GLOBS = [
-  "*.ts",
-  "*.tsx",
-  "*.js",
-  "*.jsx",
-  "*.py",
-  "*.java",
-  "*.kt",
-  "*.go",
-  "*.rb"
-];
+var NAMING_SOURCE_GLOBS = ALL_SOURCE_GLOBS;
 function detectNamingConventions(repoPath, _params) {
   const files = iterFiles(repoPath, NAMING_SOURCE_GLOBS);
   const relevantFiles = files.filter((f) => {
@@ -4782,18 +4963,7 @@ function detectNamingConventions(repoPath, _params) {
     ...evidence
   ]);
 }
-var FILE_SIZE_GLOBS = [
-  "*.ts",
-  "*.tsx",
-  "*.js",
-  "*.jsx",
-  "*.py",
-  "*.java",
-  "*.kt",
-  "*.go",
-  "*.rb",
-  "*.cs"
-];
+var FILE_SIZE_GLOBS = ALL_SOURCE_GLOBS;
 var LOC_THRESHOLD = 300;
 function countLines(filePath) {
   try {
@@ -5661,7 +5831,15 @@ var DETECTORS4 = {
 import { existsSync as existsSync5, readFileSync as readFileSync6, statSync as statSync2 } from "node:fs";
 import { join as join7, relative as relative6 } from "node:path";
 import { execFileSync as execFileSync5 } from "node:child_process";
-var TRUNK_NAMES = /* @__PURE__ */ new Set(["main", "master", "develop", "development"]);
+var TRUNK_NAMES = /* @__PURE__ */ new Set([
+  "main",
+  "master",
+  "develop",
+  "development",
+  "dev",
+  "prod",
+  "trunk"
+]);
 var LAYER_PATTERNS = [
   {
     name: "api/backend",
@@ -5680,6 +5858,49 @@ var LAYER_PATTERNS = [
     patterns: /\/(infra|infrastructure|terraform|k8s|kubernetes|helm|deploy)\//i
   }
 ];
+var API_LAYER_DIRS = [
+  "api",
+  "routes",
+  "server",
+  "backend",
+  "controllers",
+  "handlers",
+  "endpoints"
+];
+var UI_LAYER_DIRS = ["frontend", "ui", "web", "client"];
+var DB_LAYER_DIRS = ["migrations", "db", "database", "models"];
+var DB_LAYER_FILE_GLOBS = ["*.sql", "schema.prisma", "*.prisma"];
+function detectedLayers(repoPath) {
+  const hasApi = API_LAYER_DIRS.some((d) => {
+    const p = join7(repoPath, d);
+    return existsSync5(p) && statSync2(p).isDirectory();
+  });
+  const uiDir = UI_LAYER_DIRS.some((d) => {
+    const p = join7(repoPath, d);
+    return existsSync5(p) && statSync2(p).isDirectory();
+  });
+  let hasUi = uiDir;
+  if (!hasUi) {
+    try {
+      hasUi = iterFiles(repoPath, ["*.tsx", "*.jsx"]).length > 0;
+    } catch {
+      hasUi = false;
+    }
+  }
+  const dbDir = DB_LAYER_DIRS.some((d) => {
+    const p = join7(repoPath, d);
+    return existsSync5(p) && statSync2(p).isDirectory();
+  });
+  let hasDb = dbDir;
+  if (!hasDb) {
+    try {
+      hasDb = iterFiles(repoPath, DB_LAYER_FILE_GLOBS).length > 0;
+    } catch {
+      hasDb = false;
+    }
+  }
+  return { hasApi, hasUi, hasDb };
+}
 function detectTrunk2(repoPath) {
   for (const candidate of ["main", "master", "develop", "development"]) {
     try {
@@ -5746,12 +5967,26 @@ function detectVerticalDelivery(repoPath, _params) {
       "computed"
     );
   }
+  const layers = detectedLayers(repoPath);
+  const layerCount = [layers.hasApi, layers.hasUi, layers.hasDb].filter(
+    Boolean
+  ).length;
+  if (layerCount < 2) {
+    return makeResult(
+      "SKIP",
+      null,
+      [
+        "fewer than 2 architectural layers present \u2014 vertical delivery not applicable"
+      ],
+      "computed"
+    );
+  }
   const trunk = detectTrunk2(repoPath);
   const verticalBranches = [];
   const singleLayerBranches = [];
   for (const branch of branches) {
-    const layerCount = branchLayerCount(repoPath, branch, trunk);
-    if (layerCount >= 2) {
+    const layerCount2 = branchLayerCount(repoPath, branch, trunk);
+    if (layerCount2 >= 2) {
       verticalBranches.push(branch);
     } else {
       singleLayerBranches.push(branch);
@@ -5796,67 +6031,8 @@ function detectVerticalDelivery(repoPath, _params) {
     "computed"
   );
 }
-var BACKEND_RX = /-backend$|[-_]api$|[-_]server$/i;
-var FRONTEND_RX = /-frontend$|[-_]ui$|[-_]client$|[-_]web$/i;
-function stripLayerSuffix(name2) {
-  return name2.replace(
-    /-backend$|-frontend$|[-_]api$|[-_]server$|[-_]ui$|[-_]client$|[-_]web$/i,
-    ""
-  ).toLowerCase();
-}
-function detectNoLayerSplit(repoPath, _params) {
-  let branches;
-  try {
-    const out2 = execFileSync5("git", ["branch", "--format=%(refname:short)"], {
-      cwd: repoPath,
-      encoding: "utf8"
-    });
-    branches = out2.split("\n").map((b) => b.trim()).filter((b) => b.length > 0 && !TRUNK_NAMES.has(b));
-  } catch {
-    return makeResult("SKIP", null, [
-      "no git branches available \u2014 layer-split detection skipped"
-    ]);
-  }
-  if (branches.length === 0) {
-    return makeResult("SKIP", null, [
-      "no feature branches found \u2014 layer-split detection skipped"
-    ]);
-  }
-  const backendBranches = branches.filter((b) => BACKEND_RX.test(b));
-  const frontendBranches = branches.filter((b) => FRONTEND_RX.test(b));
-  const pairedRoots = [];
-  for (const b of backendBranches) {
-    const root = stripLayerSuffix(b);
-    const hasFrontendPair = frontendBranches.some(
-      (f) => stripLayerSuffix(f) === root
-    );
-    if (hasFrontendPair) {
-      pairedRoots.push(root);
-    }
-  }
-  if (pairedRoots.length === 0) {
-    return makeResult("PASS", 0, [
-      "no paired backend/frontend branch split patterns detected",
-      `${branches.length} feature branch(es) inspected`
-    ]);
-  }
-  const evidence = [
-    `${pairedRoots.length} paired layer-split branch pattern(s) detected`,
-    ...pairedRoots.slice(0, 10).map((r) => `split pattern root: ${r}`)
-  ];
-  if (pairedRoots.length >= 3) {
-    return makeResult("FAIL", pairedRoots.length, [
-      `${pairedRoots.length} feature(s) split into separate backend/frontend branches \u2014 vertical delivery anti-pattern`,
-      ...evidence
-    ]);
-  }
-  return makeResult("WARN", pairedRoots.length, [
-    `${pairedRoots.length} feature(s) split into separate backend/frontend branches`,
-    ...evidence
-  ]);
-}
-var IMPL_PATH_RX = /\b(src|app|lib|packages?)\//i;
-var SPEC_REF_RX = /context\/spec\/\d{3}-|(?<!\/)spec\/\d{3}-/;
+var IMPL_PATH_RX = /(?:^|[^\w])(src|app|lib|packages?|cmd|internal|pkg)\//i;
+var SPEC_REF_RX = /context\/spec\/\d{3}-|(?<!\/)spec\/\d{3}-|\.specify\/|openspec\/|specs?\/[\w-]+\/(spec|design|tasks)\.md/i;
 function detectBidirectionalLinks(repoPath, _params) {
   const specBase = join7(repoPath, "context", "spec");
   if (!existsSync5(specBase)) {
@@ -5890,16 +6066,7 @@ function detectBidirectionalLinks(repoPath, _params) {
       if (specImplEvidence.length >= 3) break;
     }
   }
-  const SOURCE_GLOBS3 = [
-    "*.ts",
-    "*.tsx",
-    "*.js",
-    "*.jsx",
-    "*.py",
-    "*.go",
-    "*.java",
-    "*.kt"
-  ];
+  const SOURCE_GLOBS3 = ALL_SOURCE_GLOBS;
   let implRefsSpec = false;
   const implSpecEvidence = [];
   let sourceFiles = [];
@@ -5942,70 +6109,51 @@ function detectBidirectionalLinks(repoPath, _params) {
     `${sourceFiles.length} source file(s) found but none reference context/spec/`
   ]);
 }
-var API_DIRS = [
-  "api",
-  "routes",
-  "server",
-  "backend",
-  "controllers",
-  "handlers",
-  "endpoints"
-];
-var UI_DIRS = ["frontend", "ui", "web", "client"];
-var DB_FILES_GLOBS = ["*.sql", "schema.prisma", "*.prisma"];
-var DB_DIRS = ["migrations", "db", "database", "models"];
-function hasAnyDir(repoPath, dirs) {
-  for (const d of dirs) {
-    if (existsSync5(join7(repoPath, d)) && statSync2(join7(repoPath, d)).isDirectory()) {
-      return d;
-    }
-  }
-  return null;
-}
 function detectLayerCoverage(repoPath, _params) {
-  const apiDir = hasAnyDir(repoPath, API_DIRS);
-  const hasApi = apiDir !== null;
-  const uiDir = hasAnyDir(repoPath, UI_DIRS);
-  let hasUi = uiDir !== null;
-  let uiSignal = uiDir ? `directory: ${uiDir}/` : null;
-  if (!hasUi) {
+  const { hasApi, hasUi, hasDb } = detectedLayers(repoPath);
+  const apiSignal = hasApi ? API_LAYER_DIRS.find((d) => {
+    const p = join7(repoPath, d);
+    return existsSync5(p) && statSync2(p).isDirectory();
+  }) + "/" : null;
+  const uiDirName = UI_LAYER_DIRS.find((d) => {
+    const p = join7(repoPath, d);
+    return existsSync5(p) && statSync2(p).isDirectory();
+  });
+  let uiSignal = uiDirName ? `directory: ${uiDirName}/` : null;
+  if (!uiSignal && hasUi) {
     let uiFiles = [];
     try {
       uiFiles = iterFiles(repoPath, ["*.tsx", "*.jsx"]);
     } catch {
       uiFiles = [];
     }
-    if (uiFiles.length > 0) {
-      hasUi = true;
-      uiSignal = `${uiFiles.length} .tsx/.jsx file(s)`;
-    }
+    uiSignal = `${uiFiles.length} .tsx/.jsx file(s)`;
   }
-  const dbDir = hasAnyDir(repoPath, DB_DIRS);
-  let hasDb = dbDir !== null;
-  let dbSignal = dbDir ? `directory: ${dbDir}/` : null;
-  if (!hasDb) {
+  const dbDirName = DB_LAYER_DIRS.find((d) => {
+    const p = join7(repoPath, d);
+    return existsSync5(p) && statSync2(p).isDirectory();
+  });
+  let dbSignal = dbDirName ? `directory: ${dbDirName}/` : null;
+  if (!dbSignal && hasDb) {
     let dbFiles = [];
     try {
-      dbFiles = iterFiles(repoPath, DB_FILES_GLOBS);
+      dbFiles = iterFiles(repoPath, DB_LAYER_FILE_GLOBS);
     } catch {
       dbFiles = [];
     }
-    if (dbFiles.length > 0) {
-      hasDb = true;
-      dbSignal = `${dbFiles.length} schema/SQL file(s)`;
-    }
+    dbSignal = `${dbFiles.length} schema/SQL file(s)`;
   }
   const layerCount = [hasApi, hasUi, hasDb].filter(Boolean).length;
   if (layerCount < 2) {
     return makeResult("SKIP", layerCount, [
       "fewer than 2 distinct layers detected \u2014 single-layer project, E2E-04 not applicable",
-      hasApi ? `API layer: ${apiDir}/` : "API layer: not detected",
+      hasApi ? `API layer: ${apiSignal}` : "API layer: not detected",
       hasUi ? `UI layer: ${uiSignal}` : "UI layer: not detected",
       hasDb ? `DB layer: ${dbSignal}` : "DB layer: not detected"
     ]);
   }
   const evidence = [
-    hasApi ? `API layer: ${apiDir}/` : "API layer: not detected",
+    hasApi ? `API layer: ${apiSignal}` : "API layer: not detected",
     hasUi ? `UI layer: ${uiSignal}` : "UI layer: not detected",
     hasDb ? `DB layer: ${dbSignal}` : "DB layer: not detected"
   ];
@@ -6029,7 +6177,16 @@ var ROOT_TOOLING_FILES = [
   "justfile",
   "Justfile",
   ".gitlab-ci.yml",
-  ".gitlab-ci.yaml"
+  ".gitlab-ci.yaml",
+  "WORKSPACE",
+  "WORKSPACE.bazel",
+  "MODULE.bazel",
+  "BUILD.bazel",
+  "nx.json",
+  "pants.toml",
+  "turbo.json",
+  "lerna.json",
+  "pnpm-workspace.yaml"
 ];
 function detectCrossLayerTooling(repoPath, _params) {
   const found = [];
@@ -6038,17 +6195,23 @@ function detectCrossLayerTooling(repoPath, _params) {
       found.push(f);
     }
   }
-  for (const ciDir of CI_DIRS) {
-    const ciDirPath = join7(repoPath, ciDir);
-    if (!existsSync5(ciDirPath)) continue;
-    let ciFiles = [];
-    try {
-      ciFiles = iterFiles(ciDirPath, ["*.yml", "*.yaml"]);
-    } catch {
-      ciFiles = [];
-    }
-    if (ciFiles.length > 0) {
-      found.push(`${ciDir}/ (${ciFiles.length} workflow file(s))`);
+  for (const candidate of CI_CONFIG_CANDIDATES) {
+    if (found.some((f) => f.startsWith(candidate))) continue;
+    const candidatePath = join7(repoPath, candidate);
+    if (!existsSync5(candidatePath)) continue;
+    const s = statSync2(candidatePath);
+    if (s.isDirectory()) {
+      let ciFiles = [];
+      try {
+        ciFiles = iterFiles(candidatePath, ["*.yml", "*.yaml", "Jenkinsfile"]);
+      } catch {
+        ciFiles = [];
+      }
+      if (ciFiles.length > 0) {
+        found.push(`${candidate}/ (${ciFiles.length} workflow file(s))`);
+      }
+    } else {
+      found.push(`${candidate}`);
     }
   }
   if (found.length > 0) {
@@ -6064,8 +6227,7 @@ function detectCrossLayerTooling(repoPath, _params) {
 var DETECTORS5 = {
   2300: detectVerticalDelivery,
   // E2E-01 vertical delivery (computed)
-  2301: detectNoLayerSplit,
-  // E2E-02 no paired layer-split branches
+  // 2301 intentionally omitted — E2E-02 (name-based layer-split) removed
   2302: detectBidirectionalLinks,
   // E2E-03 spec↔impl bidirectional links
   2303: detectLayerCoverage,
@@ -6352,11 +6514,11 @@ var LOCKFILES2 = [
 function detectScsLockfiles(repoPath, _params) {
   const found = iterFiles(repoPath, LOCKFILES2).map((p) => basename4(p));
   if (found.length > 0) {
-    const uniq2 = [...new Set(found)].sort();
+    const uniq3 = [...new Set(found)].sort();
     return makeResult(
       "PASS",
-      uniq2.length,
-      uniq2.map((n) => `lockfile present: ${n}`)
+      uniq3.length,
+      uniq3.map((n) => `lockfile present: ${n}`)
     );
   }
   return makeResult("FAIL", 0, ["no dependency lockfile found"]);
@@ -7424,35 +7586,8 @@ var DETECTORS8 = {
 // plugins/awos/skills/ai-readiness-audit/detectors/quality_assurance.ts
 import { readFileSync as readFileSync10, existsSync as existsSync9 } from "node:fs";
 import { join as join11, relative as relative10, basename as basename5 } from "node:path";
-var TEST_FILE_GLOBS = [
-  "*.test.ts",
-  "*.test.tsx",
-  "*.test.js",
-  "*.test.jsx",
-  "*.spec.ts",
-  "*.spec.tsx",
-  "*.spec.js",
-  "*.spec.jsx",
-  "test_*.py",
-  "*_test.py",
-  "*_test.go",
-  "*_test.java",
-  "*Test.java",
-  "*Test.kt",
-  "*Spec.kt"
-];
-var SOURCE_FILE_GLOBS = [
-  "*.ts",
-  "*.tsx",
-  "*.js",
-  "*.jsx",
-  "*.py",
-  "*.go",
-  "*.java",
-  "*.kt",
-  "*.rb",
-  "*.php"
-];
+var TEST_FILE_GLOBS = ALL_TEST_GLOBS;
+var SOURCE_FILE_GLOBS = ALL_SOURCE_GLOBS;
 var SOURCE_IGNORE = [
   ".git",
   "node_modules",
@@ -7467,17 +7602,21 @@ var SOURCE_IGNORE = [
 ];
 var INTEGRATION_DIR_RX = /\/(integration(?:[_-]?tests?)?|e2e[_-]?tests?|system[_-]?tests?|functional[_-]?tests?)\//i;
 var INTEGRATION_FILE_RX = /[_.-](integration|contract|integration_test|it)[._-]/i;
-var E2E_CONTENT_RX = /\b(playwright|cypress|puppeteer|selenium|webdriver|nightwatch|testcafe|detox|appium|supertest)\b/i;
+var E2E_CONTENT_RX = /\b(playwright|cypress|puppeteer|selenium|webdriver|nightwatch|testcafe|detox|appium|supertest|vitest|k6|gatling|webdriverio|wdio|codeceptjs|robot\s+framework)\b/i;
 var E2E_GLOBS = [
   "playwright.config.ts",
   "playwright.config.js",
+  "playwright.config.mjs",
   "cypress.json",
   "cypress.config.ts",
   "cypress.config.js",
+  "cypress.config.mjs",
   "nightwatch.conf.js",
   "wdio.conf.ts",
   "wdio.conf.js",
-  "testcafe.config.js"
+  "wdio.conf.mjs",
+  "testcafe.config.js",
+  "codeceptjs.conf.js"
 ];
 function detectTestInfrastructure(repoPath, _params) {
   let testFiles = [];
@@ -7579,7 +7718,7 @@ function detectUnitTests(repoPath, _params) {
     ...evidence
   ]);
 }
-var INTEGRATION_CONTENT_RX = /(?:\bimport\s+(?:httpx|asyncpg|psycopg(?:2)?|testcontainers)\b|\bfrom\s+(?:httpx|asyncpg|psycopg(?:2)?|sqlalchemy|testcontainers|fastapi\.testclient|starlette\.testclient)\s+import\b|\b(?:TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|requests\.post|httpx\.get|httpx\.post|httpx\.AsyncClient|httpx\.Client|asyncpg\.connect|asyncpg\.create_pool|psycopg2?\.connect|create_engine|sessionmaker|AsyncSession|TestClient|ASGITransport|supertest|axios\.get|fetch\()\b)/i;
+var INTEGRATION_CONTENT_RX = /(?:\bimport\s+(?:httpx|asyncpg|psycopg(?:2)?|testcontainers)\b|\bfrom\s+(?:httpx|asyncpg|psycopg(?:2)?|sqlalchemy|testcontainers|fastapi\.testclient|starlette\.testclient)\s+import\b|\b(?:TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|requests\.post|httpx\.get|httpx\.post|httpx\.AsyncClient|httpx\.Client|asyncpg\.connect|asyncpg\.create_pool|psycopg2?\.connect|create_engine|sessionmaker|AsyncSession|TestClient|ASGITransport|supertest|axios\.get|fetch\(|k6\/http|gatling|rest[- ]?assured|karate|robot\s+framework|webdriverio|wdio|pytest\.mark\.integration|@Tag\("integration"\))\b)/i;
 var INTEGRATION_FILE_NAME_RX = /integration|contract|system[_-]test/i;
 var TEST_DOCKER_GLOBS = ["docker-compose*.yml", "docker-compose*.yaml"];
 function detectIntegrationTests(repoPath, _params) {
@@ -7791,9 +7930,28 @@ var COVERAGE_CONFIG_FILES = [
   "jest.config.js",
   "jest.config.json",
   "vitest.config.ts",
-  "vitest.config.js"
+  "vitest.config.js",
+  ".simplecov",
+  // SimpleCov (Ruby)
+  "tarpaulin.toml",
+  // cargo-tarpaulin (Rust)
+  "lcov.info",
+  // LCOV output — coverage was generated
+  ".coverage"
+  // Python coverage.py output file
 ];
-var COVERAGE_CONTENT_RX = /coverageThreshold|coverage[_-]?report|coverage[_-]?min|(?:\[tool\.coverage)|codecov|nyc|c8\b|--coverage\b/i;
+var COVERAGE_CONTENT_SCAN_FILES = [
+  "pytest.ini",
+  "tox.ini",
+  "pyproject.toml",
+  "setup.cfg",
+  "package.json",
+  "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
+  "Makefile"
+];
+var COVERAGE_CONTENT_RX = /coverageThreshold|coverage[_-]?report|coverage[_-]?min|(?:\[tool\.coverage)|codecov|nyc|c8\b|--coverage\b|--cov\b|pytest-cov|JaCoCo|jacoco|go\s+test.*-cover|SimpleCov|tarpaulin/i;
 function detectCoverageConfig(repoPath, _params) {
   const signals = [];
   for (const name2 of COVERAGE_CONFIG_FILES) {
@@ -7802,19 +7960,7 @@ function detectCoverageConfig(repoPath, _params) {
       signals.push(`coverage config: ${name2}`);
     }
   }
-  const pkgJson = join11(repoPath, "package.json");
-  if (existsSync9(pkgJson)) {
-    let content;
-    try {
-      content = readFileSync10(pkgJson, "utf8");
-    } catch {
-      content = "";
-    }
-    if (COVERAGE_CONTENT_RX.test(content)) {
-      signals.push("coverage settings in package.json");
-    }
-  }
-  for (const name2 of ["pyproject.toml", "setup.cfg"]) {
+  for (const name2 of COVERAGE_CONTENT_SCAN_FILES) {
     const full = join11(repoPath, name2);
     if (!existsSync9(full)) continue;
     let content;
@@ -7823,8 +7969,8 @@ function detectCoverageConfig(repoPath, _params) {
     } catch {
       continue;
     }
-    if (/\[tool\.coverage|coverage_report|coveragerc/i.test(content)) {
-      signals.push(`coverage config in ${name2}`);
+    if (COVERAGE_CONTENT_RX.test(content)) {
+      signals.push(`coverage settings in ${name2}`);
     }
   }
   if (signals.length > 0) {
@@ -8613,16 +8759,12 @@ function detectCorsNotWildcard(repoPath, _params) {
   ]);
 }
 var SQL_GLOBS = [
-  "*.py",
-  "*.ts",
-  "*.tsx",
-  "*.js",
-  "*.jsx",
-  "*.go",
-  "*.java",
-  "*.kt",
-  "*.rb",
-  "*.php"
+  ...ALL_SOURCE_GLOBS,
+  "*.sql",
+  "*.sql.j2",
+  "*.sql.erb",
+  "*.psql",
+  "*.tmpl"
 ];
 var STRING_SQL_PATTERNS = [
   // Python: cursor.execute("..." + var) or cursor.execute("..." % var)
@@ -11602,7 +11744,10 @@ function computeTopology(repoPath, connectors) {
     repoPath,
     /\b(fastapi|flask|django|express|@nestjs|gin-gonic|fiber|spring(framework|boot)?|sinatra|rails|actix_web|axum|aiohttp|starlette)\b/i
   );
-  const hasApi = hasHttpApi || anyGlob(repoPath, ["openapi.json", "openapi.yaml", "swagger.json"]) || codeMatches(repoPath, /\b(graphql|grpc|@grpc|protobuf|router\.(get|post|put))\b/i);
+  const hasApi = hasHttpApi || anyGlob(repoPath, ["openapi.json", "openapi.yaml", "swagger.json"]) || codeMatches(
+    repoPath,
+    /\b(graphql|grpc|@grpc|protobuf|router\.(get|post|put))\b/i
+  );
   const manifestHits = (() => {
     try {
       return iterFiles(repoPath, [
@@ -11665,13 +11810,19 @@ function computeTopology(repoPath, connectors) {
       repoPath,
       /\b(jwt|oauth2?|passport|keycloak|auth0|@login_required|authenticate|bearer\s+token|rbac)\b/i
     ),
-    uses_env_vars: anyPath(repoPath, [".env", ".env.example"]) || anyGlob(repoPath, [".env", ".env.*"]) || codeMatches(repoPath, /\b(os\.environ|os\.getenv|process\.env|dotenv|godotenv)\b/),
+    uses_env_vars: anyPath(repoPath, [".env", ".env.example"]) || anyGlob(repoPath, [".env", ".env.*"]) || codeMatches(
+      repoPath,
+      /\b(os\.environ|os\.getenv|process\.env|dotenv|godotenv)\b/
+    ),
     handles_secrets: anyPath(repoPath, [".env"]) || anyGlob(repoPath, [".env", ".env.*"]) || codeMatches(
       repoPath,
       /\b(keyvault|secretsmanager|secret_?manager|hashicorp.?vault|SECRET_KEY|API_KEY|getSecret)\b/i
     ),
     is_monorepo: isMonorepo,
-    is_multi_service: anyGlob(repoPath, ["docker-compose.yml", "docker-compose.yaml"]) ? /services\s*:/.test(
+    is_multi_service: anyGlob(repoPath, [
+      "docker-compose.yml",
+      "docker-compose.yaml"
+    ]) ? /services\s*:/.test(
       readIfExists(repoPath, "docker-compose.yml") || readIfExists(repoPath, "docker-compose.yaml")
     ) : (() => {
       try {
@@ -11685,7 +11836,14 @@ function computeTopology(repoPath, connectors) {
       anyPath(repoPath, ["backend", "api", "server", "src"]),
       anyPath(repoPath, ["infra", "infrastructure", "terraform", "deploy"])
     ].filter(Boolean).length >= 2,
-    is_not_library: hasApi || anyPath(repoPath, ["Dockerfile", "docker-compose.yml"]) || anyGlob(repoPath, ["main.py", "main.go", "app.py", "server.ts", "index.ts", "manage.py"]),
+    is_not_library: hasApi || anyPath(repoPath, ["Dockerfile", "docker-compose.yml"]) || anyGlob(repoPath, [
+      "main.py",
+      "main.go",
+      "app.py",
+      "server.ts",
+      "index.ts",
+      "manage.py"
+    ]),
     // Connector-dependent — repo alone cannot prove these. Default false; the
     // orchestrator flips them true after a successful MCP connector fetch.
     has_tracker: Boolean(connectors?.has_tracker),

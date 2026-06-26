@@ -1,43 +1,17 @@
 import { makeResult, iterFiles } from './_base.ts';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, relative, basename } from 'node:path';
+import { ALL_TEST_GLOBS, ALL_SOURCE_GLOBS } from '../languages.ts';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-// Glob patterns that identify test files by naming convention.
-const TEST_FILE_GLOBS = [
-  '*.test.ts',
-  '*.test.tsx',
-  '*.test.js',
-  '*.test.jsx',
-  '*.spec.ts',
-  '*.spec.tsx',
-  '*.spec.js',
-  '*.spec.jsx',
-  'test_*.py',
-  '*_test.py',
-  '*_test.go',
-  '*_test.java',
-  '*Test.java',
-  '*Test.kt',
-  '*Spec.kt',
-];
+// Glob patterns that identify test files by naming convention — from registry.
+const TEST_FILE_GLOBS = ALL_TEST_GLOBS;
 
-// Source file globs (non-test source modules).
-const SOURCE_FILE_GLOBS = [
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.py',
-  '*.go',
-  '*.java',
-  '*.kt',
-  '*.rb',
-  '*.php',
-];
+// Source file globs (non-test source modules) — from registry.
+const SOURCE_FILE_GLOBS = ALL_SOURCE_GLOBS;
 
 // Directories to skip for source file scanning.
 const SOURCE_IGNORE = [
@@ -64,19 +38,23 @@ const INTEGRATION_FILE_RX =
 
 // E2E test markers in file content.
 const E2E_CONTENT_RX =
-  /\b(playwright|cypress|puppeteer|selenium|webdriver|nightwatch|testcafe|detox|appium|supertest)\b/i;
+  /\b(playwright|cypress|puppeteer|selenium|webdriver|nightwatch|testcafe|detox|appium|supertest|vitest|k6|gatling|webdriverio|wdio|codeceptjs|robot\s+framework)\b/i;
 
 // E2E config / directory names.
 const E2E_GLOBS = [
   'playwright.config.ts',
   'playwright.config.js',
+  'playwright.config.mjs',
   'cypress.json',
   'cypress.config.ts',
   'cypress.config.js',
+  'cypress.config.mjs',
   'nightwatch.conf.js',
   'wdio.conf.ts',
   'wdio.conf.js',
+  'wdio.conf.mjs',
   'testcafe.config.js',
+  'codeceptjs.conf.js',
 ];
 
 // ---------------------------------------------------------------------------
@@ -263,15 +241,16 @@ export function detectUnitTests(
 // ---------------------------------------------------------------------------
 
 // Content signals that indicate real I/O integration tests (not mocked):
-//   HTTP clients:  httpx (import or qualified), requests, supertest, TestClient (ASGI), fetch against server
-//   DB drivers:    asyncpg (import or qualified), psycopg, sqlalchemy engine/session, testcontainers
+//   HTTP clients:  httpx, requests, supertest, TestClient (ASGI), k6, gatling
+//   DB drivers:    asyncpg, psycopg, sqlalchemy engine/session, testcontainers
 //   App transports: starlette/fastapi TestClient, httptest.NewServer
-//   Framework markers: @SpringBootTest, @DataJpaTest, DatabaseTestCase
+//   Framework markers: @SpringBootTest, @DataJpaTest, DatabaseTestCase, rest-assured, karate,
+//                       robot framework, @Tag("integration"), pytest.mark.integration
 // Covers both qualified calls (httpx.AsyncClient) and import-based unqualified usage
 // (from httpx import AsyncClient; import asyncpg; from sqlalchemy import ...).
 // Note: `requests.get` is intentionally kept broad — in test files it signals real HTTP.
 const INTEGRATION_CONTENT_RX =
-  /(?:\bimport\s+(?:httpx|asyncpg|psycopg(?:2)?|testcontainers)\b|\bfrom\s+(?:httpx|asyncpg|psycopg(?:2)?|sqlalchemy|testcontainers|fastapi\.testclient|starlette\.testclient)\s+import\b|\b(?:TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|requests\.post|httpx\.get|httpx\.post|httpx\.AsyncClient|httpx\.Client|asyncpg\.connect|asyncpg\.create_pool|psycopg2?\.connect|create_engine|sessionmaker|AsyncSession|TestClient|ASGITransport|supertest|axios\.get|fetch\()\b)/i;
+  /(?:\bimport\s+(?:httpx|asyncpg|psycopg(?:2)?|testcontainers)\b|\bfrom\s+(?:httpx|asyncpg|psycopg(?:2)?|sqlalchemy|testcontainers|fastapi\.testclient|starlette\.testclient)\s+import\b|\b(?:TestContainers?|testcontainers|DatabaseTestCase|IntegrationTest|@SpringBootTest|@DataJpaTest|httptest\.NewServer|requests\.get|requests\.post|httpx\.get|httpx\.post|httpx\.AsyncClient|httpx\.Client|asyncpg\.connect|asyncpg\.create_pool|psycopg2?\.connect|create_engine|sessionmaker|AsyncSession|TestClient|ASGITransport|supertest|axios\.get|fetch\(|k6\/http|gatling|rest[- ]?assured|karate|robot\s+framework|webdriverio|wdio|pytest\.mark\.integration|@Tag\("integration"\))\b)/i;
 
 const INTEGRATION_FILE_NAME_RX = /integration|contract|system[_-]test/i;
 
@@ -578,6 +557,7 @@ export function detectTestPyramid(
 // FAIL  if no coverage configuration found.
 // ---------------------------------------------------------------------------
 
+// Files whose PRESENCE alone signals a coverage setup.
 const COVERAGE_CONFIG_FILES = [
   '.nycrc',
   '.nycrc.json',
@@ -590,10 +570,27 @@ const COVERAGE_CONFIG_FILES = [
   'jest.config.json',
   'vitest.config.ts',
   'vitest.config.js',
+  '.simplecov', // SimpleCov (Ruby)
+  'tarpaulin.toml', // cargo-tarpaulin (Rust)
+  'lcov.info', // LCOV output — coverage was generated
+  '.coverage', // Python coverage.py output file
+];
+
+// Files where CONTENT is checked for coverage patterns.
+const COVERAGE_CONTENT_SCAN_FILES = [
+  'pytest.ini',
+  'tox.ini',
+  'pyproject.toml',
+  'setup.cfg',
+  'package.json',
+  'pom.xml',
+  'build.gradle',
+  'build.gradle.kts',
+  'Makefile',
 ];
 
 const COVERAGE_CONTENT_RX =
-  /coverageThreshold|coverage[_-]?report|coverage[_-]?min|(?:\[tool\.coverage)|codecov|nyc|c8\b|--coverage\b/i;
+  /coverageThreshold|coverage[_-]?report|coverage[_-]?min|(?:\[tool\.coverage)|codecov|nyc|c8\b|--coverage\b|--cov\b|pytest-cov|JaCoCo|jacoco|go\s+test.*-cover|SimpleCov|tarpaulin/i;
 
 export function detectCoverageConfig(
   repoPath: string,
@@ -601,7 +598,7 @@ export function detectCoverageConfig(
 ): ReturnType<typeof makeResult> {
   const signals: string[] = [];
 
-  // Check known coverage config files
+  // Check known coverage config files (presence is sufficient signal).
   for (const name of COVERAGE_CONFIG_FILES) {
     const full = join(repoPath, name);
     if (existsSync(full)) {
@@ -609,22 +606,8 @@ export function detectCoverageConfig(
     }
   }
 
-  // Check package.json for coverage settings
-  const pkgJson = join(repoPath, 'package.json');
-  if (existsSync(pkgJson)) {
-    let content: string;
-    try {
-      content = readFileSync(pkgJson, 'utf8');
-    } catch {
-      content = '';
-    }
-    if (COVERAGE_CONTENT_RX.test(content)) {
-      signals.push('coverage settings in package.json');
-    }
-  }
-
-  // Check pyproject.toml / setup.cfg / .coveragerc
-  for (const name of ['pyproject.toml', 'setup.cfg']) {
+  // Check content-scanned files for coverage patterns.
+  for (const name of COVERAGE_CONTENT_SCAN_FILES) {
     const full = join(repoPath, name);
     if (!existsSync(full)) continue;
     let content: string;
@@ -633,8 +616,8 @@ export function detectCoverageConfig(
     } catch {
       continue;
     }
-    if (/\[tool\.coverage|coverage_report|coveragerc/i.test(content)) {
-      signals.push(`coverage config in ${name}`);
+    if (COVERAGE_CONTENT_RX.test(content)) {
+      signals.push(`coverage settings in ${name}`);
     }
   }
 

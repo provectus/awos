@@ -1,6 +1,7 @@
 import { makeResult, iterFiles, grep } from './_base.ts';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { ALL_SOURCE_GLOBS } from '../languages.ts';
 
 // ---------------------------------------------------------------------------
 // detectTlsEnforced — category 3000 (AS-01, method: detected)
@@ -291,16 +292,12 @@ export function detectCorsNotWildcard(
 // ---------------------------------------------------------------------------
 
 const SQL_GLOBS = [
-  '*.py',
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.go',
-  '*.java',
-  '*.kt',
-  '*.rb',
-  '*.php',
+  ...ALL_SOURCE_GLOBS,
+  '*.sql',
+  '*.sql.j2',
+  '*.sql.erb',
+  '*.psql',
+  '*.tmpl',
 ];
 
 // Patterns indicating string-built SQL

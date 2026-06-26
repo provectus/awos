@@ -427,6 +427,39 @@ test('AS-09: NestJS @Throttle decorator is PASS', () => {
 });
 
 // ---------------------------------------------------------------------------
+// C6 — broadened SQL_GLOBS: .cs, .sql template files
+// ---------------------------------------------------------------------------
+
+test('AS-04: string-built SQL in a *.cs file is WARN or FAIL', () => {
+  // C# file — now in scope via ALL_SOURCE_GLOBS
+  const t = tmp();
+  writeFileSync(
+    join(t, 'Repo.cs'),
+    'var sql = "SELECT * FROM Users WHERE Id=" + userId;\nconn.Execute(sql);\n'
+  );
+  const r = detectParameterizedSql(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `expected WARN or FAIL for string-built SQL in .cs, got ${r.status}`
+  );
+});
+
+test('AS-04: string-built SQL in a *.sql.j2 Jinja template file is WARN or FAIL', () => {
+  // Jinja SQL template with string interpolation — not a parameterized query
+  const t = tmp();
+  // Use a clear pattern: execute("SELECT...WHERE id=" + var)
+  writeFileSync(
+    join(t, 'users.sql.j2'),
+    'cur.execute("SELECT * FROM users WHERE id=" + user_id)\n'
+  );
+  const r = detectParameterizedSql(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `expected WARN or FAIL for string-built SQL in .sql.j2, got ${r.status}`
+  );
+});
+
+// ---------------------------------------------------------------------------
 // DETECTORS map — structural sanity
 // ---------------------------------------------------------------------------
 

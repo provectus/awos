@@ -37,17 +37,6 @@ For single-layer projects, most checks will auto-SKIP since cross-layer delivery
 - **Severity:** high
 - **Category:** 2300
 
-### E2E-02: No layer-split branching pattern
-
-- **What:** Branches are not split by layer (e.g., no `feature-X-backend` / `feature-X-frontend` pairs)
-- **How:** Check recent branch names in git history for patterns like `*-backend`, `*-frontend`, `*-api`, `*-ui` suffixes on what appears to be the same feature. Use `git branch -a --list` and look for paired branch names.
-- **Pass:** No layer-split branch pairs found
-- **Warn:** 1-2 instances of layer-split branches found
-- **Fail:** Systematic pattern of layer-split branches (3+ pairs)
-- **Skip-When:** Topology artifact shows single-service repo
-- **Severity:** medium
-- **Category:** 2301
-
 ### E2E-03: Spec-to-delivery traceability
 
 - **What:** Specifications link to implementation and implementation references specs

@@ -765,19 +765,6 @@ reliability_default = "maximal"
 source = "AWOS audit"
 source_year = 2026
 
-[category.end_to_end_delivery_e2e_02]
-code = 2301
-metric = "E2E-02"
-dimension = "end-to-end-delivery"
-weight = 3
-method = "detected"
-definition = "Branches are not split by layer (no paired *-backend/*-frontend branch patterns)"
-applies_when = "topology.is_monorepo"
-sources = ["audit"]
-reliability_default = "maximal"
-source = "AWOS audit"
-source_year = 2026
-
 [category.end_to_end_delivery_e2e_03]
 code = 2302
 metric = "E2E-03"

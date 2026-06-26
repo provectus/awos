@@ -303,9 +303,5 @@ test('detectMcpConfig: .cursor/mcp.json present → PASS', () => {
   mkdirSync(join(t, '.cursor'), { recursive: true });
   writeFileSync(join(t, '.cursor', 'mcp.json'), '{}');
   const r = detectMcpConfig(t);
-  assert.equal(
-    r.status,
-    'PASS',
-    'expected PASS when .cursor/mcp.json present'
-  );
+  assert.equal(r.status, 'PASS', 'expected PASS when .cursor/mcp.json present');
 });

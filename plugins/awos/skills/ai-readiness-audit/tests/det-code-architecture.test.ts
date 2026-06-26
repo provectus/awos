@@ -43,6 +43,14 @@ test('ARCH-01: PASS when docs/architecture.md is present', () => {
   assert.equal(r.status, 'PASS', 'docs/architecture.md should yield PASS');
 });
 
+test('ARCH-01: PASS when docs/architecture.adoc is present', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'docs'), { recursive: true });
+  writeFileSync(join(t, 'docs', 'architecture.adoc'), '= Arch');
+  const r = detectArchPattern(t);
+  assert.equal(r.status, 'PASS', 'docs/architecture.adoc should yield PASS');
+});
+
 test('ARCH-01: WARN when recognizable layered dirs present but no explicit arch doc', () => {
   const t = tmp();
   // Recognizable layered layout: at least 3 of {src, lib, api, routes, controllers, services, models, domain, infra, infrastructure, application}

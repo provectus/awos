@@ -22,6 +22,8 @@ export const CI_DIRS = [
   '.buildkite', // Buildkite
   '.drone', // Drone (directory variant)
   '.teamcity', // TeamCity
+  '.concourse', // Concourse CI
+  '.woodpecker', // Woodpecker CI (directory variant)
 ];
 
 /**
@@ -40,6 +42,10 @@ export const CI_FILES = [
   'bitbucket-pipelines.yaml',
   '.drone.yml', // Drone (single-file variant)
   '.drone.yaml',
+  '.woodpecker.yml', // Woodpecker CI (single-file variants)
+  '.woodpecker.yaml',
+  'ci/pipeline.yml', // Concourse CI pipeline (file convention)
+  'ci/pipeline.yaml',
 ];
 
 /** Every candidate path (dirs + files) for a simple presence gate. */

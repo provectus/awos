@@ -71,7 +71,12 @@ function repoWithFile(name: string): string {
   return r;
 }
 
-for (const dir of ['.circleci', '.azure-pipelines', '.buildkite', '.teamcity']) {
+for (const dir of [
+  '.circleci',
+  '.azure-pipelines',
+  '.buildkite',
+  '.teamcity',
+]) {
   test(`ci collector: ${dir}/ directory → available=true (was a false "no CI")`, () => {
     const art = collect(repoWithDir(dir), PERIOD);
     assert.equal(art.available, true, `${dir} should count as CI config`);

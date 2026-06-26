@@ -2,7 +2,8 @@ import { makeResult, iterFiles } from './_base.ts';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { CI_DIRS } from '../ci_platforms.ts';
+import { CI_CONFIG_CANDIDATES } from '../ci_platforms.ts';
+import { ALL_SOURCE_GLOBS } from '../languages.ts';
 
 // ---------------------------------------------------------------------------
 // detectVerticalDelivery — category 2300 (E2E-01, method: computed)
@@ -24,7 +25,15 @@ import { CI_DIRS } from '../ci_platforms.ts';
 // SKIP  if no feature branches, or not a multi-layer repo, or not a git repo
 // ---------------------------------------------------------------------------
 
-const TRUNK_NAMES = new Set(['main', 'master', 'develop', 'development']);
+const TRUNK_NAMES = new Set([
+  'main',
+  'master',
+  'develop',
+  'development',
+  'dev',
+  'prod',
+  'trunk',
+]);
 
 // Layer buckets: a file path must contain one of these segment patterns to
 // count as belonging to that layer. Using lowercase matching.
@@ -48,6 +57,63 @@ const LAYER_PATTERNS: Array<{ name: string; patterns: RegExp }> = [
       /\/(infra|infrastructure|terraform|k8s|kubernetes|helm|deploy)\//i,
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Shared layer-presence helper — used by detectVerticalDelivery and
+// detectLayerCoverage to avoid duplicating the detection logic.
+// ---------------------------------------------------------------------------
+
+const API_LAYER_DIRS = [
+  'api',
+  'routes',
+  'server',
+  'backend',
+  'controllers',
+  'handlers',
+  'endpoints',
+];
+const UI_LAYER_DIRS = ['frontend', 'ui', 'web', 'client'];
+const DB_LAYER_DIRS = ['migrations', 'db', 'database', 'models'];
+const DB_LAYER_FILE_GLOBS = ['*.sql', 'schema.prisma', '*.prisma'];
+
+function detectedLayers(repoPath: string): {
+  hasApi: boolean;
+  hasUi: boolean;
+  hasDb: boolean;
+} {
+  const hasApi = API_LAYER_DIRS.some((d) => {
+    const p = join(repoPath, d);
+    return existsSync(p) && statSync(p).isDirectory();
+  });
+
+  const uiDir = UI_LAYER_DIRS.some((d) => {
+    const p = join(repoPath, d);
+    return existsSync(p) && statSync(p).isDirectory();
+  });
+  let hasUi = uiDir;
+  if (!hasUi) {
+    try {
+      hasUi = iterFiles(repoPath, ['*.tsx', '*.jsx']).length > 0;
+    } catch {
+      hasUi = false;
+    }
+  }
+
+  const dbDir = DB_LAYER_DIRS.some((d) => {
+    const p = join(repoPath, d);
+    return existsSync(p) && statSync(p).isDirectory();
+  });
+  let hasDb = dbDir;
+  if (!hasDb) {
+    try {
+      hasDb = iterFiles(repoPath, DB_LAYER_FILE_GLOBS).length > 0;
+    } catch {
+      hasDb = false;
+    }
+  }
+
+  return { hasApi, hasUi, hasDb };
+}
 
 function detectTrunk(repoPath: string): string {
   for (const candidate of ['main', 'master', 'develop', 'development']) {
@@ -131,6 +197,23 @@ export function detectVerticalDelivery(
     );
   }
 
+  // Gate: require at least 2 architectural layers before evaluating
+  // vertical delivery (a single-layer repo cannot deliver vertically).
+  const layers = detectedLayers(repoPath);
+  const layerCount = [layers.hasApi, layers.hasUi, layers.hasDb].filter(
+    Boolean
+  ).length;
+  if (layerCount < 2) {
+    return makeResult(
+      'SKIP',
+      null,
+      [
+        'fewer than 2 architectural layers present — vertical delivery not applicable',
+      ],
+      'computed'
+    );
+  }
+
   const trunk = detectTrunk(repoPath);
   const verticalBranches: string[] = [];
   const singleLayerBranches: string[] = [];
@@ -189,98 +272,6 @@ export function detectVerticalDelivery(
 }
 
 // ---------------------------------------------------------------------------
-// detectNoLayerSplit — category 2301 (E2E-02, method: detected)
-//
-// applies_when: topology.is_monorepo
-//
-// Detects whether git branches are split by layer — e.g. paired
-// `feat/auth-backend` + `feat/auth-frontend` patterns. This anti-pattern
-// indicates work is not being delivered end-to-end in a single branch.
-//
-// PASS  if no paired layer-split branch patterns detected.
-// WARN  if 1-2 paired patterns detected.
-// FAIL  if 3+ paired patterns detected.
-// SKIP  if no git branches available.
-// ---------------------------------------------------------------------------
-
-const BACKEND_RX = /-backend$|[-_]api$|[-_]server$/i;
-const FRONTEND_RX = /-frontend$|[-_]ui$|[-_]client$|[-_]web$/i;
-
-function stripLayerSuffix(name: string): string {
-  return name
-    .replace(
-      /-backend$|-frontend$|[-_]api$|[-_]server$|[-_]ui$|[-_]client$|[-_]web$/i,
-      ''
-    )
-    .toLowerCase();
-}
-
-export function detectNoLayerSplit(
-  repoPath: string,
-  _params?: unknown
-): ReturnType<typeof makeResult> {
-  let branches: string[];
-  try {
-    const out = execFileSync('git', ['branch', '--format=%(refname:short)'], {
-      cwd: repoPath,
-      encoding: 'utf8',
-    });
-    branches = out
-      .split('\n')
-      .map((b) => b.trim())
-      .filter((b) => b.length > 0 && !TRUNK_NAMES.has(b));
-  } catch {
-    return makeResult('SKIP', null, [
-      'no git branches available — layer-split detection skipped',
-    ]);
-  }
-
-  if (branches.length === 0) {
-    return makeResult('SKIP', null, [
-      'no feature branches found — layer-split detection skipped',
-    ]);
-  }
-
-  const backendBranches = branches.filter((b) => BACKEND_RX.test(b));
-  const frontendBranches = branches.filter((b) => FRONTEND_RX.test(b));
-
-  const pairedRoots: string[] = [];
-  for (const b of backendBranches) {
-    const root = stripLayerSuffix(b);
-    const hasFrontendPair = frontendBranches.some(
-      (f) => stripLayerSuffix(f) === root
-    );
-    if (hasFrontendPair) {
-      pairedRoots.push(root);
-    }
-  }
-
-  if (pairedRoots.length === 0) {
-    return makeResult('PASS', 0, [
-      'no paired backend/frontend branch split patterns detected',
-      `${branches.length} feature branch(es) inspected`,
-    ]);
-  }
-
-  const evidence = [
-    `${pairedRoots.length} paired layer-split branch pattern(s) detected`,
-    ...pairedRoots.slice(0, 10).map((r) => `split pattern root: ${r}`),
-  ];
-
-  if (pairedRoots.length >= 3) {
-    return makeResult('FAIL', pairedRoots.length, [
-      `${pairedRoots.length} feature(s) split into separate backend/frontend branches — vertical delivery anti-pattern`,
-      ...evidence,
-    ]);
-  }
-
-  return makeResult('WARN', pairedRoots.length, [
-    `${pairedRoots.length} feature(s) split into separate backend/frontend branches`,
-    ...evidence,
-  ]);
-}
-
-// ---------------------------------------------------------------------------
 // detectBidirectionalLinks — category 2302 (E2E-03, method: detected)
 //
 // Checks that spec files reference implementation paths and that implementation
@@ -296,8 +287,9 @@ export function detectNoLayerSplit(
 // FAIL  if neither direction is found, or no spec dir exists.
 // ---------------------------------------------------------------------------
 
-const IMPL_PATH_RX = /\b(src|app|lib|packages?)\//i;
-const SPEC_REF_RX = /context\/spec\/\d{3}-|(?<!\/)spec\/\d{3}-/;
+const IMPL_PATH_RX = /(?:^|[^\w])(src|app|lib|packages?|cmd|internal|pkg)\//i;
+const SPEC_REF_RX =
+  /context\/spec\/\d{3}-|(?<!\/)spec\/\d{3}-|\.specify\/|openspec\/|specs?\/[\w-]+\/(spec|design|tasks)\.md/i;
 
 export function detectBidirectionalLinks(
   repoPath: string,
@@ -342,16 +334,7 @@ export function detectBidirectionalLinks(
   }
 
   // Check impl→spec: any source file references context/spec/
-  const SOURCE_GLOBS = [
-    '*.ts',
-    '*.tsx',
-    '*.js',
-    '*.jsx',
-    '*.py',
-    '*.go',
-    '*.java',
-    '*.kt',
-  ];
+  const SOURCE_GLOBS = ALL_SOURCE_GLOBS;
   let implRefsSpec = false;
   const implSpecEvidence: string[] = [];
 
@@ -411,84 +394,55 @@ export function detectBidirectionalLinks(
 // applies_when: topology.has_multiple_layers
 //
 // Checks that: API definitions have corresponding UI consumers, and DB schemas
-// have corresponding API layers. Uses directory presence as the signal.
-//
-// Layer presence signals:
-//   API    — api/, routes/, server/, backend/, controllers/, handlers/ dirs
-//   UI     — frontend/, ui/, web/, client/ dirs OR *.tsx/*.jsx files
-//   DB     — *.sql files, migrations/ dir, schema.prisma, models/ dir
+// have corresponding API layers. Uses the shared detectedLayers() helper.
 //
 // PASS  if all 3 layers present.
 // WARN  if 2 of 3 layers present.
 // SKIP  if fewer than 2 layers detected (single-layer project).
-// FAIL  should not normally occur — but is reserved for API present without UI.
 // ---------------------------------------------------------------------------
-
-const API_DIRS = [
-  'api',
-  'routes',
-  'server',
-  'backend',
-  'controllers',
-  'handlers',
-  'endpoints',
-];
-const UI_DIRS = ['frontend', 'ui', 'web', 'client'];
-const DB_FILES_GLOBS = ['*.sql', 'schema.prisma', '*.prisma'];
-const DB_DIRS = ['migrations', 'db', 'database', 'models'];
-
-function hasAnyDir(repoPath: string, dirs: string[]): string | null {
-  for (const d of dirs) {
-    if (
-      existsSync(join(repoPath, d)) &&
-      statSync(join(repoPath, d)).isDirectory()
-    ) {
-      return d;
-    }
-  }
-  return null;
-}
 
 export function detectLayerCoverage(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  // API layer
-  const apiDir = hasAnyDir(repoPath, API_DIRS);
-  const hasApi = apiDir !== null;
+  const { hasApi, hasUi, hasDb } = detectedLayers(repoPath);
 
-  // UI layer — check dirs first, then file extensions
-  const uiDir = hasAnyDir(repoPath, UI_DIRS);
-  let hasUi = uiDir !== null;
-  let uiSignal = uiDir ? `directory: ${uiDir}/` : null;
-  if (!hasUi) {
+  // Determine a human-readable signal for each layer
+  const apiSignal = hasApi
+    ? API_LAYER_DIRS.find((d) => {
+        const p = join(repoPath, d);
+        return existsSync(p) && statSync(p).isDirectory();
+      }) + '/'
+    : null;
+
+  const uiDirName = UI_LAYER_DIRS.find((d) => {
+    const p = join(repoPath, d);
+    return existsSync(p) && statSync(p).isDirectory();
+  });
+  let uiSignal: string | null = uiDirName ? `directory: ${uiDirName}/` : null;
+  if (!uiSignal && hasUi) {
     let uiFiles: string[] = [];
     try {
       uiFiles = iterFiles(repoPath, ['*.tsx', '*.jsx']);
     } catch {
       uiFiles = [];
     }
-    if (uiFiles.length > 0) {
-      hasUi = true;
-      uiSignal = `${uiFiles.length} .tsx/.jsx file(s)`;
-    }
+    uiSignal = `${uiFiles.length} .tsx/.jsx file(s)`;
   }
 
-  // DB layer — check dirs then files
-  const dbDir = hasAnyDir(repoPath, DB_DIRS);
-  let hasDb = dbDir !== null;
-  let dbSignal = dbDir ? `directory: ${dbDir}/` : null;
-  if (!hasDb) {
+  const dbDirName = DB_LAYER_DIRS.find((d) => {
+    const p = join(repoPath, d);
+    return existsSync(p) && statSync(p).isDirectory();
+  });
+  let dbSignal: string | null = dbDirName ? `directory: ${dbDirName}/` : null;
+  if (!dbSignal && hasDb) {
     let dbFiles: string[] = [];
     try {
-      dbFiles = iterFiles(repoPath, DB_FILES_GLOBS);
+      dbFiles = iterFiles(repoPath, DB_LAYER_FILE_GLOBS);
     } catch {
       dbFiles = [];
     }
-    if (dbFiles.length > 0) {
-      hasDb = true;
-      dbSignal = `${dbFiles.length} schema/SQL file(s)`;
-    }
+    dbSignal = `${dbFiles.length} schema/SQL file(s)`;
   }
 
   const layerCount = [hasApi, hasUi, hasDb].filter(Boolean).length;
@@ -496,14 +450,14 @@ export function detectLayerCoverage(
   if (layerCount < 2) {
     return makeResult('SKIP', layerCount, [
       'fewer than 2 distinct layers detected — single-layer project, E2E-04 not applicable',
-      hasApi ? `API layer: ${apiDir}/` : 'API layer: not detected',
+      hasApi ? `API layer: ${apiSignal}` : 'API layer: not detected',
       hasUi ? `UI layer: ${uiSignal}` : 'UI layer: not detected',
       hasDb ? `DB layer: ${dbSignal}` : 'DB layer: not detected',
     ]);
   }
 
   const evidence = [
-    hasApi ? `API layer: ${apiDir}/` : 'API layer: not detected',
+    hasApi ? `API layer: ${apiSignal}` : 'API layer: not detected',
     hasUi ? `UI layer: ${uiSignal}` : 'UI layer: not detected',
     hasDb ? `DB layer: ${dbSignal}` : 'DB layer: not detected',
   ];
@@ -547,6 +501,15 @@ const ROOT_TOOLING_FILES = [
   'Justfile',
   '.gitlab-ci.yml',
   '.gitlab-ci.yaml',
+  'WORKSPACE',
+  'WORKSPACE.bazel',
+  'MODULE.bazel',
+  'BUILD.bazel',
+  'nx.json',
+  'pants.toml',
+  'turbo.json',
+  'lerna.json',
+  'pnpm-workspace.yaml',
 ];
 
 export function detectCrossLayerTooling(
@@ -562,18 +525,24 @@ export function detectCrossLayerTooling(
     }
   }
 
-  // Check CI directories for any YAML files
-  for (const ciDir of CI_DIRS) {
-    const ciDirPath = join(repoPath, ciDir);
-    if (!existsSync(ciDirPath)) continue;
-    let ciFiles: string[] = [];
-    try {
-      ciFiles = iterFiles(ciDirPath, ['*.yml', '*.yaml']);
-    } catch {
-      ciFiles = [];
-    }
-    if (ciFiles.length > 0) {
-      found.push(`${ciDir}/ (${ciFiles.length} workflow file(s))`);
+  // Check CI candidates (dirs + single-file configs)
+  for (const candidate of CI_CONFIG_CANDIDATES) {
+    if (found.some((f) => f.startsWith(candidate))) continue; // already counted via ROOT_TOOLING_FILES
+    const candidatePath = join(repoPath, candidate);
+    if (!existsSync(candidatePath)) continue;
+    const s = statSync(candidatePath);
+    if (s.isDirectory()) {
+      let ciFiles: string[] = [];
+      try {
+        ciFiles = iterFiles(candidatePath, ['*.yml', '*.yaml', 'Jenkinsfile']);
+      } catch {
+        ciFiles = [];
+      }
+      if (ciFiles.length > 0) {
+        found.push(`${candidate}/ (${ciFiles.length} workflow file(s))`);
+      }
+    } else {
+      found.push(`${candidate}`);
     }
   }
 
@@ -591,7 +560,7 @@ export function detectCrossLayerTooling(
 
 // ---------------------------------------------------------------------------
 // DETECTORS — maps each end-to-end-delivery code to its function.
-// All 5 E2E checks are detected/computed — none are judgment.
+// E2E-02 (2301) was removed — name-based layer-split detection dropped.
 // ---------------------------------------------------------------------------
 
 export const DETECTORS: Record<
@@ -599,7 +568,7 @@ export const DETECTORS: Record<
   (repoPath: string, params?: unknown) => ReturnType<typeof makeResult>
 > = {
   2300: detectVerticalDelivery, // E2E-01 vertical delivery (computed)
-  2301: detectNoLayerSplit, // E2E-02 no paired layer-split branches
+  // 2301 intentionally omitted — E2E-02 (name-based layer-split) removed
   2302: detectBidirectionalLinks, // E2E-03 spec↔impl bidirectional links
   2303: detectLayerCoverage, // E2E-04 API + UI + DB layer coverage
   2304: detectCrossLayerTooling, // E2E-05 cross-layer unified tooling

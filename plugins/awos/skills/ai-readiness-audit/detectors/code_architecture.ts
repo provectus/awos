@@ -2,6 +2,7 @@ import { makeResult, iterFiles } from './_base.ts';
 import { readFileSync } from 'node:fs';
 import { basename, dirname, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { ALL_SOURCE_GLOBS } from '../languages.ts';
 
 // ---------------------------------------------------------------------------
 // detectArchPattern — category 2100 (ARCH-01, method: detected)
@@ -13,11 +14,26 @@ import { execFileSync } from 'node:child_process';
 // FAIL if neither is found.
 // ---------------------------------------------------------------------------
 
+// Arch doc patterns: root-level files, docs/ subdirectory, design/ subdirectory.
+// Supported extensions: .md, .rst, .txt, .adoc
 const ARCH_DOC_PATTERNS = [
   'ARCHITECTURE.md',
   'ARCHITECTURE.rst',
+  'ARCHITECTURE.txt',
+  'ARCHITECTURE.adoc',
   'architecture.md',
   'architecture.rst',
+  'architecture.txt',
+  'architecture.adoc',
+  'docs/architecture.md',
+  'docs/architecture.rst',
+  'docs/architecture.txt',
+  'docs/architecture.adoc',
+  'docs/ARCHITECTURE.md',
+  'docs/ARCHITECTURE.rst',
+  'docs/ARCHITECTURE.txt',
+  'docs/ARCHITECTURE.adoc',
+  'design/*.md',
 ];
 const LAYERED_DIRS = [
   'routes',
@@ -126,7 +142,7 @@ const LAYER_TIERS: Record<string, number> = {
 const IMPORT_RX =
   /(?:import\s+.*?from\s+['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\)|from\s+([^\s]+)\s+import)/;
 
-const SOURCE_GLOBS = ['*.ts', '*.tsx', '*.js', '*.jsx', '*.py'];
+const SOURCE_GLOBS = ALL_SOURCE_GLOBS;
 
 function getLayerTier(dir: string): number | undefined {
   const lower = dir.toLowerCase();
@@ -393,17 +409,7 @@ function classifyName(name: string): NamingConvention {
   return 'other';
 }
 
-const NAMING_SOURCE_GLOBS = [
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.py',
-  '*.java',
-  '*.kt',
-  '*.go',
-  '*.rb',
-];
+const NAMING_SOURCE_GLOBS = ALL_SOURCE_GLOBS;
 
 export function detectNamingConventions(
   repoPath: string,
@@ -485,18 +491,7 @@ export function detectNamingConventions(
 // Value is the exact ratio (0–1 float, rounded to 10 decimal places for stability).
 // ---------------------------------------------------------------------------
 
-const FILE_SIZE_GLOBS = [
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.py',
-  '*.java',
-  '*.kt',
-  '*.go',
-  '*.rb',
-  '*.cs',
-];
+const FILE_SIZE_GLOBS = ALL_SOURCE_GLOBS;
 const LOC_THRESHOLD = 300;
 
 function countLines(filePath: string): number {

@@ -137,6 +137,9 @@ export interface Check {
   hint: string;
   plain?: string;
   value_series?: Array<{ bucket_start: string; value: number | null }>;
+  unit?: string;
+  expression?: string;
+  source_year?: number;
 }
 
 export interface DimensionArtifact {
@@ -240,6 +243,15 @@ const LIMITED_HISTORY_DAYS = 30;
 
 function pct(ratio: number): string {
   return (ratio * 100).toFixed(1) + '%';
+}
+
+/** Round floats to 2dp; integers stay integral; null/undefined → '—'. */
+function fmtValue(v: string | number | null | undefined): string {
+  if (v === null || v === undefined) return '—';
+  if (typeof v === 'number') {
+    return Number.isInteger(v) ? String(v) : v.toFixed(2);
+  }
+  return String(v);
 }
 
 function titleLabel(dim: DimensionArtifact): string {
@@ -560,8 +572,7 @@ export function renderMarkdown(audit: AuditJson): string {
         ? `${c.reliability.tag} (${c.reliability.confidence})${c.reliability.tag === 'minimal' ? ' *' : ''}`
         : '—';
       if (c.reliability.tag === 'minimal' && c.applies) hasMinimal = true;
-      const valueStr =
-        c.value !== null && c.value !== undefined ? String(c.value) : '—';
+      const valueStr = fmtValue(c.value);
       const seriesStr =
         c.value_series && c.value_series.length > 0
           ? ` \\[${sparkline(c.value_series)}\\]`
@@ -1039,7 +1050,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
       '<table class="checks"><colgroup><col style="width:3%"><col style="width:24%"><col style="width:8%"><col style="width:7%"><col style="width:10%"><col style="width:13%"><col style="width:35%"></colgroup>'
     );
     rows.push(
-      '<thead><tr><th>#</th><th>Check</th><th>Status</th><th>Wt</th><th>Reliability</th><th>Value</th><th>Evidence</th></tr></thead><tbody>'
+      '<thead><tr><th>#</th><th>Check</th><th>Status</th><th>Points</th><th>Reliability</th><th>Value</th><th>Evidence</th></tr></thead><tbody>'
     );
     let ckn = 1;
     let hasMinimal = false;
@@ -1061,8 +1072,6 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
           : c.reliability.tag === 'not-reliable'
             ? 'A rough proxy — treat as indicative, not exact.'
             : 'Reliable for what was reachable.';
-      const valueStr =
-        c.value !== null && c.value !== undefined ? String(c.value) : '—';
       const seriesSvg =
         c.value_series && c.value_series.length > 0
           ? sparklineSvg(c.value_series)
@@ -1072,13 +1081,24 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
       // Technical detail (code · source · method) folded into the Check tooltip.
       const codeStr = c.code && c.code.length > 0 ? c.code.join(', ') : '—';
       const checkMeta = `${esc(c.definition)} — source: ${esc(c.source || '—')} · method: ${esc(c.method)} · category ${esc(codeStr)}`;
+      // Points cell: tooltip enriched with standards.toml-derived meta.
+      const pointsMeta = `${c.definition}${c.source ? ` · ${c.source}` : ''}${c.source_year ? ` (${c.source_year})` : ''}`;
+      const pointsCell = tip(
+        String(c.weight_awarded) + '/' + String(c.weight_max),
+        `Worth up to ${c.weight_max} points · ${c.method}`,
+        pointsMeta
+      );
+      // Value cell: rounded + expression tooltip when available.
+      const valueCell = c.expression
+        ? tip(fmtValue(c.value), c.expression, c.unit ? `unit: ${c.unit}` : '')
+        : esc(fmtValue(c.value));
       rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
   <td>${ckn++}</td>
   <td class="check"><span class="tip" tabindex="0"><b>${esc(c.check_id)}</b><span class="tipbox"><b>${esc(plainLead(c))}</b><span class="tipmeta">${checkMeta}</span></span></span><span class="plain">${esc(plainLead(c))}</span></td>
   <td>${statusBadge(c.status)}</td>
-  <td>${tip(String(c.weight_awarded) + '/' + String(c.weight_max), `Earned ${c.weight_awarded} of a possible ${c.weight_max} points for this check.`, '')}</td>
+  <td>${pointsCell}</td>
   <td class="${relClass}">${tip(relLabel, relTipPlain, c.reliability.note ?? '')}</td>
-  <td>${valueStr}${seriesSvg}</td>
+  <td>${valueCell}${seriesSvg}</td>
   <td class="evidence">${evidence}</td>
 </tr>`);
     }

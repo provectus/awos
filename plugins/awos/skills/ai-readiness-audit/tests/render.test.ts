@@ -685,6 +685,52 @@ test('labelize uppercases known acronyms', () => {
   assert.equal(labelize('code-architecture'), 'Code Architecture');
 });
 
+test('html rounds float values to 2dp and labels the Points column', () => {
+  const audit = {
+    date: '2026-06-26',
+    project: 'x',
+    audit_total: 1,
+    coverage: 1,
+    dimensions: [
+      {
+        dimension: 'quality-assurance',
+        date: '2026-06-26',
+        score: 0,
+        coverage: 0,
+        checks: [
+          {
+            check_id: 'QA-01',
+            code: [2500],
+            method: 'computed',
+            status: 'WARN',
+            value: 0.47058823529411764,
+            evidence: [],
+            weight_awarded: 0,
+            weight_max: 8,
+            applies: true,
+            reliability: { tag: 'maximal', confidence: 'high', note: null },
+            source: 'AWOS audit',
+            definition: 'coverage',
+            hint: 'x',
+            expression: '48 test files ÷ 102 modules = 0.47',
+            unit: 'ratio',
+          },
+        ],
+      },
+    ],
+  };
+  const html = renderHtml(audit as any);
+  assert.ok(
+    html.includes('0.47') && !html.includes('0.47058823529411764'),
+    'value must be rounded to 2dp'
+  );
+  assert.ok(html.includes('>Points<'), 'check table header must read "Points"');
+  assert.ok(
+    html.includes('48 test files ÷ 102 modules = 0.47'),
+    'value tooltip must show the expression'
+  );
+});
+
 test('report renders connections and missed-sources section', () => {
   const audit: AuditJson = {
     date: '2026-01-15',

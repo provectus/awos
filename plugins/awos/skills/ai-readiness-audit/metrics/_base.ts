@@ -79,6 +79,8 @@ export interface MetricResult {
   value_series?: ValueSeriesEntry[];
   /** Human-readable derivation of the value (e.g. "42 of 50 public defs documented = 0.84"). */
   expression?: string;
+  /** Unit of the value (e.g. "ratio", "days", "count"). */
+  unit?: string;
 }
 
 /**
@@ -99,7 +101,9 @@ export function makeMetricResult(
   sourcesUsed: string[],
   sourcesMissing: string[],
   band: string | null = null,
-  valueSeries?: ValueSeriesEntry[]
+  valueSeries?: ValueSeriesEntry[],
+  unit?: string,
+  expression?: string
 ): MetricResult {
   const result: MetricResult = {
     metric,
@@ -114,6 +118,12 @@ export function makeMetricResult(
   };
   if (valueSeries !== undefined) {
     result.value_series = valueSeries;
+  }
+  if (unit !== undefined) {
+    result.unit = unit;
+  }
+  if (expression !== undefined) {
+    result.expression = expression;
   }
   return result;
 }

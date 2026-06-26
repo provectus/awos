@@ -78,6 +78,9 @@ interface CheckRecord {
   definition: string;
   hint: string;
   plain: string;
+  unit?: string;
+  expression?: string;
+  source_year?: number;
 }
 
 export interface AuditCoreSummary {
@@ -155,6 +158,7 @@ export async function auditCore(
   }
   const awarded = new Set<number>();
   const skippedByMetric = new Set<number>();
+  const metricMeta = new Map<number, { unit?: string; expression?: string }>();
   for (const id of metricIds) {
     const fn = metrics[id];
     if (!fn) continue;
@@ -167,10 +171,17 @@ export async function auditCore(
     }
     for (const code of (res.categories_awarded ?? []) as number[]) {
       awarded.add(code);
+      metricMeta.set(code, { unit: res.unit, expression: res.expression });
     }
     if (res.status === 'SKIP') {
       for (const c of Object.values(cats)) {
         if (c.metric === id) skippedByMetric.add(c.code);
+      }
+    }
+    // Store meta for all codes this metric covers (not just awarded).
+    for (const c of Object.values(cats)) {
+      if (c.metric === id && !metricMeta.has(c.code)) {
+        metricMeta.set(c.code, { unit: res.unit, expression: res.expression });
       }
     }
   }
@@ -192,7 +203,8 @@ export async function auditCore(
       awarded,
       skippedByMetric,
       topology,
-      checkIdByCode
+      checkIdByCode,
+      metricMeta
     );
     (byDimension[c.dimension] ??= []).push(rec);
     if (rec.status === 'PENDING_JUDGMENT') judgmentPending++;
@@ -383,11 +395,14 @@ function buildCheck(
   awarded: Set<number>,
   skippedByMetric: Set<number>,
   topology: TopologyFlags,
-  checkIdByCode: Map<number, string>
+  checkIdByCode: Map<number, string>,
+  metricMeta?: Map<number, { unit?: string; expression?: string }>
 ): CheckRecord {
   let status: string;
   let value: unknown = null;
   let evidence: string[] = [];
+  let unit: string | undefined;
+  let expression: string | undefined;
 
   if (appliesGatedOff(c, topology)) {
     // applies_when topology flag is false → category does not apply.
@@ -416,11 +431,17 @@ function buildCheck(
     if (awarded.has(c.code)) status = 'PASS';
     else if (skippedByMetric.has(c.code)) status = 'SKIP';
     else status = 'FAIL';
+    // Thread unit/expression from the metric result if available.
+    const meta = metricMeta?.get(c.code);
+    if (meta) {
+      unit = meta.unit;
+      expression = meta.expression;
+    }
   }
 
   const applies = status !== 'SKIP';
   const weightAwarded = status === 'PASS' ? c.weight : 0;
-  return {
+  const rec: CheckRecord = {
     check_id: checkIdByCode.get(c.code) ?? key,
     code: [c.code],
     method: c.method,
@@ -439,5 +460,9 @@ function buildCheck(
     definition: c.definition ?? '',
     hint: `${c.definition ?? ''} · ${c.method} · ${c.source ?? ''} (${c.source_year ?? ''})`,
     plain: c.definition ?? '',
+    source_year: c.source_year,
   };
+  if (unit !== undefined) rec.unit = unit;
+  if (expression !== undefined) rec.expression = expression;
+  return rec;
 }

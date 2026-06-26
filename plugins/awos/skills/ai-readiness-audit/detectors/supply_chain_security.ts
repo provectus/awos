@@ -747,7 +747,7 @@ export function detectDependencyOverrides(
   }
 
   return makeResult('WARN', foundOverrides.length, [
-    `${foundOverrides.length} dependency override(s) found — review for suspicious or recently-published pins`,
+    'override(s) present — review that each is tracked, minimal, and justified (this check does not verify version freshness or CVEs)',
     ...foundOverrides,
   ]);
 }

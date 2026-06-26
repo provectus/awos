@@ -170,7 +170,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 
 ### SCS-07: Dependency overrides are reviewed and justified
 
-- **What:** Dependency version overrides (mechanisms that force specific versions of transitive dependencies) are tracked, minimal, and do not pin to recently published or suspicious versions
+- **What:** Dependency version overrides (mechanisms that force specific versions of transitive dependencies) are tracked, minimal, and justified — present overrides are surfaced for human review (freshness/CVE status is not verified offline)
 - **How:**
   1. Check for override mechanisms in each ecosystem:
      - **npm:** `"overrides"` field in `package.json`
@@ -184,14 +184,13 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
   2. If overrides exist:
      - Count the total number of overridden packages
      - Check whether each override pins to a specific version or uses a range
-     - Cross-reference overridden versions against the quarantine check logic (SCS-04): are any overridden versions published less than 7 days ago?
      - Check whether overrides have documented justification for why they exist. Where justification lives depends on the manifest format:
        - **Comment-capable formats** (TOML, Ruby, YAML, Gradle Kotlin/Groovy): inline comments alongside the override (e.g., `# CVE-2024-1234 fix`)
        - **JSON formats** (`package.json`): JSON does not support comments per RFC 8259 — justification should live in adjacent documentation (ADR, security notes, PR description, or a dedicated `overrides.md` / `DEPENDENCY_DECISIONS.md` file)
   3. If no overrides exist, this is a neutral signal — auto-PASS (overrides are not required, just need to be safe when present)
-- **Pass:** No dependency overrides exist, OR overrides exist and all pin to versions older than 7 days with documented justification (inline comments for comment-capable formats, or adjacent documentation for JSON manifests)
+- **Pass:** No dependency overrides exist, OR overrides exist and all have documented justification (inline comments for comment-capable formats, or adjacent documentation for JSON manifests)
 - **Warn:** Overrides exist but lack documented justification, or the number of overrides is high (10+ packages), suggesting possible maintenance debt
-- **Fail:** Overrides pin to versions published within the last 7 days, OR overrides use permissive ranges (`*`, `>=`), OR overrides reference git URLs or arbitrary tarballs without explanation
+- **Fail:** Overrides use permissive ranges (`*`, `>=`), OR overrides reference git URLs or arbitrary tarballs without explanation
 - **Skip-When:** Topology shows no package manifests detected
 - **Severity:** high
 - **Category:** 2906

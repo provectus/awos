@@ -149,6 +149,7 @@ export function detectMcpConfig(
   }
   return makeResult('FAIL', 0, [
     'no MCP configuration found — no MCP servers configured for any agentic coding tool',
+    'note: only repo-committed MCP config is visible here; org/MGM-pushed MCP servers configured outside the repo are not detectable and may still be in use',
   ]);
 }
 

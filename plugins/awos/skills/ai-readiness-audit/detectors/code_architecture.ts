@@ -485,7 +485,7 @@ export function detectNamingConventions(
 // ---------------------------------------------------------------------------
 // detectFileSizes — category 2105 (ARCH-06, method: computed)
 //
-// Computes the percentage of source files that exceed a LOC threshold (300 lines).
+// Computes the percentage of source files that exceed a per-language size threshold (default 300 lines).
 // PASS if <= 10% of files are over the threshold.
 // WARN if 11–30%.
 // FAIL if > 30%.

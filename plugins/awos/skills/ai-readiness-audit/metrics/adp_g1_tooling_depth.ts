@@ -35,7 +35,8 @@ import {
 } from '../agent_tools.ts';
 
 // Tooling path → category code mapping built from the tool registry.
-// Code 106 is kept exactly as-is (AWOS spec signals not in the registry).
+// Code 106 (spec-driven adoption: context/spec, context/, .awos/) is defined
+// inline — these paths are AWOS-specific and not in the agent-tools registry.
 const TOOLING_MAP: Array<{ paths: string[]; code: number }> = [
   { paths: ALL_INSTRUCTION_FILES, code: 101 },
   { paths: ALL_SKILL_DIRS, code: 102 },

@@ -747,7 +747,7 @@ export function detectDependencyOverrides(
   }
 
   return makeResult('WARN', foundOverrides.length, [
-    'override(s) present — review that each is tracked, minimal, and justified (this check does not verify version freshness or CVEs)',
+    `${foundOverrides.length} override(s) present — review that each is tracked, minimal, and justified (this check does not verify version freshness or CVEs)`,
     ...foundOverrides,
   ]);
 }

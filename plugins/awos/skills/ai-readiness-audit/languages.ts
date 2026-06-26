@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
+import { iterFiles } from './detectors/_base.ts';
 
 export interface LanguageDef {
   id: string;
@@ -229,10 +230,36 @@ export const ALL_TEST_GLOBS = uniq(LANGUAGES.flatMap((l) => l.testFileGlobs));
 export const ALL_TEST_DIRS = uniq(LANGUAGES.flatMap((l) => l.testDirNames));
 export const ALL_DEP_FILES = uniq(LANGUAGES.flatMap((l) => l.depFiles));
 
-export function detectLanguages(repoPath: string): LanguageDef[] {
-  return LANGUAGES.filter((l) =>
-    l.depFiles.some((f) => !f.includes('*') && existsSync(join(repoPath, f)))
-  );
+export interface DetectedLanguage {
+  def: LanguageDef;
+  evidence: string;
+}
+
+/**
+ * A language is "present" when it has at least one real source file (its
+ * sourceGlobs) outside ignored dirs (.venv/node_modules/etc., via iterFiles's
+ * DEFAULT_IGNORE). Shared build files (Makefile, CMakeLists) alone do NOT count
+ * — that produced false C/C++ on Python repos. Evidence cites the source-file
+ * count plus any matching dependency manifest.
+ */
+export function detectLanguages(repoPath: string): DetectedLanguage[] {
+  const out: DetectedLanguage[] = [];
+  for (const def of LANGUAGES) {
+    let count = 0;
+    try {
+      count = iterFiles(repoPath, def.sourceGlobs).length;
+    } catch {
+      count = 0;
+    }
+    if (count === 0) continue;
+    const dep = def.depFiles.find(
+      (f) => !f.includes('*') && existsSync(join(repoPath, f))
+    );
+    const ext = def.sourceGlobs[0]?.replace('*', '') ?? '';
+    const evidence = `${count} ${ext} file${count === 1 ? '' : 's'}${dep ? ` · ${dep}` : ''}`;
+    out.push({ def, evidence });
+  }
+  return out;
 }
 
 const DEFAULT_SIZE_THRESHOLD = 300;

@@ -337,7 +337,7 @@ export async function auditCore(
   const linkedRepos = detectLinkedRepos(repoPath);
   const ciPath = detectCiConfigPath(repoPath);
   const techStack = {
-    languages: detectLanguages(repoPath).map((l) => l.displayName),
+    languages: detectLanguages(repoPath).map((l) => l.def.displayName),
     agent_tools: detectAgentTools(repoPath).map((t) => t.displayName),
     ci: ciPath ? [ciDisplayName(ciPath)] : [],
     frameworks: detectFrameworks(repoPath),

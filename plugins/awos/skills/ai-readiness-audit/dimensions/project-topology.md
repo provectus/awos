@@ -111,6 +111,7 @@ The engine computes these topology flags deterministically (`topology.ts`) from 
 - `has_multiple_layers`: true|false (e.g. two or more distinct application layers detected)
 - `has_package_ecosystem`: true|false (e.g. package.json, pyproject.toml, go.mod, Cargo.toml, or pom.xml found)
 - `has_package_manifests`: true|false (e.g. same as has_package_ecosystem — at least one manifest found)
+- `has_python`: true|false (e.g. Python source files or Python dependency manifests found — .py files, pyproject.toml, setup.py, requirements.txt, Pipfile, etc.)
 - `has_topology`: true|false (always true — this dimension always runs and produces topology data)
 - `has_tracker`: true|false (e.g. Jira project key, Linear URL, GitHub Issues link found in docs/scripts)
 - `is_monorepo`: true|false (e.g. two or more independent build roots detected in workspace)

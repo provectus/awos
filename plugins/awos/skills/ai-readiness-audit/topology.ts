@@ -268,59 +268,134 @@ export function computeTopology(
 // Framework detection
 // ---------------------------------------------------------------------------
 
-/** Ordered list of framework/stack-component signals. Each entry maps a source
- *  code pattern to a clean display name. `rx` entries are matched against all
- *  source files via `codeMatches`; `paths` entries use `anyPath` to check for
- *  well-known repo layout directories. */
-type FrameworkSignal =
-  | { name: string; rx: RegExp }
-  | { name: string; paths: string[] };
+export interface DetectedFramework {
+  name: string;
+  evidence: string;
+}
 
-const FRAMEWORK_SIGNALS: FrameworkSignal[] = [
-  // HTTP web frameworks (mirrors the has_http_api regex, one signal per framework)
-  { name: 'FastAPI', rx: /\bfastapi\b/i },
-  { name: 'Flask', rx: /\bflask\b/i },
-  { name: 'Django', rx: /\bdjango\b/i },
-  { name: 'Express', rx: /\bexpress\b/i },
-  { name: 'NestJS', rx: /nestjs/i },
-  { name: 'Spring Boot', rx: /\bspring(?:framework|boot)\b/i },
-  { name: 'Gin', rx: /gin-gonic/i },
-  { name: 'Fiber', rx: /\bfiber\b/i },
-  { name: 'Sinatra', rx: /\bsinatra\b/i },
-  { name: 'Rails', rx: /\brails\b/i },
-  { name: 'Actix', rx: /\bactix_web\b/i },
-  { name: 'Axum', rx: /\baxum\b/i },
-  { name: 'aiohttp', rx: /\baiohttp\b/i },
-  { name: 'Starlette', rx: /\bstarlette\b/i },
-  // API stack components (mirrors the supplemental has_api regex)
-  { name: 'GraphQL', rx: /\bgraphql\b/i },
-  { name: 'gRPC', rx: /\b(?:grpc|protobuf)\b/i },
+// A framework is detected from dependency manifests (package token present) or
+// an import/usage statement — never a bare word in prose. `deps` are substrings
+// looked for in manifest text; `importRx` is matched against non-ignored source.
+interface FrameworkDef {
+  name: string;
+  deps: string[];
+  importRx?: RegExp;
+}
+
+const MANIFESTS = [
+  'requirements.txt',
+  'pyproject.toml',
+  'Pipfile',
+  'setup.cfg',
+  'setup.py',
+  'package.json',
+  'go.mod',
+  'Cargo.toml',
+  'Gemfile',
+  'build.gradle',
+  'build.gradle.kts',
+  'pom.xml',
+  'composer.json',
 ];
 
+const FRAMEWORKS: FrameworkDef[] = [
+  {
+    name: 'FastAPI',
+    deps: ['fastapi'],
+    importRx: /^\s*(?:from|import)\s+fastapi\b/m,
+  },
+  {
+    name: 'Flask',
+    deps: ['flask', 'Flask'],
+    importRx: /^\s*(?:from|import)\s+flask\b/m,
+  },
+  {
+    name: 'Django',
+    deps: ['django', 'Django'],
+    importRx: /^\s*(?:from|import)\s+django\b/m,
+  },
+  {
+    name: 'Starlette',
+    deps: ['starlette'],
+    importRx: /^\s*(?:from|import)\s+starlette\b/m,
+  },
+  {
+    name: 'aiohttp',
+    deps: ['aiohttp'],
+    importRx: /^\s*(?:from|import)\s+aiohttp\b/m,
+  },
+  {
+    name: 'Express',
+    deps: ['express'],
+    importRx: /(?:require\(\s*['"]express['"]\)|from\s+['"]express['"])/,
+  },
+  {
+    name: 'NestJS',
+    deps: ['@nestjs/core', '@nestjs/common'],
+    importRx: /@nestjs\//,
+  },
+  { name: 'Gin', deps: ['gin-gonic/gin'], importRx: /gin-gonic\/gin/ },
+  { name: 'Fiber', deps: ['gofiber/fiber'], importRx: /gofiber\/fiber/ },
+  {
+    name: 'Rails',
+    deps: ['rails'],
+    importRx: /(?:require\s+['"]rails|Rails\.application)/,
+  },
+  { name: 'Sinatra', deps: ['sinatra'], importRx: /require\s+['"]sinatra['"]/ },
+  {
+    name: 'Spring Boot',
+    deps: ['spring-boot'],
+    importRx: /org\.springframework\.boot/,
+  },
+  { name: 'Actix', deps: ['actix-web'], importRx: /\bactix_web\b/ },
+  { name: 'Axum', deps: ['axum'], importRx: /^\s*use\s+axum\b/m },
+  {
+    name: 'GraphQL',
+    deps: ['graphql', 'graphene', 'strawberry-graphql'],
+    importRx:
+      /(?:^\s*(?:from|import)\s+(?:graphql|graphene|strawberry)\b|from\s+['"](?:graphql|graphene|strawberry)['"])/m,
+  },
+  {
+    name: 'gRPC',
+    deps: ['grpcio', 'grpc', '@grpc/grpc-js'],
+    importRx:
+      /(?:\bimport\s+grpc\b|from\s+['"](?:@grpc\/|grpc)[^'"]*['"]|require\s*\(\s*['"](?:@grpc\/|grpc)[^'"]*['"]\))/,
+  },
+];
+
+/** Concatenated text of all present dependency manifests (for substring scan). */
+function manifestText(repoPath: string): string {
+  return MANIFESTS.map((m) => readIfExists(repoPath, m)).join('\n');
+}
+
 /**
- * Return the display names of frameworks and notable stack components detected
- * in the repository source, in stable declaration order, deduped.
- *
- * Uses the same `codeMatches`/`anyPath`/`anyGlob` helpers as the topology
- * flags — additive; does not change any existing flag behavior.
+ * Detect frameworks/stack components from dependency manifests and import
+ * statements (never bare prose). Returns name + evidence, deduped, stable order.
  */
-export function detectFrameworks(repoPath: string): string[] {
-  const names: string[] = [];
-  for (const signal of FRAMEWORK_SIGNALS) {
-    if ('rx' in signal) {
-      if (codeMatches(repoPath, signal.rx)) names.push(signal.name);
-    } else {
-      if (anyPath(repoPath, signal.paths)) names.push(signal.name);
+export function detectFrameworks(repoPath: string): DetectedFramework[] {
+  const manifests = manifestText(repoPath);
+  const out: DetectedFramework[] = [];
+  for (const fw of FRAMEWORKS) {
+    const depHit = fw.deps.find((d) => manifests.includes(d));
+    if (depHit) {
+      out.push({
+        name: fw.name,
+        evidence: `dependency "${depHit}" in a manifest`,
+      });
+      continue;
+    }
+    if (fw.importRx && codeMatches(repoPath, fw.importRx)) {
+      out.push({ name: fw.name, evidence: `imported in source` });
     }
   }
-  // AWOS: both a context/ directory and either .awos or context/spec must exist.
+  // AWOS: a context/ directory plus .awos or context/spec.
   if (
     anyPath(repoPath, ['context']) &&
     anyPath(repoPath, ['.awos', 'context/spec'])
   ) {
-    names.push('AWOS');
+    out.push({ name: 'AWOS', evidence: 'context/ + .awos/spec layout' });
   }
-  return names;
+  return out;
 }
 
 // ---------------------------------------------------------------------------

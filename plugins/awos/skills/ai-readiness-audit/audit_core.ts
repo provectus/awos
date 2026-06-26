@@ -340,7 +340,7 @@ export async function auditCore(
     languages: detectLanguages(repoPath).map((l) => l.def.displayName),
     agent_tools: detectAgentTools(repoPath).map((t) => t.displayName),
     ci: ciPath ? [ciDisplayName(ciPath)] : [],
-    frameworks: detectFrameworks(repoPath),
+    frameworks: detectFrameworks(repoPath).map((f) => f.name),
   };
   const detectionConflicts = computeDetectionConflicts(repoPath);
 

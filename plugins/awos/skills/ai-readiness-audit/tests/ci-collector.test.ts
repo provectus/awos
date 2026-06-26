@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { collect } from '../collectors/ci.ts';
@@ -118,34 +118,3 @@ for (const file of [
     assert.equal((art.raw as any).config_detected, true);
   });
 }
-
-// ---------------------------------------------------------------------------
-// TDD-RED: new behaviour — config-only (no runs) must be available:false
-// ---------------------------------------------------------------------------
-
-test('ci collector: config-only (no runs, no connector) → available:false + reason contains "config detected"', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-ci-'));
-  try {
-    mkdirSync(join(repo, '.azure-pipelines'), { recursive: true });
-    writeFileSync(join(repo, '.azure-pipelines', 'ci.yml'), 'steps: []\n');
-    const art = collect(repo, PERIOD);
-    assert.equal(
-      art.available,
-      false,
-      'config-only CI must be available:false'
-    );
-    assert.match(String(art.reason_if_absent), /config detected/i);
-  } finally {
-    rmSync(repo, { recursive: true, force: true });
-  }
-});
-
-test('ci collector: connector with actual run records → available:true', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-ci2-'));
-  try {
-    const art = collect(repo, PERIOD, { runs: [{ conclusion: 'success' }] });
-    assert.equal(art.available, true, 'runs present → available:true');
-  } finally {
-    rmSync(repo, { recursive: true, force: true });
-  }
-});

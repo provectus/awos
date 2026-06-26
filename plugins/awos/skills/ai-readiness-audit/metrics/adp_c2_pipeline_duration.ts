@@ -62,7 +62,7 @@ export function compute(
 
   const artifact = JSON.parse(readFileSync(ciPath, 'utf8'));
 
-  // available=false means the collector found no CI config and no connector.
+  // available=false: collector found no CI config, no connector, or config-only with no run history.
   if (!artifact?.available) {
     return makeMetricResult(
       'adp_c2_pipeline_duration',
@@ -77,35 +77,9 @@ export function compute(
 
   const raw = artifact?.raw ?? {};
   const runs: unknown[] = Array.isArray(raw.runs) ? raw.runs : [];
-  const configDetected: boolean = Boolean(raw.config_detected);
 
-  // Partial case: CI config present but no run data.
-  // Return OK (source is available) with downgraded reliability (MED).
-  if (runs.length === 0) {
-    const categories = awardCategories(
-      standards,
-      'adp_c2_pipeline_duration',
-      topology
-    );
-    const partialReliability = {
-      tag: 'not-reliable',
-      confidence: 'MED' as const,
-      note: configDetected
-        ? 'CI config detected but no run data available; pipeline duration cannot be computed'
-        : 'CI source available but no run data available; pipeline duration cannot be computed',
-    };
-    return makeMetricResult(
-      'adp_c2_pipeline_duration',
-      null,
-      'duration_seconds',
-      categories,
-      partialReliability,
-      ['ci'],
-      []
-    );
-  }
-
-  // Full case: compute average duration from run records.
+  // available=true guarantees runs.length > 0 (collector contract).
+  // Compute average duration from run records.
   const avgDuration = averageDuration(runs);
   const categories = awardCategories(
     standards,

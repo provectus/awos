@@ -69,7 +69,7 @@ export function compute(
 
   const artifact = JSON.parse(readFileSync(ciPath, 'utf8'));
 
-  // available=false means the collector found no CI config and no connector.
+  // available=false: collector found no CI config, no connector, or config-only with no run history.
   if (!artifact?.available) {
     return makeMetricResult(
       'adp_c1_ci_pass_rate',
@@ -84,37 +84,9 @@ export function compute(
 
   const raw = artifact?.raw ?? {};
   const runs: unknown[] = Array.isArray(raw.runs) ? raw.runs : [];
-  const configDetected: boolean = Boolean(raw.config_detected);
 
-  // Partial case: CI config present but no run data.
-  // Return OK (source is available) with downgraded reliability (MED).
-  if (runs.length === 0) {
-    const categories = awardCategories(
-      standards,
-      'adp_c1_ci_pass_rate',
-      topology
-    );
-    const reliability = computeReliability('not-reliable', ['ci'], []);
-    // Downgrade to MED: we have a source but it carries no run records.
-    const partialReliability = {
-      tag: reliability.tag,
-      confidence: 'MED' as const,
-      note: configDetected
-        ? 'CI config detected but no run data available; pass rate cannot be computed'
-        : 'CI source available but no run data available; pass rate cannot be computed',
-    };
-    return makeMetricResult(
-      'adp_c1_ci_pass_rate',
-      null,
-      'banded',
-      categories,
-      partialReliability,
-      ['ci'],
-      []
-    );
-  }
-
-  // Full case: compute pass rate from run records.
+  // available=true guarantees runs.length > 0 (collector contract).
+  // Compute pass rate from run records.
   const successful = countSuccessful(runs);
   const rate = successful / runs.length;
   const band = ciPassBand(rate);

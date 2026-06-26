@@ -231,6 +231,14 @@ export function computeTopology(
         'index.ts',
         'manage.py',
       ]),
+    has_python:
+      anyGlob(repoPath, ['*.py']) ||
+      anyPath(repoPath, [
+        'pyproject.toml',
+        'setup.py',
+        'requirements.txt',
+        'Pipfile',
+      ]),
     // Connector-dependent — repo alone cannot prove these. Default false; the
     // orchestrator flips them true after a successful MCP connector fetch.
     has_tracker: Boolean(connectors?.has_tracker),

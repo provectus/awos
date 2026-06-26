@@ -750,6 +750,32 @@ reliability_default = "maximal"
 source = "AWOS audit"
 source_year = 2026
 
+[category.documentation_doc_05]
+code = 2204
+metric = "adp_g13_doc_coverage"
+dimension = "documentation"
+weight = 2
+method = "computed"
+definition = "Public/exported definitions carry doc-comments (docstring/JSDoc/KDoc/Go doc) — coverage of the documented API surface"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
+[category.documentation_doc_06]
+code = 2205
+metric = "adp_g13_doc_coverage"
+dimension = "documentation"
+weight = 1
+method = "computed"
+definition = "Overall definition doc-comment coverage across all source definitions"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS audit"
+source_year = 2026
+
 # --- end-to-end-delivery (5 checks) ---
 
 [category.end_to_end_delivery_e2e_01]

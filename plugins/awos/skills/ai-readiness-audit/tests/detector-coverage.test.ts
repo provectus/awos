@@ -2,21 +2,21 @@
  * detector-coverage.test.ts
  *
  * Ensures every category in standards.toml whose `dimension` is one of the 10
- * scored audit dimensions AND whose `method` is "detected" or "computed" has a
- * corresponding entry in the merged DETECTORS map exported from cli.ts.
+ * scored audit dimensions AND whose `method` is "detected" or "computed" can be
+ * evaluated by audit-core — i.e. it is either a file-system detector (in the
+ * merged DETECTORS map) OR a registered AST/connector metric (in METRICS).
+ * audit-core routes a category to its metric whenever no detector owns the code,
+ * so both forms of coverage are valid (e.g. DOC-05/06 doc-coverage are async AST
+ * metrics, not synchronous detectors).
  *
  * The test intentionally excludes `dimension = "ai-sdlc-adoption"` because
  * those `computed` ADP categories are metrics, not file-system detectors.
- *
- * RED state: fails for codes 2700-2703 before they are added.
- * GREEN state: passes after detectLinting/detectFormatting/detectTypeSafety/
- *              detectCiCd are wired into the DETECTORS map.
  */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadStandards } from './helpers.ts';
-import { DETECTORS } from '../cli.ts';
+import { DETECTORS, METRICS } from '../cli.ts';
 
 // The scored audit dimensions (project-topology is unscored, excluded).
 const AUDIT_DIMENSIONS = new Set([
@@ -33,7 +33,7 @@ const AUDIT_DIMENSIONS = new Set([
   'supply-chain-security',
 ]);
 
-test('every detected/computed audit category has a detector in the merged DETECTORS map', () => {
+test('every detected/computed audit category is evaluable (a detector OR a registered metric)', () => {
   const standards = loadStandards();
   const categories = standards.category as Record<string, any>;
 
@@ -48,7 +48,9 @@ test('every detected/computed audit category has a detector in the merged DETECT
   for (const [slug, cat] of Object.entries(categories)) {
     if (!AUDIT_DIMENSIONS.has(cat.dimension)) continue;
     if (cat.method !== 'detected' && cat.method !== 'computed') continue;
-    if (!(cat.code in DETECTORS)) {
+    const hasDetector = cat.code in DETECTORS;
+    const hasMetric = typeof cat.metric === 'string' && cat.metric in METRICS;
+    if (!hasDetector && !hasMetric) {
       missing.push({
         slug,
         code: cat.code,
@@ -64,7 +66,7 @@ test('every detected/computed audit category has a detector in the merged DETECT
     [],
     [
       `${missing.length} audit categor${missing.length === 1 ? 'y' : 'ies'} with method=detected/computed`,
-      `are missing from the merged DETECTORS map:`,
+      `cannot be evaluated — neither a detector (DETECTORS) nor a registered metric (METRICS):`,
       ...missing.map(
         (m) =>
           `  code=${m.code} metric=${m.metric} dimension=${m.dimension} method=${m.method} (slug: ${m.slug})`

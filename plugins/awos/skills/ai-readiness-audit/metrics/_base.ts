@@ -77,6 +77,8 @@ export interface MetricResult {
   status: 'OK' | 'SKIP';
   /** Monthly history series (one entry per 30-day bucket), omitted for snapshot/non-rate metrics. */
   value_series?: ValueSeriesEntry[];
+  /** Human-readable derivation of the value (e.g. "42 of 50 public defs documented = 0.84"). */
+  expression?: string;
 }
 
 /**

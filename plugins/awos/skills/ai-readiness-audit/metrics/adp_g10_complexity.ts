@@ -33,52 +33,30 @@
  *
  * CCN_THRESHOLD: 10 (McCabe classic threshold for "high complexity" hotspots).
  */
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, extname, dirname, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, existsSync } from 'node:fs';
+import { extname, relative } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
 import { isGeneratedPath } from '../generated.ts';
-
-// Static import of web-tree-sitter (bundled by esbuild as CJS→ESM).
-// web-tree-sitter@0.24 exports the Parser class as module.exports (CJS default).
-// esbuild wraps this into a default export that we destructure.
-import webTreeSitter from 'web-tree-sitter';
+import {
+  EXT_TO_GRAMMAR,
+  MAX_FILE_BYTES,
+  LanguageLoader,
+  getParserClass,
+  initParser,
+  resolveGrammarsDir,
+  walkDir,
+  type TSNode,
+} from './_ast.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const CCN_THRESHOLD = 10;
-const MAX_FILE_BYTES = 512 * 1024; // skip files > 512 KB
-
-// Extension → grammar wasm file name (inside dist/grammars/)
-const EXT_TO_GRAMMAR: Record<string, string> = {
-  '.js': 'tree-sitter-javascript.wasm',
-  '.mjs': 'tree-sitter-javascript.wasm',
-  '.cjs': 'tree-sitter-javascript.wasm',
-  '.jsx': 'tree-sitter-javascript.wasm',
-  '.ts': 'tree-sitter-typescript.wasm',
-  '.mts': 'tree-sitter-typescript.wasm',
-  '.cts': 'tree-sitter-typescript.wasm',
-  '.tsx': 'tree-sitter-tsx.wasm',
-  '.py': 'tree-sitter-python.wasm',
-  '.go': 'tree-sitter-go.wasm',
-  '.java': 'tree-sitter-java.wasm',
-  '.rb': 'tree-sitter-ruby.wasm',
-  '.cs': 'tree-sitter-c_sharp.wasm',
-  '.c': 'tree-sitter-c.wasm',
-  '.cpp': 'tree-sitter-cpp.wasm',
-  '.cc': 'tree-sitter-cpp.wasm',
-  '.cxx': 'tree-sitter-cpp.wasm',
-  '.rs': 'tree-sitter-rust.wasm',
-  '.php': 'tree-sitter-php.wasm',
-  '.kt': 'tree-sitter-kotlin.wasm',
-  '.kts': 'tree-sitter-kotlin.wasm',
-};
 
 // Node types that increment the cyclomatic complexity counter.
 const DECISION_NODE_TYPES = new Set([
@@ -114,154 +92,9 @@ const FUNCTION_BOUNDARY_TYPES = new Set([
   'closure_expression', // Rust |...| {}
 ]);
 
-// Directories to skip.
-const PRUNE_DIRS = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.venv',
-  '__pycache__',
-  '.next',
-  'target',
-  'vendor',
-  '.cache',
-  'coverage',
-]);
-
-// ---------------------------------------------------------------------------
-// Locate wasm assets
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve the directory that holds grammar wasm files.
- * - Bundled (dist/cli.js): grammars are in dist/grammars/
- * - Source (tsx metrics/): look up to node_modules/tree-sitter-wasms/out/
- */
-function resolveGrammarsDir(): string {
-  const metricsDir = dirname(fileURLToPath(import.meta.url));
-  // When bundled, dist/cli.js is in dist/ → grammars/ is sibling of cli.js
-  const distGrammars = join(metricsDir, 'grammars');
-  if (existsSync(distGrammars)) return distGrammars;
-  // When running from source (tsx), try common relative paths to node_modules
-  const candidates = [
-    join(
-      metricsDir,
-      '..',
-      '..',
-      '..',
-      '..',
-      '..',
-      'node_modules',
-      'tree-sitter-wasms',
-      'out'
-    ),
-    join(
-      metricsDir,
-      '..',
-      '..',
-      '..',
-      '..',
-      'node_modules',
-      'tree-sitter-wasms',
-      'out'
-    ),
-    join(
-      metricsDir,
-      '..',
-      '..',
-      '..',
-      'node_modules',
-      'tree-sitter-wasms',
-      'out'
-    ),
-  ];
-  for (const c of candidates) {
-    if (existsSync(c)) return c;
-  }
-  return distGrammars; // fallback — will cause clean SKIP for each grammar
-}
-
-/**
- * Resolve the core tree-sitter.wasm path.
- * - Bundled (dist/): dist/tree-sitter.wasm
- * - Source (tsx): node_modules/web-tree-sitter/tree-sitter.wasm
- */
-function resolveCoreWasm(): string {
-  const metricsDir = dirname(fileURLToPath(import.meta.url));
-  // Bundled: dist/ has tree-sitter.wasm at the same level as cli.js
-  const distWasm = join(metricsDir, 'tree-sitter.wasm');
-  if (existsSync(distWasm)) return distWasm;
-  // Source: search upward for node_modules/web-tree-sitter/tree-sitter.wasm
-  const candidates = [
-    join(
-      metricsDir,
-      '..',
-      '..',
-      '..',
-      '..',
-      '..',
-      'node_modules',
-      'web-tree-sitter',
-      'tree-sitter.wasm'
-    ),
-    join(
-      metricsDir,
-      '..',
-      '..',
-      '..',
-      '..',
-      'node_modules',
-      'web-tree-sitter',
-      'tree-sitter.wasm'
-    ),
-    join(
-      metricsDir,
-      '..',
-      '..',
-      '..',
-      'node_modules',
-      'web-tree-sitter',
-      'tree-sitter.wasm'
-    ),
-  ];
-  for (const c of candidates) {
-    if (existsSync(c)) return c;
-  }
-  return distWasm; // fallback
-}
-
-// ---------------------------------------------------------------------------
-// File walking
-// ---------------------------------------------------------------------------
-
-function walkDir(dir: string, cb: (filePath: string) => void): void {
-  let entries: ReturnType<typeof readdirSync>;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      if (PRUNE_DIRS.has(entry.name)) continue;
-      walkDir(join(dir, entry.name), cb);
-    } else if (entry.isFile()) {
-      cb(join(dir, entry.name));
-    }
-  }
-}
-
 // ---------------------------------------------------------------------------
 // CCN counting from tree-sitter AST
 // ---------------------------------------------------------------------------
-
-type TSNode = {
-  type: string;
-  isNamed: boolean;
-  childCount: number;
-  child(i: number): TSNode | null;
-};
 
 /** Count decision points within a subtree, not recursing into nested functions. */
 function countDecisions(node: TSNode): number {
@@ -349,61 +182,11 @@ export async function compute(
 
   if (!existsSync(repoPath)) return makeSkip();
 
-  const grammarsDir = resolveGrammarsDir();
-  const coreWasmPath = resolveCoreWasm();
+  const Parser = getParserClass();
+  if (!(await initParser())) return makeSkip();
 
-  // Use web-tree-sitter (statically bundled by esbuild from CJS module).
-  // web-tree-sitter@0.24 exports the Parser class as module.exports (CJS).
-  // esbuild wraps CJS modules: the default export IS the Parser class.
-  const Parser = webTreeSitter as unknown as {
-    new (): {
-      setLanguage(lang: unknown): void;
-      parse(source: string): { rootNode: TSNode; delete(): void } | null;
-      delete(): void;
-    };
-    init(opts?: { locateFile?: (name: string) => string }): Promise<void>;
-    Language: { load(data: Uint8Array): Promise<unknown> };
-  };
-
-  if (!Parser || typeof Parser.init !== 'function') return makeSkip();
-
-  // Initialise the core runtime.
-  // We pass BOTH wasmBinary (the file contents) AND locateFile (to fix the
-  // wasmBinaryFile path check) because the bundled CJS wrapper inside ESM
-  // does not have __dirname, causing the default path-finder to fail.
-  // With both options set, getBinarySync matches `wasmBinaryFile` via locateFile
-  // and returns the pre-loaded binary — no filesystem access needed at init.
-  try {
-    if (!existsSync(coreWasmPath)) return makeSkip();
-    const wasmBinary = readFileSync(coreWasmPath);
-    await Parser.init({
-      wasmBinary,
-      locateFile: () => coreWasmPath,
-    });
-  } catch {
-    return makeSkip();
-  }
-
-  // Cache loaded Language objects.
-  const languageCache = new Map<string, unknown>();
-
-  async function loadLanguage(grammarFile: string): Promise<unknown> {
-    if (languageCache.has(grammarFile)) return languageCache.get(grammarFile);
-    const grammarPath = join(grammarsDir, grammarFile);
-    if (!existsSync(grammarPath)) {
-      languageCache.set(grammarFile, null);
-      return null;
-    }
-    try {
-      const grammarBytes = readFileSync(grammarPath);
-      const lang = await Parser.Language.load(new Uint8Array(grammarBytes));
-      languageCache.set(grammarFile, lang);
-      return lang;
-    } catch {
-      languageCache.set(grammarFile, null);
-      return null;
-    }
-  }
+  const loader = new LanguageLoader(resolveGrammarsDir());
+  const loadLanguage = (grammarFile: string) => loader.load(grammarFile);
 
   // Collect source files: any file whose extension is in EXT_TO_GRAMMAR.
   // Files in languages not in EXT_TO_GRAMMAR are not collected; they are

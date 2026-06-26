@@ -10,6 +10,16 @@ export interface LanguageDef {
   depFiles: string[];
   importRx?: RegExp;
   sizeThreshold?: number;
+  /**
+   * AST node types that should carry a doc-comment, for doc-coverage
+   * (adp_g13_doc_coverage). Tree-sitter node type names confirmed against the
+   * bundled grammars. Populated only for languages with a well-defined
+   * doc-comment convention; the metric's per-language doc/export logic keys off
+   * the language `id`.
+   */
+  docConvention?: {
+    documentableNodeTypes: string[];
+  };
 }
 
 export const LANGUAGES: LanguageDef[] = [
@@ -22,6 +32,13 @@ export const LANGUAGES: LanguageDef[] = [
     depFiles: ['package.json'],
     importRx:
       /(?:import\s.*from\s+['"]([^'"]+)['"]|require\(\s*['"]([^'"]+)['"]\s*\))/,
+    docConvention: {
+      documentableNodeTypes: [
+        'function_declaration',
+        'method_definition',
+        'class_declaration',
+      ],
+    },
   },
   {
     id: 'typescript',
@@ -31,6 +48,13 @@ export const LANGUAGES: LanguageDef[] = [
     testDirNames: ['__tests__', 'test', 'tests'],
     depFiles: ['package.json', 'tsconfig.json'],
     importRx: /import\s.*from\s+['"]([^'"]+)['"]/,
+    docConvention: {
+      documentableNodeTypes: [
+        'function_declaration',
+        'method_definition',
+        'class_declaration',
+      ],
+    },
   },
   {
     id: 'python',
@@ -47,6 +71,13 @@ export const LANGUAGES: LanguageDef[] = [
       'setup.py',
     ],
     importRx: /(?:from\s+(\S+)\s+import|import\s+(\S+))/,
+    docConvention: {
+      documentableNodeTypes: [
+        'function_definition',
+        'class_definition',
+        'module',
+      ],
+    },
   },
   {
     id: 'go',
@@ -57,6 +88,13 @@ export const LANGUAGES: LanguageDef[] = [
     depFiles: ['go.mod', 'go.sum'],
     importRx: /import\s+(?:\(\s*)?["]([^"]+)["]/,
     sizeThreshold: 500,
+    docConvention: {
+      documentableNodeTypes: [
+        'function_declaration',
+        'method_declaration',
+        'type_declaration',
+      ],
+    },
   },
   {
     id: 'java',
@@ -72,6 +110,9 @@ export const LANGUAGES: LanguageDef[] = [
     ],
     importRx: /import\s+([\w.]+);/,
     sizeThreshold: 500,
+    docConvention: {
+      documentableNodeTypes: ['method_declaration', 'class_declaration'],
+    },
   },
   {
     id: 'kotlin',
@@ -87,6 +128,9 @@ export const LANGUAGES: LanguageDef[] = [
     ],
     importRx: /import\s+([\w.]+)/,
     sizeThreshold: 450,
+    docConvention: {
+      documentableNodeTypes: ['function_declaration', 'class_declaration'],
+    },
   },
   {
     id: 'ruby',

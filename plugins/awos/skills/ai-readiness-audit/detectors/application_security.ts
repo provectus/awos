@@ -2,6 +2,7 @@ import { makeResult, iterFiles, grep } from './_base.ts';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ALL_SOURCE_GLOBS } from '../languages.ts';
+import { FRAMEWORK_AUTH_PATTERNS } from '../frameworks.ts';
 
 // ---------------------------------------------------------------------------
 // detectTlsEnforced — category 3000 (AS-01, method: detected)
@@ -558,10 +559,12 @@ export function detectAuthOnMutations(
     }
 
     const hasMutation = MUTATION_ROUTE_RX.test(content);
-    const hasAuth = AUTH_DECORATOR_RX.test(content);
+    const fileHasAuth =
+      AUTH_DECORATOR_RX.test(content) ||
+      FRAMEWORK_AUTH_PATTERNS.some((rx) => rx.test(content));
 
     if (hasMutation) filesWithMutations.push(rel);
-    if (hasMutation && hasAuth) filesWithAuth.push(rel);
+    if (hasMutation && fileHasAuth) filesWithAuth.push(rel);
   }
 
   if (filesWithMutations.length === 0) {

@@ -15,15 +15,19 @@ The design groups the ~25 items into six workstreams. Each item names the file a
 
 ## 1. Connectors & sources honesty
 
-### 1.1 Document the connector raw shape (CRITICAL)
+### 1.1 Data-source resolution protocol (CRITICAL)
 
-**Problem.** The Atlassian MCP (Jira/Confluence) was reachable, but the orchestrator declined tracker/docs enrichment and left both SKIP. Stated reason: the collector's raw JSON shape is undocumented in the bundle, so emitting metrics from MCP data felt fabrication-risky.
+**Problem.** The Atlassian MCP (Jira/Confluence) was reachable, but the orchestrator declined tracker/docs enrichment and left both SKIP, reasoning that the collector's raw JSON shape was undocumented so emitting metrics felt fabrication-risky. That reasoning is wrong: a reachable, working integration is a real data source and must not be silently dropped. The deeper fix is a protocol, not just a schema doc.
 
-**Fix.** Add a "Connector shapes" reference the orchestrator can trust:
+**Fix — never abandon a potential source without user confirmation.** SKILL.md Step 6 gains an explicit data-source resolution protocol the orchestrator follows for every non-git source (tracker, docs, incident, and any other MCP/integration that could feed a metric):
 
-- New `references/connector-shapes.md` documenting the exact `TrackerConnector` / `TrackerRaw` (`collectors/tracker.ts`) and `DocsConnector` / `DocsRaw` (`collectors/docs.ts`) interfaces as annotated JSON, with one worked example each: Jira issue search → `TrackerConnector`, Confluence page list → `DocsConnector`.
-- SKILL.md Step 6 links to it and instructs: when a tracker/docs MCP is reachable, fetch → map into the documented shape → write `collected/{tracker,docs}.json` → run the connector metrics. Emitting metrics from data mapped into a documented shape is not fabrication; declining a reachable connector is the failure mode to avoid.
-- Keep the existing reliability tagging so connector-derived metrics still carry their confidence band.
+1. **Discover & attempt.** Enumerate reachable integrations (configured MCP servers, connectors). For each that maps to a collector source, attempt to fetch.
+2. **On success** → map into the documented connector shape, write `collected/<source>.json`, run that source's metrics. Mapping into a documented shape is not fabrication; declining a reachable source is the failure mode to avoid.
+3. **On failure or ambiguity** (auth error, unclear/unfamiliar schema, broken dependency, closed port, empty/partial result, "not sure how to map this") → do **not** silently SKIP. Surface the source, the failure reason, and a remediation hint, then `AskUserQuestion`: **Mark unavailable** (record reason in the report) / **Retry with guidance** / **Here's how to fix it** (doc links). Only mark a source unavailable after this — by user choice, or, in headless `claude -p` runs (no interactive user), by the documented headless default: mark unavailable **with the failure reason and remediation captured in the report's missed-sources list**, never as a bare silent SKIP.
+
+To make step 2 trustworthy, add `references/connector-shapes.md` documenting the exact `TrackerConnector` / `TrackerRaw` (`collectors/tracker.ts`) and `DocsConnector` / `DocsRaw` (`collectors/docs.ts`) interfaces as annotated JSON, with one worked example each (Jira issue search → `TrackerConnector`, Confluence page list → `DocsConnector`). Step 6 links to it. Existing reliability tagging is unchanged, so connector-derived metrics still carry their confidence band.
+
+Every source that ends up unavailable carries a **reason + remediation** into the §1.2 Connections section — the report explains what was missed and how to wire it, rather than the source just being absent.
 
 ### 1.2 Surface linked repositories in Connections & Sources
 
@@ -33,7 +37,7 @@ The design groups the ~25 items into six workstreams. Each item names the file a
 
 - Topology gains a `linked_repos` detection: resolve symlinks under agent-tool dirs (`.claude/`, etc.) and `git submodule`/`gitlink` entries that point outside the repo; collect distinct target repo names.
 - `audit_core.ts` writes `audit.linked_repos: { name, kind, via }[]` (kind ∈ symlink|submodule; via = the path that revealed it).
-- `connectionsSection()` renders a third group, "Linked repositories," beneath Connected / Missed. Org mode keeps its existing flat treatment (per-repo nesting remains a tracked follow-up, out of scope here).
+- `connectionsSection()` renders a third group, "Linked repositories," beneath Connected / Missed. The section is **always present** — when none are detected it renders explicitly ("No linked repositories detected"), so a reader can tell detection ran and found nothing versus the feature being absent. Org mode keeps its existing flat treatment (per-repo nesting remains a tracked follow-up, out of scope here).
 
 ### 1.3 Tech Stack section + detection-conflict feedback
 
@@ -67,30 +71,35 @@ The design groups the ~25 items into six workstreams. Each item names the file a
 
 ## 3. Scoring transparency
 
-### 3.1 Value: round + explain
+### 3.1 Points + Value: rename, round, explain
 
-**Problem.** The Value column shows raw, unitless, unrounded numbers across incomparable units: QA-01 `0.47058823529411764` (ratio), QA-02 `48` (file count), DOC-01 `11936` (bytes). No tooltip, no rounding.
+**Problem.** Two columns confuse readers. "Wt" reads as "weight" but actually shows awarded/max points. The Value column shows raw, unitless, unrounded numbers across incomparable units: QA-01 `0.47058823529411764` (ratio), QA-02 `48` (file count), DOC-01 `11936` (bytes). No tooltips, no rounding.
 
-**Fix.**
+**Fix — Points column.** Rename the "Wt" column header to **"Points"** (md + html) to stop the weight confusion. Its `tip()` tooltip surfaces the underlying `standards.toml` record for that category so the score is traceable to the source of truth: weight (max points), `method` (detected/computed/judgment), `definition`, and `source` + `source_year`. These fields are already parsed by the `standards` verb; thread the matched category record (or the needed subset) into the Check object so the renderer can show "Worth N points · detected · OWASP ASVS 2025 · <definition>".
+
+**Fix — Value column.**
 
 - Add optional `unit?: string` and `expression?: string` to the metric/check result (`metrics/_base.ts`, threaded through `audit_core.ts` to the Check object render.ts consumes). `expression` is the human computation with the actual numbers, authored where the metric is computed — e.g. QA-01 → `"48 test files ÷ 102 source modules = 0.47"`, DOC-01 → `"README.md = 11936 bytes"`.
-- `render.ts` rounds displayed numeric values to 2 decimals (ratios/floats; integers and byte counts stay integral) and wraps the Value cell in the existing `tip()` showing `expression` + `unit`. Narrower column, self-explaining.
+- `render.ts` rounds displayed numeric values to 2 decimals (ratios/floats; integers and byte counts stay integral) and wraps the Value cell in `tip()` showing `expression` + `unit`. Narrower column, self-explaining.
 - Detectors/metrics populate `expression` for at least the numeric checks the run exposed; others fall back to the bare rounded value (no tooltip) until filled.
 
 ### 3.2 AS-03 not-configured ≠ pass-with-zero
 
 Covered in §5; it's both a fairness and a transparency fix.
 
-## 4. New metric: in-code comment density
+## 4. New metric: doc-comment coverage
 
-**Problem.** DOC-02 only checks per-service READMEs; nothing measures inline documentation, which benefits every language.
+**Problem.** DOC-02 only checks per-service READMEs; nothing measures in-code documentation, which benefits every language. A raw comment-line-to-code ratio is the wrong measure — it's heavily language/idiom dependent (a terse Go file and a verbose Java file aren't comparable) and rewards comment volume over usefulness.
 
-**Fix.** New detected metric (new DOC category code + `standards.toml` entry + dimension `.md` block + detector) computing, per the language registry:
+**Fix — measure coverage, not volume.** Adopt the docstr-coverage model (cf. the Python [`docstr-coverage`](https://pypi.org/project/docstr-coverage/) tool, JSDoc/TSDoc coverage, KDoc, Go doc comments): the metric is the **fraction of documentable definitions that carry a doc-comment** — i.e. `documented_defs / total_defs`, not comment lines / code lines. Documentable definitions = modules/files, classes, and functions/methods, identified via the tree-sitter AST we already bundle for the complexity metric (`adp_g10_complexity`), so no new parsing dependency. A definition is "documented" if it has the language's doc convention attached (Python: a docstring as the first statement; TS/JS: a leading `/** … */`; Go: a doc comment immediately preceding the decl; KDoc: `/** … */`).
 
-- comment-line-to-code-line ratio (registry supplies each language's line-comment + block-comment tokens — extend `LanguageDef` with `commentTokens`),
-- docstring/doc-comment coverage for languages that have a convention (Python docstrings, JSDoc/TSDoc, KDoc, Go doc comments).
+This is likely a **small family** rather than one number, since "documented" means different things at different scopes:
 
-Small weight (≈2). Bands tuned conservatively (heavily-generated or terse-idiom languages shouldn't be punished). `applies_when` requires a recognized source language. Generated/vendored files excluded via the shared ignore set from §5.3.
+- **Public/exported-symbol coverage** — fraction of *exported/public* definitions that are documented (the highest-value signal; an unexported helper needs a doc far less than a public API).
+- **Overall definition coverage** — fraction of all definitions documented (secondary, lower weight).
+- Optionally a **module/file-header coverage** sub-signal.
+
+Concretely: 1–2 new categories (`standards.toml` + dimension `.md` blocks + a detector reusing the AST layer), small weights (≈2 each), banded conservatively à la docstr-coverage (e.g. ≥80% elite … <40% low). `applies_when` requires a recognized source language with a known doc convention; languages without one SKIP. `LanguageDef` gains the documentable-node + doc-convention hints needed to drive this (which AST node types are documentable, how a doc attaches). Generated/vendored files excluded via the shared ignore set from §5.3.
 
 ## 5. Metric fairness
 
@@ -157,7 +166,7 @@ ADP-G1 code 106 (`adp_g1_tooling_depth.ts:45`) tests whether spec dirs appear in
 
 ## Registry extensions (summary)
 
-- `LanguageDef`: `commentTokens` (line + block), optional `sizeThreshold`, typing-signal hints. Drives §4, §5.3, §5.6.
+- `LanguageDef`: documentable-node + doc-convention hints (which AST node types are documentable, how a doc-comment attaches, what counts as exported/public), optional `sizeThreshold`, typing-signal hints. Drives §4, §5.3, §5.6.
 - `AgentToolDef`: `localOnlyFiles`. Drives §6.2.
 - Framework-auth patterns list. Drives §5.1.
 - Shared `GENERATED_GLOBS`. Drives §4, §5.3.
@@ -166,9 +175,10 @@ All consumed by iterating the registry in detectors — no per-language/tool bra
 
 ## Testing
 
-- Engine `*.test.ts`: AS-06 FastAPI-DI recognized; AS-03 not-configured → N/A; SEC-05 docker-gap detection; SBP-06 gated off for non-Python; QA-09 SKIP on single-service; spec-triad 106 awarded; PAI-05 local files excluded; DOC-04 non-path refs ignored; comment metric on a multi-language fixture; generated-file exclusion in ARCH-06.
+- Engine `*.test.ts`: AS-06 FastAPI-DI recognized; AS-03 not-configured → N/A; SEC-05 docker-gap detection; SBP-06 gated off for non-Python; QA-09 SKIP on single-service; spec-triad 106 awarded; PAI-05 local files excluded; DOC-04 non-path refs ignored; doc-comment coverage on a multi-language fixture (documented vs undocumented defs); generated-file exclusion in ARCH-06.
 - `standards-schema.test.ts` guard still passes (every `applies_when` flag computed in topology.ts) — covers new flags.
-- Render: round-to-2dp and Value tooltip presence; accordion markup; linked-repos + tech-stack sections present.
+- Render: round-to-2dp; Value tooltip (expression) present; "Points" header with standards.toml tooltip; accordion markup; linked-repos section present even when empty; tech-stack section present.
+- Data-source protocol: a failed/unavailable source renders into the missed-sources list with a reason + remediation string (headless-default path), rather than being absent.
 - Rebuild `dist/` and commit; CI `git diff --exit-code` on dist must pass.
 
 ## Out of scope (tracked follow-ups)

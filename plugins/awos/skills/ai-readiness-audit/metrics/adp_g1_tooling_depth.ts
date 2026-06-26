@@ -15,7 +15,7 @@
  *   103 → ANY rule/command directory (.claude/commands, .cursor/rules, …)
  *   104 → ANY hook path (.claude/hooks, .kiro/hooks, …)
  *   105 → ANY MCP config path (.mcp.json, .cursor/mcp.json, .kiro/settings/mcp.json, …)
- *   106 → AWOS spec signals (context/, .awos/, or scripts/) — kept as-is
+ *   106 → spec-driven signals (context/spec, context/, .awos/)
  *
  * SKIP: if git.json is absent or tooling_paths is missing.
  */
@@ -42,12 +42,8 @@ const TOOLING_MAP: Array<{ paths: string[]; code: number }> = [
   { paths: ALL_RULE_COMMAND_DIRS, code: 103 },
   { paths: ALL_HOOK_PATHS, code: 104 },
   { paths: ALL_MCP_CONFIG_PATHS, code: 105 },
-  // Code 106: spec signals — context/, .awos/, or scripts/ in tooling_paths
-  // (git collector does not include these but we detect them via the paths list)
-  {
-    paths: ['context/', '.awos/', 'scripts/', 'context', '.awos', 'scripts'],
-    code: 106,
-  },
+  // Code 106: spec-driven adoption signals — context/spec, context/, or .awos/
+  { paths: ['context/spec', 'context', '.awos'], code: 106 },
 ];
 
 // All defined tooling category codes for coverage denominator.

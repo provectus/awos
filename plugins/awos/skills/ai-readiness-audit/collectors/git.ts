@@ -77,6 +77,10 @@ const TOOLING_CANDIDATES = [
     ...ALL_HOOK_PATHS,
     ...ALL_MCP_CONFIG_PATHS,
     ...ALL_TOOL_CONFIG_DIRS,
+    // Spec-driven adoption signals (ADP-G1 code 106).
+    'context/spec',
+    'context',
+    '.awos',
   ]),
 ];
 

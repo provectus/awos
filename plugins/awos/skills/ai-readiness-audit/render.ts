@@ -212,6 +212,24 @@ export interface SourceSummary {
   history_available_days: number | null;
 }
 
+export interface LinkedRepo {
+  name: string;
+  kind: 'symlink' | 'submodule';
+  via: string;
+}
+
+export interface TechStack {
+  languages: string[];
+  agent_tools: string[];
+  ci: string[];
+  frameworks: string[];
+}
+
+export interface DetectionConflict {
+  file: string;
+  claimedBy: string[];
+}
+
 export interface AuditJson {
   date: string;
   project: string;
@@ -227,6 +245,10 @@ export interface AuditJson {
   per_repo?: PerRepoSummary[];
   // collector availability
   sources?: SourceSummary[];
+  // linked repos + tech-stack metadata (optional; populated by audit_core)
+  linked_repos?: LinkedRepo[];
+  tech_stack?: TechStack;
+  detection_conflicts?: DetectionConflict[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1143,32 +1165,85 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
 
   // ─── Connections & Sources section ─────────────────────────────────────────
   function connectionsSection(): string {
-    if (!audit.sources || audit.sources.length === 0) return '';
     const rows: string[] = ['<h2>Connections &amp; Sources</h2>'];
-    const connected = audit.sources.filter((s) => s.available);
-    const missed = audit.sources.filter((s) => !s.available);
-    if (connected.length > 0) {
-      rows.push('<h3>Connected</h3><ul>');
-      for (const s of connected) {
-        const limitedNote =
-          s.history_available_days !== null &&
-          s.history_available_days < LIMITED_HISTORY_DAYS
-            ? ` <em>(limited history ~${s.history_available_days} days)</em>`
+
+    // Connected / missed sub-blocks — only rendered when sources are available.
+    if (audit.sources && audit.sources.length > 0) {
+      const connected = audit.sources.filter((s) => s.available);
+      const missed = audit.sources.filter((s) => !s.available);
+      if (connected.length > 0) {
+        rows.push('<h3>Connected</h3><ul>');
+        for (const s of connected) {
+          const limitedNote =
+            s.history_available_days !== null &&
+            s.history_available_days < LIMITED_HISTORY_DAYS
+              ? ` <em>(limited history ~${s.history_available_days} days)</em>`
+              : '';
+          rows.push(`<li>${esc(s.source)}${limitedNote}</li>`);
+        }
+        rows.push('</ul>');
+      }
+      if (missed.length > 0) {
+        rows.push('<h3>Missed / limited</h3><ul>');
+        for (const s of missed) {
+          const reason = s.reason_if_absent
+            ? ` — ${esc(s.reason_if_absent)}`
             : '';
-        rows.push(`<li>${esc(s.source)}${limitedNote}</li>`);
+          rows.push(`<li>${esc(s.source)}${reason}</li>`);
+        }
+        rows.push('</ul>');
+      }
+    }
+
+    // Linked repositories — always rendered so the reader can see it was checked.
+    rows.push('<h3>Linked repositories</h3>');
+    const linked = audit.linked_repos ?? [];
+    if (linked.length > 0) {
+      rows.push('<ul>');
+      for (const r of linked) {
+        rows.push(
+          `<li>${esc(r.name)} <em>(${esc(r.kind)} via ${esc(r.via)})</em></li>`
+        );
+      }
+      rows.push('</ul>');
+    } else {
+      rows.push('<p><em>No linked repositories detected.</em></p>');
+    }
+
+    return rows.join('\n');
+  }
+
+  // ─── Tech Stack section ────────────────────────────────────────────────────
+  function techStackSection(): string {
+    const ts = audit.tech_stack;
+    if (!ts) return '';
+    const rows: string[] = ['<h2>Tech Stack</h2>'];
+
+    function listGroup(label: string, items: string[]): void {
+      if (items.length === 0) return;
+      rows.push(`<h3>${esc(label)}</h3><ul>`);
+      for (const item of items) rows.push(`<li>${esc(item)}</li>`);
+      rows.push('</ul>');
+    }
+
+    listGroup('Languages', ts.languages);
+    listGroup('Agent tools', ts.agent_tools);
+    listGroup('CI', ts.ci);
+    listGroup('Frameworks', ts.frameworks);
+
+    const conflicts = audit.detection_conflicts ?? [];
+    if (conflicts.length > 0) {
+      rows.push('<h3>Ambiguous detections</h3>');
+      rows.push(
+        '<p>The following files were matched by more than one language detector:</p>'
+      );
+      rows.push('<ul>');
+      for (const c of conflicts) {
+        rows.push(`<li>${esc(c.file)} → ${esc(c.claimedBy.join(', '))}</li>`);
       }
       rows.push('</ul>');
     }
-    if (missed.length > 0) {
-      rows.push('<h3>Missed / limited</h3><ul>');
-      for (const s of missed) {
-        const reason = s.reason_if_absent
-          ? ` — ${esc(s.reason_if_absent)}`
-          : '';
-        rows.push(`<li>${esc(s.source)}${reason}</li>`);
-      }
-      rows.push('</ul>');
-    }
+
     return rows.join('\n');
   }
 
@@ -1221,6 +1296,7 @@ ${recommendationsSection()}
 ${dimensionSummary()}
 ${reposSection()}
 ${connectionsSection()}
+${techStackSection()}
 </div>
 
 ${dimPages}

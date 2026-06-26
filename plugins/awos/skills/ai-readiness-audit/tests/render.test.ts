@@ -764,3 +764,41 @@ test('report renders connections and missed-sources section', () => {
   assert.match(md, /no CI config or connector found/);
   assert.match(md, /14 days|limited history/i);
 });
+
+test('connections renders Linked repositories even when none, and a Tech Stack section', () => {
+  const audit = {
+    date: '2026-06-26',
+    project: 'x',
+    audit_total: 0,
+    coverage: 0,
+    dimensions: [],
+    sources: [
+      {
+        source: 'git',
+        available: true,
+        reason_if_absent: null,
+        history_available_days: 120,
+      },
+    ],
+    linked_repos: [],
+    tech_stack: {
+      languages: ['Python'],
+      agent_tools: ['Claude Code'],
+      ci: ['Azure DevOps'],
+      frameworks: ['FastAPI'],
+    },
+  };
+  const html = renderHtml(audit as any);
+  assert.ok(
+    html.includes('Linked repositories'),
+    'linked-repos heading always present'
+  );
+  assert.ok(
+    /no linked repositories detected/i.test(html),
+    'explicit empty state'
+  );
+  assert.ok(
+    html.includes('Tech Stack') && html.includes('FastAPI'),
+    'tech stack section present'
+  );
+});

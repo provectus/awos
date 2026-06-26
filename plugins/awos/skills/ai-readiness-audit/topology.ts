@@ -10,7 +10,13 @@
 // cannot be derived from the repo alone — they default to false and are patched
 // by the orchestrator when an MCP connector is available.
 // ---------------------------------------------------------------------------
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  lstatSync,
+  readlinkSync,
+  readdirSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { iterFiles, grep } from './detectors/_base.ts';
 import { detectCiConfigPath } from './ci_platforms.ts';
@@ -255,4 +261,68 @@ export function computeTopology(
     has_incident_source: Boolean(connectors?.has_incident_source),
   };
   return flags;
+}
+
+// ---------------------------------------------------------------------------
+// Linked repository detection
+// ---------------------------------------------------------------------------
+
+export interface LinkedRepo {
+  name: string;
+  kind: 'symlink' | 'submodule';
+  via: string;
+}
+
+/**
+ * Detect linked (externally-referenced) repositories by scanning:
+ *  1. `.gitmodules` — each `url =` entry is a submodule.
+ *  2. Symlinks under agent-tool config dirs (e.g. `.claude/`, `.cursor/`)
+ *     that point outside the repo root — treated as linked repos.
+ *
+ * Returns an array of unique `LinkedRepo` records keyed by `name`.
+ */
+export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
+  const found = new Map<string, LinkedRepo>();
+
+  // 1. Parse .gitmodules for submodule URLs.
+  const gm = readIfExists(repoPath, '.gitmodules');
+  for (const m of gm.matchAll(/url\s*=\s*(\S+)/g)) {
+    const url = m[1];
+    const name =
+      url
+        .replace(/\.git$/, '')
+        .split(/[\\/]/)
+        .pop() || url;
+    found.set(name, { name, kind: 'submodule', via: '.gitmodules' });
+  }
+
+  // 2. Symlinks under agent-tool config dirs pointing outside the repo.
+  for (const dir of ALL_TOOL_CONFIG_DIRS) {
+    const base = join(repoPath, dir);
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(base);
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      const p = join(base, e);
+      try {
+        if (lstatSync(p).isSymbolicLink()) {
+          const target = readlinkSync(p);
+          // Heuristic: use the last non-trivial segment of the symlink target as the name.
+          const segments = target
+            .replace(/\/+$/, '')
+            .split(/[\\/]/)
+            .filter(Boolean);
+          const name = segments[segments.length - 1] ?? target;
+          found.set(name, { name, kind: 'symlink', via: `${dir}/${e}` });
+        }
+      } catch {
+        /* not readable — skip */
+      }
+    }
+  }
+
+  return [...found.values()];
 }

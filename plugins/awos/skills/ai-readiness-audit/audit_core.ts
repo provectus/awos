@@ -24,8 +24,16 @@ import { mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 
 import { loadStandards } from './metrics/_base.ts';
-import { computeTopology, type TopologyFlags } from './topology.ts';
+import {
+  computeTopology,
+  detectLinkedRepos,
+  type TopologyFlags,
+} from './topology.ts';
+import { detectLanguages, LANGUAGES } from './languages.ts';
+import { detectAgentTools } from './agent_tools.ts';
+import { detectCiConfigPath } from './ci_platforms.ts';
 import type { DetectorResult } from './detectors/_base.ts';
+import { iterFiles, DEFAULT_IGNORE } from './detectors/_base.ts';
 import type { MetricResult } from './metrics/_base.ts';
 import type { Period } from './collectors/_base.ts';
 import { writeArtifact } from './collectors/_base.ts';
@@ -33,6 +41,92 @@ import { collect as collectGit } from './collectors/git.ts';
 import { collect as collectCi } from './collectors/ci.ts';
 import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
+
+// ---------------------------------------------------------------------------
+// CI platform display name — derived from the config path returned by
+// detectCiConfigPath so there is a single source of truth for recognised paths.
+// ---------------------------------------------------------------------------
+function ciDisplayName(configPath: string): string {
+  if (configPath.startsWith('.github/workflows')) return 'GitHub Actions';
+  if (configPath.startsWith('.circleci')) return 'CircleCI';
+  if (configPath.startsWith('.gitlab-ci')) return 'GitLab CI';
+  if (
+    configPath.startsWith('.azure-pipelines') ||
+    configPath.startsWith('azure-pipelines')
+  )
+    return 'Azure DevOps';
+  if (configPath === 'Jenkinsfile') return 'Jenkins';
+  if (configPath.startsWith('.travis')) return 'Travis CI';
+  if (configPath.startsWith('bitbucket-pipelines'))
+    return 'Bitbucket Pipelines';
+  if (configPath.startsWith('.buildkite')) return 'Buildkite';
+  if (configPath.startsWith('.drone')) return 'Drone';
+  if (configPath.startsWith('.teamcity')) return 'TeamCity';
+  if (
+    configPath.startsWith('.concourse') ||
+    configPath.startsWith('ci/pipeline')
+  )
+    return 'Concourse CI';
+  if (configPath.startsWith('.woodpecker')) return 'Woodpecker CI';
+  if (configPath.startsWith('pipelines/')) return 'Azure DevOps';
+  return configPath;
+}
+
+// ---------------------------------------------------------------------------
+// Detection conflicts — files claimed by more than one language's sourceGlobs.
+// Uses an extension-based approach on the language registry (O(languages²))
+// and a limited file scan to stay fast even on large repos.
+// ---------------------------------------------------------------------------
+function computeDetectionConflicts(
+  repoPath: string
+): Array<{ file: string; claimedBy: string[] }> {
+  // Build extension → language displayName[] map from the language registry.
+  const extLangs = new Map<string, string[]>();
+  for (const lang of LANGUAGES) {
+    for (const glob of lang.sourceGlobs) {
+      // Only handle simple *.ext globs (the common case).
+      if (!glob.startsWith('*.')) continue;
+      const ext = glob.slice(1); // e.g. ".ts"
+      const existing = extLangs.get(ext) ?? [];
+      if (!existing.includes(lang.displayName)) {
+        existing.push(lang.displayName);
+        extLangs.set(ext, existing);
+      }
+    }
+  }
+
+  // Collect conflict extensions (registry-level).
+  const conflictExts = new Set<string>();
+  for (const [ext, langs] of extLangs) {
+    if (langs.length > 1) conflictExts.add(ext);
+  }
+  if (conflictExts.size === 0) return [];
+
+  // Find actual conflicted files in the repo (limited sample).
+  const conflicts: Array<{ file: string; claimedBy: string[] }> = [];
+  try {
+    const conflictGlobs = [...conflictExts].map((ext) => `*${ext}`);
+    const files = iterFiles(repoPath, conflictGlobs, DEFAULT_IGNORE).slice(
+      0,
+      200
+    );
+    for (const file of files) {
+      const dot = file.lastIndexOf('.');
+      if (dot === -1) continue;
+      const ext = file.slice(dot);
+      const langs = extLangs.get(ext);
+      if (langs && langs.length > 1) {
+        conflicts.push({
+          file: file.replace(repoPath + '/', ''),
+          claimedBy: langs,
+        });
+      }
+    }
+  } catch {
+    /* scan errors are non-fatal */
+  }
+  return conflicts;
+}
 
 const PERIOD: Period = {
   bucket_days: 30,
@@ -238,6 +332,17 @@ export async function auditCore(
     dimensions.push(dim);
   }
 
+  // Compute linked repos, tech stack, and detection conflicts.
+  const linkedRepos = detectLinkedRepos(repoPath);
+  const ciPath = detectCiConfigPath(repoPath);
+  const techStack = {
+    languages: detectLanguages(repoPath).map((l) => l.displayName),
+    agent_tools: detectAgentTools(repoPath).map((t) => t.displayName),
+    ci: ciPath ? [ciDisplayName(ciPath)] : [],
+    frameworks: [] as string[], // TODO: extract from topology framework signals
+  };
+  const detectionConflicts = computeDetectionConflicts(repoPath);
+
   const audit = {
     date,
     project: basename(repoPath),
@@ -245,6 +350,9 @@ export async function auditCore(
     coverage: auditApplicable > 0 ? auditTotal / auditApplicable : 0,
     dimensions,
     sources,
+    linked_repos: linkedRepos,
+    tech_stack: techStack,
+    detection_conflicts: detectionConflicts,
   };
   writeFileSync(join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
 
@@ -330,7 +438,14 @@ export function aggregate(outDir: string): void {
     coverage: applicable > 0 ? total / applicable : 0,
     dimensions,
   };
-  for (const block of ['headline', 'insights', 'recommendations']) {
+  for (const block of [
+    'headline',
+    'insights',
+    'recommendations',
+    'tech_stack',
+    'linked_repos',
+    'detection_conflicts',
+  ]) {
     if (existing[block] !== undefined) audit[block] = existing[block];
   }
   // Prefer re-derived sources when collected/ artifacts are present; fall back

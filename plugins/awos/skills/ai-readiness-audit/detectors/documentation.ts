@@ -406,6 +406,15 @@ function loadMakefileTargets(repoPath: string): Set<string> {
   return new Set<string>();
 }
 
+/** A reference is checkable as a filesystem path only if it looks like a file. */
+function looksLikeFilePath(ref: string): boolean {
+  const r = ref.trim();
+  if (r.length === 0) return false;
+  if (r.includes(':')) return false; // command/skill names like awos:architecture, URLs
+  if (!/\.[A-Za-z0-9]{1,8}$/.test(r)) return false; // must end in a file extension
+  return true;
+}
+
 function extractLocalLinks(readmeContent: string): string[] {
   const links: string[] = [];
   let m: RegExpExecArray | null;
@@ -475,6 +484,8 @@ export function detectDocsAccuracy(
   // --- local file/directory link verification ---
   const localLinks = extractLocalLinks(readmeContent);
   for (const link of localLinks) {
+    // Skip tokens that don't look like filesystem paths (e.g. /api routes, /skill:names).
+    if (!looksLikeFilePath(link)) continue;
     // Resolve relative to README directory (which is repoPath for root README)
     const readmeDir = dirname(readmePath);
     const resolved = join(readmeDir, link);

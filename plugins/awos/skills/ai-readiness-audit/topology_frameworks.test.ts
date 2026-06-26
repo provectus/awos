@@ -13,18 +13,10 @@ test('detectFrameworks returns ["FastAPI"] for a FastAPI Python repo', () => {
       join(repo, 'main.py'),
       'from fastapi import FastAPI\napp = FastAPI()\n'
     );
-    const frameworks = detectFrameworks(repo);
-    assert.ok(
-      frameworks.includes('FastAPI'),
-      `detectFrameworks must include "FastAPI" for a repo with FastAPI source, got ${JSON.stringify(frameworks)}`
-    );
-    assert.ok(
-      !frameworks.includes('Flask'),
-      `detectFrameworks must not include "Flask" for a FastAPI-only repo, got ${JSON.stringify(frameworks)}`
-    );
-    assert.ok(
-      !frameworks.includes('Django'),
-      `detectFrameworks must not include "Django" for a FastAPI-only repo, got ${JSON.stringify(frameworks)}`
+    assert.deepStrictEqual(
+      detectFrameworks(repo),
+      ['FastAPI'],
+      'detectFrameworks must return exactly ["FastAPI"] for a FastAPI-only repo'
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });
@@ -90,6 +82,23 @@ test('detectFrameworks does not report AWOS when only context/ exists', () => {
     assert.ok(
       !frameworks.includes('AWOS'),
       `detectFrameworks must not report AWOS when only context/ exists (no .awos or context/spec), got ${JSON.stringify(frameworks)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('detectFrameworks does not report Spring Boot for bare "spring" word', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-spring-bare-'));
+  try {
+    writeFileSync(
+      join(repo, 'util.py'),
+      '# spring cleaning TODO\nspring_offset = 1\n'
+    );
+    const frameworks = detectFrameworks(repo);
+    assert.ok(
+      !frameworks.includes('Spring Boot'),
+      `detectFrameworks must not report "Spring Boot" when the only "spring" occurrence is a bare word (no "framework"/"boot" suffix), got ${JSON.stringify(frameworks)}`
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });

@@ -282,7 +282,7 @@ const FRAMEWORK_SIGNALS: FrameworkSignal[] = [
   { name: 'Django', rx: /\bdjango\b/i },
   { name: 'Express', rx: /\bexpress\b/i },
   { name: 'NestJS', rx: /nestjs/i },
-  { name: 'Spring Boot', rx: /\bspring(?:framework|boot)?\b/i },
+  { name: 'Spring Boot', rx: /\bspring(?:framework|boot)\b/i },
   { name: 'Gin', rx: /gin-gonic/i },
   { name: 'Fiber', rx: /\bfiber\b/i },
   { name: 'Sinatra', rx: /\bsinatra\b/i },

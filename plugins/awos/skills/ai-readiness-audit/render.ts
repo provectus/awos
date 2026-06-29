@@ -1072,7 +1072,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
   <td>${tip(relStr, anyMinimal ? 'Some numbers here are lower bounds — the true value may be higher.' : 'Numbers here are upper-bound reliable for what was reachable.', '')}</td>
   <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
   <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
-  <td>${counts.pass}</td>
+  <td>${counts.pass > 0 ? `<span style="color:#16a34a;font-weight:600">${counts.pass}</span>` : counts.pass}</td>
   <td>${counts.skip}</td>
 </tr>`);
     }

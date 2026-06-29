@@ -2,7 +2,43 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderMarkdown, renderHtml } from './render.ts';
-import type { AuditJson } from './render.ts';
+import type { AuditJson, Check, DimensionArtifact } from './render.ts';
+
+/** Minimal valid Check fixture — extend per test. */
+function makeCheck(overrides: Partial<Check> = {}): Check {
+  return {
+    check_id: 'TEST-01',
+    code: [1001],
+    method: 'detected',
+    status: 'PASS',
+    value: null,
+    evidence: [],
+    weight_awarded: 1,
+    weight_max: 1,
+    applies: true,
+    reliability: { tag: 'maximal', confidence: 'high', note: null },
+    source: 'git',
+    definition: 'Test check definition',
+    hint: 'Test hint',
+    ...overrides,
+  };
+}
+
+/** Minimal valid DimensionArtifact fixture. */
+function makeDim(
+  dimension: string,
+  checks: Check[] = [],
+  overrides: Partial<DimensionArtifact> = {}
+): DimensionArtifact {
+  return {
+    dimension,
+    date: '2026-01-01',
+    score: 0,
+    coverage: 0,
+    checks,
+    ...overrides,
+  };
+}
 
 /** Minimal valid audit fixture — extend per test. */
 function makeAudit(overrides: Partial<AuditJson> = {}): AuditJson {
@@ -92,6 +128,20 @@ test('renderMarkdown shows "None detected." when linked_repos is absent', () => 
   assert.ok(
     md.includes('None detected.'),
     'Linked Repositories section must say "None detected." when absent from audit JSON'
+  );
+});
+
+test('Dimensions table must green-highlight non-zero PASS counts (issue #4)', () => {
+  const dim = makeDim('ai-tooling', [
+    makeCheck({ check_id: 'T-01', status: 'PASS', applies: true }),
+    makeCheck({ check_id: 'T-02', status: 'FAIL', applies: true }),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  assert.match(
+    html,
+    /color:#16a34a;font-weight:600">\s*\d+<\/span>/,
+    'Dimensions table must green-highlight non-zero PASS counts (issue #4)'
   );
 });
 

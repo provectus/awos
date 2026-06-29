@@ -684,14 +684,23 @@ export function renderMarkdown(audit: AuditJson): string {
       if (c.reliability.tag === 'minimal' && c.applies) hasMinimal = true;
       const confStr =
         c.status === 'SKIP' ? '—' : `${Math.round((c.confidence ?? 0) * 100)}%`;
-      const valueStr = fmtValue(c.value);
+      const valueStr =
+        c.value != null && c.unit && !c.expression
+          ? `${fmtValue(c.value)} ${c.unit}`
+          : fmtValue(c.value);
       const seriesStr =
         c.value_series && c.value_series.length > 0
           ? ` \\[${sparkline(c.value_series)}\\]`
           : '';
       const hint = c.hint ?? '—';
+      const sourceCiteMd =
+        c.source_url && c.source_date
+          ? ` — [${c.source} ${c.source_date}](${c.source_url})`
+          : c.source_url
+            ? ` — [${c.source}](${c.source_url})`
+            : '';
       lines.push(
-        `| ${checkNum++} | ${c.check_id} | ${c.method} | ${fmtPts(c.weight_awarded)} | ${c.weight_max} | ${c.status} | ${reliabilityStr} | ${confStr} | ${valueStr}${seriesStr} | ${hint} |`
+        `| ${checkNum++} | ${c.check_id} | ${c.method} | ${fmtPts(c.weight_awarded)} | ${c.weight_max} | ${c.status} | ${reliabilityStr} | ${confStr} | ${valueStr}${seriesStr} | ${hint}${sourceCiteMd} |`
       );
     }
     lines.push('');
@@ -1183,7 +1192,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       for (const c of dim.checks) {
         mSupported++;
         if (c.status !== 'SKIP') mExecuted++;
-        if (c.weight_awarded > 0) mScored++;
+        if (c.weight_awarded > 0 && c.status !== 'SKIP') mScored++;
       }
     }
     rows.push(
@@ -1362,6 +1371,12 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
             c.unit ? `unit: ${c.unit}` : ''
           )
         );
+      } else if (c.value != null) {
+        const numStr = `${fmtValue(c.value)}${c.unit ? ' ' + c.unit : ''}`;
+        const escaped = esc(fmtValue(c.value));
+        if (!evidenceItems.some((item) => item.includes(escaped))) {
+          evidenceItems.push(esc(numStr));
+        }
       }
       const evidence =
         evidenceItems.length > 0 ? evidenceItems.join('<br>') : '—';

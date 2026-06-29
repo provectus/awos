@@ -159,11 +159,12 @@ test('Overview must show three-value metric count (scored/executed/supported) ab
     /Metrics:/,
     'Overview must show three-value metric count above Dimensions table (issue #1)'
   );
-  // Default weight_awarded=1, so all 4 checks are "scored"; 3 non-SKIP checks are "executed".
+  // Default weight_awarded=1 for all 4 checks, but SKIP checks are excluded from scored.
+  // T-04 is SKIP so scored=3; executed=3 (non-SKIP); supported=4.
   assert.match(
     html,
-    /4 scored/,
-    'Overview must show correct scored count (4 checks with weight_awarded > 0)'
+    /3 scored/,
+    'Overview must show correct scored count (3 non-SKIP checks with weight_awarded > 0; SKIP checks excluded)'
   );
   assert.match(
     html,
@@ -478,6 +479,58 @@ test('Per-check row shows visible source citation link when source_url is set (6
 // ---------------------------------------------------------------------------
 // 6c.5 — Linked repos grouped by kind (symlink / submodule / mcp)
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Fix 1 — Markdown per-check source link
+// ---------------------------------------------------------------------------
+
+test('renderMarkdown includes source citation link in check row when source_url is set (Fix 1)', () => {
+  const check = makeCheck({
+    check_id: 'SRC-MD-01',
+    status: 'PASS',
+    applies: true,
+    source_url: 'https://example.com/standard',
+    source_date: '2024-01',
+    source: 'NIST',
+  } as any);
+  const dim = makeDim('test-md-src-link', [check]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('](https://example.com/standard)'),
+    'renderMarkdown check row must include a markdown link to source_url (Fix 1)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Fix 2 — Unit-only numeric value shown in Evidence
+// ---------------------------------------------------------------------------
+
+test('HTML evidence shows fmtValue(value) and unit for a check with value+unit but no expression (Fix 2)', () => {
+  const check = makeCheck({
+    check_id: 'UV-01',
+    status: 'PASS',
+    applies: true,
+    value: 0.62,
+    unit: 'ratio',
+    evidence: [],
+  } as any);
+  const dim = makeDim('test-unit-val', [check]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-unit-val"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist in HTML');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  assert.ok(
+    pageHtml.includes('0.62'),
+    'Evidence cell must show fmtValue(value) for a unit-only-no-expression check (Fix 2)'
+  );
+  assert.ok(
+    pageHtml.includes('ratio'),
+    'Evidence cell must show the unit for a unit-only-no-expression check (Fix 2)'
+  );
+});
 
 test('Linked repos are grouped by kind with section headings (6c.5)', () => {
   const audit = makeAudit({

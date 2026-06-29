@@ -527,7 +527,7 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
     }
     for (const e of entries) {
       const p = join(dirPath, e);
-      const via = `${viaPrefix}/${e}`;
+      const via = viaPrefix ? `${viaPrefix}/${e}` : e;
       try {
         const stat = lstatSync(p);
         if (stat.isSymbolicLink()) {

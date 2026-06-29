@@ -32,6 +32,7 @@ import {
   renderHtml,
   labelize,
   formatSourceWindow,
+  shortSourceLabel,
 } from '../render.ts';
 import type { AuditJson } from '../render.ts';
 
@@ -569,8 +570,8 @@ test('renderHtml: drill-down check table is fixed-layout with a wide Evidence co
     'Evidence must be its own wide column, not a cramped equal-width cell'
   );
   assert.ok(
-    html.includes('width:32%'),
-    'Evidence column must be allocated the widest share of the table'
+    html.includes('width:43%'),
+    'Evidence column must be allocated the widest share of the table (43% after Value column removal)'
   );
 });
 
@@ -906,15 +907,22 @@ test('renderHtml: Dimensions overview table has a Sources column header after Po
   );
 });
 
-test('renderHtml: Sources cell shows human labels for each dimension', () => {
+test('renderHtml: Sources cell shows SHORT labels; verbose label goes to tooltip only (6c.3)', () => {
   const html = renderHtml(sourcesFixture());
   assert.ok(
     html.includes('git history'),
-    'Sources cell must show "git history" label for the git source'
+    'Sources cell must show "git history" (no " via " boundary → keep as-is)'
   );
+  // "Jira via Atlassian MCP" truncates at " via " → short label is "Jira".
+  // The cell text is "git history, Jira" (rendered as tip() span value).
+  assert.ok(
+    html.includes('git history, Jira'),
+    'Sources cell must show "git history, Jira" — tracker label truncated at " via " to "Jira"'
+  );
+  // Verbose label still in the tooltip.
   assert.ok(
     html.includes('Jira via Atlassian MCP'),
-    'Sources cell must show "Jira via Atlassian MCP" for the tracker source'
+    'Verbose source label "Jira via Atlassian MCP" must still appear in the tooltip'
   );
 });
 
@@ -1003,5 +1011,45 @@ test('formatSourceWindow: formats days as months when ≥60, as days when <60, l
     formatSourceWindow('unknown-src', undefined),
     'unknown-src',
     'formatSourceWindow: unknown source with no windows map falls back to the source key'
+  );
+});
+
+test('shortSourceLabel: truncates at " via " boundary (6c.3)', () => {
+  const windows = {
+    tracker: { days: 180, label: 'Jira via Atlassian MCP' },
+    docs: { days: null, label: "Confluence space 'Onex' via Atlassian MCP" },
+    git: { days: 540, label: 'git history' },
+    audit: { days: null, label: 'source code' },
+  };
+  assert.equal(
+    shortSourceLabel('tracker', windows),
+    'Jira',
+    'shortSourceLabel: "Jira via Atlassian MCP" must truncate at " via " → "Jira"'
+  );
+  assert.equal(
+    shortSourceLabel('docs', windows),
+    "Confluence space 'Onex'",
+    'shortSourceLabel: Confluence label must truncate at " via " → "Confluence space \'Onex\'"'
+  );
+  assert.equal(
+    shortSourceLabel('git', windows),
+    'git history',
+    'shortSourceLabel: "git history" has no " via " boundary — keep as-is'
+  );
+  assert.equal(
+    shortSourceLabel('unknown', undefined),
+    'unknown',
+    'shortSourceLabel: unknown source with no windows falls back to source key'
+  );
+});
+
+test('shortSourceLabel: truncates at " (project" after " via " split (6c.3)', () => {
+  const windows = {
+    tracker: { days: 90, label: 'Jira (project OAPBCRNA) via Atlassian MCP' },
+  };
+  assert.equal(
+    shortSourceLabel('tracker', windows),
+    'Jira',
+    'shortSourceLabel: truncates at " via " first → "Jira (project OAPBCRNA)", then at " (project" → "Jira"'
   );
 });

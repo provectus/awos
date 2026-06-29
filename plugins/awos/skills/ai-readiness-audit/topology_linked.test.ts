@@ -204,9 +204,10 @@ test('detectLinkedRepos: symlink outside repo NOT under tool-config dir surfaces
       'symlink',
       'symlink outside tool-config dir must have kind="symlink"'
     );
-    assert.ok(
-      found!.via.includes('src'),
-      `via must reference the src/ path; got "${found!.via}"`
+    assert.equal(
+      found!.via,
+      'src/lib',
+      `via must be the clean relative path "src/lib" with no leading slash; got "${found!.via}"`
     );
   } finally {
     rmSync(base, { recursive: true, force: true });

@@ -303,6 +303,29 @@ export function formatSourceWindow(
   return `${label} (~${windowStr})`;
 }
 
+/**
+ * Returns a short display label for a source key.
+ *
+ * Truncates the recorded label at the first ' via ' boundary (e.g.
+ * "Jira (project X) via Atlassian MCP" → "Jira (project X)"), then at
+ * ' (project' (e.g. "Jira (project X)" → "Jira"). Falls back to
+ * SOURCE_LABEL_DEFAULTS[src] when no label is recorded.
+ */
+export function shortSourceLabel(
+  src: string,
+  sourceWindows:
+    | Record<string, { days: number | null; label: string }>
+    | undefined
+): string {
+  const recorded = sourceWindows?.[src]?.label;
+  if (!recorded) return SOURCE_LABEL_DEFAULTS[src] ?? src;
+  const viaIdx = recorded.indexOf(' via ');
+  let short = viaIdx !== -1 ? recorded.slice(0, viaIdx) : recorded;
+  const projIdx = short.indexOf(' (project');
+  if (projIdx !== -1) short = short.slice(0, projIdx);
+  return short.trim() || (SOURCE_LABEL_DEFAULTS[src] ?? src);
+}
+
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
@@ -734,12 +757,33 @@ export function renderMarkdown(audit: AuditJson): string {
   }
 
   // Linked Repositories — always rendered so the reader can see it was checked.
+  // Grouped by kind: Symlinks / Git submodules / MCP servers.
   lines.push('## Linked Repositories');
   lines.push('');
   const linked = audit.linked_repos ?? [];
   if (linked.length > 0) {
-    for (const r of linked) {
-      lines.push(`- ${r.name} (${r.kind} via ${r.via})`);
+    const byKindMd: Record<string, LinkedRepo[]> = {};
+    for (const r of linked) (byKindMd[r.kind] ??= []).push(r);
+    const KIND_LABEL_MD: Record<string, string> = {
+      symlink: 'Symlinks',
+      submodule: 'Git submodules',
+      mcp: 'MCP servers',
+    };
+    for (const kind of ['symlink', 'submodule', 'mcp']) {
+      const bucket = byKindMd[kind];
+      if (!bucket || bucket.length === 0) continue;
+      lines.push(`**${KIND_LABEL_MD[kind]}:**`);
+      lines.push('');
+      for (const r of bucket) lines.push(`- ${r.name} (via ${r.via})`);
+      lines.push('');
+    }
+    for (const [kind, bucket] of Object.entries(byKindMd)) {
+      if (['symlink', 'submodule', 'mcp'].includes(kind) || !bucket.length)
+        continue;
+      lines.push(`**${kind}:**`);
+      lines.push('');
+      for (const r of bucket) lines.push(`- ${r.name} (via ${r.via})`);
+      lines.push('');
     }
   } else {
     lines.push('None detected.');
@@ -921,6 +965,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
 h2{font-size:1.15rem;font-weight:600;margin:24px 0 10px}
 h3{font-size:.95rem;font-weight:600;margin:0 0 6px;color:#475569}
+h4{font-size:.85rem;font-weight:600;margin:10px 0 4px;color:#64748b}
+.src-cite{font-size:.75rem;color:#64748b}
+.src-cite a{color:#6366f1}
 .meta{color:#64748b;font-size:.85rem;margin-bottom:8px}
 .meta span{margin-right:16px}
 a{color:#4f46e5;text-decoration:none}
@@ -1125,19 +1172,26 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
   // ─── Dimension summary table (overview; rows link to sub-pages) ─────────────
   function dimensionSummary(): string {
     const rows: string[] = ['<h2>Dimensions</h2>'];
-    // Metrics-found count: applicable checks that have PASS or WARN (something detected)
-    // over total applicable checks, summed across all dimensions.
-    let found = 0;
-    let total = 0;
+    // Three-value metrics count (summed across all checks in all dimensions):
+    //   scored    = checks with weight_awarded > 0 (contributed to score)
+    //   executed  = checks with status !== 'SKIP' (actually ran)
+    //   supported = all checks in the catalog for this repo
+    let mScored = 0;
+    let mExecuted = 0;
+    let mSupported = 0;
     for (const dim of audit.dimensions) {
       for (const c of dim.checks) {
-        if (!c.applies) continue;
-        total++;
-        if (c.status !== 'FAIL' && c.status !== 'SKIP') found++;
+        mSupported++;
+        if (c.status !== 'SKIP') mExecuted++;
+        if (c.weight_awarded > 0) mScored++;
       }
     }
     rows.push(
-      `<p class="metrics-found">${tip(`Metrics found: ${found} of ${total}`, 'Checks that detected a capability (PASS, PARTIAL, or WARN) out of all checks that apply to this project.', 'excludes SKIP (inapplicable) checks')}</p>`
+      `<p class="metrics-found">${tip(
+        `Metrics: ${mScored} scored · ${mExecuted} executed · ${mSupported} supported`,
+        'Three-level metric counts across all checks',
+        'scored = weight_awarded > 0 · executed = status ≠ SKIP · supported = all checks in catalog'
+      )}</p>`
     );
     rows.push(
       '<table><thead><tr><th>#</th><th>Dimension</th><th>Points</th><th>Sources</th><th>Coverage</th><th>Reliability</th><th>FAIL</th><th>WARN</th><th>PARTIAL</th><th>PASS</th><th>SKIP</th></tr></thead><tbody>'
@@ -1165,15 +1219,12 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
           : 'Numbers here are upper-bound reliable for what was reachable.';
       const key = dimKey(dim);
       const href = `#dim/${esc(key)}`;
-      // Sources column: cell shows human labels; tooltip adds lookback window per source.
+      // Sources column: cell shows SHORT labels; tooltip adds full label + lookback window.
       const dimSourcesUsed = (dim.sources_used as string[] | undefined) ?? [];
       const sourcesCell = (() => {
         if (dimSourcesUsed.length === 0) return '—';
         const cellText = dimSourcesUsed
-          .map(
-            (s) =>
-              audit.source_windows?.[s]?.label ?? SOURCE_LABEL_DEFAULTS[s] ?? s
-          )
+          .map((s) => shortSourceLabel(s, audit.source_windows))
           .join(', ');
         const tooltipDetail = dimSourcesUsed
           .map((s) => formatSourceWindow(s, audit.source_windows))
@@ -1271,10 +1322,10 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       '<div class="toolbar"><button onclick="toggleIssues(this)">Show issues only</button></div>'
     );
     rows.push(
-      '<table class="checks"><colgroup><col style="width:3%"><col style="width:22%"><col style="width:8%"><col style="width:7%"><col style="width:9%"><col style="width:8%"><col style="width:11%"><col style="width:32%"></colgroup>'
+      '<table class="checks"><colgroup><col style="width:3%"><col style="width:22%"><col style="width:8%"><col style="width:7%"><col style="width:9%"><col style="width:8%"><col style="width:43%"></colgroup>'
     );
     rows.push(
-      '<thead><tr><th>#</th><th>Check</th><th>Status</th><th>Points</th><th>Reliability</th><th>Confidence</th><th>Value</th><th>Evidence</th></tr></thead><tbody>'
+      '<thead><tr><th>#</th><th>Check</th><th>Status</th><th>Points</th><th>Reliability</th><th>Confidence</th><th>Evidence</th></tr></thead><tbody>'
     );
     let ckn = 1;
     let hasMinimal = false;
@@ -1300,8 +1351,20 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         c.value_series && c.value_series.length > 0
           ? sparklineSvg(c.value_series)
           : '';
+      // Build evidence items; append expression/value when present (moved from removed Value column).
+      const evidenceItems: string[] =
+        c.evidence.length > 0 ? c.evidence.map(esc) : [];
+      if (c.expression) {
+        evidenceItems.push(
+          tip(
+            esc(fmtValue(c.value)),
+            c.expression,
+            c.unit ? `unit: ${c.unit}` : ''
+          )
+        );
+      }
       const evidence =
-        c.evidence.length > 0 ? c.evidence.map(esc).join('<br>') : '—';
+        evidenceItems.length > 0 ? evidenceItems.join('<br>') : '—';
       // Technical detail (code · source · method) folded into the Check tooltip.
       const codeStr = c.code && c.code.length > 0 ? c.code.join(', ') : '—';
       const checkMeta = `${esc(c.definition)} — source: ${esc(c.source || '—')} · method: ${esc(c.method)} · category ${esc(codeStr)}`;
@@ -1330,27 +1393,13 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       // Confidence cell: percent for applicable checks, dash for SKIP.
       const confCell =
         c.status === 'SKIP' ? '—' : `${Math.round((c.confidence ?? 0) * 100)}%`;
-      // Value cell: show when it adds signal (numeric/banded with unit/expression/series,
-      // or a value that isn't already shown in evidence); suppress with '—' otherwise.
-      let valueCell: string;
-      if (c.unit || c.expression || c.value_series) {
-        // Always show when there's a unit, formula, or time series — these add signal.
-        valueCell = c.expression
-          ? tip(
-              fmtValue(c.value),
-              c.expression,
-              c.unit ? `unit: ${c.unit}` : ''
-            )
-          : esc(fmtValue(c.value));
-      } else if (
-        c.value == null ||
-        (typeof c.value === 'string' && c.evidence.join(' ').includes(c.value))
-      ) {
-        // Value is absent or is a string already shown verbatim in evidence — suppress.
-        valueCell = '—';
-      } else {
-        valueCell = esc(fmtValue(c.value));
-      }
+      // Visible per-metric source citation link (6c.4) — shown inline in the Evidence cell.
+      const sourceCiteHtml =
+        c.source_url && c.source_date
+          ? `<br><small class="src-cite"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source)} ${esc(c.source_date)}</a></small>`
+          : c.source_url
+            ? `<br><small class="src-cite"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source)}</a></small>`
+            : '';
       rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
   <td>${ckn++}</td>
   <td class="check"><span class="tip" tabindex="0"><b>${esc(c.check_id)}</b><span class="tipbox"><b>${esc(plainLead(c))}</b><span class="tipmeta">${checkMeta}</span></span></span><span class="plain">${esc(plainLead(c))}</span></td>
@@ -1358,8 +1407,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
   <td>${pointsCell}</td>
   <td class="${relClass}">${tip(relLabel, relTipPlain, c.reliability.note ?? '')}</td>
   <td>${confCell}</td>
-  <td>${valueCell}${seriesSvg}</td>
-  <td class="evidence">${evidence}</td>
+  <td class="evidence">${evidence}${seriesSvg}${sourceCiteHtml}</td>
 </tr>`);
     }
     rows.push('</tbody></table>');
@@ -1436,16 +1484,40 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
     }
 
     // Linked repositories — always rendered so the reader can see it was checked.
+    // Grouped by kind: Symlinks / Git submodules / MCP servers.
     rows.push('<h3>Linked repositories</h3>');
     const linked = audit.linked_repos ?? [];
     if (linked.length > 0) {
-      rows.push('<ul>');
+      const byKind: Record<string, LinkedRepo[]> = {};
       for (const r of linked) {
-        rows.push(
-          `<li>${esc(r.name)} <em>(${esc(r.kind)} via ${esc(r.via)})</em></li>`
-        );
+        (byKind[r.kind] ??= []).push(r);
       }
-      rows.push('</ul>');
+      const KIND_LABEL: Record<string, string> = {
+        symlink: 'Symlinks',
+        submodule: 'Git submodules',
+        mcp: 'MCP servers',
+      };
+      for (const kind of ['symlink', 'submodule', 'mcp']) {
+        const bucket = byKind[kind];
+        if (!bucket || bucket.length === 0) continue;
+        rows.push(`<h4>${KIND_LABEL[kind]}</h4><ul>`);
+        for (const r of bucket) {
+          rows.push(
+            `<li><b>${esc(r.name)}</b> <em>via ${esc(r.via)}</em></li>`
+          );
+        }
+        rows.push('</ul>');
+      }
+      // Render any unknown kinds (future-proof).
+      for (const [kind, bucket] of Object.entries(byKind)) {
+        if (['symlink', 'submodule', 'mcp'].includes(kind) || !bucket.length)
+          continue;
+        rows.push(`<h4>${esc(kind)}</h4><ul>`);
+        for (const r of bucket) {
+          rows.push(`<li>${esc(r.name)} <em>via ${esc(r.via)}</em></li>`);
+        }
+        rows.push('</ul>');
+      }
     } else {
       rows.push('<p><em>No linked repositories detected.</em></p>');
     }

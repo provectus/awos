@@ -145,7 +145,7 @@ test('Dimensions table must green-highlight non-zero PASS counts (issue #4)', ()
   );
 });
 
-test('Overview must show found-vs-total metric count above Dimensions table (issue #1)', () => {
+test('Overview must show three-value metric count (scored/executed/supported) above Dimensions table (issue #1)', () => {
   const dim = makeDim('test-dim', [
     makeCheck({ check_id: 'T-01', status: 'PASS', applies: true }),
     makeCheck({ check_id: 'T-02', status: 'WARN', applies: true }),
@@ -156,13 +156,24 @@ test('Overview must show found-vs-total metric count above Dimensions table (iss
   const html = renderHtml(audit);
   assert.match(
     html,
-    /Metrics found:/,
-    'Overview must show found-vs-total metric count above Dimensions table (issue #1)'
+    /Metrics:/,
+    'Overview must show three-value metric count above Dimensions table (issue #1)'
+  );
+  // Default weight_awarded=1, so all 4 checks are "scored"; 3 non-SKIP checks are "executed".
+  assert.match(
+    html,
+    /4 scored/,
+    'Overview must show correct scored count (4 checks with weight_awarded > 0)'
   );
   assert.match(
     html,
-    /2 of 3/,
-    'Overview must show correct found-vs-total metric count (2 PASS/WARN out of 3 applicable)'
+    /3 executed/,
+    'Overview must show correct executed count (3 non-SKIP checks)'
+  );
+  assert.match(
+    html,
+    /4 supported/,
+    'Overview must show correct supported count (4 total checks in catalog)'
   );
 });
 
@@ -190,39 +201,19 @@ test('Each dimension page needs prev/next nav to adjacent dimensions (issue #7)'
   );
 });
 
-test('Value column must suppress strings already shown in Evidence (issue #10)', () => {
-  const checkA = makeCheck({
-    check_id: 'T-A',
-    status: 'PASS',
-    applies: true,
-    value: 'README.md',
-    evidence: ['README.md present'],
-    // no unit, no expression, no value_series
-  });
-  const checkB = makeCheck({
-    check_id: 'T-B',
-    status: 'PASS',
-    applies: true,
-    value: 0.62,
-    unit: 'ratio',
-    evidence: ['computed from PR merge rate'],
-  });
-  const dim = makeDim('test-val-dim', [checkA, checkB]);
+test('Value column removed: dimension check table has no Value column header (issue #10)', () => {
+  const dim = makeDim('test-no-val-col', [
+    makeCheck({ check_id: 'T-A', status: 'PASS', applies: true }),
+  ]);
   const audit = makeAudit({ dimensions: [dim] });
   const html = renderHtml(audit);
-  const pageStart = html.indexOf('id="page-test-val-dim"');
+  const pageStart = html.indexOf('id="page-test-no-val-col"');
   assert.ok(pageStart !== -1, 'Dimension page must exist in HTML');
   const pageEnd = html.indexOf('</section>', pageStart);
   const pageHtml = html.slice(pageStart, pageEnd + 10);
-  // checkA: value 'README.md' is a substring of evidence 'README.md present' → should suppress
   assert.ok(
-    !pageHtml.includes('>README.md<'),
-    'Value column must suppress strings already shown in Evidence (issue #10)'
-  );
-  // checkB: value has unit 'ratio' → current behaviour (always show)
-  assert.ok(
-    pageHtml.includes('>0.62<'),
-    'Value column must show numeric value when unit is present (issue #10)'
+    !pageHtml.includes('<th>Value</th>'),
+    'Value column removed: dimension check table must have no Value column header (issue #10)'
   );
 });
 
@@ -419,4 +410,97 @@ test('Fix 2: overview Reliability cell must show "not-reliable" (not "maximal") 
     overviewHtml.includes('not-reliable'),
     'overview Reliability cell must show "not-reliable" when applicable checks carry that tag (Fix 2)'
   );
+});
+
+// ---------------------------------------------------------------------------
+// 6c.3 — Short source labels in Sources cell, verbose in tooltip
+// ---------------------------------------------------------------------------
+
+test('Sources cell shows short label; verbose label goes to tooltip only (6c.3)', () => {
+  const audit = makeAudit({
+    source_windows: {
+      git: { days: 540, label: 'git history' },
+      tracker: { days: 180, label: 'Jira via Atlassian MCP' },
+    },
+    dimensions: [
+      makeDim('dim-a', [makeCheck()], {
+        sources_used: ['git', 'tracker'],
+      } as any),
+    ],
+  });
+  const html = renderHtml(audit);
+  // Short label for tracker (truncated at ' via '): 'Jira'
+  // Cell text rendered as: "git history, Jira" inside the tip span value.
+  assert.ok(
+    html.includes('git history, Jira'),
+    'Sources cell must show short combined labels: "git history, Jira" (tracker truncated at " via ")'
+  );
+  // Verbose label still appears in the tooltip text.
+  assert.ok(
+    html.includes('Jira via Atlassian MCP'),
+    'Verbose source label must still appear in the Sources tooltip'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 6c.4 — Visible per-check source citation link
+// ---------------------------------------------------------------------------
+
+test('Per-check row shows visible source citation link when source_url is set (6c.4)', () => {
+  const check = makeCheck({
+    check_id: 'SRC-01',
+    status: 'PASS',
+    applies: true,
+    source_url: 'https://example.com/standard',
+    source_date: '2024-01',
+  } as any);
+  const dim = makeDim('test-src-link', [check]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-src-link"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist in HTML');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  assert.ok(
+    pageHtml.includes('href="https://example.com/standard"'),
+    'Per-check row must contain a visible anchor link to source_url (6c.4)'
+  );
+  assert.ok(
+    pageHtml.includes('target="_blank"'),
+    'Source citation link must open in a new tab (6c.4)'
+  );
+  assert.ok(
+    pageHtml.includes('rel="noopener"'),
+    'Source citation link must carry rel="noopener" (6c.4)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 6c.5 — Linked repos grouped by kind (symlink / submodule / mcp)
+// ---------------------------------------------------------------------------
+
+test('Linked repos are grouped by kind with section headings (6c.5)', () => {
+  const audit = makeAudit({
+    linked_repos: [
+      { name: 'ext-lib', kind: 'symlink', via: 'src/lib' },
+      { name: 'ui-kit', kind: 'submodule', via: '.gitmodules' },
+      { name: 'github-mcp', kind: 'mcp', via: '.mcp.json' },
+    ],
+  });
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('Symlinks'),
+    'Symlinks group heading must appear (6c.5)'
+  );
+  assert.ok(
+    html.includes('Git submodules'),
+    'Git submodules group heading must appear (6c.5)'
+  );
+  assert.ok(
+    html.includes('MCP servers'),
+    'MCP servers group heading must appear (6c.5)'
+  );
+  assert.ok(html.includes('ext-lib'), 'symlink repo name must appear (6c.5)');
+  assert.ok(html.includes('ui-kit'), 'submodule repo name must appear (6c.5)');
+  assert.ok(html.includes('github-mcp'), 'MCP server name must appear (6c.5)');
 });

@@ -83,7 +83,7 @@ After the discovery round completes, use `AskUserQuestion` **once, at the start 
 
 **Many repos:** do **not** ask for a per-repo link-with-explanation list (too large to be usable). Instead, ask only for either:
 
-- a `sources.toml` file path (see schema below), or
+- a `sources.toml` file path (for repo scope and non-MCP connector wiring only — reachable MCP connectors are enriched directly; see `connector-shapes.md`), or
 - a flat list of repo links.
 
 Then **map repos to links empirically** — match each link to a repository by in-repo signals (remote URLs, doc/script references, directory names). Report the inferred mapping to the user rather than interrogating them repo by repo.

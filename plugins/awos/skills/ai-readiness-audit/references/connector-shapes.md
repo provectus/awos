@@ -244,6 +244,6 @@ A reachable tracker/docs/incident MCP is enriched by default — fetching and ma
    node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric <id> "<repoPath>" "context/audits/YYYY-MM-DD/collected"
    ```
    Mapping reachable data into the documented shape is not fabrication.
-3. **On failure or unclear mapping** (auth error, unfamiliar schema, broken dependency, empty result, closed port) — do not silently skip. In interactive mode, use `AskUserQuestion` with three options: mark unavailable (record the reason) / retry with guidance / show how to fix (link to this document). In headless `claude -p` runs (no interactive user), default to marking the source unavailable and record the failure reason plus a remediation hint in the report's `missed_sources` list.
+3. **On failure or unclear mapping** (auth error, unfamiliar schema, broken dependency, empty result, closed port) — do not silently skip. In interactive mode, use `AskUserQuestion` with three options: mark unavailable (record the reason) / retry with guidance / show how to fix (link to this document). In headless `claude -p` runs (no interactive user), default to marking the source unavailable and record the _actual_ failure reason plus a remediation hint in the report's `missed_sources` list — the real cause (e.g. "Jira MCP returned 401"), never "no connector provided" when an MCP was in fact reachable.
 
 Never drop a reachable source without a recorded reason.

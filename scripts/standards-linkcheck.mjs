@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /**
- * standards-linkcheck.mjs — verify HTTP reachability of every [source."<name>"]
- * URL declared in standards.toml.
+ * standards-linkcheck.mjs — verify HTTP reachability of every per-category
+ * `url` field declared in standards.toml [category.*] blocks.
+ *
+ * URLs are deduplicated for fetching (many categories share the same URL).
+ * Each unique URL is checked once; the category name(s) using it are shown.
  *
  * Usage:
  *   node scripts/standards-linkcheck.mjs [path/to/standards.toml] [--dry-run]
@@ -29,29 +32,39 @@ import { parse } from 'smol-toml';
 // ---------------------------------------------------------------------------
 
 /**
- * Extract every [source."<name>"] table's url field from a standards.toml text.
+ * Extract unique `url` values from every [category.*] block in a standards.toml text.
+ *
+ * Each category now carries its own `url` field directly. This function collects
+ * all distinct urls (deduplicated), carrying one representative category name per url.
  *
  * @param {string} tomlText - raw text of a standards.toml file
- * @returns {{ name: string; url: string }[]} - array of {name, url} pairs, in
- *   declaration order. Returns [] when no [source.*] tables are present or when
- *   none of them carry a `url` key.
+ * @returns {{ name: string; url: string }[]} - array of {name, url} pairs (deduplicated by url).
+ *   Returns [] when no [category.*] blocks carry a `url` key.
  */
 export function extractSourceUrls(tomlText) {
   const parsed = parse(tomlText);
-  const sourceTable = parsed['source'];
+  const categoryTable = parsed['category'];
   if (
-    sourceTable === null ||
-    sourceTable === undefined ||
-    typeof sourceTable !== 'object'
+    categoryTable === null ||
+    categoryTable === undefined ||
+    typeof categoryTable !== 'object'
   ) {
     return [];
   }
-  return Object.entries(sourceTable)
-    .filter(
-      ([, v]) =>
-        v !== null && typeof v === 'object' && typeof v['url'] === 'string'
-    )
-    .map(([name, v]) => ({ name, url: v['url'] }));
+  // Deduplicate: keep first category name seen for each url.
+  const seen = new Map();
+  for (const [catKey, v] of Object.entries(categoryTable)) {
+    if (v !== null && typeof v === 'object' && typeof v['url'] === 'string') {
+      const url = v['url'];
+      if (!seen.has(url)) {
+        // Use the human `source` label as the name if available; fall back to category key.
+        const name =
+          typeof v['source'] === 'string' && v['source'] ? v['source'] : catKey;
+        seen.set(url, { name, url });
+      }
+    }
+  }
+  return Array.from(seen.values());
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +143,7 @@ async function main() {
 
   if (entries.length === 0) {
     process.stdout.write(
-      'standards-linkcheck: no [source.*] table found (not yet added) — nothing to check.\n'
+      'standards-linkcheck: no [category.*] blocks with a `url` field found — nothing to check.\n'
     );
     process.exit(0);
   }

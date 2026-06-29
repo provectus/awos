@@ -23,7 +23,7 @@
 import { mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 
-import { loadStandards, resolveSource } from './metrics/_base.ts';
+import { loadStandards } from './metrics/_base.ts';
 import {
   computeTopology,
   detectLinkedRepos,
@@ -171,6 +171,11 @@ interface Category {
   reliability_default?: string;
   source?: string;
   sources?: string[];
+  url?: string;
+  date?: string;
+  last_verified?: string;
+  threshold?: number;
+  threshold_days?: number;
 }
 
 interface CheckRecord {
@@ -376,7 +381,6 @@ export async function auditCore(
       skippedByMetric,
       topology,
       checkIdByCode,
-      standards,
       metricMeta
     );
     (byDimension[c.dimension] ??= []).push(rec);
@@ -655,7 +659,6 @@ function buildCheck(
   skippedByMetric: Set<number>,
   topology: TopologyFlags,
   checkIdByCode: Map<number, string>,
-  standards: Record<string, unknown>,
   metricMeta?: Map<
     number,
     {
@@ -741,10 +744,8 @@ function buildCheck(
 
   const applies = status !== 'SKIP';
   const weightAwarded = Math.round(c.weight * score * 10) / 10;
-  const { date: source_date, url: source_url } = resolveSource(
-    standards,
-    c.source ?? ''
-  );
+  const source_date = c.date ?? null;
+  const source_url = c.url ?? null;
   const hintDate = source_date ?? '';
   const rec: CheckRecord = {
     check_id: c.check_id ?? checkIdByCode.get(c.code) ?? key,

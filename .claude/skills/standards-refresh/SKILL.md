@@ -29,33 +29,37 @@ The skill writes two files:
 
 | File | Contents |
 |------|----------|
-| `standards-refresh-proposal.md` | Full two-pass report: sources table with HTTP status and verified dates, weights table with proposed changes and citations, "considered but not proposed" table, and a "left unchanged" rationale summary. |
-| `standards-refresh-sources.toml` | Ready-to-paste `[source."<name>"]` blocks for every URL that resolved successfully. Entries that are dead or unverified are excluded and flagged in the proposal instead. |
+| `standards-refresh-proposal.md` | Full two-pass report: per-category url/date/last_verified table with HTTP status and verified dates, weights table with proposed changes and citations, "considered but not proposed" table, and a "left unchanged" rationale summary. |
+| `standards-refresh-patch.toml` | Ready-to-paste per-category field updates (`url`, `date`, `last_verified`) for every category whose URL resolved successfully. Categories with dead or unverified links are excluded and flagged in the proposal instead. |
 
 After reviewing the proposal, apply it manually:
 
-1. Add the `[source.*]` blocks from `standards-refresh-sources.toml` to `standards.toml`.
+1. For each category in `standards-refresh-patch.toml`, update the matching `[category.*]` block in `standards.toml` with the refreshed `url`, `date`, and `last_verified` fields.
 2. Apply the weight delta table from the proposal.
-3. Run `node scripts/standards-linkcheck.mjs` to confirm all proposed URLs resolve.
+3. Run `node scripts/standards-linkcheck.mjs` to confirm all per-category URLs resolve.
 4. Open a PR with label `patch` (or `minor` if weights change materially).
 
 ## Methodology
 
-### Pass 1 — Source link verification
+### Pass 1 — Per-category link verification
 
-For each distinct `source` string found in `standards.toml`:
+Each `[category.*]` block in `standards.toml` carries its own `url`, `date`, and `last_verified` fields. Pass 1 verifies each unique URL independently and stamps per-category results:
+
+For each distinct `url` found across all `[category.*]` blocks:
 
 1. Run a WebSearch to locate the authoritative current URL — the canonical report or specification page, not blog summaries or secondary references.
 2. Issue a WebFetch against the candidate URL to confirm HTTP resolution and capture the precise publication or last-revised date.
-3. Record: `source name`, `proposed_url`, `final_url_after_redirect`, `http_status`, `date`, `notes`.
+3. Record: `category slug`, `source name`, `proposed_url`, `final_url_after_redirect`, `http_status`, `date`, `last_verified` (today's date).
+
+When multiple categories share the same URL (e.g. all DORA categories pointing to the DORA report), verify the URL once and apply the result to all sharing categories. Each category's `last_verified` is stamped independently with the run date.
 
 Rules:
 - For DOI references, use the doi.org URL as the canonical form (stable even when the landing page is paywalled). A 302 redirect from doi.org to a paywalled page (HTTP 403) is **not** a dead link — flag it as REACHABLE-AUTH and keep the DOI URL.
 - **Never fabricate a URL.** If WebFetch fails or returns 404/5xx, flag the link as DEAD and propose no replacement until a confirmed URL is found. A missing or stale link is far less harmful than a plausible-but-wrong one.
 - For living documents (GitHub repositories, framework websites), record the date of the latest release or last commit visible on the page, not the original publication date.
-- Where `source_year` in `standards.toml` does not match the verified date, flag it as a metadata correction in the proposal. These are low-risk fixes that should be applied alongside any weight changes.
+- Where a category's `date` does not match the verified publication date, flag it as a metadata correction in the proposal.
 
-After running Pass 1, run `node scripts/standards-linkcheck.mjs <path>` against the proposed sources file to programmatically confirm all proposed URLs return HTTP 200 or REACHABLE-AUTH before adding them to `standards.toml`.
+After running Pass 1, run `node scripts/standards-linkcheck.mjs <path>` against the updated `standards.toml` to programmatically confirm all per-category URLs return HTTP 200 or REACHABLE-AUTH.
 
 ### Pass 2 — Weight rescale
 
@@ -77,8 +81,8 @@ For each category you considered but did not propose changing, include a row in 
 ### Reproducibility
 
 To reproduce a prior run:
-1. Fetch each URL in the sources table with a bare WebFetch and record HTTP status and date.
-2. Cross-reference `source_year` values in `standards.toml` against the verified dates.
+1. Fetch each distinct `url` from `[category.*]` blocks with a bare WebFetch and record HTTP status and date.
+2. Cross-reference each category's `date` field in `standards.toml` against the verified publication dates.
 3. For weight changes, look up each check's `applies_when` condition to determine breadth and compare its current weight against checks in the same dimension with `applies_when = "always"`.
 
-The scratchpad files (`standards-refresh-proposal.md` and `standards-refresh-sources.toml`) from a prior run serve as the baseline for the next refresh. Diff them against the current `standards.toml` to see what was accepted.
+The scratchpad files (`standards-refresh-proposal.md` and `standards-refresh-patch.toml`) from a prior run serve as the baseline for the next refresh. Diff the patch against the current `standards.toml` to see what was accepted.

@@ -1,11 +1,18 @@
 /**
  * audit_core.test.ts — tests that audit-core writes a sources[] block into audit.json
  * and that aggregate() preserves an existing sources block when collected/ is absent.
- * Also verifies the Phase 3a Correction 3 weight_awarded re-derivation.
+ * Also verifies the Phase 3a Correction 3 weight_awarded re-derivation, and that
+ * check source_url/source_date come from per-category fields (6a.1).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { auditCore, aggregate } from '../audit_core.ts';
@@ -606,5 +613,56 @@ test("aggregate: sources_used is the sorted union of applicable checks' sources 
     auditJson.source_windows.ci?.label,
     'CI runs',
     'source_windows.ci.label must be "CI runs" (SOURCE_LABEL_DEFAULTS fallback when source_label absent)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 6a.1: check source_url/source_date come from per-category fields, not resolveSource
+// ---------------------------------------------------------------------------
+
+test('audit-core: check records carry source_url and source_date from per-category fields', async () => {
+  const outDir = mkdtempSync(join(tmpdir(), 'audit-core-src-url-test-'));
+  const repoPath = SKILL_ROOT;
+
+  await auditCore(repoPath, outDir, {}, {}, STANDARDS_PATH);
+
+  // Load any per-dimension JSON that exists and find at least one check with source_url set.
+  const dimFiles = readdirSync(outDir).filter(
+    (f) => f.endsWith('.json') && f !== 'audit.json'
+  );
+
+  assert.ok(
+    dimFiles.length > 0,
+    'audit-core must produce at least one dimension JSON'
+  );
+
+  let checkedCount = 0;
+  for (const f of dimFiles) {
+    const dim = JSON.parse(readFileSync(join(outDir, f), 'utf8'));
+    for (const chk of dim.checks ?? []) {
+      if (chk.applies && chk.source_url) {
+        // A check with a source_url must also have source_date, both non-empty strings.
+        assert.equal(
+          typeof chk.source_url,
+          'string',
+          `check ${chk.check_id}: source_url must be a string, got ${typeof chk.source_url}`
+        );
+        assert.ok(
+          chk.source_url.startsWith('http'),
+          `check ${chk.check_id}: source_url must be a URL, got "${chk.source_url}"`
+        );
+        assert.ok(
+          chk.source_date && typeof chk.source_date === 'string',
+          `check ${chk.check_id}: source_date must be a non-empty string when source_url is set`
+        );
+        checkedCount++;
+      }
+    }
+  }
+
+  // At least one check in the audit must have carried a source_url (ADP-01 etc. will).
+  assert.ok(
+    checkedCount > 0,
+    'at least one check must carry source_url from the per-category url field'
   );
 });

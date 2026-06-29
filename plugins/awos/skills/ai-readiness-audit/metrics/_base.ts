@@ -176,29 +176,6 @@ export function capBucketsByHistory<T extends { bucket_start: string }>(
 }
 
 // ---------------------------------------------------------------------------
-// Source resolver
-// ---------------------------------------------------------------------------
-
-/**
- * Look up a [source."<name>"] entry from the parsed standards object.
- * smol-toml parses `[source."X"]` into `standards.source["X"]`.
- * Returns { date: null, url: null } for unknown source names.
- */
-export function resolveSource(
-  standards: Record<string, unknown>,
-  sourceName: string
-): { date: string | null; url: string | null } {
-  const sourceTable = standards['source'] as
-    | Record<string, { date?: string; url?: string }>
-    | undefined;
-  if (!sourceTable || !sourceTable[sourceName]) {
-    return { date: null, url: null };
-  }
-  const entry = sourceTable[sourceName];
-  return { date: entry.date ?? null, url: entry.url ?? null };
-}
-
-// ---------------------------------------------------------------------------
 // Category award helper
 // ---------------------------------------------------------------------------
 

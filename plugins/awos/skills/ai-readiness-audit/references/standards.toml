@@ -49,6 +49,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"   # presence != active use → true usage ≤ shown
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.ai_tooling_skills]
 code = 102
@@ -62,6 +65,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.ai_tooling_commands]
 code = 103
@@ -75,6 +81,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.ai_tooling_hooks]
 code = 104
@@ -88,6 +97,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.ai_tooling_mcp]
 code = 105
@@ -101,6 +113,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.ai_tooling_spec_signals]
 code = 106
@@ -114,6 +129,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # ADP-G2: Active monthly contributors
 
@@ -129,6 +147,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # raw count; no direction implied without context
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # ADP-G3: Deployment / merge frequency (DORA banded)
 
@@ -144,6 +165,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # direction depends on team size; banded comparison is the signal
 source = "DORA State of DevOps"
+url = "https://dora.dev/dora-report-2025/"
+date = "2025-09"
+last_verified = "2026-06-29"
 
 # ADP-G4: Lead time for change (DORA banded)
 
@@ -159,6 +183,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # direction depends on team; banded comparison is the signal
 source = "DORA State of DevOps"
+url = "https://dora.dev/dora-report-2025/"
+date = "2025-09"
+last_verified = "2026-06-29"
 
 # ADP-G5: PR cycle time (banded)
 
@@ -174,6 +201,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"
 source = "DORA State of DevOps"
+url = "https://dora.dev/dora-report-2025/"
+date = "2025-09"
+last_verified = "2026-06-29"
 
 # ADP-G6: Code churn & rework
 
@@ -189,6 +219,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # ADP-G7: Change failure rate proxy (DORA banded)
 
@@ -204,6 +237,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"
 source = "DORA State of DevOps"
+url = "https://dora.dev/dora-report-2025/"
+date = "2025-09"
+last_verified = "2026-06-29"
 
 # ADP-G8: Review rework cycle (banded)
 
@@ -219,6 +255,9 @@ applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # ADP-G9: AI-attributed change share (lower bound)
 
@@ -227,13 +266,16 @@ code = 901
 check_id = "ADP-14"
 metric = "adp_g9_ai_attribution"
 dimension = "ai-sdlc-adoption"
-weight = 5
+weight = 2
 method = "computed"
 definition = "Share of commits/PRs carrying AI markers (Co-authored-by: trailer, agent label). Always a lower bound — true usage >= shown."
 applies_when = "always"
 sources = ["git"]
 reliability_default = "minimal"   # true usage >= shown: attribution is easily disabled
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # ---------------------------------------------------------------------------
 # Tier C: CI source categories
@@ -253,6 +295,9 @@ applies_when = "topology.has_ci"
 sources = ["ci"]
 reliability_default = "not-reliable"
 source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-06-29"
 
 [category.pipeline_duration_trend]
 code = 1002
@@ -266,6 +311,9 @@ applies_when = "topology.has_ci"
 sources = ["ci"]
 reliability_default = "not-reliable"
 source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-06-29"
 
 # ---------------------------------------------------------------------------
 # Tier I: Issue tracker categories
@@ -278,11 +326,14 @@ metric = "adp_i1_work_mix"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "computed"
-definition = "Team-FTE share across Growth / KTLO / Support issue types (FTE-allocation model; never money)"
+definition = "Team capacity split across Growth (new features/value), KTLO (Keep The Lights On — maintenance, bug fixes, dependency and infra upkeep), and Support (customer-driven) work."
 applies_when = "topology.has_tracker"
 sources = ["tracker"]
 reliability_default = "not-reliable"
 source = "DX Core 4"
+url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
+date = "2024-12"
+last_verified = "2026-06-29"
 
 [category.issue_throughput]
 code = 1102
@@ -296,6 +347,9 @@ applies_when = "topology.has_tracker"
 sources = ["tracker"]
 reliability_default = "not-reliable"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.mttr]
 code = 1103
@@ -309,6 +363,9 @@ applies_when = "topology.has_incident_source"
 sources = ["tracker", "incident"]
 reliability_default = "not-reliable"
 source = "DORA State of DevOps"
+url = "https://dora.dev/dora-report-2025/"
+date = "2025-09"
+last_verified = "2026-06-29"
 
 # ---------------------------------------------------------------------------
 # Tier D: Docs / wiki categories
@@ -326,6 +383,9 @@ applies_when = "topology.has_docs_connector"
 sources = ["docs"]
 reliability_default = "not-reliable"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # ---------------------------------------------------------------------------
 # Tier G: code complexity / scale / dependency metrics (ADP-G10–G12)
@@ -346,6 +406,9 @@ applies_when = "always"
 sources = ["scale"]
 reliability_default = "not-reliable"
 source = "McCabe 1976"
+url = "https://doi.org/10.1109/TSE.1976.233837"
+date = "1976-07"
+last_verified = "2026-06-29"
 
 # ADP-G11: Lines of code and scale
 
@@ -361,6 +424,9 @@ applies_when = "always"
 sources = ["scale"]
 reliability_default = "not-reliable"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # ADP-G12: Direct dependency count (manifest-based)
 
@@ -376,6 +442,9 @@ applies_when = "always"
 sources = ["scale"]
 reliability_default = "not-reliable"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # ---------------------------------------------------------------------------
 # [category.*] — org-level portfolio rollup categories (ORG.2)
@@ -395,6 +464,9 @@ applies_when = "always"
 sources = ["org-rollup"]
 reliability_default = "not-reliable"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.org_capability_score]
 code = 9001
@@ -408,6 +480,9 @@ applies_when = "always"
 sources = ["org-rollup"]
 reliability_default = "not-reliable"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.org_measurement_coverage]
 code = 9002
@@ -421,6 +496,9 @@ applies_when = "always"
 sources = ["org-rollup"]
 reliability_default = "not-reliable"
 source = "AWOS conventions"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # ---------------------------------------------------------------------------
 # [band.*] — thresholds for banded metrics
@@ -524,6 +602,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.ai_development_tooling_ai_02]
 code = 2001
@@ -536,6 +617,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.ai_development_tooling_ai_03]
 code = 2002
@@ -548,6 +632,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.ai_development_tooling_ai_04]
 code = 2003
@@ -560,6 +647,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.ai_development_tooling_ai_05]
 code = 2004
@@ -572,6 +662,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.ai_development_tooling_ai_06]
 code = 2005
@@ -586,6 +679,9 @@ applies_when = "topology.has_agent_instruction_files"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.ai_development_tooling_ai_07]
 code = 2006
@@ -598,6 +694,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # --- code-architecture (6 checks) ---
 
@@ -612,6 +711,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.code_architecture_arch_02]
 code = 2101
@@ -624,6 +726,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.code_architecture_arch_03]
 code = 2102
@@ -638,6 +743,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.code_architecture_arch_04]
 code = 2103
@@ -650,6 +758,9 @@ applies_when = "topology.is_not_library"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.code_architecture_arch_05]
 code = 2104
@@ -662,6 +773,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.code_architecture_arch_06]
 code = 2105
@@ -674,6 +788,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # --- documentation (4 checks) ---
 
@@ -688,6 +805,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.documentation_doc_02]
 code = 2201
@@ -700,6 +820,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.documentation_doc_03]
 code = 2202
@@ -712,6 +835,9 @@ applies_when = "topology.has_api"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.documentation_doc_04]
 code = 2203
@@ -724,6 +850,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.documentation_doc_05]
 code = 2204
@@ -736,6 +865,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.documentation_doc_06]
 code = 2205
@@ -748,6 +880,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # --- end-to-end-delivery (5 checks) ---
 
@@ -762,6 +897,9 @@ applies_when = "topology.is_monorepo"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.end_to_end_delivery_e2e_03]
 code = 2302
@@ -774,6 +912,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.end_to_end_delivery_e2e_04]
 code = 2303
@@ -786,6 +927,9 @@ applies_when = "topology.has_multiple_layers"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.end_to_end_delivery_e2e_05]
 code = 2304
@@ -798,6 +942,9 @@ applies_when = "topology.is_monorepo"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # --- prompt-agent-integrity (6 checks) ---
 
@@ -812,6 +959,9 @@ applies_when = "topology.has_ai_agent_files"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.prompt_agent_integrity_pai_02]
 code = 2401
@@ -824,6 +974,9 @@ applies_when = "topology.has_ai_agent_files"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.prompt_agent_integrity_pai_03]
 code = 2402
@@ -836,6 +989,9 @@ applies_when = "topology.has_hooks"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.prompt_agent_integrity_pai_04]
 code = 2403
@@ -848,6 +1004,9 @@ applies_when = "topology.has_mcp_config"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.prompt_agent_integrity_pai_05]
 code = 2404
@@ -860,6 +1019,9 @@ applies_when = "topology.has_ai_agent_files"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.prompt_agent_integrity_pai_06]
 code = 2405
@@ -872,6 +1034,9 @@ applies_when = "topology.has_commands_or_skills"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # --- quality-assurance (10 checks) ---
 
@@ -885,7 +1050,11 @@ definition = "The project has meaningful tests covering at least 60% of its sour
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
+threshold = 0.60
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.quality_assurance_qa_02]
 code = 2501
@@ -898,6 +1067,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.quality_assurance_qa_03]
 code = 2502
@@ -910,6 +1082,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.quality_assurance_qa_04]
 code = 2503
@@ -922,6 +1097,9 @@ applies_when = "topology.is_not_library"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.quality_assurance_qa_05]
 code = 2504
@@ -934,6 +1112,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.quality_assurance_qa_06]
 code = 2505
@@ -946,6 +1127,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.quality_assurance_qa_07]
 code = 2506
@@ -958,6 +1142,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.quality_assurance_qa_08]
 code = 2507
@@ -970,6 +1157,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.quality_assurance_qa_09]
 code = 2508
@@ -982,6 +1172,9 @@ applies_when = "topology.is_multi_service"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.quality_assurance_qa_10]
 code = 2509
@@ -994,6 +1187,9 @@ applies_when = "topology.has_ml_layer"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # --- security (5 checks) ---
 
@@ -1008,6 +1204,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.security_sec_02]
 code = 2601
@@ -1020,6 +1219,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.security_sec_03]
 code = 2602
@@ -1032,6 +1234,9 @@ applies_when = "topology.uses_env_vars"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.security_sec_04]
 code = 2603
@@ -1044,6 +1249,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.security_sec_05]
 code = 2604
@@ -1056,6 +1264,9 @@ applies_when = "topology.has_topology"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # --- software-best-practices (6 checks) ---
 
@@ -1070,6 +1281,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.software_best_practices_sbp_02]
 code = 2701
@@ -1082,6 +1296,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.software_best_practices_sbp_03]
 code = 2702
@@ -1094,6 +1311,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.software_best_practices_sbp_05]
 code = 2703
@@ -1106,6 +1326,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.software_best_practices_sbp_06]
 code = 2704
@@ -1118,6 +1341,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.software_best_practices_sbp_07]
 code = 2705
@@ -1130,6 +1356,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.sbp_except_clause_syntax]
 code = 2706
@@ -1142,6 +1371,9 @@ applies_when = "topology.has_python"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # --- spec-driven-development (7 checks) ---
 
@@ -1156,6 +1388,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.spec_driven_development_sdd_02]
 code = 2801
@@ -1168,6 +1403,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.spec_driven_development_sdd_03]
 code = 2802
@@ -1180,6 +1418,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.spec_driven_development_sdd_04]
 code = 2803
@@ -1191,7 +1432,11 @@ definition = "Significant features are built through the AWOS spec workflow, not
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
+threshold = 0.70
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.spec_driven_development_sdd_05]
 code = 2804
@@ -1204,6 +1449,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.spec_driven_development_sdd_06]
 code = 2805
@@ -1216,6 +1464,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.spec_driven_development_sdd_07]
 code = 2806
@@ -1228,6 +1479,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # --- supply-chain-security (8 checks) ---
 
@@ -1242,6 +1496,9 @@ applies_when = "topology.has_package_ecosystem"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.supply_chain_security_scs_02]
 code = 2901
@@ -1254,6 +1511,9 @@ applies_when = "topology.has_lockfiles"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.supply_chain_security_scs_03]
 code = 2902
@@ -1266,6 +1526,9 @@ applies_when = "topology.has_package_manifests"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.supply_chain_security_scs_04]
 code = 2903
@@ -1277,7 +1540,11 @@ definition = "All resolved dependency versions have been published for at least 
 applies_when = "topology.has_package_ecosystem"
 sources = ["audit"]
 reliability_default = "maximal"
+threshold_days = 7
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.supply_chain_security_scs_05]
 code = 2904
@@ -1290,6 +1557,9 @@ applies_when = "topology.has_dependency_automation"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.supply_chain_security_scs_06]
 code = 2905
@@ -1302,6 +1572,9 @@ applies_when = "topology.has_ci"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.supply_chain_security_scs_07]
 code = 2906
@@ -1314,6 +1587,9 @@ applies_when = "topology.has_package_manifests"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 [category.supply_chain_security_scs_08]
 code = 2907
@@ -1326,6 +1602,9 @@ applies_when = "topology.has_lockfiles"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS audit"
+url = "https://github.com/provectus/awos"
+date = "2026-06"
+last_verified = "2026-06-29"
 
 # ---------------------------------------------------------------------------
 # application-security (OWASP ASVS 5.0.0 Level 1 — curated subset)
@@ -1345,6 +1624,9 @@ applies_when = "topology.has_http_api"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-29"
 
 # AS-02: Security headers present (X-Content-Type-Options, X-Frame-Options, etc.)
 [category.appsec_security_headers]
@@ -1358,6 +1640,9 @@ applies_when = "topology.has_http_api"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-29"
 
 # AS-03: CORS not wildcard
 [category.appsec_cors_not_wildcard]
@@ -1371,6 +1656,9 @@ applies_when = "topology.has_http_api"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-29"
 
 # AS-04: Parameterized SQL / no string-built queries
 [category.appsec_parameterized_sql]
@@ -1384,6 +1672,9 @@ applies_when = "topology.has_db"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-29"
 
 # AS-05: Secrets not hardcoded in source
 [category.appsec_no_hardcoded_secrets]
@@ -1397,6 +1688,9 @@ applies_when = "topology.handles_secrets"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-29"
 
 # AS-06: Authentication required on state-changing endpoints
 [category.appsec_auth_on_mutations]
@@ -1410,6 +1704,9 @@ applies_when = "topology.uses_auth"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-29"
 
 # AS-07: Password / session hygiene signals
 [category.appsec_password_session_hygiene]
@@ -1423,6 +1720,9 @@ applies_when = "topology.uses_auth"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-29"
 
 # AS-08: Input validation / output encoding present
 [category.appsec_input_validation]
@@ -1436,6 +1736,9 @@ applies_when = "topology.has_http_api"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-29"
 
 # AS-09: Rate limiting / brute-force protection
 [category.appsec_rate_limiting]
@@ -1449,6 +1752,9 @@ applies_when = "topology.uses_auth"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-29"
 
 # AS-10: Authorization correctness (judgment)
 [category.appsec_authorization_correctness]
@@ -1464,6 +1770,9 @@ reliability_default = "maximal"
 rubric = "Review route/controller handlers: do all state-changing endpoints verify the caller's identity and role before acting? Look for missing auth checks on update/delete paths, IDOR patterns (direct object references without ownership check), and admin actions accessible to unprivileged roles."
 evidence_required = ["list of protected endpoints and their auth middleware/decorator", "any endpoints that bypass the auth layer and the justification", "access-control model (RBAC/ABAC/ownership) — source files where it is enforced"]
 source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-29"
 
 # AS-11: Insecure design review (judgment)
 [category.appsec_insecure_design]
@@ -1479,40 +1788,6 @@ reliability_default = "maximal"
 rubric = "Examine the API surface for systemic insecure-design patterns: mass assignment vulnerabilities (binding all request fields to model), missing object-level access control, sensitive data exposure in error messages, lack of security context in the design (no mention of threat model, security requirements, or defense in depth). Score PASS if no systemic issues are evident, WARN if one issue is found, FAIL if two or more are present."
 evidence_required = ["API surface overview (routes, methods, input models)", "error-handling approach and what details are returned to clients", "any existing threat model or security design documentation"]
 source = "OWASP ASVS"
-
-# ---------------------------------------------------------------------------
-# [source.*] — verified source metadata for every distinct `source` value
-# used by [category.*] and [band.*] entries above.
-#
-# Parsed by resolveSource() in metrics/_base.ts; each entry is indexed by the
-# string that appears in a category's `source = "..."` field.
-# URLs were HTTP-checked on 2026-06-29 (see scratchpad/standards-refresh-sources.toml).
-# ---------------------------------------------------------------------------
-
-[source."AWOS audit"]
-url  = "https://github.com/provectus/awos"
-date = "2026-06"
-
-[source."AWOS conventions"]
-url  = "https://github.com/provectus/awos"
-date = "2026-06"
-
-[source."DORA State of DevOps"]
-url  = "https://dora.dev/dora-report-2025/"
-date = "2025-09"
-
-[source."Martin Fowler CI/CD"]
-url  = "https://martinfowler.com/articles/continuousIntegration.html"
-date = "2024-01-18"
-
-[source."DX Core 4"]
-url  = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
-date = "2024-12"
-
-[source."McCabe 1976"]
-url  = "https://doi.org/10.1109/TSE.1976.233837"
-date = "1976-07"
-
-[source."OWASP ASVS"]
-url  = "https://owasp.org/www-project-application-security-verification-standard/"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
+last_verified = "2026-06-29"

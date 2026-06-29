@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadStandards } from './helpers.ts';
 import { computeTopology } from '../topology.ts';
-import { resolveSource } from '../metrics/_base.ts';
 
 const VALID = new Set(['computed', 'detected', 'judgment']);
 const categories = () => loadStandards().category as Record<string, any>;
@@ -43,26 +42,25 @@ test('non-judgment categories carry no rubric', () => {
   }
 });
 
-test('every distinct source value used by a category resolves to a [source.*] entry with a non-empty url', () => {
-  const standards = loadStandards() as Record<string, unknown>;
-  const cats = standards.category as Record<string, any>;
+test('every [category.*] has a non-empty url and date field', () => {
+  const cats = categories();
   const missing: string[] = [];
-  const seen = new Set<string>();
   for (const [slug, cat] of Object.entries(cats)) {
-    const sourceName: string | undefined = cat.source;
-    if (!sourceName || seen.has(sourceName)) continue;
-    seen.add(sourceName);
-    const { url } = resolveSource(standards, sourceName);
-    if (!url) {
+    if (!cat.url || typeof cat.url !== 'string' || cat.url.trim() === '') {
       missing.push(
-        `category ${slug} cites source "${sourceName}" which has no [source."${sourceName}"] entry with a non-empty url in standards.toml`
+        `category ${slug} is missing a non-empty url field — add url directly to the [category.*] block`
+      );
+    }
+    if (!cat.date || typeof cat.date !== 'string' || cat.date.trim() === '') {
+      missing.push(
+        `category ${slug} is missing a non-empty date field — add date directly to the [category.*] block`
       );
     }
   }
   assert.deepEqual(
     missing,
     [],
-    `All category source values must resolve to a verified [source.*] url:\n${missing.join('\n')}`
+    `Every [category.*] must carry its own non-empty url and date fields:\n${missing.join('\n')}`
   );
 });
 

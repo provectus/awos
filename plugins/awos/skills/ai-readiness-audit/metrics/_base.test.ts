@@ -1,76 +1,65 @@
-// _base.test.ts — unit tests for resolveSource() in metrics/_base.ts
+// _base.test.ts — unit tests for metrics/_base.ts helpers.
+// (resolveSource was removed in 6a; per-category url/date fields are now the
+// source of truth — see tests/standards-schema.test.ts for coverage assertions.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveSource } from './_base.ts';
+import { computeReliability, makeMetricResult } from './_base.ts';
 
-const SAMPLE_STANDARDS: Record<string, unknown> = {
-  source: {
-    'DORA State of DevOps': {
-      url: 'https://dora.dev/dora-report-2025/',
-      date: '2025-09',
-    },
-    'McCabe 1976': {
-      url: 'https://doi.org/10.1109/TSE.1976.233837',
-      date: '1976-07',
-    },
-    'No URL Entry': {
-      date: '2025-01',
-    },
-  },
-};
-
-test('resolveSource returns url and date for a known source', () => {
-  const result = resolveSource(SAMPLE_STANDARDS, 'DORA State of DevOps');
+test('computeReliability: HIGH when all sources present', () => {
+  const r = computeReliability('maximal', ['git'], []);
+  assert.equal(r.tag, 'maximal', 'tag must pass through unchanged');
   assert.equal(
-    result.url,
-    'https://dora.dev/dora-report-2025/',
-    'resolveSource must return the correct url for a known source'
+    r.confidence,
+    'HIGH',
+    'confidence must be HIGH when no sources are missing'
   );
-  assert.equal(
-    result.date,
-    '2025-09',
-    'resolveSource must return the correct date for a known source'
+  assert.ok(
+    r.note === null || r.note === '',
+    'note must be null when nothing is missing'
   );
 });
 
-test('resolveSource returns {date:null,url:null} for an unknown source', () => {
-  const result = resolveSource(SAMPLE_STANDARDS, 'Unknown Source');
-  assert.equal(
-    result.url,
+test('computeReliability: downgrades on a missing source', () => {
+  const r = computeReliability('maximal', ['git'], ['ci']);
+  assert.ok(
+    ['MED', 'LOW'].includes(r.confidence),
+    'confidence must degrade when a source is missing'
+  );
+  assert.match(r.note.toLowerCase(), /ci/, 'note must name the missing source');
+});
+
+test('makeMetricResult: status SKIP when no sources used', () => {
+  const res = makeMetricResult(
+    'adp_c1',
     null,
-    'resolveSource must return null url for an unknown source'
+    'raw',
+    [],
+    computeReliability('not-reliable', [], ['ci']),
+    [],
+    ['ci']
   );
   assert.equal(
-    result.date,
-    null,
-    'resolveSource must return null date for an unknown source'
+    res.status,
+    'SKIP',
+    'status must be SKIP when sourcesUsed is empty'
   );
 });
 
-test('resolveSource returns {date:null,url:null} when standards has no source table', () => {
-  const result = resolveSource({}, 'DORA State of DevOps');
-  assert.equal(
-    result.url,
-    null,
-    'resolveSource must return null url when source table is absent'
+test('makeMetricResult: status OK when at least one source used', () => {
+  const res = makeMetricResult(
+    'adp_g1',
+    0.5,
+    'coverage',
+    [101],
+    computeReliability('maximal', ['git'], []),
+    ['git'],
+    []
   );
-  assert.equal(
-    result.date,
-    null,
-    'resolveSource must return null date when source table is absent'
+  assert.equal(res.status, 'OK', 'status must be OK when a source is used');
+  assert.deepEqual(
+    res.categories_awarded,
+    [101],
+    'categories_awarded must match input'
   );
-});
-
-test('resolveSource handles entries without url field (url is null)', () => {
-  const result = resolveSource(SAMPLE_STANDARDS, 'No URL Entry');
-  assert.equal(
-    result.url,
-    null,
-    'resolveSource must return null url when entry has no url field'
-  );
-  assert.equal(
-    result.date,
-    '2025-01',
-    'resolveSource must return the date even when url is absent'
-  );
+  assert.equal(res.kind, 'coverage', 'kind must pass through unchanged');
 });

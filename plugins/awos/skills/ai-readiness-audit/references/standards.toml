@@ -48,10 +48,10 @@ definition = "Repo has a non-trivial agent instruction file (CLAUDE.md / AGENTS.
 applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"   # presence != active use → true usage ≤ shown
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.ai_tooling_skills]
 code = 102
@@ -64,10 +64,10 @@ definition = "Repo defines agent skill files (e.g. .claude/skills/*/SKILL.md or 
 applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.ai_tooling_commands]
 code = 103
@@ -80,10 +80,10 @@ definition = "Repo defines custom commands or rule files for an agentic coding t
 applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.ai_tooling_hooks]
 code = 104
@@ -96,10 +96,10 @@ definition = "Repo defines lifecycle hooks for an agentic coding tool (e.g. .cla
 applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.ai_tooling_mcp]
 code = 105
@@ -112,10 +112,10 @@ definition = "Repo carries an MCP server config (.mcp.json or equivalent)"
 applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.ai_tooling_spec_signals]
 code = 106
@@ -128,10 +128,10 @@ definition = "Repo has spec-driven adoption signals: spec directories, spec-refe
 applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 # ADP-G2: Active monthly contributors
 
@@ -146,10 +146,10 @@ definition = "Distinct commit-author count per trailing 30-day bucket (aggregate
 applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # raw count; no direction implied without context
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "DX Core 4"
+url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
+date = "2024-12"
+last_verified = "2026-06-30"
 
 # ADP-G3: Deployment / merge frequency (DORA banded)
 
@@ -218,10 +218,10 @@ definition = "Insertions+deletions trend and rework-hotspot file count; churn ra
 applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "DX Core 4"
+url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
+date = "2024-12"
+last_verified = "2026-06-30"
 
 # ADP-G7: Change failure rate proxy (DORA banded)
 
@@ -254,10 +254,10 @@ definition = "Review rounds and time-to-resolve-review-threads per PR; proxied f
 applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "DX Core 4"
+url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
+date = "2024-12"
+last_verified = "2026-06-30"
 
 # ADP-G9: AI-attributed change share (lower bound)
 
@@ -272,10 +272,10 @@ definition = "Share of commits/PRs carrying AI markers (Co-authored-by: trailer,
 applies_when = "always"
 sources = ["git"]
 reliability_default = "minimal"   # true usage >= shown: attribution is easily disabled
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "DX Core 4"
+url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
+date = "2024-12"
+last_verified = "2026-06-30"
 
 # ---------------------------------------------------------------------------
 # Tier C: CI source categories
@@ -346,10 +346,10 @@ definition = "Delivered-issue count and backlog burn-down rate per monthly bucke
 applies_when = "topology.has_tracker"
 sources = ["tracker"]
 reliability_default = "not-reliable"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "DX Core 4"
+url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
+date = "2024-12"
+last_verified = "2026-06-30"
 
 [category.mttr]
 code = 1103
@@ -382,10 +382,10 @@ definition = "External spec/doc coverage & freshness in Confluence/Coda/Notion; 
 applies_when = "topology.has_docs_connector"
 sources = ["docs"]
 reliability_default = "not-reliable"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Diátaxis"
+url = "https://diataxis.fr/"
+date = "2024"
+last_verified = "2026-06-30"
 
 # ---------------------------------------------------------------------------
 # Tier G: code complexity / scale / dependency metrics (ADP-G10–G12)
@@ -423,10 +423,10 @@ definition = "Total source-file line count (LOC), per-language breakdown, and fi
 applies_when = "always"
 sources = ["scale"]
 reliability_default = "not-reliable"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "McCabe 1976"
+url = "https://doi.org/10.1109/TSE.1976.233837"
+date = "1976-07"
+last_verified = "2026-06-30"
 
 # ADP-G12: Direct dependency count (manifest-based)
 
@@ -441,10 +441,10 @@ definition = "Direct-dependency count from package manifests (package.json / pyp
 applies_when = "always"
 sources = ["scale"]
 reliability_default = "not-reliable"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-06-30"
 
 # ---------------------------------------------------------------------------
 # [category.*] — org-level portfolio rollup categories (ORG.2)
@@ -463,10 +463,10 @@ definition = "Fraction of portfolio repos with any AI tooling (agent instruction
 applies_when = "always"
 sources = ["org-rollup"]
 reliability_default = "not-reliable"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.org_capability_score]
 code = 9001
@@ -479,10 +479,10 @@ definition = "Sum of awarded category weights across all portfolio repos (Σ wei
 applies_when = "always"
 sources = ["org-rollup"]
 reliability_default = "not-reliable"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.org_measurement_coverage]
 code = 9002
@@ -495,10 +495,10 @@ definition = "Fraction of portfolio repos where at least one data-source collect
 applies_when = "always"
 sources = ["org-rollup"]
 reliability_default = "not-reliable"
-source = "AWOS conventions"
-url = "https://github.com/provectus/awos"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 # ---------------------------------------------------------------------------
 # [band.*] — thresholds for banded metrics
@@ -601,10 +601,10 @@ definition = "The combined agent instruction file ecosystem gives AI agents suff
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_02]
 code = 2001
@@ -616,10 +616,10 @@ definition = "The project defines custom slash commands for common workflows"
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_03]
 code = 2002
@@ -631,10 +631,10 @@ definition = "The project uses agentic coding tool skills for specialized workfl
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_04]
 code = 2003
@@ -646,10 +646,10 @@ definition = "The project configures MCP servers for extended tool access"
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_05]
 code = 2004
@@ -661,10 +661,10 @@ definition = "The project uses agentic coding tool hooks for automated guardrail
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_06]
 code = 2005
@@ -678,10 +678,10 @@ definition = "Every agent instruction file contains high-quality, non-obvious co
 applies_when = "topology.has_agent_instruction_files"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_07]
 code = 2006
@@ -693,10 +693,10 @@ definition = "The agentic coding tool has the means to run the application and o
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 # --- code-architecture (6 checks) ---
 
@@ -710,10 +710,10 @@ definition = "The project follows a declared or recognizable architectural patte
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-06-30"
 
 [category.code_architecture_arch_02]
 code = 2101
@@ -725,10 +725,10 @@ definition = "Code modules have clear boundaries and no tangled cross-imports"
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-06-30"
 
 [category.code_architecture_arch_03]
 code = 2102
@@ -742,10 +742,10 @@ definition = "Modules and directories serve a single clear purpose rather than b
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-06-30"
 
 [category.code_architecture_arch_04]
 code = 2103
@@ -757,10 +757,10 @@ definition = "Business logic, data access, and presentation are separated — no
 applies_when = "topology.is_not_library"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-06-30"
 
 [category.code_architecture_arch_05]
 code = 2104
@@ -772,10 +772,10 @@ definition = "The project follows consistent naming conventions for files and di
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-06-30"
 
 [category.code_architecture_arch_06]
 code = 2105
@@ -787,10 +787,10 @@ definition = "Source files are reasonably sized, indicating proper decomposition
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "McCabe 1976"
+url = "https://doi.org/10.1109/TSE.1976.233837"
+date = "1976-07"
+last_verified = "2026-06-30"
 
 # --- documentation (4 checks) ---
 
@@ -804,10 +804,10 @@ definition = "The repository has a top-level README.md with setup instructions a
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Diátaxis"
+url = "https://diataxis.fr/"
+date = "2024"
+last_verified = "2026-06-30"
 
 [category.documentation_doc_02]
 code = 2201
@@ -819,10 +819,10 @@ definition = "Each major service directory has its own README.md with build and 
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Diátaxis"
+url = "https://diataxis.fr/"
+date = "2024"
+last_verified = "2026-06-30"
 
 [category.documentation_doc_03]
 code = 2202
@@ -834,10 +834,10 @@ definition = "API endpoints are documented via OpenAPI/Swagger specs or equivale
 applies_when = "topology.has_api"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OpenAPI Specification"
+url = "https://www.openapis.org/"
+date = "2025"
+last_verified = "2026-06-30"
 
 [category.documentation_doc_04]
 code = 2203
@@ -849,10 +849,10 @@ definition = "Documentation references match current code reality — sampled cl
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Diátaxis"
+url = "https://diataxis.fr/"
+date = "2024"
+last_verified = "2026-06-30"
 
 [category.documentation_doc_05]
 code = 2204
@@ -864,10 +864,10 @@ definition = "Public/exported definitions carry doc-comments (docstring/JSDoc/KD
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Diátaxis"
+url = "https://diataxis.fr/"
+date = "2024"
+last_verified = "2026-06-30"
 
 [category.documentation_doc_06]
 code = 2205
@@ -879,10 +879,10 @@ definition = "Overall definition doc-comment coverage across all source definiti
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Diátaxis"
+url = "https://diataxis.fr/"
+date = "2024"
+last_verified = "2026-06-30"
 
 # --- end-to-end-delivery (5 checks) ---
 
@@ -896,10 +896,10 @@ definition = "Feature branches touch multiple layers in a single branch, indicat
 applies_when = "topology.is_monorepo"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "DORA State of DevOps"
+url = "https://dora.dev/dora-report-2025/"
+date = "2025-09"
+last_verified = "2026-06-30"
 
 [category.end_to_end_delivery_e2e_03]
 code = 2302
@@ -911,10 +911,10 @@ definition = "Specifications link to implementation and implementation reference
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.end_to_end_delivery_e2e_04]
 code = 2303
@@ -926,10 +926,10 @@ definition = "API definitions have corresponding UI consumers and database schem
 applies_when = "topology.has_multiple_layers"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-06-30"
 
 [category.end_to_end_delivery_e2e_05]
 code = 2304
@@ -941,10 +941,10 @@ definition = "The project has cross-layer tooling (unified Makefile, docker-comp
 applies_when = "topology.is_monorepo"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-06-30"
 
 # --- prompt-agent-integrity (6 checks) ---
 
@@ -958,10 +958,10 @@ definition = "AI agent instruction files contain no invisible Unicode characters
 applies_when = "topology.has_ai_agent_files"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-06-30"
 
 [category.prompt_agent_integrity_pai_02]
 code = 2401
@@ -973,10 +973,10 @@ definition = "Agent instruction files contain no prompt injection patterns attem
 applies_when = "topology.has_ai_agent_files"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-06-30"
 
 [category.prompt_agent_integrity_pai_03]
 code = 2402
@@ -988,10 +988,10 @@ definition = "Hook scripts contain only legitimate automation with no exfiltrati
 applies_when = "topology.has_hooks"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-06-30"
 
 [category.prompt_agent_integrity_pai_04]
 code = 2403
@@ -1003,10 +1003,10 @@ definition = "MCP server configurations reference trusted, verifiable endpoints 
 applies_when = "topology.has_mcp_config"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-06-30"
 
 [category.prompt_agent_integrity_pai_05]
 code = 2404
@@ -1018,10 +1018,10 @@ definition = "All AI agent instruction and configuration files are tracked in gi
 applies_when = "topology.has_ai_agent_files"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-06-30"
 
 [category.prompt_agent_integrity_pai_06]
 code = 2405
@@ -1033,10 +1033,10 @@ definition = "Skill and command files contain no instructions to bypass security
 applies_when = "topology.has_commands_or_skills"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-06-30"
 
 # --- quality-assurance (10 checks) ---
 
@@ -1051,10 +1051,10 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 threshold = 0.60
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_02]
 code = 2501
@@ -1066,10 +1066,10 @@ definition = "The project has tests that verify individual units of logic in iso
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_03]
 code = 2502
@@ -1081,10 +1081,10 @@ definition = "The project has tests that verify interactions between components 
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_04]
 code = 2503
@@ -1096,10 +1096,10 @@ definition = "The project has end-to-end tests exercising complete user flows th
 applies_when = "topology.is_not_library"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_05]
 code = 2504
@@ -1111,10 +1111,10 @@ definition = "Test distribution follows a healthy pyramid: most tests unit-level
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_06]
 code = 2505
@@ -1126,10 +1126,10 @@ definition = "The project measures what percentage of source code is exercised b
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_07]
 code = 2506
@@ -1141,10 +1141,10 @@ definition = "Tests use a structured approach to create and manage test data rat
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_08]
 code = 2507
@@ -1156,10 +1156,10 @@ definition = "Unit and integration tests use mocking/stubbing to isolate the cod
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_09]
 code = 2508
@@ -1171,10 +1171,10 @@ definition = "Service boundaries are verified through consumer-driven contract t
 applies_when = "topology.is_multi_service"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_10]
 code = 2509
@@ -1186,10 +1186,10 @@ definition = "ML models are tested for quality metrics as part of the developmen
 applies_when = "topology.has_ml_layer"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-06-30"
 
 # --- security (5 checks) ---
 
@@ -1203,10 +1203,10 @@ definition = "Environment files containing secrets are excluded from version con
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-30"
 
 [category.security_sec_02]
 code = 2601
@@ -1218,10 +1218,10 @@ definition = "Agentic coding tool hooks are configured to prevent agents from re
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-30"
 
 [category.security_sec_03]
 code = 2602
@@ -1233,10 +1233,10 @@ definition = "A template environment file exists so developers know which variab
 applies_when = "topology.uses_env_vars"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-30"
 
 [category.security_sec_04]
 code = 2603
@@ -1248,10 +1248,10 @@ definition = "No hardcoded secrets, API keys, or credentials are committed to th
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-30"
 
 [category.security_sec_05]
 code = 2604
@@ -1263,10 +1263,10 @@ definition = "Sensitive file types present in the stack are excluded from versio
 applies_when = "topology.has_topology"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-30"
 
 # --- software-best-practices (6 checks) ---
 
@@ -1280,10 +1280,10 @@ definition = "Code linters are configured for all major languages in the project
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-06-30"
 
 [category.software_best_practices_sbp_02]
 code = 2701
@@ -1295,10 +1295,10 @@ definition = "Code formatting is automated and consistent via formatters with sc
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-06-30"
 
 [category.software_best_practices_sbp_03]
 code = 2702
@@ -1310,10 +1310,10 @@ definition = "The project uses strong typing where the language supports it — 
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-06-30"
 
 [category.software_best_practices_sbp_05]
 code = 2703
@@ -1325,10 +1325,10 @@ definition = "Automated build, test, and deploy pipeline is configured with buil
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-06-30"
 
 [category.software_best_practices_sbp_06]
 code = 2704
@@ -1340,10 +1340,10 @@ definition = "The codebase follows consistent error handling — errors are logg
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-06-30"
 
 [category.software_best_practices_sbp_07]
 code = 2705
@@ -1355,10 +1355,10 @@ definition = "Dependencies are locked with lockfiles and dependency update autom
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-06-30"
 
 [category.sbp_except_clause_syntax]
 code = 2706
@@ -1370,10 +1370,10 @@ definition = "Python source contains no Python-2 except-clause syntax (except A,
 applies_when = "topology.has_python"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "Python 3 — What's New (PEP 3110)"
+url = "https://docs.python.org/3/whatsnew/3.0.html"
+date = "2008-12"
+last_verified = "2026-06-30"
 
 # --- spec-driven-development (7 checks) ---
 
@@ -1387,10 +1387,10 @@ definition = "AWOS framework is installed in the project providing the spec-driv
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_02]
 code = 2801
@@ -1402,10 +1402,10 @@ definition = "The three foundational AWOS documents exist with substantive conte
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_03]
 code = 2802
@@ -1417,10 +1417,10 @@ definition = "Technology choices declared in architecture.md match what is actua
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_04]
 code = 2803
@@ -1433,10 +1433,10 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 threshold = 0.70
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_05]
 code = 2804
@@ -1448,10 +1448,10 @@ definition = "Each spec directory contains the full AWOS spec triad: functional-
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_06]
 code = 2805
@@ -1463,10 +1463,10 @@ definition = "Specs that have progressed past Draft are actively being worked on
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_07]
 code = 2806
@@ -1478,10 +1478,10 @@ definition = "Tasks in tasks.md files are annotated with meaningful agent assign
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
-last_verified = "2026-06-29"
+last_verified = "2026-06-30"
 
 # --- supply-chain-security (8 checks) ---
 
@@ -1495,10 +1495,10 @@ definition = "Lockfiles exist and are tracked by git, ensuring all developers an
 applies_when = "topology.has_package_ecosystem"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_02]
 code = 2901
@@ -1510,10 +1510,10 @@ definition = "Lockfiles include cryptographic integrity hashes verifying downloa
 applies_when = "topology.has_lockfiles"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_03]
 code = 2902
@@ -1525,10 +1525,10 @@ definition = "Dependency versions use exact pinning — not wildcards, open-ende
 applies_when = "topology.has_package_manifests"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_04]
 code = 2903
@@ -1541,10 +1541,10 @@ applies_when = "topology.has_package_ecosystem"
 sources = ["audit"]
 reliability_default = "maximal"
 threshold_days = 7
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "SLSA"
+url = "https://slsa.dev/"
+date = "2025"
+last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_05]
 code = 2904
@@ -1556,10 +1556,10 @@ definition = "Dependency update PRs require human review before merging, prevent
 applies_when = "topology.has_dependency_automation"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "NIST SSDF (SP 800-218)"
+url = "https://csrc.nist.gov/pubs/sp/800/218/final"
+date = "2022-02"
+last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_06]
 code = 2905
@@ -1571,10 +1571,10 @@ definition = "The CI/CD pipeline includes automated vulnerability scanning of de
 applies_when = "topology.has_ci"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "NIST SSDF (SP 800-218)"
+url = "https://csrc.nist.gov/pubs/sp/800/218/final"
+date = "2022-02"
+last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_07]
 code = 2906
@@ -1586,10 +1586,10 @@ definition = "Dependency version overrides are tracked, minimal, and justified �
 applies_when = "topology.has_package_manifests"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_08]
 code = 2907
@@ -1601,10 +1601,10 @@ definition = "The dependency tree is not excessively bloated — direct-to-trans
 applies_when = "topology.has_lockfiles"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS audit"
-url = "https://github.com/provectus/awos"
-date = "2026-06"
-last_verified = "2026-06-29"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-06-30"
 
 # ---------------------------------------------------------------------------
 # application-security (OWASP ASVS 5.0.0 Level 1 — curated subset)

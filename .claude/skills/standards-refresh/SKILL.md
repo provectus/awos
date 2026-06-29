@@ -3,13 +3,16 @@ name: standards-refresh
 description: >-
   Maintainer skill for re-verifying the source links and re-evaluating the
   weights in plugins/awos/skills/ai-readiness-audit/references/standards.toml.
-  Runs two passes (link verification + weight rescale) and emits a cited
-  proposal document plus a ready-to-paste sources patch.
+  Runs three passes (authoritative-source replacement + link verification +
+  weight rescale) and emits a cited proposal document plus a ready-to-paste
+  sources patch.
 ---
 
 # Standards Refresh
 
-A periodic maintainer task to keep `standards.toml` honest: source links must resolve and weights must reflect current (not original) importance. Run this once per major AWOS release or whenever a cited external standard publishes a new edition.
+A periodic maintainer task to keep `standards.toml` honest: every category must cite a genuine external authority, those links must resolve, and weights must reflect current (not original) importance. Run this once per major AWOS release or whenever a cited external standard publishes a new edition.
+
+**Why each category needs a real external source.** Each scoring category cites the standard that justifies *why* the capability matters, and that citation is surfaced in the audit report next to the check (the "source" label and its link). A reader clicks it to learn the industry rationale. A link to the AWOS repository itself does not do this — `https://github.com/provectus/awos` is the tool's own page, not a write-up of an industry standard. Categories whose `source` is `"AWOS audit"` or `"AWOS conventions"` and whose `url` is the AWOS repo are **self-references**: they tell the reader "we measure this because we measure this." Pass 0 replaces them with the external authority that actually defines the practice.
 
 ## How to run
 
@@ -19,9 +22,9 @@ Invoke this skill in a Claude Code session from the repo root:
 /standards-refresh
 ```
 
-No arguments needed. The skill is self-contained: it reads `standards.toml`, runs both passes, and writes its output to a scratchpad you specify (or a default under `tmp/`).
+No arguments needed. The skill is self-contained: it reads `standards.toml`, runs all three passes, and writes its output to a scratchpad you specify (or a default under `tmp/`).
 
-Before starting, confirm you have network access — Pass 1 issues live WebFetch calls.
+Before starting, confirm you have network access — Pass 0 and Pass 1 issue live WebSearch/WebFetch calls.
 
 ## What it outputs
 
@@ -29,17 +32,42 @@ The skill writes two files:
 
 | File | Contents |
 |------|----------|
-| `standards-refresh-proposal.md` | Full two-pass report: per-category url/date/last_verified table with HTTP status and verified dates, weights table with proposed changes and citations, "considered but not proposed" table, and a "left unchanged" rationale summary. |
-| `standards-refresh-patch.toml` | Ready-to-paste per-category field updates (`url`, `date`, `last_verified`) for every category whose URL resolved successfully. Categories with dead or unverified links are excluded and flagged in the proposal instead. |
+| `standards-refresh-proposal.md` | Full three-pass report: a **self-reference audit** table (every category whose source is the AWOS repo, with the proposed external authority and its verified URL); a per-category url/date/last_verified table with HTTP status and verified dates; a weights table with proposed changes and citations; a "considered but not proposed" table; and a "left unchanged" rationale summary. |
+| `standards-refresh-patch.toml` | Ready-to-paste per-category field updates (`source`, `url`, `date`, `last_verified`) for every category whose proposed URL resolved successfully. Categories with dead or unverified links are excluded and flagged in the proposal instead. |
 
 After reviewing the proposal, apply it manually:
 
-1. For each category in `standards-refresh-patch.toml`, update the matching `[category.*]` block in `standards.toml` with the refreshed `url`, `date`, and `last_verified` fields.
+1. For each category in `standards-refresh-patch.toml`, update the matching `[category.*]` block in `standards.toml` with the refreshed `source`, `url`, `date`, and `last_verified` fields.
 2. Apply the weight delta table from the proposal.
 3. Run `node scripts/standards-linkcheck.mjs` to confirm all per-category URLs resolve.
 4. Open a PR with label `patch` (or `minor` if weights change materially).
 
 ## Methodology
+
+### Pass 0 — Authoritative-source replacement (self-reference audit)
+
+Run this first: a category with a self-referential source distorts every later pass (there is no external publication date to verify, and no external authority to weigh against).
+
+1. List every `[category.*]` block whose `url` is `https://github.com/provectus/awos` (equivalently, whose `source` is `"AWOS audit"` or `"AWOS conventions"`). These are the self-references to fix.
+2. For each, read the category's `definition`, `dimension`, and `metric`, then find the external authority that actually defines or justifies the practice the category measures. Search for the canonical specification, standards body, or primary industry write-up — not a blog summary. Map by cluster:
+
+   | Capability cluster (examples of dimensions) | Authoritative source family |
+   |---|---|
+   | Delivery throughput & stability — deploy frequency, lead time, change-fail rate, MTTR (`end-to-end-delivery`, parts of `ai-sdlc-adoption`) | DORA *State of DevOps* report; Google DORA guides (dora.dev) |
+   | CI/CD practice — pipeline presence, trunk-based, automated gates (`software-best-practices`, `end-to-end-delivery`) | Martin Fowler (Continuous Integration / Delivery); DORA |
+   | Code complexity, size, maintainability (`code-architecture`) | McCabe 1976 (cyclomatic complexity); established maintainability literature |
+   | Testing & quality gates — coverage, test layering, flake control (`quality-assurance`) | Martin Fowler "Test Pyramid"/"Self-Testing Code"; Google Testing Blog; ISTQB glossary |
+   | Application security controls (`security`) | OWASP ASVS; OWASP Top 10; NIST SSDF (SP 800-218) |
+   | Dependency & build-chain integrity (`supply-chain-security`) | OWASP SCVS; SLSA framework (slsa.dev); NIST SSDF; CISA SBOM guidance |
+   | Documentation completeness & freshness (`documentation`) | Diátaxis framework; Google developer-documentation style/guides; Write the Docs |
+   | AI agent tooling, prompt integrity, spec-driven flow (`ai-development-tooling`, `prompt-agent-integrity`, `spec-driven-development`, agent-tooling parts of `ai-sdlc-adoption`/`org-portfolio`) | Anthropic engineering docs — *Building effective agents*, *Claude Code best practices*, prompt-engineering guides (platform.claude.com / code.claude.com); Anthropic Agent SDK docs |
+
+3. Verify the candidate URL with WebFetch (the Pass 1 rules below apply) and capture its publication/last-revised date.
+4. In the patch, set **`source`** to the real authority name (e.g. `"OWASP SCVS"`, `"DORA State of DevOps"`, `"Anthropic — Building effective agents"`), **`url`** to the verified link, **`date`** to the source's publication date, and **`last_verified`** to today. The report's source label then reads e.g. "DORA State of DevOps 2025" instead of "AWOS audit 2026-06".
+
+**When no external standard genuinely fits.** A few categories detect AWOS-native conventions with no published external equivalent (e.g. the presence of `context/spec` documents in the AWOS layout). Do not dress these up with a loosely-related link. Keep an AWOS source, but make the label honest — set `source` to `"AWOS convention"` (singular, describing what it is) and point `url` at the specific documentation page for that convention, not the repo root. Flag each such retained self-reference in the proposal with a one-line justification so the next refresh can revisit it as the ecosystem matures. Prefer a real external authority wherever one exists — agent-tooling and prompt categories almost always have an Anthropic or industry source and should not be left self-referential.
+
+Never fabricate a URL (see Pass 1). A retained, honestly-labelled AWOS convention link is acceptable; a plausible-but-unverified external link is not.
 
 ### Pass 1 — Per-category link verification
 
@@ -81,8 +109,9 @@ For each category you considered but did not propose changing, include a row in 
 ### Reproducibility
 
 To reproduce a prior run:
-1. Fetch each distinct `url` from `[category.*]` blocks with a bare WebFetch and record HTTP status and date.
-2. Cross-reference each category's `date` field in `standards.toml` against the verified publication dates.
-3. For weight changes, look up each check's `applies_when` condition to determine breadth and compare its current weight against checks in the same dimension with `applies_when = "always"`.
+1. Grep `[category.*]` blocks for `url = "https://github.com/provectus/awos"` to re-list the self-references Pass 0 must address, and cross-check the proposal's self-reference audit table.
+2. Fetch each distinct `url` from `[category.*]` blocks with a bare WebFetch and record HTTP status and date.
+3. Cross-reference each category's `date` field in `standards.toml` against the verified publication dates.
+4. For weight changes, look up each check's `applies_when` condition to determine breadth and compare its current weight against checks in the same dimension with `applies_when = "always"`.
 
 The scratchpad files (`standards-refresh-proposal.md` and `standards-refresh-patch.toml`) from a prior run serve as the baseline for the next refresh. Diff the patch against the current `standards.toml` to see what was accepted.

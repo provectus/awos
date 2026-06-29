@@ -75,6 +75,12 @@ export interface MetricResult {
   sources_used: string[];
   sources_missing: string[];
   status: 'OK' | 'SKIP';
+  /** Fraction of capability present: ∈ [0,1]. Default: 1 when any category awarded, 0 otherwise (or 0 on SKIP). */
+  score: number;
+  /** Fraction of applicable surface measured: ∈ [0,1]. Default: 1 when OK, 0 on SKIP. */
+  confidence: number;
+  /** Per-category-code score overrides for metrics that award multiple codes with different natural scores. */
+  score_per_code?: Record<number, number>;
   /** Monthly history series (one entry per 30-day bucket), omitted for snapshot/non-rate metrics. */
   value_series?: ValueSeriesEntry[];
   /** Human-readable derivation of the value (e.g. "42 of 50 public defs documented = 0.84"). */
@@ -91,6 +97,11 @@ export interface MetricResult {
  *
  * Pass `valueSeries` for rate/over-time metrics; omit (or pass undefined) for
  * snapshot metrics — the field will not appear in the result.
+ *
+ * score defaults to 1 when any category is awarded, 0 otherwise (and 0 on SKIP).
+ * confidence defaults to 1 when OK, 0 on SKIP.
+ * scorePerCode provides per-code overrides for metrics that feed multiple codes
+ * with different natural scores (e.g. adp_g13_doc_coverage).
  */
 export function makeMetricResult(
   metric: string,
@@ -103,8 +114,12 @@ export function makeMetricResult(
   band: string | null = null,
   valueSeries?: ValueSeriesEntry[],
   unit?: string,
-  expression?: string
+  expression?: string,
+  score?: number,
+  confidence?: number,
+  scorePerCode?: Record<number, number>
 ): MetricResult {
+  const status: 'OK' | 'SKIP' = sourcesUsed.length === 0 ? 'SKIP' : 'OK';
   const result: MetricResult = {
     metric,
     value,
@@ -114,8 +129,14 @@ export function makeMetricResult(
     reliability,
     sources_used: [...sourcesUsed],
     sources_missing: [...sourcesMissing],
-    status: sourcesUsed.length === 0 ? 'SKIP' : 'OK',
+    status,
+    score:
+      score ?? (status === 'SKIP' ? 0 : categoriesAwarded.length > 0 ? 1 : 0),
+    confidence: confidence ?? (status === 'SKIP' ? 0 : 1),
   };
+  if (scorePerCode !== undefined) {
+    result.score_per_code = scorePerCode;
+  }
   if (valueSeries !== undefined) {
     result.value_series = valueSeries;
   }

@@ -12,7 +12,46 @@ test('makeResult shape', () => {
     value: 3,
     evidence: ['src/a.ts:10 found X'],
     method: 'detected',
+    score: 1,
+    confidence: 1,
   });
+});
+
+test('makeResult default score mapping: PASS=1, WARN=0.5, FAIL=0, SKIP=0/0', () => {
+  assert.equal(makeResult('PASS', null, []).score, 1, 'PASS score must be 1');
+  assert.equal(
+    makeResult('PASS', null, []).confidence,
+    1,
+    'PASS confidence must be 1'
+  );
+  assert.equal(
+    makeResult('WARN', null, []).score,
+    0.5,
+    'WARN score must be 0.5'
+  );
+  assert.equal(
+    makeResult('WARN', null, []).confidence,
+    1,
+    'WARN confidence must be 1'
+  );
+  assert.equal(makeResult('FAIL', null, []).score, 0, 'FAIL score must be 0');
+  assert.equal(
+    makeResult('FAIL', null, []).confidence,
+    1,
+    'FAIL confidence must be 1'
+  );
+  assert.equal(makeResult('SKIP', null, []).score, 0, 'SKIP score must be 0');
+  assert.equal(
+    makeResult('SKIP', null, []).confidence,
+    0,
+    'SKIP confidence must be 0'
+  );
+});
+
+test('makeResult accepts explicit score override', () => {
+  const r = makeResult('WARN', 0.75, [], 'detected', 0.75, 1.0);
+  assert.equal(r.score, 0.75, 'explicit score must override default');
+  assert.equal(r.confidence, 1.0, 'explicit confidence must be stored');
 });
 
 test('makeResult rejects a bad status', () => {

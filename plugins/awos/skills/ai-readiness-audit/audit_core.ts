@@ -174,6 +174,10 @@ interface CheckRecord {
   definition: string;
   hint: string;
   plain: string;
+  /** Fraction of capability present: ∈ [0,1]. */
+  score: number;
+  /** Fraction of applicable surface measured: ∈ [0,1]. */
+  confidence: number;
   unit?: string;
   expression?: string;
   source_year?: number;
@@ -256,7 +260,14 @@ export async function auditCore(
   const skippedByMetric = new Set<number>();
   const metricMeta = new Map<
     number,
-    { unit?: string; expression?: string; value?: unknown; evidence?: string[] }
+    {
+      unit?: string;
+      expression?: string;
+      value?: unknown;
+      evidence?: string[];
+      score?: number;
+      confidence?: number;
+    }
   >();
   for (const id of metricIds) {
     const fn = metrics[id];
@@ -270,11 +281,16 @@ export async function auditCore(
     }
     for (const code of (res.categories_awarded ?? []) as number[]) {
       awarded.add(code);
+      const perCodeScore = (
+        res.score_per_code as Record<number, number> | undefined
+      )?.[code];
       metricMeta.set(code, {
         unit: res.unit,
         expression: res.expression,
         value: res.value,
         evidence: res.expression ? [res.expression] : [],
+        score: perCodeScore ?? res.score,
+        confidence: res.confidence,
       });
     }
     if (res.status === 'SKIP') {
@@ -285,11 +301,16 @@ export async function auditCore(
     // Store meta for all codes this metric covers (not just awarded).
     for (const c of Object.values(cats)) {
       if (c.metric === id && !metricMeta.has(c.code)) {
+        const perCodeScore = (
+          res.score_per_code as Record<number, number> | undefined
+        )?.[c.code as number];
         metricMeta.set(c.code, {
           unit: res.unit,
           expression: res.expression,
           value: res.value,
           evidence: res.expression ? [res.expression] : [],
+          score: perCodeScore ?? res.score,
+          confidence: res.confidence,
         });
       }
     }
@@ -421,7 +442,14 @@ export function aggregate(outDir: string): void {
     if (!Array.isArray(checks)) continue;
     // Re-derive applies from status so patched-PASS connector checks count
     // in the denominator — prevents coverage > 1 when a SKIP is patched to PASS.
-    for (const c of checks) c.applies = c.status !== 'SKIP';
+    // Re-derive weight_awarded from score (Correction 3) so orchestrator-patched
+    // checks that carry an explicit score re-sum correctly.
+    for (const c of checks) {
+      c.applies = c.status !== 'SKIP';
+      const s =
+        c.score ?? (c.status === 'PASS' ? 1 : c.status === 'WARN' ? 0.5 : 0);
+      c.weight_awarded = Math.round((c.weight_max || 0) * s * 10) / 10;
+    }
     const score = checks.reduce((s, c) => s + (c.weight_awarded || 0), 0);
     const appl = checks
       .filter((c) => c.applies)
@@ -540,7 +568,14 @@ function buildCheck(
   checkIdByCode: Map<number, string>,
   metricMeta?: Map<
     number,
-    { unit?: string; expression?: string; value?: unknown; evidence?: string[] }
+    {
+      unit?: string;
+      expression?: string;
+      value?: unknown;
+      evidence?: string[];
+      score?: number;
+      confidence?: number;
+    }
   >
 ): CheckRecord {
   let status: string;
@@ -548,14 +583,19 @@ function buildCheck(
   let evidence: string[] = [];
   let unit: string | undefined;
   let expression: string | undefined;
+  let score = 0;
+  let confidence = 0;
 
   if (appliesGatedOff(c, topology)) {
     // applies_when topology flag is false → category does not apply.
     status = 'SKIP';
     value = `applies_when ${c.applies_when} is false`;
+    // score=0, confidence=0 (already initialised)
   } else if (c.method === 'judgment') {
     status = 'PENDING_JUDGMENT';
+    // score=0, confidence=0 until the orchestrator patches this check
   } else if (detectors[c.code] !== undefined) {
+    // Detector branch: take status/score/confidence straight from DetectorResult.
     let r: DetectorResult;
     try {
       r = detectors[c.code](repoPath);
@@ -565,18 +605,22 @@ function buildCheck(
         value: `detector-error: ${String(err)}`,
         evidence: [],
         method: c.method,
+        score: 0,
+        confidence: 1,
       };
     }
     status = r.status;
     value = r.value;
     evidence = r.evidence;
+    score = r.score;
+    confidence = r.confidence;
   } else {
-    // metric-routed: PASS if the metric awarded this code; SKIP if its metric
-    // had no sources; otherwise the criterion ran but was not met.
-    if (awarded.has(c.code)) status = 'PASS';
-    else if (skippedByMetric.has(c.code)) status = 'SKIP';
-    else status = 'FAIL';
-    // Thread unit/expression/value/evidence from the metric result if available.
+    // Metric-routed branch (Correction 2): score is gated by applicability —
+    // only an AWARDED (PASS) code carries the metric's continuous score.
+    let baseStatus: string;
+    if (awarded.has(c.code)) baseStatus = 'PASS';
+    else if (skippedByMetric.has(c.code)) baseStatus = 'SKIP';
+    else baseStatus = 'FAIL';
     const meta = metricMeta?.get(c.code);
     if (meta) {
       unit = meta.unit;
@@ -584,10 +628,29 @@ function buildCheck(
       value = meta.value ?? value;
       if (evidence.length === 0 && meta.evidence) evidence = meta.evidence;
     }
+
+    if (baseStatus === 'SKIP') {
+      score = 0;
+      confidence = 0;
+    } else if (baseStatus === 'FAIL') {
+      score = 0;
+      confidence = meta?.confidence ?? 1;
+    } else {
+      // awarded
+      score = meta?.score ?? 1; // continuous metric score; default 1 (binary-present)
+      confidence = meta?.confidence ?? 1;
+    }
+
+    // Derive the display badge from the score for awarded continuous metrics:
+    if (baseStatus === 'PASS') {
+      status = score >= 0.999 ? 'PASS' : score <= 0.001 ? 'FAIL' : 'PARTIAL';
+    } else {
+      status = baseStatus; // SKIP / FAIL unchanged
+    }
   }
 
   const applies = status !== 'SKIP';
-  const weightAwarded = status === 'PASS' ? c.weight : 0;
+  const weightAwarded = Math.round(c.weight * score * 10) / 10;
   const rec: CheckRecord = {
     check_id: c.check_id ?? checkIdByCode.get(c.code) ?? key,
     code: [c.code],
@@ -607,6 +670,8 @@ function buildCheck(
     definition: c.definition ?? '',
     hint: `${c.definition ?? ''} · ${c.method} · ${c.source ?? ''} (${c.source_year ?? ''})`,
     plain: c.definition ?? '',
+    score,
+    confidence,
     source_year: c.source_year,
   };
   if (unit !== undefined) rec.unit = unit;

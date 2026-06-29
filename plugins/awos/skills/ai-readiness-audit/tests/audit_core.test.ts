@@ -1,6 +1,7 @@
 /**
  * audit_core.test.ts — tests that audit-core writes a sources[] block into audit.json
  * and that aggregate() preserves an existing sources block when collected/ is absent.
+ * Also verifies the Phase 3a Correction 3 weight_awarded re-derivation.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -143,5 +144,119 @@ test('aggregate preserves existing sources block when collected/ is absent', () 
   assert.ok(
     Array.isArray(result.recommendations),
     'aggregate must preserve recommendations block'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Phase 3a / Correction 3: aggregate re-derives weight_awarded from score
+// ---------------------------------------------------------------------------
+
+test('aggregate re-derives weight_awarded = round(weight_max × score, 1) for score=1, score=0.5, score=0', () => {
+  const outDir = mkdtempSync(join(tmpdir(), 'aggregate-weight-test-'));
+
+  // Three checks with explicit score values covering the three cases.
+  const dimJson = {
+    dimension: 'code-quality',
+    date: '2025-01-01',
+    score: 0,
+    coverage: 0,
+    checks: [
+      {
+        // FULL: explicit score=1 on a PASS check → weight_awarded must be weight_max
+        check_id: 'CQ-01',
+        code: [1],
+        method: 'detected',
+        status: 'PASS',
+        value: true,
+        evidence: [],
+        weight_awarded: 0, // wrong initial value — aggregate must fix it
+        weight_max: 6,
+        score: 1,
+        confidence: 1,
+        applies: true,
+        reliability: { tag: 'maximal', confidence: 'HIGH', note: null },
+        source: '',
+        definition: '',
+        hint: '',
+        plain: '',
+      },
+      {
+        // HALF: explicit score=0.5 on a PARTIAL check → weight_awarded = round(6×0.5,1) = 3.0
+        check_id: 'CQ-02',
+        code: [2],
+        method: 'computed',
+        status: 'PARTIAL',
+        value: 0.5,
+        evidence: [],
+        weight_awarded: 0, // wrong — must become 3.0
+        weight_max: 6,
+        score: 0.5,
+        confidence: 1,
+        applies: true,
+        reliability: { tag: 'not-reliable', confidence: 'LOW', note: null },
+        source: '',
+        definition: '',
+        hint: '',
+        plain: '',
+      },
+      {
+        // ZERO: explicit score=0 on a FAIL check → weight_awarded = 0
+        check_id: 'CQ-03',
+        code: [3],
+        method: 'detected',
+        status: 'FAIL',
+        value: false,
+        evidence: [],
+        weight_awarded: 99, // wrong — must become 0
+        weight_max: 4,
+        score: 0,
+        confidence: 1,
+        applies: true,
+        reliability: { tag: 'maximal', confidence: 'HIGH', note: null },
+        source: '',
+        definition: '',
+        hint: '',
+        plain: '',
+      },
+    ],
+  };
+  writeFileSync(
+    join(outDir, 'code-quality.json'),
+    JSON.stringify(dimJson, null, 2)
+  );
+
+  aggregate(outDir);
+
+  const updated = JSON.parse(
+    readFileSync(join(outDir, 'code-quality.json'), 'utf8')
+  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const checks = updated.checks as any[];
+
+  const full = checks.find((c: any) => c.check_id === 'CQ-01');
+  const half = checks.find((c: any) => c.check_id === 'CQ-02');
+  const zero = checks.find((c: any) => c.check_id === 'CQ-03');
+
+  assert.equal(
+    full.weight_awarded,
+    6,
+    `score=1 × weight_max=6 must yield weight_awarded=6, got ${full.weight_awarded}`
+  );
+  assert.equal(
+    half.weight_awarded,
+    3,
+    `score=0.5 × weight_max=6 must yield weight_awarded=3.0, got ${half.weight_awarded}`
+  );
+  assert.equal(
+    zero.weight_awarded,
+    0,
+    `score=0 × weight_max=4 must yield weight_awarded=0, got ${zero.weight_awarded}`
+  );
+
+  // Dimension score must also reflect re-derived values: 6 + 3 + 0 = 9
+  assert.equal(
+    updated.score,
+    9,
+    `dimension score must be sum of re-derived weight_awarded (6+3+0=9), got ${updated.score}`
   );
 });

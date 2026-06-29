@@ -16,20 +16,43 @@ export interface DetectorResult {
   value: unknown;
   evidence: string[];
   method: string;
+  /** Fraction of capability present: ∈ [0,1]. Default: PASS=1, WARN=0.5, FAIL=0, SKIP=0. */
+  score: number;
+  /** Fraction of applicable surface measured: ∈ [0,1]. Default: SKIP=0, all others=1. */
+  confidence: number;
 }
+
+/** Default score mapping when no explicit score is provided. */
+const STATUS_SCORE: Record<string, number> = {
+  PASS: 1.0,
+  WARN: 0.5,
+  FAIL: 0.0,
+  SKIP: 0.0,
+};
 
 export function makeResult(
   status: string,
   value: unknown,
   evidence: string[],
-  method = 'detected'
+  method = 'detected',
+  score?: number,
+  confidence?: number
 ): DetectorResult {
   if (!VALID_STATUS.has(status)) {
     throw new Error(
       `status must be one of ${[...VALID_STATUS].sort()}, got ${status}`
     );
   }
-  return { status, value, evidence: [...evidence], method };
+  const resolvedScore = score ?? STATUS_SCORE[status] ?? 0;
+  const resolvedConfidence = confidence ?? (status === 'SKIP' ? 0 : 1);
+  return {
+    status,
+    value,
+    evidence: [...evidence],
+    method,
+    score: resolvedScore,
+    confidence: resolvedConfidence,
+  };
 }
 
 // Use `find` for a fast, deterministic file walk (Unix host assumed); fall back is a JS walk.

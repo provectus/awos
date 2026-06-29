@@ -254,7 +254,10 @@ export async function auditCore(
   }
   const awarded = new Set<number>();
   const skippedByMetric = new Set<number>();
-  const metricMeta = new Map<number, { unit?: string; expression?: string; value?: unknown; evidence?: string[] }>();
+  const metricMeta = new Map<
+    number,
+    { unit?: string; expression?: string; value?: unknown; evidence?: string[] }
+  >();
   for (const id of metricIds) {
     const fn = metrics[id];
     if (!fn) continue;
@@ -535,7 +538,10 @@ function buildCheck(
   skippedByMetric: Set<number>,
   topology: TopologyFlags,
   checkIdByCode: Map<number, string>,
-  metricMeta?: Map<number, { unit?: string; expression?: string; value?: unknown; evidence?: string[] }>
+  metricMeta?: Map<
+    number,
+    { unit?: string; expression?: string; value?: unknown; evidence?: string[] }
+  >
 ): CheckRecord {
   let status: string;
   let value: unknown = null;

@@ -904,6 +904,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
 .toolbar button{padding:5px 12px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:.8rem}
 .toolbar button.active{background:#4f46e5;color:#fff;border-color:#4f46e5}
 .backlink{display:inline-block;margin-bottom:10px;font-size:.85rem}
+.dim-nav{display:flex;gap:16px;font-size:.85rem;margin:8px 0}
 .dim-head{font-size:.9rem;color:#64748b;margin-bottom:12px}
 /* reliability colours */
 .rel-minimal{color:#d97706}
@@ -1095,13 +1096,36 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
   }
 
   // ─── One drill-down sub-page per dimension ─────────────────────────────────
-  function dimensionPage(dim: DimensionArtifact): string {
+  function dimensionPage(
+    dim: DimensionArtifact,
+    idx: number,
+    all: DimensionArtifact[]
+  ): string {
     const key = dimKey(dim);
     const counts = statusCounts(dim);
     const covPct = pct(dim.coverage);
     const rows: string[] = [];
     rows.push(`<section class="dim-page" id="page-${esc(key)}">`);
     rows.push('<a class="backlink" href="#">← Back to overview</a>');
+    // Prev/next navigation between dimension pages.
+    const prev = all[idx - 1];
+    const next = all[idx + 1];
+    const navParts: string[] = [];
+    if (prev) {
+      navParts.push(
+        `<a href="#dim/${esc(dimKey(prev))}">← ${esc(titleLabel(prev))}</a>`
+      );
+    }
+    if (next) {
+      navParts.push(
+        `<a href="#dim/${esc(dimKey(next))}">${esc(titleLabel(next))} →</a>`
+      );
+    }
+    const navHtml =
+      navParts.length > 0
+        ? `<nav class="dim-nav">${navParts.join(' ')}</nav>`
+        : '';
+    if (navHtml) rows.push(navHtml);
     rows.push(`<h2>${esc(titleLabel(dim))}</h2>`);
     rows.push(
       `<div class="dim-head">${tip(String(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, 'Σ awarded weights · standards.toml')} · coverage ${tip(covPct, `Share of this area's expected capability that is in place.`, 'score ÷ Σ applicable weights')} · FAIL ${counts.fail} · WARN ${counts.warn} · PASS ${counts.pass} · SKIP ${counts.skip}</div>`
@@ -1188,6 +1212,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
         '<p style="font-size:.78rem;color:#64748b">* lower-bound measurement (reliability tag: minimal).</p>'
       );
     }
+    if (navHtml) rows.push(navHtml);
     rows.push('</section>');
     return rows.join('\n');
   }
@@ -1332,7 +1357,9 @@ route();
 `;
 
   // ─── Assemble HTML ─────────────────────────────────────────────────────────
-  const dimPages = audit.dimensions.map((d) => dimensionPage(d)).join('\n');
+  const dimPages = audit.dimensions
+    .map((d, idx, all) => dimensionPage(d, idx, all))
+    .join('\n');
 
   return `<!DOCTYPE html>
 <html lang="en">

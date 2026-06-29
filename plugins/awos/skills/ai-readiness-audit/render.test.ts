@@ -166,6 +166,30 @@ test('Overview must show found-vs-total metric count above Dimensions table (iss
   );
 });
 
+test('Each dimension page needs prev/next nav to adjacent dimensions (issue #7)', () => {
+  const dims = [
+    makeDim('dim-first'),
+    makeDim('dim-middle'),
+    makeDim('dim-last'),
+  ];
+  const audit = makeAudit({ dimensions: dims });
+  const html = renderHtml(audit);
+  const middleStart = html.indexOf('id="page-dim-middle"');
+  assert.ok(middleStart !== -1, 'Middle dimension page must exist in HTML');
+  const middleEnd = html.indexOf('</section>', middleStart);
+  const middleHtml = html.slice(middleStart, middleEnd + 10);
+  assert.match(
+    middleHtml,
+    /href="#dim\/dim-first"/,
+    'Each dimension page needs prev/next nav to adjacent dimensions (issue #7)'
+  );
+  assert.match(
+    middleHtml,
+    /href="#dim\/dim-last"/,
+    'Each dimension page needs prev/next nav to adjacent dimensions (issue #7)'
+  );
+});
+
 test('tech stack renders names with evidence tooltips and no ~0 days', () => {
   const audit = {
     date: '2026-06-26',

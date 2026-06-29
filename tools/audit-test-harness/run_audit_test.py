@@ -296,6 +296,60 @@ def summarize_output(out_dir):
     return {}
 
 
+# ---------------------------------------------------------------------------
+def locate_out_dir(audits, today, seeded_date):
+    """The date-named output dir the run produced: today's if present, else the
+    newest date dir that isn't the seeded previous one."""
+    out_dir = os.path.join(audits, today)
+    if os.path.isdir(out_dir):
+        return out_dir
+    dd = [d for d in date_dirs(audits) if d != seeded_date]
+    return os.path.join(audits, dd[-1]) if dd else ""
+
+
+def assess_engine_compliance(out_dir, run_log):
+    """Did the run actually use the deterministic engine?
+
+    A compliant run invokes `audit-core` and produces audit.json / org-portfolio.json.
+    The stochastic headless reversion — the model reconstructs the removed
+    per-dimension DAG/fan-out (spawning dimension-auditor subagents) instead of
+    calling the engine — produces per-dimension .md grade files and NO audit.json.
+    That run silently passes today (rc=0, output dir exists) while having produced
+    the wrong artifact type in a different, non-comparable scoring universe.
+
+    Returns the signals so the harness can fail loudly / retry."""
+    has_json = bool(out_dir) and (
+        os.path.isfile(os.path.join(out_dir, "audit.json"))
+        or os.path.isfile(os.path.join(out_dir, "org-portfolio.json")))
+    audit_core_calls = 0
+    fanout_spawns = 0
+    try:
+        with open(run_log) as f:
+            txt = f.read()
+        audit_core_calls = txt.count("audit-core")
+        fanout_spawns = txt.count("dimension-auditor")
+    except Exception:
+        pass
+    compliant = bool(has_json and audit_core_calls > 0)
+    return {"engine_compliant": compliant, "has_audit_json": has_json,
+            "audit_core_calls": audit_core_calls, "fanout_agent_spawns": fanout_spawns}
+
+
+def seed_audit_core(engine, target, out_dir):
+    """Recovery for a non-compliant run: run the deterministic engine ourselves so
+    the archive still holds a correct audit.json (in the right scoring universe),
+    not just the model's hand-graded .md files. The run is salvaged but the meta
+    flags it as a product regression (the MODEL skipped the engine)."""
+    os.makedirs(out_dir, exist_ok=True)
+    rp = subprocess.run(["node", engine, "audit-core", target, out_dir],
+                        capture_output=True, text=True)
+    if rp.returncode == 0:
+        log(f"  ✓ harness ran audit-core → {os.path.join(out_dir, 'audit.json')}")
+        return True
+    log(f"  ✗ harness audit-core failed: {rp.stderr.strip()[:200]}")
+    return False
+
+
 def main():
     ap = argparse.ArgumentParser(description="Test/iterate on /awos:ai-readiness-audit.")
     ap.add_argument("--target", required=True, help="repo to audit (cwd of the run)")
@@ -313,6 +367,12 @@ def main():
                     help="run `npm run build:engine` in worktree before the run")
     ap.add_argument("--claude-flags", default="--dangerously-skip-permissions",
                     help="extra flags passed to claude (space-separated)")
+    ap.add_argument("--retries", type=int, default=2,
+                    help="if a run skips the engine (no audit-core / no audit.json), "
+                         "relaunch claude this many times before giving up (default 2)")
+    ap.add_argument("--no-engine-guard", action="store_true",
+                    help="disable the audit-core compliance guard + auto-retry "
+                         "(record signals only, never retry or seed)")
     ap.add_argument("--no-deploy", action="store_true",
                     help="don't repoint the marketplace — use whatever it currently serves")
     ap.add_argument("--dry-run", action="store_true",
@@ -397,25 +457,68 @@ def main():
                                      args.seed_date, today)
 
         claude_flags = args.claude_flags.split() if args.claude_flags else []
-        run_log = os.path.join(run_dir, "run.jsonl")
-        result, rc = stream_run(target, claude_flags, run_log)
-
-        # archive produced output
         audits = os.path.join(target, "context/audits")
-        out_dir = os.path.join(audits, today)
-        if not os.path.isdir(out_dir):
-            dd = date_dirs(audits)
-            # newest date dir that isn't the seeded previous one
-            dd = [d for d in dd if d != seeded_date]
-            out_dir = os.path.join(audits, dd[-1]) if dd else ""
+
+        # Engine-compliance guard + auto-retry. The headless model sometimes
+        # reconstructs the removed per-dimension fan-out instead of calling
+        # audit-core, producing .md grade files and no audit.json — a silent
+        # regression that used to pass (rc=0, an output dir exists). Detect it,
+        # relaunch up to --retries times, and finally salvage by running the
+        # engine ourselves. `model_complied` records whether the MODEL used the
+        # engine, independent of any salvage.
+        attempts = 1 if args.no_engine_guard else max(1, 1 + args.retries)
+        out_dir, comp, result, rc, final_log = "", {}, {}, 0, ""
+        for attempt in range(1, attempts + 1):
+            if attempt > 1:
+                log(f"\n▶ engine-skip retry {attempt - 1}/{attempts - 1} — relaunching claude")
+                prev = locate_out_dir(audits, today, seeded_date)
+                if prev and os.path.isdir(prev) and os.path.basename(prev) != seeded_date:
+                    shutil.rmtree(prev, ignore_errors=True)
+                    log(f"  ✓ cleared non-compliant output {prev}")
+            final_log = os.path.join(run_dir, f"run.attempt{attempt}.jsonl")
+            result, rc = stream_run(target, claude_flags, final_log)
+            out_dir = locate_out_dir(audits, today, seeded_date)
+            comp = assess_engine_compliance(out_dir, final_log)
+            if args.no_engine_guard:
+                log(f"  engine guard disabled — compliance signals: {comp}")
+                break
+            if comp["engine_compliant"]:
+                if attempt > 1:
+                    log(f"  ✓ retry {attempt - 1} complied (audit-core called, audit.json present)")
+                break
+            log("⚠ NON-COMPLIANT run — the model skipped the deterministic engine "
+                f"(audit_core_calls={comp['audit_core_calls']}, "
+                f"has_audit_json={comp['has_audit_json']}, "
+                f"dimension-auditor_spawns={comp['fanout_agent_spawns']}).")
+
+        model_complied = bool(comp.get("engine_compliant"))
+        # Expose the final attempt's transcript under the canonical name for
+        # compare scripts (per-attempt transcripts are kept as run.attemptN.jsonl).
+        try:
+            shutil.copyfile(final_log, os.path.join(run_dir, "run.jsonl"))
+        except Exception:
+            pass
+
+        # Salvage: if every attempt skipped the engine, run audit-core ourselves
+        # so the archive still holds a correct audit.json (right scoring universe),
+        # not just the model's hand-graded .md. The run stays flagged as a
+        # product regression via model_complied=False.
+        engine_seeded = False
+        if not args.no_engine_guard and not model_complied:
+            log("⚠ all attempts skipped the engine — harness seeding audit-core to salvage the artifact")
+            if not out_dir:
+                out_dir = os.path.join(audits, today)
+            engine_seeded = seed_audit_core(engine, target, out_dir)
+            comp = assess_engine_compliance(out_dir, final_log)
+        comp["model_complied"] = model_complied
+        comp["engine_seeded_by_harness"] = engine_seeded
 
         # Fallback render: a transport failure (e.g. "API Error: Connection
         # closed mid-response") can kill claude after audit.json is complete but
         # before it renders the reports — leaving a non-zero rc and no
         # report.md/html. audit.json is the source of truth and `render` is a
         # pure function of it, so we can finish the job ourselves and turn a
-        # failed run into a complete one. Runs whenever the report is missing but
-        # the JSON exists, regardless of rc.
+        # failed run into a complete one. Also renders the salvage-seeded JSON.
         if out_dir and os.path.isdir(out_dir):
             src_json = next(
                 (os.path.join(out_dir, n)
@@ -449,6 +552,7 @@ def main():
             "seeded_previous_date": seeded_date,
             "seed_from": seed_from,
             "claude_version": claude_ver, "claude_rc": rc,
+            "compliance": comp,
             "skill_under_test": {"repo": "awos", "worktree": worktree, "commit": awos_sha,
                                  "short": awos_short, "branch": awos_branch,
                                  "dirty": awos_dirty,
@@ -483,6 +587,18 @@ def main():
             f"metrics={summary.get('portfolio_metrics')}")
     log(f"\n✓ run complete (claude rc={rc}) -> {run_dir}")
     log(f"  compare:  python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'compare_audit_runs.py')} --target {tgt_name}")
+
+    # Loud, non-zero exit when the MODEL skipped the engine, even if the harness
+    # salvaged a correct audit.json. This is the QA hole the guard closes: such a
+    # run must never quietly report success.
+    if not args.no_engine_guard and not comp.get("model_complied", True):
+        salvaged = comp.get("engine_seeded_by_harness")
+        log(f"\n✗ ENGINE-SKIP REGRESSION: the model never called audit-core across "
+            f"{attempts} attempt(s) — it reconstructed the per-dimension fan-out "
+            f"(dimension-auditor spawns={comp.get('fanout_agent_spawns')}). "
+            f"{'Harness seeded audit-core so the artifact is correct, but ' if salvaged else ''}"
+            f"this is a product regression (CLAUDE.md 'Known gap'). Exiting non-zero.")
+        sys.exit(3)
 
 
 if __name__ == "__main__":

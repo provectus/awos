@@ -6,3 +6,7 @@ docs/superpowers/
 # local scratch / audit-harness output (never commit)
 tmp/
 scratchpad-handoff-*.md
+
+# Python bytecode (audit test harness)
+__pycache__/
+*.pyc

@@ -2,16 +2,17 @@
 
 Repeatable, provenance-tagged test runs of the `/awos:ai-readiness-audit` skill against real local repos. A developer/QA aid — not shipped product (the installer only copies `commands/`, `templates/`, `scripts/`, `claude/commands/`, so this `tools/` dir never reaches a user's project).
 
-- `run_audit_test.py` — deploy worktree skill → prepare target → run headless → measure tokens → archive.
+- `run_audit_test.py` — deploy worktree skill → prepare target → run headless → guard engine compliance (retry/salvage) → measure tokens → archive.
 - `compare_audit_runs.py` — diff two archived runs (per-dimension score deltas + tokens/cost).
 
 **Where things live.** The scripts are committed here (`tools/audit-test-harness/`). The run archive stays at `<awos main checkout>/tmp/audit-runs/` (gitignored). Both scripts resolve that path automatically from the `awos-marketplace` directory source (falling back to the script's own repo root), so runs accumulate in one place no matter which checkout — main or a worktree — you invoke the harness from. `--worktree` defaults to the checkout the script lives in.
 
-## The three traps it neutralizes
+## The four traps it neutralizes
 
 1. **`claude -p` does not read your worktree.** `awos-marketplace` is a _directory_ source, and `claude` serves the plugin **live from its `installLocation`** (the main checkout) — **not** from the version caches under `~/.claude/plugins/cache/awos-marketplace/awos/<version>/`. (Deploying to those caches, which an earlier version of this harness did, was never loaded — every test silently ran the main checkout's old plugin.) So the harness repoints the marketplace's `source.path` + `installLocation` (in `known_marketplaces.json` and `settings.json`) at the worktree and runs `claude plugin marketplace update`, then **restores the originals in a `finally` block** — a failed or interrupted run still restores. The repoint affects any project using `awos` for the duration of the run. `--no-deploy` skips it (use whatever the marketplace currently serves).
 2. **The output dir is a hardcoded date** (`context/audits/YYYY-MM-DD/`). Same-day re-runs overwrite, and `SKILL.md` Step 4 reads _other_ date-folders as a "previous audit" delta baseline. The harness controls this via `--phase` (below) and archives output elsewhere; comparison is done from the archive.
 3. **The skill never reports tokens.** Measured by the harness from the final `stream-json` `result` event (`total_cost_usd`, `usage`, `duration_ms`, `num_turns`) into `run-meta.json`. Sub-agent usage rolls into that one session total.
+4. **A regressed run silently reports green.** Under headless `claude -p`, the model stochastically rebuilds the removed per-dimension fan-out (spawning `dimension-auditor` subagents) instead of calling `audit-core` — producing `.md` letter-grade files and **no `audit.json`**, in a different, non-comparable scoring universe. rc was still 0 and an output dir existed, so it passed. The harness now **guards compliance**: after each run it asserts `audit.json` exists _and_ `audit-core` appears in the transcript. On failure it relaunches `claude` up to `--retries` times (default 2; the reversion is ~1-in-5, so a retry usually complies). If every attempt skips the engine, it **salvages** by running `audit-core` itself so the archive still holds a correct `audit.json`, then **exits non-zero** and records `compliance` (with `model_complied`, `audit_core_calls`, `fanout_agent_spawns`, `engine_seeded_by_harness`) in `run-meta.json` — the regression is caught and recovered, never silently green. `--no-engine-guard` records the signals only (no retry/salvage). Root cause is the documented "Known gap" in the repo `CLAUDE.md` (load-time `` !`…` `` injection is dead in plugin skills).
 
 ## --phase first | second (empty vs. previous-audit-exists)
 

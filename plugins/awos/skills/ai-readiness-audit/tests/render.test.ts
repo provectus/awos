@@ -27,7 +27,12 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderMarkdown, renderHtml, labelize } from '../render.ts';
+import {
+  renderMarkdown,
+  renderHtml,
+  labelize,
+  formatSourceWindow,
+} from '../render.ts';
 import type { AuditJson } from '../render.ts';
 
 // ---------------------------------------------------------------------------
@@ -843,5 +848,160 @@ test('connections renders Linked repositories even when none, and a Tech Stack s
   assert.ok(
     html.includes('Tech Stack') && html.includes('FastAPI'),
     'tech stack section present'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Phase 5: Sources column in Dimensions table
+// ---------------------------------------------------------------------------
+
+/** Build an audit fixture that carries sources_used per dimension and source_windows. */
+function sourcesFixture(): AuditJson {
+  return {
+    date: '2026-06-01',
+    project: 'sources-test',
+    audit_total: 10,
+    coverage: 0.5,
+    source_windows: {
+      git: { days: 540, label: 'git history' },
+      tracker: { days: 180, label: 'Jira via Atlassian MCP' },
+    },
+    dimensions: [
+      {
+        dimension: 'ai-development-tooling',
+        date: '2026-06-01',
+        score: 5,
+        coverage: 0.5,
+        sources_used: ['git', 'tracker'],
+        checks: [makeCheck({ check_id: 'AI-01', status: 'PASS' })],
+      },
+      {
+        dimension: 'security',
+        date: '2026-06-01',
+        score: 5,
+        coverage: 0.5,
+        sources_used: ['git'],
+        checks: [makeCheck({ check_id: 'SEC-01', status: 'PASS' })],
+      },
+    ],
+  };
+}
+
+test('renderHtml: Dimensions overview table has a Sources column header after Points', () => {
+  const html = renderHtml(sourcesFixture());
+  // The header row must contain both Points and Sources in that order.
+  const pointsIdx = html.indexOf('>Points<');
+  const sourcesIdx = html.indexOf('>Sources<');
+  assert.ok(
+    pointsIdx !== -1,
+    'Dimensions table must have a Points column header'
+  );
+  assert.ok(
+    sourcesIdx !== -1,
+    'Dimensions table must have a Sources column header'
+  );
+  assert.ok(
+    sourcesIdx > pointsIdx,
+    'Sources column header must appear after Points column header in the table'
+  );
+});
+
+test('renderHtml: Sources cell shows human labels for each dimension', () => {
+  const html = renderHtml(sourcesFixture());
+  assert.ok(
+    html.includes('git history'),
+    'Sources cell must show "git history" label for the git source'
+  );
+  assert.ok(
+    html.includes('Jira via Atlassian MCP'),
+    'Sources cell must show "Jira via Atlassian MCP" for the tracker source'
+  );
+});
+
+test('renderHtml: Sources tooltip includes formatted window (~N months)', () => {
+  const html = renderHtml(sourcesFixture());
+  // git: 540 days → ~18 months; tracker: 180 days → ~6 months
+  assert.ok(
+    html.includes('~18 months'),
+    'Sources tooltip must show "~18 months" for git (540 days ÷ 30 = 18)'
+  );
+  assert.ok(
+    html.includes('~6 months'),
+    'Sources tooltip must show "~6 months" for tracker (180 days ÷ 30 = 6)'
+  );
+});
+
+test('renderHtml: Sources column shows — when dimension has no sources_used', () => {
+  const audit: AuditJson = {
+    date: '2026-06-01',
+    project: 'no-sources',
+    audit_total: 0,
+    coverage: 0,
+    dimensions: [
+      {
+        dimension: 'security',
+        date: '2026-06-01',
+        score: 0,
+        coverage: 0,
+        // no sources_used field
+        checks: [],
+      },
+    ],
+  };
+  const html = renderHtml(audit);
+  // The Sources column must render a dash for a dimension with no sources_used.
+  assert.ok(
+    html.includes('<th>Sources</th>') || html.includes('>Sources<'),
+    'Sources column header must still appear'
+  );
+});
+
+test('renderMarkdown: summary table has Sources column header and human labels', () => {
+  const md = renderMarkdown(sourcesFixture());
+  assert.ok(
+    md.includes('| Sources |'),
+    'Markdown summary table must have a Sources column'
+  );
+  assert.ok(
+    md.includes('git history'),
+    'Markdown Sources cell must show "git history"'
+  );
+  assert.ok(
+    md.includes('Jira via Atlassian MCP'),
+    'Markdown Sources cell must show "Jira via Atlassian MCP"'
+  );
+});
+
+test('formatSourceWindow: formats days as months when ≥60, as days when <60, label-only when null', () => {
+  const windows = {
+    git: { days: 540, label: 'git history' },
+    tracker: { days: 180, label: 'Jira via Atlassian MCP' },
+    ci: { days: 30, label: 'CI runs' },
+    scale: { days: null, label: 'source code (AST)' },
+  };
+  assert.equal(
+    formatSourceWindow('git', windows),
+    'git history (~18 months)',
+    'formatSourceWindow: 540 days must render as ~18 months'
+  );
+  assert.equal(
+    formatSourceWindow('tracker', windows),
+    'Jira via Atlassian MCP (~6 months)',
+    'formatSourceWindow: 180 days must render as ~6 months'
+  );
+  assert.equal(
+    formatSourceWindow('ci', windows),
+    'CI runs (~30 days)',
+    'formatSourceWindow: 30 days must render as 30 days (below 60-day threshold)'
+  );
+  assert.equal(
+    formatSourceWindow('scale', windows),
+    'source code (AST)',
+    'formatSourceWindow: null days must render label only (no window suffix)'
+  );
+  assert.equal(
+    formatSourceWindow('unknown-src', undefined),
+    'unknown-src',
+    'formatSourceWindow: unknown source with no windows map falls back to the source key'
   );
 });

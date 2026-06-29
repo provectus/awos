@@ -76,7 +76,7 @@ The computed artifact the engine derives from `TrackerConnector`. The orchestrat
 
 ### Worked example — Jira issue-search → `collected/tracker.json`
 
-A Jira MCP call like `searchJiraIssuesUsingJql({ jql: "project = PROJ AND updated >= -90d", maxResults: 200 })` returns an array of issue objects. Map each to a `TicketRecord`:
+A Jira MCP call like `searchJiraIssuesUsingJql({ jql: "project = PROJ AND updated >= -180d", maxResults: 200 })` returns an array of issue objects. Map each to a `TicketRecord`:
 
 ```
 Jira field          → TicketRecord field
@@ -88,7 +88,7 @@ issue.fields.created        → created_at (ISO 8601 string)
 issue.fields.resolutiondate → resolved_at (ISO 8601 string or null → omit)
 ```
 
-Write the assembled `TrackerConnector` to `collected/tracker.json`:
+Write the assembled `TrackerConnector` to `collected/tracker.json`. Include a `period` block that records the actual window queried — the engine uses this to populate the **Sources** column tooltip in the report:
 
 ```json
 {
@@ -107,9 +107,18 @@ Write the assembled `TrackerConnector` to `collected/tracker.json`:
       "created_at": "2024-11-01T09:00:00Z"
     }
   ],
-  "incident_source": null
+  "incident_source": null,
+  "period": {
+    "lookback_days": 180,
+    "source_label": "Jira via Atlassian MCP"
+  }
 }
 ```
+
+| `period` field    | Type     | Meaning                                                                         |
+| ----------------- | -------- | ------------------------------------------------------------------------------- |
+| `lookback_days`   | `number` | The actual query window in days (e.g. 180 for a `updated >= -180d` Jira query). The renderer converts ≥60 days to months in the tooltip. Default for tracker is 180 days ("~6 months"). |
+| `source_label`    | `string` | Human-readable name shown in the Sources tooltip, e.g. `"Jira via Atlassian MCP"`, `"GitHub Issues"`, `"Linear"`. |
 
 ---
 
@@ -181,7 +190,7 @@ page._links.webui       → url  (prepend base URL if relative)
 page.version.when       → updated_at (ISO 8601 string)
 ```
 
-Write the assembled `DocsConnector` to `collected/docs.json`:
+Write the assembled `DocsConnector` to `collected/docs.json`. Include a `period` block so the Sources tooltip names the actual connector and window:
 
 ```json
 {
@@ -196,9 +205,15 @@ Write the assembled `DocsConnector` to `collected/docs.json`:
       "url": "https://wiki.example.com/display/ENG/API+Reference",
       "updated_at": "2024-08-05T09:30:00Z"
     }
-  ]
+  ],
+  "period": {
+    "lookback_days": 180,
+    "source_label": "Confluence via Atlassian MCP"
+  }
 }
 ```
+
+The `period.lookback_days` and `period.source_label` fields follow the same schema as for the tracker artifact (see above).
 
 ---
 

@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { auditCore, aggregate } from '../audit_core.ts';
@@ -347,5 +347,264 @@ test('aggregate re-derives weight_awarded = round(weight_max × score, 1) for sc
     updated.score,
     9,
     `dimension score must be sum of re-derived weight_awarded (6+3+0=9), got ${updated.score}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Phase 5: sources_used per dimension + source_windows in audit.json
+// ---------------------------------------------------------------------------
+
+test("aggregate: sources_used is the sorted union of applicable checks' sources per dimension, and audit.source_windows is built from collected/ period blocks", () => {
+  const outDir = mkdtempSync(join(tmpdir(), 'aggregate-sources-used-test-'));
+  const collectedDir = join(outDir, 'collected');
+
+  // Dimension A: git + tracker checks (one SKIP check with scale should be excluded)
+  const dimA = {
+    dimension: 'ai-sdlc-adoption',
+    date: '2025-01-01',
+    score: 0,
+    coverage: 0,
+    checks: [
+      {
+        check_id: 'AI-01',
+        code: [101],
+        method: 'detected',
+        status: 'PASS',
+        value: true,
+        evidence: [],
+        weight_awarded: 5,
+        weight_max: 5,
+        score: 1,
+        confidence: 1,
+        applies: true,
+        sources: ['git'],
+        reliability: { tag: 'maximal', confidence: 'high', note: null },
+        source: '',
+        definition: '',
+        hint: '',
+        plain: '',
+        source_date: null,
+        source_url: null,
+      },
+      {
+        check_id: 'AI-02',
+        code: [210],
+        method: 'computed',
+        status: 'PASS',
+        value: 3,
+        evidence: [],
+        weight_awarded: 3,
+        weight_max: 3,
+        score: 1,
+        confidence: 1,
+        applies: true,
+        sources: ['tracker'],
+        reliability: { tag: 'maximal', confidence: 'high', note: null },
+        source: '',
+        definition: '',
+        hint: '',
+        plain: '',
+        source_date: null,
+        source_url: null,
+      },
+      {
+        check_id: 'AI-03',
+        code: [150],
+        method: 'computed',
+        status: 'SKIP',
+        value: null,
+        evidence: [],
+        weight_awarded: 0,
+        weight_max: 2,
+        score: 0,
+        confidence: 0,
+        applies: false,
+        sources: ['scale'],
+        reliability: { tag: 'maximal', confidence: 'high', note: null },
+        source: '',
+        definition: '',
+        hint: '',
+        plain: '',
+        source_date: null,
+        source_url: null,
+      },
+    ],
+  };
+
+  // Dimension B: ci only
+  const dimB = {
+    dimension: 'quality-assurance',
+    date: '2025-01-01',
+    score: 0,
+    coverage: 0,
+    checks: [
+      {
+        check_id: 'QA-01',
+        code: [501],
+        method: 'detected',
+        status: 'FAIL',
+        value: false,
+        evidence: [],
+        weight_awarded: 0,
+        weight_max: 4,
+        score: 0,
+        confidence: 1,
+        applies: true,
+        sources: ['ci'],
+        reliability: { tag: 'maximal', confidence: 'high', note: null },
+        source: '',
+        definition: '',
+        hint: '',
+        plain: '',
+        source_date: null,
+        source_url: null,
+      },
+    ],
+  };
+
+  writeFileSync(
+    join(outDir, 'ai-sdlc-adoption.json'),
+    JSON.stringify(dimA, null, 2)
+  );
+  writeFileSync(
+    join(outDir, 'quality-assurance.json'),
+    JSON.stringify(dimB, null, 2)
+  );
+
+  // Write collected artifacts with period blocks (as the orchestrator would after connector fetch).
+  mkdirSync(collectedDir, { recursive: true });
+  writeFileSync(
+    join(collectedDir, 'git.json'),
+    JSON.stringify(
+      {
+        source: 'git',
+        available: true,
+        reason_if_absent: null,
+        period: {
+          bucket_days: 30,
+          lookback_days: 540,
+          history_available_days: 540,
+          source_label: 'git history',
+        },
+        raw: {},
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(
+    join(collectedDir, 'tracker.json'),
+    JSON.stringify(
+      {
+        source: 'tracker',
+        available: true,
+        reason_if_absent: null,
+        period: {
+          bucket_days: 30,
+          lookback_days: 180,
+          history_available_days: 180,
+          source_label: 'Jira via Atlassian MCP',
+        },
+        raw: {},
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(
+    join(collectedDir, 'ci.json'),
+    JSON.stringify(
+      {
+        source: 'ci',
+        available: true,
+        reason_if_absent: null,
+        period: {
+          bucket_days: 30,
+          lookback_days: 90,
+          history_available_days: 90,
+        },
+        raw: {},
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(
+    join(collectedDir, 'docs.json'),
+    JSON.stringify(
+      {
+        source: 'docs',
+        available: false,
+        reason_if_absent: 'no docs connector',
+        period: {
+          bucket_days: 30,
+          lookback_days: 0,
+          history_available_days: 0,
+        },
+        raw: {},
+      },
+      null,
+      2
+    )
+  );
+
+  aggregate(outDir);
+
+  // Check per-dimension sources_used
+  const updatedA = JSON.parse(
+    readFileSync(join(outDir, 'ai-sdlc-adoption.json'), 'utf8')
+  );
+  assert.deepEqual(
+    updatedA.sources_used,
+    ['git', 'tracker'],
+    'ai-sdlc-adoption sources_used must be ["git", "tracker"] (scale is SKIP → excluded)'
+  );
+
+  const updatedB = JSON.parse(
+    readFileSync(join(outDir, 'quality-assurance.json'), 'utf8')
+  );
+  assert.deepEqual(
+    updatedB.sources_used,
+    ['ci'],
+    'quality-assurance sources_used must be ["ci"]'
+  );
+
+  // Check audit.json source_windows
+  const auditJson = JSON.parse(
+    readFileSync(join(outDir, 'audit.json'), 'utf8')
+  );
+  assert.ok(
+    auditJson.source_windows !== undefined,
+    'audit.json must have a source_windows map after aggregate'
+  );
+  assert.equal(
+    auditJson.source_windows.git?.days,
+    540,
+    'source_windows.git.days must be 540 (from period.lookback_days)'
+  );
+  assert.equal(
+    auditJson.source_windows.git?.label,
+    'git history',
+    'source_windows.git.label must be "git history" (from period.source_label)'
+  );
+  assert.equal(
+    auditJson.source_windows.tracker?.days,
+    180,
+    'source_windows.tracker.days must be 180 (from period.lookback_days)'
+  );
+  assert.equal(
+    auditJson.source_windows.tracker?.label,
+    'Jira via Atlassian MCP',
+    'source_windows.tracker.label must be "Jira via Atlassian MCP" (from period.source_label)'
+  );
+  assert.equal(
+    auditJson.source_windows.ci?.days,
+    90,
+    'source_windows.ci.days must be 90 (fallback to period.lookback_days when source_label absent)'
+  );
+  assert.equal(
+    auditJson.source_windows.ci?.label,
+    'CI runs',
+    'source_windows.ci.label must be "CI runs" (SOURCE_LABEL_DEFAULTS fallback when source_label absent)'
   );
 });

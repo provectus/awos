@@ -137,6 +137,18 @@ const PERIOD: Period = {
 
 const COLLECTOR_SOURCES = ['git', 'ci', 'tracker', 'docs'] as const;
 
+/** Human-readable label for each source type (used in report tooltips). */
+const SOURCE_LABEL_DEFAULTS: Record<string, string> = {
+  git: 'git history',
+  ci: 'CI runs',
+  tracker: 'issue tracker',
+  docs: 'docs/wiki',
+  scale: 'source code (AST)',
+  audit: 'source code & config',
+  incident: 'incident source',
+  'org-rollup': 'portfolio',
+};
+
 type DetectorFn = (repoPath: string, params?: unknown) => DetectorResult;
 type MetricFn = (
   collectedDir: string,
@@ -156,6 +168,7 @@ interface Category {
   applies_when?: string;
   reliability_default?: string;
   source?: string;
+  sources?: string[];
 }
 
 interface CheckRecord {
@@ -181,6 +194,8 @@ interface CheckRecord {
   expression?: string;
   source_date: string | null;
   source_url: string | null;
+  /** Data sources that fed this check (from standards.toml `sources = [...]`). */
+  sources: string[];
 }
 
 export interface AuditCoreSummary {
@@ -244,6 +259,31 @@ export async function auditCore(
       };
     }
   });
+
+  // Build source_windows from collected artifacts for per-dimension provenance.
+  // days = period.lookback_days ?? period.history_available_days ?? null
+  // label = period.source_label (orchestrator-recorded) if present, else default.
+  const sourceWindows: Record<string, { days: number | null; label: string }> =
+    {};
+  for (const src of COLLECTOR_SOURCES) {
+    try {
+      const art = JSON.parse(
+        readFileSync(join(collectedDir, `${src}.json`), 'utf8')
+      );
+      const p = (art.period ?? {}) as Record<string, unknown>;
+      const days: number | null =
+        (p.lookback_days as number | undefined) ??
+        (p.history_available_days as number | undefined) ??
+        null;
+      const label =
+        (p.source_label as string | undefined) ??
+        SOURCE_LABEL_DEFAULTS[src] ??
+        src;
+      sourceWindows[src] = { days, label };
+    } catch {
+      /* artifact absent */
+    }
+  }
 
   // 2. Deterministic topology flags. Connector-dependent flags default to
   //    absent; the orchestrator re-runs with connectors during the patch phase.
@@ -355,12 +395,16 @@ export async function auditCore(
       .reduce((s, c) => s + c.weight_max, 0);
     auditTotal += score;
     auditApplicable += applicable;
+    const sourcesUsed = [
+      ...new Set(checks.filter((c) => c.applies).flatMap((c) => c.sources)),
+    ].sort();
     const dim = {
       dimension,
       date,
       score,
       coverage: applicable > 0 ? score / applicable : 0,
       checks,
+      sources_used: sourcesUsed,
     };
     writeFileSync(
       join(outDir, `${dimension}.json`),
@@ -389,7 +433,7 @@ export async function auditCore(
   };
   const detectionConflicts = computeDetectionConflicts(repoPath);
 
-  const audit = {
+  const audit: Record<string, unknown> = {
     date,
     project: basename(repoPath),
     audit_total: auditTotal,
@@ -400,6 +444,8 @@ export async function auditCore(
     tech_stack: techStack,
     detection_conflicts: detectionConflicts,
   };
+  if (Object.keys(sourceWindows).length > 0)
+    audit.source_windows = sourceWindows;
   writeFileSync(join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
 
   return {
@@ -457,6 +503,14 @@ export function aggregate(outDir: string): void {
       .reduce((s, c) => s + (c.weight_max || 0), 0);
     dim.score = score;
     dim.coverage = appl > 0 ? score / appl : 0;
+    // Re-derive sources_used: union of sources across applicable checks.
+    dim.sources_used = [
+      ...new Set(
+        checks
+          .filter((c) => c.applies)
+          .flatMap((c) => (c.sources ?? []) as string[])
+      ),
+    ].sort();
     writeFileSync(join(outDir, f), JSON.stringify(dim, null, 2));
     total += score;
     applicable += appl;
@@ -469,7 +523,7 @@ export function aggregate(outDir: string): void {
     /* no prior audit.json */
   }
 
-  // Re-derive sources from collected/ artifacts (derived like dimension sums).
+  // Re-derive sources and source_windows from collected/ artifacts.
   const collectedDirAgg = join(outDir, 'collected');
   const derivedSources = COLLECTOR_SOURCES.map((src) => {
     try {
@@ -486,6 +540,30 @@ export function aggregate(outDir: string): void {
       return null;
     }
   }).filter(Boolean);
+
+  const derivedSourceWindows: Record<
+    string,
+    { days: number | null; label: string }
+  > = {};
+  for (const src of COLLECTOR_SOURCES) {
+    try {
+      const art = JSON.parse(
+        readFileSync(join(collectedDirAgg, `${src}.json`), 'utf8')
+      );
+      const p = (art.period ?? {}) as Record<string, unknown>;
+      const days: number | null =
+        (p.lookback_days as number | undefined) ??
+        (p.history_available_days as number | undefined) ??
+        null;
+      const label =
+        (p.source_label as string | undefined) ??
+        SOURCE_LABEL_DEFAULTS[src] ??
+        src;
+      derivedSourceWindows[src] = { days, label };
+    } catch {
+      /* artifact absent */
+    }
+  }
 
   const audit: Record<string, unknown> = {
     date: existing.date ?? new Date().toISOString().slice(0, 10),
@@ -510,6 +588,12 @@ export function aggregate(outDir: string): void {
     audit.sources = derivedSources;
   } else if (existing.sources !== undefined) {
     audit.sources = existing.sources;
+  }
+  // Same fallback logic for source_windows.
+  if (Object.keys(derivedSourceWindows).length > 0) {
+    audit.source_windows = derivedSourceWindows;
+  } else if (existing.source_windows !== undefined) {
+    audit.source_windows = existing.source_windows;
   }
   writeFileSync(join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
 }
@@ -681,6 +765,7 @@ function buildCheck(
     confidence,
     source_date,
     source_url,
+    sources: c.sources ?? [],
   };
   if (unit !== undefined) rec.unit = unit;
   if (expression !== undefined) rec.expression = expression;

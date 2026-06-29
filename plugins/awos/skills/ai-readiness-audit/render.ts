@@ -254,6 +254,8 @@ export interface AuditJson {
   per_repo?: PerRepoSummary[];
   // collector availability
   sources?: SourceSummary[];
+  // per-source lookback window (populated by audit_core from collected/ artifacts)
+  source_windows?: Record<string, { days: number | null; label: string }>;
   // linked repos + tech-stack metadata (optional; populated by audit_core)
   linked_repos?: LinkedRepo[];
   tech_stack?: TechStack;
@@ -267,6 +269,39 @@ export interface AuditJson {
 
 /** Days threshold below which a source's history is flagged as limited. */
 const LIMITED_HISTORY_DAYS = 30;
+
+/** Fallback human label for each source key when source_windows is absent. */
+const SOURCE_LABEL_DEFAULTS: Record<string, string> = {
+  git: 'git history',
+  ci: 'CI runs',
+  tracker: 'issue tracker',
+  docs: 'docs/wiki',
+  scale: 'source code (AST)',
+  audit: 'source code & config',
+  incident: 'incident source',
+  'org-rollup': 'portfolio',
+};
+
+/**
+ * Format a source's window for a tooltip line.
+ *
+ * Returns `<label> (~<N> months)` for ≥60 days, `<label> (~<N> days)` for
+ * shorter windows, or just `<label>` when `days` is null (e.g. scale/audit).
+ */
+export function formatSourceWindow(
+  src: string,
+  sourceWindows:
+    | Record<string, { days: number | null; label: string }>
+    | undefined
+): string {
+  const win = sourceWindows?.[src];
+  const label = win?.label ?? SOURCE_LABEL_DEFAULTS[src] ?? src;
+  const days = win?.days ?? null;
+  if (days === null) return label;
+  const windowStr =
+    days >= 60 ? `${Math.round(days / 30)} months` : `${days} days`;
+  return `${label} (~${windowStr})`;
+}
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -544,16 +579,28 @@ export function renderMarkdown(audit: AuditJson): string {
   lines.push('## Summary');
   lines.push('');
   lines.push(
-    '| # | Dimension | Points | Coverage | FAIL | WARN | PARTIAL | PASS | SKIP |'
+    '| # | Dimension | Points | Sources | Coverage | FAIL | WARN | PARTIAL | PASS | SKIP |'
   );
   lines.push(
-    '| - | --------- | ------ | -------- | ---- | ---- | ------- | ---- | ---- |'
+    '| - | --------- | ------ | ------- | -------- | ---- | ---- | ------- | ---- | ---- |'
   );
   let rowNum = 1;
   for (const dim of audit.dimensions) {
     const counts = statusCounts(dim);
+    const dimSourcesUsed = (dim.sources_used as string[] | undefined) ?? [];
+    const sourcesCell =
+      dimSourcesUsed.length === 0
+        ? '—'
+        : dimSourcesUsed
+            .map(
+              (s) =>
+                audit.source_windows?.[s]?.label ??
+                SOURCE_LABEL_DEFAULTS[s] ??
+                s
+            )
+            .join(', ');
     lines.push(
-      `| ${rowNum++} | ${titleLabel(dim)} | ${dim.score} | ${pct(dim.coverage)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
+      `| ${rowNum++} | ${titleLabel(dim)} | ${dim.score} | ${sourcesCell} | ${pct(dim.coverage)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
     );
   }
   lines.push('');
@@ -1093,7 +1140,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       `<p class="metrics-found">${tip(`Metrics found: ${found} of ${total}`, 'Checks that detected a capability (PASS, PARTIAL, or WARN) out of all checks that apply to this project.', 'excludes SKIP (inapplicable) checks')}</p>`
     );
     rows.push(
-      '<table><thead><tr><th>#</th><th>Dimension</th><th>Points</th><th>Coverage</th><th>Reliability</th><th>FAIL</th><th>WARN</th><th>PARTIAL</th><th>PASS</th><th>SKIP</th></tr></thead><tbody>'
+      '<table><thead><tr><th>#</th><th>Dimension</th><th>Points</th><th>Sources</th><th>Coverage</th><th>Reliability</th><th>FAIL</th><th>WARN</th><th>PARTIAL</th><th>PASS</th><th>SKIP</th></tr></thead><tbody>'
     );
     let n = 1;
     for (const dim of audit.dimensions) {
@@ -1106,10 +1153,30 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const relStr = anyMinimal ? 'minimal *' : 'maximal';
       const key = dimKey(dim);
       const href = `#dim/${esc(key)}`;
+      // Sources column: cell shows human labels; tooltip adds lookback window per source.
+      const dimSourcesUsed = (dim.sources_used as string[] | undefined) ?? [];
+      const sourcesCell = (() => {
+        if (dimSourcesUsed.length === 0) return '—';
+        const cellText = dimSourcesUsed
+          .map(
+            (s) =>
+              audit.source_windows?.[s]?.label ?? SOURCE_LABEL_DEFAULTS[s] ?? s
+          )
+          .join(', ');
+        const tooltipDetail = dimSourcesUsed
+          .map((s) => formatSourceWindow(s, audit.source_windows))
+          .join(' · ');
+        return tip(
+          cellText,
+          'Data sources feeding this dimension',
+          tooltipDetail
+        );
+      })();
       rows.push(`<tr class="dim-row${lowCov}" onclick="location.hash='dim/${esc(key)}'">
   <td>${n++}</td>
   <td><a href="${href}"><strong>${esc(titleLabel(dim))}</strong></a></td>
   <td>${tip(String(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, `coverage ${covPct} · ${esc(dim.dimension)} · standards.toml`)}</td>
+  <td>${sourcesCell}</td>
   <td>${tip(covPct, `Share of this area's expected capability that is in place.`, `score ÷ Σ applicable weights · ${esc(dim.dimension)}`)}</td>
   <td>${tip(relStr, anyMinimal ? 'Some numbers here are lower bounds — the true value may be higher.' : 'Numbers here are upper-bound reliable for what was reachable.', '')}</td>
   <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>

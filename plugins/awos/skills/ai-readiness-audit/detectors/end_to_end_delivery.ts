@@ -1,5 +1,5 @@
 import { makeResult, iterFiles } from './_base.ts';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { CI_CONFIG_CANDIDATES } from '../ci_platforms.ts';

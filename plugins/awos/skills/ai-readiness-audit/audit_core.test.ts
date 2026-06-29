@@ -169,7 +169,6 @@ test('Metric-routed checks must carry the metric value+evidence into the record 
 // Task 2.3: ai-sdlc-adoption checks must use short ADP-NN ids
 // ---------------------------------------------------------------------------
 
-import { loadStandards } from './metrics/_base.ts';
 import { join as pathJoin, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 

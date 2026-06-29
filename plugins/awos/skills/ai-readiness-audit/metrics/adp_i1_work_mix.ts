@@ -71,7 +71,21 @@ export function compute(
     );
   }
 
-  const artifact = JSON.parse(readFileSync(trackerPath, 'utf8'));
+  let artifact;
+  try {
+    artifact = JSON.parse(readFileSync(trackerPath, 'utf8'));
+  } catch {
+    // Malformed/truncated tracker.json → degrade to SKIP rather than crash.
+    return makeMetricResult(
+      'adp_i1_work_mix',
+      null,
+      'banded',
+      [],
+      computeReliability('not-reliable', [], ['tracker']),
+      [],
+      ['tracker']
+    );
+  }
 
   // available=false means no tracker connector was provided.
   if (!artifact?.available) {

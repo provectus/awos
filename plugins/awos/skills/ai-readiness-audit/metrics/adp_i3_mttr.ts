@@ -30,14 +30,11 @@
  *   collectedDir/tracker.json — read when present (incident_source field upgrades reliability)
  *
  * Git-proxy computation:
- *   1. Read all merge commits flagged as revert/hotfix/rollback (via revert_merges count).
- *      The git collector stores merge_records as { merged_at, branch_first_commit_at }.
- *      All first-parent merges are included; we filter to recovery-style merges by looking
- *      at revert_merges count relative to total_merges — but since individual merge records
- *      do not carry type labels, we use a simpler proxy:
- *      compute the interval for each merge record (merged_at − branch_first_commit_at)
- *      which approximates "how long did this fix branch live before merging".
- *      When revert_merges > 0, prefer those intervals; otherwise fall back to all merges.
+ *   1. The git collector stores merge_records as { merged_at, branch_first_commit_at }.
+ *      Individual merge records do not carry type labels, so recovery-style merges
+ *      cannot be isolated; we use a uniform proxy across all first-parent merges:
+ *      the interval for each record (merged_at − branch_first_commit_at), which
+ *      approximates "how long did this branch live before merging".
  *   2. Compute median of those intervals in hours.
  *
  * SKIP: never. Returns OK with null value when no merge records exist (minimal git history).
@@ -175,7 +172,32 @@ export function compute(
     );
   }
 
-  const gitArtifact = JSON.parse(readFileSync(gitPath, 'utf8'));
+  let gitArtifact;
+  try {
+    gitArtifact = JSON.parse(readFileSync(gitPath, 'utf8'));
+  } catch {
+    // Malformed/truncated git.json → return git-proxy with no value (never SKIP).
+    const reliability: Reliability = {
+      tag: 'not-reliable',
+      confidence: 'LOW',
+      note: 'git-proxy, true value may differ; git.json unreadable',
+    };
+    return makeMetricResult(
+      'adp_i3_mttr',
+      null,
+      'banded',
+      [],
+      reliability,
+      ['git'],
+      [],
+      null,
+      undefined,
+      undefined,
+      undefined,
+      0,
+      0
+    );
+  }
   const raw = gitArtifact?.raw ?? {};
   const mergeRecords: MergeRecord[] = Array.isArray(raw.merge_records)
     ? (raw.merge_records as MergeRecord[])

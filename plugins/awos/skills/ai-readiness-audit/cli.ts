@@ -62,7 +62,7 @@ import { DETECTORS as DOC_DETECTORS } from './detectors/documentation.ts';
 import { DETECTORS as AS_DETECTORS } from './detectors/application_security.ts';
 // Adding a detector module is a one-line change per import + one spread below.
 
-import { makeResult, type DetectorResult } from './detectors/_base.ts';
+import { type DetectorResult } from './detectors/_base.ts';
 
 export const DETECTORS: Record<
   number,
@@ -198,7 +198,7 @@ async function main(): Promise<void> {
     printJson({
       error: 'no command given',
       usage:
-        'collect|detect|metric|standards|progress|rollup|render <arg> [repoPath]',
+        'collect|detect|metric|standards|progress|rollup|render|aggregate|audit-core <arg> [repoPath]',
     });
     process.exit(1);
   }
@@ -537,7 +537,7 @@ async function main(): Promise<void> {
       printJson({
         error: `unknown command "${command}"`,
         usage:
-          'collect|detect|metric|standards|progress|rollup|render|audit-core <arg> [repoPath]',
+          'collect|detect|metric|standards|progress|rollup|render|aggregate|audit-core <arg> [repoPath]',
       });
       process.exit(1);
     }

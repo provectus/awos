@@ -358,8 +358,10 @@ export function detectApiDocs(
 // semantic "does the doc describe the real architecture" is judgment-only.
 // ---------------------------------------------------------------------------
 
-// Matches `make <target>` or `make target` in code blocks and inline code.
-const MAKE_TARGET_RX = /`make\s+([a-zA-Z0-9_-]+)`|\bmake\s+([a-zA-Z0-9_-]+)\b/g;
+// Matches `make <target>` only inside inline code. The bare `make <word>` form
+// is intentionally excluded — it matches ordinary prose ("make sure", "make
+// changes") and would treat those words as Makefile targets.
+const MAKE_TARGET_RX = /`make\s+([a-zA-Z0-9_-]+)`/g;
 
 // Matches Makefile target lines: `<target>:` at column 0.
 const MAKEFILE_TARGET_RX = /^([a-zA-Z0-9_-][a-zA-Z0-9_.-]*):/gm;
@@ -376,7 +378,7 @@ function extractMakeTargets(readmeContent: string): string[] {
   let m: RegExpExecArray | null;
   MAKE_TARGET_RX.lastIndex = 0;
   while ((m = MAKE_TARGET_RX.exec(readmeContent)) !== null) {
-    const target = m[1] ?? m[2];
+    const target = m[1];
     if (target && target !== 'install' && target.length > 0) {
       targets.add(target);
     }

@@ -1,4 +1,4 @@
-import { makeResult, iterFiles, grep } from './_base.ts';
+import { makeResult, iterFiles } from './_base.ts';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ALL_HOOK_PATHS } from '../agent_tools.ts';
@@ -360,9 +360,9 @@ const SENSITIVE_PATTERNS: Array<{
     fileGlob: 'credentials.json',
   },
   {
-    name: 'secrets.yaml',
+    name: 'secrets.yaml/secrets.yml',
     rx: /^\s*(\*\*\/)?(secrets\.yaml|secrets\.yml)\s*(?:#.*)?$/m,
-    fileGlob: 'secrets.yaml',
+    fileGlob: 'secrets.y*ml',
   },
   {
     name: 'kubeconfig',

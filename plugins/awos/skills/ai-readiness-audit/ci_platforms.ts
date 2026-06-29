@@ -61,7 +61,23 @@ export const CI_CONFIG_CANDIDATES = [...CI_DIRS, ...CI_FILES];
  */
 export function detectCiConfigPath(repoPath: string): string | null {
   for (const candidate of CI_CONFIG_CANDIDATES) {
-    if (existsSync(join(repoPath, candidate))) return candidate;
+    const full = join(repoPath, candidate);
+    if (!existsSync(full)) continue;
+    if (CI_DIRS.includes(candidate)) {
+      // Directory candidate: require at least one file inside, so an empty
+      // placeholder dir (e.g. a bare `.github/workflows/`) doesn't register as
+      // CI. Any file counts — some platforms use non-YAML config (TeamCity
+      // `.kts`), so we deliberately don't gate on `.yml`/`.yaml` here.
+      try {
+        if (readdirSync(full).length > 0) {
+          return candidate;
+        }
+      } catch {
+        /* not readable — ignore */
+      }
+      continue;
+    }
+    return candidate;
   }
   const pipelines = join(repoPath, 'pipelines');
   try {

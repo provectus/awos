@@ -540,6 +540,20 @@ export function detectTestPyramid(
     );
   }
 
+  // Unit is still the largest tier, but e2e exceeds integration — top-heavy
+  // (missing-middle) shape rather than a true inversion.
+  if (unitDominates && !e2eSmallest) {
+    return makeResult(
+      'WARN',
+      unitCount,
+      [
+        `test pyramid top-heavy — e2e (${e2eCount}) exceeds integration (${integrationCount})`,
+        ...evidence,
+      ],
+      'computed'
+    );
+  }
+
   return makeResult(
     'FAIL',
     0,

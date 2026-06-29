@@ -32,6 +32,7 @@ test('detects Woodpecker and Concourse', () => {
 
   const d2 = tmp();
   mkdirSync(join(d2, '.concourse'), { recursive: true });
+  writeFileSync(join(d2, '.concourse', 'pipeline.yml'), 'jobs: []\n');
   assert.equal(detectCiConfigPath(d2), '.concourse');
   rmSync(d2, { recursive: true });
 });
@@ -40,6 +41,17 @@ test('returns null when no CI config found', () => {
   const d = tmp();
   writeFileSync(join(d, 'README.md'), '# project\n');
   assert.equal(detectCiConfigPath(d), null);
+  rmSync(d, { recursive: true });
+});
+
+test('an empty CI directory is not treated as CI', () => {
+  const d = tmp();
+  mkdirSync(join(d, '.github', 'workflows'), { recursive: true });
+  assert.equal(
+    detectCiConfigPath(d),
+    null,
+    'an empty .github/workflows/ must not register as CI'
+  );
   rmSync(d, { recursive: true });
 });
 

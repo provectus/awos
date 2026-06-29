@@ -1,6 +1,6 @@
 import { makeResult, iterFiles, grep } from './_base.ts';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
 import { ALL_SOURCE_GLOBS } from '../languages.ts';
 import { FRAMEWORK_AUTH_PATTERNS } from '../frameworks.ts';
 
@@ -24,10 +24,6 @@ const TLS_CONFIG_GLOBS = [
   '*.conf',
   '*.json',
 ];
-
-// Matches http:// followed by a non-localhost, non-127 host.
-const PLAIN_HTTP_RX =
-  /https?:\/\/((?!localhost|127\.|0\.0\.0\.0|::1)[a-zA-Z0-9\-._]+)/i;
 
 // Must actually be http (not https)
 const PLAIN_HTTP_STRICT_RX =

@@ -48,7 +48,21 @@ export function compute(
     );
   }
 
-  const artifact = JSON.parse(readFileSync(docsPath, 'utf8'));
+  let artifact;
+  try {
+    artifact = JSON.parse(readFileSync(docsPath, 'utf8'));
+  } catch {
+    // Malformed/truncated docs.json → degrade to SKIP rather than crash the run.
+    return makeMetricResult(
+      'adp_d1_spec_coverage',
+      null,
+      'coverage',
+      [],
+      computeReliability('not-reliable', [], ['docs']),
+      [],
+      ['docs']
+    );
+  }
 
   // available=false means no docs connector was provided.
   if (!artifact?.available) {

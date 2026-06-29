@@ -1,6 +1,6 @@
 import { makeResult, iterFiles } from './_base.ts';
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, basename } from 'node:path';
+import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 // ---------------------------------------------------------------------------
@@ -368,7 +368,10 @@ export function detectArchTechMatch(
   const verified: string[] = [];
 
   for (const signal of TECH_SIGNALS) {
-    if (!content.includes(signal.name.toLowerCase())) continue;
+    const nameRx = new RegExp(
+      `\\b${signal.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`
+    );
+    if (!nameRx.test(content)) continue;
     if (signal.detect(repoPath)) {
       verified.push(signal.name);
     } else {

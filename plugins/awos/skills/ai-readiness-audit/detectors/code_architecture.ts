@@ -73,7 +73,29 @@ export function detectArchPattern(
   try {
     out = execFileSync(
       'find',
-      [repoPath, '-maxdepth', '3', '-type', 'd', '-print'],
+      [
+        repoPath,
+        '-maxdepth',
+        '3',
+        '(',
+        '-name',
+        'node_modules',
+        '-o',
+        '-name',
+        '.git',
+        '-o',
+        '-name',
+        'dist',
+        '-o',
+        '-name',
+        'vendor',
+        ')',
+        '-prune',
+        '-o',
+        '-type',
+        'd',
+        '-print',
+      ],
       { encoding: 'utf8' }
     );
   } catch {

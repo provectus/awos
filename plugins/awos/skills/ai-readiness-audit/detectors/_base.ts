@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { relative, join } from 'node:path';
+import { relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DIR_MARKERS } from '../generated.ts';
 

@@ -1150,10 +1150,14 @@ test('standards.toml exists and matches the category/band schema', () => {
     /standards_version\s*=\s*"/,
     'meta.standards_version must be set'
   );
-  // At least one category table with every required key.
-  assert.match(
-    src,
-    /\[category\./,
+  // Required keys must appear inside a [category.*] table block, not merely
+  // somewhere in the file — slice each block and assert against it so a key
+  // declared only in (say) a [source.*] table can't satisfy the check.
+  const categoryBlocks = [
+    ...src.matchAll(/\[category\.[^\]]+\]([\s\S]*?)(?=\n\[|$)/g),
+  ].map((m) => m[1]);
+  assert.ok(
+    categoryBlocks.length > 0,
     'standards.toml must define [category.*] tables'
   );
   for (const key of [
@@ -1167,10 +1171,9 @@ test('standards.toml exists and matches the category/band schema', () => {
     'reliability_default',
     'source',
   ]) {
-    assert.match(
-      src,
-      new RegExp('\\n\\s*' + key + '\\s*='),
-      `category tables must declare ${key}`
+    assert.ok(
+      categoryBlocks.some((b) => new RegExp(`^\\s*${key}\\s*=`, 'm').test(b)),
+      `[category.*] tables must declare ${key}`
     );
   }
   // Reliability defaults use the locked vocabulary only.

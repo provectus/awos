@@ -182,7 +182,7 @@ export function detectLockfileIntegrity(
 //   otherwise     → PASS (includes zero deps)
 // ---------------------------------------------------------------------------
 
-const RANGED_RX = /["']?\s*(?:\^|~=?|>=|>|!= ?|\*|x\s*(?:\.|$))\s*\d/;
+const RANGED_RX = /["']?\s*(?:\^|~=?|>=|>|!= ?|\*|x\s*\.?)\s*\d/;
 
 // ---------------------------------------------------------------------------
 // parsePyprojectDeps — minimal TOML section scanner for pyproject.toml

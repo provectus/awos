@@ -147,3 +147,65 @@ test('detectFrameworks does not report Spring Boot for bare "spring" word', () =
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test('detectFrameworks: guardrails-ai dep must NOT yield Rails (false positive guard)', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-guardrails-'));
+  try {
+    writeFileSync(
+      join(repo, 'pyproject.toml'),
+      '[project]\ndependencies = ["fastapi>=0.100", "guardrails-ai>=0.4"]\n'
+    );
+    const frameworks = detectFrameworks(repo).map((f) => f.name);
+    assert.ok(
+      !frameworks.includes('Rails'),
+      `guardrails-ai dep must NOT trigger Rails detection (substring false positive); got ${JSON.stringify(frameworks)}`
+    );
+    assert.ok(
+      frameworks.includes('FastAPI'),
+      `fastapi dep must still yield FastAPI; got ${JSON.stringify(frameworks)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('detectFrameworks: PyPI "expression" dep must NOT yield Express (false positive guard)', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-expression-'));
+  try {
+    writeFileSync(
+      join(repo, 'requirements.txt'),
+      'expression==5.0.0\naiohttp==3.9.0\n'
+    );
+    const frameworks = detectFrameworks(repo).map((f) => f.name);
+    assert.ok(
+      !frameworks.includes('Express'),
+      `PyPI "expression" dep must NOT trigger Express detection (substring false positive); got ${JSON.stringify(frameworks)}`
+    );
+    assert.ok(
+      frameworks.includes('aiohttp'),
+      `aiohttp dep must still yield aiohttp; got ${JSON.stringify(frameworks)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('detectFrameworks: spring-boot-starter-web in build.gradle still yields Spring Boot', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-spring-starter-'));
+  try {
+    writeFileSync(
+      join(repo, 'build.gradle'),
+      "plugins { id 'org.springframework.boot' version '3.2.0' }\n" +
+        'dependencies {\n' +
+        "  implementation 'org.springframework.boot:spring-boot-starter-web:3.2.0'\n" +
+        '}\n'
+    );
+    const frameworks = detectFrameworks(repo).map((f) => f.name);
+    assert.ok(
+      frameworks.includes('Spring Boot'),
+      `spring-boot-starter-web must still yield Spring Boot (boundary match must not over-tighten); got ${JSON.stringify(frameworks)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});

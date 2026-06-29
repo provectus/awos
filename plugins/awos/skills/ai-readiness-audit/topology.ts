@@ -368,6 +368,26 @@ function manifestText(repoPath: string): string {
   return MANIFESTS.map((m) => readIfExists(repoPath, m)).join('\n');
 }
 
+/** Escape special regex characters in a literal string. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * True when `dep` appears in `manifests` as a whole package token — i.e. not
+ * flanked by alphanumerics or underscores. Package separators (`-`, `.`, `/`,
+ * `@`, quotes, spaces, version operators) all count as boundaries, so:
+ *   - "rails" inside "guardrails-ai" → NO match (preceded by "d")
+ *   - "express" inside "expression"  → NO match (followed by "i")
+ *   - "spring-boot" inside "spring-boot-starter-web" → MATCH ("-" is a boundary)
+ *   - "express" in `{"express":"^4"}` → MATCH (flanked by quotes)
+ */
+function manifestHasDep(manifests: string, dep: string): boolean {
+  return new RegExp(
+    `(?<![A-Za-z0-9_])${escapeRegex(dep)}(?![A-Za-z0-9_])`
+  ).test(manifests);
+}
+
 /**
  * Detect frameworks/stack components from dependency manifests and import
  * statements (never bare prose). Returns name + evidence, deduped, stable order.
@@ -376,7 +396,7 @@ export function detectFrameworks(repoPath: string): DetectedFramework[] {
   const manifests = manifestText(repoPath);
   const out: DetectedFramework[] = [];
   for (const fw of FRAMEWORKS) {
-    const depHit = fw.deps.find((d) => manifests.includes(d));
+    const depHit = fw.deps.find((d) => manifestHasDep(manifests, d));
     if (depHit) {
       out.push({
         name: fw.name,

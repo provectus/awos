@@ -4,7 +4,7 @@ This document defines how the `ai-readiness-audit` skill resolves, confirms, and
 
 The engine is TypeScript (Node/esbuild), bundled to `dist/cli.js` inside the plugin directory. When invoked by the skill orchestrator (whose working directory is the user's repo), collectors are called with the absolute path `${CLAUDE_SKILL_DIR}/dist/cli.js`:
 
-```
+```bash
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" collect <source> <repoPath>
 ```
 
@@ -119,7 +119,7 @@ All fields are optional. Omitting `[[repos]]` entirely means "audit the current 
 
 Each collector (`collectors/git.ts`, `collectors/ci.ts`, `collectors/tracker.ts`, `collectors/docs.ts`) is dispatched via:
 
-```
+```bash
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" collect <source> <repoPath>
 ```
 

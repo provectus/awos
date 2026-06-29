@@ -15,7 +15,7 @@
 
 ## Tab 1 — Board / CEO one-pager (example)
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────┐
 │  AI-SDLC CAPABILITY (portfolio)                                      │
 │                                    confidence: MEDIUM (git + tracker;│
@@ -77,7 +77,7 @@ Diagnostics surfaced alongside the table:
 
 Every metric, every repo, fully attributed: metric · current value · reliability tag · confidence · source tier. Plus the **Repositories & Connections** map:
 
-```
+```text
 service-checkout      linked: current repo
   code host: GitHub (gh) ✓   CI: GitHub Actions ✓   tracker: Jira ✓   docs: Confluence ✓   → HIGH
 platform-iac          linked: git submodule
@@ -97,7 +97,7 @@ This is where "why was X measured without integration Y?" and "why don't I see v
 
 ## How it is produced (summary; org behavior specified inline in `SKILL.md` + the report templates)
 
-The organization run is a scope of the measurement: it executes the per-repo `ai-sdlc-adoption` dimension across every in-scope repo (a GitHub/GitLab org, a folder of repos, or a `sources.toml` list), then aggregates the per-repo results into **at most three** contributor-weighted portfolio metrics — AI-tooling coverage, capability score, and measurement coverage — without rolling up the full per-repo metric set. Per-repo detail stays in the drill-down tab.
+The organization run is a scope of the measurement: it executes the per-repo `ai-sdlc-adoption` dimension across every in-scope repo (a GitHub/GitLab org, a folder of repos, or a `sources.toml` list), then aggregates the per-repo results into **at most three** portfolio metrics — AI-tooling coverage, capability score, and measurement coverage — contributor-weighted when contributor counts are available, with equal-weight fallback otherwise, without rolling up the full per-repo metric set. Per-repo detail stays in the drill-down tab.
 
 **Report generation is deterministic — narrative is authored upstream.** The audit engine writes a single `audit.json` file, into which the orchestrator authors the plain-language report blocks (`headline`, `insights`, `recommendations`, and per-check `plain`) — this is where the synthesized "READ" and the next-lever narrative come from. The command `node dist/cli.js render audit.json --format html` (or `--format md`) then converts the JSON to the single-page HTML or Markdown report — pure and deterministic: no clocks, no LLM calls **in the renderer**. The JSON is the single source of truth; the HTML/Markdown are derived output. The report is never hand-written. This split is deliberate: it keeps the renderer reproducible while still giving the board a synthesized narrative, instead of forcing a choice between the two.
 

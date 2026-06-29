@@ -30,7 +30,7 @@ Tier G requires only local git history. It is always attempted because git is th
 - **ADP-G4** — Per merged branch, median of (merge-commit date − branch first-commit date).
 - **ADP-G5** — If a code-host connector is present, open→merge from host API; else approximate as first-commit→merge and label **low-confidence (git-approximation)**.
 - **ADP-G6** — `git log --numstat` aggregate insertions+deletions per commit (trend); rework hotspots = files changed >N times within the window (high re-touch = churn). Report churn rate trend, not raw size.
-- **ADP-G7** — Share of default-branch merges followed within N days by a revert/hotfix: count `^Revert"`, `hotfix`, `rollback` first-parent commits ÷ total merges.
+- **ADP-G7** — Share of default-branch merges followed within N days by a revert/hotfix: count `^Revert "`, `hotfix`, `rollback` first-parent commits ÷ total merges.
 - **ADP-G8** — If host review data available: review rounds and time-to-resolve-review-threads per PR; else commits pushed after branch open as a proxy, labeled low-confidence.
 - **ADP-G9** — Share of commits/PRs carrying AI markers (attribution trailers from any supported agentic tool — `Co-authored-by: Claude`, `Co-authored-by: Cursor`, `Co-authored-by: Gemini`, etc.): `git log --grep` over trailers ÷ total. Label explicitly as a **minimum**; never present as the true adoption level.
 

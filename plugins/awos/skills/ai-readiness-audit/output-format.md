@@ -26,7 +26,7 @@ Field notes:
 - **`coverage`** — `score ÷ Σ weights of applicable categories` (categories whose `applies_when` evaluated to false are excluded from both numerator and denominator).
 - **`checks`** — one record per check block in the dimension file. Nothing is dropped; this JSON is the source of truth.
 
-Per-check record schema (all fields required):
+Per-check record schema (all fields required unless explicitly marked optional):
 
 ```json
 {

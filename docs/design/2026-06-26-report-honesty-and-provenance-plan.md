@@ -838,7 +838,7 @@ All green.
 ```bash
 ENGINE=plugins/awos/skills/ai-readiness-audit/dist/cli.js
 OUT=$(mktemp -d)
-/opt/homebrew/bin/node "$ENGINE" audit-core /Users/aleksandrmakarov/code/onex-discovery-api "$OUT" >/dev/null
+/opt/homebrew/bin/node "$ENGINE" audit-core /path/to/target-repo "$OUT" >/dev/null
 /opt/homebrew/bin/node -e "const a=require('$OUT/audit.json'); console.log(JSON.stringify({langs:a.tech_stack.languages, fw:a.tech_stack.frameworks, linked:a.linked_repos, ci:a.sources.find(s=>s.source==='ci')},null,2))"
 ```
 

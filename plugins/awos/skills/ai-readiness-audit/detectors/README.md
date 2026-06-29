@@ -29,7 +29,7 @@ The auditor uses the `status` field verbatim when aggregating the per-dimension 
 
 Each dimension listed in `dimensions/` that requires automated checking has a corresponding detector file named after the dimension slug, for example:
 
-```
+```text
 detectors/code-architecture.ts   ← dimension: code-architecture
 detectors/quality-assurance.ts   ← dimension: quality-assurance
 ```

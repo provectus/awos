@@ -115,10 +115,10 @@ Write the assembled `TrackerConnector` to `collected/tracker.json`. Include a `p
 }
 ```
 
-| `period` field    | Type     | Meaning                                                                         |
-| ----------------- | -------- | ------------------------------------------------------------------------------- |
-| `lookback_days`   | `number` | The actual query window in days (e.g. 180 for a `updated >= -180d` Jira query). The renderer converts ≥60 days to months in the tooltip. Default for tracker is 180 days ("~6 months"). |
-| `source_label`    | `string` | Human-readable name shown in the Sources tooltip, e.g. `"Jira via Atlassian MCP"`, `"GitHub Issues"`, `"Linear"`. |
+| `period` field  | Type     | Meaning                                                                                                                                                                                 |
+| --------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lookback_days` | `number` | The actual query window in days (e.g. 180 for a `updated >= -180d` Jira query). The renderer converts ≥60 days to months in the tooltip. Default for tracker is 180 days ("~6 months"). |
+| `source_label`  | `string` | Human-readable name shown in the Sources tooltip, e.g. `"Jira via Atlassian MCP"`, `"GitHub Issues"`, `"Linear"`.                                                                       |
 
 ---
 

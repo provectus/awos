@@ -12,7 +12,7 @@ Each check now carries two orthogonal numeric fields alongside its status badge:
 
 ### Weight awarded
 
-```
+```text
 weight_awarded = round(weight_max × score, 1)
 ```
 
@@ -38,7 +38,7 @@ PARTIAL is derived automatically from score when a metric-routed check is awarde
 
 The dimension score is the sum of `weight_awarded` values across all applicable checks (those whose `applies_when` condition is true):
 
-```
+```text
 dimension_score = Σ weight_awarded  for each check where applies_when = true
 ```
 
@@ -48,7 +48,7 @@ There are no deductions, no max-points ceiling, and no percentage transformation
 
 The coverage ratio expresses how much of today's defined standard a project has achieved within a dimension:
 
-```
+```text
 coverage_ratio = Σ weight_awarded ÷ Σ weight_max
                  (both sums over applicable checks only)
 ```
@@ -59,7 +59,7 @@ Display as a percentage labeled **"relative to today's standard"**. This is not 
 
 The audit total is the sum of all dimension scores, uncapped:
 
-```
+```text
 audit_total = Σ dimension_score  across all audited dimensions
 ```
 

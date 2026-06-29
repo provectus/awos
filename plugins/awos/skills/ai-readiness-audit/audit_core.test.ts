@@ -227,3 +227,93 @@ test('ai-sdlc-adoption checks must use short ADP-NN ids, not category slugs (iss
     rmSync(tmpBase, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Fix 1: float dust — dim.score and audit_total must be exactly 1 dp
+// ---------------------------------------------------------------------------
+
+test('aggregate must round dim.score and audit_total to 1 dp — no float dust (e.g. 2.1 + 0.8 must be 2.9, not 2.9000000000000004)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-rnd-'));
+  try {
+    // aggregate re-derives weight_awarded = round(weight_max * score * 10)/10.
+    // We need: dim1 checks → 1.4 + 0.7 = 2.1, dim2 check → 0.8.
+    // 2.1 + 0.8 = 2.9000000000000004 in IEEE 754 — the bug this test guards.
+    // score=0.7, weight_max=2 → weight_awarded = round(2*0.7*10)/10 = 1.4
+    // score=0.7, weight_max=1 → weight_awarded = round(1*0.7*10)/10 = 0.7
+    // score=0.4, weight_max=2 → weight_awarded = round(2*0.4*10)/10 = 0.8
+    const makeCheckFixture = (
+      id: string,
+      scoreVal: number,
+      weightMax: number
+    ) => ({
+      check_id: id,
+      code: [1],
+      method: 'detected',
+      status: 'PASS',
+      value: true,
+      evidence: [],
+      weight_awarded: Math.round(weightMax * scoreVal * 10) / 10,
+      weight_max: weightMax,
+      applies: true,
+      reliability: { tag: 'maximal', confidence: 'HIGH', note: null },
+      source: '',
+      definition: '',
+      hint: '',
+      plain: '',
+      score: scoreVal,
+      confidence: 1,
+      sources: [],
+    });
+    const dim1 = {
+      dimension: 'dim-one',
+      date: '2026-01-01',
+      score: 2.1,
+      coverage: 1,
+      // A-01: 0.7*2=1.4, A-02: 0.7*1=0.7 → sum=2.1
+      checks: [
+        makeCheckFixture('A-01', 0.7, 2),
+        makeCheckFixture('A-02', 0.7, 1),
+      ],
+    };
+    const dim2 = {
+      dimension: 'dim-two',
+      date: '2026-01-01',
+      score: 0.8,
+      coverage: 1,
+      // B-01: 0.4*2=0.8 → sum=0.8
+      checks: [makeCheckFixture('B-01', 0.4, 2)],
+    };
+    writeFileSync(join(dir, 'dim-one.json'), JSON.stringify(dim1));
+    writeFileSync(join(dir, 'dim-two.json'), JSON.stringify(dim2));
+
+    aggregate(dir);
+
+    const updatedDim1 = JSON.parse(
+      readFileSync(join(dir, 'dim-one.json'), 'utf8')
+    );
+    const updatedDim2 = JSON.parse(
+      readFileSync(join(dir, 'dim-two.json'), 'utf8')
+    );
+    const updatedAudit = JSON.parse(
+      readFileSync(join(dir, 'audit.json'), 'utf8')
+    );
+
+    assert.strictEqual(
+      updatedDim1.score,
+      2.1,
+      `dim-one.score must be exactly 2.1 (no float dust), got ${updatedDim1.score}`
+    );
+    assert.strictEqual(
+      updatedDim2.score,
+      0.8,
+      `dim-two.score must be exactly 0.8 (no float dust), got ${updatedDim2.score}`
+    );
+    assert.strictEqual(
+      updatedAudit.audit_total,
+      2.9,
+      `audit_total must be exactly 2.9, not ${updatedAudit.audit_total} — float dust from 2.1+0.8 must be rounded away`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -395,3 +395,28 @@ test('tech stack renders names with evidence tooltips and no ~0 days', () => {
   );
   assert.ok(!/~0 days/.test(html), 'never render ~0 days');
 });
+
+test('Fix 2: overview Reliability cell must show "not-reliable" (not "maximal") when dimension checks are not-reliable but not minimal', () => {
+  const notReliableCheck = makeCheck({
+    check_id: 'NR-01',
+    status: 'PASS',
+    applies: true,
+    reliability: { tag: 'not-reliable', confidence: 'high', note: null },
+  });
+  const dim = makeDim('test-not-reliable', [notReliableCheck]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  // The overview Dimensions table must NOT show "maximal" for this dimension.
+  // Extract the overview table row to avoid false positives from per-check cells.
+  const overviewEnd = html.indexOf('<section class="dim-page"');
+  const overviewHtml = overviewEnd !== -1 ? html.slice(0, overviewEnd) : html;
+  assert.ok(
+    !overviewHtml.includes('>maximal<') &&
+      !overviewHtml.match(/>\s*maximal\s*</),
+    'overview Reliability cell must not show "maximal" when all applicable checks are not-reliable (Fix 2)'
+  );
+  assert.ok(
+    overviewHtml.includes('not-reliable'),
+    'overview Reliability cell must show "not-reliable" when applicable checks carry that tag (Fix 2)'
+  );
+});

@@ -504,7 +504,7 @@ export function renderMarkdown(audit: AuditJson): string {
   if (isOrg) {
     lines.push(`**Mode:** Organization (${audit.per_repo?.length ?? 0} repos)`);
   }
-  lines.push(`**Audit Total:** ${audit.audit_total} pts`);
+  lines.push(`**Audit Total:** ${fmtPts(audit.audit_total)} pts`);
   lines.push(
     `**Coverage Ratio:** ${pct(audit.coverage)} rel. today's standard`
   );
@@ -600,7 +600,7 @@ export function renderMarkdown(audit: AuditJson): string {
             )
             .join(', ');
     lines.push(
-      `| ${rowNum++} | ${titleLabel(dim)} | ${dim.score} | ${sourcesCell} | ${pct(dim.coverage)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
+      `| ${rowNum++} | ${titleLabel(dim)} | ${fmtPts(dim.score)} | ${sourcesCell} | ${pct(dim.coverage)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
     );
   }
   lines.push('');
@@ -641,7 +641,7 @@ export function renderMarkdown(audit: AuditJson): string {
     lines.push(`## Dimension: ${titleLabel(dim)}`);
     lines.push('');
     lines.push(
-      `**Score:** ${dim.score} pts (coverage ${pct(dim.coverage)} rel. today's standard)`
+      `**Score:** ${fmtPts(dim.score)} pts (coverage ${pct(dim.coverage)} rel. today's standard)`
     );
     lines.push('');
 
@@ -696,7 +696,7 @@ export function renderMarkdown(audit: AuditJson): string {
           ? r.sources_reachable.join(', ')
           : '(none)';
       lines.push(
-        `| ${r.repo} | ${contributors} | ${r.awarded_weight} | ${sources} | ${r.has_ai_tooling ? 'yes' : 'no'} |`
+        `| ${r.repo} | ${contributors} | ${fmtPts(r.awarded_weight)} | ${sources} | ${r.has_ai_tooling ? 'yes' : 'no'} |`
       );
     }
     lines.push('');
@@ -1024,7 +1024,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
     } else {
       // Single-repo capability headline
       rows.push(
-        `<div class="cap-score">${tip(String(audit.audit_total) + ' pts', 'Total AI-SDLC capability — the sum of all capabilities the project has in place. It is uncapped and rises as the standard grows.', 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
+        `<div class="cap-score">${tip(fmtPts(audit.audit_total) + ' pts', 'Total AI-SDLC capability — the sum of all capabilities the project has in place. It is uncapped and rises as the standard grows.', 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
       );
       rows.push(
         `<div class="cap-cov">Coverage ${tip(pct(audit.coverage), "How much of today's expected capability is in place. Read it as 'we have X% of what the current standard asks for', not as a school grade.", 'score ÷ Σ applicable category weights · standards.toml')}</div>`
@@ -1150,7 +1150,19 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const anyMinimal = dim.checks.some(
         (c) => c.applies && c.reliability.tag === 'minimal'
       );
-      const relStr = anyMinimal ? 'minimal *' : 'maximal';
+      const anyNotReliable = dim.checks.some(
+        (c) => c.applies && c.reliability.tag === 'not-reliable'
+      );
+      const relStr = anyMinimal
+        ? 'minimal *'
+        : anyNotReliable
+          ? 'not-reliable'
+          : 'maximal';
+      const relTip = anyMinimal
+        ? 'Some numbers here are lower bounds — the true value may be higher.'
+        : anyNotReliable
+          ? 'Numbers here carry rough estimates; the true value may differ significantly.'
+          : 'Numbers here are upper-bound reliable for what was reachable.';
       const key = dimKey(dim);
       const href = `#dim/${esc(key)}`;
       // Sources column: cell shows human labels; tooltip adds lookback window per source.
@@ -1175,10 +1187,10 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       rows.push(`<tr class="dim-row${lowCov}" onclick="location.hash='dim/${esc(key)}'">
   <td>${n++}</td>
   <td><a href="${href}"><strong>${esc(titleLabel(dim))}</strong></a></td>
-  <td>${tip(String(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, `coverage ${covPct} · ${esc(dim.dimension)} · standards.toml`)}</td>
+  <td>${tip(fmtPts(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, `coverage ${covPct} · ${esc(dim.dimension)} · standards.toml`)}</td>
   <td>${sourcesCell}</td>
   <td>${tip(covPct, `Share of this area's expected capability that is in place.`, `score ÷ Σ applicable weights · ${esc(dim.dimension)}`)}</td>
-  <td>${tip(relStr, anyMinimal ? 'Some numbers here are lower bounds — the true value may be higher.' : 'Numbers here are upper-bound reliable for what was reachable.', '')}</td>
+  <td>${tip(relStr, relTip, '')}</td>
   <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
   <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
   <td>${counts.partial > 0 ? `<span style="color:#d97706;font-weight:600">${counts.partial}</span>` : counts.partial}</td>
@@ -1235,7 +1247,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const meanConfStr =
         totalW > 0 ? `${Math.round((weightedC / totalW) * 100)}%` : '—';
       rows.push(
-        `<div class="dim-head">${tip(String(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, 'Σ awarded weights · standards.toml')} · coverage ${tip(covPct, `Share of this area's expected capability that is in place.`, 'score ÷ Σ applicable weights')} · confidence ${tip(meanConfStr, 'Weight-averaged confidence: fraction of applicable surface measured for this dimension.', 'Σ(confidence × weight_max) ÷ Σ weight_max for applicable checks')} · FAIL ${counts.fail} · WARN ${counts.warn} · PARTIAL ${counts.partial} · PASS ${counts.pass} · SKIP ${counts.skip}</div>`
+        `<div class="dim-head">${tip(fmtPts(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, 'Σ awarded weights · standards.toml')} · coverage ${tip(covPct, `Share of this area's expected capability that is in place.`, 'score ÷ Σ applicable weights')} · confidence ${tip(meanConfStr, 'Weight-averaged confidence: fraction of applicable surface measured for this dimension.', 'Σ(confidence × weight_max) ÷ Σ weight_max for applicable checks')} · FAIL ${counts.fail} · WARN ${counts.warn} · PARTIAL ${counts.partial} · PASS ${counts.pass} · SKIP ${counts.skip}</div>`
       );
     }
 
@@ -1337,13 +1349,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         // Value is absent or is a string already shown verbatim in evidence — suppress.
         valueCell = '—';
       } else {
-        valueCell = c.expression
-          ? tip(
-              fmtValue(c.value),
-              c.expression,
-              c.unit ? `unit: ${c.unit}` : ''
-            )
-          : esc(fmtValue(c.value));
+        valueCell = esc(fmtValue(c.value));
       }
       rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
   <td>${ckn++}</td>
@@ -1384,7 +1390,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
   <td>${r.contributors !== null ? tip(String(r.contributors), 'Aggregate active-contributor count — no per-person data.', '') : '—'}</td>
   <td>${sources}</td>
   <td>${r.has_ai_tooling ? '✓ yes' : '✗ no'}</td>
-  <td>${tip(String(r.awarded_weight), `Capability points earned by this repo: ${r.awarded_weight}.`, '')}</td>
+  <td>${tip(fmtPts(r.awarded_weight), `Capability points earned by this repo: ${r.awarded_weight}.`, '')}</td>
 </tr>`);
       }
       rows.push('</tbody></table>');

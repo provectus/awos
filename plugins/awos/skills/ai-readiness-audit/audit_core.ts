@@ -129,6 +129,8 @@ function computeDetectionConflicts(
   return conflicts;
 }
 
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
 const PERIOD: Period = {
   bucket_days: 30,
   lookback_days: 730,
@@ -389,11 +391,11 @@ export async function auditCore(
   let auditApplicable = 0;
   const dimensions: unknown[] = [];
   for (const [dimension, checks] of Object.entries(byDimension)) {
-    const score = checks.reduce((s, c) => s + c.weight_awarded, 0);
+    const score = round1(checks.reduce((s, c) => s + c.weight_awarded, 0));
     const applicable = checks
       .filter((c) => c.applies)
       .reduce((s, c) => s + c.weight_max, 0);
-    auditTotal += score;
+    auditTotal = round1(auditTotal + score);
     auditApplicable += applicable;
     const sourcesUsed = [
       ...new Set(checks.filter((c) => c.applies).flatMap((c) => c.sources)),
@@ -497,7 +499,9 @@ export function aggregate(outDir: string): void {
         c.score ?? (c.status === 'PASS' ? 1 : c.status === 'WARN' ? 0.5 : 0);
       c.weight_awarded = Math.round((c.weight_max || 0) * s * 10) / 10;
     }
-    const score = checks.reduce((s, c) => s + (c.weight_awarded || 0), 0);
+    const score = round1(
+      checks.reduce((s, c) => s + (c.weight_awarded || 0), 0)
+    );
     const appl = checks
       .filter((c) => c.applies)
       .reduce((s, c) => s + (c.weight_max || 0), 0);
@@ -512,7 +516,7 @@ export function aggregate(outDir: string): void {
       ),
     ].sort();
     writeFileSync(join(outDir, f), JSON.stringify(dim, null, 2));
-    total += score;
+    total = round1(total + score);
     applicable += appl;
     dimensions.push(dim);
   }
@@ -568,7 +572,7 @@ export function aggregate(outDir: string): void {
   const audit: Record<string, unknown> = {
     date: existing.date ?? new Date().toISOString().slice(0, 10),
     project: existing.project ?? basename(outDir),
-    audit_total: total,
+    audit_total: round1(total),
     coverage: applicable > 0 ? total / applicable : 0,
     dimensions,
   };

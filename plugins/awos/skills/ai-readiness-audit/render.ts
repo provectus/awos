@@ -619,7 +619,7 @@ export function renderMarkdown(audit: AuditJson): string {
 
   // Per-repo table (org mode)
   if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
-    lines.push('## Repositories & Connections');
+    lines.push('## Repositories');
     lines.push('');
     lines.push(
       '| Repo | Contributors | Awarded Weight | Sources Reachable | AI Tooling |'
@@ -1180,7 +1180,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
 
   // ─── Repositories & Connections (org mode + single-repo note) ──────────────
   function reposSection(): string {
-    const rows: string[] = ['<h2>Repositories &amp; Connections</h2>'];
+    const rows: string[] = ['<h2>Repositories</h2>'];
     if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
       rows.push(
         '<table><thead><tr><th>Repo</th><th>Contributors</th><th>Sources</th><th>AI Tooling</th><th>Awarded Weight</th></tr></thead><tbody>'

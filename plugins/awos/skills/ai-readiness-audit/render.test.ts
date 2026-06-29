@@ -145,6 +145,27 @@ test('Dimensions table must green-highlight non-zero PASS counts (issue #4)', ()
   );
 });
 
+test('Overview must show found-vs-total metric count above Dimensions table (issue #1)', () => {
+  const dim = makeDim('test-dim', [
+    makeCheck({ check_id: 'T-01', status: 'PASS', applies: true }),
+    makeCheck({ check_id: 'T-02', status: 'WARN', applies: true }),
+    makeCheck({ check_id: 'T-03', status: 'FAIL', applies: true }),
+    makeCheck({ check_id: 'T-04', status: 'SKIP', applies: false }),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  assert.match(
+    html,
+    /Metrics found:/,
+    'Overview must show found-vs-total metric count above Dimensions table (issue #1)'
+  );
+  assert.match(
+    html,
+    /2 of 3/,
+    'Overview must show correct found-vs-total metric count (2 PASS/WARN out of 3 applicable)'
+  );
+});
+
 test('tech stack renders names with evidence tooltips and no ~0 days', () => {
   const audit = {
     date: '2026-06-26',

@@ -1050,6 +1050,20 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
   // ─── Dimension summary table (overview; rows link to sub-pages) ─────────────
   function dimensionSummary(): string {
     const rows: string[] = ['<h2>Dimensions</h2>'];
+    // Metrics-found count: applicable checks that have PASS or WARN (something detected)
+    // over total applicable checks, summed across all dimensions.
+    let found = 0;
+    let total = 0;
+    for (const dim of audit.dimensions) {
+      for (const c of dim.checks) {
+        if (!c.applies) continue;
+        total++;
+        if (c.status !== 'FAIL' && c.status !== 'SKIP') found++;
+      }
+    }
+    rows.push(
+      `<p class="metrics-found">${tip(`Metrics found: ${found} of ${total}`, 'Checks that detected a capability (PASS or partial) out of all checks that apply to this project.', 'excludes SKIP (inapplicable) checks')}</p>`
+    );
     rows.push(
       '<table><thead><tr><th>#</th><th>Dimension</th><th>Points</th><th>Coverage</th><th>Reliability</th><th>FAIL</th><th>WARN</th><th>PASS</th><th>SKIP</th></tr></thead><tbody>'
     );

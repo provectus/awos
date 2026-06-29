@@ -82,3 +82,90 @@ test(
     }
   }
 );
+
+// ---------------------------------------------------------------------------
+// Task 2.2: buildCheck must thread metric value+evidence through to the record
+// ---------------------------------------------------------------------------
+
+import { execSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { auditCore } from './audit_core.ts';
+
+test(
+  'Metric-routed checks must carry the metric value+evidence into the record (issue #12 blank connector values)',
+  async () => {
+    const tmpBase = mkdtempSync(join(tmpdir(), 'awos-buildcheck-'));
+    try {
+      const repoPath = join(tmpBase, 'repo');
+      mkdirSync(repoPath, { recursive: true });
+      execSync('git init', { cwd: repoPath, stdio: 'ignore' });
+
+      const outDir = join(tmpBase, 'out');
+      mkdirSync(outDir, { recursive: true });
+
+      const standardsPath = join(tmpBase, 'standards.toml');
+      writeFileSync(
+        standardsPath,
+        [
+          '[meta]',
+          'monthly_bucket_days = 30',
+          'max_lookback_days = 730',
+          '',
+          '[category.test_metric_cat]',
+          'code = 999',
+          'metric = "test_metric"',
+          'dimension = "ai-sdlc-adoption"',
+          'weight = 5',
+          'method = "computed"',
+          'definition = "Test metric"',
+          'applies_when = "always"',
+          'sources = ["git"]',
+          'reliability_default = "not-reliable"',
+          'source = "test"',
+          'source_year = 2026',
+        ].join('\n')
+      );
+
+      const mockMetric = async () => ({
+        metric: 'test_metric',
+        value: 0.62,
+        kind: 'computed',
+        band: null as null,
+        categories_awarded: [999],
+        reliability: { tag: 'not-reliable', confidence: 'HIGH' as const, note: null },
+        sources_used: ['git'],
+        sources_missing: [] as string[],
+        status: 'OK' as const,
+        expression: '31/50 growth',
+      });
+
+      await auditCore(
+        repoPath,
+        outDir,
+        {},
+        { test_metric: mockMetric },
+        standardsPath
+      );
+
+      const dimJson = JSON.parse(
+        readFileSync(join(outDir, 'ai-sdlc-adoption.json'), 'utf8')
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const check = (dimJson.checks as any[]).find((c: any) =>
+        Array.isArray(c.code) ? c.code.includes(999) : c.code === 999
+      );
+      assert.ok(check, 'check with code 999 must exist in ai-sdlc-adoption dimension JSON');
+      assert.equal(
+        check.value,
+        0.62,
+        `check.value must be 0.62 from metric result, got ${JSON.stringify(check.value)}`
+      );
+      assert.ok(
+        Array.isArray(check.evidence) && check.evidence.length > 0,
+        `check.evidence must be non-empty (from metric expression), got ${JSON.stringify(check.evidence)}`
+      );
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  }
+);

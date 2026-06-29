@@ -253,7 +253,7 @@ export async function auditCore(
   }
   const awarded = new Set<number>();
   const skippedByMetric = new Set<number>();
-  const metricMeta = new Map<number, { unit?: string; expression?: string }>();
+  const metricMeta = new Map<number, { unit?: string; expression?: string; value?: unknown; evidence?: string[] }>();
   for (const id of metricIds) {
     const fn = metrics[id];
     if (!fn) continue;
@@ -266,7 +266,12 @@ export async function auditCore(
     }
     for (const code of (res.categories_awarded ?? []) as number[]) {
       awarded.add(code);
-      metricMeta.set(code, { unit: res.unit, expression: res.expression });
+      metricMeta.set(code, {
+        unit: res.unit,
+        expression: res.expression,
+        value: res.value,
+        evidence: res.expression ? [res.expression] : [],
+      });
     }
     if (res.status === 'SKIP') {
       for (const c of Object.values(cats)) {
@@ -276,7 +281,12 @@ export async function auditCore(
     // Store meta for all codes this metric covers (not just awarded).
     for (const c of Object.values(cats)) {
       if (c.metric === id && !metricMeta.has(c.code)) {
-        metricMeta.set(c.code, { unit: res.unit, expression: res.expression });
+        metricMeta.set(c.code, {
+          unit: res.unit,
+          expression: res.expression,
+          value: res.value,
+          evidence: res.expression ? [res.expression] : [],
+        });
       }
     }
   }
@@ -524,7 +534,7 @@ function buildCheck(
   skippedByMetric: Set<number>,
   topology: TopologyFlags,
   checkIdByCode: Map<number, string>,
-  metricMeta?: Map<number, { unit?: string; expression?: string }>
+  metricMeta?: Map<number, { unit?: string; expression?: string; value?: unknown; evidence?: string[] }>
 ): CheckRecord {
   let status: string;
   let value: unknown = null;
@@ -559,11 +569,13 @@ function buildCheck(
     if (awarded.has(c.code)) status = 'PASS';
     else if (skippedByMetric.has(c.code)) status = 'SKIP';
     else status = 'FAIL';
-    // Thread unit/expression from the metric result if available.
+    // Thread unit/expression/value/evidence from the metric result if available.
     const meta = metricMeta?.get(c.code);
     if (meta) {
       unit = meta.unit;
       expression = meta.expression;
+      value = meta.value ?? value;
+      if (evidence.length === 0 && meta.evidence) evidence = meta.evidence;
     }
   }
 

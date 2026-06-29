@@ -1166,7 +1166,6 @@ test('standards.toml exists and matches the category/band schema', () => {
     'sources',
     'reliability_default',
     'source',
-    'source_year',
   ]) {
     assert.match(
       src,
@@ -1425,7 +1424,7 @@ test('report templates use weighted points + reliability, not grades', () => {
   );
 });
 
-test('plugin.json version matches the awos marketplace entry and equals 2.7.0', () => {
+test('plugin.json version matches the awos marketplace entry and equals 2.8.0', () => {
   const pluginManifest = JSON.parse(
     readUtf8(
       path.join(repoRoot, 'plugins', 'awos', '.claude-plugin', 'plugin.json')
@@ -1448,8 +1447,8 @@ test('plugin.json version matches the awos marketplace entry and equals 2.7.0', 
   );
   assert.equal(
     pluginManifest.version,
-    '2.7.0',
-    `plugins/awos/.claude-plugin/plugin.json version must be "2.7.0" (continuous scoring + PARTIAL/confidence render), got "${pluginManifest.version}"`
+    '2.8.0',
+    `plugins/awos/.claude-plugin/plugin.json version must be "2.8.0" (source links + weight rescale), got "${pluginManifest.version}"`
   );
 });
 

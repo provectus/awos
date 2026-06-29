@@ -143,7 +143,8 @@ export interface Check {
   value_series?: Array<{ bucket_start: string; value: number | null }>;
   unit?: string;
   expression?: string;
-  source_year?: number;
+  source_date?: string | null;
+  source_url?: string | null;
   score?: number;
   confidence?: number;
 }
@@ -756,6 +757,16 @@ function tip(value: string, plain: string, meta = ''): string {
   return `<span class="tip" tabindex="0">${esc(value)}<span class="tipbox"><b>${esc(plain)}</b>${metaHtml}</span></span>`;
 }
 
+/**
+ * Like tip(), but treats `metaHtml` as pre-built trusted HTML (not escaped).
+ * The caller must escape any user-controlled values before passing them in.
+ * Use only for structured HTML fragments like anchor links.
+ */
+function tipHtml(value: string, plain: string, metaHtml = ''): string {
+  const metaSpan = metaHtml ? `<span class="tipmeta">${metaHtml}</span>` : '';
+  return `<span class="tip" tabindex="0">${esc(value)}<span class="tipbox"><b>${esc(plain)}</b>${metaSpan}</span></span>`;
+}
+
 /** Render a compact sparkline as inline SVG bars (min-height 4px, max 20px). */
 function sparklineSvg(
   series: Array<{ bucket_start: string; value: number | null }>
@@ -1216,11 +1227,26 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const codeStr = c.code && c.code.length > 0 ? c.code.join(', ') : '—';
       const checkMeta = `${esc(c.definition)} — source: ${esc(c.source || '—')} · method: ${esc(c.method)} · category ${esc(codeStr)}`;
       // Points cell: tooltip enriched with standards.toml-derived meta.
-      const pointsMeta = `${c.definition}${c.source ? ` · ${c.source}` : ''}${c.source_year ? ` (${c.source_year})` : ''}`;
-      const pointsCell = tip(
+      // Renders source as a clickable link when source_url is available.
+      let pointsMetaHtml: string;
+      if (c.source) {
+        const sourceText = esc(c.source);
+        if (c.source_url && c.source_date) {
+          const escapedUrl = esc(c.source_url);
+          const escapedDate = esc(c.source_date);
+          pointsMetaHtml = `${esc(c.definition)} · ${sourceText} <a href="${escapedUrl}" target="_blank" rel="noopener">${escapedDate}</a>`;
+        } else if (c.source_date) {
+          pointsMetaHtml = `${esc(c.definition)} · ${sourceText} · ${esc(c.source_date)}`;
+        } else {
+          pointsMetaHtml = `${esc(c.definition)} · ${sourceText}`;
+        }
+      } else {
+        pointsMetaHtml = esc(c.definition);
+      }
+      const pointsCell = tipHtml(
         fmtPts(c.weight_awarded) + '/' + fmtPts(c.weight_max),
         `Worth up to ${c.weight_max} points · ${c.method}`,
-        pointsMeta
+        pointsMetaHtml
       );
       // Confidence cell: percent for applicable checks, dash for SKIP.
       const confCell =

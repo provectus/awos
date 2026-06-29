@@ -112,7 +112,6 @@ test('Metric-routed checks must carry the metric value+evidence into the record 
         'sources = ["git"]',
         'reliability_default = "not-reliable"',
         'source = "test"',
-        'source_year = 2026',
       ].join('\n')
     );
 

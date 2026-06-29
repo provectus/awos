@@ -37,8 +37,7 @@ One table per scoring category. Every category table declares exactly eleven req
 | `applies_when`        | string | `"always"` or a topology predicate (e.g. `"topology.has_ci"`, `"topology.is_monorepo"`)                 |
 | `sources`             | array  | Which collectors provide the data: `"git"`, `"ci"`, `"tracker"`, `"docs"`, `"incident"`, `"audit"`      |
 | `reliability_default` | string | Locked vocabulary: `"minimal"` (true ≥ shown), `"maximal"` (true ≤ shown), or `"not-reliable"`          |
-| `source`              | string | Citation name (paper, report, or framework)                                                             |
-| `source_year`         | int    | Year of the cited source                                                                                |
+| `source`              | string | Citation name — must match a key in the `[source.*]` table below                                       |
 
 **`method`** classifies how the verdict is produced:
 
@@ -67,8 +66,7 @@ One table per banded metric. Band tables define the DORA-style threshold tiers (
 | Key                                 | Description                             |
 | ----------------------------------- | --------------------------------------- |
 | `metric`                            | Which metric this band table applies to |
-| `source`                            | Citation for the band thresholds        |
-| `source_year`                       | Year of the cited source                |
+| `source`                            | Citation for the band thresholds — must match a key in the `[source.*]` table |
 | `elite` / `high` / `medium` / `low` | Human-readable threshold strings        |
 
 ## Currently seeded categories (Task A.1)

@@ -23,7 +23,7 @@
 import { mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 
-import { loadStandards } from './metrics/_base.ts';
+import { loadStandards, resolveSource } from './metrics/_base.ts';
 import {
   computeTopology,
   detectLinkedRepos,
@@ -156,7 +156,6 @@ interface Category {
   applies_when?: string;
   reliability_default?: string;
   source?: string;
-  source_year?: number;
 }
 
 interface CheckRecord {
@@ -180,7 +179,8 @@ interface CheckRecord {
   confidence: number;
   unit?: string;
   expression?: string;
-  source_year?: number;
+  source_date: string | null;
+  source_url: string | null;
 }
 
 export interface AuditCoreSummary {
@@ -334,6 +334,7 @@ export async function auditCore(
       skippedByMetric,
       topology,
       checkIdByCode,
+      standards,
       metricMeta
     );
     (byDimension[c.dimension] ??= []).push(rec);
@@ -566,6 +567,7 @@ function buildCheck(
   skippedByMetric: Set<number>,
   topology: TopologyFlags,
   checkIdByCode: Map<number, string>,
+  standards: Record<string, unknown>,
   metricMeta?: Map<
     number,
     {
@@ -651,6 +653,11 @@ function buildCheck(
 
   const applies = status !== 'SKIP';
   const weightAwarded = Math.round(c.weight * score * 10) / 10;
+  const { date: source_date, url: source_url } = resolveSource(
+    standards,
+    c.source ?? ''
+  );
+  const hintDate = source_date ?? '';
   const rec: CheckRecord = {
     check_id: c.check_id ?? checkIdByCode.get(c.code) ?? key,
     code: [c.code],
@@ -668,11 +675,12 @@ function buildCheck(
     },
     source: c.source ?? '',
     definition: c.definition ?? '',
-    hint: `${c.definition ?? ''} · ${c.method} · ${c.source ?? ''} (${c.source_year ?? ''})`,
+    hint: `${c.definition ?? ''} · ${c.method} · ${c.source ?? ''}${hintDate ? ` (${hintDate})` : ''}`,
     plain: c.definition ?? '',
     score,
     confidence,
-    source_year: c.source_year,
+    source_date,
+    source_url,
   };
   if (unit !== undefined) rec.unit = unit;
   if (expression !== undefined) rec.expression = expression;

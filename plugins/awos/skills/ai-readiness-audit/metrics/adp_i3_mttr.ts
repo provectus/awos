@@ -148,7 +148,7 @@ export function compute(
         undefined,
         undefined,
         0,
-        1.0
+        0.0
       );
     }
     // Neither source present — but we must not SKIP. Return with git listed as

@@ -98,6 +98,7 @@ export function compute(
   );
 
   // No ticket data → OK with null value (meaningful signal: empty tracker).
+  // score=0: an empty / all-unknown-type tracker has 0 growth fraction.
   if (total === 0) {
     const categories = awardCategories(standards, 'adp_i1_work_mix', topology);
     const reliability = computeReliability('not-reliable', ['tracker'], []);
@@ -113,7 +114,7 @@ export function compute(
       undefined,
       undefined,
       undefined,
-      1.0,
+      0,
       1.0
     );
   }

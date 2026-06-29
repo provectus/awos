@@ -48,6 +48,41 @@ test('doc-coverage awards 2204 (public) when public defs are well documented', a
       'string',
       'result must carry an expression string'
     );
+    // score: public coverage = 2/2 = 1.0 → score (score2204) = 1.0
+    assert.ok(
+      (res.score ?? 0) >= 0.9,
+      `score must be near 1.0 for fully-documented public defs, got ${res.score}`
+    );
+    // confidence: 1 file tried, 1 file analysed → confidence = 1.0
+    assert.ok(
+      Math.abs((res.confidence ?? 0) - 1.0) < 1e-6,
+      `confidence must be 1.0 when all files parsed, got ${res.confidence}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('doc-coverage score and confidence reflect partial documentation', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-partial-'));
+  try {
+    // One public def documented, one not → publicCoverage = 0.5 → score2204 = 0.5
+    writeFileSync(
+      join(dir, 'a.py'),
+      'def f():\n    """Does f."""\n    return 1\n\ndef g():\n    return 2\n'
+    );
+    const res = await compute(dir, {}, {}, dir);
+    assert.equal(res.status, 'OK', 'metric must run');
+    // score2204 = publicCoverage = 0.5
+    assert.ok(
+      Math.abs((res.score ?? 0) - 0.5) < 0.01,
+      `score must be ~0.5 for 50% documented public defs, got ${res.score}`
+    );
+    // confidence: 1 file tried, 1 analysed → 1.0
+    assert.ok(
+      Math.abs((res.confidence ?? 0) - 1.0) < 1e-6,
+      `confidence must be 1.0 when all files parsed, got ${res.confidence}`
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

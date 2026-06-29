@@ -79,6 +79,7 @@ export function compute(
 
   const reliability = computeReliability('not-reliable', ['git'], []);
 
+  const expression = `avg ${avg.toFixed(1)} contributors/month over ${buckets.length} bucket${buckets.length !== 1 ? 's' : ''}`;
   return makeMetricResult(
     'adp_g2_contributors',
     avg,
@@ -88,6 +89,8 @@ export function compute(
     ['git'],
     [],
     null,
-    value_series
+    value_series,
+    undefined,
+    expression
   );
 }

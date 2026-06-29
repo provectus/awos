@@ -238,6 +238,7 @@ export function compute(
 
   const value = { total_direct_deps: total, by_manifest: byManifest };
   const reliability = computeReliability('not-reliable', ['scale'], []);
+  const expression = `${total} direct dependencies across ${Object.keys(byManifest).length} manifest${Object.keys(byManifest).length !== 1 ? 's' : ''}`;
 
   return makeMetricResult(
     'adp_g12_deps',
@@ -246,6 +247,10 @@ export function compute(
     [1303],
     reliability,
     ['scale'],
-    []
+    [],
+    null,
+    undefined,
+    undefined,
+    expression
   );
 }

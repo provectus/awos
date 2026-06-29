@@ -97,6 +97,7 @@ export function compute(
   );
   const reliability = computeReliability('not-reliable', ['ci'], []);
 
+  const expression = `${successful}/${runs.length} CI runs passed = ${(rate * 100).toFixed(1)}% pass rate (${band})`;
   return makeMetricResult(
     'adp_c1_ci_pass_rate',
     rate,
@@ -105,6 +106,9 @@ export function compute(
     reliability,
     ['ci'],
     [],
-    band
+    band,
+    undefined,
+    undefined,
+    expression
   );
 }

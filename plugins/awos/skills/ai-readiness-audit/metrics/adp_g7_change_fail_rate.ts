@@ -78,6 +78,7 @@ export function compute(
   // failures result in a reverting merge commit with the right keywords.
   const reliability = computeReliability('minimal', ['git'], []);
 
+  const expression = `${revertMerges}/${totalMerges} reverts = ${(rate * 100).toFixed(1)}% change failure rate (${band})`;
   return makeMetricResult(
     'adp_g7_change_fail_rate',
     rate,
@@ -86,6 +87,9 @@ export function compute(
     reliability,
     ['git'],
     [],
-    band
+    band,
+    undefined,
+    undefined,
+    expression
   );
 }

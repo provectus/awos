@@ -120,6 +120,7 @@ export function compute(
   const categories = awardCategories(standards, 'adp_i1_work_mix', topology);
   const reliability = computeReliability('not-reliable', ['tracker'], []);
 
+  const expression = `${growthCount}/${total} growth tickets = ${growthFrac.toFixed(2)}`;
   return makeMetricResult(
     'adp_i1_work_mix',
     growthFrac,
@@ -128,6 +129,9 @@ export function compute(
     reliability,
     ['tracker'],
     [],
-    band
+    band,
+    undefined,
+    undefined,
+    expression
   );
 }

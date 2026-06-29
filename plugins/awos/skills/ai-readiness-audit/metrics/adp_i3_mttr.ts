@@ -192,6 +192,7 @@ export function compute(
   const sourcesUsed = incidentSource ? ['git', 'tracker'] : ['git'];
   const sourcesMissing: string[] = [];
 
+  const expression = medianHours !== null ? `median ${medianHours.toFixed(1)}h MTTR (${band})` : 'no incident data';
   return makeMetricResult(
     'adp_i3_mttr',
     medianHours,
@@ -200,6 +201,9 @@ export function compute(
     reliability,
     sourcesUsed,
     sourcesMissing,
-    band
+    band,
+    undefined,
+    undefined,
+    expression
   );
 }

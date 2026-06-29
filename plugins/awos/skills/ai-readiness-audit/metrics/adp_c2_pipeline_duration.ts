@@ -88,6 +88,7 @@ export function compute(
   );
   const reliability = computeReliability('not-reliable', ['ci'], []);
 
+  const expression = `avg pipeline duration ${avgDuration !== null ? avgDuration.toFixed(0) + 's' : 'unknown'} across ${runs.length} run${runs.length !== 1 ? 's' : ''}`;
   return makeMetricResult(
     'adp_c2_pipeline_duration',
     avgDuration,
@@ -95,6 +96,10 @@ export function compute(
     categories,
     reliability,
     ['ci'],
-    []
+    [],
+    null,
+    undefined,
+    undefined,
+    expression
   );
 }

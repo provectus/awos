@@ -156,6 +156,7 @@ export function compute(
     }
   }
 
+  const expression = `median ${medianHours.toFixed(1)}h lead time over ${leadTimesHours.length} merge${leadTimesHours.length !== 1 ? 's' : ''} (${band})`;
   return makeMetricResult(
     'adp_g4_lead_time',
     medianHours,
@@ -165,6 +166,8 @@ export function compute(
     ['git'],
     [],
     band,
-    value_series.length > 0 ? value_series : undefined
+    value_series.length > 0 ? value_series : undefined,
+    undefined,
+    expression
   );
 }

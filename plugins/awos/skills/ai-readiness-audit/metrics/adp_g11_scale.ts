@@ -171,6 +171,7 @@ export function compute(
   };
   const reliability = computeReliability('not-reliable', ['scale'], []);
 
+  const expression = `${totalLoc} LOC across ${fileCount} files`;
   return makeMetricResult(
     'adp_g11_scale',
     value,
@@ -178,6 +179,10 @@ export function compute(
     [1302],
     reliability,
     ['scale'],
-    []
+    [],
+    null,
+    undefined,
+    undefined,
+    expression
   );
 }

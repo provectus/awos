@@ -81,6 +81,7 @@ export function compute(
   );
   const reliability = computeReliability('not-reliable', ['docs'], []);
 
+  const expression = `${recentlyUpdatedCount}/${pageCount} docs recently updated = ${(coverage * 100).toFixed(1)}% freshness`;
   return makeMetricResult(
     'adp_d1_spec_coverage',
     coverage,
@@ -88,6 +89,10 @@ export function compute(
     categories,
     reliability,
     ['docs'],
-    []
+    [],
+    null,
+    undefined,
+    undefined,
+    expression
   );
 }

@@ -99,6 +99,7 @@ export function compute(
 
   const reliability = computeReliability('maximal', ['git'], []);
 
+  const expression = `${awarded.length}/${ALL_CODES.length} tooling layers present = ${(coverage * 100).toFixed(0)}%`;
   return makeMetricResult(
     'adp_g1_tooling_depth',
     coverage,
@@ -106,6 +107,10 @@ export function compute(
     awarded,
     reliability,
     ['git'],
-    []
+    [],
+    null,
+    undefined,
+    undefined,
+    expression
   );
 }

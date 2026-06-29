@@ -65,6 +65,7 @@ export function compute(
 
   const reliability = computeReliability('not-reliable', ['git'], []);
 
+  const expression = `${added} added + ${deleted} deleted = ${totalChurn} total churn lines`;
   return makeMetricResult(
     'adp_g6_churn',
     totalChurn,
@@ -72,6 +73,10 @@ export function compute(
     [601],
     reliability,
     ['git'],
-    []
+    [],
+    null,
+    undefined,
+    undefined,
+    expression
   );
 }

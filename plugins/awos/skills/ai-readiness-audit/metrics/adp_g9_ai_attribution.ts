@@ -66,6 +66,7 @@ export function compute(
   // is >= the measured value.
   const reliability = computeReliability('minimal', ['git'], []);
 
+  const expression = `${aiMarkedCommits}/${totalCommits} commits with AI markers = ${(attributionRate * 100).toFixed(1)}% (lower bound)`;
   return makeMetricResult(
     'adp_g9_ai_attribution',
     attributionRate,
@@ -73,6 +74,10 @@ export function compute(
     [901],
     reliability,
     ['git'],
-    []
+    [],
+    null,
+    undefined,
+    undefined,
+    expression
   );
 }

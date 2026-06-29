@@ -77,6 +77,7 @@ export function compute(
   // Review round count requires code-host data (PR comments, review requests).
   const reliability = computeReliability('not-reliable', ['git'], []);
 
+  const expression = `avg ${commitsPerPr.toFixed(1)} commits/PR → ${reworkProxy.toFixed(1)} estimated rework commits`;
   return makeMetricResult(
     'adp_g8_review_rework',
     reworkProxy,
@@ -84,6 +85,10 @@ export function compute(
     [801],
     reliability,
     ['git'],
-    []
+    [],
+    null,
+    undefined,
+    undefined,
+    expression
   );
 }

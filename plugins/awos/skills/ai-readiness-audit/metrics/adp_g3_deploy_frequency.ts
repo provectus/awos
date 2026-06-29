@@ -102,6 +102,7 @@ export function compute(
     value: bucketWeeks > 0 ? (b.merges ?? 0) / bucketWeeks : null,
   }));
 
+  const expression = `${totalMerges} merges / ${totalWeeks.toFixed(1)}w = ${mergesPerWeek.toFixed(2)}/week (${band})`;
   return makeMetricResult(
     'adp_g3_deploy_frequency',
     mergesPerWeek,
@@ -111,6 +112,8 @@ export function compute(
     ['git'],
     [],
     band,
-    value_series
+    value_series,
+    undefined,
+    expression
   );
 }

@@ -67,6 +67,7 @@ export function compute(
   const categories = awardCategories(standards, 'adp_i2_throughput', topology);
   const reliability = computeReliability('not-reliable', ['tracker'], []);
 
+  const expression = `${resolvedCount} tickets resolved`;
   return makeMetricResult(
     'adp_i2_throughput',
     resolvedCount,
@@ -74,6 +75,10 @@ export function compute(
     categories,
     reliability,
     ['tracker'],
-    []
+    [],
+    null,
+    undefined,
+    undefined,
+    expression
   );
 }

@@ -112,6 +112,8 @@ export function detectTestInfrastructure(
 
   const ratio = testCount / sourceCount;
   const pct = Math.round(ratio * 100);
+  // score: continuous coverage proxy clamped to [0,1]
+  const score = Math.min(1, Math.max(0, ratio));
 
   const evidence = [
     `${testCount} test file(s) found for ${sourceCount} source module(s) (${pct}% ratio)`,
@@ -126,7 +128,9 @@ export function detectTestInfrastructure(
         `test coverage proxy: ${pct}% — meaningful tests covering ≥ 60% of source modules`,
         ...evidence,
       ],
-      'computed'
+      'computed',
+      score,
+      1.0
     );
   }
 
@@ -138,7 +142,9 @@ export function detectTestInfrastructure(
         `test coverage proxy: ${pct}% — partial test coverage (below 60% threshold)`,
         ...evidence,
       ],
-      'computed'
+      'computed',
+      score,
+      1.0
     );
   }
 
@@ -149,7 +155,9 @@ export function detectTestInfrastructure(
       `test coverage proxy: ${pct}% — insufficient test coverage (below 30% threshold)`,
       ...evidence,
     ],
-    'computed'
+    'computed',
+    score,
+    1.0
   );
 }
 

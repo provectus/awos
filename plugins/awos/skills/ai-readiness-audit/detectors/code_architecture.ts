@@ -468,18 +468,32 @@ export function detectNamingConventions(
   ];
 
   if (ratio >= 0.9) {
-    return makeResult('PASS', ratio, evidence);
+    return makeResult('PASS', ratio, evidence, 'detected', ratio, 1.0);
   }
   if (ratio >= 0.7) {
-    return makeResult('WARN', ratio, [
-      `inconsistent file naming: dominant convention ${dominant} at ${Math.round(ratio * 100)}% (below 90% threshold)`,
-      ...evidence,
-    ]);
+    return makeResult(
+      'WARN',
+      ratio,
+      [
+        `inconsistent file naming: dominant convention ${dominant} at ${Math.round(ratio * 100)}% (below 90% threshold)`,
+        ...evidence,
+      ],
+      'detected',
+      ratio,
+      1.0
+    );
   }
-  return makeResult('FAIL', ratio, [
-    `inconsistent file naming: dominant convention ${dominant} at only ${Math.round(ratio * 100)}% (below 70% threshold)`,
-    ...evidence,
-  ]);
+  return makeResult(
+    'FAIL',
+    ratio,
+    [
+      `inconsistent file naming: dominant convention ${dominant} at only ${Math.round(ratio * 100)}% (below 70% threshold)`,
+      ...evidence,
+    ],
+    'detected',
+    ratio,
+    1.0
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -544,6 +558,8 @@ export function detectFileSizes(
   const total = checkedCount;
   // Round to 10 decimal places to avoid floating-point noise
   const ratio = Math.round((oversized.length / total) * 1e10) / 1e10;
+  // score: fraction of files within threshold (lower oversized ratio = better)
+  const score = Math.min(1, Math.max(0, 1 - ratio));
 
   const evidence = [
     `${oversized.length}/${total} source files exceed their per-language size threshold`,
@@ -558,7 +574,9 @@ export function detectFileSizes(
         `${Math.round(ratio * 100)}% of source files exceed their per-language size threshold (threshold: 30%)`,
         ...evidence,
       ],
-      'computed'
+      'computed',
+      score,
+      1.0
     );
   }
   if (ratio > 0.1) {
@@ -569,7 +587,9 @@ export function detectFileSizes(
         `${Math.round(ratio * 100)}% of source files exceed their per-language size threshold (threshold: 10%)`,
         ...evidence,
       ],
-      'computed'
+      'computed',
+      score,
+      1.0
     );
   }
   return makeResult(
@@ -579,7 +599,9 @@ export function detectFileSizes(
       `${Math.round(ratio * 100)}% of source files exceed their per-language size threshold — within threshold`,
       ...evidence,
     ],
-    'computed'
+    'computed',
+    score,
+    1.0
   );
 }
 

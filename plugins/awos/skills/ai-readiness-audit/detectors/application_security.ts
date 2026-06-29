@@ -166,26 +166,51 @@ export function detectSecurityHeaders(
     }
   }
 
+  // score: fraction of expected security headers found
+  const score =
+    SECURITY_HEADERS.length > 0 ? found.length / SECURITY_HEADERS.length : 0;
+
   if (found.length >= 2) {
-    return makeResult('PASS', found.length, [
-      `${found.length} of ${SECURITY_HEADERS.length} security headers configured: ${found.join(', ')}`,
-      ...found.map((h) => `header configured: ${h}`),
-    ]);
+    return makeResult(
+      'PASS',
+      found.length,
+      [
+        `${found.length} of ${SECURITY_HEADERS.length} security headers configured: ${found.join(', ')}`,
+        ...found.map((h) => `header configured: ${h}`),
+      ],
+      'detected',
+      score,
+      1.0
+    );
   }
 
   if (found.length === 1) {
     const missing = SECURITY_HEADERS.filter((h) => !found.includes(h.name)).map(
       (h) => h.name
     );
-    return makeResult('WARN', found.length, [
-      `only ${found.length} security header found (${found[0]}) — add ${missing.join(', ')}`,
-      ...missing.map((h) => `missing header: ${h}`),
-    ]);
+    return makeResult(
+      'WARN',
+      found.length,
+      [
+        `only ${found.length} security header found (${found[0]}) — add ${missing.join(', ')}`,
+        ...missing.map((h) => `missing header: ${h}`),
+      ],
+      'detected',
+      score,
+      1.0
+    );
   }
 
-  return makeResult('FAIL', 0, [
-    `no HTTP security headers (${SECURITY_HEADERS.map((h) => h.name).join(', ')}) found in source — configure them in your framework middleware or reverse proxy`,
-  ]);
+  return makeResult(
+    'FAIL',
+    0,
+    [
+      `no HTTP security headers (${SECURITY_HEADERS.map((h) => h.name).join(', ')}) found in source — configure them in your framework middleware or reverse proxy`,
+    ],
+    'detected',
+    score,
+    1.0
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -594,31 +619,54 @@ export function detectAuthOnMutations(
   }
 
   const coverage = filesWithAuth.length / filesWithMutations.length;
+  // score: continuous auth-coverage ratio clamped to [0,1]
+  const score = Math.min(1, Math.max(0, coverage));
 
   if (coverage >= 0.7) {
-    return makeResult('PASS', filesWithAuth.length, [
-      `auth decorators/middleware found in ${filesWithAuth.length}/${filesWithMutations.length} files with mutation routes`,
-      ...filesWithAuth.slice(0, 5).map((f) => `auth + mutations: ${f}`),
-    ]);
+    return makeResult(
+      'PASS',
+      filesWithAuth.length,
+      [
+        `auth decorators/middleware found in ${filesWithAuth.length}/${filesWithMutations.length} files with mutation routes`,
+        ...filesWithAuth.slice(0, 5).map((f) => `auth + mutations: ${f}`),
+      ],
+      'detected',
+      score,
+      1.0
+    );
   }
 
   if (coverage >= 0.3) {
-    return makeResult('WARN', filesWithAuth.length, [
-      `auth found in only ${filesWithAuth.length}/${filesWithMutations.length} mutation route files — some endpoints may be unprotected`,
-      ...filesWithMutations
-        .filter((f) => !filesWithAuth.includes(f))
-        .slice(0, 5)
-        .map((f) => `mutation routes without auth: ${f}`),
-    ]);
+    return makeResult(
+      'WARN',
+      filesWithAuth.length,
+      [
+        `auth found in only ${filesWithAuth.length}/${filesWithMutations.length} mutation route files — some endpoints may be unprotected`,
+        ...filesWithMutations
+          .filter((f) => !filesWithAuth.includes(f))
+          .slice(0, 5)
+          .map((f) => `mutation routes without auth: ${f}`),
+      ],
+      'detected',
+      score,
+      1.0
+    );
   }
 
-  return makeResult('FAIL', filesWithAuth.length, [
-    `auth decorators/middleware absent from ${filesWithMutations.length - filesWithAuth.length}/${filesWithMutations.length} files with mutation routes`,
-    ...filesWithMutations
-      .filter((f) => !filesWithAuth.includes(f))
-      .slice(0, 8)
-      .map((f) => `no auth detected: ${f}`),
-  ]);
+  return makeResult(
+    'FAIL',
+    filesWithAuth.length,
+    [
+      `auth decorators/middleware absent from ${filesWithMutations.length - filesWithAuth.length}/${filesWithMutations.length} files with mutation routes`,
+      ...filesWithMutations
+        .filter((f) => !filesWithAuth.includes(f))
+        .slice(0, 8)
+        .map((f) => `no auth detected: ${f}`),
+    ],
+    'detected',
+    score,
+    1.0
+  );
 }
 
 // ---------------------------------------------------------------------------

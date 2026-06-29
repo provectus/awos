@@ -40,6 +40,30 @@ test('union helpers aggregate per-language attributes', () => {
   assert.ok(ALL_DEP_FILES.includes('go.mod'));
 });
 
+test('detectLanguages excludes htmlcov JS files (generated coverage assets are not language evidence)', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-lang-htmlcov-'));
+  try {
+    mkdirSync(join(repo, 'htmlcov'), { recursive: true });
+    writeFileSync(
+      join(repo, 'htmlcov', 'coverage_html_cb_dd2e7eb5.js'),
+      'var x=1;\n'
+    );
+    mkdirSync(join(repo, 'src'), { recursive: true });
+    writeFileSync(join(repo, 'src', 'a.py'), 'print(1)\n');
+    writeFileSync(join(repo, 'pyproject.toml'), '[project]\nname="x"\n');
+
+    const langs = detectLanguages(repo);
+    const names = langs.map((l) => l.def.displayName).sort();
+    assert.deepEqual(
+      names,
+      ['Python'],
+      `htmlcov/*.js must not be counted as JavaScript; got ${names.join(',')}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 test('detectLanguages requires real source files (Makefile alone is not C/C++)', () => {
   const repo = mkdtempSync(join(tmpdir(), 'awos-lang-'));
   try {

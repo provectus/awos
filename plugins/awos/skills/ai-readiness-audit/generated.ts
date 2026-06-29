@@ -20,7 +20,7 @@ export const GENERATED_GLOBS: string[] = [
 ];
 
 // Directory segments that, if present anywhere in the path, mark it generated/vendored.
-const DIR_MARKERS = [
+export const DIR_MARKERS = [
   'htmlcov',
   'generated',
   '__generated__',

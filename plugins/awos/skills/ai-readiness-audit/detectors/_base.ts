@@ -1,17 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { relative, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { DIR_MARKERS } from '../generated.ts';
 
 export const VALID_STATUS = new Set(['PASS', 'WARN', 'FAIL', 'SKIP']);
+// Deduped union of generated.ts DIR_MARKERS plus a few extras that only the
+// file-walker needs (.git, __pycache__, target).  Keep this in sync by deriving
+// from the single source of truth rather than duplicating the list.
 export const DEFAULT_IGNORE = [
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.venv',
-  '__pycache__',
-  '.next',
-  'target',
+  ...new Set([...DIR_MARKERS, '.git', '__pycache__', 'target']),
 ];
 
 export interface DetectorResult {

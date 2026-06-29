@@ -433,7 +433,8 @@ def main():
             "duration_ms": result.get("duration_ms"), "num_turns": result.get("num_turns"),
             "is_error": result.get("is_error"), "summary": summary,
         }
-        json.dump(meta, open(os.path.join(run_dir, "run-meta.json"), "w"), indent=2)
+        with open(os.path.join(run_dir, "run-meta.json"), "w") as f:
+            json.dump(meta, f, indent=2)
     finally:
         if orig_market is not None:
             log(f"▶ restoring {MARKET_NAME} to original ({orig_market['km_install']})")

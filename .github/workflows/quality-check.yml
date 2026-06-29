@@ -19,7 +19,11 @@ jobs:
           node-version: '22'
 
       - name: Run prettier check
-        run: npx prettier . --check
+        # Pin the exact version: this job has no `npm ci`, so a bare `npx prettier`
+        # fetches the latest release (a floating `^` range let CI grab 3.9.1 and
+        # reformat files that are clean under the pinned 3.8.4). Keep in lockstep
+        # with the prettier devDependency in package.json.
+        run: npx prettier@3.8.4 . --check
 
   # Test suite — non-blocking initially.
   # Flip `continue-on-error: false` to make this a required gate once it has

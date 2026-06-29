@@ -94,7 +94,7 @@ If the user declines to answer, proceed with discovery results at the achievable
 
 ## `sources.toml` schema
 
-The optional override file lives at `context/audits/sources.toml` relative to the audit root. When present, its values override or extend auto-detection.
+The optional override file lives at `context/audits/sources.toml` relative to the audit root. When present, its values override or extend auto-detection. It is purely an override for non-MCP or explicit connector wiring (and repo scope) — a reachable MCP connector (Jira/Confluence/Linear/Coda/…) is used directly during the audit whether or not a `sources.toml` exists. Its absence never means tracker/docs enrichment is skipped; see the data-source resolution protocol in `connector-shapes.md`.
 
 ```toml
 # Scope: which repositories to measure. Omit for current-repo-only.

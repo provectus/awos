@@ -202,11 +202,43 @@ Write the assembled `DocsConnector` to `collected/docs.json`:
 
 ---
 
+## Turnkey enrichment recipe
+
+When a tracker or docs MCP is reachable, enriching it is a small, bounded operation — not a 730-day data migration. The engine buckets whatever you provide; a recent window is enough. Mapping reachable data into the shapes above is expected, not fabrication, and it is not gated on a `sources.toml`.
+
+Tracker (Jira) → `collected/tracker.json`:
+
+```
+# 1. Fetch a bounded recent window (e.g. issues updated in the last ~180 days).
+#    Jira MCP: searchJiraIssuesUsingJql, jql = "updated >= -180d ORDER BY updated DESC"
+# 2. Map each issue to a TicketRecord {id, type, status, created_at, resolved_at}
+#    and wrap as a TrackerConnector {tickets: [...], incident_source: null}.
+# 3. Write it:
+#    context/audits/YYYY-MM-DD/collected/tracker.json
+# 4. Re-run the tracker metrics, then re-aggregate:
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i1 "<repoPath>" "context/audits/YYYY-MM-DD/collected"
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i2 "<repoPath>" "context/audits/YYYY-MM-DD/collected"
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i3 "<repoPath>" "context/audits/YYYY-MM-DD/collected"
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
+```
+
+Docs (Confluence) → `collected/docs.json`:
+
+```
+# 1. List recent space pages (e.g. Confluence MCP: getPagesInConfluenceSpace, or
+#    searchConfluenceUsingCql with cql = "lastmodified >= now('-180d')").
+# 2. Map each page to a DocPage {title, url, updated_at} and wrap as a
+#    DocsConnector {pages: [...]}.
+# 3. Write context/audits/YYYY-MM-DD/collected/docs.json, then:
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_d1 "<repoPath>" "context/audits/YYYY-MM-DD/collected"
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
+```
+
 ## Data-source resolution protocol
 
-For every non-git source (tracker, docs, incident, and any reachable MCP/integration that maps to a collector):
+A reachable tracker/docs/incident MCP is enriched by default — fetching and mapping it is part of the audit, not optional, and not gated on a `sources.toml`. For every non-git source (tracker, docs, incident, and any reachable MCP/integration that maps to a collector):
 
-1. **Attempt to fetch.** Try the MCP call or API request.
+1. **Attempt to fetch.** Try the MCP call or API request. If it is reachable, fetch it — do not pre-decide it is out of scope.
 2. **On success** — map each returned record into the shape above, write the `TrackerConnector` or `DocsConnector` JSON to `collected/<source>.json`, then run the affected metric:
    ```
    node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric <id> "<repoPath>" "context/audits/YYYY-MM-DD/collected"

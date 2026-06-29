@@ -202,3 +202,79 @@ test('adp_g7: SKIP when total_merges is 0', () => {
     'must SKIP when total_merges is 0 (cannot compute rate)'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_g7: score=1.0 and confidence=1.0 when 0% change failure rate (elite band)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [],
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 50,
+    ai_marked_commits: 0,
+    total_merges: 10,
+    revert_merges: 0,
+    numstat_totals: { added: 300, deleted: 100 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.score,
+    1.0,
+    'score must be 1.0 when failure rate = 0 (clamp01(1 - 0/0.15) = 1)'
+  );
+  assert.equal(result.confidence, 1.0, 'confidence must be 1.0');
+});
+
+test('adp_g7: score=0 when failure rate >= 15% (low band)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [],
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 50,
+    ai_marked_commits: 0,
+    total_merges: 100,
+    revert_merges: 15,
+    numstat_totals: { added: 300, deleted: 100 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    result.score <= 0.001,
+    `score must be 0 at 15% failure rate (clamp01(1 - 0.15/0.15) = 0), got ${result.score}`
+  );
+});
+
+test('adp_g7: score~=0.5 at 7.5% failure rate', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [],
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 50,
+    ai_marked_commits: 0,
+    total_merges: 200,
+    revert_merges: 15, // 15/200 = 7.5%
+    numstat_totals: { added: 300, deleted: 100 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    Math.abs(result.score - 0.5) < 0.0001,
+    `score must be 0.5 at 7.5% failure rate (clamp01(1 - 0.075/0.15)), got ${result.score}`
+  );
+});
+
+test('adp_g7: score=0 and confidence=0 on SKIP', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

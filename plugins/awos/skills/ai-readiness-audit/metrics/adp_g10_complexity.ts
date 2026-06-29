@@ -40,6 +40,15 @@ import {
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
+import { bandScore, clamp01 } from './_score.ts';
+
+const COMPLEXITY_ANCHORS = [
+  { x: 1, y: 1.0 },
+  { x: 5, y: 1.0 },
+  { x: 10, y: 0.75 },
+  { x: 15, y: 0.5 },
+  { x: 30, y: 0.0 },
+] as const;
 import { isGeneratedPath } from '../generated.ts';
 import {
   EXT_TO_GRAMMAR,
@@ -287,6 +296,17 @@ export async function compute(
     band,
   };
 
+  const filesTotal = filesAnalysed + filesSkipped;
+  const complexityScore = clamp01(
+    bandScore(
+      avgCcn,
+      COMPLEXITY_ANCHORS as Array<{ x: number; y: number }>,
+      'linear'
+    )
+  );
+  const complexityConfidence = filesTotal > 0 ? filesAnalysed / filesTotal : 0;
+  const complexityExpression = `avg_ccn=${avgCcn.toFixed(1)} (${band}), ${hotspotCount} hotspot${hotspotCount !== 1 ? 's' : ''} > CCN 10`;
+
   return makeMetricResult(
     'adp_g10_complexity',
     value,
@@ -295,6 +315,11 @@ export async function compute(
     computeReliability('not-reliable', ['scale'], []),
     ['scale'],
     [],
-    band
+    band,
+    undefined,
+    undefined,
+    complexityExpression,
+    complexityScore,
+    complexityConfidence
   );
 }

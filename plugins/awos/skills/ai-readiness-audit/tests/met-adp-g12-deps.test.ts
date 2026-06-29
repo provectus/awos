@@ -194,3 +194,34 @@ test('adp_g12: metric id is adp_g12_deps', () => {
   const result = compute('', standards, {}, tmp);
   assert.equal(result.metric, 'adp_g12_deps');
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_g12: score=1.0 and confidence=1.0 when deps found (observational metric)', () => {
+  const tmp = makeTmpDir();
+  writeFileSync(
+    join(tmp, 'package.json'),
+    JSON.stringify({ dependencies: { react: '^18', axios: '^1' } })
+  );
+
+  const result = compute('', standards, {}, tmp);
+  assert.equal(
+    result.score,
+    1.0,
+    'score must be 1.0 when deps found (observational — count alone is informational)'
+  );
+  assert.equal(
+    result.confidence,
+    1.0,
+    'confidence must be 1.0 when manifest present'
+  );
+});
+
+test('adp_g12: score=0 and confidence=0 on SKIP (no manifest)', () => {
+  const tmp = makeTmpDir();
+  const result = compute('', standards, {}, tmp);
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

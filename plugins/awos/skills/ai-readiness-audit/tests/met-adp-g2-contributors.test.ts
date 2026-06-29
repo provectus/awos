@@ -140,3 +140,43 @@ test('adp_g2: SKIP when monthly_buckets empty', () => {
     'must SKIP when monthly_buckets is empty'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_g2: score=1 and confidence=1 when data available (observational metric)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    monthly_buckets: [
+      { bucket_start: '2025-01-01', authors: 3, commits: 10, merges: 2 },
+    ],
+    tooling_paths: [],
+    merge_records: [],
+    total_commits: 10,
+    ai_marked_commits: 0,
+    total_merges: 2,
+    revert_merges: 0,
+    numstat_totals: { added: 50, deleted: 10 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.score,
+    1.0,
+    'score must be 1.0 when data available (observational metric — direction is ambiguous)'
+  );
+  assert.equal(
+    result.confidence,
+    1.0,
+    'confidence must be 1.0 when full git history scanned'
+  );
+});
+
+test('adp_g2: score=0 and confidence=0 on SKIP', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

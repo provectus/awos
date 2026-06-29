@@ -228,3 +228,49 @@ test('adp_i1: mixed growth type names are case-insensitive', () => {
     `expected ~0.5 growth fraction, got ${result.value}`
   );
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_i1: score=1.0 when 100% growth work (60%+ threshold capped)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'tracker', {
+    tickets: [],
+    type_counts: { story: 10 },
+    resolved_count: 5,
+    incident_source: null,
+  });
+
+  const result = compute(collectedDir, standards, { has_tracker: true });
+  assert.equal(
+    result.score,
+    1.0,
+    'score must be 1.0 when growthFrac=1.0 (clamp01(1.0/0.6) = 1.0)'
+  );
+  assert.equal(result.confidence, 1.0, 'confidence must be 1.0');
+});
+
+test('adp_i1: score=0.5 when 30% growth work (half of 60% threshold)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'tracker', {
+    tickets: [],
+    type_counts: { story: 3, bug: 7 },
+    resolved_count: 5,
+    incident_source: null,
+  });
+
+  const result = compute(collectedDir, standards, { has_tracker: true });
+  // growthFrac = 3/10 = 0.3; score = clamp01(0.3/0.6) = 0.5
+  assert.ok(
+    Math.abs(result.score - 0.5) < 0.0001,
+    `score must be 0.5 when growthFrac=0.3 (= 0.3/0.6), got ${result.score}`
+  );
+});
+
+test('adp_i1: score=0 and confidence=0 on SKIP (tracker absent)', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

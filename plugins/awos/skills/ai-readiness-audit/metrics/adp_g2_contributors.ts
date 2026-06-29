@@ -91,6 +91,8 @@ export function compute(
     null,
     value_series,
     undefined,
-    expression
+    expression,
+    1.0,
+    1.0
   );
 }

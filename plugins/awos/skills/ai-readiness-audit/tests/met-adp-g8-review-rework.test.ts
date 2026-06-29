@@ -160,3 +160,46 @@ test('adp_g8: SKIP when merge_records empty', () => {
     'must SKIP when no merge records available'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_g8: score=1.0 and confidence=1.0 when data available (observational metric)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [
+      {
+        branch_first_commit_at: '2025-01-01T00:00:00Z',
+        merged_at: '2025-01-02T00:00:00Z',
+      },
+    ],
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 10,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 50, deleted: 10 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.score,
+    1.0,
+    'score must be 1.0 when data available (observational — direction is ambiguous)'
+  );
+  assert.equal(
+    result.confidence,
+    1.0,
+    'confidence must be 1.0 when git data present'
+  );
+});
+
+test('adp_g8: score=0 and confidence=0 on SKIP', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

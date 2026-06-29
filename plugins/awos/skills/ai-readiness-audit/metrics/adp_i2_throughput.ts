@@ -79,6 +79,8 @@ export function compute(
     null,
     undefined,
     undefined,
-    expression
+    expression,
+    1.0,
+    1.0
   );
 }

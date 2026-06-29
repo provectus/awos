@@ -41,6 +41,7 @@ import {
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
+import { clamp01 } from './_score.ts';
 import { isGeneratedPath } from '../generated.ts';
 import { LANGUAGES } from '../languages.ts';
 import {
@@ -297,15 +298,25 @@ export async function compute(
       ? `${publicDocumented} of ${publicTotal} public defs documented = ${publicCoverage.toFixed(2)}`
       : `${documented} of ${total} defs documented = ${overallCoverage.toFixed(2)}`;
 
-  const result = makeMetricResult(
+  const score2204 = clamp01(publicCoverage);
+  const score2205 = clamp01(overallCoverage);
+  const docConfidence =
+    filePaths.length > 0 ? filesAnalysed / filePaths.length : 0;
+
+  return makeMetricResult(
     'adp_g13_doc_coverage',
     Math.round(publicCoverage * 1000) / 1000,
     'computed',
     awarded,
     computeReliability('maximal', ['audit'], []),
     ['audit'],
-    []
+    [],
+    null,
+    undefined,
+    undefined,
+    expression,
+    score2204,
+    docConfidence,
+    { 2204: score2204, 2205: score2205 }
   );
-  result.expression = expression;
-  return result;
 }

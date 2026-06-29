@@ -235,3 +235,81 @@ test('adp_g4: SKIP when merge_records empty', () => {
     'must SKIP when no merge records to compute from'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_g4: score=0.75 and confidence=1.0 when median lead time is 24h (DORA high anchor)', () => {
+  const tmp = makeTmpDir();
+  // Single merge record with 24h lead time → median = 24h → score = 0.75 (log anchor)
+  const base = new Date('2025-01-01T00:00:00Z');
+  const merged = new Date(base.getTime() + 24 * 3_600_000);
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [
+      {
+        branch_first_commit_at: base.toISOString(),
+        merged_at: merged.toISOString(),
+      },
+    ],
+    monthly_buckets: [
+      { bucket_start: '2025-01-01', authors: 2, commits: 10, merges: 1 },
+    ],
+    tooling_paths: [],
+    total_commits: 10,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 50, deleted: 10 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    Math.abs(result.score - 0.75) < 0.0001,
+    `score must be 0.75 at 24h median lead time (log anchor), got ${result.score}`
+  );
+  assert.equal(
+    result.confidence,
+    1.0,
+    'confidence must be 1.0 when git data available'
+  );
+});
+
+test('adp_g4: score=1.0 when median lead time is <= 1h (below first anchor)', () => {
+  const tmp = makeTmpDir();
+  const base = new Date('2025-01-01T00:00:00Z');
+  const merged = new Date(base.getTime() + 1 * 3_600_000);
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [
+      {
+        branch_first_commit_at: base.toISOString(),
+        merged_at: merged.toISOString(),
+      },
+    ],
+    monthly_buckets: [
+      { bucket_start: '2025-01-01', authors: 2, commits: 5, merges: 1 },
+    ],
+    tooling_paths: [],
+    total_commits: 5,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 20, deleted: 5 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.score,
+    1.0,
+    'score must be 1.0 when lead time <= 1h (clamps to first anchor)'
+  );
+});
+
+test('adp_g4: score=0 and confidence=0 on SKIP', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

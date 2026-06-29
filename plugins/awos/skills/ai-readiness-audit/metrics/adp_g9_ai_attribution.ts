@@ -20,6 +20,7 @@ import {
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
+import { clamp01 } from './_score.ts';
 
 export function compute(
   collectedDir: string,
@@ -78,6 +79,8 @@ export function compute(
     null,
     undefined,
     undefined,
-    expression
+    expression,
+    clamp01(attributionRate),
+    1.0
   );
 }

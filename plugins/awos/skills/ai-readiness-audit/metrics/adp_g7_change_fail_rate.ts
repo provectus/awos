@@ -27,6 +27,7 @@ import {
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
+import { clamp01 } from './_score.ts';
 
 /** Map change failure rate fraction to a DORA band label. */
 function doraChangeFailBand(rate: number): string {
@@ -90,6 +91,8 @@ export function compute(
     band,
     undefined,
     undefined,
-    expression
+    expression,
+    clamp01(1 - rate / 0.15),
+    1.0
   );
 }

@@ -353,3 +353,53 @@ test('adp_i3: metric id is correct', () => {
 
   assert.equal(result.metric, 'adp_i3_mttr', 'metric id must be "adp_i3_mttr"');
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_i3: score=0.75 when median MTTR is 1h (DORA high anchor)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    makeGitRaw([makeMergeRecord(1)])
+  );
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    Math.abs(result.score - 0.75) < 0.0001,
+    `score must be 0.75 at 1h MTTR (log anchor), got ${result.score}`
+  );
+  // Git-proxy only → confidence=0.3 (intervals present but no incident_source)
+  assert.ok(
+    result.confidence > 0 && result.confidence <= 1,
+    `confidence must be in (0,1] when git proxy data present, got ${result.confidence}`
+  );
+});
+
+test('adp_i3: score=0.5 when median MTTR is 24h (DORA medium anchor)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    makeGitRaw([makeMergeRecord(24)])
+  );
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    Math.abs(result.score - 0.5) < 0.0001,
+    `score must be 0.5 at 24h MTTR (log anchor), got ${result.score}`
+  );
+});
+
+test('adp_i3: score=0 and confidence=0 when no git and no incident source', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 when no data sources');
+  assert.equal(
+    result.confidence,
+    0,
+    'confidence must be 0 when no data available'
+  );
+});

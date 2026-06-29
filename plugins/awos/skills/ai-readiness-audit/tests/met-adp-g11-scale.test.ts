@@ -154,3 +154,31 @@ test('adp_g11: metric id is adp_g11_scale', () => {
   const result = compute('', standards, {}, tmp);
   assert.equal(result.metric, 'adp_g11_scale');
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_g11: score=1.0 and confidence=1.0 when files found (observational metric)', () => {
+  const tmp = makeTmpDir();
+  writeFileSync(join(tmp, 'app.js'), 'const x = 1;\nconst y = 2;\n');
+
+  const result = compute('', standards, {}, tmp);
+  assert.equal(
+    result.score,
+    1.0,
+    'score must be 1.0 when source files found (observational — size is context)'
+  );
+  assert.equal(
+    result.confidence,
+    1.0,
+    'confidence must be 1.0 when LOC can be counted'
+  );
+});
+
+test('adp_g11: score=0 and confidence=0 on SKIP (no files)', () => {
+  const tmp = makeTmpDir();
+  const result = compute('', standards, {}, tmp);
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

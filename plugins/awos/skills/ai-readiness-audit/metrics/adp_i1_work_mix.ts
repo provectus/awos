@@ -33,6 +33,7 @@ import {
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
+import { clamp01 } from './_score.ts';
 
 const GROWTH_TYPES = new Set([
   'feature',
@@ -107,7 +108,13 @@ export function compute(
       categories,
       reliability,
       ['tracker'],
-      []
+      [],
+      null,
+      undefined,
+      undefined,
+      undefined,
+      1.0,
+      1.0
     );
   }
 
@@ -132,6 +139,8 @@ export function compute(
     band,
     undefined,
     undefined,
-    expression
+    expression,
+    clamp01(growthFrac / 0.6),
+    1.0
   );
 }

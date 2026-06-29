@@ -31,6 +31,14 @@ import {
   type MetricResult,
   type ValueSeriesEntry,
 } from './_base.ts';
+import { bandScore } from './_score.ts';
+
+const DEPLOY_FREQ_ANCHORS = [
+  { x: 0.03, y: 0 },
+  { x: 0.25, y: 0.1 },
+  { x: 1.0, y: 0.5 },
+  { x: 7.0, y: 1.0 },
+] as const;
 
 /** Map merges-per-week to a DORA band label. */
 function doraDeployBand(mergesPerWeek: number): string {
@@ -102,6 +110,11 @@ export function compute(
     value: bucketWeeks > 0 ? (b.merges ?? 0) / bucketWeeks : null,
   }));
 
+  const score = bandScore(
+    mergesPerWeek,
+    DEPLOY_FREQ_ANCHORS as Array<{ x: number; y: number }>,
+    'log'
+  );
   const expression = `${totalMerges} merges / ${totalWeeks.toFixed(1)}w = ${mergesPerWeek.toFixed(2)}/week (${band})`;
   return makeMetricResult(
     'adp_g3_deploy_frequency',
@@ -114,6 +127,8 @@ export function compute(
     band,
     value_series,
     undefined,
-    expression
+    expression,
+    score,
+    1.0
   );
 }

@@ -161,3 +161,36 @@ test('adp_i2: categories_awarded empty when topology.has_tracker=false', () => {
     'no category 1102 when topology.has_tracker is false'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_i2: score=1.0 and confidence=1.0 when throughput data available (observational metric)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'tracker', {
+    tickets: [],
+    type_counts: { story: 5, bug: 3 },
+    resolved_count: 42,
+    incident_source: null,
+  });
+
+  const result = compute(collectedDir, standards, { has_tracker: true });
+  assert.equal(
+    result.score,
+    1.0,
+    'score must be 1.0 when throughput data available (observational — count alone is informational)'
+  );
+  assert.equal(
+    result.confidence,
+    1.0,
+    'confidence must be 1.0 when tracker connected'
+  );
+});
+
+test('adp_i2: score=0 and confidence=0 on SKIP (tracker absent)', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

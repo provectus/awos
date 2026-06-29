@@ -207,3 +207,56 @@ test('adp_c1: categories_awarded empty when topology.has_ci=false', () => {
     'no category 1001 when topology.has_ci is false'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_c1: score=1.0 and confidence=1.0 when all runs succeed (100% pass rate)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'ci', {
+    config_detected: true,
+    config_path: '.github/workflows/ci.yml',
+    runs: [
+      { conclusion: 'success' },
+      { conclusion: 'success' },
+      { conclusion: 'success' },
+    ],
+  });
+
+  const result = compute(collectedDir, standards, { has_ci: true });
+  assert.equal(
+    result.score,
+    1.0,
+    'score must equal pass rate (1.0 when all runs succeed)'
+  );
+  assert.equal(result.confidence, 1.0, 'confidence must be 1.0');
+});
+
+test('adp_c1: score=0.8 when 4 of 5 runs succeed (80% pass rate)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'ci', {
+    config_detected: true,
+    config_path: '.github/workflows/ci.yml',
+    runs: [
+      { conclusion: 'success' },
+      { conclusion: 'success' },
+      { conclusion: 'success' },
+      { conclusion: 'success' },
+      { conclusion: 'failure' },
+    ],
+  });
+
+  const result = compute(collectedDir, standards, { has_ci: true });
+  assert.ok(
+    Math.abs(result.score - 0.8) < 0.0001,
+    `score must equal pass rate (0.8 = 4/5), got ${result.score}`
+  );
+});
+
+test('adp_c1: score=0 and confidence=0 on SKIP (ci.json absent)', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

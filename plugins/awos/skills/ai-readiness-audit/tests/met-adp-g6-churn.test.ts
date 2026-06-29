@@ -128,3 +128,41 @@ test('adp_g6: SKIP when numstat_totals missing', () => {
     'must SKIP when numstat_totals is missing from raw'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_g6: score=1.0 and confidence=1.0 when data available (observational metric)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [],
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 10,
+    ai_marked_commits: 0,
+    total_merges: 0,
+    revert_merges: 0,
+    numstat_totals: { added: 300, deleted: 100 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.score,
+    1.0,
+    'score must be 1.0 when data available (direction is project-size dependent)'
+  );
+  assert.equal(
+    result.confidence,
+    1.0,
+    'confidence must be 1.0 when git source present'
+  );
+});
+
+test('adp_g6: score=0 and confidence=0 on SKIP', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

@@ -29,6 +29,15 @@ import {
   type MetricResult,
   type ValueSeriesEntry,
 } from './_base.ts';
+import { bandScore, clamp01 } from './_score.ts';
+
+const CYCLE_TIME_ANCHORS = [
+  { x: 1, y: 1.0 },
+  { x: 24, y: 0.75 },
+  { x: 168, y: 0.5 },
+  { x: 720, y: 0.25 },
+  { x: 2160, y: 0.0 },
+] as const;
 
 interface MergeRecord {
   merged_at: string;
@@ -156,6 +165,13 @@ export function compute(
     }
   }
 
+  const score = clamp01(
+    bandScore(
+      medianHours,
+      CYCLE_TIME_ANCHORS as Array<{ x: number; y: number }>,
+      'log'
+    )
+  );
   const expression = `median ${medianHours.toFixed(1)}h cycle time (${band})`;
   return makeMetricResult(
     'adp_g5_pr_cycle_time',
@@ -168,6 +184,8 @@ export function compute(
     band,
     value_series.length > 0 ? value_series : undefined,
     undefined,
-    expression
+    expression,
+    score,
+    1.0
   );
 }

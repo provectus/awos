@@ -170,3 +170,67 @@ test('adp_g9: SKIP when total_commits is 0', () => {
     'must SKIP when total_commits is 0 (cannot compute ratio)'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_g9: score equals attribution rate (50% → score=0.5)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [],
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 2,
+    ai_marked_commits: 1,
+    total_merges: 0,
+    revert_merges: 0,
+    numstat_totals: { added: 10, deleted: 2 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    Math.abs(result.score - 0.5) < 0.0001,
+    `score must equal attributionRate (0.5), got ${result.score}`
+  );
+  assert.equal(
+    result.confidence,
+    1.0,
+    'confidence must be 1.0 when all commits scanned'
+  );
+});
+
+test('adp_g9: score=0 when no AI commits (0% attribution)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [],
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 10,
+    ai_marked_commits: 0,
+    total_merges: 0,
+    revert_merges: 0,
+    numstat_totals: { added: 80, deleted: 20 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.score,
+    0,
+    'score must be 0 when no AI-attributed commits'
+  );
+  assert.equal(
+    result.confidence,
+    1.0,
+    'confidence is still 1.0 — surface is fully scanned'
+  );
+});
+
+test('adp_g9: score=0 and confidence=0 on SKIP (no git.json)', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

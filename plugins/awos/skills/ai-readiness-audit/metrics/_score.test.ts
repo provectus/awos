@@ -58,6 +58,10 @@ test('loginterp: returns y0 when x0<=0 (guard against log(0))', () => {
   assert.equal(loginterp(5, 0, 0.5, 10, 1), 0.5);
 });
 
+test('loginterp: returns y0 when x1<=0 (guard against log(0) in upper bound)', () => {
+  assert.equal(loginterp(5, 1, 0.5, 0, 1), 0.5);
+});
+
 // ---------------------------------------------------------------------------
 // bandScore
 // ---------------------------------------------------------------------------

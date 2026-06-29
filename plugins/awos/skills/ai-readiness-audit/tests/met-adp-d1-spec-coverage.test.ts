@@ -182,3 +182,48 @@ test('adp_d1: sources_used and sources_missing correct on success', () => {
     'sources_missing must be empty on full data'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_d1: score=1.0 when all pages recently updated (100% coverage)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'docs', {
+    page_count: 5,
+    recently_updated_count: 5,
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.score,
+    1.0,
+    'score must equal coverage ratio (1.0 = 5/5)'
+  );
+  assert.equal(
+    result.confidence,
+    1.0,
+    'confidence must be 1.0 when docs connector available'
+  );
+});
+
+test('adp_d1: score=0.5 when half of pages recently updated', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'docs', {
+    page_count: 4,
+    recently_updated_count: 2,
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    Math.abs(result.score - 0.5) < 0.0001,
+    `score must be 0.5 when 2/4 pages recently updated, got ${result.score}`
+  );
+});
+
+test('adp_d1: score=0 and confidence=0 on SKIP (docs.json absent)', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

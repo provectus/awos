@@ -176,3 +176,63 @@ test('adp_g3: SKIP when monthly_buckets empty', () => {
   const result = compute(collectedDir, standards, {});
   assert.equal(result.status, 'SKIP', 'must SKIP when no bucket data');
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_g3: score=1.0 and confidence=1.0 at exactly 7.0 merges/week (elite anchor)', () => {
+  const tmp = makeTmpDir();
+  // 1 bucket × 30 days = 30/7 weeks; 30 merges / (30/7) weeks = 7.0 merges/week exactly
+  const collectedDir = writeCollected(tmp, 'git', {
+    monthly_buckets: [
+      { bucket_start: '2025-01-01', authors: 5, commits: 100, merges: 30 },
+    ],
+    tooling_paths: [],
+    merge_records: [],
+    total_commits: 100,
+    ai_marked_commits: 0,
+    total_merges: 30,
+    revert_merges: 0,
+    numstat_totals: { added: 500, deleted: 100 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    Math.abs(result.score - 1.0) < 0.0001,
+    `score must be 1.0 at 7 merges/week (elite anchor), got ${result.score}`
+  );
+  assert.equal(result.confidence, 1.0, 'confidence must be 1.0');
+});
+
+test('adp_g3: score=0 when 0 merges (below lower anchor)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    monthly_buckets: [
+      { bucket_start: '2025-01-01', authors: 2, commits: 5, merges: 0 },
+    ],
+    tooling_paths: [],
+    merge_records: [],
+    total_commits: 5,
+    ai_marked_commits: 0,
+    total_merges: 0,
+    revert_merges: 0,
+    numstat_totals: { added: 20, deleted: 5 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.score,
+    0,
+    'score must be 0 when no merges (below 0.03/week anchor)'
+  );
+});
+
+test('adp_g3: score=0 and confidence=0 on SKIP', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

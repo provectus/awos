@@ -51,6 +51,14 @@ import {
   type MetricResult,
   type Reliability,
 } from './_base.ts';
+import { bandScore, clamp01 } from './_score.ts';
+
+const MTTR_ANCHORS = [
+  { x: 0.1, y: 1.0 },
+  { x: 1, y: 0.75 },
+  { x: 24, y: 0.5 },
+  { x: 168, y: 0.0 },
+] as const;
 
 /** Map median hours to a DORA MTTR band label. */
 function mtttrBand(medianHours: number): string {
@@ -134,7 +142,13 @@ export function compute(
         categories,
         reliability,
         ['tracker'],
-        ['git']
+        ['git'],
+        null,
+        undefined,
+        undefined,
+        undefined,
+        0,
+        1.0
       );
     }
     // Neither source present — but we must not SKIP. Return with git listed as
@@ -151,7 +165,13 @@ export function compute(
       [],
       reliability,
       ['git'],
-      []
+      [],
+      null,
+      undefined,
+      undefined,
+      undefined,
+      0,
+      0
     );
   }
 
@@ -192,6 +212,17 @@ export function compute(
   const sourcesUsed = incidentSource ? ['git', 'tracker'] : ['git'];
   const sourcesMissing: string[] = [];
 
+  const score =
+    medianHours !== null
+      ? clamp01(
+          bandScore(
+            medianHours,
+            MTTR_ANCHORS as Array<{ x: number; y: number }>,
+            'log'
+          )
+        )
+      : 0;
+  const confidence = incidentSource ? 1.0 : allIntervals.length > 0 ? 0.3 : 0.0;
   const expression =
     medianHours !== null
       ? `median ${medianHours.toFixed(1)}h MTTR (${band})`
@@ -207,6 +238,8 @@ export function compute(
     band,
     undefined,
     undefined,
-    expression
+    expression,
+    score,
+    confidence
   );
 }

@@ -30,6 +30,7 @@ import {
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
+import { clamp01 } from './_score.ts';
 
 /** Map pass-rate fraction to a band label. */
 function ciPassBand(rate: number): string {
@@ -109,6 +110,8 @@ export function compute(
     band,
     undefined,
     undefined,
-    expression
+    expression,
+    clamp01(rate),
+    1.0
   );
 }

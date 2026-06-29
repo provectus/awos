@@ -195,3 +195,34 @@ test('adp_c2: categories_awarded empty when topology.has_ci=false', () => {
     'no category 1002 when topology.has_ci is false'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3b: score/confidence contracts
+// ---------------------------------------------------------------------------
+
+test('adp_c2: score=1.0 and confidence=1.0 when pipeline duration data available (observational metric)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'ci', {
+    config_detected: true,
+    config_path: '.github/workflows/ci.yml',
+    runs: [
+      { conclusion: 'success', duration_seconds: 120 },
+      { conclusion: 'success', duration_seconds: 180 },
+    ],
+  });
+
+  const result = compute(collectedDir, standards, { has_ci: true });
+  assert.equal(
+    result.score,
+    1.0,
+    'score must be 1.0 when duration data available (observational — shorter is better but thresholds vary)'
+  );
+  assert.equal(result.confidence, 1.0, 'confidence must be 1.0');
+});
+
+test('adp_c2: score=0 and confidence=0 on SKIP (ci.json absent)', () => {
+  const tmp = makeTmpDir();
+  const result = compute(join(tmp, 'no-collected'), standards, {});
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});

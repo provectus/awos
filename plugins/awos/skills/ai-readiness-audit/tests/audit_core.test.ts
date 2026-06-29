@@ -148,6 +148,95 @@ test('aggregate preserves existing sources block when collected/ is absent', () 
 });
 
 // ---------------------------------------------------------------------------
+// Phase 3b: weight-leak guard — FAIL code's weight_awarded must be 0 even when
+// the metric ran and an awarded code carries a continuous score.
+// ---------------------------------------------------------------------------
+
+test('aggregate: two-code metric — awarded code gets weight_max×score, non-awarded code gets 0', () => {
+  const outDir = mkdtempSync(join(tmpdir(), 'aggregate-leak-test-'));
+
+  // Simulates adp_g13_doc_coverage: two codes (2204, 2205) in the same metric.
+  // Code 2204 awarded (PARTIAL, score=0.7 → weight_awarded = round(2×0.7,1) = 1.4)
+  // Code 2205 NOT awarded (FAIL, score=0 → weight_awarded = 0), even though the metric ran.
+  const dimJson = {
+    dimension: 'documentation',
+    date: '2025-01-01',
+    score: 0,
+    coverage: 0,
+    checks: [
+      {
+        check_id: 'DOC-05',
+        code: [2204],
+        method: 'computed',
+        status: 'PARTIAL',
+        value: 0.7,
+        evidence: [],
+        weight_awarded: 0,
+        weight_max: 2,
+        score: 0.7,
+        confidence: 0.9,
+        applies: true,
+        reliability: { tag: 'maximal', confidence: 'HIGH', note: null },
+        source: '',
+        definition: '',
+        hint: '',
+        plain: '',
+      },
+      {
+        check_id: 'DOC-06',
+        code: [2205],
+        method: 'computed',
+        status: 'FAIL',
+        value: 0.4,
+        evidence: [],
+        weight_awarded: 99,
+        weight_max: 1,
+        score: 0,
+        confidence: 0.9,
+        applies: true,
+        reliability: { tag: 'maximal', confidence: 'HIGH', note: null },
+        source: '',
+        definition: '',
+        hint: '',
+        plain: '',
+      },
+    ],
+  };
+  writeFileSync(
+    join(outDir, 'documentation.json'),
+    JSON.stringify(dimJson, null, 2)
+  );
+
+  aggregate(outDir);
+
+  const updated = JSON.parse(
+    readFileSync(join(outDir, 'documentation.json'), 'utf8')
+  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const checks = updated.checks as any[];
+  const awarded = checks.find((c: any) => c.check_id === 'DOC-05');
+  const notAwarded = checks.find((c: any) => c.check_id === 'DOC-06');
+
+  assert.equal(
+    awarded.weight_awarded,
+    1.4,
+    `awarded code (score=0.7, weight_max=2) must yield weight_awarded=1.4, got ${awarded.weight_awarded}`
+  );
+  assert.equal(
+    notAwarded.weight_awarded,
+    0,
+    `non-awarded code (score=0, weight_max=1) must yield weight_awarded=0, not ${notAwarded.weight_awarded} — weight-leak must be closed`
+  );
+
+  // Dimension total = 1.4 + 0 = 1.4
+  assert.equal(
+    updated.score,
+    1.4,
+    `dimension score must be 1.4 (only awarded code contributes), got ${updated.score}`
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Phase 3a / Correction 3: aggregate re-derives weight_awarded from score
 // ---------------------------------------------------------------------------
 

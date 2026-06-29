@@ -148,3 +148,31 @@ test('linked repo named from target repo root, not the symlink leaf', () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('Symlink scan must surface AWOS context/* symlinks, not only agent-tool config dirs (issue #6)', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-ctx-symlink-'));
+  const outsideRepo = join(base, 'another-context-repo');
+  const repo = join(base, 'repo');
+  try {
+    mkdirSync(outsideRepo, { recursive: true });
+    mkdirSync(repo, { recursive: true });
+    // Create context/ dir in repo with a symlink to an outside directory.
+    mkdirSync(join(repo, 'context'), { recursive: true });
+    symlinkSync(outsideRepo, join(repo, 'context', 'product'));
+
+    const linked = detectLinkedRepos(repo);
+    assert.ok(
+      linked.some(
+        (r) => r.name === 'another-context-repo' || r.via.includes('context')
+      ),
+      `Symlink scan must surface AWOS context/* symlinks, not only agent-tool config dirs (issue #6): got ${JSON.stringify(linked)}`
+    );
+    const found = linked.find(
+      (r) => r.name === 'another-context-repo' || r.via.includes('context')
+    );
+    assert.ok(found, 'context/ symlink must be detected');
+    assert.equal(found!.kind, 'symlink', 'must be kind=symlink');
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});

@@ -548,5 +548,11 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
     scanDirForOutsideSymlinks(join(repoPath, dir), dir, 1);
   }
 
+  // Also scan AWOS framework dirs (context/, .awos/) for outside symlinks.
+  const AWOS_FRAMEWORK_DIRS = ['context', '.awos'];
+  for (const dir of AWOS_FRAMEWORK_DIRS) {
+    scanDirForOutsideSymlinks(join(repoPath, dir), dir, 1);
+  }
+
   return [...found.values()];
 }

@@ -326,9 +326,44 @@ export function shortSourceLabel(
   return short.trim() || (SOURCE_LABEL_DEFAULTS[src] ?? src);
 }
 
+/**
+ * Full human label for a source key (no lookback window). Prefers the recorded
+ * `source_windows` label, falls back to SOURCE_LABEL_DEFAULTS, then the raw key.
+ * Used for the Connected / Missed lists where a bare key like "tracker" reads as
+ * jargon — "issue tracker" is the friendly form.
+ */
+export function sourceFullLabel(
+  src: string,
+  sourceWindows:
+    | Record<string, { days: number | null; label: string }>
+    | undefined
+): string {
+  return sourceWindows?.[src]?.label ?? SOURCE_LABEL_DEFAULTS[src] ?? src;
+}
+
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Group linked repos by `name`, preserving first-seen order, collecting every
+ * `via` path that reaches each name. Lets the renderer show one line per repo
+ * with all its links (e.g. `onex-discovery-awos via .awos, context/product`).
+ */
+function groupLinkedByName(
+  bucket: LinkedRepo[]
+): Array<{ name: string; vias: string[] }> {
+  const order: string[] = [];
+  const viasByName = new Map<string, string[]>();
+  for (const r of bucket) {
+    if (!viasByName.has(r.name)) {
+      viasByName.set(r.name, []);
+      order.push(r.name);
+    }
+    viasByName.get(r.name)!.push(r.via);
+  }
+  return order.map((name) => ({ name, vias: viasByName.get(name)! }));
+}
 
 function pct(ratio: number): string {
   return (ratio * 100).toFixed(1) + '%';
@@ -750,7 +785,8 @@ export function renderMarkdown(audit: AuditJson): string {
           s.history_available_days < LIMITED_HISTORY_DAYS
             ? ` (limited history ~${s.history_available_days} days)`
             : '';
-        lines.push(`- ${s.source}${limitedNote}`);
+        const label = sourceFullLabel(s.source, audit.source_windows);
+        lines.push(`- ${label}${limitedNote}`);
       }
       lines.push('');
     }
@@ -759,7 +795,8 @@ export function renderMarkdown(audit: AuditJson): string {
       lines.push('');
       for (const s of missed) {
         const reason = s.reason_if_absent ? ` — ${s.reason_if_absent}` : '';
-        lines.push(`- ${s.source}${reason}`);
+        const label = sourceFullLabel(s.source, audit.source_windows);
+        lines.push(`- ${label}${reason}`);
       }
       lines.push('');
     }
@@ -778,21 +815,25 @@ export function renderMarkdown(audit: AuditJson): string {
       submodule: 'Git submodules',
       mcp: 'MCP servers',
     };
+    const pushBucket = (bucket: LinkedRepo[]): void => {
+      for (const g of groupLinkedByName(bucket)) {
+        lines.push(`- ${g.name} (via ${g.vias.join(', ')})`);
+      }
+      lines.push('');
+    };
     for (const kind of ['symlink', 'submodule', 'mcp']) {
       const bucket = byKindMd[kind];
       if (!bucket || bucket.length === 0) continue;
       lines.push(`**${KIND_LABEL_MD[kind]}:**`);
       lines.push('');
-      for (const r of bucket) lines.push(`- ${r.name} (via ${r.via})`);
-      lines.push('');
+      pushBucket(bucket);
     }
     for (const [kind, bucket] of Object.entries(byKindMd)) {
       if (['symlink', 'submodule', 'mcp'].includes(kind) || !bucket.length)
         continue;
       lines.push(`**${kind}:**`);
       lines.push('');
-      for (const r of bucket) lines.push(`- ${r.name} (via ${r.via})`);
-      lines.push('');
+      pushBucket(bucket);
     }
   } else {
     lines.push('None detected.');
@@ -1408,7 +1449,8 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       // Confidence cell: percent for applicable checks, dash for SKIP.
       const confCell =
         c.status === 'SKIP' ? '—' : `${Math.round((c.confidence ?? 0) * 100)}%`;
-      // Visible per-metric source citation link (6c.4) — shown inline in the Evidence cell.
+      // Visible per-metric source citation link (6c.4) — shown inline under the
+      // Check name, where the reader looks for what defines/standardises a check.
       const sourceCiteHtml =
         c.source_url && c.source_date
           ? `<br><small class="src-cite"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source)} ${esc(c.source_date)}</a></small>`
@@ -1417,12 +1459,12 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
             : '';
       rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
   <td>${ckn++}</td>
-  <td class="check"><span class="tip" tabindex="0"><b>${esc(c.check_id)}</b><span class="tipbox"><b>${esc(plainLead(c))}</b><span class="tipmeta">${checkMeta}</span></span></span><span class="plain">${esc(plainLead(c))}</span></td>
+  <td class="check"><span class="tip" tabindex="0"><b>${esc(c.check_id)}</b><span class="tipbox"><b>${esc(plainLead(c))}</b><span class="tipmeta">${checkMeta}</span></span></span><span class="plain">${esc(plainLead(c))}</span>${sourceCiteHtml}</td>
   <td>${statusBadge(c.status)}</td>
   <td>${pointsCell}</td>
   <td class="${relClass}">${tip(relLabel, relTipPlain, c.reliability.note ?? '')}</td>
   <td>${confCell}</td>
-  <td class="evidence">${evidence}${seriesSvg}${sourceCiteHtml}</td>
+  <td class="evidence">${evidence}${seriesSvg}</td>
 </tr>`);
     }
     rows.push('</tbody></table>');
@@ -1450,7 +1492,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
             : '<em>none detected</em>';
         rows.push(`<tr>
   <td>${esc(r.repo)}</td>
-  <td>${r.contributors !== null ? tip(String(r.contributors), 'Aggregate active-contributor count — no per-person data.', '') : '—'}</td>
+  <td>${r.contributors !== null ? tip(String(r.contributors), 'Active contributors in the audit window.', '') : '—'}</td>
   <td>${sources}</td>
   <td>${r.has_ai_tooling ? '✓ yes' : '✗ no'}</td>
   <td>${tip(fmtPts(r.awarded_weight), `Capability points earned by this repo: ${r.awarded_weight}.`, '')}</td>
@@ -1482,7 +1524,8 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
             s.history_available_days < LIMITED_HISTORY_DAYS
               ? ` <em>(limited history ~${s.history_available_days} days)</em>`
               : '';
-          rows.push(`<li>${esc(s.source)}${limitedNote}</li>`);
+          const label = sourceFullLabel(s.source, audit.source_windows);
+          rows.push(`<li>${esc(label)}${limitedNote}</li>`);
         }
         rows.push('</ul>');
       }
@@ -1492,7 +1535,8 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
           const reason = s.reason_if_absent
             ? ` — ${esc(s.reason_if_absent)}`
             : '';
-          rows.push(`<li>${esc(s.source)}${reason}</li>`);
+          const label = sourceFullLabel(s.source, audit.source_windows);
+          rows.push(`<li>${esc(label)}${reason}</li>`);
         }
         rows.push('</ul>');
       }
@@ -1512,26 +1556,29 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         submodule: 'Git submodules',
         mcp: 'MCP servers',
       };
+      // One <li> per linked repo, with every `via` path that reaches it joined
+      // — so all distinct links (e.g. three symlinks into one repo) are shown
+      // together rather than collapsed to the first one.
+      const renderBucket = (bucket: LinkedRepo[]): void => {
+        rows.push('<ul>');
+        for (const g of groupLinkedByName(bucket)) {
+          const vias = g.vias.map((v) => esc(v)).join(', ');
+          rows.push(`<li><b>${esc(g.name)}</b> <em>via ${vias}</em></li>`);
+        }
+        rows.push('</ul>');
+      };
       for (const kind of ['symlink', 'submodule', 'mcp']) {
         const bucket = byKind[kind];
         if (!bucket || bucket.length === 0) continue;
-        rows.push(`<h4>${KIND_LABEL[kind]}</h4><ul>`);
-        for (const r of bucket) {
-          rows.push(
-            `<li><b>${esc(r.name)}</b> <em>via ${esc(r.via)}</em></li>`
-          );
-        }
-        rows.push('</ul>');
+        rows.push(`<h4>${KIND_LABEL[kind]}</h4>`);
+        renderBucket(bucket);
       }
       // Render any unknown kinds (future-proof).
       for (const [kind, bucket] of Object.entries(byKind)) {
         if (['symlink', 'submodule', 'mcp'].includes(kind) || !bucket.length)
           continue;
-        rows.push(`<h4>${esc(kind)}</h4><ul>`);
-        for (const r of bucket) {
-          rows.push(`<li>${esc(r.name)} <em>via ${esc(r.via)}</em></li>`);
-        }
-        rows.push('</ul>');
+        rows.push(`<h4>${esc(kind)}</h4>`);
+        renderBucket(bucket);
       }
     } else {
       rows.push('<p><em>No linked repositories detected.</em></p>');

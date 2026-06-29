@@ -408,6 +408,34 @@ def main():
             # newest date dir that isn't the seeded previous one
             dd = [d for d in dd if d != seeded_date]
             out_dir = os.path.join(audits, dd[-1]) if dd else ""
+
+        # Fallback render: a transport failure (e.g. "API Error: Connection
+        # closed mid-response") can kill claude after audit.json is complete but
+        # before it renders the reports — leaving a non-zero rc and no
+        # report.md/html. audit.json is the source of truth and `render` is a
+        # pure function of it, so we can finish the job ourselves and turn a
+        # failed run into a complete one. Runs whenever the report is missing but
+        # the JSON exists, regardless of rc.
+        if out_dir and os.path.isdir(out_dir):
+            src_json = next(
+                (os.path.join(out_dir, n)
+                 for n in ("org-portfolio.json", "audit.json")
+                 if os.path.isfile(os.path.join(out_dir, n))),
+                None)
+            if src_json and not os.path.isfile(os.path.join(out_dir, "report.html")):
+                log(f"⚠ report.html missing but {os.path.basename(src_json)} present "
+                    f"(claude rc={rc}) — rendering reports from JSON")
+                for fmt, out_name in (("md", "report.md"), ("html", "report.html")):
+                    rp = subprocess.run(
+                        ["node", engine, "render", src_json, "--format", fmt],
+                        capture_output=True, text=True)
+                    if rp.returncode == 0:
+                        with open(os.path.join(out_dir, out_name), "w") as f:
+                            f.write(rp.stdout)
+                        log(f"  ✓ wrote {out_name}")
+                    else:
+                        log(f"  ✗ render {fmt} failed: {rp.stderr.strip()[:200]}")
+
         if out_dir and os.path.isdir(out_dir):
             shutil.copytree(out_dir, os.path.join(run_dir, "audit-output"))
             log(f"▶ archived audit output -> {run_dir}/audit-output")

@@ -556,8 +556,13 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
               resolved !== realRepoRoot
             ) {
               const name = linkedRepoName(resolved);
-              if (!found.has(name)) {
-                found.set(name, { name, kind: 'symlink', via });
+              // Key symlinks by their own path (`via`), not the target repo
+              // name: several symlinks can point into the same repo (e.g.
+              // .awos, context/product, .claude/skills → onex-discovery-awos)
+              // and every one of them is a distinct link worth reporting.
+              const key = `symlink:${via}`;
+              if (!found.has(key)) {
+                found.set(key, { name, kind: 'symlink', via });
               }
             }
             continue;
@@ -568,8 +573,12 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
             realTarget !== realRepoRoot
           ) {
             const name = linkedRepoName(realTarget);
-            if (!found.has(name)) {
-              found.set(name, { name, kind: 'symlink', via });
+            // Key by `via` (the symlink path), not the target repo name, so
+            // multiple links into the same repo are all kept. See the dangling
+            // branch above for the rationale.
+            const key = `symlink:${via}`;
+            if (!found.has(key)) {
+              found.set(key, { name, kind: 'symlink', via });
             }
           }
         } else if (

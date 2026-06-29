@@ -18,7 +18,7 @@ import {
   readdirSync,
   realpathSync,
 } from 'node:fs';
-import { join, dirname, basename } from 'node:path';
+import { join, dirname, basename, resolve, sep } from 'node:path';
 import { iterFiles, grep } from './detectors/_base.ts';
 import { detectCiConfigPath } from './ci_platforms.ts';
 import {
@@ -536,11 +536,26 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
           try {
             realTarget = realpathSync(p).replace(/\/+$/, '');
           } catch {
-            // Dangling symlink — target doesn't exist; use the raw link value for
-            // the name but record it only if it looks like an absolute outside path.
+            // Dangling symlink — target doesn't exist; resolve the raw link
+            // value relative to the symlink's own directory so that relative
+            // targets (e.g. "../sibling") are evaluated correctly before we
+            // decide whether they point outside the repo.  Realpath the
+            // directory (not the dangling target) so the result is in the
+            // same namespace as realRepoRoot (important on macOS where /tmp
+            // is a symlink to /private/tmp).
             const rawTarget = readlinkSync(p);
-            if (!rawTarget.startsWith(realRepoRoot)) {
-              const name = linkedRepoName(rawTarget.replace(/\/+$/, ''));
+            let linkDir: string;
+            try {
+              linkDir = realpathSync(dirname(p));
+            } catch {
+              linkDir = dirname(p);
+            }
+            const resolved = resolve(linkDir, rawTarget);
+            if (
+              !resolved.startsWith(realRepoRoot + sep) &&
+              resolved !== realRepoRoot
+            ) {
+              const name = linkedRepoName(resolved);
               if (!found.has(name)) {
                 found.set(name, { name, kind: 'symlink', via });
               }

@@ -369,3 +369,63 @@ test('detectLinkedRepos: all three kinds (symlink + submodule + mcp) surface tog
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Dangling-symlink relative-path fix (issue: relative dangling symlinks
+// were always recorded as external because rawTarget never starts with the
+// absolute realRepoRoot).
+// ---------------------------------------------------------------------------
+
+test('detectLinkedRepos: dangling relative symlink pointing OUTSIDE repo IS recorded', () => {
+  // link x -> ../outside-thing  (resolves outside repo, target does not exist)
+  const base = mkdtempSync(join(tmpdir(), 'awos-dangle-out-'));
+  const repo = join(base, 'repo');
+  try {
+    mkdirSync(repo, { recursive: true });
+    // ../outside-thing resolves to base/outside-thing — outside repo, dangling
+    symlinkSync('../outside-thing', join(repo, 'x'));
+
+    const linked = detectLinkedRepos(repo);
+    assert.ok(
+      linked.some((r) => r.name === 'outside-thing'),
+      `dangling relative symlink pointing outside repo must be recorded as linked repo; got ${JSON.stringify(linked)}`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('detectLinkedRepos: dangling relative symlink pointing INSIDE repo is NOT recorded', () => {
+  // link y -> ./does-not-exist-yet  (resolves inside repo, target does not exist)
+  const repo = mkdtempSync(join(tmpdir(), 'awos-dangle-in-'));
+  try {
+    // ./does-not-exist-yet resolves to repo/does-not-exist-yet — inside repo, dangling
+    symlinkSync('./does-not-exist-yet', join(repo, 'y'));
+
+    const linked = detectLinkedRepos(repo);
+    assert.ok(
+      !linked.some((r) => r.name === 'does-not-exist-yet'),
+      `dangling relative symlink resolving inside the repo must NOT be recorded as linked repo; got ${JSON.stringify(linked)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('detectLinkedRepos: dangling absolute symlink pointing outside repo IS recorded (regression)', () => {
+  // Absolute dangling path — the old rawTarget.startsWith(realRepoRoot) check
+  // handled this; must still work after the relative-path fix.
+  const repo = mkdtempSync(join(tmpdir(), 'awos-dangle-abs-'));
+  try {
+    // /tmp/absolute-outside-dangling does not exist and is outside repo
+    symlinkSync('/tmp/absolute-outside-dangling', join(repo, 'z'));
+
+    const linked = detectLinkedRepos(repo);
+    assert.ok(
+      linked.some((r) => r.name === 'absolute-outside-dangling'),
+      `dangling absolute symlink pointing outside repo must be recorded as linked repo; got ${JSON.stringify(linked)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});

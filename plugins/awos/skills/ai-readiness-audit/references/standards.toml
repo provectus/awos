@@ -39,6 +39,7 @@ standards_version = "2026.06"
 
 [category.ai_tooling_claude_md]
 code = 101
+check_id = "ADP-01"
 metric = "adp_g1_tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 10
@@ -52,6 +53,7 @@ source_year = 2026
 
 [category.ai_tooling_skills]
 code = 102
+check_id = "ADP-02"
 metric = "adp_g1_tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 6
@@ -65,6 +67,7 @@ source_year = 2026
 
 [category.ai_tooling_commands]
 code = 103
+check_id = "ADP-03"
 metric = "adp_g1_tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -78,6 +81,7 @@ source_year = 2026
 
 [category.ai_tooling_hooks]
 code = 104
+check_id = "ADP-04"
 metric = "adp_g1_tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -91,6 +95,7 @@ source_year = 2026
 
 [category.ai_tooling_mcp]
 code = 105
+check_id = "ADP-05"
 metric = "adp_g1_tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -104,6 +109,7 @@ source_year = 2026
 
 [category.ai_tooling_spec_signals]
 code = 106
+check_id = "ADP-06"
 metric = "adp_g1_tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 8
@@ -119,6 +125,7 @@ source_year = 2026
 
 [category.active_contributors]
 code = 201
+check_id = "ADP-07"
 metric = "adp_g2_contributors"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -134,6 +141,7 @@ source_year = 2026
 
 [category.merge_frequency]
 code = 301
+check_id = "ADP-08"
 metric = "adp_g3_deploy_frequency"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -149,6 +157,7 @@ source_year = 2025
 
 [category.lead_time_for_change]
 code = 401
+check_id = "ADP-09"
 metric = "adp_g4_lead_time"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -164,6 +173,7 @@ source_year = 2025
 
 [category.pr_cycle_time]
 code = 501
+check_id = "ADP-10"
 metric = "adp_g5_pr_cycle_time"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -179,6 +189,7 @@ source_year = 2025
 
 [category.code_churn]
 code = 601
+check_id = "ADP-11"
 metric = "adp_g6_churn"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -194,6 +205,7 @@ source_year = 2026
 
 [category.change_failure_rate]
 code = 701
+check_id = "ADP-12"
 metric = "adp_g7_change_fail_rate"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -209,6 +221,7 @@ source_year = 2025
 
 [category.review_rework]
 code = 801
+check_id = "ADP-13"
 metric = "adp_g8_review_rework"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -224,6 +237,7 @@ source_year = 2026
 
 [category.ai_attribution]
 code = 901
+check_id = "ADP-14"
 metric = "adp_g9_ai_attribution"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -243,6 +257,7 @@ source_year = 2026
 # it is a ratio metric (percentage), not a presence signal — true usage is not bounded above by the observed value.
 [category.ci_pass_rate]
 code = 1001
+check_id = "ADP-15"
 metric = "adp_c1_ci_pass_rate"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -256,6 +271,7 @@ source_year = 2025
 
 [category.pipeline_duration_trend]
 code = 1002
+check_id = "ADP-16"
 metric = "adp_c2_pipeline_duration"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -273,6 +289,7 @@ source_year = 2025
 
 [category.work_mix_allocation]
 code = 1101
+check_id = "ADP-17"
 metric = "adp_i1_work_mix"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -286,6 +303,7 @@ source_year = 2025
 
 [category.issue_throughput]
 code = 1102
+check_id = "ADP-18"
 metric = "adp_i2_throughput"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -299,6 +317,7 @@ source_year = 2026
 
 [category.mttr]
 code = 1103
+check_id = "ADP-19"
 metric = "adp_i3_mttr"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -316,6 +335,7 @@ source_year = 2025
 
 [category.external_spec_coverage]
 code = 1201
+check_id = "ADP-20"
 metric = "adp_d1_spec_coverage"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -336,6 +356,7 @@ source_year = 2026
 
 [category.cyclomatic_complexity]
 code = 1301
+check_id = "ADP-21"
 metric = "adp_g10_complexity"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -351,6 +372,7 @@ source_year = 1976
 
 [category.loc_scale]
 code = 1302
+check_id = "ADP-22"
 metric = "adp_g11_scale"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -366,6 +388,7 @@ source_year = 2026
 
 [category.dependency_count]
 code = 1303
+check_id = "ADP-23"
 metric = "adp_g12_deps"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -385,6 +408,7 @@ source_year = 2026
 
 [category.org_ai_tooling_coverage]
 code = 9000
+check_id = "ORG-01"
 metric = "org_ai_tooling_coverage"
 dimension = "org-portfolio"
 weight = 10
@@ -398,6 +422,7 @@ source_year = 2026
 
 [category.org_capability_score]
 code = 9001
+check_id = "ORG-02"
 metric = "org_capability_score"
 dimension = "org-portfolio"
 weight = 10
@@ -411,6 +436,7 @@ source_year = 2026
 
 [category.org_measurement_coverage]
 code = 9002
+check_id = "ORG-03"
 metric = "org_measurement_coverage"
 dimension = "org-portfolio"
 weight = 10

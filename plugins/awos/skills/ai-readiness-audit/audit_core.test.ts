@@ -169,3 +169,66 @@ test(
     }
   }
 );
+
+// ---------------------------------------------------------------------------
+// Task 2.3: ai-sdlc-adoption checks must use short ADP-NN ids
+// ---------------------------------------------------------------------------
+
+import { loadStandards } from './metrics/_base.ts';
+import { join as pathJoin, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+test(
+  'ai-sdlc-adoption checks must use short ADP-NN ids, not category slugs (issue #12)',
+  async () => {
+    const skillRoot = pathJoin(
+      dirname(fileURLToPath(import.meta.url)),
+      '.',
+    );
+    const standardsPath = pathJoin(skillRoot, 'references', 'standards.toml');
+
+    const tmpBase = mkdtempSync(join(tmpdir(), 'awos-adpid-'));
+    try {
+      const repoPath = join(tmpBase, 'repo');
+      mkdirSync(repoPath, { recursive: true });
+      // Create a CLAUDE.md to trigger ADP-01 (code 101)
+      writeFileSync(join(repoPath, 'CLAUDE.md'), '# AI Instructions\nContext for AI');
+      execSync('git init && git add . && git commit -m "init" --allow-empty-message', {
+        cwd: repoPath,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 'Test',
+          GIT_AUTHOR_EMAIL: 'test@test.com',
+          GIT_COMMITTER_NAME: 'Test',
+          GIT_COMMITTER_EMAIL: 'test@test.com',
+        },
+      });
+
+      const outDir = join(tmpBase, 'out');
+      mkdirSync(outDir, { recursive: true });
+
+      // Import detectors and metrics from the cli to get the full registry.
+      // Use auditCore directly with an empty registry — we only care about
+      // the check_id sourced from standards.toml for the metric-routed check
+      // with code 101.
+      await auditCore(repoPath, outDir, {}, {}, standardsPath);
+
+      const dimJson = JSON.parse(
+        readFileSync(join(outDir, 'ai-sdlc-adoption.json'), 'utf8')
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const check101 = (dimJson.checks as any[]).find((c: any) =>
+        Array.isArray(c.code) ? c.code.includes(101) : c.code === 101
+      );
+      assert.ok(check101, 'check with code 101 must exist');
+      assert.equal(
+        check101.check_id,
+        'ADP-01',
+        `ai-sdlc-adoption checks must use short ADP-NN ids, not category slugs (issue #12): got ${JSON.stringify(check101.check_id)}`
+      );
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  }
+);

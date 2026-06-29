@@ -147,6 +147,7 @@ type MetricFn = (
 
 interface Category {
   code: number;
+  check_id?: string;
   metric?: string;
   dimension: string;
   weight: number;
@@ -582,7 +583,7 @@ function buildCheck(
   const applies = status !== 'SKIP';
   const weightAwarded = status === 'PASS' ? c.weight : 0;
   const rec: CheckRecord = {
-    check_id: checkIdByCode.get(c.code) ?? key,
+    check_id: c.check_id ?? checkIdByCode.get(c.code) ?? key,
     code: [c.code],
     method: c.method,
     status,

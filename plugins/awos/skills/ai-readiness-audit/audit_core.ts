@@ -405,6 +405,9 @@ export function aggregate(outDir: string): void {
     }
     const checks = dim.checks as CheckRecord[] | undefined;
     if (!Array.isArray(checks)) continue;
+    // Re-derive applies from status so patched-PASS connector checks count
+    // in the denominator — prevents coverage > 1 when a SKIP is patched to PASS.
+    for (const c of checks) c.applies = c.status !== 'SKIP';
     const score = checks.reduce((s, c) => s + (c.weight_awarded || 0), 0);
     const appl = checks
       .filter((c) => c.applies)

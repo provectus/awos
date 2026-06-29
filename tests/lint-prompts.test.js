@@ -1425,7 +1425,7 @@ test('report templates use weighted points + reliability, not grades', () => {
   );
 });
 
-test('plugin.json version matches the awos marketplace entry and equals 2.4.0', () => {
+test('plugin.json version matches the awos marketplace entry and equals 2.5.0', () => {
   const pluginManifest = JSON.parse(
     readUtf8(
       path.join(repoRoot, 'plugins', 'awos', '.claude-plugin', 'plugin.json')
@@ -1448,8 +1448,8 @@ test('plugin.json version matches the awos marketplace entry and equals 2.4.0', 
   );
   assert.equal(
     pluginManifest.version,
-    '2.4.0',
-    `plugins/awos/.claude-plugin/plugin.json version must be "2.4.0" (fairness + report v2), got "${pluginManifest.version}"`
+    '2.5.0',
+    `plugins/awos/.claude-plugin/plugin.json version must be "2.5.0" (report honesty + provenance), got "${pluginManifest.version}"`
   );
 });
 

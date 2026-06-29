@@ -949,7 +949,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
     } else {
       // Single-repo capability headline
       rows.push(
-        `<div class="cap-score">${tip(String(audit.audit_total) + ' pts', 'Total AI-SDLC capability — the sum of all capabilities the project has in place. It is uncapped and rises as the standard grows; it is not a grade out of 100.', 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
+        `<div class="cap-score">${tip(String(audit.audit_total) + ' pts', 'Total AI-SDLC capability — the sum of all capabilities the project has in place. It is uncapped and rises as the standard grows.', 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
       );
       rows.push(
         `<div class="cap-cov">Coverage ${tip(pct(audit.coverage), "How much of today's expected capability is in place. Read it as 'we have X% of what the current standard asks for', not as a school grade.", 'score ÷ Σ applicable category weights · standards.toml')}</div>`

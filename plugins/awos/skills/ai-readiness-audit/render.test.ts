@@ -226,6 +226,133 @@ test('Value column must suppress strings already shown in Evidence (issue #10)',
   );
 });
 
+test('PARTIAL status badge renders with amber color for a PARTIAL check', () => {
+  const partialCheck = makeCheck({
+    check_id: 'P-01',
+    status: 'PARTIAL' as Check['status'],
+    applies: true,
+    weight_awarded: 0.6,
+    weight_max: 1,
+    confidence: 0.8,
+  });
+  const dim = makeDim('test-partial', [partialCheck]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-partial"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  assert.match(
+    pageHtml,
+    /PARTIAL/,
+    'PARTIAL badge must appear in the dimension page for a PARTIAL check'
+  );
+  assert.match(
+    pageHtml,
+    /#f59e0b/,
+    'PARTIAL badge must use the amber badge color (#f59e0b)'
+  );
+});
+
+test('Confidence column header appears in dimension check table', () => {
+  const dim = makeDim('test-conf-header', [
+    makeCheck({
+      check_id: 'C-01',
+      status: 'PASS',
+      applies: true,
+      confidence: 1.0,
+    } as Check),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-conf-header"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  assert.match(
+    pageHtml,
+    /<th>Confidence<\/th>/,
+    'Confidence column header must appear in the check table'
+  );
+});
+
+test('Confidence cell shows 50% for a check with confidence 0.5', () => {
+  const dim = makeDim('test-conf-50', [
+    makeCheck({
+      check_id: 'C-02',
+      status: 'PASS',
+      applies: true,
+      confidence: 0.5,
+    } as Check),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-conf-50"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  assert.match(
+    pageHtml,
+    /50%/,
+    'Confidence cell must show "50%" for a check with confidence 0.5'
+  );
+});
+
+test('Confidence cell shows dash for a SKIP check', () => {
+  const dim = makeDim('test-conf-skip', [
+    makeCheck({
+      check_id: 'C-03',
+      status: 'SKIP',
+      applies: false,
+      confidence: 0,
+    } as Check),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-conf-skip"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  // The confidence cell for a SKIP check must contain the dash character
+  assert.ok(
+    pageHtml.includes('<td>—</td>') ||
+      pageHtml.includes('<td>&mdash;</td>') ||
+      pageHtml.includes('>—<'),
+    'Confidence cell must show "—" for a SKIP check'
+  );
+});
+
+test('Dimension header shows weight-averaged mean confidence percent', () => {
+  const dim = makeDim('test-mean-conf', [
+    makeCheck({
+      check_id: 'D-01',
+      status: 'PASS',
+      applies: true,
+      weight_max: 2,
+      confidence: 0.8,
+    } as Check),
+    makeCheck({
+      check_id: 'D-02',
+      status: 'PASS',
+      applies: true,
+      weight_max: 2,
+      confidence: 0.6,
+    } as Check),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-mean-conf"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  // Mean confidence = (0.8*2 + 0.6*2) / (2+2) = 2.8/4 = 0.70 → 70%
+  assert.match(
+    pageHtml,
+    /70%/,
+    'Dimension header must show weight-averaged mean confidence (70% for 0.8 and 0.6 each weighted by 2)'
+  );
+});
+
 test('tech stack renders names with evidence tooltips and no ~0 days', () => {
   const audit = {
     date: '2026-06-26',

@@ -129,7 +129,7 @@ export interface Check {
   check_id: string;
   code: number[];
   method: string;
-  status: 'PASS' | 'WARN' | 'FAIL' | 'SKIP';
+  status: 'PASS' | 'WARN' | 'FAIL' | 'SKIP' | 'PARTIAL';
   value: string | number | null;
   evidence: string[];
   weight_awarded: number;
@@ -144,6 +144,8 @@ export interface Check {
   unit?: string;
   expression?: string;
   source_year?: number;
+  score?: number;
+  confidence?: number;
 }
 
 export interface DimensionArtifact {
@@ -282,6 +284,12 @@ function fmtValue(v: string | number | null | undefined): string {
   return String(v);
 }
 
+/** Format a weight number for display: integers as-is, fractions to 1 dp. */
+function fmtPts(n: number): string {
+  if (Number.isInteger(n)) return String(n);
+  return (Math.round(n * 10) / 10).toFixed(1);
+}
+
 function titleLabel(dim: DimensionArtifact): string {
   return labelize(dim.dimension);
 }
@@ -340,25 +348,28 @@ function metricLabel(metric: string): string {
 }
 
 /**
- * Derive status counts for a dimension (FAIL / WARN / PASS / SKIP).
+ * Derive status counts for a dimension (FAIL / WARN / PARTIAL / PASS / SKIP).
  */
 function statusCounts(dim: DimensionArtifact): {
   fail: number;
   warn: number;
+  partial: number;
   pass: number;
   skip: number;
 } {
   let fail = 0,
     warn = 0,
+    partial = 0,
     pass = 0,
     skip = 0;
   for (const c of dim.checks) {
     if (c.status === 'FAIL') fail++;
     else if (c.status === 'WARN') warn++;
+    else if (c.status === 'PARTIAL') partial++;
     else if (c.status === 'PASS') pass++;
     else skip++;
   }
-  return { fail, warn, pass, skip };
+  return { fail, warn, partial, pass, skip };
 }
 
 /** Plain-language lead for a check: prefer `plain`, fall back to `definition`. */
@@ -532,16 +543,16 @@ export function renderMarkdown(audit: AuditJson): string {
   lines.push('## Summary');
   lines.push('');
   lines.push(
-    '| # | Dimension | Points | Coverage | FAIL | WARN | PASS | SKIP |'
+    '| # | Dimension | Points | Coverage | FAIL | WARN | PARTIAL | PASS | SKIP |'
   );
   lines.push(
-    '| - | --------- | ------ | -------- | ---- | ---- | ---- | ---- |'
+    '| - | --------- | ------ | -------- | ---- | ---- | ------- | ---- | ---- |'
   );
   let rowNum = 1;
   for (const dim of audit.dimensions) {
     const counts = statusCounts(dim);
     lines.push(
-      `| ${rowNum++} | ${titleLabel(dim)} | ${dim.score} | ${pct(dim.coverage)} | ${counts.fail} | ${counts.warn} | ${counts.pass} | ${counts.skip} |`
+      `| ${rowNum++} | ${titleLabel(dim)} | ${dim.score} | ${pct(dim.coverage)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
     );
   }
   lines.push('');
@@ -588,10 +599,10 @@ export function renderMarkdown(audit: AuditJson): string {
 
     // Check table with Hint column
     lines.push(
-      '| # | Check ID | Method | Weight Awarded | Weight Max | Status | Reliability | Value | Hint |'
+      '| # | Check ID | Method | Weight Awarded | Weight Max | Status | Reliability | Confidence | Value | Hint |'
     );
     lines.push(
-      '| - | -------- | ------ | -------------- | ---------- | ------ | ----------- | ----- | ---- |'
+      '| - | -------- | ------ | -------------- | ---------- | ------ | ----------- | ---------- | ----- | ---- |'
     );
     let checkNum = 1;
     let hasMinimal = false;
@@ -600,6 +611,8 @@ export function renderMarkdown(audit: AuditJson): string {
         ? `${c.reliability.tag} (${c.reliability.confidence})${c.reliability.tag === 'minimal' ? ' *' : ''}`
         : '—';
       if (c.reliability.tag === 'minimal' && c.applies) hasMinimal = true;
+      const confStr =
+        c.status === 'SKIP' ? '—' : `${Math.round((c.confidence ?? 0) * 100)}%`;
       const valueStr = fmtValue(c.value);
       const seriesStr =
         c.value_series && c.value_series.length > 0
@@ -607,7 +620,7 @@ export function renderMarkdown(audit: AuditJson): string {
           : '';
       const hint = c.hint ?? '—';
       lines.push(
-        `| ${checkNum++} | ${c.check_id} | ${c.method} | ${c.weight_awarded} | ${c.weight_max} | ${c.status} | ${reliabilityStr} | ${valueStr}${seriesStr} | ${hint} |`
+        `| ${checkNum++} | ${c.check_id} | ${c.method} | ${fmtPts(c.weight_awarded)} | ${c.weight_max} | ${c.status} | ${reliabilityStr} | ${confStr} | ${valueStr}${seriesStr} | ${hint} |`
       );
     }
     lines.push('');
@@ -782,6 +795,7 @@ function statusBadge(status: string): string {
   const colors: Record<string, string> = {
     PASS: '#22c55e',
     WARN: '#eab308',
+    PARTIAL: '#f59e0b',
     FAIL: '#ef4444',
     SKIP: '#9ca3af',
   };
@@ -792,6 +806,7 @@ function statusBadge(status: string): string {
 const STATUS_COLOR: Record<string, string> = {
   PASS: '#f0fdf4',
   WARN: '#fefce8',
+  PARTIAL: '#fde68a',
   FAIL: '#fef2f2',
   SKIP: '#f9fafb',
 };
@@ -887,6 +902,7 @@ th{background:#f1f5f9;text-align:left;padding:6px 8px;border-bottom:2px solid #e
 td{padding:6px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
 tr[data-status='PASS'] td{background:#f0fdf4}
 tr[data-status='WARN'] td{background:#fefce8}
+tr[data-status='PARTIAL'] td{background:#fde68a}
 tr[data-status='FAIL'] td{background:#fef2f2}
 tr[data-status='SKIP'] td{background:#f9fafb}
 tr.low-cov td{background:#fff7ed}
@@ -898,8 +914,8 @@ table.checks{table-layout:fixed}
 table.checks td.evidence{font-size:.78rem;white-space:normal;overflow-wrap:anywhere;word-break:break-word;color:#334155}
 table.checks td.check b{font-size:.82rem}
 table.checks td.check .plain{display:block;font-size:.75rem;color:#64748b;margin-top:2px}
-/* issues-only filter */
-body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{display:none}
+/* issues-only filter: PARTIAL is a partial pass, not an issue — hidden with PASS */
+body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],body.issues-only tr[data-status='PARTIAL']{display:none}
 .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
 .toolbar button{padding:5px 12px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:.8rem}
 .toolbar button.active{background:#4f46e5;color:#fff;border-color:#4f46e5}
@@ -1063,10 +1079,10 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
       }
     }
     rows.push(
-      `<p class="metrics-found">${tip(`Metrics found: ${found} of ${total}`, 'Checks that detected a capability (PASS or partial) out of all checks that apply to this project.', 'excludes SKIP (inapplicable) checks')}</p>`
+      `<p class="metrics-found">${tip(`Metrics found: ${found} of ${total}`, 'Checks that detected a capability (PASS, PARTIAL, or WARN) out of all checks that apply to this project.', 'excludes SKIP (inapplicable) checks')}</p>`
     );
     rows.push(
-      '<table><thead><tr><th>#</th><th>Dimension</th><th>Points</th><th>Coverage</th><th>Reliability</th><th>FAIL</th><th>WARN</th><th>PASS</th><th>SKIP</th></tr></thead><tbody>'
+      '<table><thead><tr><th>#</th><th>Dimension</th><th>Points</th><th>Coverage</th><th>Reliability</th><th>FAIL</th><th>WARN</th><th>PARTIAL</th><th>PASS</th><th>SKIP</th></tr></thead><tbody>'
     );
     let n = 1;
     for (const dim of audit.dimensions) {
@@ -1087,6 +1103,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
   <td>${tip(relStr, anyMinimal ? 'Some numbers here are lower bounds — the true value may be higher.' : 'Numbers here are upper-bound reliable for what was reachable.', '')}</td>
   <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
   <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
+  <td>${counts.partial > 0 ? `<span style="color:#d97706;font-weight:600">${counts.partial}</span>` : counts.partial}</td>
   <td>${counts.pass > 0 ? `<span style="color:#16a34a;font-weight:600">${counts.pass}</span>` : counts.pass}</td>
   <td>${counts.skip}</td>
 </tr>`);
@@ -1127,9 +1144,22 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
         : '';
     if (navHtml) rows.push(navHtml);
     rows.push(`<h2>${esc(titleLabel(dim))}</h2>`);
-    rows.push(
-      `<div class="dim-head">${tip(String(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, 'Σ awarded weights · standards.toml')} · coverage ${tip(covPct, `Share of this area's expected capability that is in place.`, 'score ÷ Σ applicable weights')} · FAIL ${counts.fail} · WARN ${counts.warn} · PASS ${counts.pass} · SKIP ${counts.skip}</div>`
-    );
+    // Weight-weighted mean confidence of applicable checks.
+    {
+      let totalW = 0,
+        weightedC = 0;
+      for (const c of dim.checks) {
+        if (c.status === 'SKIP' || !c.applies) continue;
+        const w = c.weight_max ?? 0;
+        totalW += w;
+        weightedC += (c.confidence ?? 0) * w;
+      }
+      const meanConfStr =
+        totalW > 0 ? `${Math.round((weightedC / totalW) * 100)}%` : '—';
+      rows.push(
+        `<div class="dim-head">${tip(String(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, 'Σ awarded weights · standards.toml')} · coverage ${tip(covPct, `Share of this area's expected capability that is in place.`, 'score ÷ Σ applicable weights')} · confidence ${tip(meanConfStr, 'Weight-averaged confidence: fraction of applicable surface measured for this dimension.', 'Σ(confidence × weight_max) ÷ Σ weight_max for applicable checks')} · FAIL ${counts.fail} · WARN ${counts.warn} · PARTIAL ${counts.partial} · PASS ${counts.pass} · SKIP ${counts.skip}</div>`
+      );
+    }
 
     // Recommendations scoped to this dimension
     const dimLabel = titleLabel(dim);
@@ -1151,10 +1181,10 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
       '<div class="toolbar"><button onclick="toggleIssues(this)">Show issues only</button></div>'
     );
     rows.push(
-      '<table class="checks"><colgroup><col style="width:3%"><col style="width:24%"><col style="width:8%"><col style="width:7%"><col style="width:10%"><col style="width:13%"><col style="width:35%"></colgroup>'
+      '<table class="checks"><colgroup><col style="width:3%"><col style="width:22%"><col style="width:8%"><col style="width:7%"><col style="width:9%"><col style="width:8%"><col style="width:11%"><col style="width:32%"></colgroup>'
     );
     rows.push(
-      '<thead><tr><th>#</th><th>Check</th><th>Status</th><th>Points</th><th>Reliability</th><th>Value</th><th>Evidence</th></tr></thead><tbody>'
+      '<thead><tr><th>#</th><th>Check</th><th>Status</th><th>Points</th><th>Reliability</th><th>Confidence</th><th>Value</th><th>Evidence</th></tr></thead><tbody>'
     );
     let ckn = 1;
     let hasMinimal = false;
@@ -1188,10 +1218,13 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
       // Points cell: tooltip enriched with standards.toml-derived meta.
       const pointsMeta = `${c.definition}${c.source ? ` · ${c.source}` : ''}${c.source_year ? ` (${c.source_year})` : ''}`;
       const pointsCell = tip(
-        String(c.weight_awarded) + '/' + String(c.weight_max),
+        fmtPts(c.weight_awarded) + '/' + fmtPts(c.weight_max),
         `Worth up to ${c.weight_max} points · ${c.method}`,
         pointsMeta
       );
+      // Confidence cell: percent for applicable checks, dash for SKIP.
+      const confCell =
+        c.status === 'SKIP' ? '—' : `${Math.round((c.confidence ?? 0) * 100)}%`;
       // Value cell: show when it adds signal (numeric/banded with unit/expression/series,
       // or a value that isn't already shown in evidence); suppress with '—' otherwise.
       let valueCell: string;
@@ -1225,6 +1258,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
   <td>${statusBadge(c.status)}</td>
   <td>${pointsCell}</td>
   <td class="${relClass}">${tip(relLabel, relTipPlain, c.reliability.note ?? '')}</td>
+  <td>${confCell}</td>
   <td>${valueCell}${seriesSvg}</td>
   <td class="evidence">${evidence}</td>
 </tr>`);

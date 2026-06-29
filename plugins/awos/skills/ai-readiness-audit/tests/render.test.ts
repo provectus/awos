@@ -564,7 +564,7 @@ test('renderHtml: drill-down check table is fixed-layout with a wide Evidence co
     'Evidence must be its own wide column, not a cramped equal-width cell'
   );
   assert.ok(
-    html.includes('width:35%'),
+    html.includes('width:32%'),
     'Evidence column must be allocated the widest share of the table'
   );
 });

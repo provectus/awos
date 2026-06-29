@@ -434,8 +434,8 @@ test('renderMarkdown (org): portfolio metrics present', () => {
     'Org markdown must include the tooling coverage metric'
   );
   assert.ok(
-    md.includes('Repositories & Connections'),
-    'Org markdown must include a Repositories & Connections section'
+    md.includes('## Repositories'),
+    'Org markdown must include a ## Repositories section'
   );
 });
 

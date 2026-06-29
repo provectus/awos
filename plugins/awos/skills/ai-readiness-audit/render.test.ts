@@ -190,6 +190,42 @@ test('Each dimension page needs prev/next nav to adjacent dimensions (issue #7)'
   );
 });
 
+test('Value column must suppress strings already shown in Evidence (issue #10)', () => {
+  const checkA = makeCheck({
+    check_id: 'T-A',
+    status: 'PASS',
+    applies: true,
+    value: 'README.md',
+    evidence: ['README.md present'],
+    // no unit, no expression, no value_series
+  });
+  const checkB = makeCheck({
+    check_id: 'T-B',
+    status: 'PASS',
+    applies: true,
+    value: 0.62,
+    unit: 'ratio',
+    evidence: ['computed from PR merge rate'],
+  });
+  const dim = makeDim('test-val-dim', [checkA, checkB]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-val-dim"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist in HTML');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  // checkA: value 'README.md' is a substring of evidence 'README.md present' → should suppress
+  assert.ok(
+    !pageHtml.includes('>README.md<'),
+    'Value column must suppress strings already shown in Evidence (issue #10)'
+  );
+  // checkB: value has unit 'ratio' → current behaviour (always show)
+  assert.ok(
+    pageHtml.includes('>0.62<'),
+    'Value column must show numeric value when unit is present (issue #10)'
+  );
+});
+
 test('tech stack renders names with evidence tooltips and no ~0 days', () => {
   const audit = {
     date: '2026-06-26',

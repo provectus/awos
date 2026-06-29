@@ -1192,10 +1192,33 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP']{
         `Worth up to ${c.weight_max} points · ${c.method}`,
         pointsMeta
       );
-      // Value cell: rounded + expression tooltip when available.
-      const valueCell = c.expression
-        ? tip(fmtValue(c.value), c.expression, c.unit ? `unit: ${c.unit}` : '')
-        : esc(fmtValue(c.value));
+      // Value cell: show when it adds signal (numeric/banded with unit/expression/series,
+      // or a value that isn't already shown in evidence); suppress with '—' otherwise.
+      let valueCell: string;
+      if (c.unit || c.expression || c.value_series) {
+        // Always show when there's a unit, formula, or time series — these add signal.
+        valueCell = c.expression
+          ? tip(
+              fmtValue(c.value),
+              c.expression,
+              c.unit ? `unit: ${c.unit}` : ''
+            )
+          : esc(fmtValue(c.value));
+      } else if (
+        c.value == null ||
+        (typeof c.value === 'string' && c.evidence.join(' ').includes(c.value))
+      ) {
+        // Value is absent or is a string already shown verbatim in evidence — suppress.
+        valueCell = '—';
+      } else {
+        valueCell = c.expression
+          ? tip(
+              fmtValue(c.value),
+              c.expression,
+              c.unit ? `unit: ${c.unit}` : ''
+            )
+          : esc(fmtValue(c.value));
+      }
       rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
   <td>${ckn++}</td>
   <td class="check"><span class="tip" tabindex="0"><b>${esc(c.check_id)}</b><span class="tipbox"><b>${esc(plainLead(c))}</b><span class="tipmeta">${checkMeta}</span></span></span><span class="plain">${esc(plainLead(c))}</span></td>

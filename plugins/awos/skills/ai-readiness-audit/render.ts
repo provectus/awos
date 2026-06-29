@@ -277,7 +277,7 @@ const SOURCE_LABEL_DEFAULTS: Record<string, string> = {
   tracker: 'issue tracker',
   docs: 'docs/wiki',
   scale: 'source code (AST)',
-  audit: 'source code & config',
+  audit: 'source code',
   incident: 'incident source',
   'org-rollup': 'portfolio',
 };

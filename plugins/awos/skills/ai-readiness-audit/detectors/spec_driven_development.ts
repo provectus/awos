@@ -481,8 +481,12 @@ function branchTouchedSpec(
 
 export function detectBranchSpecRatio(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
+  const threshold =
+    (params as { threshold?: number } | undefined)?.threshold ?? 0.7;
+  const thresholdPct = Math.round(threshold * 100);
+
   const branches = listLocalBranches(repoPath);
 
   if (branches.length === 0) {
@@ -516,12 +520,12 @@ export function detectBranchSpecRatio(
     ...plainBranches.slice(0, 10).map((b) => `plain branch: ${b}`),
   ];
 
-  if (ratio >= 0.7) {
+  if (ratio >= threshold) {
     return makeResult(
       'PASS',
       ratio,
       [
-        `${Math.round(ratio * 100)}% of feature branches used spec workflow (threshold: 70%)`,
+        `${Math.round(ratio * 100)}% of feature branches used spec workflow (threshold: ${thresholdPct}%)`,
         ...evidence,
       ],
       'computed'
@@ -533,7 +537,7 @@ export function detectBranchSpecRatio(
       'WARN',
       ratio,
       [
-        `${Math.round(ratio * 100)}% of feature branches used spec workflow (below 70% threshold)`,
+        `${Math.round(ratio * 100)}% of feature branches used spec workflow (below ${thresholdPct}% threshold)`,
         ...evidence,
       ],
       'computed'
@@ -544,7 +548,7 @@ export function detectBranchSpecRatio(
     'FAIL',
     ratio,
     [
-      `only ${Math.round(ratio * 100)}% of feature branches used spec workflow (threshold: 70%)`,
+      `only ${Math.round(ratio * 100)}% of feature branches used spec workflow (threshold: ${thresholdPct}%)`,
       ...evidence,
     ],
     'computed'

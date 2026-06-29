@@ -146,7 +146,7 @@ const SOURCE_LABEL_DEFAULTS: Record<string, string> = {
   tracker: 'issue tracker',
   docs: 'docs/wiki',
   scale: 'source code (AST)',
-  audit: 'source code & config',
+  audit: 'source code',
   incident: 'incident source',
   'org-rollup': 'portfolio',
 };
@@ -326,16 +326,20 @@ export async function auditCore(
       process.stderr.write(`audit-core: metric ${id} threw: ${String(err)}\n`);
       continue;
     }
+    const resEvidencePerCode = res.evidence_per_code as
+      | Record<number, string[]>
+      | undefined;
     for (const code of (res.categories_awarded ?? []) as number[]) {
       awarded.add(code);
       const perCodeScore = (
         res.score_per_code as Record<number, number> | undefined
       )?.[code];
+      const perCodeEvidence = resEvidencePerCode?.[code];
       metricMeta.set(code, {
         unit: res.unit,
         expression: res.expression,
         value: res.value,
-        evidence: res.expression ? [res.expression] : [],
+        evidence: perCodeEvidence ?? (res.expression ? [res.expression] : []),
         score: perCodeScore ?? res.score,
         confidence: res.confidence,
       });
@@ -351,11 +355,12 @@ export async function auditCore(
         const perCodeScore = (
           res.score_per_code as Record<number, number> | undefined
         )?.[c.code as number];
+        const perCodeEvidence = resEvidencePerCode?.[c.code as number];
         metricMeta.set(c.code, {
           unit: res.unit,
           expression: res.expression,
           value: res.value,
-          evidence: res.expression ? [res.expression] : [],
+          evidence: perCodeEvidence ?? (res.expression ? [res.expression] : []),
           score: perCodeScore ?? res.score,
           confidence: res.confidence,
         });
@@ -689,9 +694,14 @@ function buildCheck(
     // score=0, confidence=0 until the orchestrator patches this check
   } else if (detectors[c.code] !== undefined) {
     // Detector branch: take status/score/confidence straight from DetectorResult.
+    // Pass the category's threshold fields so detectors can read from standards.toml
+    // instead of hardcoding threshold values.
     let r: DetectorResult;
     try {
-      r = detectors[c.code](repoPath);
+      r = detectors[c.code](repoPath, {
+        threshold: c.threshold,
+        threshold_days: c.threshold_days,
+      });
     } catch (err) {
       r = {
         status: 'FAIL',

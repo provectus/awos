@@ -8,6 +8,8 @@
  * - SKIP when git.json is absent
  * - SKIP when tooling_paths is empty (no categories awarded)
  * - all tooling layers present → full coverage
+ * - evidence_per_code: each code 101–106 gets DIFFERENT, layer-specific evidence
+ * - present layers emit "layer present: …"; absent layers emit "layer absent: …"
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -242,5 +244,105 @@ test('adp_g1: empty tooling_paths → no categories awarded, value 0, status OK 
     result.categories_awarded,
     [],
     'no categories awarded with empty tooling'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 6b.1 — per-code evidence: each code gets DIFFERENT, layer-specific evidence
+// ---------------------------------------------------------------------------
+
+test('adp_g1: evidence_per_code is present in result and keyed by layer code', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    tooling_paths: ['CLAUDE.md'],
+    monthly_buckets: [],
+    merge_records: [],
+    total_commits: 1,
+    ai_marked_commits: 0,
+    total_merges: 0,
+    revert_merges: 0,
+    numstat_totals: { added: 0, deleted: 0 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    result.evidence_per_code !== undefined,
+    'evidence_per_code must be present in MetricResult'
+  );
+  // All 6 layer codes must have evidence entries.
+  for (const code of [101, 102, 103, 104, 105, 106]) {
+    assert.ok(
+      Array.isArray(result.evidence_per_code![code]) &&
+        result.evidence_per_code![code].length > 0,
+      `evidence_per_code must have a non-empty entry for code ${code}`
+    );
+  }
+});
+
+test('adp_g1: present layer emits "layer present: …", absent layer emits "layer absent: …"', () => {
+  const tmp = makeTmpDir();
+  // Only code 101 (CLAUDE.md) and code 105 (.mcp.json) present.
+  const collectedDir = writeCollected(tmp, 'git', {
+    tooling_paths: ['CLAUDE.md', '.mcp.json'],
+    monthly_buckets: [],
+    merge_records: [],
+    total_commits: 2,
+    ai_marked_commits: 0,
+    total_merges: 0,
+    revert_merges: 0,
+    numstat_totals: { added: 0, deleted: 0 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(result.evidence_per_code, 'evidence_per_code must be defined');
+
+  // 101 and 105 are present → "layer present: …"
+  assert.ok(
+    result.evidence_per_code![101][0].startsWith('layer present:'),
+    `code 101 must start with "layer present:"; got "${result.evidence_per_code![101][0]}"`
+  );
+  assert.ok(
+    result.evidence_per_code![105][0].startsWith('layer present:'),
+    `code 105 must start with "layer present:"; got "${result.evidence_per_code![105][0]}"`
+  );
+  // 102, 103, 104, 106 are absent → "layer absent: …"
+  for (const code of [102, 103, 104, 106]) {
+    assert.ok(
+      result.evidence_per_code![code][0].startsWith('layer absent:'),
+      `code ${code} must start with "layer absent:"; got "${result.evidence_per_code![code][0]}"`
+    );
+  }
+});
+
+test('adp_g1: each code 101–106 gets DIFFERENT evidence text (no shared expression across codes)', () => {
+  const tmp = makeTmpDir();
+  // Mixed presence: 101, 102, 103 present; 104, 105, 106 absent.
+  const collectedDir = writeCollected(tmp, 'git', {
+    tooling_paths: ['CLAUDE.md', '.claude/skills', '.claude/commands'],
+    monthly_buckets: [],
+    merge_records: [],
+    total_commits: 3,
+    ai_marked_commits: 0,
+    total_merges: 0,
+    revert_merges: 0,
+    numstat_totals: { added: 0, deleted: 0 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(result.evidence_per_code, 'evidence_per_code must be defined');
+
+  const evidenceTexts = [101, 102, 103, 104, 105, 106].map(
+    (code) => result.evidence_per_code![code][0]
+  );
+
+  // All six evidence lines must be distinct (no shared "5/6 tooling layers…" blob).
+  const uniqueTexts = new Set(evidenceTexts);
+  assert.equal(
+    uniqueTexts.size,
+    6,
+    `all 6 codes must have DIFFERENT evidence lines; got: ${JSON.stringify(evidenceTexts)}`
   );
 });

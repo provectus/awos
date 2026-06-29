@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { detectTestInfrastructure } from './quality_assurance.ts';
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli.ts');
 const NODE = process.env.NODE_BIN || process.execPath;
@@ -102,6 +103,52 @@ test('QA-01 PASS score ≥ 0.6 when test coverage proxy meets threshold', () => 
       `4/4 test ratio must be PASS; got ${res.status}`
     );
     assert.ok(res.score >= 0.6, `PASS score must be ≥ 0.60; got ${res.score}`);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 6b.2 — detector reads threshold from params (not hardcoded)
+// ---------------------------------------------------------------------------
+
+test('QA-01: detector uses threshold from params — custom threshold=0.4 makes a 40% ratio PASS', () => {
+  // 2 test files + 5 source files → ratio = 0.40
+  // Default threshold is 0.6 → this would be WARN.
+  // With threshold=0.40 passed via params → must be PASS.
+  const repo = mkdtempSync(join(tmpdir(), 'awos-qa01-thresh-'));
+  try {
+    mkdirSync(join(repo, 'app'), { recursive: true });
+    writeFileSync(join(repo, 'app', 'user.py'), 'x = 1\n');
+    writeFileSync(join(repo, 'app', 'auth.py'), 'x = 1\n');
+    writeFileSync(join(repo, 'app', 'data.py'), 'x = 1\n');
+    writeFileSync(join(repo, 'app', 'routes.py'), 'x = 1\n');
+    writeFileSync(join(repo, 'app', 'models.py'), 'x = 1\n');
+    writeFileSync(join(repo, 'app', 'test_user.py'), 'def test_user(): pass\n');
+    writeFileSync(join(repo, 'app', 'test_auth.py'), 'def test_auth(): pass\n');
+
+    // Without params (default 0.6) → WARN
+    const resDefault = detectTestInfrastructure(repo);
+    assert.equal(
+      resDefault.status,
+      'WARN',
+      `40% ratio must be WARN with default threshold 0.6; got ${resDefault.status}`
+    );
+
+    // With threshold=0.4 → PASS (40% ≥ 40%)
+    const resCustom = detectTestInfrastructure(repo, { threshold: 0.4 });
+    assert.equal(
+      resCustom.status,
+      'PASS',
+      `40% ratio must be PASS with threshold=0.40; got ${resCustom.status}`
+    );
+
+    // Evidence must interpolate the threshold percentage
+    const passEvidence = resCustom.evidence[0];
+    assert.ok(
+      passEvidence.includes('40%'),
+      `evidence must mention the custom threshold 40%; got "${passEvidence}"`
+    );
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }

@@ -525,15 +525,17 @@ export function detectPinnedVersions(
 
 export function detectScsQuarantineAge(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
+  const thresholdDays =
+    (params as { threshold_days?: number } | undefined)?.threshold_days ?? 7;
   return makeResult(
     'SKIP',
     null,
     [
       'SCS-04 (quarantine-age) requires live registry API calls to resolve per-version publish timestamps',
       'This check is non-deterministic offline — it is intentionally skipped by the static detector',
-      'To evaluate: query npm/PyPI/crates.io registry APIs and verify each pinned version is ≥7 days old',
+      `To evaluate: query npm/PyPI/crates.io registry APIs and verify each pinned version is ≥${thresholdDays} days old`,
     ],
     'computed'
   );

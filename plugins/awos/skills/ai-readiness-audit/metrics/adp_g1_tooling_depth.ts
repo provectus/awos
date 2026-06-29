@@ -50,6 +50,16 @@ const TOOLING_MAP: Array<{ paths: string[]; code: number }> = [
 // All defined tooling category codes for coverage denominator.
 const ALL_CODES = TOOLING_MAP.map((e) => e.code);
 
+// Human-readable label for each tooling layer — used in per-code evidence strings.
+const LAYER_LABELS: Record<number, string> = {
+  101: 'AI instruction file (CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules)',
+  102: 'skill directory (.claude/skills or equivalent)',
+  103: 'command/rule directory (.claude/commands or equivalent)',
+  104: 'hook directory (.claude/hooks or equivalent)',
+  105: 'MCP config (.mcp.json or equivalent)',
+  106: 'spec-driven signals (context/spec or .awos/)',
+};
+
 export function compute(
   collectedDir: string,
   _standards: Record<string, unknown>,
@@ -84,14 +94,19 @@ export function compute(
 
   const toolingPaths: string[] = raw.tooling_paths;
 
-  // Determine which category codes are present.
+  // Determine which category codes are present and build per-code evidence.
   const awarded: number[] = [];
+  const evidencePerCode: Record<number, string[]> = {};
   for (const entry of TOOLING_MAP) {
     const present = entry.paths.some((p) =>
       toolingPaths.some((tp) => tp === p || tp.startsWith(p.replace(/\/$/, '')))
     );
+    const label = LAYER_LABELS[entry.code] ?? `layer ${entry.code}`;
     if (present) {
       awarded.push(entry.code);
+      evidencePerCode[entry.code] = [`layer present: ${label}`];
+    } else {
+      evidencePerCode[entry.code] = [`layer absent: ${label}`];
     }
   }
 
@@ -111,6 +126,10 @@ export function compute(
     null,
     undefined,
     undefined,
-    expression
+    expression,
+    undefined,
+    undefined,
+    undefined,
+    evidencePerCode
   );
 }

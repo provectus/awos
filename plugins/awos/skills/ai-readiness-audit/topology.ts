@@ -424,7 +424,7 @@ export function detectFrameworks(repoPath: string): DetectedFramework[] {
 
 export interface LinkedRepo {
   name: string;
-  kind: 'symlink' | 'submodule';
+  kind: 'symlink' | 'submodule' | 'mcp';
   via: string;
 }
 
@@ -454,11 +454,37 @@ function linkedRepoName(realTarget: string): string {
   return segs[segs.length - 1] ?? realTarget;
 }
 
+// Directories to skip when walking the repo tree for outside symlinks.
+// Includes build artefact dirs, dependency trees, and generated output dirs.
+const SYMLINK_WALK_SKIP = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  '.venv',
+  '__pycache__',
+  'target',
+  'vendor',
+  '.tox',
+  '.next',
+  'htmlcov',
+  '.cargo',
+  'coverage',
+  '.nyc_output',
+  '.parcel-cache',
+  '.cache',
+  '.turbo',
+  'out',
+  '.output',
+]);
+
 /**
  * Detect linked (externally-referenced) repositories by scanning:
  *  1. `.gitmodules` — each `url =` entry is a submodule.
- *  2. Symlinks under agent-tool config dirs (e.g. `.claude/`, `.cursor/`)
- *     that point outside the repo root — treated as linked repos.
+ *  2. Symlinks anywhere in the repo tree (depth ≤ 4, skipping heavy dirs)
+ *     whose resolved target is outside the repo root.
+ *  3. MCP server entries from `.mcp.json` and `.claude/settings.json` /
+ *     `.claude/settings.local.json` `mcpServers` keys.
  *
  * Returns an array of unique `LinkedRepo` records keyed by `name`.
  */
@@ -477,12 +503,9 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
     found.set(name, { name, kind: 'submodule', via: '.gitmodules' });
   }
 
-  // 2. Symlinks under agent-tool config dirs whose resolved target is OUTSIDE
-  //    the repo root. Recurses up to 2 levels deep so nested paths like
-  //    `.claude/skills/<name>` are found. Symlinks pointing within the repo
-  //    (e.g. local convenience links) are ignored.
-  //    The repo root is resolved via realpathSync to handle /tmp → /private/tmp
-  //    style platform aliases before comparison.
+  // 2. Broad symlink walk: every symlink in the repo tree whose resolved target
+  //    is outside the repo root. Capped at depth 4 to stay fast on large trees.
+  //    Uses lstatSync so we never follow symlink-directories into their trees.
   const realRepoRoot = (() => {
     try {
       return realpathSync(repoPath).replace(/\/+$/, '');
@@ -534,8 +557,12 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
               found.set(name, { name, kind: 'symlink', via });
             }
           }
-        } else if (stat.isDirectory() && depth > 0) {
-          // Recurse one more level; never follow symlink-directories (lstatSync used).
+        } else if (
+          stat.isDirectory() &&
+          depth > 0 &&
+          !SYMLINK_WALK_SKIP.has(e)
+        ) {
+          // Recurse into subdirectories; skip heavy/vendor/build dirs.
           scanDirForOutsideSymlinks(p, via, depth - 1);
         }
       } catch {
@@ -544,14 +571,48 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
     }
   }
 
-  for (const dir of ALL_TOOL_CONFIG_DIRS) {
-    scanDirForOutsideSymlinks(join(repoPath, dir), dir, 1);
-  }
+  // Walk the full repo tree from root (depth 4).
+  scanDirForOutsideSymlinks(repoPath, '', 4);
 
-  // Also scan AWOS framework dirs (context/, .awos/) for outside symlinks.
-  const AWOS_FRAMEWORK_DIRS = ['context', '.awos'];
-  for (const dir of AWOS_FRAMEWORK_DIRS) {
-    scanDirForOutsideSymlinks(join(repoPath, dir), dir, 1);
+  // 3. MCP server enumeration: parse .mcp.json and .claude/settings*.json for
+  //    `mcpServers` keys. Emit one entry per server (kind='mcp', name=server key,
+  //    via=config path). Names/commands only — nothing is executed.
+  const mcpConfigPaths = [
+    '.mcp.json',
+    '.claude/settings.json',
+    '.claude/settings.local.json',
+  ];
+  for (const configRelPath of mcpConfigPaths) {
+    const configPath = join(repoPath, configRelPath);
+    let raw: string;
+    try {
+      raw = readFileSync(configPath, 'utf8');
+    } catch {
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+    const servers =
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      'mcpServers' in (parsed as object)
+        ? (parsed as Record<string, unknown>)['mcpServers']
+        : undefined;
+    if (servers === null || typeof servers !== 'object') continue;
+    for (const serverName of Object.keys(servers as Record<string, unknown>)) {
+      // Use serverName as the unique key; first config file to define it wins.
+      if (!found.has(serverName)) {
+        found.set(serverName, {
+          name: serverName,
+          kind: 'mcp',
+          via: configRelPath,
+        });
+      }
+    }
   }
 
   return [...found.values()];

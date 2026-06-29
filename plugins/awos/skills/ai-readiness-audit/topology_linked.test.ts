@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { detectLinkedRepos } from './topology.ts';
+import { detectLinkedRepos, type LinkedRepo } from './topology.ts';
 
 test('detectLinkedRepos finds git submodules', () => {
   const repo = mkdtempSync(join(tmpdir(), 'awos-linked-'));
@@ -172,6 +172,198 @@ test('Symlink scan must surface AWOS context/* symlinks, not only agent-tool con
     );
     assert.ok(found, 'context/ symlink must be detected');
     assert.equal(found!.kind, 'symlink', 'must be kind=symlink');
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 6b.4 — expanded linked repo detection: all three kinds in one fixture
+// ---------------------------------------------------------------------------
+
+test('detectLinkedRepos: symlink outside repo NOT under tool-config dir surfaces as kind=symlink', () => {
+  // The expanded walk must find symlinks in arbitrary dirs (e.g. src/), not just
+  // agent-tool config dirs or AWOS framework dirs.
+  const base = mkdtempSync(join(tmpdir(), 'awos-broad-symlink-'));
+  const outsideRepo = join(base, 'shared-lib');
+  const repo = join(base, 'repo');
+  try {
+    mkdirSync(join(outsideRepo, '.git'), { recursive: true }); // give it a .git so the name resolves
+    mkdirSync(join(repo, 'src'), { recursive: true });
+    // Place a symlink inside src/ (not under any tool-config dir).
+    symlinkSync(outsideRepo, join(repo, 'src', 'lib'));
+
+    const linked = detectLinkedRepos(repo);
+    const found = linked.find((r) => r.name === 'shared-lib');
+    assert.ok(
+      found !== undefined,
+      `detectLinkedRepos must find a symlink under src/ pointing outside the repo; got ${JSON.stringify(linked)}`
+    );
+    assert.equal(
+      found!.kind,
+      'symlink',
+      'symlink outside tool-config dir must have kind="symlink"'
+    );
+    assert.ok(
+      found!.via.includes('src'),
+      `via must reference the src/ path; got "${found!.via}"`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('detectLinkedRepos: .mcp.json servers appear as kind=mcp entries', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-mcp-json-'));
+  try {
+    writeFileSync(
+      join(repo, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          'github-mcp': {
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-github'],
+          },
+          'filesystem-mcp': {
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-filesystem'],
+          },
+        },
+      })
+    );
+
+    const linked = detectLinkedRepos(repo);
+
+    const githubMcp = linked.find((r) => r.name === 'github-mcp');
+    const fsMcp = linked.find((r) => r.name === 'filesystem-mcp');
+
+    assert.ok(
+      githubMcp !== undefined,
+      `detectLinkedRepos must detect "github-mcp" from .mcp.json; got ${JSON.stringify(linked)}`
+    );
+    assert.equal(
+      githubMcp!.kind,
+      'mcp',
+      'MCP server entry must have kind="mcp"'
+    );
+    assert.equal(
+      githubMcp!.via,
+      '.mcp.json',
+      'MCP server via must reference .mcp.json'
+    );
+
+    assert.ok(
+      fsMcp !== undefined,
+      'detectLinkedRepos must detect "filesystem-mcp" from .mcp.json'
+    );
+    assert.equal(
+      fsMcp!.kind,
+      'mcp',
+      'second MCP server must also have kind="mcp"'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('detectLinkedRepos: .claude/settings.json mcpServers appear as kind=mcp entries', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-claude-settings-mcp-'));
+  try {
+    mkdirSync(join(repo, '.claude'), { recursive: true });
+    writeFileSync(
+      join(repo, '.claude', 'settings.json'),
+      JSON.stringify({
+        mcpServers: {
+          'atlassian-mcp': { command: 'node', args: ['dist/index.js'] },
+        },
+      })
+    );
+
+    const linked = detectLinkedRepos(repo);
+    const found = linked.find((r) => r.name === 'atlassian-mcp');
+    assert.ok(
+      found !== undefined,
+      `detectLinkedRepos must detect "atlassian-mcp" from .claude/settings.json; got ${JSON.stringify(linked)}`
+    );
+    assert.equal(found!.kind, 'mcp', 'must be kind="mcp"');
+    assert.equal(
+      found!.via,
+      '.claude/settings.json',
+      'via must reference .claude/settings.json'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('detectLinkedRepos: all three kinds (symlink + submodule + mcp) surface together', () => {
+  // A repo with:
+  // - .gitmodules with one submodule
+  // - an outside symlink NOT under a tool-config dir (under lib/)
+  // - .mcp.json with 2 MCP servers
+  // All three kinds must appear in the result.
+  const base = mkdtempSync(join(tmpdir(), 'awos-all-kinds-'));
+  const outsideTarget = join(base, 'external-repo');
+  const repo = join(base, 'my-repo');
+  try {
+    mkdirSync(join(outsideTarget, '.git'), { recursive: true });
+    mkdirSync(join(repo, 'lib'), { recursive: true });
+
+    // Submodule
+    writeFileSync(
+      join(repo, '.gitmodules'),
+      '[submodule "vendor/ui"]\n  path = vendor/ui\n  url = https://github.com/acme/ui-kit.git\n'
+    );
+
+    // Outside symlink not under tool-config dir
+    symlinkSync(outsideTarget, join(repo, 'lib', 'external'));
+
+    // MCP servers
+    writeFileSync(
+      join(repo, '.mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          'server-alpha': { command: 'node', args: ['alpha/index.js'] },
+          'server-beta': { command: 'node', args: ['beta/index.js'] },
+        },
+      })
+    );
+
+    const linked = detectLinkedRepos(repo);
+
+    // Submodule
+    const sub = linked.find((r: LinkedRepo) => r.kind === 'submodule');
+    assert.ok(
+      sub !== undefined,
+      `submodule must be detected; got ${JSON.stringify(linked)}`
+    );
+    assert.equal(sub!.name, 'ui-kit', 'submodule name must be "ui-kit"');
+
+    // Symlink
+    const sym = linked.find((r: LinkedRepo) => r.kind === 'symlink');
+    assert.ok(
+      sym !== undefined,
+      `outside symlink under lib/ must be detected; got ${JSON.stringify(linked)}`
+    );
+    assert.equal(
+      sym!.name,
+      'external-repo',
+      'symlink name must be "external-repo"'
+    );
+
+    // MCP servers (2)
+    const mcps = linked.filter((r: LinkedRepo) => r.kind === 'mcp');
+    assert.equal(
+      mcps.length,
+      2,
+      `exactly 2 MCP server entries must be detected; got ${JSON.stringify(mcps)}`
+    );
+    const mcpNames = mcps.map((r: LinkedRepo) => r.name).sort();
+    assert.deepEqual(
+      mcpNames,
+      ['server-alpha', 'server-beta'],
+      `MCP server names must match; got ${JSON.stringify(mcpNames)}`
+    );
   } finally {
     rmSync(base, { recursive: true, force: true });
   }

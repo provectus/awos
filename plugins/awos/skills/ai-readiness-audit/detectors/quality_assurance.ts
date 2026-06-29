@@ -76,8 +76,12 @@ const E2E_GLOBS = [
 
 export function detectTestInfrastructure(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
+  const threshold =
+    (params as { threshold?: number } | undefined)?.threshold ?? 0.6;
+  const thresholdPct = Math.round(threshold * 100);
+
   // Collect test files
   let testFiles: string[] = [];
   try {
@@ -120,12 +124,12 @@ export function detectTestInfrastructure(
     ...testFiles.slice(0, 5).map((f) => `test file: ${relative(repoPath, f)}`),
   ];
 
-  if (ratio >= 0.6) {
+  if (ratio >= threshold) {
     return makeResult(
       'PASS',
       ratio,
       [
-        `test coverage proxy: ${pct}% — meaningful tests covering ≥ 60% of source modules`,
+        `test coverage proxy: ${pct}% — meaningful tests covering ≥ ${thresholdPct}% of source modules`,
         ...evidence,
       ],
       'computed',
@@ -139,7 +143,7 @@ export function detectTestInfrastructure(
       'WARN',
       ratio,
       [
-        `test coverage proxy: ${pct}% — partial test coverage (below 60% threshold)`,
+        `test coverage proxy: ${pct}% — partial test coverage (below ${thresholdPct}% threshold)`,
         ...evidence,
       ],
       'computed',

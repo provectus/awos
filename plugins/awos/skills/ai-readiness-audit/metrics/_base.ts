@@ -81,6 +81,8 @@ export interface MetricResult {
   confidence: number;
   /** Per-category-code score overrides for metrics that award multiple codes with different natural scores. */
   score_per_code?: Record<number, number>;
+  /** Per-category-code evidence lines for metrics that emit layer-specific evidence (e.g. adp_g1_tooling_depth). */
+  evidence_per_code?: Record<number, string[]>;
   /** Monthly history series (one entry per 30-day bucket), omitted for snapshot/non-rate metrics. */
   value_series?: ValueSeriesEntry[];
   /** Human-readable derivation of the value (e.g. "42 of 50 public defs documented = 0.84"). */
@@ -117,7 +119,8 @@ export function makeMetricResult(
   expression?: string,
   score?: number,
   confidence?: number,
-  scorePerCode?: Record<number, number>
+  scorePerCode?: Record<number, number>,
+  evidencePerCode?: Record<number, string[]>
 ): MetricResult {
   const status: 'OK' | 'SKIP' = sourcesUsed.length === 0 ? 'SKIP' : 'OK';
   const result: MetricResult = {
@@ -136,6 +139,9 @@ export function makeMetricResult(
   };
   if (scorePerCode !== undefined) {
     result.score_per_code = scorePerCode;
+  }
+  if (evidencePerCode !== undefined) {
+    result.evidence_per_code = evidencePerCode;
   }
   if (valueSeries !== undefined) {
     result.value_series = valueSeries;

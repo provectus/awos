@@ -2,7 +2,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderMarkdown, renderHtml } from './render.ts';
-import type { AuditJson, Check, DimensionArtifact } from './render.ts';
+import type {
+  AuditJson,
+  Check,
+  DimensionArtifact,
+  DeliveryMetric,
+} from './render.ts';
 
 /** Minimal valid Check fixture — extend per test. */
 function makeCheck(overrides: Partial<Check> = {}): Check {
@@ -556,4 +561,179 @@ test('Linked repos are grouped by kind with section headings (6c.5)', () => {
   assert.ok(html.includes('ext-lib'), 'symlink repo name must appear (6c.5)');
   assert.ok(html.includes('ui-kit'), 'submodule repo name must appear (6c.5)');
   assert.ok(html.includes('github-mcp'), 'MCP server name must appear (6c.5)');
+});
+
+// ---------------------------------------------------------------------------
+// Task 4.1 — gated delivery-metric headline rows
+// ---------------------------------------------------------------------------
+
+test('HTML headline renders gated-absent delivery metrics as "needs connector" note with no band chip, and present metrics normally (Task 4.1)', () => {
+  // 9-row fixture: mix of non-gated/present, gated/absent (various absent forms),
+  // and gated/present (connector was available, so render normally).
+  const delivery: DeliveryMetric[] = [
+    // Row 1: non-gated, value present, band present → value + colored band chip
+    { label: 'Deploy Frequency', display_value: '12/week', band: 'elite' },
+    // Row 2: non-gated, value present, band present → value + colored band chip
+    { label: 'Lead Time', display_value: '2 days', band: 'high' },
+    // Row 3: non-gated, value present, no band → value, no band chip
+    { label: 'Change Failure Rate', display_value: '1%' },
+    // Row 4: non-gated, value present, band → value + band chip
+    { label: 'MTTR', display_value: '< 1 hour', band: 'elite' },
+    // Row 5: gated tracker, absent via em-dash → "needs ticketing connector", no band chip
+    { label: 'Ticket Cycle Time', display_value: '—', gated: 'tracker' },
+    // Row 6: gated tracker, absent via empty string → "needs ticketing connector"
+    { label: 'Ticket Throughput', display_value: '', gated: 'tracker' },
+    // Row 7: gated incident, absent via hyphen → "needs incident connector", no band chip
+    { label: 'Incident Rate', display_value: '-', gated: 'incident' },
+    // Row 8: gated incident, absent via missing value → "needs incident connector"
+    {
+      label: 'MTTD',
+      display_value: undefined as unknown as string,
+      gated: 'incident',
+    },
+    // Row 9: gated tracker, but display_value IS present (connector available) → render normally with band chip
+    {
+      label: 'Tracker Velocity',
+      display_value: '42/sprint',
+      band: 'medium',
+      gated: 'tracker',
+    },
+  ];
+
+  const audit = makeAudit({ headline: { delivery } });
+  const html = renderHtml(audit);
+
+  // Contract: present non-gated metrics show their display_value and a colored band chip
+  assert.ok(
+    html.includes('12/week'),
+    'Deploy Frequency display_value must appear in HTML (non-gated present, Task 4.1)'
+  );
+  assert.ok(
+    html.includes('class="band"') && html.includes('elite'),
+    'Elite band chip must appear for Deploy Frequency (non-gated present, Task 4.1)'
+  );
+  assert.ok(
+    html.includes('2 days'),
+    'Lead Time display_value must appear in HTML (non-gated present, Task 4.1)'
+  );
+  assert.ok(
+    html.includes('1%'),
+    'Change Failure Rate display_value must appear in HTML (non-gated, no band, Task 4.1)'
+  );
+  assert.ok(
+    html.includes('&lt; 1 hour'),
+    'MTTR display_value must be escaped and appear in HTML (non-gated present, Task 4.1)'
+  );
+
+  // Contract: gated-absent tracker metrics render the "needs ticketing connector" note and NO band chip in their value cell
+  assert.ok(
+    html.includes('needs ticketing connector'),
+    'Gated-absent tracker metrics must render "needs ticketing connector" note (Task 4.1)'
+  );
+  // Verify the absent gated rows do NOT render a band chip for their label
+  // We check the Ticket Cycle Time kv block does not contain a band chip
+  const ticketCycleIdx = html.indexOf('Ticket Cycle Time');
+  assert.ok(
+    ticketCycleIdx !== -1,
+    'Ticket Cycle Time label must appear (Task 4.1)'
+  );
+  const ticketCycleKv = html.slice(
+    ticketCycleIdx,
+    html.indexOf('</div>', ticketCycleIdx + 1) + 6
+  );
+  assert.ok(
+    !ticketCycleKv.includes('class="band"'),
+    'Gated-absent tracker metric must NOT render a band chip (Task 4.1)'
+  );
+
+  // Contract: gated-absent incident metrics render the "needs incident connector" note and NO band chip
+  assert.ok(
+    html.includes('needs incident connector'),
+    'Gated-absent incident metrics must render "needs incident connector" note (Task 4.1)'
+  );
+  const incidentRateIdx = html.indexOf('Incident Rate');
+  assert.ok(
+    incidentRateIdx !== -1,
+    'Incident Rate label must appear (Task 4.1)'
+  );
+  const incidentRateKv = html.slice(
+    incidentRateIdx,
+    html.indexOf('</div>', incidentRateIdx + 1) + 6
+  );
+  assert.ok(
+    !incidentRateKv.includes('class="band"'),
+    'Gated-absent incident metric must NOT render a band chip (Task 4.1)'
+  );
+
+  // Contract: gated metric WITH a present display_value renders normally (value + band chip)
+  assert.ok(
+    html.includes('42/sprint'),
+    'Gated tracker metric with present display_value must render its value (Task 4.1)'
+  );
+  const trackerVelocityIdx = html.indexOf('Tracker Velocity');
+  assert.ok(
+    trackerVelocityIdx !== -1,
+    'Tracker Velocity label must appear (Task 4.1)'
+  );
+  const trackerVelocityKv = html.slice(
+    trackerVelocityIdx,
+    html.indexOf('</div>', trackerVelocityIdx + 1) + 6
+  );
+  assert.ok(
+    trackerVelocityKv.includes('class="band"'),
+    'Gated metric with present value must render its band chip (Task 4.1)'
+  );
+});
+
+test('Markdown headline renders gated-absent delivery metrics as "needs connector" note with no band column, and present metrics normally (Task 4.1)', () => {
+  const delivery: DeliveryMetric[] = [
+    // Present non-gated → value + band
+    { label: 'Deploy Frequency', display_value: '12/week', band: 'elite' },
+    // Gated tracker absent → note, no band
+    { label: 'Ticket Cycle Time', display_value: '—', gated: 'tracker' },
+    // Gated incident absent → note, no band
+    { label: 'Incident Rate', display_value: '-', gated: 'incident' },
+    // Gated tracker present → render normally
+    {
+      label: 'Tracker Velocity',
+      display_value: '42/sprint',
+      band: 'medium',
+      gated: 'tracker',
+    },
+  ];
+
+  const audit = makeAudit({ headline: { delivery } });
+  const md = renderMarkdown(audit);
+
+  // Contract: present metrics render their value and band
+  assert.ok(
+    md.includes('12/week'),
+    'Present non-gated metric must render its display_value in Markdown (Task 4.1)'
+  );
+  assert.ok(
+    md.includes('elite'),
+    'Present non-gated metric must render its band in Markdown (Task 4.1)'
+  );
+
+  // Contract: gated-absent tracker renders "needs ticketing connector" note, no band cell
+  assert.ok(
+    md.includes('needs ticketing connector'),
+    'Gated-absent tracker metric must render "needs ticketing connector" in Markdown (Task 4.1)'
+  );
+
+  // Contract: gated-absent incident renders "needs incident connector" note
+  assert.ok(
+    md.includes('needs incident connector'),
+    'Gated-absent incident metric must render "needs incident connector" in Markdown (Task 4.1)'
+  );
+
+  // Contract: gated metric with present value renders normally (value + band)
+  assert.ok(
+    md.includes('42/sprint'),
+    'Gated tracker metric with present display_value must render its value in Markdown (Task 4.1)'
+  );
+  assert.ok(
+    md.includes('medium'),
+    'Gated tracker metric with present display_value must render its band in Markdown (Task 4.1)'
+  );
 });

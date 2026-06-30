@@ -68,7 +68,7 @@
  *   "scale":    ScaleMetric[],      // code scale & complexity
  *   "reach":    { ai_tooling?: string, contributors?: string },
  * }
- * DeliveryMetric: { label, display_value, band?, reliability?, check_id? }
+ * DeliveryMetric: { label, display_value, band?, reliability?, check_id?, gated?: 'tracker'|'incident' }
  * ScaleMetric:    { label, display_value, check_id? }
  *
  * Insight (the narrative READ):
@@ -163,6 +163,8 @@ export interface DeliveryMetric {
   band?: string;
   reliability?: string;
   check_id?: string;
+  /** When set, the metric requires an external connector. If display_value is absent the renderer shows a "needs X connector" note instead of a value. */
+  gated?: 'tracker' | 'incident';
 }
 
 export interface ScaleMetric {
@@ -551,7 +553,15 @@ export function renderMarkdown(audit: AuditJson): string {
       lines.push('| Metric | Value | Band |');
       lines.push('| ------ | ----- | ---- |');
       for (const d of h.delivery) {
-        lines.push(`| ${d.label} | ${d.display_value} | ${d.band ?? '—'} |`);
+        if (d.gated && deliveryValueAbsent(d.display_value)) {
+          const note =
+            d.gated === 'tracker'
+              ? '— (needs ticketing connector)'
+              : '— (needs incident connector)';
+          lines.push(`| ${d.label} | ${note} | |`);
+        } else {
+          lines.push(`| ${d.label} | ${d.display_value} | ${d.band ?? '—'} |`);
+        }
       }
       lines.push('');
     }
@@ -905,6 +915,12 @@ const BAND_COLOR: Record<string, string> = {
   low: '#ef4444',
 };
 
+/** Returns true when a DeliveryMetric display_value is considered absent: missing, empty, em-dash, or hyphen. */
+function deliveryValueAbsent(v: string | undefined): boolean {
+  const t = (v ?? '').trim();
+  return t === '' || t === '—' || t === '-';
+}
+
 const SEVERITY_COLOR: Record<string, string> = {
   high: '#ef4444',
   medium: '#eab308',
@@ -1068,6 +1084,13 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
     if (h?.delivery && h.delivery.length > 0) {
       const items = h.delivery
         .map((d) => {
+          if (d.gated && deliveryValueAbsent(d.display_value)) {
+            const note =
+              d.gated === 'tracker'
+                ? '— (needs ticketing connector)'
+                : '— (needs incident connector)';
+            return `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${esc(note)}</span></div>`;
+          }
           const bandHtml = d.band
             ? `<span class="band" style="background:${BAND_COLOR[d.band.toLowerCase()] ?? '#94a3b8'}">${esc(d.band)}</span>`
             : '';

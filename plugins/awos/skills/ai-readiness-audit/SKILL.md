@@ -134,7 +134,9 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
      6. **Change-failure rate** — check `ADP-13`; band from hint; `check_id: "ADP-13"`.
      7. **Cycle time (Jira In-Progress→Done)** — set `gated: "tracker"`. When a tracker connector is present, transcribe the median Jira In-Progress→Done duration as `display_value`; when no tracker connector, omit `display_value` so the renderer prints "— (needs ticketing connector)".
      8. **MTTR** — set `gated: "incident"`. When an incident connector is present, transcribe the value from check `ADP-I4` as `display_value`; when no incident connector, omit `display_value` so the renderer prints "— (needs incident connector)". (`adp_i3_mttr` also produces a git-proxy value, but the headline MTTR row reflects true incident recovery and is gated on an incident connector.)
-        `scale[]` = code size/complexity (`ADP-G11`, `ADP-G10`, deps `ADP-G12`). `reach` = `{ai_tooling, contributors}` (`ADP-G1`/`ADP-G2`). Keep `reach.contributors` to the count and cadence (e.g. "4 active contributors (90d)") — do not append a privacy disclaimer such as "counts are aggregate; no per-person data". The aggregate/no-PII rule governs what you collect, not the report copy; surfacing it just clutters the headline.
+
+     `scale[]` = code size/complexity (`ADP-G11`, `ADP-G10`, deps `ADP-G12`). `reach` = `{ai_tooling, contributors}` (`ADP-G1`/`ADP-G2`). Keep `reach.contributors` to the count and cadence (e.g. "4 active contributors (90d)") — do not append a privacy disclaimer such as "counts are aggregate; no per-person data". The aggregate/no-PII rule governs what you collect, not the report copy; surfacing it just clutters the headline.
+
    - `insights[]` — 3–6 thematic cards, the "READ": `{theme, severity, weak_areas[], so_what, improves}`. Plain language for a non-technical stakeholder — name the weak areas and say what improves if they are fixed.
    - `recommendations[]` — the prioritized fixes as `{id, priority (P0/P1/P2), title, dimension, check_id, effort, detail}`. `detail` is a plain-language paragraph. Transcribe each from a real FAIL/WARN check.
 

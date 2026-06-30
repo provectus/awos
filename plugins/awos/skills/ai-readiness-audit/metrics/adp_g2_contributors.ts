@@ -22,7 +22,11 @@ import {
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
-import { activeContributors, type AuthorRow } from '../collectors/git.ts';
+import {
+  activeContributors,
+  ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT,
+  type AuthorRow,
+} from '../collectors/git.ts';
 
 export function compute(
   collectedDir: string,
@@ -61,7 +65,7 @@ export function compute(
   const T: number =
     ((_standards['meta'] as Record<string, unknown>)?.[
       'active_contributor_threshold'
-    ] as number | undefined) ?? 0.1;
+    ] as number | undefined) ?? ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT;
 
   const active = activeContributors(perAuthor, T);
   const excluded = perAuthor.length - active;

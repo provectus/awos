@@ -188,7 +188,18 @@ export interface WindowStats {
   merges: number;
   authors_total: number;
   per_author: AuthorRow[];
+  /** Merges divided by active-contributor count; null when activeCount is 0. Display-only. */
+  merges_per_active: number | null;
+  /** Total LOC (added + deleted) divided by active-contributor count; null when activeCount is 0. Display-only. */
+  loc_per_active: number | null;
 }
+
+/**
+ * Framework default for the active-contributor exclusion threshold.
+ * Mirrors meta.active_contributor_threshold in standards.toml (default 0.1 = 10 %).
+ * Single source of truth — adp_g2_contributors and display-only ratios both use this.
+ */
+export const ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT = 0.1;
 
 /**
  * Active-contributor filter (locked rule — Phase 2 ratios reuse this).
@@ -215,6 +226,8 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
     merges: 0,
     authors_total: 0,
     per_author: [],
+    merges_per_active: null,
+    loc_per_active: null,
   };
 
   // Anchor to the newest commit date — no wall-clock dependency.
@@ -297,12 +310,22 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
     0
   );
 
+  const activeCount = activeContributors(
+    perAuthor,
+    ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
+  );
+  const totalLines = perAuthor.reduce((s, a) => s + a.lines, 0);
+  const merges_per_active = activeCount > 0 ? totalMerges / activeCount : null;
+  const loc_per_active = activeCount > 0 ? totalLines / activeCount : null;
+
   return {
     window_days: windowDays,
     commits: totalCommits,
     merges: totalMerges,
     authors_total: allAuthors.size,
     per_author: perAuthor,
+    merges_per_active,
+    loc_per_active,
   };
 }
 

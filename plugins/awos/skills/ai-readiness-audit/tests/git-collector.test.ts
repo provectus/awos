@@ -314,3 +314,73 @@ test('window_stats: monthly_buckets is not emitted (field removed in task 0.2)',
     'window_stats must be present in raw after task 0.2'
   );
 });
+
+// ---------------------------------------------------------------------------
+// merges_per_active / loc_per_active tests (task 1.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build an empty repo (git init, no commits) for the null-case test.
+ * With no commits, window_stats is the zero-value empty struct and
+ * per_author is [] → activeCount is 0 → both ratios must be null.
+ */
+function emptyRepo(): string {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-empty-')), 'repo');
+  mkdirSync(r);
+  execFileSync('git', ['init', '-q', '-b', 'main'], {
+    cwd: r,
+    stdio: 'ignore',
+  });
+  return r;
+}
+
+test('window_stats: merges_per_active and loc_per_active are null when there are no commits (activeCount = 0)', () => {
+  // Contract: divide-by-zero guard — when no authors are active (empty per_author
+  // → activeCount 0), both ratio fields must be null, not NaN or Infinity.
+  const art = collect(emptyRepo(), WINDOW_PERIOD);
+  const ws = art.raw.window_stats;
+
+  assert.equal(
+    ws.merges_per_active,
+    null,
+    'merges_per_active must be null when activeCount is 0 (empty repo has no authors)'
+  );
+  assert.equal(
+    ws.loc_per_active,
+    null,
+    'loc_per_active must be null when activeCount is 0 (empty repo has no authors)'
+  );
+});
+
+test('window_stats: merges_per_active and loc_per_active equal expected ratios for a crafted multi-author history', () => {
+  // Contract: display-only throughput ratios are computed correctly.
+  //
+  // Fixture (windowRepo):
+  //   Alice: commits=1, merges=1, lines=3
+  //   Bob:   commits=1, merges=0, lines=5
+  //   total merges in window = 1
+  //   total lines            = 8
+  //
+  // Active-contributor filter (T=0.1):
+  //   tm=1, tl=8
+  //   Alice: merge_share=1.0 (≥0.1) → NOT excluded → active
+  //   Bob:   loc_share=5/8=0.625 (≥0.1) → NOT excluded → active
+  //   activeCount = 2
+  //
+  // Expected:
+  //   merges_per_active = 1 / 2 = 0.5
+  //   loc_per_active    = 8 / 2 = 4.0
+  const art = collect(windowRepo(), WINDOW_PERIOD);
+  const ws = art.raw.window_stats;
+
+  assert.equal(
+    ws.merges_per_active,
+    0.5,
+    'merges_per_active must be 1 merge / 2 active contributors = 0.5'
+  );
+  assert.equal(
+    ws.loc_per_active,
+    4.0,
+    'loc_per_active must be 8 total lines / 2 active contributors = 4.0'
+  );
+});

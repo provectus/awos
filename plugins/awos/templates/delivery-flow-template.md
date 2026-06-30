@@ -52,13 +52,14 @@ Which commands `/awos:flow` generated and their names — re-runs reconcile exac
 
 1. [Static checks — what runs, where]
 2. [Local AI review — file convention, human-edit loop, learning-loop into CLAUDE.md]
-3. [Automatic reviewer on the code host — which bot (e.g. CodeRabbit), whether the flow waits for its review after opening the change request and addresses its findings]
+3. [Automatic reviewer on the code host — a third-party bot (e.g. CodeRabbit) or a project-built AI reviewer (e.g. a GitHub Action calling Claude); whether the flow waits for its review after opening the change request and addresses its findings, and whether its pass/fail drives a §5 ticket-state transition]
 4. [Remote PR review — platform, human reviewers, wait-or-poll policy]
 5. [CI on the change request — which pipelines trigger, the typical duration from recent runs (the flow polls at matching intervals), and the policy: wait + fix failures in a loop | report first results and hand off | no CI (local suite is the gate)]
 6. [Environment/soak/compliance gates — if any]
 
 - **Approval gates:** [after spec and after tech — most reliable | one gate after spec + tech — faster | none; tasks.md has no gate by default — `/awos:implement` starts right after `/awos:tasks`]
 - **Change-request timing:** [after local review — CI runs only on reviewed code | before local review — remote gates start earlier, one extra CI run on unreviewed code]
+- **Max-wait & escalation:** [how long the flow waits on remote gates before escalating, whether it auto-relaunches the monitor when a poll window expires, and the threshold past which it asks the human instead of waiting — the generated `Monitor` timeout is sized to this]
 
 ## 5. Delivery
 
@@ -68,7 +69,8 @@ Which commands `/awos:flow` generated and their names — re-runs reconcile exac
 - **Approvals:** [who signs off, where recorded]
 - **Versioning:** [what gets bumped, where, by whom]
 - **Deployment:** [manual CD job | scheduled | fully automatic | local deploy step — the command, and when the flow runs it: after the merge | after post-merge CI is green | never]
-- **Definition of Done:** [the evidence that closes the loop — may include post-merge pipelines green; plus the ticket transition, only when the source has tickets to transition]
+- **Ticket state transitions:** [the event→state map across the whole cycle, in the tracker's own state names — start (→ In Progress), change request opened (→ In Review), a gate/review failing (→ back to needs-work, e.g. To Do), merged, done; or "n/a — ticketless source"]
+- **Definition of Done:** [the evidence that closes the loop — may include post-merge pipelines green; plus the final ticket transition, only when the source has tickets to transition]
 
 ## 6. Trigger
 

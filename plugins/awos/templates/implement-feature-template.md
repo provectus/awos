@@ -129,7 +129,9 @@ Stage all changed files, excluding `.env`, credentials, and secrets. [Commit mes
 
 [Per §4: open the change request via the chosen transport from §7. Then wait on every remote gate concurrently rather than in sequence — CI checks (e.g. `gh pr checks`, `glab ci status`, the Azure DevOps CLI), the automatic reviewer's pass (address its findings), human review (wait-or-poll policy), environment/soak/compliance gates — and join them all before merge. On CI failure, per the recorded policy: delegate diagnosis and the fix to a subagent (per §8) working from the failed job's logs, push, re-check until green — or report the first results and hand off. For a repo with no code host, the local test/lint suite already served as the gate — omit this stage, along with any other gate §4 rules out.]
 
-Wait with the `Monitor` tool, never foreground `sleep` loops: a poll loop that emits each gate's terminal result and exits when all are settled, its timeout sized to the typical pipeline duration recorded in §4, the poll interval 30s+ against remote APIs, and the filter covering every terminal state — failures and cancellations, not just success, because a monitor that only greps the success marker stays silent through a failed run.
+[Per §5's ticket-state map (omit for ticketless sources): transition the ticket to the in-review state when the change request opens, and back to the needs-work state if a gate or review fails — so the developer sees it — re-advancing it when the gates go green again.]
+
+Wait with the `Monitor` tool, never foreground `sleep` loops: a poll loop that emits each gate's terminal result and exits when all are settled, its timeout sized to the typical pipeline duration recorded in §4, the poll interval 30s+ against remote APIs, and the filter covering every terminal state — failures and cancellations, not just success, because a monitor that only greps the success marker stays silent through a failed run. Apply §4's max-wait & escalation policy when a poll window expires without the gates settling — auto-relaunch the monitor, or ask the human past the recorded threshold; never wait forever.
 
 <!-- /awos:flow:stage -->
 

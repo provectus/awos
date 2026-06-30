@@ -1100,6 +1100,41 @@ test('flow.md wires fix-bug generation alongside implement-feature', () => {
   );
 });
 
+test('flow.md and the template record a ticket-state lifecycle and CI escalation', () => {
+  // Eugene automates the whole status cycle off flow/CI events — including
+  // the failure path (review fails → back to To Do) — driven by a project
+  // -built CI AI reviewer. And remote-gate waits need a max-wait/escalation
+  // policy, not an unbounded poll.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const tpl = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /Ticket state transitions/i.test(flow) &&
+      /Ticket state transitions/i.test(tpl),
+    'flow.md §5 and delivery-flow-template.md must record a ticket-state transition map (events → tracker states), not just the closing transition'
+  );
+  assert.ok(
+    /back to .*needs-work|→ back to/i.test(flow),
+    'the ticket-state map must cover the failure path — a failed gate/review sends the ticket back to a needs-work state'
+  );
+  assert.ok(
+    /project-built AI reviewer/i.test(flow),
+    'flow.md §4 must recognize a project-built CI AI reviewer (a GitHub Action calling Claude), not only third-party bots'
+  );
+  assert.ok(
+    /max-wait/i.test(flow) && /max-wait/i.test(tpl),
+    'flow.md §4 and delivery-flow-template.md must record a max-wait & escalation policy for remote-gate waits'
+  );
+  for (const f of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, f));
+    assert.ok(
+      /max-wait & escalation policy/i.test(body),
+      `${f} remote-gates stage must apply the §4 max-wait & escalation policy instead of waiting forever`
+    );
+  }
+});
+
 test('fix-bug-template.md supports a crash-report source', () => {
   // Eugene's /everclear:fix starts from a Crashlytics issue: pull events,
   // map the stack to real file:line, and refuse to invent lines when the

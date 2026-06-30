@@ -45,6 +45,20 @@ function daysBetween(d1: Date, d2: Date): number {
   return Math.round((d2.getTime() - d1.getTime()) / 86_400_000);
 }
 
+/**
+ * Newest commit date across all refs, or null on an empty repo / git failure.
+ * Anchoring windows to this (not wall-clock) keeps audits reproducible.
+ */
+function latestCommitDate(cwd: string): Date | null {
+  const latestStr = run(
+    ['log', '--all', '--format=%cI', '--max-count=1'],
+    cwd
+  ).trim();
+  if (!latestStr) return null;
+  const d = parseDate(latestStr);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 // ---------------------------------------------------------------------------
 // Individual fact collectors
 // ---------------------------------------------------------------------------
@@ -207,6 +221,13 @@ export interface WindowStats {
 export const ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT = 0.1;
 
 /**
+ * Framework default for the code-turnover rework horizon, in days.
+ * Mirrors meta.rework_horizon_days in standards.toml (default 21).
+ * A line deleted within this many days of being authored counts as "reworked".
+ */
+export const REWORK_HORIZON_DAYS_DEFAULT = 21;
+
+/**
  * Active-contributor filter (locked rule — Phase 2 ratios reuse this).
  *
  * An author is excluded iff their merge-share AND LOC-share are both strictly
@@ -238,16 +259,11 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
   };
 
   // Anchor to the newest commit date — no wall-clock dependency.
-  const latestDateStr = run(
-    ['log', '--all', '--format=%cI', '--max-count=1'],
-    cwd
-  ).trim();
-  if (!latestDateStr) return empty;
-  const latestCommitDate = parseDate(latestDateStr);
-  if (isNaN(latestCommitDate.getTime())) return empty;
+  const latest = latestCommitDate(cwd);
+  if (!latest) return empty;
 
   const since = new Date(
-    latestCommitDate.getTime() - windowDays * 86_400_000
+    latest.getTime() - windowDays * 86_400_000
   ).toISOString();
 
   // 0. In-window revert/hotfix/rollback merges — bounded to the same window as the rest.
@@ -379,6 +395,124 @@ function getNumstatTotals(cwd: string): NumstatTotals {
 }
 
 // ---------------------------------------------------------------------------
+// Code turnover (windowed, directional rework ratio)
+// ---------------------------------------------------------------------------
+
+export interface CodeTurnover {
+  reworked_lines: number;
+  total_added: number;
+  /** reworked_lines / total_added; null when total_added is 0. */
+  ratio: number | null;
+}
+
+/**
+ * Code turnover ≈ (lines added then deleted within the rework horizon) ÷
+ * (lines added), measured over the lookback window.
+ *
+ * Approximation: git numstat reports per-file (added, deleted) COUNTS, never
+ * line identity, so the true authored-age of a deleted line is unknowable
+ * cheaply. We approximate it with a single oldest→newest replay maintaining a
+ * per-file FIFO pool of recent additions ("recently authored, not yet
+ * removed"). A deletion consumes the oldest still-in-horizon pooled lines for
+ * that file; consumed lines whose deletion lands in the window count as
+ * reworked. Deletions of lines older than the horizon (or of foreign/unpooled
+ * lines) are deliberately NOT rework. The pool is pruned by horizon each commit,
+ * so the walk stays bounded and single-pass.
+ *
+ * The replay starts `horizon` days BEFORE the window so an in-window deletion
+ * can still find an addition authored just before the window opened.
+ */
+function getCodeTurnover(cwd: string, period: Period): CodeTurnover | null {
+  const lookbackDays = period.lookback_days;
+  const horizonDays = REWORK_HORIZON_DAYS_DEFAULT;
+
+  const anchor = latestCommitDate(cwd);
+  if (!anchor) return null;
+
+  const dayMs = 86_400_000;
+  const horizonMs = horizonDays * dayMs;
+  const windowStartMs = anchor.getTime() - lookbackDays * dayMs;
+  const replayStartMs = windowStartMs - horizonMs;
+  const replayStartISO = new Date(replayStartMs).toISOString();
+
+  // Per-file FIFO pool of recent additions (oldest first), epoch-ms dated.
+  interface PoolEntry {
+    date: number;
+    remaining: number;
+  }
+  const perFile = new Map<string, PoolEntry[]>();
+
+  let reworked = 0;
+  let totalAdded = 0;
+
+  const out = run(
+    [
+      'log',
+      '--reverse',
+      '--no-merges',
+      '--numstat',
+      `--since=${replayStartISO}`,
+      '--format=%H\t%cI',
+    ],
+    cwd
+  );
+  if (!out.trim()) return { reworked_lines: 0, total_added: 0, ratio: null };
+
+  let currentDate = 0; // epoch ms of the commit currently being parsed
+  for (const line of out.split('\n')) {
+    // Commit header: "<40-hex SHA>\t<ISO commit date>".
+    const header = line.match(/^[0-9a-f]{40}\t(.+)$/);
+    if (header) {
+      const d = parseDate(header[1]);
+      currentDate = isNaN(d.getTime()) ? 0 : d.getTime();
+      continue;
+    }
+    // Numstat row: "<added>\t<deleted>\t<path>"; skip binary "-\t-\t" rows.
+    const row = line.match(/^(\d+)\t(\d+)\t(.+)$/);
+    if (!row || !currentDate) continue;
+    const added = parseInt(row[1], 10);
+    const deleted = parseInt(row[2], 10);
+    const path = row[3];
+
+    const pool = perFile.get(path) ?? [];
+    const inWindow = currentDate >= windowStartMs;
+
+    // (a) Deletions consume prior in-horizon additions, oldest-eligible-first.
+    let toDelete = deleted;
+    for (const entry of pool) {
+      if (toDelete <= 0) break;
+      if (entry.remaining <= 0) continue;
+      // Too old to be reworked-within-horizon — leave it for pruning below.
+      if (currentDate - entry.date >= horizonMs) continue;
+      const consumed = Math.min(entry.remaining, toDelete);
+      entry.remaining -= consumed;
+      toDelete -= consumed;
+      if (inWindow) reworked += consumed;
+    }
+
+    // (b) Prune exhausted and out-of-horizon entries to keep the pool bounded.
+    const pruned = pool.filter(
+      (e) => e.remaining > 0 && currentDate - e.date < horizonMs
+    );
+
+    // (c) Pool this commit's additions (never visible to its own deletions).
+    if (added > 0) {
+      pruned.push({ date: currentDate, remaining: added });
+      if (inWindow) totalAdded += added;
+    }
+
+    if (pruned.length > 0) perFile.set(path, pruned);
+    else perFile.delete(path);
+  }
+
+  return {
+    reworked_lines: reworked,
+    total_added: totalAdded,
+    ratio: totalAdded > 0 ? reworked / totalAdded : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // History span
 // ---------------------------------------------------------------------------
 
@@ -412,6 +546,7 @@ export interface GitRaw {
   merge_records: MergeRecord[];
   window_stats: WindowStats;
   numstat_totals: NumstatTotals;
+  code_turnover: CodeTurnover | null;
 }
 
 export function collect(repoPath: string, period: Period) {
@@ -423,6 +558,7 @@ export function collect(repoPath: string, period: Period) {
   const merge_records = getMergeRecords(repoPath);
   const window_stats = buildWindowStats(repoPath, period);
   const numstat_totals = getNumstatTotals(repoPath);
+  const code_turnover = getCodeTurnover(repoPath, period);
   const history_available_days = getHistoryAvailableDays(repoPath);
 
   const raw: GitRaw = {
@@ -435,6 +571,7 @@ export function collect(repoPath: string, period: Period) {
     merge_records,
     window_stats,
     numstat_totals,
+    code_turnover,
   };
 
   return makeArtifact(

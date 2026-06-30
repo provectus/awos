@@ -503,3 +503,140 @@ test('window_stats: revert_merges is 0 for a clean repo with no revert/hotfix me
     `window_stats.revert_merges must be 0 for a clean repo; got ${ws.revert_merges}`
   );
 });
+
+// ---------------------------------------------------------------------------
+// code_turnover tests (task 2.3) — windowed reworked/added ratio.
+//
+// Anchor = newest commit (2025-03-25). lookback = 90d → windowStart = 2024-12-25.
+// rework horizon = 21d. A line "added" then "deleted" within 21d, with the
+// deletion in-window, is reworked; deletions of older lines are not.
+// ---------------------------------------------------------------------------
+
+const TEN_LINES = 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\n';
+const TWO_LINES = 'l1\nl2\n';
+
+/**
+ * High-turnover history (linear, single author 'A'):
+ *   2025-03-01  add foo.txt (10 lines)            in-window → total_added += 10
+ *   2025-03-10  shrink foo.txt to 2 lines (-8)    9d after add, in-horizon + in-window → reworked += 8
+ *   2025-03-25  add bar.txt (2 lines)  (ANCHOR)   in-window → total_added += 2
+ *
+ * Expected: reworked_lines=8, total_added=12, ratio = 8/12.
+ */
+function highTurnoverRepo(): string {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-turnover-')), 'repo');
+  mkdirSync(r);
+  git(r, ['init', '-q', '-b', 'main'], '2025-03-01T00:00:00');
+  writeFileSync(join(r, 'foo.txt'), TEN_LINES);
+  git(r, ['add', '-A'], '2025-03-01T00:00:00');
+  git(r, ['commit', '-qm', 'feat: foo'], '2025-03-01T00:00:00');
+
+  writeFileSync(join(r, 'foo.txt'), TWO_LINES); // remove last 8 lines → 0 added, 8 deleted
+  git(r, ['add', '-A'], '2025-03-10T00:00:00');
+  git(r, ['commit', '-qm', 'refactor: shrink foo'], '2025-03-10T00:00:00');
+
+  writeFileSync(join(r, 'bar.txt'), TWO_LINES);
+  git(r, ['add', '-A'], '2025-03-25T00:00:00');
+  git(r, ['commit', '-qm', 'feat: bar'], '2025-03-25T00:00:00');
+  return r;
+}
+
+/**
+ * Add-only history — never deletes recent lines:
+ *   2025-03-01  add a.txt (5 lines)              total_added += 5
+ *   2025-03-25  add b.txt (3 lines)  (ANCHOR)    total_added += 3
+ * Expected: reworked_lines=0, total_added=8, ratio = 0.
+ */
+function addOnlyRepo(): string {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-addonly-')), 'repo');
+  mkdirSync(r);
+  git(r, ['init', '-q', '-b', 'main'], '2025-03-01T00:00:00');
+  writeFileSync(join(r, 'a.txt'), 'a1\na2\na3\na4\na5\n');
+  git(r, ['add', '-A'], '2025-03-01T00:00:00');
+  git(r, ['commit', '-qm', 'feat: a'], '2025-03-01T00:00:00');
+
+  writeFileSync(join(r, 'b.txt'), 'b1\nb2\nb3\n');
+  git(r, ['add', '-A'], '2025-03-25T00:00:00');
+  git(r, ['commit', '-qm', 'feat: b'], '2025-03-25T00:00:00');
+  return r;
+}
+
+/**
+ * Out-of-horizon deletion — a deletion 59d after the add is NOT rework:
+ *   2025-01-01  add foo.txt (10 lines)           in-window → total_added += 10
+ *   2025-03-01  shrink foo.txt to 2 lines (-8)    59d after add → out of horizon → NOT reworked
+ *   2025-03-25  add bar.txt (1 line)  (ANCHOR)    in-window → total_added += 1
+ * Expected: reworked_lines=0, total_added=11, ratio = 0.
+ */
+function outOfHorizonRepo(): string {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-far-')), 'repo');
+  mkdirSync(r);
+  git(r, ['init', '-q', '-b', 'main'], '2025-01-01T00:00:00');
+  writeFileSync(join(r, 'foo.txt'), TEN_LINES);
+  git(r, ['add', '-A'], '2025-01-01T00:00:00');
+  git(r, ['commit', '-qm', 'feat: foo'], '2025-01-01T00:00:00');
+
+  writeFileSync(join(r, 'foo.txt'), TWO_LINES); // -8, but 59 days later
+  git(r, ['add', '-A'], '2025-03-01T00:00:00');
+  git(
+    r,
+    ['commit', '-qm', 'refactor: shrink foo (late)'],
+    '2025-03-01T00:00:00'
+  );
+
+  writeFileSync(join(r, 'bar.txt'), 'x\n');
+  git(r, ['add', '-A'], '2025-03-25T00:00:00');
+  git(r, ['commit', '-qm', 'feat: bar'], '2025-03-25T00:00:00');
+  return r;
+}
+
+test('code_turnover: lines rewritten within the horizon count as turnover (high ratio)', () => {
+  const art = collect(highTurnoverRepo(), WINDOW_PERIOD);
+  const ct = art.raw.code_turnover;
+  assert.ok(ct !== null && ct !== undefined, 'code_turnover must be present');
+  assert.equal(
+    ct.reworked_lines,
+    8,
+    'reworked_lines must be 8 (foo.txt shrunk by 8 lines 9d after creation, in-window)'
+  );
+  assert.equal(
+    ct.total_added,
+    12,
+    'total_added must be 12 (10 foo + 2 bar, both in-window)'
+  );
+  assert.equal(
+    ct.ratio,
+    8 / 12,
+    `ratio must be reworked/added = 8/12; got ${ct.ratio}`
+  );
+});
+
+test('code_turnover: an add-only history has ratio 0 (no rework)', () => {
+  const art = collect(addOnlyRepo(), WINDOW_PERIOD);
+  const ct = art.raw.code_turnover;
+  assert.ok(ct !== null && ct !== undefined, 'code_turnover must be present');
+  assert.equal(ct.reworked_lines, 0, 'reworked_lines must be 0 (no deletions)');
+  assert.equal(ct.total_added, 8, 'total_added must be 8 (5 + 3)');
+  assert.equal(ct.ratio, 0, 'ratio must be 0 when nothing is reworked');
+});
+
+test('code_turnover: deletions beyond the rework horizon are NOT counted as turnover', () => {
+  const art = collect(outOfHorizonRepo(), WINDOW_PERIOD);
+  const ct = art.raw.code_turnover;
+  assert.ok(ct !== null && ct !== undefined, 'code_turnover must be present');
+  assert.equal(
+    ct.reworked_lines,
+    0,
+    'reworked_lines must be 0 (the 8-line deletion is 59d after the add → out of horizon)'
+  );
+  assert.equal(
+    ct.total_added,
+    11,
+    'total_added must be 11 (10 foo + 1 bar, both in-window)'
+  );
+  assert.equal(
+    ct.ratio,
+    0,
+    'ratio must be 0 — old lines deleted are not rework'
+  );
+});

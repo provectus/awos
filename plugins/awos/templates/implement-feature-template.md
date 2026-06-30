@@ -25,7 +25,7 @@ Takes one feature — its requirements from [source per §1 of delivery-flow.md]
 
 ## Arguments
 
-`$ARGUMENTS` — [expected ticket reference shape per §1: ID, URL, or file path]. If empty, ask the user.
+`$ARGUMENTS` — [expected ticket reference shape per §1: ID, URL, or file path]. If empty, resume from the next incomplete item in `context/product/roadmap.md` (the first unchecked `- [ ]`, as `/awos:spec` does); if the roadmap is missing or fully complete, ask the user.
 
 ## Context Discipline
 
@@ -48,7 +48,7 @@ A flow this long degrades in one context window — judgment is worst exactly wh
 
 ### Step 2: Detect the Entry Point
 
-Start with a cheap preflight on the fast model tier (per §8): is this feature already delivered — a merged change request, a recorded Done? If so, report that and stop. Then: if `context/spec/{SPEC_NAME}/flow-log.md` exists, read it first — it names the last completed stage and carries the branch, commit, and change-request state. The log is a convenience, not ground truth: for the spec-generation stages the on-disk artifacts win when they disagree with the log (a manual or partial rerun can leave it stale) — cross-check `context/spec/` and, if they differ, resume from the first missing artifact and repair the log to match before continuing. Past spec generation there is no such artifact to scan, so the log is the only resume signal. [Per §1: if a spec directory for this feature may already exist under `context/spec/`, inspect it and resume from the first missing artifact — skip `/awos:spec` if `functional-spec.md` exists, skip `/awos:tech` if `technical-considerations.md` exists, and so on. Omit the pre-written-spec handling if specs never arrive pre-written.]
+Start with a cheap preflight on the fast model tier (per §8): is this feature **already done**? Check the status across every source §1 records (tickets can live in more than one place) before doing any work — if the tracker ticket is in a Done/closed state, or the owning AWOS spec is already `Completed` (or all its `tasks.md` items are `[x]`), or a merged change request exists, report that and stop. Don't re-run the chain over work that is already delivered. Then: if `context/spec/{SPEC_NAME}/flow-log.md` exists, read it first — it names the last completed stage and carries the branch, commit, and change-request state. The log is a convenience, not ground truth: for the spec-generation stages the on-disk artifacts win when they disagree with the log (a manual or partial rerun can leave it stale) — cross-check `context/spec/` and, if they differ, resume from the first missing artifact and repair the log to match before continuing. Past spec generation there is no such artifact to scan, so the log is the only resume signal. [Per §1: if a spec directory for this feature may already exist under `context/spec/`, inspect it and resume from the first missing artifact — skip `/awos:spec` if `functional-spec.md` exists, skip `/awos:tech` if `technical-considerations.md` exists, and so on. Omit the pre-written-spec handling if specs never arrive pre-written.]
 
 <!-- /awos:flow:stage -->
 

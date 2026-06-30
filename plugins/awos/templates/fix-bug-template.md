@@ -61,7 +61,7 @@ This command is an orchestrator. It diagnoses and decides, but the code change g
 
 ### Step 2: Detect the Entry Point
 
-Same resume logic as implement-feature. Start with a cheap preflight on the fast model tier (per §8): is this bug already fixed — a merged change request, a recorded close? If so, report that and stop. Then, if a flow log for this bug exists (`context/spec/{SPEC_NAME}/flow-log.md`, or `context/fix-log-{BUG_ID}.md`), read it first — it names the last completed stage and carries the branch, commit, classification verdict, and change-request state, and is the resume signal for the middle stages that produce no scannable artifact.
+Same resume logic as implement-feature. Start with a cheap preflight on the fast model tier (per §8): is this bug **already fixed**? Check the status across every source §1 records (bug reports can live in more than one place) before doing any work — if the tracker ticket is in a closed/fixed state, the crash issue is already resolved, or a merged change request exists, report that and stop rather than re-fixing. Then, if a flow log for this bug exists (`context/spec/{SPEC_NAME}/flow-log.md`, or `context/fix-log-{BUG_ID}.md`), read it first — it names the last completed stage and carries the branch, commit, classification verdict, and change-request state, and is the resume signal for the middle stages that produce no scannable artifact.
 
 <!-- /awos:flow:stage -->
 

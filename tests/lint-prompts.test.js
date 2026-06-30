@@ -1100,6 +1100,48 @@ test('flow.md wires fix-bug generation alongside implement-feature', () => {
   );
 });
 
+test('flow.md inventory covers platform build/verify toolchains', () => {
+  // Step 2 probed only web browser automation; mobile/native flows verify
+  // with a platform toolchain (Eugene uses XcodeBuildMCP build_sim).
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /Build & verify toolchain/i.test(body),
+    "flow.md Step 2 inventory must record the project's build/verify toolchain as a transport"
+  );
+  assert.ok(
+    /XcodeBuildMCP|Gradle|emulator|simulator/i.test(body),
+    'flow.md must recognize non-web build/verify toolchains (iOS/Android), not just browser automation'
+  );
+});
+
+test('generated commands resume from the roadmap and skip already-done work', () => {
+  // /everclear:workflow with no arg picks the next roadmap item; and a ticket
+  // already Done / spec already Completed must not be re-implemented.
+  const feat = readUtf8(
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+  );
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /next incomplete item in `context\/product\/roadmap\.md`/i.test(feat),
+    'implement-feature-template.md must resume from the next incomplete roadmap item when invoked with no input'
+  );
+  for (const f of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, f));
+    assert.ok(
+      /every source §1 records/i.test(body),
+      `${f} resume-detection must check status across every source §1 records, not a single place`
+    );
+  }
+  assert.ok(
+    /already `Completed`/i.test(feat),
+    'implement-feature-template.md must stop when the owning spec is already Completed (or its tasks are all done) instead of re-running the chain'
+  );
+  assert.ok(
+    /"done"\/closed state names/i.test(flow),
+    "flow.md §1 must capture the tracker's done/closed state names so resume-detection can skip delivered work"
+  );
+});
+
 test('flow.md and the template record a ticket-state lifecycle and CI escalation', () => {
   // Eugene automates the whole status cycle off flow/CI events — including
   // the failure path (review fails → back to To Do) — driven by a project

@@ -140,7 +140,6 @@ export interface Check {
   definition: string;
   hint: string;
   plain?: string;
-  value_series?: Array<{ bucket_start: string; value: number | null }>;
   unit?: string;
   expression?: string;
   source_date?: string | null;
@@ -472,31 +471,6 @@ function plainLead(c: Check): string {
 }
 
 /**
- * Build a compact inline sparkline string for a value_series.
- * Uses Unicode block characters: ▁▂▃▄▅▆▇█ to represent normalized heights.
- */
-function sparkline(
-  series: Array<{ bucket_start: string; value: number | null }>
-): string {
-  const bars = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-  const values = series
-    .map((e) => e.value)
-    .filter((v): v is number => v !== null);
-  if (values.length === 0) return '(no data)';
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min;
-  return series
-    .map((e) => {
-      if (e.value === null) return '·';
-      if (range === 0) return bars[3];
-      const idx = Math.round(((e.value - min) / range) * (bars.length - 1));
-      return bars[Math.max(0, Math.min(bars.length - 1, idx))];
-    })
-    .join('');
-}
-
-/**
  * Derive prioritized recommendations from FAIL/WARN checks when the orchestrator
  * did not author a structured `recommendations[]` block. Mechanical fallback —
  * carries the check hint, not plain-language prose.
@@ -723,10 +697,6 @@ export function renderMarkdown(audit: AuditJson): string {
         c.value != null && c.unit && !c.expression
           ? `${fmtValue(c.value)} ${c.unit}`
           : fmtValue(c.value);
-      const seriesStr =
-        c.value_series && c.value_series.length > 0
-          ? ` \\[${sparkline(c.value_series)}\\]`
-          : '';
       const hint = c.hint ?? '—';
       const sourceCiteMd =
         c.source_url && c.source_date
@@ -735,7 +705,7 @@ export function renderMarkdown(audit: AuditJson): string {
             ? ` — [${c.source}](${c.source_url})`
             : '';
       lines.push(
-        `| ${checkNum++} | ${c.check_id} | ${c.method} | ${fmtPts(c.weight_awarded)} | ${c.weight_max} | ${c.status} | ${reliabilityStr} | ${confStr} | ${valueStr}${seriesStr} | ${hint}${sourceCiteMd} |`
+        `| ${checkNum++} | ${c.check_id} | ${c.method} | ${fmtPts(c.weight_awarded)} | ${c.weight_max} | ${c.status} | ${reliabilityStr} | ${confStr} | ${valueStr} | ${hint}${sourceCiteMd} |`
       );
     }
     lines.push('');
@@ -908,41 +878,6 @@ function tipHtml(value: string, plain: string, metaHtml = ''): string {
   return `<span class="tip" tabindex="0">${esc(value)}<span class="tipbox"><b>${esc(plain)}</b>${metaSpan}</span></span>`;
 }
 
-/** Render a compact sparkline as inline SVG bars (min-height 4px, max 20px). */
-function sparklineSvg(
-  series: Array<{ bucket_start: string; value: number | null }>
-): string {
-  const w = 4;
-  const gap = 1;
-  const maxH = 20;
-  const values = series
-    .map((e) => e.value)
-    .filter((v): v is number => v !== null);
-  const min = values.length > 0 ? Math.min(...values) : 0;
-  const max = values.length > 0 ? Math.max(...values) : 0;
-  const range = max - min;
-  const svgW = series.length * (w + gap) - gap;
-  const rects = series
-    .map((e, i) => {
-      const h =
-        e.value === null
-          ? 2
-          : range === 0
-            ? maxH / 2
-            : Math.max(
-                4,
-                Math.round(((e.value - min) / range) * (maxH - 4)) + 4
-              );
-      const x = i * (w + gap);
-      const y = maxH - h;
-      const fill = e.value === null ? '#d1d5db' : '#6366f1';
-      const label = `${e.bucket_start}: ${e.value !== null ? String(e.value) : 'n/a'}`;
-      return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"><title>${esc(label)}</title></rect>`;
-    })
-    .join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${maxH}" style="vertical-align:middle;margin-left:4px" aria-label="sparkline">${rects}</svg>`;
-}
-
 function statusBadge(status: string): string {
   const colors: Record<string, string> = {
     PASS: '#22c55e',
@@ -995,7 +930,6 @@ const PRIORITY_COLOR: Record<string, string> = {
  *   - Hash-routed sub-pages; browser Back/Forward work natively
  *   - "Issues only" filter toggle (hides PASS/SKIP rows via body class)
  *   - @media print (expand all, hide toggles)
- *   - value_series rendered as inline SVG sparkline
  *   - All plain-language blocks optional; degrades to the capability headline
  */
 export function renderHtml(audit: AuditJson): string {
@@ -1397,10 +1331,6 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
           : c.reliability.tag === 'not-reliable'
             ? 'A rough proxy — treat as indicative, not exact.'
             : 'Reliable for what was reachable.';
-      const seriesSvg =
-        c.value_series && c.value_series.length > 0
-          ? sparklineSvg(c.value_series)
-          : '';
       // Build evidence items; append expression/value when present (moved from removed Value column).
       const evidenceItems: string[] =
         c.evidence.length > 0 ? c.evidence.map(esc) : [];
@@ -1464,7 +1394,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
   <td>${pointsCell}</td>
   <td class="${relClass}">${tip(relLabel, relTipPlain, c.reliability.note ?? '')}</td>
   <td>${confCell}</td>
-  <td class="evidence">${evidence}${seriesSvg}</td>
+  <td class="evidence">${evidence}</td>
 </tr>`);
     }
     rows.push('</tbody></table>');

@@ -57,14 +57,6 @@ export function computeReliability(
 // Metric result builder
 // ---------------------------------------------------------------------------
 
-/** One data point in a monthly history series. */
-export interface ValueSeriesEntry {
-  /** ISO 8601 start of the 30-day bucket. */
-  bucket_start: string;
-  /** Computed metric value for this bucket, or null when the bucket has no data. */
-  value: number | null;
-}
-
 export interface MetricResult {
   metric: string;
   value: unknown;
@@ -83,8 +75,6 @@ export interface MetricResult {
   score_per_code?: Record<number, number>;
   /** Per-category-code evidence lines for metrics that emit layer-specific evidence (e.g. adp_g1_tooling_depth). */
   evidence_per_code?: Record<number, string[]>;
-  /** Monthly history series (one entry per 30-day bucket), omitted for snapshot/non-rate metrics. */
-  value_series?: ValueSeriesEntry[];
   /** Human-readable derivation of the value (e.g. "42 of 50 public defs documented = 0.84"). */
   expression?: string;
   /** Unit of the value (e.g. "ratio", "days", "count"). */
@@ -96,9 +86,6 @@ export interface MetricResult {
  *
  * status is "SKIP" when sourcesUsed is empty (no data was available to
  * compute the metric); "OK" otherwise.
- *
- * Pass `valueSeries` for rate/over-time metrics; omit (or pass undefined) for
- * snapshot metrics — the field will not appear in the result.
  *
  * score defaults to 1 when any category is awarded, 0 otherwise (and 0 on SKIP).
  * confidence defaults to 1 when OK, 0 on SKIP.
@@ -114,7 +101,6 @@ export function makeMetricResult(
   sourcesUsed: string[],
   sourcesMissing: string[],
   band: string | null = null,
-  valueSeries?: ValueSeriesEntry[],
   unit?: string,
   expression?: string,
   score?: number,
@@ -142,9 +128,6 @@ export function makeMetricResult(
   }
   if (evidencePerCode !== undefined) {
     result.evidence_per_code = evidencePerCode;
-  }
-  if (valueSeries !== undefined) {
-    result.value_series = valueSeries;
   }
   if (unit !== undefined) {
     result.unit = unit;

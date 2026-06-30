@@ -143,7 +143,6 @@ export function compute(
         null,
         undefined,
         undefined,
-        undefined,
         0,
         0.0
       );
@@ -164,7 +163,6 @@ export function compute(
       ['git'],
       [],
       null,
-      undefined,
       undefined,
       undefined,
       0,
@@ -191,7 +189,6 @@ export function compute(
       ['git'],
       [],
       null,
-      undefined,
       undefined,
       undefined,
       0,
@@ -258,7 +255,6 @@ export function compute(
     sourcesUsed,
     sourcesMissing,
     band,
-    undefined,
     undefined,
     expression,
     score,

@@ -18,7 +18,6 @@ import {
   computeReliability,
   makeMetricResult,
   type MetricResult,
-  type ValueSeriesEntry,
 } from './_base.ts';
 
 export function compute(
@@ -72,11 +71,6 @@ export function compute(
   const avg =
     buckets.reduce((sum, b) => sum + (b.authors ?? 0), 0) / buckets.length;
 
-  const value_series: ValueSeriesEntry[] = buckets.map((b) => ({
-    bucket_start: b.bucket_start,
-    value: b.authors ?? null,
-  }));
-
   const reliability = computeReliability('not-reliable', ['git'], []);
 
   const expression = `avg ${avg.toFixed(1)} contributors/month over ${buckets.length} bucket${buckets.length !== 1 ? 's' : ''}`;
@@ -89,7 +83,6 @@ export function compute(
     ['git'],
     [],
     null,
-    value_series,
     undefined,
     expression,
     1.0,

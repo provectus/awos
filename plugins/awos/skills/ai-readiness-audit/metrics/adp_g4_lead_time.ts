@@ -23,11 +23,9 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  capBucketsByHistory,
   computeReliability,
   makeMetricResult,
   type MetricResult,
-  type ValueSeriesEntry,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
 
@@ -130,41 +128,6 @@ export function compute(
   // or overcount if work predated branching.
   const reliability = computeReliability('minimal', ['git'], []);
 
-  // Build monthly history series using monthly_buckets for bucket boundaries.
-  const historyAvailableDays: number =
-    artifact?.period?.history_available_days ?? 0;
-  const bucketDays: number = artifact?.period?.bucket_days ?? 30;
-  const bucketMs = bucketDays * 86_400_000;
-
-  const value_series: ValueSeriesEntry[] = [];
-  if (Array.isArray(raw.monthly_buckets) && raw.monthly_buckets.length > 0) {
-    const allBuckets: Array<{ bucket_start: string }> = raw.monthly_buckets;
-    const cappedBuckets = capBucketsByHistory(
-      allBuckets,
-      historyAvailableDays,
-      bucketDays
-    );
-    for (const bucket of cappedBuckets) {
-      const bucketStart = new Date(bucket.bucket_start).getTime();
-      const bucketEnd = bucketStart + bucketMs;
-      const bucketLeadTimes: number[] = [];
-      for (const r of records) {
-        const mergedAt = new Date(r.merged_at).getTime();
-        if (isNaN(mergedAt) || mergedAt <= bucketStart || mergedAt > bucketEnd)
-          continue;
-        const firstCommit = new Date(r.branch_first_commit_at).getTime();
-        if (isNaN(firstCommit)) continue;
-        const diffHours = (mergedAt - firstCommit) / 3_600_000;
-        if (diffHours >= 0) bucketLeadTimes.push(diffHours);
-      }
-      bucketLeadTimes.sort((a, b) => a - b);
-      value_series.push({
-        bucket_start: bucket.bucket_start,
-        value: bucketLeadTimes.length > 0 ? median(bucketLeadTimes) : null,
-      });
-    }
-  }
-
   const score = clamp01(
     bandScore(
       medianHours,
@@ -182,7 +145,6 @@ export function compute(
     ['git'],
     [],
     band,
-    value_series.length > 0 ? value_series : undefined,
     undefined,
     expression,
     score,

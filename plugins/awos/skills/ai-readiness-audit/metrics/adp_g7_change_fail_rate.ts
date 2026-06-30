@@ -90,7 +90,6 @@ export function compute(
     [],
     band,
     undefined,
-    undefined,
     expression,
     clamp01(1 - rate / 0.15),
     1.0

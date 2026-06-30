@@ -317,7 +317,6 @@ export async function compute(
     [],
     band,
     undefined,
-    undefined,
     complexityExpression,
     complexityScore,
     complexityConfidence

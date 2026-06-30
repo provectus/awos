@@ -29,7 +29,6 @@ import {
   computeReliability,
   makeMetricResult,
   type MetricResult,
-  type ValueSeriesEntry,
 } from './_base.ts';
 import { bandScore } from './_score.ts';
 
@@ -104,12 +103,6 @@ export function compute(
   const band = doraDeployBand(mergesPerWeek);
   const reliability = computeReliability('not-reliable', ['git'], []);
 
-  const bucketWeeks = bucketDays / 7;
-  const value_series: ValueSeriesEntry[] = buckets.map((b) => ({
-    bucket_start: b.bucket_start,
-    value: bucketWeeks > 0 ? (b.merges ?? 0) / bucketWeeks : null,
-  }));
-
   const score = bandScore(
     mergesPerWeek,
     DEPLOY_FREQ_ANCHORS as Array<{ x: number; y: number }>,
@@ -125,7 +118,6 @@ export function compute(
     ['git'],
     [],
     band,
-    value_series,
     undefined,
     expression,
     score,

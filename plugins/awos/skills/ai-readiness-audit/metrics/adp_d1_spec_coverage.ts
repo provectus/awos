@@ -107,7 +107,6 @@ export function compute(
     [],
     null,
     undefined,
-    undefined,
     expression,
     clamp01(coverage),
     1.0

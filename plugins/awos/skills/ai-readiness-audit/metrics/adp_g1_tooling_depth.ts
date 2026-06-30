@@ -125,7 +125,6 @@ export function compute(
     [],
     null,
     undefined,
-    undefined,
     expression,
     undefined,
     undefined,

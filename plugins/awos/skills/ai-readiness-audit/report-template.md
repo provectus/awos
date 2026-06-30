@@ -27,7 +27,7 @@ Tooltips do **not** use the native `title=` attribute (it has a ~1.5 s delay and
 
 ## Drill-down check table
 
-`table-layout: fixed` with an explicit `<colgroup>`. Columns: `#`, `Check` (id + plain one-liner), `Status`, `Wt` (awarded/max), `Reliability`, `Value` (+ inline SVG sparkline when `value_series` is present), **`Evidence` (~35–45%, the widest column)**. Evidence wraps cleanly (`overflow-wrap:anywhere`) instead of being cramped into an equal-width cell. Each `<tr>` carries a `data-status` attribute (`PASS`/`WARN`/`FAIL`/`SKIP`) for the issues-only filter and status background color.
+`table-layout: fixed` with an explicit `<colgroup>`. Columns: `#`, `Check` (id + plain one-liner), `Status`, `Wt` (awarded/max), `Reliability`, `Value`, **`Evidence` (~35–45%, the widest column)**. Evidence wraps cleanly (`overflow-wrap:anywhere`) instead of being cramped into an equal-width cell. Each `<tr>` carries a `data-status` attribute (`PASS`/`WARN`/`FAIL`/`SKIP`) for the issues-only filter and status background color.
 
 ### Issues-only filter
 

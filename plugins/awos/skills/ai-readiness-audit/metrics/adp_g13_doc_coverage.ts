@@ -313,7 +313,6 @@ export async function compute(
     [],
     null,
     undefined,
-    undefined,
     expression,
     score2204,
     docConfidence,

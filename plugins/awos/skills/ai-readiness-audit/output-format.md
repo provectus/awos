@@ -47,8 +47,7 @@ Per-check record schema (all fields required unless explicitly marked optional):
   "source": "<source name from standards.toml>",
   "definition": "<category definition from standards.toml>",
   "hint": "<definition> · <value-derivation> · <reliability tag (confidence)> · <source (year)> · <method>",
-  "plain": "<one-sentence non-technical explanation of what this check verifies>",
-  "value_series": [{ "bucket_start": "YYYY-MM-DD", "value": <number | null> }]
+  "plain": "<one-sentence non-technical explanation of what this check verifies>"
 }
 ```
 
@@ -68,7 +67,6 @@ Field notes:
 - **`source`** / **`definition`** — copied verbatim from the matching `[category.*]` table in `standards.toml`.
 - **`hint`** — five-part human-readable summary; shown as small print inside the HTML tooltip (the specialist detail).
 - **`plain`** — one plain-language sentence a non-technical stakeholder understands ("Blocks AI agents from opening secret files like `.env` before they run a command."). The HTML tooltip leads with this, demoting `hint` to small print below it. Optional but recommended on every check; when absent the renderer falls back to `definition`.
-- **`value_series`** — optional. Array of `{ bucket_start: "YYYY-MM-DD", value: number | null }` objects representing per-bucket time-series data (e.g. monthly contributor counts, CI pass rate per 30-day window). Emitted only by metric-backed checks in the `ai-sdlc-adoption` dimension. When present, `node dist/cli.js render` renders the series as a Unicode sparkline in Markdown and an inline SVG sparkline in HTML. Omit the field entirely for checks that produce no time series.
 
 Any dimension-specific summary data consumed by downstream dimensions (e.g. the topology output used by later dimensions via `depends-on`) must be included as an additional top-level key in the JSON object alongside `dimension`, `date`, `score`, `coverage`, and `checks`.
 

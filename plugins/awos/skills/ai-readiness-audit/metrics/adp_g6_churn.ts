@@ -76,7 +76,6 @@ export function compute(
     [],
     null,
     undefined,
-    undefined,
     expression,
     1.0,
     1.0

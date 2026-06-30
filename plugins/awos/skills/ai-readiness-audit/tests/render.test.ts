@@ -7,7 +7,6 @@
  *   - Hint column header in every per-dimension check table
  *   - Every dimension name present
  *   - Five hint-part labels present in at least one check's hint cell
- *   - value_series rendered as sparkline notation
  *   - Insights section rendered from audit.insights
  *   - Recommendations rendered from audit.recommendations (plain detail), with a
  *     mechanical FAIL/WARN fallback when the field is absent
@@ -20,7 +19,7 @@
  *   - Executive band: capability headline + delivery/scale/reach from audit.headline
  *   - Top insights cards + "What to improve" recommendations
  *   - Drill-down check table is fixed-layout with a wide Evidence column
- *   - data-status attributes, issues-only filter, @media print, SVG sparkline
+ *   - data-status attributes, issues-only filter, @media print
  *   - Graceful degradation when headline/insights/recommendations/plain are absent
  *   - Org mode: ≤3 portfolio metrics + Repositories & Connections + per_repo
  */
@@ -49,7 +48,6 @@ function makeCheck(
     applies: boolean;
     reliability_tag: string;
     plain: string;
-    value_series: Array<{ bucket_start: string; value: number | null }>;
   }> = {}
 ): import('../render.ts').Check {
   const status = overrides.status ?? 'PASS';
@@ -74,7 +72,6 @@ function makeCheck(
     definition: 'Claude.md presence and quality',
     hint: `Claude.md presence · detected from .claude/CLAUDE.md · ${tag} (high) · git native (2024) · detected`,
     plain: overrides.plain,
-    value_series: overrides.value_series,
   };
 }
 
@@ -175,11 +172,6 @@ function singleRepoFixture(): AuditJson {
             status: 'PASS',
             weight_awarded: 4,
             weight_max: 4,
-            value_series: [
-              { bucket_start: '2025-11-01', value: 3 },
-              { bucket_start: '2025-12-01', value: 5 },
-              { bucket_start: '2026-01-01', value: 4 },
-            ],
           }),
         ],
       },
@@ -378,14 +370,6 @@ test('renderMarkdown: SKIP rows present (no data dropped)', () => {
   assert.ok(
     md.includes('AI-03') && md.includes('SKIP'),
     'Markdown must include SKIP rows — no data is dropped'
-  );
-});
-
-test('renderMarkdown: value_series rendered as sparkline notation', () => {
-  const md = renderMarkdown(singleRepoFixture());
-  assert.ok(
-    /[▁▂▃▄▅▆▇█]/.test(md),
-    'Markdown must include Unicode sparkline characters for checks with value_series'
   );
 });
 
@@ -608,16 +592,6 @@ test('renderHtml: @media print rule present', () => {
   assert.ok(
     html.includes('@media print'),
     'HTML must include @media print rules to expand sub-pages and hide chrome'
-  );
-});
-
-test('renderHtml: value_series rendered as inline SVG sparkline', () => {
-  const html = renderHtml(singleRepoFixture());
-  assert.ok(
-    html.includes('<svg') &&
-      html.includes('sparkline') &&
-      html.includes('<rect'),
-    'HTML must render value_series as an inline SVG sparkline'
   );
 });
 

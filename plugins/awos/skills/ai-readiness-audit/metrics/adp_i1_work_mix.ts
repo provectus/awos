@@ -127,7 +127,6 @@ export function compute(
       null,
       undefined,
       undefined,
-      undefined,
       0,
       1.0
     );
@@ -152,7 +151,6 @@ export function compute(
     ['tracker'],
     [],
     band,
-    undefined,
     undefined,
     expression,
     clamp01(growthFrac / 0.6),

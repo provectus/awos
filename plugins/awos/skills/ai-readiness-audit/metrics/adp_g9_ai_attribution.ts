@@ -78,7 +78,6 @@ export function compute(
     [],
     null,
     undefined,
-    undefined,
     expression,
     clamp01(attributionRate),
     1.0

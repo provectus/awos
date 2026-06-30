@@ -197,6 +197,15 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Severity:** high
 - **Category:** 1401
 
+### ADP-G15: Onboarding ease (DX Core 4 time-to-10th-PR proxy)
+
+- **What:** Onboarding enabler presence as a filesystem-derived proxy for the DX Core 4 "Time to 10th PR" outcome. Four boolean signals: (1) README contains setup/install/getting-started/usage/quickstart heading or a recognizable bootstrap command; (2) agent context file (CLAUDE.md/AGENTS.md); (3) .env example file; (4) one-command bootstrap file (Makefile, justfile, Taskfile, docker-compose.yml, setup.sh, or package.json with setup/bootstrap/dev script). value = present_count/4. Bands are AWOS heuristics. Ramp-time not measured (see ADP-G4/ADP-G8).
+- **How:** `node "<engine cli path>" metric adp_g15_onboarding_ease <repoPath> context/audits/<date>/collected`
+- **Pass (OK):** metric returns `status: "OK"` — always OK when repoPath exists (0 enablers → value 0 / band "concerning", not SKIP)
+- **Skip:** metric returns `status: "SKIP"` — repoPath does not exist
+- **Severity:** medium
+- **Category:** 1501
+
 ### ADP-G10: Cyclomatic complexity
 
 - **What:** Average and maximum McCabe cyclomatic complexity (CCN) per function across the repository, computed by parsing source files with tree-sitter grammars. Bands: elite ≤5, high ≤10, medium ≤15, low >15.

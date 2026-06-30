@@ -497,6 +497,24 @@ url = "https://dora.dev/guides/dora-metrics/"
 date = "2024"
 last_verified = "2026-06-30"
 
+# ADP-G15: Onboarding ease — enabler presence proxy (DX Core 4 time-to-10th-PR)
+
+[category.onboarding_ease]
+code = 1501
+check_id = "ADP-25"
+metric = "adp_g15_onboarding_ease"
+dimension = "ai-sdlc-adoption"
+weight = 3
+method = "computed"
+definition = "Onboarding enabler presence as a proxy for the DX Core 4 'Time to 10th PR' outcome (average time for a new engineer to merge their 10th pull request). Four boolean signals are checked: (1) README contains a setup/install/getting-started/usage/quickstart heading or a common bootstrap command (npm install, yarn, pnpm install, make, docker compose, pip install, poetry install, ./gradlew, bundle install, go build/run, cargo build, uv sync); (2) agent context file present (CLAUDE.md/AGENTS.md or topology.has_agent_instruction_files); (3) .env example file present (.env.example/.env.sample/.env.template/.env.dist); (4) one-command bootstrap present (Makefile, justfile, Taskfile, docker-compose.yml, setup.sh, or package.json with setup/bootstrap/dev script). value = present_count/4 (0..1). Ramp-time (median first-commit to first-merge) is intentionally not measured — it overlaps lead-time/review-rework metrics and is not always available. Band thresholds are AWOS heuristics (no published DX Core 4 numeric targets): good ≥0.75, watch ≥0.50, concerning <0.50."
+applies_when = "always"
+sources = ["git"]
+reliability_default = "minimal"
+source = "DX Core 4 (GetDX) — Time to 10th PR"
+url = "https://getdx.com/blog/software-development-metrics/"
+date = "2024"
+last_verified = "2026-07-01"
+
 # ---------------------------------------------------------------------------
 # [category.*] — org-level portfolio rollup categories (ORG.2)
 # Computed by org_rollup.ts from per-repo audit JSONs. Code range 9000–9002.

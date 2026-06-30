@@ -89,3 +89,32 @@ test('git collector counts non-Claude AI commits and tooling', () => {
     'GEMINI.md surfaced as tooling'
   );
 });
+
+test('git collector reads >1MiB of git output without truncation (maxBuffer regression)', () => {
+  // Regression: run() used execFileSync's default 1 MiB maxBuffer. On a
+  // large/long-lived repo, `git log --numstat` exceeds that, throws ENOBUFS,
+  // and the catch silently returns '' — zeroing churn and the monthly buckets
+  // (so DORA contributors/deploy-frequency silently SKIP). Here one commit adds
+  // enough files that `git log --numstat` clears 1 MiB; with the old cap
+  // numstat_totals.added would be 0, with the fix it is the true total.
+  const r = join(mkdtempSync(join(tmpdir(), 'git-big-')), 'repo');
+  mkdirSync(r);
+  git(r, ['init', '-q', '-b', 'main']);
+  const FILES = 5000; // ~250 B/numstat-line → ~1.25 MiB, like the repo that tripped it
+  const LINES_PER_FILE = 3;
+  // Long, padded filenames so the numstat output (one line per file, dominated
+  // by the path) crosses 1 MiB at a modest file count.
+  const pad = 'x'.repeat(240);
+  for (let i = 0; i < FILES; i++) {
+    writeFileSync(join(r, `f_${pad}_${i}.txt`), 'a\nb\nc\n');
+  }
+  git(r, ['add', '-A']);
+  git(r, ['commit', '-qm', 'feat: many files']);
+
+  const art = collect(r, PERIOD);
+  assert.equal(
+    art.raw.numstat_totals.added,
+    FILES * LINES_PER_FILE,
+    `churn must reflect every added line across all ${FILES} files; got ${art.raw.numstat_totals.added} (0 means the >1MiB numstat output was truncated by maxBuffer)`
+  );
+});

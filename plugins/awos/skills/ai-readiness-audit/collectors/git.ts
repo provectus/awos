@@ -18,7 +18,14 @@ import {
 
 function run(args: string[], cwd: string): string {
   try {
-    return execFileSync('git', args, { cwd, encoding: 'utf8' });
+    // maxBuffer defaults to 1 MB; a full `git log` on a large/long-lived repo
+    // easily exceeds that, which would throw ENOBUFS and silently return ''
+    // (zeroing out monthly_buckets and the per-bucket metrics). Raise the cap.
+    return execFileSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      maxBuffer: 512 * 1024 * 1024,
+    });
   } catch {
     return '';
   }

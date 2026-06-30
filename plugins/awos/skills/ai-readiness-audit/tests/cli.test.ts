@@ -182,8 +182,8 @@ test('standards: parses standards.toml, emits JSON with expected codes and meta'
   const meta = parsed['meta'] as Record<string, unknown>;
   assert.equal(
     meta['monthly_bucket_days'],
-    30,
-    'meta.monthly_bucket_days must equal 30'
+    undefined,
+    'meta.monthly_bucket_days must be absent (bucket machinery removed)'
   );
 
   // [category.*] tables must be present.

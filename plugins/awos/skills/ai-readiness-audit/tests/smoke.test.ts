@@ -4,6 +4,6 @@ import { loadStandards } from './helpers.ts';
 
 test('standards.toml loads and has meta', () => {
   const data = loadStandards();
-  assert.equal(data.meta.monthly_bucket_days, 30);
-  assert.equal(data.meta.max_lookback_days, 730);
+  assert.equal(data.meta.monthly_bucket_days, undefined);
+  assert.equal(data.meta.max_lookback_days, 90);
 });

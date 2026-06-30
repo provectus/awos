@@ -179,7 +179,7 @@ import type { Period } from './collectors/_base.ts';
 
 const DEFAULT_PERIOD: Period = {
   bucket_days: 30,
-  lookback_days: 730,
+  lookback_days: 90,
   history_available_days: 0,
 };
 

@@ -133,7 +133,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 
 const PERIOD: Period = {
   bucket_days: 30,
-  lookback_days: 730,
+  lookback_days: 90,
   history_available_days: 0,
 };
 

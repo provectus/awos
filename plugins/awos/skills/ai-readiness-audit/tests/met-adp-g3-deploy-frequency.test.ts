@@ -2,11 +2,12 @@
  * Tests for adp_g3_deploy_frequency metric.
  *
  * Contracts verified:
- * - fixture with known merge counts → expected merges/week value
+ * - whole-window formula: mergesPerWeek = window_stats.merges / (window_days/7)
  * - DORA band is correctly assigned (elite/high/medium/low)
  * - status is OK when git source present, categories_awarded=[301]
  * - kind is "banded"
- * - SKIP when git.json absent or monthly_buckets empty
+ * - SKIP when git.json absent or window_stats absent
+ * - weight_max === 10 for merge_frequency in standards.toml
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,32 +23,64 @@ function makeTmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'g3-'));
 }
 
-test('adp_g3: high-frequency merges → elite band', () => {
-  const tmp = makeTmpDir();
-  // 70 merges over 2 buckets × 30 days = 60 days = ~8.57 weeks → ~8.17 merges/week → elite (>=7)
-  const collectedDir = writeCollected(tmp, 'git', {
-    monthly_buckets: [
-      { bucket_start: '2025-01-01', authors: 4, commits: 50, merges: 35 },
-      { bucket_start: '2025-02-01', authors: 4, commits: 50, merges: 35 },
-    ],
+/** Minimal git.json raw with a window_stats payload. */
+function gitRawWithWindow(
+  merges: number,
+  windowDays: number,
+  windowStart?: string
+) {
+  return {
+    window_stats: {
+      window_days: windowDays,
+      merges,
+      commits: 0,
+      authors_total: 0,
+      per_author: [],
+      merges_per_active: null,
+      loc_per_active: null,
+      window_start: windowStart ?? null,
+    },
     tooling_paths: [],
     merge_records: [],
-    total_commits: 100,
+    total_commits: merges,
     ai_marked_commits: 0,
-    total_merges: 70,
+    total_merges: merges,
     revert_merges: 0,
-    numstat_totals: { added: 500, deleted: 100 },
+    numstat_totals: { added: 0, deleted: 0 },
     default_branch: 'main',
-  });
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Whole-window formula — the canonical Task 2.1 fixture
+// ---------------------------------------------------------------------------
+
+test('adp_g3: whole-window formula — 14 merges / 98 days = 1.0/week → high band', () => {
+  // Hand arithmetic: 98 days / 7 = 14 weeks; 14 merges / 14 weeks = 1.0/week
+  // 1.0/week is exactly at the elite/high boundary (>= 1 → high, < 7 → high)
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', gitRawWithWindow(14, 98));
 
   const result = compute(collectedDir, standards, {});
 
-  assert.equal(result.status, 'OK', 'status must be OK');
+  assert.equal(
+    result.status,
+    'OK',
+    'status must be OK when window_stats present'
+  );
   assert.equal(result.kind, 'banded', 'kind must be "banded"');
-  assert.equal(result.band, 'elite', 'elite when merges/week >= 7');
+  assert.equal(
+    result.band,
+    'high',
+    '14 merges / 14 weeks = 1.0/week → high band'
+  );
+  assert.ok(
+    Math.abs((result.value as number) - 1.0) < 0.0001,
+    `mergesPerWeek must be 1.0 for 14 merges / 14 weeks, got ${result.value}`
+  );
   assert.ok(
     result.categories_awarded.includes(301),
-    'code 301 must be awarded'
+    'code 301 must be awarded when data is available'
   );
   assert.equal(
     result.metric,
@@ -56,23 +89,29 @@ test('adp_g3: high-frequency merges → elite band', () => {
   );
 });
 
-test('adp_g3: medium-frequency → medium band (~0.5/week)', () => {
+// ---------------------------------------------------------------------------
+// DORA band coverage
+// ---------------------------------------------------------------------------
+
+test('adp_g3: high-frequency merges → elite band (>= 7/week)', () => {
   const tmp = makeTmpDir();
-  // 3 merges over 2 buckets × 30 days = 60 days = ~8.57 weeks → 0.35/week → medium (>=0.25,<1)
-  const collectedDir = writeCollected(tmp, 'git', {
-    monthly_buckets: [
-      { bucket_start: '2025-01-01', authors: 2, commits: 10, merges: 2 },
-      { bucket_start: '2025-02-01', authors: 2, commits: 8, merges: 1 },
-    ],
-    tooling_paths: [],
-    merge_records: [],
-    total_commits: 18,
-    ai_marked_commits: 0,
-    total_merges: 3,
-    revert_merges: 0,
-    numstat_totals: { added: 80, deleted: 20 },
-    default_branch: 'main',
-  });
+  // 70 merges / (60 days / 7) = 70 / 8.571 ≈ 8.17/week → elite
+  const collectedDir = writeCollected(tmp, 'git', gitRawWithWindow(70, 60));
+
+  const result = compute(collectedDir, standards, {});
+
+  assert.equal(result.status, 'OK', 'status must be OK');
+  assert.equal(result.band, 'elite', 'elite when merges/week >= 7');
+  assert.ok(
+    result.categories_awarded.includes(301),
+    'code 301 must be awarded'
+  );
+});
+
+test('adp_g3: medium-frequency → medium band (>= 0.25/week, < 1/week)', () => {
+  const tmp = makeTmpDir();
+  // 3 merges / (60 days / 7) = 3 / 8.571 ≈ 0.35/week → medium
+  const collectedDir = writeCollected(tmp, 'git', gitRawWithWindow(3, 60));
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -82,44 +121,19 @@ test('adp_g3: medium-frequency → medium band (~0.5/week)', () => {
   );
 });
 
-test('adp_g3: low-frequency → low band (<0.25/week)', () => {
+test('adp_g3: low-frequency → low band (< 0.25/week)', () => {
   const tmp = makeTmpDir();
   // 0 merges → 0/week → low
-  const collectedDir = writeCollected(tmp, 'git', {
-    monthly_buckets: [
-      { bucket_start: '2025-01-01', authors: 1, commits: 5, merges: 0 },
-      { bucket_start: '2025-02-01', authors: 1, commits: 3, merges: 0 },
-    ],
-    tooling_paths: [],
-    merge_records: [],
-    total_commits: 8,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(tmp, 'git', gitRawWithWindow(0, 60));
 
   const result = compute(collectedDir, standards, {});
   assert.equal(result.band, 'low', 'must be low when no merges');
 });
 
-test('adp_g3: once/day merges → high band (>=1/week, <7/week)', () => {
+test('adp_g3: 5 merges / 30 days → high band (>= 1/week, < 7/week)', () => {
   const tmp = makeTmpDir();
-  // 5 merges in 1 bucket × 30 days = ~4.28 weeks → 5/4.28 ≈ 1.17/week → high
-  const collectedDir = writeCollected(tmp, 'git', {
-    monthly_buckets: [
-      { bucket_start: '2025-01-01', authors: 3, commits: 20, merges: 5 },
-    ],
-    tooling_paths: [],
-    merge_records: [],
-    total_commits: 20,
-    ai_marked_commits: 0,
-    total_merges: 5,
-    revert_merges: 0,
-    numstat_totals: { added: 100, deleted: 30 },
-    default_branch: 'main',
-  });
+  // 5 merges / (30/7) = 5 / 4.286 ≈ 1.17/week → high
+  const collectedDir = writeCollected(tmp, 'git', gitRawWithWindow(5, 30));
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -129,29 +143,25 @@ test('adp_g3: once/day merges → high band (>=1/week, <7/week)', () => {
   );
 });
 
+// ---------------------------------------------------------------------------
+// Reliability and metadata
+// ---------------------------------------------------------------------------
+
 test('adp_g3: reliability tag is not-reliable', () => {
   const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    monthly_buckets: [
-      { bucket_start: '2025-01-01', authors: 2, commits: 8, merges: 1 },
-    ],
-    tooling_paths: [],
-    merge_records: [],
-    total_commits: 8,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 30, deleted: 5 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(tmp, 'git', gitRawWithWindow(1, 30));
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
     result.reliability.tag,
     'not-reliable',
-    'reliability tag must be "not-reliable"'
+    'reliability tag must be "not-reliable" (direction depends on team size)'
   );
 });
+
+// ---------------------------------------------------------------------------
+// SKIP contracts
+// ---------------------------------------------------------------------------
 
 test('adp_g3: SKIP when git.json absent', () => {
   const tmp = makeTmpDir();
@@ -159,10 +169,10 @@ test('adp_g3: SKIP when git.json absent', () => {
   assert.equal(result.status, 'SKIP', 'must SKIP when git.json absent');
 });
 
-test('adp_g3: SKIP when monthly_buckets empty', () => {
+test('adp_g3: SKIP when window_stats absent from raw', () => {
   const tmp = makeTmpDir();
+  // git.json present but raw lacks window_stats
   const collectedDir = writeCollected(tmp, 'git', {
-    monthly_buckets: [],
     tooling_paths: [],
     merge_records: [],
     total_commits: 0,
@@ -171,56 +181,41 @@ test('adp_g3: SKIP when monthly_buckets empty', () => {
     revert_merges: 0,
     numstat_totals: { added: 0, deleted: 0 },
     default_branch: 'main',
+    // deliberately no window_stats
   });
 
   const result = compute(collectedDir, standards, {});
-  assert.equal(result.status, 'SKIP', 'must SKIP when no bucket data');
+  assert.equal(
+    result.status,
+    'SKIP',
+    'must SKIP when window_stats is absent from raw'
+  );
 });
 
 // ---------------------------------------------------------------------------
-// Phase 3b: score/confidence contracts
+// Score / confidence contracts
 // ---------------------------------------------------------------------------
 
 test('adp_g3: score=1.0 and confidence=1.0 at exactly 7.0 merges/week (elite anchor)', () => {
   const tmp = makeTmpDir();
-  // 1 bucket × 30 days = 30/7 weeks; 30 merges / (30/7) weeks = 7.0 merges/week exactly
-  const collectedDir = writeCollected(tmp, 'git', {
-    monthly_buckets: [
-      { bucket_start: '2025-01-01', authors: 5, commits: 100, merges: 30 },
-    ],
-    tooling_paths: [],
-    merge_records: [],
-    total_commits: 100,
-    ai_marked_commits: 0,
-    total_merges: 30,
-    revert_merges: 0,
-    numstat_totals: { added: 500, deleted: 100 },
-    default_branch: 'main',
-  });
+  // 30 merges / (30 days / 7) = 30 / 4.286 = 7.0 merges/week exactly
+  const collectedDir = writeCollected(tmp, 'git', gitRawWithWindow(30, 30));
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
     Math.abs(result.score - 1.0) < 0.0001,
     `score must be 1.0 at 7 merges/week (elite anchor), got ${result.score}`
   );
-  assert.equal(result.confidence, 1.0, 'confidence must be 1.0');
+  assert.equal(
+    result.confidence,
+    1.0,
+    'confidence must be 1.0 when data available'
+  );
 });
 
 test('adp_g3: score=0 when 0 merges (below lower anchor)', () => {
   const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    monthly_buckets: [
-      { bucket_start: '2025-01-01', authors: 2, commits: 5, merges: 0 },
-    ],
-    tooling_paths: [],
-    merge_records: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(tmp, 'git', gitRawWithWindow(0, 30));
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -235,4 +230,19 @@ test('adp_g3: score=0 and confidence=0 on SKIP', () => {
   const result = compute(join(tmp, 'no-collected'), standards, {});
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});
+
+// ---------------------------------------------------------------------------
+// Weight contract — parse standards.toml directly
+// ---------------------------------------------------------------------------
+
+test('adp_g3: merge_frequency weight is 10 in standards.toml (Task 2.1)', () => {
+  // The merge_frequency category was bumped from 5 → 10 in Task 2.1 because
+  // deploy frequency is a headline DORA signal.
+  const weight = (standards as any).category?.merge_frequency?.weight;
+  assert.equal(
+    weight,
+    10,
+    `standards.toml [category.merge_frequency].weight must be 10 (Task 2.1 bump), got ${weight}`
+  );
 });

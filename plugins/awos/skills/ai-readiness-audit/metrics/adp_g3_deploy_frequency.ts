@@ -2,7 +2,7 @@
  * adp_g3_deploy_frequency — Deploy / merge frequency (DORA banded).
  *
  * kind: "banded"
- * value: merges per week (average across monthly buckets)
+ * value: merges per week over the whole audit window
  * band: one of "elite" | "high" | "medium" | "low" per DORA thresholds
  * categories_awarded: [301] when data is available
  * reliability_default: "not-reliable" (direction depends on team size)
@@ -13,19 +13,17 @@
  *   medium → once/week to once/month  (>= 0.25/week, < 1/week)
  *   low    → < once per month  (< 0.25/week)
  *
- * Computation: sum all bucket merges / total bucket period weeks.
- * Buckets come from git.json raw.monthly_buckets (each ~30 days).
+ * Computation: window_stats.merges / (window_stats.window_days / 7)
+ * Single whole-window aggregate — no bucket averaging.
  *
  * Source shape: collectedDir/git.json
- * Input raw fields: monthly_buckets (Array<{ merges: number; bucket_days?: number }>)
- * Also uses period.bucket_days for week conversion.
+ * Input raw fields: window_stats (WindowStats — merges, window_days)
  *
- * SKIP: if git.json is absent or monthly_buckets is empty.
+ * SKIP: if git.json is absent or raw.window_stats is absent.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  capBucketsByHistory,
   computeReliability,
   makeMetricResult,
   type MetricResult,
@@ -67,11 +65,7 @@ export function compute(
 
   const artifact = JSON.parse(readFileSync(gitPath, 'utf8'));
   const raw = artifact?.raw;
-  if (
-    !raw ||
-    !Array.isArray(raw.monthly_buckets) ||
-    raw.monthly_buckets.length === 0
-  ) {
+  if (!raw || !raw.window_stats) {
     return makeMetricResult(
       'adp_g3_deploy_frequency',
       null,
@@ -83,22 +77,24 @@ export function compute(
     );
   }
 
-  const bucketDays: number = artifact?.period?.bucket_days ?? 30;
-  const historyAvailableDays: number =
-    artifact?.period?.history_available_days ?? 0;
+  const windowStats = raw.window_stats;
+  const totalMerges: number = windowStats.merges ?? 0;
+  const windowDays: number = windowStats.window_days ?? 0;
 
-  const allBuckets: Array<{ bucket_start: string; merges: number }> =
-    raw.monthly_buckets;
-  const buckets = capBucketsByHistory(
-    allBuckets,
-    historyAvailableDays,
-    bucketDays
-  );
+  if (windowDays <= 0) {
+    return makeMetricResult(
+      'adp_g3_deploy_frequency',
+      null,
+      'banded',
+      [],
+      computeReliability('not-reliable', [], ['git']),
+      [],
+      ['git']
+    );
+  }
 
-  const totalMerges = buckets.reduce((sum, b) => sum + (b.merges ?? 0), 0);
-  const totalDays = buckets.length * bucketDays;
-  const totalWeeks = totalDays / 7;
-  const mergesPerWeek = totalWeeks > 0 ? totalMerges / totalWeeks : 0;
+  const totalWeeks = windowDays / 7;
+  const mergesPerWeek = totalMerges / totalWeeks;
 
   const band = doraDeployBand(mergesPerWeek);
   const reliability = computeReliability('not-reliable', ['git'], []);

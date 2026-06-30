@@ -16,9 +16,13 @@
  *   low    → >= 1 month (>= 720 hours)
  *
  * Source shape: collectedDir/git.json
- * Input raw fields: merge_records (Array<{ merged_at: string; branch_first_commit_at: string }>)
+ * Input raw fields:
+ *   merge_records (Array<{ merged_at: string; branch_first_commit_at: string }>)
+ *   window_stats?.window_start (string | null | undefined) — when present and non-empty,
+ *     only records whose merged_at >= window_start are counted; when absent or null,
+ *     ALL records are used (graceful degradation for artifacts from older collectors).
  *
- * SKIP: if git.json is absent or merge_records is empty.
+ * SKIP: if git.json is absent, merge_records is empty, or no in-window lead times exist.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -93,9 +97,16 @@ export function compute(
     );
   }
 
-  const records: MergeRecord[] = raw.merge_records;
+  // If window_stats.window_start is available, restrict to in-window merges only.
+  // When absent/null (older artifact or empty repo), fall back to all records so
+  // existing test fixtures and pre-task-2.1 audits continue to produce results.
+  const windowStart: string | null = raw.window_stats?.window_start ?? null;
+  let records: MergeRecord[] = raw.merge_records;
+  if (windowStart) {
+    records = records.filter((r) => r.merged_at >= windowStart);
+  }
 
-  // Compute lead times in hours for each merge record.
+  // Compute lead times in hours for each (in-window) merge record.
   const leadTimesHours: number[] = [];
   for (const r of records) {
     const mergedAt = new Date(r.merged_at).getTime();
@@ -135,7 +146,8 @@ export function compute(
       'log'
     )
   );
-  const expression = `median ${medianHours.toFixed(1)}h lead time over ${leadTimesHours.length} merge${leadTimesHours.length !== 1 ? 's' : ''} (${band})`;
+  const windowLabel = windowStart ? ' (in-window)' : '';
+  const expression = `median ${medianHours.toFixed(1)}h lead time over ${leadTimesHours.length} merge${leadTimesHours.length !== 1 ? 's' : ''}${windowLabel} (${band})`;
   return makeMetricResult(
     'adp_g4_lead_time',
     medianHours,

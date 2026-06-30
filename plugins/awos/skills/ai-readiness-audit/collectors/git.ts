@@ -192,6 +192,9 @@ export interface WindowStats {
   merges_per_active: number | null;
   /** Total LOC (added + deleted) divided by active-contributor count; null when activeCount is 0. Display-only. */
   loc_per_active: number | null;
+  /** ISO 8601 timestamp of the window anchor minus lookback_days (the oldest commit included).
+   * Used by adp_g4_lead_time to filter merge_records to the same window. Null on empty repos. */
+  window_start: string | null;
 }
 
 /**
@@ -228,6 +231,7 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
     per_author: [],
     merges_per_active: null,
     loc_per_active: null,
+    window_start: null,
   };
 
   // Anchor to the newest commit date — no wall-clock dependency.
@@ -326,6 +330,7 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
     per_author: perAuthor,
     merges_per_active,
     loc_per_active,
+    window_start: since,
   };
 }
 

@@ -7,6 +7,9 @@
  * - kind is "banded", categories_awarded=[401], status=OK
  * - reliability tag is "minimal" (git approximation)
  * - SKIP when git.json absent or merge_records empty
+ * - window_start filter: only in-window records counted when window_start present
+ * - graceful fallback: all records used when window_stats/window_start absent
+ * - weight_max === 10 for lead_time_for_change in standards.toml
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -312,4 +315,168 @@ test('adp_g4: score=0 and confidence=0 on SKIP', () => {
   const result = compute(join(tmp, 'no-collected'), standards, {});
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
+});
+
+// ---------------------------------------------------------------------------
+// window_start filter (Task 2.1)
+// ---------------------------------------------------------------------------
+
+test('adp_g4: window_start filter — only in-window records count toward median', () => {
+  // Fixture design:
+  //   window_start = 2025-01-15T00:00:00Z
+  //   Record A (IN-WINDOW):  merged_at = 2025-02-01T12:00:00Z, branch started 2025-02-01T00:00:00Z → 12h lead time
+  //   Record B (OUT-OF-WINDOW): merged_at = 2025-01-10T00:00:00Z, branch started 2025-01-01T00:00:00Z → 216h lead time
+  //
+  // Without filtering: median of [12h, 216h] = (12+216)/2 = 114h → "high" band
+  // With filtering (only Record A): median of [12h] = 12h → "elite" band
+  // If the result is "elite", the filter worked correctly.
+  const tmp = makeTmpDir();
+  const windowStart = '2025-01-15T00:00:00.000Z';
+
+  const inWindowRecord = {
+    branch_first_commit_at: '2025-02-01T00:00:00.000Z',
+    merged_at: '2025-02-01T12:00:00.000Z', // 12h after branch start, merged_at Feb 1 > Jan 15 → IN
+  };
+  const outOfWindowRecord = {
+    branch_first_commit_at: '2025-01-01T00:00:00.000Z',
+    merged_at: '2025-01-10T00:00:00.000Z', // 9d=216h lead time, merged_at Jan 10 < Jan 15 → OUT
+  };
+
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [outOfWindowRecord, inWindowRecord],
+    window_stats: {
+      window_days: 90,
+      window_start: windowStart,
+      merges: 1,
+      commits: 0,
+      authors_total: 0,
+      per_author: [],
+      merges_per_active: null,
+      loc_per_active: null,
+    },
+    tooling_paths: [],
+    total_commits: 2,
+    ai_marked_commits: 0,
+    total_merges: 2,
+    revert_merges: 0,
+    numstat_totals: { added: 0, deleted: 0 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+
+  assert.equal(
+    result.status,
+    'OK',
+    'status must be OK when at least one in-window record is present'
+  );
+  assert.equal(
+    result.band,
+    'elite',
+    `only the 12h in-window record must count toward median; ` +
+      `if "high" (114h) the out-of-window 216h record was incorrectly included`
+  );
+  assert.ok(
+    Math.abs((result.value as number) - 12) < 0.001,
+    `median must be 12h (only the in-window record); got ${result.value}`
+  );
+});
+
+test('adp_g4: window_start absent → all records used (graceful fallback)', () => {
+  // When window_stats is absent from the artifact, the metric falls back to
+  // using ALL merge_records. This preserves backward compatibility with artifacts
+  // collected before window_start was added to the WindowStats shape.
+  //
+  // Fixture: two records with 12h and 800h lead times; no window_stats.
+  // Without fallback (incorrect): zero records → SKIP.
+  // With fallback (correct): median of [12h, 800h] = 406h → "low" band.
+  const tmp = makeTmpDir();
+
+  const record12h = {
+    branch_first_commit_at: '2025-02-01T00:00:00.000Z',
+    merged_at: '2025-02-01T12:00:00.000Z', // 12h lead time
+  };
+  // 800h = 33 days + 8 hours after 2025-01-10T00:00:00Z = 2025-02-12T08:00:00Z
+  const record800h = {
+    branch_first_commit_at: '2025-01-10T00:00:00.000Z',
+    merged_at: '2025-02-12T08:00:00.000Z', // 800h lead time
+  };
+
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [record12h, record800h],
+    // no window_stats — simulates an older artifact or collector without window_start
+    tooling_paths: [],
+    total_commits: 2,
+    ai_marked_commits: 0,
+    total_merges: 2,
+    revert_merges: 0,
+    numstat_totals: { added: 0, deleted: 0 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+
+  assert.equal(
+    result.status,
+    'OK',
+    'status must be OK — both records used when window_start absent (fallback to all records)'
+  );
+  assert.ok(
+    (result.value as number) > 400,
+    `median must include both records (> 400h); got ${result.value} — value near 12 means only the in-window record was used despite no window_start`
+  );
+});
+
+test('adp_g4: SKIP when all records are outside the window', () => {
+  // When window_start filters ALL records out, the metric must SKIP (no valid data).
+  const tmp = makeTmpDir();
+  const windowStart = '2025-06-01T00:00:00.000Z';
+
+  const oldRecord = {
+    branch_first_commit_at: '2025-01-01T00:00:00.000Z',
+    merged_at: '2025-01-02T00:00:00.000Z', // well before window_start
+  };
+
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [oldRecord],
+    window_stats: {
+      window_days: 90,
+      window_start: windowStart,
+      merges: 0,
+      commits: 0,
+      authors_total: 0,
+      per_author: [],
+      merges_per_active: null,
+      loc_per_active: null,
+    },
+    tooling_paths: [],
+    total_commits: 1,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 0, deleted: 0 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.status,
+    'SKIP',
+    'must SKIP when all merge_records are outside the window (no valid in-window lead times)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Weight contract — parse standards.toml directly
+// ---------------------------------------------------------------------------
+
+test('adp_g4: lead_time_for_change weight is 10 in standards.toml (Task 2.1)', () => {
+  // The lead_time_for_change category was bumped from 5 → 10 in Task 2.1 because
+  // lead time is a headline DORA signal.
+  const weight = (standards as any).category?.lead_time_for_change?.weight;
+  assert.equal(
+    weight,
+    10,
+    `standards.toml [category.lead_time_for_change].weight must be 10 (Task 2.1 bump), got ${weight}`
+  );
 });

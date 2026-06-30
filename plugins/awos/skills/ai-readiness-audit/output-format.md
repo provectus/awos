@@ -81,11 +81,18 @@ The renderer is deterministic and contains no LLM. The plain-language narrative 
   "headline": {
     "delivery": [
       {
+        "label": "Merges / active contributor",
+        "display_value": "3.2 / contributor"
+      },
+      {
         "label": "Deployment frequency",
         "display_value": "1.9 / wk",
         "band": "High",
-        "reliability": "maximal",
-        "check_id": "ADP-G3"
+        "check_id": "ADP-09"
+      },
+      {
+        "label": "Cycle time (Jira In-Progress→Done)",
+        "gated": "tracker"
       }
     ],
     "scale": [
@@ -97,7 +104,7 @@ The renderer is deterministic and contains no LLM. The plain-language narrative 
     ],
     "reach": {
       "ai_tooling": "AI agent config present (partial)",
-      "contributors": "5.3 active / month"
+      "contributors": "4 active contributors (90d)"
     }
   },
   "insights": [
@@ -123,7 +130,7 @@ The renderer is deterministic and contains no LLM. The plain-language narrative 
 }
 ```
 
-Authoring integrity: `headline` numbers and `recommendations` are **transcribed verbatim** from real checks (cite the `check_id`); the DORA `band` is read from the check's `hint` ("DORA-banded (high)"). The orchestrator never invents numbers — it selects and phrases. `recommendations[]` here and the long-form `recommendations.md` come from one authoring pass and must stay in sync.
+Authoring integrity: `headline` numbers and `recommendations` are **transcribed verbatim** from real checks (cite the `check_id`); DORA `band` values are read from the check's `hint` ("DORA-banded (high)"). Git-only display values (merges per contributor, LOC per contributor) are read from `collected/git.json` → `raw.window_stats` and carry no `band` or `check_id`. Gated rows (`gated: "tracker"` for cycle time, `gated: "incident"` for MTTR) omit `display_value` when no connector is reachable, causing the renderer to print the appropriate "needs … connector" placeholder. The orchestrator never invents numbers — it selects and phrases. `recommendations[]` here and the long-form `recommendations.md` come from one authoring pass and must stay in sync.
 
 ---
 

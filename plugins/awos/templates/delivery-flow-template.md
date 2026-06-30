@@ -17,6 +17,13 @@ The canonical project config every generated flow command checks against. Flow-a
 - **Format/lint gate scope:** [whether the project's format/lint gate runs over the whole repo (so AWOS working files must be added to its ignore) or is already scoped — or "none"]
 - **Reused-skill overrides:** [any hardcoded constant in a reused skill the user chose to keep, with why — or "none"]
 
+## Generated Commands
+
+Which commands `/awos:flow` generated and their names — re-runs reconcile exactly these files.
+
+- **Feature command:** [slash name and file — e.g. `/implement-feature` → `.claude/commands/implement-feature.md` — or "not generated"]
+- **Bug-fix command:** [slash name and file — e.g. `/fix-bug` → `.claude/commands/fix-bug.md`, or a rename such as `/fix` → `.claude/commands/fix.md` — or "not generated"]
+
 ## 1. Feature Description Source
 
 - **Source:** [Jira | Azure DevOps | Linear | Notion | GitHub/GitLab issue | local file | prompt text | pre-generated spec]
@@ -95,9 +102,10 @@ Where the flow announces itself so the team stays aware as gates are removed —
 
 ## Bug-fix Flow
 
-Whether `/awos:flow` also generated the lighter `fix-bug` command, and its policy. Flow-agnostic — the bug-fix command consumes §1–§9 above and only its middle stages differ.
+Whether `/awos:flow` generated the lighter bug-fix command (named in **Generated Commands** above), and its policy. Flow-agnostic — the bug-fix command consumes §1–§9 above and only its middle stages differ.
 
-- **Generated:** [yes — `.claude/commands/fix-bug.md` | no]
+- **Generated:** [yes — see Generated Commands for the name/file | no]
+- **Bug source:** [where bug reports come from — a tracker ticket, a crash report from a crash-reporting tool (e.g. Crashlytics, Sentry; transport per §7, stack symbolicated and mapped to local `file:line`), a plain description, or several of these — or "n/a (not generated)"]
 - **Classification & amendment policy:** [every fix is classified conformance (code violated a correct spec → fix + regression test, no spec change) vs. divergence (spec was wrong or behavior intentionally changed → fix + regression test + amend the owning `functional-spec.md` via `/awos:spec` update mode); a bug mapping to no spec proceeds without amendment]
 - **Regression-test expectation:** [a fix adds one failing→passing test capturing the bug, honoring the project's `<!-- skip-tests: true -->` opt-out — or "n/a (not generated)"]
 

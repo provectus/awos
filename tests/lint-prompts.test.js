@@ -1083,7 +1083,7 @@ test('fix-bug-template.md carries the canonical bug-fix stages and the classify 
 
 test('flow.md wires fix-bug generation alongside implement-feature', () => {
   // /awos:flow must generate the optional second command from its own
-  // template, gated on a Step 4 opt-in decision, with the same
+  // template, gated on the Command-set decision, with the same
   // reconcile-on-rerun behavior as implement-feature.
   const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
   assert.ok(
@@ -1092,15 +1092,43 @@ test('flow.md wires fix-bug generation alongside implement-feature', () => {
   );
   assert.ok(
     body.includes('.claude/commands/fix-bug.md'),
-    'flow.md must generate the sibling command at .claude/commands/fix-bug.md'
-  );
-  assert.ok(
-    /Bug-fix flow \(optional second command\)/i.test(body),
-    'flow.md Step 4 must add the bug-fix opt-in decision (does the project want the fix-bug flow, with its classification/regression policy)'
+    'flow.md must keep the default bug-fix command path .claude/commands/fix-bug.md'
   );
   assert.ok(
     /classification gate/i.test(body),
-    'flow.md bug-fix decision must settle the classification gate (conformance vs. divergence) policy'
+    'flow.md bug-fix policy must settle the classification gate (conformance vs. divergence)'
+  );
+});
+
+test('flow.md interviews the command set and names', () => {
+  // Eugene's road-test named his commands to taste (/everclear:workflow,
+  // /everclear:fix); the generator must let the team pick which commands to
+  // build and what to call them, and record the names so re-runs reconcile
+  // the right files. This decision absorbs the old bug-fix opt-in.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /Command set & names/i.test(body),
+    'flow.md must interview a "Command set & names" decision — which commands to generate (feature, bug-fix, or both) and the slash-name for each'
+  );
+  assert.ok(
+    /Generated Commands/.test(body),
+    "flow.md must record the chosen command names/filenames in the decision record's Generated Commands field so re-runs reconcile the right files"
+  );
+  assert.ok(
+    /`\/feature`|`\/fix`/.test(body),
+    'flow.md must show that the generated commands can be renamed from the defaults (e.g. /feature, /fix)'
+  );
+});
+
+test('delivery-flow-template.md records the generated command set', () => {
+  // Re-runs read this field to find the exact files to reconcile — it can no
+  // longer assume implement-feature.md / fix-bug.md once names are renameable.
+  const body = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /## .*Generated Commands/.test(body),
+    'delivery-flow-template.md must declare a "Generated Commands" section recording each command\'s slash name and file'
   );
 });
 

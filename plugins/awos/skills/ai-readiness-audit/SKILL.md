@@ -45,7 +45,7 @@ Never prompt mid-run after this step.
 ### Phase 0c — Determine audit mode
 
 - **Single-repo mode** (one repo detected): proceed directly to Step 1 for that repo.
-- **Org mode** (multiple repos detected): run the per-repo audit (Steps 1–6) across all repos in parallel. Each repo runs the normal single-repo flow — the Step 5 `audit-core` pass plus the Step 6 patch/render. Collect the per-repo audit result JSONs into `context/audits/YYYY-MM-DD/per-repo/`. After all per-repo audits complete, proceed to the org rollup in Step 6 (org branch).
+- **Org mode** (multiple repos detected): run the per-repo audit (Steps 1–6) across all repos in parallel. Each repo writes its full audit into its own subdir `context/audits/YYYY-MM-DD/per-repo/<repo>/` — Step 5's `audit-core` uses that subdir as its `<outDir>`, and Step 6's patch/aggregate/render all operate on files inside it. After all per-repo audits complete, proceed to the org rollup in Step 6 (org branch).
 
 Contributor counts are always reported in aggregate (never per-person). No money, no PII.
 
@@ -156,7 +156,28 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
 
 When the audit ran in org mode (multiple repos, per `references/data-sources.md`), after all per-repo audits are complete, produce the org-level portfolio summary:
 
-1. Each per-repo audit must have written a result JSON to `context/audits/YYYY-MM-DD/per-repo/<repo-name>.json`. Each file must include `repo`, `contributors` (aggregate count, no PII), `awarded_weight` (Σ awarded category weights from that repo), `sources_reachable` (list of collector sources that returned `available=true`), and `has_ai_tooling` (boolean).
+1. Each per-repo audit runs `audit-core` with the repo's own subdir as the output directory:
+
+   ```bash
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" audit-core "<repoPath>" "context/audits/YYYY-MM-DD/per-repo/<repo-name>"
+   ```
+
+   After the Step 6 judgment patch and aggregate, render the repo's report into the same subdir:
+
+   ```bash
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/per-repo/<repo-name>/audit.json --format md   > context/audits/YYYY-MM-DD/per-repo/<repo-name>/report.md
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/per-repo/<repo-name>/audit.json --format html > context/audits/YYYY-MM-DD/per-repo/<repo-name>/report.html
+   ```
+
+   Each `per-repo/<repo-name>/` directory ends up with the full `audit.json`, `report.md`, `report.html`, and `collected/` artifacts for that repo. A later task will add links from the org report to each `per-repo/<repo-name>/report.html`.
+
+   Also write a 5-field summary sibling file (consumed by the `rollup` CLI in step 2); derive its values from the repo's `audit.json` — do not re-compute them:
+
+   ```text
+   context/audits/YYYY-MM-DD/per-repo/<repo-name>.json
+   ```
+
+   That file must include `repo`, `contributors` (aggregate count, no PII), `awarded_weight` (Σ awarded category weights from that repo), `sources_reachable` (list of collector sources that returned `available=true`), and `has_ai_tooling` (boolean).
 
 2. Invoke the org rollup via the CLI:
 

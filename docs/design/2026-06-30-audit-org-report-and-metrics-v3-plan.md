@@ -1,366 +1,314 @@
-# Audit Org-Report + Metrics v3 Implementation Plan
+# Audit Org-Report + Metrics v3 — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. This plan is written for a **fresh CC session** with the repo + root `CLAUDE.md` available but no memory of the conversation that produced it.
+> **Hand-off note (read first):** This plan is written to be executed by a **separate, fresh CC session** that has the repo + root `CLAUDE.md` but none of the conversation that produced this plan. It is self-contained: every task names exact files (with `file:line` anchors from a code survey), the change, the reasoning, and how to verify. Execute with `superpowers:subagent-driven-development` (a fresh subagent per task, review between tasks) or `superpowers:executing-plans`. On approval, this file should be saved to `docs/design/2026-06-30-audit-org-report-and-metrics-v3-plan.md` (replacing the earlier draft committed there) and the work done on branch `feat/ai-sdlc-metrics` (PR #139).
 
-**Goal:** Bring the org (multi-repo) audit report up to single-repo parity, redesign the headline delivery matrix, switch all delivery metrics from 30-day buckets to a single configurable window (default 90 days), add an "active contributor" notion, convert churn to a windowed turnover/rework rate, and add four new metrics (DORA Rework Rate + three connector metrics).
+All engine paths below are under `plugins/awos/skills/ai-readiness-audit/` unless noted.
 
-**Architecture:** The audit is a deterministic TypeScript engine (`plugins/awos/skills/ai-readiness-audit/`) bundled to `dist/cli.js`; an LLM orchestrator (`SKILL.md`) fills only the judgment/connector slice and authors the report's plain-language blocks into `audit.json`; `render.ts` is a pure JSON→MD/HTML renderer. Scoring categories live in `references/standards.toml`. The org flow runs the single-repo flow per repo, then `org_rollup.ts` summarizes. This plan keeps that shape: engine changes are deterministic + unit-tested; report-copy/connector changes are SKILL.md + connector-shapes guidance.
+---
 
-**Tech Stack:** TypeScript (`node:test` + `tsx`), esbuild bundle (`scripts/build-engine.mjs` → `dist/cli.js`), smol-toml for `standards.toml`, no runtime npm deps in the engine path beyond what's already bundled.
+## Context — why this work
 
-## Global Constraints
+The single-repo audit is in good shape, but two rounds of real runs surfaced gaps:
 
-- Node toolchain: use a **real Node** (`/opt/homebrew/bin/node`), not the Bun shim, for `node:test` (`npm run test:engine`). Per repo memory.
-- **`dist/` is committed and CI-gated.** After editing any engine `.ts`: `npm run build:engine` and commit the regenerated `dist/`. CI runs `git diff --exit-code` on `dist/`.
-- **Do not bump the plugin version** per change — release-drafter owns versioning via PR labels.
-- Every per-category source link in `standards.toml` must cite a real external authority and resolve via `node scripts/standards-linkcheck.mjs references/standards.toml` (DOI 202/403 = REACHABLE-AUTH, allowed). Never fabricate a URL.
-- Prettier: `npx prettier --write` changed files before commit (single quotes, semicolons, 80-col, es5 commas). CI fails on drift.
-- Markdown (`.md` prompts/docs): do **not** hard-wrap prose at 80 cols; one logical line per paragraph/bullet.
-- Tests must narrate the contract they verify in the `assert` message (not "N pass").
-- Contributor data stays **aggregate, no PII**. This governs collection; do not echo a privacy disclaimer into report copy.
-- Test the audit harness changes with `tools/audit-test-harness/run_audit_test.py` (engine-compliance guard is already in place); a live headless run is ~$8 and stochastic — prefer engine unit tests for verification, reserve headless runs for end-to-end confirmation.
+1. **The org (multi-repo) report is a dead end.** It shows only 3 portfolio numbers and a 5-column repo table with no per-repo detail, no drill-down, no aggregated sources, and no org-level "what to improve". Users expect each repo to be openable as its own full report, the top matrix to be the org average of the same metrics, and Connections to aggregate across repos with counts.
+2. **The delivery metrics are bucketed and partly the wrong shape.** Everything is averaged over 30-day buckets across a 730-day window; the team wants a single recent window (90 days), an "active contributor" notion that excludes drive-by committers (PM/QA), churn reframed as a directional windowed turnover/rework rate, the DORA 2025 "Rework Rate", and three new ticketing/adoption metrics. The headline matrix needs to become the canonical set of delivery numbers.
+3. **Jira fetch silently stops at ~100 tickets** (a per-request MCP cap), so tracker metrics under-sample long-lived projects.
+4. **`collectors/git.ts` `run()` swallows all git errors silently** — only the 1 MiB buffer case was fixed; unexpected failures still vanish.
 
-## How to verify any engine task (the standard loop)
+The architecture stays as-is: a deterministic TypeScript engine (`dist/cli.js`) computes everything scoreable; the LLM orchestrator (`SKILL.md`) fills only the judgment/connector slice and authors plain-language blocks into `audit.json`; `render.ts` is a pure JSON→MD/HTML renderer. Engine changes get unit tests; report-copy/connector changes are SKILL.md + `connector-shapes.md` guidance.
 
-Each engine task ends with this loop — treated as its final steps, not repeated verbatim below:
+---
+
+## Global constraints (apply to every task)
+
+- **Real Node toolchain.** Use `/opt/homebrew/bin/node` (the global `node` is a Bun shim that breaks `node:test`). Run engine tests with `export PATH="/opt/homebrew/bin:$PATH" && npm run test:engine`.
+- **`dist/` is committed and CI-gated.** After editing any engine `.ts`: `npm run build:engine` and commit the regenerated `dist/cli.js`. CI runs `git diff --exit-code` on `dist/`.
+- **Do not bump the plugin version** — release-drafter owns versioning via PR labels.
+- **Contributor data stays aggregate, no PII.** This governs collection only; never echo a privacy disclaimer into report copy.
+- **Markdown prose is not hard-wrapped** at 80 cols — one logical line per paragraph/bullet.
+- **Tests narrate the contract** they verify in the `assert` message (not "N pass").
+
+(Removed per maintainer: the per-category-source-link verification and the Prettier emphasis are no longer plan-level constraints. CI still runs Prettier; just `npx prettier --write` your changed files before committing.)
+
+### Standard verify loop (the tail of every engine task)
 
 ```bash
 export PATH="/opt/homebrew/bin:$PATH"
-npm run test:engine                 # all engine unit tests green
-npm run build:engine                # regenerate dist/
-node scripts/standards-linkcheck.mjs plugins/awos/skills/ai-readiness-audit/references/standards.toml   # if standards.toml changed
+npm run test:engine          # all engine unit tests green
+npm run build:engine         # regenerate dist/
 npx prettier --write <changed files>
 git add <changed .ts/.toml/.md + dist/cli.js> && git commit -m "<conventional msg>"
 ```
 
----
-
-## Open Questions — resolve before/early (ask the user or pick the noted default)
-
-These came from a verbal spec; resolve up front so later tasks don't churn.
-
-- [ ] **Q1 — Sparkline series after de-bucketing.** Removing 30-day buckets removes the per-bucket `value_series` (the sparklines in dimension tables). Default decision: keep a coarse series for trend visuals by still bucketing _internally for the sparkline only_ (e.g. weekly) while the **headline number** is the whole-window aggregate. Confirm, or drop sparklines for de-bucketed metrics.
-- [ ] **Q2 — "Lead time, but measure adp_g3_deploy for the whole time, not by buckets."** Interpreted as: compute **deployment frequency** and **lead time** as single whole-window aggregates (over `max_lookback_days`), not per-bucket averages. Confirm this reading.
-- [ ] **Q3 — `monthly_bucket_days` removal.** Spec says it's "probably not needed — measure for max_lookback_days." Default: **remove** `monthly_bucket_days` from `[meta]` and all bucket logic; if Q1 keeps sparklines, introduce a separate `sparkline_bucket_days` instead. Confirm.
-- [ ] **Q4 — Org per-repo drill-down delivery mechanism.** Embed every repo's full report as hash-routed sections inside the single org `report.html` (`#repo/<name>`), mirroring the existing `#dim/<key>` routing (self-contained, one file) — vs. emit a separate `report.html` per repo and link out. Default: **embed** (self-contained). Confirm; the org-JSON shape (Task 5.1) depends on this.
-- [ ] **Q5 — New-metric weights & applicability.** The four new metrics (Rework Rate, ticket-split, description-quality, onboarding-ease) need `weight` + `applies_when`. Defaults proposed per task; confirm before they affect scores.
+There is **no end-to-end validation phase** — headless `claude -p` runs are ~$8, stochastic, and mostly manual. Verify each change with engine unit tests; a maintainer will do the occasional headless run out of band (the harness already has the engine-compliance guard).
 
 ---
 
-## Phase 0 — Window model: single configurable lookback, default 90 days
+## Locked decisions (from maintainer feedback)
 
-Foundational; later metric tasks depend on it. Today `[meta].max_lookback_days = 730` and `monthly_bucket_days = 30`; `git.ts` builds `monthly_buckets`, and `adp_g2/g3/g4/g7` average across buckets.
+- **One window, no buckets.** Remove `monthly_bucket_days` and all 30-day bucketing. Every delivery metric is a single aggregate over `max_lookback_days`. **Remove `value_series`/sparklines entirely** (Q1/Q2/Q3).
+- **`max_lookback_days = 90`** (was 730).
+- **Active contributor** = author not below the 10% threshold on **both** merge-share and LOC-share over the window. Threshold is a new `[meta]` param `active_contributor_threshold = 0.1`.
+- **Org per-repo drill-down = separate report files in folders.** Each repo renders its own `per-repo/<repo>/report.html`; the org report links to them. No single giant embedded HTML, no in-page `#repo/` routing (Q4).
+- **Weights:** the DORA delivery metrics (deploy frequency, lead time, change-failure rate, MTTR, **Rework Rate**) get `weight = 10` — they are the important signals. Cycle time gets the default `weight = 3` (tracker-gated). The two raw per-active-contributor ratios (merges/contrib, LOC/contrib) are **display-only headline values, not scored categories** — raw output volume has no defensible good/bad direction and DX/DORA explicitly warn against rewarding it; they appear in the headline but award no weight. *(If the maintainer wants them scored, that needs banding thresholds first — flag before implementing.)*
+- New metrics' `applies_when` = `"always"` for git-derived, `"topology.has_tracker"` for ticketing-derived (Q5 defaults).
 
-### Task 0.1 — Default lookback to 90 days
+---
 
-**Files:**
+## How the engine fits together (orientation for the executor)
 
-- Modify: `plugins/awos/skills/ai-readiness-audit/references/standards.toml` (`[meta]`)
-- Test: `plugins/awos/skills/ai-readiness-audit/tests/standards-meta.test.ts` (create if absent; else fold into an existing standards test)
+- **Metric registry is explicit, not auto-discovered.** `audit_core.ts:218-224` receives a `metrics` map; it is hand-built in `cli.ts:150-170` (`METRICS`, keyed by metric-id string) with one import each at `cli.ts:87-105`. Adding a metric = new `metrics/<id>.ts` + one import + one `METRICS` entry + a `[category.*]` block in `standards.toml`.
+- **A category routes to its metric by name:** `audit_core.ts:301-305` collects every `category.metric` lacking a detector; `audit_core.ts:319-324` runs `metrics[id](collectedDir, standards, topology, repoPath)`. The metric awards its codes via `awardCategories(standards, '<id>', topology)` (`metrics/_base.ts:198-226`).
+- **Score → weight.** A metric returns a continuous `score ∈ [0,1]` (capability fraction). `audit_core.ts:756`: `weight_awarded = round(weight_max · score · 10)/10`, `weight_max = category.weight`. So bumping a category's `weight` to 10 scales its contribution; no other change needed.
+- **Bands live in TS, not TOML.** The `[band.*]` tables in `standards.toml` are documentation-only (nothing reads them at runtime). Real DORA thresholds are TS anchors fed to `bandScore(...)` (`metrics/_score.ts:43-61`); see `metrics/adp_g3_deploy_frequency.ts:36-49,113-117` for the pattern (label fn + anchors → `score`).
+- **`applies_when` gating:** `audit_core.ts:651-656` + `:687-691` — `"always"` or `"topology.<flag>"`; gated-off → SKIP, excluded from the coverage denominator.
+- **Connector metrics:** the engine runs git/ci/tracker/docs collectors itself; with no connector, tracker/docs collectors return `available:false` so their metrics SKIP. The orchestrator (SKILL.md Step 6.2) fetches the live MCP, writes `collected/<source>.json` in the `connector-shapes.md` shape, re-runs `cli.js metric <id> <repo> <collectedDir>`, patches the check, then `aggregate`. Tracker metrics read `collected/tracker.json` (template: `metrics/adp_i2_throughput.ts:33,48-67`). **Name any new tracker metric `adp_i*`** so the standalone re-run path auto-collects tracker (`cli.ts:321-337`).
+- **`dimensions/*.md`** is NOT read for the category list (that's `standards.toml`); the engine only reads it for the code→`check_id` fallback (`audit_core.ts:614-648`) and judgment rubrics. A new `computed` category does not strictly need a `.md` edit, but add one for human/source consistency.
 
-**Approach:** Change `max_lookback_days = 730` → `90`. Per Q3, also remove `monthly_bucket_days` (or replace with `sparkline_bucket_days` if Q1 keeps sparklines). Grep every reader of these keys and update defaults: `metrics/_base.ts` (`capBucketsByHistory`), `collectors/git.ts` (`period.bucket_days`, `lookback`), `audit_core.ts`, `cli.ts`. Search: `grep -rn "max_lookback_days\|monthly_bucket_days\|730\|bucket_days" plugins/awos/skills/ai-readiness-audit --include=*.ts`.
+---
 
-- [ ] Write a failing test asserting the parsed `[meta].max_lookback_days === 90` and that `monthly_bucket_days` is absent (or `sparkline_bucket_days` present per Q1).
-- [ ] Update `[meta]`, fix every `.ts` default fallback (`?? 730`, `?? 30`) to the new values.
-- [ ] Standard verify loop. **Acceptance:** a repo's delivery metrics compute over a 90-day window; no `730`/`30` magic defaults remain except an intentional sparkline bucket.
+## Phase 0 — One 90-day window, no buckets, no value_series
 
-### Task 0.2 — Collector emits whole-window aggregates, not 30-day buckets
+Foundational; Phases 1–2 read its output.
 
-**Files:**
+### Task 0.1 — `[meta]`: 90-day window, drop `monthly_bucket_days`
 
-- Modify: `plugins/awos/skills/ai-readiness-audit/collectors/git.ts` (`buildMonthlyBuckets`, `GitRaw`, `collect`)
-- Test: `plugins/awos/skills/ai-readiness-audit/tests/git-collector.test.ts`
+**Files:** `references/standards.toml` (`[meta]`); a test in `tests/` (create `tests/standards-meta.test.ts`).
+**Why:** the team wants recent signal (last quarter), not a 2-year average, and a single window removes the bucket machinery entirely.
+**Change:** set `max_lookback_days = 90`; delete `monthly_bucket_days`. Grep every consumer and fix defaults: `grep -rn "max_lookback_days\|monthly_bucket_days\|730\|bucket_days" --include=*.ts .` — expect `metrics/_base.ts` (`capBucketsByHistory`, soon removed), `collectors/git.ts` (`period.bucket_days`, `lookback`), `audit_core.ts`, `cli.ts`.
 
-**Approach:** Replace per-bucket `monthly_buckets` with a single windowed aggregate object the metrics read. Keep `git log --all --since=<window>` (already date-anchored to newest commit, no wall-clock) but collapse to one window. New `GitRaw` field, e.g.:
+- [ ] Failing test: parse `standards.toml`, assert `meta.max_lookback_days === 90` and `meta.monthly_bucket_days === undefined`.
+- [ ] Apply `[meta]` change; fix `?? 730` / `?? 30` fallbacks to drop bucketing (collapse to the single window — completed in 0.2).
+- [ ] Standard verify loop.
+
+### Task 0.2 — git collector emits one windowed aggregate with per-author rows
+
+**Files:** `collectors/git.ts` (`buildMonthlyBuckets`→removed, `GitRaw`, `collect` at `:324-347`); `tests/git-collector.test.ts`.
+**Why:** the active-contributor filter (Phase 1) and de-bucketed delivery metrics (Phase 2) need per-author merge/LOC totals over the single window, not per-bucket author counts.
+**Change:** replace `monthly_buckets` with:
 
 ```ts
-// window-scoped delivery aggregates (replaces monthly_buckets)
+// GitRaw.window_stats — whole-window delivery aggregates (replaces monthly_buckets)
 window_stats: {
-  window_days: number; // = max_lookback_days
+  window_days: number;          // = meta.max_lookback_days
   commits: number;
-  merges: number; // first-parent merges into default branch
-  authors_total: number; // distinct authors in window
-  per_author: Array<{
-    author: string;
-    commits: number;
-    merges: number;
-    lines: number;
-  }>; // for active-contributor filter (Task 1.x); aggregate, no PII beyond author key used transiently
+  merges: number;               // first-parent merges into default branch, in window
+  authors_total: number;        // distinct authors in window
+  per_author: Array<{ author: string; commits: number; merges: number; lines: number }>;
 }
 ```
 
-Per Q1, optionally also emit `sparkline_series: Array<{ bucket_start: string; value: number }>` from a weekly internal bucketing for visuals only.
+Derive `per_author.lines` from `git log --all --since=<window> --no-merges --numstat --format=%H\t%aN` (sum added+deleted per author); `per_author.merges` from `git log --first-parent --merges --since=<window> --format=%aN`. The window is still anchored to the newest commit date (no wall-clock), as `buildMonthlyBuckets` does today (`collectors/git.ts:185-205`). Mind the existing `maxBuffer: 512*1024*1024` in `run()`. Keep `numstat_totals`, `merge_records`, `history_available_days`.
 
-- [ ] Write failing tests on a temp repo (reuse the `git()`/`repo()` helpers in the test file): assert `window_stats.merges`, `window_stats.authors_total`, and `window_stats.per_author` are populated and correct for a crafted history.
-- [ ] Implement: derive `per_author` by parsing `git log --all --since --no-merges --numstat --format=%H\t%aN` (lines per author) and `git log --first-parent --merges --since --format=%aN` (merges per author). Mind the `maxBuffer: 512*1024*1024` fix already in `run()`.
-- [ ] Keep `numstat_totals`, `merge_records`, `history_available_days` as-is (still needed).
-- [ ] Standard verify loop. **Acceptance:** `git.json` carries `window_stats` with per-author rows; `monthly_buckets` removed.
+- [ ] Failing tests on a temp repo (reuse `git()`/`repo()` helpers): assert `window_stats.merges`, `authors_total`, and `per_author` rows are correct for a crafted history.
+- [ ] Implement; delete `buildMonthlyBuckets` + `monthly_buckets`.
+- [ ] Standard verify loop.
+
+### Task 0.3 — Remove `value_series` end-to-end
+
+**Files (exact, from survey):** producers `metrics/adp_g2_contributors.ts:75-92`, `adp_g3_deploy_frequency.ts:108-128`, `adp_g4_lead_time.ts:139,161,185`, `adp_g5_pr_cycle_time.ts:139,161,185`; type/param `metrics/_base.ts:61-66,87,117,146-148` (`ValueSeriesEntry`, `MetricResult.value_series`, `makeMetricResult` param); renderer `render.ts:143` (CheckRecord field), `sparkline()` `:478` (+use `:727-728`), `sparklineSvg()` `:912` (+use `:1401-1402`), doc comments `:475,998`; docs `output-format.md:51,71`, `report-template.md:30`; tests `tests/history.test.ts`, `tests/render.test.ts:52,77,178,384,614`. **No `audit_core.ts` change** — it already never carries `value_series`.
+**Why:** with a single window there is no series to draw; sparklines become dead weight.
+
+- [ ] Update the failing tests first (remove/adjust the value_series and sparkline assertions in `history.test.ts` and `render.test.ts`).
+- [ ] Remove `value_series` from the 4 producers and the `_base.ts` type+param; remove `sparkline`/`sparklineSvg` + their call sites from `render.ts`; scrub the docs.
+- [ ] Standard verify loop. **Acceptance:** no `value_series`/`sparkline` references remain (`grep -rn "value_series\|sparkline" --include=*.ts .` is empty).
 
 ---
 
 ## Phase 1 — Active Contributor
 
-Spec: an _active contributor_ is someone actually delivering code, not a PM/QA who merges 1–2× per window. Compute per-author merges and per-author LOC over the window; **exclude** anyone below the threshold (default 0.1 = 10%) on **both** metrics. New `standards.toml` param.
+### Task 1.1 — `active_contributor_threshold` + active-contributor computation
 
-### Task 1.1 — `active_contributor_threshold` param + active-contributor computation
-
-**Files:**
-
-- Modify: `references/standards.toml` (`[meta]` add `active_contributor_threshold = 0.1`; update `[category.active_contributors]` definition + `monthly_bucket_days` references)
-- Modify: `metrics/adp_g2_contributors.ts` (full rewrite)
-- Test: `metrics/adp_g2_contributors.test.ts` (create; mirror existing metric test style)
-
-**Approach — active-contributor rule (lock this so downstream metrics agree):**
-Given `per_author` rows over the window: for each author compute `merge_share = author.merges / Σ merges` and `loc_share = author.lines / Σ lines`. An author is **active** iff `merge_share >= T` **OR** `loc_share >= T` is **false** for exclusion — i.e. exclude when `merge_share < T AND loc_share < T`. (Spec: "cut out those who both less than 10% for both metrics.") `active_contributors = count(authors not excluded)`.
+**Files:** `references/standards.toml` (`[meta]` add `active_contributor_threshold = 0.1`; update `[category.active_contributors]` at `:138-152`); rewrite `metrics/adp_g2_contributors.ts`; new `metrics/adp_g2_contributors.test.ts`.
+**Why:** a team of 3 SDE + 1 ML + 1 PM + 1 QA has ~4 people actually delivering code; counting raw distinct authors overstates the delivery base and distorts the per-contributor ratios.
+**Rule (lock it — Phase 2 ratios reuse it):** from `window_stats.per_author`, `merge_share = merges/Σmerges`, `loc_share = lines/Σlines`; **exclude** an author iff `merge_share < T AND loc_share < T`; `active_contributors = count(not excluded)`.
 
 ```ts
 function activeContributors(perAuthor: AuthorRow[], T: number): number {
-  const totMerges = sum(perAuthor.map((a) => a.merges)) || 1;
-  const totLines = sum(perAuthor.map((a) => a.lines)) || 1;
-  return perAuthor.filter(
-    (a) => !(a.merges / totMerges < T && a.lines / totLines < T)
-  ).length;
+  const tm = perAuthor.reduce((s, a) => s + a.merges, 0) || 1;
+  const tl = perAuthor.reduce((s, a) => s + a.lines, 0) || 1;
+  return perAuthor.filter(a => !((a.merges / tm < T) && (a.lines / tl < T))).length;
 }
 ```
 
-- [ ] Failing tests: team of 6 (3 SDE heavy, 1 ML moderate, 1 PM 1 merge, 1 QA 1 merge) → `active_contributors === 4` with `T=0.1`; edge cases (single author → 1; empty → 0/SKIP); threshold read from standards, default 0.1.
-- [ ] Rewrite `adp_g2_contributors.compute` to read `window_stats.per_author` + `standards.meta.active_contributor_threshold`, return the active count as `value`, `expression` like `"4 active contributors (window 90d; excluded 2 below 10% on merges & LOC)"`. Update category `definition`.
-- [ ] Decide reliability: keep `not-reliable`? Active-contributor filtering is a heuristic → `minimal` is defensible; note in proposal. Default keep `not-reliable` unless Q5 says otherwise.
-- [ ] Standard verify loop. **Acceptance:** `adp_g2` reports active-contributor count over the window; `active_contributor_threshold` is a documented `[meta]` param.
+- [ ] Failing tests: the 6-person team → `4` with `T=0.1`; single author → `1`; empty → SKIP; `T` read from `meta.active_contributor_threshold` (default `0.1`).
+- [ ] Rewrite `compute()` to read `window_stats.per_author` + the threshold; `value = active count`; `expression = "4 active contributors (90d; 2 excluded <10% on merges & LOC)"`; update the category `definition`. Keep `reliability_default = "not-reliable"` (it's a heuristic count). It still awards code `201`.
+- [ ] Standard verify loop.
 
-### Task 1.2 — Per-active-contributor delivery ratios (Merges/LOC per active contributor)
+### Task 1.2 — Merges/LOC per active contributor (display-only headline values)
 
-**Files:**
+**Files:** add computed fields to the git artifact in `collectors/git.ts` (`merges_per_active`, `loc_per_active` under `window_stats`, computed once `active_contributors` is known — or compute in a tiny helper the headline authoring reads); test in `git-collector.test.ts`.
+**Why:** the headline needs "throughput per delivering person", normalized so big and small teams compare. These are **display-only** (see Locked decisions) — they award no weight, so no banding needed.
+**Change:** `merges_per_active = window_stats.merges / active_contributors`; `loc_per_active = window_stats.per_author.reduce(+lines) / active_contributors` (guard divide-by-zero → null). Surface them on the git artifact so SKILL.md Step 6.4 can transcribe into `headline.delivery`.
 
-- Create: `metrics/adp_g2b_per_contributor.ts` (or extend `adp_g2`) — emits `merges_per_active_contributor` and `loc_per_active_contributor`
-- Modify: `references/standards.toml` (new category/categories or sub-values)
-- Test: `metrics/adp_g2b_per_contributor.test.ts`
-
-**Approach:** `merges_per_active = window_stats.merges / active_contributors`; `loc_per_active = (numstat_totals.added /*or window lines*/) / active_contributors`. These feed two headline rows (Phase 4). Decide whether they are scored categories or display-only headline values (default: **display-only**, surfaced via headline authoring, so no weight churn). If display-only, they can be computed fields on the git artifact rather than scored categories — simpler. Confirm under Q5.
-
-- [ ] Failing test: crafted history → expected ratios.
-- [ ] Implement (as computed git-artifact fields if display-only, else as categories).
-- [ ] Standard verify loop. **Acceptance:** both ratios available to the headline.
+- [ ] Failing test: crafted history → expected ratios (and null when 0 active).
+- [ ] Implement; standard verify loop.
 
 ---
 
-## Phase 2 — Delivery metrics over the whole window + churn→turnover + Rework Rate
+## Phase 2 — Delivery metrics over the whole window + turnover + Rework Rate
 
-### Task 2.1 — Deploy frequency & lead time as whole-window aggregates
+### Task 2.1 — Deploy frequency & lead time as single whole-window aggregates
 
-**Files:**
+**Files:** `metrics/adp_g3_deploy_frequency.ts`, `metrics/adp_g4_lead_time.ts`; `references/standards.toml` (bump both `weight` to `10`); tests `tests/met-adp-g3-deploy-frequency.test.ts` (+ create g4 test).
+**Why:** the team wants one recent number per DORA metric, not a bucket average; and these are the headline signals, hence weight 10.
+**Change:** deploy frequency = `window_stats.merges / (window_days/7)` merges/week over the whole window; lead time = median of all in-window `merge_records` branch-age. Keep the existing TS band anchors + `bandScore` → `score`; drop `capBucketsByHistory`/`value_series`. Set `[category.merge_frequency].weight = 10`, `[category.lead_time_for_change].weight = 10`.
 
-- Modify: `metrics/adp_g3_deploy_frequency.ts`, `metrics/adp_g4_lead_time.ts`
-- Tests: existing `tests/met-adp-g3-deploy-frequency.test.ts`, add `met-adp-g4-lead-time.test.ts` if absent
+- [ ] Failing tests: whole-window value + correct band + `weight_max === 10`.
+- [ ] Implement; standard verify loop.
 
-**Approach (per Q2):** Deploy frequency = `window_stats.merges / (window_days/7)` merges-per-week over the whole window (not per-bucket average). Lead time = median over all merge_records in window (already whole-set). Keep DORA banding from `[band.deploy_frequency]`/`[band.lead_time_for_change]`. Remove bucket dependence + `capBucketsByHistory`.
+### Task 2.2 — Change-failure rate whole-window, weight 10
 
-- [ ] Failing tests asserting whole-window values + correct band.
-- [ ] Implement; drop `value_series` or replace with weekly sparkline per Q1.
-- [ ] Standard verify loop. **Acceptance:** deploy-freq/lead-time are single whole-window numbers, DORA-banded.
+**Files:** `metrics/adp_g7_change_fail_rate.ts`; `standards.toml` (`[category.change_failure_rate].weight = 10`); test.
+**Change:** ensure the revert/hotfix-follows-merge share sums over the single window; keep TS band. Bump weight to 10.
+- [ ] Failing test → whole-window share + band + weight 10. Implement; verify loop.
 
-### Task 2.2 — Change-failure rate over the whole window
+### Task 2.3 — Convert `adp_g6_churn` → windowed code-turnover (banded, directional)
 
-**Files:** Modify `metrics/adp_g7_change_fail_rate.ts`; test `tests/det-…`/new.
-**Approach:** Already a share of merges followed by revert/hotfix; ensure it sums over the window, not per-bucket. Band via `[band.change_failure_rate]`.
+**Files:** `collectors/git.ts` (new turnover computation), `metrics/adp_g6_churn.ts` (rewrite to band it), `references/standards.toml` (`[category.code_churn]` definition → turnover; add the TS band anchors in the metric module; add `[meta] rework_horizon_days = 21`); tests `metrics/adp_g6_churn.test.ts` + `git-collector.test.ts`.
+**Why:** raw lifetime `added+deleted` is directionless and unbounded; turnover (recently-written lines soon rewritten) is a bounded, directional health signal.
+**Definition (locked):** `turnover = (lines deleted/modified whose authored-age < rework_horizon_days) ÷ (total lines merged)`, from a single oldest→newest diff replay bounded to the last `(window + rework_horizon)` days. Bands ≈ `<12% good / 12–18% watch / >18% concerning`. `reliability_default = "minimal"` (approximate line attribution is industry-accepted). The collector does the git replay (collector work); the metric bands the ratio via `bandScore`.
 
-- [ ] Failing test → whole-window share + band. Implement. Standard verify loop.
-
-### Task 2.3 — Convert `adp_g6_churn` → windowed turnover/rework rate
-
-**Files:**
-
-- Modify: `collectors/git.ts` (new computed field), `metrics/adp_g6_churn.ts` (rewrite), `references/standards.toml` (`[category.code_churn]` → turnover; add `[band.code_turnover]`)
-- Tests: `metrics/adp_g6_churn.test.ts` (create), `tests/git-collector.test.ts`
-
-**Approach (locked from spec):** Turnover = `(lines deleted/modified whose authored-age < N days) ÷ (total lines merged)` from a **single oldest→newest diff replay** bounded to the last `(window + N)` days. Band ≈ `<12% good / 12–18% watch / >18% concerning`. Reliability `minimal` (approximate attribution is industry-accepted). Pick `N` (rework horizon) as a `[meta]` param, e.g. `rework_horizon_days = 21`. The collector computes the turnover field (git-replay is collector work, not metric work); the metric just bands it.
-
-- [ ] Failing collector test: a repo where a file is written then largely rewritten within `N` days → high turnover; stable repo → low.
-- [ ] Implement git replay in `collectors/git.ts` (use `git log --reverse --numstat` over the bounded window; attribute deletions to the age of the line being deleted via `git blame`-free approximation: compare successive states; keep it bounded/fast). Document the approximation.
-- [ ] Rewrite `adp_g6_churn.compute` to band the turnover ratio; update category `definition`, `source` (DX Core 4 or DORA — see Task 2.4 research), add `[band.code_turnover]`.
-- [ ] Standard verify loop. **Acceptance:** `adp_g6` is a banded, directional turnover %; raw lifetime churn no longer surfaced as the value.
+- [ ] Failing collector test: a file written then largely rewritten within the horizon → high turnover; a stable repo → low.
+- [ ] Implement the bounded replay in `collectors/git.ts` (walk `git log --reverse --numstat` over the bounded window; approximate deleted-line age by replaying successive states — document the approximation and keep it bounded/fast).
+- [ ] Rewrite `adp_g6_churn.compute()` to band the turnover ratio (TS anchors); update `definition`; pick `source` (keep DX Core 4 or DORA per Task 2.4 research).
+- [ ] Standard verify loop. **Acceptance:** `adp_g6` is a banded directional turnover %, not raw churn.
 
 ### Task 2.4 — New metric: DORA 2025 **Rework Rate** (research spike → implement)
 
-**Files:**
-
-- Create: `metrics/adp_g14_rework_rate.ts`
-- Modify: `references/standards.toml` (new `[category.rework_rate]` + `[band.rework_rate]`)
-- Tests: `metrics/adp_g14_rework_rate.test.ts`
-
-**Research spike (do first, deliverable = a cited definition):**
-
-- [ ] Confirm the **DORA 2025** "rework rate" definition + thresholds from the DORA 2025 report (`https://dora.dev/research/2025/`). Verify the URL with WebFetch; record exact definition + band thresholds. If DORA's "rework" overlaps Task 2.3 turnover, define this one at the **delivery** level (e.g. share of changes requiring unplanned follow-up work / failed-then-refixed) distinct from line-level turnover, and document the distinction in the category `definition` to avoid double-counting.
-      **Implement:**
-- [ ] Failing test with crafted inputs → expected rate + band.
-- [ ] Implement metric from git (and tracker if richer); category `weight`/`applies_when` per Q5 (default `weight = 3`, `applies_when = "always"`); `source = "DORA State of DevOps"`, verified URL/date.
-- [ ] Standard verify loop. **Acceptance:** a banded Rework Rate appears as a headline metric.
+**Files:** `metrics/adp_g14_rework_rate.ts` (new; template `metrics/adp_i2_throughput.ts`); `cli.ts` (+import `:~105`, +`METRICS` entry `:~169`); `references/standards.toml` (`[category.rework_rate]`, template `[category.issue_throughput]:338-352`, `weight = 10`, `method = "computed"`); `dimensions/ai-sdlc-adoption.md` (a `### / **Category:**` entry); test `metrics/adp_g14_rework_rate.test.ts`.
+**Research spike (do first; deliverable = a cited definition):**
+- [ ] Confirm the DORA 2025 "rework rate" definition + thresholds from the DORA 2025 report (`https://dora.dev/research/2025/`, verify with WebFetch; record exact definition + bands). Define it at the **delivery** level (unplanned/failed-then-refixed work) **distinct from** Task 2.3 line-level turnover, and say so in the category `definition` to avoid double-counting.
+**Implement:**
+- [ ] Failing test with crafted inputs → expected rate + band + `weight_max === 10`.
+- [ ] Implement from git (and tracker if richer); register in `cli.ts`; TS band anchors; `applies_when = "always"`; verified `source`/`url`/`date`.
+- [ ] Standard verify loop.
 
 ---
 
-## Phase 3 — New connector (tracker) metrics + research spikes
+## Phase 3 — New ticketing / adoption metrics (each gated by a research spike)
 
-All three are **tracker-connector** metrics (Jira/Linear/etc.): SKIP when no tracker reachable, computed by the orchestrator's connector step from `collected/tracker.json`. Each needs a cited industry rationale (spec: "find proofs in internet").
+All three are **tracker-connector** metrics named `adp_i*` (so the standalone re-run path auto-collects tracker, `cli.ts:321-337`); `applies_when = "topology.has_tracker"`; SKIP without a tracker. Each spike must produce a **verified** authoritative source before implementation (the maintainer asked for "proofs from the internet"); if none is found, set `weight` low + `reliability "minimal"` and say so.
 
 ### Task 3.1 — Ticket sub-task split ratio (over-splitting is negative)
 
-**Files:** `metrics/adp_t1_subtask_split.ts` (new); `references/standards.toml` (`[category.ticket_subtask_split]` + band); `references/connector-shapes.md` (extend `TicketRecord` with `parent`/`subtask_count` if needed); test.
-**Research spike:**
-
-- [ ] Find an authoritative source that over-fragmenting work items is harmful (context-switching / coordination overhead; AI auto-splitting to assign across roles is the spec's concern). Candidate search: "work fragmentation context switching cost", "too-granular user stories anti-pattern", "INVEST small but not too small". Verify a real URL; record it. If no strong source, set `weight` low and mark reliability `minimal`, and say so in the proposal.
-      **Implement:**
-- [ ] Extend tracker shape so the engine can compute `avg subtasks per parent ticket` (and/or share of tickets with > K subtasks). Band: low split = good; high = concerning.
-- [ ] Failing test on a synthetic `tracker.json`; implement; category metadata; verify loop.
-- [ ] Update `SKILL.md` Step 6.2 + `connector-shapes.md` worked example to capture parent/subtask links from Jira (`parent`, `subtasks` fields).
+**Files:** `metrics/adp_i4_subtask_split.ts` (new); `cli.ts` (+import/entry); `standards.toml` (`[category.ticket_subtask_split]` + TS band, default `weight = 3`); `references/connector-shapes.md` (extend `TicketRecord` with `parent`/`subtask_count`); `SKILL.md` Step 6.2 (capture parent/subtask links from Jira); test.
+**Why:** AI auto-splitting a ticket into many sub-tasks assigned across roles fragments work and adds coordination/context-switching cost — a negative adoption signal.
+**Spike:** find an authority that over-fragmentation harms flow (search: "work fragmentation context-switching cost", "too-granular stories anti-pattern", INVEST "small but not too small"). Verify a URL.
+**Implement:** compute `avg subtasks per parent` and/or `share of tickets with > K subtasks`, banded (low good); `reliability "minimal"`. Failing test on a synthetic `tracker.json`; implement; verify loop.
 
 ### Task 3.2 — Ticket description quality/richness
 
-**Files:** `metrics/adp_t2_description_quality.ts` (new); `standards.toml` category+band; `connector-shapes.md` (ensure `TicketRecord` carries `description`/`acceptance_criteria` length/structure signals — compute size in the collector, not raw text, to avoid PII/bulk); test.
-**Research spike:**
-
-- [ ] Cite an authority for "good ticket descriptions" — INVEST criteria (Bill Wake), Definition of Ready, or Atlassian/Agile Alliance guidance on acceptance criteria. Verify URL.
-      **Implement:**
-- [ ] Define a deterministic proxy (e.g. share of tickets with a non-trivial description AND acceptance criteria AND a reproducible structure), banded. Reliability `minimal`.
-- [ ] Failing test; implement; metadata; verify loop; SKILL.md/connector-shapes guidance to capture the needed fields.
+**Files:** `metrics/adp_i5_description_quality.ts` (new); `cli.ts`; `standards.toml` (`[category.ticket_description_quality]` + band, `weight = 3`); `connector-shapes.md` (have the collector capture description/AC **size/structure signals**, not raw text — avoid PII/bulk); `SKILL.md` Step 6.2; test.
+**Why:** thin tickets ("fix bug") starve both humans and AI agents of context; description quality is an AI-readiness signal.
+**Spike:** cite INVEST (Bill Wake), Definition of Ready, or Atlassian/Agile-Alliance acceptance-criteria guidance. Verify a URL.
+**Implement:** deterministic proxy (share of tickets with a non-trivial description AND acceptance criteria AND structure), banded; `reliability "minimal"`. Failing test; implement; verify loop.
 
 ### Task 3.3 — AI-adoption metric: onboarding ease
 
-**Files:** `metrics/adp_o1_onboarding_ease.ts` (new) under the AI-adoption/`ai-sdlc-adoption` dimension; `standards.toml` category+band; test.
-**Research spike:**
-
-- [ ] Cite an authority linking fast onboarding to delivery health — DX Core 4 (onboarding time / "time to 10th PR"), or GitHub/Microsoft research on time-to-first-commit. Verify URL.
-      **Implement:**
-- [ ] Define a deterministic proxy from git + repo signals (e.g. presence of README run steps + CLAUDE.md + `.env.example` + a one-command bootstrap + low "time from first commit to first merge for new authors"). Decide git-only vs connector. Band; reliability per data available.
-- [ ] Failing test; implement; metadata; verify loop.
+**Files:** `metrics/adp_g15_onboarding_ease.ts` (new, `ai-sdlc-adoption` dimension); `cli.ts`; `standards.toml` (`[category.onboarding_ease]` + band, `weight = 3`, `applies_when = "always"`); test.
+**Why:** how fast a new contributor becomes productive is a core AI-SDLC outcome (good docs + bootstrap + agent context shorten it).
+**Spike:** cite DX Core 4 onboarding time / "time to 10th PR", or GitHub/Microsoft time-to-first-commit research. Verify a URL.
+**Implement:** git-derived proxy (e.g. README run steps + CLAUDE.md + `.env.example` + one-command bootstrap presence, plus median first-commit→first-merge for new authors in window), banded; reliability per data available. Failing test; implement; verify loop.
 
 ---
 
-## Phase 4 — Headline matrix redesign (single-repo first)
+## Phase 4 — Headline matrix redesign
 
-Spec's headline (top of every report, single-repo and org-avg):
-
-1. Points + Coverage (as now)
-2. Merges per active contributor (Task 1.2)
-3. LOC per active contributor (Task 1.2)
-4. Deployment Frequency (Task 2.1)
-5. Rework Rate — DORA 2025 (Task 2.4)
-6. Lead time — whole window (Task 2.1)
-7. Change-failure rate (Task 2.2)
-8. Cycle time — Jira In-Progress→Done — only with a real ticketing connector (gate on tracker)
-9. MTTR — only with a real incident connector (gate on incident source)
+Headline rows (every report; org = average — Phase 5): **1** Points + Coverage · **2** Merges/active contributor · **3** LOC/active contributor · **4** Deployment frequency · **5** Rework Rate (DORA 2025) · **6** Lead time (whole window) · **7** Change-failure rate · **8** Cycle time (Jira In-Progress→Done — only with a tracker connector) · **9** MTTR (only with an incident connector).
 
 ### Task 4.1 — Headline schema + renderer
 
-**Files:** Modify `render.ts` (`Headline`/`DeliveryMetric`/`ScaleMetric` types + `execBand`); test `render.test.ts`.
-**Approach:** Extend `Headline` so `delivery[]` carries the new rows with `band` + `reliability` + `check_id`, and a `gated?: 'tracker'|'incident'` flag so the renderer can show "— (needs ticketing connector)" instead of a number when absent. Keep `scale`/`reach`. The renderer formats; it must not compute.
-
-- [ ] Failing render test: given a headline JSON with all 9 rows (some gated/absent), HTML shows each labeled value or a clear "needs X connector" note, DORA bands colored.
-- [ ] Implement in `execBand`. Standard verify loop (render tests only; no dist behavior change beyond render — still rebuild dist).
+**Files:** `render.ts` (`Headline`/`DeliveryMetric` types + `execBand()` `:1102-1184`, `BAND_COLOR` `:966`); `render.test.ts`.
+**Change:** extend `DeliveryMetric` with an optional `gated?: 'tracker' | 'incident'` so the renderer prints "— (needs ticketing connector)" / "— (needs incident connector)" instead of a number when the gated source is absent. Keep DORA band coloring. Renderer formats only.
+- [ ] Failing render test: a headline JSON with all 9 rows (some gated/absent) renders each labeled value or a clear "needs X connector" note, DORA bands colored.
+- [ ] Implement in `execBand`; standard verify loop.
 
 ### Task 4.2 — SKILL.md headline authoring
 
-**Files:** Modify `SKILL.md` Step 6.4 (headline authoring) + `output-format.md` (Headline schema).
-**Approach:** Update the orchestrator instructions to transcribe the 9 rows verbatim from the new check_ids (active-contributor ratios, deploy-freq, rework-rate, lead-time, change-fail, cycle-time, MTTR), reading bands from each check's `hint`; gate cycle-time/MTTR on connector availability; never invent numbers.
-
-- [ ] Update SKILL.md + output-format.md. No code test; validated by a headless run (Phase 8) and by `render.test.ts` fixture coverage.
+**Files:** `SKILL.md` Step 6.4 (`:126-132`); `output-format.md` (Headline schema).
+**Change:** instruct the orchestrator to transcribe the 9 rows verbatim from the check_ids (active-contributor ratios from the git artifact, deploy-freq, rework-rate, lead-time, change-fail, cycle-time, MTTR), reading bands from each check's `hint`; gate cycle-time/MTTR on connector availability; never invent numbers. No code test (prompt change); covered by 4.1 fixture + a maintainer headless run.
 
 ---
 
 ## Phase 5 — Org (multi-repo) report overhaul
 
-Today org `audit.json` has only `portfolio_metrics` (3) + a minimal `per_repo[]` (repo, awarded_weight, sources_reachable, has_ai_tooling); per-repo JSONs are stripped (no dimensions/headline/sources). Spec wants single-repo-parity per repo, an org-avg headline matrix, an aggregated Connections & Sources with counts, org-level "What to improve", and clickable per-repo drill-down.
+Today every repo's `audit-core` writes to the **shared** dated dir and is overwritten (`SKILL.md:68`); only a 5-field summary survives in `per-repo/<repo>.json` (`org_rollup.ts:35-46`). So there is no per-repo detail to render. Fix the collision, then build the org views from the preserved per-repo audits.
 
-### Task 5.1 — Preserve full per-repo audits in the org artifact
+### Task 5.1 — Preserve each repo's full audit + render a per-repo report file
 
-**Files:** Modify `SKILL.md` Step 6 org branch (write the full per-repo `audit.json` into `per-repo/<repo>.json`, not the stripped summary), and the org-JSON assembly to include `repo_audits: AuditJson[]`. Modify `metrics/org_rollup.ts` (`PerRepoInput`/`PerRepoSummary`) + `cli.ts rollup` to carry the richer rows. Tests: `tests/…org_rollup`.
-**Approach:** Each per-repo file becomes the repo's full single-repo `audit.json` (already produced during the per-repo run — stop discarding it). The org `org-portfolio.json` gains `repo_audits` (full) for drill-down, while keeping `per_repo[]` summary rows (now enriched with per-repo headline values: pts, coverage, active-contributors, merges/active, loc/active, deploy-freq, lead-time, change-fail, cycle-time?, MTTR?).
+**Files:** `SKILL.md` Step 6 org branch (`:48,144-176`).
+**Why:** this is the root enabler — full per-repo `audit.json` already exists momentarily; just stop overwriting it, and reuse the existing single-repo renderer per repo.
+**Change (orchestration only, no engine change):** run each repo's `audit-core` into its **own** subdir `context/audits/YYYY-MM-DD/per-repo/<repo>/` (pass that as `audit-core`'s `<outDir>`, `cli.ts:501-518`). After patch/aggregate, render that repo's report into the same subdir: `cli.js render .../per-repo/<repo>/audit.json --format html > .../per-repo/<repo>/report.html` (and `.md`). Keep the 5-field summary too (or derive it from the repo's `audit.json`).
+- [ ] Update SKILL.md org branch accordingly; verify by a maintainer headless org run that each `per-repo/<repo>/` has a full `audit.json` + `report.html`.
 
-- [ ] Failing test: `rollup` over rich inputs yields `per_repo[]` rows carrying the new columns; org JSON validates against renderer schema.
-- [ ] Implement; update `output-format.md` org schema. Standard verify loop.
+### Task 5.2 — Rollup reads full per-repo audits; org headline = average matrix
 
-### Task 5.2 — Org headline = avg of the single-repo matrix
+**Files:** `metrics/org_rollup.ts` (extend `PerRepoInput`/`OrgRollupResult` `:35-70`), `cli.ts rollup` (`:358-417`) to read each repo's full `audit.json` (not just the summary); tests.
+**Why:** the org top matrix must mirror the single-repo headline, averaged, and the per-repo table needs each repo's delivery numbers.
+**Change:** `rollup` ingests each `per-repo/<repo>/audit.json`; for each repo extract `audit_total`, `coverage`, and the 9 headline values; emit (a) an org `headline` whose `delivery[]` is the per-metric **mean** across repos (average the raw value, then re-band via the same TS band fns — extract them to a shared helper if needed; skip repos missing a metric and note coverage), and (b) an enriched `per_repo[]` carrying every column for Task 5.3. Keep the 3 portfolio cards.
+- [ ] Failing tests: org headline rows = mean of per-repo values, correctly re-banded; `per_repo[]` rows carry pts/coverage/merges-per/loc-per/deploy/lead/change-fail/cycle/mttr.
+- [ ] Implement; update `output-format.md` org schema; standard verify loop.
 
-**Files:** Modify `metrics/org_rollup.ts` (compute org-average `headline`), `render.ts` (`execBand` already handles `isOrg`; feed it the averaged headline), `SKILL.md` org branch (author org headline). Tests.
-**Approach:** Average each delivery metric across repos (mind bands: average the raw value then re-band; skip repos where a metric is absent and note coverage). Keep the 3 portfolio cards too if desired, but the **top matrix mirrors single-repo, averaged**.
+### Task 5.3 — Per-repo table with metric columns + links to per-repo reports
 
-- [ ] Failing test: org headline rows = mean of per-repo values, correctly banded.
-- [ ] Implement; render; verify loop.
-
-### Task 5.3 — Per-repo table with metric columns + clickable drill-down
-
-**Files:** Modify `render.ts` (`reposSection` → rich table; add org per-repo routing `#repo/<name>` + per-repo sections reusing `dimensionSummary`/`dimensionPage` minus the org-only bits; per Q4). Tests `render.test.ts`.
-**Approach (per Q4 default = embed):** Each `per_repo` row shows: Repo, Points, Coverage, Merges/active, LOC/active, Deploy-freq, Lead-time, Change-fail, MTTR (if incident), Cycle-time (if ticketing). Clicking a row routes to `#repo/<name>`, a section rendering that repo's full report **without** the org "Dimensions" cross-repo summary (which is meaningless across heterogeneous repos) — i.e. the repo's headline matrix + its dimension summary + its dimension drill-downs. Reuse existing `dimensionPage`/`dimensionSummary` against `repo_audits[i]`; extend the inline `route()` JS to handle `repo/` prefix.
-
-- [ ] Failing render tests: org HTML contains one row per repo with all columns; a `#repo/<name>` section exists and renders that repo's dimensions; cross-repo "Dimensions" table is absent from per-repo sections.
-- [ ] Implement. Standard verify loop.
+**Files:** `render.ts` `reposSection()` (`:1482-1508`); `render.test.ts`.
+**Why:** the maintainer wants the org "Repositories" section to be the single-repo headline columns per repo, each row opening that repo's report.
+**Change:** replace the 5-column table with: **Repo | Points | Coverage | Merges/active | LOC/active | Deploy freq | Lead time | Change-fail | Cycle time¹ | MTTR²** (¹ only if tracker, ² only if incident — blank/"—" otherwise). Make the repo cell a link `<a href="per-repo/<repo>/report.html">` (relative path; the file sits alongside the org `report.html` per Task 5.1). No `#repo/` in-page routing — separate files, easier to navigate, avoids one giant HTML (Q4).
+- [ ] Failing render tests: one row per repo with all columns; repo cell links to `per-repo/<repo>/report.html`; gated columns blank without the connector.
+- [ ] Implement; standard verify loop.
 
 ### Task 5.4 — Aggregated Connections & Sources with per-item repo counts
 
-**Files:** Modify `render.ts` (`connectionsSection` for org mode), org-JSON assembly (aggregate sources + tech-stack + linked-repos across repos with counts). Tests.
-**Approach:** Org Connections shows each connected source/language/framework/MCP server with a repo count: `git history (8)`, `Jira (5)`, `Python (3)`, `Terraform (1)`, MCP servers `awos-recruitment (2)`, etc. Aggregate from each repo's `sources`, `tech_stack`, `linked_repos`. Reuse the friendly-label + grouping helpers added earlier (`sourceFullLabel`, `groupLinkedByName`).
-
-- [ ] Failing render test: org Connections lists items with `(N)` repo counts; languages/frameworks/MCP aggregated.
-- [ ] Implement; org-JSON must carry the aggregated structure (author in SKILL.md org branch or compute in `org_rollup.ts` — prefer engine compute in `org_rollup.ts`). Standard verify loop.
+**Files:** `metrics/org_rollup.ts` (aggregate sources/tech-stack/linked-repos across repos with counts), `render.ts` `connectionsSection()` (`:1511-1588`) org branch; tests.
+**Why:** at org altitude the useful view is "how many repos have each thing": `git history (8)`, `Jira (5)`, `Python (3)`, `Terraform (1)`, MCP `awos-recruitment (2)`.
+**Change:** the rollup (engine) computes, from each repo's `audit.json` (`sources`, `tech_stack`, `linked_repos`), aggregated maps with repo counts; the renderer lists each item with `(N)`. Reuse `sourceFullLabel` and `groupLinkedByName` (already in `render.ts`).
+- [ ] Failing render test: org Connections lists items with `(N)` counts across sources/languages/frameworks/MCP servers.
+- [ ] Implement (compute in `org_rollup.ts`, render in `connectionsSection`); standard verify loop.
 
 ### Task 5.5 — Org-level "What to improve"
 
-**Files:** Modify `SKILL.md` org branch (author org `insights[]`/`recommendations[]` at portfolio altitude) + optionally a deterministic `org_rollup.ts` helper that surfaces cross-repo patterns to seed it. Tests for any engine helper.
-**Approach:** Highlight portfolio observations: "N/8 repos lack AI instruction files", "M repos have FAIL security checks", "K repos have no end-to-end delivery wiring", etc. If deterministic seeding is added (recommended for headless robustness), compute counts of repos with each FAIL/absent category in `org_rollup.ts` and expose them; the orchestrator turns them into plain-language cards.
-
-- [ ] Failing test for the deterministic seed (counts of repos failing/absent per category).
-- [ ] Implement seed + SKILL.md authoring guidance. Verify loop.
+**Files:** `metrics/org_rollup.ts` (deterministic cross-repo seed); `SKILL.md` org branch (author org `insights[]`/`recommendations[]` from the seed); test.
+**Why:** the org needs portfolio observations, not a per-repo dump: "N/8 repos lack an AI instruction file", "M repos have FAIL security checks", "K repos have no end-to-end delivery wiring".
+**Change:** the rollup computes, per category/dimension, the count of repos where it FAILs or is absent (it already has each repo's full `audit.json` after 5.2), and exposes the top cross-repo gaps; the orchestrator turns them into plain-language cards. Deterministic seeding keeps this robust under headless runs.
+- [ ] Failing test for the seed (counts of repos failing/absent per category are correct).
+- [ ] Implement seed + SKILL.md authoring guidance; standard verify loop (engine part).
 
 ---
 
 ## Phase 6 — Jira deep fetch (beyond 100)
 
-Spec: only 100 Jira tickets are used — that's a per-request MCP cap; dig deeper.
-
 ### Task 6.1 — Paginated tracker fetch guidance
 
-**Files:** Modify `SKILL.md` Step 6.2 + `references/connector-shapes.md` (Jira worked example).
-**Approach:** Instruct the orchestrator to **paginate**: loop `searchJiraIssuesUsingJql` with `startAt += maxResults` (or `nextPageToken`) until `startAt >= total` or a sane cap (e.g. 2000 tickets / the window), accumulating into one `tickets[]` before writing `collected/tracker.json`. Document the cap + the `period.lookback_days` it implies. Note Linear/GitHub-Issues pagination equivalents. This is prompt guidance (no engine change) — the collector already accepts an arbitrary-length array.
-
-- [ ] Update SKILL.md + connector-shapes worked example with the pagination loop and the cap.
-- [ ] Validate via a headless run against a repo with >100 tickets (Phase 8), confirming `tracker.json` ticket count > 100.
+**Files:** `references/connector-shapes.md` (worked example `:77-122`, recipe `:220-238`); `SKILL.md` Step 6.2 (`:115`).
+**Why:** the worked example does a single `maxResults: 200` call; the MCP server caps a request at ~100, so long-lived projects are silently under-sampled. `collectors/tracker.ts:96` consumes the full `tickets[]` with **no cap**, so this is purely orchestrator-side.
+**Change:** document a pagination loop — page on `startAt` (classic JQL) or `nextPageToken` (cloud `searchJiraIssuesUsingJql`), accumulate into one `tickets[]` until a short page / `isLast` / no token, up to a sane cap (e.g. 2000 tickets or the window), then write `collected/tracker.json` once. Note `maxResults` is server-capped (don't rely on 200). Add the Linear/GitHub-Issues pagination equivalents in one line. Prompt-only; no engine change.
+- [ ] Update `connector-shapes.md` + `SKILL.md`; a maintainer headless run against a >100-ticket project confirms `tracker.json` ticket count > 100.
 
 ---
 
-## Phase 7 — `collectors/git.ts` error handling (follow-up from prior review)
-
-The `run()` `catch { return '' }` swallows **all** git errors silently; only the 1 MiB buffer case was fixed. Some calls fail legitimately (e.g. `symbolic-ref --short HEAD` on detached HEAD), so a blanket log is wrong — needs per-call judgment.
+## Phase 7 — `collectors/git.ts` error handling (per-call judgment)
 
 ### Task 7.1 — Distinguish expected-empty from unexpected git failures
 
-**Files:** Modify `collectors/git.ts` (`run()` + call sites); test `tests/git-collector.test.ts`.
-**Approach:** Give `run()` an options arg, e.g. `run(args, cwd, { allowFailure?: boolean })`. When `allowFailure` (the calls that legitimately can fail — `symbolic-ref`, side-branch `^1..^2`), keep silent `''`. Otherwise, on a non-ENOENT/non-zero error, emit a one-line `console.error('[git collector] <subcommand> failed: <code>')` breadcrumb to **stderr** (collectors write JSON to files, so stderr is safe) and still return `''` so the collector degrades. Do **not** log on "command produced no output" (that's valid empty).
-
-- [ ] Failing test: a `run()` of a bogus git subcommand without `allowFailure` writes a stderr breadcrumb (capture via spawning), while an `allowFailure` call stays silent. (Or unit-test a small extracted helper that decides "should log".)
-- [ ] Implement; audit each call site and tag the legitimately-empty ones `allowFailure: true`.
-- [ ] Standard verify loop. **Acceptance:** unexpected git failures leave a breadcrumb; expected-empty calls stay quiet.
-
----
-
-## Phase 8 — End-to-end validation
-
-### Task 8.1 — Headless org + single-repo runs
-
-**Files:** none (uses `tools/audit-test-harness/run_audit_test.py`).
-
-- [ ] Single-repo headless run against `onex-discovery-api`; confirm the new 9-row headline, active-contributor count, turnover %, and that the engine-compliance guard passes.
-- [ ] Org headless run against the sample org set (`tmp/audit-runs/_sample_org_ORG` targets); confirm per-repo drill-down, org-avg headline, aggregated Connections with counts, org "What to improve", and Jira ticket count > 100 where applicable.
-- [ ] Eyeball `report.html` for both; file any follow-ups.
+**Files:** `collectors/git.ts` (`run()` + call sites at `:53,58,152,279,299` and others); `tests/git-collector.test.ts`.
+**Why:** `run()`'s `catch { return '' }` swallows **all** git errors; only the buffer case was fixed. But some calls legitimately fail (e.g. `symbolic-ref --short HEAD` on detached HEAD, side-branch `^1..^2`), so a blanket log is wrong — needs per-call intent.
+**Change:** add an options arg `run(args, cwd, { allowFailure = false } = {})`. For the legitimately-failing calls, pass `allowFailure: true` → keep silent `''`. Otherwise, on a non-zero/unexpected error (not "empty output", which is valid), emit a one-line `console.error('[git collector] <subcommand> failed: <code>')` to **stderr** (collectors write JSON to files, so stderr is safe) and still return `''` so the collector degrades. Audit each call site and tag the expected-empty ones.
+- [ ] Failing test: a non-`allowFailure` bogus subcommand writes a stderr breadcrumb; an `allowFailure` call stays silent (test a small extracted "shouldLog(error, allowFailure)" helper, or capture stderr from a child).
+- [ ] Implement; standard verify loop.
 
 ---
 
-## Self-Review (run before handing off / after each phase)
+## Cross-task type-name lock (keep consistent across tasks)
 
-- **Spec coverage:** org details parity (5.1–5.4) ✓ · per-repo clickable drill-down (5.3) ✓ · per-repo columns incl. merges/LOC-per-active, deploy, lead, change-fail, MTTR, cycle (5.3) ✓ · org-avg top matrix (5.2) ✓ · aggregated Connections w/ counts (5.4) ✓ · org "What to improve" (5.5) ✓ · Jira >100 (6.1) ✓ · lookback→90 (0.1) ✓ · active contributor + 0.1 param (1.1) ✓ · drop `monthly_bucket_days`/measure over window (0.x, Q3) ✓ · headline matrix redesign (Phase 4) ✓ · churn→windowed turnover (2.3) ✓ · DORA Rework Rate (2.4) ✓ · Jira subtask-split (3.1) ✓ · Jira description quality (3.2) ✓ · onboarding-ease AI metric (3.3) ✓ · git silent-catch per-call judgment (7.1) ✓.
-- **Placeholder scan:** the research spikes (2.4, 3.1, 3.2, 3.3) intentionally carry "find + verify a source" as their first deliverable — these are bounded research tasks with a defined output contract (cited URL + band thresholds + category schema), not TODO placeholders. Every other task has concrete files, signatures, and tests.
-- **Type consistency:** lock these names across tasks — `window_stats` (git artifact), `per_author`/`AuthorRow{author,commits,merges,lines}`, `active_contributor_threshold` ([meta]), `rework_horizon_days` ([meta]), `repo_audits` (org JSON), `#repo/<name>` (org routing). Reconcile if any task renames.
+`window_stats`, `AuthorRow { author; commits; merges; lines }`, `per_author`, `merges_per_active`, `loc_per_active` (git artifact); `[meta].active_contributor_threshold` (0.1), `[meta].rework_horizon_days` (21); metric ids `adp_g14_rework_rate`, `adp_i4_subtask_split`, `adp_i5_description_quality`, `adp_g15_onboarding_ease`; org per-repo report path `per-repo/<repo>/report.html`; headline `DeliveryMetric.gated`.
 
-## Execution Handoff
+## Self-review — spec coverage
 
-Recommended order: **Phase 0 → 1 → 2 → 3 → 4 → 5 → 6/7 (parallel) → 8.** Phases 0–2 are the deterministic engine spine everything else reads; Phase 5 (org) depends on Phase 4 (headline) which depends on Phases 1–2. Phases 6 and 7 are independent and can run anytime.
+Org parity (5.1–5.4) ✓ · per-repo report files in folders + links (5.1,5.3, Q4) ✓ · per-repo columns incl. merges/LOC-per-active, deploy, lead, change-fail, cycle, MTTR (5.3) ✓ · org-avg top matrix (5.2) ✓ · aggregated Connections w/ counts (5.4) ✓ · org "What to improve" (5.5) ✓ · Jira >100 (6.1) ✓ · 90-day window (0.1) ✓ · drop buckets + value_series (0.1,0.3, Q1/Q2/Q3) ✓ · active contributor + 0.1 param (1.1) ✓ · merges/LOC per active (1.2) ✓ · headline 9-row matrix (Phase 4) ✓ · deploy/lead/change-fail whole-window + weight 10 (2.1,2.2) ✓ · churn→turnover (2.3) ✓ · DORA Rework Rate weight 10 (2.4) ✓ · ticket subtask-split (3.1) ✓ · ticket description quality (3.2) ✓ · onboarding-ease (3.3) ✓ · git silent-catch per-call judgment (7.1) ✓ · trimmed Global Constraints + removed end-to-end phase + Prettier/source-link de-emphasized ✓.
 
-This spec spans several subsystems; if executing with subagents, treat each Phase as a reviewable unit (a fresh subagent per task, two-stage review between tasks).
+**Research spikes (2.4, 3.1, 3.2, 3.3)** intentionally lead with "find + verify a source" — bounded research tasks with a defined output contract (verified URL + band thresholds + category schema), not TODO placeholders.
+
+## Execution order
+
+**0 → 1 → 2 → 3 → 4 → 5**, with **6** and **7** independent (anytime). Phase 0 is the spine (window + per-author data) every metric reads; Phase 5 (org) depends on Phase 4 (headline) which depends on Phases 1–2. Treat each Phase as a reviewable unit if running with subagents.

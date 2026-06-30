@@ -14,11 +14,10 @@ Prettier ignores `.toml` files, so format drift is caught by two test layers: a 
 
 Global constants that govern the cadence and history window for every metric.
 
-| Key                   | Value                     | Meaning                                                             |
-| --------------------- | ------------------------- | ------------------------------------------------------------------- |
-| `monthly_bucket_days` | `30`                      | Duration of a single measurement bucket in days                     |
-| `max_lookback_days`   | `730`                     | Maximum history window (2 years); bounded by minimal source history |
-| `standards_version`   | string (e.g. `"2026.06"`) | Semantic version of this file; used to detect stale cached copies   |
+| Key                 | Value                     | Meaning                                                                                                                  |
+| ------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `max_lookback_days` | `90`                      | Single measurement window (90 days); git collector emits one `window_stats` aggregate anchored to the newest commit date |
+| `standards_version` | string (e.g. `"2026.06"`) | Semantic version of this file; used to detect stale cached copies                                                        |
 
 These values are locked data — do not change them without a version bump and a migration plan, as metric scripts and the audit orchestrator both read them directly.
 

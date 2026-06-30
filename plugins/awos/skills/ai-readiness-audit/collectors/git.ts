@@ -20,7 +20,7 @@ function run(args: string[], cwd: string): string {
   try {
     // maxBuffer defaults to 1 MB; a full `git log` on a large/long-lived repo
     // easily exceeds that, which would throw ENOBUFS and silently return ''
-    // (zeroing out monthly_buckets and the per-bucket metrics). Raise the cap.
+    // (zeroing out window_stats and numstat_totals). Raise the cap.
     return execFileSync('git', args, {
       cwd,
       encoding: 'utf8',
@@ -172,98 +172,121 @@ function getMergeRecords(cwd: string): MergeRecord[] {
 }
 
 // ---------------------------------------------------------------------------
-// Monthly buckets
+// Window stats (single 90-day aggregate, replaces monthly_buckets)
 // ---------------------------------------------------------------------------
 
-interface Bucket {
-  bucket_start: string;
-  authors: number;
+export interface AuthorRow {
+  author: string;
   commits: number;
   merges: number;
+  lines: number;
 }
 
-function buildMonthlyBuckets(cwd: string, period: Period): Bucket[] {
-  // First find the latest commit date to use as the window anchor.
-  // This makes bucket boundaries a pure function of git history (no wall-clock).
+export interface WindowStats {
+  window_days: number;
+  commits: number;
+  merges: number;
+  authors_total: number;
+  per_author: AuthorRow[];
+}
+
+function buildWindowStats(cwd: string, period: Period): WindowStats {
+  const windowDays = period.lookback_days;
+  const empty: WindowStats = {
+    window_days: windowDays,
+    commits: 0,
+    merges: 0,
+    authors_total: 0,
+    per_author: [],
+  };
+
+  // Anchor to the newest commit date — no wall-clock dependency.
   const latestDateStr = run(
     ['log', '--all', '--format=%cI', '--max-count=1'],
     cwd
   ).trim();
-  if (!latestDateStr) return [];
+  if (!latestDateStr) return empty;
   const latestCommitDate = parseDate(latestDateStr);
-  if (isNaN(latestCommitDate.getTime())) return [];
+  if (isNaN(latestCommitDate.getTime())) return empty;
 
-  // Compute since from the latest commit date, not Date.now().
-  const lookback = period.lookback_days;
   const since = new Date(
-    latestCommitDate.getTime() - lookback * 86_400_000
+    latestCommitDate.getTime() - windowDays * 86_400_000
   ).toISOString();
 
-  // Fetch all commits within lookback window: sha, author, date, is-merge.
-  // We use --format="%H %aN %cI %P" — P lists parent SHAs (2+ = merge).
-  const logOut = run(
-    ['log', '--all', `--since=${since}`, '--format=%H\t%aN\t%cI\t%P'],
+  // 1. Non-merge commits — derive per-author commit counts and line churn.
+  //    Format: one "%H\t%aN" header line per commit, then numstat lines.
+  const numstatOut = run(
+    [
+      'log',
+      '--all',
+      `--since=${since}`,
+      '--no-merges',
+      '--numstat',
+      '--format=%H\t%aN',
+    ],
     cwd
-  )
-    .trim()
-    .split('\n')
-    .filter(Boolean);
+  );
 
-  if (logOut.length === 0) return [];
-
-  interface CommitRow {
-    sha: string;
-    author: string;
-    date: Date;
-    isMerge: boolean;
+  interface AuthorEntry {
+    commits: number;
+    lines: number;
   }
+  const authorMap = new Map<string, AuthorEntry>();
+  let currentAuthor = '';
 
-  const rows: CommitRow[] = [];
-  for (const line of logOut) {
-    const parts = line.split('\t');
-    const [sha, author, dateStr, parents = ''] = parts;
-    if (!sha || !author || !dateStr) continue;
-    const date = parseDate(dateStr);
-    if (isNaN(date.getTime())) continue;
-    rows.push({
-      sha,
-      author,
-      date,
-      isMerge: parents.trim().split(' ').length > 1,
-    });
-  }
-
-  if (rows.length === 0) return [];
-
-  // Determine the date range for bucketing.
-  const newest = new Date(Math.max(...rows.map((r) => r.date.getTime())));
-  const oldest = new Date(Math.min(...rows.map((r) => r.date.getTime())));
-
-  // Build bucket boundaries from newest backwards.
-  const bucketMs = period.bucket_days * 86_400_000;
-  const buckets: Bucket[] = [];
-
-  let bucketEnd = newest;
-  // Work backwards until we cover oldest.
-  while (bucketEnd >= oldest) {
-    const bucketStart = new Date(bucketEnd.getTime() - bucketMs);
-    const inBucket = rows.filter(
-      (r) => r.date > bucketStart && r.date <= bucketEnd
-    );
-    if (inBucket.length > 0) {
-      const authors = new Set(inBucket.map((r) => r.author)).size;
-      buckets.push({
-        bucket_start: bucketStart.toISOString(),
-        authors,
-        commits: inBucket.length,
-        merges: inBucket.filter((r) => r.isMerge).length,
-      });
+  for (const line of numstatOut.split('\n')) {
+    // Commit header: full 40-char SHA, tab, author name.
+    const commitMatch = line.match(/^[0-9a-f]{40}\t(.+)$/);
+    if (commitMatch) {
+      currentAuthor = commitMatch[1].trim();
+      const entry = authorMap.get(currentAuthor) ?? { commits: 0, lines: 0 };
+      entry.commits++;
+      authorMap.set(currentAuthor, entry);
+      continue;
     }
-    bucketEnd = bucketStart;
+    // Numstat line: <added>\t<deleted>\t<path>  (skip binary "-\t-\t" lines).
+    const numstatMatch = line.match(/^(\d+)\t(\d+)\t/);
+    if (numstatMatch && currentAuthor) {
+      const entry = authorMap.get(currentAuthor)!;
+      entry.lines +=
+        parseInt(numstatMatch[1], 10) + parseInt(numstatMatch[2], 10);
+    }
   }
 
-  // Return in ascending chronological order.
-  return buckets.reverse();
+  // 2. First-parent merges — derive per-author merge counts and total.
+  const mergeOut = run(
+    ['log', '--first-parent', '--merges', `--since=${since}`, '--format=%aN'],
+    cwd
+  );
+
+  const mergeAuthors = mergeOut.trim().split('\n').filter(Boolean);
+  const mergeMap = new Map<string, number>();
+  for (const author of mergeAuthors) {
+    mergeMap.set(author, (mergeMap.get(author) ?? 0) + 1);
+  }
+  const totalMerges = mergeAuthors.length;
+
+  // 3. Combine into per_author rows.
+  const allAuthors = new Set([...authorMap.keys(), ...mergeMap.keys()]);
+  const perAuthor: AuthorRow[] = Array.from(allAuthors).map((author) => ({
+    author,
+    commits: authorMap.get(author)?.commits ?? 0,
+    merges: mergeMap.get(author) ?? 0,
+    lines: authorMap.get(author)?.lines ?? 0,
+  }));
+
+  const totalCommits = Array.from(authorMap.values()).reduce(
+    (s, e) => s + e.commits,
+    0
+  );
+
+  return {
+    window_days: windowDays,
+    commits: totalCommits,
+    merges: totalMerges,
+    authors_total: allAuthors.size,
+    per_author: perAuthor,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -321,7 +344,7 @@ export interface GitRaw {
   revert_merges: number;
   tooling_paths: string[];
   merge_records: MergeRecord[];
-  monthly_buckets: Bucket[];
+  window_stats: WindowStats;
   numstat_totals: NumstatTotals;
 }
 
@@ -332,7 +355,7 @@ export function collect(repoPath: string, period: Period) {
   const tooling_paths = getToolingPaths(repoPath);
   const { total_merges, revert_merges } = getMergeStats(repoPath);
   const merge_records = getMergeRecords(repoPath);
-  const monthly_buckets = buildMonthlyBuckets(repoPath, period);
+  const window_stats = buildWindowStats(repoPath, period);
   const numstat_totals = getNumstatTotals(repoPath);
   const history_available_days = getHistoryAvailableDays(repoPath);
 
@@ -344,7 +367,7 @@ export function collect(repoPath: string, period: Period) {
     revert_merges,
     tooling_paths,
     merge_records,
-    monthly_buckets,
+    window_stats,
     numstat_totals,
   };
 

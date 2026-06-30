@@ -147,10 +147,9 @@ When a source is unavailable, `available` is `false` and `reason_if_absent` carr
 
 ## Period & history
 
-Cadence and lookback cap are governed by `standards.toml [meta]`:
+The measurement window is governed by `standards.toml [meta]`:
 
-- **`monthly_bucket_days = 30`** — metrics are bucketed in 30-day windows.
-- **`max_lookback_days = 730`** — the 2-year lookback cap; no metric looks further back than this regardless of available history.
+- **`max_lookback_days = 90`** — the single 90-day window; the git collector emits one `window_stats` aggregate (not per-30-day buckets) anchored to the newest commit date.
 
 **Minimal-source-history rule.** Each metric's available history is bounded by the **minimal available history among its feeding sources** — the shortest `history_available_days` value reported in the collector artifacts for that metric's inputs. A metric cannot claim more historical depth than its least-historical source allows.
 

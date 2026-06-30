@@ -6,6 +6,94 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { collect } from '../collectors/git.ts';
 
+// ---------------------------------------------------------------------------
+// window_stats test helpers
+// ---------------------------------------------------------------------------
+
+function gitAs(
+  cwd: string,
+  args: string[],
+  date: string,
+  name: string,
+  email: string
+): void {
+  execFileSync('git', args, {
+    cwd,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: date,
+      GIT_COMMITTER_DATE: date,
+      GIT_AUTHOR_NAME: name,
+      GIT_AUTHOR_EMAIL: email,
+      GIT_COMMITTER_NAME: name,
+      GIT_COMMITTER_EMAIL: email,
+    },
+  });
+}
+
+/**
+ * Build a hermetic multi-author git repo for window_stats tests.
+ *
+ * History (anchor = newest commit = 2025-03-25):
+ *   2024-12-01  Alice  — "chore: old"  adds old.txt (10 lines)  OUTSIDE 90-day window
+ *   2025-01-10  Alice  — "feat: a"     adds a.txt  (3 lines)    within window
+ *   2025-02-15  Bob    — "feat: b"     adds b.txt  (5 lines)    within window (on feature-bob)
+ *   2025-03-25  Alice  — "Merge feature-bob"  first-parent merge into main  (ANCHOR)
+ *
+ * Since = 2025-03-25 - 90d = 2024-12-25.  The 2024-12-01 old commit is EXCLUDED.
+ *
+ * Expected window_stats:
+ *   commits:       2 (Alice 1 + Bob 1, non-merge)
+ *   merges:        1 (Alice merged feature-bob)
+ *   authors_total: 2
+ *   per_author:
+ *     Alice: { commits:1, merges:1, lines:3 }
+ *     Bob:   { commits:1, merges:0, lines:5 }
+ */
+function windowRepo(): string {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-window-')), 'repo');
+  mkdirSync(r);
+
+  const alice = (args: string[], date: string) =>
+    gitAs(r, args, date, 'Alice', 'alice@example.com');
+  const bob = (args: string[], date: string) =>
+    gitAs(r, args, date, 'Bob', 'bob@example.com');
+
+  alice(['init', '-q', '-b', 'main'], '2024-12-01T00:00:00');
+
+  // OLD commit — outside the 90-day window from anchor 2025-03-25
+  writeFileSync(join(r, 'old.txt'), 'x\ny\nz\na\nb\nc\nd\ne\nf\ng\n'); // 10 lines
+  alice(['add', '-A'], '2024-12-01T00:00:00');
+  alice(['commit', '-qm', 'chore: old'], '2024-12-01T00:00:00');
+
+  // Alice's work commit — within window
+  writeFileSync(join(r, 'a.txt'), 'a\nb\nc\n'); // 3 lines
+  alice(['add', '-A'], '2025-01-10T00:00:00');
+  alice(['commit', '-qm', 'feat: a'], '2025-01-10T00:00:00');
+
+  // Bob's feature branch
+  alice(['checkout', '-qb', 'feature-bob'], '2025-02-01T00:00:00');
+  writeFileSync(join(r, 'b.txt'), '1\n2\n3\n4\n5\n'); // 5 lines
+  bob(['add', '-A'], '2025-02-15T00:00:00');
+  bob(['commit', '-qm', 'feat: b'], '2025-02-15T00:00:00');
+
+  // Alice merges feature-bob into main — newest commit (ANCHOR = 2025-03-25)
+  alice(['checkout', '-q', 'main'], '2025-03-24T00:00:00');
+  alice(
+    ['merge', '--no-ff', '-qm', 'Merge feature-bob', 'feature-bob'],
+    '2025-03-25T00:00:00'
+  );
+
+  return r;
+}
+
+const WINDOW_PERIOD = {
+  bucket_days: 30,
+  lookback_days: 90,
+  history_available_days: 0,
+};
+
 function git(cwd: string, args: string[], date = '2025-01-01T00:00:00') {
   execFileSync('git', args, {
     cwd,
@@ -116,5 +204,113 @@ test('git collector reads >1MiB of git output without truncation (maxBuffer regr
     art.raw.numstat_totals.added,
     FILES * LINES_PER_FILE,
     `churn must reflect every added line across all ${FILES} files; got ${art.raw.numstat_totals.added} (0 means the >1MiB numstat output was truncated by maxBuffer)`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// window_stats tests (task 0.2)
+// ---------------------------------------------------------------------------
+
+test('window_stats: merges, authors_total, and per_author rows are correct', () => {
+  const repoPath = windowRepo();
+  const art = collect(repoPath, WINDOW_PERIOD);
+
+  assert.ok(
+    art.raw.window_stats !== undefined,
+    'window_stats must exist on raw (monthly_buckets replaced)'
+  );
+
+  const ws = art.raw.window_stats;
+
+  assert.equal(
+    ws.window_days,
+    90,
+    'window_days must equal period.lookback_days (90)'
+  );
+  assert.equal(
+    ws.merges,
+    1,
+    'merges must count exactly the one first-parent merge in the 90-day window (Alice merged feature-bob on 2025-03-25)'
+  );
+  assert.equal(
+    ws.authors_total,
+    2,
+    'authors_total must be 2 (Alice and Bob both have activity in window)'
+  );
+  assert.equal(
+    ws.commits,
+    2,
+    'commits must count non-merge commits in window: Alice (2025-01-10) and Bob (2025-02-15)'
+  );
+
+  const byName = Object.fromEntries(
+    ws.per_author.map((row: { author: string }) => [row.author, row])
+  );
+
+  assert.ok(byName['Alice'] !== undefined, 'per_author must include Alice');
+  assert.equal(
+    byName['Alice'].commits,
+    1,
+    'Alice must have 1 non-merge commit in the window (feat: a on 2025-01-10)'
+  );
+  assert.equal(
+    byName['Alice'].merges,
+    1,
+    'Alice must have 1 merge (she ran git merge feature-bob on 2025-03-25)'
+  );
+  assert.equal(
+    byName['Alice'].lines,
+    3,
+    'Alice must have 3 lines (3 added in a.txt within window; no deletions)'
+  );
+
+  assert.ok(byName['Bob'] !== undefined, 'per_author must include Bob');
+  assert.equal(
+    byName['Bob'].commits,
+    1,
+    'Bob must have 1 non-merge commit in the window (feat: b on 2025-02-15)'
+  );
+  assert.equal(
+    byName['Bob'].merges,
+    0,
+    'Bob must have 0 merges (he did not run git merge in this repo)'
+  );
+  assert.equal(
+    byName['Bob'].lines,
+    5,
+    'Bob must have 5 lines (5 added in b.txt; no deletions)'
+  );
+});
+
+test('window_stats: old commit outside the 90-day window is excluded (window anchored to newest commit)', () => {
+  const repoPath = windowRepo();
+  const art = collect(repoPath, WINDOW_PERIOD);
+
+  const ws = art.raw.window_stats;
+
+  // The 2024-12-01 commit by Alice added old.txt (10 lines).
+  // Anchor = 2025-03-25; since = 2024-12-25.  2024-12-01 is outside → excluded.
+  // If included, Alice.lines would be 13 (3 + 10); correct value is 3.
+  const alice = ws.per_author.find(
+    (row: { author: string }) => row.author === 'Alice'
+  );
+  assert.ok(alice !== undefined, 'Alice must appear in per_author');
+  assert.equal(
+    alice.lines,
+    3,
+    `Alice.lines must be 3 (only the 2025-01-10 in-window commit counted); ` +
+      `got ${alice.lines} — value 13 would mean the 2024-12-01 old commit was NOT excluded`
+  );
+});
+
+test('window_stats: monthly_buckets is not emitted (field removed in task 0.2)', () => {
+  const art = collect(repo(), PERIOD);
+  assert.ok(
+    !('monthly_buckets' in art.raw),
+    'monthly_buckets must NOT appear in raw — it was replaced by window_stats in task 0.2'
+  );
+  assert.ok(
+    'window_stats' in art.raw,
+    'window_stats must be present in raw after task 0.2'
   );
 });

@@ -1,0 +1,328 @@
+/**
+ * Tests for adp_i4_subtask_split — ticket sub-task split ratio.
+ *
+ * TDD: written before the implementation exists.
+ * Each test names the contract it is asserting so failure messages are self-describing.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { compute } from './adp_i4_subtask_split.ts';
+import { loadStandards } from './_base.ts';
+
+// ---------------------------------------------------------------------------
+// Fixture helpers
+// ---------------------------------------------------------------------------
+
+type TicketFixture = Record<string, unknown>;
+
+function makeTrackerArtifact(
+  tickets: TicketFixture[],
+  available = true
+): string {
+  return JSON.stringify({
+    available,
+    raw: { tickets },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// SKIP cases
+// ---------------------------------------------------------------------------
+
+test('adp_i4_subtask_split: SKIP when tracker.json absent', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-nofile-'));
+  try {
+    const res = compute(dir, {}, {});
+    assert.equal(
+      res.status,
+      'SKIP',
+      'status must be SKIP when tracker.json does not exist'
+    );
+    assert.equal(res.score, 0, 'score must be 0 on SKIP');
+    assert.equal(res.confidence, 0, 'confidence must be 0 on SKIP');
+    assert.deepEqual(
+      res.categories_awarded,
+      [],
+      'no categories may be awarded on SKIP'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('adp_i4_subtask_split: SKIP when tracker.json available=false', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-unavail-'));
+  try {
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact([], false));
+    const res = compute(dir, {}, {});
+    assert.equal(
+      res.status,
+      'SKIP',
+      'status must be SKIP when tracker connector is unavailable'
+    );
+    assert.equal(res.score, 0, 'score must be 0 when connector is unavailable');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('adp_i4_subtask_split: SKIP when no ticket has subtask_count data', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-nodata-'));
+  try {
+    // Tickets present but none carry a numeric subtask_count > 0
+    const tickets: TicketFixture[] = [
+      { id: 'PROJ-1', type: 'story', status: 'Done' },
+      { id: 'PROJ-2', type: 'bug', status: 'Done' },
+    ];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.equal(
+      res.status,
+      'SKIP',
+      'status must be SKIP when no ticket carries a numeric subtask_count > 0'
+    );
+    assert.deepEqual(
+      res.categories_awarded,
+      [],
+      'no categories may be awarded when subtask data is absent'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('adp_i4_subtask_split: SKIP when raw.tickets is absent from artifact', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-notickets-'));
+  try {
+    writeFileSync(
+      join(dir, 'tracker.json'),
+      JSON.stringify({ available: true, raw: {} })
+    );
+    const res = compute(dir, {}, {});
+    assert.equal(
+      res.status,
+      'SKIP',
+      'status must be SKIP when raw.tickets is absent from the artifact'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Computation — good band (avg ≤ 3)
+// ---------------------------------------------------------------------------
+
+test('adp_i4_subtask_split: avg=2 subtasks/parent → band=good, score≈0.867', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-good-'));
+  try {
+    // Two parent tickets each with 2 subtasks → avg = 2.0
+    // ANCHORS: (0,1)→(3,0.8): at x=2 → 1 + (0.8-1)*(2/3) ≈ 0.8667
+    const tickets: TicketFixture[] = [
+      { id: 'PROJ-1', subtask_count: 2 },
+      { id: 'PROJ-2', subtask_count: 2 },
+      { id: 'PROJ-3' }, // leaf ticket — no subtask_count, excluded from avg
+    ];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.equal(res.status, 'OK', 'status must be OK with subtask data');
+    assert.equal(res.band, 'good', 'band must be "good" for avg subtasks ≤ 3');
+    const expected = 1 + (0.8 - 1) * (2 / 3);
+    assert.ok(
+      Math.abs((res.score ?? 0) - expected) < 1e-4,
+      `score must be ≈${expected.toFixed(4)} at avg=2.0 (linear ANCHOR interpolation), got ${res.score}`
+    );
+    assert.ok(
+      Math.abs((res.value as number) - 2) < 1e-9,
+      `value must equal avg subtasks per parent (2.0), got ${res.value}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Computation — watch band (3 < avg ≤ 6)
+// ---------------------------------------------------------------------------
+
+test('adp_i4_subtask_split: avg=4.5 subtasks/parent → band=watch, score=0.6', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-watch-'));
+  try {
+    // Parents: 4 and 5 subtasks → avg = 4.5
+    // ANCHORS: (3,0.8)→(6,0.4): at x=4.5 → 0.8 + (0.4-0.8)*(1.5/3) = 0.6
+    const tickets: TicketFixture[] = [
+      { id: 'PROJ-1', subtask_count: 4 },
+      { id: 'PROJ-2', subtask_count: 5 },
+    ];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.equal(res.status, 'OK', 'status must be OK with subtask data');
+    assert.equal(
+      res.band,
+      'watch',
+      'band must be "watch" for 3 < avg subtasks ≤ 6'
+    );
+    assert.ok(
+      Math.abs((res.score ?? 0) - 0.6) < 1e-6,
+      `score must be 0.6 at avg=4.5 (linear ANCHOR interpolation), got ${res.score}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Computation — concerning band (avg > 6)
+// ---------------------------------------------------------------------------
+
+test('adp_i4_subtask_split: avg=8 subtasks/parent → band=concerning, score=0.2', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-concern-'));
+  try {
+    // Both parents with 8 subtasks → avg = 8
+    // ANCHORS: (6,0.4)→(10,0): at x=8 → 0.4 + (0-0.4)*(2/4) = 0.2
+    const tickets: TicketFixture[] = [
+      { id: 'PROJ-1', subtask_count: 8 },
+      { id: 'PROJ-2', subtask_count: 8 },
+    ];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.equal(res.status, 'OK', 'status must be OK with subtask data');
+    assert.equal(
+      res.band,
+      'concerning',
+      'band must be "concerning" for avg subtasks > 6'
+    );
+    assert.ok(
+      Math.abs((res.score ?? 0) - 0.2) < 1e-6,
+      `score must be 0.2 at avg=8 (linear ANCHOR interpolation), got ${res.score}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Category and reliability
+// ---------------------------------------------------------------------------
+
+test('adp_i4_subtask_split: awards category 1104 when topology.has_tracker=true', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-cat-'));
+  try {
+    const tickets: TicketFixture[] = [{ id: 'PROJ-1', subtask_count: 3 }];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    // Pass mock standards that declare 1104 for this metric
+    const mockStandards = {
+      category: {
+        ticket_subtask_split: {
+          code: 1104,
+          metric: 'adp_i4_subtask_split',
+          applies_when: 'topology.has_tracker',
+          weight: 3,
+        },
+      },
+    };
+    const res = compute(dir, mockStandards, { has_tracker: true });
+    assert.ok(
+      (res.categories_awarded as number[]).includes(1104),
+      `category 1104 must be awarded when topology.has_tracker=true, got ${JSON.stringify(res.categories_awarded)}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('adp_i4_subtask_split: does not award 1104 when topology.has_tracker=false', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-notopol-'));
+  try {
+    const tickets: TicketFixture[] = [{ id: 'PROJ-1', subtask_count: 2 }];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const mockStandards = {
+      category: {
+        ticket_subtask_split: {
+          code: 1104,
+          metric: 'adp_i4_subtask_split',
+          applies_when: 'topology.has_tracker',
+          weight: 3,
+        },
+      },
+    };
+    const res = compute(dir, mockStandards, { has_tracker: false });
+    assert.ok(
+      !(res.categories_awarded as number[]).includes(1104),
+      `category 1104 must NOT be awarded when topology.has_tracker=false, got ${JSON.stringify(res.categories_awarded)}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('adp_i4_subtask_split: reliability.tag is "minimal"', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-rel-'));
+  try {
+    const tickets: TicketFixture[] = [{ id: 'PROJ-1', subtask_count: 2 }];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.equal(
+      res.reliability.tag,
+      'minimal',
+      'reliability.tag must be "minimal" (AWOS heuristic bands, no published numeric threshold)'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('adp_i4_subtask_split: expression describes the computation', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-expr-'));
+  try {
+    const tickets: TicketFixture[] = [
+      { id: 'PROJ-1', subtask_count: 2 },
+      { id: 'PROJ-2', subtask_count: 4 },
+    ];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.ok(
+      typeof res.expression === 'string' && res.expression.length > 0,
+      `expression must be a non-empty string describing the computation, got ${JSON.stringify(res.expression)}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Weight-contract: verify standards.toml declares weight=3 for this category
+// ---------------------------------------------------------------------------
+
+test('adp_i4_subtask_split: standards.toml [category.ticket_subtask_split].weight === 3', () => {
+  const thisFile = fileURLToPath(import.meta.url);
+  const skillRoot = dirname(dirname(thisFile)); // metrics/ → skill root
+  const standardsPath = join(skillRoot, 'references', 'standards.toml');
+  const standards = loadStandards(standardsPath);
+  const cat = (
+    standards['category'] as Record<string, Record<string, unknown>>
+  )['ticket_subtask_split'];
+  assert.ok(
+    cat !== undefined,
+    '[category.ticket_subtask_split] must exist in standards.toml'
+  );
+  assert.equal(
+    cat['weight'],
+    3,
+    '[category.ticket_subtask_split].weight must be 3 (AWOS definition)'
+  );
+  assert.equal(
+    cat['code'],
+    1104,
+    '[category.ticket_subtask_split].code must be 1104'
+  );
+  assert.equal(
+    cat['method'],
+    'computed',
+    '[category.ticket_subtask_split].method must be "computed"'
+  );
+});

@@ -11,6 +11,10 @@ export interface TicketRecord {
   status?: string;
   created_at?: string;
   resolved_at?: string;
+  /** Count of direct sub-tasks (e.g. Jira issue.fields.subtasks.length). Used by ADP-I4. */
+  subtask_count?: number;
+  /** Parent ticket key (e.g. Jira issue.fields.parent?.key). Used by ADP-I4. */
+  parent?: string | null;
   [key: string]: unknown;
 }
 

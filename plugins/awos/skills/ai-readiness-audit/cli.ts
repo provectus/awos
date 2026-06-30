@@ -99,6 +99,7 @@ import { compute as computeD1 } from './metrics/adp_d1_spec_coverage.ts';
 import { compute as computeI1 } from './metrics/adp_i1_work_mix.ts';
 import { compute as computeI2 } from './metrics/adp_i2_throughput.ts';
 import { compute as computeI3 } from './metrics/adp_i3_mttr.ts';
+import { compute as computeI4 } from './metrics/adp_i4_subtask_split.ts';
 import { compute as computeG10 } from './metrics/adp_g10_complexity.ts';
 import { compute as computeG11 } from './metrics/adp_g11_scale.ts';
 import { compute as computeG12 } from './metrics/adp_g12_deps.ts';
@@ -164,6 +165,7 @@ export const METRICS: Record<string, MetricFn> = {
   adp_i1_work_mix: computeI1,
   adp_i2_throughput: computeI2,
   adp_i3_mttr: computeI3,
+  adp_i4_subtask_split: computeI4,
   adp_g10_complexity: computeG10,
   adp_g11_scale: computeG11,
   adp_g12_deps: computeG12,

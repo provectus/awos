@@ -22,14 +22,16 @@ Represents a single work item returned by a project tracker (Jira, Linear, GitHu
 }
 ```
 
-| Field         | Type      | Required | Meaning                                                               |
-| ------------- | --------- | -------- | --------------------------------------------------------------------- |
-| `id`          | `string`  | yes      | Unique ticket identifier (e.g. Jira issue key "PROJ-123")             |
-| `type`        | `string`  | no       | Issue type label (e.g. "bug", "feature", "story", "task")             |
-| `status`      | `string`  | no       | Current status label (e.g. "Done", "In Progress", "Open")             |
-| `created_at`  | `string`  | no       | ISO 8601 creation timestamp                                           |
-| `resolved_at` | `string`  | no       | ISO 8601 timestamp when the ticket was resolved/closed                |
-| _(any)_       | `unknown` | no       | Additional fields from the source system are passed through unchanged |
+| Field           | Type            | Required | Meaning                                                               |
+| --------------- | --------------- | -------- | --------------------------------------------------------------------- |
+| `id`            | `string`        | yes      | Unique ticket identifier (e.g. Jira issue key "PROJ-123")             |
+| `type`          | `string`        | no       | Issue type label (e.g. "bug", "feature", "story", "task")             |
+| `status`        | `string`        | no       | Current status label (e.g. "Done", "In Progress", "Open")             |
+| `created_at`    | `string`        | no       | ISO 8601 creation timestamp                                           |
+| `resolved_at`   | `string`        | no       | ISO 8601 timestamp when the ticket was resolved/closed                |
+| `subtask_count` | `number`        | no       | Count of direct sub-tasks (used by ADP-I4 sub-task split metric)      |
+| `parent`        | `string\|null`  | no       | Parent ticket key (used by ADP-I4 to identify sub-task relationships)  |
+| _(any)_         | `unknown`       | no       | Additional fields from the source system are passed through unchanged |
 
 The `resolved_count` helper treats a ticket as resolved when `status` (lowercased) equals `"done"` **or** `resolved_at` is non-null. Map whichever field your source exposes.
 
@@ -79,13 +81,15 @@ The computed artifact the engine derives from `TrackerConnector`. The orchestrat
 A Jira MCP call like `searchJiraIssuesUsingJql({ jql: "project = PROJ AND updated >= -180d", maxResults: 200 })` returns an array of issue objects. Map each to a `TicketRecord`:
 
 ```
-Jira field          → TicketRecord field
------------           -----------------
-issue.key           → id            ("PROJ-123")
-issue.fields.issuetype.name → type  ("Bug")
-issue.fields.status.name    → status ("Done")
-issue.fields.created        → created_at (ISO 8601 string)
-issue.fields.resolutiondate → resolved_at (ISO 8601 string or null → omit)
+Jira field                         → TicketRecord field
+-----------                          -----------------
+issue.key                          → id            ("PROJ-123")
+issue.fields.issuetype.name        → type          ("Bug")
+issue.fields.status.name           → status        ("Done")
+issue.fields.created               → created_at    (ISO 8601 string)
+issue.fields.resolutiondate        → resolved_at   (ISO 8601 string or null → omit)
+issue.fields.subtasks.length       → subtask_count (number; omit when 0 or absent)
+issue.fields.parent?.key           → parent        (string or null → omit when null)
 ```
 
 Write the assembled `TrackerConnector` to `collected/tracker.json`. Include a `period` block that records the actual window queried — the engine uses this to populate the **Sources** column tooltip in the report:
@@ -231,9 +235,10 @@ Tracker (Jira) → `collected/tracker.json`:
 # 3. Write it:
 #    context/audits/YYYY-MM-DD/collected/tracker.json
 # 4. Re-run the tracker metrics, then re-aggregate:
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i1 "<repoPath>" "context/audits/YYYY-MM-DD/collected"
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i2 "<repoPath>" "context/audits/YYYY-MM-DD/collected"
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i3 "<repoPath>" "context/audits/YYYY-MM-DD/collected"
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i1_work_mix "<repoPath>" "context/audits/YYYY-MM-DD/collected"
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i2_throughput "<repoPath>" "context/audits/YYYY-MM-DD/collected"
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i3_mttr "<repoPath>" "context/audits/YYYY-MM-DD/collected"
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i4_subtask_split "<repoPath>" "context/audits/YYYY-MM-DD/collected"
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
 ```
 

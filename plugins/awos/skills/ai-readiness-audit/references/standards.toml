@@ -368,6 +368,22 @@ url = "https://dora.dev/dora-report-2025/"
 date = "2025-09"
 last_verified = "2026-06-29"
 
+[category.ticket_subtask_split]
+code = 1104
+check_id = "ADP-I4"
+metric = "adp_i4_subtask_split"
+dimension = "ai-sdlc-adoption"
+weight = 3
+method = "computed"
+definition = "Over-splitting tickets into many subtasks fragments work — departs from INVEST right-sizing, adds coordination/context-switching cost; bands are AWOS heuristics, DORA/INVEST publish no numeric threshold"
+applies_when = "topology.has_tracker"
+sources = ["tracker"]
+reliability_default = "minimal"
+source = "Agile Alliance (INVEST)"
+url = "https://agilealliance.org/glossary/invest/"
+date = "2003"
+last_verified = "2026-06-30"
+
 # ---------------------------------------------------------------------------
 # Tier D: Docs / wiki categories
 # ---------------------------------------------------------------------------

@@ -170,6 +170,15 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Severity:** high
 - **Category:** 1103
 
+### ADP-I4: Ticket sub-task split ratio
+
+- **What:** Average number of direct sub-tasks per parent ticket; high averages signal AI-driven over-splitting that fragments work, raises coordination cost, and departs from INVEST "Small" right-sizing. Bands are AWOS heuristics (≤3 good, ≤6 watch, >6 concerning) — INVEST and DORA publish no numeric threshold.
+- **How:** `node "<engine cli path>" metric adp_i4_subtask_split <repoPath> context/audits/<date>/collected`
+- **Pass (OK):** metric returns `status: "OK"` — at least one parent ticket with `subtask_count > 0` found in the tracker artifact
+- **Skip-When:** `has_tracker` is false, or tracker artifact has `available=false`, or no ticket in the window carries a numeric `subtask_count > 0`
+- **Severity:** medium
+- **Category:** 1104
+
 ### ADP-G14: Deployment rework rate
 
 - **What:** DORA deployment rework rate — share of deployments that are unplanned fix work triggered by incidents (DORA's fifth metric, introduced 2024). Proxied from git: first-parent merges in the 90-day window whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords. Bands are AWOS heuristics (DORA publishes no numeric thresholds).

@@ -897,6 +897,16 @@ test('implement-feature-template.md carries stage markers and the AWOS chain', (
     /do not add run-time focus areas/i.test(body),
     'implement-feature-template.md review stage must keep the independence rule: the reviewer prompt is fixed at generation time — an orchestrator that just implemented the change must not frame its own review'
   );
+  // The close stage must surface the local review (verdict + finding count +
+  // review file path) — the review is a real gate but otherwise buried in
+  // the logs. The Close-the-Loop stage is the hand-off report.
+  const closeStage = body.slice(body.indexOf('awos:flow:stage=close-ticket'));
+  assert.ok(
+    /verdict/i.test(closeStage) &&
+      /finding count/i.test(closeStage) &&
+      closeStage.includes('review.md'),
+    'implement-feature-template.md close stage must report the local review evidence — verdict, finding count, and the review file path (context/spec/{SPEC_NAME}/review.md)'
+  );
   const stageOrder = [
     'fetch-ticket',
     'resume-detection',

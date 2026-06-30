@@ -161,6 +161,8 @@ Merging is irreversible. Even when the recorded policy lets the flow merge, ask 
 
 [Per §5's definition of Done: gather the recorded evidence (change-request link, merge commit, deploy confirmation) and report the final state to the user. When the source has tickets, also transition the ticket using the chosen transport and attach the evidence; omit the transition entirely for ticketless sources — the report to the user is the close.]
 
+Include the local review in the reported evidence — it is a real gate but gets buried in the logs otherwise. From the local-review stage's flow-log entry, report: the review **verdict**, the **finding count** (by severity), the **review file path** (`context/spec/{SPEC_NAME}/review.md`, or the path a reused review command used), and that a manual keep/drop gate ran over the findings. The path lets the user re-open the full review without re-running.
+
 <!-- /awos:flow:stage -->
 
 ---

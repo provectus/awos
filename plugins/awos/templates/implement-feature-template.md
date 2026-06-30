@@ -8,7 +8,11 @@ Skeleton consumed by /awos:flow. The generator replaces every [bracketed
 instruction] with project-specific prose from context/product/delivery-flow.md,
 omits stages the decisions rule out, and keeps the stage marker comments —
 they let re-runs attribute manual edits to specific stages. Fixed prose
-outside brackets survives into the generated command as-is.
+outside brackets survives into the generated command as-is. The stage markers
+are HTML comments: never nest them. If the generated file needs a header
+comment of its own that mentions the markers, write them in prose (stage
+markers of the form awos:flow:stage=name) — never put a literal arrow-close
+inside an outer comment, or it closes early and breaks the file.
 -->
 
 # Implement a Feature End-to-End
@@ -52,7 +56,7 @@ Start with a cheap preflight on the fast model tier (per §8): is this feature a
 
 ### Step 3: Prepare the Workspace
 
-[Per §2–§3 of delivery-flow.md: verify `context/` is reachable and current; warn on a dirty working tree; create the branch (or worktree, per the recorded recipe) from the base branch using the team's naming convention; submodule init/update if required. Store the branch name as `BRANCH` and the ticket ID as `TICKET_ID` for later stages.]
+[Per §2–§3 of delivery-flow.md: verify `context/` is reachable and current; warn on a dirty working tree; create the branch (or worktree, per the recorded recipe) from the base branch using the team's naming convention; submodule init/update if required. Store the branch name as `BRANCH` and the ticket ID as `TICKET_ID` for later stages.] Uncommitted AWOS artifacts — `context/product/delivery-flow.md` and this command file, left by `/awos:flow` — are an expected dirty-tree cause; surface them as such rather than treating them as a blocker.
 
 <!-- /awos:flow:stage -->
 

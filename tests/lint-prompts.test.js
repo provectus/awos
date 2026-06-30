@@ -728,6 +728,78 @@ test('flow.md wires the delivery-flow generator contract end to end', () => {
   );
 });
 
+test('flow.md re-run interviews only the dimensions the user chose', () => {
+  // A road-test re-run re-reviewed all seven dimensions with "(текущее)"
+  // defaults instead of only the ones the user wanted to change. The re-run
+  // path must collect a granular per-dimension selection in Step 1.3 and
+  // interview only those, bulk-confirming the rest unchanged.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /granular/i.test(body),
+    'flow.md re-run path must collect a granular per-dimension selection (the individual dimensions), not coarse buckets that re-ask everything inside them'
+  );
+  assert.ok(
+    /bulk-confirm/i.test(body),
+    'flow.md re-run path must bulk-confirm the unselected dimensions as unchanged in one summary line — never re-ask a dimension the user did not choose to revisit'
+  );
+  assert.ok(
+    /only those/i.test(body),
+    'flow.md Step 4 must interview only the dimensions selected on a re-run, not fall back to the fresh-run all-dimensions interview'
+  );
+});
+
+test('flow.md keeps autonomy holistic and un-steered', () => {
+  // The approval-gates question mis-steered the road-test user toward the
+  // most-gated option, and autonomy was gates-only — reused interactive
+  // skills and chain interviews impose pauses the gate choice never sees.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /do \*\*not\*\* pre-mark the most-gated option/i.test(body),
+    'flow.md approval-gates question must not pre-mark the most-gated option "(Recommended)" — the amount of gating is the user\'s autonomy call, and flow.md forbids decorative recommendations'
+  );
+  assert.ok(
+    /no gates: unattended/i.test(body),
+    'flow.md approval-gates options must read as an autonomy spectrum labeled by the pauses each imposes (two gates / one combined gate / no gates: unattended)'
+  );
+  assert.ok(
+    /Reused interactivity is part of the autonomy decision/i.test(body),
+    "flow.md Step 4.5 must treat a reused skill's per-run confirmations as part of the autonomy decision (reuse-with-prompt vs. compose a non-interactive path that keeps validation) — not a silent import"
+  );
+  assert.ok(
+    /Interaction budget/i.test(body),
+    'flow.md Step 8 must report an Interaction budget enumerating every human-pause — gate-controlled, reuse-imposed, and chain-imposed — so "how autonomous is it really" is visible at generation time'
+  );
+});
+
+test('flow.md tells the user to commit the generated artifacts', () => {
+  // /awos:flow leaves delivery-flow.md + the generated command uncommitted;
+  // the first run then warns on the dirty tree. Step 8 must close the gap.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /commit the generated artifacts/i.test(body),
+    'flow.md Step 8 must tell the user to commit the generated artifacts (delivery-flow.md, implement-feature.md, fix-bug.md when present) so the first run starts from a clean tree'
+  );
+});
+
+test('flow.md and the template guard the generated header against comment-nesting', () => {
+  // A generated file embedded a literal awos:flow:stage marker inside its
+  // outer <!-- … --> header comment; the inner --> closed the comment early
+  // (CodeRabbit-flagged). The generator must be told to describe markers in
+  // prose, never nest one HTML comment inside another.
+  const flowBody = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const tplBody = readUtf8(
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+  );
+  assert.ok(
+    /never nest one inside another/i.test(flowBody),
+    "flow.md Step 6 must instruct the generator not to nest stage-marker HTML comments inside the generated file's own header comment"
+  );
+  assert.ok(
+    /never nest them/i.test(tplBody),
+    'implement-feature-template.md header must warn the generator never to nest the stage-marker comments'
+  );
+});
+
 test('implement-feature-template.md carries stage markers and the AWOS chain', () => {
   // The generated /implement-feature command is user-owned; /awos:flow re-runs
   // reconcile manual edits per stage. The HTML-comment stage markers are the

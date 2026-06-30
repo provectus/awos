@@ -425,13 +425,13 @@ test('deliverable commands write their file on an unanswered question', () => {
     'tech.md',
   ];
   const missing = [];
-  for (const c of deliverableCommands) {
-    const body = readUtf8(path.join(commandsDir, c));
+  for (const command of deliverableCommands) {
+    const body = readUtf8(path.join(commandsDir, command));
     if (
       !body.includes('never a stop signal') ||
       !body.includes('including writing')
     ) {
-      missing.push(c);
+      missing.push(command);
     }
   }
   assert.deepEqual(

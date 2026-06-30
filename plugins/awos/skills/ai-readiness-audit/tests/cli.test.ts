@@ -252,6 +252,7 @@ test('metric adp_g2_contributors: query-once path reads pre-collected git.json',
       JSON.stringify(artifact, null, 2)
     );
 
+    // Transitional (Task 0.2 → 1.1): adp_g2 still reads monthly_buckets, replaced by window_stats, so it SKIPs here. Task 1.1 migrates g2 to window_stats, which restores OK + code 201 — flip these assertions back then.
     // Step 2: run metric with pre-collected dir (query-once path).
     const { json: result, code: metricCode } = runCli(
       'metric',
@@ -273,13 +274,15 @@ test('metric adp_g2_contributors: query-once path reads pre-collected git.json',
     );
     assert.equal(
       r['status'],
-      'OK',
-      'status must be OK when git artifact is present'
+      'SKIP',
+      'adp_g2 SKIPs transitionally until Task 1.1 migrates it to window_stats'
     );
     assert.ok(
-      Array.isArray(r['categories_awarded']) &&
-        (r['categories_awarded'] as number[]).includes(201),
-      'categories_awarded must include code 201'
+      !(
+        Array.isArray(r['categories_awarded']) &&
+        (r['categories_awarded'] as number[]).includes(201)
+      ),
+      'adp_g2 must NOT award code 201 while SKIPping (restored by Task 1.1)'
     );
   } finally {
     rmSync(tmpRepo, { recursive: true, force: true });

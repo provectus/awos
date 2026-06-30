@@ -179,6 +179,15 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Severity:** medium
 - **Category:** 1104
 
+### ADP-I5: Ticket description quality
+
+- **What:** Share of tickets with a non-trivial description (≥50 characters); thin tickets ("fix bug") starve both humans and AI agents of context needed to understand scope, intent, and done-criteria. The 50-char threshold is an AWOS heuristic — Agile Alliance's Definition of Ready specifies descriptive acceptance criteria but publishes no numeric character-count threshold. Size/structure signals only; no raw description text is stored.
+- **How:** `node "<engine cli path>" metric adp_i5_description_quality <repoPath> context/audits/<date>/collected`
+- **Pass (OK):** metric returns `status: "OK"` — at least one ticket with a numeric `description_length` found in the tracker artifact
+- **Skip-When:** `has_tracker` is false, or tracker artifact has `available=false`, or no ticket in the window carries a numeric `description_length`
+- **Severity:** medium
+- **Category:** 1105
+
 ### ADP-G14: Deployment rework rate
 
 - **What:** DORA deployment rework rate — share of deployments that are unplanned fix work triggered by incidents (DORA's fifth metric, introduced 2024). Proxied from git: first-parent merges in the 90-day window whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords. Bands are AWOS heuristics (DORA publishes no numeric thresholds).

@@ -15,6 +15,10 @@ export interface TicketRecord {
   subtask_count?: number;
   /** Parent ticket key (e.g. Jira issue.fields.parent?.key). Used by ADP-I4. */
   parent?: string | null;
+  /** Character count of the ticket description (size/structure signal only — no raw text). Used by ADP-I5. */
+  description_length?: number;
+  /** Whether the ticket body contains acceptance criteria (structure signal only — no raw text). Used by ADP-I5. */
+  has_acceptance_criteria?: boolean;
   [key: string]: unknown;
 }
 

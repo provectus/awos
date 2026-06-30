@@ -384,6 +384,22 @@ url = "https://agilealliance.org/glossary/invest/"
 date = "2003"
 last_verified = "2026-06-30"
 
+[category.ticket_description_quality]
+code = 1105
+check_id = "ADP-I5"
+metric = "adp_i5_description_quality"
+dimension = "ai-sdlc-adoption"
+weight = 3
+method = "computed"
+definition = "Share of tickets with a non-trivial description (≥50 chars); thin tickets starve both humans and AI agents of context. The 50-char threshold is an AWOS heuristic — Agile Alliance's Definition of Ready specifies acceptance criteria but publishes no numeric character-count threshold. Size/structure signals only; no raw description text is stored."
+applies_when = "topology.has_tracker"
+sources = ["tracker"]
+reliability_default = "minimal"
+source = "Agile Alliance (Definition of Ready)"
+url = "https://www.agilealliance.org/glossary/definition-of-ready/"
+date = "2012"
+last_verified = "2026-06-30"
+
 # ---------------------------------------------------------------------------
 # Tier D: Docs / wiki categories
 # ---------------------------------------------------------------------------

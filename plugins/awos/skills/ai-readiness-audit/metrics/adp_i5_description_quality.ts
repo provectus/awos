@@ -1,0 +1,161 @@
+/**
+ * adp_i5_description_quality — Ticket description quality/richness.
+ *
+ * kind: "banded"
+ * value: share of tickets with description_length ≥ MIN_DESC_CHARS (number ∈ [0,1]), or null
+ * band: "good" (≥0.7) | "medium" (≥0.4) | "low" (<0.4)
+ * categories_awarded: [1105] when topology.has_tracker is true and description_length data available
+ * reliability_default: "minimal"
+ *
+ * Rationale (Agile Alliance Definition of Ready):
+ *   The Agile Alliance Definition of Ready (https://www.agilealliance.org/glossary/definition-of-ready/)
+ *   specifies that a story must include acceptance criteria and be sufficiently described
+ *   before it enters a sprint. "Thin tickets" (e.g. "fix bug") starve both humans and
+ *   AI agents of the context needed to understand scope, intent, and done-criteria.
+ *   When an AI agent receives a thin ticket it either hallucinates scope or requires
+ *   expensive back-and-forth clarification rounds, both of which hurt delivery throughput.
+ *
+ *   This metric uses a character-count proxy: a description of ≥50 characters is
+ *   treated as "non-trivial". This threshold is an AWOS heuristic — the Agile Alliance
+ *   publishes no numeric character-count criterion. Disclose this wherever the metric
+ *   is presented. Only size/structure signals (character count, AC presence) are stored;
+ *   raw description text is never collected or logged.
+ *
+ *   Band thresholds are AWOS heuristics:
+ *     ≥70%  → "good"    most tickets are well-described
+ *     ≥40%  → "medium"  moderate description coverage, room to improve
+ *     <40%  → "low"     thin tickets dominate; AI-agent context is severely limited
+ *
+ * Score anchors (piecewise linear interpolation, higher share = higher score):
+ *   ANCHORS = [{x:0,y:0},{x:0.4,y:0.4},{x:0.7,y:0.8},{x:1,y:1}]
+ *   score = clamp01(bandScore(share, ANCHORS, 'linear'))
+ *
+ * SKIP conditions:
+ *   - tracker.json absent
+ *   - tracker.json available === false (no connector provided)
+ *   - raw.tickets absent or empty
+ *   - no ticket has a numeric description_length (no description-quality data in the window)
+ *
+ * Source shape: collectedDir/tracker.json
+ * Input raw field: tickets[].description_length (number, optional)
+ *
+ * @see https://www.agilealliance.org/glossary/definition-of-ready/  (Agile Alliance, 2012)
+ */
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  awardCategories,
+  computeReliability,
+  makeMetricResult,
+  type MetricResult,
+} from './_base.ts';
+import { bandScore, clamp01 } from './_score.ts';
+
+const MIN_DESC_CHARS = 50;
+
+const ANCHORS = [
+  { x: 0, y: 0 },
+  { x: 0.4, y: 0.4 },
+  { x: 0.7, y: 0.8 },
+  { x: 1, y: 1 },
+] as const;
+
+/** Map share of well-described tickets to a band label. */
+function descriptionBand(share: number): 'good' | 'medium' | 'low' {
+  if (share >= 0.7) return 'good';
+  if (share >= 0.4) return 'medium';
+  return 'low';
+}
+
+export function compute(
+  collectedDir: string,
+  standards: Record<string, unknown>,
+  topology: Record<string, boolean>
+): MetricResult {
+  const trackerPath = join(collectedDir, 'tracker.json');
+
+  if (!existsSync(trackerPath)) {
+    return makeMetricResult(
+      'adp_i5_description_quality',
+      null,
+      'banded',
+      [],
+      computeReliability('minimal', [], ['tracker']),
+      [],
+      ['tracker']
+    );
+  }
+
+  const artifact = JSON.parse(readFileSync(trackerPath, 'utf8'));
+
+  if (!artifact?.available) {
+    return makeMetricResult(
+      'adp_i5_description_quality',
+      null,
+      'banded',
+      [],
+      computeReliability('minimal', [], ['tracker']),
+      [],
+      ['tracker']
+    );
+  }
+
+  const raw = artifact?.raw ?? {};
+  const tickets: Array<Record<string, unknown>> = Array.isArray(raw.tickets)
+    ? (raw.tickets as Array<Record<string, unknown>>)
+    : [];
+
+  // Only tickets with a numeric description_length contribute to the metric.
+  const eligible = tickets.filter(
+    (t) => typeof t['description_length'] === 'number'
+  );
+
+  if (eligible.length === 0) {
+    return makeMetricResult(
+      'adp_i5_description_quality',
+      null,
+      'banded',
+      [],
+      computeReliability('minimal', [], ['tracker']),
+      [],
+      ['tracker']
+    );
+  }
+
+  const wellDescribed = eligible.filter(
+    (t) => (t['description_length'] as number) >= MIN_DESC_CHARS
+  );
+  const share = wellDescribed.length / eligible.length;
+  const band = descriptionBand(share);
+  const score = clamp01(
+    bandScore(share, ANCHORS as Array<{ x: number; y: number }>, 'linear')
+  );
+
+  const categories = awardCategories(
+    standards,
+    'adp_i5_description_quality',
+    topology
+  );
+  const reliability = computeReliability('minimal', ['tracker'], []);
+
+  const expression =
+    `${wellDescribed.length} of ${eligible.length} tickets with description ≥${MIN_DESC_CHARS} chars = ` +
+    `${(share * 100).toFixed(1)}% (${band}; ` +
+    `threshold is an AWOS heuristic — Agile Alliance publishes no numeric criterion; ` +
+    `size/structure signals only, no raw text stored)`;
+
+  return makeMetricResult(
+    'adp_i5_description_quality',
+    share,
+    'banded',
+    categories,
+    reliability,
+    ['tracker'],
+    [],
+    band,
+    'ratio',
+    expression,
+    score,
+    1.0
+  );
+}

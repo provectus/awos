@@ -22,16 +22,18 @@ Represents a single work item returned by a project tracker (Jira, Linear, GitHu
 }
 ```
 
-| Field           | Type            | Required | Meaning                                                               |
-| --------------- | --------------- | -------- | --------------------------------------------------------------------- |
-| `id`            | `string`        | yes      | Unique ticket identifier (e.g. Jira issue key "PROJ-123")             |
-| `type`          | `string`        | no       | Issue type label (e.g. "bug", "feature", "story", "task")             |
-| `status`        | `string`        | no       | Current status label (e.g. "Done", "In Progress", "Open")             |
-| `created_at`    | `string`        | no       | ISO 8601 creation timestamp                                           |
-| `resolved_at`   | `string`        | no       | ISO 8601 timestamp when the ticket was resolved/closed                |
-| `subtask_count` | `number`        | no       | Count of direct sub-tasks (used by ADP-I4 sub-task split metric)      |
-| `parent`        | `string\|null`  | no       | Parent ticket key (used by ADP-I4 to identify sub-task relationships)  |
-| _(any)_         | `unknown`       | no       | Additional fields from the source system are passed through unchanged |
+| Field                     | Type           | Required | Meaning                                                                                                   |
+| ------------------------- | -------------- | -------- | --------------------------------------------------------------------------------------------------------- |
+| `id`                      | `string`       | yes      | Unique ticket identifier (e.g. Jira issue key "PROJ-123")                                                 |
+| `type`                    | `string`       | no       | Issue type label (e.g. "bug", "feature", "story", "task")                                                 |
+| `status`                  | `string`       | no       | Current status label (e.g. "Done", "In Progress", "Open")                                                 |
+| `created_at`              | `string`       | no       | ISO 8601 creation timestamp                                                                               |
+| `resolved_at`             | `string`       | no       | ISO 8601 timestamp when the ticket was resolved/closed                                                    |
+| `subtask_count`           | `number`       | no       | Count of direct sub-tasks (used by ADP-I4 sub-task split metric)                                          |
+| `parent`                  | `string\|null` | no       | Parent ticket key (used by ADP-I4 to identify sub-task relationships)                                     |
+| `description_length`      | `number`       | no       | Character count of the ticket description (size/structure signal — **no raw text**; used by ADP-I5)       |
+| `has_acceptance_criteria` | `boolean`      | no       | Whether the ticket body contains acceptance criteria (structure signal — **no raw text**; used by ADP-I5) |
+| _(any)_                   | `unknown`      | no       | Additional fields from the source system are passed through unchanged                                     |
 
 The `resolved_count` helper treats a ticket as resolved when `status` (lowercased) equals `"done"` **or** `resolved_at` is non-null. Map whichever field your source exposes.
 
@@ -88,8 +90,10 @@ issue.fields.issuetype.name        → type          ("Bug")
 issue.fields.status.name           → status        ("Done")
 issue.fields.created               → created_at    (ISO 8601 string)
 issue.fields.resolutiondate        → resolved_at   (ISO 8601 string or null → omit)
-issue.fields.subtasks.length       → subtask_count (number; omit when 0 or absent)
-issue.fields.parent?.key           → parent        (string or null → omit when null)
+issue.fields.subtasks.length       → subtask_count           (number; omit when 0 or absent)
+issue.fields.parent?.key           → parent                  (string or null → omit when null)
+issue.fields.description?.length   → description_length      (number; char count only — never include raw text; omit when absent)
+/acceptance.criteria/i.test(desc)  → has_acceptance_criteria (boolean; regex match on description — no raw text stored; omit when absent)
 ```
 
 Write the assembled `TrackerConnector` to `collected/tracker.json`. Include a `period` block that records the actual window queried — the engine uses this to populate the **Sources** column tooltip in the report:
@@ -239,6 +243,7 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i1_work_mix "<repoPath>" "cont
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i2_throughput "<repoPath>" "context/audits/YYYY-MM-DD/collected"
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i3_mttr "<repoPath>" "context/audits/YYYY-MM-DD/collected"
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i4_subtask_split "<repoPath>" "context/audits/YYYY-MM-DD/collected"
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i5_description_quality "<repoPath>" "context/audits/YYYY-MM-DD/collected"
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
 ```
 

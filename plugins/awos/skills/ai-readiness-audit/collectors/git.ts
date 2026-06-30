@@ -186,6 +186,8 @@ export interface WindowStats {
   window_days: number;
   commits: number;
   merges: number;
+  /** First-parent merges in the window whose subject matches revert/hotfix/rollback keywords. */
+  revert_merges: number;
   authors_total: number;
   per_author: AuthorRow[];
   /** Merges divided by active-contributor count; null when activeCount is 0. Display-only. */
@@ -227,6 +229,7 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
     window_days: windowDays,
     commits: 0,
     merges: 0,
+    revert_merges: 0,
     authors_total: 0,
     per_author: [],
     merges_per_active: null,
@@ -246,6 +249,23 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
   const since = new Date(
     latestCommitDate.getTime() - windowDays * 86_400_000
   ).toISOString();
+
+  // 0. In-window revert/hotfix/rollback merges — bounded to the same window as the rest.
+  const revertOut = run(
+    [
+      'log',
+      '--first-parent',
+      '--merges',
+      '--grep=^Revert\\|hotfix\\|rollback',
+      `--since=${since}`,
+      '--format=%H',
+    ],
+    cwd
+  )
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+  const revert_merges = revertOut.length;
 
   // 1. Non-merge commits — derive per-author commit counts and line churn.
   //    Format: one "%H\t%aN" header line per commit, then numstat lines.
@@ -326,6 +346,7 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
     window_days: windowDays,
     commits: totalCommits,
     merges: totalMerges,
+    revert_merges,
     authors_total: allAuthors.size,
     per_author: perAuthor,
     merges_per_active,

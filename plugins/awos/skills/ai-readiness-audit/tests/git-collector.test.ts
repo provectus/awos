@@ -384,3 +384,122 @@ test('window_stats: merges_per_active and loc_per_active equal expected ratios f
     'loc_per_active must be 8 total lines / 2 active contributors = 4.0'
   );
 });
+
+// ---------------------------------------------------------------------------
+// window_stats.revert_merges tests (task 2.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a repo with:
+ *   - Anchor commit at 2025-03-25 (a normal merge)
+ *   - Revert merge at 2025-03-20 (subject starts with "Revert") — INSIDE window
+ *   - Hotfix merge at 2025-02-15 (subject contains "hotfix") — INSIDE window
+ *   - Old revert merge at 2024-10-01 (subject starts with "Revert") — OUTSIDE 90-day window
+ *
+ * Window anchor = 2025-03-25; since = 2024-12-25.
+ * In-window reverts: 2025-03-20 and 2025-02-15 → revert_merges = 2.
+ * Out-of-window: 2024-10-01 → excluded.
+ */
+function revertRepo(): string {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-revert-')), 'repo');
+  mkdirSync(r);
+
+  const alice = (args: string[], date: string) =>
+    gitAs(r, args, date, 'Alice', 'alice@example.com');
+
+  alice(['init', '-q', '-b', 'main'], '2024-10-01T00:00:00');
+
+  // Root commit
+  writeFileSync(join(r, 'root.txt'), 'root\n');
+  alice(['add', '-A'], '2024-10-01T00:00:00');
+  alice(['commit', '-qm', 'feat: root'], '2024-10-01T00:00:00');
+
+  // Out-of-window revert merge — 2024-10-01, well outside the 90-day window from 2025-03-25
+  alice(['checkout', '-qb', 'old-revert'], '2024-10-01T00:00:00');
+  writeFileSync(join(r, 'old.txt'), 'old\n');
+  alice(['add', '-A'], '2024-10-01T00:00:00');
+  alice(['commit', '-qm', 'feat: old change'], '2024-10-01T00:00:00');
+  alice(['checkout', '-q', 'main'], '2024-10-01T00:00:00');
+  alice(
+    [
+      'merge',
+      '--no-ff',
+      '-qm',
+      'Revert "old change" (out of window)',
+      'old-revert',
+    ],
+    '2024-10-01T00:00:00'
+  );
+
+  // In-window hotfix merge — 2025-02-15
+  alice(['checkout', '-qb', 'hotfix-1'], '2025-02-15T00:00:00');
+  writeFileSync(join(r, 'fix.txt'), 'fix\n');
+  alice(['add', '-A'], '2025-02-15T00:00:00');
+  alice(['commit', '-qm', 'fix: patch'], '2025-02-15T00:00:00');
+  alice(['checkout', '-q', 'main'], '2025-02-15T00:00:00');
+  alice(
+    ['merge', '--no-ff', '-qm', 'hotfix: apply critical patch', 'hotfix-1'],
+    '2025-02-15T00:00:00'
+  );
+
+  // In-window revert merge — 2025-03-20
+  alice(['checkout', '-qb', 'revert-1'], '2025-03-20T00:00:00');
+  writeFileSync(join(r, 'revert.txt'), 'revert\n');
+  alice(['add', '-A'], '2025-03-20T00:00:00');
+  alice(['commit', '-qm', 'chore: prep revert'], '2025-03-20T00:00:00');
+  alice(['checkout', '-q', 'main'], '2025-03-20T00:00:00');
+  alice(
+    [
+      'merge',
+      '--no-ff',
+      '-qm',
+      'Revert "feat: something" in window',
+      'revert-1',
+    ],
+    '2025-03-20T00:00:00'
+  );
+
+  // Normal anchor merge — 2025-03-25 (newest commit → window anchor)
+  alice(['checkout', '-qb', 'feature-x'], '2025-03-25T00:00:00');
+  writeFileSync(join(r, 'x.txt'), 'x\n');
+  alice(['add', '-A'], '2025-03-25T00:00:00');
+  alice(['commit', '-qm', 'feat: x'], '2025-03-25T00:00:00');
+  alice(['checkout', '-q', 'main'], '2025-03-25T00:00:00');
+  alice(
+    ['merge', '--no-ff', '-qm', 'Merge feature-x', 'feature-x'],
+    '2025-03-25T00:00:00'
+  );
+
+  return r;
+}
+
+test('window_stats: revert_merges counts in-window revert/hotfix merges and excludes out-of-window ones', () => {
+  // Fixture has 2 in-window reverts (hotfix merge on 2025-02-15, Revert merge on 2025-03-20)
+  // and 1 out-of-window revert (2024-10-01), which must be excluded.
+  // window anchor = 2025-03-25, since = 2024-12-25
+  const repoPath = revertRepo();
+  const art = collect(repoPath, WINDOW_PERIOD);
+  const ws = art.raw.window_stats;
+
+  assert.ok(
+    'revert_merges' in ws,
+    'window_stats must include revert_merges field'
+  );
+  assert.equal(
+    ws.revert_merges,
+    2,
+    `window_stats.revert_merges must be 2 (hotfix + Revert in window); got ${ws.revert_merges} — value 3 would mean out-of-window revert was NOT excluded`
+  );
+});
+
+test('window_stats: revert_merges is 0 for a clean repo with no revert/hotfix merges', () => {
+  // windowRepo() has only one normal merge ("Merge feature-bob") — no revert keywords.
+  const art = collect(windowRepo(), WINDOW_PERIOD);
+  const ws = art.raw.window_stats;
+
+  assert.equal(
+    ws.revert_merges,
+    0,
+    `window_stats.revert_merges must be 0 for a clean repo; got ${ws.revert_merges}`
+  );
+});

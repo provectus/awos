@@ -2,7 +2,8 @@
  * adp_g7_change_fail_rate — Change failure rate proxy (DORA banded).
  *
  * kind: "banded"
- * value: revert_merges / total_merges as a fraction (0–1), or null when no merges
+ * value: window_stats.revert_merges / window_stats.merges as a fraction (0–1),
+ *        or null when no merges in the window
  * band: one of "elite" | "high" | "medium" | "low" per DORA change-failure thresholds
  * categories_awarded: [701] when data is available
  * reliability_default: "minimal" — lower bound: only keyword-detected
@@ -16,9 +17,9 @@
  *   low    → > 15%  (rate >= 0.15)
  *
  * Source shape: collectedDir/git.json
- * Input raw fields: revert_merges (number), total_merges (number)
+ * Input fields: window_stats.revert_merges (number), window_stats.merges (number)
  *
- * SKIP: if git.json is absent or total_merges is 0.
+ * SKIP: if git.json is absent, window_stats is absent, or window_stats.merges is 0.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -57,7 +58,8 @@ export function compute(
 
   const artifact = JSON.parse(readFileSync(gitPath, 'utf8'));
   const raw = artifact?.raw;
-  if (!raw || typeof raw.total_merges !== 'number' || raw.total_merges === 0) {
+  const ws = raw?.window_stats;
+  if (!ws || typeof ws.merges !== 'number' || ws.merges === 0) {
     return makeMetricResult(
       'adp_g7_change_fail_rate',
       null,
@@ -69,8 +71,8 @@ export function compute(
     );
   }
 
-  const totalMerges: number = raw.total_merges;
-  const revertMerges: number = raw.revert_merges ?? 0;
+  const totalMerges: number = ws.merges;
+  const revertMerges: number = ws.revert_merges ?? 0;
   const rate = revertMerges / totalMerges;
   const band = doraChangeFailBand(rate);
 

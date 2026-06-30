@@ -190,6 +190,23 @@ export interface WindowStats {
   per_author: AuthorRow[];
 }
 
+/**
+ * Active-contributor filter (locked rule — Phase 2 ratios reuse this).
+ *
+ * An author is excluded iff their merge-share AND LOC-share are both strictly
+ * below threshold T.  T is configurable via meta.active_contributor_threshold
+ * in standards.toml (default 0.1 = 10 %).
+ *
+ * @param perAuthor - author rows from window_stats.per_author
+ * @param T         - exclusion threshold (0 < T ≤ 1)
+ */
+export function activeContributors(perAuthor: AuthorRow[], T: number): number {
+  const tm = perAuthor.reduce((s, a) => s + a.merges, 0) || 1;
+  const tl = perAuthor.reduce((s, a) => s + a.lines, 0) || 1;
+  return perAuthor.filter((a) => !(a.merges / tm < T && a.lines / tl < T))
+    .length;
+}
+
 function buildWindowStats(cwd: string, period: Period): WindowStats {
   const windowDays = period.lookback_days;
   const empty: WindowStats = {

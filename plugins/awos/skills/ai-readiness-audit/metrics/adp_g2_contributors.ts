@@ -1,24 +1,28 @@
 /**
- * adp_g2_contributors — Active monthly contributor count.
+ * adp_g2_contributors — Active contributor count over the 90-day window.
  *
  * kind: "computed"
- * value: average distinct author count per 30-day monthly bucket
+ * value: number of active contributors (authors not excluded by the threshold rule)
  * categories_awarded: [201] when data is available
  * reliability_default: "not-reliable" (raw count; no direction without context)
  *
  * Source shape: collectedDir/git.json
- * Input raw fields: monthly_buckets (Array<{ authors: number }>)
+ * Input raw fields: window_stats.per_author (Array<AuthorRow>)
  *
- * SKIP: if git.json is absent or monthly_buckets is empty.
+ * Active-contributor rule (locked — Phase 2 ratios reuse it):
+ *   exclude an author iff merge_share < T AND loc_share < T
+ *   where T = meta.active_contributor_threshold (default 0.1)
+ *
+ * SKIP: if git.json is absent or window_stats.per_author is absent/empty.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  capBucketsByHistory,
   computeReliability,
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
+import { activeContributors, type AuthorRow } from '../collectors/git.ts';
 
 export function compute(
   collectedDir: string,
@@ -40,11 +44,9 @@ export function compute(
 
   const artifact = JSON.parse(readFileSync(gitPath, 'utf8'));
   const raw = artifact?.raw;
-  if (
-    !raw ||
-    !Array.isArray(raw.monthly_buckets) ||
-    raw.monthly_buckets.length === 0
-  ) {
+  const perAuthor: AuthorRow[] | undefined = raw?.window_stats?.per_author;
+
+  if (!Array.isArray(perAuthor) || perAuthor.length === 0) {
     return makeMetricResult(
       'adp_g2_contributors',
       null,
@@ -56,27 +58,24 @@ export function compute(
     );
   }
 
-  const historyAvailableDays: number =
-    artifact?.period?.history_available_days ?? 0;
-  const bucketDays: number = artifact?.period?.bucket_days ?? 30;
+  const T: number =
+    ((_standards['meta'] as Record<string, unknown>)?.[
+      'active_contributor_threshold'
+    ] as number | undefined) ?? 0.1;
 
-  const allBuckets: Array<{ bucket_start: string; authors: number }> =
-    raw.monthly_buckets;
-  const buckets = capBucketsByHistory(
-    allBuckets,
-    historyAvailableDays,
-    bucketDays
-  );
-
-  const avg =
-    buckets.reduce((sum, b) => sum + (b.authors ?? 0), 0) / buckets.length;
+  const active = activeContributors(perAuthor, T);
+  const excluded = perAuthor.length - active;
+  const pct = Math.round(T * 100);
+  const plural = active === 1 ? 'contributor' : 'contributors';
+  const excludedClause =
+    excluded > 0 ? `; ${excluded} excluded <${pct}% on merges & LOC` : '';
+  const expression = `${active} active ${plural} (90d${excludedClause})`;
 
   const reliability = computeReliability('not-reliable', ['git'], []);
 
-  const expression = `avg ${avg.toFixed(1)} contributors/month over ${buckets.length} bucket${buckets.length !== 1 ? 's' : ''}`;
   return makeMetricResult(
     'adp_g2_contributors',
-    avg,
+    active,
     'computed',
     [201],
     reliability,

@@ -22,6 +22,7 @@
 
 [meta]
 max_lookback_days = 90
+active_contributor_threshold = 0.1
 standards_version = "2026.06"
 # Users override by pointing sources.toml [standards].standards_file at their own copy.
 
@@ -141,7 +142,7 @@ metric = "adp_g2_contributors"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
-definition = "Distinct commit-author count per trailing 30-day bucket (aggregate only, no PII)"
+definition = "Active contributor count over the 90-day window: authors excluded only when both their merge-share and LOC-share fall below the active_contributor_threshold (default 10 %), filtering out drive-by reviewers and non-code participants (aggregate only, no PII)"
 applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # raw count; no direction implied without context

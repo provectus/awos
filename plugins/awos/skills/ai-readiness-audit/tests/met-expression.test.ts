@@ -55,11 +55,17 @@ test('Every computed metric must emit a human-readable expression so the report 
 test('Every computed metric must emit a human-readable expression so the report shows evidence (issue #12): adp_g2_contributors', () => {
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(tmp, 'git', {
-    monthly_buckets: [
-      { bucket_start: '2026-01-01', authors: 5 },
-      { bucket_start: '2026-02-01', authors: 7 },
-      { bucket_start: '2026-03-01', authors: 6 },
-    ],
+    window_stats: {
+      window_days: 90,
+      commits: 60,
+      merges: 18,
+      authors_total: 3,
+      per_author: [
+        { author: 'Alice', commits: 30, merges: 9, lines: 900 },
+        { author: 'Bob', commits: 20, merges: 6, lines: 600 },
+        { author: 'Carol', commits: 10, merges: 3, lines: 300 },
+      ],
+    },
     tooling_paths: [],
     numstat_totals: { added: 0, deleted: 0 },
     merge_records: [],
@@ -68,6 +74,6 @@ test('Every computed metric must emit a human-readable expression so the report 
   assert.equal(result.status, 'OK', 'status must be OK');
   assert.ok(
     typeof result.expression === 'string' && result.expression.length > 0,
-    `adp_g2_contributors must emit a non-empty expression when computing avg contributors, got ${JSON.stringify(result.expression)}`
+    `adp_g2_contributors must emit a non-empty expression when computing active contributor count, got ${JSON.stringify(result.expression)}`
   );
 });

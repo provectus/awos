@@ -781,6 +781,43 @@ test('flow.md tells the user to commit the generated artifacts', () => {
   );
 });
 
+test('flow.md captures canonical project config and reconciles reused-skill constants', () => {
+  // A reused skill hardcoded the wrong Jira instance host; the dead link
+  // surfaced at runtime and was mis-blamed on the generated command. Step 2
+  // must capture the canonical config and Step 4.5 must reconcile a reused
+  // skill's hardcoded constants against it at generation time.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /Canonical project config/i.test(body) && /base URL/i.test(body),
+    'flow.md Step 2 must capture canonical project config (Jira base URL, Slack channel/handles, code-host org/repo) as project-config facts'
+  );
+  assert.ok(
+    /hardcoded constants/i.test(body) && /Project Setup/i.test(body),
+    'flow.md Step 4.5 must scan a reused skill for hardcoded constants and reconcile them against the captured Project Setup config, asking on a mismatch'
+  );
+  assert.ok(
+    /Format\/lint gate scope/i.test(body) &&
+      /Do not add a format pass inside the generated flow/i.test(body),
+    'flow.md Step 2 must detect a repo-wide format/lint gate and Step 8 must advise the project-side ignore fix — without adding a format pass inside the flow'
+  );
+});
+
+test('delivery-flow-template.md carries a flow-agnostic Project Setup section', () => {
+  // The canonical config the reconcile step checks against lives in the
+  // decision record so re-runs and the sibling fix-bug flow reuse it.
+  const body = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /## .*Project Setup/.test(body),
+    'delivery-flow-template.md must declare a "Project Setup" section recording the canonical config (Jira base URL, Slack channel, team handles) — reconciled against reused-skill constants at generation time'
+  );
+  assert.ok(
+    /base URL/i.test(body) && /code-host org\/repo/i.test(body),
+    'delivery-flow-template.md Project Setup must record the Jira base URL and code-host org/repo so reused skills can be checked against them'
+  );
+});
+
 test('flow.md and the template guard the generated header against comment-nesting', () => {
   // A generated file embedded a literal awos:flow:stage marker inside its
   // outer <!-- … --> header comment; the inner --> closed the comment early

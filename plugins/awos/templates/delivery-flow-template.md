@@ -93,6 +93,14 @@ Where the flow announces itself so the team stays aware as gates are removed —
 - **Channel:** [team channel and transport from §7 — Slack, Teams, a PR comment — or "none (interactive runs only)"]
 - **Announce on:** [the transitions that post — e.g. spec ready, change request opened, gates passed, merged, deployed, blocked-and-waiting; favor events that need a human or change shared state]
 
+## Bug-fix Flow
+
+Whether `/awos:flow` also generated the lighter `fix-bug` command, and its policy. Flow-agnostic — the bug-fix command consumes §1–§9 above and only its middle stages differ.
+
+- **Generated:** [yes — `.claude/commands/fix-bug.md` | no]
+- **Classification & amendment policy:** [every fix is classified conformance (code violated a correct spec → fix + regression test, no spec change) vs. divergence (spec was wrong or behavior intentionally changed → fix + regression test + amend the owning `functional-spec.md` via `/awos:spec` update mode); a bug mapping to no spec proceeds without amendment]
+- **Regression-test expectation:** [a fix adds one failing→passing test capturing the bug, honoring the project's `<!-- skip-tests: true -->` opt-out — or "n/a (not generated)"]
+
 ## 10. Local Customizations
 
 Manual edits to the generated command that the user chose to keep during regeneration. `/awos:flow` re-applies these on every regeneration; remove an entry to retire it.

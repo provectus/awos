@@ -965,6 +965,143 @@ test('delivery-flow-template.md preserves customizations and the tooling invento
     /Stage automation \(reuse \/ replace \/ compose\)/.test(body),
     'delivery-flow-template.md must record the per-stage reuse/replace/compose decision for overlapping project automation, so re-runs do not regenerate over a reused command'
   );
+  assert.ok(
+    /## .*Bug-fix Flow/.test(body),
+    'delivery-flow-template.md must declare a "Bug-fix Flow" section — whether fix-bug was generated, the classification/amendment policy, and the regression-test expectation; the sibling command consumes it'
+  );
+});
+
+test('commands/spec.md carries an Update Mode that amends in place', () => {
+  // spec.md was creation-only; a behavior-changing fix had no way to keep the
+  // spec in sync. Update Mode mirrors the Step 2A pattern in
+  // product/roadmap/architecture: detect an existing spec, edit it in place,
+  // and never allocate a new index.
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    /Mode Detection/i.test(body) && /Update Mode/i.test(body),
+    'commands/spec.md must add a Mode Detection step that routes an existing-spec reference to an Update Mode (mirroring product/roadmap/architecture)'
+  );
+  assert.ok(
+    /never allocates a new index/i.test(body) &&
+      /never runs `create-spec-directory\.sh`/i.test(body),
+    'commands/spec.md Update Mode must edit in place — it must never run create-spec-directory.sh and never allocate a new index'
+  );
+  assert.ok(
+    /## Change Log/.test(body),
+    'commands/spec.md Update Mode must append a dated entry under a ## Change Log heading'
+  );
+  assert.ok(
+    /stays `Completed`/i.test(body),
+    'commands/spec.md Update Mode must not force a Status transition — a spec amended after a verified fix stays Completed'
+  );
+});
+
+test('functional-spec-template.md declares a Change Log section', () => {
+  // The amendment target for spec.md Update Mode must be a well-defined,
+  // canonical section so the edit knows where to write.
+  const body = readUtf8(path.join(templatesDir, 'functional-spec-template.md'));
+  assert.ok(
+    /## Change Log/.test(body),
+    'functional-spec-template.md must carry a canonical "## Change Log" section — the target for Update-Mode amendments'
+  );
+});
+
+test('fix-bug-template.md carries the canonical bug-fix stages and the classify gate', () => {
+  // The generated /fix-bug command is the lighter sibling of
+  // /implement-feature: diagnose → fix → scoped re-verify → targeted spec
+  // amendment. Its classify gate is what makes spec-amendment correct, and
+  // its amend-spec stage must invoke core /awos:spec rather than duplicating
+  // amendment prose.
+  const body = readUtf8(path.join(pluginTemplatesDir, 'fix-bug-template.md'));
+  const stageOrder = [
+    'fetch-bug',
+    'resume-detection',
+    'workspace',
+    'diagnose',
+    'classify',
+    'fix',
+    'regression-test',
+    'verify-criteria',
+    'amend-spec',
+    'commit-push',
+    'remote-gates',
+    'merge',
+    'close-ticket',
+  ];
+  const positions = stageOrder.map((s) =>
+    body.indexOf(`<!-- awos:flow:stage=${s} -->`)
+  );
+  for (let i = 0; i < stageOrder.length; i++) {
+    assert.ok(
+      positions[i] !== -1 && (i === 0 || positions[i] > positions[i - 1]),
+      `fix-bug-template.md stages must appear in canonical order (${stageOrder.join(' → ')}); '${stageOrder[i]}' is missing or out of place`
+    );
+  }
+  assert.ok(
+    body.includes('<!-- /awos:flow:stage -->'),
+    'fix-bug-template.md must close every stage with the <!-- /awos:flow:stage --> marker so /awos:flow re-runs can attribute manual edits per stage'
+  );
+  assert.ok(
+    /[Cc]onformance/.test(body) && /[Dd]ivergence/.test(body),
+    'fix-bug-template.md classify stage must distinguish conformance bugs (do not amend the spec) from divergence (amend the spec) — the gate that makes amendment correct'
+  );
+  assert.ok(
+    /amend-spec/.test(body) && /invoke[s]? `\/awos:spec`/i.test(body),
+    'fix-bug-template.md amend-spec stage must invoke core /awos:spec in update mode on a divergence, not duplicate amendment prose'
+  );
+  assert.ok(
+    body.includes('**[Agent:') &&
+      /do not edit code in the main context/i.test(body),
+    'fix-bug-template.md must be orchestrator-only — the fix is delegated via **[Agent: name]** and the orchestrator never edits code itself'
+  );
+  assert.ok(
+    body.includes('<!-- skip-tests: true -->'),
+    'fix-bug-template.md regression-test/verify-criteria stages must honor the <!-- skip-tests: true --> opt-out'
+  );
+  assert.ok(
+    /`Monitor` tool, never foreground `sleep` loops/.test(body),
+    'fix-bug-template.md remote-gates stage must wait with the Monitor tool, not blind sleep loops, with a filter covering failure states'
+  );
+  assert.ok(
+    /skipped or unanswered confirmation means do not merge/i.test(body),
+    'fix-bug-template.md merge stage must keep the per-run confirmation guard — a skipped confirmation is a no'
+  );
+  const closeStage = body.slice(body.indexOf('awos:flow:stage=close-ticket'));
+  assert.ok(
+    /verdict/i.test(closeStage) &&
+      /finding count/i.test(closeStage) &&
+      closeStage.includes('review.md'),
+    'fix-bug-template.md close stage must report the local review evidence (verdict, finding count, review file path) — the same hand-off treatment as implement-feature'
+  );
+  for (const section of ['§2', '§4', '§5', '§9']) {
+    assert.ok(
+      body.includes(section),
+      `fix-bug-template.md must reuse the shared delivery-flow decisions (${section}) rather than re-deriving them`
+    );
+  }
+});
+
+test('flow.md wires fix-bug generation alongside implement-feature', () => {
+  // /awos:flow must generate the optional second command from its own
+  // template, gated on a Step 4 opt-in decision, with the same
+  // reconcile-on-rerun behavior as implement-feature.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    body.includes('${CLAUDE_PLUGIN_ROOT}/templates/fix-bug-template.md'),
+    'flow.md must reference the bundled fix-bug-template.md so generation is self-contained in the plugin'
+  );
+  assert.ok(
+    body.includes('.claude/commands/fix-bug.md'),
+    'flow.md must generate the sibling command at .claude/commands/fix-bug.md'
+  );
+  assert.ok(
+    /Bug-fix flow \(optional second command\)/i.test(body),
+    'flow.md Step 4 must add the bug-fix opt-in decision (does the project want the fix-bug flow, with its classification/regression policy)'
+  );
+  assert.ok(
+    /classification gate/i.test(body),
+    'flow.md bug-fix decision must settle the classification gate (conformance vs. divergence) policy'
+  );
 });
 
 test('context/<path> references in prompts are internally consistent', () => {

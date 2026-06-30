@@ -1134,16 +1134,28 @@ test('standards.toml exists and matches the category/band schema', () => {
   assert.ok(fs.existsSync(p), 'expected references/standards.toml');
   const src = readUtf8(p);
   // [meta] cadence + lookback are data, with the exact locked values.
+  // Metrics v3: a single 90-day window (no 30-day bucketing); the active-
+  // contributor and rework-horizon thresholds are locked meta constants.
   assert.match(src, /\[meta\]/, 'standards.toml must have a [meta] table');
-  assert.match(
+  assert.doesNotMatch(
     src,
-    /monthly_bucket_days\s*=\s*30/,
-    'meta.monthly_bucket_days must be 30'
+    /monthly_bucket_days/,
+    'meta.monthly_bucket_days must be removed (single 90-day window, no bucketing)'
   );
   assert.match(
     src,
-    /max_lookback_days\s*=\s*730/,
-    'meta.max_lookback_days must be 730'
+    /max_lookback_days\s*=\s*90/,
+    'meta.max_lookback_days must be 90 (single recent window)'
+  );
+  assert.match(
+    src,
+    /active_contributor_threshold\s*=\s*0\.1/,
+    'meta.active_contributor_threshold must be 0.1 (active-contributor exclusion threshold)'
+  );
+  assert.match(
+    src,
+    /rework_horizon_days\s*=\s*21/,
+    'meta.rework_horizon_days must be 21 (code-turnover rework window)'
   );
   assert.match(
     src,

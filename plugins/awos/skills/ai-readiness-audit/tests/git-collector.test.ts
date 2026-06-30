@@ -640,3 +640,122 @@ test('code_turnover: deletions beyond the rework horizon are NOT counted as turn
     'ratio must be 0 — old lines deleted are not rework'
   );
 });
+
+// ---------------------------------------------------------------------------
+// window_stats.fix_merges tests (task 2.4) — deployment rework rate proxy.
+//
+// fix_merges counts first-parent merges in the 90-day window whose commit
+// subject matches fix|bugfix|hotfix|patch|defect|regression (case-insensitive).
+// Distinct from revert_merges (which matches ^Revert|hotfix|rollback for g7).
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a repo with:
+ *   - Root commit at 2024-10-01 (outside all windows)
+ *   - Out-of-window "fix: old repair" merge at 2024-11-01 (before since=2024-12-25)
+ *   - In-window "fix: apply security patch" merge at 2025-01-15
+ *   - In-window "bugfix: resolve defect" merge at 2025-02-20
+ *   - Normal anchor merge at 2025-03-25 (newest commit → anchor)
+ *
+ * Window anchor = 2025-03-25; since = 2024-12-25.
+ * In-window fix merges: 2025-01-15 and 2025-02-20 → fix_merges = 2.
+ * Out-of-window: 2024-11-01 → excluded.
+ */
+function fixMergeRepo(): string {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-fix-')), 'repo');
+  mkdirSync(r);
+
+  const alice = (args: string[], date: string) =>
+    gitAs(r, args, date, 'Alice', 'alice@example.com');
+
+  alice(['init', '-q', '-b', 'main'], '2024-10-01T00:00:00');
+
+  // Root commit
+  writeFileSync(join(r, 'root.txt'), 'root\n');
+  alice(['add', '-A'], '2024-10-01T00:00:00');
+  alice(['commit', '-qm', 'feat: root'], '2024-10-01T00:00:00');
+
+  // Out-of-window fix merge — 2024-11-01, before since=2024-12-25
+  alice(['checkout', '-qb', 'old-fix'], '2024-11-01T00:00:00');
+  writeFileSync(join(r, 'old-fix.txt'), 'old fix\n');
+  alice(['add', '-A'], '2024-11-01T00:00:00');
+  alice(['commit', '-qm', 'chore: old change'], '2024-11-01T00:00:00');
+  alice(['checkout', '-q', 'main'], '2024-11-01T00:00:00');
+  alice(
+    ['merge', '--no-ff', '-qm', 'fix: old repair (out of window)', 'old-fix'],
+    '2024-11-01T00:00:00'
+  );
+
+  // In-window fix merge — 2025-01-15
+  alice(['checkout', '-qb', 'fix-1'], '2025-01-15T00:00:00');
+  writeFileSync(join(r, 'fix1.txt'), 'fix 1\n');
+  alice(['add', '-A'], '2025-01-15T00:00:00');
+  alice(['commit', '-qm', 'feat: new feature'], '2025-01-15T00:00:00');
+  alice(['checkout', '-q', 'main'], '2025-01-15T00:00:00');
+  alice(
+    [
+      'merge',
+      '--no-ff',
+      '-qm',
+      'fix: apply security patch (in window)',
+      'fix-1',
+    ],
+    '2025-01-15T00:00:00'
+  );
+
+  // In-window bugfix merge — 2025-02-20
+  alice(['checkout', '-qb', 'fix-2'], '2025-02-20T00:00:00');
+  writeFileSync(join(r, 'fix2.txt'), 'fix 2\n');
+  alice(['add', '-A'], '2025-02-20T00:00:00');
+  alice(['commit', '-qm', 'feat: another change'], '2025-02-20T00:00:00');
+  alice(['checkout', '-q', 'main'], '2025-02-20T00:00:00');
+  alice(
+    ['merge', '--no-ff', '-qm', 'bugfix: resolve defect (in window)', 'fix-2'],
+    '2025-02-20T00:00:00'
+  );
+
+  // Normal anchor merge — 2025-03-25 (newest commit → window anchor)
+  alice(['checkout', '-qb', 'feature-x'], '2025-03-25T00:00:00');
+  writeFileSync(join(r, 'x.txt'), 'x\n');
+  alice(['add', '-A'], '2025-03-25T00:00:00');
+  alice(['commit', '-qm', 'feat: x'], '2025-03-25T00:00:00');
+  alice(['checkout', '-q', 'main'], '2025-03-25T00:00:00');
+  alice(
+    ['merge', '--no-ff', '-qm', 'Merge feature-x', 'feature-x'],
+    '2025-03-25T00:00:00'
+  );
+
+  return r;
+}
+
+test('window_stats: fix_merges counts in-window fix/bugfix merges and excludes out-of-window ones', () => {
+  // Fixture has 2 in-window fix merges (fix on 2025-01-15, bugfix on 2025-02-20)
+  // and 1 out-of-window fix merge (2024-11-01), which must be excluded.
+  // window anchor = 2025-03-25, since = 2024-12-25
+  const repoPath = fixMergeRepo();
+  const art = collect(repoPath, WINDOW_PERIOD);
+  const ws = art.raw.window_stats;
+
+  assert.ok(
+    'fix_merges' in ws,
+    'window_stats must include fix_merges field (required for adp_g14_rework_rate)'
+  );
+  assert.equal(
+    ws.fix_merges,
+    2,
+    `window_stats.fix_merges must be 2 (fix on 2025-01-15 + bugfix on 2025-02-20 in window); ` +
+      `got ${ws.fix_merges} — value 3 would mean the 2024-11-01 out-of-window fix was NOT excluded`
+  );
+});
+
+test('window_stats: fix_merges is 0 for a clean repo with no fix/bugfix/patch merges', () => {
+  // windowRepo() has only one normal merge ("Merge feature-bob") — no fix keywords.
+  const art = collect(windowRepo(), WINDOW_PERIOD);
+  const ws = art.raw.window_stats;
+
+  assert.equal(
+    ws.fix_merges,
+    0,
+    `window_stats.fix_merges must be 0 for a repo with no fix-labelled merges; got ${ws.fix_merges}`
+  );
+});

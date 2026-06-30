@@ -447,6 +447,24 @@ url = "https://owasp.org/www-project-software-component-verification-standard/"
 date = "2020"
 last_verified = "2026-06-30"
 
+# ADP-G14: Deployment rework rate (DORA 2024, git keyword proxy)
+
+[category.rework_rate]
+code = 1401
+check_id = "ADP-24"
+metric = "adp_g14_rework_rate"
+dimension = "ai-sdlc-adoption"
+weight = 10
+method = "computed"
+definition = "DORA deployment rework rate: ratio of deployments that are unplanned work to fix bugs triggered by incidents in production. Proxied from git: first-parent merges in the 90-day window whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords (case-insensitive). Distinct from change_failure_rate (g7), which counts revert/rollback deployments, and from code_churn (g6), which measures line-level turnover. DORA publishes no numeric thresholds for rework rate; bands (good <15%, watch <30%, concerning >=30%) are AWOS heuristics."
+applies_when = "always"
+sources = ["git"]
+reliability_default = "minimal"
+source = "DORA"
+url = "https://dora.dev/guides/dora-metrics/"
+date = "2024"
+last_verified = "2026-06-30"
+
 # ---------------------------------------------------------------------------
 # [category.*] — org-level portfolio rollup categories (ORG.2)
 # Computed by org_rollup.ts from per-repo audit JSONs. Code range 9000–9002.

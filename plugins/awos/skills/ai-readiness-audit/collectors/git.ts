@@ -202,6 +202,15 @@ export interface WindowStats {
   merges: number;
   /** First-parent merges in the window whose subject matches revert/hotfix/rollback keywords. */
   revert_merges: number;
+  /**
+   * First-parent merges in the window whose subject matches fix/bugfix/hotfix/patch/defect/regression
+   * keywords (case-insensitive). Used by adp_g14_rework_rate (DORA deployment rework rate proxy).
+   *
+   * Note: `hotfix` intentionally overlaps with revert_merges. That is inherent to message-keyword
+   * proxies — revert_merges measures change-failure (DORA g7) and fix_merges measures rework rate
+   * (DORA g14); they are different metrics with different denominators and bands.
+   */
+  fix_merges: number;
   authors_total: number;
   per_author: AuthorRow[];
   /** Merges divided by active-contributor count; null when activeCount is 0. Display-only. */
@@ -251,6 +260,7 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
     commits: 0,
     merges: 0,
     revert_merges: 0,
+    fix_merges: 0,
     authors_total: 0,
     per_author: [],
     merges_per_active: null,
@@ -266,7 +276,7 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
     latest.getTime() - windowDays * 86_400_000
   ).toISOString();
 
-  // 0. In-window revert/hotfix/rollback merges — bounded to the same window as the rest.
+  // 0a. In-window revert/hotfix/rollback merges — bounded to the same window as the rest.
   const revertOut = run(
     [
       'log',
@@ -282,6 +292,26 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
     .split('\n')
     .filter(Boolean);
   const revert_merges = revertOut.length;
+
+  // 0b. In-window fix/bugfix/hotfix/patch/defect/regression merges — used by adp_g14_rework_rate
+  //     (DORA deployment rework rate proxy). Distinct from revert_merges above: both grep for
+  //     "hotfix" by design — they measure different DORA metrics (change-failure vs. rework rate).
+  const fixOut = run(
+    [
+      'log',
+      '--first-parent',
+      '--merges',
+      '--grep=fix\\|bugfix\\|hotfix\\|patch\\|defect\\|regression',
+      '--regexp-ignore-case',
+      `--since=${since}`,
+      '--format=%H',
+    ],
+    cwd
+  )
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+  const fix_merges = fixOut.length;
 
   // 1. Non-merge commits — derive per-author commit counts and line churn.
   //    Format: one "%H\t%aN" header line per commit, then numstat lines.
@@ -363,6 +393,7 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
     commits: totalCommits,
     merges: totalMerges,
     revert_merges,
+    fix_merges,
     authors_total: allAuthors.size,
     per_author: perAuthor,
     merges_per_active,

@@ -170,6 +170,15 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Severity:** high
 - **Category:** 1103
 
+### ADP-G14: Deployment rework rate
+
+- **What:** DORA deployment rework rate — share of deployments that are unplanned fix work triggered by incidents (DORA's fifth metric, introduced 2024). Proxied from git: first-parent merges in the 90-day window whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords. Bands are AWOS heuristics (DORA publishes no numeric thresholds).
+- **How:** `node "<engine cli path>" metric adp_g14_rework_rate <repoPath> context/audits/<date>/collected`
+- **Pass (OK):** metric returns `status: "OK"` — rework rate computed and banded
+- **Skip:** metric returns `status: "SKIP"` — git source unavailable or no merges in window
+- **Severity:** high
+- **Category:** 1401
+
 ### ADP-G10: Cyclomatic complexity
 
 - **What:** Average and maximum McCabe cyclomatic complexity (CCN) per function across the repository, computed by parsing source files with tree-sitter grammars. Bands: elite ≤5, high ≤10, medium ≤15, low >15.

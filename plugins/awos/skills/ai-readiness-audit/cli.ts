@@ -103,6 +103,7 @@ import { compute as computeG10 } from './metrics/adp_g10_complexity.ts';
 import { compute as computeG11 } from './metrics/adp_g11_scale.ts';
 import { compute as computeG12 } from './metrics/adp_g12_deps.ts';
 import { compute as computeG13 } from './metrics/adp_g13_doc_coverage.ts';
+import { compute as computeG14 } from './metrics/adp_g14_rework_rate.ts';
 // Adding a metric module is a one-line change per import + one entry in METRICS below.
 
 import type { MetricResult } from './metrics/_base.ts';
@@ -167,6 +168,7 @@ export const METRICS: Record<string, MetricFn> = {
   adp_g11_scale: computeG11,
   adp_g12_deps: computeG12,
   adp_g13_doc_coverage: computeG13,
+  adp_g14_rework_rate: computeG14,
 };
 
 // ---------------------------------------------------------------------------

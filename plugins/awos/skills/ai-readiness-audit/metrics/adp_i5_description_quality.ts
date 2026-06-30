@@ -2,10 +2,14 @@
  * adp_i5_description_quality — Ticket description quality/richness.
  *
  * kind: "banded"
- * value: share of tickets with description_length ≥ MIN_DESC_CHARS (number ∈ [0,1]), or null
- * band: "good" (≥0.7) | "medium" (≥0.4) | "low" (<0.4)
+ * value: share of eligible tickets that are well-described (number ∈ [0,1]), or null
+ * band: "good" (≥0.7) | "watch" (≥0.4) | "concerning" (<0.4)
  * categories_awarded: [1105] when topology.has_tracker is true and description_length data available
  * reliability_default: "minimal"
+ *
+ * A ticket is "well-described" iff BOTH signals hold:
+ *   - description_length ≥ MIN_DESC_CHARS (non-trivial description), AND
+ *   - has_acceptance_criteria === true (the ticket states its done-criteria).
  *
  * Rationale (Agile Alliance Definition of Ready):
  *   The Agile Alliance Definition of Ready (https://www.agilealliance.org/glossary/definition-of-ready/)
@@ -15,16 +19,17 @@
  *   When an AI agent receives a thin ticket it either hallucinates scope or requires
  *   expensive back-and-forth clarification rounds, both of which hurt delivery throughput.
  *
- *   This metric uses a character-count proxy: a description of ≥50 characters is
- *   treated as "non-trivial". This threshold is an AWOS heuristic — the Agile Alliance
- *   publishes no numeric character-count criterion. Disclose this wherever the metric
- *   is presented. Only size/structure signals (character count, AC presence) are stored;
- *   raw description text is never collected or logged.
+ *   This metric uses two deterministic proxies: a description of ≥50 characters is
+ *   treated as "non-trivial", and an explicit acceptance-criteria flag confirms the
+ *   ticket states its done-criteria. The 50-char threshold is an AWOS heuristic — the
+ *   Agile Alliance publishes no numeric character-count criterion. Disclose this wherever
+ *   the metric is presented. Only size/structure signals (character count, AC presence)
+ *   are stored; raw description text is never collected or logged.
  *
  *   Band thresholds are AWOS heuristics:
- *     ≥70%  → "good"    most tickets are well-described
- *     ≥40%  → "medium"  moderate description coverage, room to improve
- *     <40%  → "low"     thin tickets dominate; AI-agent context is severely limited
+ *     ≥70%  → "good"        most tickets are well-described
+ *     ≥40%  → "watch"       moderate description coverage, room to improve
+ *     <40%  → "concerning"  thin tickets dominate; AI-agent context is severely limited
  *
  * Score anchors (piecewise linear interpolation, higher share = higher score):
  *   ANCHORS = [{x:0,y:0},{x:0.4,y:0.4},{x:0.7,y:0.8},{x:1,y:1}]
@@ -36,8 +41,13 @@
  *   - raw.tickets absent or empty
  *   - no ticket has a numeric description_length (no description-quality data in the window)
  *
+ * Eligibility note: a ticket is "eligible" iff it carries a numeric description_length.
+ *   The has_acceptance_criteria flag does NOT affect eligibility — it only decides
+ *   whether an eligible ticket counts as well-described.
+ *
  * Source shape: collectedDir/tracker.json
- * Input raw field: tickets[].description_length (number, optional)
+ * Input raw fields: tickets[].description_length (number, optional),
+ *                   tickets[].has_acceptance_criteria (boolean, optional)
  *
  * @see https://www.agilealliance.org/glossary/definition-of-ready/  (Agile Alliance, 2012)
  */
@@ -61,10 +71,10 @@ const ANCHORS = [
 ] as const;
 
 /** Map share of well-described tickets to a band label. */
-function descriptionBand(share: number): 'good' | 'medium' | 'low' {
+function descriptionBand(share: number): 'good' | 'watch' | 'concerning' {
   if (share >= 0.7) return 'good';
-  if (share >= 0.4) return 'medium';
-  return 'low';
+  if (share >= 0.4) return 'watch';
+  return 'concerning';
 }
 
 export function compute(
@@ -122,8 +132,11 @@ export function compute(
     );
   }
 
+  // Well-described requires BOTH a non-trivial description AND acceptance criteria.
   const wellDescribed = eligible.filter(
-    (t) => (t['description_length'] as number) >= MIN_DESC_CHARS
+    (t) =>
+      (t['description_length'] as number) >= MIN_DESC_CHARS &&
+      t['has_acceptance_criteria'] === true
   );
   const share = wellDescribed.length / eligible.length;
   const band = descriptionBand(share);
@@ -139,7 +152,7 @@ export function compute(
   const reliability = computeReliability('minimal', ['tracker'], []);
 
   const expression =
-    `${wellDescribed.length} of ${eligible.length} tickets with description ≥${MIN_DESC_CHARS} chars = ` +
+    `${wellDescribed.length} of ${eligible.length} tickets with description ≥${MIN_DESC_CHARS} chars + acceptance criteria = ` +
     `${(share * 100).toFixed(1)}% (${band}; ` +
     `threshold is an AWOS heuristic — Agile Alliance publishes no numeric criterion; ` +
     `size/structure signals only, no raw text stored)`;

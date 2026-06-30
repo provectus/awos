@@ -585,10 +585,9 @@ test('HTML headline renders gated-absent delivery metrics as "needs connector" n
     { label: 'Ticket Throughput', display_value: '', gated: 'tracker' },
     // Row 7: gated incident, absent via hyphen → "needs incident connector", no band chip
     { label: 'Incident Rate', display_value: '-', gated: 'incident' },
-    // Row 8: gated incident, absent via missing value → "needs incident connector"
+    // Row 8: gated incident, absent via missing key → "needs incident connector"
     {
       label: 'MTTD',
-      display_value: undefined as unknown as string,
       gated: 'incident',
     },
     // Row 9: gated tracker, but display_value IS present (connector available) → render normally with band chip

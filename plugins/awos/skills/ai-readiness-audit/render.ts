@@ -68,7 +68,7 @@
  *   "scale":    ScaleMetric[],      // code scale & complexity
  *   "reach":    { ai_tooling?: string, contributors?: string },
  * }
- * DeliveryMetric: { label, display_value, band?, reliability?, check_id?, gated?: 'tracker'|'incident' }
+ * DeliveryMetric: { label, display_value?, band?, reliability?, check_id?, gated?: 'tracker'|'incident' }
  * ScaleMetric:    { label, display_value, check_id? }
  *
  * Insight (the narrative READ):
@@ -159,7 +159,7 @@ export interface DimensionArtifact {
 
 export interface DeliveryMetric {
   label: string;
-  display_value: string;
+  display_value?: string;
   band?: string;
   reliability?: string;
   check_id?: string;

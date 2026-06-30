@@ -53,6 +53,8 @@ This command is an orchestrator. It diagnoses and decides, but the code change g
 
 [Connector-specific fetch using the chosen transport from §7 of delivery-flow.md, with its recorded fallback — reuse §1, but the source is a bug report rather than a feature ticket. Extract and keep: bug ID, title, the reported symptom, reproduction steps if given, affected area, link. For description-only sources this stage just normalizes the input. Store the bug ID as `BUG_ID`.]
 
+[Crash-report source (per the Bug-fix Flow source decision — e.g. Crashlytics, Sentry): fetch the issue and its most recent events via the §7 transport for the crash tool, and use the title/subtitle as the problem statement. Map every app-frame in the stack to a real `file:line` in the local checkout (Grep/Read), ignoring system frames. **If the stack is unsymbolicated** (raw addresses, no file/line), say so explicitly and do not invent line numbers — the symbol file (dSYM/source map) for that build was likely not uploaded. Capture impact — affected versions, user count, first/last-seen — and prefer a source-typed branch name (e.g. `bug/crash-<short-id>`) per §2. The diagnose stage starts from this stack context. Omit this paragraph when the bug-fix source decision does not include crash reports.]
+
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=resume-detection -->
@@ -170,6 +172,8 @@ Merging is irreversible. Even when the recorded policy lets the flow merge, ask 
 [Per §5's definition of Done: gather the recorded evidence and report the final state to the user. When the source has tickets, transition the bug to its closed/fixed state using the chosen transport and attach the evidence; omit the transition for ticketless sources — the report to the user is the close.]
 
 Include the local review and the spec-amendment outcome in the reported evidence, so neither is buried in the logs. From the flow log, report: the review **verdict**, the **finding count** (by severity), the **review file path** (`context/spec/{SPEC_NAME}/review.md`, or the path a reused review command used), that a manual keep/drop gate ran over the findings, and — for a divergence fix — that the owning spec was amended (the criteria touched and the Change Log entry). The path lets the user re-open the full review without re-running.
+
+[Crash-report source: optionally write a short investigation note back to the crash issue via the §7 transport — root cause, branch, files touched — but never auto-close it; a crash resolves on its own once a non-crashing build ships.]
 
 <!-- /awos:flow:stage -->
 

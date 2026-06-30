@@ -1100,6 +1100,27 @@ test('flow.md wires fix-bug generation alongside implement-feature', () => {
   );
 });
 
+test('fix-bug-template.md supports a crash-report source', () => {
+  // Eugene's /everclear:fix starts from a Crashlytics issue: pull events,
+  // map the stack to real file:line, and refuse to invent lines when the
+  // build is unsymbolicated. The generated fix-bug command must support
+  // crash reporters as a bug source, generically.
+  const tpl = readUtf8(path.join(pluginTemplatesDir, 'fix-bug-template.md'));
+  assert.ok(
+    /unsymbolicated/i.test(tpl) && /do not invent line numbers/i.test(tpl),
+    'fix-bug-template.md fetch-bug stage must map a crash stack to local file:line and refuse to invent line numbers on an unsymbolicated build'
+  );
+  assert.ok(
+    /never auto-close/i.test(tpl),
+    'fix-bug-template.md must allow writing an investigation note back to the crash issue without auto-closing it'
+  );
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /bug source/i.test(flow) && /crash report/i.test(flow),
+    'flow.md bug-fix policy must ask the bug source, including a crash report from a crash-reporting tool'
+  );
+});
+
 test('flow.md interviews the command set and names', () => {
   // Eugene's road-test named his commands to taste (/everclear:workflow,
   // /everclear:fix); the generator must let the team pick which commands to

@@ -382,6 +382,69 @@ test('adp_g4: window_start filter — only in-window records count toward median
   );
 });
 
+test('adp_g4: window_start filter is chronological, not lexicographic (non-UTC merged_at offset)', () => {
+  // Regression: merged_at comes from git %cI in the committer's LOCAL timezone
+  // (e.g. "...-08:00"), while window_start is UTC from toISOString() ("...Z").
+  // A naive string compare (merged_at >= window_start) is NOT chronological for
+  // mixed-offset ISO-8601 timestamps, so a commit within ~14h of the boundary is
+  // mis-included/excluded. This fixture crafts exactly such a boundary case.
+  //
+  //   window_start = 2025-01-15T00:00:00.000Z
+  //   record merged_at = 2025-01-14T20:00:00-08:00  ==  2025-01-15T04:00:00Z
+  //     → chronologically 4h AFTER window_start → IN window
+  //     → but lexicographically "2025-01-14T..." < "2025-01-15T..." → string compare EXCLUDES it
+  //   branch_first_commit_at = 2025-01-14T16:00:00.000Z → 12h lead time → elite band
+  //
+  // With the (buggy) string compare: the only record is excluded → SKIP.
+  // With chronological (epoch) compare: record is included → OK, elite band.
+  const tmp = makeTmpDir();
+  const windowStart = '2025-01-15T00:00:00.000Z';
+
+  const boundaryRecord = {
+    branch_first_commit_at: '2025-01-14T16:00:00.000Z', // 12h before merge
+    merged_at: '2025-01-14T20:00:00-08:00', // = 2025-01-15T04:00:00Z, INSIDE window
+  };
+
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [boundaryRecord],
+    window_stats: {
+      window_days: 90,
+      window_start: windowStart,
+      merges: 1,
+      commits: 0,
+      authors_total: 0,
+      per_author: [],
+      merges_per_active: null,
+      loc_per_active: null,
+    },
+    tooling_paths: [],
+    total_commits: 1,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 0, deleted: 0 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+
+  assert.equal(
+    result.status,
+    'OK',
+    'record at 2025-01-15T04:00:00Z (from -08:00 offset) is chronologically inside the window and must be INCLUDED; ' +
+      'a SKIP here means the filter used a lexicographic string compare that wrongly excluded it'
+  );
+  assert.equal(
+    result.band,
+    'elite',
+    'the included 12h-lead record must yield elite band'
+  );
+  assert.ok(
+    Math.abs((result.value as number) - 12) < 0.001,
+    `median must be 12h (the in-window boundary record); got ${result.value}`
+  );
+});
+
 test('adp_g4: window_start absent → all records used (graceful fallback)', () => {
   // When window_stats is absent from the artifact, the metric falls back to
   // using ALL merge_records. This preserves backward compatibility with artifacts

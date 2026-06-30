@@ -100,10 +100,17 @@ export function compute(
   // If window_stats.window_start is available, restrict to in-window merges only.
   // When absent/null (older artifact or empty repo), fall back to all records so
   // existing test fixtures and pre-task-2.1 audits continue to produce results.
+  // Compare by epoch-ms, not by ISO string: merged_at comes from git %cI in the
+  // committer's LOCAL timezone offset (e.g. "...-08:00") while window_start is UTC
+  // from toISOString(); lexicographic compare of mixed-offset strings is not
+  // chronological and would mis-window commits near the boundary.
   const windowStart: string | null = raw.window_stats?.window_start ?? null;
   let records: MergeRecord[] = raw.merge_records;
   if (windowStart) {
-    records = records.filter((r) => r.merged_at >= windowStart);
+    const windowStartMs = new Date(windowStart).getTime();
+    records = records.filter(
+      (r) => new Date(r.merged_at).getTime() >= windowStartMs
+    );
   }
 
   // Compute lead times in hours for each (in-window) merge record.

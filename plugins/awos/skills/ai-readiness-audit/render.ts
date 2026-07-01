@@ -1052,9 +1052,9 @@ const HEADLINE_TIP: Record<string, string> = {
   'AI tooling':
     'AI coding tools detected in the repository (config files, agent instructions, commit markers).',
   'Active Contributors':
-    'Distinct active authors in the measurement window (of the total authors in window); shows their cadence.',
+    "Distinct commit authors with at least 2 commits in the last 90 days — single-commit drive-by authors are excluded. The '(of N in window)' figure is the total distinct authors who committed at all.",
   'Spec coverage':
-    'Share of feature branches that touched spec files (AWOS SDD-04). Higher = more work goes through the spec workflow.',
+    'Share of feature branches that touched spec files, for any spec-driven workflow (AWOS, Kiro, Agent-OS, and similar). Higher means more work goes through a spec workflow (check SDD-04).',
   'Repos with AI tooling':
     'How many portfolio repositories have any AI tooling present.',
 };
@@ -1374,13 +1374,17 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
     );
     rows.push(
       '<table><thead><tr>' +
-        '<th>#</th>' +
-        '<th>Dimension</th>' +
+        `<th>${tip('#', 'Row number — dimensions are listed in a fixed order.')}</th>` +
+        `<th>${tip('Dimension', 'A capability area being audited: a group of related checks scored together. Click a row to open its checks.')}</th>` +
         `<th>${tip('Points', 'Capability points earned in this area.')}</th>` +
         `<th>${tip('Sources', 'Data sources feeding this dimension.')}</th>` +
         `<th>${tip('Coverage', "Share of this area's expected capability that is in place.")}</th>` +
         `<th>${tip('Reliability', 'How trustworthy the numbers in this area are — maximal, minimal (lower bound), or not-reliable (rough proxy).')}</th>` +
-        '<th>FAIL</th><th>WARN</th><th>PARTIAL</th><th>PASS</th><th>SKIP</th>' +
+        `<th>${tip('FAIL', 'Checks where the capability is absent or below its failing threshold.')}</th>` +
+        `<th>${tip('WARN', 'Checks partly in place but below target — worth attention.')}</th>` +
+        `<th>${tip('PARTIAL', 'Checks partly satisfied: some criteria met, not all.')}</th>` +
+        `<th>${tip('PASS', 'Checks fully satisfied.')}</th>` +
+        `<th>${tip('SKIP', 'Checks not evaluated because a required data source or precondition was unavailable — e.g. no ticketing/incident connector, or the check does not apply to this project.')}</th>` +
         '</tr></thead><tbody>'
     );
     let n = 1;
@@ -1424,7 +1428,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       })();
       rows.push(`<tr class="dim-row${lowCov}" onclick="location.hash='dim/${esc(key)}'">
   <td>${n++}</td>
-  <td><a href="${href}"><strong>${tip(titleLabel(dim), 'Open this area to see its individual checks.', `${dim.checks.length} checks · coverage ${covPct}`)}</strong></a></td>
+  <td><a href="${href}"><strong>${esc(titleLabel(dim))}</strong></a></td>
   <td>${tip(fmtPts(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, `coverage ${covPct} · ${esc(dim.dimension)} · standards.toml`)}</td>
   <td>${sourcesCell}</td>
   <td>${tip(covPct, `Share of this area's expected capability that is in place.`, `score ÷ Σ applicable weights · ${esc(dim.dimension)}`)}</td>

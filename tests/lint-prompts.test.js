@@ -1166,8 +1166,8 @@ test('standards.toml exists and matches the category/band schema', () => {
   );
   assert.match(
     src,
-    /active_contributor_threshold\s*=\s*0\.05/,
-    'meta.active_contributor_threshold must be 0.05 (active-contributor exclusion threshold)'
+    /active_contributor_min_commits\s*=\s*2/,
+    'meta.active_contributor_min_commits must be 2 (active = authors with ≥2 commits in the window)'
   );
   assert.match(
     src,
@@ -1585,8 +1585,8 @@ test('SKILL.md headline delivery rows put the unit in the value, not a duplicate
     'SKILL.md must author the delivery rows with bare "Merges" / "LOC" labels'
   );
   assert.ok(
-    body.includes('/ active contributor'),
-    'the per-contributor unit must live in the display_value (e.g. "3.2 / active contributor")'
+    body.includes('/ week (per active contributor)'),
+    'the per-week per-contributor unit must live in the display_value (e.g. "1.5 / week (per active contributor)")'
   );
 });
 

@@ -308,19 +308,23 @@ export interface WindowStats {
   merges_per_active: number | null;
   /** Total LOC (added + deleted) divided by active-contributor count; null when activeCount is 0. Display-only. */
   loc_per_active: number | null;
+  /** Display-only: merges per active contributor per week (merges_per_active ÷ (window_days / 7)). */
+  merges_per_active_per_week: number | null;
+  /** Display-only: LOC per active contributor per week (loc_per_active ÷ (window_days / 7)). */
+  loc_per_active_per_week: number | null;
   /** ISO 8601 timestamp of the window anchor minus lookback_days (the oldest commit included).
    * Used by adp_g4_lead_time to filter merge_records to the same window. Null on empty repos. */
   window_start: string | null;
 }
 
 /**
- * Fallback for the active-contributor exclusion threshold, used ONLY when the
+ * Fallback for the active-contributor minimum-commits bar, used ONLY when the
  * caller does not thread the value in (e.g. the standalone `collect` verb run
- * without standards). The source of truth is `meta.active_contributor_threshold`
+ * without standards). The source of truth is `meta.active_contributor_min_commits`
  * in standards.toml — `audit-core` reads it and passes it into `collect(...)`.
  * Keep this in sync with that key only as a last-resort default.
  */
-export const ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT = 0.05;
+export const ACTIVE_CONTRIBUTOR_MIN_COMMITS_DEFAULT = 2;
 
 /**
  * Fallback for the code-turnover rework horizon, in days, used ONLY when the
@@ -334,24 +338,26 @@ export const REWORK_HORIZON_DAYS_DEFAULT = 21;
 /**
  * Active-contributor filter (locked rule — Phase 2 ratios reuse this).
  *
- * An author is excluded iff their merge-share AND LOC-share are both strictly
- * below threshold T.  T is configurable via meta.active_contributor_threshold
- * in standards.toml (default 0.05 = 5 %).
+ * An author is active iff they have at least `minActiveCommits` commits in the
+ * window. This is an absolute bar, not a share of the total — so a single
+ * dominant author no longer forces everyone else's share below a threshold and
+ * wrongly excludes them. `minActiveCommits` is configurable via
+ * meta.active_contributor_min_commits in standards.toml (default 2).
  *
- * @param perAuthor - author rows from window_stats.per_author
- * @param T         - exclusion threshold (0 < T ≤ 1)
+ * @param perAuthor        - author rows from window_stats.per_author
+ * @param minActiveCommits - minimum commits in the window to count as active (≥ 1)
  */
-export function activeContributors(perAuthor: AuthorRow[], T: number): number {
-  const tm = perAuthor.reduce((s, a) => s + a.merges, 0) || 1;
-  const tl = perAuthor.reduce((s, a) => s + a.lines, 0) || 1;
-  return perAuthor.filter((a) => !(a.merges / tm < T && a.lines / tl < T))
-    .length;
+export function activeContributors(
+  perAuthor: AuthorRow[],
+  minActiveCommits: number
+): number {
+  return perAuthor.filter((a) => a.commits >= minActiveCommits).length;
 }
 
 function buildWindowStats(
   cwd: string,
   period: Period,
-  activeThreshold: number
+  minActiveCommits: number
 ): WindowStats {
   const windowDays = period.lookback_days;
   const empty: WindowStats = {
@@ -364,6 +370,8 @@ function buildWindowStats(
     per_author: [],
     merges_per_active: null,
     loc_per_active: null,
+    merges_per_active_per_week: null,
+    loc_per_active_per_week: null,
     window_start: null,
   };
 
@@ -479,10 +487,18 @@ function buildWindowStats(
     0
   );
 
-  const activeCount = activeContributors(perAuthor, activeThreshold);
+  const activeCount = activeContributors(perAuthor, minActiveCommits);
   const totalLines = perAuthor.reduce((s, a) => s + a.lines, 0);
   const merges_per_active = activeCount > 0 ? totalMerges / activeCount : null;
   const loc_per_active = activeCount > 0 ? totalLines / activeCount : null;
+  const merges_per_active_per_week =
+    merges_per_active != null && windowDays > 0
+      ? merges_per_active / (windowDays / 7)
+      : null;
+  const loc_per_active_per_week =
+    loc_per_active != null && windowDays > 0
+      ? loc_per_active / (windowDays / 7)
+      : null;
 
   return {
     window_days: windowDays,
@@ -494,6 +510,8 @@ function buildWindowStats(
     per_author: perAuthor,
     merges_per_active,
     loc_per_active,
+    merges_per_active_per_week,
+    loc_per_active_per_week,
     window_start: since,
   };
 }
@@ -691,8 +709,8 @@ export interface GitRaw {
  * same values as the metrics; the constants above are last-resort fallbacks.
  */
 export interface GitCollectOptions {
-  /** meta.active_contributor_threshold */
-  activeContributorThreshold?: number;
+  /** meta.active_contributor_min_commits */
+  activeContributorMinCommits?: number;
   /** meta.rework_horizon_days */
   reworkHorizonDays?: number;
 }
@@ -702,8 +720,8 @@ export function collect(
   period: Period,
   opts: GitCollectOptions = {}
 ) {
-  const activeThreshold =
-    opts.activeContributorThreshold ?? ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT;
+  const minActiveCommits =
+    opts.activeContributorMinCommits ?? ACTIVE_CONTRIBUTOR_MIN_COMMITS_DEFAULT;
   const reworkHorizonDays =
     opts.reworkHorizonDays ?? REWORK_HORIZON_DAYS_DEFAULT;
   const default_branch = getDefaultBranch(repoPath);
@@ -712,7 +730,7 @@ export function collect(
   const tooling_paths = getToolingPaths(repoPath);
   const { total_merges, revert_merges } = getMergeStats(repoPath);
   const merge_records = getMergeRecords(repoPath);
-  const window_stats = buildWindowStats(repoPath, period, activeThreshold);
+  const window_stats = buildWindowStats(repoPath, period, minActiveCommits);
   const numstat_totals = getNumstatTotals(repoPath);
   const code_turnover = getCodeTurnover(repoPath, period, reworkHorizonDays);
   const history_available_days = getHistoryAvailableDays(repoPath);

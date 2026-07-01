@@ -371,6 +371,49 @@ test('SDD-04: master-trunk repo computes correct ratio (no ancestor inflation)',
   assert.equal(r.method, 'computed');
 });
 
+test('SDD-04: branch touching non-AWOS spec dir (specs/) counts as spec-touching', () => {
+  const t = tmp();
+  gitInit(t);
+  // A plain `specs/` convention (not AWOS `context/spec/`) must still count.
+  addBranch(t, 'feat-kiroless', 'specs/foo.md');
+  const r = detectBranchSpecRatio(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'branch touching specs/ must count as spec-touching → 1/1 = 1.0 → PASS'
+  );
+  assert.equal(r.value, 1, 'specs/ path counted → ratio 1.0');
+});
+
+test('SDD-04: branch touching a Kiro spec dir (.kiro/specs/) counts as spec-touching', () => {
+  const t = tmp();
+  gitInit(t);
+  addBranch(t, 'feat-kiro', '.kiro/specs/bar.md');
+  const r = detectBranchSpecRatio(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'branch touching .kiro/specs/ must count as spec-touching → 1/1 = 1.0 → PASS'
+  );
+  assert.equal(r.value, 1, '.kiro/specs/ path counted → ratio 1.0');
+});
+
+test('SDD-04: mixed frameworks — AWOS + Kiro + Agent-OS all count as spec-touching', () => {
+  const t = tmp();
+  gitInit(t);
+  // Three branches, each under a different spec-driven framework's spec dir.
+  addBranch(t, 'feat-awos', 'context/spec/001-a/functional-spec.md');
+  addBranch(t, 'feat-kiro', '.kiro/specs/b.md');
+  addBranch(t, 'feat-agentos', '.agent-os/specs/c.md');
+  const r = detectBranchSpecRatio(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'all three framework spec dirs must count → 3/3 = 1.0 → PASS'
+  );
+  assert.equal(r.value, 1, 'AWOS + Kiro + Agent-OS all counted → ratio 1.0');
+});
+
 // ---------------------------------------------------------------------------
 // detectSpecTriadComplete — code 2804 (SDD-05, detected)
 //

@@ -26,7 +26,7 @@ test('metaNumber reads [meta] tunables from standards.toml (source of truth), wi
   const s = loadStandards() as Record<string, unknown>;
   for (const key of [
     'max_lookback_days',
-    'active_contributor_threshold',
+    'active_contributor_min_commits',
     'rework_horizon_days',
   ]) {
     const sentinel = -999;

@@ -456,6 +456,27 @@ function listLocalBranches(repoPath: string): string[] {
   }
 }
 
+// Spec directories recognised across common spec-driven frameworks (not just AWOS).
+// A changed path counts as a spec-touch when it falls under any of these roots.
+const SPEC_DIRS = [
+  'context/spec/', // AWOS
+  'specs/',
+  'spec/',
+  '.kiro/specs/', // Kiro
+  '.agent-os/specs/', // Agent-OS
+  'docs/specs/',
+] as const;
+
+/** True if a changed path falls under any recognised spec directory. Robust to a leading "./". */
+function isSpecPath(path: string): boolean {
+  const p = path.replace(/^\.\//, '');
+  return SPEC_DIRS.some((dir) => {
+    // Prefix match ("specs/foo.md") or an interior segment equal to the dir
+    // ("packages/a/specs/foo.md").
+    return p.startsWith(dir) || p.includes('/' + dir);
+  });
+}
+
 function branchTouchedSpec(
   repoPath: string,
   branch: string,
@@ -476,7 +497,10 @@ function branchTouchedSpec(
       ],
       { cwd: repoPath, encoding: 'utf8' }
     );
-    return out.split('\n').some((line) => line.startsWith('context/spec/'));
+    return out
+      .split('\n')
+      .map((line) => line.trim())
+      .some((line) => line.length > 0 && isSpecPath(line));
   } catch {
     return false;
   }

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { collect, run } from '../collectors/git.ts';
+import { collect, run, activeContributors } from '../collectors/git.ts';
 
 // ---------------------------------------------------------------------------
 // window_stats test helpers
@@ -352,36 +352,169 @@ test('window_stats: merges_per_active and loc_per_active are null when there are
   );
 });
 
-test('window_stats: merges_per_active and loc_per_active equal expected ratios for a crafted multi-author history', () => {
-  // Contract: display-only throughput ratios are computed correctly.
-  //
-  // Fixture (windowRepo):
-  //   Alice: commits=1, merges=1, lines=3
-  //   Bob:   commits=1, merges=0, lines=5
-  //   total merges in window = 1
-  //   total lines            = 8
-  //
-  // Active-contributor filter (T=0.1):
-  //   tm=1, tl=8
-  //   Alice: merge_share=1.0 (≥0.1) → NOT excluded → active
-  //   Bob:   loc_share=5/8=0.625 (≥0.1) → NOT excluded → active
-  //   activeCount = 2
-  //
-  // Expected:
-  //   merges_per_active = 1 / 2 = 0.5
-  //   loc_per_active    = 8 / 2 = 4.0
-  const art = collect(windowRepo(), WINDOW_PERIOD);
+/**
+ * Build a repo where ONE author dominates LOC and merges while several others
+ * do real, steady work. Under the old share-based active-contributor rule the
+ * dominant author forced everyone else below the 5% share cutoff, so only he
+ * counted as active (the "1 active of 9" bug). The new absolute-commits rule
+ * counts every author with ≥ active_contributor_min_commits commits.
+ *
+ * Non-merge per-author commits / lines (all within the 90-day window):
+ *   Dom:   3 commits, 100 lines (dom1=50, dom2=30, dom3=20), + 1 first-parent merge
+ *   Carol: 2 commits,   5 lines (3 + 2)
+ *   Dave:  2 commits,   5 lines (4 + 1)
+ *   Eve:   1 commit,    2 lines  ← single-commit drive-by, excluded at minCommits=2
+ *
+ * total merges = 1, total lines = 112.
+ * active @ minCommits=2 → {Dom, Carol, Dave} = 3 (Eve excluded).
+ * active @ minCommits=3 → {Dom} = 1.
+ */
+function activeRuleRepo(): string {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-active-')), 'repo');
+  mkdirSync(r);
+  const dom = (args: string[], date: string) =>
+    gitAs(r, args, date, 'Dom', 'dom@example.com');
+  const carol = (args: string[], date: string) =>
+    gitAs(r, args, date, 'Carol', 'carol@example.com');
+  const dave = (args: string[], date: string) =>
+    gitAs(r, args, date, 'Dave', 'dave@example.com');
+  const eve = (args: string[], date: string) =>
+    gitAs(r, args, date, 'Eve', 'eve@example.com');
+  const lines = (n: number) => 'x\n'.repeat(n);
+
+  dom(['init', '-q', '-b', 'main'], '2025-01-01T00:00:00');
+
+  writeFileSync(join(r, 'dom1.txt'), lines(50));
+  dom(['add', '-A'], '2025-01-02T00:00:00');
+  dom(['commit', '-qm', 'feat: dom1'], '2025-01-02T00:00:00');
+  writeFileSync(join(r, 'dom2.txt'), lines(30));
+  dom(['add', '-A'], '2025-01-03T00:00:00');
+  dom(['commit', '-qm', 'feat: dom2'], '2025-01-03T00:00:00');
+
+  writeFileSync(join(r, 'carol1.txt'), lines(3));
+  carol(['add', '-A'], '2025-01-04T00:00:00');
+  carol(['commit', '-qm', 'feat: carol1'], '2025-01-04T00:00:00');
+  writeFileSync(join(r, 'carol2.txt'), lines(2));
+  carol(['add', '-A'], '2025-01-05T00:00:00');
+  carol(['commit', '-qm', 'feat: carol2'], '2025-01-05T00:00:00');
+
+  writeFileSync(join(r, 'dave1.txt'), lines(4));
+  dave(['add', '-A'], '2025-01-06T00:00:00');
+  dave(['commit', '-qm', 'feat: dave1'], '2025-01-06T00:00:00');
+  writeFileSync(join(r, 'dave2.txt'), lines(1));
+  dave(['add', '-A'], '2025-01-07T00:00:00');
+  dave(['commit', '-qm', 'feat: dave2'], '2025-01-07T00:00:00');
+
+  writeFileSync(join(r, 'eve1.txt'), lines(2));
+  eve(['add', '-A'], '2025-01-08T00:00:00');
+  eve(['commit', '-qm', 'feat: eve1'], '2025-01-08T00:00:00');
+
+  // Dom's feature branch → 3rd non-merge commit for Dom + the one merge.
+  dom(['checkout', '-qb', 'feature-dom'], '2025-01-09T00:00:00');
+  writeFileSync(join(r, 'dom3.txt'), lines(20));
+  dom(['add', '-A'], '2025-01-10T00:00:00');
+  dom(['commit', '-qm', 'feat: dom3'], '2025-01-10T00:00:00');
+  dom(['checkout', '-q', 'main'], '2025-01-11T00:00:00');
+  dom(
+    ['merge', '--no-ff', '-qm', 'Merge feature-dom', 'feature-dom'],
+    '2025-01-12T00:00:00'
+  );
+
+  return r;
+}
+
+test('activeContributors: absolute minimum-commits bar — a dominant author does not suppress others, single-commit authors are excluded', () => {
+  // Regression guard for the "1 active of 9" bug: the old rule excluded an
+  // author iff BOTH merge-share and LOC-share fell below T, so one dominant
+  // author forced everyone else out. The new rule keeps every author with
+  // >= minCommits commits, independent of anyone else's share.
+  const rows = [
+    { author: 'Dom', commits: 40, merges: 12, lines: 5000 }, // dominates LOC + merges
+    { author: 'Carol', commits: 3, merges: 0, lines: 20 },
+    { author: 'Dave', commits: 2, merges: 0, lines: 10 },
+    { author: 'Eve', commits: 1, merges: 0, lines: 3 }, // drive-by
+  ];
+  assert.equal(
+    activeContributors(rows, 2),
+    3,
+    'active must be the 3 authors with >=2 commits (Dom, Carol, Dave); the old share rule returned 1 because Dom dominates LOC+merges and pushes the others below the share cutoff'
+  );
+  assert.equal(
+    activeContributors(rows, 1),
+    4,
+    'at minCommits=1 every author qualifies (all have >=1 commit)'
+  );
+});
+
+test('window_stats: merges_per_active and loc_per_active use the absolute-commits active count (all >=2-commit authors, dominant author does not suppress others)', () => {
+  // Contract: the collector's active count follows the absolute minimum-commits
+  // rule. In activeRuleRepo, Dom dominates LOC (100/112) and holds the only
+  // merge, yet Carol and Dave (2 commits each) must still count as active while
+  // Eve (1 commit) is excluded → active = 3, not 1.
+  const art = collect(activeRuleRepo(), WINDOW_PERIOD);
   const ws = art.raw.window_stats;
 
+  const active = activeContributors(ws.per_author, 2);
+  assert.equal(
+    active,
+    3,
+    'active must be 3 (Dom, Carol, Dave — all >=2 commits); Eve is excluded (1 commit)'
+  );
+
+  const totalLines = ws.per_author.reduce(
+    (s: number, a: { lines: number }) => s + a.lines,
+    0
+  );
   assert.equal(
     ws.merges_per_active,
-    0.5,
-    'merges_per_active must be 1 merge / 2 active contributors = 0.5'
+    ws.merges / 3,
+    'merges_per_active must be total merges (1) / 3 active contributors'
   );
   assert.equal(
     ws.loc_per_active,
-    4.0,
-    'loc_per_active must be 8 total lines / 2 active contributors = 4.0'
+    totalLines / 3,
+    'loc_per_active must be total lines (112) / 3 active contributors'
+  );
+});
+
+test('window_stats: merges_per_active_per_week and loc_per_active_per_week equal the per-active value divided by (window_days / 7)', () => {
+  // Contract: the per-week variants are exactly the per-active value scaled by
+  // the number of weeks in the window (window_days / 7).
+  const art = collect(activeRuleRepo(), WINDOW_PERIOD);
+  const ws = art.raw.window_stats;
+
+  assert.ok(
+    ws.merges_per_active != null && ws.loc_per_active != null,
+    'precondition: per-active values must be non-null for this fixture'
+  );
+
+  const weeks = ws.window_days / 7;
+  assert.equal(
+    ws.merges_per_active_per_week,
+    ws.merges_per_active / weeks,
+    'merges_per_active_per_week must equal merges_per_active / (window_days / 7)'
+  );
+  assert.equal(
+    ws.loc_per_active_per_week,
+    ws.loc_per_active / weeks,
+    'loc_per_active_per_week must equal loc_per_active / (window_days / 7)'
+  );
+});
+
+test('window_stats: per-week throughput fields are null when there are no active contributors (empty repo)', () => {
+  // Divide-by-zero guard also covers the per-week variants: when per-active is
+  // null (activeCount 0), the per-week fields must be null, not NaN.
+  const art = collect(emptyRepo(), WINDOW_PERIOD);
+  const ws = art.raw.window_stats;
+  assert.equal(
+    ws.merges_per_active_per_week,
+    null,
+    'merges_per_active_per_week must be null when there are no active contributors'
+  );
+  assert.equal(
+    ws.loc_per_active_per_week,
+    null,
+    'loc_per_active_per_week must be null when there are no active contributors'
   );
 });
 
@@ -853,26 +986,26 @@ function gitDates(
   });
 }
 
-test('collect honors the threaded active-contributor threshold (not a hardcoded constant)', () => {
-  // windowRepo: Alice (1 merge, 3 lines) + Bob (0 merges, 5 lines), 1 in-window merge.
-  // At a strict threshold (0.9) only Alice clears it → active=1 → merges_per_active=1.
-  // At a lenient threshold (0.05) both clear it → active=2 → merges_per_active=0.5.
-  const repo = windowRepo();
-  const strict = collect(repo, WINDOW_PERIOD, {
-    activeContributorThreshold: 0.9,
+test('collect honors the threaded active-contributor minimum-commits bar (not a hardcoded constant)', () => {
+  // activeRuleRepo: Dom=3 commits (+1 merge), Carol=2, Dave=2, Eve=1.
+  // At minCommits=3 only Dom clears it → active=1 → merges_per_active = 1/1.
+  // At minCommits=2 Dom+Carol+Dave clear it → active=3 → merges_per_active = 1/3.
+  const repo = activeRuleRepo();
+  const bar3 = collect(repo, WINDOW_PERIOD, {
+    activeContributorMinCommits: 3,
   });
-  const lenient = collect(repo, WINDOW_PERIOD, {
-    activeContributorThreshold: 0.05,
+  const bar2 = collect(repo, WINDOW_PERIOD, {
+    activeContributorMinCommits: 2,
   });
   assert.equal(
-    strict.raw.window_stats.merges_per_active,
+    bar3.raw.window_stats.merges_per_active,
     1,
-    'strict threshold → 1 active contributor → merges_per_active = 1/1'
+    'minCommits=3 → 1 active contributor (Dom) → merges_per_active = 1/1'
   );
   assert.equal(
-    lenient.raw.window_stats.merges_per_active,
-    0.5,
-    'lenient threshold → 2 active contributors → merges_per_active = 1/2; the threshold must be threaded, not hardcoded'
+    bar2.raw.window_stats.merges_per_active,
+    1 / 3,
+    'minCommits=2 → 3 active contributors → merges_per_active = 1/3; the bar must be threaded, not hardcoded'
   );
 });
 

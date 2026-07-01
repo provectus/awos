@@ -40,7 +40,7 @@ import type { Period } from './collectors/_base.ts';
 import { writeArtifact } from './collectors/_base.ts';
 import {
   collect as collectGit,
-  ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT,
+  ACTIVE_CONTRIBUTOR_MIN_COMMITS_DEFAULT,
   REWORK_HORIZON_DAYS_DEFAULT,
 } from './collectors/git.ts';
 import { collect as collectCi } from './collectors/ci.ts';
@@ -259,10 +259,10 @@ export async function auditCore(
       history_available_days: 0,
     };
     const gitOpts = {
-      activeContributorThreshold: metaNumber(
+      activeContributorMinCommits: metaNumber(
         standards,
-        'active_contributor_threshold',
-        ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
+        'active_contributor_min_commits',
+        ACTIVE_CONTRIBUTOR_MIN_COMMITS_DEFAULT
       ),
       reworkHorizonDays: metaNumber(
         standards,

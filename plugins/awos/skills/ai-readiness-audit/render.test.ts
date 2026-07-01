@@ -442,12 +442,74 @@ test('Sources cell shows short label; verbose label goes to tooltip only (6c.3)'
     html.includes('git history, Jira'),
     'Sources cell must show short combined labels: "git history, Jira" (tracker truncated at " via ")'
   );
-  // Summary-table tooltips live on the column labels, not the values: the "Sources"
-  // header carries the column explanation, and the value cell is plain (no per-row tip).
+  // Summary-table tooltips live on BOTH the column header and the value cell: the
+  // "Sources" header carries the column explanation, and the value cell keeps its
+  // per-row tooltip (short label in the cell, verbose window in the tipbox).
   assert.ok(
-    html.includes(`<th><span class="tip"`) &&
-      html.includes('Data sources feeding this dimension.'),
-    'The "Sources" column tooltip must be on the header label, not the value cell'
+    html.includes(
+      `<th><span class="tip" tabindex="0">Sources<span class="tipbox">`
+    ) && html.includes('Data sources feeding this dimension.'),
+    'The "Sources" column header must carry the column-explanation tooltip'
+  );
+  assert.ok(
+    html.includes(
+      '<td><span class="tip" tabindex="0">git history, Jira<span class="tipbox">'
+    ),
+    'The "Sources" value cell must keep its per-row tooltip'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// E5 — Dimensions summary table: tooltips on every column header, plain name cell
+// ---------------------------------------------------------------------------
+
+test('Dimensions summary table carries a tooltip on every column header and a plain (untipped) Dimension name cell (E5)', () => {
+  const dim = makeDim('test-e5-headers', [
+    makeCheck({ check_id: 'E5-01', status: 'PASS', applies: true }),
+  ]);
+  const html = renderHtml(makeAudit({ dimensions: [dim] }));
+  const headerTips: Array<[string, string]> = [
+    ['#', 'Row number — dimensions are listed in a fixed order.'],
+    [
+      'Dimension',
+      'A capability area being audited: a group of related checks scored together. Click a row to open its checks.',
+    ],
+    ['Points', 'Capability points earned in this area.'],
+    ['Sources', 'Data sources feeding this dimension.'],
+    ['Coverage', "Share of this area's expected capability that is in place."],
+    ['Reliability', 'How trustworthy the numbers in this area are'],
+    [
+      'FAIL',
+      'Checks where the capability is absent or below its failing threshold.',
+    ],
+    ['WARN', 'Checks partly in place but below target — worth attention.'],
+    ['PARTIAL', 'Checks partly satisfied: some criteria met, not all.'],
+    ['PASS', 'Checks fully satisfied.'],
+    [
+      'SKIP',
+      'Checks not evaluated because a required data source or precondition was unavailable',
+    ],
+  ];
+  for (const [label, explanation] of headerTips) {
+    assert.ok(
+      html.includes(
+        `<th><span class="tip" tabindex="0">${label}<span class="tipbox">`
+      ),
+      `Dimensions summary "${label}" column header must carry a tooltip span (E5)`
+    );
+    assert.ok(
+      html.includes(explanation),
+      `Dimensions summary "${label}" header tooltip must carry its column explanation (E5)`
+    );
+  }
+  // E5: the Dimension name cell is a plain <a><strong>, NOT wrapped in a tooltip.
+  assert.ok(
+    !/<strong><span class="tip"/.test(html),
+    'The Dimension name cell must not wrap its value in a tooltip span (E5 removed it)'
+  );
+  assert.ok(
+    /<td><a href="[^"]*"><strong>[^<]+<\/strong><\/a><\/td>/.test(html),
+    'The Dimension name cell must be a plain <a><strong> row label (E5)'
   );
 });
 

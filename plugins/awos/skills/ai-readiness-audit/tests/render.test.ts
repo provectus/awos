@@ -1067,6 +1067,36 @@ test('renderHtml: dimension summary tooltips live on BOTH column headers and val
       ),
     'Coverage and Reliability column headers must also carry tooltips'
   );
+  // Every remaining column header also carries a tooltip.
+  for (const [label, explanation] of [
+    ['#', 'Row number — dimensions are listed in a fixed order.'],
+    [
+      'Dimension',
+      'A capability area being audited: a group of related checks scored together. Click a row to open its checks.',
+    ],
+    [
+      'FAIL',
+      'Checks where the capability is absent or below its failing threshold.',
+    ],
+    ['WARN', 'Checks partly in place but below target — worth attention.'],
+    ['PARTIAL', 'Checks partly satisfied: some criteria met, not all.'],
+    ['PASS', 'Checks fully satisfied.'],
+    [
+      'SKIP',
+      'Checks not evaluated because a required data source or precondition was unavailable — e.g. no ticketing/incident connector, or the check does not apply to this project.',
+    ],
+  ] as const) {
+    assert.ok(
+      html.includes(
+        `<th><span class="tip" tabindex="0">${label}<span class="tipbox">`
+      ),
+      `The "${label}" column header must carry a column-explanation tooltip`
+    );
+    assert.ok(
+      html.includes(explanation),
+      `The "${label}" header tooltip must carry its column explanation`
+    );
+  }
   // Value cells ALSO carry a per-row tooltip (tooltips everywhere).
   assert.ok(
     html.includes(
@@ -1078,12 +1108,14 @@ test('renderHtml: dimension summary tooltips live on BOTH column headers and val
     html.includes('· ai-development-tooling · standards.toml'),
     'The Points value tooltip must carry its row-specific meta (coverage · dimension · standards.toml)'
   );
-  // The Dimension name (row label) cell also carries a tooltip.
+  // The Dimension name (row label) cell is a PLAIN <a><strong> with NO tooltip (E5).
   assert.ok(
-    /<strong><span class="tip" tabindex="0">[^<]+<span class="tipbox">/.test(
-      html
-    ),
-    'The Dimension name cell must carry a tooltip on the row label'
+    /<td><a href="[^"]*"><strong>[^<]+<\/strong><\/a><\/td>/.test(html),
+    'The Dimension name cell must be a plain <a><strong> row label with no tooltip'
+  );
+  assert.ok(
+    !/<strong><span class="tip"/.test(html),
+    'The Dimension name cell must NOT wrap its value in a tooltip span (E5 removed it)'
   );
 });
 
@@ -1099,9 +1131,15 @@ test('renderHtml: Reach labels the contributor row "Active Contributors" with th
   );
   assert.ok(
     html.includes(
-      'Distinct active authors in the measurement window (of the total authors in window)'
+      'Distinct commit authors with at least 2 commits in the last 90 days'
     ),
-    'Active Contributors tooltip must explain active-of-total-in-window'
+    'Active Contributors tooltip must explain the ≥2-commits-in-90-days derivation'
+  );
+  assert.ok(
+    html.includes(
+      "The '(of N in window)' figure is the total distinct authors who committed at all."
+    ),
+    'Active Contributors tooltip must explain the (of N in window) total'
   );
 });
 
@@ -1123,8 +1161,14 @@ test('renderHtml: Reach renders Spec coverage and orders items Active Contributo
     'Spec coverage value string must render in the Reach block'
   );
   assert.ok(
-    html.includes('Share of feature branches that touched spec files'),
-    'Spec coverage tooltip (HEADLINE_TIP entry) must be present'
+    html.includes(
+      'Share of feature branches that touched spec files, for any spec-driven workflow (AWOS, Kiro, Agent-OS, and similar).'
+    ),
+    'Spec coverage tooltip must describe any spec-driven workflow, not hardcode AWOS'
+  );
+  assert.ok(
+    !html.includes('(AWOS SDD-04)'),
+    'Spec coverage tooltip must not hardcode the AWOS-specific "(AWOS SDD-04)" phrasing'
   );
 });
 

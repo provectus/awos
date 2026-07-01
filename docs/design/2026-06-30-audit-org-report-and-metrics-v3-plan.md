@@ -50,7 +50,7 @@ There is **no end-to-end validation phase** — headless `claude -p` runs are ~$
 - **`max_lookback_days = 90`** (was 730).
 - **Active contributor** = author not below the 10% threshold on **both** merge-share and LOC-share over the window. Threshold is a new `[meta]` param `active_contributor_threshold = 0.1`.
 - **Org per-repo drill-down = separate report files in folders.** Each repo renders its own `per-repo/<repo>/report.html`; the org report links to them. No single giant embedded HTML, no in-page `#repo/` routing (Q4).
-- **Weights:** the DORA delivery metrics (deploy frequency, lead time, change-failure rate, MTTR, **Rework Rate**) get `weight = 10` — they are the important signals. Cycle time gets the default `weight = 3` (tracker-gated). The two raw per-active-contributor ratios (merges/contrib, LOC/contrib) are **display-only headline values, not scored categories** — raw output volume has no defensible good/bad direction and DX/DORA explicitly warn against rewarding it; they appear in the headline but award no weight. *(If the maintainer wants them scored, that needs banding thresholds first — flag before implementing.)*
+- **Weights:** the DORA delivery metrics (deploy frequency, lead time, change-failure rate, MTTR, **Rework Rate**) get `weight = 10` — they are the important signals. Cycle time gets the default `weight = 3` (tracker-gated). The two raw per-active-contributor ratios (merges/contrib, LOC/contrib) are **display-only headline values, not scored categories** — raw output volume has no defensible good/bad direction and DX/DORA explicitly warn against rewarding it; they appear in the headline but award no weight. _(If the maintainer wants them scored, that needs banding thresholds first — flag before implementing.)_
 - New metrics' `applies_when` = `"always"` for git-derived, `"topology.has_tracker"` for ticketing-derived (Q5 defaults).
 
 ---
@@ -90,11 +90,16 @@ Foundational; Phases 1–2 read its output.
 ```ts
 // GitRaw.window_stats — whole-window delivery aggregates (replaces monthly_buckets)
 window_stats: {
-  window_days: number;          // = meta.max_lookback_days
+  window_days: number; // = meta.max_lookback_days
   commits: number;
-  merges: number;               // first-parent merges into default branch, in window
-  authors_total: number;        // distinct authors in window
-  per_author: Array<{ author: string; commits: number; merges: number; lines: number }>;
+  merges: number; // first-parent merges into default branch, in window
+  authors_total: number; // distinct authors in window
+  per_author: Array<{
+    author: string;
+    commits: number;
+    merges: number;
+    lines: number;
+  }>;
 }
 ```
 
@@ -127,7 +132,8 @@ Derive `per_author.lines` from `git log --all --since=<window> --no-merges --num
 function activeContributors(perAuthor: AuthorRow[], T: number): number {
   const tm = perAuthor.reduce((s, a) => s + a.merges, 0) || 1;
   const tl = perAuthor.reduce((s, a) => s + a.lines, 0) || 1;
-  return perAuthor.filter(a => !((a.merges / tm < T) && (a.lines / tl < T))).length;
+  return perAuthor.filter((a) => !(a.merges / tm < T && a.lines / tl < T))
+    .length;
 }
 ```
 
@@ -161,6 +167,7 @@ function activeContributors(perAuthor: AuthorRow[], T: number): number {
 
 **Files:** `metrics/adp_g7_change_fail_rate.ts`; `standards.toml` (`[category.change_failure_rate].weight = 10`); test.
 **Change:** ensure the revert/hotfix-follows-merge share sums over the single window; keep TS band. Bump weight to 10.
+
 - [ ] Failing test → whole-window share + band + weight 10. Implement; verify loop.
 
 ### Task 2.3 — Convert `adp_g6_churn` → windowed code-turnover (banded, directional)
@@ -178,8 +185,9 @@ function activeContributors(perAuthor: AuthorRow[], T: number): number {
 
 **Files:** `metrics/adp_g14_rework_rate.ts` (new; template `metrics/adp_i2_throughput.ts`); `cli.ts` (+import `:~105`, +`METRICS` entry `:~169`); `references/standards.toml` (`[category.rework_rate]`, template `[category.issue_throughput]:338-352`, `weight = 10`, `method = "computed"`); `dimensions/ai-sdlc-adoption.md` (a `### / **Category:**` entry); test `metrics/adp_g14_rework_rate.test.ts`.
 **Research spike (do first; deliverable = a cited definition):**
+
 - [ ] Confirm the DORA 2025 "rework rate" definition + thresholds from the DORA 2025 report (`https://dora.dev/research/2025/`, verify with WebFetch; record exact definition + bands). Define it at the **delivery** level (unplanned/failed-then-refixed work) **distinct from** Task 2.3 line-level turnover, and say so in the category `definition` to avoid double-counting.
-**Implement:**
+      **Implement:**
 - [ ] Failing test with crafted inputs → expected rate + band + `weight_max === 10`.
 - [ ] Implement from git (and tracker if richer); register in `cli.ts`; TS band anchors; `applies_when = "always"`; verified `source`/`url`/`date`.
 - [ ] Standard verify loop.
@@ -221,6 +229,7 @@ Headline rows (every report; org = average — Phase 5): **1** Points + Coverage
 
 **Files:** `render.ts` (`Headline`/`DeliveryMetric` types + `execBand()` `:1102-1184`, `BAND_COLOR` `:966`); `render.test.ts`.
 **Change:** extend `DeliveryMetric` with an optional `gated?: 'tracker' | 'incident'` so the renderer prints "— (needs ticketing connector)" / "— (needs incident connector)" instead of a number when the gated source is absent. Keep DORA band coloring. Renderer formats only.
+
 - [ ] Failing render test: a headline JSON with all 9 rows (some gated/absent) renders each labeled value or a clear "needs X connector" note, DORA bands colored.
 - [ ] Implement in `execBand`; standard verify loop.
 
@@ -240,6 +249,7 @@ Today every repo's `audit-core` writes to the **shared** dated dir and is overwr
 **Files:** `SKILL.md` Step 6 org branch (`:48,144-176`).
 **Why:** this is the root enabler — full per-repo `audit.json` already exists momentarily; just stop overwriting it, and reuse the existing single-repo renderer per repo.
 **Change (orchestration only, no engine change):** run each repo's `audit-core` into its **own** subdir `context/audits/YYYY-MM-DD/per-repo/<repo>/` (pass that as `audit-core`'s `<outDir>`, `cli.ts:501-518`). After patch/aggregate, render that repo's report into the same subdir: `cli.js render .../per-repo/<repo>/audit.json --format html > .../per-repo/<repo>/report.html` (and `.md`). Keep the 5-field summary too (or derive it from the repo's `audit.json`).
+
 - [ ] Update SKILL.md org branch accordingly; verify by a maintainer headless org run that each `per-repo/<repo>/` has a full `audit.json` + `report.html`.
 
 ### Task 5.2 — Rollup reads full per-repo audits; org headline = average matrix
@@ -247,6 +257,7 @@ Today every repo's `audit-core` writes to the **shared** dated dir and is overwr
 **Files:** `metrics/org_rollup.ts` (extend `PerRepoInput`/`OrgRollupResult` `:35-70`), `cli.ts rollup` (`:358-417`) to read each repo's full `audit.json` (not just the summary); tests.
 **Why:** the org top matrix must mirror the single-repo headline, averaged, and the per-repo table needs each repo's delivery numbers.
 **Change:** `rollup` ingests each `per-repo/<repo>/audit.json`; for each repo extract `audit_total`, `coverage`, and the 9 headline values; emit (a) an org `headline` whose `delivery[]` is the per-metric **mean** across repos (average the raw value, then re-band via the same TS band fns — extract them to a shared helper if needed; skip repos missing a metric and note coverage), and (b) an enriched `per_repo[]` carrying every column for Task 5.3. Keep the 3 portfolio cards.
+
 - [ ] Failing tests: org headline rows = mean of per-repo values, correctly re-banded; `per_repo[]` rows carry pts/coverage/merges-per/loc-per/deploy/lead/change-fail/cycle/mttr.
 - [ ] Implement; update `output-format.md` org schema; standard verify loop.
 
@@ -255,6 +266,7 @@ Today every repo's `audit-core` writes to the **shared** dated dir and is overwr
 **Files:** `render.ts` `reposSection()` (`:1482-1508`); `render.test.ts`.
 **Why:** the maintainer wants the org "Repositories" section to be the single-repo headline columns per repo, each row opening that repo's report.
 **Change:** replace the 5-column table with: **Repo | Points | Coverage | Merges/active | LOC/active | Deploy freq | Lead time | Change-fail | Cycle time¹ | MTTR²** (¹ only if tracker, ² only if incident — blank/"—" otherwise). Make the repo cell a link `<a href="per-repo/<repo>/report.html">` (relative path; the file sits alongside the org `report.html` per Task 5.1). No `#repo/` in-page routing — separate files, easier to navigate, avoids one giant HTML (Q4).
+
 - [ ] Failing render tests: one row per repo with all columns; repo cell links to `per-repo/<repo>/report.html`; gated columns blank without the connector.
 - [ ] Implement; standard verify loop.
 
@@ -263,6 +275,7 @@ Today every repo's `audit-core` writes to the **shared** dated dir and is overwr
 **Files:** `metrics/org_rollup.ts` (aggregate sources/tech-stack/linked-repos across repos with counts), `render.ts` `connectionsSection()` (`:1511-1588`) org branch; tests.
 **Why:** at org altitude the useful view is "how many repos have each thing": `git history (8)`, `Jira (5)`, `Python (3)`, `Terraform (1)`, MCP `awos-recruitment (2)`.
 **Change:** the rollup (engine) computes, from each repo's `audit.json` (`sources`, `tech_stack`, `linked_repos`), aggregated maps with repo counts; the renderer lists each item with `(N)`. Reuse `sourceFullLabel` and `groupLinkedByName` (already in `render.ts`).
+
 - [ ] Failing render test: org Connections lists items with `(N)` counts across sources/languages/frameworks/MCP servers.
 - [ ] Implement (compute in `org_rollup.ts`, render in `connectionsSection`); standard verify loop.
 
@@ -271,6 +284,7 @@ Today every repo's `audit-core` writes to the **shared** dated dir and is overwr
 **Files:** `metrics/org_rollup.ts` (deterministic cross-repo seed); `SKILL.md` org branch (author org `insights[]`/`recommendations[]` from the seed); test.
 **Why:** the org needs portfolio observations, not a per-repo dump: "N/8 repos lack an AI instruction file", "M repos have FAIL security checks", "K repos have no end-to-end delivery wiring".
 **Change:** the rollup computes, per category/dimension, the count of repos where it FAILs or is absent (it already has each repo's full `audit.json` after 5.2), and exposes the top cross-repo gaps; the orchestrator turns them into plain-language cards. Deterministic seeding keeps this robust under headless runs.
+
 - [ ] Failing test for the seed (counts of repos failing/absent per category are correct).
 - [ ] Implement seed + SKILL.md authoring guidance; standard verify loop (engine part).
 
@@ -283,6 +297,7 @@ Today every repo's `audit-core` writes to the **shared** dated dir and is overwr
 **Files:** `references/connector-shapes.md` (worked example `:77-122`, recipe `:220-238`); `SKILL.md` Step 6.2 (`:115`).
 **Why:** the worked example does a single `maxResults: 200` call; the MCP server caps a request at ~100, so long-lived projects are silently under-sampled. `collectors/tracker.ts:96` consumes the full `tickets[]` with **no cap**, so this is purely orchestrator-side.
 **Change:** document a pagination loop — page on `startAt` (classic JQL) or `nextPageToken` (cloud `searchJiraIssuesUsingJql`), accumulate into one `tickets[]` until a short page / `isLast` / no token, up to a sane cap (e.g. 2000 tickets or the window), then write `collected/tracker.json` once. Note `maxResults` is server-capped (don't rely on 200). Add the Linear/GitHub-Issues pagination equivalents in one line. Prompt-only; no engine change.
+
 - [ ] Update `connector-shapes.md` + `SKILL.md`; a maintainer headless run against a >100-ticket project confirms `tracker.json` ticket count > 100.
 
 ---
@@ -294,6 +309,7 @@ Today every repo's `audit-core` writes to the **shared** dated dir and is overwr
 **Files:** `collectors/git.ts` (`run()` + call sites at `:53,58,152,279,299` and others); `tests/git-collector.test.ts`.
 **Why:** `run()`'s `catch { return '' }` swallows **all** git errors; only the buffer case was fixed. But some calls legitimately fail (e.g. `symbolic-ref --short HEAD` on detached HEAD, side-branch `^1..^2`), so a blanket log is wrong — needs per-call intent.
 **Change:** add an options arg `run(args, cwd, { allowFailure = false } = {})`. For the legitimately-failing calls, pass `allowFailure: true` → keep silent `''`. Otherwise, on a non-zero/unexpected error (not "empty output", which is valid), emit a one-line `console.error('[git collector] <subcommand> failed: <code>')` to **stderr** (collectors write JSON to files, so stderr is safe) and still return `''` so the collector degrades. Audit each call site and tag the expected-empty ones.
+
 - [ ] Failing test: a non-`allowFailure` bogus subcommand writes a stderr breadcrumb; an `allowFailure` call stays silent (test a small extracted "shouldLog(error, allowFailure)" helper, or capture stderr from a child).
 - [ ] Implement; standard verify loop.
 

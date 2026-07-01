@@ -16,7 +16,24 @@ import {
 // Shell helper
 // ---------------------------------------------------------------------------
 
-function run(args: string[], cwd: string): string {
+/**
+ * Run a git subcommand and return its stdout as a string.
+ *
+ * `allowFailure` signals that the call is expected to fail on certain valid
+ * repo states (e.g. `symbolic-ref --short HEAD` on a detached HEAD, or a
+ * `^1..^2` rev-range on a root/octopus merge). When true, a non-zero exit
+ * is silently swallowed and `''` is returned. When false (the default), an
+ * unexpected failure emits a one-line stderr breadcrumb naming the subcommand
+ * and the error code so the failure is traceable in logs — the collector still
+ * returns `''` and degrades gracefully rather than throwing.
+ *
+ * Exported so the allowFailure contract can be unit-tested directly.
+ */
+export function run(
+  args: string[],
+  cwd: string,
+  { allowFailure = false }: { allowFailure?: boolean } = {}
+): string {
   try {
     // maxBuffer defaults to 1 MB; a full `git log` on a large/long-lived repo
     // easily exceeds that, which would throw ENOBUFS and silently return ''
@@ -24,9 +41,19 @@ function run(args: string[], cwd: string): string {
     return execFileSync('git', args, {
       cwd,
       encoding: 'utf8',
+      // stdio: 'pipe' captures git's own stderr so it does not bleed to the
+      // parent process's stderr on failure. Stdout is still returned as a
+      // string (the execFileSync contract with encoding:'utf8').
+      stdio: 'pipe',
       maxBuffer: 512 * 1024 * 1024,
     });
-  } catch {
+  } catch (err) {
+    if (allowFailure) return '';
+    const status = (err as { status?: number }).status;
+    const code = (err as { code?: string }).code;
+    console.error(
+      `[git collector] git ${args[0]} failed: ${status ?? code ?? 'error'}`
+    );
     return '';
   }
 }
@@ -64,12 +91,20 @@ function latestCommitDate(cwd: string): Date | null {
 // ---------------------------------------------------------------------------
 
 function getDefaultBranch(cwd: string): string {
-  const out = run(['symbolic-ref', '--short', 'HEAD'], cwd).trim();
+  // symbolic-ref exits non-zero on a detached HEAD — that is a valid repo state,
+  // so allowFailure prevents a spurious breadcrumb; '' correctly falls back to 'main'.
+  const out = run(['symbolic-ref', '--short', 'HEAD'], cwd, {
+    allowFailure: true,
+  }).trim();
   return out || 'main';
 }
 
 function getTotalCommits(cwd: string): number {
-  const out = run(['rev-list', '--count', 'HEAD'], cwd).trim();
+  // rev-list --count HEAD exits non-zero on an empty repo (no HEAD ref yet),
+  // which is a valid state — allowFailure keeps the output clean; '' parses to 0.
+  const out = run(['rev-list', '--count', 'HEAD'], cwd, {
+    allowFailure: true,
+  }).trim();
   const n = parseInt(out, 10);
   return isNaN(n) ? 0 : n;
 }
@@ -163,7 +198,11 @@ function getMergeRecords(cwd: string): MergeRecord[] {
     if (!sha || !mergedAt) continue;
 
     // Get all commits reachable from MERGE_HEAD (^2) but not from first parent.
-    const sideOut = run(['log', '--format=%cI', `${sha}^1..${sha}^2`], cwd)
+    // allowFailure: a root commit has no ^1, and an octopus merge's ^2 may not
+    // exist — both are valid repo states where this rev-range legitimately fails.
+    const sideOut = run(['log', '--format=%cI', `${sha}^1..${sha}^2`], cwd, {
+      allowFailure: true,
+    })
       .trim()
       .split('\n')
       .filter(Boolean);

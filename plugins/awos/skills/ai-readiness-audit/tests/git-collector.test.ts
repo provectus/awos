@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { collect } from '../collectors/git.ts';
+import { collect, run } from '../collectors/git.ts';
 
 // ---------------------------------------------------------------------------
 // window_stats test helpers
@@ -758,4 +758,70 @@ test('window_stats: fix_merges is 0 for a clean repo with no fix/bugfix/patch me
     0,
     `window_stats.fix_merges must be 0 for a repo with no fix-labelled merges; got ${ws.fix_merges}`
   );
+});
+
+// ---------------------------------------------------------------------------
+// run() allowFailure tests (task 7.1) — breadcrumb on unexpected errors, silence on expected ones.
+// ---------------------------------------------------------------------------
+
+test('run(): unexpected git failure emits a [git collector] stderr breadcrumb (allowFailure defaults to false)', () => {
+  // Contract: when a git subcommand fails unexpectedly (allowFailure not set),
+  // run() must write exactly one stderr breadcrumb beginning with "[git collector]"
+  // and containing the subcommand name so failures are traceable in logs.
+  // The call still returns '' so the collector degrades gracefully.
+  // console.error is spied-on and restored to keep test output pristine.
+  const cwd = mkdtempSync(join(tmpdir(), 'git-run-'));
+  const captured: string[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    captured.push(args.map(String).join(' '));
+  };
+  try {
+    const result = run(['bogus-subcommand-xyz'], cwd);
+    assert.equal(
+      result,
+      '',
+      'run() must return "" even when the subcommand fails'
+    );
+    assert.equal(
+      captured.length,
+      1,
+      `run() must emit exactly one stderr breadcrumb for an unexpected failure; got ${captured.length}`
+    );
+    assert.ok(
+      captured[0].includes('[git collector]'),
+      `stderr breadcrumb must include "[git collector]"; got: ${captured[0]}`
+    );
+    assert.ok(
+      captured[0].includes('bogus-subcommand-xyz'),
+      `stderr breadcrumb must include the failing subcommand name; got: ${captured[0]}`
+    );
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test('run(): allowFailure:true silences stderr for an expected-empty git call (e.g. detached HEAD, root-commit ^2)', () => {
+  // Contract: when allowFailure is true (a "legitimately-failing" call site),
+  // run() must return "" with NO stderr output — the failure is expected and
+  // logging it would be noisy (e.g. symbolic-ref --short HEAD on a detached HEAD,
+  // or ${sha}^1..${sha}^2 on a root/octopus merge commit).
+  // console.error is spied-on and restored to keep test output pristine.
+  const cwd = mkdtempSync(join(tmpdir(), 'git-run-'));
+  const captured: string[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    captured.push(args.map(String).join(' '));
+  };
+  try {
+    const result = run(['bogus-subcommand-xyz'], cwd, { allowFailure: true });
+    assert.equal(result, '', 'run() must return "" on allowFailure failure');
+    assert.equal(
+      captured.length,
+      0,
+      `run() must NOT emit any stderr when allowFailure:true; got ${captured.length} message(s): ${captured.join(', ')}`
+    );
+  } finally {
+    console.error = originalError;
+  }
 });

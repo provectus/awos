@@ -344,6 +344,29 @@ export function formatSourceWindow(
 }
 
 /**
+ * The measurement window for the whole report, as a header phrase such as
+ * "last 90 days (2026-04-02 – 2026-07-01)". Derived from the git source window
+ * (the primary time-bounded source); the date range is computed back from
+ * `endDate` (the audit date). Returns null when no windowed source is present
+ * (e.g. scale-only); omits the range when `endDate` is missing/unparseable.
+ */
+export function measurementWindowLabel(
+  sourceWindows:
+    | Record<string, { days: number | null; label: string }>
+    | undefined,
+  endDate?: string
+): string | null {
+  const days = sourceWindows?.['git']?.days ?? null;
+  if (days === null || days === undefined) return null;
+  if (!endDate) return `last ${days} days`;
+  const end = new Date(`${endDate}T00:00:00Z`);
+  if (Number.isNaN(end.getTime())) return `last ${days} days`;
+  const start = new Date(end.getTime() - days * 86_400_000);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return `last ${days} days (${iso(start)} – ${iso(end)})`;
+}
+
+/**
  * Returns a short display label for a source key.
  *
  * Truncates the recorded label at the first ' via ' boundary (e.g.
@@ -592,6 +615,10 @@ export function renderMarkdown(audit: AuditJson): string {
   if (isOrg) {
     lines.push(`**Mode:** Organization (${audit.per_repo?.length ?? 0} repos)`);
   }
+  const windowLabel = measurementWindowLabel(audit.source_windows, audit.date);
+  if (windowLabel) {
+    lines.push(`**Measurement window:** ${windowLabel}`);
+  }
   lines.push(`**Audit Total:** ${fmtPts(audit.audit_total)} pts`);
   lines.push(
     `**Coverage Ratio:** ${pct(audit.coverage)} rel. today's standard`
@@ -758,9 +785,11 @@ export function renderMarkdown(audit: AuditJson): string {
       const confStr =
         c.status === 'SKIP' ? '—' : `${Math.round((c.confidence ?? 0) * 100)}%`;
       const valueStr =
-        c.value != null && c.unit && !c.expression
-          ? `${fmtValue(c.value)} ${c.unit}`
-          : fmtValue(c.value);
+        c.status === 'SKIP' && c.evidence && c.evidence.length > 0
+          ? c.evidence.join('; ')
+          : c.value != null && c.unit && !c.expression
+            ? `${fmtValue(c.value)} ${c.unit}`
+            : fmtValue(c.value);
       const hint = c.hint ?? '—';
       const sourceCiteMd =
         c.source_url && c.source_date
@@ -1009,6 +1038,26 @@ const BAND_COLOR: Record<string, string> = {
   low: '#ef4444',
 };
 
+/**
+ * Tooltip text for headline-band metrics that have no `check_id` to resolve a
+ * definition from (git-derived rows and connector-gated rows). Keyed by the
+ * metric label with any trailing "(...)" unit clause stripped.
+ */
+const HEADLINE_TIP: Record<string, string> = {
+  Merges:
+    'Merged pull requests per active contributor in the window — a delivery-throughput signal.',
+  LOC: 'Lines of code changed per active contributor in the window — a delivery-volume signal.',
+  'Cycle time':
+    'Median in-progress→done duration for tickets, from the ticketing connector (Jira, Linear, GitHub Projects, …).',
+  MTTR: 'Mean time to restore service after a production incident (needs an incident connector).',
+  'AI tooling':
+    'AI coding tools detected in the repository (config files, agent instructions, commit markers).',
+  Contributors:
+    'Distinct active authors in the measurement window and their cadence.',
+  'Repos with AI tooling':
+    'How many portfolio repositories have any AI tooling present.',
+};
+
 /** Returns true when a DeliveryMetric display_value is considered absent: missing, empty, em-dash, or hyphen. */
 function deliveryValueAbsent(v: string | undefined): boolean {
   const t = (v ?? '').trim();
@@ -1175,20 +1224,37 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
     // Headline blocks: delivery / scale / reach (single-repo and org)
     const h = audit.headline;
     const blocks: string[] = [];
+
+    // Every headline metric gets a tooltip (parity with per-dimension rows).
+    // Prefer the referenced check's definition; fall back to a static blurb.
+    const checkById = new Map<string, Check>();
+    for (const dim of audit.dimensions ?? []) {
+      for (const c of dim.checks) checkById.set(c.check_id, c);
+    }
+    const headlineTipText = (label: string, checkId?: string): string => {
+      if (checkId) {
+        const c = checkById.get(checkId);
+        if (c) return c.plain && c.plain.trim() ? c.plain : c.definition;
+      }
+      const key = label.replace(/\s*\(.*\)\s*$/, '').trim();
+      return HEADLINE_TIP[key] ?? HEADLINE_TIP[label] ?? label;
+    };
+
     if (h?.delivery && h.delivery.length > 0) {
       const items = h.delivery
         .map((d) => {
+          const tipText = headlineTipText(d.label, d.check_id);
           if (d.gated && deliveryValueAbsent(d.display_value)) {
             const note =
               d.gated === 'tracker'
                 ? '— (needs ticketing connector)'
                 : '— (needs incident connector)';
-            return `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${esc(note)}</span></div>`;
+            return `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(note, tipText)}</span></div>`;
           }
           const bandHtml = d.band
             ? `<span class="band" style="background:${BAND_COLOR[d.band.toLowerCase()] ?? '#94a3b8'}">${esc(d.band)}</span>`
             : '';
-          return `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${esc(d.display_value)}${bandHtml}</span></div>`;
+          return `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(d.display_value ?? '—', tipText)}${bandHtml}</span></div>`;
         })
         .join('');
       blocks.push(
@@ -1199,7 +1265,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const items = h.scale
         .map(
           (s) =>
-            `<div class="kv"><span class="k">${esc(s.label)}</span><span class="v">${esc(s.display_value)}</span></div>`
+            `<div class="kv"><span class="k">${esc(s.label)}</span><span class="v">${tip(s.display_value, headlineTipText(s.label, s.check_id))}</span></div>`
         )
         .join('');
       blocks.push(
@@ -1209,16 +1275,16 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
     const reachItems: string[] = [];
     if (h?.reach?.ai_tooling)
       reachItems.push(
-        `<div class="kv"><span class="k">AI tooling</span><span class="v">${esc(h.reach.ai_tooling)}</span></div>`
+        `<div class="kv"><span class="k">AI tooling</span><span class="v">${tip(h.reach.ai_tooling, HEADLINE_TIP['AI tooling'])}</span></div>`
       );
     if (h?.reach?.contributors)
       reachItems.push(
-        `<div class="kv"><span class="k">Contributors</span><span class="v">${esc(h.reach.contributors)}</span></div>`
+        `<div class="kv"><span class="k">Contributors</span><span class="v">${tip(h.reach.contributors, HEADLINE_TIP['Contributors'])}</span></div>`
       );
     if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
       const withTooling = audit.per_repo.filter((r) => r.has_ai_tooling).length;
       reachItems.push(
-        `<div class="kv"><span class="k">Repos with AI tooling</span><span class="v">${withTooling} / ${audit.per_repo.length}</span></div>`
+        `<div class="kv"><span class="k">Repos with AI tooling</span><span class="v">${tip(`${withTooling} / ${audit.per_repo.length}`, HEADLINE_TIP['Repos with AI tooling'])}</span></div>`
       );
     }
     if (reachItems.length > 0) {
@@ -1777,6 +1843,7 @@ route();
   <span><strong>Date:</strong> ${esc(audit.date)}</span>
   <span><strong>Project:</strong> ${esc(audit.project)}</span>
   ${isOrg ? `<span><strong>Mode:</strong> Organization (${audit.per_repo?.length ?? 0} repos)</span>` : ''}
+  ${measurementWindowLabel(audit.source_windows, audit.date) ? `<span><strong>Measurement window:</strong> ${esc(measurementWindowLabel(audit.source_windows, audit.date)!)}</span>` : ''}
 </div>
 
 <div id="overview">

@@ -11,7 +11,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractSourceUrls } from './standards-linkcheck.mjs';
+import { extractSourceUrls, findBareRootUrls } from './standards-linkcheck.mjs';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -166,5 +166,26 @@ last_verified = "2026-06-29"
     result[0].url,
     'https://doi.org/10.1109/TSE.1976.233837',
     'url must be preserved verbatim'
+  );
+});
+
+test('findBareRootUrls flags bare domain roots and passes deep links', () => {
+  const toml = `
+[category.root_a]
+source = "Site A"
+url = "https://example.com/"
+[category.root_b]
+source = "Site B"
+url = "https://example.org"
+[category.deep]
+source = "Deep"
+url = "https://example.com/spec/v1/page.html"
+`;
+  const offenders = findBareRootUrls(toml);
+  const urls = offenders.map((o) => o.url).sort();
+  assert.deepEqual(
+    urls,
+    ['https://example.com/', 'https://example.org'],
+    'bare domain roots (path "" or "/") must be flagged; deep links must pass'
   );
 });

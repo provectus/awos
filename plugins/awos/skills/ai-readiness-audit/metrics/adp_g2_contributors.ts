@@ -11,7 +11,7 @@
  *
  * Active-contributor rule (locked — Phase 2 ratios reuse it):
  *   exclude an author iff merge_share < T AND loc_share < T
- *   where T = meta.active_contributor_threshold (default 0.1)
+ *   where T = meta.active_contributor_threshold (from standards.toml [meta])
  *
  * SKIP: if git.json is absent or window_stats.per_author is absent/empty.
  */
@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  metaNumber,
   type MetricResult,
 } from './_base.ts';
 import {
@@ -62,10 +63,11 @@ export function compute(
     );
   }
 
-  const T: number =
-    ((_standards['meta'] as Record<string, unknown>)?.[
-      'active_contributor_threshold'
-    ] as number | undefined) ?? ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT;
+  const T: number = metaNumber(
+    _standards,
+    'active_contributor_threshold',
+    ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
+  );
 
   const active = activeContributors(perAuthor, T);
   const excluded = perAuthor.length - active;

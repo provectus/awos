@@ -1149,8 +1149,8 @@ test('standards.toml exists and matches the category/band schema', () => {
   );
   assert.match(
     src,
-    /active_contributor_threshold\s*=\s*0\.1/,
-    'meta.active_contributor_threshold must be 0.1 (active-contributor exclusion threshold)'
+    /active_contributor_threshold\s*=\s*0\.05/,
+    'meta.active_contributor_threshold must be 0.05 (active-contributor exclusion threshold)'
   );
   assert.match(
     src,
@@ -1554,6 +1554,25 @@ test('SKILL.md Step 0 references data-sources.md for multi-repo discovery', () =
   );
 });
 
+test('SKILL.md headline delivery rows put the unit in the value, not a duplicated label', () => {
+  // "Merges / active contributor" = "19.0 / contributor" reads as a duplicate.
+  // The label carries the metric name; the per-contributor unit lives in the value.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    !body.includes('**Merges / active contributor**') &&
+      !body.includes('**LOC / active contributor**'),
+    'delivery rows must not use the duplicated "Merges / active contributor" / "LOC / active contributor" labels'
+  );
+  assert.ok(
+    body.includes('**Merges**') && body.includes('**LOC**'),
+    'SKILL.md must author the delivery rows with bare "Merges" / "LOC" labels'
+  );
+  assert.ok(
+    body.includes('/ active contributor'),
+    'the per-contributor unit must live in the display_value (e.g. "3.2 / active contributor")'
+  );
+});
+
 test('SKILL.md Step 0 uses AskUserQuestion to confirm discovered repos', () => {
   // A single AskUserQuestion at the start of the run is the only prompt
   // allowed — it confirms the auto-discovered repo set before the audit begins.
@@ -1589,6 +1608,54 @@ test('SKILL.md Step 0 documents headless default to auto-discovered repos', () =
 });
 
 // ---------------------------------------------------------------------------
+// PERF: Step 6 batches connector re-scoring via the `enrich` verb, and org mode
+// fans out per-repo `repo-auditor` subagents (Part 1 wall-time improvements).
+
+test('SKILL.md Step 6 re-scores connectors via one `enrich` pass (not per-metric spawns)', () => {
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /dist\/cli\.js["']?\s+enrich/.test(src),
+    'SKILL.md Step 6 must invoke the `enrich` engine verb to re-score connector metrics in one pass'
+  );
+});
+
+test('SKILL.md Step 6.2 fetches independent connector sources concurrently', () => {
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /concurrent|in a single message|parallel tool calls/i.test(src),
+    'SKILL.md Step 6 must instruct fetching the independent connector sources concurrently'
+  );
+});
+
+test('SKILL.md org branch dispatches the repo-auditor subagent per repo', () => {
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /repo-auditor/.test(src),
+    'SKILL.md org branch must dispatch the `awos:repo-auditor` subagent per repo (concurrent per-repo audits)'
+  );
+});
+
+test('the repo-auditor plugin agent exists with valid frontmatter', () => {
+  const agentPath = path.join(
+    repoRoot,
+    'plugins',
+    'awos',
+    'agents',
+    'repo-auditor.md'
+  );
+  assert.ok(
+    fs.existsSync(agentPath),
+    'plugins/awos/agents/repo-auditor.md must exist'
+  );
+  const { data, hasFrontmatter } = parse(readUtf8(agentPath));
+  assert.ok(hasFrontmatter, 'repo-auditor.md must have YAML frontmatter');
+  assert.equal(data.name, 'repo-auditor', 'agent name must be "repo-auditor"');
+  assert.ok(
+    typeof data.description === 'string' && data.description.length > 0,
+    'repo-auditor.md must declare a description'
+  );
+});
+
 // ORG.2: SKILL.md Step 6 org branch — ≤3 portfolio metrics + org rollup
 // ---------------------------------------------------------------------------
 
@@ -1725,9 +1792,9 @@ test('SKILL.md Step 6 aggregates per-dimension JSON into audit.json', () => {
   );
 });
 
-test('SKILL.md Step 6 renders report.md via cli.js render --format md', () => {
+test('SKILL.md Step 6 renders report.md via cli.js render (--format md or both)', () => {
   // The orchestrator must call the renderer for markdown output, not write it
-  // by hand. The render command + --format md flag are the canonical invocation.
+  // by hand. `--format both` writes report.md + report.html in one invocation.
   const src = readUtf8(SKILL_MD_PATH);
   assert.ok(
     src.includes('node dist/cli.js render') ||
@@ -1736,8 +1803,8 @@ test('SKILL.md Step 6 renders report.md via cli.js render --format md', () => {
     'SKILL.md Step 6 must invoke the render CLI command to produce report.md (never hand-write it)'
   );
   assert.ok(
-    /--format md/.test(src),
-    'SKILL.md Step 6 must pass "--format md" to the renderer for the markdown report'
+    /--format (md|both)/.test(src),
+    'SKILL.md Step 6 must pass "--format md" or "--format both" to the renderer for the markdown report'
   );
   assert.ok(
     /report\.md/.test(src),
@@ -1767,8 +1834,8 @@ test('SKILL.md Step 6 unconditionally renders report.html via --format html', ()
     'SKILL.md Step 6 must state report.html is generated unconditionally (incl. headless), never gated on interactivity'
   );
   assert.ok(
-    /--format html/.test(src),
-    'SKILL.md Step 6 must show "--format html" as the HTML render flag'
+    /--format (html|both)/.test(src),
+    'SKILL.md Step 6 must show "--format html" or "--format both" as the HTML render flag'
   );
   assert.ok(
     /report\.html/.test(src),

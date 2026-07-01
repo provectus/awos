@@ -76,18 +76,24 @@ Each `[category.*]` block in `standards.toml` carries its own `url`, `date`, and
 For each distinct `url` found across all `[category.*]` blocks:
 
 1. Run a WebSearch to locate the authoritative current URL — the canonical report or specification page, not blog summaries or secondary references.
-2. Issue a WebFetch against the candidate URL to confirm HTTP resolution and capture the precise publication or last-revised date.
-3. Record: `category slug`, `source name`, `proposed_url`, `final_url_after_redirect`, `http_status`, `date`, `last_verified` (today's date).
+2. Issue a WebFetch against the candidate URL to confirm HTTP resolution, capture the precise publication or last-revised date, **and read enough of the page to confirm its content actually defines or justifies this category's metric.** HTTP 200 is necessary but not sufficient: a page that resolves but does not explain the concept fails verification.
+3. Record: `category slug`, `source name`, `proposed_url`, `final_url_after_redirect`, `http_status`, `date`, `last_verified` (today's date), and a one-line `relevance` note quoting the part of the page that defines the metric.
 
 When multiple categories share the same URL (e.g. all DORA categories pointing to the DORA report), verify the URL once and apply the result to all sharing categories. Each category's `last_verified` is stamped independently with the run date.
 
 Rules:
+- **Search by the metric's actual calculation, not the category label.** Before judging a source, read how the metric is really computed (`metrics/<id>.ts` / `detectors/*.ts`) — what it counts, over what window, with what threshold. Search for the backing source using *that* definition. A category named "loc_scale" whose code counts non-blank physical source lines needs a source that defines physical SLOC, not a generic "developer productivity" page. **We do not invent our own metric and then bolt on a loosely-related citation** — the source must back the thing the code actually measures.
+- **If a metric has no backing at all — it looks invented/hallucinated (no standard, no industry article defines or justifies the measurement) — do not manufacture a source. Stop and ask the user** with `AskUserQuestion`, offering to **drop the metric/category** (or its external claim) as one of the options. An unbacked metric is a bug to surface, not a citation to fake.
+- **Relevance, not just liveness.** A link is only valid if the fetched page explains the specific practice the category measures. A resolving-but-off-topic page — a product overview, a research index, a marketing page that merely mentions the topic — is a bad link even at HTTP 200. When the current link fails relevance, replace it; do not keep it because it resolves.
+- **Deep-link, never a site root.** The `url` must land on the specific page that explains the concept, never a bare domain root or landing page (`https://example.com/`). A domain root almost never defines the metric it is attached to. `node scripts/standards-linkcheck.mjs` fails on bare-root URLs — treat that as an error to fix, not a warning.
+- **Recency.** Flag any source whose publication date is more than ~10 years old and search for a newer authoritative edition. Keep an old source only when it is the genuine canonical primary for the concept (e.g. McCabe 1976 for cyclomatic complexity) — and record that justification in the proposal. An old source attached to a metric it does not actually cover (e.g. a complexity paper on a plain LOC metric) is both stale and irrelevant: replace it.
 - For DOI references, use the doi.org URL as the canonical form (stable even when the landing page is paywalled). A 302 redirect from doi.org to a paywalled page (HTTP 403) is **not** a dead link — flag it as REACHABLE-AUTH and keep the DOI URL.
 - **Never fabricate a URL.** If WebFetch fails or returns 404/5xx, flag the link as DEAD and propose no replacement until a confirmed URL is found. A missing or stale link is far less harmful than a plausible-but-wrong one.
+- **When no relevant, live, reasonably-current authoritative source can be found, stop and ask the user** with `AskUserQuestion` (offer: keep-and-flag as an honest AWOS convention / provide a source you know of / drop the check's external claim). Do not settle for a loosely-related link to fill the field — a wrong-but-resolving link is exactly the failure this skill exists to prevent.
 - For living documents (GitHub repositories, framework websites), record the date of the latest release or last commit visible on the page, not the original publication date.
 - Where a category's `date` does not match the verified publication date, flag it as a metadata correction in the proposal.
 
-After running Pass 1, run `node scripts/standards-linkcheck.mjs <path>` against the updated `standards.toml` to programmatically confirm all per-category URLs return HTTP 200 or REACHABLE-AUTH.
+After running Pass 1, run `node scripts/standards-linkcheck.mjs <path>` against the updated `standards.toml` to programmatically confirm all per-category URLs return HTTP 200 or REACHABLE-AUTH **and that none is a bare domain root.**
 
 ### Pass 2 — Weight rescale
 

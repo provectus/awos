@@ -1194,3 +1194,102 @@ test('renderHtml single-repo mode: org_connections field does not affect single-
     'Single-repo HTML must not render org_connections count list (99 is a sentinel)'
   );
 });
+
+// ── R1: measurement window in the header ──────────────────────────────────
+test('renderMarkdown states the measurement window in the header', () => {
+  const audit = makeAudit({
+    source_windows: { git: { days: 90, label: 'git history' } },
+  } as unknown as Partial<AuditJson>);
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('**Measurement window:** last 90 days'),
+    'Markdown header must state the measurement window (last 90 days) so the reader knows the interval'
+  );
+  // The window must be accompanied by the concrete date range, not just "90 days".
+  assert.match(
+    md,
+    /last 90 days \(2025-10-03 – 2026-01-01\)/,
+    'the measurement window must show the date range (start – end), not only the day count'
+  );
+});
+
+test('renderHtml states the measurement window in the meta band', () => {
+  const audit = makeAudit({
+    source_windows: { git: { days: 90, label: 'git history' } },
+  } as unknown as Partial<AuditJson>);
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('Measurement window') && html.includes('last 90 days'),
+    'HTML meta band must state the measurement window (last 90 days)'
+  );
+});
+
+// ── R2: every headline metric carries a tooltip ───────────────────────────
+test('renderHtml wraps every headline metric value in a tooltip (main-page parity with dimension rows)', () => {
+  const audit = makeAudit({
+    headline: {
+      delivery: [
+        { label: 'Merges', display_value: '19.0 / active contributor' },
+        {
+          label: 'Deployment frequency',
+          display_value: '2 / day',
+          band: 'high',
+          check_id: 'ADP-08',
+        },
+        { label: 'Cycle time (Jira In-Progress→Done)', gated: 'tracker' },
+      ],
+      scale: [{ label: 'LOC', display_value: '12,000' }],
+      reach: { ai_tooling: 'Claude, Copilot', contributors: '4 active (90d)' },
+    },
+  } as unknown as Partial<AuditJson>);
+  const html = renderHtml(audit);
+  const tipWrapped = (v: string) =>
+    html.includes(`<span class="tip" tabindex="0">${v}<span class="tipbox">`);
+  assert.ok(
+    tipWrapped('19.0 / active contributor'),
+    'Merges delivery value must be tooltip-wrapped'
+  );
+  assert.ok(
+    tipWrapped('2 / day'),
+    'Deployment frequency delivery value must be tooltip-wrapped'
+  );
+  assert.ok(
+    html.includes('needs ticketing connector') &&
+      tipWrapped('— (needs ticketing connector)'),
+    'gated-absent delivery note must be tooltip-wrapped'
+  );
+  assert.ok(tipWrapped('12,000'), 'scale value must be tooltip-wrapped');
+  assert.ok(
+    tipWrapped('Claude, Copilot'),
+    'AI-tooling reach value must be tooltip-wrapped'
+  );
+  assert.ok(
+    tipWrapped('4 active (90d)'),
+    'Contributors reach value must be tooltip-wrapped'
+  );
+});
+
+// ── R4: SKIP reason renders in the evidence column ────────────────────────
+test('renderHtml shows the skip reason in the evidence column instead of a bare "—"', () => {
+  const skip = makeCheck({
+    check_id: 'ADP-15',
+    status: 'SKIP',
+    applies: false,
+    evidence: [
+      'No ci data available — connect a ci source (connector or config) to score this check.',
+    ],
+  });
+  const audit = makeAudit({
+    dimensions: [makeDim('delivery-automation', [skip])],
+  });
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('No ci data available'),
+    'a SKIP check must render its reason in the evidence column, not a bare "—"'
+  );
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('No ci data available'),
+    'a SKIP check must render its reason in the Markdown check table, not a bare "—"'
+  );
+});

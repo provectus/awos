@@ -67,6 +67,30 @@ export function extractSourceUrls(tomlText) {
   return Array.from(seen.values());
 }
 
+/**
+ * Find category `url` values that are a bare domain root (path is empty or "/").
+ * A site root almost never explains the specific metric it is attached to, so
+ * these are treated as errors — the url must deep-link to the concept page.
+ *
+ * @param {string} tomlText - raw text of a standards.toml file
+ * @returns {{ name: string; url: string }[]} - offending {name, url} pairs.
+ */
+export function findBareRootUrls(tomlText) {
+  const offenders = [];
+  for (const { name, url } of extractSourceUrls(tomlText)) {
+    let pathname;
+    try {
+      pathname = new URL(url).pathname;
+    } catch {
+      continue; // unparseable urls are handled by the reachability check
+    }
+    if (pathname === '' || pathname === '/') {
+      offenders.push({ name, url });
+    }
+  }
+  return offenders;
+}
+
 // ---------------------------------------------------------------------------
 // HTTP check (network I/O — not imported in tests)
 // ---------------------------------------------------------------------------
@@ -146,6 +170,18 @@ async function main() {
       'standards-linkcheck: no [category.*] blocks with a `url` field found — nothing to check.\n'
     );
     process.exit(0);
+  }
+
+  // Static check (runs offline, even in --dry-run): no bare domain-root URLs.
+  const bareRoots = findBareRootUrls(tomlText);
+  if (bareRoots.length > 0) {
+    process.stdout.write(
+      `\nERROR: ${bareRoots.length} bare domain-root URL(s) found — deep-link to the page that explains the metric, not a site root:\n`
+    );
+    for (const r of bareRoots) {
+      process.stdout.write(`  ${r.name}: ${r.url}\n`);
+    }
+    process.exit(1);
   }
 
   if (isDryRun) {

@@ -825,3 +825,119 @@ test('run(): allowFailure:true silences stderr for an expected-empty git call (e
     console.error = originalError;
   }
 });
+
+// ---------------------------------------------------------------------------
+// Lead time for change: branch_first_commit_at must use AUTHOR date, not
+// COMMITTER date. Committer dates get rewritten to ~now on rebase, which would
+// collapse lead time to ~0 for a branch rebased just before merging.
+// ---------------------------------------------------------------------------
+
+function gitDates(
+  cwd: string,
+  args: string[],
+  authorDate: string,
+  committerDate: string
+): void {
+  execFileSync('git', args, {
+    cwd,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: authorDate,
+      GIT_COMMITTER_DATE: committerDate,
+      GIT_AUTHOR_NAME: 'A',
+      GIT_AUTHOR_EMAIL: 'a@x',
+      GIT_COMMITTER_NAME: 'A',
+      GIT_COMMITTER_EMAIL: 'a@x',
+    },
+  });
+}
+
+test('collect honors the threaded active-contributor threshold (not a hardcoded constant)', () => {
+  // windowRepo: Alice (1 merge, 3 lines) + Bob (0 merges, 5 lines), 1 in-window merge.
+  // At a strict threshold (0.9) only Alice clears it → active=1 → merges_per_active=1.
+  // At a lenient threshold (0.05) both clear it → active=2 → merges_per_active=0.5.
+  const repo = windowRepo();
+  const strict = collect(repo, WINDOW_PERIOD, {
+    activeContributorThreshold: 0.9,
+  });
+  const lenient = collect(repo, WINDOW_PERIOD, {
+    activeContributorThreshold: 0.05,
+  });
+  assert.equal(
+    strict.raw.window_stats.merges_per_active,
+    1,
+    'strict threshold → 1 active contributor → merges_per_active = 1/1'
+  );
+  assert.equal(
+    lenient.raw.window_stats.merges_per_active,
+    0.5,
+    'lenient threshold → 2 active contributors → merges_per_active = 1/2; the threshold must be threaded, not hardcoded'
+  );
+});
+
+test('merge_records: branch_first_commit_at uses author date, so a rebased branch keeps a non-zero lead time', () => {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-leadtime-')), 'repo');
+  mkdirSync(r);
+
+  gitDates(
+    r,
+    ['init', '-q', '-b', 'main'],
+    '2025-01-01T00:00:00',
+    '2025-01-01T00:00:00'
+  );
+  writeFileSync(join(r, 'base.txt'), 'base\n');
+  gitDates(r, ['add', '-A'], '2025-01-01T00:00:00', '2025-01-01T00:00:00');
+  gitDates(
+    r,
+    ['commit', '-qm', 'base'],
+    '2025-01-01T00:00:00',
+    '2025-01-01T00:00:00'
+  );
+
+  // Feature commit authored 2025-02-01 but committed 2025-03-25 (as if rebased
+  // onto main immediately before merging). Committer date == merge time.
+  gitDates(
+    r,
+    ['checkout', '-qb', 'feature'],
+    '2025-02-01T00:00:00',
+    '2025-03-25T00:00:00'
+  );
+  writeFileSync(join(r, 'f.txt'), 'feat\n');
+  gitDates(r, ['add', '-A'], '2025-02-01T00:00:00', '2025-03-25T00:00:00');
+  gitDates(
+    r,
+    ['commit', '-qm', 'feat'],
+    '2025-02-01T00:00:00',
+    '2025-03-25T00:00:00'
+  );
+
+  gitDates(
+    r,
+    ['checkout', '-q', 'main'],
+    '2025-03-25T00:00:00',
+    '2025-03-25T00:00:00'
+  );
+  gitDates(
+    r,
+    ['merge', '--no-ff', '-qm', 'Merge feature', 'feature'],
+    '2025-03-25T00:00:00',
+    '2025-03-25T00:00:00'
+  );
+
+  const art = collect(r, WINDOW_PERIOD);
+  const recs = art.raw.merge_records;
+  assert.equal(
+    recs.length,
+    1,
+    'exactly one first-parent merge record expected'
+  );
+
+  const first = new Date(recs[0].branch_first_commit_at).getTime();
+  const merged = new Date(recs[0].merged_at).getTime();
+  const days = (merged - first) / 86_400_000;
+  assert.ok(
+    days > 40,
+    `lead time must reflect the author-date span (~52 days here), not ~0: branch_first_commit_at=${recs[0].branch_first_commit_at}, merged_at=${recs[0].merged_at}, diff=${days.toFixed(1)}d — a ~0 diff means committer date (rewritten by rebase) leaked in`
+  );
+});

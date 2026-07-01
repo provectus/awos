@@ -22,7 +22,13 @@
 // Standards parser (smol-toml — bundled, no Python required)
 // ---------------------------------------------------------------------------
 import { parse as parseToml } from 'smol-toml';
-import { readFileSync, mkdtempSync, existsSync } from 'node:fs';
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  mkdtempSync,
+  existsSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,7 +36,11 @@ import { fileURLToPath } from 'node:url';
 // ---------------------------------------------------------------------------
 // Collectors
 // ---------------------------------------------------------------------------
-import { collect as collectGit } from './collectors/git.ts';
+import {
+  collect as collectGit,
+  ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT,
+  REWORK_HORIZON_DAYS_DEFAULT,
+} from './collectors/git.ts';
 import { collect as collectCi } from './collectors/ci.ts';
 import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
@@ -110,7 +120,7 @@ import { compute as computeG15 } from './metrics/adp_g15_onboarding_ease.ts';
 // Adding a metric module is a one-line change per import + one entry in METRICS below.
 
 import type { MetricResult } from './metrics/_base.ts';
-import { loadStandards } from './metrics/_base.ts';
+import { loadStandards, metaNumber } from './metrics/_base.ts';
 
 // ---------------------------------------------------------------------------
 // Org rollup
@@ -185,11 +195,30 @@ export const METRICS: Record<string, MetricFn> = {
 // this default and overrides values via the collector's own defaults.
 import type { Period } from './collectors/_base.ts';
 
-const DEFAULT_PERIOD: Period = {
-  bucket_days: 30,
-  lookback_days: 90,
-  history_available_days: 0,
-};
+/** Build the collection Period from standards.toml [meta] (the source of truth). */
+function periodFromMeta(standards: Record<string, unknown>): Period {
+  return {
+    bucket_days: 30,
+    lookback_days: metaNumber(standards, 'max_lookback_days', 90),
+    history_available_days: 0,
+  };
+}
+
+/** Git collector tunables from standards.toml [meta] (the source of truth). */
+function gitOptsFromMeta(standards: Record<string, unknown>) {
+  return {
+    activeContributorThreshold: metaNumber(
+      standards,
+      'active_contributor_threshold',
+      ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
+    ),
+    reworkHorizonDays: metaNumber(
+      standards,
+      'rework_horizon_days',
+      REWORK_HORIZON_DAYS_DEFAULT
+    ),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Dispatch
@@ -385,7 +414,17 @@ async function main(): Promise<void> {
         });
         process.exit(1);
       }
-      printJson(fn(repoPath, DEFAULT_PERIOD));
+      // Period + git tunables come from standards.toml [meta], never hardcoded.
+      const collectStandards = loadStandards(
+        join(resolveSkillRoot(), 'references', 'standards.toml')
+      );
+      printJson(
+        fn(
+          repoPath,
+          periodFromMeta(collectStandards),
+          gitOptsFromMeta(collectStandards)
+        )
+      );
       break;
     }
 
@@ -462,6 +501,17 @@ async function main(): Promise<void> {
         process.exit(1);
       }
 
+      // Load standards up front — the Period and git tunables come from its
+      // [meta] table (source of truth), and the metric needs it for scoring.
+      const standardsPath = join(
+        resolveSkillRoot(),
+        'references',
+        'standards.toml'
+      );
+      const standards = loadStandards(standardsPath);
+      const period = periodFromMeta(standards);
+      const gitOpts = gitOptsFromMeta(standards);
+
       // Scale-based metrics (G10/G11/G12) scan the repo directly and do not
       // need a collector artifact.  They receive repoPath as the 4th argument.
       const isScaleMetric =
@@ -484,37 +534,25 @@ async function main(): Promise<void> {
         const tmpRoot = mkdtempSync(join(tmpdir(), 'awos-metric-'));
         collectedDir = join(tmpRoot, 'collected');
         // Git collector is always run for ADP-G* metrics.
-        const gitArtifact = collectGit(repoPath, DEFAULT_PERIOD);
+        const gitArtifact = collectGit(repoPath, period, gitOpts);
         writeArtifact(gitArtifact as { source: string }, collectedDir);
         // CI collector is run for ADP-C* metrics.
         if (id.startsWith('adp_c')) {
-          const ciArtifact = collectCi(repoPath, DEFAULT_PERIOD);
+          const ciArtifact = collectCi(repoPath, period);
           writeArtifact(ciArtifact as { source: string }, collectedDir);
         }
         // Docs collector is run for ADP-D* metrics.
         if (id.startsWith('adp_d')) {
-          const docsArtifact = collectDocs(repoPath, DEFAULT_PERIOD);
+          const docsArtifact = collectDocs(repoPath, period);
           writeArtifact(docsArtifact as { source: string }, collectedDir);
         }
         // Tracker collector is run for ADP-I* metrics (also git for MTTR proxy).
         if (id.startsWith('adp_i')) {
-          const trackerArtifact = collectTracker(repoPath, DEFAULT_PERIOD);
+          const trackerArtifact = collectTracker(repoPath, period);
           writeArtifact(trackerArtifact as { source: string }, collectedDir);
         }
       }
 
-      // Load standards for category award.
-      // import.meta.url resolves to dist/cli.js when bundled, so go one level
-      // up from dirname to reach the skill root where references/ lives.
-      const cliDir = dirname(fileURLToPath(import.meta.url));
-      // When running from source (tsx), cliDir is the skill root itself.
-      // When bundled (dist/cli.js), cliDir is dist/ — one level below the skill root.
-      const skillRoot =
-        cliDir.endsWith('/dist') || cliDir.endsWith('\\dist')
-          ? dirname(cliDir)
-          : cliDir;
-      const standardsPath = join(skillRoot, 'references', 'standards.toml');
-      const standards = loadStandards(standardsPath);
       // Await in case the metric is async (e.g. adp_g10_complexity uses wasm init).
       const result = await metricFn(collectedDir, standards, {}, repoPath);
       printJson(result);
@@ -629,9 +667,23 @@ async function main(): Promise<void> {
       const remainingArgs = process.argv.slice(4);
       const fmtIdx = remainingArgs.indexOf('--format');
       const format = fmtIdx !== -1 ? remainingArgs[fmtIdx + 1] : 'md';
-      if (format !== 'md' && format !== 'html') {
+      if (format !== 'md' && format !== 'html' && format !== 'both') {
         printJson({
-          error: `render --format must be "md" or "html", got "${format}"`,
+          error: `render --format must be "md", "html", or "both", got "${format}"`,
+        });
+        process.exit(1);
+      }
+      // `--format both` writes report.md + report.html into --out-dir in one
+      // process (single spawn instead of two). Single-format modes keep writing
+      // to stdout for back-compat.
+      const outDirIdx = remainingArgs.indexOf('--out-dir');
+      const outDirArg =
+        outDirIdx !== -1 ? remainingArgs[outDirIdx + 1] : undefined;
+      if (format === 'both' && !outDirArg) {
+        printJson({
+          error: 'render --format both requires --out-dir <dir>',
+          usage:
+            'node dist/cli.js render <audit.json> --format both --out-dir <dir>',
         });
         process.exit(1);
       }
@@ -656,6 +708,17 @@ async function main(): Promise<void> {
           path: auditPath,
         });
         process.exit(1);
+      }
+      if (format === 'both') {
+        const dir = outDirArg as string;
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, 'report.md'), renderMarkdown(audit) + '\n');
+        writeFileSync(join(dir, 'report.html'), renderHtml(audit) + '\n');
+        printJson({
+          rendered: ['report.md', 'report.html'],
+          out_dir: dir,
+        });
+        break;
       }
       const output =
         format === 'html' ? renderHtml(audit) : renderMarkdown(audit);
@@ -684,6 +747,37 @@ async function main(): Promise<void> {
         DETECTORS,
         METRICS,
         standardsPath
+      );
+      printJson(summary);
+      break;
+    }
+
+    case 'enrich': {
+      // Re-score a completed audit against the already-populated collected/ dir,
+      // in ONE pass. After the orchestrator fetches connectors and writes
+      // collected/<source>.json, `enrich` re-runs every detector+metric reading
+      // those artifacts (connector metrics now score instead of SKIP) and
+      // rewrites the per-dimension JSON + audit.json — replacing the old loop of
+      // one `node metric <id>` spawn per connector metric. Judgment checks are
+      // (re)emitted as PENDING_JUDGMENT, so run enrich BEFORE the judgment patch.
+      const repoPath = arg1;
+      const outDir = arg2;
+      if (!repoPath || !outDir) {
+        printJson({ error: 'enrich requires <repoPath> <outDir>' });
+        process.exit(1);
+      }
+      const standardsPath = join(
+        resolveSkillRoot(),
+        'references',
+        'standards.toml'
+      );
+      const summary = await auditCore(
+        repoPath,
+        outDir,
+        DETECTORS,
+        METRICS,
+        standardsPath,
+        join(outDir, 'collected')
       );
       printJson(summary);
       break;

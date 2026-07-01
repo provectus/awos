@@ -10,6 +10,22 @@ export function loadStandards(path: string): Record<string, unknown> {
   return parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
 }
 
+/**
+ * Read a numeric tunable from the standards.toml `[meta]` table. standards.toml
+ * is the single source of truth for these values; `fallback` applies only when
+ * the key is absent or malformed. Use this everywhere instead of hardcoding a
+ * copy of a meta value.
+ */
+export function metaNumber(
+  standards: Record<string, unknown>,
+  key: string,
+  fallback: number
+): number {
+  const meta = standards['meta'] as Record<string, unknown> | undefined;
+  const value = meta?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 // ---------------------------------------------------------------------------
 // Reliability computation
 // ---------------------------------------------------------------------------

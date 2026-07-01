@@ -1,7 +1,13 @@
 // audit_core.test.ts — unit tests for aggregate() in audit_core.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { aggregate } from './audit_core.ts';
@@ -314,5 +320,200 @@ test('aggregate must round dim.score and audit_total to 1 dp — no float dust (
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// R4: every SKIP check must carry a human-readable reason in `evidence`.
+// R5: a category `summary` becomes the inline lead (`plain`); `definition`
+//     stays verbose (for the tooltip).
+// ---------------------------------------------------------------------------
+
+function buildBareRepo(): { repoPath: string; outDir: string; base: string } {
+  const base = mkdtempSync(join(tmpdir(), 'awos-skipreason-'));
+  const repoPath = join(base, 'repo');
+  mkdirSync(repoPath, { recursive: true });
+  execSync('git init && git add . && git commit -m init --allow-empty', {
+    cwd: repoPath,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'T',
+      GIT_AUTHOR_EMAIL: 't@t.co',
+      GIT_COMMITTER_NAME: 'T',
+      GIT_COMMITTER_EMAIL: 't@t.co',
+    },
+  });
+  const outDir = join(base, 'out');
+  mkdirSync(outDir, { recursive: true });
+  return { repoPath, outDir, base };
+}
+
+const standardsPathForSkip = pathJoin(
+  dirname(fileURLToPath(import.meta.url)),
+  'references',
+  'standards.toml'
+);
+
+test('every SKIP check carries a reason in evidence — never a bare "—" (R4)', async () => {
+  const { repoPath, outDir, base } = buildBareRepo();
+  try {
+    // Empty registries: connector/topology-gated categories (no CI/docs/tracker
+    // on a bare repo) resolve to SKIP.
+    await auditCore(repoPath, outDir, {}, {}, standardsPathForSkip);
+
+    const files = readdirSync(outDir).filter(
+      (f) => f.endsWith('.json') && f !== 'audit.json'
+    );
+    const skips: { file: string; id: string; evidence: unknown }[] = [];
+    for (const f of files) {
+      const dim = JSON.parse(readFileSync(join(outDir, f), 'utf8'));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const c of (dim.checks ?? []) as any[]) {
+        if (c.status === 'SKIP')
+          skips.push({ file: f, id: c.check_id, evidence: c.evidence });
+      }
+    }
+    assert.ok(
+      skips.length > 0,
+      'a bare repo should produce at least one SKIP (CI/tracker/docs-gated categories)'
+    );
+    for (const s of skips) {
+      assert.ok(
+        Array.isArray(s.evidence) &&
+          s.evidence.length > 0 &&
+          String(s.evidence[0]).trim().length > 0,
+        `SKIP check ${s.id} (${s.file}) must carry a human-readable reason in evidence, got ${JSON.stringify(s.evidence)}`
+      );
+    }
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('a category summary becomes the inline lead (plain); definition stays verbose (R5)', async () => {
+  const { repoPath, outDir, base } = buildBareRepo();
+  try {
+    await auditCore(repoPath, outDir, {}, {}, standardsPathForSkip);
+    const dim = JSON.parse(
+      readFileSync(join(outDir, 'ai-sdlc-adoption.json'), 'utf8')
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rework = (dim.checks as any[]).find((c: any) =>
+      Array.isArray(c.code) ? c.code.includes(1401) : c.code === 1401
+    );
+    assert.ok(rework, 'ADP-24 (code 1401) must exist');
+    assert.equal(
+      rework.plain,
+      'DORA deployment rework rate: share of deploys that are unplanned bug-fix work.',
+      `check.plain must be the concise summary, got ${JSON.stringify(rework.plain)}`
+    );
+    assert.ok(
+      String(rework.definition).includes('fix/bugfix/hotfix'),
+      'the verbose definition must be retained (it feeds the tooltip)'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Part 1 #1: `enrich` re-scores connector metrics from an already-populated
+// collected/ dir in one pass (auditCore with collectedDirOverride), replacing
+// the old per-metric `node metric <id>` spawns. It must NOT overwrite the
+// connector artifacts, and it must flip the gated check from SKIP to scored.
+// ---------------------------------------------------------------------------
+
+import { compute as i1WorkMix } from './metrics/adp_i1_work_mix.ts';
+
+test('enrich re-scores a connector metric from a populated collected/ dir without clobbering it', async () => {
+  const { repoPath, outDir, base } = buildBareRepo();
+  try {
+    const registry = { adp_i1_work_mix: i1WorkMix };
+    // Baseline: no tracker connector → adp_i1 (code 1101) is gated off → SKIP.
+    await auditCore(repoPath, outDir, {}, registry, standardsPathForSkip);
+    const readI1 = () => {
+      const dim = JSON.parse(
+        readFileSync(join(outDir, 'ai-sdlc-adoption.json'), 'utf8')
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (dim.checks as any[]).find((c: any) =>
+        Array.isArray(c.code) ? c.code.includes(1101) : c.code === 1101
+      );
+    };
+    assert.equal(
+      readI1().status,
+      'SKIP',
+      'baseline: the tracker check SKIPs without a connector'
+    );
+
+    // Orchestrator writes an available tracker connector artifact.
+    writeFileSync(
+      join(outDir, 'collected', 'tracker.json'),
+      JSON.stringify({
+        source: 'tracker',
+        available: true,
+        period: { lookback_days: 180, source_label: 'Jira via MCP' },
+        tickets: [],
+        type_counts: { feature: 10, story: 5 },
+        resolved_count: 8,
+        incident_source: null,
+      })
+    );
+
+    // enrich = auditCore re-score against the populated collected/ (override).
+    await auditCore(
+      repoPath,
+      outDir,
+      {},
+      registry,
+      standardsPathForSkip,
+      join(outDir, 'collected')
+    );
+
+    assert.notEqual(
+      readI1().status,
+      'SKIP',
+      'after enrich the tracker check must be scored (topology.has_tracker flips true), not SKIP'
+    );
+    const tracker = JSON.parse(
+      readFileSync(join(outDir, 'collected', 'tracker.json'), 'utf8')
+    );
+    assert.equal(
+      tracker.available,
+      true,
+      'enrich must reuse (not overwrite) the connector artifact — available stays true'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('render --format both writes report.md + report.html in one invocation', () => {
+  const { repoPath, outDir, base } = buildBareRepo();
+  try {
+    execSync(
+      `node "${pathJoin(dirname(fileURLToPath(import.meta.url)), 'dist', 'cli.js')}" audit-core "${repoPath}" "${outDir}"`,
+      { stdio: 'ignore' }
+    );
+    const cli = pathJoin(
+      dirname(fileURLToPath(import.meta.url)),
+      'dist',
+      'cli.js'
+    );
+    execSync(
+      `node "${cli}" render "${join(outDir, 'audit.json')}" --format both --out-dir "${outDir}"`,
+      { stdio: 'ignore' }
+    );
+    assert.ok(
+      readFileSync(join(outDir, 'report.md'), 'utf8').length > 0,
+      'render --format both must write report.md'
+    );
+    assert.ok(
+      readFileSync(join(outDir, 'report.html'), 'utf8').includes('<html'),
+      'render --format both must write report.html'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
   }
 });

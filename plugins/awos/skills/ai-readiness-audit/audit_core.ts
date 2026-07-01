@@ -23,7 +23,7 @@
 import { mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 
-import { loadStandards } from './metrics/_base.ts';
+import { loadStandards, metaNumber } from './metrics/_base.ts';
 import {
   computeTopology,
   detectLinkedRepos,
@@ -38,7 +38,11 @@ import { iterFiles, DEFAULT_IGNORE } from './detectors/_base.ts';
 import type { MetricResult } from './metrics/_base.ts';
 import type { Period } from './collectors/_base.ts';
 import { writeArtifact } from './collectors/_base.ts';
-import { collect as collectGit } from './collectors/git.ts';
+import {
+  collect as collectGit,
+  ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT,
+  REWORK_HORIZON_DAYS_DEFAULT,
+} from './collectors/git.ts';
 import { collect as collectCi } from './collectors/ci.ts';
 import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
@@ -131,11 +135,9 @@ function computeDetectionConflicts(
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
-const PERIOD: Period = {
-  bucket_days: 30,
-  lookback_days: 90,
-  history_available_days: 0,
-};
+// Last-resort lookback window (days) used only when meta.max_lookback_days is
+// absent from standards.toml. The source of truth is meta.max_lookback_days.
+const MAX_LOOKBACK_DAYS_FALLBACK = 90;
 
 const COLLECTOR_SOURCES = ['git', 'ci', 'tracker', 'docs'] as const;
 
@@ -167,6 +169,8 @@ interface Category {
   weight: number;
   method: string;
   definition?: string;
+  /** Optional one-line lead shown inline; the full `definition` stays in the tooltip. */
+  summary?: string;
   applies_when?: string;
   reliability_default?: string;
   source?: string;
@@ -220,7 +224,12 @@ export async function auditCore(
   outDir: string,
   detectors: Record<number, DetectorFn>,
   metrics: Record<string, MetricFn>,
-  standardsPath: string
+  standardsPath: string,
+  // When set, skip the deterministic collectors and score against this already
+  // populated collected/ directory instead. This is the `enrich` path: after the
+  // orchestrator writes connector artifacts (tracker/docs/ci) into collected/,
+  // re-scoring reuses them rather than overwriting them with empty ones.
+  collectedDirOverride?: string
 ): Promise<AuditCoreSummary> {
   const start = Date.now();
   const standards = loadStandards(standardsPath);
@@ -235,14 +244,40 @@ export async function auditCore(
 
   // 1. Deterministic collectors → collected/ artifacts. git is always present;
   //    ci self-probes; tracker/docs emit available:false without a connector.
-  const collectedDir = join(outDir, 'collected');
-  for (const art of [
-    collectGit(repoPath, PERIOD),
-    collectCi(repoPath, PERIOD),
-    collectTracker(repoPath, PERIOD),
-    collectDocs(repoPath, PERIOD),
-  ]) {
-    writeArtifact(art as { source: string }, collectedDir);
+  //    When collectedDirOverride is set (the `enrich` re-score path), skip
+  //    collection entirely and reuse the caller's already-populated artifacts.
+  const collectedDir = collectedDirOverride ?? join(outDir, 'collected');
+  if (!collectedDirOverride) {
+    // All tunables come from standards.toml [meta] — never hardcoded here.
+    const period: Period = {
+      bucket_days: 30,
+      lookback_days: metaNumber(
+        standards,
+        'max_lookback_days',
+        MAX_LOOKBACK_DAYS_FALLBACK
+      ),
+      history_available_days: 0,
+    };
+    const gitOpts = {
+      activeContributorThreshold: metaNumber(
+        standards,
+        'active_contributor_threshold',
+        ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
+      ),
+      reworkHorizonDays: metaNumber(
+        standards,
+        'rework_horizon_days',
+        REWORK_HORIZON_DAYS_DEFAULT
+      ),
+    };
+    for (const art of [
+      collectGit(repoPath, period, gitOpts),
+      collectCi(repoPath, period),
+      collectTracker(repoPath, period),
+      collectDocs(repoPath, period),
+    ]) {
+      writeArtifact(art as { source: string }, collectedDir);
+    }
   }
 
   // Build sources block from collector artifacts.
@@ -292,9 +327,29 @@ export async function auditCore(
     }
   }
 
-  // 2. Deterministic topology flags. Connector-dependent flags default to
-  //    absent; the orchestrator re-runs with connectors during the patch phase.
-  const topology: TopologyFlags = computeTopology(repoPath);
+  // 2. Deterministic topology flags. Connector-dependent flags (has_tracker,
+  //    has_docs_connector, has_incident_source) are derived from the collected
+  //    artifacts' availability: without a connector they are absent (checks
+  //    SKIP); once the orchestrator writes an available connector artifact and
+  //    `enrich` re-scores, they flip true so the gated categories score.
+  const readCollected = (src: string): Record<string, unknown> | null => {
+    try {
+      return JSON.parse(
+        readFileSync(join(collectedDir, `${src}.json`), 'utf8')
+      ) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+  const trackerArt = readCollected('tracker');
+  const docsArt = readCollected('docs');
+  const topology: TopologyFlags = computeTopology(repoPath, {
+    has_tracker: Boolean(trackerArt?.available),
+    has_docs_connector: Boolean(docsArt?.available),
+    has_incident_source: Boolean(
+      trackerArt?.available && trackerArt?.incident_source
+    ),
+  });
 
   // 3. Run each metric once. A metric reports the category codes it awarded
   //    (PASS) and whether it ran (OK) or skipped (no sources).
@@ -655,6 +710,23 @@ function appliesGatedOff(c: Category, topology: TopologyFlags): boolean {
   return m ? !topology[m[1]] : false;
 }
 
+/**
+ * Human-readable reason for a SKIP, shown in the report's evidence column so a
+ * skipped check never renders as a bare "—". Prefers naming the missing data
+ * source (actionable); falls back to the applies_when condition.
+ */
+function buildSkipReason(c: Category, topology: TopologyFlags): string {
+  const nonGit = (c.sources ?? []).filter((s) => s && s !== 'git');
+  if (nonGit.length > 0) {
+    const label = nonGit.join('/');
+    return `No ${label} data available — connect a ${label} source (connector or config) to score this check.`;
+  }
+  if (appliesGatedOff(c, topology) && c.applies_when) {
+    return `Not applicable — "${c.applies_when}" is false for this repository.`;
+  }
+  return 'Skipped — the required data was not available.';
+}
+
 function buildCheck(
   key: string,
   c: Category,
@@ -686,8 +758,8 @@ function buildCheck(
 
   if (appliesGatedOff(c, topology)) {
     // applies_when topology flag is false → category does not apply.
+    // A human-readable reason is filled into `evidence` below (see skip-reason block).
     status = 'SKIP';
-    value = `applies_when ${c.applies_when} is false`;
     // score=0, confidence=0 (already initialised)
   } else if (c.method === 'judgment') {
     status = 'PENDING_JUDGMENT';
@@ -752,6 +824,11 @@ function buildCheck(
     }
   }
 
+  // A SKIP with no evidence renders as a bare "—"; give the reader a reason why.
+  if (status === 'SKIP' && evidence.length === 0) {
+    evidence = [buildSkipReason(c, topology)];
+  }
+
   const applies = status !== 'SKIP';
   const weightAwarded = Math.round(c.weight * score * 10) / 10;
   const source_date = c.date ?? null;
@@ -775,7 +852,9 @@ function buildCheck(
     source: c.source ?? '',
     definition: c.definition ?? '',
     hint: `${c.definition ?? ''} · ${c.method} · ${c.source ?? ''}${hintDate ? ` (${hintDate})` : ''}`,
-    plain: c.definition ?? '',
+    // Inline lead: prefer a concise `summary`, fall back to the full definition.
+    // The verbose `definition` still renders in the HTML tooltip regardless.
+    plain: c.summary ?? c.definition ?? '',
     score,
     confidence,
     source_date,

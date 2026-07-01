@@ -198,9 +198,12 @@ function getMergeRecords(cwd: string): MergeRecord[] {
     if (!sha || !mergedAt) continue;
 
     // Get all commits reachable from MERGE_HEAD (^2) but not from first parent.
+    // Use author date (%aI), not committer date: a branch rebased just before
+    // merging has its committer dates rewritten to ~merge-time, which would
+    // collapse lead time to ~0. Author date reflects when the work was written.
     // allowFailure: a root commit has no ^1, and an octopus merge's ^2 may not
     // exist — both are valid repo states where this rev-range legitimately fails.
-    const sideOut = run(['log', '--format=%cI', `${sha}^1..${sha}^2`], cwd, {
+    const sideOut = run(['log', '--format=%aI', `${sha}^1..${sha}^2`], cwd, {
       allowFailure: true,
     })
       .trim()
@@ -262,16 +265,20 @@ export interface WindowStats {
 }
 
 /**
- * Framework default for the active-contributor exclusion threshold.
- * Mirrors meta.active_contributor_threshold in standards.toml (default 0.1 = 10 %).
- * Single source of truth — adp_g2_contributors and display-only ratios both use this.
+ * Fallback for the active-contributor exclusion threshold, used ONLY when the
+ * caller does not thread the value in (e.g. the standalone `collect` verb run
+ * without standards). The source of truth is `meta.active_contributor_threshold`
+ * in standards.toml — `audit-core` reads it and passes it into `collect(...)`.
+ * Keep this in sync with that key only as a last-resort default.
  */
-export const ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT = 0.1;
+export const ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT = 0.05;
 
 /**
- * Framework default for the code-turnover rework horizon, in days.
- * Mirrors meta.rework_horizon_days in standards.toml (default 21).
- * A line deleted within this many days of being authored counts as "reworked".
+ * Fallback for the code-turnover rework horizon, in days, used ONLY when the
+ * caller does not thread the value in. The source of truth is
+ * `meta.rework_horizon_days` in standards.toml — `audit-core` reads it and
+ * passes it into `collect(...)`. A line deleted within this many days of being
+ * authored counts as "reworked".
  */
 export const REWORK_HORIZON_DAYS_DEFAULT = 21;
 
@@ -280,7 +287,7 @@ export const REWORK_HORIZON_DAYS_DEFAULT = 21;
  *
  * An author is excluded iff their merge-share AND LOC-share are both strictly
  * below threshold T.  T is configurable via meta.active_contributor_threshold
- * in standards.toml (default 0.1 = 10 %).
+ * in standards.toml (default 0.05 = 5 %).
  *
  * @param perAuthor - author rows from window_stats.per_author
  * @param T         - exclusion threshold (0 < T ≤ 1)
@@ -292,7 +299,11 @@ export function activeContributors(perAuthor: AuthorRow[], T: number): number {
     .length;
 }
 
-function buildWindowStats(cwd: string, period: Period): WindowStats {
+function buildWindowStats(
+  cwd: string,
+  period: Period,
+  activeThreshold: number
+): WindowStats {
   const windowDays = period.lookback_days;
   const empty: WindowStats = {
     window_days: windowDays,
@@ -419,10 +430,7 @@ function buildWindowStats(cwd: string, period: Period): WindowStats {
     0
   );
 
-  const activeCount = activeContributors(
-    perAuthor,
-    ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
-  );
+  const activeCount = activeContributors(perAuthor, activeThreshold);
   const totalLines = perAuthor.reduce((s, a) => s + a.lines, 0);
   const merges_per_active = activeCount > 0 ? totalMerges / activeCount : null;
   const loc_per_active = activeCount > 0 ? totalLines / activeCount : null;
@@ -492,9 +500,12 @@ export interface CodeTurnover {
  * The replay starts `horizon` days BEFORE the window so an in-window deletion
  * can still find an addition authored just before the window opened.
  */
-function getCodeTurnover(cwd: string, period: Period): CodeTurnover | null {
+function getCodeTurnover(
+  cwd: string,
+  period: Period,
+  horizonDays: number
+): CodeTurnover | null {
   const lookbackDays = period.lookback_days;
-  const horizonDays = REWORK_HORIZON_DAYS_DEFAULT;
 
   const anchor = latestCommitDate(cwd);
   if (!anchor) return null;
@@ -619,16 +630,36 @@ export interface GitRaw {
   code_turnover: CodeTurnover | null;
 }
 
-export function collect(repoPath: string, period: Period) {
+/**
+ * Tunables sourced from standards.toml `[meta]`. Callers that have loaded
+ * standards (audit-core) pass these in so the collector's computations honor the
+ * same values as the metrics; the constants above are last-resort fallbacks.
+ */
+export interface GitCollectOptions {
+  /** meta.active_contributor_threshold */
+  activeContributorThreshold?: number;
+  /** meta.rework_horizon_days */
+  reworkHorizonDays?: number;
+}
+
+export function collect(
+  repoPath: string,
+  period: Period,
+  opts: GitCollectOptions = {}
+) {
+  const activeThreshold =
+    opts.activeContributorThreshold ?? ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT;
+  const reworkHorizonDays =
+    opts.reworkHorizonDays ?? REWORK_HORIZON_DAYS_DEFAULT;
   const default_branch = getDefaultBranch(repoPath);
   const total_commits = getTotalCommits(repoPath);
   const ai_marked_commits = getAiMarkedCommits(repoPath);
   const tooling_paths = getToolingPaths(repoPath);
   const { total_merges, revert_merges } = getMergeStats(repoPath);
   const merge_records = getMergeRecords(repoPath);
-  const window_stats = buildWindowStats(repoPath, period);
+  const window_stats = buildWindowStats(repoPath, period, activeThreshold);
   const numstat_totals = getNumstatTotals(repoPath);
-  const code_turnover = getCodeTurnover(repoPath, period);
+  const code_turnover = getCodeTurnover(repoPath, period, reworkHorizonDays);
   const history_available_days = getHistoryAvailableDays(repoPath);
 
   const raw: GitRaw = {

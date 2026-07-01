@@ -81,8 +81,8 @@ The renderer is deterministic and contains no LLM. The plain-language narrative 
   "headline": {
     "delivery": [
       {
-        "label": "Merges / active contributor",
-        "display_value": "3.2 / contributor"
+        "label": "Merges",
+        "display_value": "3.2 / active contributor"
       },
       {
         "label": "Deployment frequency",
@@ -164,13 +164,13 @@ In org mode the engine reads each repo's FULL audit — `context/audits/YYYY-MM-
   "headline": {
     "delivery": [
       {
-        "label": "Merges / active contributor",
-        "display_value": "3 / contributor",
+        "label": "Merges",
+        "display_value": "3 / active contributor",
         "repos_counted": 8
       },
       {
-        "label": "LOC / active contributor",
-        "display_value": "150 / contributor",
+        "label": "LOC",
+        "display_value": "150 / active contributor",
         "repos_counted": 8
       },
       {

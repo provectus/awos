@@ -35,7 +35,7 @@ Represents a single work item returned by a project tracker (Jira, Linear, GitHu
 | `has_acceptance_criteria` | `boolean`      | no       | Whether the ticket body contains acceptance criteria (structure signal — **no raw text**; used by ADP-I5) |
 | _(any)_                   | `unknown`      | no       | Additional fields from the source system are passed through unchanged                                     |
 
-The `resolved_count` helper treats a ticket as resolved when `status` (lowercased) equals `"done"` **or** `resolved_at` is non-null. Map whichever field your source exposes.
+**Systems vary — normalize into this shape.** Field names and state labels differ across trackers, so map each system's own vocabulary onto the canonical fields; the metrics never see the vendor terms. `status` is a free-text label from the source (Jira `fields.status.name`, Linear `state.name`, GitHub Projects column, Asana section). A ticket counts toward `resolved_count` when it is in any **terminal / completed** state — `done`, `closed`, `resolved`, `completed`, `shipped`, `merged` (case-insensitive) — **or** when `resolved_at` is non-null. Likewise the in-progress→done cycle-time headline uses whichever states the system calls "in progress" and "done". When in doubt, set `resolved_at` from the source's completion timestamp so throughput does not depend on state-name matching at all.
 
 ### TrackerConnector
 
@@ -272,14 +272,13 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
 
 ## Data-source resolution protocol
 
-A reachable tracker/docs/incident MCP is enriched by default — fetching and mapping it is part of the audit, not optional, and not gated on a `sources.toml`. For every non-git source (tracker, docs, incident, and any reachable MCP/integration that maps to a collector):
+A reachable tracker/docs/incident MCP is enriched by default — fetching and mapping it is part of the audit, not optional, and not gated on a `sources.toml`. The sources are independent, so **fetch them concurrently** — issue the tracker/docs/incident calls in a single message (parallel tool calls); only pagination _within_ a source is sequential. For every non-git source (tracker, docs, incident, and any reachable MCP/integration that maps to a collector):
 
 1. **Attempt to fetch.** Try the MCP call or API request. If it is reachable, fetch it — do not pre-decide it is out of scope.
-2. **On success** — map each returned record into the shape above, write the `TrackerConnector` or `DocsConnector` JSON to `collected/<source>.json`, then run the affected metric:
+2. **On success** — map each returned record into the shape above and write the `TrackerConnector` or `DocsConnector` JSON to `collected/<source>.json`. Mapping reachable data into the documented shape is not fabrication. Do **not** re-run a metric per source here — once every reachable source's artifact is written, the orchestrator re-scores them all in one pass:
    ```
-   node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric <id> "<repoPath>" "context/audits/YYYY-MM-DD/collected"
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" enrich "<repoPath>" "context/audits/YYYY-MM-DD"
    ```
-   Mapping reachable data into the documented shape is not fabrication.
 3. **On failure or unclear mapping** (auth error, unfamiliar schema, broken dependency, empty result, closed port) — do not silently skip. In interactive mode, use `AskUserQuestion` with three options: mark unavailable (record the reason) / retry with guidance / show how to fix (link to this document). In headless `claude -p` runs (no interactive user), default to marking the source unavailable and record the _actual_ failure reason plus a remediation hint in the report's `missed_sources` list — the real cause (e.g. "Jira MCP returned 401"), never "no connector provided" when an MCP was in fact reachable.
 
 Never drop a reachable source without a recorded reason.

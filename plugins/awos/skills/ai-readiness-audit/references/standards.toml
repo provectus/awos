@@ -22,7 +22,7 @@
 
 [meta]
 max_lookback_days = 90
-active_contributor_threshold = 0.1
+active_contributor_threshold = 0.05
 rework_horizon_days = 21
 standards_version = "2026.06"
 # Users override by pointing sources.toml [standards].standards_file at their own copy.
@@ -143,7 +143,7 @@ metric = "adp_g2_contributors"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
-definition = "Active contributor count over the 90-day window: authors excluded only when both their merge-share and LOC-share fall below the active_contributor_threshold (default 10 %), filtering out drive-by reviewers and non-code participants (aggregate only, no PII)"
+definition = "Active contributor count over the 90-day window: authors excluded only when both their merge-share and LOC-share fall below the active_contributor_threshold (default 5 %), filtering out drive-by reviewers and non-code participants (aggregate only, no PII)"
 applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # raw count; no direction implied without context
@@ -215,7 +215,7 @@ metric = "adp_g6_churn"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
-definition = "Windowed code-turnover: share of recently-authored lines (within rework_horizon_days, default 21) that are deleted again inside the 90-day window — a bounded, directional rework signal (lower is better), not raw lifetime churn size"
+definition = "Windowed code-turnover: share of recently-authored lines (within the rework horizon) that are deleted again inside the 90-day window — a bounded, directional rework signal (lower is better)."
 applies_when = "always"
 sources = ["git"]
 reliability_default = "minimal"   # windowed turnover metric; directional signal, not raw count
@@ -273,10 +273,10 @@ definition = "Share of commits/PRs carrying AI markers (Co-authored-by: trailer,
 applies_when = "always"
 sources = ["git"]
 reliability_default = "minimal"   # true usage >= shown: attribution is easily disabled
-source = "DX Core 4"
-url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
-date = "2024-12"
-last_verified = "2026-06-30"
+source = "GitHub Docs — Co-authored-by"
+url = "https://docs.github.com/en/pull-requests/committing-changes-to-your-project/creating-and-editing-commits/creating-a-commit-with-multiple-authors"
+date = "2025"
+last_verified = "2026-07-01"
 
 # ---------------------------------------------------------------------------
 # Tier C: CI source categories
@@ -391,6 +391,7 @@ metric = "adp_i5_description_quality"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
+summary = "Share of tickets with a non-trivial description and acceptance criteria — thin tickets starve humans and AI agents of context."
 definition = "Share of tickets with a non-trivial description (≥50 chars) AND acceptance criteria; thin tickets starve both humans and AI agents of context. The 50-char threshold is an AWOS heuristic — Agile Alliance's Definition of Ready specifies acceptance criteria but publishes no numeric character-count threshold. Size/structure signals only; no raw description text is stored."
 applies_when = "topology.has_tracker"
 sources = ["tracker"]
@@ -415,8 +416,8 @@ definition = "External spec/doc coverage & freshness in Confluence/Coda/Notion; 
 applies_when = "topology.has_docs_connector"
 sources = ["docs"]
 reliability_default = "not-reliable"
-source = "Diátaxis"
-url = "https://diataxis.fr/"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
 date = "2024"
 last_verified = "2026-06-30"
 
@@ -456,10 +457,10 @@ definition = "Total source-file line count (LOC), per-language breakdown, and fi
 applies_when = "always"
 sources = ["scale"]
 reliability_default = "not-reliable"
-source = "McCabe 1976"
-url = "https://doi.org/10.1109/TSE.1976.233837"
-date = "1976-07"
-last_verified = "2026-06-30"
+source = "Wikipedia — Source lines of code (physical SLOC)"
+url = "https://en.wikipedia.org/wiki/Source_lines_of_code"
+date = "2025"
+last_verified = "2026-07-01"
 
 # ADP-G12: Direct dependency count (manifest-based)
 
@@ -488,13 +489,14 @@ metric = "adp_g14_rework_rate"
 dimension = "ai-sdlc-adoption"
 weight = 10
 method = "computed"
+summary = "DORA deployment rework rate: share of deploys that are unplanned bug-fix work."
 definition = "DORA deployment rework rate: ratio of deployments that are unplanned work to fix bugs triggered by incidents in production. Proxied from git: first-parent merges in the 90-day window whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords (case-insensitive). Distinct from change_failure_rate (g7), which counts revert/rollback deployments, and from code_churn (g6), which measures line-level turnover. DORA publishes no numeric thresholds for rework rate; bands (good <15%, watch <30%, concerning >=30%) are AWOS heuristics."
 applies_when = "always"
 sources = ["git"]
 reliability_default = "minimal"
 source = "DORA"
 url = "https://dora.dev/guides/dora-metrics/"
-date = "2024"
+date = "2025"
 last_verified = "2026-06-30"
 
 # ADP-G15: Onboarding ease — enabler presence proxy (DX Core 4 time-to-10th-PR)
@@ -506,6 +508,7 @@ metric = "adp_g15_onboarding_ease"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
+summary = "Onboarding-enabler presence (README setup, agent context, .env example, one-command bootstrap) — a proxy for time-to-productivity."
 definition = "Onboarding enabler presence as a proxy for the DX Core 4 'Time to 10th PR' outcome (average time for a new engineer to merge their 10th pull request). Four boolean signals are checked: (1) README contains a setup/install/getting-started/usage/quickstart heading or a common bootstrap command (npm install, yarn, pnpm install, make, docker compose, pip install, poetry install, ./gradlew, bundle install, go build/run, cargo build, uv sync); (2) agent context file present (CLAUDE.md/AGENTS.md or topology.has_agent_instruction_files); (3) .env example file present (.env.example/.env.sample/.env.template/.env.dist); (4) one-command bootstrap present (Makefile, justfile, Taskfile, docker-compose.yml, setup.sh, or package.json with setup/bootstrap/dev script). value = present_count/4 (0..1). Ramp-time (median first-commit to first-merge) is intentionally not measured — it overlaps lead-time/review-rework metrics and is not always available. Band thresholds are AWOS heuristics (no published DX Core 4 numeric targets): good ≥0.75, watch ≥0.50, concerning <0.50."
 applies_when = "always"
 sources = ["git"]
@@ -873,8 +876,8 @@ definition = "The repository has a top-level README.md with setup instructions a
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "Diátaxis"
-url = "https://diataxis.fr/"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
 date = "2024"
 last_verified = "2026-06-30"
 
@@ -888,8 +891,8 @@ definition = "Each major service directory has its own README.md with build and 
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "Diátaxis"
-url = "https://diataxis.fr/"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
 date = "2024"
 last_verified = "2026-06-30"
 
@@ -904,7 +907,7 @@ applies_when = "topology.has_api"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "OpenAPI Specification"
-url = "https://www.openapis.org/"
+url = "https://spec.openapis.org/oas/latest.html"
 date = "2025"
 last_verified = "2026-06-30"
 
@@ -918,8 +921,8 @@ definition = "Documentation references match current code reality — sampled cl
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "Diátaxis"
-url = "https://diataxis.fr/"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
 date = "2024"
 last_verified = "2026-06-30"
 
@@ -933,8 +936,8 @@ definition = "Public/exported definitions carry doc-comments (docstring/JSDoc/KD
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "Diátaxis"
-url = "https://diataxis.fr/"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
 date = "2024"
 last_verified = "2026-06-30"
 
@@ -948,8 +951,8 @@ definition = "Overall definition doc-comment coverage across all source definiti
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "Diátaxis"
-url = "https://diataxis.fr/"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
 date = "2024"
 last_verified = "2026-06-30"
 
@@ -1611,7 +1614,7 @@ sources = ["audit"]
 reliability_default = "maximal"
 threshold_days = 7
 source = "SLSA"
-url = "https://slsa.dev/"
+url = "https://slsa.dev/spec/v1.0/"
 date = "2025"
 last_verified = "2026-06-30"
 

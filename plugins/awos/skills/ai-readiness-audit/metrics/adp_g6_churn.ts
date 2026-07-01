@@ -3,8 +3,9 @@
  *
  * kind: "computed"
  * value: code_turnover.ratio — reworked lines ÷ added lines over the window,
- *   where "reworked" = lines deleted within rework_horizon_days (21) of being
- *   authored. Lower is better (less recently-written code being thrown away).
+ *   where "reworked" = lines deleted within meta.rework_horizon_days (from
+ *   standards.toml) of being authored. Lower is better (less recently-written
+ *   code being thrown away).
  * band: "good" (<0.12) | "watch" (<0.18) | "concerning" (>=0.18)
  * categories_awarded: [601] when data is available
  * reliability_default: "minimal" (the collector approximates per-line authored
@@ -22,9 +23,11 @@ import { join } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  metaNumber,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
+import { REWORK_HORIZON_DAYS_DEFAULT } from '../collectors/git.ts';
 
 /**
  * Turnover→score anchors (linear, lower ratio → higher score):
@@ -61,7 +64,7 @@ function skip(): MetricResult {
 
 export function compute(
   collectedDir: string,
-  _standards: Record<string, unknown>,
+  standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
   const gitPath = join(collectedDir, 'git.json');
@@ -92,7 +95,12 @@ export function compute(
 
   const reliability = computeReliability('minimal', ['git'], []);
   const pct = (ratio * 100).toFixed(1);
-  const expression = `${reworked}/${added} lines reworked within 21d = ${pct}% turnover (${band})`;
+  const horizonDays = metaNumber(
+    standards,
+    'rework_horizon_days',
+    REWORK_HORIZON_DAYS_DEFAULT
+  );
+  const expression = `${reworked}/${added} lines reworked within ${horizonDays}d = ${pct}% turnover (${band})`;
 
   return makeMetricResult(
     'adp_g6_churn',

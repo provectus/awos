@@ -53,7 +53,7 @@ Never prompt mid-run after this step.
 ### Phase 0c — Determine audit mode
 
 - **Single-repo mode** (one repo detected): proceed directly to Step 1 for that repo.
-- **Org mode** (multiple repos detected): run the per-repo audit (Steps 1–6) across all repos in parallel. Each repo writes its full audit into its own subdir `context/audits/YYYY-MM-DD/per-repo/<repo>/` — Step 5's `audit-core` uses that subdir as its `<outDir>`, and Step 6's patch/aggregate/render all operate on files inside it. After all per-repo audits complete, proceed to the org rollup in Step 6 (org branch).
+- **Org mode** (multiple repos detected): run the per-repo audit (Steps 1–6) across all repos in parallel by dispatching one `awos:repo-auditor` subagent per repo, concurrently (see Step 6 org branch). Each repo writes its full audit into its own subdir `context/audits/YYYY-MM-DD/per-repo/<repo>/` — Step 5's `audit-core` uses that subdir as its `<outDir>`, and Step 6's patch/enrich/aggregate/render all operate on files inside it. After all per-repo audits complete, proceed to the org rollup in Step 6 (org branch).
 
 Contributor counts are always reported in aggregate (never per-person). No money, no PII.
 
@@ -115,15 +115,24 @@ Use a mid-tier model (Sonnet) for the judgment checks and narrative authoring �
 
 `audit.json` already holds the full deterministic result. Fill only what the engine cannot, then render. Never re-score a `detected`/`computed` check, and never hand-write `report.md`/`report.html`.
 
-1. **Judgment checks (5).** For each check with `status: "PENDING_JUDGMENT"`, read its category rubric and `evidence_required` from `references/standards.toml` and the dimension file, gather the evidence from the repo, decide `PASS`/`WARN`/`FAIL`, and edit that check record in its `context/audits/YYYY-MM-DD/<dimension>.json` (set `status`, `value`, `evidence`, and `weight_awarded` = the category weight on PASS, else 0).
-
-2. **Connector metrics — data-source resolution.** A reachable tracker/docs/incident MCP or integration (Jira, Confluence, Linear, Coda, GitHub Issues, …) is a normal data source for the audit: when one is reachable, fetching and mapping it is part of doing the audit, not an optional extra. It is not gated on a `sources.toml` — that file only configures non-MCP or explicit connectors, and its absence never justifies skipping a reachable MCP. The 730-day window is handled by the engine's bucketing; a bounded recent query is enough, so enrichment is low-effort, not out of scope. `references/connector-shapes.md` has a turnkey recipe. For every such non-git source:
+1. **Connector metrics — fetch all reachable sources, then re-score in one `enrich` pass.** A reachable tracker/docs/incident MCP or integration (Jira, Confluence, Linear, Coda, GitHub Issues, …) is a normal data source for the audit: when one is reachable, fetching and mapping it is part of doing the audit, not an optional extra. It is not gated on a `sources.toml` — that file only configures non-MCP or explicit connectors, and its absence never justifies skipping a reachable MCP. The 730-day window is handled by the engine's bucketing; a bounded recent query is enough, so enrichment is low-effort, not out of scope. `references/connector-shapes.md` has a turnkey recipe. For every such non-git source:
 
    - **Attempt to fetch.** Making the MCP call or API request _is_ the reachability check — make it. Do not pre-decide a source is out of scope from Step 0 discovery (or from a missing `sources.toml`) and skip the call; only conclude a source is unreachable from an actual failure response.
-   - **On success** — map the returned records into the exact connector shape in `references/connector-shapes.md`, write the artifact to `context/audits/YYYY-MM-DD/collected/<source>.json`, re-run the affected metric (`node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric <id> "<repoPath>" "context/audits/YYYY-MM-DD/collected"`), and patch the affected check records. Mapping reachable data into the documented shape is not fabrication. Also record the actual window used and a human label in the artifact's `period` block so the Sources column in the report reflects what truly happened: set `period.lookback_days` (e.g. 180 for a 6-month Jira query) and `period.source_label` (e.g. `"Jira via Atlassian MCP"` or `"Confluence via Atlassian MCP"`). The default tracker lookback is 180 days ("6 months"); use whatever window you actually queried. For Jira, paginate to completion before writing the artifact: each request is server-capped at ~100 results; loop on `startAt` (classic JQL) or `nextPageToken` (cloud) until a short/empty page or `isLast: true`, accumulate all results into one `tickets[]` capped at ~2000 tickets, then write `collected/tracker.json` once. When mapping Jira issues, also capture parent/subtask links: set `subtask_count` to `issue.fields.subtasks.length` (omit when 0 or absent) and `parent` to `issue.fields.parent?.key` (omit when null) — these feed the ADP-I4 sub-task split metric. Also capture description size/structure signals (no raw text): set `description_length` to `issue.fields.description?.length` and `has_acceptance_criteria` to whether the description matches `/acceptance.criteria/i` — these feed the ADP-I5 description quality metric.
+   - **Fetch the independent sources concurrently.** Tracker, docs, and incident are independent — no data flows between them. Issue their initial fetches in a single message (parallel tool calls), not one after another. Only pagination _within_ a source is sequential (each Jira page needs the prior page's `startAt`/`nextPageToken` cursor).
+   - **On success** — map the returned records into the exact connector shape in `references/connector-shapes.md` and write the artifact to `context/audits/YYYY-MM-DD/collected/<source>.json`. Mapping reachable data into the documented shape is not fabrication. Also record the actual window used and a human label in the artifact's `period` block so the Sources column in the report reflects what truly happened: set `period.lookback_days` (e.g. 180 for a 6-month Jira query) and `period.source_label` (e.g. `"Jira via Atlassian MCP"` or `"Confluence via Atlassian MCP"`). The default tracker lookback is 180 days ("6 months"); use whatever window you actually queried. For Jira, paginate to completion before writing the artifact: each request is server-capped at ~100 results; loop on `startAt` (classic JQL) or `nextPageToken` (cloud) until a short/empty page or `isLast: true`, accumulate all results into one `tickets[]` capped at ~2000 tickets, then write `collected/tracker.json` once. When mapping Jira issues, also capture parent/subtask links: set `subtask_count` to `issue.fields.subtasks.length` (omit when 0 or absent) and `parent` to `issue.fields.parent?.key` (omit when null) — these feed the ADP-I4 sub-task split metric. Also capture description size/structure signals (no raw text): set `description_length` to `issue.fields.description?.length` and `has_acceptance_criteria` to whether the description matches `/acceptance.criteria/i` — these feed the ADP-I5 description quality metric.
    - **On failure or unclear mapping** (auth error, unfamiliar schema, broken dependency, empty result, closed port) — do not silently skip. In interactive mode, use `AskUserQuestion` with three options: mark unavailable (record the reason) / retry with guidance / show how to fix (link to `references/connector-shapes.md`). **In headless `claude -p` runs** (no interactive user), default to marking the source unavailable and record the _actual_ failure reason plus a remediation hint in the report's `missed_sources` list — record the real cause (e.g. "Jira MCP returned 401"), never "no connector provided" when an MCP was in fact reachable.
 
    A reachable source that was not fetched is a gap, not a SKIP: enrich it. Never drop a reachable source without a recorded reason. With no connector reachable at all, leave the check `SKIP` — that is correct, not a failure.
+
+   Once every reachable source's artifact is written, re-score the whole audit in **one** pass — this replaces re-running a metric per source:
+
+   ```bash
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" enrich "<repoPath>" "context/audits/YYYY-MM-DD"
+   ```
+
+   `enrich` reuses the `collected/` artifacts you just wrote (it never re-collects, so it never overwrites them), flips the connector topology flags, and rewrites every per-dimension JSON + `audit.json` with the connector metrics now scored. Run it **once, after all fetches** — never once per source, and never a separate `metric <id>` spawn per connector metric. If no connector was reachable, skip `enrich` entirely (nothing changed).
+
+2. **Judgment checks (5).** Run this **after** `enrich` — `enrich` re-emits judgment checks as `PENDING_JUDGMENT`, so patching them earlier would be undone. Gather the evidence for all five in one pass: for each check with `status: "PENDING_JUDGMENT"`, read its category rubric and `evidence_required` from `references/standards.toml` and the dimension file, gather the evidence from the repo, decide `PASS`/`WARN`/`FAIL`, and edit that check record in its `context/audits/YYYY-MM-DD/<dimension>.json` (set `status`, `value`, `evidence`, and `weight_awarded` = the category weight on PASS, else 0). Apply all five edits together rather than looping one check at a time.
 
 3. **Re-aggregate** so `audit.json` reflects the patches (recomputes every dimension score + the audit totals from the per-dimension files; preserves report blocks):
 
@@ -134,16 +143,21 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
 4. **Author the plain-language report blocks into `audit.json`.** The renderer is deterministic and contains no LLM — the narrative a CEO reads is authored _here_, by you, and stored in the JSON so the renderer only formats it. Add three optional top-level fields (schema in `output-format.md` → "Report blocks"):
 
    - `headline` — the executive band. Transcribe values **verbatim** from the dimension checks (cite the `check_id`); never invent numbers. Row 1 of the headline (capability Points + Coverage cap-score block) is emitted by the renderer directly from `audit_total`/`coverage` — do not add it as a `delivery[]` entry. `delivery[]` carries rows 2–9, each a `DeliveryMetric` object `{label, display_value?, band?, gated?, check_id?}`. Author them in this order, reading DORA bands from each check's `hint` field ("DORA-banded (high)"), and transcribing all values verbatim — never invent numbers:
-     1. **Merges / active contributor** — `display_value` from `collected/git.json` → `raw.window_stats.merges_per_active` (e.g. `"3.2 / contributor"`); no `band`; no `check_id`; source: git artifact. If the value is null (zero active contributors), omit `display_value`.
-     2. **LOC / active contributor** — from `raw.window_stats.loc_per_active`; same rules.
+     1. **Merges** — put the unit in the value, not the label: `label: "Merges"`, `display_value` from `collected/git.json` → `raw.window_stats.merges_per_active` rendered as `"<n> / active contributor"` (e.g. `"3.2 / active contributor"`); no `band`; no `check_id`; source: git artifact. If the value is null (zero active contributors), omit `display_value`.
+     2. **LOC** — `label: "LOC"`, `display_value` from `raw.window_stats.loc_per_active` as `"<n> / active contributor"`; same rules.
      3. **Deployment frequency** — check `ADP-08`; band from hint; `check_id: "ADP-08"`.
      4. **Rework rate (DORA)** — check `ADP-24`; band from hint; `check_id: "ADP-24"`.
      5. **Lead time for change** — check `ADP-09`; band from hint; `check_id: "ADP-09"`.
      6. **Change-failure rate** — check `ADP-12`; band from hint; `check_id: "ADP-12"`.
-     7. **Cycle time (Jira In-Progress→Done)** — set `gated: "tracker"`; no git `check_id`. Sourced only from the tracker connector: when one is present, transcribe the median Jira In-Progress→Done duration as `display_value`; when no tracker connector, omit `display_value` so the renderer prints "— (needs ticketing connector)".
+     7. **Cycle time (In-Progress→Done)** — set `gated: "tracker"`; no git `check_id`. Sourced only from the tracker connector, whichever ticketing system it is (Jira, Linear, GitHub Projects, Asana, …): when one is present, transcribe the median in-progress→done duration as `display_value`; when no tracker connector, omit `display_value` so the renderer prints "— (needs ticketing connector)". Keep the label system-neutral ("In-Progress→Done") — do not hard-code a vendor name; each system's own state names map onto the canonical in-progress/done states (see `references/connector-shapes.md`).
      8. **MTTR** — set `gated: "incident"`; no git `check_id`. MTTR cannot be derived from git; it comes only from an incident connector. When an incident connector is present, transcribe its recovery value as `display_value`; when no incident connector, omit `display_value` so the renderer prints "— (needs incident connector)". (`adp_i3_mttr` still scores separately as a git-proxy category, but it does not feed this headline row.)
 
-     `scale[]` = code size/complexity (`ADP-G11`, `ADP-G10`, deps `ADP-G12`). `reach` = `{ai_tooling, contributors}` (`ADP-G1`/`ADP-G2`). Keep `reach.contributors` to the count and cadence (e.g. "4 active contributors (90d)") — do not append a privacy disclaimer such as "counts are aggregate; no per-person data". The aggregate/no-PII rule governs what you collect, not the report copy; surfacing it just clutters the headline.
+     `scale[]` = code size & complexity — author **exactly these three rows**, each a `{label, display_value, check_id}` transcribed from its check (do **not** put commits, contributors, or merges here — those are activity, not scale/complexity):
+     1. **Source size** — `check_id: "ADP-22"` — LOC + file count (e.g. `"234k LOC · 1,203 files"`).
+     2. **Cyclomatic complexity** — `check_id: "ADP-21"` — average / max CCN (e.g. `"avg 4.2 · max 38"`).
+     3. **Direct dependencies** — `check_id: "ADP-23"` — direct dependency count (e.g. `"142 direct deps"`).
+
+     `reach` = `{ai_tooling, contributors}`. Keep `reach.contributors` to the count and cadence (e.g. "4 active contributors (90d)") — do not append a privacy disclaimer such as "counts are aggregate; no per-person data". The aggregate/no-PII rule governs what you collect, not the report copy; surfacing it just clutters the headline.
 
    - `insights[]` — 3–6 thematic cards, the "READ": `{theme, severity, weak_areas[], so_what, improves}`. Plain language for a non-technical stakeholder — name the weak areas and say what improves if they are fixed.
    - `recommendations[]` — the prioritized fixes as `{id, priority (P0/P1/P2), title, dimension, check_id, effort, detail}`. `detail` is a plain-language paragraph. Transcribe each from a real FAIL/WARN check.
@@ -153,9 +167,10 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
 5. Render the report from the JSON source of truth — **always produce BOTH `report.md` and the self-contained `report.html`** here. The HTML is the headline deliverable; it is generated unconditionally in this step, never gated on Step 7 or on interactivity, so headless runs always produce it:
 
    ```bash
-   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format md   > context/audits/YYYY-MM-DD/report.md
-   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format html > context/audits/YYYY-MM-DD/report.html
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/audit.json --format both --out-dir context/audits/YYYY-MM-DD
    ```
+
+   `--format both` writes `report.md` and `report.html` in one invocation (one process, not two).
 
 6. Write `context/audits/YYYY-MM-DD/recommendations.md` — the same prioritized recommendations you authored into `audit.recommendations` in step 4, in long-form Markdown (this file is the input `/awos:roadmap` consumes). Keep the two in sync; they come from one authoring pass.
 7. Present the full report to the user by reading and displaying `context/audits/YYYY-MM-DD/report.md`.
@@ -164,18 +179,9 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
 
 When the audit ran in org mode (multiple repos, per `references/data-sources.md`), after all per-repo audits are complete, produce the org-level portfolio summary:
 
-1. Each per-repo audit runs `audit-core` with the repo's own subdir as the output directory:
+1. **Audit every repo in parallel via the `repo-auditor` subagent.** Dispatch one `awos:repo-auditor` Agent per repo, all in a single message so they run concurrently (this is where org-mode wall time is won — repos audit simultaneously, not one after another). Give each subagent its `<repoPath>`, its output subdir `context/audits/YYYY-MM-DD/per-repo/<repo-name>`, the engine path `${CLAUDE_SKILL_DIR}/dist/cli.js`, and the skill dir `${CLAUDE_SKILL_DIR}`. Each subagent runs the full single-repo flow — Step 5 `audit-core` → Step 6 connector `enrich` + judgment + `aggregate` → `render --format both` — into its own subdir, so per-repo outputs never collide (each repo's `audit-core`/`enrich`/`render` uses `context/audits/YYYY-MM-DD/per-repo/<repo-name>` as its artifacts/output dir, never the shared `context/audits/YYYY-MM-DD/`). For a large portfolio, cap the fan-out to a handful of concurrent subagents at a time.
 
-   ```bash
-   node "${CLAUDE_SKILL_DIR}/dist/cli.js" audit-core "<repoPath>" "context/audits/YYYY-MM-DD/per-repo/<repo-name>"
-   ```
-
-   After the Step 6 judgment patch and aggregate, render the repo's report into the same subdir:
-
-   ```bash
-   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/per-repo/<repo-name>/audit.json --format md   > context/audits/YYYY-MM-DD/per-repo/<repo-name>/report.md
-   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/per-repo/<repo-name>/audit.json --format html > context/audits/YYYY-MM-DD/per-repo/<repo-name>/report.html
-   ```
+   **Wait for all subagents to finish** — each must have written `context/audits/YYYY-MM-DD/per-repo/<repo-name>/audit.json` — before the rollup. The rollup scans the `per-repo/` directory and silently omits any repo whose audit is not yet written, so the barrier matters.
 
    Each `per-repo/<repo-name>/` directory ends up with the full `audit.json`, `report.md`, `report.html`, and `collected/` artifacts for that repo. A later task will add links from the org report to each `per-repo/<repo-name>/report.html`.
 
@@ -205,8 +211,7 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
 4. Render the org report from the org audit JSON — **always produce BOTH `report.md` and `report.html`** (unconditional, never gated on Step 7):
 
    ```bash
-   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/org-portfolio.json --format md   > context/audits/YYYY-MM-DD/report.md
-   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/org-portfolio.json --format html > context/audits/YYYY-MM-DD/report.html
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" render context/audits/YYYY-MM-DD/org-portfolio.json --format both --out-dir context/audits/YYYY-MM-DD
    ```
 
 5. Present the three portfolio metrics to the user with a brief interpretation:

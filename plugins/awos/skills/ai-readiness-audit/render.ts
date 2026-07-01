@@ -658,17 +658,13 @@ export function renderMarkdown(audit: AuditJson): string {
       }
       lines.push('');
     }
-    if (
-      h.reach &&
-      (h.reach.ai_tooling || h.reach.contributors || h.reach.spec_coverage)
-    ) {
+    if (h.reach && REACH_FIELDS.some(([key]) => h.reach![key])) {
       lines.push('## Reach');
       lines.push('');
-      if (h.reach.contributors)
-        lines.push(`- Active Contributors: ${h.reach.contributors}`);
-      if (h.reach.spec_coverage)
-        lines.push(`- Spec coverage: ${h.reach.spec_coverage}`);
-      if (h.reach.ai_tooling) lines.push(`- AI tooling: ${h.reach.ai_tooling}`);
+      for (const [key, label] of REACH_FIELDS) {
+        const v = h.reach[key];
+        if (v) lines.push(`- ${label}: ${v}`);
+      }
       lines.push('');
     }
   }
@@ -941,13 +937,6 @@ export function renderMarkdown(audit: AuditJson): string {
       lines.push('');
       pushBucket(bucket);
     }
-    for (const [kind, bucket] of Object.entries(byKindMd)) {
-      if (['symlink', 'submodule', 'mcp'].includes(kind) || !bucket.length)
-        continue;
-      lines.push(`**${kind}:**`);
-      lines.push('');
-      pushBucket(bucket);
-    }
   } else {
     lines.push('None detected.');
   }
@@ -1069,6 +1058,18 @@ const HEADLINE_TIP: Record<string, string> = {
   'Repos with AI tooling':
     'How many portfolio repositories have any AI tooling present.',
 };
+
+/**
+ * Reach headline fields in display order (Active Contributors → Spec coverage →
+ * AI tooling). The single source of truth for both the Markdown and HTML Reach
+ * renderers, so their order and labels can't drift apart. Each label doubles as
+ * the HEADLINE_TIP lookup key.
+ */
+const REACH_FIELDS = [
+  ['contributors', 'Active Contributors'],
+  ['spec_coverage', 'Spec coverage'],
+  ['ai_tooling', 'AI tooling'],
+] as const;
 
 /** Returns true when a DeliveryMetric display_value is considered absent: missing, empty, em-dash, or hyphen. */
 function deliveryValueAbsent(v: string | undefined): boolean {
@@ -1285,18 +1286,13 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       );
     }
     const reachItems: string[] = [];
-    if (h?.reach?.contributors)
-      reachItems.push(
-        `<div class="kv"><span class="k">Active Contributors</span><span class="v">${tip(h.reach.contributors, HEADLINE_TIP['Active Contributors'])}</span></div>`
-      );
-    if (h?.reach?.spec_coverage)
-      reachItems.push(
-        `<div class="kv"><span class="k">Spec coverage</span><span class="v">${tip(h.reach.spec_coverage, HEADLINE_TIP['Spec coverage'])}</span></div>`
-      );
-    if (h?.reach?.ai_tooling)
-      reachItems.push(
-        `<div class="kv"><span class="k">AI tooling</span><span class="v">${tip(h.reach.ai_tooling, HEADLINE_TIP['AI tooling'])}</span></div>`
-      );
+    for (const [key, label] of REACH_FIELDS) {
+      const v = h?.reach?.[key];
+      if (v)
+        reachItems.push(
+          `<div class="kv"><span class="k">${label}</span><span class="v">${tip(v, HEADLINE_TIP[label])}</span></div>`
+        );
+    }
     if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
       const withTooling = audit.per_repo.filter((r) => r.has_ai_tooling).length;
       reachItems.push(
@@ -1787,13 +1783,6 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         const bucket = byKind[kind];
         if (!bucket || bucket.length === 0) continue;
         rows.push(`<h4>${KIND_LABEL[kind]}</h4>`);
-        renderBucket(bucket);
-      }
-      // Render any unknown kinds (future-proof).
-      for (const [kind, bucket] of Object.entries(byKind)) {
-        if (['symlink', 'submodule', 'mcp'].includes(kind) || !bucket.length)
-          continue;
-        rows.push(`<h4>${esc(kind)}</h4>`);
         renderBucket(bucket);
       }
     } else {

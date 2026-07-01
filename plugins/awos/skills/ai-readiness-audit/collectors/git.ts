@@ -231,6 +231,8 @@ function getMergeRecords(cwd: string): MergeRecord[] {
     });
   }
 
+  const visited = new Set<string>();
+
   // BFS from a seed set over not-yet-visited commits, marking them visited.
   // When trackMin is true, returns the earliest author date encountered.
   const sweep = (seeds: string[], trackMin: boolean): number => {
@@ -250,7 +252,6 @@ function getMergeRecords(cwd: string): MergeRecord[] {
     return minMs;
   };
 
-  const visited = new Set<string>();
   const records: MergeRecord[] = [];
   for (let i = mainline.length - 1; i >= 0; i--) {
     const c = mainline[i];
@@ -655,10 +656,16 @@ function getHistoryAvailableDays(cwd: string): number {
     .map((s) => parseDate(s))
     .filter((d) => !isNaN(d.getTime()));
   if (allDates.length < 2) return 0;
-  const ts = allDates.map((d) => d.getTime());
-  const earliest = new Date(Math.min(...ts));
-  const latest = new Date(Math.max(...ts));
-  return Math.max(0, daysBetween(earliest, latest));
+  // Reduce (not Math.min(...ts)/Math.max(...ts)) — spreading an unbounded
+  // history array can overflow the argument stack on very large repos.
+  let min = allDates[0].getTime();
+  let max = min;
+  for (const d of allDates) {
+    const t = d.getTime();
+    if (t < min) min = t;
+    if (t > max) max = t;
+  }
+  return Math.max(0, daysBetween(new Date(min), new Date(max)));
 }
 
 // ---------------------------------------------------------------------------

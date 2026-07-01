@@ -11,7 +11,15 @@ argument-hint: '[dimension] — omit for a full audit'
 
 # Code Audit — Orchestrator
 
-You are the audit orchestrator. Your job is to coordinate dimension-specific auditors, each running in their own context window, and compile results into a final report.
+You run the AI-SDLC readiness audit. Deterministic scoring is a single engine command — `audit-core` (Step 5) — which reads `references/standards.toml` and every `dimensions/*.md`, evaluates the project-topology flags, and scores every category across all dimensions in one pass. Your job is to run that command, fill the small slice the engine cannot compute (the 5 judgment checks and the tracker/docs connector metrics), and render the report from the resulting JSON.
+
+There is no per-dimension auditor and no subagent fan-out. You do not read the codebase to hand-write findings, and you do not emit A–F or 0–100 grades — scoring is additive weighted points produced by the engine. Auditing here is running one command and filling one gap.
+
+## Load-time pre-run — the engine has already scored the current repo
+
+The deterministic pass runs automatically as this skill loads, so its result is present before you reason about anything. The output below is the real weighted score for the current repo; the artifacts (`audit.json`, per-dimension `<dimension>.json`, `collected/`) already exist under `context/audits/<today>/`. Treat scoring as done: do not re-derive it, do not spawn per-dimension work, do not grade by hand. Proceed to Step 0 (confirm scope), then Step 6 (fill the LLM-only gap and render). In org mode the remaining repos are scored the same way — one `audit-core` call each into `per-repo/<repo>/` (Step 0c).
+
+!`command -v node >/dev/null 2>&1 && { R="${CLAUDE_PROJECT_DIR}"; [ -n "$R" ] || R="$(pwd)"; D="$(date +%F)"; echo "[audit-core] one-pass deterministic engine → context/audits/$D (current repo: $R)"; node "${CLAUDE_SKILL_DIR}/dist/cli.js" audit-core "$R" "$R/context/audits/$D" 2>&1; } || echo "[audit-core] NOT run (no node on PATH, or engine errored). Deterministic scoring is the single audit-core command in Step 5 — run it before proceeding; never fan out per-dimension auditors or hand-write scores."`
 
 ## Step 0 — Discover Audit Scope (Multi-Repo)
 
@@ -78,7 +86,7 @@ All deterministic scoring — every `detected` and `computed` category across al
 
 **Engine preflight:** confirm a `node` runtime is on PATH (`command -v node`). If `node` is absent, stop and tell the user to install Node — the audit cannot compute deterministic metrics without it. The bundle runs under any `node` on PATH.
 
-Run the deterministic pass. It creates the artifacts directory and writes every `context/audits/YYYY-MM-DD/<dimension>.json`, the aggregated `context/audits/YYYY-MM-DD/audit.json`, and the `collected/<source>.json` artifacts:
+The load-time pre-run already executed this pass for the current repo, so its artifacts exist before you get here. Re-run the command below only if `context/audits/YYYY-MM-DD/audit.json` is missing, or once per additional repo in org mode. It creates the artifacts directory and writes every `context/audits/YYYY-MM-DD/<dimension>.json`, the aggregated `context/audits/YYYY-MM-DD/audit.json`, and the `collected/<source>.json` artifacts:
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" audit-core "<repoPath>" "context/audits/YYYY-MM-DD"

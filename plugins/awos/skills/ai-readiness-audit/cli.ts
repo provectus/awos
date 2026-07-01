@@ -237,6 +237,13 @@ interface AuditJson {
   coverage?: number;
   dimensions?: AuditDimension[];
   sources?: Array<{ source?: string; available?: boolean }>;
+  tech_stack?: {
+    languages: Array<{ name: string }>;
+    agent_tools: Array<{ name: string }>;
+    ci: Array<{ name: string }>;
+    frameworks: Array<{ name: string }>;
+  };
+  linked_repos?: Array<{ name: string; via?: string; kind?: string }>;
 }
 
 /** Coerce a check value to a finite number, else null (covers SKIP/null/NaN). */
@@ -321,6 +328,8 @@ function readPerRepoAudit(
     audit_total: auditTotal,
     coverage: numOrNull(audit.coverage) ?? undefined,
     delivery,
+    tech_stack: audit.tech_stack,
+    linked_repos: audit.linked_repos,
   };
 }
 

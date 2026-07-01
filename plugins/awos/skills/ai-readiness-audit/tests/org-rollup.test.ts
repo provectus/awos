@@ -407,3 +407,198 @@ test('org_rollup: legacy input without delivery produces no headline', () => {
     'legacy per_repo row must default delivery values to null'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Task 5.4 — org_connections aggregation
+// ---------------------------------------------------------------------------
+
+/**
+ * Three repos with overlapping sources, tech-stack items, and linked repos.
+ * Used to verify deduplication within a repo and cross-repo counting.
+ *
+ *   CONN_1: git, tracker; Python, FastAPI, Claude Code (agent_tools), GitHub Actions (ci); awos-recruitment (mcp)
+ *   CONN_2: git, ci;     Python, TypeScript, GitHub Actions (ci); awos-recruitment (mcp, via different path)
+ *   CONN_3: git;         TypeScript, Express; (no linked repos)
+ *
+ * Expected counts:
+ *   sources:       git(3), ci(1), tracker(1)          [sorted: git(3), ci(1), tracker(1)]
+ *   languages:     Python(2), TypeScript(2)
+ *   frameworks:    Express(1), FastAPI(1)
+ *   agent_tools:   Claude Code(1)
+ *   ci:            GitHub Actions(2)
+ *   linked_repos:  awos-recruitment(2)   ← CONN_2 links it via two paths but counts once per repo
+ */
+const CONN_1: PerRepoInput = {
+  repo: 'org/conn-1',
+  awarded_weight: 10,
+  sources_reachable: ['git', 'tracker'],
+  has_ai_tooling: true,
+  tech_stack: {
+    languages: [{ name: 'Python', evidence: '10 .py files' }],
+    frameworks: [{ name: 'FastAPI', evidence: 'fastapi in requirements' }],
+    agent_tools: [{ name: 'Claude Code', evidence: '.claude' }],
+    ci: [{ name: 'GitHub Actions', evidence: '.github/workflows' }],
+  },
+  linked_repos: [{ name: 'awos-recruitment', kind: 'mcp', via: '.awos' }],
+};
+
+const CONN_2: PerRepoInput = {
+  repo: 'org/conn-2',
+  awarded_weight: 20,
+  sources_reachable: ['git', 'ci'],
+  has_ai_tooling: false,
+  tech_stack: {
+    languages: [
+      { name: 'Python', evidence: '5 .py files' },
+      { name: 'TypeScript', evidence: '20 .ts files' },
+    ],
+    frameworks: [],
+    agent_tools: [],
+    ci: [{ name: 'GitHub Actions', evidence: '.github/workflows' }],
+  },
+  // Two linked-repo entries for the same name via different paths → counts as 1 for this repo.
+  linked_repos: [
+    { name: 'awos-recruitment', kind: 'mcp', via: '.claude/settings.json' },
+    { name: 'awos-recruitment', kind: 'mcp', via: '.mcp.json' },
+  ],
+};
+
+const CONN_3: PerRepoInput = {
+  repo: 'org/conn-3',
+  awarded_weight: 5,
+  sources_reachable: ['git'],
+  has_ai_tooling: false,
+  tech_stack: {
+    languages: [{ name: 'TypeScript', evidence: '30 .ts files' }],
+    frameworks: [{ name: 'Express', evidence: 'express in package.json' }],
+    agent_tools: [],
+    ci: [],
+  },
+  linked_repos: [],
+};
+
+test('org_rollup: org_connections is present in the result', () => {
+  const result = rollup([CONN_1, CONN_2, CONN_3]);
+  assert.ok(
+    result.org_connections !== undefined,
+    'org_connections must be present when tech_stack or linked_repos are supplied'
+  );
+});
+
+test('org_rollup: org_connections.sources counts repos where each source key is available', () => {
+  const result = rollup([CONN_1, CONN_2, CONN_3]);
+  const sources = result.org_connections!.sources;
+  const byName = Object.fromEntries(sources.map((e) => [e.name, e.count]));
+  assert.equal(
+    byName['git'],
+    3,
+    'git is available in all 3 repos → count must be 3'
+  );
+  assert.equal(
+    byName['tracker'],
+    1,
+    'tracker is available in 1 repo → count must be 1'
+  );
+  assert.equal(
+    byName['ci'],
+    1,
+    'ci is available in 1 repo (sources_reachable) → count must be 1'
+  );
+});
+
+test('org_rollup: org_connections.languages counts repos with each language name', () => {
+  const result = rollup([CONN_1, CONN_2, CONN_3]);
+  const langs = result.org_connections!.languages;
+  const byName = Object.fromEntries(langs.map((e) => [e.name, e.count]));
+  assert.equal(byName['Python'], 2, 'Python appears in 2 repos → count 2');
+  assert.equal(
+    byName['TypeScript'],
+    2,
+    'TypeScript appears in 2 repos → count 2'
+  );
+});
+
+test('org_rollup: org_connections.frameworks counts repos with each framework', () => {
+  const result = rollup([CONN_1, CONN_2, CONN_3]);
+  const fws = result.org_connections!.frameworks;
+  const byName = Object.fromEntries(fws.map((e) => [e.name, e.count]));
+  assert.equal(byName['FastAPI'], 1, 'FastAPI appears in 1 repo → count 1');
+  assert.equal(byName['Express'], 1, 'Express appears in 1 repo → count 1');
+});
+
+test('org_rollup: org_connections.ci counts repos with each CI system', () => {
+  const result = rollup([CONN_1, CONN_2, CONN_3]);
+  const ciItems = result.org_connections!.ci;
+  const byName = Object.fromEntries(ciItems.map((e) => [e.name, e.count]));
+  assert.equal(
+    byName['GitHub Actions'],
+    2,
+    'GitHub Actions appears in 2 repos → count 2'
+  );
+});
+
+test('org_rollup: org_connections.agent_tools counts repos with each agent tool', () => {
+  const result = rollup([CONN_1, CONN_2, CONN_3]);
+  const tools = result.org_connections!.agent_tools;
+  const byName = Object.fromEntries(tools.map((e) => [e.name, e.count]));
+  assert.equal(
+    byName['Claude Code'],
+    1,
+    'Claude Code appears in 1 repo → count 1'
+  );
+});
+
+test('org_rollup: org_connections.linked_repos dedupes within a repo (same name via 2 paths counts once)', () => {
+  const result = rollup([CONN_1, CONN_2, CONN_3]);
+  const linked = result.org_connections!.linked_repos;
+  const byName = Object.fromEntries(linked.map((e) => [e.name, e.count]));
+  assert.equal(
+    byName['awos-recruitment'],
+    2,
+    'awos-recruitment is linked by 2 repos (CONN_2 links it via 2 paths but counts once) → count 2'
+  );
+});
+
+test('org_rollup: org_connections lists are sorted by count desc then name asc', () => {
+  const result = rollup([CONN_1, CONN_2, CONN_3]);
+  const sources = result.org_connections!.sources;
+  // git(3) first, then ci(1) and tracker(1) alphabetically
+  assert.equal(
+    sources[0].name,
+    'git',
+    'highest count (git, 3) must come first'
+  );
+  const countOneItems = sources.slice(1).map((e) => e.name);
+  assert.deepEqual(
+    countOneItems,
+    [...countOneItems].sort(),
+    'items with equal count must be sorted alphabetically'
+  );
+
+  const langs = result.org_connections!.languages;
+  // Both Python and TypeScript have count 2 → alphabetical order: Python, TypeScript
+  assert.equal(
+    langs[0].name,
+    'Python',
+    'Python before TypeScript (same count, alphabetical)'
+  );
+  assert.equal(
+    langs[1].name,
+    'TypeScript',
+    'TypeScript second (same count, alphabetical)'
+  );
+});
+
+test('org_rollup: org_connections is present and non-empty for repos without tech_stack', () => {
+  // Repos without tech_stack should still produce org_connections with sources from sources_reachable.
+  const result = rollup([REPO_A, REPO_B]);
+  assert.ok(
+    result.org_connections !== undefined,
+    'org_connections must be present even when tech_stack is absent'
+  );
+  const srcNames = result.org_connections!.sources.map((e) => e.name);
+  assert.ok(
+    srcNames.includes('git'),
+    'git must appear in sources (both repos have it)'
+  );
+});

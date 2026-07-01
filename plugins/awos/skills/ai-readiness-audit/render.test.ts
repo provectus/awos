@@ -1013,3 +1013,184 @@ test('Markdown per-repo table (Task 5.3): one row per repo with all new columns 
     'Markdown per-repo table must include MTTR footnote about incident connector (Task 5.3)'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Task 5.4 — org Connections & Sources aggregated view
+// ---------------------------------------------------------------------------
+
+import type { OrgConnections } from './render.ts';
+
+/**
+ * Org-mode audit fixture with org_connections populated.
+ * Uses source_windows to verify sourceFullLabel is called for source labels.
+ *
+ *   sources: git(8), tracker(5)
+ *   languages: Python(3), TypeScript(1)
+ *   frameworks: FastAPI(2)
+ *   agent_tools: Claude Code(4)
+ *   ci: GitHub Actions(6)
+ *   linked_repos: awos-recruitment(2)
+ */
+function makeOrgAuditWithConnections(): AuditJson {
+  const org_connections: OrgConnections = {
+    sources: [
+      { name: 'git', count: 8 },
+      { name: 'tracker', count: 5 },
+    ],
+    languages: [
+      { name: 'Python', count: 3 },
+      { name: 'TypeScript', count: 1 },
+    ],
+    frameworks: [{ name: 'FastAPI', count: 2 }],
+    agent_tools: [{ name: 'Claude Code', count: 4 }],
+    ci: [{ name: 'GitHub Actions', count: 6 }],
+    linked_repos: [{ name: 'awos-recruitment', count: 2 }],
+  };
+
+  return {
+    ...makeAudit({
+      portfolio_metrics: [
+        {
+          metric: 'org_capability_score',
+          value: 42,
+          description: 'test',
+          contributor_weighted: false,
+          repos_counted: 8,
+        },
+      ],
+      source_windows: {
+        git: { days: 90, label: 'git history' },
+        tracker: { days: 30, label: 'Jira' },
+      },
+      org_connections,
+    }),
+  } as AuditJson;
+}
+
+test('renderHtml org mode: org_connections sources rendered with sourceFullLabel and repo counts (Task 5.4)', () => {
+  const audit = makeOrgAuditWithConnections();
+  const html = renderHtml(audit);
+  // Contract: source labels come from sourceFullLabel (uses source_windows label)
+  assert.ok(
+    html.includes('git history (8)'),
+    'HTML org Connections must render "git history (8)" using sourceFullLabel for the git key'
+  );
+  assert.ok(
+    html.includes('Jira (5)'),
+    'HTML org Connections must render "Jira (5)" using the source_windows label for tracker'
+  );
+});
+
+test('renderHtml org mode: org_connections tech and linked items rendered with counts (Task 5.4)', () => {
+  const audit = makeOrgAuditWithConnections();
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('Python (3)'),
+    'HTML org Connections must render languages with repo count: "Python (3)"'
+  );
+  assert.ok(
+    html.includes('TypeScript (1)'),
+    'HTML org Connections must render languages with repo count: "TypeScript (1)"'
+  );
+  assert.ok(
+    html.includes('FastAPI (2)'),
+    'HTML org Connections must render frameworks with repo count: "FastAPI (2)"'
+  );
+  assert.ok(
+    html.includes('Claude Code (4)'),
+    'HTML org Connections must render agent_tools with repo count: "Claude Code (4)"'
+  );
+  assert.ok(
+    html.includes('GitHub Actions (6)'),
+    'HTML org Connections must render CI with repo count: "GitHub Actions (6)"'
+  );
+  assert.ok(
+    html.includes('awos-recruitment (2)'),
+    'HTML org Connections must render linked_repos with repo count: "awos-recruitment (2)"'
+  );
+});
+
+test('renderMarkdown org mode: org_connections rendered with repo counts (Task 5.4)', () => {
+  const audit = makeOrgAuditWithConnections();
+  const md = renderMarkdown(audit);
+  // Contract: source labels use sourceFullLabel
+  assert.ok(
+    md.includes('git history (8)'),
+    'Markdown org Connections must render "git history (8)" using sourceFullLabel for the git key'
+  );
+  assert.ok(
+    md.includes('Jira (5)'),
+    'Markdown org Connections must render "Jira (5)" using the source_windows label for tracker'
+  );
+  assert.ok(
+    md.includes('Python (3)'),
+    'Markdown org Connections must render languages with count: "Python (3)"'
+  );
+  assert.ok(
+    md.includes('awos-recruitment (2)'),
+    'Markdown org Connections must render linked_repos with count: "awos-recruitment (2)"'
+  );
+});
+
+test('renderHtml org mode: empty org_connections categories are omitted (Task 5.4)', () => {
+  const audit = makeAudit({
+    portfolio_metrics: [
+      {
+        metric: 'org_capability_score',
+        value: 0,
+        description: 'test',
+        contributor_weighted: false,
+        repos_counted: 1,
+      },
+    ],
+    org_connections: {
+      sources: [{ name: 'git', count: 1 }],
+      languages: [],
+      frameworks: [],
+      agent_tools: [],
+      ci: [],
+      linked_repos: [],
+    },
+  } as unknown as Partial<AuditJson>);
+  const html = renderHtml(audit);
+  // Only sources should appear; other empty categories omitted
+  assert.ok(
+    html.includes('git history (1)') || html.includes('git (1)'),
+    'HTML org Connections must render the non-empty sources list'
+  );
+  assert.ok(
+    !html.includes('<h3>Languages</h3>') &&
+      !html.includes('Languages</h3>') &&
+      !html.includes('**Languages:**'),
+    'HTML org Connections must omit empty categories'
+  );
+});
+
+test('renderHtml single-repo mode: org_connections field does not affect single-repo connections rendering (Task 5.4 scope guard)', () => {
+  // A single-repo audit with org_connections set (shouldn't happen in practice,
+  // but the renderer must not break or silently show org data in single-repo mode).
+  const audit = makeAudit({
+    sources: [
+      {
+        source: 'git',
+        available: true,
+        reason_if_absent: null,
+        history_available_days: 90,
+      },
+    ],
+    org_connections: {
+      sources: [{ name: 'git', count: 99 }],
+      languages: [],
+      frameworks: [],
+      agent_tools: [],
+      ci: [],
+      linked_repos: [],
+    },
+  } as unknown as Partial<AuditJson>);
+  const html = renderHtml(audit);
+  // Single-repo mode shows Connected/Missed, not the org count view
+  assert.ok(
+    !html.includes('git (99)') && !html.includes('git history (99)'),
+    'Single-repo HTML must not render org_connections count list (99 is a sentinel)'
+  );
+});

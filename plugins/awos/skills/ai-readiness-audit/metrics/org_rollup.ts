@@ -83,6 +83,48 @@ export interface PerRepoInput {
   coverage?: number;
   /** Rich delivery numbers for the org headline + per-repo table. */
   delivery?: PerRepoDelivery;
+  /**
+   * Tech-stack items detected for this repo (four categories).
+   * Only `name` is used for aggregation; `evidence` is not carried through.
+   */
+  tech_stack?: {
+    languages: Array<{ name: string }>;
+    agent_tools: Array<{ name: string }>;
+    ci: Array<{ name: string }>;
+    frameworks: Array<{ name: string }>;
+  };
+  /**
+   * Linked repos detected for this repo (symlinks / submodules / MCP servers).
+   * Only `name` is used for cross-repo counting; a repo linking the same name via
+   * multiple paths counts once per repo.
+   */
+  linked_repos?: Array<{ name: string; via?: string; kind?: string }>;
+}
+
+// ---------------------------------------------------------------------------
+// Org connections types (Task 5.4)
+// ---------------------------------------------------------------------------
+
+/** One aggregated item in the org Connections view: a name and the number of repos that have it. */
+export interface OrgConnItem {
+  name: string;
+  /** Number of repos in which this item is present (deduplicated per repo). */
+  count: number;
+}
+
+/**
+ * Cross-repo aggregation of connections and stack items.
+ * Each list is sorted by count desc, then name asc, for deterministic output.
+ */
+export interface OrgConnections {
+  /** Source keys (e.g. "git", "tracker") → count of repos where that source is available. */
+  sources: OrgConnItem[];
+  languages: OrgConnItem[];
+  frameworks: OrgConnItem[];
+  agent_tools: OrgConnItem[];
+  ci: OrgConnItem[];
+  /** Linked-repo names → count of repos that link each one. */
+  linked_repos: OrgConnItem[];
 }
 
 export interface PortfolioMetric {
@@ -118,6 +160,11 @@ export interface OrgRollupResult {
   headline?: { delivery: OrgDeliveryMetric[] };
   /** Per-repo summary rows (input echoed with computed fields). */
   per_repo: PerRepoSummary[];
+  /**
+   * Cross-repo aggregation of connections and stack items (Task 5.4).
+   * Each list is sorted by count desc, then name asc.
+   */
+  org_connections?: OrgConnections;
 }
 
 export interface PerRepoSummary {
@@ -232,6 +279,85 @@ function buildHeadline(
 }
 
 // ---------------------------------------------------------------------------
+// Org connections aggregation (Task 5.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a sorted OrgConnItem list from a count map.
+ * Sort order: count desc, then name asc for stable deterministic output.
+ */
+function sortedConnItems(counts: Map<string, number>): OrgConnItem[] {
+  return Array.from(counts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+/**
+ * Aggregate cross-repo connections from per-repo inputs.
+ *
+ * Sources: uses `sources_reachable` (the available source keys per repo).
+ * Tech-stack categories and linked_repos: uses the optional `tech_stack` /
+ * `linked_repos` fields added in Task 5.4 (absent repos contribute nothing).
+ * All deduplication is per-repo: an item that appears twice in one repo's
+ * list (e.g. same linked-repo name via two paths) is counted once for that
+ * repo.
+ */
+function aggregateConnections(perRepoResults: PerRepoInput[]): OrgConnections {
+  const srcCounts = new Map<string, number>();
+  const langCounts = new Map<string, number>();
+  const fwCounts = new Map<string, number>();
+  const toolCounts = new Map<string, number>();
+  const ciCounts = new Map<string, number>();
+  const linkedCounts = new Map<string, number>();
+
+  for (const repo of perRepoResults) {
+    // Sources: dedupe within this repo before counting.
+    const seenSrc = new Set(repo.sources_reachable ?? []);
+    for (const src of seenSrc) {
+      srcCounts.set(src, (srcCounts.get(src) ?? 0) + 1);
+    }
+
+    // Tech-stack categories: dedupe by name within this repo.
+    if (repo.tech_stack) {
+      for (const item of dedupeByName(repo.tech_stack.languages)) {
+        langCounts.set(item, (langCounts.get(item) ?? 0) + 1);
+      }
+      for (const item of dedupeByName(repo.tech_stack.frameworks)) {
+        fwCounts.set(item, (fwCounts.get(item) ?? 0) + 1);
+      }
+      for (const item of dedupeByName(repo.tech_stack.agent_tools)) {
+        toolCounts.set(item, (toolCounts.get(item) ?? 0) + 1);
+      }
+      for (const item of dedupeByName(repo.tech_stack.ci)) {
+        ciCounts.set(item, (ciCounts.get(item) ?? 0) + 1);
+      }
+    }
+
+    // Linked repos: dedupe by name within this repo.
+    if (repo.linked_repos) {
+      const seenLinked = new Set(repo.linked_repos.map((r) => r.name));
+      for (const name of seenLinked) {
+        linkedCounts.set(name, (linkedCounts.get(name) ?? 0) + 1);
+      }
+    }
+  }
+
+  return {
+    sources: sortedConnItems(srcCounts),
+    languages: sortedConnItems(langCounts),
+    frameworks: sortedConnItems(fwCounts),
+    agent_tools: sortedConnItems(toolCounts),
+    ci: sortedConnItems(ciCounts),
+    linked_repos: sortedConnItems(linkedCounts),
+  };
+}
+
+/** Return the unique names from an array of {name, ...} items. */
+function dedupeByName(items: Array<{ name: string }>): string[] {
+  return Array.from(new Set(items.map((i) => i.name)));
+}
+
+// ---------------------------------------------------------------------------
 // Rollup implementation
 // ---------------------------------------------------------------------------
 
@@ -260,6 +386,14 @@ export function rollup(
         makeMetric('org_measurement_coverage', 0, false, 0),
       ],
       per_repo: [],
+      org_connections: {
+        sources: [],
+        languages: [],
+        frameworks: [],
+        agent_tools: [],
+        ci: [],
+        linked_repos: [],
+      },
     };
   }
 
@@ -352,7 +486,12 @@ export function rollup(
   ];
 
   const headline = buildHeadline(repos);
-  const result: OrgRollupResult = { portfolio_metrics, per_repo: repos };
+  const org_connections = aggregateConnections(perRepoResults);
+  const result: OrgRollupResult = {
+    portfolio_metrics,
+    per_repo: repos,
+    org_connections,
+  };
   if (headline) result.headline = headline;
   return result;
 }

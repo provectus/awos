@@ -258,6 +258,25 @@ export interface DetectionConflict {
   claimedBy: string[];
 }
 
+/** One item in the org Connections aggregated view: name + number of repos that have it. */
+export interface OrgConnItem {
+  name: string;
+  count: number;
+}
+
+/**
+ * Cross-repo aggregation of connections and stack items (Task 5.4).
+ * Produced by org_rollup and stored in org-portfolio.json for the renderer.
+ */
+export interface OrgConnections {
+  sources: OrgConnItem[];
+  languages: OrgConnItem[];
+  frameworks: OrgConnItem[];
+  agent_tools: OrgConnItem[];
+  ci: OrgConnItem[];
+  linked_repos: OrgConnItem[];
+}
+
 export interface AuditJson {
   date: string;
   project: string;
@@ -271,6 +290,8 @@ export interface AuditJson {
   // org-mode fields (optional)
   portfolio_metrics?: PortfolioMetric[];
   per_repo?: PerRepoSummary[];
+  /** Aggregated connections across repos (org mode, Task 5.4). */
+  org_connections?: OrgConnections;
   // collector availability
   sources?: SourceSummary[];
   // per-source lookback window (populated by audit_core from collected/ artifacts)
@@ -783,8 +804,47 @@ export function renderMarkdown(audit: AuditJson): string {
     lines.push('');
   }
 
-  // Connections & Sources
-  if (audit.sources && audit.sources.length > 0) {
+  // Connections & Sources — org mode shows an aggregated count view; single-repo shows connected/missed.
+  if (isOrg && audit.org_connections) {
+    const oc = audit.org_connections;
+    lines.push('## Connections & Sources');
+    lines.push('');
+    const connMdItems = (
+      items: OrgConnItem[],
+      labelFn: (n: string) => string
+    ): string => items.map((i) => `${labelFn(i.name)} (${i.count})`).join(', ');
+    if (oc.sources.length > 0) {
+      lines.push(
+        '**Sources:** ' +
+          connMdItems(oc.sources, (n) =>
+            sourceFullLabel(n, audit.source_windows)
+          )
+      );
+      lines.push('');
+    }
+    if (oc.languages.length > 0) {
+      lines.push('**Languages:** ' + connMdItems(oc.languages, (n) => n));
+      lines.push('');
+    }
+    if (oc.agent_tools.length > 0) {
+      lines.push('**Agent Tools:** ' + connMdItems(oc.agent_tools, (n) => n));
+      lines.push('');
+    }
+    if (oc.ci.length > 0) {
+      lines.push('**CI:** ' + connMdItems(oc.ci, (n) => n));
+      lines.push('');
+    }
+    if (oc.frameworks.length > 0) {
+      lines.push('**Frameworks:** ' + connMdItems(oc.frameworks, (n) => n));
+      lines.push('');
+    }
+    if (oc.linked_repos.length > 0) {
+      lines.push(
+        '**Linked Repositories:** ' + connMdItems(oc.linked_repos, (n) => n)
+      );
+      lines.push('');
+    }
+  } else if (audit.sources && audit.sources.length > 0) {
     lines.push('## Connections & Sources');
     lines.push('');
     const connected = audit.sources.filter((s) => s.available);
@@ -1522,7 +1582,47 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
   function connectionsSection(): string {
     const rows: string[] = ['<h2>Connections &amp; Sources</h2>'];
 
-    // Connected / missed sub-blocks — only rendered when sources are available.
+    // Org mode: render the aggregated count view.
+    if (isOrg && audit.org_connections) {
+      const oc = audit.org_connections;
+      const connHtmlItems = (
+        items: OrgConnItem[],
+        labelFn: (n: string) => string
+      ): string =>
+        items.map((i) => `${esc(labelFn(i.name))} (${i.count})`).join(', ');
+
+      if (oc.sources.length > 0) {
+        rows.push(
+          `<h3>Sources</h3><p>${connHtmlItems(oc.sources, (n) => sourceFullLabel(n, audit.source_windows))}</p>`
+        );
+      }
+      if (oc.languages.length > 0) {
+        rows.push(
+          `<h3>Languages</h3><p>${connHtmlItems(oc.languages, (n) => n)}</p>`
+        );
+      }
+      if (oc.agent_tools.length > 0) {
+        rows.push(
+          `<h3>Agent Tools</h3><p>${connHtmlItems(oc.agent_tools, (n) => n)}</p>`
+        );
+      }
+      if (oc.ci.length > 0) {
+        rows.push(`<h3>CI</h3><p>${connHtmlItems(oc.ci, (n) => n)}</p>`);
+      }
+      if (oc.frameworks.length > 0) {
+        rows.push(
+          `<h3>Frameworks</h3><p>${connHtmlItems(oc.frameworks, (n) => n)}</p>`
+        );
+      }
+      if (oc.linked_repos.length > 0) {
+        rows.push(
+          `<h3>Linked Repositories</h3><p>${connHtmlItems(oc.linked_repos, (n) => n)}</p>`
+        );
+      }
+      return rows.join('\n');
+    }
+
+    // Single-repo mode: connected / missed sub-blocks.
     if (audit.sources && audit.sources.length > 0) {
       const connected = audit.sources.filter((s) => s.available);
       const missed = audit.sources.filter((s) => !s.available);

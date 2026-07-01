@@ -593,6 +593,53 @@ test('verify.md does not hardcode a verification-tool priority order', () => {
   );
 });
 
+test('verify.md and the flow templates never punt a drivable render to the user', () => {
+  // Road-test regression (session 928eba0a): the generated /fix-bug
+  // paused and told the user to run `! make run` for the live check,
+  // even though the agent could reclaim the port or drive the deploy
+  // itself. It punted because a shared-resource guardrail made
+  // "can't auto-verify" artificially true. The fix: running the app is
+  // the flow's job, and the manual AskUserQuestion fallback is only for
+  // a criterion with no agent-driven render path at all. Lock the
+  // guidance into verify.md and both flow templates so a regenerated
+  // command carries it.
+  const verify = readUtf8(path.join(commandsDir, 'verify.md'));
+  assert.ok(
+    /Running the app is your job, not the user's/i.test(verify) ||
+      /Running the app to verify is/i.test(verify),
+    "commands/verify.md must state that running the app to verify is the agent's job — a reserved shared resource is not grounds to hand the user a `run` command"
+  );
+  assert.ok(
+    /last resort/i.test(verify) && /alternate port/i.test(verify),
+    'commands/verify.md must frame the manual AskUserQuestion fallback as a last resort and name agent-driven paths (alternate port / reclaim / deploy) to try first'
+  );
+
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /Running the app to verify is the flow's job, not the user's/i.test(body),
+      `${tmpl} verify stage must state that running the app to verify is the flow's job, not the user's — the shared-resource guardrail must not become a reason to punt`
+    );
+    assert.ok(
+      /sanctioned verification path/i.test(body),
+      `${tmpl} verify stage must point at the §2/§3 sanctioned verification path (reclaim the resource / alternate port / drive the deploy) so a drivable criterion is never deferred to a manual run`
+    );
+  }
+
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /sanctioned verification path/i.test(flow),
+    'flow.md worktree/shared-resource investigation must record a sanctioned verification path so the generated verify stage self-verifies instead of handing the user a `run` command'
+  );
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /Sanctioned verification path/i.test(dfTemplate),
+    'delivery-flow-template.md §2 must carry a "Sanctioned verification path" field so the decision record captures how verify drives the app when a shared resource is reserved'
+  );
+});
+
 test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
   // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
   // propose a QA agent by searching the registry, not by always

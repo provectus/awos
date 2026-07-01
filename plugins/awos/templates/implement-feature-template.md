@@ -96,6 +96,8 @@ Run `/awos:implement` [per §8: in the main context if it dispatches subagents i
 
 Run `/awos:verify` [per §8: in a subagent if it is non-interactive], returning the verdict and the list of gaps. Address gaps before proceeding.
 
+Running the app to verify is the flow's job, not the user's. [If §2/§3 recorded a shared resource the app binds — a port a running service holds, a single database, a device — the workspace guardrail reserves it for normal work, but verification still needs a real render: reclaim the resource (stop the service, alternate port, throwaway instance) or drive the project's §5 deploy/run step and verify against it, per the sanctioned verification path §2/§3 records. Don't hand the user a `run` command or defer a drivable criterion to a later manual deploy — manual confirmation is only for a criterion the agent genuinely cannot render here.]
+
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=local-review -->

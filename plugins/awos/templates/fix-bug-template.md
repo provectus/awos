@@ -114,7 +114,9 @@ Add one test that fails on the old code and passes on the fix, capturing the bug
 
 ### Step 8: Verify the Touched Criteria
 
-Re-check **only** the acceptance criteria the bug touched, with `/awos:verify`'s evidence discipline — drive the UI/API for real, screenshot visual criteria to `docs/screenshots/`, and `AskUserQuestion` when a criterion can't be auto-verified. This is scoped: it does not re-run the whole acceptance set, does not flip the spec's Status, and honors `<!-- skip-tests: true -->` (look-and-feel walk-through only, no test suites). Report the criteria checked and their evidence.
+Re-check **only** the acceptance criteria the bug touched, with `/awos:verify`'s evidence discipline — drive the UI/API for real, screenshot visual criteria to `docs/screenshots/`, and `AskUserQuestion` only when a criterion has no agent-driven render path at all. This is scoped: it does not re-run the whole acceptance set, does not flip the spec's Status, and honors `<!-- skip-tests: true -->` (look-and-feel walk-through only, no test suites). Report the criteria checked and their evidence.
+
+Running the app to verify is the flow's job, not the user's. [If §2/§3 recorded a shared resource the app binds — a port a running service holds, a single database, a device — the workspace guardrail reserves it for normal work, but this stage still verifies against a real render: reclaim the resource (stop the service, use an alternate port, spin a throwaway instance) or drive the project's own §5 deploy/run step and verify against that, per the sanctioned verification path §2/§3 records. Do not hand the user a `run` command to execute, and do not defer a drivable criterion to a later manual deploy — the manual `AskUserQuestion` fallback is only for a criterion the agent genuinely cannot render here.]
 
 <!-- /awos:flow:stage -->
 

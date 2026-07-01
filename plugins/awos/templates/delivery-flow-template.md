@@ -38,6 +38,7 @@ Which commands `/awos:flow` generated and their names — re-runs reconcile exac
 - **Submodules:** [none | init/update steps]
 - **Target sync & conflicts:** [rebase onto target | merge target in — checked before opening the change request and again before merging (the target moves while gates run); conflicts resolved by a subagent, non-trivial resolutions confirmed with the user, local gates re-run after any sync]
 - **Worktrees:** [viable — isolation recipe | main-repo-only — blocking shared resources and why]
+- **Sanctioned verification path:** [when a shared resource (a port a running service holds, a single database, a device) is reserved by the guardrail, how the verify stage still drives the app against a real render — stop/restart the service, an alternate port, a throwaway instance, or the §5 deploy/run step. The generated command uses this to self-verify rather than handing the user a `run` command; "n/a — nothing shared blocks a run" when no such resource exists]
 
 ## 3. Repository Topology
 

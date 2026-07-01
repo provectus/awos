@@ -413,15 +413,16 @@ test('deliverable commands write their file on an unanswered question', () => {
   // unanswered question as a signal to fall back to a default and still write
   // the file — never as a stop. See commands/tasks.md for the canonical rule.
   //
-  // This list is intentionally partial: spec.md is also a
-  // document-generating command and still carries the same unfixed approval
-  // gate (e.g. spec.md "Once the user approves the draft … write the
-  // specification"). It is a deliberate follow-up — add it here once the
-  // same fallback rule is ported to it.
+  // Every command that generates a document under context/ and asks the
+  // user questions on the way carries this rule. spec.md's default is its
+  // own `[NEEDS CLARIFICATION: …]` marker rather than a documented value,
+  // but the contract is the same: an unanswered question is never a stop —
+  // record the gap and still write the deliverable.
   const deliverableCommands = [
     'product.md',
     'roadmap.md',
     'architecture.md',
+    'spec.md',
     'tasks.md',
     'tech.md',
   ];

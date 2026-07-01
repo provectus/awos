@@ -32,7 +32,7 @@ Takes one feature — its requirements from [source per §1 of delivery-flow.md]
 A flow this long degrades in one context window — judgment is worst exactly where it matters most, at review time. Per §8 of delivery-flow.md:
 
 - Run every isolatable stage in a subagent (a subagent can invoke `/awos:*` commands via the Skill tool; its context is discarded on completion). Subagent reports must be terse — paths, verdicts, counts — never full document or review content.
-- After each completed stage, append an entry to `context/spec/{SPEC_NAME}/flow-log.md`: the stage name, what was produced and where (paths, branch, commit, change-request link), any decisions taken along the way, and which stage comes next. The log is the flow's memory outside the context window — a fresh session (after a restart, a crash, or an unattended hand-off between sessions) resumes by reading this one small file instead of re-deriving state from the whole repo. That is what keeps the window small across a long flow: nothing needs to stay in context once it is in the log.
+- After each completed stage, append an entry to `context/spec/{SPEC_NAME}/flow-log.md`: the stage name, what was produced and where (paths, branch, commit), any decisions taken along the way, and which stage comes next. The log is the flow's memory outside the context window — a fresh session (after a restart, a crash, or an unattended hand-off between sessions) resumes by reading this one small file instead of re-deriving state from the whole repo. That is what keeps the window small across a long flow: nothing needs to stay in context once it is in the log. The log is committed with the work (Step 9 stages it alongside the code), so it must never become an uncommittable leftover: **once the change request is opened — or the change is merged — stop writing to the tracked log**, since a commit adding log lines is unwelcome on a change request under review and impossible once it merges, so a late append would strand a change that can never reach it. From that point report late-stage progress to the user and via §9 notifications, and resume the remote stages from remote state (the open/merged change request and the ticket status), which the resume-detection stage already inspects. The close stage leaves a clean working tree and never writes a final entry it cannot commit.
 - Never launch a nested headless session (`claude -p`) from this command — permission modes, PATH, and timeouts differ per machine. Unattended chaining belongs to the trigger setup (§6), outside this command.
 - Tell every dispatched subagent: tools are functional — do not test them or make exploratory calls; every call needs a purpose. Run each delegated stage on the model tier recorded in §8 — the fast tier for mechanical transport work, the strongest for judgment.
 
@@ -119,13 +119,15 @@ The review must stay independent of this conversation's authorship bias:
 
 ### Step 9: Commit & Push
 
-Stage all changed files, excluding `.env`, credentials, and secrets. [Commit message convention per the team; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
+Write this stage's flow-log entry **before** staging so the log rides in this commit — this is the flow-log's last committed state (see Context Discipline). Then stage all changed files, excluding `.env`, credentials, and secrets. [Commit message convention per the team; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
 
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=remote-gates -->
 
 ### Step 10: Remote Gates
+
+From here the change request is open — **do not append to the tracked flow-log** (Context Discipline): a commit adding log lines is unwelcome on a change request under review, and impossible once it merges. Report gate progress to the user and via Notifications instead; resume relies on the remote state, not the log.
 
 [Per §2 sync policy: before opening the change request, fetch the target branch and verify the branches merge cleanly — a dry-run merge or rebase. On conflicts: delegate resolution to a subagent (per §8), re-run the local gates on the resolved result, and push.]
 
@@ -166,6 +168,8 @@ Merging is irreversible. Even when the recorded policy lets the flow merge, ask 
 [Per §5's definition of Done: gather the recorded evidence (change-request link, merge commit, deploy confirmation) and report the final state to the user. When the source has tickets, also transition the ticket using the chosen transport and attach the evidence; omit the transition entirely for ticketless sources — the report to the user is the close.]
 
 Include the local review in the reported evidence — it is a real gate but gets buried in the logs otherwise. From the local-review stage's flow-log entry, report: the review **verdict**, the **finding count** (by severity), the **review file path** (`context/spec/{SPEC_NAME}/review.md`, or the path a reused review command used), and that a manual keep/drop gate ran over the findings. The path lets the user re-open the full review without re-running.
+
+Leave a clean working tree: do not write a closing flow-log entry (the log was finalized at commit-push and the change request is now open or merged — a new entry could never be committed into it). If any flow-created artifact is still uncommitted, surface it in the report rather than leaving it behind — an uncommitted leftover after a merged or in-review change request is a bug, not a record.
 
 <!-- /awos:flow:stage -->
 

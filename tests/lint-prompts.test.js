@@ -640,6 +640,51 @@ test('verify.md and the flow templates never punt a drivable render to the user'
   );
 });
 
+test('the flow templates finalize the flow-log at commit-push and never leave it as a leftover', () => {
+  // Road-test regression (session 928eba0a): the generated flow left
+  // context/spec/006-settings-page/flow-log.md dirty — the close stage
+  // appended after the last commit, so the entry could never reach the
+  // merged PR. The flow-log is committed with the work but must stop
+  // being written once the change request is opened or merged, and the
+  // close stage must leave a clean tree. Lock the discipline into both
+  // templates, flow.md, and the decision record.
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /once the change request is opened — or the change is merged — stop writing to the tracked log/i.test(
+        body
+      ),
+      `${tmpl} must stop writing to the tracked flow-log once the change request is opened or merged — a late append strands a change that can never reach the PR`
+    );
+    assert.ok(
+      /flow-log's last committed state/i.test(body),
+      `${tmpl} commit-push stage must finalize the flow-log in that commit (write the entry before staging)`
+    );
+    assert.ok(
+      /Leave a clean working tree/i.test(body) &&
+        /leftover after a merged or in-review change request is a bug/i.test(
+          body
+        ),
+      `${tmpl} close stage must guarantee a clean working tree — an uncommitted flow-created artifact after merge/review is a bug, not a record`
+    );
+  }
+
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /stops writing to it once the change request is opened or merged/i.test(
+      flow
+    ),
+    'flow.md context-strategy must bake in the flow-log commit discipline so generated commands never leave an uncommittable leftover'
+  );
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /never becomes an uncommittable leftover/i.test(dfTemplate),
+    'delivery-flow-template.md §8 flow-log field must record that the log is finalized at commit-push and never left as a leftover'
+  );
+});
+
 test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
   // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
   // propose a QA agent by searching the registry, not by always

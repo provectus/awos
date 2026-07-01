@@ -55,7 +55,7 @@ Never prompt mid-run after this step.
 
 Contributor counts are always reported in aggregate (never per-person). No money, no PII.
 
-Dispatch this discovery work with a fast model (Haiku) — it is mechanical file/PATH probing.
+Dispatch this discovery work as `Agent` subagents pinned to the cheapest tier — pass `model: haiku` on the Agent call. It is mechanical file/PATH probing, so Haiku is sufficient and avoids spending the orchestrator's model on it. In org mode, issue one Haiku probe per repo in a single message so they run concurrently.
 
 ## Step 1 — Dimensions are the engine's job, not yours
 
@@ -109,7 +109,7 @@ It returns `pct` (fraction 0–1 complete) and `eta_seconds`; print a single rea
 
 ## Step 6 — Patch the LLM-only slice, then render
 
-Use a mid-tier model (Sonnet) for the judgment checks and narrative authoring — moderate reasoning, single pass.
+Run the judgment checks and narrative authoring on Sonnet: dispatch them as an `Agent` subagent with `model: sonnet` (moderate reasoning, single pass) rather than doing them inline on the orchestrator's model. The subagent reads `audit.json` plus the evidence, decides the five `judgment` categories, authors the headline/insight/recommendation blocks, and returns them for the orchestrator to patch. In org mode this slice already runs inside each `awos:repo-auditor` subagent (itself pinned to Sonnet), so this applies to single-repo mode and the org-rollup narrative.
 
 `audit.json` already holds the full deterministic result. Fill only what the engine cannot, then render. Never re-score a `detected`/`computed` check, and never hand-write `report.md`/`report.html`.
 

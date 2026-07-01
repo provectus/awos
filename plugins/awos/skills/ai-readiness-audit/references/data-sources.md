@@ -73,7 +73,7 @@ Each probe:
 - Probes which connectors are reachable (see Connector detection above).
 - Reads in-repo signals — CI config, tracker references in docs or scripts, doc links — to infer each repo's sources.
 
-Dispatch this discovery work with a fast model (Haiku) — it is mechanical file/PATH probing.
+Dispatch this discovery work as `Agent` subagents pinned to Haiku (`model: haiku` on the Agent call) — it is mechanical file/PATH probing, so the cheapest tier is sufficient.
 
 ### Phase 2 — One confirmation prompt
 

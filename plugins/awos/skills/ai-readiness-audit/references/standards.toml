@@ -3,8 +3,8 @@
 # Single source of truth for every scoring category used by the
 # ai-sdlc-adoption metric set (and, in later tasks, by all 11 existing audit
 # dimensions).  Parsed at runtime via `node dist/cli.js standards` (smol-toml).
-# Users may override by pointing sources.toml [standards].standards_file at
-# their own copy of this file.
+# Weights and bands are data — retune by editing this file (or a project-local
+# copy the engine is pointed at).
 #
 # Schema
 # ------
@@ -25,7 +25,6 @@ max_lookback_days = 90
 active_contributor_threshold = 0.05
 rework_horizon_days = 21
 standards_version = "2026.06"
-# Users override by pointing sources.toml [standards].standards_file at their own copy.
 
 # ---------------------------------------------------------------------------
 # [category.*] — ai-sdlc-adoption metric categories

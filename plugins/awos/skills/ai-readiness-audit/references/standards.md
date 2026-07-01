@@ -92,11 +92,4 @@ The 11 existing audit dimensions' categories are added in Task A.4.
 
 ## Overriding the defaults
 
-To use custom thresholds or add project-specific categories, copy this file to your project and point `sources.toml` at it:
-
-```toml
-[standards]
-standards_file = "path/to/your/standards.toml"
-```
-
-The metric scripts load whichever file `sources.toml` points at; if no override is configured they fall back to the bundled copy.
+To use custom thresholds or add project-specific categories, edit the bundled `standards.toml` in place, or keep a project-local copy and point the engine at it. Weights, bands, and category definitions are all data — no code changes are needed to retune them.

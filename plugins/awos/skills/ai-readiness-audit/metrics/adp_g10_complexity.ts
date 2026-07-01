@@ -53,11 +53,10 @@ import { isGeneratedPath } from '../generated.ts';
 import {
   EXT_TO_GRAMMAR,
   MAX_FILE_BYTES,
-  LanguageLoader,
   getParserClass,
+  getSharedLoader,
   initParser,
-  resolveGrammarsDir,
-  walkDir,
+  listRepoFiles,
   type TSNode,
 } from './_ast.ts';
 
@@ -194,17 +193,17 @@ export async function compute(
   const Parser = getParserClass();
   if (!(await initParser())) return makeSkip();
 
-  const loader = new LanguageLoader(resolveGrammarsDir());
+  const loader = getSharedLoader();
   const loadLanguage = (grammarFile: string) => loader.load(grammarFile);
 
   // Collect source files: any file whose extension is in EXT_TO_GRAMMAR.
   // Files in languages not in EXT_TO_GRAMMAR are not collected; they are
   // neither analysed nor counted as skipped.
   const filePaths: string[] = [];
-  walkDir(repoPath, (p) => {
-    if (isGeneratedPath(relative(repoPath, p))) return;
+  for (const p of listRepoFiles(repoPath)) {
+    if (isGeneratedPath(relative(repoPath, p))) continue;
     if (EXT_TO_GRAMMAR[extname(p).toLowerCase()]) filePaths.push(p);
-  });
+  }
 
   if (filePaths.length === 0) return makeSkip();
 

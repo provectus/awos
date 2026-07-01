@@ -242,3 +242,41 @@ export function walkDir(dir: string, cb: (filePath: string) => void): void {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Process-wide shared state, so the AST metrics (adp_g10, adp_g11, adp_g13)
+// don't each re-do the two most expensive setup steps: compiling grammar wasm
+// and walking the repo. A repo is immutable for the duration of one audit, and
+// tree-sitter Language objects are stateless and reusable across parsers, so
+// sharing these is byte-identical to the per-metric versions — just cheaper.
+// ---------------------------------------------------------------------------
+
+let sharedLoader: LanguageLoader | null = null;
+
+/**
+ * A single LanguageLoader shared across every AST metric, so each grammar wasm
+ * is compiled once per process instead of once per metric (grammar compile is
+ * the dominant tree-sitter cost). The loader already caches per grammar file;
+ * making it a singleton extends that cache across metrics.
+ */
+export function getSharedLoader(): LanguageLoader {
+  if (!sharedLoader) sharedLoader = new LanguageLoader(resolveGrammarsDir());
+  return sharedLoader;
+}
+
+const fileListCache = new Map<string, string[]>();
+
+/**
+ * Full list of files under `repoPath` (pruning PRUNE_DIRS), memoized per path.
+ * All AST metrics call this instead of walking the tree themselves, so the repo
+ * is walked once per audit rather than once per metric. Each caller applies its
+ * own extension filter to the returned list.
+ */
+export function listRepoFiles(repoPath: string): string[] {
+  const cached = fileListCache.get(repoPath);
+  if (cached) return cached;
+  const files: string[] = [];
+  walkDir(repoPath, (p) => files.push(p));
+  fileListCache.set(repoPath, files);
+  return files;
+}

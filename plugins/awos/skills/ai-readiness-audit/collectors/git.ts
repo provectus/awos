@@ -111,16 +111,14 @@ function getTotalCommits(cwd: string): number {
 
 /** Count commits that carry AI agent attribution trailers (any supported tool). */
 function getAiMarkedCommits(cwd: string): number {
-  const matchedSHAs = new Set<string>();
-  for (const pat of ALL_COMMIT_ATTRIBUTION) {
-    const out = run(
-      ['log', '--regexp-ignore-case', `--grep=${pat.source}`, '--format=%H'],
-      cwd
-    );
-    for (const sha of out.trim().split('\n').filter(Boolean)) {
-      matchedSHAs.add(sha);
-    }
-  }
+  // One `git log` pass instead of one per attribution pattern: git OR-combines
+  // multiple `--grep` by default, so a single invocation matches the union of
+  // all patterns. A commit matching several patterns still appears once in the
+  // log output, so the Set naturally dedups to the same count as the old loop.
+  const args = ['log', '--regexp-ignore-case', '--format=%H'];
+  for (const pat of ALL_COMMIT_ATTRIBUTION) args.push(`--grep=${pat.source}`);
+  const out = run(args, cwd);
+  const matchedSHAs = new Set(out.trim().split('\n').filter(Boolean));
   return matchedSHAs.size;
 }
 
@@ -183,47 +181,97 @@ interface MergeRecord {
 }
 
 function getMergeRecords(cwd: string): MergeRecord[] {
-  // Get first-parent merge commits with their dates.
-  const mergeOut = run(
-    ['log', '--first-parent', '--merges', '--format=%H %cI'],
-    cwd
-  )
+  // Two batched `git log` passes replace the old per-merge fork. The original
+  // ran one `git log <sha>^1..<sha>^2` per first-parent merge — O(merges)
+  // subprocess forks (the heaviest git cost, and the path that hit maxBuffer
+  // ENOBUFS on large repos). Here we read the graph once and resolve every
+  // merge's side branch in memory:
+  //
+  //   Pass 1 — the first-parent mainline (newest→oldest) with each commit's
+  //            committer date (merged_at) and parent SHAs.
+  //   Pass 2 — the full ancestor graph (every reachable commit's author date +
+  //            parents) for in-memory side-branch traversal.
+  //
+  // A single oldest→newest sweep then reproduces each merge's `sha^1..sha^2`
+  // set exactly. Walking oldest-first and marking each processed commit
+  // "visited", by the time we reach a merge M its first parent's whole ancestry
+  // (anc(p1)) is already visited; a BFS from p2 over the still-unvisited commits
+  // therefore yields exactly anc(p2) \ anc(p1) — identical to the old rev-range.
+  // branch_first_commit_at is the earliest AUTHOR date (%aI) in that set: a
+  // branch rebased just before merging has its committer dates rewritten to
+  // ~merge-time, which would collapse lead time to ~0; author date reflects when
+  // the work was written.
+
+  // Pass 1: mainline first-parent chain, newest first.
+  const mainlineOut = run(['log', '--first-parent', '--format=%H|%cI|%P'], cwd)
     .trim()
     .split('\n')
     .filter(Boolean);
+  if (mainlineOut.length === 0) return [];
 
-  const records: MergeRecord[] = [];
-  for (const line of mergeOut) {
-    const [sha, mergedAt] = line.split(' ');
-    if (!sha || !mergedAt) continue;
+  interface MainlineCommit {
+    sha: string;
+    mergedAt: string;
+    parents: string[];
+  }
+  const mainline: MainlineCommit[] = mainlineOut.map((line) => {
+    const [sha, mergedAt = '', parentStr = ''] = line.split('|');
+    return { sha, mergedAt, parents: parentStr.split(' ').filter(Boolean) };
+  });
 
-    // Get all commits reachable from MERGE_HEAD (^2) but not from first parent.
-    // Use author date (%aI), not committer date: a branch rebased just before
-    // merging has its committer dates rewritten to ~merge-time, which would
-    // collapse lead time to ~0. Author date reflects when the work was written.
-    // allowFailure: a root commit has no ^1, and an octopus merge's ^2 may not
-    // exist — both are valid repo states where this rev-range legitimately fails.
-    const sideOut = run(['log', '--format=%aI', `${sha}^1..${sha}^2`], cwd, {
-      allowFailure: true,
-    })
-      .trim()
-      .split('\n')
-      .filter(Boolean);
-
-    if (sideOut.length === 0) continue;
-
-    // Earliest commit on the merged-in branch.
-    const dates = sideOut
-      .map((d) => new Date(d))
-      .filter((d) => !isNaN(d.getTime()));
-    if (dates.length === 0) continue;
-    const earliest = new Date(Math.min(...dates.map((d) => d.getTime())));
-
-    records.push({
-      merged_at: mergedAt,
-      branch_first_commit_at: earliest.toISOString(),
+  // Pass 2: full ancestor graph — sha → { authorMs, parents }.
+  const graph = new Map<string, { authorMs: number; parents: string[] }>();
+  for (const line of run(['log', '--format=%H|%aI|%P'], cwd).split('\n')) {
+    if (!line) continue;
+    const [sha, authorAt = '', parentStr = ''] = line.split('|');
+    if (!sha) continue;
+    graph.set(sha, {
+      authorMs: new Date(authorAt).getTime(),
+      parents: parentStr.split(' ').filter(Boolean),
     });
   }
+
+  // BFS from a seed set over not-yet-visited commits, marking them visited.
+  // When trackMin is true, returns the earliest author date encountered.
+  const sweep = (seeds: string[], trackMin: boolean): number => {
+    let minMs = Infinity;
+    const stack = [...seeds];
+    while (stack.length > 0) {
+      const sha = stack.pop()!;
+      if (visited.has(sha)) continue;
+      visited.add(sha);
+      const node = graph.get(sha);
+      if (!node) continue;
+      if (trackMin && !isNaN(node.authorMs) && node.authorMs < minMs) {
+        minMs = node.authorMs;
+      }
+      for (const p of node.parents) if (!visited.has(p)) stack.push(p);
+    }
+    return minMs;
+  };
+
+  const visited = new Set<string>();
+  const records: MergeRecord[] = [];
+  for (let i = mainline.length - 1; i >= 0; i--) {
+    const c = mainline[i];
+    if (c.parents.length >= 2) {
+      // Second parent (^2) supplies the merged-in branch; track its earliest
+      // author date. Any further parents (octopus ^3…) are marked visited but
+      // excluded from the record, matching the old `^1..^2`-only range.
+      const minMs = sweep([c.parents[1]], true);
+      if (c.parents.length > 2) sweep(c.parents.slice(2), false);
+      if (minMs !== Infinity) {
+        records.push({
+          merged_at: c.mergedAt,
+          branch_first_commit_at: new Date(minMs).toISOString(),
+        });
+      }
+    }
+    visited.add(c.sha);
+  }
+
+  // The old loop emitted records newest-first (git log order); preserve that.
+  records.reverse();
   return records;
 }
 

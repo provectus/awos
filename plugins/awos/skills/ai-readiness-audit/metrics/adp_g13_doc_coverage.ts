@@ -47,11 +47,10 @@ import { LANGUAGES } from '../languages.ts';
 import {
   EXT_TO_GRAMMAR,
   MAX_FILE_BYTES,
-  LanguageLoader,
   getParserClass,
+  getSharedLoader,
   initParser,
-  resolveGrammarsDir,
-  walkDir,
+  listRepoFiles,
   type TSNode,
 } from './_ast.ts';
 
@@ -221,15 +220,15 @@ export async function compute(
 
   // Gather source files in doc-convention languages (non-generated).
   const filePaths: string[] = [];
-  walkDir(repoPath, (p) => {
-    if (isGeneratedPath(relative(repoPath, p))) return;
+  for (const p of listRepoFiles(repoPath)) {
+    if (isGeneratedPath(relative(repoPath, p))) continue;
     if (EXT_TO_LANG.has(extname(p).toLowerCase())) filePaths.push(p);
-  });
+  }
   if (filePaths.length === 0) return makeSkip();
 
   if (!(await initParser())) return makeSkip();
   const Parser = getParserClass();
-  const loader = new LanguageLoader(resolveGrammarsDir());
+  const loader = getSharedLoader();
   const parser = new Parser();
 
   let total = 0;

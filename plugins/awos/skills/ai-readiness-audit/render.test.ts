@@ -437,15 +437,17 @@ test('Sources cell shows short label; verbose label goes to tooltip only (6c.3)'
   });
   const html = renderHtml(audit);
   // Short label for tracker (truncated at ' via '): 'Jira'
-  // Cell text rendered as: "git history, Jira" inside the tip span value.
+  // Cell text rendered as plain text: "git history, Jira".
   assert.ok(
     html.includes('git history, Jira'),
     'Sources cell must show short combined labels: "git history, Jira" (tracker truncated at " via ")'
   );
-  // Verbose label still appears in the tooltip text.
+  // Summary-table tooltips live on the column labels, not the values: the "Sources"
+  // header carries the column explanation, and the value cell is plain (no per-row tip).
   assert.ok(
-    html.includes('Jira via Atlassian MCP'),
-    'Verbose source label must still appear in the Sources tooltip'
+    html.includes(`<th><span class="tip"`) &&
+      html.includes('Data sources feeding this dimension.'),
+    'The "Sources" column tooltip must be on the header label, not the value cell'
   );
 });
 
@@ -1208,8 +1210,8 @@ test('renderMarkdown states the measurement window in the header', () => {
   // The window must be accompanied by the concrete date range, not just "90 days".
   assert.match(
     md,
-    /last 90 days \(2025-10-03 – 2026-01-01\)/,
-    'the measurement window must show the date range (start – end), not only the day count'
+    /last 90 days \(2025-10-03\.\.2026-01-01\)/,
+    'the measurement window must show the date range (start..end) with the `..` separator, not only the day count'
   );
 });
 

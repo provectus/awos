@@ -28,14 +28,15 @@
  *
  * SKIP: if repoPath cannot be read or no recognized source files are found.
  */
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { join, extname, basename, relative } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+import { extname, relative } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
 import { isGeneratedPath } from '../generated.ts';
+import { listRepoFiles } from './_ast.ts';
 
 // Extension → language name mapping.
 const EXT_TO_LANG: Record<string, string> = {
@@ -62,21 +63,6 @@ const EXT_TO_LANG: Record<string, string> = {
   '.kts': 'Kotlin',
 };
 
-// Directories to skip when walking.
-const PRUNE_DIRS = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.venv',
-  '__pycache__',
-  '.next',
-  'target',
-  'vendor',
-  '.cache',
-  'coverage',
-]);
-
 interface LangStats {
   files: number;
   loc: number;
@@ -85,24 +71,6 @@ interface LangStats {
 /** Count non-blank lines in a string. */
 function countLines(content: string): number {
   return content.split('\n').filter((l) => l.trim().length > 0).length;
-}
-
-/** Walk the directory tree, calling cb for every file (not directory). */
-function walkDir(dir: string, cb: (filePath: string) => void): void {
-  let entries: ReturnType<typeof readdirSync>;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      if (PRUNE_DIRS.has(entry.name)) continue;
-      walkDir(join(dir, entry.name), cb);
-    } else if (entry.isFile()) {
-      cb(join(dir, entry.name));
-    }
-  }
 }
 
 export function compute(
@@ -131,16 +99,16 @@ export function compute(
   let totalLoc = 0;
   let fileCount = 0;
 
-  walkDir(repoPath, (filePath) => {
-    if (isGeneratedPath(relative(repoPath, filePath))) return;
+  for (const filePath of listRepoFiles(repoPath)) {
+    if (isGeneratedPath(relative(repoPath, filePath))) continue;
     const ext = extname(filePath).toLowerCase();
     const lang = EXT_TO_LANG[ext];
-    if (!lang) return;
+    if (!lang) continue;
     let content: string;
     try {
       content = readFileSync(filePath, 'utf8');
     } catch {
-      return;
+      continue;
     }
     const loc = countLines(content);
     totalLoc += loc;
@@ -150,7 +118,7 @@ export function compute(
     }
     byLanguage[lang].files += 1;
     byLanguage[lang].loc += loc;
-  });
+  }
 
   if (fileCount === 0) {
     return makeMetricResult(

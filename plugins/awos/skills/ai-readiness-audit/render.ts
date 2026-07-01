@@ -66,7 +66,7 @@
  * {
  *   "delivery": DeliveryMetric[],   // DORA-banded delivery metrics
  *   "scale":    ScaleMetric[],      // code scale & complexity
- *   "reach":    { ai_tooling?: string, contributors?: string },
+ *   "reach":    { ai_tooling?: string, contributors?: string, spec_coverage?: string },
  * }
  * DeliveryMetric: { label, display_value?, band?, reliability?, check_id?, gated?: 'tracker'|'incident' }
  * ScaleMetric:    { label, display_value, check_id? }
@@ -185,7 +185,11 @@ export interface ScaleMetric {
 export interface Headline {
   delivery?: DeliveryMetric[];
   scale?: ScaleMetric[];
-  reach?: { ai_tooling?: string; contributors?: string };
+  reach?: {
+    ai_tooling?: string;
+    contributors?: string;
+    spec_coverage?: string;
+  };
 }
 
 export interface Insight {
@@ -345,7 +349,7 @@ export function formatSourceWindow(
 
 /**
  * The measurement window for the whole report, as a header phrase such as
- * "last 90 days (2026-04-02 – 2026-07-01)". Derived from the git source window
+ * "last 90 days (2026-04-02..2026-07-01)". Derived from the git source window
  * (the primary time-bounded source); the date range is computed back from
  * `endDate` (the audit date). Returns null when no windowed source is present
  * (e.g. scale-only); omits the range when `endDate` is missing/unparseable.
@@ -363,7 +367,7 @@ export function measurementWindowLabel(
   if (Number.isNaN(end.getTime())) return `last ${days} days`;
   const start = new Date(end.getTime() - days * 86_400_000);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
-  return `last ${days} days (${iso(start)} – ${iso(end)})`;
+  return `last ${days} days (${iso(start)}..${iso(end)})`;
 }
 
 /**
@@ -654,11 +658,17 @@ export function renderMarkdown(audit: AuditJson): string {
       }
       lines.push('');
     }
-    if (h.reach && (h.reach.ai_tooling || h.reach.contributors)) {
+    if (
+      h.reach &&
+      (h.reach.ai_tooling || h.reach.contributors || h.reach.spec_coverage)
+    ) {
       lines.push('## Reach');
       lines.push('');
-      if (h.reach.ai_tooling) lines.push(`- ${h.reach.ai_tooling}`);
-      if (h.reach.contributors) lines.push(`- ${h.reach.contributors}`);
+      if (h.reach.contributors)
+        lines.push(`- Active Contributors: ${h.reach.contributors}`);
+      if (h.reach.spec_coverage)
+        lines.push(`- Spec coverage: ${h.reach.spec_coverage}`);
+      if (h.reach.ai_tooling) lines.push(`- AI tooling: ${h.reach.ai_tooling}`);
       lines.push('');
     }
   }
@@ -1052,8 +1062,10 @@ const HEADLINE_TIP: Record<string, string> = {
   MTTR: 'Mean time to restore service after a production incident (needs an incident connector).',
   'AI tooling':
     'AI coding tools detected in the repository (config files, agent instructions, commit markers).',
-  Contributors:
-    'Distinct active authors in the measurement window and their cadence.',
+  'Active Contributors':
+    'Distinct active authors in the measurement window (of the total authors in window); shows their cadence.',
+  'Spec coverage':
+    'Share of feature branches that touched spec files (AWOS SDD-04). Higher = more work goes through the spec workflow.',
   'Repos with AI tooling':
     'How many portfolio repositories have any AI tooling present.',
 };
@@ -1273,13 +1285,17 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       );
     }
     const reachItems: string[] = [];
+    if (h?.reach?.contributors)
+      reachItems.push(
+        `<div class="kv"><span class="k">Active Contributors</span><span class="v">${tip(h.reach.contributors, HEADLINE_TIP['Active Contributors'])}</span></div>`
+      );
+    if (h?.reach?.spec_coverage)
+      reachItems.push(
+        `<div class="kv"><span class="k">Spec coverage</span><span class="v">${tip(h.reach.spec_coverage, HEADLINE_TIP['Spec coverage'])}</span></div>`
+      );
     if (h?.reach?.ai_tooling)
       reachItems.push(
         `<div class="kv"><span class="k">AI tooling</span><span class="v">${tip(h.reach.ai_tooling, HEADLINE_TIP['AI tooling'])}</span></div>`
-      );
-    if (h?.reach?.contributors)
-      reachItems.push(
-        `<div class="kv"><span class="k">Contributors</span><span class="v">${tip(h.reach.contributors, HEADLINE_TIP['Contributors'])}</span></div>`
       );
     if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
       const withTooling = audit.per_repo.filter((r) => r.has_ai_tooling).length;
@@ -1361,7 +1377,15 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       )}</p>`
     );
     rows.push(
-      '<table><thead><tr><th>#</th><th>Dimension</th><th>Points</th><th>Sources</th><th>Coverage</th><th>Reliability</th><th>FAIL</th><th>WARN</th><th>PARTIAL</th><th>PASS</th><th>SKIP</th></tr></thead><tbody>'
+      '<table><thead><tr>' +
+        '<th>#</th>' +
+        '<th>Dimension</th>' +
+        `<th>${tip('Points', 'Capability points earned in this area.')}</th>` +
+        `<th>${tip('Sources', 'Data sources feeding this dimension.')}</th>` +
+        `<th>${tip('Coverage', "Share of this area's expected capability that is in place.")}</th>` +
+        `<th>${tip('Reliability', 'How trustworthy the numbers in this area are — maximal, minimal (lower bound), or not-reliable (rough proxy).')}</th>` +
+        '<th>FAIL</th><th>WARN</th><th>PARTIAL</th><th>PASS</th><th>SKIP</th>' +
+        '</tr></thead><tbody>'
     );
     let n = 1;
     for (const dim of audit.dimensions) {
@@ -1379,36 +1403,25 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         : anyNotReliable
           ? 'not-reliable'
           : 'maximal';
-      const relTip = anyMinimal
-        ? 'Some numbers here are lower bounds — the true value may be higher.'
-        : anyNotReliable
-          ? 'Numbers here carry rough estimates; the true value may differ significantly.'
-          : 'Numbers here are upper-bound reliable for what was reachable.';
       const key = dimKey(dim);
       const href = `#dim/${esc(key)}`;
       // Sources column: cell shows SHORT labels; tooltip adds full label + lookback window.
       const dimSourcesUsed = (dim.sources_used as string[] | undefined) ?? [];
-      const sourcesCell = (() => {
-        if (dimSourcesUsed.length === 0) return '—';
-        const cellText = dimSourcesUsed
-          .map((s) => shortSourceLabel(s, audit.source_windows))
-          .join(', ');
-        const tooltipDetail = dimSourcesUsed
-          .map((s) => formatSourceWindow(s, audit.source_windows))
-          .join(' · ');
-        return tip(
-          cellText,
-          'Data sources feeding this dimension',
-          tooltipDetail
-        );
-      })();
+      const sourcesCell =
+        dimSourcesUsed.length === 0
+          ? '—'
+          : esc(
+              dimSourcesUsed
+                .map((s) => shortSourceLabel(s, audit.source_windows))
+                .join(', ')
+            );
       rows.push(`<tr class="dim-row${lowCov}" onclick="location.hash='dim/${esc(key)}'">
   <td>${n++}</td>
   <td><a href="${href}"><strong>${esc(titleLabel(dim))}</strong></a></td>
-  <td>${tip(fmtPts(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, `coverage ${covPct} · ${esc(dim.dimension)} · standards.toml`)}</td>
+  <td>${fmtPts(dim.score)} pts</td>
   <td>${sourcesCell}</td>
-  <td>${tip(covPct, `Share of this area's expected capability that is in place.`, `score ÷ Σ applicable weights · ${esc(dim.dimension)}`)}</td>
-  <td>${tip(relStr, relTip, '')}</td>
+  <td>${covPct}</td>
+  <td>${relStr}</td>
   <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
   <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
   <td>${counts.partial > 0 ? `<span style="color:#d97706;font-weight:600">${counts.partial}</span>` : counts.partial}</td>
@@ -1586,6 +1599,32 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         '<p style="font-size:.78rem;color:#64748b">* lower-bound measurement (reliability tag: minimal).</p>'
       );
     }
+
+    // Throughput context (ai-sdlc-adoption only): the headline "Merges" and "LOC"
+    // per-active rows have no standards.toml category, so without this they would
+    // appear only on the overview and have no dimension home. Echoed here as
+    // non-scored context — delivery normalizers, not capability points.
+    if (dim.dimension === 'ai-sdlc-adoption') {
+      const baseLabel = (l: string) => l.replace(/\s*\(.*\)\s*$/, '').trim();
+      const throughput = (audit.headline?.delivery ?? []).filter((d) => {
+        const b = baseLabel(d.label);
+        return b === 'Merges' || b === 'LOC';
+      });
+      if (throughput.length > 0) {
+        rows.push('<h3>Throughput context (not scored)</h3>');
+        rows.push(
+          '<p class="dim-head">Delivery-throughput normalizers echoed from the overview — context only, not part of this dimension’s capability score.</p>'
+        );
+        const items = throughput
+          .map(
+            (d) =>
+              `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(d.display_value ?? '—', HEADLINE_TIP[baseLabel(d.label)] ?? d.label)}</span></div>`
+          )
+          .join('');
+        rows.push(`<div class="exec-col">${items}</div>`);
+      }
+    }
+
     if (navHtml) rows.push(navHtml);
     rows.push('</section>');
     return rows.join('\n');

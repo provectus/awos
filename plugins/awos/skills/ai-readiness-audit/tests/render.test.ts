@@ -32,6 +32,7 @@ import {
   labelize,
   formatSourceWindow,
   shortSourceLabel,
+  measurementWindowLabel,
 } from '../render.ts';
 import type { AuditJson } from '../render.ts';
 
@@ -114,6 +115,7 @@ function singleRepoFixture(): AuditJson {
       reach: {
         ai_tooling: 'AI agent config present (partial)',
         contributors: '5.3 active contributors / month',
+        spec_coverage: '7/12 feature branches touched context/spec/',
       },
     },
     insights: [
@@ -881,35 +883,24 @@ test('renderHtml: Dimensions overview table has a Sources column header after Po
   );
 });
 
-test('renderHtml: Sources cell shows SHORT labels; verbose label goes to tooltip only (6c.3)', () => {
+test('renderHtml: Sources value cell shows plain SHORT labels — tooltip moved to the column header', () => {
   const html = renderHtml(sourcesFixture());
   assert.ok(
     html.includes('git history'),
     'Sources cell must show "git history" (no " via " boundary → keep as-is)'
   );
   // "Jira via Atlassian MCP" truncates at " via " → short label is "Jira".
-  // The cell text is "git history, Jira" (rendered as tip() span value).
+  // The value cell is now PLAIN text (no tip() wrapping) — tooltips live on headers.
   assert.ok(
-    html.includes('git history, Jira'),
-    'Sources cell must show "git history, Jira" — tracker label truncated at " via " to "Jira"'
+    html.includes('<td>git history, Jira</td>'),
+    'Sources value cell must be plain "git history, Jira" (tracker truncated at " via " to "Jira"), no per-row tooltip'
   );
-  // Verbose label still in the tooltip.
+  // The Sources column tooltip now sits on the header label, not the value cell.
   assert.ok(
-    html.includes('Jira via Atlassian MCP'),
-    'Verbose source label "Jira via Atlassian MCP" must still appear in the tooltip'
-  );
-});
-
-test('renderHtml: Sources tooltip includes formatted window (~N months)', () => {
-  const html = renderHtml(sourcesFixture());
-  // git: 540 days → ~18 months; tracker: 180 days → ~6 months
-  assert.ok(
-    html.includes('~18 months'),
-    'Sources tooltip must show "~18 months" for git (540 days ÷ 30 = 18)'
-  );
-  assert.ok(
-    html.includes('~6 months'),
-    'Sources tooltip must show "~6 months" for tracker (180 days ÷ 30 = 6)'
+    html.includes(
+      '<th><span class="tip" tabindex="0">Sources<span class="tipbox">'
+    ),
+    'Sources column HEADER must carry the tooltip explaining the column'
   );
 });
 
@@ -1025,5 +1016,167 @@ test('shortSourceLabel: truncates at " (project" after " via " split (6c.3)', ()
     shortSourceLabel('tracker', windows),
     'Jira',
     'shortSourceLabel: truncates at " via " first → "Jira (project OAPBCRNA)", then at " (project" → "Jira"'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Report-fixes: date separator, header tooltips, Active Contributors,
+// Spec coverage + Reach order, throughput-context on the dimension page.
+// ---------------------------------------------------------------------------
+
+test('measurementWindowLabel: joins the date range with ".." (not an en-dash)', () => {
+  const label = measurementWindowLabel(
+    { git: { days: 90, label: 'git history' } },
+    '2026-07-01'
+  );
+  assert.ok(
+    label?.includes('2026-04-02..2026-07-01'),
+    `Measurement window must join the two ISO dates with ".." (got: ${label})`
+  );
+  assert.ok(
+    !label?.includes(' – '),
+    'Measurement window must not use the ambiguous space-en-dash-space separator'
+  );
+});
+
+test('renderHtml: dimension summary tooltips live on the column HEADERS, values are plain', () => {
+  const html = renderHtml(sourcesFixture());
+  // Header labels for Points/Sources/Coverage/Reliability now carry the tooltip.
+  assert.ok(
+    html.includes(
+      '<th><span class="tip" tabindex="0">Points<span class="tipbox">'
+    ),
+    'Points column header must carry the tooltip (label, not value)'
+  );
+  assert.ok(
+    html.includes('Capability points earned in this area.'),
+    'Points header tooltip must carry the column explanation'
+  );
+  assert.ok(
+    html.includes(
+      '<th><span class="tip" tabindex="0">Coverage<span class="tipbox">'
+    ) &&
+      html.includes(
+        '<th><span class="tip" tabindex="0">Reliability<span class="tipbox">'
+      ),
+    'Coverage and Reliability column headers must also carry tooltips'
+  );
+  // Value cells are now plain formatted values — no per-row tip() wrapping.
+  assert.ok(
+    html.includes('<td>5 pts</td>'),
+    'Points value cell must be plain text ("5 pts"), not a tooltip span'
+  );
+  assert.ok(
+    !html.includes('· ai-development-tooling · standards.toml'),
+    'The summary-table per-row Points value tooltip (with row-specific meta) must be gone'
+  );
+});
+
+test('renderHtml: Reach labels the contributor row "Active Contributors" with the reworded tip', () => {
+  const html = renderHtml(singleRepoFixture());
+  assert.ok(
+    html.includes('<span class="k">Active Contributors</span>'),
+    'Reach must label the contributor row "Active Contributors", not bare "Contributors"'
+  );
+  assert.ok(
+    !html.includes('<span class="k">Contributors</span>'),
+    'The bare "Contributors" reach label must no longer be emitted'
+  );
+  assert.ok(
+    html.includes(
+      'Distinct active authors in the measurement window (of the total authors in window)'
+    ),
+    'Active Contributors tooltip must explain active-of-total-in-window'
+  );
+});
+
+test('renderHtml: Reach renders Spec coverage and orders items Active Contributors → Spec coverage → AI tooling', () => {
+  const html = renderHtml(singleRepoFixture());
+  const ac = html.indexOf('>Active Contributors<');
+  const sc = html.indexOf('>Spec coverage<');
+  const at = html.indexOf('>AI tooling<');
+  assert.ok(
+    ac !== -1 && sc !== -1 && at !== -1,
+    'Reach must render Active Contributors, Spec coverage, and AI tooling rows'
+  );
+  assert.ok(
+    ac < sc && sc < at,
+    `Reach order must be Active Contributors → Spec coverage → AI tooling (indices ${ac}, ${sc}, ${at})`
+  );
+  assert.ok(
+    html.includes('7/12 feature branches touched context/spec/'),
+    'Spec coverage value string must render in the Reach block'
+  );
+  assert.ok(
+    html.includes('Share of feature branches that touched spec files'),
+    'Spec coverage tooltip (HEADLINE_TIP entry) must be present'
+  );
+});
+
+test('renderMarkdown: Reach lists Active Contributors → Spec coverage → AI tooling in order', () => {
+  const md = renderMarkdown(singleRepoFixture());
+  const ac = md.indexOf('Active Contributors:');
+  const sc = md.indexOf('Spec coverage:');
+  const at = md.indexOf('AI tooling:');
+  assert.ok(
+    ac !== -1 && sc !== -1 && at !== -1,
+    'Markdown Reach must list Active Contributors, Spec coverage, and AI tooling'
+  );
+  assert.ok(
+    ac < sc && sc < at,
+    `Markdown Reach order must match HTML (indices ${ac}, ${sc}, ${at})`
+  );
+});
+
+test('renderHtml: ai-sdlc-adoption dimension page echoes Merges and LOC as non-scored throughput context', () => {
+  const audit: AuditJson = {
+    date: '2026-01-15',
+    project: 'adoption-repo',
+    audit_total: 10,
+    coverage: 0.5,
+    headline: {
+      delivery: [
+        { label: 'Merges', display_value: '3.1 / active' },
+        { label: 'LOC', display_value: '480 / active' },
+        {
+          label: 'Deployment frequency',
+          display_value: '4 / wk',
+          band: 'High',
+        },
+      ],
+    },
+    dimensions: [
+      {
+        dimension: 'ai-sdlc-adoption',
+        date: '2026-01-15',
+        score: 10,
+        coverage: 0.5,
+        checks: [makeCheck({ check_id: 'ADP-01', status: 'PASS' })],
+      },
+    ],
+  };
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-ai-sdlc-adoption"');
+  assert.ok(
+    pageStart !== -1,
+    'ai-sdlc-adoption dimension sub-page must be rendered'
+  );
+  const page = html.slice(pageStart, html.indexOf('</section>', pageStart));
+  assert.ok(
+    page.includes('Throughput context (not scored)'),
+    'ai-sdlc-adoption page must carry a clearly non-scored throughput-context subsection'
+  );
+  assert.ok(
+    page.includes('3.1 / active') && page.includes('480 / active'),
+    'Throughput context must echo BOTH the Merges/active and LOC/active headline values'
+  );
+});
+
+test('renderHtml: throughput-context subsection is confined to ai-sdlc-adoption', () => {
+  // singleRepoFixture has no ai-sdlc-adoption dimension → no throughput block anywhere.
+  const html = renderHtml(singleRepoFixture());
+  assert.ok(
+    !html.includes('Throughput context (not scored)'),
+    'Non-ai-sdlc-adoption dimension pages must not render the throughput-context subsection'
   );
 });

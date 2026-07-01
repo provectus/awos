@@ -1058,18 +1058,35 @@ test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
   );
 });
 
-test('data-sources reference covers detection, schema, linking, history params', () => {
+test('data-sources reference covers boundary rule, detection, and history params', () => {
   const p = path.join(referencesDir, 'data-sources.md');
   assert.ok(fs.existsSync(p), 'expected references/data-sources.md');
   const src = readUtf8(p);
-  assert.match(src, /sources\.toml/);
-  assert.match(src, /submodule/i);
-  assert.match(src, /symlink/i);
-  assert.match(src, /monorepo/i);
+  // The audit boundary is always a folder or a GitHub org — never a manifest file.
+  assert.doesNotMatch(
+    src,
+    /sources\.toml/i,
+    'data-sources must not reference a sources.toml scope manifest — the boundary is the folder or GitHub org'
+  );
+  assert.match(
+    src,
+    /boundary/i,
+    'data-sources must describe the audit boundary rule'
+  );
+  assert.match(
+    src,
+    /gh repo list/,
+    'data-sources must enumerate a GitHub org via `gh repo list <org>`'
+  );
+  assert.match(
+    src,
+    /org mode/i,
+    'data-sources must describe org mode (a non-git folder of git subdirs, or a GitHub org)'
+  );
+  assert.match(src, /monorepo/i); // monorepo = single-repo mode over the whole folder
   assert.match(src, /current repo/i); // no-arg default
-  assert.match(src, /AskUserQuestion/); // confirm sources once, at start
+  assert.match(src, /AskUserQuestion/); // confirm scope once, at start
   assert.match(src, /discovery/i); // discovery-first flow
-  assert.match(src, /empiric/i); // many-repos: map repos → links empirically
   assert.match(
     src,
     /standards\.toml/,

@@ -876,6 +876,80 @@ test('collect honors the threaded active-contributor threshold (not a hardcoded 
   );
 });
 
+test('merge_records: batched resolution assigns each side branch to its own merge and picks the earliest author date', () => {
+  // Structure exercise for the batched getMergeRecords (single graph pass +
+  // in-memory sweep replacing the old per-merge `sha^1..sha^2` fork). Two
+  // sequential feature branches merge into main; feature-A has two commits so
+  // the "earliest author date on the branch" logic is exercised, and the
+  // per-merge assignment (anc(p2) \ anc(p1)) must not bleed A's commits into B.
+  const r = join(mkdtempSync(join(tmpdir(), 'git-merges-')), 'repo');
+  mkdirSync(r);
+  const alice = (args: string[], date: string) =>
+    gitAs(r, args, date, 'Alice', 'alice@example.com');
+
+  alice(['init', '-q', '-b', 'main'], '2025-01-01T00:00:00');
+  writeFileSync(join(r, 'root.txt'), 'root\n');
+  alice(['add', '-A'], '2025-01-01T00:00:00');
+  alice(['commit', '-qm', 'feat: root'], '2025-01-01T00:00:00');
+
+  // feature-A: two commits (earliest = 2025-01-05), merged 2025-01-10.
+  alice(['checkout', '-qb', 'feature-a'], '2025-01-05T00:00:00');
+  writeFileSync(join(r, 'a1.txt'), 'a1\n');
+  alice(['add', '-A'], '2025-01-05T00:00:00');
+  alice(['commit', '-qm', 'feat: a1'], '2025-01-05T00:00:00');
+  writeFileSync(join(r, 'a2.txt'), 'a2\n');
+  alice(['add', '-A'], '2025-01-07T00:00:00');
+  alice(['commit', '-qm', 'feat: a2'], '2025-01-07T00:00:00');
+  alice(['checkout', '-q', 'main'], '2025-01-10T00:00:00');
+  alice(
+    ['merge', '--no-ff', '-qm', 'Merge feature-a', 'feature-a'],
+    '2025-01-10T00:00:00'
+  );
+
+  // feature-B: branched off post-A main, one commit (2025-01-15), merged 2025-01-20.
+  alice(['checkout', '-qb', 'feature-b'], '2025-01-15T00:00:00');
+  writeFileSync(join(r, 'b1.txt'), 'b1\n');
+  alice(['add', '-A'], '2025-01-15T00:00:00');
+  alice(['commit', '-qm', 'feat: b1'], '2025-01-15T00:00:00');
+  alice(['checkout', '-q', 'main'], '2025-01-20T00:00:00');
+  alice(
+    ['merge', '--no-ff', '-qm', 'Merge feature-b', 'feature-b'],
+    '2025-01-20T00:00:00'
+  );
+
+  const art = collect(r, PERIOD);
+  const recs = art.raw.merge_records;
+
+  assert.equal(recs.length, 2, 'exactly two first-parent merges expected');
+
+  // Day-diff (merged_at − branch_first_commit_at) is timezone-invariant: both
+  // fields derive from the same local wall-clock dates, so the span is stable
+  // even though toISOString() normalizes branch_first_commit_at to UTC.
+  const dayDiff = (rec: {
+    merged_at: string;
+    branch_first_commit_at: string;
+  }) =>
+    Math.round(
+      (new Date(rec.merged_at).getTime() -
+        new Date(rec.branch_first_commit_at).getTime()) /
+        86_400_000
+    );
+
+  // Records are emitted newest-first (git log order): feature-b then feature-a.
+  const [recB, recA] = recs;
+
+  assert.equal(
+    dayDiff(recA),
+    5,
+    `feature-a span must be Jan05→Jan10 = 5 days (earliest author date a1, not a2 which would give 3); got ${dayDiff(recA)}`
+  );
+  assert.equal(
+    dayDiff(recB),
+    5,
+    `feature-b span must be Jan15→Jan20 = 5 days; got ${dayDiff(recB)} — 15 would mean feature-a's commits bled into feature-b's diff`
+  );
+});
+
 test('merge_records: branch_first_commit_at uses author date, so a rebased branch keeps a non-zero lead time', () => {
   const r = join(mkdtempSync(join(tmpdir(), 'git-leadtime-')), 'repo');
   mkdirSync(r);

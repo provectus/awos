@@ -23,7 +23,7 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
 
    This scores every `detected`/`computed` category and writes `<outDir>/<dimension>.json` + `<outDir>/audit.json`. This one call **is** the whole deterministic slice. Never re-score a `detected`/`computed` check by hand, and never fan out a subagent per dimension — reconstructing a per-dimension flow is the failure mode this design exists to prevent.
 
-2. **Connectors → `enrich`.** Fetch any reachable tracker/docs/incident source for this repo, following `<SKILL_DIR>/references/connector-shapes.md`. Fetch independent sources concurrently (paginate within each), write each `<outDir>/collected/<source>.json`, then re-score once:
+2. **Connectors → `enrich`.** Fetch any reachable tracker/docs/incident source for this repo, following `<SKILL_DIR>/references/connector-shapes.md`. The sources are independent, so issue their initial fetches as parallel tool calls in a single message (only pagination within a source is serial); write each `<outDir>/collected/<source>.json`, then re-score once:
 
    ```bash
    node "<ENGINE>" enrich "<repoPath>" "<outDir>"

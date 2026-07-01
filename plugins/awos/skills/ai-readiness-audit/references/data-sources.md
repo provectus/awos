@@ -27,19 +27,19 @@ This table is derived from `agent_tools.ts` — the single registry that drives 
 
 ---
 
-## Default behavior
+## The audit boundary
 
-When invoked with no arguments, the skill audits the **current repo** (the working directory). No additional configuration is needed for a single-repo project.
+The audit scope is always **either a folder or a GitHub org — never a manifest file**. The target the skill is pointed at decides the mode:
 
-Linked repositories are resolved automatically using three methods:
+1. **A git repo** (the target folder contains `.git`) → **single-repo mode** over that repo. A monorepo is just this case: one repo, audited as a whole.
+2. **A non-git folder** → **org mode**. Enumerate every immediate top-level subdirectory that is itself a git repo, and audit each one. List any top-level subdirectories that were skipped because they are not git repos, so the audited scope is transparent to the user.
+3. **A GitHub org name** → **org mode** over the org's repos, enumerated with `gh repo list <org>` (gh CLI on PATH) or the GitHub MCP if present.
 
-1. **Monorepo build roots** — packages and apps listed in monorepo build config (workspace roots, `pnpm-workspace.yaml`, `turbo.json`, etc.; see `dimensions/project-topology.md` → TOPO-01).
-2. **Git submodules** — paths declared in `.gitmodules`.
-3. **Symlinked source directories** — filesystem symlinks inside the repo that point to a path outside the repo root. This covers the pattern where an AWOS orchestrating repo is symlinked into service repos — see "One Orchestrating Repo: Spec-Driven Development Across a Live Multi-Repo Product" (Provectus on Medium).
+No scope manifest is read; there is no configuration file to author. Point the skill at the folder or org and it resolves the boundary itself.
 
-### Monorepo & linked-repo detection (TOPO-01)
+### Monorepo detection (TOPO-01)
 
-The monorepo flag (`dimensions/project-topology.md` → TOPO-01) is set when a workspace manifest is present at the repo root — any of `pnpm-workspace.yaml`, `package.json` with a `workspaces` field, `turbo.json`, `nx.json`, `lerna.json`, `pants.toml`, `WORKSPACE`/`MODULE.bazel`, or a Cargo/Go workspace declaration. When set, packages/apps declared by that manifest are treated as additional build roots for the audit. Git submodules (`.gitmodules`) and in-repo symlinks pointing outside the repo root are linked in the same way. This flag gates the `applies_when` of the end-to-end-delivery checks.
+The monorepo flag (`dimensions/project-topology.md` → TOPO-01) is set when a workspace manifest is present at the repo root — any of `pnpm-workspace.yaml`, `package.json` with a `workspaces` field, `turbo.json`, `nx.json`, `lerna.json`, `pants.toml`, `WORKSPACE`/`MODULE.bazel`, or a Cargo/Go workspace declaration. This flag gates the `applies_when` of the end-to-end-delivery checks. It is a per-repo topology signal — it does not split a monorepo into multiple audit targets; a monorepo is always single-repo mode over the whole folder.
 
 ---
 
@@ -62,14 +62,14 @@ Source resolution runs in **two phases** to minimize interruptions.
 
 ### Phase 1 — Discovery round
 
-Dispatch a "find integrations" subagent per repository:
+Resolve the boundary (see "The audit boundary" above), then probe connectors per repo:
 
-- **Single repo:** one subagent for the current repo.
-- **Several repos:** fan-out, one subagent per repo, running in parallel.
+- **Single repo:** probe the current repo directly.
+- **Org mode:** fan-out, one probe per discovered repo, running in parallel.
 
-Each subagent:
+Each probe:
 
-- Detects linked repos (submodules, symlinks, monorepo build roots).
+- Confirms the repo is a git repo (has `.git`).
 - Probes which connectors are reachable (see Connector detection above).
 - Reads in-repo signals — CI config, tracker references in docs or scripts, doc links — to infer each repo's sources.
 
@@ -77,41 +77,11 @@ Dispatch this discovery work with a fast model (Haiku) — it is mechanical file
 
 ### Phase 2 — One confirmation prompt
 
-After the discovery round completes, use `AskUserQuestion` **once, at the start of the run**, to confirm the detected sources and fill any gaps. Never prompt mid-run.
+After the discovery round completes, use `AskUserQuestion` **once, at the start of the run**, to confirm the detected scope and sources. Never prompt mid-run.
 
-**Single / few repos:** present the detected connectors and ask which to use; invite the user to supply any missing endpoint or credential.
-
-**Many repos:** do **not** ask for a per-repo link-with-explanation list (too large to be usable). Instead, ask only for either:
-
-- a `sources.toml` file path (for repo scope and non-MCP connector wiring only — reachable MCP connectors are enriched directly; see `connector-shapes.md`), or
-- a flat list of repo links.
-
-Then **map repos to links empirically** — match each link to a repository by in-repo signals (remote URLs, doc/script references, directory names). Report the inferred mapping to the user rather than interrogating them repo by repo.
+Present the resolved boundary — the repo (single-repo mode) or the list of enumerated repos with any non-git subdirectories that were skipped (org mode) — together with each repo's detected connectors, and offer to proceed with the auto-discovered set as-is (the headless default).
 
 If the user declines to answer, proceed with discovery results at the achievable confidence level.
-
----
-
-## `sources.toml` schema
-
-The optional override file lives at `context/audits/sources.toml` relative to the audit root. When present, its values override or extend auto-detection. It is purely an override for non-MCP or explicit connector wiring (and repo scope) — a reachable MCP connector (Jira/Confluence/Linear/Coda/…) is used directly during the audit whether or not a `sources.toml` exists. Its absence never means tracker/docs enrichment is skipped; see the data-source resolution protocol in `connector-shapes.md`.
-
-```toml
-# Scope: which repositories to measure. Omit for current-repo-only.
-[[repos]]
-path = "."                 # local path or
-url  = "git@github.com:org/service-a.git"
-
-[sources]
-ci = "github-actions"      # or "gitlab-ci", "none"
-issue_tracker = "jira"     # or "github-issues", "linear", "none"
-docs = "confluence"        # or "coda", "none"
-
-[standards]
-standards_file = "context/audits/standards.toml"   # optional; governs period/history params
-```
-
-All fields are optional. Omitting `[[repos]]` entirely means "audit the current repo only." The history parameter `max_lookback_days` is read from `standards.toml` — see "Period & history" below.
 
 ---
 
@@ -159,8 +129,8 @@ The measurement window is governed by `standards.toml [meta]`:
 
 ---
 
-## Multi-repo linking
+## Org mode — auditing multiple repos
 
-When the audit spans multiple repositories (resolved via monorepo build roots, submodules, or symlinks), the skill links them into a single audit view rather than treating them as independent projects. The AWOS-linked-into-services pattern — where a central orchestrating repo is symlinked into each service repo — is explicitly supported. For background on the pattern, see "One Orchestrating Repo: Spec-Driven Development Across a Live Multi-Repo Product" (Provectus, Medium).
+When the boundary resolves to multiple repositories (a non-git folder of git subdirectories, or a GitHub org), the skill audits each repo independently and aggregates the results at the org/product level. Each repo runs the full single-repo flow into its own `per-repo/<repo>/` subdir, then a portfolio rollup summarizes across them.
 
-Each linked repository is measured independently and the results are aggregated at the org/product level. Contributor counts are always reported in aggregate (never per-person) and granularity stays at the repository level.
+Contributor counts are always reported in aggregate (never per-person) and granularity stays at the repository level.

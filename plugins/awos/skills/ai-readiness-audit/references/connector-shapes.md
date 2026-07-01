@@ -234,7 +234,7 @@ The `period.lookback_days` and `period.source_label` fields follow the same sche
 
 ## Turnkey enrichment recipe
 
-When a tracker or docs MCP is reachable, enriching it is a small, bounded operation — not a 730-day data migration. The engine buckets whatever you provide; a recent window is enough. Mapping reachable data into the shapes above is expected, not fabrication, and it is not gated on a `sources.toml`.
+When a tracker or docs MCP is reachable, enriching it is a small, bounded operation — not a 730-day data migration. The engine buckets whatever you provide; a recent window is enough. Mapping reachable data into the shapes above is expected, not fabrication. Reachability is decided by attempting the call, not by any config file.
 
 Tracker (Jira) → `collected/tracker.json`:
 
@@ -272,7 +272,7 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
 
 ## Data-source resolution protocol
 
-A reachable tracker/docs/incident MCP is enriched by default — fetching and mapping it is part of the audit, not optional, and not gated on a `sources.toml`. The sources are independent, so **fetch them concurrently** — issue the tracker/docs/incident calls in a single message (parallel tool calls); only pagination _within_ a source is sequential. For every non-git source (tracker, docs, incident, and any reachable MCP/integration that maps to a collector):
+A reachable tracker/docs/incident MCP is enriched by default — fetching and mapping it is part of the audit, not optional. Reachability is decided by attempting the call, not by any config file. The sources are independent, so **fetch them concurrently** — issue the tracker/docs/incident calls in a single message (parallel tool calls); only pagination _within_ a source is sequential. For every non-git source (tracker, docs, incident, and any reachable MCP/integration that maps to a collector):
 
 1. **Attempt to fetch.** Try the MCP call or API request. If it is reachable, fetch it — do not pre-decide it is out of scope.
 2. **On success** — map each returned record into the shape above and write the `TrackerConnector` or `DocsConnector` JSON to `collected/<source>.json`. Mapping reachable data into the documented shape is not fabrication. Do **not** re-run a metric per source here — once every reachable source's artifact is written, the orchestrator re-scores them all in one pass:

@@ -17,7 +17,7 @@ There is no per-dimension auditor and no subagent fan-out. You do not read the c
 
 ## Load-time pre-run — the engine has already scored the current repo
 
-The deterministic pass runs automatically as this skill loads, so its result is present before you reason about anything. The output below is the real weighted score for the current repo; the artifacts (`audit.json`, per-dimension `<dimension>.json`, `collected/`) already exist under `context/audits/<today>/`. Treat scoring as done: do not re-derive it, do not spawn per-dimension work, do not grade by hand. Proceed to Step 0 (confirm scope), then Step 6 (fill the LLM-only gap and render). In org mode the remaining repos are scored the same way — one `audit-core` call each into `per-repo/<repo>/` (Step 0c).
+The deterministic pass runs automatically as this skill loads, so its result is present before you reason about anything. The output below is the real weighted score for the current repo; the artifacts (`audit.json`, per-dimension `<dimension>.json`, `collected/`) already exist under `context/audits/<today>/`. Treat scoring as done: do not re-derive it, do not spawn per-dimension work, do not grade by hand. Proceed to Step 0 (confirm scope), then Step 6 (fill the LLM-only gap and render). In org mode the repos are scored the same way — one `audit-core` call each into `per-repo/<repo>/`, dispatched together in the Step 6 org branch.
 
 !`command -v node >/dev/null 2>&1 && { R="${CLAUDE_PROJECT_DIR}"; [ -n "$R" ] || R="$(pwd)"; D="$(date +%F)"; echo "[audit-core] one-pass deterministic engine → context/audits/$D (current repo: $R)"; node "${CLAUDE_SKILL_DIR}/dist/cli.js" audit-core "$R" "$R/context/audits/$D" 2>&1; } || echo "[audit-core] NOT run (no node on PATH, or engine errored). Deterministic scoring is the single audit-core command in Step 5 — run it before proceeding; never fan out per-dimension auditors or hand-write scores."`
 
@@ -25,25 +25,23 @@ The deterministic pass runs automatically as this skill loads, so its result is 
 
 Before discovering dimensions, resolve the repositories that the audit will cover. Follow the discover-first flow defined in `references/data-sources.md`.
 
-### Phase 0a — Auto-discover repositories
+### Phase 0a — Resolve the audit boundary
 
-Detect the audit scope using three methods (per `data-sources.md`):
+The audit boundary is always the target folder or a GitHub org — never a manifest file. Resolve it from what the skill is pointed at (per `data-sources.md`):
 
-1. **Current repo** — always included.
-2. **Monorepo build roots** — packages/apps declared in workspace configs (`pnpm-workspace.yaml`, `turbo.json`, etc.; see `dimensions/project-topology.md` → TOPO-01).
-3. **Git submodules** — paths declared in `.gitmodules`.
-4. **Symlinked source directories** — filesystem symlinks inside the repo that point outside the repo root (the AWOS-linked-into-services pattern; see `data-sources.md` "Multi-repo linking").
+1. **A git repo** (target folder has `.git`) → **single-repo mode** over that repo. A monorepo is this case — one repo, audited whole.
+2. **A non-git folder** → **org mode**. Enumerate every immediate top-level subdirectory that is a git repo (has `.git`) and audit each one. List any top-level subdirectories skipped for not being git repos so the scope is transparent.
+3. **A GitHub org name** → **org mode** over the org's repos, enumerated with `gh repo list <org>` (or the GitHub MCP if present).
 
-Also probe connector availability per repo: code host (`gh`/`glab` on PATH or GitHub/GitLab MCP server), CI config files, issue tracker references, docs connectors (Confluence/Coda MCP).
+Also probe connector availability per repo: code host (`gh`/`glab` on PATH or GitHub/GitLab MCP server), CI config files, issue tracker references, docs connectors (Confluence/Coda MCP). Connectors are auto-detected per run — there is no config file to read.
 
-If a `context/audits/sources.toml` file exists, read it — its `[[repos]]` and `[sources]` sections override or extend auto-detection.
+**Preflight:** the engine needs `node` on PATH (checked in Step 5); GitHub-org enumeration additionally needs `gh` on PATH (or the GitHub MCP). If a needed tool is absent, tell the user what to install rather than silently narrowing scope.
 
 ### Phase 0b — Confirm scope with a single AskUserQuestion
 
-After auto-discovery completes, present the detected repo set and connectors to the user with a **single `AskUserQuestion`** call. Include:
+After discovery completes, present the resolved boundary to the user with a **single `AskUserQuestion`** call. Include:
 
-- The auto-discovered repos with their detected connectors.
-- An option to supply a `sources.toml` path or a flat list of additional repo links.
+- The resolved repo set with each repo's detected connectors — in org mode, also the non-git subdirectories that were skipped.
 - An option to proceed with the auto-discovered set as-is (the headless default).
 
 **Headless default:** when `AskUserQuestion` receives its default answer (no interactive input, e.g. in CI or `--output-format stream-json` mode), proceed using only the auto-discovered repos and connectors — no interactive entry required. This means the audit is always runnable headlessly without any prompting.
@@ -52,8 +50,8 @@ Never prompt mid-run after this step.
 
 ### Phase 0c — Determine audit mode
 
-- **Single-repo mode** (one repo detected): proceed directly to Step 1 for that repo.
-- **Org mode** (multiple repos detected): run the per-repo audit (Steps 1–6) across all repos in parallel by dispatching one `awos:repo-auditor` subagent per repo, concurrently (see Step 6 org branch). Each repo writes its full audit into its own subdir `context/audits/YYYY-MM-DD/per-repo/<repo>/` — Step 5's `audit-core` uses that subdir as its `<outDir>`, and Step 6's patch/enrich/aggregate/render all operate on files inside it. After all per-repo audits complete, proceed to the org rollup in Step 6 (org branch).
+- **Single-repo mode** (one git repo): proceed directly to Step 1 for that repo.
+- **Org mode** (a non-git folder of repos, or a GitHub org): the per-repo audits and the portfolio rollup are all run in the **Step 6 org branch** — that is the single place org fan-out happens. Do not dispatch per-repo work here; just carry the resolved repo list forward.
 
 Contributor counts are always reported in aggregate (never per-person). No money, no PII.
 
@@ -115,10 +113,12 @@ Use a mid-tier model (Sonnet) for the judgment checks and narrative authoring �
 
 `audit.json` already holds the full deterministic result. Fill only what the engine cannot, then render. Never re-score a `detected`/`computed` check, and never hand-write `report.md`/`report.html`.
 
-1. **Connector metrics — fetch all reachable sources, then re-score in one `enrich` pass.** A reachable tracker/docs/incident MCP or integration (Jira, Confluence, Linear, Coda, GitHub Issues, …) is a normal data source for the audit: when one is reachable, fetching and mapping it is part of doing the audit, not an optional extra. It is not gated on a `sources.toml` — that file only configures non-MCP or explicit connectors, and its absence never justifies skipping a reachable MCP. The 730-day window is handled by the engine's bucketing; a bounded recent query is enough, so enrichment is low-effort, not out of scope. `references/connector-shapes.md` has a turnkey recipe. For every such non-git source:
+**Keep the engine invocation count minimal.** Each engine call is a separate model turn, and in single-repo mode wall time is dominated by the number of serial turns, not by engine compute (the deterministic pass is a couple of seconds). The whole flow needs only the load-time `audit-core` inject already done, then **one** `enrich`, **one** `aggregate`, and **one** `render` — do not spawn a `metric <id>` per connector, do not re-run `audit-core`, and do not loop `aggregate`. The large wall-time wins come from org-mode fan-out (repos audited concurrently, Step 6 org branch); a single-repo run is bounded by its turn count, so the levers are batching connector fetches and not adding extra engine turns.
 
-   - **Attempt to fetch.** Making the MCP call or API request _is_ the reachability check — make it. Do not pre-decide a source is out of scope from Step 0 discovery (or from a missing `sources.toml`) and skip the call; only conclude a source is unreachable from an actual failure response.
-   - **Fetch the independent sources concurrently.** Tracker, docs, and incident are independent — no data flows between them. Issue their initial fetches in a single message (parallel tool calls), not one after another. Only pagination _within_ a source is sequential (each Jira page needs the prior page's `startAt`/`nextPageToken` cursor).
+1. **Connector metrics — fetch all reachable sources, then re-score in one `enrich` pass.** A reachable tracker/docs/incident MCP or integration (Jira, Confluence, Linear, Coda, GitHub Issues, …) is a normal data source for the audit: when one is reachable, fetching and mapping it is part of doing the audit, not an optional extra. Reachability is decided by attempting the call, not by any config file. The 730-day window is handled by the engine's bucketing; a bounded recent query is enough, so enrichment is low-effort, not out of scope. `references/connector-shapes.md` has a turnkey recipe. For every such non-git source:
+
+   - **Attempt to fetch.** Making the MCP call or API request _is_ the reachability check — make it. Do not pre-decide a source is out of scope from Step 0 discovery and skip the call; only conclude a source is unreachable from an actual failure response.
+   - **Fetch the independent sources in a single message.** Tracker, docs, and incident are independent — no data flows between them, so issue their initial fetches as parallel tool calls in one message, not one after another. Each serial turn is a full model round-trip, so batching the first-page fetches is the main single-repo wall-time lever. Only pagination _within_ a source is sequential (each Jira page needs the prior page's `startAt`/`nextPageToken` cursor) — that tail is the only part that must be serial.
    - **On success** — map the returned records into the exact connector shape in `references/connector-shapes.md` and write the artifact to `context/audits/YYYY-MM-DD/collected/<source>.json`. Mapping reachable data into the documented shape is not fabrication. Also record the actual window used and a human label in the artifact's `period` block so the Sources column in the report reflects what truly happened: set `period.lookback_days` (e.g. 180 for a 6-month Jira query) and `period.source_label` (e.g. `"Jira via Atlassian MCP"` or `"Confluence via Atlassian MCP"`). The default tracker lookback is 180 days ("6 months"); use whatever window you actually queried. For Jira, paginate to completion before writing the artifact: each request is server-capped at ~100 results; loop on `startAt` (classic JQL) or `nextPageToken` (cloud) until a short/empty page or `isLast: true`, accumulate all results into one `tickets[]` capped at ~2000 tickets, then write `collected/tracker.json` once. When mapping Jira issues, also capture parent/subtask links: set `subtask_count` to `issue.fields.subtasks.length` (omit when 0 or absent) and `parent` to `issue.fields.parent?.key` (omit when null) — these feed the ADP-I4 sub-task split metric. Also capture description size/structure signals (no raw text): set `description_length` to `issue.fields.description?.length` and `has_acceptance_criteria` to whether the description matches `/acceptance.criteria/i` — these feed the ADP-I5 description quality metric.
    - **On failure or unclear mapping** (auth error, unfamiliar schema, broken dependency, empty result, closed port) — do not silently skip. In interactive mode, use `AskUserQuestion` with three options: mark unavailable (record the reason) / retry with guidance / show how to fix (link to `references/connector-shapes.md`). **In headless `claude -p` runs** (no interactive user), default to marking the source unavailable and record the _actual_ failure reason plus a remediation hint in the report's `missed_sources` list — record the real cause (e.g. "Jira MCP returned 401"), never "no connector provided" when an MCP was in fact reachable.
 
@@ -157,7 +157,10 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
      2. **Cyclomatic complexity** — `check_id: "ADP-21"` — average / max CCN (e.g. `"avg 4.2 · max 38"`).
      3. **Direct dependencies** — `check_id: "ADP-23"` — direct dependency count (e.g. `"142 direct deps"`).
 
-     `reach` = `{ai_tooling, contributors}`. Keep `reach.contributors` to the count and cadence (e.g. "4 active contributors (90d)") — do not append a privacy disclaimer such as "counts are aggregate; no per-person data". The aggregate/no-PII rule governs what you collect, not the report copy; surfacing it just clutters the headline.
+     `reach` = `{contributors, spec_coverage, ai_tooling}` — author exactly these three string fields (the renderer reads these keys by name):
+     1. **`contributors`** (rendered label "Active Contributors") — the active-contributor count with the total-in-window in parens, e.g. `"4 active (of 7 in window, 90d)"`. The active count is check `ADP-07` / `adp_g2_contributors`; the total-in-window is `raw.window_stats.authors_total` from `collected/git.json`. Do not append a privacy disclaimer such as "counts are aggregate; no per-person data" — the no-PII rule governs what you collect, not the report copy.
+     2. **`spec_coverage`** — the branch→spec coverage from check `SDD-04`, e.g. `"3/5 feature branches touched specs (60%)"`. Transcribe the SDD-04 check value and its evidence string; do not confuse it with the docs-freshness spec coverage (ADP-20).
+     3. **`ai_tooling`** — base this on tooling **depth**, checks `ADP-01..06` / `adp_g1_tooling_depth` (which agent tools, instruction files, skills, commands, hooks, and MCP config are present). Do **not** cite the AI-commit-marker attribution percentage (ADP-14 / `adp_g9_ai_attribution`) — that metric is unreliable, so no "AI commit markers ~N% of commits" phrasing.
 
    - `insights[]` — 3–6 thematic cards, the "READ": `{theme, severity, weak_areas[], so_what, improves}`. Plain language for a non-technical stakeholder — name the weak areas and say what improves if they are fixed.
    - `recommendations[]` — the prioritized fixes as `{id, priority (P0/P1/P2), title, dimension, check_id, effort, detail}`. `detail` is a plain-language paragraph. Transcribe each from a real FAIL/WARN check.
@@ -179,7 +182,7 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
 
 When the audit ran in org mode (multiple repos, per `references/data-sources.md`), after all per-repo audits are complete, produce the org-level portfolio summary:
 
-1. **Audit every repo in parallel via the `repo-auditor` subagent.** Dispatch one `awos:repo-auditor` Agent per repo, all in a single message so they run concurrently (this is where org-mode wall time is won — repos audit simultaneously, not one after another). Give each subagent its `<repoPath>`, its output subdir `context/audits/YYYY-MM-DD/per-repo/<repo-name>`, the engine path `${CLAUDE_SKILL_DIR}/dist/cli.js`, and the skill dir `${CLAUDE_SKILL_DIR}`. Each subagent runs the full single-repo flow — Step 5 `audit-core` → Step 6 connector `enrich` + judgment + `aggregate` → `render --format both` — into its own subdir, so per-repo outputs never collide (each repo's `audit-core`/`enrich`/`render` uses `context/audits/YYYY-MM-DD/per-repo/<repo-name>` as its artifacts/output dir, never the shared `context/audits/YYYY-MM-DD/`). For a large portfolio, cap the fan-out to a handful of concurrent subagents at a time.
+1. **Dispatch one `awos:repo-auditor` Agent per repo in a single message — this is the only place per-repo audits are launched, and issuing them together is what makes them run concurrently.** All the Agent tool calls go in one message; org-mode wall time is won here, because the repos audit simultaneously rather than one after another. Give each subagent its `<repoPath>`, its output subdir `context/audits/YYYY-MM-DD/per-repo/<repo-name>`, the engine path `${CLAUDE_SKILL_DIR}/dist/cli.js`, and the skill dir `${CLAUDE_SKILL_DIR}`. Each subagent runs the full single-repo flow — Step 5 `audit-core` → Step 6 connector `enrich` + judgment + `aggregate` → `render --format both` — into its own subdir, so per-repo outputs never collide (each repo's `audit-core`/`enrich`/`render` uses `context/audits/YYYY-MM-DD/per-repo/<repo-name>` as its artifacts/output dir, never the shared `context/audits/YYYY-MM-DD/`). For a large portfolio, cap the fan-out to a handful of concurrent subagents at a time.
 
    **Wait for all subagents to finish** — each must have written `context/audits/YYYY-MM-DD/per-repo/<repo-name>/audit.json` — before the rollup. The rollup scans the `per-repo/` directory and silently omits any repo whose audit is not yet written, so the barrier matters.
 

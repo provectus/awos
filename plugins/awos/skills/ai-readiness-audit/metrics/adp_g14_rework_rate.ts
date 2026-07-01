@@ -58,7 +58,7 @@ const REWORK_ANCHORS = [
  * Map rework rate fraction to an AWOS heuristic band label.
  * DORA publishes no numeric thresholds for rework rate; these bands are AWOS heuristics.
  */
-function reworkBand(rate: number): string {
+export function reworkBand(rate: number): string {
   if (rate < 0.15) return 'good';
   if (rate < 0.3) return 'watch';
   return 'concerning';

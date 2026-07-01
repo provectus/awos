@@ -58,7 +58,7 @@ const MTTR_ANCHORS = [
 ] as const;
 
 /** Map median hours to a DORA MTTR band label. */
-function mtttrBand(medianHours: number): string {
+export function mtttrBand(medianHours: number): string {
   if (medianHours < 1) return 'elite';
   if (medianHours < 24) return 'high';
   if (medianHours < 168) return 'medium';

@@ -38,7 +38,7 @@ const DEPLOY_FREQ_ANCHORS = [
 ] as const;
 
 /** Map merges-per-week to a DORA band label. */
-function doraDeployBand(mergesPerWeek: number): string {
+export function doraDeployBand(mergesPerWeek: number): string {
   if (mergesPerWeek >= 7) return 'elite';
   if (mergesPerWeek >= 1) return 'high';
   if (mergesPerWeek >= 0.25) return 'medium';

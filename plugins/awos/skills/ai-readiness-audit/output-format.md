@@ -132,6 +132,115 @@ The renderer is deterministic and contains no LLM. The plain-language narrative 
 
 Authoring integrity: `headline` numbers and `recommendations` are **transcribed verbatim** from real checks (cite the `check_id`); DORA `band` values are read from the check's `hint` ("DORA-banded (high)"). Git-only display values (merges per contributor, LOC per contributor) are read from `collected/git.json` → `raw.window_stats` and carry no `band` or `check_id`. Gated rows (`gated: "tracker"` for cycle time, `gated: "incident"` for MTTR) omit `display_value` when no connector is reachable, causing the renderer to print the appropriate "needs … connector" placeholder. The orchestrator never invents numbers — it selects and phrases. `recommendations[]` here and the long-form `recommendations.md` come from one authoring pass and must stay in sync.
 
+### Org rollup output (`org-portfolio.json`)
+
+In org mode the engine reads each repo's FULL audit — `context/audits/YYYY-MM-DD/per-repo/<repo>/audit.json` plus its `collected/git.json` — via `node dist/cli.js rollup <per-repo-dir>` and emits an `OrgRollupResult`. It carries the three portfolio cards, an org **headline** (the delivery matrix averaged across repos and re-banded), and an enriched **per_repo** row per repo so the org report's per-repo table can render every column.
+
+```json
+{
+  "portfolio_metrics": [
+    {
+      "metric": "org_ai_tooling_coverage",
+      "value": 0.62,
+      "description": "…",
+      "contributor_weighted": true,
+      "repos_counted": 8
+    },
+    {
+      "metric": "org_capability_score",
+      "value": 41.3,
+      "description": "…",
+      "contributor_weighted": false,
+      "repos_counted": 8
+    },
+    {
+      "metric": "org_measurement_coverage",
+      "value": 0.88,
+      "description": "…",
+      "contributor_weighted": true,
+      "repos_counted": 8
+    }
+  ],
+  "headline": {
+    "delivery": [
+      {
+        "label": "Merges / active contributor",
+        "display_value": "3 / contributor",
+        "repos_counted": 8
+      },
+      {
+        "label": "LOC / active contributor",
+        "display_value": "150 / contributor",
+        "repos_counted": 8
+      },
+      {
+        "label": "Deployment frequency",
+        "display_value": "7 / wk",
+        "band": "elite",
+        "check_id": "ADP-09",
+        "repos_counted": 8
+      },
+      {
+        "label": "Rework rate (DORA)",
+        "display_value": "15%",
+        "band": "watch",
+        "check_id": "ADP-25",
+        "repos_counted": 6
+      },
+      {
+        "label": "Lead time for change",
+        "display_value": "24 h",
+        "band": "high",
+        "check_id": "ADP-10",
+        "repos_counted": 8
+      },
+      {
+        "label": "Change-failure rate",
+        "display_value": "5%",
+        "band": "high",
+        "check_id": "ADP-13",
+        "repos_counted": 8
+      },
+      {
+        "label": "Cycle time",
+        "display_value": "24 h",
+        "band": "high",
+        "check_id": "ADP-11",
+        "repos_counted": 3
+      },
+      {
+        "label": "MTTR",
+        "display_value": "1 h",
+        "band": "high",
+        "check_id": "ADP-I4",
+        "repos_counted": 2
+      }
+    ]
+  },
+  "per_repo": [
+    {
+      "repo": "org/service-a",
+      "contributors": 8,
+      "awarded_weight": 50,
+      "sources_reachable": ["git", "ci"],
+      "has_ai_tooling": true,
+      "audit_total": 50,
+      "coverage": 0.5,
+      "merges_per_active": 4,
+      "loc_per_active": 200,
+      "deploy_freq": 8,
+      "rework_rate": 0.1,
+      "lead_time": 12,
+      "change_fail": 0.04,
+      "cycle_time": null,
+      "mttr": null
+    }
+  ]
+}
+```
+
+`headline.delivery[]` mirrors the single-repo executive band (rows 2–9), in the same order, but each `display_value` is the per-metric **mean** across repos and each `band` is the mean re-banded through the same TS band functions (`doraDeployBand`, `reworkBand`, `doraLeadTimeBand`, `doraChangeFailBand`, `doraCycleTimeBand`, `mtttrBand`). Row 1 (capability Points + Coverage) stays the `org_capability_score` card and is not duplicated here. A metric is averaged over only the repos that supply a value; `repos_counted` notes that coverage; a metric absent in every repo is omitted. Delivery values are pulled from each repo's audit checks by `check_id` (`ADP-09`/`ADP-25`/`ADP-10`/`ADP-13`/`ADP-11`/`ADP-I4`); `merges_per_active`/`loc_per_active` come from each repo's `collected/git.json` → `raw.window_stats`. The legacy `per_repo` fields are derived from the audit itself — `awarded_weight`/`audit_total` from `audit_total`, `has_ai_tooling` from any awarded AI-tooling code (101–106), `sources_reachable` from the available collector sources, `contributors` from the `ADP-07` check value — so no flat `<repo>.json` summary is required.
+
 ---
 
 ## Report Template

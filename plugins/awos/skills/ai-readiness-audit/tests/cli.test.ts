@@ -285,3 +285,184 @@ test('metric adp_g2_contributors: query-once path reads pre-collected git.json',
     rmSync(tmpRepo, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// 'rollup' — reads each repo's FULL audit from per-repo subdirectories,
+// emitting the org headline (average matrix) + enriched per_repo rows.
+// ---------------------------------------------------------------------------
+
+/** Write a minimal per-repo audit.json + collected/git.json under <base>/<repo>. */
+function writeRepoAudit(
+  base: string,
+  repo: string,
+  opts: {
+    audit_total: number;
+    coverage: number;
+    deploy: number | null;
+    lead: number | null;
+    merges: number | null;
+    loc: number | null;
+    aiToolingAwarded?: boolean;
+    contributors?: number | null;
+    sources?: string[];
+  }
+): void {
+  const repoDir = join(base, repo);
+  mkdirSync(join(repoDir, 'collected'), { recursive: true });
+  const checks: Record<string, unknown>[] = [
+    { check_id: 'ADP-09', code: [700], status: 'OK', value: opts.deploy },
+    { check_id: 'ADP-10', code: [701], status: 'OK', value: opts.lead },
+  ];
+  if (opts.contributors != null)
+    checks.push({
+      check_id: 'ADP-07',
+      code: [201],
+      status: 'OK',
+      value: opts.contributors,
+    });
+  if (opts.aiToolingAwarded)
+    checks.push({
+      check_id: 'AITD-01',
+      code: [101],
+      status: 'PASS',
+      weight_awarded: 5,
+      value: true,
+    });
+  const audit = {
+    date: '2026-07-01',
+    project: repo,
+    audit_total: opts.audit_total,
+    coverage: opts.coverage,
+    dimensions: [{ dimension: 'ai-sdlc-adoption', checks }],
+    sources: (opts.sources ?? ['git']).map((s) => ({
+      source: s,
+      available: true,
+    })),
+  };
+  writeFileSync(join(repoDir, 'audit.json'), JSON.stringify(audit));
+  writeFileSync(
+    join(repoDir, 'collected', 'git.json'),
+    JSON.stringify({
+      source: 'git',
+      available: true,
+      raw: {
+        window_stats: {
+          merges_per_active: opts.merges,
+          loc_per_active: opts.loc,
+        },
+      },
+    })
+  );
+}
+
+test('rollup: reads per-repo subdirs → org headline (mean matrix) + enriched per_repo', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-rollup-test-'));
+  try {
+    writeRepoAudit(base, 'service-a', {
+      audit_total: 50,
+      coverage: 0.5,
+      deploy: 8,
+      lead: 12,
+      merges: 4,
+      loc: 200,
+      aiToolingAwarded: true,
+      contributors: 8,
+      sources: ['git', 'ci'],
+    });
+    writeRepoAudit(base, 'service-b', {
+      audit_total: 30,
+      coverage: 0.3,
+      deploy: 6,
+      lead: 36,
+      merges: 2,
+      loc: 100,
+      aiToolingAwarded: false,
+      contributors: 4,
+      sources: ['git'],
+    });
+    // A dir missing audit.json must be skipped gracefully, not crash.
+    mkdirSync(join(base, 'broken'), { recursive: true });
+
+    const { json, code } = runCli('rollup', base);
+    assert.equal(code, 0, 'rollup must exit 0');
+    const r = json as Record<string, unknown>;
+
+    // Portfolio cards intact.
+    assert.equal(
+      (r['portfolio_metrics'] as unknown[]).length,
+      3,
+      'rollup must still emit exactly 3 portfolio metrics'
+    );
+
+    // Org headline = per-metric mean, re-banded.
+    const headline = r['headline'] as { delivery: Record<string, unknown>[] };
+    assert.ok(
+      headline,
+      'rollup must emit an org headline for rich per-repo data'
+    );
+    const deploy = headline.delivery.find(
+      (d) => d['label'] === 'Deployment frequency'
+    );
+    assert.ok(deploy, 'headline must include Deployment frequency');
+    assert.equal(
+      deploy['display_value'],
+      '7 / wk',
+      'deploy freq mean (8+6)/2 = 7 / wk'
+    );
+    assert.equal(deploy['band'], 'elite', 'deploy mean 7 re-bands to elite');
+    const lead = headline.delivery.find(
+      (d) => d['label'] === 'Lead time for change'
+    );
+    assert.equal(
+      lead!['display_value'],
+      '24 h',
+      'lead time mean (12+36)/2 = 24 h'
+    );
+
+    // Enriched per_repo carries audit_total, coverage, delivery columns.
+    const perRepo = r['per_repo'] as Record<string, unknown>[];
+    assert.equal(
+      perRepo.length,
+      2,
+      'broken (no audit.json) repo must be skipped'
+    );
+    const a = perRepo.find((p) => p['repo'] === 'service-a')!;
+    assert.equal(
+      a['audit_total'],
+      50,
+      'per_repo must carry audit_total from audit.json'
+    );
+    assert.equal(
+      a['coverage'],
+      0.5,
+      'per_repo must carry coverage from audit.json'
+    );
+    assert.equal(
+      a['merges_per_active'],
+      4,
+      'per_repo must carry merges/active from git.json'
+    );
+    assert.equal(
+      a['deploy_freq'],
+      8,
+      'per_repo must carry deploy_freq from ADP-09 check'
+    );
+    assert.equal(
+      a['has_ai_tooling'],
+      true,
+      'has_ai_tooling derived from awarded code 101'
+    );
+    assert.deepEqual(
+      a['sources_reachable'],
+      ['git', 'ci'],
+      'sources_reachable derived from audit.json available sources'
+    );
+    assert.equal(
+      a['contributors'],
+      8,
+      'contributors derived from ADP-07 check value'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});

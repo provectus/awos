@@ -26,11 +26,46 @@
  *   }
  *
  * No money, no PII. Contributor counts are aggregate only.
+ *
+ * Beyond the three portfolio cards the rollup also emits an org **headline**
+ * (Task 5.2): the per-metric MEAN of each delivery number across repos,
+ * re-banded by applying the same TS band functions the single-repo headline
+ * uses. This mirrors the single-repo executive band, averaged, so the org
+ * report's top matrix reads like a per-repo one. The enriched `per_repo[]`
+ * rows carry every delivery column so the org report's per-repo table
+ * (Task 5.3) can render a full row per repo.
  */
+
+import { doraDeployBand } from './adp_g3_deploy_frequency.ts';
+import { doraLeadTimeBand } from './adp_g4_lead_time.ts';
+import { doraCycleTimeBand } from './adp_g5_pr_cycle_time.ts';
+import { doraChangeFailBand } from './adp_g7_change_fail_rate.ts';
+import { reworkBand } from './adp_g14_rework_rate.ts';
+import { mtttrBand } from './adp_i3_mttr.ts';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+/** Per-repo delivery numbers, transcribed from the repo's audit + git artifact. */
+export interface PerRepoDelivery {
+  /** git.json raw.window_stats.merges_per_active. */
+  merges_per_active?: number | null;
+  /** git.json raw.window_stats.loc_per_active. */
+  loc_per_active?: number | null;
+  /** ADP-09 deployment/merge frequency (merges per week). */
+  deploy_freq?: number | null;
+  /** ADP-25 rework rate (0–1 fraction). */
+  rework_rate?: number | null;
+  /** ADP-10 lead time for change (hours). */
+  lead_time?: number | null;
+  /** ADP-13 change-failure rate (0–1 fraction). */
+  change_fail?: number | null;
+  /** ADP-11 cycle time (hours). */
+  cycle_time?: number | null;
+  /** ADP-I4 MTTR (hours). */
+  mttr?: number | null;
+}
 
 export interface PerRepoInput {
   /** Repository identifier (path or name). */
@@ -43,6 +78,12 @@ export interface PerRepoInput {
   sources_reachable?: string[];
   /** True when any AI tooling category (codes 101–106) was awarded. */
   has_ai_tooling?: boolean;
+  /** Weighted audit total for this repo (Σ awarded weights). */
+  audit_total?: number;
+  /** Coverage ratio (awarded ÷ applicable) for this repo, 0–1. */
+  coverage?: number;
+  /** Rich delivery numbers for the org headline + per-repo table. */
+  delivery?: PerRepoDelivery;
 }
 
 export interface PortfolioMetric {
@@ -54,9 +95,28 @@ export interface PortfolioMetric {
   repos_counted: number;
 }
 
+/**
+ * One org-headline delivery row: the per-metric mean across repos, re-banded.
+ * Shape matches the renderer's DeliveryMetric ({label, display_value, band?,
+ * check_id?}); org_rollup does NOT import render.ts (layering). `repos_counted`
+ * notes how many repos contributed a value to the mean (coverage).
+ */
+export interface OrgDeliveryMetric {
+  label: string;
+  display_value: string;
+  band?: string;
+  check_id?: string;
+  repos_counted?: number;
+}
+
 export interface OrgRollupResult {
   /** Exactly ≤3 portfolio-level metrics. */
   portfolio_metrics: PortfolioMetric[];
+  /**
+   * Org executive band: the delivery matrix averaged across repos and
+   * re-banded. Omitted when no repo supplies any delivery data.
+   */
+  headline?: { delivery: OrgDeliveryMetric[] };
   /** Per-repo summary rows (input echoed with computed fields). */
   per_repo: PerRepoSummary[];
 }
@@ -67,6 +127,123 @@ export interface PerRepoSummary {
   awarded_weight: number;
   sources_reachable: string[];
   has_ai_tooling: boolean;
+  /** Weighted audit total for this repo. */
+  audit_total: number | null;
+  /** Coverage ratio for this repo, 0–1. */
+  coverage: number | null;
+  /** Delivery numbers, flattened for the per-repo table (Task 5.3). */
+  merges_per_active: number | null;
+  loc_per_active: number | null;
+  deploy_freq: number | null;
+  rework_rate: number | null;
+  lead_time: number | null;
+  change_fail: number | null;
+  cycle_time: number | null;
+  mttr: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Org headline (average matrix) spec
+// ---------------------------------------------------------------------------
+
+/**
+ * Delivery rows 2–9 of the org headline, in the same order as the single-repo
+ * headline (SKILL.md). Row 1 (capability Points + Coverage) stays the
+ * `org_capability_score` portfolio card — it is NOT duplicated here.
+ *
+ * `key`    — field on PerRepoDelivery to average.
+ * `band`   — re-band function applied to the MEAN (omit for un-banded rows).
+ * `format` — turns the MEAN into a display string.
+ */
+interface DeliverySpec {
+  key: keyof PerRepoDelivery;
+  label: string;
+  check_id?: string;
+  band?: (v: number) => string;
+  format: (v: number) => string;
+}
+
+const DELIVERY_SPECS: DeliverySpec[] = [
+  {
+    key: 'merges_per_active',
+    label: 'Merges / active contributor',
+    format: (v) => `${round1(v)} / contributor`,
+  },
+  {
+    key: 'loc_per_active',
+    label: 'LOC / active contributor',
+    format: (v) => `${round1(v)} / contributor`,
+  },
+  {
+    key: 'deploy_freq',
+    label: 'Deployment frequency',
+    check_id: 'ADP-09',
+    band: doraDeployBand,
+    format: (v) => `${round1(v)} / wk`,
+  },
+  {
+    key: 'rework_rate',
+    label: 'Rework rate (DORA)',
+    check_id: 'ADP-25',
+    band: reworkBand,
+    format: (v) => `${round1(v * 100)}%`,
+  },
+  {
+    key: 'lead_time',
+    label: 'Lead time for change',
+    check_id: 'ADP-10',
+    band: doraLeadTimeBand,
+    format: (v) => `${round1(v)} h`,
+  },
+  {
+    key: 'change_fail',
+    label: 'Change-failure rate',
+    check_id: 'ADP-13',
+    band: doraChangeFailBand,
+    format: (v) => `${round1(v * 100)}%`,
+  },
+  {
+    key: 'cycle_time',
+    label: 'Cycle time',
+    check_id: 'ADP-11',
+    band: doraCycleTimeBand,
+    format: (v) => `${round1(v)} h`,
+  },
+  {
+    key: 'mttr',
+    label: 'MTTR',
+    check_id: 'ADP-I4',
+    band: mtttrBand,
+    format: (v) => `${round1(v)} h`,
+  },
+];
+
+/**
+ * Build the org headline: per-metric mean across repos, re-banded.
+ * A metric present in only some repos is averaged over just those repos
+ * (its `repos_counted` notes the coverage); a metric absent in ALL repos is
+ * omitted. Returns undefined when no delivery row has any data.
+ */
+function buildHeadline(
+  repos: PerRepoSummary[]
+): { delivery: OrgDeliveryMetric[] } | undefined {
+  const rows: OrgDeliveryMetric[] = [];
+  for (const spec of DELIVERY_SPECS) {
+    const present = repos
+      .map((r) => r[spec.key] as number | null)
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    if (present.length === 0) continue; // absent in all repos → omit
+    const mean = present.reduce((s, v) => s + v, 0) / present.length;
+    const row: OrgDeliveryMetric = {
+      label: spec.label,
+      display_value: spec.format(mean),
+      repos_counted: present.length,
+    };
+    if (spec.band) row.band = spec.band(mean);
+    if (spec.check_id) row.check_id = spec.check_id;
+    rows.push(row);
+  }
+  return rows.length > 0 ? { delivery: rows } : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,13 +279,26 @@ export function rollup(
   }
 
   // Normalize inputs.
-  const repos: PerRepoSummary[] = perRepoResults.map((r) => ({
-    repo: r.repo,
-    contributors: r.contributors ?? null,
-    awarded_weight: r.awarded_weight ?? 0,
-    sources_reachable: r.sources_reachable ?? [],
-    has_ai_tooling: r.has_ai_tooling ?? false,
-  }));
+  const repos: PerRepoSummary[] = perRepoResults.map((r) => {
+    const d = r.delivery ?? {};
+    return {
+      repo: r.repo,
+      contributors: r.contributors ?? null,
+      awarded_weight: r.awarded_weight ?? 0,
+      sources_reachable: r.sources_reachable ?? [],
+      has_ai_tooling: r.has_ai_tooling ?? false,
+      audit_total: r.audit_total ?? null,
+      coverage: r.coverage ?? null,
+      merges_per_active: d.merges_per_active ?? null,
+      loc_per_active: d.loc_per_active ?? null,
+      deploy_freq: d.deploy_freq ?? null,
+      rework_rate: d.rework_rate ?? null,
+      lead_time: d.lead_time ?? null,
+      change_fail: d.change_fail ?? null,
+      cycle_time: d.cycle_time ?? null,
+      mttr: d.mttr ?? null,
+    };
+  });
 
   // Determine whether contributor weighting is available (all repos have
   // a non-zero contributor count).
@@ -178,7 +368,10 @@ export function rollup(
     },
   ];
 
-  return { portfolio_metrics, per_repo: repos };
+  const headline = buildHeadline(repos);
+  const result: OrgRollupResult = { portfolio_metrics, per_repo: repos };
+  if (headline) result.headline = headline;
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -187,6 +380,11 @@ export function rollup(
 
 function round4(n: number): number {
   return Math.round(n * 10000) / 10000;
+}
+
+/** Round to 1 decimal place (drops a trailing ".0" via Number coercion). */
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
 }
 
 function makeMetric(

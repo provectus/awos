@@ -22,7 +22,7 @@
 // Standards parser (smol-toml — bundled, no Python required)
 // ---------------------------------------------------------------------------
 import { parse as parseToml } from 'smol-toml';
-import { readFileSync, mkdtempSync } from 'node:fs';
+import { readFileSync, mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -116,7 +116,7 @@ import { loadStandards } from './metrics/_base.ts';
 // Org rollup
 // ---------------------------------------------------------------------------
 import { rollup as orgRollup } from './metrics/org_rollup.ts';
-import type { PerRepoInput } from './metrics/org_rollup.ts';
+import type { PerRepoInput, PerRepoDelivery } from './metrics/org_rollup.ts';
 
 // ---------------------------------------------------------------------------
 // Renderer
@@ -197,6 +197,127 @@ const DEFAULT_PERIOD: Period = {
 
 function printJson(value: unknown): void {
   process.stdout.write(JSON.stringify(value, null, 2) + '\n');
+}
+
+// ---------------------------------------------------------------------------
+// rollup helpers — read one repo's FULL audit into a rich PerRepoInput.
+// ---------------------------------------------------------------------------
+
+/** Delivery check_id → the PerRepoDelivery field it feeds. */
+const DELIVERY_CHECK_IDS: Array<[string, keyof PerRepoDelivery]> = [
+  ['ADP-09', 'deploy_freq'],
+  ['ADP-25', 'rework_rate'],
+  ['ADP-10', 'lead_time'],
+  ['ADP-13', 'change_fail'],
+  ['ADP-11', 'cycle_time'],
+  ['ADP-I4', 'mttr'],
+];
+
+/** AI-tooling category codes (101–106); any awarded → has_ai_tooling. */
+const AI_TOOLING_CODES = new Set([101, 102, 103, 104, 105, 106]);
+
+interface AuditCheck {
+  check_id?: string;
+  code?: number[];
+  status?: string;
+  value?: unknown;
+  weight_awarded?: number;
+}
+
+interface AuditDimension {
+  checks?: AuditCheck[];
+}
+
+interface AuditJson {
+  audit_total?: number;
+  coverage?: number;
+  dimensions?: AuditDimension[];
+  sources?: Array<{ source?: string; available?: boolean }>;
+}
+
+/** Coerce a check value to a finite number, else null (covers SKIP/null/NaN). */
+function numOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+/**
+ * Read <repoDir>/audit.json + <repoDir>/collected/git.json and derive a rich
+ * PerRepoInput. Returns null (logging to stderr) when audit.json is missing or
+ * unparseable, so one bad repo never crashes the whole rollup.
+ */
+function readPerRepoAudit(
+  repoDir: string,
+  repoName: string
+): PerRepoInput | null {
+  const auditPath = join(repoDir, 'audit.json');
+  let audit: AuditJson;
+  try {
+    audit = JSON.parse(readFileSync(auditPath, 'utf8')) as AuditJson;
+  } catch {
+    process.stderr.write(
+      `rollup: skipping ${repoName} — missing or unparseable audit.json\n`
+    );
+    return null;
+  }
+
+  // Flatten every check once; index by check_id and scan for AI-tooling codes.
+  const checks: AuditCheck[] = (audit.dimensions ?? []).flatMap(
+    (d) => d.checks ?? []
+  );
+  const byCheckId = new Map<string, AuditCheck>();
+  let hasAiTooling = false;
+  for (const c of checks) {
+    if (c.check_id && !byCheckId.has(c.check_id)) byCheckId.set(c.check_id, c);
+    const awarded = (c.weight_awarded ?? 0) > 0 || c.status === 'PASS';
+    if (awarded && (c.code ?? []).some((code) => AI_TOOLING_CODES.has(code)))
+      hasAiTooling = true;
+  }
+
+  // Delivery check values by check_id (null when absent / SKIP / null value).
+  const delivery: PerRepoDelivery = {};
+  for (const [checkId, field] of DELIVERY_CHECK_IDS) {
+    delivery[field] = numOrNull(byCheckId.get(checkId)?.value);
+  }
+
+  // Merges/LOC per active contributor from the git artifact (best-effort).
+  const gitPath = join(repoDir, 'collected', 'git.json');
+  if (existsSync(gitPath)) {
+    try {
+      const git = JSON.parse(readFileSync(gitPath, 'utf8')) as {
+        raw?: { window_stats?: Record<string, unknown> };
+      };
+      const ws = git.raw?.window_stats ?? {};
+      delivery.merges_per_active = numOrNull(ws.merges_per_active);
+      delivery.loc_per_active = numOrNull(ws.loc_per_active);
+    } catch {
+      process.stderr.write(
+        `rollup: ${repoName} — unparseable collected/git.json, dropping per-active stats\n`
+      );
+    }
+  } else {
+    process.stderr.write(
+      `rollup: ${repoName} — no collected/git.json, per-active stats unavailable\n`
+    );
+  }
+
+  // Legacy summary fields derived from the audit (no flat <repo>.json needed).
+  const auditTotal = numOrNull(audit.audit_total) ?? 0;
+  const sourcesReachable = (audit.sources ?? [])
+    .filter((s) => s.available)
+    .map((s) => s.source ?? '')
+    .filter((s) => s.length > 0);
+  const contributors = numOrNull(byCheckId.get('ADP-07')?.value);
+
+  return {
+    repo: repoName,
+    contributors: contributors ?? undefined,
+    awarded_weight: auditTotal,
+    sources_reachable: sourcesReachable,
+    has_ai_tooling: hasAiTooling,
+    audit_total: auditTotal,
+    coverage: numOrNull(audit.coverage) ?? undefined,
+    delivery,
+  };
 }
 
 async function main(): Promise<void> {
@@ -364,31 +485,32 @@ async function main(): Promise<void> {
     }
 
     case 'rollup': {
-      // Aggregate per-repo audit JSONs into ≤3 portfolio metrics.
+      // Aggregate the FULL per-repo audits into ≤3 portfolio metrics, an org
+      // headline (average delivery matrix), and enriched per-repo rows.
       //
       // Usage:
-      //   node dist/cli.js rollup <dir-of-per-repo-jsons>
+      //   node dist/cli.js rollup <per-repo-dir>
       //
-      // Each JSON file in <dir> must be a valid PerRepoInput object.
-      // The rollup reads all *.json files in the directory, parses them,
-      // and emits the OrgRollupResult to stdout.
-      //
-      // SKILL.md Step 6 org branch can invoke this after all per-repo audits
-      // have written their result JSON to a shared directory.
+      // <per-repo-dir> holds one SUBDIRECTORY per repo (as written by SKILL.md
+      // Step 6's org branch): <per-repo-dir>/<repo>/audit.json plus
+      // <per-repo-dir>/<repo>/collected/git.json. For each repo we read the
+      // full audit — audit_total, coverage, the six delivery check values by
+      // check_id — and the git artifact's per-active-contributor stats, then
+      // derive the legacy summary fields so a flat <repo>.json is no longer
+      // required. A repo dir missing either artifact is skipped (logged to
+      // stderr), never crashing the whole rollup.
       const dirArg = arg1;
       if (!dirArg) {
         printJson({
-          error: 'rollup requires <dir-of-per-repo-jsons>',
-          usage: 'node dist/cli.js rollup <dir>',
+          error: 'rollup requires <per-repo-dir>',
+          usage: 'node dist/cli.js rollup <per-repo-dir>',
         });
         process.exit(1);
       }
-      let files: string[];
+      const { readdirSync: rd, statSync: st } = await import('node:fs');
+      let entries: string[];
       try {
-        const { readdirSync: rd } = await import('node:fs');
-        files = rd(dirArg)
-          .filter((f: string) => f.endsWith('.json'))
-          .map((f: string) => `${dirArg}/${f}`);
+        entries = rd(dirArg);
       } catch (err: unknown) {
         const e = err as NodeJS.ErrnoException;
         printJson({
@@ -398,14 +520,16 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       const perRepoResults: PerRepoInput[] = [];
-      for (const f of files) {
+      for (const entry of entries) {
+        const repoDir = join(dirArg, entry);
+        // Only descend into subdirectories (each a repo).
         try {
-          const raw = readFileSync(f, 'utf8');
-          perRepoResults.push(JSON.parse(raw) as PerRepoInput);
+          if (!st(repoDir).isDirectory()) continue;
         } catch {
-          // Skip unparseable files — log a warning but continue.
-          process.stderr.write(`rollup: skipping unparseable file ${f}\n`);
+          continue;
         }
+        const input = readPerRepoAudit(repoDir, entry);
+        if (input) perRepoResults.push(input);
       }
       // Load standards for future standards-aware normalization.
       const cliDirR = dirname(fileURLToPath(import.meta.url));

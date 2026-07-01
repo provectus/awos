@@ -50,7 +50,7 @@ function median(sorted: number[]): number {
 }
 
 /** Map median cycle-time hours to a DORA band label. */
-function doraCycleTimeBand(hours: number): string {
+export function doraCycleTimeBand(hours: number): string {
   if (hours < 24) return 'elite';
   if (hours < 168) return 'high';
   if (hours < 720) return 'medium';

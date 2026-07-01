@@ -31,7 +31,7 @@ import {
 import { clamp01 } from './_score.ts';
 
 /** Map change failure rate fraction to a DORA band label. */
-function doraChangeFailBand(rate: number): string {
+export function doraChangeFailBand(rate: number): string {
   if (rate < 0.05) return 'elite';
   if (rate < 0.1) return 'high';
   if (rate < 0.15) return 'medium';

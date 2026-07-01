@@ -128,12 +128,12 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
    - `headline` — the executive band. Transcribe values **verbatim** from the dimension checks (cite the `check_id`); never invent numbers. Row 1 of the headline (capability Points + Coverage cap-score block) is emitted by the renderer directly from `audit_total`/`coverage` — do not add it as a `delivery[]` entry. `delivery[]` carries rows 2–9, each a `DeliveryMetric` object `{label, display_value?, band?, gated?, check_id?}`. Author them in this order, reading DORA bands from each check's `hint` field ("DORA-banded (high)"), and transcribing all values verbatim — never invent numbers:
      1. **Merges / active contributor** — `display_value` from `collected/git.json` → `raw.window_stats.merges_per_active` (e.g. `"3.2 / contributor"`); no `band`; no `check_id`; source: git artifact. If the value is null (zero active contributors), omit `display_value`.
      2. **LOC / active contributor** — from `raw.window_stats.loc_per_active`; same rules.
-     3. **Deployment frequency** — check `ADP-09`; band from hint; `check_id: "ADP-09"`.
-     4. **Rework rate (DORA)** — check `ADP-25`; band from hint; `check_id: "ADP-25"`.
-     5. **Lead time for change** — check `ADP-10`; band from hint; `check_id: "ADP-10"`.
-     6. **Change-failure rate** — check `ADP-13`; band from hint; `check_id: "ADP-13"`.
-     7. **Cycle time (Jira In-Progress→Done)** — set `gated: "tracker"`. When a tracker connector is present, transcribe the median Jira In-Progress→Done duration as `display_value`; when no tracker connector, omit `display_value` so the renderer prints "— (needs ticketing connector)".
-     8. **MTTR** — set `gated: "incident"`. When an incident connector is present, transcribe the value from check `ADP-I4` as `display_value`; when no incident connector, omit `display_value` so the renderer prints "— (needs incident connector)". (`adp_i3_mttr` also produces a git-proxy value, but the headline MTTR row reflects true incident recovery and is gated on an incident connector.)
+     3. **Deployment frequency** — check `ADP-08`; band from hint; `check_id: "ADP-08"`.
+     4. **Rework rate (DORA)** — check `ADP-24`; band from hint; `check_id: "ADP-24"`.
+     5. **Lead time for change** — check `ADP-09`; band from hint; `check_id: "ADP-09"`.
+     6. **Change-failure rate** — check `ADP-12`; band from hint; `check_id: "ADP-12"`.
+     7. **Cycle time (Jira In-Progress→Done)** — set `gated: "tracker"`; no git `check_id`. Sourced only from the tracker connector: when one is present, transcribe the median Jira In-Progress→Done duration as `display_value`; when no tracker connector, omit `display_value` so the renderer prints "— (needs ticketing connector)".
+     8. **MTTR** — set `gated: "incident"`; no git `check_id`. MTTR cannot be derived from git; it comes only from an incident connector. When an incident connector is present, transcribe its recovery value as `display_value`; when no incident connector, omit `display_value` so the renderer prints "— (needs incident connector)". (`adp_i3_mttr` still scores separately as a git-proxy category, but it does not feed this headline row.)
 
      `scale[]` = code size/complexity (`ADP-G11`, `ADP-G10`, deps `ADP-G12`). `reach` = `{ai_tooling, contributors}` (`ADP-G1`/`ADP-G2`). Keep `reach.contributors` to the count and cadence (e.g. "4 active contributors (90d)") — do not append a privacy disclaimer such as "counts are aggregate; no per-person data". The aggregate/no-PII rule governs what you collect, not the report copy; surfacing it just clutters the headline.
 

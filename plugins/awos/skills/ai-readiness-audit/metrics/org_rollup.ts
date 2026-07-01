@@ -38,33 +38,32 @@
 
 import { doraDeployBand } from './adp_g3_deploy_frequency.ts';
 import { doraLeadTimeBand } from './adp_g4_lead_time.ts';
-import { doraCycleTimeBand } from './adp_g5_pr_cycle_time.ts';
 import { doraChangeFailBand } from './adp_g7_change_fail_rate.ts';
 import { reworkBand } from './adp_g14_rework_rate.ts';
-import { mtttrBand } from './adp_i3_mttr.ts';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-/** Per-repo delivery numbers, transcribed from the repo's audit + git artifact. */
+/**
+ * Per-repo delivery numbers, transcribed from the repo's audit + git artifact.
+ * Only the four git-sourced DORA metrics live here. Cycle-time (Jira
+ * In-Progress→Done) and MTTR (real incident recovery) are connector-gated and
+ * never deterministically computed, so they are not carried in the rollup.
+ */
 export interface PerRepoDelivery {
   /** git.json raw.window_stats.merges_per_active. */
   merges_per_active?: number | null;
   /** git.json raw.window_stats.loc_per_active. */
   loc_per_active?: number | null;
-  /** ADP-09 deployment/merge frequency (merges per week). */
+  /** ADP-08 deployment/merge frequency (merges per week). */
   deploy_freq?: number | null;
-  /** ADP-25 rework rate (0–1 fraction). */
+  /** ADP-24 rework rate (0–1 fraction). */
   rework_rate?: number | null;
-  /** ADP-10 lead time for change (hours). */
+  /** ADP-09 lead time for change (hours). */
   lead_time?: number | null;
-  /** ADP-13 change-failure rate (0–1 fraction). */
+  /** ADP-12 change-failure rate (0–1 fraction). */
   change_fail?: number | null;
-  /** ADP-11 cycle time (hours). */
-  cycle_time?: number | null;
-  /** ADP-I4 MTTR (hours). */
-  mttr?: number | null;
 }
 
 export interface PerRepoInput {
@@ -138,8 +137,6 @@ export interface PerRepoSummary {
   rework_rate: number | null;
   lead_time: number | null;
   change_fail: number | null;
-  cycle_time: number | null;
-  mttr: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,9 +144,11 @@ export interface PerRepoSummary {
 // ---------------------------------------------------------------------------
 
 /**
- * Delivery rows 2–9 of the org headline, in the same order as the single-repo
- * headline (SKILL.md). Row 1 (capability Points + Coverage) stays the
- * `org_capability_score` portfolio card — it is NOT duplicated here.
+ * The 6 deterministic delivery rows of the org headline, in the same order as
+ * the single-repo headline (SKILL.md). Row 1 (capability Points + Coverage)
+ * stays the `org_capability_score` portfolio card — it is NOT duplicated here.
+ * Cycle-time and MTTR are connector-gated (tracker / incident) and never
+ * deterministically computed, so the deterministic org headline omits them.
  *
  * `key`    — field on PerRepoDelivery to average.
  * `band`   — re-band function applied to the MEAN (omit for un-banded rows).
@@ -177,44 +176,30 @@ const DELIVERY_SPECS: DeliverySpec[] = [
   {
     key: 'deploy_freq',
     label: 'Deployment frequency',
-    check_id: 'ADP-09',
+    check_id: 'ADP-08',
     band: doraDeployBand,
     format: (v) => `${round1(v)} / wk`,
   },
   {
     key: 'rework_rate',
     label: 'Rework rate (DORA)',
-    check_id: 'ADP-25',
+    check_id: 'ADP-24',
     band: reworkBand,
     format: (v) => `${round1(v * 100)}%`,
   },
   {
     key: 'lead_time',
     label: 'Lead time for change',
-    check_id: 'ADP-10',
+    check_id: 'ADP-09',
     band: doraLeadTimeBand,
     format: (v) => `${round1(v)} h`,
   },
   {
     key: 'change_fail',
     label: 'Change-failure rate',
-    check_id: 'ADP-13',
+    check_id: 'ADP-12',
     band: doraChangeFailBand,
     format: (v) => `${round1(v * 100)}%`,
-  },
-  {
-    key: 'cycle_time',
-    label: 'Cycle time',
-    check_id: 'ADP-11',
-    band: doraCycleTimeBand,
-    format: (v) => `${round1(v)} h`,
-  },
-  {
-    key: 'mttr',
-    label: 'MTTR',
-    check_id: 'ADP-I4',
-    band: mtttrBand,
-    format: (v) => `${round1(v)} h`,
   },
 ];
 
@@ -295,8 +280,6 @@ export function rollup(
       rework_rate: d.rework_rate ?? null,
       lead_time: d.lead_time ?? null,
       change_fail: d.change_fail ?? null,
-      cycle_time: d.cycle_time ?? null,
-      mttr: d.mttr ?? null,
     };
   });
 

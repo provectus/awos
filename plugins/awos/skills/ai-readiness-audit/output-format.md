@@ -88,7 +88,7 @@ The renderer is deterministic and contains no LLM. The plain-language narrative 
         "label": "Deployment frequency",
         "display_value": "1.9 / wk",
         "band": "High",
-        "check_id": "ADP-09"
+        "check_id": "ADP-08"
       },
       {
         "label": "Cycle time (Jira In-Progress→Done)",
@@ -177,43 +177,29 @@ In org mode the engine reads each repo's FULL audit — `context/audits/YYYY-MM-
         "label": "Deployment frequency",
         "display_value": "7 / wk",
         "band": "elite",
-        "check_id": "ADP-09",
+        "check_id": "ADP-08",
         "repos_counted": 8
       },
       {
         "label": "Rework rate (DORA)",
         "display_value": "15%",
         "band": "watch",
-        "check_id": "ADP-25",
+        "check_id": "ADP-24",
         "repos_counted": 6
       },
       {
         "label": "Lead time for change",
         "display_value": "24 h",
         "band": "high",
-        "check_id": "ADP-10",
+        "check_id": "ADP-09",
         "repos_counted": 8
       },
       {
         "label": "Change-failure rate",
         "display_value": "5%",
         "band": "high",
-        "check_id": "ADP-13",
+        "check_id": "ADP-12",
         "repos_counted": 8
-      },
-      {
-        "label": "Cycle time",
-        "display_value": "24 h",
-        "band": "high",
-        "check_id": "ADP-11",
-        "repos_counted": 3
-      },
-      {
-        "label": "MTTR",
-        "display_value": "1 h",
-        "band": "high",
-        "check_id": "ADP-I4",
-        "repos_counted": 2
       }
     ]
   },
@@ -231,15 +217,13 @@ In org mode the engine reads each repo's FULL audit — `context/audits/YYYY-MM-
       "deploy_freq": 8,
       "rework_rate": 0.1,
       "lead_time": 12,
-      "change_fail": 0.04,
-      "cycle_time": null,
-      "mttr": null
+      "change_fail": 0.04
     }
   ]
 }
 ```
 
-`headline.delivery[]` mirrors the single-repo executive band (rows 2–9), in the same order, but each `display_value` is the per-metric **mean** across repos and each `band` is the mean re-banded through the same TS band functions (`doraDeployBand`, `reworkBand`, `doraLeadTimeBand`, `doraChangeFailBand`, `doraCycleTimeBand`, `mtttrBand`). Row 1 (capability Points + Coverage) stays the `org_capability_score` card and is not duplicated here. A metric is averaged over only the repos that supply a value; `repos_counted` notes that coverage; a metric absent in every repo is omitted. Delivery values are pulled from each repo's audit checks by `check_id` (`ADP-09`/`ADP-25`/`ADP-10`/`ADP-13`/`ADP-11`/`ADP-I4`); `merges_per_active`/`loc_per_active` come from each repo's `collected/git.json` → `raw.window_stats`. The legacy `per_repo` fields are derived from the audit itself — `awarded_weight`/`audit_total` from `audit_total`, `has_ai_tooling` from any awarded AI-tooling code (101–106), `sources_reachable` from the available collector sources, `contributors` from the `ADP-07` check value — so no flat `<repo>.json` summary is required.
+The deterministic org `headline.delivery[]` has **6 rows** — the 2 git per-active rows (merges/active, LOC/active) plus the 4 git-sourced DORA metrics (deployment frequency, rework rate, lead time, change-failure rate). Cycle-time and MTTR are connector-gated (tracker / incident) and never deterministically computed, so the deterministic org headline omits them entirely. Each `display_value` is the per-metric **mean** across repos and each `band` is the mean re-banded through the same TS band functions (`doraDeployBand`, `reworkBand`, `doraLeadTimeBand`, `doraChangeFailBand`). Row 1 (capability Points + Coverage) stays the `org_capability_score` card and is not duplicated here. A metric is averaged over only the repos that supply a value; `repos_counted` notes that coverage; a metric absent in every repo is omitted. Delivery values are pulled from each repo's audit checks by `check_id` (`ADP-08`/`ADP-24`/`ADP-09`/`ADP-12`); `merges_per_active`/`loc_per_active` come from each repo's `collected/git.json` → `raw.window_stats`. The legacy `per_repo` fields are derived from the audit itself — `awarded_weight`/`audit_total` from `audit_total`, `has_ai_tooling` from any awarded AI-tooling code (101–106), `sources_reachable` from the available collector sources, `contributors` from the `ADP-07` check value — so no flat `<repo>.json` summary is required.
 
 ---
 

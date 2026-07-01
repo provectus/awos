@@ -203,14 +203,18 @@ function printJson(value: unknown): void {
 // rollup helpers — read one repo's FULL audit into a rich PerRepoInput.
 // ---------------------------------------------------------------------------
 
-/** Delivery check_id → the PerRepoDelivery field it feeds. */
+/**
+ * Delivery check_id → the PerRepoDelivery field it feeds.
+ * Only the git-sourced DORA metrics feed the deterministic rollup. Cycle-time
+ * and MTTR are connector-gated (tracker / incident) and never derived from git,
+ * so they are intentionally absent here — the deterministic org headline omits
+ * them.
+ */
 const DELIVERY_CHECK_IDS: Array<[string, keyof PerRepoDelivery]> = [
-  ['ADP-09', 'deploy_freq'],
-  ['ADP-25', 'rework_rate'],
-  ['ADP-10', 'lead_time'],
-  ['ADP-13', 'change_fail'],
-  ['ADP-11', 'cycle_time'],
-  ['ADP-I4', 'mttr'],
+  ['ADP-08', 'deploy_freq'],
+  ['ADP-24', 'rework_rate'],
+  ['ADP-09', 'lead_time'],
+  ['ADP-12', 'change_fail'],
 ];
 
 /** AI-tooling category codes (101–106); any awarded → has_ai_tooling. */

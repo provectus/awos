@@ -233,15 +233,15 @@ test('org_rollup: repos_counted field reflects input size', () => {
 
 /**
  * Two repos carrying the full rich delivery slice. Values are chosen so each
- * per-metric MEAN lands unambiguously inside one DORA band:
+ * per-metric MEAN lands unambiguously inside one DORA band. Cycle-time and
+ * MTTR are connector-gated (not git-sourced) and never carried in the rollup,
+ * so the deterministic headline has exactly 6 rows:
  *   merges   (4+2)/2   = 3       → "3 / contributor"      (no band)
  *   loc      (200+100)/2 = 150   → "150 / contributor"    (no band)
  *   deploy   (8+6)/2    = 7      → elite  (>=7)            "7 / wk"
  *   rework   (0.10+0.20)/2 = 0.15 → watch  (>=0.15,<0.30) "15%"
  *   lead     (12+36)/2  = 24     → high   (>=24,<168)     "24 h"
  *   change   (0.04+0.06)/2 = 0.05 → high  (>=0.05,<0.10)  "5%"
- *   cycle    (20+28)/2  = 24     → high   (>=24,<168)     "24 h"
- *   mttr     (0.5+1.5)/2 = 1.0   → high   (>=1,<24)       "1 h"
  */
 const RICH_1: PerRepoInput = {
   repo: 'org/rich-1',
@@ -258,8 +258,6 @@ const RICH_1: PerRepoInput = {
     rework_rate: 0.1,
     lead_time: 12,
     change_fail: 0.04,
-    cycle_time: 20,
-    mttr: 0.5,
   },
 };
 
@@ -278,8 +276,6 @@ const RICH_2: PerRepoInput = {
     rework_rate: 0.2,
     lead_time: 36,
     change_fail: 0.06,
-    cycle_time: 28,
-    mttr: 1.5,
   },
 };
 
@@ -294,17 +290,24 @@ test('org_rollup: headline.delivery values are the per-metric MEAN, re-banded', 
   const result = rollup([RICH_1, RICH_2]);
   assert.ok(result.headline, 'rich input must produce a headline block');
 
+  // The deterministic org headline is exactly 6 rows: the 2 git per-active rows
+  // plus the 4 git-sourced DORA metrics. Cycle-time and MTTR are connector-gated
+  // and never appear here.
+  assert.equal(
+    result.headline.delivery.length,
+    6,
+    `deterministic org headline must have 6 rows (no cycle/MTTR), got ${result.headline.delivery.length}`
+  );
+
   const cases: Array<[string, string, string | undefined, string | undefined]> =
     [
       // label, display_value, band, check_id
       ['Merges / active contributor', '3 / contributor', undefined, undefined],
       ['LOC / active contributor', '150 / contributor', undefined, undefined],
-      ['Deployment frequency', '7 / wk', 'elite', 'ADP-09'],
-      ['Rework rate (DORA)', '15%', 'watch', 'ADP-25'],
-      ['Lead time for change', '24 h', 'high', 'ADP-10'],
-      ['Change-failure rate', '5%', 'high', 'ADP-13'],
-      ['Cycle time', '24 h', 'high', 'ADP-11'],
-      ['MTTR', '1 h', 'high', 'ADP-I4'],
+      ['Deployment frequency', '7 / wk', 'elite', 'ADP-08'],
+      ['Rework rate (DORA)', '15%', 'watch', 'ADP-24'],
+      ['Lead time for change', '24 h', 'high', 'ADP-09'],
+      ['Change-failure rate', '5%', 'high', 'ADP-12'],
     ];
   for (const [label, display, band, checkId] of cases) {
     const d = deliveryRow(result, label);
@@ -352,26 +355,26 @@ test('org_rollup: a metric present in only some repos averages over just those r
 });
 
 test('org_rollup: a metric absent in ALL repos is omitted from the headline', () => {
-  const r1NoCycle: PerRepoInput = {
+  const r1NoDeploy: PerRepoInput = {
     ...RICH_1,
-    delivery: { ...RICH_1.delivery, cycle_time: null },
+    delivery: { ...RICH_1.delivery, deploy_freq: null },
   };
-  const r2NoCycle: PerRepoInput = {
+  const r2NoDeploy: PerRepoInput = {
     ...RICH_2,
-    delivery: { ...RICH_2.delivery, cycle_time: null },
+    delivery: { ...RICH_2.delivery, deploy_freq: null },
   };
-  const result = rollup([r1NoCycle, r2NoCycle]);
-  const cycle = (result.headline?.delivery ?? []).find(
-    (x) => x.label === 'Cycle time'
+  const result = rollup([r1NoDeploy, r2NoDeploy]);
+  const deploy = (result.headline?.delivery ?? []).find(
+    (x) => x.label === 'Deployment frequency'
   );
   assert.equal(
-    cycle,
+    deploy,
     undefined,
-    'Cycle time must be omitted when no repo supplies a value'
+    'Deployment frequency must be omitted when no repo supplies a value'
   );
 });
 
-test('org_rollup: enriched per_repo rows carry audit_total, coverage and all 8 delivery values', () => {
+test('org_rollup: enriched per_repo rows carry audit_total, coverage and all 6 delivery values', () => {
   const result = rollup([RICH_1, RICH_2]);
   const row = result.per_repo.find((r) => r.repo === 'org/rich-1');
   assert.ok(row, 'per_repo must include org/rich-1');
@@ -387,8 +390,6 @@ test('org_rollup: enriched per_repo rows carry audit_total, coverage and all 8 d
   assert.equal(row.rework_rate, 0.1, 'per_repo row must carry rework_rate');
   assert.equal(row.lead_time, 12, 'per_repo row must carry lead_time');
   assert.equal(row.change_fail, 0.04, 'per_repo row must carry change_fail');
-  assert.equal(row.cycle_time, 20, 'per_repo row must carry cycle_time');
-  assert.equal(row.mttr, 0.5, 'per_repo row must carry mttr');
 });
 
 test('org_rollup: legacy input without delivery produces no headline', () => {

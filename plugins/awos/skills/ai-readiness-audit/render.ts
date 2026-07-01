@@ -221,8 +221,8 @@ export interface PerRepoSummary {
   sources_reachable: string[];
   has_ai_tooling: boolean;
   // Enriched by org_rollup (Task 5.2); optional so single-repo JSON still validates.
-  audit_total?: number;
-  coverage?: number;
+  audit_total?: number | null;
+  coverage?: number | null;
   merges_per_active?: number | null;
   loc_per_active?: number | null;
   deploy_freq?: number | null;

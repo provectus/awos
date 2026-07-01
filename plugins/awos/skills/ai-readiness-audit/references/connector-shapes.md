@@ -80,7 +80,14 @@ The computed artifact the engine derives from `TrackerConnector`. The orchestrat
 
 ### Worked example — Jira issue-search → `collected/tracker.json`
 
-A Jira MCP call like `searchJiraIssuesUsingJql({ jql: "project = PROJ AND updated >= -180d", maxResults: 200 })` returns an array of issue objects. Map each to a `TicketRecord`:
+Jira returns at most ~100 issues per request regardless of `maxResults`, so a single call silently under-samples long-lived projects. Page through all results and accumulate into one `tickets[]` before writing the artifact. Two paging modes depending on the MCP / Jira cloud version:
+
+- **`startAt` (classic JQL):** call `searchJiraIssuesUsingJql({ jql: "project = PROJ AND updated >= -180d ORDER BY updated DESC", maxResults: 100, startAt: 0 })`, then repeat with `startAt += page_size` until the returned page is shorter than `maxResults` or empty. Cap at ~2000 tickets total, or stop when issues fall outside the lookback window.
+- **`nextPageToken` (cloud `searchJiraIssuesUsingJql`):** pass the `nextPageToken` from each response back as a parameter in the next call; stop when `isLast: true` or no token is returned. Apply the same ~2000-ticket cap.
+
+Write `collected/tracker.json` once after all pages are accumulated — not per page. Linear paginates via `pageInfo.hasNextPage` + `endCursor` (GraphQL cursor); GitHub Issues via the `Link: rel="next"` header or `page` query param.
+
+Map each collected issue to a `TicketRecord`:
 
 ```
 Jira field                         → TicketRecord field
@@ -233,10 +240,14 @@ Tracker (Jira) → `collected/tracker.json`:
 
 ```
 # 1. Fetch a bounded recent window (e.g. issues updated in the last ~180 days).
-#    Jira MCP: searchJiraIssuesUsingJql, jql = "updated >= -180d ORDER BY updated DESC"
+#    maxResults is server-capped (~100), so a single call under-samples. Page to completion:
+#      Classic JQL: loop on startAt (increment by page size) until a short/empty page.
+#      Cloud MCP:   loop on nextPageToken until isLast: true or no token returned.
+#    jql = "updated >= -180d ORDER BY updated DESC", cap at ~2000 tickets.
+#    Accumulate all pages into one tickets[], then proceed to step 2.
 # 2. Map each issue to a TicketRecord {id, type, status, created_at, resolved_at}
 #    and wrap as a TrackerConnector {tickets: [...], incident_source: null}.
-# 3. Write it:
+# 3. Write it once (after all pages are accumulated):
 #    context/audits/YYYY-MM-DD/collected/tracker.json
 # 4. Re-run the tracker metrics, then re-aggregate:
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i1_work_mix "<repoPath>" "context/audits/YYYY-MM-DD/collected"

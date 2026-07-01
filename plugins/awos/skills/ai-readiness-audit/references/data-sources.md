@@ -111,7 +111,7 @@ docs = "confluence"        # or "coda", "none"
 standards_file = "context/audits/standards.toml"   # optional; governs period/history params
 ```
 
-All fields are optional. Omitting `[[repos]]` entirely means "audit the current repo only." Period and history parameters (`monthly_bucket_days`, `max_lookback_days`) are read from `standards.toml` — see "Period & history" below.
+All fields are optional. Omitting `[[repos]]` entirely means "audit the current repo only." The history parameter `max_lookback_days` is read from `standards.toml` — see "Period & history" below.
 
 ---
 

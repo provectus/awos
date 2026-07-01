@@ -171,21 +171,13 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
 
    Each `per-repo/<repo-name>/` directory ends up with the full `audit.json`, `report.md`, `report.html`, and `collected/` artifacts for that repo. A later task will add links from the org report to each `per-repo/<repo-name>/report.html`.
 
-   Also write a 5-field summary sibling file (consumed by the `rollup` CLI in step 2); derive its values from the repo's `audit.json` — do not re-compute them:
-
-   ```text
-   context/audits/YYYY-MM-DD/per-repo/<repo-name>.json
-   ```
-
-   That file must include `repo`, `contributors` (aggregate count, no PII), `awarded_weight` (Σ awarded category weights from that repo), `sources_reachable` (list of collector sources that returned `available=true`), and `has_ai_tooling` (boolean).
-
 2. Invoke the org rollup via the CLI:
 
    ```bash
    node "${CLAUDE_SKILL_DIR}/dist/cli.js" rollup context/audits/YYYY-MM-DD/per-repo/
    ```
 
-   This computes **exactly three (≤3) portfolio metrics** — never the full per-repo metric set:
+   The rollup reads each `per-repo/<repo-name>/audit.json` (the full per-repo audit written by step 1) and derives `awarded_weight`, `contributors`, `sources_reachable`, and `has_ai_tooling` from it. It computes **exactly three (≤3) portfolio metrics** — never the full per-repo metric set:
    - **`org_ai_tooling_coverage`** — fraction of portfolio repos with any AI tooling present (contributor-weighted).
    - **`org_capability_score`** — average awarded category-weight score across portfolio repos (Σ weight / repo count).
    - **`org_measurement_coverage`** — fraction of portfolio repos with ≥1 reachable data-source collector (contributor-weighted).

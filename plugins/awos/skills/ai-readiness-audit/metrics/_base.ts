@@ -139,32 +139,6 @@ export function makeMetricResult(
 }
 
 // ---------------------------------------------------------------------------
-// History series helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Cap a monthly_buckets array to at most `maxDays` of history.
- *
- * Buckets are ordered oldest-first (ascending bucket_start). We keep the
- * MOST RECENT buckets that fit within `maxDays`. Each bucket covers
- * `bucketDays` days.
- *
- * When `maxDays` is 0 or negative, returns the full array unchanged (no cap).
- */
-export function capBucketsByHistory<T extends { bucket_start: string }>(
-  buckets: T[],
-  maxDays: number,
-  bucketDays: number
-): T[] {
-  if (maxDays <= 0 || bucketDays <= 0) return buckets;
-  const maxBuckets = Math.floor(maxDays / bucketDays);
-  if (maxBuckets <= 0) return [];
-  if (buckets.length <= maxBuckets) return buckets;
-  // Keep the most-recent (tail) buckets.
-  return buckets.slice(buckets.length - maxBuckets);
-}
-
-// ---------------------------------------------------------------------------
 // Category award helper
 // ---------------------------------------------------------------------------
 

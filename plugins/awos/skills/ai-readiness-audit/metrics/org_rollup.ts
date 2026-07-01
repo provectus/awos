@@ -99,6 +99,39 @@ export interface PerRepoInput {
    * multiple paths counts once per repo.
    */
   linked_repos?: Array<{ name: string; via?: string; kind?: string }>;
+  /**
+   * Flattened check records from this repo's audit dimensions (Task 5.5).
+   * Used by the org rollup to compute cross-repo capability gaps.
+   * Absent repos contribute nothing to gap aggregation.
+   */
+  checks?: Array<{
+    check_id: string;
+    dimension: string;
+    /** Human label from standards.toml — the first repo that has this check sets it. */
+    definition: string;
+    status: string;
+  }>;
+}
+
+// ---------------------------------------------------------------------------
+// Org gaps types (Task 5.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * One cross-repo capability gap: a check that FAILs in at least one repo.
+ * Used as the deterministic seed for the orchestrator's org insights/recommendations.
+ */
+export interface OrgGap {
+  /** Check identifier (e.g. "SEC-01", "AI-03"). */
+  check_id: string;
+  /** Dimension slug the check belongs to (e.g. "security"). */
+  dimension: string;
+  /** Human-readable label from standards.toml — taken from the first repo that has this check. */
+  definition: string;
+  /** Number of repos where this check's status is FAIL. */
+  fail_repos: number;
+  /** Number of repos where this check is present (any status, including SKIP). */
+  total_repos: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +198,14 @@ export interface OrgRollupResult {
    * Each list is sorted by count desc, then name asc.
    */
   org_connections?: OrgConnections;
+  /**
+   * Deterministic cross-repo capability gap seed (Task 5.5).
+   * Each entry is a check that FAILs in ≥1 repo, sorted by fail_repos desc
+   * then check_id asc, capped at 15. Absent when no check FAILs anywhere.
+   * The orchestrator phrases these into plain-language portfolio insights
+   * and recommendations; it never invents the counts.
+   */
+  org_gaps?: OrgGap[];
 }
 
 export interface PerRepoSummary {
@@ -358,6 +399,74 @@ function dedupeByName(items: Array<{ name: string }>): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// Org gap computation (Task 5.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the cross-repo capability gap seed from per-repo check arrays.
+ *
+ * Rules:
+ * - total_repos counts every repo where the check is present (any status, including SKIP).
+ * - fail_repos counts only repos where status === 'FAIL'; WARN and SKIP are not failures.
+ * - Duplicate check_ids within one repo count once per repo (first occurrence wins).
+ * - Only checks with fail_repos > 0 are included (a gap in ≥1 repo).
+ * - Sorted by fail_repos desc, then check_id asc for deterministic output.
+ * - Capped at 15 entries so the seed is scannable without being a per-repo dump.
+ * - definition comes from the first repo in the input array that carries the check.
+ */
+function computeOrgGaps(perRepoResults: PerRepoInput[]): OrgGap[] {
+  // Map from check_id to accumulator.
+  const gapMap = new Map<
+    string,
+    {
+      dimension: string;
+      definition: string;
+      fail_repos: number;
+      total_repos: number;
+    }
+  >();
+
+  for (const repo of perRepoResults) {
+    if (!repo.checks || repo.checks.length === 0) continue;
+
+    // Dedupe check_ids within this repo; first occurrence wins for status.
+    const seenInRepo = new Set<string>();
+    for (const check of repo.checks) {
+      if (!check.check_id || seenInRepo.has(check.check_id)) continue;
+      seenInRepo.add(check.check_id);
+
+      const entry = gapMap.get(check.check_id);
+      if (entry) {
+        entry.total_repos++;
+        if (check.status === 'FAIL') entry.fail_repos++;
+      } else {
+        gapMap.set(check.check_id, {
+          dimension: check.dimension,
+          definition: check.definition,
+          fail_repos: check.status === 'FAIL' ? 1 : 0,
+          total_repos: 1,
+        });
+      }
+    }
+  }
+
+  return Array.from(gapMap.entries())
+    .filter(([, v]) => v.fail_repos > 0)
+    .sort(
+      ([aId, av], [bId, bv]) =>
+        bv.fail_repos - av.fail_repos || aId.localeCompare(bId)
+    )
+    .slice(0, 15)
+    .map(([check_id, v]) => ({
+      check_id,
+      dimension: v.dimension,
+      definition: v.definition,
+      fail_repos: v.fail_repos,
+      total_repos: v.total_repos,
+    }));
+}
+
+// ---------------------------------------------------------------------------
 // Rollup implementation
 // ---------------------------------------------------------------------------
 
@@ -394,6 +503,7 @@ export function rollup(
         ci: [],
         linked_repos: [],
       },
+      org_gaps: [],
     };
   }
 
@@ -487,10 +597,12 @@ export function rollup(
 
   const headline = buildHeadline(repos);
   const org_connections = aggregateConnections(perRepoResults);
+  const org_gaps = computeOrgGaps(perRepoResults);
   const result: OrgRollupResult = {
     portfolio_metrics,
     per_repo: repos,
     org_connections,
+    org_gaps,
   };
   if (headline) result.headline = headline;
   return result;

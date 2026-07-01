@@ -200,6 +200,8 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
 
    Also author the plain-language report blocks (`headline`, `insights[]`, `recommendations[]`) into `org-portfolio.json` exactly as in single-repo Step 6.4 — at portfolio altitude: `headline.reach` summarises tooling coverage across repos, `insights[]` are portfolio-level themes (e.g. the AI-dark repos, the connector gaps), and `recommendations[]` name the repos/checks driving them. The renderer formats them; it does not synthesize them.
 
+   **Authoring `insights[]` and `recommendations[]` from the `org_gaps` seed.** The rollup output already contains a deterministic `org_gaps` array — the cross-repo capability gaps computed by the engine. Use it as the source of truth for counts; never invent numbers. Turn each entry into a plain-language portfolio card: for `insights[]`, phrase each gap as "`<fail_repos>`/`<total_repos>` repos fail `<definition>` (`<dimension>`)"; for `recommendations[]`, name the check, cite the count, and describe what fixing it improves. Start from the highest-`fail_repos` entries (they are already sorted). Pick the 3–5 most impactful to surface rather than listing every gap. Gaps with `fail_repos === total_repos` (all repos failing) warrant a P0 priority; gaps in roughly half the repos warrant P1; isolated gaps (1 repo) warrant P2 unless the check is critical.
+
 4. Render the org report from the org audit JSON — **always produce BOTH `report.md` and `report.html`** (unconditional, never gated on Step 7):
 
    ```bash

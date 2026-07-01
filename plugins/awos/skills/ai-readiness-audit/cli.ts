@@ -226,9 +226,11 @@ interface AuditCheck {
   status?: string;
   value?: unknown;
   weight_awarded?: number;
+  definition?: string;
 }
 
 interface AuditDimension {
+  dimension?: string;
   checks?: AuditCheck[];
 }
 
@@ -284,6 +286,27 @@ function readPerRepoAudit(
       hasAiTooling = true;
   }
 
+  // Build the compact checks list for cross-repo gap aggregation (Task 5.5).
+  // Iterate dimensions so each check record carries its dimension slug.
+  const checksForGaps: Array<{
+    check_id: string;
+    dimension: string;
+    definition: string;
+    status: string;
+  }> = [];
+  for (const dim of audit.dimensions ?? []) {
+    const dimSlug = dim.dimension ?? '';
+    for (const c of dim.checks ?? []) {
+      if (!c.check_id) continue;
+      checksForGaps.push({
+        check_id: c.check_id,
+        dimension: dimSlug,
+        definition: c.definition ?? '',
+        status: c.status ?? '',
+      });
+    }
+  }
+
   // Delivery check values by check_id (null when absent / SKIP / null value).
   const delivery: PerRepoDelivery = {};
   for (const [checkId, field] of DELIVERY_CHECK_IDS) {
@@ -330,6 +353,7 @@ function readPerRepoAudit(
     delivery,
     tech_stack: audit.tech_stack,
     linked_repos: audit.linked_repos,
+    checks: checksForGaps,
   };
 }
 

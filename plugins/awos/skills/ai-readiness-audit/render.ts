@@ -1399,25 +1399,36 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         : anyNotReliable
           ? 'not-reliable'
           : 'maximal';
+      const relTip = anyMinimal
+        ? 'Some numbers here are lower bounds — the true value may be higher.'
+        : anyNotReliable
+          ? 'Numbers here carry rough estimates; the true value may differ significantly.'
+          : 'Numbers here are upper-bound reliable for what was reachable.';
       const key = dimKey(dim);
       const href = `#dim/${esc(key)}`;
       // Sources column: cell shows SHORT labels; tooltip adds full label + lookback window.
       const dimSourcesUsed = (dim.sources_used as string[] | undefined) ?? [];
-      const sourcesCell =
-        dimSourcesUsed.length === 0
-          ? '—'
-          : esc(
-              dimSourcesUsed
-                .map((s) => shortSourceLabel(s, audit.source_windows))
-                .join(', ')
-            );
+      const sourcesCell = (() => {
+        if (dimSourcesUsed.length === 0) return '—';
+        const cellText = dimSourcesUsed
+          .map((s) => shortSourceLabel(s, audit.source_windows))
+          .join(', ');
+        const tooltipDetail = dimSourcesUsed
+          .map((s) => formatSourceWindow(s, audit.source_windows))
+          .join(' · ');
+        return tip(
+          cellText,
+          'Data sources feeding this dimension',
+          tooltipDetail
+        );
+      })();
       rows.push(`<tr class="dim-row${lowCov}" onclick="location.hash='dim/${esc(key)}'">
   <td>${n++}</td>
-  <td><a href="${href}"><strong>${esc(titleLabel(dim))}</strong></a></td>
-  <td>${fmtPts(dim.score)} pts</td>
+  <td><a href="${href}"><strong>${tip(titleLabel(dim), 'Open this area to see its individual checks.', `${dim.checks.length} checks · coverage ${covPct}`)}</strong></a></td>
+  <td>${tip(fmtPts(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, `coverage ${covPct} · ${esc(dim.dimension)} · standards.toml`)}</td>
   <td>${sourcesCell}</td>
-  <td>${covPct}</td>
-  <td>${relStr}</td>
+  <td>${tip(covPct, `Share of this area's expected capability that is in place.`, `score ÷ Σ applicable weights · ${esc(dim.dimension)}`)}</td>
+  <td>${tip(relStr, relTip, '')}</td>
   <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
   <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
   <td>${counts.partial > 0 ? `<span style="color:#d97706;font-weight:600">${counts.partial}</span>` : counts.partial}</td>

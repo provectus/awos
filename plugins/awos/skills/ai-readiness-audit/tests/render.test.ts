@@ -883,24 +883,30 @@ test('renderHtml: Dimensions overview table has a Sources column header after Po
   );
 });
 
-test('renderHtml: Sources value cell shows plain SHORT labels — tooltip moved to the column header', () => {
+test('renderHtml: Sources tooltips live on BOTH the column header and the value cell', () => {
   const html = renderHtml(sourcesFixture());
   assert.ok(
     html.includes('git history'),
     'Sources cell must show "git history" (no " via " boundary → keep as-is)'
   );
   // "Jira via Atlassian MCP" truncates at " via " → short label is "Jira".
-  // The value cell is now PLAIN text (no tip() wrapping) — tooltips live on headers.
+  // The value cell shows the SHORT label and carries a per-row tooltip.
   assert.ok(
-    html.includes('<td>git history, Jira</td>'),
-    'Sources value cell must be plain "git history, Jira" (tracker truncated at " via " to "Jira"), no per-row tooltip'
+    html.includes(
+      '<td><span class="tip" tabindex="0">git history, Jira<span class="tipbox">'
+    ),
+    'Sources value cell must show the short label "git history, Jira" inside a per-row tooltip'
   );
-  // The Sources column tooltip now sits on the header label, not the value cell.
+  assert.ok(
+    html.includes('Jira via Atlassian MCP'),
+    'Sources value tooltip must include the full source label with its lookback window'
+  );
+  // The Sources column HEADER also carries a tooltip explaining the column.
   assert.ok(
     html.includes(
       '<th><span class="tip" tabindex="0">Sources<span class="tipbox">'
     ),
-    'Sources column HEADER must carry the tooltip explaining the column'
+    'Sources column HEADER must also carry the tooltip explaining the column'
   );
 });
 
@@ -1039,14 +1045,14 @@ test('measurementWindowLabel: joins the date range with ".." (not an en-dash)', 
   );
 });
 
-test('renderHtml: dimension summary tooltips live on the column HEADERS, values are plain', () => {
+test('renderHtml: dimension summary tooltips live on BOTH column headers and value cells', () => {
   const html = renderHtml(sourcesFixture());
-  // Header labels for Points/Sources/Coverage/Reliability now carry the tooltip.
+  // Header labels for Points/Sources/Coverage/Reliability carry a column-level tooltip.
   assert.ok(
     html.includes(
       '<th><span class="tip" tabindex="0">Points<span class="tipbox">'
     ),
-    'Points column header must carry the tooltip (label, not value)'
+    'Points column header must carry the column-explanation tooltip'
   );
   assert.ok(
     html.includes('Capability points earned in this area.'),
@@ -1061,14 +1067,23 @@ test('renderHtml: dimension summary tooltips live on the column HEADERS, values 
       ),
     'Coverage and Reliability column headers must also carry tooltips'
   );
-  // Value cells are now plain formatted values — no per-row tip() wrapping.
+  // Value cells ALSO carry a per-row tooltip (tooltips everywhere).
   assert.ok(
-    html.includes('<td>5 pts</td>'),
-    'Points value cell must be plain text ("5 pts"), not a tooltip span'
+    html.includes(
+      '<td><span class="tip" tabindex="0">5 pts<span class="tipbox">'
+    ),
+    'Points value cell must carry its per-row tooltip'
   );
   assert.ok(
-    !html.includes('· ai-development-tooling · standards.toml'),
-    'The summary-table per-row Points value tooltip (with row-specific meta) must be gone'
+    html.includes('· ai-development-tooling · standards.toml'),
+    'The Points value tooltip must carry its row-specific meta (coverage · dimension · standards.toml)'
+  );
+  // The Dimension name (row label) cell also carries a tooltip.
+  assert.ok(
+    /<strong><span class="tip" tabindex="0">[^<]+<span class="tipbox">/.test(
+      html
+    ),
+    'The Dimension name cell must carry a tooltip on the row label'
   );
 });
 

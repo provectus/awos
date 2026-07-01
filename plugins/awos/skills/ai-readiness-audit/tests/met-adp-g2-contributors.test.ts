@@ -2,14 +2,14 @@
  * Tests for adp_g2_contributors metric — active contributor count over 90-day window.
  *
  * Contracts verified:
- * - 6-person team (4 code contributors, 2 single-commit drive-by) → 4 active
+ * - 6-person team (4 code contributors, 2 drive-by) → 4 active with T=0.1
  * - single author → 1 active
  * - status is OK when window_stats.per_author is present and non-empty
  * - categories_awarded contains [201]
  * - kind is "computed"
  * - SKIP when git.json absent
  * - SKIP when per_author is absent or empty
- * - active = authors with ≥ meta.active_contributor_min_commits commits (default 2)
+ * - threshold T read from meta.active_contributor_threshold (default 0.1)
  * - score=1 / confidence=1 when OK; score=0 / confidence=0 on SKIP
  * - reliability tag is "not-reliable"
  */
@@ -63,9 +63,8 @@ function makeGitRaw(
 // ---------------------------------------------------------------------------
 
 test('adp_g2: 6-person team with 4 code contributors and 2 drive-by → 4 active', () => {
-  // Active = distinct authors with ≥ active_contributor_min_commits (default 2) commits.
-  // The 4 code contributors have many commits → active; PM + QA each made a single
-  // drive-by commit (< 2) → excluded.
+  // 3 SDE + 1 ML each have ≥10% merge share (SDE: 10/40=0.25; ML: 10/40=0.25) → active
+  // PM + QA each have 0% merge share and tiny LOC share → excluded on both dimensions
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(
     tmp,
@@ -75,8 +74,8 @@ test('adp_g2: 6-person team with 4 code contributors and 2 drive-by → 4 active
       { author: 'SDE2', commits: 50, merges: 10, lines: 1000 },
       { author: 'SDE3', commits: 50, merges: 10, lines: 1000 },
       { author: 'ML1', commits: 30, merges: 10, lines: 1000 },
-      { author: 'PM1', commits: 1, merges: 0, lines: 10 },
-      { author: 'QA1', commits: 1, merges: 0, lines: 10 },
+      { author: 'PM1', commits: 5, merges: 0, lines: 10 },
+      { author: 'QA1', commits: 5, merges: 0, lines: 10 },
     ])
   );
 
@@ -96,7 +95,7 @@ test('adp_g2: 6-person team with 4 code contributors and 2 drive-by → 4 active
   assert.equal(
     result.value,
     4,
-    '6-person team: active count must be 4 (PM + QA excluded — each has < 2 commits)'
+    '6-person team: active count must be 4 (PM + QA excluded — both merge share and LOC share < 10%)'
   );
   assert.ok(
     typeof result.expression === 'string' &&
@@ -196,8 +195,9 @@ test('adp_g2: SKIP when per_author is empty array', () => {
 // Threshold
 // ---------------------------------------------------------------------------
 
-test('adp_g2: min-commits bar read from meta.active_contributor_min_commits (default 2)', () => {
-  // With the default bar of 2 commits, both authors clear it → both active.
+test('adp_g2: threshold T read from meta.active_contributor_threshold (default 0.1 from standards)', () => {
+  // With T=0.1 (from standards.toml meta), authors with both merge/LOC share ≥10% are active.
+  // Both authors here are active at T=0.1 (each has 50% share) — confirms default threshold works.
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(
     tmp,
@@ -212,35 +212,36 @@ test('adp_g2: min-commits bar read from meta.active_contributor_min_commits (def
   assert.equal(
     result.value,
     2,
-    'with the default 2-commit bar: both authors have ≥2 commits so both are active'
+    'with default T=0.1: both authors have 50% share so both are active'
   );
 });
 
-test('adp_g2: higher min-commits from standards meta excludes more authors', () => {
-  // With the default bar (2) both are active; raising the bar to 5 excludes Bob (3 commits).
+test('adp_g2: higher T from standards meta excludes more authors', () => {
+  // With T=0.3 (30%), Bob has merge_share=20/100=0.2 < 0.3 AND loc_share=200/1000=0.2 < 0.3 → excluded.
+  // Alice has 80% share → active. Result: 1 active.
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(
     tmp,
     'git',
     makeGitRaw([
       { author: 'Alice', commits: 80, merges: 80, lines: 800 },
-      { author: 'Bob', commits: 3, merges: 0, lines: 200 },
+      { author: 'Bob', commits: 20, merges: 20, lines: 200 },
     ])
   );
 
-  // Pass custom standards override raising the min-commits bar to 5.
+  // Pass custom standards override with T=0.3
   const customStandards = {
     ...standards,
     meta: {
       ...((standards as any).meta ?? {}),
-      active_contributor_min_commits: 5,
+      active_contributor_threshold: 0.3,
     },
   };
   const result = compute(collectedDir, customStandards as any, {});
   assert.equal(
     result.value,
     1,
-    'with min_commits=5: Bob (3 commits) is excluded; only Alice (80 commits) is active'
+    'with T=0.3: Bob (20% share) is excluded; only Alice (80% share) is active'
   );
 });
 

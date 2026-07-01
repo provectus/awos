@@ -318,13 +318,13 @@ export interface WindowStats {
 }
 
 /**
- * Fallback for the active-contributor minimum-commits bar, used ONLY when the
+ * Fallback for the active-contributor exclusion threshold, used ONLY when the
  * caller does not thread the value in (e.g. the standalone `collect` verb run
- * without standards). The source of truth is `meta.active_contributor_min_commits`
+ * without standards). The source of truth is `meta.active_contributor_threshold`
  * in standards.toml — `audit-core` reads it and passes it into `collect(...)`.
  * Keep this in sync with that key only as a last-resort default.
  */
-export const ACTIVE_CONTRIBUTOR_MIN_COMMITS_DEFAULT = 2;
+export const ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT = 0.05;
 
 /**
  * Fallback for the code-turnover rework horizon, in days, used ONLY when the
@@ -338,26 +338,26 @@ export const REWORK_HORIZON_DAYS_DEFAULT = 21;
 /**
  * Active-contributor filter (locked rule — Phase 2 ratios reuse this).
  *
- * An author is active iff they have at least `minActiveCommits` commits in the
- * window. This is an absolute bar, not a share of the total — so a single
- * dominant author no longer forces everyone else's share below a threshold and
- * wrongly excludes them. `minActiveCommits` is configurable via
- * meta.active_contributor_min_commits in standards.toml (default 2).
+ * An author is excluded only when BOTH their merge-share and their LOC-share
+ * fall below threshold T (a fraction of the window totals). This filters out
+ * drive-by reviewers and non-code participants while keeping anyone with a
+ * meaningful share of merges or code. T is configurable via
+ * meta.active_contributor_threshold in standards.toml (default 0.05).
  *
- * @param perAuthor        - author rows from window_stats.per_author
- * @param minActiveCommits - minimum commits in the window to count as active (≥ 1)
+ * @param perAuthor - author rows from window_stats.per_author
+ * @param T         - exclusion threshold as a fraction of window totals (0..1)
  */
-export function activeContributors(
-  perAuthor: AuthorRow[],
-  minActiveCommits: number
-): number {
-  return perAuthor.filter((a) => a.commits >= minActiveCommits).length;
+export function activeContributors(perAuthor: AuthorRow[], T: number): number {
+  const tm = perAuthor.reduce((s, a) => s + a.merges, 0) || 1;
+  const tl = perAuthor.reduce((s, a) => s + a.lines, 0) || 1;
+  return perAuthor.filter((a) => !(a.merges / tm < T && a.lines / tl < T))
+    .length;
 }
 
 function buildWindowStats(
   cwd: string,
   period: Period,
-  minActiveCommits: number
+  activeThreshold: number
 ): WindowStats {
   const windowDays = period.lookback_days;
   const empty: WindowStats = {
@@ -487,7 +487,7 @@ function buildWindowStats(
     0
   );
 
-  const activeCount = activeContributors(perAuthor, minActiveCommits);
+  const activeCount = activeContributors(perAuthor, activeThreshold);
   const totalLines = perAuthor.reduce((s, a) => s + a.lines, 0);
   const merges_per_active = activeCount > 0 ? totalMerges / activeCount : null;
   const loc_per_active = activeCount > 0 ? totalLines / activeCount : null;
@@ -709,8 +709,8 @@ export interface GitRaw {
  * same values as the metrics; the constants above are last-resort fallbacks.
  */
 export interface GitCollectOptions {
-  /** meta.active_contributor_min_commits */
-  activeContributorMinCommits?: number;
+  /** meta.active_contributor_threshold */
+  activeContributorThreshold?: number;
   /** meta.rework_horizon_days */
   reworkHorizonDays?: number;
 }
@@ -720,8 +720,8 @@ export function collect(
   period: Period,
   opts: GitCollectOptions = {}
 ) {
-  const minActiveCommits =
-    opts.activeContributorMinCommits ?? ACTIVE_CONTRIBUTOR_MIN_COMMITS_DEFAULT;
+  const activeThreshold =
+    opts.activeContributorThreshold ?? ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT;
   const reworkHorizonDays =
     opts.reworkHorizonDays ?? REWORK_HORIZON_DAYS_DEFAULT;
   const default_branch = getDefaultBranch(repoPath);
@@ -730,7 +730,7 @@ export function collect(
   const tooling_paths = getToolingPaths(repoPath);
   const { total_merges, revert_merges } = getMergeStats(repoPath);
   const merge_records = getMergeRecords(repoPath);
-  const window_stats = buildWindowStats(repoPath, period, minActiveCommits);
+  const window_stats = buildWindowStats(repoPath, period, activeThreshold);
   const numstat_totals = getNumstatTotals(repoPath);
   const code_turnover = getCodeTurnover(repoPath, period, reworkHorizonDays);
   const history_available_days = getHistoryAvailableDays(repoPath);

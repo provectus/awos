@@ -22,7 +22,7 @@
 
 [meta]
 max_lookback_days = 90
-active_contributor_min_commits = 2
+active_contributor_threshold = 0.05
 rework_horizon_days = 21
 standards_version = "2026.06"
 
@@ -142,7 +142,7 @@ metric = "adp_g2_contributors"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
-definition = "Active contributor count over the 90-day window: distinct commit authors with at least active_contributor_min_commits commits (default 2), so single-commit drive-by authors are excluded while everyone doing real work in the window is counted (aggregate only, no PII)"
+definition = "Active contributor count over the 90-day window: authors excluded only when both their merge-share and LOC-share fall below the active_contributor_threshold (default 5 %), filtering out drive-by reviewers and non-code participants (aggregate only, no PII)"
 applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # raw count; no direction implied without context

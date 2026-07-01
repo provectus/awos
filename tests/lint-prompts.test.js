@@ -1166,8 +1166,8 @@ test('standards.toml exists and matches the category/band schema', () => {
   );
   assert.match(
     src,
-    /active_contributor_min_commits\s*=\s*2/,
-    'meta.active_contributor_min_commits must be 2 (active = authors with ≥2 commits in the window)'
+    /active_contributor_threshold\s*=\s*0\.05/,
+    'meta.active_contributor_threshold must be 0.05 (active-contributor exclusion threshold)'
   );
   assert.match(
     src,

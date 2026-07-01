@@ -38,7 +38,7 @@ import { fileURLToPath } from 'node:url';
 // ---------------------------------------------------------------------------
 import {
   collect as collectGit,
-  ACTIVE_CONTRIBUTOR_MIN_COMMITS_DEFAULT,
+  ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT,
   REWORK_HORIZON_DAYS_DEFAULT,
 } from './collectors/git.ts';
 import { collect as collectCi } from './collectors/ci.ts';
@@ -207,10 +207,10 @@ function periodFromMeta(standards: Record<string, unknown>): Period {
 /** Git collector tunables from standards.toml [meta] (the source of truth). */
 function gitOptsFromMeta(standards: Record<string, unknown>) {
   return {
-    activeContributorMinCommits: metaNumber(
+    activeContributorThreshold: metaNumber(
       standards,
-      'active_contributor_min_commits',
-      ACTIVE_CONTRIBUTOR_MIN_COMMITS_DEFAULT
+      'active_contributor_threshold',
+      ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
     ),
     reworkHorizonDays: metaNumber(
       standards,

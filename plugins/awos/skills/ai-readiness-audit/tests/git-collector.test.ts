@@ -353,21 +353,20 @@ test('window_stats: merges_per_active and loc_per_active are null when there are
 });
 
 /**
- * Build a repo where ONE author dominates LOC and merges while several others
- * do real, steady work. Under the old share-based active-contributor rule the
- * dominant author forced everyone else below the 5% share cutoff, so only he
- * counted as active (the "1 active of 9" bug). The new absolute-commits rule
- * counts every author with ≥ active_contributor_min_commits commits.
+ * Build a repo where ONE author dominates LOC and holds the only merge while
+ * several others do real, steady work. Used to exercise the share-based
+ * active-contributor rule (an author is excluded only when BOTH merge-share and
+ * LOC-share fall below T) and the per-week throughput variants.
  *
  * Non-merge per-author commits / lines (all within the 90-day window):
  *   Dom:   3 commits, 100 lines (dom1=50, dom2=30, dom3=20), + 1 first-parent merge
  *   Carol: 2 commits,   5 lines (3 + 2)
  *   Dave:  2 commits,   5 lines (4 + 1)
- *   Eve:   1 commit,    2 lines  ← single-commit drive-by, excluded at minCommits=2
+ *   Eve:   1 commit,    2 lines
  *
  * total merges = 1, total lines = 112.
- * active @ minCommits=2 → {Dom, Carol, Dave} = 3 (Eve excluded).
- * active @ minCommits=3 → {Dom} = 1.
+ * active @ T=0.05 → {Dom} = 1 (Dom holds 100% of merges and 89% of LOC; Carol,
+ * Dave, Eve all fall below the 5% share on both dimensions).
  */
 function activeRuleRepo(): string {
   const r = join(mkdtempSync(join(tmpdir(), 'git-active-')), 'repo');
@@ -423,42 +422,39 @@ function activeRuleRepo(): string {
   return r;
 }
 
-test('activeContributors: absolute minimum-commits bar — a dominant author does not suppress others, single-commit authors are excluded', () => {
-  // Regression guard for the "1 active of 9" bug: the old rule excluded an
-  // author iff BOTH merge-share and LOC-share fell below T, so one dominant
-  // author forced everyone else out. The new rule keeps every author with
-  // >= minCommits commits, independent of anyone else's share.
+test('activeContributors: excludes an author only when BOTH merge-share and LOC-share fall below T', () => {
   const rows = [
     { author: 'Dom', commits: 40, merges: 12, lines: 5000 }, // dominates LOC + merges
     { author: 'Carol', commits: 3, merges: 0, lines: 20 },
     { author: 'Dave', commits: 2, merges: 0, lines: 10 },
-    { author: 'Eve', commits: 1, merges: 0, lines: 3 }, // drive-by
+    { author: 'Eve', commits: 1, merges: 0, lines: 3 },
   ];
+  // total merges = 12, total lines = 5033. At T=0.05 the bars are merge-share
+  // >= 0.05 or LOC-share >= 0.05; only Dom clears either, so active = 1.
   assert.equal(
-    activeContributors(rows, 2),
-    3,
-    'active must be the 3 authors with >=2 commits (Dom, Carol, Dave); the old share rule returned 1 because Dom dominates LOC+merges and pushes the others below the share cutoff'
+    activeContributors(rows, 0.05),
+    1,
+    'at T=0.05 only Dom clears the 5% share on merges or LOC; Carol/Dave/Eve are below both and excluded'
   );
   assert.equal(
-    activeContributors(rows, 1),
+    activeContributors(rows, 0),
     4,
-    'at minCommits=1 every author qualifies (all have >=1 commit)'
+    'at T=0 no author is below the threshold on either dimension, so all are kept'
   );
 });
 
-test('window_stats: merges_per_active and loc_per_active use the absolute-commits active count (all >=2-commit authors, dominant author does not suppress others)', () => {
-  // Contract: the collector's active count follows the absolute minimum-commits
-  // rule. In activeRuleRepo, Dom dominates LOC (100/112) and holds the only
-  // merge, yet Carol and Dave (2 commits each) must still count as active while
-  // Eve (1 commit) is excluded → active = 3, not 1.
+test('window_stats: merges_per_active and loc_per_active use the share-based active count', () => {
+  // In activeRuleRepo, Dom holds 100% of merges and 89% of LOC; Carol/Dave/Eve
+  // all fall below the 5% share on both dimensions, so active = 1 under the
+  // share rule.
   const art = collect(activeRuleRepo(), WINDOW_PERIOD);
   const ws = art.raw.window_stats;
 
-  const active = activeContributors(ws.per_author, 2);
+  const active = activeContributors(ws.per_author, 0.05);
   assert.equal(
     active,
-    3,
-    'active must be 3 (Dom, Carol, Dave — all >=2 commits); Eve is excluded (1 commit)'
+    1,
+    'active must be 1 (Dom) — he dominates both merge-share and LOC-share, pushing the others below the 5% cutoff'
   );
 
   const totalLines = ws.per_author.reduce(
@@ -467,13 +463,13 @@ test('window_stats: merges_per_active and loc_per_active use the absolute-commit
   );
   assert.equal(
     ws.merges_per_active,
-    ws.merges / 3,
-    'merges_per_active must be total merges (1) / 3 active contributors'
+    ws.merges / active,
+    'merges_per_active must be total merges / active-contributor count'
   );
   assert.equal(
     ws.loc_per_active,
-    totalLines / 3,
-    'loc_per_active must be total lines (112) / 3 active contributors'
+    totalLines / active,
+    'loc_per_active must be total lines / active-contributor count'
   );
 });
 
@@ -986,26 +982,27 @@ function gitDates(
   });
 }
 
-test('collect honors the threaded active-contributor minimum-commits bar (not a hardcoded constant)', () => {
-  // activeRuleRepo: Dom=3 commits (+1 merge), Carol=2, Dave=2, Eve=1.
-  // At minCommits=3 only Dom clears it → active=1 → merges_per_active = 1/1.
-  // At minCommits=2 Dom+Carol+Dave clear it → active=3 → merges_per_active = 1/3.
+test('collect honors the threaded active-contributor threshold (not a hardcoded constant)', () => {
+  // activeRuleRepo shares: Dom holds 100% of merges; Carol/Dave each 5/112 ≈ 4.46%
+  // of LOC, Eve 2/112 ≈ 1.79%. Total merges = 1.
+  // At T=0.05 only Dom clears the bar → active=1 → merges_per_active = 1/1.
+  // At T=0.04 Carol+Dave clear it too (4.46% ≥ 4%) → active=3 → merges_per_active = 1/3.
   const repo = activeRuleRepo();
-  const bar3 = collect(repo, WINDOW_PERIOD, {
-    activeContributorMinCommits: 3,
+  const strict = collect(repo, WINDOW_PERIOD, {
+    activeContributorThreshold: 0.05,
   });
-  const bar2 = collect(repo, WINDOW_PERIOD, {
-    activeContributorMinCommits: 2,
+  const loose = collect(repo, WINDOW_PERIOD, {
+    activeContributorThreshold: 0.04,
   });
   assert.equal(
-    bar3.raw.window_stats.merges_per_active,
+    strict.raw.window_stats.merges_per_active,
     1,
-    'minCommits=3 → 1 active contributor (Dom) → merges_per_active = 1/1'
+    'T=0.05 → 1 active contributor (Dom) → merges_per_active = 1/1'
   );
   assert.equal(
-    bar2.raw.window_stats.merges_per_active,
+    loose.raw.window_stats.merges_per_active,
     1 / 3,
-    'minCommits=2 → 3 active contributors → merges_per_active = 1/3; the bar must be threaded, not hardcoded'
+    'T=0.04 → 3 active contributors (Dom, Carol, Dave) → merges_per_active = 1/3; the threshold must be threaded, not hardcoded'
   );
 });
 

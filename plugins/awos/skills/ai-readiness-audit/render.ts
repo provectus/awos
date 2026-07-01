@@ -107,6 +107,15 @@
  *   "awarded_weight":    number,
  *   "sources_reachable": string[],
  *   "has_ai_tooling":    boolean,
+ *   // Enriched by org_rollup (Task 5.2) — optional:
+ *   "audit_total":       number?,
+ *   "coverage":          number?,
+ *   "merges_per_active": number | null?,
+ *   "loc_per_active":    number | null?,
+ *   "deploy_freq":       number | null?,
+ *   "rework_rate":       number | null?,
+ *   "lead_time":         number | null?,
+ *   "change_fail":       number | null?,
  * }
  * =============================================================================
  */
@@ -211,6 +220,15 @@ export interface PerRepoSummary {
   awarded_weight: number;
   sources_reachable: string[];
   has_ai_tooling: boolean;
+  // Enriched by org_rollup (Task 5.2); optional so single-repo JSON still validates.
+  audit_total?: number;
+  coverage?: number;
+  merges_per_active?: number | null;
+  loc_per_active?: number | null;
+  deploy_freq?: number | null;
+  rework_rate?: number | null;
+  lead_time?: number | null;
+  change_fail?: number | null;
 }
 
 export interface SourceSummary {
@@ -383,6 +401,21 @@ function fmtValue(v: string | number | null | undefined): string {
 function fmtPts(n: number): string {
   if (Number.isInteger(n)) return String(n);
   return (Math.round(n * 10) / 10).toFixed(1);
+}
+
+// Delivery-value formatters for the per-repo org table (Task 5.3).
+// Each returns "—" when the value is null/undefined.
+function fmtN1dp(v: number | null | undefined): string {
+  return v == null ? '—' : v.toFixed(1);
+}
+function fmtWk(v: number | null | undefined): string {
+  return v == null ? '—' : v.toFixed(1) + ' / wk';
+}
+function fmtPctMul(v: number | null | undefined): string {
+  return v == null ? '—' : (v * 100).toFixed(1) + '%';
+}
+function fmtH(v: number | null | undefined): string {
+  return v == null ? '—' : v.toFixed(1) + ' h';
 }
 
 function titleLabel(dim: DimensionArtifact): string {
@@ -725,27 +758,28 @@ export function renderMarkdown(audit: AuditJson): string {
     }
   }
 
-  // Per-repo table (org mode)
+  // Per-repo table (org mode) — Task 5.3: delivery columns + links to per-repo reports
   if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
     lines.push('## Repositories');
     lines.push('');
     lines.push(
-      '| Repo | Contributors | Awarded Weight | Sources Reachable | AI Tooling |'
+      '| Repo | Points | Coverage | Merges/active | LOC/active | Deploy freq | Rework rate | Lead time | Change-fail | Cycle time¹ | MTTR² |'
     );
     lines.push(
-      '| ---- | ------------ | -------------- | ----------------- | ---------- |'
+      '| ---- | ------ | -------- | ------------- | ---------- | ----------- | ----------- | --------- | ----------- | ----------- | ----- |'
     );
     for (const r of audit.per_repo) {
-      const contributors =
-        r.contributors !== null ? String(r.contributors) : '—';
-      const sources =
-        r.sources_reachable.length > 0
-          ? r.sources_reachable.join(', ')
-          : '(none)';
+      const repoLink = `[${r.repo}](per-repo/${r.repo}/report.html)`;
+      const coverage = r.coverage != null ? pct(r.coverage) : '—';
       lines.push(
-        `| ${r.repo} | ${contributors} | ${fmtPts(r.awarded_weight)} | ${sources} | ${r.has_ai_tooling ? 'yes' : 'no'} |`
+        `| ${repoLink} | ${fmtPts(r.awarded_weight)} | ${coverage} | ${fmtN1dp(r.merges_per_active)} | ${fmtN1dp(r.loc_per_active)} | ${fmtWk(r.deploy_freq)} | ${fmtPctMul(r.rework_rate)} | ${fmtH(r.lead_time)} | ${fmtPctMul(r.change_fail)} | — | — |`
       );
     }
+    lines.push('');
+    lines.push(
+      '¹ Cycle time (Jira In-Progress→Done) requires a ticketing connector.'
+    );
+    lines.push('² MTTR requires an incident connector.');
     lines.push('');
   }
 
@@ -1432,26 +1466,50 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
   }
 
   // ─── Repositories & Connections (org mode + single-repo note) ──────────────
+  // Task 5.3: delivery columns + links to per-repo reports
   function reposSection(): string {
     const rows: string[] = ['<h2>Repositories</h2>'];
     if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
       rows.push(
-        '<table><thead><tr><th>Repo</th><th>Contributors</th><th>Sources</th><th>AI Tooling</th><th>Awarded Weight</th></tr></thead><tbody>'
+        '<table><thead><tr>' +
+          '<th>Repo</th>' +
+          '<th>Points</th>' +
+          '<th>Coverage</th>' +
+          '<th>Merges/active</th>' +
+          '<th>LOC/active</th>' +
+          '<th>Deploy freq</th>' +
+          '<th>Rework rate</th>' +
+          '<th>Lead time</th>' +
+          '<th>Change-fail</th>' +
+          '<th>Cycle time¹</th>' +
+          '<th>MTTR²</th>' +
+          '</tr></thead><tbody>'
       );
       for (const r of audit.per_repo) {
-        const sources =
-          r.sources_reachable.length > 0
-            ? r.sources_reachable.map(esc).join(', ')
-            : '<em>none detected</em>';
-        rows.push(`<tr>
-  <td>${esc(r.repo)}</td>
-  <td>${r.contributors !== null ? tip(String(r.contributors), 'Active contributors in the audit window.', '') : '—'}</td>
-  <td>${sources}</td>
-  <td>${r.has_ai_tooling ? '✓ yes' : '✗ no'}</td>
-  <td>${tip(fmtPts(r.awarded_weight), `Capability points earned by this repo: ${r.awarded_weight}.`, '')}</td>
-</tr>`);
+        const coverage = r.coverage != null ? pct(r.coverage) : '—';
+        rows.push(
+          `<tr>` +
+            `<td><a href="per-repo/${esc(r.repo)}/report.html">${esc(r.repo)}</a></td>` +
+            `<td>${tip(fmtPts(r.awarded_weight), `Capability points earned by this repo: ${r.awarded_weight}.`, '')}</td>` +
+            `<td>${coverage}</td>` +
+            `<td>${fmtN1dp(r.merges_per_active)}</td>` +
+            `<td>${fmtN1dp(r.loc_per_active)}</td>` +
+            `<td>${fmtWk(r.deploy_freq)}</td>` +
+            `<td>${fmtPctMul(r.rework_rate)}</td>` +
+            `<td>${fmtH(r.lead_time)}</td>` +
+            `<td>${fmtPctMul(r.change_fail)}</td>` +
+            `<td>—</td>` +
+            `<td>—</td>` +
+            `</tr>`
+        );
       }
       rows.push('</tbody></table>');
+      rows.push(
+        '<p class="footnote">¹ Cycle time (Jira In-Progress→Done) requires a ticketing connector.</p>'
+      );
+      rows.push(
+        '<p class="footnote">² MTTR requires an incident connector.</p>'
+      );
     } else {
       rows.push(
         `<p>Single-repo audit. Project: <strong>${esc(audit.project)}</strong>. ${audit.dimensions.length} dimension(s) evaluated.</p>`

@@ -7,6 +7,7 @@ import type {
   Check,
   DimensionArtifact,
   DeliveryMetric,
+  PerRepoSummary,
 } from './render.ts';
 
 /** Minimal valid Check fixture — extend per test. */
@@ -734,5 +735,281 @@ test('Markdown headline renders gated-absent delivery metrics as "needs connecto
   assert.ok(
     md.includes('medium'),
     'Gated tracker metric with present display_value must render its band in Markdown (Task 4.1)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.3 — Per-repo org table with delivery columns + links to per-repo reports
+// ---------------------------------------------------------------------------
+
+/** Two-repo fixture for the Task 5.3 per-repo table tests. Repo A has all
+ * delivery values populated; Repo B has all delivery values null to verify
+ * the "—" fallback path for every column. */
+function makeOrgAuditWithPerRepo(): AuditJson {
+  const repoA: PerRepoSummary = {
+    repo: 'acme/backend',
+    contributors: 5,
+    awarded_weight: 12,
+    sources_reachable: ['git'],
+    has_ai_tooling: true,
+    audit_total: 12,
+    coverage: 0.75,
+    merges_per_active: 3.2,
+    loc_per_active: 450.0,
+    deploy_freq: 2.5,
+    rework_rate: 0.08,
+    lead_time: 24.0,
+    change_fail: 0.05,
+  };
+  const repoB: PerRepoSummary = {
+    repo: 'acme/frontend',
+    contributors: null,
+    awarded_weight: 7,
+    sources_reachable: [],
+    has_ai_tooling: false,
+    audit_total: 7,
+    coverage: 0.4,
+    merges_per_active: null,
+    loc_per_active: null,
+    deploy_freq: null,
+    rework_rate: null,
+    lead_time: null,
+    change_fail: null,
+  };
+  return makeAudit({
+    portfolio_metrics: [
+      {
+        metric: 'org_ai_tooling_coverage',
+        value: 0.5,
+        description: 'fraction with AI tooling',
+        repos_counted: 2,
+        contributor_weighted: false,
+      },
+    ],
+    per_repo: [repoA, repoB],
+  });
+}
+
+test('HTML per-repo table (Task 5.3): one row per repo with all new columns in order', () => {
+  const audit = makeOrgAuditWithPerRepo();
+  const html = renderHtml(audit);
+
+  // Contract: both repos appear in the table
+  assert.ok(
+    html.includes('acme/backend'),
+    'HTML per-repo table must include repo A name (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('acme/frontend'),
+    'HTML per-repo table must include repo B name (Task 5.3)'
+  );
+
+  // Contract: Repo cell links to per-repo/<repo>/report.html (relative path)
+  assert.ok(
+    html.includes('href="per-repo/acme/backend/report.html"'),
+    'HTML per-repo table: repo cell must link to per-repo/<repo>/report.html (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('href="per-repo/acme/frontend/report.html"'),
+    'HTML per-repo table: repo B cell must link to per-repo/<repo>/report.html (Task 5.3)'
+  );
+
+  // Contract: column headers present in order
+  const headerOrder = [
+    'Repo',
+    'Points',
+    'Coverage',
+    'Merges/active',
+    'LOC/active',
+    'Deploy freq',
+    'Rework rate',
+    'Lead time',
+    'Change-fail',
+    'Cycle time',
+    'MTTR',
+  ];
+  let lastIdx = -1;
+  for (const col of headerOrder) {
+    const idx = html.indexOf(col, lastIdx + 1);
+    assert.ok(
+      idx !== -1,
+      `HTML per-repo table header must contain column "${col}" (Task 5.3)`
+    );
+    assert.ok(
+      idx > lastIdx,
+      `HTML per-repo table column "${col}" must appear after prior columns (Task 5.3)`
+    );
+    lastIdx = idx;
+  }
+
+  // Contract: delivery values formatted correctly for repo A
+  assert.ok(
+    html.includes('2.5 / wk'),
+    'HTML per-repo table: deploy_freq must render as "<n> / wk" (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('8.0%'),
+    'HTML per-repo table: rework_rate must render as "<pct>%" ×100 1dp (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('24.0 h'),
+    'HTML per-repo table: lead_time must render as "<n> h" (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('5.0%'),
+    'HTML per-repo table: change_fail must render as "<pct>%" ×100 (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('3.2'),
+    'HTML per-repo table: merges_per_active must render rounded to 1dp (Task 5.3)'
+  );
+
+  // Contract: null delivery values render as "—"
+  // repo B has all delivery nulls; verify the em-dash appears (multiple times expected)
+  const dashCount = (html.match(/—/g) ?? []).length;
+  assert.ok(
+    dashCount >= 6,
+    `HTML per-repo table: null delivery values must render as "—"; found ${dashCount} (Task 5.3)`
+  );
+
+  // Contract: Cycle time and MTTR columns are always "—"
+  // Header contains the labels; data cells are always dashes
+  assert.ok(
+    html.includes('Cycle time'),
+    'HTML per-repo table must include Cycle time column header (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('MTTR'),
+    'HTML per-repo table must include MTTR column header (Task 5.3)'
+  );
+
+  // Contract: footnotes present
+  assert.ok(
+    html.includes('Cycle time') && html.includes('ticketing connector'),
+    'HTML per-repo table must include Cycle time footnote about ticketing connector (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('MTTR') && html.includes('incident connector'),
+    'HTML per-repo table must include MTTR footnote about incident connector (Task 5.3)'
+  );
+});
+
+test('Markdown per-repo table (Task 5.3): one row per repo with all new columns in order', () => {
+  const audit = makeOrgAuditWithPerRepo();
+  const md = renderMarkdown(audit);
+
+  // Contract: ## Repositories section present
+  assert.ok(
+    md.includes('## Repositories'),
+    'Markdown must include ## Repositories section (Task 5.3)'
+  );
+
+  // Contract: both repos appear
+  assert.ok(
+    md.includes('acme/backend'),
+    'Markdown per-repo table must include repo A (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('acme/frontend'),
+    'Markdown per-repo table must include repo B (Task 5.3)'
+  );
+
+  // Contract: Repo cell is a Markdown link to per-repo/<repo>/report.html
+  assert.ok(
+    md.includes('[acme/backend](per-repo/acme/backend/report.html)'),
+    'Markdown per-repo table: repo cell must be a link to per-repo/<repo>/report.html (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('[acme/frontend](per-repo/acme/frontend/report.html)'),
+    'Markdown per-repo table: repo B cell must be a link to per-repo/<repo>/report.html (Task 5.3)'
+  );
+
+  // Contract: column headers present in order
+  const headerLine = md
+    .split('\n')
+    .find((l) => l.includes('| Repo |') && l.includes('Points'));
+  assert.ok(
+    headerLine !== undefined,
+    'Markdown per-repo table must have a header row with Repo and Points (Task 5.3)'
+  );
+  const colOrder = [
+    'Repo',
+    'Points',
+    'Coverage',
+    'Merges/active',
+    'LOC/active',
+    'Deploy freq',
+    'Rework rate',
+    'Lead time',
+    'Change-fail',
+    'Cycle time',
+    'MTTR',
+  ];
+  let last = -1;
+  for (const col of colOrder) {
+    const pos = headerLine!.indexOf(col, last + 1);
+    assert.ok(
+      pos !== -1,
+      `Markdown header must contain column "${col}" (Task 5.3)`
+    );
+    assert.ok(
+      pos > last,
+      `Markdown column "${col}" must appear after prior columns (Task 5.3)`
+    );
+    last = pos;
+  }
+
+  // Contract: delivery values formatted correctly for repo A
+  assert.ok(
+    md.includes('2.5 / wk'),
+    'Markdown per-repo table: deploy_freq must render as "<n> / wk" (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('8.0%'),
+    'Markdown per-repo table: rework_rate must render as "<pct>%" ×100 1dp (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('24.0 h'),
+    'Markdown per-repo table: lead_time must render as "<n> h" (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('5.0%'),
+    'Markdown per-repo table: change_fail must render as "<pct>%" ×100 (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('3.2'),
+    'Markdown per-repo table: merges_per_active must render to 1dp (Task 5.3)'
+  );
+
+  // Contract: null delivery values render as "—"
+  const repoBRow = md.split('\n').find((l) => l.includes('acme/frontend'));
+  assert.ok(
+    repoBRow !== undefined,
+    'Markdown per-repo table: repo B row must exist (Task 5.3)'
+  );
+  const dashesInRowB = (repoBRow!.match(/—/g) ?? []).length;
+  assert.ok(
+    dashesInRowB >= 6,
+    `Markdown per-repo table: repo B must have ≥6 "—" for null delivery values; found ${dashesInRowB} (Task 5.3)`
+  );
+
+  // Contract: Cycle time and MTTR are always "—"
+  assert.ok(
+    md.includes('Cycle time'),
+    'Markdown per-repo table must include Cycle time column header (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('MTTR'),
+    'Markdown per-repo table must include MTTR column header (Task 5.3)'
+  );
+
+  // Contract: footnotes appear below the table
+  assert.ok(
+    md.includes('ticketing connector'),
+    'Markdown per-repo table must include Cycle time footnote about ticketing connector (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('incident connector'),
+    'Markdown per-repo table must include MTTR footnote about incident connector (Task 5.3)'
   );
 });

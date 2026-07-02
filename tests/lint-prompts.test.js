@@ -685,6 +685,46 @@ test('the flow templates finalize the flow-log at commit-push and never leave it
   );
 });
 
+test('the flow distinguishes interactive vs unattended AskUserQuestion timeouts', () => {
+  // A road-test found the 60s AskUserQuestion no-answer fallback firing
+  // in an interactive session, silently defaulting while the user was
+  // still deciding. The 60s timer is a harness guard (the skill can't
+  // change it), but the reaction is ours: unattended runs (driven with
+  // AWOS_UNATTENDED=1) take the safe default; interactive runs re-ask
+  // once and announce the default. An irreversible step never proceeds
+  // on a timeout. Lock the env-var contract into flow.md, both
+  // templates, and the decision record.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /AWOS_UNATTENDED/.test(flow),
+    'flow.md must key the unanswered-question handling off the AWOS_UNATTENDED env var — interactive and headless runs treat a 60s timeout differently'
+  );
+  assert.ok(
+    /re-ask the question once/i.test(flow),
+    'flow.md must re-ask once in an interactive run rather than silently defaulting on the 60s timeout'
+  );
+
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /AWOS_UNATTENDED/.test(body) && /No response after 60s/i.test(body),
+      `${tmpl} must carry the AWOS_UNATTENDED run-mode rule for the harness's "No response after 60s" fallback`
+    );
+    assert.ok(
+      /timeout never authorizes an irreversible step/i.test(body),
+      `${tmpl} must keep the guard that a timeout never authorizes an irreversible step (merge / spec-amendment confirmations stay a no)`
+    );
+  }
+
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /AWOS_UNATTENDED=1/.test(dfTemplate),
+    'delivery-flow-template.md §6 must record AWOS_UNATTENDED=1 as an operator prerequisite for unattended runs'
+  );
+});
+
 test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
   // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
   // propose a QA agent by searching the registry, not by always

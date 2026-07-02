@@ -76,7 +76,7 @@ Which commands `/awos:flow` generated and their names — re-runs reconcile exac
 ## 6. Trigger
 
 - **Supported:** manual — `/implement-feature <feature — ticket ID, link, or file path>`
-- **Wanted (setup notes only):** [polling via `/loop`/cron, webhook — what to set up, or "none". For unattended runs, the driver chains headless stage invocations (`claude -p "/implement-feature <feature>"`; resume-detection makes each idempotent) — record the prerequisites the operator owns: the machine, `claude` on PATH, a permission mode that allows edits, and headless-capable transports]
+- **Wanted (setup notes only):** [polling via `/loop`/cron, webhook — what to set up, or "none". For unattended runs, the driver chains headless stage invocations (`claude -p "/implement-feature <feature>"`; resume-detection makes each idempotent) — record the prerequisites the operator owns: the machine, `claude` on PATH, a permission mode that allows edits, `AWOS_UNATTENDED=1` exported in the driver's environment (so the command takes safe defaults on the 60s no-answer instead of re-asking a human who isn't there), and headless-capable transports]
 
 ## 7. Tooling Inventory
 

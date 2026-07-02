@@ -526,11 +526,30 @@ export async function auditCore(
   };
   const detectionConflicts = computeDetectionConflicts(repoPath);
 
+  // Standards provenance for the report: the date the standard was last
+  // verified (max last_verified across categories — the coverage headline
+  // cites it) and the active-contributor threshold (interpolated into the
+  // Reach tooltip so prose never drifts from the data).
+  const standardsDate = Object.values(cats)
+    .map((c) => c.last_verified ?? '')
+    .filter(Boolean)
+    .sort()
+    .pop();
+  const standardsMeta = {
+    ...(standardsDate ? { standards_date: standardsDate } : {}),
+    active_contributor_threshold: metaNumber(
+      standards,
+      'active_contributor_threshold',
+      ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
+    ),
+  };
+
   const audit: Record<string, unknown> = {
     date,
     project: basename(repoPath),
     audit_total: auditTotal,
     coverage: auditApplicable > 0 ? auditTotal / auditApplicable : 0,
+    standards_meta: standardsMeta,
     dimensions,
     sources,
     linked_repos: linkedRepos,
@@ -706,6 +725,7 @@ export function aggregate(outDir: string): void {
     'tech_stack',
     'linked_repos',
     'detection_conflicts',
+    'standards_meta',
   ]) {
     if (existing[block] !== undefined) audit[block] = existing[block];
   }

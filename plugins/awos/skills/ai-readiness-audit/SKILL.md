@@ -213,7 +213,7 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
    context/audits/YYYY-MM-DD/org-portfolio.json
    ```
 
-   The JSON structure must contain `portfolio_metrics`, `per_repo`, `date`, `project`, `audit_total` (average awarded weight across repos), `coverage` (average coverage ratio), and `dimensions` (aggregated dimension data from all per-repo audits). This shape satisfies the renderer's `AuditJson` schema so the renderer can produce both org markdown and HTML from this single file.
+   The JSON structure must contain `portfolio_metrics`, `per_repo`, `date`, `project`, `audit_total` (average awarded weight across repos), `coverage` (average coverage ratio), and `dimensions` (aggregated dimension data from all per-repo audits). Also carry the rollup output's `source_windows` and `standards_meta` through unchanged — they drive the report's measurement-window header and the coverage/threshold tooltips. `project` is the portfolio name plus repo count only (e.g. `"acme portfolio"` — the header already shows the repo count and the Repositories table lists every repo; never inline the repo list into `project`). This shape satisfies the renderer's `AuditJson` schema so the renderer can produce both org markdown and HTML from this single file.
 
    Also author the plain-language report blocks (`headline`, `insights[]`, `recommendations[]`) into `org-portfolio.json` exactly as in single-repo Step 6.4 — at portfolio altitude: `headline.reach` summarises tooling coverage across repos, `insights[]` are portfolio-level themes (e.g. the AI-dark repos, the connector gaps), and `recommendations[]` name the repos/checks driving them. The renderer formats them; it does not synthesize them.
 

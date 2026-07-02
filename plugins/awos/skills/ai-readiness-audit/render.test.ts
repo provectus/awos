@@ -881,8 +881,8 @@ test('HTML per-repo table (Task 5.3): one row per repo with all new columns in o
   // Contract: column headers present in order
   const headerOrder = [
     'Repo',
-    'Points',
     'Coverage',
+    'Points',
     'Merges/active',
     'LOC/active',
     'Deploy freq',
@@ -998,8 +998,8 @@ test('Markdown per-repo table (Task 5.3): one row per repo with all new columns 
   );
   const colOrder = [
     'Repo',
-    'Points',
     'Coverage',
+    'Points',
     'Merges/active',
     'LOC/active',
     'Deploy freq',
@@ -1111,6 +1111,19 @@ function makeOrgAuditWithConnections(): AuditJson {
     linked_repos: [{ name: 'awos-recruitment', count: 2 }],
   };
 
+  // 8 repos: git reachable in all 8, tracker in 5, ci in 6, docs in none.
+  const per_repo = Array.from({ length: 8 }, (_, i) => ({
+    repo: `org/repo-${i}`,
+    contributors: null,
+    awarded_weight: 10,
+    sources_reachable: [
+      'git',
+      ...(i < 5 ? ['tracker'] : []),
+      ...(i < 6 ? ['ci'] : []),
+    ],
+    has_ai_tooling: true,
+  }));
+
   return {
     ...makeAudit({
       portfolio_metrics: [
@@ -1126,73 +1139,81 @@ function makeOrgAuditWithConnections(): AuditJson {
         git: { days: 90, label: 'git history' },
         tracker: { days: 30, label: 'Jira' },
       },
+      per_repo,
       org_connections,
     }),
   } as AuditJson;
 }
 
-test('renderHtml org mode: org_connections sources rendered with sourceFullLabel and repo counts (Task 5.4)', () => {
+test('renderHtml org mode: Connections uses the per-repo Connected/Missed template with (n/N) counts (Task 5.4)', () => {
   const audit = makeOrgAuditWithConnections();
   const html = renderHtml(audit);
-  // Contract: source labels come from sourceFullLabel (uses source_windows label)
   assert.ok(
-    html.includes('git history (8)'),
-    'HTML org Connections must render "git history (8)" using sourceFullLabel for the git key'
+    html.includes('<h3>Connected</h3>'),
+    'org Connections must use the same Connected/Missed template as a per-repo report'
   );
   assert.ok(
-    html.includes('Jira (5)'),
-    'HTML org Connections must render "Jira (5)" using the source_windows label for tracker'
+    html.includes('git history (8/8)'),
+    'org Connections must render "git history (8/8)" — n of N repos have the source'
+  );
+  assert.ok(
+    html.includes('Jira (5/8)'),
+    'org Connections must render the tracker as "Jira … (5/8)"'
+  );
+  assert.ok(
+    html.includes('(0/8)'),
+    'a source available in no repo must appear under Missed with (0/8)'
   );
 });
 
-test('renderHtml org mode: org_connections tech and linked items rendered with counts (Task 5.4)', () => {
+test('renderHtml org mode: Tech Stack renders org items with (n/N) repo counts (Task 5.4)', () => {
   const audit = makeOrgAuditWithConnections();
   const html = renderHtml(audit);
   assert.ok(
-    html.includes('Python (3)'),
-    'HTML org Connections must render languages with repo count: "Python (3)"'
+    html.includes('Python (3/8)'),
+    'org Tech Stack must render languages with repo count: "Python (3/8)"'
   );
   assert.ok(
-    html.includes('TypeScript (1)'),
-    'HTML org Connections must render languages with repo count: "TypeScript (1)"'
+    html.includes('TypeScript (1/8)'),
+    'org Tech Stack must render languages with repo count: "TypeScript (1/8)"'
   );
   assert.ok(
-    html.includes('FastAPI (2)'),
-    'HTML org Connections must render frameworks with repo count: "FastAPI (2)"'
+    html.includes('FastAPI (2/8)'),
+    'org Tech Stack must render frameworks with repo count: "FastAPI (2/8)"'
   );
   assert.ok(
-    html.includes('Claude Code (4)'),
-    'HTML org Connections must render agent_tools with repo count: "Claude Code (4)"'
+    html.includes('Claude Code (4/8)'),
+    'org Tech Stack must render agent_tools with repo count: "Claude Code (4/8)"'
   );
   assert.ok(
-    html.includes('GitHub Actions (6)'),
-    'HTML org Connections must render CI with repo count: "GitHub Actions (6)"'
+    html.includes('GitHub Actions (6/8)'),
+    'org Tech Stack must render CI with repo count: "GitHub Actions (6/8)"'
   );
   assert.ok(
-    html.includes('awos-recruitment (2)'),
-    'HTML org Connections must render linked_repos with repo count: "awos-recruitment (2)"'
+    html.includes('awos-recruitment</b> (2/8)'),
+    'org Connections must render linked_repos with repo count: "awos-recruitment (2/8)"'
   );
 });
 
 test('renderMarkdown org mode: org_connections rendered with repo counts (Task 5.4)', () => {
   const audit = makeOrgAuditWithConnections();
   const md = renderMarkdown(audit);
-  // Contract: source labels use sourceFullLabel
+  // Contract: source labels use sourceFullLabel; counts are (n/N) repos
   assert.ok(
-    md.includes('git history (8)'),
-    'Markdown org Connections must render "git history (8)" using sourceFullLabel for the git key'
+    md.includes('git history (8/8)'),
+    'Markdown org Connections must render "git history … (8/8)"'
   );
   assert.ok(
-    md.includes('Jira (5)'),
-    'Markdown org Connections must render "Jira (5)" using the source_windows label for tracker'
+    md.includes('Jira (5/8)'),
+    'Markdown org Connections must render "Jira … (5/8)"'
   );
   assert.ok(
-    md.includes('Python (3)'),
-    'Markdown org Connections must render languages with count: "Python (3)"'
+    md.includes('Python (3/8)'),
+    'Markdown org Connections must render languages with count: "Python (3/8)"'
   );
   assert.ok(
-    md.includes('awos-recruitment (2)'),
-    'Markdown org Connections must render linked_repos with count: "awos-recruitment (2)"'
+    md.includes('awos-recruitment (2/8)'),
+    'Markdown org Connections must render linked_repos with count: "awos-recruitment (2/8)"'
   );
 });
 
@@ -1207,6 +1228,15 @@ test('renderHtml org mode: empty org_connections categories are omitted (Task 5.
         repos_counted: 1,
       },
     ],
+    per_repo: [
+      {
+        repo: 'org/solo',
+        contributors: null,
+        awarded_weight: 1,
+        sources_reachable: ['git'],
+        has_ai_tooling: false,
+      },
+    ],
     org_connections: {
       sources: [{ name: 'git', count: 1 }],
       languages: [],
@@ -1219,8 +1249,8 @@ test('renderHtml org mode: empty org_connections categories are omitted (Task 5.
   const html = renderHtml(audit);
   // Only sources should appear; other empty categories omitted
   assert.ok(
-    html.includes('git history (1)') || html.includes('git (1)'),
-    'HTML org Connections must render the non-empty sources list'
+    html.includes('git history (1/1)'),
+    'HTML org Connections must render the non-empty sources list with (n/N)'
   );
   assert.ok(
     !html.includes('<h3>Languages</h3>') &&

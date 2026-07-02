@@ -306,6 +306,11 @@ export interface AuditJson {
   sources?: SourceSummary[];
   // per-source lookback window (populated by audit_core from collected/ artifacts)
   source_windows?: Record<string, { days: number | null; label: string }>;
+  /** Standards provenance stamped by audit-core: last-verified date + tunables. */
+  standards_meta?: {
+    standards_date?: string;
+    active_contributor_threshold?: number;
+  };
   // linked repos + tech-stack metadata (optional; populated by audit_core)
   linked_repos?: LinkedRepo[];
   tech_stack?: TechStack;
@@ -630,13 +635,25 @@ function derivedRecommendations(audit: AuditJson): Recommendation[] {
  * executive headline, insights ("READ"), recommendations, the dimension summary,
  * and the per-dimension check tables (with the five-part Hint column preserved).
  */
-export function renderMarkdown(audit: AuditJson): string {
+export interface RenderOptions {
+  /** Relative link back to the parent org report (per-repo reports only). */
+  backLink?: string;
+}
+
+export function renderMarkdown(
+  audit: AuditJson,
+  opts: RenderOptions = {}
+): string {
   const lines: string[] = [];
   const isOrg =
     Array.isArray(audit.portfolio_metrics) &&
     audit.portfolio_metrics.length > 0;
 
   // Header
+  if (opts.backLink) {
+    lines.push(`[← Back to org report](${opts.backLink})`);
+    lines.push('');
+  }
   lines.push('# AI-SDLC Readiness Audit Report');
   lines.push('');
   lines.push(`**Date:** ${audit.date}`);
@@ -648,10 +665,10 @@ export function renderMarkdown(audit: AuditJson): string {
   if (windowLabel) {
     lines.push(`**Measurement window:** ${windowLabel}`);
   }
-  lines.push(`**Audit Total:** ${fmtPts(audit.audit_total)} pts`);
   lines.push(
-    `**Coverage Ratio:** ${pct(audit.coverage)} rel. today's standard`
+    `**Coverage:** ${pct(audit.coverage)} — ${coverageTipText(audit)}`
   );
+  lines.push(`**Points:** ${fmtPts(audit.audit_total)} pts`);
   lines.push('');
 
   // Executive headline blocks (delivery / scale / reach)
@@ -733,10 +750,10 @@ export function renderMarkdown(audit: AuditJson): string {
   lines.push('## Summary');
   lines.push('');
   lines.push(
-    '| # | Dimension | Points | Sources | Coverage | FAIL | WARN | PARTIAL | PASS | SKIP |'
+    '| # | Dimension | Coverage | Sources | Points | FAIL | WARN | PARTIAL | PASS | SKIP |'
   );
   lines.push(
-    '| - | --------- | ------ | ------- | -------- | ---- | ---- | ------- | ---- | ---- |'
+    '| - | --------- | -------- | ------- | ------ | ---- | ---- | ------- | ---- | ---- |'
   );
   let rowNum = 1;
   for (const dim of audit.dimensions) {
@@ -755,7 +772,7 @@ export function renderMarkdown(audit: AuditJson): string {
             .join(', ');
     const info = isInformational(dim);
     lines.push(
-      `| ${rowNum++} | ${titleLabel(dim)} | ${info ? 'info' : fmtPts(dim.score)} | ${sourcesCell} | ${info ? '—' : pct(dim.coverage)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
+      `| ${rowNum++} | ${titleLabel(dim)} | ${info ? 'info' : pct(dim.coverage)} | ${sourcesCell} | ${info ? '—' : fmtPts(dim.score)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
     );
   }
   lines.push('');
@@ -851,7 +868,7 @@ export function renderMarkdown(audit: AuditJson): string {
     lines.push('## Repositories');
     lines.push('');
     lines.push(
-      '| Repo | Points | Coverage | Merges/active | LOC/active | Deploy freq | Rework rate | Lead time | Change-fail | Cycle time¹ | MTTR² |'
+      '| Repo | Coverage | Points | Merges/active | LOC/active | Deploy freq | Rework rate | Lead time | Change-fail | Cycle time¹ | MTTR² |'
     );
     lines.push(
       '| ---- | ------ | -------- | ------------- | ---------- | ----------- | ----------- | --------- | ----------- | ----------- | ----- |'
@@ -860,7 +877,7 @@ export function renderMarkdown(audit: AuditJson): string {
       const repoLink = `[${r.repo}](per-repo/${r.repo}/report.html)`;
       const coverage = r.coverage != null ? pct(r.coverage) : '—';
       lines.push(
-        `| ${repoLink} | ${fmtPts(r.awarded_weight)} | ${coverage} | ${fmtN1dp(r.merges_per_active)} | ${fmtN1dp(r.loc_per_active)} | ${fmtWk(r.deploy_freq)} | ${fmtPctMul(r.rework_rate)} | ${fmtH(r.lead_time)} | ${fmtPctMul(r.change_fail)} | — | — |`
+        `| ${repoLink} | ${coverage} | ${fmtPts(r.awarded_weight)} | ${fmtN1dp(r.merges_per_active)} | ${fmtN1dp(r.loc_per_active)} | ${fmtWk(r.deploy_freq)} | ${fmtPctMul(r.rework_rate)} | ${fmtH(r.lead_time)} | ${fmtPctMul(r.change_fail)} | — | — |`
       );
     }
     lines.push('');
@@ -876,10 +893,14 @@ export function renderMarkdown(audit: AuditJson): string {
     const oc = audit.org_connections;
     lines.push('## Connections & Sources');
     lines.push('');
+    const orgTotal = audit.per_repo?.length ?? 0;
     const connMdItems = (
       items: OrgConnItem[],
       labelFn: (n: string) => string
-    ): string => items.map((i) => `${labelFn(i.name)} (${i.count})`).join(', ');
+    ): string =>
+      items
+        .map((i) => `${labelFn(i.name)} (${i.count}/${orgTotal})`)
+        .join(', ');
     if (oc.sources.length > 0) {
       lines.push(
         '**Sources:** ' +
@@ -1086,7 +1107,7 @@ const HEADLINE_TIP: Record<string, string> = {
   'AI tooling':
     'AI coding tools detected in the repository (config files, agent instructions, commit markers).',
   'Active Contributors':
-    "Contributors with a meaningful share of the 90-day window's work: an author counts as active unless BOTH their share of merged PRs and their share of changed lines fall below the activity threshold (5% by default). The '(of N in window)' figure is the total distinct authors who committed at all.",
+    "Contributors with a meaningful share of the 90-day window's work: an author counts as active unless BOTH their share of merged PRs and their share of changed lines fall below {threshold}. The '(of N in window)' figure is the total distinct authors who committed at all.",
   'Spec coverage':
     'Share of feature work that went through a written spec: merged branches/PRs whose changes touched spec files (AWOS context/spec/, Kiro, Agent-OS, plain specs/ conventions). Higher means more work is spec-driven.',
   'Repos with AI tooling':
@@ -1104,6 +1125,24 @@ const REACH_FIELDS = [
   ['spec_coverage', 'Spec coverage'],
   ['ai_tooling', 'AI tooling'],
 ] as const;
+
+/**
+ * Resolve the {threshold} placeholder in a headline tip from the audit's
+ * standards_meta (falls back to the standard 5% when the field is absent),
+ * so tooltip prose never drifts from the configured value in standards.toml.
+ */
+function resolveTip(text: string, audit: AuditJson): string {
+  const t = audit.standards_meta?.active_contributor_threshold ?? 0.05;
+  return text.replace('{threshold}', `${Math.round(t * 100)}%`);
+}
+
+/** The coverage headline tooltip, citing the standard's last-verified date when known. */
+function coverageTipText(audit: AuditJson): string {
+  const d = audit.standards_meta?.standards_date;
+  return d
+    ? `Average software project score among all applicable metrics by industry standards on ${d}`
+    : 'Average software project score among all applicable metrics by current industry standards';
+}
 
 /** Returns true when a DeliveryMetric display_value is considered absent: missing, empty, em-dash, or hyphen. */
 function deliveryValueAbsent(v: string | undefined): boolean {
@@ -1138,7 +1177,7 @@ const PRIORITY_COLOR: Record<string, string> = {
  *   - @media print (expand all, hide toggles)
  *   - All plain-language blocks optional; degrades to the capability headline
  */
-export function renderHtml(audit: AuditJson): string {
+export function renderHtml(audit: AuditJson, opts: RenderOptions = {}): string {
   const isOrg =
     Array.isArray(audit.portfolio_metrics) &&
     audit.portfolio_metrics.length > 0;
@@ -1259,12 +1298,12 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       }
       rows.push('</div>');
     } else {
-      // Single-repo capability headline
+      // Single-repo capability headline — Coverage is the main figure.
       rows.push(
-        `<div class="cap-score">${tip(fmtPts(audit.audit_total) + ' pts', 'Total AI-SDLC capability — the sum of all capabilities the project has in place. It is uncapped and rises as the standard grows.', 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
+        `<div class="cap-score">${tip(pct(audit.coverage) + ' Coverage', coverageTipText(audit), 'score ÷ Σ applicable category weights · standards.toml')}</div>`
       );
       rows.push(
-        `<div class="cap-cov">Coverage ${tip(pct(audit.coverage), "How much of today's expected capability is in place. Read it as 'we have X% of what the current standard asks for', not as a school grade.", 'score ÷ Σ applicable category weights · standards.toml')}</div>`
+        `<div class="cap-cov">${tip(fmtPts(audit.audit_total) + ' pts', 'Capability points — the sum of all capabilities the project has in place. Uncapped; rises as the standard grows.', 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
       );
     }
 
@@ -1284,7 +1323,10 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         if (c) return c.plain && c.plain.trim() ? c.plain : c.definition;
       }
       const key = label.replace(/\s*\(.*\)\s*$/, '').trim();
-      return HEADLINE_TIP[key] ?? HEADLINE_TIP[label] ?? label;
+      return resolveTip(
+        HEADLINE_TIP[key] ?? HEADLINE_TIP[label] ?? label,
+        audit
+      );
     };
     // The VALUE carries the underlying check's evidence — how the number was
     // derived, or (for a "—") why the value is absent. Returns null when no
@@ -1370,13 +1412,13 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         reachFallback[key as keyof typeof reachFallback];
       if (v)
         reachItems.push(
-          `<div class="kv"><span class="k">${tip(label, HEADLINE_TIP[label])}</span><span class="v">${esc(v)}</span></div>`
+          `<div class="kv"><span class="k">${tip(label, resolveTip(HEADLINE_TIP[label], audit))}</span><span class="v">${esc(v)}</span></div>`
         );
     }
     if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
       const withTooling = audit.per_repo.filter((r) => r.has_ai_tooling).length;
       reachItems.push(
-        `<div class="kv"><span class="k">${tip('Repos with AI tooling', HEADLINE_TIP['Repos with AI tooling'])}</span><span class="v">${esc(`${withTooling} / ${audit.per_repo.length}`)}</span></div>`
+        `<div class="kv"><span class="k">${tip('Repos with AI tooling', resolveTip(HEADLINE_TIP['Repos with AI tooling'], audit))}</span><span class="v">${esc(`${withTooling} / ${audit.per_repo.length}`)}</span></div>`
       );
     }
     if (reachItems.length > 0) {
@@ -1456,9 +1498,9 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       '<table><thead><tr>' +
         `<th>${tip('#', 'Row number — dimensions are listed in a fixed order.')}</th>` +
         `<th>${tip('Dimension', 'A capability area being audited: a group of related checks scored together. Click a row to open its checks.')}</th>` +
-        `<th>${tip('Points', 'Capability points earned in this area.')}</th>` +
-        `<th>${tip('Sources', 'Data sources feeding this dimension.')}</th>` +
         `<th>${tip('Coverage', "Share of this area's expected capability that is in place.")}</th>` +
+        `<th>${tip('Sources', 'Data sources feeding this dimension.')}</th>` +
+        `<th>${tip('Points', 'Capability points earned in this area.')}</th>` +
         `<th>${tip('Reliability', 'How trustworthy the numbers in this area are — maximal, minimal (lower bound), or not-reliable (rough proxy).')}</th>` +
         `<th>${tip('FAIL', 'Checks where the capability is absent or below its failing threshold.')}</th>` +
         `<th>${tip('WARN', 'Checks partly in place but below target — worth attention.')}</th>` +
@@ -1515,9 +1557,9 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       rows.push(`<tr class="dim-row${lowCov}" onclick="location.hash='dim/${esc(key)}'">
   <td>${n++}</td>
   <td>${nameCell}</td>
-  <td>${info ? tip('info', 'Informational descriptors — reported for context, not scored toward the audit total.') : `${fmtPts(dim.score)} pts`}</td>
+  <td>${info ? tip('info', 'Informational descriptors — reported for context, not scored toward the audit total.') : covPct}</td>
   <td>${sourcesCell}</td>
-  <td>${info ? '—' : covPct}</td>
+  <td>${info ? '—' : `${fmtPts(dim.score)} pts`}</td>
   <td>${tip(relStr, relTip, '')}</td>
   <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
   <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
@@ -1671,11 +1713,22 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       } else {
         pointsMetaHtml = esc(c.definition);
       }
-      const pointsCell = tipHtml(
-        fmtPts(c.weight_awarded) + '/' + fmtPts(c.weight_max),
-        `Worth up to ${c.weight_max} points · ${c.method}`,
-        pointsMetaHtml
-      );
+      const pointsPct =
+        (c.weight_max || 0) > 0
+          ? ` (${((c.weight_awarded / c.weight_max) * 100).toFixed(1)}%)`
+          : '';
+      const pointsCell =
+        (c.weight_max || 0) === 0
+          ? tipHtml(
+              '—',
+              'Informational descriptor — carries no weight.',
+              pointsMetaHtml
+            )
+          : tipHtml(
+              `${fmtPts(c.weight_awarded)}/${fmtPts(c.weight_max)}${pointsPct}`,
+              `Worth up to ${c.weight_max} points · ${c.method}`,
+              pointsMetaHtml
+            );
       // Confidence cell: percent for applicable checks, dash for SKIP.
       const confCell =
         c.status === 'SKIP' ? '—' : `${Math.round((c.confidence ?? 0) * 100)}%`;
@@ -1722,7 +1775,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         const items = throughput
           .map(
             (d) =>
-              `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(d.display_value ?? '—', HEADLINE_TIP[baseLabel(d.label)] ?? d.label)}</span></div>`
+              `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(d.display_value ?? '—', resolveTip(HEADLINE_TIP[baseLabel(d.label)] ?? d.label, audit))}</span></div>`
           )
           .join('');
         rows.push(`<div class="exec-col">${items}</div>`);
@@ -1741,17 +1794,17 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
     if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
       rows.push(
         '<table><thead><tr>' +
-          '<th>Repo</th>' +
-          '<th>Points</th>' +
-          '<th>Coverage</th>' +
-          '<th>Merges/active</th>' +
-          '<th>LOC/active</th>' +
-          '<th>Deploy freq</th>' +
-          '<th>Rework rate</th>' +
-          '<th>Lead time</th>' +
-          '<th>Change-fail</th>' +
-          '<th>Cycle time¹</th>' +
-          '<th>MTTR²</th>' +
+          `<th>${tip('Repo', 'Portfolio repository — click to open its full per-repo report.')}</th>` +
+          `<th>${tip('Coverage', coverageTipText(audit))}</th>` +
+          `<th>${tip('Points', 'Capability points earned by the repo (sum of awarded category weights, uncapped).')}</th>` +
+          `<th>${tip('Merges/active', 'Merged PRs per active contributor over the window — delivery throughput.')}</th>` +
+          `<th>${tip('LOC/active', 'Changed lines per active contributor over the window — delivery volume.')}</th>` +
+          `<th>${tip('Deploy freq', 'Merge events into the default branch per week (DORA deployment-frequency proxy).')}</th>` +
+          `<th>${tip('Rework rate', 'Share of merge events that are fix/hotfix work (DORA rework-rate proxy).')}</th>` +
+          `<th>${tip('Lead time', 'Median hours from first branch commit to merge (DORA lead time).')}</th>` +
+          `<th>${tip('Change-fail', 'Share of merge events that are reverts/hotfixes (DORA change-failure proxy).')}</th>` +
+          `<th>${tip('Cycle time¹', 'Median ticket In-Progress→Done time — needs a ticketing connector.')}</th>` +
+          `<th>${tip('MTTR²', 'Mean time to restore after an incident — needs an incident connector.')}</th>` +
           '</tr></thead><tbody>'
       );
       for (const r of audit.per_repo) {
@@ -1759,8 +1812,8 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         rows.push(
           `<tr>` +
             `<td><a href="per-repo/${esc(r.repo)}/report.html">${esc(r.repo)}</a></td>` +
-            `<td>${tip(fmtPts(r.awarded_weight), `Capability points earned by this repo: ${r.awarded_weight}.`, '')}</td>` +
             `<td>${coverage}</td>` +
+            `<td>${tip(fmtPts(r.awarded_weight), `Capability points earned by this repo: ${r.awarded_weight}.`, '')}</td>` +
             `<td>${fmtN1dp(r.merges_per_active)}</td>` +
             `<td>${fmtN1dp(r.loc_per_active)}</td>` +
             `<td>${fmtWk(r.deploy_freq)}</td>` +
@@ -1791,42 +1844,52 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
   function connectionsSection(): string {
     const rows: string[] = ['<h2>Connections &amp; Sources</h2>'];
 
-    // Org mode: render the aggregated count view.
-    if (isOrg && audit.org_connections) {
-      const oc = audit.org_connections;
-      const connHtmlItems = (
-        items: OrgConnItem[],
-        labelFn: (n: string) => string
-      ): string =>
-        items.map((i) => `${esc(labelFn(i.name))} (${i.count})`).join(', ');
-
-      if (oc.sources.length > 0) {
-        rows.push(
-          `<h3>Sources</h3><p>${connHtmlItems(oc.sources, (n) => sourceFullLabel(n, audit.source_windows))}</p>`
-        );
+    // Org mode: same Connected / Missed template as the per-repo report, with
+    // each item carrying an (n/N) repo count — e.g. "CI runs (3/8)" means 3 of
+    // the 8 portfolio repos have that data source available.
+    if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
+      const total = audit.per_repo.length;
+      const countBySource = new Map<string, number>();
+      for (const r of audit.per_repo) {
+        for (const src of r.sources_reachable ?? []) {
+          countBySource.set(src, (countBySource.get(src) ?? 0) + 1);
+        }
       }
-      if (oc.languages.length > 0) {
-        rows.push(
-          `<h3>Languages</h3><p>${connHtmlItems(oc.languages, (n) => n)}</p>`
-        );
+      const canonical = ['git', 'ci', 'tracker', 'docs'];
+      const connected = canonical.filter(
+        (c) => (countBySource.get(c) ?? 0) > 0
+      );
+      const missed = canonical.filter((c) => (countBySource.get(c) ?? 0) === 0);
+      if (connected.length > 0) {
+        rows.push('<h3>Connected</h3><ul>');
+        for (const src of connected) {
+          const label = sourceFullLabel(src, audit.source_windows);
+          rows.push(
+            `<li>${esc(label)} (${countBySource.get(src)}/${total})</li>`
+          );
+        }
+        rows.push('</ul>');
       }
-      if (oc.agent_tools.length > 0) {
-        rows.push(
-          `<h3>Agent Tools</h3><p>${connHtmlItems(oc.agent_tools, (n) => n)}</p>`
-        );
+      if (missed.length > 0) {
+        rows.push('<h3>Missed / limited</h3><ul>');
+        for (const src of missed) {
+          const label = sourceFullLabel(src, audit.source_windows);
+          rows.push(
+            `<li>${esc(label)} (0/${total}) — not available in any repo</li>`
+          );
+        }
+        rows.push('</ul>');
       }
-      if (oc.ci.length > 0) {
-        rows.push(`<h3>CI</h3><p>${connHtmlItems(oc.ci, (n) => n)}</p>`);
-      }
-      if (oc.frameworks.length > 0) {
-        rows.push(
-          `<h3>Frameworks</h3><p>${connHtmlItems(oc.frameworks, (n) => n)}</p>`
-        );
-      }
-      if (oc.linked_repos.length > 0) {
-        rows.push(
-          `<h3>Linked Repositories</h3><p>${connHtmlItems(oc.linked_repos, (n) => n)}</p>`
-        );
+      rows.push('<h3>Linked repositories</h3>');
+      const orgLinked = audit.org_connections?.linked_repos ?? [];
+      if (orgLinked.length > 0) {
+        rows.push('<ul>');
+        for (const l of orgLinked) {
+          rows.push(`<li><b>${esc(l.name)}</b> (${l.count}/${total})</li>`);
+        }
+        rows.push('</ul>');
+      } else {
+        rows.push('<p><em>No linked repositories detected.</em></p>');
       }
       return rows.join('\n');
     }
@@ -1902,6 +1965,30 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
 
   // ─── Tech Stack section ────────────────────────────────────────────────────
   function techStackSection(): string {
+    // Org mode: same section shape as per-repo, each item counted (n/N repos).
+    if (isOrg && audit.org_connections && audit.per_repo?.length) {
+      const oc = audit.org_connections;
+      const total = audit.per_repo.length;
+      const rows: string[] = ['<h2>Tech Stack</h2>'];
+      const group = (label: string, items: OrgConnItem[]): void => {
+        if (items.length === 0) return;
+        rows.push(
+          `<h3>${esc(label)}</h3><p>${items
+            .map((i) =>
+              tip(
+                `${i.name} (${i.count}/${total})`,
+                `${i.count} of ${total} portfolio repos have ${i.name}.`
+              )
+            )
+            .join(', ')}</p>`
+        );
+      };
+      group('Languages', oc.languages);
+      group('Agent tools', oc.agent_tools);
+      group('CI', oc.ci);
+      group('Frameworks', oc.frameworks);
+      return rows.length > 1 ? rows.join('\n') : '';
+    }
     const ts = audit.tech_stack;
     if (!ts) return '';
     const rows: string[] = ['<h2>Tech Stack</h2>'];
@@ -1974,6 +2061,7 @@ route();
 </head>
 <body>
 <div class="container">
+${opts.backLink ? `<div class="backlink"><a href="${esc(opts.backLink)}">← Back to org report</a></div>` : ''}
 <h1>AI-SDLC Readiness Audit</h1>
 <div class="meta">
   <span><strong>Date:</strong> ${esc(audit.date)}</span>

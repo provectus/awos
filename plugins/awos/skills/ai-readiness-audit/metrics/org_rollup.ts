@@ -81,6 +81,10 @@ export interface PerRepoInput {
   audit_total?: number;
   /** Coverage ratio (awarded ÷ applicable) for this repo, 0–1. */
   coverage?: number;
+  /** Per-source lookback windows from this repo's audit.json (passthrough). */
+  source_windows?: Record<string, { days: number | null; label: string }>;
+  /** Standards provenance from this repo's audit.json (passthrough). */
+  standards_meta?: Record<string, unknown>;
   /** Rich delivery numbers for the org headline + per-repo table. */
   delivery?: PerRepoDelivery;
   /**
@@ -198,6 +202,14 @@ export interface OrgRollupResult {
    * Each list is sorted by count desc, then name asc.
    */
   org_connections?: OrgConnections;
+  /**
+   * Per-source lookback windows merged across repos (max days per source,
+   * first label) — lets the org report show the measurement window like a
+   * per-repo report does.
+   */
+  source_windows?: Record<string, { days: number | null; label: string }>;
+  /** Standards provenance (standards_date, thresholds) from the per-repo audits. */
+  standards_meta?: Record<string, unknown>;
   /**
    * Deterministic cross-repo capability gap seed (Task 5.5).
    * Each entry is a check that FAILs in ≥1 repo, sorted by fail_repos desc
@@ -602,6 +614,22 @@ export function rollup(
   const headline = buildHeadline(repos);
   const org_connections = aggregateConnections(perRepoResults);
   const org_gaps = computeOrgGaps(perRepoResults);
+
+  // Merge per-repo source windows: max days per source, first label seen.
+  const sourceWindows: Record<string, { days: number | null; label: string }> =
+    {};
+  for (const r of perRepoResults) {
+    for (const [src, w] of Object.entries(r.source_windows ?? {})) {
+      const existing = sourceWindows[src];
+      if (!existing || (w.days ?? 0) > (existing.days ?? 0)) {
+        sourceWindows[src] = { days: w.days ?? null, label: w.label };
+      }
+    }
+  }
+  const standardsMeta = perRepoResults.find(
+    (r) => r.standards_meta
+  )?.standards_meta;
+
   const result: OrgRollupResult = {
     portfolio_metrics,
     per_repo: repos,
@@ -609,6 +637,9 @@ export function rollup(
     org_gaps,
   };
   if (headline) result.headline = headline;
+  if (Object.keys(sourceWindows).length > 0)
+    result.source_windows = sourceWindows;
+  if (standardsMeta) result.standards_meta = standardsMeta;
   return result;
 }
 

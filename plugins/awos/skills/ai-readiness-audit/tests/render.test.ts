@@ -864,9 +864,10 @@ function sourcesFixture(): AuditJson {
   };
 }
 
-test('renderHtml: Dimensions overview table has a Sources column header after Points', () => {
+test('renderHtml: Dimensions overview table order is Coverage → Sources → Points', () => {
   const html = renderHtml(sourcesFixture());
-  // The header row must contain both Points and Sources in that order.
+  // Coverage is the main metric: its column leads, Points trails.
+  const coverageIdx = html.indexOf('>Coverage<');
   const pointsIdx = html.indexOf('>Points<');
   const sourcesIdx = html.indexOf('>Sources<');
   assert.ok(
@@ -874,12 +875,16 @@ test('renderHtml: Dimensions overview table has a Sources column header after Po
     'Dimensions table must have a Points column header'
   );
   assert.ok(
+    coverageIdx !== -1 && coverageIdx < sourcesIdx,
+    'Coverage column header must lead the Sources column'
+  );
+  assert.ok(
     sourcesIdx !== -1,
     'Dimensions table must have a Sources column header'
   );
   assert.ok(
-    sourcesIdx > pointsIdx,
-    'Sources column header must appear after Points column header in the table'
+    sourcesIdx < pointsIdx,
+    'Points column header must appear after Sources (coverage-first order)'
   );
 });
 
@@ -1128,9 +1133,9 @@ test('renderHtml: Reach labels the contributor row "Active Contributors" with th
   );
   assert.ok(
     html.includes(
-      'an author counts as active unless BOTH their share of merged PRs and their share of changed lines fall below the activity threshold'
+      'an author counts as active unless BOTH their share of merged PRs and their share of changed lines fall below 5%'
     ),
-    'Active Contributors tooltip must state the real share-based rule, not a commit-count heuristic'
+    'Active Contributors tooltip must state the share rule with the resolved threshold value (5% default)'
   );
   assert.ok(
     html.includes(

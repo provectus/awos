@@ -30,7 +30,7 @@ import {
   existsSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
@@ -379,6 +379,8 @@ function readPerRepoAudit(
     has_ai_tooling: hasAiTooling,
     audit_total: auditTotal,
     coverage: numOrNull(audit.coverage) ?? undefined,
+    source_windows: audit.source_windows,
+    standards_meta: audit.standards_meta,
     delivery,
     tech_stack: audit.tech_stack,
     linked_repos: audit.linked_repos,
@@ -712,11 +714,25 @@ async function main(): Promise<void> {
       if (format === 'both') {
         const dir = outDirArg as string;
         mkdirSync(dir, { recursive: true });
-        writeFileSync(join(dir, 'report.md'), renderMarkdown(audit) + '\n');
-        writeFileSync(join(dir, 'report.html'), renderHtml(audit) + '\n');
+        // A per-repo report inside an org run lives at
+        // <org>/per-repo/<repo>/report.html — give it a link back to the org
+        // report two levels up. Detected from the out-dir path, so the
+        // orchestrator doesn't have to remember a flag.
+        const isPerRepo = /[\\/]per-repo[\\/][^\\/]+[\\/]?$/.test(resolve(dir));
+        const mdOpts = isPerRepo ? { backLink: '../../report.md' } : {};
+        const htmlOpts = isPerRepo ? { backLink: '../../report.html' } : {};
+        writeFileSync(
+          join(dir, 'report.md'),
+          renderMarkdown(audit, mdOpts) + '\n'
+        );
+        writeFileSync(
+          join(dir, 'report.html'),
+          renderHtml(audit, htmlOpts) + '\n'
+        );
         printJson({
           rendered: ['report.md', 'report.html'],
           out_dir: dir,
+          ...(isPerRepo ? { back_link: true } : {}),
         });
         break;
       }

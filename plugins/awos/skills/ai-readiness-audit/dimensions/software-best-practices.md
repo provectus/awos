@@ -57,12 +57,22 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 ### SBP-06: Error handling patterns are consistent
 
 - **What:** The codebase follows consistent error handling rather than silent swallowing
-- **How:** Sample 5 catch blocks across backend and frontend. Check whether errors are logged, re-thrown, or silently ignored. Look for global error handlers. Also detect Python-2 `except A, B:` syntax which is a SyntaxError on Python 3.
-- **Pass:** Errors are consistently logged or propagated; global handlers exist; no Python-2 except-clause syntax
+- **How:** Sample 5 catch blocks across backend and frontend. Check whether errors are logged, re-thrown, or silently ignored. Look for global error handlers.
+- **Pass:** Errors are consistently logged or propagated; global handlers exist
 - **Warn:** Mixed patterns — some errors handled well, some silently swallowed
-- **Fail:** Widespread silent error swallowing (empty catch blocks, no logging) or Python-2 except-clause syntax defects found
+- **Fail:** Widespread silent error swallowing (empty catch blocks, no logging)
 - **Severity:** high
-- **Category:** 2704, 2706
+- **Category:** 2704
+
+### SBP-08: No Python-2 except-clause syntax
+
+- **What:** Python source contains no Python-2 `except A, B:` syntax, which is a SyntaxError under Python 3
+- **How:** Scan Python source files for the Python-2 except-clause pattern
+- **Pass:** No Python-2 except-clause syntax found
+- **Fail:** Python-2 except-clause syntax defects found
+- **Skip-When:** No Python source in the repository
+- **Severity:** medium
+- **Category:** 2706
 
 ### SBP-07: Dependencies are managed
 

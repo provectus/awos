@@ -100,3 +100,71 @@ test('ARCH-05 score equals ratio below 0.70 on FAIL', () => {
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test('ARCH-05 excludes test files from the naming check (B2) — well-tested repo can PASS', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-arch05-tests-'));
+  try {
+    mkdirSync(join(repo, 'src'), { recursive: true });
+    // 3 snake_case sources + 3 standard *.test.ts files. Before the fix the
+    // dotted test basenames counted as "other" → 50% dominance → FAIL.
+    for (const name of ['user_service', 'auth_handler', 'data_model']) {
+      writeFileSync(join(repo, 'src', `${name}.ts`), 'export const x = 1;\n');
+      writeFileSync(
+        join(repo, 'src', `${name}.test.ts`),
+        'export const t = 1;\n'
+      );
+    }
+    const res = detect(repo);
+    assert.equal(
+      res.status,
+      'PASS',
+      `test files must not count as naming violations; got ${res.status}: ${JSON.stringify(res.evidence)}`
+    );
+    assert.ok(
+      Math.abs(res.score - 1.0) < 0.01,
+      `score must be 1.0 when all non-test files share a convention; got ${res.score}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('ARCH-05 classifies dotted role qualifiers (.d.ts, .stories.tsx) by their stem', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-arch05-dotted-'));
+  try {
+    mkdirSync(join(repo, 'src'), { recursive: true });
+    writeFileSync(
+      join(repo, 'src', 'user_service.ts'),
+      'export const x = 1;\n'
+    );
+    writeFileSync(
+      join(repo, 'src', 'auth_handler.ts'),
+      'export const x = 1;\n'
+    );
+    writeFileSync(join(repo, 'src', 'api_types.d.ts'), 'export type T = 1;\n');
+    const res = detect(repo);
+    assert.equal(
+      res.status,
+      'PASS',
+      `.d.ts declaration files must classify by stem, not as violations; got ${res.status}: ${JSON.stringify(res.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('ARCH-05 emits SKIP, not PASS, when there are no source files to evaluate', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-arch05-empty-'));
+  try {
+    mkdirSync(join(repo, 'docs'), { recursive: true });
+    writeFileSync(join(repo, 'docs', 'readme.txt'), 'hello\n');
+    const res = detect(repo);
+    assert.equal(
+      res.status,
+      'SKIP',
+      `an empty repo must not PASS the naming check (vacuous pass, A4); got ${res.status}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});

@@ -434,11 +434,11 @@ test('ARCH-05: FAIL when files are mixed with < 70% consistent', () => {
   );
 });
 
-test('ARCH-05: PASS when no source files found', () => {
+test('ARCH-05: SKIP when no source files found — absence is not compliance', () => {
   const t = tmp();
   writeFileSync(join(t, 'README.md'), '# project\n');
   const r = detectNamingConventions(t);
-  assert.equal(r.status, 'PASS', 'no source files → PASS (nothing to check)');
+  assert.equal(r.status, 'SKIP', 'no source files → SKIP (nothing to check)');
 });
 
 test('ARCH-05: WARN when 70-89% files are consistent', () => {

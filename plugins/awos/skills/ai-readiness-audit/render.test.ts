@@ -1288,8 +1288,8 @@ test('renderHtml states the measurement window in the meta band', () => {
   );
 });
 
-// ── R2: every headline metric carries a tooltip ───────────────────────────
-test('renderHtml wraps every headline metric value in a tooltip (main-page parity with dimension rows)', () => {
+// ── R2: every headline metric label carries a tooltip (not the value) ───────
+test('renderHtml wraps every headline metric label in a tooltip (tooltip on label, value shown plain)', () => {
   const audit = makeAudit({
     headline: {
       delivery: [
@@ -1307,29 +1307,43 @@ test('renderHtml wraps every headline metric value in a tooltip (main-page parit
     },
   } as unknown as Partial<AuditJson>);
   const html = renderHtml(audit);
-  const tipWrapped = (v: string) =>
-    html.includes(`<span class="tip" tabindex="0">${v}<span class="tipbox">`);
+  const labelTipWrapped = (label: string) =>
+    html.includes(
+      `<span class="tip" tabindex="0">${label}<span class="tipbox">`
+    );
+  const valuePlain = (v: string) =>
+    html.includes(`<span class="v">${v}</span>`);
+  assert.ok(labelTipWrapped('Merges'), 'Merges label must be tooltip-wrapped');
   assert.ok(
-    tipWrapped('19.0 / active contributor'),
-    'Merges delivery value must be tooltip-wrapped'
+    valuePlain('19.0 / active contributor'),
+    'Merges delivery value must be plain (no tooltip)'
   );
   assert.ok(
-    tipWrapped('2 / day'),
-    'Deployment frequency delivery value must be tooltip-wrapped'
+    labelTipWrapped('Deployment frequency'),
+    'Deployment frequency label must be tooltip-wrapped'
   );
   assert.ok(
     html.includes('needs ticketing connector') &&
-      tipWrapped('— (needs ticketing connector)'),
-    'gated-absent delivery note must be tooltip-wrapped'
+      valuePlain('— (needs ticketing connector)'),
+    'gated-absent delivery note must be plain (no tooltip)'
   );
-  assert.ok(tipWrapped('12,000'), 'scale value must be tooltip-wrapped');
+  assert.ok(labelTipWrapped('LOC'), 'scale label must be tooltip-wrapped');
+  assert.ok(valuePlain('12,000'), 'scale value must be plain (no tooltip)');
   assert.ok(
-    tipWrapped('Claude, Copilot'),
-    'AI-tooling reach value must be tooltip-wrapped'
+    labelTipWrapped('AI tooling'),
+    'AI-tooling reach label must be tooltip-wrapped'
   );
   assert.ok(
-    tipWrapped('4 active (90d)'),
-    'Contributors reach value must be tooltip-wrapped'
+    valuePlain('Claude, Copilot'),
+    'AI-tooling reach value must be plain (no tooltip)'
+  );
+  assert.ok(
+    labelTipWrapped('Active Contributors'),
+    'Contributors reach label must be tooltip-wrapped'
+  );
+  assert.ok(
+    valuePlain('4 active (90d)'),
+    'Contributors reach value must be plain (no tooltip)'
   );
 });
 
@@ -1355,5 +1369,37 @@ test('renderHtml shows the skip reason in the evidence column instead of a bare 
   assert.ok(
     md.includes('No ci data available'),
     'a SKIP check must render its reason in the Markdown check table, not a bare "—"'
+  );
+});
+
+test('object check values render as k=v pairs, never "[object Object]"', () => {
+  const audit = makeAudit({
+    dimensions: [
+      makeDim('ai-sdlc-adoption', [
+        makeCheck({
+          check_id: 'ADP-22',
+          value: {
+            total_loc: 4821,
+            file_count: 37,
+            by_language: { TypeScript: { files: 30, loc: 4500 } },
+          },
+        }),
+      ]),
+    ],
+  });
+  const md = renderMarkdown(audit);
+  const html = renderHtml(audit);
+  for (const [name, out] of [
+    ['markdown', md],
+    ['html', html],
+  ] as const) {
+    assert.ok(
+      !out.includes('[object Object]'),
+      `${name} output must never contain "[object Object]"`
+    );
+  }
+  assert.ok(
+    md.includes('total_loc=4821'),
+    `object values must render their primitive fields as k=v pairs, got: ${md.split('\n').find((l) => l.includes('ADP-22'))}`
   );
 });

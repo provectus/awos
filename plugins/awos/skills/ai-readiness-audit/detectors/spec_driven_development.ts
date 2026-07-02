@@ -16,29 +16,34 @@ export function detectAwosInstalled(
   _params?: unknown
 ): ReturnType<typeof makeResult> {
   const hasAwos = existsSync(join(repoPath, '.awos'));
-  const hasContext = existsSync(join(repoPath, 'context'));
+  // A bare context/ directory is NOT evidence of a spec workspace — the audit
+  // itself creates context/audits/ for its output. Only the workspace subdirs
+  // the installer creates (context/product, context/spec) count.
+  const hasContext =
+    existsSync(join(repoPath, 'context', 'product')) ||
+    existsSync(join(repoPath, 'context', 'spec'));
 
   if (hasAwos && hasContext) {
     return makeResult('PASS', 2, [
       '.awos/ directory present — AWOS framework installed',
-      'context/ directory present — spec workspace initialised',
+      'context/product or context/spec present — spec workspace initialised',
     ]);
   }
 
   if (hasAwos) {
     return makeResult('WARN', 1, [
-      '.awos/ directory present but context/ is missing — AWOS installed but workspace not initialised',
+      '.awos/ directory present but context/product and context/spec are missing — AWOS installed but workspace not initialised',
     ]);
   }
 
   if (hasContext) {
     return makeResult('WARN', 1, [
-      'context/ directory present but .awos/ is missing — workspace exists but AWOS framework not installed',
+      'context/ workspace present but .awos/ is missing — workspace exists but AWOS framework not installed',
     ]);
   }
 
   return makeResult('FAIL', 0, [
-    'neither .awos/ nor context/ found — AWOS framework is not installed',
+    'neither .awos/ nor a context/ spec workspace found — AWOS framework is not installed',
   ]);
 }
 

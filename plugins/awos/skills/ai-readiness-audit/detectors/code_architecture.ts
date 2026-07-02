@@ -403,8 +403,9 @@ export function detectSeparationOfConcerns(
 // ---------------------------------------------------------------------------
 // detectNamingConventions — category 2104 (ARCH-05, method: detected)
 //
-// Check file-naming convention adherence across source files.
-// Classifies each source filename (without extension) into one of:
+// Check file-naming convention adherence across source files. Test files are
+// excluded (they follow the test-naming convention, a separate axis).
+// Classifies each source filename's stem (first dot-segment) into one of:
 //   - snake_case: all lowercase with underscores
 //   - kebab-case: all lowercase with hyphens
 //   - camelCase: starts with lowercase, has uppercase letters
@@ -434,24 +435,43 @@ function classifyName(name: string): NamingConvention {
 
 const NAMING_SOURCE_GLOBS = ALL_SOURCE_GLOBS;
 
+// Test files follow the ecosystem's test-naming convention (foo.test.ts,
+// test_foo.py, foo_test.go) — a separate axis from source-file naming, so they
+// are excluded rather than counted as violations of the source convention.
+const TEST_FILE_NAME_RX = /(\.(test|spec)\.[^.]+$)|(^test_)|(_test\.[^.]+$)/i;
+
+/**
+ * The convention-bearing part of a filename: the first dot-segment. Trailing
+ * dot-qualifiers (`.d.ts`, `.config.ts`, `.stories.tsx`) are role markers, not
+ * naming-convention choices, so they are ignored for classification.
+ */
+function nameStem(base: string): string {
+  return base.split('.')[0];
+}
+
 export function detectNamingConventions(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
   const files = iterFiles(repoPath, NAMING_SOURCE_GLOBS);
 
-  // Exclude index files, __init__, and config files as they follow their own conventions
+  // Exclude test files (separate naming axis) and index/__init__/config-style
+  // files, which follow their own conventions.
   const relevantFiles = files.filter((f) => {
-    const base = basename(f).replace(/\.[^.]+$/, ''); // strip extension
+    const base = basename(f);
+    if (TEST_FILE_NAME_RX.test(base)) return false;
     return !['index', '__init__', 'main', 'app', 'setup', 'config'].includes(
-      base
+      nameStem(base)
     );
   });
 
   if (relevantFiles.length === 0) {
-    return makeResult('PASS', 0, [
-      'no source files found — naming convention check skipped',
-    ]);
+    return makeResult(
+      'SKIP',
+      null,
+      ['no source files to evaluate — naming convention check not applicable'],
+      'detected'
+    );
   }
 
   const counts: Record<NamingConvention, number> = {
@@ -463,8 +483,7 @@ export function detectNamingConventions(
   };
 
   for (const f of relevantFiles) {
-    const base = basename(f).replace(/\.[^.]+$/, '');
-    counts[classifyName(base)]++;
+    counts[classifyName(nameStem(basename(f)))]++;
   }
 
   const total = relevantFiles.length;

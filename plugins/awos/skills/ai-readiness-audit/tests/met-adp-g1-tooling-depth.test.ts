@@ -142,7 +142,7 @@ test('adp_g1: all tooling layers → full coverage (value === 1)', () => {
       '.claude/commands',
       '.claude/hooks',
       '.mcp.json',
-      'context',
+      'context/spec',
     ],
     monthly_buckets: [],
     merge_records: [],

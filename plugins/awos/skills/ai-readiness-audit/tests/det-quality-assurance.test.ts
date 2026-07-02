@@ -632,18 +632,31 @@ test('QA-06: tox.ini with pytest-cov returns PASS', () => {
   assert.equal(r.status, 'PASS', 'tox.ini with pytest-cov must return PASS');
 });
 
-test('QA-04: Vitest reference in test file is detected as E2E signal', () => {
-  // vitest is in E2E_CONTENT_RX — a file importing it must yield PASS
+test('QA-04: Vitest reference is NOT an E2E signal (unit runner, not a browser driver) — B1', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'app.spec.ts'),
     'import { vitest } from "vitest";\ntest("x", () => {});\n'
   );
   const r = detectE2ETests(t);
+  assert.notEqual(
+    r.status,
+    'PASS',
+    'importing the vitest unit runner must not count as E2E evidence'
+  );
+});
+
+test('QA-04: Playwright reference in test file IS detected as E2E signal', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'flow.spec.ts'),
+    'import { test } from "@playwright/test";\ntest("x", async ({ page }) => {});\n'
+  );
+  const r = detectE2ETests(t);
   assert.equal(
     r.status,
     'PASS',
-    'vitest import should be detected as an E2E signal'
+    'a playwright import must be detected as an E2E signal'
   );
 });
 

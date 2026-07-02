@@ -436,11 +436,22 @@ function pct(ratio: number): string {
   return (ratio * 100).toFixed(1) + '%';
 }
 
-/** Round floats to 2dp; integers stay integral; null/undefined → '—'. */
-function fmtValue(v: string | number | null | undefined): string {
+/**
+ * Round floats to 2dp; integers stay integral; null/undefined → '—'.
+ * Objects (e.g. the scale metric's { total_loc, file_count, … }) render their
+ * primitive fields as "k=v" pairs instead of the useless "[object Object]".
+ */
+function fmtValue(v: unknown): string {
   if (v === null || v === undefined) return '—';
   if (typeof v === 'number') {
     return Number.isInteger(v) ? String(v) : v.toFixed(2);
+  }
+  if (Array.isArray(v)) return v.map(fmtValue).join(', ');
+  if (typeof v === 'object') {
+    const pairs = Object.entries(v as Record<string, unknown>)
+      .filter(([, val]) => typeof val === 'number' || typeof val === 'string')
+      .map(([k, val]) => `${k}=${fmtValue(val)}`);
+    return pairs.length > 0 ? pairs.join(', ') : '—';
   }
   return String(v);
 }
@@ -1262,12 +1273,12 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
               d.gated === 'tracker'
                 ? '— (needs ticketing connector)'
                 : '— (needs incident connector)';
-            return `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(note, tipText)}</span></div>`;
+            return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${esc(note)}</span></div>`;
           }
           const bandHtml = d.band
             ? `<span class="band" style="background:${BAND_COLOR[d.band.toLowerCase()] ?? '#94a3b8'}">${esc(d.band)}</span>`
             : '';
-          return `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(d.display_value ?? '—', tipText)}${bandHtml}</span></div>`;
+          return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${esc(d.display_value ?? '—')}${bandHtml}</span></div>`;
         })
         .join('');
       blocks.push(
@@ -1278,7 +1289,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const items = h.scale
         .map(
           (s) =>
-            `<div class="kv"><span class="k">${esc(s.label)}</span><span class="v">${tip(s.display_value, headlineTipText(s.label, s.check_id))}</span></div>`
+            `<div class="kv"><span class="k">${tip(s.label, headlineTipText(s.label, s.check_id))}</span><span class="v">${esc(s.display_value)}</span></div>`
         )
         .join('');
       blocks.push(
@@ -1290,13 +1301,13 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const v = h?.reach?.[key];
       if (v)
         reachItems.push(
-          `<div class="kv"><span class="k">${label}</span><span class="v">${tip(v, HEADLINE_TIP[label])}</span></div>`
+          `<div class="kv"><span class="k">${tip(label, HEADLINE_TIP[label])}</span><span class="v">${esc(v)}</span></div>`
         );
     }
     if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
       const withTooling = audit.per_repo.filter((r) => r.has_ai_tooling).length;
       reachItems.push(
-        `<div class="kv"><span class="k">Repos with AI tooling</span><span class="v">${tip(`${withTooling} / ${audit.per_repo.length}`, HEADLINE_TIP['Repos with AI tooling'])}</span></div>`
+        `<div class="kv"><span class="k">${tip('Repos with AI tooling', HEADLINE_TIP['Repos with AI tooling'])}</span><span class="v">${esc(`${withTooling} / ${audit.per_repo.length}`)}</span></div>`
       );
     }
     if (reachItems.length > 0) {
@@ -1429,9 +1440,9 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       rows.push(`<tr class="dim-row${lowCov}" onclick="location.hash='dim/${esc(key)}'">
   <td>${n++}</td>
   <td><a href="${href}"><strong>${esc(titleLabel(dim))}</strong></a></td>
-  <td>${tip(fmtPts(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, `coverage ${covPct} · ${esc(dim.dimension)} · standards.toml`)}</td>
+  <td>${fmtPts(dim.score)} pts</td>
   <td>${sourcesCell}</td>
-  <td>${tip(covPct, `Share of this area's expected capability that is in place.`, `score ÷ Σ applicable weights · ${esc(dim.dimension)}`)}</td>
+  <td>${covPct}</td>
   <td>${tip(relStr, relTip, '')}</td>
   <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
   <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>

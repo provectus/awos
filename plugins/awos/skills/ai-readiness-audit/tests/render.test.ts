@@ -1097,16 +1097,11 @@ test('renderHtml: dimension summary tooltips live on BOTH column headers and val
       `The "${label}" header tooltip must carry its column explanation`
     );
   }
-  // Value cells ALSO carry a per-row tooltip (tooltips everywhere).
+  // Points/Coverage value cells are PLAIN — the explanation lives on the
+  // column header, so every row doesn't repeat the same tooltip.
   assert.ok(
-    html.includes(
-      '<td><span class="tip" tabindex="0">5 pts<span class="tipbox">'
-    ),
-    'Points value cell must carry its per-row tooltip'
-  );
-  assert.ok(
-    html.includes('· ai-development-tooling · standards.toml'),
-    'The Points value tooltip must carry its row-specific meta (coverage · dimension · standards.toml)'
+    html.includes('<td>5 pts</td>'),
+    'Points value cell must be plain (its explanation lives on the column header)'
   );
   // The Dimension name (row label) cell is a PLAIN <a><strong> with NO tooltip (E5).
   assert.ok(
@@ -1122,8 +1117,10 @@ test('renderHtml: dimension summary tooltips live on BOTH column headers and val
 test('renderHtml: Reach labels the contributor row "Active Contributors" with the reworded tip', () => {
   const html = renderHtml(singleRepoFixture());
   assert.ok(
-    html.includes('<span class="k">Active Contributors</span>'),
-    'Reach must label the contributor row "Active Contributors", not bare "Contributors"'
+    html.includes(
+      '<span class="k"><span class="tip" tabindex="0">Active Contributors<span class="tipbox">'
+    ),
+    'Reach must label the contributor row "Active Contributors" with the tooltip on the label'
   );
   assert.ok(
     !html.includes('<span class="k">Contributors</span>'),

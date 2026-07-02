@@ -517,3 +517,163 @@ test('render --format both writes report.md + report.html in one invocation', ()
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// B4: aggregate clamps out-of-range patched scores and reconciles score/status
+// ---------------------------------------------------------------------------
+
+function makePatchableCheck(overrides: Record<string, unknown>) {
+  return {
+    check_id: 'AI-01',
+    code: [3001],
+    method: 'judgment',
+    status: 'PASS',
+    value: null,
+    evidence: [],
+    weight_awarded: 0,
+    weight_max: 8,
+    applies: true,
+    reliability: { tag: 'maximal', confidence: 'medium', note: null },
+    source: '',
+    definition: '',
+    hint: '',
+    plain: '',
+    score: 0,
+    confidence: 1,
+    ...overrides,
+  };
+}
+
+test('aggregate clamps a patched score > 1 — a raw weight written into score cannot inflate the total (B4)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-agg-clamp-'));
+  try {
+    // Observed live: the orchestrator patched score=8 (the weight) instead of a
+    // 0–1 fraction, producing weight_awarded 64/8.
+    const dim = {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-01',
+      score: 0,
+      coverage: 0,
+      checks: [makePatchableCheck({ score: 8 })],
+    };
+    writeFileSync(
+      join(dir, 'ai-development-tooling.json'),
+      JSON.stringify(dim)
+    );
+    aggregate(dir);
+    const updated = JSON.parse(
+      readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
+    );
+    const check = updated.checks[0];
+    assert.equal(
+      check.weight_awarded,
+      8,
+      `weight_awarded must be clamped to weight_max (8), got ${check.weight_awarded}`
+    );
+    assert.equal(
+      check.score,
+      1,
+      `score must be written back clamped to [0,1], got ${check.score}`
+    );
+    assert.equal(
+      updated.score,
+      8,
+      `dimension score must not exceed applicable weight, got ${updated.score}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('aggregate reconciles a status-only patch (PASS with score left at 0) instead of zeroing the credit', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-agg-reconcile-'));
+  try {
+    // Orchestrator set status/weight_awarded but never touched score.
+    const dim = {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-01',
+      score: 0,
+      coverage: 0,
+      checks: [makePatchableCheck({ score: 0, weight_awarded: 8 })],
+    };
+    writeFileSync(
+      join(dir, 'ai-development-tooling.json'),
+      JSON.stringify(dim)
+    );
+    aggregate(dir);
+    const check = JSON.parse(
+      readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
+    ).checks[0];
+    assert.equal(
+      check.weight_awarded,
+      8,
+      `a PASS patch without a score must keep its awarded weight, got ${check.weight_awarded}`
+    );
+    assert.equal(
+      check.score,
+      1,
+      `score must be reconciled with the PASS status, got ${check.score}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('aggregate zeroes stale credit on a FAIL — weight_awarded cannot survive a failing status', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-agg-fail-'));
+  try {
+    const dim = {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-01',
+      score: 0,
+      coverage: 0,
+      checks: [
+        makePatchableCheck({ status: 'FAIL', score: 0, weight_awarded: 8 }),
+      ],
+    };
+    writeFileSync(
+      join(dir, 'ai-development-tooling.json'),
+      JSON.stringify(dim)
+    );
+    aggregate(dir);
+    const check = JSON.parse(
+      readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
+    ).checks[0];
+    assert.equal(
+      check.weight_awarded,
+      0,
+      `a FAIL check must carry zero awarded weight, got ${check.weight_awarded}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// parseCheckIds: heading prefixes may contain digits (E2E-01, E2ED-01)
+// ---------------------------------------------------------------------------
+
+import { parseCheckIds } from './audit_core.ts';
+
+test('parseCheckIds maps digit-containing check-id prefixes (E2E-01) — not just pure-letter ones', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-checkids-'));
+  try {
+    writeFileSync(
+      join(dir, 'end-to-end-delivery.md'),
+      '# E2ED\n\n### E2E-01: Cross-layer branches\n\n- **Category:** 2300\n\n### SEC-01: Env files\n\n- **Category:** 2600\n'
+    );
+    const map = parseCheckIds(dir);
+    assert.equal(
+      map.get(2300),
+      'E2E-01',
+      `code 2300 must map to E2E-01 (digit-containing prefix), got ${map.get(2300)}`
+    );
+    assert.equal(
+      map.get(2600),
+      'SEC-01',
+      `plain-letter prefixes must keep working, got ${map.get(2600)}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

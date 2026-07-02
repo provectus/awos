@@ -244,3 +244,43 @@ test('doc-coverage detects KDoc on public Kotlin functions', async () => {
     rmSync(bare, { recursive: true, force: true });
   }
 });
+
+test('doc-coverage carries per-code evidence — the all-defs code (2205) must not reuse the public-defs line (B5)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-percode-'));
+  try {
+    // 1 public documented def + 1 private undocumented def:
+    // public coverage (2204) = 1/1 = 1.00, overall coverage (2205) = 1/2 = 0.50.
+    writeFileSync(
+      join(dir, 'a.py'),
+      'def f():\n    """Does f."""\n    return 1\n\ndef _helper():\n    return 2\n'
+    );
+    const res = await compute(dir, {}, {}, dir);
+    assert.equal(res.status, 'OK', 'metric must run when python files exist');
+    const perCode = (res as { evidence_per_code?: Record<number, string[]> })
+      .evidence_per_code;
+    assert.ok(perCode, 'result must carry evidence_per_code');
+    assert.match(
+      perCode![2204][0],
+      /public defs documented/,
+      `2204 evidence must describe the public surface, got "${perCode![2204][0]}"`
+    );
+    assert.ok(
+      !/public/.test(perCode![2205][0]),
+      `2205 evidence must describe ALL defs, not the public surface, got "${perCode![2205][0]}"`
+    );
+    assert.notEqual(
+      perCode![2205][0],
+      perCode![2204][0],
+      '2205 must not reuse the 2204 evidence line (the B5 mislabel)'
+    );
+    // With a private undocumented def present, all-defs coverage < public coverage.
+    const scores = (res as { score_per_code?: Record<number, number> })
+      .score_per_code;
+    assert.ok(
+      (scores?.[2205] ?? 1) < (scores?.[2204] ?? 0),
+      `2205 (all defs) must score below 2204 (public only) here, got ${scores?.[2205]} vs ${scores?.[2204]}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -11,6 +11,11 @@ export const DEFAULT_IGNORE = [
   ...new Set([...DIR_MARKERS, '.git', '__pycache__', 'target']),
 ];
 
+// The audit writes its own artifacts into <repo>/context/audits/ — scanning
+// that directory would let the audit score its own output (self-pollution),
+// inflating every subsequent run. Every file walk must prune it.
+export const AUDIT_OUTPUT_DIR = 'context/audits';
+
 export interface DetectorResult {
   status: string;
   value: unknown;
@@ -61,7 +66,14 @@ export function iterFiles(
   globs: string[],
   ignore = DEFAULT_IGNORE
 ): string[] {
-  const pruneArgs = ignore.flatMap((d) => ['-name', d, '-prune', '-o']);
+  const pruneArgs = [
+    ...ignore.flatMap((d) => ['-name', d, '-prune', '-o']),
+    // Path-based prune of the audit's own output directory (see AUDIT_OUTPUT_DIR).
+    '-path',
+    `*/${AUDIT_OUTPUT_DIR}`,
+    '-prune',
+    '-o',
+  ];
   const nameArgs = globs.flatMap((g, i) => {
     // Strip leading **/ glob prefix to get the bare filename pattern for find -name
     const bare = g.replace(/^\*\*\//, '');

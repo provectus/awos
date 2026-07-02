@@ -43,8 +43,9 @@ const TOOLING_MAP: Array<{ paths: string[]; code: number }> = [
   { paths: ALL_RULE_COMMAND_DIRS, code: 103 },
   { paths: ALL_HOOK_PATHS, code: 104 },
   { paths: ALL_MCP_CONFIG_PATHS, code: 105 },
-  // Code 106: spec-driven adoption signals — context/spec, context/, or .awos/
-  { paths: ['context/spec', 'context', '.awos'], code: 106 },
+  // Code 106: spec-driven adoption signals — real spec-workspace content only.
+  // A bare context/ is excluded: the audit itself creates context/audits/.
+  { paths: ['context/spec', 'context/product', '.awos'], code: 106 },
 ];
 
 // All defined tooling category codes for coverage denominator.

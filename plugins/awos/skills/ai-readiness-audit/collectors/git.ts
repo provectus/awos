@@ -131,9 +131,12 @@ const TOOLING_CANDIDATES = [
     ...ALL_HOOK_PATHS,
     ...ALL_MCP_CONFIG_PATHS,
     ...ALL_TOOL_CONFIG_DIRS,
-    // Spec-driven adoption signals (ADP-G1 code 106).
+    // Spec-driven adoption signals (ADP-G1 code 106). A bare `context/` is NOT
+    // a signal: the audit itself writes context/audits/, so counting it would
+    // let the audit score its own output. Only real spec-workspace content
+    // (context/spec, context/product) or the framework dir counts.
     'context/spec',
-    'context',
+    'context/product',
     '.awos',
   ]),
 ];

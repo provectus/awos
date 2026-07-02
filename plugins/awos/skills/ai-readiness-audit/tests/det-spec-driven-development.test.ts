@@ -68,39 +68,50 @@ function addBranch(
 // ---------------------------------------------------------------------------
 // detectAwosInstalled — code 2800 (SDD-01, detected)
 //
-// PASS if both .awos/ and context/ directories exist.
-// WARN if only one exists.
-// FAIL if neither exists.
+// PASS if .awos/ and a real spec workspace (context/product or context/spec)
+// exist. WARN if only one side exists. FAIL if neither. A bare context/ does
+// NOT count — the audit itself creates context/audits/ (self-pollution, B3).
 // ---------------------------------------------------------------------------
 
-test('SDD-01: PASS when both .awos/ and context/ are present', () => {
+test('SDD-01: PASS when both .awos/ and a spec workspace are present', () => {
   const t = tmp();
   mkdirSync(join(t, '.awos'));
-  mkdirSync(join(t, 'context'));
+  mkdirSync(join(t, 'context', 'product'), { recursive: true });
   const r = detectAwosInstalled(t);
-  assert.equal(r.status, 'PASS', 'both dirs → PASS');
+  assert.equal(r.status, 'PASS', '.awos + context/product → PASS');
   assert.equal(r.method, 'detected');
 });
 
-test('SDD-01: WARN when only .awos/ is present (no context/)', () => {
+test('SDD-01: WARN when only .awos/ is present (no spec workspace)', () => {
   const t = tmp();
   mkdirSync(join(t, '.awos'));
   const r = detectAwosInstalled(t);
   assert.equal(r.status, 'WARN', 'only .awos → WARN');
 });
 
-test('SDD-01: WARN when only context/ is present (no .awos/)', () => {
+test('SDD-01: WARN when only the spec workspace is present (no .awos/)', () => {
   const t = tmp();
-  mkdirSync(join(t, 'context'));
+  mkdirSync(join(t, 'context', 'spec'), { recursive: true });
   const r = detectAwosInstalled(t);
-  assert.equal(r.status, 'WARN', 'only context → WARN');
+  assert.equal(r.status, 'WARN', 'only context/spec → WARN');
 });
 
-test('SDD-01: FAIL when neither .awos/ nor context/ is present', () => {
+test('SDD-01: FAIL when neither .awos/ nor a spec workspace is present', () => {
   const t = tmp();
   writeFileSync(join(t, 'README.md'), '# project\n');
   const r = detectAwosInstalled(t);
   assert.equal(r.status, 'FAIL', 'no dirs → FAIL');
+});
+
+test('SDD-01: FAIL when context/ holds no workspace subdirs (e.g. only audit output)', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'context', 'audits'), { recursive: true });
+  const r = detectAwosInstalled(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'a bare context/ (audit output only) must not count as a spec workspace'
+  );
 });
 
 // ---------------------------------------------------------------------------

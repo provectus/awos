@@ -36,9 +36,12 @@ const INTEGRATION_DIR_RX =
 const INTEGRATION_FILE_RX =
   /[_.-](integration|contract|integration_test|it)[._-]/i;
 
-// E2E test markers in file content.
+// E2E test markers in file content — browser/e2e drivers only. General-purpose
+// test runners (vitest, jest) and HTTP assertion libs (supertest) must NOT be
+// listed: importing the runner is what every unit test does, so matching it
+// would classify entire unit suites as e2e.
 const E2E_CONTENT_RX =
-  /\b(playwright|cypress|puppeteer|selenium|webdriver|nightwatch|testcafe|detox|appium|supertest|vitest|k6|gatling|webdriverio|wdio|codeceptjs|robot\s+framework)\b/i;
+  /\b(playwright|cypress|puppeteer|selenium|webdriver|nightwatch|testcafe|detox|appium|k6|gatling|webdriverio|wdio|codeceptjs|robot\s+framework)\b/i;
 
 // E2E config / directory names.
 const E2E_GLOBS = [

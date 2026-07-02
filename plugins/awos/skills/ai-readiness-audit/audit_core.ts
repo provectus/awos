@@ -371,16 +371,24 @@ export async function auditCore(
       confidence?: number;
     }
   >();
-  for (const id of metricIds) {
-    const fn = metrics[id];
-    if (!fn) continue;
-    let res: MetricResult;
-    try {
-      res = await fn(collectedDir, standards, topology, repoPath);
-    } catch (err) {
-      process.stderr.write(`audit-core: metric ${id} threw: ${String(err)}\n`);
-      continue;
-    }
+  const metricResults = await Promise.all(
+    [...metricIds].map(async (id) => {
+      const fn = metrics[id];
+      if (!fn) return null;
+      try {
+        const res = await fn(collectedDir, standards, topology, repoPath);
+        return { id, res };
+      } catch (err) {
+        process.stderr.write(
+          `audit-core: metric ${id} threw: ${String(err)}\n`
+        );
+        return null;
+      }
+    })
+  );
+  for (const item of metricResults) {
+    if (!item) continue;
+    const { id, res } = item;
     const resEvidencePerCode = res.evidence_per_code as
       | Record<number, string[]>
       | undefined;
@@ -556,11 +564,36 @@ export function aggregate(outDir: string): void {
     // Re-derive applies from status so patched-PASS connector checks count
     // in the denominator — prevents coverage > 1 when a SKIP is patched to PASS.
     // Re-derive weight_awarded from score (Correction 3) so orchestrator-patched
-    // checks that carry an explicit score re-sum correctly.
+    // checks that carry an explicit score re-sum correctly. The orchestrator's
+    // patches are untrusted input: a score outside [0,1] is clamped (a raw
+    // weight written into `score` must not inflate the audit total), and a
+    // patch that set status without a score falls back to weight_awarded /
+    // status so the patched credit isn't silently zeroed. `score` is written
+    // back so the artifact never carries a score that disagrees with its
+    // status.
     for (const c of checks) {
       c.applies = c.status !== 'SKIP';
-      const s =
-        c.score ?? (c.status === 'PASS' ? 1 : c.status === 'WARN' ? 0.5 : 0);
+      let s: number;
+      if (c.status === 'SKIP') {
+        s = 0;
+      } else if (typeof c.score === 'number' && c.score > 0) {
+        s = c.score;
+      } else if (
+        ['PASS', 'WARN', 'PARTIAL'].includes(c.status) &&
+        (c.weight_max || 0) > 0 &&
+        (c.weight_awarded || 0) > 0
+      ) {
+        s = c.weight_awarded / c.weight_max;
+      } else {
+        s = c.status === 'PASS' ? 1 : c.status === 'WARN' ? 0.5 : 0;
+      }
+      if (s < 0 || s > 1) {
+        process.stderr.write(
+          `aggregate: ${c.check_id} score ${s} out of [0,1] — clamped (bad judgment/connector patch?)\n`
+        );
+        s = Math.min(1, Math.max(0, s));
+      }
+      c.score = s;
       c.weight_awarded = Math.round((c.weight_max || 0) * s * 10) / 10;
     }
     const score = round1(
@@ -666,7 +699,7 @@ export function aggregate(outDir: string): void {
   writeFileSync(join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
 }
 
-function parseCheckIds(dimensionsDir: string): Map<number, string> {
+export function parseCheckIds(dimensionsDir: string): Map<number, string> {
   const map = new Map<number, string>();
   let files: string[];
   try {
@@ -674,7 +707,8 @@ function parseCheckIds(dimensionsDir: string): Map<number, string> {
   } catch {
     return map;
   }
-  const headingRe = /^###\s+([A-Z]+-\d+)\s*:/;
+  // Prefix may contain digits after the first letter (E2E-01, E2ED-01).
+  const headingRe = /^###\s+([A-Z][A-Z0-9]*-\d+)\s*:/;
   const categoryRe = /^[-*]\s*\*\*Category:\*\*\s*([\d,\s]+)/;
   for (const file of files) {
     let text: string;

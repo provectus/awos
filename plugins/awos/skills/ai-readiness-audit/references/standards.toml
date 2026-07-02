@@ -1433,7 +1433,7 @@ last_verified = "2026-06-30"
 
 [category.sbp_except_clause_syntax]
 code = 2706
-metric = "SBP-06"
+metric = "SBP-08"
 dimension = "software-best-practices"
 weight = 1
 method = "detected"

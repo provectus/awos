@@ -292,10 +292,12 @@ export async function compute(
   if (publicTotal > 0 && publicCoverage >= PUBLIC_BAND) awarded.push(2204);
   if (overallCoverage >= OVERALL_BAND) awarded.push(2205);
 
-  const expression =
-    publicTotal > 0
-      ? `${publicDocumented} of ${publicTotal} public defs documented = ${publicCoverage.toFixed(2)}`
-      : `${documented} of ${total} defs documented = ${overallCoverage.toFixed(2)}`;
+  // Each code carries its own evidence line: 2204 scores the public surface,
+  // 2205 scores ALL defs — reusing the public line for 2205 would show
+  // "= 1.00" next to a sub-1.0 score whenever a private def is undocumented.
+  const publicLine = `${publicDocumented} of ${publicTotal} public defs documented = ${publicCoverage.toFixed(2)}`;
+  const overallLine = `${documented} of ${total} defs documented = ${overallCoverage.toFixed(2)}`;
+  const expression = publicTotal > 0 ? publicLine : overallLine;
 
   const score2204 = clamp01(publicCoverage);
   const score2205 = clamp01(overallCoverage);
@@ -315,6 +317,7 @@ export async function compute(
     expression,
     score2204,
     docConfidence,
-    { 2204: score2204, 2205: score2205 }
+    { 2204: score2204, 2205: score2205 },
+    { 2204: [publicLine], 2205: [overallLine] }
   );
 }

@@ -10,7 +10,7 @@
  * or dist/grammars/ (bundled runs).
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import webTreeSitter from 'web-tree-sitter';
@@ -175,7 +175,7 @@ export function resolveCoreWasm(): string {
   return distWasm; // fallback
 }
 
-let initialised = false;
+let _initPromise: Promise<boolean> | null = null;
 
 /**
  * Initialise the core tree-sitter runtime exactly once. Returns false (no throw)
@@ -184,21 +184,25 @@ let initialised = false;
  * Both wasmBinary and locateFile are passed: the bundled CJS-in-ESM wrapper has
  * no __dirname, so the default path-finder fails; with both set the binary is
  * matched by locateFile and returned pre-loaded (no filesystem access at init).
+ *
+ * Promise-singleton: concurrent callers share one init — safe under Promise.all.
  */
-export async function initParser(): Promise<boolean> {
-  if (initialised) return true;
-  const Parser = getParserClass();
-  if (!Parser || typeof Parser.init !== 'function') return false;
-  const coreWasmPath = resolveCoreWasm();
-  if (!existsSync(coreWasmPath)) return false;
-  try {
-    const wasmBinary = readFileSync(coreWasmPath);
-    await Parser.init({ wasmBinary, locateFile: () => coreWasmPath });
-    initialised = true;
-    return true;
-  } catch {
-    return false;
-  }
+export function initParser(): Promise<boolean> {
+  if (_initPromise) return _initPromise;
+  _initPromise = (async () => {
+    const Parser = getParserClass();
+    if (!Parser || typeof Parser.init !== 'function') return false;
+    const coreWasmPath = resolveCoreWasm();
+    if (!existsSync(coreWasmPath)) return false;
+    try {
+      const wasmBinary = readFileSync(coreWasmPath);
+      await Parser.init({ wasmBinary, locateFile: () => coreWasmPath });
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  return _initPromise;
 }
 
 /** A per-run cache mapping grammar wasm file → loaded Language (or null). */
@@ -225,7 +229,11 @@ export class LanguageLoader {
   }
 }
 
-/** Recursively walk a directory, invoking cb for each file (pruning PRUNE_DIRS). */
+/**
+ * Recursively walk a directory, invoking cb for each file. Prunes PRUNE_DIRS
+ * and the audit's own output dir `context/audits/`, so AST metrics never score
+ * artifacts the audit wrote itself.
+ */
 export function walkDir(dir: string, cb: (filePath: string) => void): void {
   let entries: ReturnType<typeof readdirSync>;
   try {
@@ -236,6 +244,7 @@ export function walkDir(dir: string, cb: (filePath: string) => void): void {
   for (const entry of entries) {
     if (entry.isDirectory()) {
       if (PRUNE_DIRS.has(entry.name)) continue;
+      if (entry.name === 'audits' && dir.endsWith(`${sep}context`)) continue;
       walkDir(join(dir, entry.name), cb);
     } else if (entry.isFile()) {
       cb(join(dir, entry.name));

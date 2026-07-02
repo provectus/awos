@@ -30,6 +30,7 @@ Your primary task is to **fill in** a product definition template using a guided
 # OUTPUTS
 
 1.  **`context/product/product-definition.md`:** The complete, non-technical product definition, created by filling in the template.
+2.  **Optional Output:** `context/product/brownfield.md`. Created on brownfield projects only. Downstream commands (`/awos:roadmap`, `/awos:architecture`) extend and eventually delete this file.
 
 ---
 
@@ -62,14 +63,34 @@ First, check if the file `context/product/product-definition.md` exists.
 
 ### Step 2B: Creation Mode
 
-1.  If `<user_prompt>` is non-empty, briefly note that you'll use it as a starting point, then refine from there.
-2.  Walk the user through the sections of the template, explaining each one.
+1.  **Brownfield detection.** Check whether the project already has source code by looking for common indicators (`src/`, `app/`, `lib/`, `package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml`, `Gemfile`, `build.gradle`, `*.csproj`, `Makefile`, `CMakeLists.txt`, `setup.py`, `pyproject.toml`, or similar). If any are found, ask the user whether to run codebase exploration using `AskUserQuestion` with two options: **Yes, explore the codebase** ("Use existing code as context for the product definition") and **No, start from scratch** ("Treat this as a new project — ignore existing code"). If the user chooses to skip, proceed to step 2 as if no source code was found. Otherwise, run a comprehensive exploration before starting the interview:
+
+    a. Launch an `Explore` agent focused on the product domain:
+
+    ```text
+    Agent(subagent_type="Explore", description="Understand existing product", prompt="
+    Explore this codebase and determine what this project does. Focus on:
+    - Purpose and problem being solved (README, docs, package metadata, comments)
+    - Target audience signals (UI copy, API design, documentation tone, onboarding flow)
+    - Main features and capabilities (entry points, routes, commands, key modules)
+    - User journey (how someone uses this from start to finish)
+
+    For each finding, cite the file paths that evidence it. Be concise — report findings as bullet points.
+    ")
+    ```
+
+    b. Triage findings with the user. Group related findings by category (e.g. all features in one call, audience signals in another) and use `AskUserQuestion` to batch up to four per call. For each finding, offer **Accept** and **Reject** as options. The user can also select "Other" to provide free-text feedback — treat it according to intent (correction, substitution, partial accept, or any other reaction). Discard rejected findings.
+
+    c. Create `context/product/brownfield.md` with a `## Product` heading. List all accepted and corrected findings under it — for corrected findings, record the corrected version, not the original. If every finding was rejected or the exploration surfaced nothing, still create the file with an empty `## Product` section; downstream commands (`/awos:roadmap`, `/awos:architecture`) key on the file's existence to run their own explorations.
+
+2.  If `<user_prompt>` is non-empty, briefly note that you'll use it as a starting point, then refine from there.
+3.  Walk the user through the sections of the template. When step 1 produced brownfield findings, use the Product section to propose draft answers — frame questions as "does this match what you intend, or would you change it?" rather than asking from a blank slate. The interview still covers every section; the exploration gives better defaults, not fewer questions.
     - **Project Name & Vision:** Ask for the project's name and its core purpose.
     - **Target Audience & Personas:** Ask who the product is for and help create one simple persona.
     - **Success Metrics:** Ask how they will measure the product's impact on the user.
     - **Core Features & User Journey:** Ask for the 3-5 most important high-level features and a simple user workflow.
     - **Project Boundaries:** Ask what is essential for the first version (In-Scope) and what can wait (Out-of-Scope).
-3.  Once all sections are complete, proceed to **Step 3: File Generation**.
+4.  Once all sections are complete, proceed to **Step 3: File Generation**.
 
 ---
 

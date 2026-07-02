@@ -19,6 +19,7 @@ Your task is to manage the architecture file located at `context/product/archite
 - **Template File:** `.awos/templates/architecture-template.md` (The required structure).
 - **Prerequisite Input 1:** `context/product/product-definition.md` (The "what" and "why").
 - **Prerequisite Input 2:** `context/product/roadmap.md` (The implementation phases).
+- **Optional Input:** `context/product/brownfield.md` (produced by `/awos:product`, extended by `/awos:roadmap`; deleted at end of this command).
 - **Primary Input/Output:** `context/product/architecture.md` (The file to create or update).
 
 ---
@@ -49,12 +50,42 @@ Follow this logic precisely.
 ## Scenario 1: Creation Mode
 
 1.  Read and synthesize the product definition and roadmap, paying close attention to features planned for Phase 1.
-2.  Work through the template section by section — not all at once.
+2.  **Brownfield context.** Check if `context/product/brownfield.md` exists (produced by `/awos:product` when it detects an existing codebase). If it does:
+
+    a. Read `context/product/brownfield.md`.
+
+    b. Construct the Explore prompt by reading `context/product/brownfield.md` and embedding its full content between `<existing_findings>` and `</existing_findings>` tags. Then launch an `Explore` agent focused on the technology stack:
+
+    ```text
+    Agent(subagent_type="Explore", description="Discover existing tech stack", prompt="
+    Explore this codebase and document the existing technology stack. Focus on:
+    - Languages and frameworks (with versions from config files)
+    - Databases, ORMs, and data stores
+    - Infrastructure (Docker, cloud configs, deployment scripts)
+    - External services and APIs (auth providers, payment, analytics)
+    - Testing frameworks and tools
+    - Build tools, bundlers, CI/CD
+
+    The following findings were already confirmed by the user — do not repeat them:
+
+    <existing_findings>
+    {paste the full current contents of context/product/brownfield.md here}
+    </existing_findings>
+
+    Report only NEW findings not covered above. For each technology found, cite the file paths that evidence it. Be concise — report findings as bullet points.
+    ")
+    ```
+
+    c. Triage new findings with the user. Group related findings by category and use `AskUserQuestion` to batch up to four per call. For each finding, offer **Accept** and **Reject** as options. The user can also select "Other" to provide free-text feedback — treat it according to intent (correction, substitution, partial accept, or any other reaction). Discard rejected findings. Append accepted and corrected findings to `context/product/brownfield.md` under a `## Technology` heading. For corrected findings, record the corrected version, not the original.
+
+    d. Use the confirmed technology findings as the default for each section, but still walk every section with the user. The interview still covers every area; the exploration gives better defaults, not fewer questions.
+
+3.  Work through the template section by section — not all at once.
     - For each architectural area, propose a concrete title from the template placeholder.
-    - For each component, propose a specific technology with one or more alternatives, justified by the project context.
+    - For each component, propose a specific technology with one or more alternatives, justified by the project context. When brownfield findings provided a known technology, present it as the default.
     - If the user is unsure, ask clarifying questions about team skills, budget, or priorities. Do not proceed until the current section is confirmed.
     - Repeat for every architectural area (Data, Infrastructure, etc.).
-3.  Once all sections are confirmed, proceed to **Step 3: Finalization**.
+4.  Once all sections are confirmed, proceed to **Step 3: Finalization**.
 
 ---
 
@@ -84,3 +115,9 @@ Give the user a quick read on whether the stack already has specialist agents �
 3.  Report the saved path and the next commands:
     - `/awos:hire` (always — it owns the canonical coverage report and installs missing specialists).
     - `/awos:spec` after `/awos:hire`.
+
+---
+
+### Step 5: Brownfield Cleanup
+
+If `context/product/brownfield.md` exists, delete it. By this point all brownfield knowledge has been absorbed into `product-definition.md`, `roadmap.md`, and `architecture.md` — the brownfield file is no longer needed.

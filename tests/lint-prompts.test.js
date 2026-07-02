@@ -1362,6 +1362,225 @@ test('delivery-flow-template.md records the generated command set', () => {
   );
 });
 
+test('commands/tasks.md marks an unreviewed tasks.md and clears it on review', () => {
+  // tasks.md is written before review (Step 4), so it starts as a
+  // draft carrying a "<!-- not-user-reviewed -->" marker that Step 5
+  // removes once the user reviews it. The marker shape is the contract
+  // — awos-qa greps the saved file to tell a draft from a reviewed
+  // plan, so a reword here would silently break that detection. Lock
+  // the shape, plus the removal-on-review instruction.
+  const body = readUtf8(path.join(commandsDir, 'tasks.md'));
+  assert.ok(
+    body.includes('<!-- not-user-reviewed -->'),
+    'commands/tasks.md must record the literal "<!-- not-user-reviewed -->" marker so awos-qa can detect a draft-grade tasks.md'
+  );
+  assert.ok(
+    /remove the `<!-- not-user-reviewed -->` marker/i.test(body),
+    'commands/tasks.md Step 5 must remove the not-user-reviewed marker once the plan has been reviewed'
+  );
+});
+
+test('product.md creates context/product/brownfield.md on brownfield detection', () => {
+  // /awos:product is the entry point for brownfield detection. When it finds
+  // source code indicators it must explore the codebase and write accepted
+  // findings to context/product/brownfield.md. Downstream commands (roadmap,
+  // architecture) depend on this file existing to avoid duplicate exploration.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    body.includes('context/product/brownfield.md'),
+    'commands/product.md must reference context/product/brownfield.md as the brownfield findings destination'
+  );
+  assert.ok(
+    /with a `## Product` heading/.test(body),
+    'commands/product.md must write brownfield findings under a "## Product" heading (anchored to brownfield.md context)'
+  );
+});
+
+test('product.md brownfield detection includes source code indicators', () => {
+  // The whole brownfield entry point depends on product.md checking for
+  // source code indicators. If the indicator list is hollowed out,
+  // brownfield never fires and the entire downstream chain goes dead.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    body.includes('package.json'),
+    'commands/product.md must check for package.json as a brownfield indicator'
+  );
+  assert.ok(
+    body.includes('`src/`'),
+    'commands/product.md must check for src/ as a brownfield indicator'
+  );
+});
+
+test('roadmap.md reads brownfield.md and appends a Capabilities section', () => {
+  // /awos:roadmap reads the brownfield file produced by /awos:product and
+  // runs its own focused exploration for capabilities. It must append its
+  // findings under a "## Capabilities" heading so /awos:architecture can
+  // see the accumulated context.
+  const body = readUtf8(path.join(commandsDir, 'roadmap.md'));
+  assert.ok(
+    body.includes('context/product/brownfield.md'),
+    'commands/roadmap.md must reference context/product/brownfield.md to consume and extend brownfield findings'
+  );
+  assert.ok(
+    /under a `## Capabilities` heading/.test(body),
+    'commands/roadmap.md must append brownfield findings under a "## Capabilities" heading (anchored to brownfield.md context)'
+  );
+});
+
+test('architecture.md reads brownfield.md and appends a Technology section', () => {
+  // /awos:architecture reads the accumulated brownfield file and runs a
+  // focused exploration for the tech stack. It must append its findings
+  // under a "## Technology" heading.
+  const body = readUtf8(path.join(commandsDir, 'architecture.md'));
+  assert.ok(
+    body.includes('context/product/brownfield.md'),
+    'commands/architecture.md must reference context/product/brownfield.md to consume and extend brownfield findings'
+  );
+  assert.ok(
+    /under a `## Technology` heading/.test(body),
+    'commands/architecture.md must append brownfield findings under a "## Technology" heading (anchored to brownfield.md context)'
+  );
+});
+
+test('architecture.md conditionally removes brownfield.md after onboarding completes', () => {
+  // /awos:architecture is the last command that uses brownfield.md. By this
+  // point all brownfield knowledge has been absorbed into product-definition.md,
+  // roadmap.md, and architecture.md. The brownfield file must be conditionally
+  // cleaned up here, not deferred to /awos:hire.
+  const body = readUtf8(path.join(commandsDir, 'architecture.md'));
+  assert.ok(
+    /If `context\/product\/brownfield\.md` exists, delete it/i.test(body),
+    'commands/architecture.md must conditionally delete context/product/brownfield.md (guard + delete in one sentence)'
+  );
+});
+
+test('brownfield commands launch Explore agents', () => {
+  // The actual mechanism for brownfield awareness is the Explore agent.
+  // Without it, the headings and triage prose are dead letters. Assert
+  // that all three commands invoke the Explore subagent.
+  for (const cmd of ['product.md', 'roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    assert.ok(
+      /subagent_type="Explore"/.test(body),
+      `commands/${cmd} must launch an Explore agent for brownfield analysis`
+    );
+  }
+});
+
+test('brownfield exploration passes existing findings to avoid duplicates', () => {
+  // Each downstream exploration (roadmap, architecture) must pass the
+  // current brownfield.md content to the Explore agent so it skips
+  // already-confirmed findings. The literal <existing_findings> tag is
+  // the contract — if renamed, the Explore prompt silently ignores it.
+  // The "Report only NEW" instruction makes the tag actually work.
+  for (const cmd of ['roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    assert.ok(
+      body.includes('<existing_findings>'),
+      `commands/${cmd} must pass existing brownfield findings inside <existing_findings> tags to the Explore agent`
+    );
+    assert.ok(
+      /Report only NEW/i.test(body),
+      `commands/${cmd} must instruct the Explore agent to report only NEW findings`
+    );
+  }
+});
+
+test('product.md does not consume existing_findings (it is the first command)', () => {
+  // product.md is always first in the brownfield chain — it must not
+  // consume <existing_findings> since there are none before it. If it
+  // gained that tag, it would imply a circular dependency.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    !/<existing_findings>/.test(body),
+    'commands/product.md must not contain <existing_findings> — it is the first brownfield command'
+  );
+});
+
+test('brownfield commands use accept/reject triage for findings', () => {
+  // All three brownfield-aware commands must triage findings with the
+  // user offering Accept and Reject options. The user can also provide
+  // free-text via the built-in "Other" field.
+  for (const cmd of ['product.md', 'roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    assert.ok(
+      /Accept/.test(body),
+      `commands/${cmd} must offer "Accept" as a triage option for brownfield findings`
+    );
+    assert.ok(
+      /Reject/.test(body),
+      `commands/${cmd} must offer "Reject" as a triage option for brownfield findings`
+    );
+  }
+});
+
+test('brownfield exploration includes fill-in slot for brownfield.md content', () => {
+  // The fill-in slot tells the agent to interpolate brownfield.md contents
+  // into the Explore prompt. Without it, <existing_findings> is empty and
+  // dedup silently dies while the tag still matches.
+  for (const cmd of ['roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    assert.ok(
+      /\{paste the full current contents of context\/product\/brownfield\.md here\}/.test(
+        body
+      ),
+      `commands/${cmd} must include the fill-in slot for brownfield.md content interpolation`
+    );
+  }
+});
+
+test('brownfield commands append (not overwrite) findings to brownfield.md', () => {
+  // Each downstream command must append to brownfield.md, not overwrite it.
+  // The append verb + heading together protect the accumulate-don't-overwrite
+  // contract.
+  const roadmapBody = readUtf8(path.join(commandsDir, 'roadmap.md'));
+  assert.ok(
+    /Append.*under a `## Capabilities` heading/i.test(roadmapBody),
+    'commands/roadmap.md must append findings under a ## Capabilities heading'
+  );
+  const archBody = readUtf8(path.join(commandsDir, 'architecture.md'));
+  assert.ok(
+    /Append.*under a `## Technology` heading/i.test(archBody),
+    'commands/architecture.md must append findings under a ## Technology heading'
+  );
+});
+
+test('brownfield commands guard exploration on brownfield.md existence', () => {
+  // Roadmap and architecture must check if brownfield.md exists before
+  // running their explorations. Without this guard, greenfield projects
+  // would attempt brownfield exploration.
+  for (const cmd of ['roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    assert.ok(
+      /brownfield\.md` exists/.test(body),
+      `commands/${cmd} must guard brownfield exploration on brownfield.md existence`
+    );
+  }
+});
+
+test('product.md lets the user opt out of brownfield exploration', () => {
+  // Even when source code is detected, the user may want to start from
+  // scratch (e.g. reinitializing a project). product.md must ask before
+  // launching the Explore agent.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    /start from scratch/i.test(body),
+    'commands/product.md must offer a "start from scratch" option to skip brownfield exploration'
+  );
+});
+
+test('product.md creates brownfield.md even when all findings are rejected', () => {
+  // product.md must always create brownfield.md when a brownfield project is
+  // detected, even if the user rejects every finding. The file acts as a
+  // sentinel — downstream commands key on its existence to run their own
+  // explorations.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    /still create the file/i.test(body),
+    'commands/product.md must create brownfield.md even when all findings are rejected (sentinel behavior)'
+  );
+});
+
 test('context/<path> references in prompts are internally consistent', () => {
   // Build a writer/reader map by scanning all prompts. A path is considered
   // consistent if every reference to it appears in at least one prompt — i.e.

@@ -438,8 +438,17 @@ def main():
 
     target = os.path.abspath(args.target)
     worktree = os.path.abspath(args.worktree)
-    if not git(target, "rev-parse", "--git-dir"):
-        die(f"--target is not a git repo: {target}")
+    tgt_is_git = bool(git(target, "rev-parse", "--git-dir"))
+    child_repos = []
+    if not tgt_is_git:
+        # Org mode: target is a non-git folder holding git-repo children; the
+        # skill audits each and writes an org-portfolio.json into the parent.
+        if os.path.isdir(target):
+            child_repos = [d for d in sorted(os.listdir(target))
+                           if os.path.isdir(os.path.join(target, d, ".git"))]
+        if not child_repos:
+            die(f"--target is neither a git repo nor an org folder with "
+                f"git-repo children: {target}")
     if not os.path.isdir(os.path.join(worktree, "plugins/awos")):
         die(f"--worktree has no plugins/awos: {worktree}")
 
@@ -449,9 +458,12 @@ def main():
     awos_branch = git(worktree, "rev-parse", "--abbrev-ref", "HEAD")
     awos_dirty = bool(git(worktree, "status", "--porcelain"))
     tgt_name = os.path.basename(target)
-    tgt_short = git(target, "rev-parse", "--short", "HEAD")
-    tgt_branch = git(target, "rev-parse", "--abbrev-ref", "HEAD")
-    tgt_dirty = bool(git(target, "status", "--porcelain"))
+    if tgt_is_git:
+        tgt_short = git(target, "rev-parse", "--short", "HEAD")
+        tgt_branch = git(target, "rev-parse", "--abbrev-ref", "HEAD")
+        tgt_dirty = bool(git(target, "status", "--porcelain"))
+    else:
+        tgt_short, tgt_branch, tgt_dirty = "org", f"{len(child_repos)}-repos", False
     claude_ver = run(["claude", "--version"], check=False).stdout.strip().splitlines()[:1]
     claude_ver = claude_ver[0] if claude_ver else "?"
     now = dt.datetime.now(dt.timezone.utc)

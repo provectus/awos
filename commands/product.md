@@ -37,6 +37,9 @@ Your primary task is to **fill in** a product definition template using a guided
 # INTERACTION
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+- A skipped or unanswered question is never a stop signal. Fall back to a documented default or assumption for that question and continue through the remaining steps, including writing `context/product/product-definition.md`.
+
+<!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
 ---
 
@@ -63,7 +66,13 @@ First, check if the file `context/product/product-definition.md` exists.
 
 ### Step 2B: Creation Mode
 
-1.  **Brownfield detection.** Check whether the project already has source code by looking for common indicators (`src/`, `app/`, `lib/`, `package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml`, `Gemfile`, `build.gradle`, `*.csproj`, `Makefile`, `CMakeLists.txt`, `setup.py`, `pyproject.toml`, or similar). If any are found, ask the user whether to run codebase exploration using `AskUserQuestion` with two options: **Yes, explore the codebase** ("Use existing code as context for the product definition") and **No, start from scratch** ("Treat this as a new project — ignore existing code"). If the user chooses to skip, proceed to step 2 as if no source code was found. Otherwise, run a comprehensive exploration before starting the interview:
+1.  **Brownfield decision.** Decide whether to use existing source code as context, in this order — and never block the write on the choice:
+
+    a. **Prompt intent first.** Read `<user_prompt>`. If it clearly asks to use or explore the existing codebase (e.g. "explore existing code", "use the current codebase", "brownfield"), the decision is **explore**. If it clearly opts out (e.g. "without brownfield detection", "from scratch", "ignore existing code", "greenfield"), the decision is **skip**. Interpret intent with natural-language understanding, not substring matching — "don't explore the codebase" is a **skip**, not an explore. When the prompt states a preference, act on it and do not ask.
+
+    b. **Silent prompt.** If `<user_prompt>` says nothing either way, check whether the project already has source code by looking for common indicators (`src/`, `app/`, `lib/`, `package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml`, `Gemfile`, `build.gradle`, `*.csproj`, `Makefile`, `CMakeLists.txt`, `setup.py`, `pyproject.toml`, or similar). If none are found, the decision is **skip**. If any are found, ask the user with `AskUserQuestion` — **Yes, explore the codebase** ("Use existing code as context for the product definition") and **No, start from scratch** ("Treat this as a new project — ignore existing code"). This question is reached only in an interactive run whose prompt expressed no preference; an unattended run states its choice in the prompt.
+
+2.  **If the decision is explore,** run a comprehensive exploration before drafting:
 
     a. Launch an `Explore` agent focused on the product domain:
 
@@ -79,23 +88,28 @@ First, check if the file `context/product/product-definition.md` exists.
     ")
     ```
 
-    b. Triage findings with the user. Group related findings by category (e.g. all features in one call, audience signals in another) and use `AskUserQuestion` to batch up to four per call. For each finding, offer **Accept** and **Reject** as options. The user can also select "Other" to provide free-text feedback — treat it according to intent (correction, substitution, partial accept, or any other reaction). Discard rejected findings.
+    b. Create `context/product/brownfield.md` with a `## Product` heading and record the findings under it. If the exploration surfaced nothing, still create the file with an empty `## Product` section; downstream commands (`/awos:roadmap`, `/awos:architecture`) key on the file's existence to run their own explorations. The findings are triaged with the user later, in **Step 4** — after the definition is saved — so exploration never blocks the write.
 
-    c. Create `context/product/brownfield.md` with a `## Product` heading. List all accepted and corrected findings under it — for corrected findings, record the corrected version, not the original. If every finding was rejected or the exploration surfaced nothing, still create the file with an empty `## Product` section; downstream commands (`/awos:roadmap`, `/awos:architecture`) key on the file's existence to run their own explorations.
-
-2.  If `<user_prompt>` is non-empty, briefly note that you'll use it as a starting point, then refine from there.
-3.  Walk the user through the sections of the template. When step 1 produced brownfield findings, use the Product section to propose draft answers — frame questions as "does this match what you intend, or would you change it?" rather than asking from a blank slate. The interview still covers every section; the exploration gives better defaults, not fewer questions.
-    - **Project Name & Vision:** Ask for the project's name and its core purpose.
-    - **Target Audience & Personas:** Ask who the product is for and help create one simple persona.
-    - **Success Metrics:** Ask how they will measure the product's impact on the user.
-    - **Core Features & User Journey:** Ask for the 3-5 most important high-level features and a simple user workflow.
-    - **Project Boundaries:** Ask what is essential for the first version (In-Scope) and what can wait (Out-of-Scope).
-4.  Once all sections are complete, proceed to **Step 3: File Generation**.
+3.  Draft every section of the template up front so a complete definition exists before any further back-and-forth — use `<user_prompt>` (when non-empty) as the starting point, fold in any brownfield findings from step 2, and fill the rest from reasonable best-practice assumptions. Never block on a question before the write:
+    - **Project Name & Vision:** the project's name and its core purpose.
+    - **Target Audience & Personas:** who the product is for, plus one simple persona.
+    - **Success Metrics:** how the product's impact on the user is measured.
+    - **Core Features & User Journey:** the 3-5 most important high-level features and a simple user workflow.
+    - **Project Boundaries:** what is essential for the first version (In-Scope) and what can wait (Out-of-Scope).
+4.  Proceed to **Step 3: File Generation**. The draft is saved there and refined with the user in **Step 4**, so it lands on disk even when no one is available to answer questions.
 
 ---
 
 ### Step 3: File Generation
 
-1.  Populate the template from `.awos/templates/product-definition-template.md` with the gathered information.
-2.  Write the final content to `context/product/product-definition.md`.
-3.  Report the saved path and the next command: `/awos:roadmap`.
+1.  Populate the template from `.awos/templates/product-definition-template.md` with the drafted content, labeling any section filled from an assumption rather than a user answer.
+2.  Write the content to `context/product/product-definition.md`. **Write the file without waiting for approval** — a product definition is reversible (re-run `/awos:product` to revise), so the deliverable is never gated behind a confirmation an unattended run cannot answer.
+
+---
+
+### Step 4: Refine and Recommend Next Step
+
+1.  Present the saved definition and offer to refine it — ask which sections to adjust, then apply changes and re-save.
+2.  **If `context/product/brownfield.md` was created in Step 2,** triage its findings with the user now. Group related findings by category and use `AskUserQuestion` to batch up to four per call, offering **Accept** and **Reject** for each (the user can also select "Other" for free-text feedback — treat it according to intent). Remove rejected findings from `context/product/brownfield.md` and from the saved definition, and re-save both; for corrected findings, record the corrected version.
+3.  If no answer comes (e.g. an unattended `claude -p` run), leave the saved definition and findings in place; the user can revise later by re-running `/awos:product`.
+4.  Report the saved path and the next command: `/awos:roadmap`.

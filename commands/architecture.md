@@ -27,6 +27,9 @@ Your task is to manage the architecture file located at `context/product/archite
 # INTERACTION
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+- A skipped or unanswered question is never a stop signal. Fall back to the documented default for that question and continue through the remaining steps, including writing `context/product/architecture.md`.
+
+<!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
 ---
 
@@ -76,16 +79,13 @@ Follow this logic precisely.
     ")
     ```
 
-    c. Triage new findings with the user. Group related findings by category and use `AskUserQuestion` to batch up to four per call. For each finding, offer **Accept** and **Reject** as options. The user can also select "Other" to provide free-text feedback — treat it according to intent (correction, substitution, partial accept, or any other reaction). Discard rejected findings. Append accepted and corrected findings to `context/product/brownfield.md` under a `## Technology` heading. For corrected findings, record the corrected version, not the original.
+    c. Append the new findings to `context/product/brownfield.md` under a `## Technology` heading (for any you revise, record the revised version, not the original). The findings seed the section defaults below and are triaged with the user later, in **Step 3: Finalization** — after the architecture is saved — so exploration never blocks the write.
 
-    d. Use the confirmed technology findings as the default for each section, but still walk every section with the user. The interview still covers every area; the exploration gives better defaults, not fewer questions.
-
-3.  Work through the template section by section — not all at once.
+3.  Draft every architectural area up front so a complete architecture exists before any back-and-forth — never blocking on a question before the write.
     - For each architectural area, propose a concrete title from the template placeholder.
-    - For each component, propose a specific technology with one or more alternatives, justified by the project context. When brownfield findings provided a known technology, present it as the default.
-    - If the user is unsure, ask clarifying questions about team skills, budget, or priorities. Do not proceed until the current section is confirmed.
-    - Repeat for every architectural area (Data, Infrastructure, etc.).
-4.  Once all sections are confirmed, proceed to **Step 3: Finalization**.
+    - For each component, propose a specific technology with one or more alternatives, justified by the project context. When brownfield findings provided a known technology, use it as the default; otherwise pick a sensible best-practice default and label it as an assumption.
+    - Cover every architectural area (Data, Infrastructure, etc.).
+4.  Proceed to **Step 3: Finalization**.
 
 ---
 
@@ -101,8 +101,9 @@ Follow this logic precisely.
 
 ### Step 3: Finalization
 
-1.  Write the final content to `context/product/architecture.md`.
-2.  Proceed to **Step 4: Coverage Hint**.
+1.  Write the architecture content to `context/product/architecture.md`. **Write the file without waiting for approval** — an architecture is reversible (re-run `/awos:architecture` to revise), so the deliverable is never gated behind a confirmation an unattended run cannot answer.
+2.  Present the saved architecture for review. If brownfield technology findings seeded any defaults, triage them with the user now: use `AskUserQuestion` to offer **Accept** and **Reject** for each (the user can also select "Other" for free-text feedback — treat it according to intent), and for any rejected or corrected choice update `context/product/architecture.md` and re-save. Apply any other requested changes and re-save; otherwise the user can revise later by re-running `/awos:architecture`.
+3.  Proceed to **Step 4: Coverage Hint**.
 
 ---
 

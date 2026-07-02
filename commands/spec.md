@@ -38,6 +38,9 @@ Your primary task is to create a new functional specification file. You will det
 # INTERACTION
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+- A skipped or unanswered question is never a stop signal. Mark the unresolved detail with a `[NEEDS CLARIFICATION: …]` marker and continue through the remaining steps, including writing `functional-spec.md`.
+
+<!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
 ---
 
@@ -75,7 +78,7 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 - **Non-Technical Questions Only:** Your questions must be answerable by a product manager or designer — never ask about data models, API design, storage, architecture, state management, caching, or any implementation detail. Frame every question in terms of what the user sees, does, or experiences. If you need to understand a behavior, ask "What should the user see when…?" not "How should the system handle…?"
 - **Never Surface Technical Names:** When you encounter technical identifiers (field names, API response keys, database columns, type names, etc.) in context files, silently map them to plain-language labels. Do not ask the user to confirm whether a user-facing label corresponds to a technical field name. If you are unsure what a technical term means in user-facing language, ask "What does the user call [plain description of the concept]?" — never expose the raw identifier.
 - **Self-Check Before Every Question:** Re-read your question. If it contains a code identifier (camelCase, snake_case, PascalCase, or a name that only appears in source code / API schemas), rewrite the question without it. If the question cannot be asked without referencing the identifier, it is a technical question — drop it.
-- You will now fill the template section by section, but you must actively probe for details that are not yet documented.
+- You will now draft the specification, section by section, from the context in Step 2. Probe for the details each section needs, but do not block on questions: where an answer is not already documented, capture the question inline as a `[NEEDS CLARIFICATION: …]` marker and keep drafting. You resolve these markers with the user in **Step 6**, after the spec is saved — so an unattended run still produces a complete draft. The examples below show the depth of probing to aim for.
 
 1.  **Overview and Rationale (The "Why"):**
     - Use the information extracted about your **topic** from Step 2 as the foundation.
@@ -86,7 +89,7 @@ Your first goal is to determine the **topic** - the single, specific feature or 
     - Ask the user to describe what needs to be done from a user's perspective.
     - For every piece of information the user gives you, think like a tester and clarify ambiguities. If the user answers in technical terms, rewrite the information into plain, user-facing language before including it in the spec.
     - If the user says: "The user needs to be able to upload a profile picture."
-    - You MUST ask clarifying questions like: "Great. Let's break that down. What file formats should be allowed (e.g., JPG, PNG)? Is there a maximum file size? What should happen after the upload is successful? What specific error message should the user see if it fails?"
+    - Probe with clarifying questions like: "Great. Let's break that down. What file formats should be allowed (e.g., JPG, PNG)? Is there a maximum file size? What should happen after the upload is successful? What specific error message should the user see if it fails?" — for any that stay unanswered, leave a `[NEEDS CLARIFICATION: …]` marker rather than stopping.
     - If information is missing, mark every unresolved detail with `[NEEDS CLARIFICATION: your specific question]` directly in the draft. Example: "The user should see an error message. [NEEDS CLARIFICATION: What should the exact text of the error message be?]"
 
 3.  **Acceptance Criteria:**
@@ -107,13 +110,13 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 
 - Before presenting to the user, re-read the entire draft end-to-end. For every sentence, ask: "Would this make sense to someone who has never seen the codebase?" Replace any developer-facing language with plain, non-technical wording in the same language the user is using. Remove any references to internal system behavior, code, or architecture that slipped in.
 
-### Step 5: Final Review
+### Step 5: File Generation
 
-- Present the complete, populated template to the user for a final review. Ask, "Here is the complete draft of the functional specification. Please review it for any inaccuracies or missing details."
-
-### Step 6: File Generation
-
-1.  **Create Short Name:** Once the user approves the draft, generate a short, kebab-case name from the specification's title (e.g., "User Profile Picture Upload" becomes `user-profile-picture-upload`).
+1.  **Create Short Name:** Generate a short, kebab-case name from the specification's title (e.g., "User Profile Picture Upload" becomes `user-profile-picture-upload`).
 2.  **Execute Directory Script:** Execute the shell script with the short name as a parameter: `.awos/scripts/create-spec-directory.sh [short-name]`. This will create a new directory (e.g., `context/spec/001-user-profile-picture-upload`).
-3.  **Save the File:** Write the final, approved specification content into the `functional-spec.md` file within the newly created directory.
-4.  Report the saved path and the next command: `/awos:tech`.
+3.  **Save the File:** Write the specification content into the `functional-spec.md` file within the newly created directory. **Write the file without waiting for approval** — a spec is reversible (re-run `/awos:spec` to revise) and any open questions are already captured as `[NEEDS CLARIFICATION: …]` markers in the draft, so the deliverable is never gated behind a confirmation an unattended run cannot answer.
+
+### Step 6: Final Review and Recommend Next Step
+
+1.  Present the saved specification and ask the user to review it for inaccuracies or missing details. Resolve any `[NEEDS CLARIFICATION: …]` markers with them, apply edits, and re-save. If no answer comes (e.g. an unattended `claude -p` run), leave the markers in place; the user — or `/awos:tech` — can resolve them later.
+2.  Report the saved path and the next command: `/awos:tech`.

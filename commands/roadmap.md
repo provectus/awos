@@ -29,6 +29,9 @@ Your task is to manage the product roadmap file located at `context/product/road
 # INTERACTION
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
+- A skipped or unanswered question is never a stop signal. Fall back to the documented default for that question and continue through the remaining steps, including writing `context/product/roadmap.md`.
+
+<!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
 ---
 
@@ -75,13 +78,12 @@ Follow this logic precisely.
     ")
     ```
 
-    c. Triage new findings with the user. Group related findings by category and use `AskUserQuestion` to batch up to four per call. For each finding, offer **Accept** and **Reject** as options. The user can also select "Other" to provide free-text feedback — treat it according to intent (correction, substitution, partial accept, or any other reaction). Discard rejected findings. Append accepted and corrected findings to `context/product/brownfield.md` under a `## Capabilities` heading. For corrected findings, record the corrected version, not the original.
+    c. Append the new findings to `context/product/brownfield.md` under a `## Capabilities` heading (for any you revise, record the revised version, not the original). The findings are triaged with the user later, in **Step 3: Finalization** — after the roadmap is saved — so exploration never blocks the write.
 
-    d. Use the full set of confirmed capabilities (from brownfield.md) to anchor the roadmap: existing capabilities are noted as already done, and new phases focus on what comes next. Feed this into the roadmap generation in the next step.
+    d. Use the full set of capabilities (from brownfield.md) to anchor the roadmap: existing capabilities are noted as already done, and new phases focus on what comes next. Feed this into the roadmap generation in the next step.
 
 3.  Generate a proposed roadmap by populating the template structure with the product definition's Core Features, grouped into logical sequential phases.
-4.  Present the full draft to the user and ask for feedback.
-5.  Iterate until the user is satisfied, then proceed to **Step 3: Finalization**.
+4.  Proceed to **Step 3: Finalization** — the draft is saved there and then surfaced for review, so it lands on disk even when no one is available to give feedback.
 
 ---
 
@@ -97,5 +99,6 @@ Follow this logic precisely.
 
 ### Step 3: Finalization
 
-1.  Write the final roadmap content to `context/product/roadmap.md`.
-2.  Report the saved path and the next command: `/awos:architecture`.
+1.  Write the roadmap content to `context/product/roadmap.md`. **Write the file without waiting for approval** — a roadmap is reversible (re-run `/awos:roadmap` to revise), so the deliverable is never gated behind a confirmation an unattended run cannot answer.
+2.  Report the saved path, then present the roadmap for review. If brownfield capabilities were appended in Creation Mode, triage them with the user now: use `AskUserQuestion` to offer **Accept** and **Reject** for each (the user can also select "Other" for free-text feedback — treat it according to intent). Remove rejected findings from `context/product/brownfield.md`, re-anchor the roadmap if needed, and re-save. If the user requests other changes, apply them and re-save; otherwise they can revise later by re-running `/awos:roadmap`.
+3.  Report the next command: `/awos:architecture`.

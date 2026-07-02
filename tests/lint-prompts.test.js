@@ -404,6 +404,45 @@ test('every core command declares an INTERACTION section', () => {
   );
 });
 
+test('deliverable commands write their file on an unanswered question', () => {
+  // These document-generating commands ask the user questions and then
+  // write a file. In an unattended `claude -p` run those questions are
+  // silently dismissed; without an explicit fallback the command narrates a
+  // draft and ends the turn, so the deliverable never lands on disk. Each
+  // listed command must carry the INTERACTION rule that treats a skipped or
+  // unanswered question as a signal to fall back to a default and still write
+  // the file — never as a stop. See commands/tasks.md for the canonical rule.
+  //
+  // Every command that generates a document under context/ and asks the
+  // user questions on the way carries this rule. spec.md's default is its
+  // own `[NEEDS CLARIFICATION: …]` marker rather than a documented value,
+  // but the contract is the same: an unanswered question is never a stop —
+  // record the gap and still write the deliverable.
+  const deliverableCommands = [
+    'product.md',
+    'roadmap.md',
+    'architecture.md',
+    'spec.md',
+    'tasks.md',
+    'tech.md',
+  ];
+  const missing = [];
+  for (const command of deliverableCommands) {
+    const body = readUtf8(path.join(commandsDir, command));
+    if (
+      !body.includes('never a stop signal') ||
+      !body.includes('including writing')
+    ) {
+      missing.push(command);
+    }
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    `deliverable commands missing the unattended-write fallback rule ("never a stop signal" + "including writing"): ${missing.join(', ')}`
+  );
+});
+
 test('wrappers do not duplicate the AskUserQuestion rule', () => {
   // Counterpart to the test above: the rule moved from wrappers to
   // core. If a wrapper still mentions AskUserQuestion the contract has

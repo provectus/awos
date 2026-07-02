@@ -52,10 +52,10 @@ test('except E as name is PASS (not a comma clause)', () => {
   assert.equal(detectExceptClauseDefect(t).status, 'PASS');
 });
 
-test('no python files is PASS', () => {
+test('no python files is SKIP — absence is not compliance', () => {
   const t = tmp();
   writeFileSync(join(t, 'readme.md'), '# project\n');
-  assert.equal(detectExceptClauseDefect(t).status, 'PASS');
+  assert.equal(detectExceptClauseDefect(t).status, 'SKIP');
 });
 
 // ---------------------------------------------------------------------------

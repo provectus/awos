@@ -83,11 +83,23 @@ test('ARCH-01: FAIL when no architecture signals found', () => {
 // PASS when no violations found.
 // ---------------------------------------------------------------------------
 
-test('ARCH-02: PASS when no imports exist (no source files)', () => {
+test('ARCH-02: SKIP when no source files exist — absence is not compliance', () => {
   const t = tmp();
   writeFileSync(join(t, 'README.md'), '# hi\n');
   const r = detectImportGraph(t);
-  assert.equal(r.status, 'PASS', 'no source files → PASS (no violations)');
+  assert.equal(r.status, 'SKIP', 'no source files → SKIP (nothing to measure)');
+});
+
+test('ARCH-02: SKIP when no files live under recognised layer directories', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'lib'));
+  writeFileSync(join(t, 'lib', 'util.ts'), "import { x } from './other';\n");
+  const r = detectImportGraph(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    'no layered dirs → SKIP (import layering not applicable)'
+  );
 });
 
 test('ARCH-02: PASS when all imports go in one direction', () => {

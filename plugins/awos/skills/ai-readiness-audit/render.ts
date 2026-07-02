@@ -1296,9 +1296,32 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         `<div class="exec-col"><h3>Code scale &amp; complexity</h3>${items}</div>`
       );
     }
+    // Derive fallback reach values from deterministic checks when the LLM
+    // headline omitted them. ADP-07 → contributors, SDD-04 → spec coverage.
+    const reachFallback: Partial<
+      Record<'contributors' | 'spec_coverage' | 'ai_tooling', string>
+    > = {};
+    if (!h?.reach?.contributors) {
+      const adp07 = checkById.get('ADP-07');
+      if (adp07?.expression) reachFallback.contributors = adp07.expression;
+    }
+    if (!h?.reach?.spec_coverage) {
+      const sdd04 = checkById.get('SDD-04');
+      if (sdd04) {
+        const ev = sdd04.evidence?.[0];
+        const pct =
+          typeof sdd04.value === 'number'
+            ? `${Math.round(sdd04.value * 100)}%`
+            : null;
+        reachFallback.spec_coverage =
+          ev ?? (pct ? `spec branch coverage ${pct}` : null) ?? undefined;
+      }
+    }
     const reachItems: string[] = [];
     for (const [key, label] of REACH_FIELDS) {
-      const v = h?.reach?.[key];
+      const v =
+        h?.reach?.[key as keyof typeof h.reach] ??
+        reachFallback[key as keyof typeof reachFallback];
       if (v)
         reachItems.push(
           `<div class="kv"><span class="k">${tip(label, HEADLINE_TIP[label])}</span><span class="v">${esc(v)}</span></div>`

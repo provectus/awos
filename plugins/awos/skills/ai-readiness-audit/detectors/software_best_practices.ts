@@ -348,6 +348,16 @@ export function detectExceptClauseDefect(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
+  // Belt-and-braces with the applies_when topology.has_python gate: a repo
+  // with no Python files must SKIP, not PASS on vacuous absence.
+  if (iterFiles(repoPath, ['*.py']).length === 0) {
+    return makeResult(
+      'SKIP',
+      null,
+      ['no Python source files — except-clause check not applicable'],
+      'detected'
+    );
+  }
   const hits = grep(repoPath, PY2_EXCEPT, ['**/*.py']);
   // Drop lines whose first non-whitespace character is `#` (Python comments).
   const realHits = hits.filter((h) => !/^\s*#/.test(h.text));

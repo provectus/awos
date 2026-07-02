@@ -217,11 +217,15 @@ test('SDD-02: FAIL when no context/ directory', () => {
 // FAIL if 3+ unverified tech mentions.
 // ---------------------------------------------------------------------------
 
-test('SDD-03: PASS when no architecture document exists', () => {
+test('SDD-03: SKIP when no architecture document exists — absence is not compliance', () => {
   const t = tmp();
   writeFileSync(join(t, 'README.md'), '# project\n');
   const r = detectArchTechMatch(t);
-  assert.equal(r.status, 'PASS', 'no arch doc → PASS (nothing to mismatch)');
+  assert.equal(
+    r.status,
+    'SKIP',
+    'no arch doc → SKIP (nothing to match against)'
+  );
   assert.equal(r.method, 'detected');
 });
 
@@ -436,11 +440,11 @@ test('SDD-04: mixed frameworks — AWOS + Kiro + Agent-OS all count as spec-touc
 // FAIL if any dir has 0 of the 3 files.
 // ---------------------------------------------------------------------------
 
-test('SDD-05: PASS when no spec directories exist', () => {
+test('SDD-05: SKIP when no spec directories exist — absence is not compliance', () => {
   const t = tmp();
   mkdirSync(join(t, 'context'), { recursive: true });
   const r = detectSpecTriadComplete(t);
-  assert.equal(r.status, 'PASS', 'no spec dirs → PASS');
+  assert.equal(r.status, 'SKIP', 'no spec dirs → SKIP');
   assert.equal(r.method, 'detected');
 });
 
@@ -511,11 +515,11 @@ test('SDD-05: WARN when one spec dir is complete but another is incomplete', () 
 // FAIL if 2+ stale specs.
 // ---------------------------------------------------------------------------
 
-test('SDD-06: PASS when no spec directories exist', () => {
+test('SDD-06: SKIP when no spec directories exist — absence is not compliance', () => {
   const t = tmp();
   mkdirSync(join(t, 'context'), { recursive: true });
   const r = detectStaleSpecs(t);
-  assert.equal(r.status, 'PASS', 'no spec dirs → PASS');
+  assert.equal(r.status, 'SKIP', 'no spec dirs → SKIP');
   assert.equal(r.method, 'detected');
 });
 

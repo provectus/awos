@@ -417,9 +417,15 @@ export function detectSensitiveFilesGitignored(
   });
 
   if (relevantTypes.length === 0) {
-    return makeResult('PASS', 0, [
-      'no sensitive file types present in this stack — no ignore coverage required',
-    ]);
+    // Nothing sensitive exists to cover — absence is not evidence of guardrails.
+    return makeResult(
+      'SKIP',
+      null,
+      [
+        'no sensitive file types present in this stack — ignore-coverage check not applicable',
+      ],
+      'detected'
+    );
   }
 
   // --- Step 2: read ignore files ---

@@ -357,16 +357,27 @@ export function detectArchTechMatch(
 ): ReturnType<typeof makeResult> {
   const archDoc = findArchDoc(repoPath);
   if (!archDoc) {
-    return makeResult('PASS', 0, [
-      'no architecture document found — tech-match check skipped',
-    ]);
+    // Absence of the doc is not compliance — there is nothing to match against.
+    return makeResult(
+      'SKIP',
+      null,
+      ['no architecture document found — tech-match check not applicable'],
+      'detected'
+    );
   }
 
   let content: string;
   try {
     content = readFileSync(archDoc, 'utf8').toLowerCase();
   } catch {
-    return makeResult('PASS', 0, ['could not read architecture document']);
+    return makeResult(
+      'SKIP',
+      null,
+      [
+        'could not read architecture document — tech-match check not applicable',
+      ],
+      'detected'
+    );
   }
 
   const unverified: string[] = [];
@@ -637,9 +648,13 @@ export function detectSpecTriadComplete(
   const specDirs = listSpecDirs(repoPath);
 
   if (specDirs.length === 0) {
-    return makeResult('PASS', 0, [
-      'no spec directories found — triad check skipped',
-    ]);
+    // A repo with zero specs must not score on spec completeness.
+    return makeResult(
+      'SKIP',
+      null,
+      ['no spec directories found — triad check not applicable'],
+      'detected'
+    );
   }
 
   const statuses: SpecDirStatus[] = [];
@@ -710,9 +725,13 @@ export function detectStaleSpecs(
   const specDirs = listSpecDirs(repoPath);
 
   if (specDirs.length === 0) {
-    return makeResult('PASS', 0, [
-      'no spec directories found — stale-spec check skipped',
-    ]);
+    // No specs → nothing can be stale, but nothing can be healthy either.
+    return makeResult(
+      'SKIP',
+      null,
+      ['no spec directories found — stale-spec check not applicable'],
+      'detected'
+    );
   }
 
   const stale: string[] = [];

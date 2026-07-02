@@ -44,6 +44,7 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Pass:** Imports follow a consistent direction; no layer violations detected in the sample
 - **Warn:** 1-2 import violations found in the sample, but the general direction is consistent
 - **Fail:** Widespread tangled imports — no clear direction, modules import each other freely
+- **Skip-When:** No source files, or no files under recognised layer directories (models/repositories/services/controllers/routes) — nothing to measure
 - **Severity:** high
 - **Category:** 2101
 

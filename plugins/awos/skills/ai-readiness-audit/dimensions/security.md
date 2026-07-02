@@ -81,6 +81,6 @@ Audits whether the project protects sensitive data (secrets, credentials, enviro
 - **Pass:** `.gitignore` covers all sensitive file types relevant to the detected stack
 - **Warn:** Some relevant categories are covered but others are missing
 - **Fail:** `.gitignore` is missing or has minimal coverage of sensitive file types relevant to this stack
-- **Skip-When:** Project topology could not be determined (no topology artifact available)
+- **Skip-When:** Project topology could not be determined (no topology artifact available), or no sensitive file types relevant to the stack are present (nothing to cover)
 - **Severity:** high
 - **Category:** 2604

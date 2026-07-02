@@ -193,12 +193,16 @@ export function detectImportGraph(
 ): ReturnType<typeof makeResult> {
   const files = iterFiles(repoPath, SOURCE_GLOBS);
   if (files.length === 0) {
-    return makeResult('PASS', 0, [
-      'no source files found — no import violations possible',
-    ]);
+    return makeResult(
+      'SKIP',
+      null,
+      ['no source files found — nothing to evaluate for import layering'],
+      'detected'
+    );
   }
 
   const violations: LayerViolation[] = [];
+  let layeredFiles = 0;
 
   for (const filePath of files) {
     const relPath = relative(repoPath, filePath);
@@ -206,6 +210,7 @@ export function detectImportGraph(
     const fileDir = basename(dirname(relPath)).toLowerCase();
     const sourceTier = getLayerTier(fileDir);
     if (sourceTier === undefined) continue; // not in a known layer
+    layeredFiles++;
 
     let src: string;
     try {
@@ -250,8 +255,23 @@ export function detectImportGraph(
     }
   }
 
+  if (layeredFiles === 0) {
+    // "No violations" would be vacuous — the repo has no recognised layer
+    // dirs, so there is nothing this check can measure (absence ≠ compliance).
+    return makeResult(
+      'SKIP',
+      null,
+      [
+        'no files under recognised layer directories (models/repositories/services/controllers/routes) — import layering not applicable',
+      ],
+      'detected'
+    );
+  }
+
   if (violations.length === 0) {
-    return makeResult('PASS', 0, ['no import layer violations detected']);
+    return makeResult('PASS', 0, [
+      `no import layer violations detected across ${layeredFiles} layered file(s)`,
+    ]);
   }
 
   const evidence = violations

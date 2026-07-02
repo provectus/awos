@@ -150,6 +150,86 @@ interface MergeStats {
   revert_merges: number;
 }
 
+// ---------------------------------------------------------------------------
+// Squash/rebase-merge awareness. GitHub/GitLab/Bitbucket squash-merge collapses
+// a whole PR into ONE ordinary commit on the trunk — no 2-parent merge commit
+// exists, so `git log --merges` sees nothing and every merge-derived metric
+// silently reads 0. The reliable fingerprint of a squash-merged PR is the PR
+// reference the forge appends to the squashed subject ("Add feature (#123)").
+// These commits are counted as merge EVENTS, attributed to the commit author —
+// which for a squash merge IS the PR author, unlike a merge commit whose
+// author is whoever clicked the merge button.
+// ---------------------------------------------------------------------------
+
+/** PR references the major forges stamp on a squash/rebase-merged commit SUBJECT. */
+const SQUASH_SUBJECT_RXS = [
+  /\(#\d+\)\s*$/, // GitHub: "Title (#123)"
+  /^Merged PR \d+:/, // Azure DevOps: "Merged PR 123: Title"
+  /\(pull request #\d+\)/i, // Bitbucket: "Title (pull request #12)"
+];
+/** GitLab squash keeps the MR ref in the BODY: "See merge request group/proj!45". */
+const SQUASH_BODY_RX = /^See merge request [^\s!]*!\d+/m;
+/** Mirrors the `--grep=^Revert\|hotfix\|rollback` merge-commit filter. */
+const REVERT_SUBJECT_RX = /^Revert|hotfix|rollback/;
+/** Mirrors the case-insensitive fix-keyword merge-commit filter (adp_g14). */
+const FIX_SUBJECT_RX = /fix|bugfix|hotfix|patch|defect|regression/i;
+
+interface SquashScan {
+  total: number;
+  reverts: number;
+  fixes: number;
+  perAuthor: Map<string, number>;
+}
+
+/**
+ * Scan first-parent NON-merge trunk commits for squash-merged PRs (a PR ref on
+ * the subject, or GitLab's merge-request ref in the body). `since` bounds the
+ * scan to a window; omit for all history. Records are separated by \x1e and
+ * fields by \x1f so multi-line bodies parse unambiguously.
+ */
+function scanSquashMerges(cwd: string, since?: string): SquashScan {
+  const args = [
+    'log',
+    '--first-parent',
+    '--no-merges',
+    '--format=%x1e%aN%x1f%s%x1f%b',
+  ];
+  if (since) args.push(`--since=${since}`);
+  const scan: SquashScan = {
+    total: 0,
+    reverts: 0,
+    fixes: 0,
+    perAuthor: new Map(),
+  };
+  for (const record of run(args, cwd).split('\x1e')) {
+    if (!record.trim()) continue;
+    const [author = '', subject = '', body = ''] = record.split('\x1f');
+    const isSquash =
+      SQUASH_SUBJECT_RXS.some((rx) => rx.test(subject)) ||
+      SQUASH_BODY_RX.test(body);
+    if (!isSquash) continue;
+    scan.total++;
+    if (REVERT_SUBJECT_RX.test(subject)) scan.reverts++;
+    if (FIX_SUBJECT_RX.test(subject)) scan.fixes++;
+    const name = author.trim();
+    scan.perAuthor.set(name, (scan.perAuthor.get(name) ?? 0) + 1);
+  }
+  return scan;
+}
+
+/** Classify the repo's merge workflow from merge-commit vs squash-event counts. */
+export function classifyMergeStrategy(
+  mergeCommits: number,
+  squashMerges: number
+): 'merge-commit' | 'squash' | 'mixed' | 'unknown' {
+  if (mergeCommits === 0 && squashMerges === 0) return 'unknown';
+  if (mergeCommits === 0) return 'squash';
+  if (squashMerges === 0) return 'merge-commit';
+  // A handful of real merge commits amid many squashed PRs is still a squash
+  // workflow (e.g. one maintainer occasionally merge-committing).
+  return squashMerges >= mergeCommits * 3 ? 'squash' : 'mixed';
+}
+
 function getMergeStats(cwd: string): MergeStats {
   const allMerges = run(
     ['log', '--first-parent', '--merges', '--format=%H'],
@@ -158,7 +238,6 @@ function getMergeStats(cwd: string): MergeStats {
     .trim()
     .split('\n')
     .filter(Boolean);
-  const total_merges = allMerges.length;
 
   const revertOut = run(
     [
@@ -173,9 +252,14 @@ function getMergeStats(cwd: string): MergeStats {
     .trim()
     .split('\n')
     .filter(Boolean);
-  const revert_merges = revertOut.length;
 
-  return { total_merges, revert_merges };
+  // Merge EVENTS = merge commits + squash-merged PRs, so squash-merge repos
+  // don't read as "never merges anything".
+  const squash = scanSquashMerges(cwd);
+  return {
+    total_merges: allMerges.length + squash.total,
+    revert_merges: revertOut.length + squash.reverts,
+  };
 }
 
 interface MergeRecord {
@@ -305,6 +389,12 @@ export interface WindowStats {
    * (DORA g14); they are different metrics with different denominators and bands.
    */
   fix_merges: number;
+  /** In-window 2-parent merge commits only (before adding squash events). */
+  merge_commits: number;
+  /** In-window squash/rebase-merged PRs (first-parent non-merge commits with a PR ref). */
+  squash_merges: number;
+  /** Detected merge workflow: merge-commit | squash | mixed | unknown. */
+  merge_strategy: 'merge-commit' | 'squash' | 'mixed' | 'unknown';
   authors_total: number;
   per_author: AuthorRow[];
   /** Merges divided by active-contributor count; null when activeCount is 0. Display-only. */
@@ -347,12 +437,23 @@ export const REWORK_HORIZON_DAYS_DEFAULT = 21;
  * meaningful share of merges or code. T is configurable via
  * meta.active_contributor_threshold in standards.toml (default 0.05).
  *
+ * Merge counts include squash-merge events attributed to the PR author, so a
+ * squash-merge repo keeps the merge-share safety valve. When there are NO
+ * merge events at all (direct-push workflow), commit-share replaces
+ * merge-share as the second axis — otherwise the rule degenerates to
+ * LOC-share-only, which one big import/lockfile author can collapse.
+ *
  * @param perAuthor - author rows from window_stats.per_author
  * @param T         - exclusion threshold as a fraction of window totals (0..1)
  */
 export function activeContributors(perAuthor: AuthorRow[], T: number): number {
-  const tm = perAuthor.reduce((s, a) => s + a.merges, 0) || 1;
+  const tm = perAuthor.reduce((s, a) => s + a.merges, 0);
   const tl = perAuthor.reduce((s, a) => s + a.lines, 0) || 1;
+  if (tm === 0) {
+    const tc = perAuthor.reduce((s, a) => s + a.commits, 0) || 1;
+    return perAuthor.filter((a) => !(a.commits / tc < T && a.lines / tl < T))
+      .length;
+  }
   return perAuthor.filter((a) => !(a.merges / tm < T && a.lines / tl < T))
     .length;
 }
@@ -369,6 +470,9 @@ function buildWindowStats(
     merges: 0,
     revert_merges: 0,
     fix_merges: 0,
+    merge_commits: 0,
+    squash_merges: 0,
+    merge_strategy: 'unknown',
     authors_total: 0,
     per_author: [],
     merges_per_active: null,
@@ -401,7 +505,6 @@ function buildWindowStats(
     .trim()
     .split('\n')
     .filter(Boolean);
-  const revert_merges = revertOut.length;
 
   // 0b. In-window fix/bugfix/hotfix/patch/defect/regression merges — used by adp_g14_rework_rate
   //     (DORA deployment rework rate proxy). Distinct from revert_merges above: both grep for
@@ -421,7 +524,13 @@ function buildWindowStats(
     .trim()
     .split('\n')
     .filter(Boolean);
-  const fix_merges = fixOut.length;
+
+  // 0c. In-window squash-merged PRs — merge events with no merge commit.
+  //     Counted into merges/revert/fix totals and attributed to their commit
+  //     author (= the PR author for a squash merge).
+  const squash = scanSquashMerges(cwd, since);
+  const revert_merges = revertOut.length + squash.reverts;
+  const fix_merges = fixOut.length + squash.fixes;
 
   // 1. Non-merge commits — derive per-author commit counts and line churn.
   //    Format: one "%H\t%aN" header line per commit, then numstat lines.
@@ -463,7 +572,9 @@ function buildWindowStats(
     }
   }
 
-  // 2. First-parent merges — derive per-author merge counts and total.
+  // 2. First-parent merge commits — per-author counts, then fold in the squash
+  //    events so a squash-merge repo's per-author merges reflect PR authors,
+  //    not just whoever performs the occasional real merge.
   const mergeOut = run(
     ['log', '--first-parent', '--merges', `--since=${since}`, '--format=%aN'],
     cwd
@@ -474,7 +585,12 @@ function buildWindowStats(
   for (const author of mergeAuthors) {
     mergeMap.set(author, (mergeMap.get(author) ?? 0) + 1);
   }
-  const totalMerges = mergeAuthors.length;
+  const mergeCommits = mergeAuthors.length;
+  for (const [author, n] of squash.perAuthor) {
+    mergeMap.set(author, (mergeMap.get(author) ?? 0) + n);
+  }
+  const totalMerges = mergeCommits + squash.total;
+  const mergeStrategy = classifyMergeStrategy(mergeCommits, squash.total);
 
   // 3. Combine into per_author rows.
   const allAuthors = new Set([...authorMap.keys(), ...mergeMap.keys()]);
@@ -509,6 +625,9 @@ function buildWindowStats(
     merges: totalMerges,
     revert_merges,
     fix_merges,
+    merge_commits: mergeCommits,
+    squash_merges: squash.total,
+    merge_strategy: mergeStrategy,
     authors_total: allAuthors.size,
     per_author: perAuthor,
     merges_per_active,

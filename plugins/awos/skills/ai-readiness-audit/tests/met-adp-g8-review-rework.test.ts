@@ -203,3 +203,25 @@ test('adp_g8: score=0 and confidence=0 on SKIP', () => {
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
 });
+
+test('adp_g8: squash-merge strategy → SKIP (merge-record proxy unavailable)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [mergeRecord(12)],
+    window_stats: { merge_strategy: 'squash' },
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 50,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 20, deleted: 5 },
+    default_branch: 'main',
+  });
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.status,
+    'SKIP',
+    'squash-merge repos must SKIP the review-rework merge-record proxy'
+  );
+});

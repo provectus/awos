@@ -19,7 +19,7 @@ Measures how fast and how safely change flows from commit to the default branch,
 
 ### DF-01: Deployment / merge frequency
 
-- **What:** Merges into the default branch per week (DORA deployment frequency proxy); result is DORA-banded (elite/high/medium/low)
+- **What:** Merge events into the default branch per week — 2-parent merge commits plus squash/rebase-merged PRs (subject carries a PR ref), so squash-merge repos measure correctly; DORA-banded (elite/high/medium/low)
 - **How:** `node "<engine cli path>" metric adp_g3_deploy_frequency <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — merge frequency computed and banded
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable
@@ -31,7 +31,7 @@ Measures how fast and how safely change flows from commit to the default branch,
 - **What:** Median time from first commit on a branch to its merge into the default branch; DORA-banded
 - **How:** `node "<engine cli path>" metric adp_g4_lead_time <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — lead time computed and banded
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable or no merge records found
+- **Skip:** metric returns `status: "SKIP"` — git source unavailable, no merge records found, or the repo squash-merges (no branch merge records exist in git; a code-host connector is needed)
 - **Severity:** medium
 - **Category:** 401
 
@@ -40,7 +40,7 @@ Measures how fast and how safely change flows from commit to the default branch,
 - **What:** Time from PR open to merge; proxied from merge-record timestamps when no code-host connector is available
 - **How:** `node "<engine cli path>" metric adp_g5_pr_cycle_time <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — cycle time computed
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable
+- **Skip:** metric returns `status: "SKIP"` — git source unavailable, or the repo squash-merges (no merge-record proxy; needs a code-host connector)
 - **Severity:** medium
 - **Category:** 501
 
@@ -58,7 +58,7 @@ Measures how fast and how safely change flows from commit to the default branch,
 - **What:** Review rounds and time-to-resolve review threads per PR; proxied from post-open commits when no code-host data is available
 - **How:** `node "<engine cli path>" metric adp_g8_review_rework <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — review rework computed
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable
+- **Skip:** metric returns `status: "SKIP"` — git source unavailable, or the repo squash-merges (no merge-record proxy; needs a code-host connector)
 - **Severity:** low
 - **Category:** 801
 

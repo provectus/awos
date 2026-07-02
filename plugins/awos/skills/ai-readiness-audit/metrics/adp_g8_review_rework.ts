@@ -64,6 +64,25 @@ export function compute(
     );
   }
 
+  // Squash/rebase-merge workflows produce no merge commits, so merge_records
+  // is empty or unrepresentative (only the rare true merge). Reporting a
+  // confident number from that residue would mis-measure a healthy repo.
+  if (raw.window_stats?.merge_strategy === 'squash') {
+    return makeMetricResult(
+      'adp_g8_review_rework',
+      null,
+      'banded',
+      [],
+      {
+        tag: 'not-reliable',
+        confidence: 'LOW',
+        note: 'squash-merge workflow: no branch merge records in git — connect a code-host connector (PR API) to measure this',
+      },
+      [],
+      ['git']
+    );
+  }
+
   const totalMerges: number = raw.merge_records.length;
   const totalCommits: number = raw.total_commits ?? 0;
 

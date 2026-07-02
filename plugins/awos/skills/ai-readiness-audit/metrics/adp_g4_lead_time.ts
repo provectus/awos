@@ -97,6 +97,26 @@ export function compute(
     );
   }
 
+  // Squash/rebase-merge workflows produce no merge commits, so merge_records
+  // is empty or unrepresentative (only the rare true merge). Reporting a
+  // confident number from that residue would mis-measure a healthy repo —
+  // admit the source is unavailable instead.
+  if (raw.window_stats?.merge_strategy === 'squash') {
+    return makeMetricResult(
+      'adp_g4_lead_time',
+      null,
+      'banded',
+      [],
+      {
+        tag: 'not-reliable',
+        confidence: 'LOW',
+        note: 'squash-merge workflow: no branch merge records in git — connect a code-host connector (PR API) to measure this',
+      },
+      [],
+      ['git']
+    );
+  }
+
   // If window_stats.window_start is available, restrict to in-window merges only.
   // When absent/null (older artifact or empty repo), fall back to all records so
   // existing test fixtures and pre-task-2.1 audits continue to produce results.

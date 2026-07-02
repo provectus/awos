@@ -213,6 +213,15 @@ export function compute(
       confidence: 'HIGH',
       note: null,
     };
+  } else if (raw.window_stats?.merge_strategy === 'squash') {
+    // Squash-merge workflow: merge_records holds only the rare true merge, so
+    // the git proxy rests on unrepresentative residue. Contract says MTTR is
+    // always included, so degrade confidence and say why instead of skipping.
+    reliability = {
+      tag: 'not-reliable',
+      confidence: 'LOW',
+      note: 'git-proxy over a squash-merge repo (merge records unrepresentative) — connect an incident source for a real MTTR',
+    };
   } else {
     // Git-proxy only → not-reliable with explanatory note.
     reliability = {

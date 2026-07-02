@@ -543,3 +543,33 @@ test('adp_g4: lead_time_for_change weight is 10 in standards.toml (Task 2.1)', (
     `standards.toml [category.lead_time_for_change].weight must be 10 (Task 2.1 bump), got ${weight}`
   );
 });
+
+test('adp_g4: squash-merge strategy → SKIP with a connector-pointing reason, never a confident number', () => {
+  const tmp = makeTmpDir();
+  // One stray real merge record exists, but the repo squash-merges: the
+  // record is unrepresentative residue and must not produce a lead time.
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [mergeRecord(12)],
+    window_stats: { merge_strategy: 'squash' },
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 50,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 20, deleted: 5 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.status,
+    'SKIP',
+    'squash-merge repos must SKIP the merge-record lead-time proxy'
+  );
+  assert.match(
+    String(result.reliability.note),
+    /squash-merge/,
+    'the reliability note must explain the squash-merge cause'
+  );
+});

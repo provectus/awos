@@ -9,7 +9,7 @@
  * Parser class. Grammar wasm files come from tree-sitter-wasms (source runs)
  * or dist/grammars/ (bundled runs).
  */
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, type Dirent } from 'node:fs';
 import { join, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -176,10 +176,21 @@ export function resolveCoreWasm(): string {
 }
 
 let _initPromise: Promise<boolean> | null = null;
+let _initError: string | null = null;
+
+/**
+ * Why the last initParser() attempt returned false (null when init succeeded
+ * or was never attempted). Metrics append this to their SKIP note so a broken
+ * wasm bundle is distinguishable from "no parseable code in the repo".
+ */
+export function getInitError(): string | null {
+  return _initError;
+}
 
 /**
  * Initialise the core tree-sitter runtime exactly once. Returns false (no throw)
- * when the core wasm is missing or init fails — callers then SKIP cleanly.
+ * when the core wasm is missing or init fails — callers then SKIP cleanly, with
+ * the failure reason recorded in getInitError().
  *
  * Both wasmBinary and locateFile are passed: the bundled CJS-in-ESM wrapper has
  * no __dirname, so the default path-finder fails; with both set the binary is
@@ -191,14 +202,21 @@ export function initParser(): Promise<boolean> {
   if (_initPromise) return _initPromise;
   _initPromise = (async () => {
     const Parser = getParserClass();
-    if (!Parser || typeof Parser.init !== 'function') return false;
+    if (!Parser || typeof Parser.init !== 'function') {
+      _initError = 'web-tree-sitter Parser class unavailable in this bundle';
+      return false;
+    }
     const coreWasmPath = resolveCoreWasm();
-    if (!existsSync(coreWasmPath)) return false;
+    if (!existsSync(coreWasmPath)) {
+      _initError = `core tree-sitter.wasm not found at ${coreWasmPath}`;
+      return false;
+    }
     try {
       const wasmBinary = readFileSync(coreWasmPath);
       await Parser.init({ wasmBinary, locateFile: () => coreWasmPath });
       return true;
-    } catch {
+    } catch (err) {
+      _initError = `tree-sitter init failed: ${err instanceof Error ? err.message : String(err)}`;
       return false;
     }
   })();
@@ -235,7 +253,7 @@ export class LanguageLoader {
  * artifacts the audit wrote itself.
  */
 export function walkDir(dir: string, cb: (filePath: string) => void): void {
-  let entries: ReturnType<typeof readdirSync>;
+  let entries: Dirent[];
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {

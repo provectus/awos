@@ -7,7 +7,9 @@
  * categories_awarded: [501] when data is available
  * reliability_default: "not-reliable" (git approximation — branch_first_commit_at
  *   is the earliest commit on the merged branch, not the PR open time; PR open
- *   time is only available via code-host connectors)
+ *   time is only available via code-host connectors). When tracker workflow
+ *   history is present, the value is computed from real in-progress→done
+ *   durations and confidence is HIGH.
  *
  * DORA band thresholds (same thresholds as lead_time_for_change):
  *   elite  → < 1 day    (< 24 hours)
@@ -15,17 +17,23 @@
  *   medium → < 1 month  (< 720 hours)
  *   low    → >= 1 month (>= 720 hours)
  *
- * Source shape: collectedDir/git.json
- * Input raw fields: merge_records (Array<{ merged_at: string; branch_first_commit_at: string }>)
+ * Source shapes:
+ *   collectedDir/tracker.json — preferred when tickets carry workflow history:
+ *     tickets with BOTH in_progress_at and resolved_at yield real
+ *     in-progress→done durations (median hours), replacing the git proxy.
+ *   collectedDir/git.json — fallback proxy:
+ *     merge_records (Array<{ merged_at: string; branch_first_commit_at: string }>)
  *
- * SKIP: if git.json is absent or merge_records is empty.
+ * SKIP: if no tracker workflow history is available AND git.json is absent
+ * or merge_records is empty.
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  readArtifact,
+  skipReliability,
   type MetricResult,
+  type Reliability,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
 
@@ -57,26 +65,90 @@ export function doraCycleTimeBand(hours: number): string {
   return 'low';
 }
 
+/**
+ * Compute in-progress→done durations (hours) from tracker tickets that carry
+ * BOTH in_progress_at and resolved_at (changelog-derived workflow history —
+ * see references/connector-shapes.md). Returns [] when the tracker artifact
+ * is absent/unavailable or no ticket has usable timestamps.
+ */
+function trackerCycleTimesHours(collectedDir: string): number[] {
+  const read = readArtifact(collectedDir, 'tracker');
+  if ('error' in read) return [];
+  const artifact = read.artifact;
+  if (!artifact?.available) return [];
+  const tickets: Array<Record<string, unknown>> = Array.isArray(
+    artifact?.raw?.tickets
+  )
+    ? artifact.raw.tickets
+    : [];
+  const hours: number[] = [];
+  for (const ticket of tickets) {
+    if (
+      typeof ticket['in_progress_at'] !== 'string' ||
+      typeof ticket['resolved_at'] !== 'string'
+    ) {
+      continue;
+    }
+    const started = new Date(ticket['in_progress_at']).getTime();
+    const resolved = new Date(ticket['resolved_at']).getTime();
+    if (isNaN(started) || isNaN(resolved)) continue;
+    const diffHours = (resolved - started) / 3_600_000;
+    if (diffHours >= 0) hours.push(diffHours);
+  }
+  return hours;
+}
+
 export function compute(
   collectedDir: string,
   _standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
-  const gitPath = join(collectedDir, 'git.json');
-  if (!existsSync(gitPath)) {
+  // Preferred source: real workflow history from the tracker connector.
+  // When tickets carry in_progress_at + resolved_at, the median
+  // in-progress→done duration replaces the git branch-lifetime proxy.
+  const trackerHours = trackerCycleTimesHours(collectedDir);
+  if (trackerHours.length > 0) {
+    trackerHours.sort((a, b) => a - b);
+    const medianHours = median(trackerHours);
+    const band = doraCycleTimeBand(medianHours);
+    const score = clamp01(bandScore(medianHours, CYCLE_TIME_ANCHORS, 'log'));
+    const reliability: Reliability = {
+      tag: 'not-reliable',
+      confidence: 'HIGH',
+      note: 'in-progress→done durations from tracker workflow history',
+    };
+    const expression = `median ${medianHours.toFixed(1)}h cycle time from ${trackerHours.length} tracker ticket${trackerHours.length !== 1 ? 's' : ''} (${band})`;
+    return makeMetricResult(
+      'adp_g5_pr_cycle_time',
+      medianHours,
+      'banded',
+      [501],
+      reliability,
+      ['tracker'],
+      [],
+      band,
+      undefined,
+      expression,
+      score,
+      1.0
+    );
+  }
+
+  // Fallback: git branch-lifetime proxy.
+  const read = readArtifact(collectedDir, 'git');
+  if ('error' in read) {
     return makeMetricResult(
       'adp_g5_pr_cycle_time',
       null,
       'banded',
       [],
-      computeReliability('not-reliable', [], ['git']),
+      skipReliability('not-reliable', 'git', read.error),
       [],
       ['git']
     );
   }
 
-  const artifact = JSON.parse(readFileSync(gitPath, 'utf8'));
-  const raw = artifact?.raw;
+  const raw = read.artifact?.raw;
   if (
     !raw ||
     !Array.isArray(raw.merge_records) ||
@@ -147,13 +219,7 @@ export function compute(
   // True PR cycle time requires a code-host connector (GitHub/GitLab API).
   const reliability = computeReliability('not-reliable', ['git'], []);
 
-  const score = clamp01(
-    bandScore(
-      medianHours,
-      CYCLE_TIME_ANCHORS as Array<{ x: number; y: number }>,
-      'log'
-    )
-  );
+  const score = clamp01(bandScore(medianHours, CYCLE_TIME_ANCHORS, 'log'));
   const expression = `median ${medianHours.toFixed(1)}h cycle time (${band})`;
   return makeMetricResult(
     'adp_g5_pr_cycle_time',

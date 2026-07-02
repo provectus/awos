@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { parse } from 'smol-toml';
 
 // ---------------------------------------------------------------------------
@@ -24,6 +25,62 @@ export function metaNumber(
   const meta = standards['meta'] as Record<string, unknown> | undefined;
   const value = meta?.[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+// ---------------------------------------------------------------------------
+// Collected-artifact reader
+// ---------------------------------------------------------------------------
+
+/**
+ * Read of a collected artifact: either the parsed JSON or a SKIP-worthy error.
+ * The artifact is intentionally loosely typed — it is the raw JSON.parse
+ * result, exactly what metrics previously produced inline.
+ */
+export type ArtifactRead =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  { artifact: any } | { error: string };
+
+/**
+ * Read and parse `<collectedDir>/<source>.json`.
+ *
+ * Returns `{artifact}` on success, or `{error}` when the file is absent or
+ * unparseable — metrics degrade to SKIP with the error carried in the
+ * reliability note (see skipReliability) instead of crashing the whole
+ * audit-core pass on one truncated artifact.
+ */
+export function readArtifact(
+  collectedDir: string,
+  source: string
+): ArtifactRead {
+  const path = join(collectedDir, `${source}.json`);
+  if (!existsSync(path)) {
+    return { error: `${source}.json not found` };
+  }
+  try {
+    return { artifact: JSON.parse(readFileSync(path, 'utf8')) };
+  } catch (err) {
+    return {
+      error: `${source}.json unreadable: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+/**
+ * Reliability for a metric that degrades to SKIP because its source artifact
+ * could not be read. Same shape computeReliability produces for a fully
+ * missing source, with the concrete read error appended so the report says
+ * why the source was unusable.
+ */
+export function skipReliability(
+  defaultTag: string,
+  source: string,
+  error: string
+): Reliability {
+  return {
+    tag: defaultTag,
+    confidence: 'LOW',
+    note: `missing sources: ${source} (${error})`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +135,7 @@ export interface MetricResult {
   value: unknown;
   kind: string;
   band: string | null;
-  categories_awarded: unknown[];
+  categories_awarded: number[];
   reliability: Reliability;
   sources_used: string[];
   sources_missing: string[];
@@ -112,7 +169,7 @@ export function makeMetricResult(
   metric: string,
   value: unknown,
   kind: string,
-  categoriesAwarded: unknown[],
+  categoriesAwarded: number[],
   reliability: Reliability,
   sourcesUsed: string[],
   sourcesMissing: string[],

@@ -7,9 +7,10 @@
  * - CI config-only (available=false, runs=[]) → SKIP (collector sets available=false; no longer an OK partial case)
  * - CI with runs carrying duration_seconds → correct avg, status=OK, categories=[1002] when has_ci
  * - Runs without duration_seconds are excluded from avg
- * - All runs missing duration_seconds → value=null
+ * - All runs missing duration_seconds → SKIP with reason (no free score)
  * - kind is "duration_seconds"
- * - band is null (no banding for this metric)
+ * - band is null (no band label; the score is banded via DURATION_ANCHORS)
+ * - score: 1.0 at ≤10 min avg, 0 at ≥2 h avg, in-between otherwise
  * - reliability.tag is "not-reliable"
  */
 import { test } from 'node:test';
@@ -160,7 +161,7 @@ test('adp_c2: runs missing duration_seconds excluded from avg', () => {
   );
 });
 
-test('adp_c2: value=null when no run has duration_seconds', () => {
+test('adp_c2: SKIP with reason when no run has duration_seconds', () => {
   const tmp = makeTmpDir();
   const runs = [{ conclusion: 'success' }, { conclusion: 'failure' }];
   const collectedDir = writeCollected(
@@ -176,7 +177,17 @@ test('adp_c2: value=null when no run has duration_seconds', () => {
     null,
     'value must be null when no run has duration_seconds'
   );
-  assert.equal(result.status, 'OK', 'status must still be OK');
+  assert.equal(
+    result.status,
+    'SKIP',
+    'must SKIP (not award a score) when duration cannot be computed from any run'
+  );
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.match(
+    result.reliability.note ?? '',
+    /duration_seconds/,
+    'SKIP note must say the runs lack duration_seconds'
+  );
 });
 
 test('adp_c2: categories_awarded empty when topology.has_ci=false', () => {
@@ -200,7 +211,7 @@ test('adp_c2: categories_awarded empty when topology.has_ci=false', () => {
 // Phase 3b: score/confidence contracts
 // ---------------------------------------------------------------------------
 
-test('adp_c2: score=1.0 and confidence=1.0 when pipeline duration data available (observational metric)', () => {
+test('adp_c2: best case — ≤10 min avg pipeline scores 1.0 with confidence 1.0', () => {
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(tmp, 'ci', {
     config_detected: true,
@@ -215,9 +226,45 @@ test('adp_c2: score=1.0 and confidence=1.0 when pipeline duration data available
   assert.equal(
     result.score,
     1.0,
-    'score must be 1.0 when duration data available (observational — shorter is better but thresholds vary)'
+    'score must be 1.0 when the average pipeline duration is ≤10 minutes (best case)'
   );
   assert.equal(result.confidence, 1.0, 'confidence must be 1.0');
+});
+
+test('adp_c2: worst case — ≥2 h avg pipeline scores 0 but stays OK', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'ci', {
+    config_detected: true,
+    config_path: '.github/workflows/ci.yml',
+    runs: [{ conclusion: 'success', duration_seconds: 3 * 3600 }],
+  });
+
+  const result = compute(collectedDir, standards, { has_ci: true });
+  assert.equal(
+    result.status,
+    'OK',
+    'a slow pipeline is still measured (OK), not skipped'
+  );
+  assert.equal(
+    result.score,
+    0,
+    'score must reach 0 at a ≥2 h average pipeline (worst case)'
+  );
+});
+
+test('adp_c2: mid-range duration scores strictly between 0 and 1', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'ci', {
+    config_detected: true,
+    config_path: '.github/workflows/ci.yml',
+    runs: [{ conclusion: 'success', duration_seconds: 1800 }],
+  });
+
+  const result = compute(collectedDir, standards, { has_ci: true });
+  assert.ok(
+    result.score > 0 && result.score < 1,
+    `a 30-minute pipeline must score strictly between 0 and 1, got ${result.score}`
+  );
 });
 
 test('adp_c2: score=0 and confidence=0 on SKIP (ci.json absent)', () => {

@@ -11,13 +11,12 @@
  * incident data source is available. The proxy computes intervals between
  * consecutive revert/hotfix/rollback merge commits on the default branch.
  *
- * Reliability tiers:
- *   - git-proxy only (incident_source absent or null):
- *       reliability.tag = "not-reliable", confidence per source coverage,
- *       note = "git-proxy, true value may differ"
- *   - incident_source present (non-null string):
- *       reliability tag stays "not-reliable" but confidence is upgraded to HIGH
- *       (incident source covers the metric properly), note is cleared.
+ * Reliability: the VALUE is always the git branch-lifetime proxy — no MTTR is
+ * ever computed from incident data here — so reliability/confidence stay at
+ * the proxy's minimal level ("not-reliable", low confidence, git-proxy note)
+ * even when tracker.raw.incident_source is present. Declaring an incident
+ * source gates category awarding (topology.has_incident_source), but it does
+ * not make the proxy number any more trustworthy.
  *
  * DORA band thresholds (band.mttr in standards.toml):
  *   elite  → < 1 hour    (median_hours < 1)
@@ -39,12 +38,10 @@
  *
  * SKIP: never. Returns OK with null value when no merge records exist (minimal git history).
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   awardCategories,
-  computeReliability,
   makeMetricResult,
+  readArtifact,
   type MetricResult,
   type Reliability,
 } from './_base.ts';
@@ -103,34 +100,30 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  const gitPath = join(collectedDir, 'git.json');
-  const trackerPath = join(collectedDir, 'tracker.json');
-
   // --- Load tracker (optional — only used for incident_source) ---
   let incidentSource: string | null = null;
-  if (existsSync(trackerPath)) {
-    try {
-      const trackerArtifact = JSON.parse(readFileSync(trackerPath, 'utf8'));
-      if (trackerArtifact?.available && trackerArtifact?.raw?.incident_source) {
-        incidentSource = trackerArtifact.raw.incident_source as string;
-      }
-    } catch {
-      // Ignore parse errors — fall back to git-proxy only.
+  const trackerRead = readArtifact(collectedDir, 'tracker');
+  if (!('error' in trackerRead)) {
+    const trackerArtifact = trackerRead.artifact;
+    if (trackerArtifact?.available && trackerArtifact?.raw?.incident_source) {
+      incidentSource = trackerArtifact.raw.incident_source as string;
     }
   }
 
   // --- Load git artifact (always required for proxy) ---
-  if (!existsSync(gitPath)) {
-    // git.json missing: git-proxy unavailable. Return OK with null value
-    // (not SKIP — this metric never skips). Note: makeMetricResult sets
-    // status=SKIP when sources_used=[], so we must include git even when absent.
-    // Use 'tracker' as the used source only when incident_source is present.
+  const gitRead = readArtifact(collectedDir, 'git');
+  if ('error' in gitRead) {
+    // git.json missing/unreadable: git-proxy unavailable. Return OK with null
+    // value (not SKIP — this metric never skips). Note: makeMetricResult sets
+    // status=SKIP when sources_used=[], so we must include git even when
+    // absent. incident_source presence does NOT upgrade reliability here —
+    // there is no value at all, let alone one computed from incident data.
     if (incidentSource) {
       const categories = awardCategories(standards, 'adp_i3_mttr', topology);
       const reliability: Reliability = {
         tag: 'not-reliable',
-        confidence: 'HIGH',
-        note: null,
+        confidence: 'LOW',
+        note: `incident source declared but MTTR is not computed from incident data; ${gitRead.error}`,
       };
       return makeMetricResult(
         'adp_i3_mttr',
@@ -152,7 +145,7 @@ export function compute(
     const reliability: Reliability = {
       tag: 'not-reliable',
       confidence: 'LOW',
-      note: 'git-proxy, true value may differ; no git history found',
+      note: `git-proxy, true value may differ; ${gitRead.error}`,
     };
     return makeMetricResult(
       'adp_i3_mttr',
@@ -169,33 +162,7 @@ export function compute(
       0
     );
   }
-
-  let gitArtifact;
-  try {
-    gitArtifact = JSON.parse(readFileSync(gitPath, 'utf8'));
-  } catch {
-    // Malformed/truncated git.json → return git-proxy with no value (never SKIP).
-    const reliability: Reliability = {
-      tag: 'not-reliable',
-      confidence: 'LOW',
-      note: 'git-proxy, true value may differ; git.json unreadable',
-    };
-    return makeMetricResult(
-      'adp_i3_mttr',
-      null,
-      'banded',
-      [],
-      reliability,
-      ['git'],
-      [],
-      null,
-      undefined,
-      undefined,
-      0,
-      0
-    );
-  }
-  const raw = gitArtifact?.raw ?? {};
+  const raw = gitRead.artifact?.raw ?? {};
   const mergeRecords: MergeRecord[] = Array.isArray(raw.merge_records)
     ? (raw.merge_records as MergeRecord[])
     : [];
@@ -204,16 +171,12 @@ export function compute(
   const allIntervals = computeGitProxyIntervals(mergeRecords);
   const medianHours = median(allIntervals);
 
-  // Build reliability.
+  // Build reliability. The value below is ALWAYS the git branch-lifetime
+  // proxy, so the proxy's minimal reliability/confidence applies regardless
+  // of incident-source presence — an upgrade is only justified once the value
+  // is computed from real incident data, which never happens here.
   let reliability: Reliability;
-  if (incidentSource) {
-    // Incident source present → upgraded reliability.
-    reliability = {
-      tag: 'not-reliable',
-      confidence: 'HIGH',
-      note: null,
-    };
-  } else if (raw.window_stats?.merge_strategy === 'squash') {
+  if (raw.window_stats?.merge_strategy === 'squash') {
     // Squash-merge workflow: merge_records holds only the rare true merge, so
     // the git proxy rests on unrepresentative residue. Contract says MTTR is
     // always included, so degrade confidence and say why instead of skipping.
@@ -242,15 +205,9 @@ export function compute(
 
   const score =
     medianHours !== null
-      ? clamp01(
-          bandScore(
-            medianHours,
-            MTTR_ANCHORS as Array<{ x: number; y: number }>,
-            'log'
-          )
-        )
+      ? clamp01(bandScore(medianHours, MTTR_ANCHORS, 'log'))
       : 0;
-  const confidence = incidentSource ? 1.0 : allIntervals.length > 0 ? 0.3 : 0.0;
+  const confidence = allIntervals.length > 0 ? 0.3 : 0.0;
   const expression =
     medianHours !== null
       ? `median ${medianHours.toFixed(1)}h MTTR (${band})`

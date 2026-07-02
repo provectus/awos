@@ -19,11 +19,11 @@
  *
  * SKIP: if git.json is absent or tooling_paths is missing.
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
 import {
@@ -66,21 +66,20 @@ export function compute(
   _standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
-  const gitPath = join(collectedDir, 'git.json');
-  if (!existsSync(gitPath)) {
+  const read = readArtifact(collectedDir, 'git');
+  if ('error' in read) {
     return makeMetricResult(
       'adp_g1_tooling_depth',
       null,
       'coverage',
       [],
-      computeReliability('maximal', [], ['git']),
+      skipReliability('maximal', 'git', read.error),
       [],
       ['git']
     );
   }
 
-  const artifact = JSON.parse(readFileSync(gitPath, 'utf8'));
-  const raw = artifact?.raw;
+  const raw = read.artifact?.raw;
   if (!raw || !Array.isArray(raw.tooling_paths)) {
     return makeMetricResult(
       'adp_g1_tooling_depth',
@@ -99,9 +98,15 @@ export function compute(
   const awarded: number[] = [];
   const evidencePerCode: Record<number, string[]> = {};
   for (const entry of TOOLING_MAP) {
-    const present = entry.paths.some((p) =>
-      toolingPaths.some((tp) => tp === p || tp.startsWith(p.replace(/\/$/, '')))
-    );
+    // Path-boundary match: a registry path matches only itself or paths nested
+    // under it ("<p>/..."), never a sibling sharing the prefix (".awos" must
+    // not match ".awos-legacy").
+    const present = entry.paths.some((p) => {
+      const base = p.replace(/\/$/, '');
+      return toolingPaths.some(
+        (tp) => tp === base || tp.startsWith(base + '/')
+      );
+    });
     const label = LAYER_LABELS[entry.code] ?? `layer ${entry.code}`;
     if (present) {
       awarded.push(entry.code);

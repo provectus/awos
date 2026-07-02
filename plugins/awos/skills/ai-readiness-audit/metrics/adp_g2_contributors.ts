@@ -15,12 +15,12 @@
  *
  * SKIP: if git.json is absent or window_stats.per_author is absent/empty.
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
   metaNumber,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
 import {
@@ -34,21 +34,20 @@ export function compute(
   _standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
-  const gitPath = join(collectedDir, 'git.json');
-  if (!existsSync(gitPath)) {
+  const read = readArtifact(collectedDir, 'git');
+  if ('error' in read) {
     return makeMetricResult(
       'adp_g2_contributors',
       null,
       'computed',
       [],
-      computeReliability('not-reliable', [], ['git']),
+      skipReliability('not-reliable', 'git', read.error),
       [],
       ['git']
     );
   }
 
-  const artifact = JSON.parse(readFileSync(gitPath, 'utf8'));
-  const raw = artifact?.raw;
+  const raw = read.artifact?.raw;
   const perAuthor: AuthorRow[] | undefined = raw?.window_stats?.per_author;
 
   if (!Array.isArray(perAuthor) || perAuthor.length === 0) {

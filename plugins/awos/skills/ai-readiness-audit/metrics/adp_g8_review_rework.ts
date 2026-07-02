@@ -18,36 +18,55 @@
  * total_commits to total_merges (commits per PR on average) minus 1 (for the
  * initial commit). When total_merges is 0 or merge_records is empty, SKIP.
  *
+ * score: banded on avg commits/PR via COMMITS_PER_PR_ANCHORS — ~1–2 commits/PR
+ * scores 1.0, declining linearly to 0 at ≥10 commits/PR (AWOS heuristics).
+ *
  * SKIP: if git.json is absent, merge_records is empty, or total_merges is 0.
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
+import { bandScore, clamp01 } from './_score.ts';
+
+/**
+ * Score anchors on avg commits per merged PR (linear piecewise, clamped to
+ * [0,1]) in the style of adp_g14_rework_rate. AWOS heuristics — DX Core 4
+ * publishes no numeric commits-per-PR thresholds:
+ *   ≤2   → 1.0   (1–2 commits/PR: focused merges, little in-review rework)
+ *   4    → 0.7
+ *   6    → 0.4
+ *   ≥10  → 0.0   (heavy in-review thrashing)
+ */
+const COMMITS_PER_PR_ANCHORS = [
+  { x: 2, y: 1.0 },
+  { x: 4, y: 0.7 },
+  { x: 6, y: 0.4 },
+  { x: 10, y: 0.0 },
+];
 
 export function compute(
   collectedDir: string,
   _standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
-  const gitPath = join(collectedDir, 'git.json');
-  if (!existsSync(gitPath)) {
+  const read = readArtifact(collectedDir, 'git');
+  if ('error' in read) {
     return makeMetricResult(
       'adp_g8_review_rework',
       null,
       'computed',
       [],
-      computeReliability('not-reliable', [], ['git']),
+      skipReliability('not-reliable', 'git', read.error),
       [],
       ['git']
     );
   }
 
-  const artifact = JSON.parse(readFileSync(gitPath, 'utf8'));
-  const raw = artifact?.raw;
+  const raw = read.artifact?.raw;
   if (
     !raw ||
     !Array.isArray(raw.merge_records) ||
@@ -71,7 +90,7 @@ export function compute(
     return makeMetricResult(
       'adp_g8_review_rework',
       null,
-      'banded',
+      'computed',
       [],
       {
         tag: 'not-reliable',
@@ -96,6 +115,12 @@ export function compute(
   // Review round count requires code-host data (PR comments, review requests).
   const reliability = computeReliability('not-reliable', ['git'], []);
 
+  // Score from the commits-per-PR proxy: ~1–2 commits/PR is best-case (1.0),
+  // declining to 0 at ≥10 commits/PR — see COMMITS_PER_PR_ANCHORS.
+  const score = clamp01(
+    bandScore(commitsPerPr, COMMITS_PER_PR_ANCHORS, 'linear')
+  );
+
   const expression = `avg ${commitsPerPr.toFixed(1)} commits/PR → ${reworkProxy.toFixed(1)} estimated rework commits`;
   return makeMetricResult(
     'adp_g8_review_rework',
@@ -108,7 +133,7 @@ export function compute(
     null,
     undefined,
     expression,
-    1.0,
+    score,
     1.0
   );
 }

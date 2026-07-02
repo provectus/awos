@@ -8,8 +8,8 @@
  * - git-only with empty merge_records → status OK, value=null, band=null
  * - git.json missing → status OK (not SKIP), reliability.tag="not-reliable",
  *   note includes "git-proxy"
- * - tracker with incident_source present (available=true) → confidence upgraded
- *   (confidence='HIGH'), note=null, sources_used includes 'tracker'
+ * - tracker with incident_source present (available=true) → NO reliability upgrade
+ *   (the value is still the git proxy), sources_used includes 'tracker'
  * - tracker available=false with incident_source → no upgrade (still git-proxy tier)
  * - categories_awarded=[1103] only when topology.has_incident_source=true
  * - categories_awarded=[] when topology.has_incident_source=false/absent
@@ -210,7 +210,7 @@ test('adp_i3: median >= 168h → low band', () => {
 // Incident source upgrade contracts
 // ---------------------------------------------------------------------------
 
-test('adp_i3: tracker with incident_source → confidence upgraded to HIGH, note=null', () => {
+test('adp_i3: tracker with incident_source → reliability stays at the git-proxy tier (no upgrade)', () => {
   const tmp = makeTmpDir();
   // Write git artifact
   const collectedDir = writeCollected(
@@ -241,19 +241,25 @@ test('adp_i3: tracker with incident_source → confidence upgraded to HIGH, note
     'not-reliable',
     'reliability tag is always "not-reliable"'
   );
-  assert.equal(
+  // The value is still the git branch-lifetime proxy — declaring an incident
+  // source does NOT make it more trustworthy, so no HIGH/1.0 upgrade.
+  assert.notEqual(
     result.reliability.confidence,
     'HIGH',
-    'confidence must be HIGH when incident_source is present'
+    'confidence must NOT upgrade to HIGH while the value is still the git proxy'
   );
-  assert.equal(
-    result.reliability.note,
-    null,
-    'note must be null when incident_source is present (no proxy disclaimer)'
+  assert.match(
+    result.reliability.note ?? '',
+    /git-proxy/,
+    'note must keep the git-proxy disclaimer even when incident_source is present'
+  );
+  assert.ok(
+    result.confidence < 1,
+    `numeric confidence must stay below 1 for a proxy value, got ${result.confidence}`
   );
   assert.ok(
     result.sources_used.includes('tracker'),
-    'sources_used must include tracker when incident_source used'
+    'sources_used must include tracker when incident_source declared'
   );
   assert.ok(
     result.sources_used.includes('git'),

@@ -24,11 +24,11 @@
  *
  * SKIP: if git.json is absent, merge_records is empty, or no in-window lead times exist.
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
@@ -66,20 +66,20 @@ export function compute(
   _standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
-  const gitPath = join(collectedDir, 'git.json');
-  if (!existsSync(gitPath)) {
+  const read = readArtifact(collectedDir, 'git');
+  if ('error' in read) {
     return makeMetricResult(
       'adp_g4_lead_time',
       null,
       'banded',
       [],
-      computeReliability('minimal', [], ['git']),
+      skipReliability('minimal', 'git', read.error),
       [],
       ['git']
     );
   }
 
-  const artifact = JSON.parse(readFileSync(gitPath, 'utf8'));
+  const artifact = read.artifact;
   const raw = artifact?.raw;
   if (
     !raw ||
@@ -166,13 +166,7 @@ export function compute(
   // or overcount if work predated branching.
   const reliability = computeReliability('minimal', ['git'], []);
 
-  const score = clamp01(
-    bandScore(
-      medianHours,
-      LEAD_TIME_ANCHORS as Array<{ x: number; y: number }>,
-      'log'
-    )
-  );
+  const score = clamp01(bandScore(medianHours, LEAD_TIME_ANCHORS, 'log'));
   const windowLabel = windowStart ? ' (in-window)' : '';
   const expression = `median ${medianHours.toFixed(1)}h lead time over ${leadTimesHours.length} merge${leadTimesHours.length !== 1 ? 's' : ''}${windowLabel} (${band})`;
   return makeMetricResult(

@@ -21,11 +21,11 @@
  *
  * SKIP: if git.json is absent or raw.window_stats is absent.
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
 import { bandScore } from './_score.ts';
@@ -50,20 +50,20 @@ export function compute(
   _standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
-  const gitPath = join(collectedDir, 'git.json');
-  if (!existsSync(gitPath)) {
+  const read = readArtifact(collectedDir, 'git');
+  if ('error' in read) {
     return makeMetricResult(
       'adp_g3_deploy_frequency',
       null,
       'banded',
       [],
-      computeReliability('not-reliable', [], ['git']),
+      skipReliability('not-reliable', 'git', read.error),
       [],
       ['git']
     );
   }
 
-  const artifact = JSON.parse(readFileSync(gitPath, 'utf8'));
+  const artifact = read.artifact;
   const raw = artifact?.raw;
   if (!raw || !raw.window_stats) {
     return makeMetricResult(
@@ -99,11 +99,7 @@ export function compute(
   const band = doraDeployBand(mergesPerWeek);
   const reliability = computeReliability('not-reliable', ['git'], []);
 
-  const score = bandScore(
-    mergesPerWeek,
-    DEPLOY_FREQ_ANCHORS as Array<{ x: number; y: number }>,
-    'log'
-  );
+  const score = bandScore(mergesPerWeek, DEPLOY_FREQ_ANCHORS, 'log');
   const expression = `${totalMerges} merges / ${totalWeeks.toFixed(1)}w = ${mergesPerWeek.toFixed(2)}/week (${band})`;
   return makeMetricResult(
     'adp_g3_deploy_frequency',

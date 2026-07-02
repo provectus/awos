@@ -21,11 +21,11 @@
  *
  * SKIP: if git.json is absent, window_stats is absent, or window_stats.merges is 0.
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
 import { clamp01 } from './_score.ts';
@@ -43,20 +43,20 @@ export function compute(
   _standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
-  const gitPath = join(collectedDir, 'git.json');
-  if (!existsSync(gitPath)) {
+  const read = readArtifact(collectedDir, 'git');
+  if ('error' in read) {
     return makeMetricResult(
       'adp_g7_change_fail_rate',
       null,
       'banded',
       [],
-      computeReliability('minimal', [], ['git']),
+      skipReliability('minimal', 'git', read.error),
       [],
       ['git']
     );
   }
 
-  const artifact = JSON.parse(readFileSync(gitPath, 'utf8'));
+  const artifact = read.artifact;
   const raw = artifact?.raw;
   const ws = raw?.window_stats;
   if (!ws || typeof ws.merges !== 'number' || ws.merges === 0) {

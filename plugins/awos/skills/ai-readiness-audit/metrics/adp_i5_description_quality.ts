@@ -51,12 +51,12 @@
  *
  * @see https://www.agilealliance.org/glossary/definition-of-ready/  (Agile Alliance, 2012)
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   awardCategories,
   computeReliability,
   makeMetricResult,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
@@ -82,21 +82,21 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  const trackerPath = join(collectedDir, 'tracker.json');
+  const read = readArtifact(collectedDir, 'tracker');
 
-  if (!existsSync(trackerPath)) {
+  if ('error' in read) {
     return makeMetricResult(
       'adp_i5_description_quality',
       null,
       'banded',
       [],
-      computeReliability('minimal', [], ['tracker']),
+      skipReliability('minimal', 'tracker', read.error),
       [],
       ['tracker']
     );
   }
 
-  const artifact = JSON.parse(readFileSync(trackerPath, 'utf8'));
+  const artifact = read.artifact;
 
   if (!artifact?.available) {
     return makeMetricResult(
@@ -140,9 +140,7 @@ export function compute(
   );
   const share = wellDescribed.length / eligible.length;
   const band = descriptionBand(share);
-  const score = clamp01(
-    bandScore(share, ANCHORS as Array<{ x: number; y: number }>, 'linear')
-  );
+  const score = clamp01(bandScore(share, ANCHORS, 'linear'));
 
   const categories = awardCategories(
     standards,

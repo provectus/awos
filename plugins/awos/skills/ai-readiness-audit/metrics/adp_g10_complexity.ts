@@ -53,6 +53,7 @@ import { isGeneratedPath } from '../generated.ts';
 import {
   EXT_TO_GRAMMAR,
   MAX_FILE_BYTES,
+  getInitError,
   getParserClass,
   getSharedLoader,
   initParser,
@@ -164,13 +165,19 @@ function bandFromAvg(avg: number): string {
 // Skip result helper
 // ---------------------------------------------------------------------------
 
-function makeSkip(): MetricResult {
+function makeSkip(reason?: string): MetricResult {
+  const reliability = computeReliability('not-reliable', [], ['scale']);
+  if (reason) {
+    reliability.note = reliability.note
+      ? `${reliability.note} (${reason})`
+      : reason;
+  }
   return makeMetricResult(
     'adp_g10_complexity',
     null,
     'computed',
     [],
-    computeReliability('not-reliable', [], ['scale']),
+    reliability,
     [],
     ['scale']
   );
@@ -191,7 +198,9 @@ export async function compute(
   if (!existsSync(repoPath)) return makeSkip();
 
   const Parser = getParserClass();
-  if (!(await initParser())) return makeSkip();
+  if (!(await initParser())) {
+    return makeSkip(getInitError() ?? 'tree-sitter init failed');
+  }
 
   const loader = getSharedLoader();
   const loadLanguage = (grammarFile: string) => loader.load(grammarFile);
@@ -297,11 +306,7 @@ export async function compute(
 
   const filesTotal = filesAnalysed + filesSkipped;
   const complexityScore = clamp01(
-    bandScore(
-      avgCcn,
-      COMPLEXITY_ANCHORS as Array<{ x: number; y: number }>,
-      'linear'
-    )
+    bandScore(avgCcn, COMPLEXITY_ANCHORS, 'linear')
   );
   const complexityConfidence = filesTotal > 0 ? filesAnalysed / filesTotal : 0;
   const complexityExpression = `avg_ccn=${avgCcn.toFixed(1)} (${band}), ${hotspotCount} hotspot${hotspotCount !== 1 ? 's' : ''} > CCN 10`;

@@ -18,12 +18,12 @@
  * Source shape: collectedDir/docs.json
  * Input raw fields: page_count (number), recently_updated_count (number)
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   awardCategories,
   computeReliability,
   makeMetricResult,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
 import { clamp01 } from './_score.ts';
@@ -33,36 +33,20 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  const docsPath = join(collectedDir, 'docs.json');
-
-  // Docs source absent → SKIP.
-  if (!existsSync(docsPath)) {
+  // Docs source absent or unreadable → SKIP with the reason in the note.
+  const read = readArtifact(collectedDir, 'docs');
+  if ('error' in read) {
     return makeMetricResult(
       'adp_d1_spec_coverage',
       null,
       'coverage',
       [],
-      computeReliability('not-reliable', [], ['docs']),
+      skipReliability('not-reliable', 'docs', read.error),
       [],
       ['docs']
     );
   }
-
-  let artifact;
-  try {
-    artifact = JSON.parse(readFileSync(docsPath, 'utf8'));
-  } catch {
-    // Malformed/truncated docs.json → degrade to SKIP rather than crash the run.
-    return makeMetricResult(
-      'adp_d1_spec_coverage',
-      null,
-      'coverage',
-      [],
-      computeReliability('not-reliable', [], ['docs']),
-      [],
-      ['docs']
-    );
-  }
+  const artifact = read.artifact;
 
   // available=false means no docs connector was provided.
   if (!artifact?.available) {

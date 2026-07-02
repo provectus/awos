@@ -165,35 +165,62 @@ test('adp_g8: SKIP when merge_records empty', () => {
 // Phase 3b: score/confidence contracts
 // ---------------------------------------------------------------------------
 
-test('adp_g8: score=1.0 and confidence=1.0 when data available (observational metric)', () => {
+/** Fixture with `commits` total commits spread over `merges` merge records. */
+function collectedWithRatio(commits: number, merges: number): string {
   const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [
-      {
-        branch_first_commit_at: '2025-01-01T00:00:00Z',
-        merged_at: '2025-01-02T00:00:00Z',
-      },
-    ],
+  return writeCollected(tmp, 'git', {
+    merge_records: Array.from({ length: merges }, mergeRecord),
     monthly_buckets: [],
     tooling_paths: [],
-    total_commits: 10,
+    total_commits: commits,
     ai_marked_commits: 0,
-    total_merges: 1,
+    total_merges: merges,
     revert_merges: 0,
     numstat_totals: { added: 50, deleted: 10 },
     default_branch: 'main',
   });
+}
 
-  const result = compute(collectedDir, standards, {});
+test('adp_g8: best case — ≤2 commits/PR scores 1.0 with confidence 1.0', () => {
+  // 4 commits over 2 merges → 2 commits/PR: focused review-clean merges.
+  const result = compute(collectedWithRatio(4, 2), standards, {});
   assert.equal(
     result.score,
     1.0,
-    'score must be 1.0 when data available (observational — direction is ambiguous)'
+    'score must be 1.0 at ≤2 commits/PR (best-case review rework)'
   );
   assert.equal(
     result.confidence,
     1.0,
     'confidence must be 1.0 when git data present'
+  );
+});
+
+test('adp_g8: worst case — ≥10 commits/PR scores 0', () => {
+  // 20 commits over 1 merge → 20 commits/PR: heavy in-review thrashing.
+  const result = compute(collectedWithRatio(20, 1), standards, {});
+  assert.equal(
+    result.status,
+    'OK',
+    'worst-case repo must still be scored (OK), not skipped'
+  );
+  assert.equal(
+    result.score,
+    0,
+    'score must reach 0 at ≥10 commits/PR (worst-case review rework)'
+  );
+});
+
+test('adp_g8: score declines between the 1.0 and 0 anchors', () => {
+  // 5 commits/PR sits between the {x:4,y:0.7} and {x:6,y:0.4} anchors.
+  const result = compute(collectedWithRatio(10, 2), standards, {});
+  assert.ok(
+    (result.score as number) > 0 && (result.score as number) < 1,
+    `mid-range commits/PR must score strictly between 0 and 1, got ${result.score}`
+  );
+  assert.ok(
+    Math.abs((result.score as number) - 0.55) < 0.0001,
+    `5 commits/PR must interpolate to 0.55 between the 4→0.7 and 6→0.4 anchors, got ${result.score}`
   );
 });
 
@@ -207,7 +234,7 @@ test('adp_g8: score=0 and confidence=0 on SKIP', () => {
 test('adp_g8: squash-merge strategy → SKIP (merge-record proxy unavailable)', () => {
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(12)],
+    merge_records: [mergeRecord()],
     window_stats: { merge_strategy: 'squash' },
     monthly_buckets: [],
     tooling_paths: [],
@@ -223,5 +250,10 @@ test('adp_g8: squash-merge strategy → SKIP (merge-record proxy unavailable)', 
     result.status,
     'SKIP',
     'squash-merge repos must SKIP the review-rework merge-record proxy'
+  );
+  assert.equal(
+    result.kind,
+    'computed',
+    'squash SKIP must report the same kind ("computed") as the scored path'
   );
 });

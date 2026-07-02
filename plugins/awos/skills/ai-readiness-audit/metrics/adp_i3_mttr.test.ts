@@ -90,7 +90,7 @@ test('adp_i3_mttr: score=0 and confidence=0 when no merge records in git.json', 
   }
 });
 
-test('adp_i3_mttr: confidence=1.0 when incident_source present in tracker with git data', () => {
+test('adp_i3_mttr: incident_source does NOT upgrade confidence while the value is the git proxy', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-i3-incident-'));
   try {
     const merged = new Date('2026-01-01T02:00:00Z');
@@ -101,10 +101,22 @@ test('adp_i3_mttr: confidence=1.0 when incident_source present in tracker with g
     );
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact('pagerduty'));
     const res = compute(dir, {}, {});
-    assert.equal(
-      res.confidence,
-      1.0,
-      'confidence must be 1.0 when incident_source is present'
+    // The value is still computed from git branch lifetimes, not incident
+    // data, so declaring an incident source must not raise confidence beyond
+    // the proxy tier (0.3 when intervals exist).
+    assert.ok(
+      Math.abs((res.confidence ?? 0) - 0.3) < 1e-6,
+      `confidence must stay at the git-proxy tier (0.3) even with incident_source declared, got ${res.confidence}`
+    );
+    assert.notEqual(
+      res.reliability.confidence,
+      'HIGH',
+      'reliability confidence must not report HIGH for a proxy value'
+    );
+    assert.match(
+      res.reliability.note ?? '',
+      /git-proxy/,
+      'the git-proxy disclaimer must survive incident_source presence'
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

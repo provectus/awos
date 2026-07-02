@@ -73,7 +73,8 @@ test('adp_i4_subtask_split: SKIP when tracker.json available=false', () => {
 test('adp_i4_subtask_split: SKIP when no ticket has subtask_count data', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-i4-nodata-'));
   try {
-    // Tickets present but none carry a numeric subtask_count > 0
+    // Tickets present but none carry a numeric subtask_count at all —
+    // the connector did not map the field, so there is nothing to measure.
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', type: 'story', status: 'Done' },
       { id: 'PROJ-2', type: 'bug', status: 'Done' },
@@ -83,7 +84,7 @@ test('adp_i4_subtask_split: SKIP when no ticket has subtask_count data', () => {
     assert.equal(
       res.status,
       'SKIP',
-      'status must be SKIP when no ticket carries a numeric subtask_count > 0'
+      'status must be SKIP when no ticket carries a numeric subtask_count (field unmapped)'
     );
     assert.deepEqual(
       res.categories_awarded,
@@ -125,7 +126,7 @@ test('adp_i4_subtask_split: avg=2 subtasks/parent → band=good, score≈0.867',
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', subtask_count: 2 },
       { id: 'PROJ-2', subtask_count: 2 },
-      { id: 'PROJ-3' }, // leaf ticket — no subtask_count, excluded from avg
+      { id: 'PROJ-3', parent: 'PROJ-1' }, // a sub-task itself — excluded from the parent average
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
     const res = compute(dir, {}, {});
@@ -199,6 +200,87 @@ test('adp_i4_subtask_split: avg=8 subtasks/parent → band=concerning, score=0.2
     assert.ok(
       Math.abs((res.score ?? 0) - 0.2) < 1e-6,
       `score must be 0.2 at avg=8 (linear ANCHOR interpolation), got ${res.score}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Denominator: ALL parent-eligible tickets, including 0-subtask ones
+// ---------------------------------------------------------------------------
+
+test('adp_i4_subtask_split: 0-subtask parents count in the average (best case reachable)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-zeros-'));
+  try {
+    // Every parent-eligible ticket has an explicit 0 → avg = 0 → the
+    // {x:0, y:1} anchor is reachable: best case scores exactly 1.0.
+    const tickets: TicketFixture[] = [
+      { id: 'PROJ-1', subtask_count: 0 },
+      { id: 'PROJ-2', subtask_count: 0 },
+    ];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.equal(
+      res.status,
+      'OK',
+      'explicit zero subtask data must be scored, not skipped'
+    );
+    assert.equal(res.value, 0, 'avg must be 0 when no parent has subtasks');
+    assert.equal(
+      res.score,
+      1,
+      'score must be 1.0 at avg=0 subtasks/parent (best case — anchor {x:0,y:1} reachable)'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('adp_i4_subtask_split: one over-split epic cannot dominate many plain tickets', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-epic-'));
+  try {
+    // 1 epic with 20 subtasks + 9 plain tickets (no subtask_count → 0).
+    // Old buggy behaviour averaged only the epic (avg=20 → score 0);
+    // correct behaviour averages all 10 parents: avg=2 → band good.
+    const tickets: TicketFixture[] = [
+      { id: 'EPIC-1', subtask_count: 20 },
+      ...Array.from({ length: 9 }, (_, i) => ({ id: `PROJ-${i + 1}` })),
+    ];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.ok(
+      Math.abs((res.value as number) - 2) < 1e-9,
+      `avg must be 2.0 (20 subtasks over 10 parent-eligible tickets), got ${res.value}`
+    );
+    assert.equal(
+      res.band,
+      'good',
+      'one over-split epic among many plain tickets must not push the band past "good"'
+    );
+    assert.ok(
+      (res.score ?? 0) > 0.8,
+      `score must stay high when only 1 of 10 parents is over-split, got ${res.score}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('adp_i4_subtask_split: worst case — every parent ≥10 subtasks scores 0', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-worst-'));
+  try {
+    const tickets: TicketFixture[] = [
+      { id: 'PROJ-1', subtask_count: 12 },
+      { id: 'PROJ-2', subtask_count: 15 },
+    ];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.equal(res.status, 'OK', 'worst-case repo must still be scored (OK)');
+    assert.equal(
+      res.score,
+      0,
+      'score must reach 0 when the average is ≥10 subtasks/parent (worst case)'
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

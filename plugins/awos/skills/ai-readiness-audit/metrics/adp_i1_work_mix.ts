@@ -25,12 +25,12 @@
  *
  * SKIP: if tracker.json is absent or available=false (no tracker connector).
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   awardCategories,
   computeReliability,
   makeMetricResult,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
 import { clamp01 } from './_score.ts';
@@ -56,36 +56,20 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  const trackerPath = join(collectedDir, 'tracker.json');
-
-  // Tracker source file absent → SKIP.
-  if (!existsSync(trackerPath)) {
+  // Tracker source absent or unreadable → SKIP with the reason in the note.
+  const read = readArtifact(collectedDir, 'tracker');
+  if ('error' in read) {
     return makeMetricResult(
       'adp_i1_work_mix',
       null,
       'banded',
       [],
-      computeReliability('not-reliable', [], ['tracker']),
+      skipReliability('not-reliable', 'tracker', read.error),
       [],
       ['tracker']
     );
   }
-
-  let artifact;
-  try {
-    artifact = JSON.parse(readFileSync(trackerPath, 'utf8'));
-  } catch {
-    // Malformed/truncated tracker.json → degrade to SKIP rather than crash.
-    return makeMetricResult(
-      'adp_i1_work_mix',
-      null,
-      'banded',
-      [],
-      computeReliability('not-reliable', [], ['tracker']),
-      [],
-      ['tracker']
-    );
-  }
+  const artifact = read.artifact;
 
   // available=false means no tracker connector was provided.
   if (!artifact?.available) {

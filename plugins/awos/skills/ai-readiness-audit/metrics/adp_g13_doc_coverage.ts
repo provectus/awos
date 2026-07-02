@@ -3,9 +3,13 @@
  *
  * kind: "computed"
  * value: number — public/exported doc-comment coverage ratio (0..1).
- * categories_awarded ⊆ {2204, 2205}:
- *   2204 (DOC-05, weight 2) — public/exported coverage ≥ PUBLIC_BAND (0.8)
- *   2205 (DOC-06, weight 1) — overall coverage ≥ OVERALL_BAND (0.6)
+ * categories_awarded ⊆ {2204, 2205} — awarded unconditionally (2204 only when
+ * a public surface exists), with a continuous per-code score modulating the
+ * weight:
+ *   2204 (DOC-05, weight 2) — score = public/exported doc coverage (0..1)
+ *   2205 (DOC-06, weight 1) — score = overall doc coverage (0..1)
+ * No threshold cliff: audit_core derives the badge from the score
+ * (PASS ≈1 / PARTIAL in-between / FAIL ≈0) and awards weight × score.
  * reliability_default: "maximal"
  *
  * Reuses the single shared grammar-loading path (./_ast.ts) — same wasm loader
@@ -47,16 +51,13 @@ import { LANGUAGES } from '../languages.ts';
 import {
   EXT_TO_GRAMMAR,
   MAX_FILE_BYTES,
+  getInitError,
   getParserClass,
   getSharedLoader,
   initParser,
   listRepoFiles,
   type TSNode,
 } from './_ast.ts';
-
-// Award bands (conservative).
-const PUBLIC_BAND = 0.8;
-const OVERALL_BAND = 0.6;
 
 // ---------------------------------------------------------------------------
 // Language tables derived from the LanguageDef registry (single source of truth)
@@ -193,13 +194,19 @@ function isPublic(n: TSNode, lang: string): boolean {
 // Skip helper
 // ---------------------------------------------------------------------------
 
-function makeSkip(): MetricResult {
+function makeSkip(reason?: string): MetricResult {
+  const reliability = computeReliability('maximal', [], ['audit']);
+  if (reason) {
+    reliability.note = reliability.note
+      ? `${reliability.note} (${reason})`
+      : reason;
+  }
   return makeMetricResult(
     'adp_g13_doc_coverage',
     null,
     'computed',
     [],
-    computeReliability('maximal', [], ['audit']),
+    reliability,
     [],
     ['audit']
   );
@@ -226,7 +233,9 @@ export async function compute(
   }
   if (filePaths.length === 0) return makeSkip();
 
-  if (!(await initParser())) return makeSkip();
+  if (!(await initParser())) {
+    return makeSkip(getInitError() ?? 'tree-sitter init failed');
+  }
   const Parser = getParserClass();
   const loader = getSharedLoader();
   const parser = new Parser();
@@ -288,9 +297,16 @@ export async function compute(
   const overallCoverage = documented / total;
   const publicCoverage = publicTotal > 0 ? publicDocumented / publicTotal : 0;
 
+  // Award unconditionally (like the other continuous metrics): the continuous
+  // score modulates each code's weight, so 0.799 public coverage earns
+  // ~0.8 × weight instead of falling off a threshold cliff to 0 points.
+  // audit_core derives the check badge from the score (PASS ≈1, PARTIAL
+  // in-between, FAIL ≈0), so status still reflects the coverage level
+  // without zeroing the award. 2204 applies only when a public surface
+  // exists to measure.
   const awarded: number[] = [];
-  if (publicTotal > 0 && publicCoverage >= PUBLIC_BAND) awarded.push(2204);
-  if (overallCoverage >= OVERALL_BAND) awarded.push(2205);
+  if (publicTotal > 0) awarded.push(2204);
+  awarded.push(2205);
 
   // Each code carries its own evidence line: 2204 scores the public surface,
   // 2205 scores ALL defs — reusing the public line for 2205 would show

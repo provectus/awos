@@ -260,3 +260,31 @@ test('adp_c1: score=0 and confidence=0 on SKIP (ci.json absent)', () => {
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
 });
+
+test('adp_c1: SKIP (not NaN) when available=true but runs=[] (hand-built connector artifact)', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(
+    tmp,
+    'ci',
+    { config_detected: true, config_path: '.github/workflows', runs: [] },
+    true // violates the collector contract, but must not poison audit_total
+  );
+  const result = compute(collectedDir, standards, { has_ci: true });
+
+  assert.equal(
+    result.status,
+    'SKIP',
+    'empty runs must SKIP — 0/0 would be NaN and poison the audit total'
+  );
+  assert.equal(result.value, null, 'value must be null when no runs exist');
+  assert.ok(
+    Number.isFinite(result.score),
+    `score must stay a finite number on empty runs, got ${result.score}`
+  );
+  assert.equal(result.score, 0, 'score must be 0 on SKIP');
+  assert.match(
+    result.reliability.note ?? '',
+    /no run records/,
+    'SKIP note must explain that the artifact has no run records'
+  );
+});

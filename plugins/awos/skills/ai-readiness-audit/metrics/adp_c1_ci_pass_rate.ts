@@ -22,12 +22,12 @@
  * Input raw fields: config_detected (bool), runs (array of run records)
  * Each run record is expected to have: conclusion (string, e.g. "success"|"failure")
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   awardCategories,
   computeReliability,
   makeMetricResult,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
 import { clamp01 } from './_score.ts';
@@ -53,22 +53,22 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  const ciPath = join(collectedDir, 'ci.json');
+  const read = readArtifact(collectedDir, 'ci');
 
   // CI source absent entirely → SKIP.
-  if (!existsSync(ciPath)) {
+  if ('error' in read) {
     return makeMetricResult(
       'adp_c1_ci_pass_rate',
       null,
       'banded',
       [],
-      computeReliability('not-reliable', [], ['ci']),
+      skipReliability('not-reliable', 'ci', read.error),
       [],
       ['ci']
     );
   }
 
-  const artifact = JSON.parse(readFileSync(ciPath, 'utf8'));
+  const artifact = read.artifact;
 
   // available=false: collector found no CI config, no connector, or config-only with no run history.
   if (!artifact?.available) {
@@ -86,7 +86,25 @@ export function compute(
   const raw = artifact?.raw ?? {};
   const runs: unknown[] = Array.isArray(raw.runs) ? raw.runs : [];
 
-  // available=true guarantees runs.length > 0 (collector contract).
+  // The collector normally guarantees runs.length > 0 when available=true,
+  // but a hand-built connector artifact can violate that; an empty runs array
+  // would make the rate 0/0 = NaN and poison audit_total → SKIP with reason.
+  if (runs.length === 0) {
+    return makeMetricResult(
+      'adp_c1_ci_pass_rate',
+      null,
+      'banded',
+      [],
+      {
+        tag: 'not-reliable',
+        confidence: 'LOW',
+        note: 'ci.json is available but has no run records — cannot compute a pass rate',
+      },
+      [],
+      ['ci']
+    );
+  }
+
   // Compute pass rate from run records.
   const successful = countSuccessful(runs);
   const rate = successful / runs.length;

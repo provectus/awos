@@ -421,3 +421,43 @@ test('org_gaps: does not disturb portfolio_metrics, per_repo, or org_connections
     'org_connections must still be present'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Connector-gated cycle_time / MTTR display values on per_repo rows
+// ---------------------------------------------------------------------------
+
+test('per_repo: connector-gated cycle_time/mttr display values carried when present, null when gated', () => {
+  const withConnectors: PerRepoInput = {
+    repo: 'repo-with-connectors',
+    delivery: { cycle_time: '2.1 d', mttr: '3 h' },
+  };
+  const gated: PerRepoInput = {
+    repo: 'repo-gated',
+    delivery: { deploy_freq: 5 },
+  };
+  const result = rollup([withConnectors, gated]);
+
+  const rich = result.per_repo.find((r) => r.repo === 'repo-with-connectors')!;
+  assert.equal(
+    rich.cycle_time,
+    '2.1 d',
+    'cycle_time display value must be carried into the per_repo row verbatim'
+  );
+  assert.equal(
+    rich.mttr,
+    '3 h',
+    'mttr display value must be carried into the per_repo row verbatim'
+  );
+
+  const bare = result.per_repo.find((r) => r.repo === 'repo-gated')!;
+  assert.equal(
+    bare.cycle_time,
+    null,
+    'cycle_time must be null when the per-repo metric is gated/absent'
+  );
+  assert.equal(
+    bare.mttr,
+    null,
+    'mttr must be null when the per-repo metric is gated/absent'
+  );
+});

@@ -45,14 +45,27 @@ import { doraChangeFailBand } from './adp_g7_change_fail_rate.ts';
 import { reworkBand } from './adp_g14_rework_rate.ts';
 
 // ---------------------------------------------------------------------------
-// Types
+// Types — the output shapes shared with the renderer live in artifact_types.ts
+// (one declaration, no drift); re-exported here for existing consumers.
 // ---------------------------------------------------------------------------
+
+import type {
+  OrgConnItem,
+  OrgConnections,
+  PerRepoSummary,
+  PortfolioMetric,
+} from '../artifact_types.ts';
+
+export type { OrgConnItem, OrgConnections, PerRepoSummary, PortfolioMetric };
 
 /**
  * Per-repo delivery numbers, transcribed from the repo's audit + git artifact.
- * Only the four git-sourced DORA metrics live here. Cycle-time (Jira
- * In-Progress→Done) and MTTR (real incident recovery) are connector-gated and
- * never deterministically computed, so they are not carried in the rollup.
+ * The four git-sourced DORA metrics are numeric and feed the averaged org
+ * headline. Cycle-time (In-Progress→Done) and MTTR (real incident recovery)
+ * are connector-gated: they are carried per repo as the DISPLAY STRING the
+ * per-repo audit's headline authored (e.g. "3.2 d"), null when the connector
+ * was absent — they populate the org Repositories table but are never
+ * averaged into the org headline.
  */
 export interface PerRepoDelivery {
   /** git.json raw.window_stats.merges_per_active. */
@@ -67,7 +80,20 @@ export interface PerRepoDelivery {
   lead_time?: number | null;
   /** DF-04 change-failure rate (0–1 fraction). */
   change_fail?: number | null;
+  /** Tracker-gated cycle time display value (headline row, e.g. "3.2 d"); null when gated/absent. */
+  cycle_time?: string | null;
+  /** Incident-gated MTTR display value (headline row); null when gated/absent. */
+  mttr?: string | null;
 }
+
+/** The numeric (averageable) PerRepoDelivery keys — the org headline spec is restricted to these. */
+type NumericDeliveryKey =
+  | 'merges_per_active'
+  | 'loc_per_active'
+  | 'deploy_freq'
+  | 'rework_rate'
+  | 'lead_time'
+  | 'change_fail';
 
 export interface PerRepoInput {
   /** Repository identifier (path or name). */
@@ -91,14 +117,15 @@ export interface PerRepoInput {
   /** Rich delivery numbers for the org headline + per-repo table. */
   delivery?: PerRepoDelivery;
   /**
-   * Tech-stack items detected for this repo (four categories).
-   * Only `name` is used for aggregation; `evidence` is not carried through.
+   * Tech-stack items detected for this repo (four categories), as read from
+   * the per-repo audit.json (whose items carry `evidence`). Only `name` is
+   * used for aggregation; `evidence` is accepted but not carried through.
    */
   tech_stack?: {
-    languages: Array<{ name: string }>;
-    agent_tools: Array<{ name: string }>;
-    ci: Array<{ name: string }>;
-    frameworks: Array<{ name: string }>;
+    languages: Array<{ name: string; evidence?: string }>;
+    agent_tools: Array<{ name: string; evidence?: string }>;
+    ci: Array<{ name: string; evidence?: string }>;
+    frameworks: Array<{ name: string; evidence?: string }>;
   };
   /**
    * Linked repos detected for this repo (symlinks / submodules / MCP servers).
@@ -139,41 +166,6 @@ export interface OrgGap {
   fail_repos: number;
   /** Number of repos where this check is present (any status, including SKIP). */
   total_repos: number;
-}
-
-// ---------------------------------------------------------------------------
-// Org connections types (Task 5.4)
-// ---------------------------------------------------------------------------
-
-/** One aggregated item in the org Connections view: a name and the number of repos that have it. */
-export interface OrgConnItem {
-  name: string;
-  /** Number of repos in which this item is present (deduplicated per repo). */
-  count: number;
-}
-
-/**
- * Cross-repo aggregation of connections and stack items.
- * Each list is sorted by count desc, then name asc, for deterministic output.
- */
-export interface OrgConnections {
-  /** Source keys (e.g. "git", "tracker") → count of repos where that source is available. */
-  sources: OrgConnItem[];
-  languages: OrgConnItem[];
-  frameworks: OrgConnItem[];
-  agent_tools: OrgConnItem[];
-  ci: OrgConnItem[];
-  /** Linked-repo names → count of repos that link each one. */
-  linked_repos: OrgConnItem[];
-}
-
-export interface PortfolioMetric {
-  metric: string;
-  value: number;
-  description: string;
-  /** Fraction 0–1: value is contributor-weighted (true) or equal-weighted (false). */
-  contributor_weighted: boolean;
-  repos_counted: number;
 }
 
 /**
@@ -223,25 +215,6 @@ export interface OrgRollupResult {
   org_gaps?: OrgGap[];
 }
 
-export interface PerRepoSummary {
-  repo: string;
-  contributors: number | null;
-  awarded_weight: number;
-  sources_reachable: string[];
-  has_ai_tooling: boolean;
-  /** Weighted audit total for this repo. */
-  audit_total: number | null;
-  /** Coverage ratio for this repo, 0–1. */
-  coverage: number | null;
-  /** Delivery numbers, flattened for the per-repo table (Task 5.3). */
-  merges_per_active: number | null;
-  loc_per_active: number | null;
-  deploy_freq: number | null;
-  rework_rate: number | null;
-  lead_time: number | null;
-  change_fail: number | null;
-}
-
 // ---------------------------------------------------------------------------
 // Org headline (average matrix) spec
 // ---------------------------------------------------------------------------
@@ -250,15 +223,16 @@ export interface PerRepoSummary {
  * The 6 deterministic delivery rows of the org headline, in the same order as
  * the single-repo headline (SKILL.md). Row 1 (capability Points + Coverage)
  * stays the `org_capability_score` portfolio card — it is NOT duplicated here.
- * Cycle-time and MTTR are connector-gated (tracker / incident) and never
- * deterministically computed, so the deterministic org headline omits them.
+ * Cycle-time and MTTR are connector-gated (tracker / incident) display strings
+ * carried per repo for the Repositories table; they cannot be averaged, so the
+ * deterministic org headline omits them.
  *
- * `key`    — field on PerRepoDelivery to average.
+ * `key`    — numeric field on PerRepoDelivery to average.
  * `band`   — re-band function applied to the MEAN (omit for un-banded rows).
  * `format` — turns the MEAN into a display string.
  */
 interface DeliverySpec {
-  key: keyof PerRepoDelivery;
+  key: NumericDeliveryKey;
   label: string;
   check_id?: string;
   band?: (v: number) => string;
@@ -539,6 +513,8 @@ export function rollup(
       rework_rate: d.rework_rate ?? null,
       lead_time: d.lead_time ?? null,
       change_fail: d.change_fail ?? null,
+      cycle_time: d.cycle_time ?? null,
+      mttr: d.mttr ?? null,
     };
   });
 

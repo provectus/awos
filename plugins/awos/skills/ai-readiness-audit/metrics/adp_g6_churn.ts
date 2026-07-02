@@ -18,12 +18,12 @@
  * SKIP: if git.json is absent, code_turnover is missing, or its ratio is null
  *   (no in-window additions to normalise against).
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
   metaNumber,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
@@ -50,13 +50,15 @@ function turnoverBand(ratio: number): string {
   return 'concerning';
 }
 
-function skip(): MetricResult {
+function skip(note?: string): MetricResult {
   return makeMetricResult(
     'adp_g6_churn',
     null,
     'computed',
     [],
-    computeReliability('minimal', [], ['git']),
+    note
+      ? skipReliability('minimal', 'git', note)
+      : computeReliability('minimal', [], ['git']),
     [],
     ['git']
   );
@@ -67,11 +69,10 @@ export function compute(
   standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
-  const gitPath = join(collectedDir, 'git.json');
-  if (!existsSync(gitPath)) return skip();
+  const read = readArtifact(collectedDir, 'git');
+  if ('error' in read) return skip(read.error);
 
-  const artifact = JSON.parse(readFileSync(gitPath, 'utf8'));
-  const raw = artifact?.raw;
+  const raw = read.artifact?.raw;
   const turnover = raw?.code_turnover;
   if (
     !turnover ||
@@ -85,13 +86,7 @@ export function compute(
   const reworked: number = turnover.reworked_lines ?? 0;
   const added: number = turnover.total_added ?? 0;
   const band = turnoverBand(ratio);
-  const score = clamp01(
-    bandScore(
-      ratio,
-      TURNOVER_ANCHORS as Array<{ x: number; y: number }>,
-      'linear'
-    )
-  );
+  const score = clamp01(bandScore(ratio, TURNOVER_ANCHORS, 'linear'));
 
   const reliability = computeReliability('minimal', ['git'], []);
   const pct = (ratio * 100).toFixed(1);

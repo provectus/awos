@@ -17,7 +17,13 @@
  *
  * SKIP: when no supported manifest is found.
  */
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import {
+  readFileSync,
+  existsSync,
+  readdirSync,
+  statSync,
+  type Dirent,
+} from 'node:fs';
 import { join, basename } from 'node:path';
 import {
   computeReliability,
@@ -51,7 +57,7 @@ const MANIFEST_NAMES = new Set([
 function findManifests(dir: string, depth = 0): string[] {
   if (depth > 3) return [];
   const found: string[] = [];
-  let entries: ReturnType<typeof readdirSync>;
+  let entries: Dirent[];
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {

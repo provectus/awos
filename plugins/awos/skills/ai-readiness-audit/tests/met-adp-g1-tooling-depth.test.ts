@@ -56,6 +56,48 @@ test('adp_g1: GEMINI.md + .cursor/commands → codes 101 and 103 awarded (not 0)
   assert.ok((result.value as number) > 0, 'Gemini-only repo must not score 0');
 });
 
+test('adp_g1: path-boundary — a sibling sharing a prefix (.awos-legacy) must not award 106', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    tooling_paths: ['.awos-legacy'],
+    monthly_buckets: [],
+    merge_records: [],
+    total_commits: 3,
+    ai_marked_commits: 0,
+    total_merges: 0,
+    revert_merges: 0,
+    numstat_totals: { added: 0, deleted: 0 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    !result.categories_awarded.includes(106),
+    `".awos-legacy" must not match the ".awos" registry path (no path boundary); got ${JSON.stringify(result.categories_awarded)}`
+  );
+});
+
+test('adp_g1: path-boundary — a path nested under a registry dir (.awos/commands) awards 106', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    tooling_paths: ['.awos/commands'],
+    monthly_buckets: [],
+    merge_records: [],
+    total_commits: 3,
+    ai_marked_commits: 0,
+    total_merges: 0,
+    revert_merges: 0,
+    numstat_totals: { added: 0, deleted: 0 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    result.categories_awarded.includes(106),
+    `a path nested under ".awos/" must still award 106; got ${JSON.stringify(result.categories_awarded)}`
+  );
+});
+
 test('adp_g1: CLAUDE.md present → code 101 awarded, status OK, kind coverage', () => {
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(tmp, 'git', {

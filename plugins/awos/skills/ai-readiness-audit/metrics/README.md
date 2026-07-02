@@ -4,7 +4,7 @@ This module is the foundation of the ADP measurement layer. All metric modules (
 
 ## Metric output contract
 
-Every metric function returns an object with this exact shape (snake_case keys — consumed by the B.10 metric modules and the B.11 orchestrator):
+Every metric function returns a `MetricResult` (the interface in `_base.ts`, snake_case keys):
 
 ```ts
 {
@@ -21,6 +21,12 @@ Every metric function returns an object with this exact shape (snake_case keys �
   sources_used: string[];   // collector sources that provided data
   sources_missing: string[]; // collector sources that were unavailable
   status: "OK" | "SKIP";   // see rule below
+  score: number;            // fraction of capability present ∈ [0,1]; defaults to 1 when any category awarded, else 0 (0 on SKIP)
+  confidence: number;       // fraction of applicable surface measured ∈ [0,1]; defaults to 1 when OK, 0 on SKIP
+  score_per_code?: Record<number, number>;     // per-code score overrides when one metric feeds codes with different natural scores
+  evidence_per_code?: Record<number, string[]>; // per-code evidence lines (e.g. adp_g1_tooling_depth's per-layer evidence)
+  expression?: string;      // human-readable derivation ("42 of 50 public defs documented = 0.84")
+  unit?: string;            // unit of the value ("ratio", "days", "count", …)
 }
 ```
 
@@ -51,4 +57,4 @@ The `tag` is always passed through unchanged from `defaultTag` (the `reliability
 `awardCategories(standards, metricName, predicateCtx)` returns the category codes from `standards.toml` whose `metric` matches `metricName` and whose `applies_when` condition is satisfied:
 
 - `"always"` → always included.
-- `"topology.<flag>"` → included when `predicateCtx[flag]` is truthy (topology flags come from the CI/tracker/docs availability checks run by the orchestrator).
+- `"topology.<flag>"` → included when `predicateCtx[flag]` is truthy. Most topology flags are deterministic file/grep heuristics computed in `topology.ts`; only `has_tracker`/`has_docs_connector`/`has_incident_source` derive from collected-artifact availability, computed in `audit_core.ts`.

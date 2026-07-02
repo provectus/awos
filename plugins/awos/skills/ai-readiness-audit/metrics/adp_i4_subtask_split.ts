@@ -30,23 +30,30 @@
  *   ANCHORS = [{x:0,y:1},{x:3,y:0.8},{x:6,y:0.4},{x:10,y:0}]
  *   score = clamp01(bandScore(avg, ANCHORS, 'linear'))
  *
+ * Averaging denominator: all parent-eligible tickets — every ticket that is
+ * not itself a sub-task (no `parent`), including those with zero sub-tasks
+ * (missing subtask_count on a parent-eligible ticket counts as 0). This keeps
+ * the {x:0, y:1} anchor reachable and stops one over-split epic from
+ * dominating the mean.
+ *
  * SKIP conditions:
- *   - tracker.json absent
+ *   - tracker.json absent or unreadable
  *   - tracker.json available === false (no connector provided)
  *   - raw.tickets absent or empty
- *   - no ticket has a numeric subtask_count > 0 (no subtask data in the window)
+ *   - no ticket carries a numeric subtask_count (field not mapped by the connector)
+ *   - no parent-eligible ticket in the window (every ticket is a sub-task)
  *
  * Source shape: collectedDir/tracker.json
  * Input raw field: tickets[].subtask_count (number, optional)
  *
  * @see https://agilealliance.org/glossary/invest/  (Bill Wake, 2003)
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   awardCategories,
   computeReliability,
   makeMetricResult,
+  readArtifact,
+  skipReliability,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
@@ -75,22 +82,22 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  const trackerPath = join(collectedDir, 'tracker.json');
+  const read = readArtifact(collectedDir, 'tracker');
 
   // Tracker source file absent → SKIP.
-  if (!existsSync(trackerPath)) {
+  if ('error' in read) {
     return makeMetricResult(
       'adp_i4_subtask_split',
       null,
       'banded',
       [],
-      computeReliability('minimal', [], ['tracker']),
+      skipReliability('minimal', 'tracker', read.error),
       [],
       ['tracker']
     );
   }
 
-  const artifact = JSON.parse(readFileSync(trackerPath, 'utf8'));
+  const artifact = read.artifact;
 
   // available=false means no tracker connector was provided.
   if (!artifact?.available) {
@@ -110,14 +117,30 @@ export function compute(
     ? (raw.tickets as Array<Record<string, unknown>>)
     : [];
 
-  // Identify parent tickets: those with a numeric subtask_count > 0.
-  const parents = tickets.filter(
-    (t) =>
-      typeof t['subtask_count'] === 'number' &&
-      (t['subtask_count'] as number) > 0
+  // No ticket in the window carries subtask data at all → the connector did
+  // not map the field; SKIP rather than guess. (An explicit subtask_count of
+  // 0 counts as data.)
+  const hasSubtaskData = tickets.some(
+    (t) => typeof t['subtask_count'] === 'number'
   );
+  if (!hasSubtaskData) {
+    return makeMetricResult(
+      'adp_i4_subtask_split',
+      null,
+      'banded',
+      [],
+      computeReliability('minimal', [], ['tracker']),
+      [],
+      ['tracker']
+    );
+  }
 
-  // No subtask data in this window → SKIP.
+  // Parent-eligible tickets: every ticket that is not itself a sub-task
+  // (no parent key), INCLUDING those with zero sub-tasks — a missing
+  // subtask_count on a parent-eligible ticket means 0. Averaging over
+  // only tickets with subtask_count > 0 would floor the mean at ≥1 (the
+  // {x:0} anchor unreachable) and let a single over-split epic dominate.
+  const parents = tickets.filter((t) => t['parent'] == null);
   if (parents.length === 0) {
     return makeMetricResult(
       'adp_i4_subtask_split',
@@ -130,11 +153,15 @@ export function compute(
     );
   }
 
-  const avgSubtasks = mean(parents.map((t) => t['subtask_count'] as number));
-  const band = subtaskBand(avgSubtasks);
-  const score = clamp01(
-    bandScore(avgSubtasks, ANCHORS as Array<{ x: number; y: number }>, 'linear')
+  const avgSubtasks = mean(
+    parents.map((t) =>
+      typeof t['subtask_count'] === 'number'
+        ? (t['subtask_count'] as number)
+        : 0
+    )
   );
+  const band = subtaskBand(avgSubtasks);
+  const score = clamp01(bandScore(avgSubtasks, ANCHORS, 'linear'));
 
   const categories = awardCategories(
     standards,

@@ -42,7 +42,7 @@ export function loginterp(
  */
 export function bandScore(
   x: number,
-  anchors: Array<{ x: number; y: number }>,
+  anchors: ReadonlyArray<{ x: number; y: number }>,
   scale: 'linear' | 'log' = 'linear'
 ): number {
   if (anchors.length === 0) return 0;

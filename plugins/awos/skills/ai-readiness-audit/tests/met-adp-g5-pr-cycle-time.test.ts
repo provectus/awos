@@ -7,10 +7,12 @@
  * - kind is "banded", categories_awarded=[501], status=OK
  * - reliability tag is "not-reliable" (git approximation, not real PR open time)
  * - SKIP when git.json absent or merge_records empty
+ * - tracker tickets carrying in_progress_at + resolved_at → real workflow
+ *   cycle time is used instead of the git proxy (fallback preserved otherwise)
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compute } from '../metrics/adp_g5_pr_cycle_time.ts';
@@ -293,5 +295,137 @@ test('adp_g5: squash-merge strategy → SKIP (merge-record proxy unavailable)', 
     result.status,
     'SKIP',
     'squash-merge repos must SKIP the PR-cycle merge-record proxy'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Tracker workflow history (in_progress_at → resolved_at)
+// ---------------------------------------------------------------------------
+
+/** Write a tracker.json with the given tickets next to the collected dir. */
+function writeTracker(
+  collectedDir: string,
+  tickets: Array<Record<string, unknown>>,
+  available = true
+): void {
+  writeFileSync(
+    join(collectedDir, 'tracker.json'),
+    JSON.stringify({ source: 'tracker', available, raw: { tickets } })
+  );
+}
+
+test('adp_g5: tracker in_progress_at→resolved_at replaces the git proxy when present', () => {
+  const tmp = makeTmpDir();
+  // Git proxy would say 700h; tracker workflow history says 12h median.
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [mergeRecord(700)],
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 5,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 10, deleted: 2 },
+    default_branch: 'main',
+  });
+  writeTracker(collectedDir, [
+    {
+      id: 'PROJ-1',
+      in_progress_at: '2025-03-01T00:00:00Z',
+      resolved_at: '2025-03-01T12:00:00Z',
+    },
+    {
+      id: 'PROJ-2',
+      in_progress_at: '2025-03-02T00:00:00Z',
+      resolved_at: '2025-03-02T12:00:00Z',
+    },
+  ]);
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(result.status, 'OK', 'status must be OK with tracker history');
+  assert.ok(
+    Math.abs((result.value as number) - 12) < 1e-6,
+    `value must be the tracker in-progress→done median (12h), not the git proxy (700h), got ${result.value}`
+  );
+  assert.equal(
+    result.band,
+    'elite',
+    '12h workflow cycle time must band elite (< 24h)'
+  );
+  assert.deepEqual(
+    result.sources_used,
+    ['tracker'],
+    'sources_used must name tracker when workflow history supplied the value'
+  );
+  assert.equal(
+    result.reliability.confidence,
+    'HIGH',
+    'confidence is HIGH when the value comes from real workflow history'
+  );
+});
+
+test('adp_g5: tickets without in_progress_at fall back to the git proxy', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [mergeRecord(10)],
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 5,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 10, deleted: 2 },
+    default_branch: 'main',
+  });
+  // Tracker connected, but no ticket carries workflow history.
+  writeTracker(collectedDir, [
+    { id: 'PROJ-1', resolved_at: '2025-03-01T12:00:00Z' },
+    { id: 'PROJ-2', status: 'In Progress' },
+  ]);
+
+  const result = compute(collectedDir, standards, {});
+  assert.ok(
+    Math.abs((result.value as number) - 10) < 1e-6,
+    `without in_progress_at the git proxy (10h) must be used, got ${result.value}`
+  );
+  assert.deepEqual(
+    result.sources_used,
+    ['git'],
+    'sources_used must stay git-only when tracker lacks workflow history'
+  );
+});
+
+test('adp_g5: tracker workflow history rescues a squash-merge repo from the null proxy', () => {
+  const tmp = makeTmpDir();
+  // Squash workflow: the git proxy is unrepresentative and normally yields null.
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [mergeRecord(5)],
+    window_stats: { merge_strategy: 'squash' },
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 50,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 10, deleted: 2 },
+    default_branch: 'main',
+  });
+  writeTracker(collectedDir, [
+    {
+      id: 'PROJ-1',
+      in_progress_at: '2025-03-01T00:00:00Z',
+      resolved_at: '2025-03-03T00:00:00Z',
+    },
+  ]);
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.status,
+    'OK',
+    'a squash repo with tracker workflow history must be scored, not nulled'
+  );
+  assert.ok(
+    Math.abs((result.value as number) - 48) < 1e-6,
+    `value must come from the tracker (48h), got ${result.value}`
   );
 });

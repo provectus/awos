@@ -270,8 +270,9 @@ test('org_rollup: repos_counted field reflects input size', () => {
 /**
  * Two repos carrying the full rich delivery slice. Values are chosen so each
  * per-metric MEAN lands unambiguously inside one DORA band. Cycle-time and
- * MTTR are connector-gated (not git-sourced) and never carried in the rollup,
- * so the deterministic headline has exactly 6 rows:
+ * MTTR are connector-gated display strings: carried per repo for the
+ * Repositories table (RICH_1 has both; RICH_2 has neither → null) but never
+ * averaged, so the deterministic headline has exactly 6 rows:
  *   merges   (4+2)/2   = 3       → "3 / contributor"      (no band)
  *   loc      (200+100)/2 = 150   → "150 / contributor"    (no band)
  *   deploy   (8+6)/2    = 7      → elite  (>=7)            "7 / wk"
@@ -294,6 +295,8 @@ const RICH_1: PerRepoInput = {
     rework_rate: 0.1,
     lead_time: 12,
     change_fail: 0.04,
+    cycle_time: '3.2 d',
+    mttr: '4.5 h',
   },
 };
 
@@ -428,6 +431,45 @@ test('org_rollup: enriched per_repo rows carry audit_total, coverage and all 6 d
   assert.equal(row.change_fail, 0.04, 'per_repo row must carry change_fail');
 });
 
+test('org_rollup: per_repo rows carry the connector-gated cycle_time/MTTR display values', () => {
+  const result = rollup([RICH_1, RICH_2]);
+
+  // RICH_1 had tracker + incident connectors → display strings carried through.
+  const rich1 = result.per_repo.find((r) => r.repo === 'org/rich-1')!;
+  assert.equal(
+    rich1.cycle_time,
+    '3.2 d',
+    'per_repo row must carry the tracker-gated cycle-time display value verbatim'
+  );
+  assert.equal(
+    rich1.mttr,
+    '4.5 h',
+    'per_repo row must carry the incident-gated MTTR display value verbatim'
+  );
+
+  // RICH_2 had no connectors → both stay null (renderer shows the em-dash).
+  const rich2 = result.per_repo.find((r) => r.repo === 'org/rich-2')!;
+  assert.equal(
+    rich2.cycle_time,
+    null,
+    'cycle_time must be null when the repo had no tracker connector (gated)'
+  );
+  assert.equal(
+    rich2.mttr,
+    null,
+    'mttr must be null when the repo had no incident connector (gated)'
+  );
+});
+
+test('org_rollup: gated cycle_time/MTTR display strings never enter the averaged headline', () => {
+  const result = rollup([RICH_1, RICH_2]);
+  const labels = (result.headline?.delivery ?? []).map((d) => d.label);
+  assert.ok(
+    !labels.some((l) => /cycle|mttr/i.test(l)),
+    `cycle time / MTTR are display strings and must not be averaged into the headline, got ${JSON.stringify(labels)}`
+  );
+});
+
 test('org_rollup: legacy input without delivery produces no headline', () => {
   const result = rollup([REPO_A, REPO_B]);
   assert.equal(
@@ -442,6 +484,12 @@ test('org_rollup: legacy input without delivery produces no headline', () => {
     null,
     'legacy per_repo row must default delivery values to null'
   );
+  assert.equal(
+    row.cycle_time,
+    null,
+    'legacy per_repo row must default cycle_time to null'
+  );
+  assert.equal(row.mttr, null, 'legacy per_repo row must default mttr to null');
 });
 
 // ---------------------------------------------------------------------------

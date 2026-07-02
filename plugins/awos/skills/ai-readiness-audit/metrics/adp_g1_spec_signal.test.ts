@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { collect } from '../collectors/git.ts';
@@ -14,6 +15,9 @@ function tmpRepoWithSpec(): string {
     join(dir, 'context', 'spec', '001-feature', 'functional-spec.md'),
     '# spec\n'
   );
+  // The git collector marks non-git directories unavailable (raw is empty),
+  // so the tooling_paths → 106 contract needs a real (commit-less) repo.
+  execFileSync('git', ['init', '-q'], { cwd: dir });
   return dir;
 }
 

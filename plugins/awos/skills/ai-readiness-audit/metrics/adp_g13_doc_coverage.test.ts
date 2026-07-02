@@ -284,3 +284,78 @@ test('doc-coverage carries per-code evidence — the all-defs code (2205) must n
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('doc-coverage has no award cliff: sub-threshold coverage still awards with a proportional score', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-cliff-'));
+  try {
+    // 4 public defs, 3 documented → publicCoverage = 0.75 (below the old 0.8
+    // gate). The award must still be granted with score ≈ 0.75 — a 0.799
+    // coverage earning 0 points was the cliff bug.
+    writeFileSync(
+      join(dir, 'a.py'),
+      [
+        'def a():',
+        '    \"\"\"Doc a.\"\"\"',
+        '    return 1',
+        '',
+        'def b():',
+        '    \"\"\"Doc b.\"\"\"',
+        '    return 2',
+        '',
+        'def c():',
+        '    \"\"\"Doc c.\"\"\"',
+        '    return 3',
+        '',
+        'def d():',
+        '    return 4',
+        '',
+      ].join('\n')
+    );
+    const res = await compute(dir, {}, {}, dir);
+    assert.ok(
+      (res.categories_awarded as number[]).includes(2204),
+      `2204 must be awarded even below the old 0.8 threshold (continuous score modulates the weight), got ${JSON.stringify(res.categories_awarded)}`
+    );
+    assert.ok(
+      (res.categories_awarded as number[]).includes(2205),
+      `2205 must be awarded unconditionally when defs exist, got ${JSON.stringify(res.categories_awarded)}`
+    );
+    const s2204 = res.score_per_code?.[2204] ?? NaN;
+    assert.ok(
+      Math.abs(s2204 - 0.75) < 1e-6,
+      `score_per_code[2204] must equal the public coverage (0.75), not fall off a threshold cliff, got ${s2204}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('doc-coverage worst case: nothing documented awards with score 0 (FAIL badge, no free points)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-zero-'));
+  try {
+    writeFileSync(
+      join(dir, 'a.py'),
+      'def a():\n    return 1\n\ndef b():\n    return 2\n'
+    );
+    const res = await compute(dir, {}, {}, dir);
+    assert.equal(
+      res.status,
+      'OK',
+      'an undocumented repo is measured, not skipped'
+    );
+    const s2204 = res.score_per_code?.[2204] ?? NaN;
+    const s2205 = res.score_per_code?.[2205] ?? NaN;
+    assert.equal(
+      s2204,
+      0,
+      'public-coverage score must be 0 when no public def is documented'
+    );
+    assert.equal(
+      s2205,
+      0,
+      'overall-coverage score must be 0 when nothing is documented'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

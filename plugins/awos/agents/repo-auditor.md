@@ -1,7 +1,6 @@
 ---
 name: repo-auditor
 description: Audit ONE repository end-to-end for the AI-readiness audit — the deterministic engine pass plus the LLM-only slice — writing all results into a caller-provided per-repo output subdir. The ai-readiness-audit org-mode flow dispatches one of these per repo, concurrently, so a portfolio audits in parallel instead of one repo at a time.
-tools: Bash, Read, Edit, Write, Glob, Grep
 model: sonnet
 ---
 
@@ -24,7 +23,7 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
 
    This scores every `detected`/`computed` category and writes `<outDir>/<dimension>.json` + `<outDir>/audit.json`. This one call **is** the whole deterministic slice. Never re-score a `detected`/`computed` check by hand, and never fan out a subagent per dimension — reconstructing a per-dimension flow is the failure mode this design exists to prevent.
 
-2. **Connectors → `enrich`.** Fetch any reachable tracker/docs/incident source for this repo, following `<SKILL_DIR>/references/connector-shapes.md`. The sources are independent, so issue their initial fetches as parallel tool calls in a single message (only pagination within a source is serial); write each `<outDir>/collected/<source>.json`, then re-score once:
+2. **Connectors → `enrich`.** Fetch any reachable tracker/docs/incident source for this repo, following `<SKILL_DIR>/references/connector-shapes.md`. You inherit the full toolset, including MCP connector tools (Jira/Confluence/Linear/…) — use them directly; a tracker reachable from the orchestrator is reachable from you. The sources are independent, so issue their initial fetches as parallel tool calls in a single message (only pagination within a source is serial); write each `<outDir>/collected/<source>.json`, then re-score once:
 
    ```bash
    node "<ENGINE>" enrich "<repoPath>" "<outDir>"

@@ -311,6 +311,7 @@ export interface AuditJson {
     standards_date?: string;
     active_contributor_threshold?: number;
   };
+  // (checks may carry last_verified — see Check)
   // linked repos + tech-stack metadata (optional; populated by audit_core)
   linked_repos?: LinkedRepo[];
   tech_stack?: TechStack;
@@ -538,9 +539,9 @@ function dimKey(dim: DimensionArtifact): string {
 
 function metricLabel(metric: string): string {
   const labels: Record<string, string> = {
-    org_ai_tooling_coverage: 'AI-tooling coverage',
+    org_ai_tooling_coverage: 'Repos with AI tooling',
     org_capability_score: 'Capability score',
-    org_measurement_coverage: 'Measurement coverage',
+    org_measurement_coverage: 'Standards coverage',
   };
   return labels[metric] ?? metric;
 }
@@ -1111,7 +1112,11 @@ const HEADLINE_TIP: Record<string, string> = {
   'Spec coverage':
     'Share of feature work that went through a written spec: merged branches/PRs whose changes touched spec files (AWOS context/spec/, Kiro, Agent-OS, plain specs/ conventions). Higher means more work is spec-driven.',
   'Repos with AI tooling':
-    'How many portfolio repositories have any AI tooling present.',
+    'How much of the portfolio works with AI tooling set up in the repository (agent instructions, skills, commands, hooks, or MCP config). Weighted by each repo\u2019s active contributors, so a large team\u2019s repo counts for more than a two-person one.',
+  'Merges / active contributor':
+    'How many pull requests each active person lands in the 90-day window, on average. A steady-delivery signal: higher means work flows to the main branch in small, frequent pieces rather than big batches.',
+  'LOC / active contributor':
+    'How many lines of code each active person changes in the 90-day window. A volume signal for sizing the other numbers \u2014 not a productivity score; more lines is not better.',
 };
 
 /**
@@ -1134,6 +1139,16 @@ const REACH_FIELDS = [
 function resolveTip(text: string, audit: AuditJson): string {
   const t = audit.standards_meta?.active_contributor_threshold ?? 0.05;
   return text.replace('{threshold}', `${Math.round(t * 100)}%`);
+}
+
+/**
+ * "Standard last verified <date>." suffix for metric-label tooltips. Every
+ * label tooltip ends with the date its definition was last checked against
+ * the cited industry source — per-check dates when the check carries one,
+ * the overall standards date otherwise. Empty when no date is known.
+ */
+function verifiedSuffix(date?: string | null): string {
+  return date ? ` Standard last verified ${date}.` : '';
 }
 
 /** The coverage headline tooltip, citing the standard's last-verified date when known. */
@@ -1290,9 +1305,14 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
           m.metric === 'org_capability_score'
             ? m.value.toFixed(2) + ' pts'
             : pct(m.value);
+        const cardTip =
+          (m.metric === 'org_measurement_coverage'
+            ? `${coverageTipText(audit)}. ${m.description}`
+            : m.description) +
+          verifiedSuffix(audit.standards_meta?.standards_date);
         rows.push(`<div class="metric-card">
   <div class="metric-name">${esc(metricLabel(m.metric))}</div>
-  <div class="metric-val">${tip(val, m.description, `${m.repos_counted} repos · ${m.contributor_weighted ? 'contributor-weighted' : 'equal-weighted'}`)}</div>
+  <div class="metric-val">${tip(val, cardTip, `${m.repos_counted} repos · ${m.contributor_weighted ? 'weighted by active contributors' : 'equal-weighted'}`)}</div>
   <div class="metric-desc">${esc(m.description)}</div>
 </div>`);
       }
@@ -1300,10 +1320,10 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
     } else {
       // Single-repo capability headline — Coverage is the main figure.
       rows.push(
-        `<div class="cap-score">${tip(pct(audit.coverage) + ' Coverage', coverageTipText(audit), 'score ÷ Σ applicable category weights · standards.toml')}</div>`
+        `<div class="cap-score">${tip(pct(audit.coverage) + ' Standards coverage', coverageTipText(audit), 'score ÷ Σ applicable category weights · standards.toml')}</div>`
       );
       rows.push(
-        `<div class="cap-cov">${tip(fmtPts(audit.audit_total) + ' pts', 'Capability points — the sum of all capabilities the project has in place. Uncapped; rises as the standard grows.', 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
+        `<div class="cap-cov">${tip(fmtPts(audit.audit_total) + ' pts', 'Capability points — the sum of all capabilities the project has in place. Uncapped; rises as the standard grows.' + verifiedSuffix(audit.standards_meta?.standards_date), 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
       );
     }
 
@@ -1412,13 +1432,13 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         reachFallback[key as keyof typeof reachFallback];
       if (v)
         reachItems.push(
-          `<div class="kv"><span class="k">${tip(label, resolveTip(HEADLINE_TIP[label], audit))}</span><span class="v">${esc(v)}</span></div>`
+          `<div class="kv"><span class="k">${tip(label, resolveTip(HEADLINE_TIP[label], audit) + verifiedSuffix(audit.standards_meta?.standards_date))}</span><span class="v">${esc(v)}</span></div>`
         );
     }
     if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
       const withTooling = audit.per_repo.filter((r) => r.has_ai_tooling).length;
       reachItems.push(
-        `<div class="kv"><span class="k">${tip('Repos with AI tooling', resolveTip(HEADLINE_TIP['Repos with AI tooling'], audit))}</span><span class="v">${esc(`${withTooling} / ${audit.per_repo.length}`)}</span></div>`
+        `<div class="kv"><span class="k">${tip('Repos with AI tooling', resolveTip(HEADLINE_TIP['Repos with AI tooling'], audit) + ` ${withTooling} of ${audit.per_repo.length} repositories.` + verifiedSuffix(audit.standards_meta?.standards_date))}</span><span class="v">${esc(`${withTooling} / ${audit.per_repo.length}`)}</span></div>`
       );
     }
     if (reachItems.length > 0) {
@@ -1498,7 +1518,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       '<table><thead><tr>' +
         `<th>${tip('#', 'Row number — dimensions are listed in a fixed order.')}</th>` +
         `<th>${tip('Dimension', 'A capability area being audited: a group of related checks scored together. Click a row to open its checks.')}</th>` +
-        `<th>${tip('Coverage', "Share of this area's expected capability that is in place.")}</th>` +
+        `<th>${tip('Coverage', `Share of this area's expected capability that is in place. ${coverageTipText(audit)}.`)}</th>` +
         `<th>${tip('Sources', 'Data sources feeding this dimension.')}</th>` +
         `<th>${tip('Points', 'Capability points earned in this area.')}</th>` +
         `<th>${tip('Reliability', 'How trustworthy the numbers in this area are — maximal, minimal (lower bound), or not-reliable (rough proxy).')}</th>` +
@@ -1695,7 +1715,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         evidenceItems.length > 0 ? evidenceItems.join('<br>') : '—';
       // Technical detail (code · source · method) folded into the Check tooltip.
       const codeStr = c.code && c.code.length > 0 ? c.code.join(', ') : '—';
-      const checkMeta = `${esc(c.definition)} — source: ${esc(c.source || '—')} · method: ${esc(c.method)} · category ${esc(codeStr)}`;
+      const checkMeta = `${esc(c.definition)} — source: ${esc(c.source || '—')} · method: ${esc(c.method)} · category ${esc(codeStr)}${esc(verifiedSuffix(c.last_verified ?? audit.standards_meta?.standards_date))}`;
       // Points cell: tooltip enriched with standards.toml-derived meta.
       // Renders source as a clickable link when source_url is available.
       let pointsMetaHtml: string;
@@ -1775,7 +1795,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         const items = throughput
           .map(
             (d) =>
-              `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(d.display_value ?? '—', resolveTip(HEADLINE_TIP[baseLabel(d.label)] ?? d.label, audit))}</span></div>`
+              `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(d.display_value ?? '—', resolveTip(HEADLINE_TIP[baseLabel(d.label)] ?? d.label, audit) + verifiedSuffix(audit.standards_meta?.standards_date))}</span></div>`
           )
           .join('');
         rows.push(`<div class="exec-col">${items}</div>`);
@@ -1794,17 +1814,17 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
     if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
       rows.push(
         '<table><thead><tr>' +
-          `<th>${tip('Repo', 'Portfolio repository — click to open its full per-repo report.')}</th>` +
-          `<th>${tip('Coverage', coverageTipText(audit))}</th>` +
-          `<th>${tip('Points', 'Capability points earned by the repo (sum of awarded category weights, uncapped).')}</th>` +
-          `<th>${tip('Merges/active', 'Merged PRs per active contributor over the window — delivery throughput.')}</th>` +
-          `<th>${tip('LOC/active', 'Changed lines per active contributor over the window — delivery volume.')}</th>` +
-          `<th>${tip('Deploy freq', 'Merge events into the default branch per week (DORA deployment-frequency proxy).')}</th>` +
-          `<th>${tip('Rework rate', 'Share of merge events that are fix/hotfix work (DORA rework-rate proxy).')}</th>` +
-          `<th>${tip('Lead time', 'Median hours from first branch commit to merge (DORA lead time).')}</th>` +
-          `<th>${tip('Change-fail', 'Share of merge events that are reverts/hotfixes (DORA change-failure proxy).')}</th>` +
-          `<th>${tip('Cycle time¹', 'Median ticket In-Progress→Done time — needs a ticketing connector.')}</th>` +
-          `<th>${tip('MTTR²', 'Mean time to restore after an incident — needs an incident connector.')}</th>` +
+          `<th>${tip('Repo', 'One repository in the portfolio. Click the name to open its full per-repo report.')}</th>` +
+          `<th>${tip('Coverage', `${coverageTipText(audit)}. 100% would mean the repo has everything the standard currently asks for.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+          `<th>${tip('Points', `Capability points the repo has earned — every practice it has in place adds its weight. Uncapped: the number grows as the standard grows, so compare repos against each other, not against a maximum.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+          `<th>${tip('Merges/active', `${resolveTip(HEADLINE_TIP['Merges / active contributor'], audit)}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+          `<th>${tip('LOC/active', `${resolveTip(HEADLINE_TIP['LOC / active contributor'], audit)}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+          `<th>${tip('Deploy freq', `How often finished work reaches the main branch, per week. The DORA research uses this as the primary speed measure: elite teams ship many small changes often.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+          `<th>${tip('Rework rate', `What share of the shipped changes are fixes for earlier changes. High rework means the team spends its time repairing recent work instead of building new things.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+          `<th>${tip('Lead time', `How long a piece of work takes from the first commit until it lands on the main branch, in hours (median). Shorter means ideas become shipped software faster.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+          `<th>${tip('Change-fail', `What share of shipped changes had to be rolled back or hot-fixed. The DORA quality measure: lower is better.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+          `<th>${tip('Cycle time¹', `How long a ticket stays in progress before it is done (median). Comes from the ticketing system (Jira, Linear, …), so it needs that connector.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+          `<th>${tip('MTTR²', `Mean time to restore service after a production incident. Comes only from an incident system (PagerDuty, Opsgenie, …), so it needs that connector.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
           '</tr></thead><tbody>'
       );
       for (const r of audit.per_repo) {

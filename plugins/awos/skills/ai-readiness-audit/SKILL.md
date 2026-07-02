@@ -157,7 +157,7 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" patch-judgment "context/audits/YYYY-MM-DD
      4. **Rework rate (DORA)** — check `DF-06`; band from hint; `check_id: "DF-06"`.
      5. **Lead time for change** — check `DF-02`; band from hint; `check_id: "DF-02"`.
      6. **Change-failure rate** — check `DF-04`; band from hint; `check_id: "DF-04"`.
-     7. **Cycle time (In-Progress→Done)** — set `gated: "tracker"`; no git `check_id`. Sourced only from the tracker connector, whichever ticketing system it is (Jira, Linear, GitHub Projects, Asana, …): when one is present, transcribe the median in-progress→done duration as `display_value`; when no tracker connector, omit `display_value` so the renderer prints "— (needs ticketing connector)". Keep the label system-neutral ("In-Progress→Done") — do not hard-code a vendor name; each system's own state names map onto the canonical in-progress/done states (see `references/connector-shapes.md`).
+     7. **Cycle time (In-Progress→Done)** — set `gated: "tracker"`; no git `check_id`. Sourced only from the tracker connector, whichever ticketing system it is (Jira, Linear, GitHub Projects, Asana, …): when the tracker artifact's tickets carry both `in_progress_at` and `resolved_at`, compute the median of (`resolved_at` − `in_progress_at`) across resolved tickets and set it as `display_value` (e.g. `"3.2 d"`); when tickets lack `in_progress_at` (transition history not fetched) or no tracker connector exists, omit `display_value` so the renderer prints "— (needs ticketing connector)". Keep the label system-neutral ("In-Progress→Done") — do not hard-code a vendor name; each system's own state names map onto the canonical in-progress/done states (see `references/connector-shapes.md`).
      8. **MTTR** — set `gated: "incident"`; no git `check_id`. MTTR cannot be derived from git; it comes only from an incident connector. When an incident connector is present, transcribe its recovery value as `display_value`; when no incident connector, omit `display_value` so the renderer prints "— (needs incident connector)". (`adp_i3_mttr` still scores separately as a git-proxy category, but it does not feed this headline row.)
 
      `scale[]` = code size & complexity — author **exactly these three rows**, each a `{label, display_value, check_id}` transcribed from its check (do **not** put commits, contributors, or merges here — those are activity, not scale/complexity):
@@ -168,10 +168,10 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" patch-judgment "context/audits/YYYY-MM-DD
      `reach` = `{contributors, spec_coverage, ai_tooling}` — author exactly these three string fields (the renderer reads these keys by name):
      1. **`contributors`** (rendered label "Active Contributors") — the active-contributor count with the total-in-window in parens, e.g. `"4 active (of 7 in window, 90d)"`. The active count is check `DESC-01` / `adp_g2_contributors`; the total-in-window is `raw.window_stats.authors_total` from `collected/git.json`. Do not append a privacy disclaimer such as "counts are aggregate; no per-person data" — the no-PII rule governs what you collect, not the report copy.
      2. **`spec_coverage`** — the branch→spec coverage from check `SDD-04`, e.g. `"3/5 feature branches touched specs (60%)"`. This measures a spec-driven workflow of any framework (AWOS, Kiro, Agent-OS, or a plain `specs/` convention), not only AWOS. Transcribe the SDD-04 check value and its evidence string; do not confuse it with the docs-freshness spec coverage (ADP-20).
-     3. **`ai_tooling`** — base this on tooling **depth**, checks `ADP-01..06` / `adp_g1_tooling_depth` (which agent tools, instruction files, skills, commands, hooks, and MCP config are present). Do **not** cite the AI-commit-marker attribution percentage (ADP-14 / `adp_g9_ai_attribution`) — that metric is unreliable, so no "AI commit markers ~N% of commits" phrasing.
+     3. **`ai_tooling`** — base this on tooling **depth**, checks `ADP-01..06` / `adp_g1_tooling_depth` (which agent tools, instruction files, skills, commands, hooks, and MCP config are present). Do **not** cite the AI-commit-marker attribution percentage (ADP-14 / `adp_g9_ai_attribution`) — that metric is unreliable, so no "AI commit markers ~N% of commits" phrasing. In org mode summarise with counts only (e.g. `"6/8 repos with agent instructions; hooks in 2"`) — never enumerate repository names in this field; the Repositories table already lists them.
 
    - `insights[]` — 3–6 thematic cards, the "READ": `{theme, severity, weak_areas[], so_what, improves}`. Plain language for a non-technical stakeholder — name the weak areas and say what improves if they are fixed.
-   - `recommendations[]` — the prioritized fixes as `{id, priority (P0/P1/P2), title, dimension, check_id, effort, detail}`. `detail` is a plain-language paragraph. Transcribe each from a real FAIL/WARN check.
+   - `recommendations[]` — the prioritized fixes as `{id, priority (P0/P1/P2), title, dimension, check_id, effort, detail}`. `detail` is a plain-language paragraph. Transcribe each from a real FAIL/WARN check, and make `check_id` the check whose failure the recommendation remediates — verify the id against the dimension artifact before writing it (a missing-CI fix cites SBP-05, not an architecture check). Render every ratio you author anywhere (headline, insights, recommendations, summaries) as a percentage with at most one decimal — never a raw float like `0.00663716814159292`.
 
 **The orchestrator never hand-writes `report.md` or `report.html`** — those files are always produced by the renderer. This is the data-loss guarantee: JSON is the source of truth; markdown and HTML are derived outputs.
 
@@ -203,9 +203,9 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
    ```
 
    The rollup reads each `per-repo/<repo-name>/audit.json` (the full per-repo audit written by step 1) and derives `awarded_weight`, `contributors`, `sources_reachable`, and `has_ai_tooling` from it. It computes **exactly three (≤3) portfolio metrics** — never the full per-repo metric set:
-   - **`org_ai_tooling_coverage`** — fraction of portfolio repos with any AI tooling present (contributor-weighted).
+   - **`org_ai_tooling_coverage`** — "Repos with AI tooling": share of the portfolio with any AI tooling present (weighted by active contributors per repo).
    - **`org_capability_score`** — average awarded category-weight score across portfolio repos (Σ weight / repo count).
-   - **`org_measurement_coverage`** — average per-repo measurement coverage: the share of the current standard the reachable data sources could score (mean of per-repo coverage ratios).
+   - **`org_measurement_coverage`** — "Standards coverage": the share of the current industry standard the portfolio has in place (mean of the per-repo coverage headlines, weighted by active contributors per repo). Rendered first of the three cards.
 
 3. Build the org audit JSON by merging the rollup output with a minimal audit envelope and write it to:
 
@@ -228,7 +228,7 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
 5. Present the three portfolio metrics to the user with a brief interpretation:
    - AI-tooling coverage across the portfolio (fraction of repos, contributor-weighted).
    - Portfolio capability score (average awarded weight, reflects depth of AI-SDLC adoption).
-   - Measurement coverage (average per-repo coverage ratio — how much of the standard the available sources could score).
+   - Standards coverage (average per-repo coverage — how much of the current industry standard is in place).
      Then present the per-repo breakdown table from `per_repo`.
 
 Contributor counts in the org report are always aggregate — no per-person data. No money figures appear in any org output.

@@ -22,20 +22,21 @@ Represents a single work item returned by a project tracker (Jira, Linear, GitHu
 }
 ```
 
-| Field                     | Type           | Required | Meaning                                                                                                   |
-| ------------------------- | -------------- | -------- | --------------------------------------------------------------------------------------------------------- |
-| `id`                      | `string`       | yes      | Unique ticket identifier (e.g. Jira issue key "PROJ-123")                                                 |
-| `type`                    | `string`       | no       | Issue type label (e.g. "bug", "feature", "story", "task")                                                 |
-| `status`                  | `string`       | no       | Current status label (e.g. "Done", "In Progress", "Open")                                                 |
-| `created_at`              | `string`       | no       | ISO 8601 creation timestamp                                                                               |
-| `resolved_at`             | `string`       | no       | ISO 8601 timestamp when the ticket was resolved/closed                                                    |
-| `subtask_count`           | `number`       | no       | Count of direct sub-tasks (used by ADP-I4 sub-task split metric)                                          |
-| `parent`                  | `string\|null` | no       | Parent ticket key (used by ADP-I4 to identify sub-task relationships)                                     |
-| `description_length`      | `number`       | no       | Character count of the ticket description (size/structure signal — **no raw text**; used by ADP-I5)       |
-| `has_acceptance_criteria` | `boolean`      | no       | Whether the ticket body contains acceptance criteria (structure signal — **no raw text**; used by ADP-I5) |
-| _(any)_                   | `unknown`      | no       | Additional fields from the source system are passed through unchanged                                     |
+| Field                     | Type           | Required | Meaning                                                                                                           |
+| ------------------------- | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `id`                      | `string`       | yes      | Unique ticket identifier (e.g. Jira issue key "PROJ-123")                                                         |
+| `type`                    | `string`       | no       | Issue type label (e.g. "bug", "feature", "story", "task")                                                         |
+| `status`                  | `string`       | no       | Current status label (e.g. "Done", "In Progress", "Open")                                                         |
+| `created_at`              | `string`       | no       | ISO 8601 creation timestamp                                                                                       |
+| `resolved_at`             | `string`       | no       | ISO 8601 timestamp when the ticket was resolved/closed                                                            |
+| `in_progress_at`          | `string`       | no       | ISO 8601 timestamp when work started (first transition into an in-progress state) — feeds the cycle-time headline |
+| `subtask_count`           | `number`       | no       | Count of direct sub-tasks (used by ADP-I4 sub-task split metric)                                                  |
+| `parent`                  | `string\|null` | no       | Parent ticket key (used by ADP-I4 to identify sub-task relationships)                                             |
+| `description_length`      | `number`       | no       | Character count of the ticket description (size/structure signal — **no raw text**; used by ADP-I5)               |
+| `has_acceptance_criteria` | `boolean`      | no       | Whether the ticket body contains acceptance criteria (structure signal — **no raw text**; used by ADP-I5)         |
+| _(any)_                   | `unknown`      | no       | Additional fields from the source system are passed through unchanged                                             |
 
-**Systems vary — normalize into this shape.** Field names and state labels differ across trackers, so map each system's own vocabulary onto the canonical fields; the metrics never see the vendor terms. `status` is a free-text label from the source (Jira `fields.status.name`, Linear `state.name`, GitHub Projects column, Asana section). A ticket counts toward `resolved_count` when it is in any **terminal / completed** state — `done`, `closed`, `resolved`, `completed`, `shipped`, `merged` (case-insensitive) — **or** when `resolved_at` is non-null. Likewise the in-progress→done cycle-time headline uses whichever states the system calls "in progress" and "done". When in doubt, set `resolved_at` from the source's completion timestamp so throughput does not depend on state-name matching at all.
+**Systems vary — normalize into this shape.** Field names and state labels differ across trackers, so map each system's own vocabulary onto the canonical fields; the metrics never see the vendor terms. `status` is a free-text label from the source (Jira `fields.status.name`, Linear `state.name`, GitHub Projects column, Asana section). A ticket counts toward `resolved_count` when it is in any **terminal / completed** state — `done`, `closed`, `resolved`, `completed`, `shipped`, `merged` (case-insensitive) — **or** when `resolved_at` is non-null. Likewise the in-progress→done cycle-time headline uses whichever states the system calls "in progress" and "done". When in doubt, set `resolved_at` from the source's completion timestamp so throughput does not depend on state-name matching at all. Set `in_progress_at` when the source exposes status-transition history cheaply (Jira: `expand=changelog` on the search request — the first transition into an in-progress status); omit it rather than issuing an extra API call per ticket.
 
 ### TrackerConnector
 

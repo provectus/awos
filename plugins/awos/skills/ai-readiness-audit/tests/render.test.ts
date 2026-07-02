@@ -422,8 +422,8 @@ test('renderMarkdown (org): portfolio metrics present', () => {
     'Org markdown must have a Portfolio Metrics section'
   );
   assert.ok(
-    md.includes('AI-tooling coverage'),
-    'Org markdown must include the tooling coverage metric'
+    md.includes('Repos with AI tooling'),
+    'Org markdown must include the AI-tooling card under its reader-facing name'
   );
   assert.ok(
     md.includes('## Repositories'),
@@ -631,16 +631,16 @@ test('renderHtml: valid HTML document (doctype, html, head, body)', () => {
 test('renderHtml (org): ≤3 portfolio metrics in the executive band', () => {
   const html = renderHtml(orgFixture());
   assert.ok(
-    html.includes('AI-tooling coverage'),
-    'Org HTML must include the org_ai_tooling_coverage metric'
+    html.includes('Repos with AI tooling'),
+    'Org HTML must include the AI-tooling card under its reader-facing name'
   );
   assert.ok(
     html.includes('Capability score'),
     'Org HTML must include the org_capability_score metric'
   );
   assert.ok(
-    html.includes('Measurement coverage'),
-    'Org HTML must include the org_measurement_coverage metric'
+    html.includes('Standards coverage'),
+    'Org HTML must include the Standards coverage card'
   );
   const metricCardCount = (html.match(/class="metric-card"/g) ?? []).length;
   assert.ok(

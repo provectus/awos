@@ -6,9 +6,12 @@
  *       contributor-weighted when contributor counts are available.
  *   (b) org_capability_score      — Σ awarded category weights across repos,
  *       normalized by repo count.
- *   (c) org_measurement_coverage  — mean per-repo coverage ratio (awarded ÷
- *       applicable weight): how much of today's standard the reachable data
- *       sources could score. Not "any collector reachable" — git always is.
+ *   (c) org_measurement_coverage  — "Standards coverage": contributor-weighted
+ *       mean of the per-repo coverage ratios (awarded ÷ applicable weight).
+ *       Not "any collector reachable" — git always is.
+ *
+ *   All three cards share ONE weighting: by active contributors per repo,
+ *   falling back to equal weights when any repo lacks a contributor count.
  *
  * Input: per-repo audit result objects (one per repo), each shaped like:
  *   {
@@ -502,9 +505,9 @@ export function rollup(
   if (perRepoResults.length === 0) {
     return {
       portfolio_metrics: [
-        makeMetric('org_ai_tooling_coverage', 0, false, 0),
-        makeMetric('org_capability_score', 0, false, 0),
         makeMetric('org_measurement_coverage', 0, false, 0),
+        makeMetric('org_capability_score', 0, false, 0),
+        makeMetric('org_ai_tooling_coverage', 0, false, 0),
       ],
       per_repo: [],
       org_connections: {
@@ -551,62 +554,63 @@ export function rollup(
 
   const totalWeight = repos.reduce((s, r) => s + weight(r), 0);
 
-  // -------------------------------------------------------------------------
-  // Metric (a): portfolio AI-tooling coverage
-  // Fraction of repos (contributor-weighted) with any AI tooling present.
-  // -------------------------------------------------------------------------
-  const toolingNumerator = repos
-    .filter((r) => r.has_ai_tooling)
-    .reduce((s, r) => s + weight(r), 0);
-  const toolingCoverage = totalWeight > 0 ? toolingNumerator / totalWeight : 0;
+  // All three portfolio cards use the SAME weighting for consistency: each
+  // repo weighs as its active-contributor count (a 40-person repo moves the
+  // portfolio average more than a 2-person one). When any repo lacks a
+  // contributor count the whole set falls back to equal weighting, and each
+  // card's description says which was used.
+  const weightingNote = allHaveContributors
+    ? 'weighted by active contributors per repo'
+    : 'equal-weighted (contributor counts unavailable)';
 
-  // -------------------------------------------------------------------------
-  // Metric (b): portfolio capability score
-  // Σ awarded_weight across repos, normalized by repo count so it is
-  // independent of portfolio size and comparable across portfolios.
-  // -------------------------------------------------------------------------
-  const totalAwarded = repos.reduce((s, r) => s + r.awarded_weight, 0);
-  const capabilityScore = repos.length > 0 ? totalAwarded / repos.length : 0;
+  // Card 1: Standards coverage — contributor-weighted mean of the per-repo
+  // coverage ratios (awarded ÷ applicable weight): how much of the current
+  // industry standard the portfolio has in place.
+  const coverageRepos = repos.filter((r) => typeof r.coverage === 'number');
+  const coverageWeight = coverageRepos.reduce((s, r) => s + weight(r), 0);
+  const standardsCoverage =
+    coverageWeight > 0
+      ? coverageRepos.reduce(
+          (s, r) => s + (r.coverage as number) * weight(r),
+          0
+        ) / coverageWeight
+      : 0;
 
-  // -------------------------------------------------------------------------
-  // Metric (c): portfolio measurement coverage
-  // Mean per-repo coverage ratio (awarded ÷ applicable weight): how much of
-  // today's standard the reachable data sources could actually score. The old
-  // "≥1 reachable collector" definition was vacuous — git is always reachable,
-  // so every portfolio read 100%.
-  // -------------------------------------------------------------------------
-  const coverages = repos
-    .map((r) => (typeof r.coverage === 'number' ? r.coverage : null))
-    .filter((v): v is number => v !== null);
-  const measurementCoverage =
-    coverages.length > 0
-      ? coverages.reduce((s, v) => s + v, 0) / coverages.length
+  // Card 2: capability score — contributor-weighted mean of awarded points.
+  const capabilityScore =
+    totalWeight > 0
+      ? repos.reduce((s, r) => s + r.awarded_weight * weight(r), 0) /
+        totalWeight
+      : 0;
+
+  // Card 3: repos with AI tooling — contributor-weighted fraction, plus the
+  // plain X-of-Y count for the tooltip.
+  const reposWithTooling = repos.filter((r) => r.has_ai_tooling);
+  const toolingCoverage =
+    totalWeight > 0
+      ? reposWithTooling.reduce((s, r) => s + weight(r), 0) / totalWeight
       : 0;
 
   const portfolio_metrics: PortfolioMetric[] = [
     {
-      metric: 'org_ai_tooling_coverage',
-      value: round4(toolingCoverage),
-      description:
-        'Fraction of portfolio repos with any AI tooling present' +
-        (allHaveContributors ? ' (contributor-weighted)' : ' (equal-weighted)'),
+      metric: 'org_measurement_coverage',
+      value: round4(standardsCoverage),
+      description: `Standards coverage — the share of the current industry standard the portfolio has in place (mean of the per-repo coverage headlines, ${weightingNote})`,
       contributor_weighted: allHaveContributors,
       repos_counted: repos.length,
     },
     {
       metric: 'org_capability_score',
       value: round4(capabilityScore),
-      description:
-        'Average awarded category-weight score across portfolio repos',
-      contributor_weighted: false,
+      description: `Average capability points per repo (sum of awarded category weights, ${weightingNote})`,
+      contributor_weighted: allHaveContributors,
       repos_counted: repos.length,
     },
     {
-      metric: 'org_measurement_coverage',
-      value: round4(measurementCoverage),
-      description:
-        'Average per-repo measurement coverage — the share of the current standard the reachable data sources could score (mean of per-repo coverage ratios)',
-      contributor_weighted: false,
+      metric: 'org_ai_tooling_coverage',
+      value: round4(toolingCoverage),
+      description: `Share of the portfolio working with AI tooling in the repo — ${reposWithTooling.length} of ${repos.length} repositories (${weightingNote})`,
+      contributor_weighted: allHaveContributors,
       repos_counted: repos.length,
     },
   ];
@@ -664,11 +668,10 @@ function makeMetric(
 ): PortfolioMetric {
   const descriptions: Record<string, string> = {
     org_ai_tooling_coverage:
-      'Fraction of portfolio repos with any AI tooling present',
-    org_capability_score:
-      'Average awarded category-weight score across portfolio repos',
+      'Share of the portfolio working with AI tooling in the repo',
+    org_capability_score: 'Average capability points per repo',
     org_measurement_coverage:
-      'Average per-repo measurement coverage — the share of the current standard the reachable data sources could score',
+      'Standards coverage — the share of the current industry standard the portfolio has in place',
   };
   return {
     metric,

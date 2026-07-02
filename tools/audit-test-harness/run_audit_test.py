@@ -414,6 +414,11 @@ def main():
                     help="run `npm run build:engine` in worktree before the run")
     ap.add_argument("--claude-flags", default="--dangerously-skip-permissions",
                     help="extra flags passed to claude (space-separated)")
+    ap.add_argument("--allow-user-mcp", action="store_true",
+                    help="do NOT pass --strict-mcp-config: the audit session may "
+                         "see the operator's user-scope MCP servers (real Jira, "
+                         "Slack, ...). Default is strict isolation so a test "
+                         "audit can never pull live connector data")
     ap.add_argument("--model", default="sonnet",
                     help="model the audit session (and its subagents) run on, "
                          "passed to `claude -p --model` (default 'sonnet' = the "
@@ -512,6 +517,11 @@ def main():
         claude_flags = args.claude_flags.split() if args.claude_flags else []
         if args.model:
             claude_flags += ["--model", args.model]
+        if not args.allow_user_mcp:
+            # Test isolation: without this, user-scope MCP servers (real Jira,
+            # Slack, Gmail, ...) leak into the audited session even with
+            # --setting-sources project — a test audit could pull live data.
+            claude_flags += ["--strict-mcp-config"]
         audits = os.path.join(target, "context/audits")
 
         # Engine-compliance guard + auto-retry. The headless model sometimes

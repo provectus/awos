@@ -118,19 +118,21 @@ test('org_rollup: org_ai_tooling_coverage — contributor-weighted fraction', ()
   );
 });
 
-test('org_rollup: org_capability_score — average awarded_weight across repos', () => {
-  // REPO_A: 40, REPO_B: 20 → avg = 30
+test('org_rollup: org_capability_score — contributor-weighted mean of awarded points', () => {
+  // REPO_A: 40 pts × 10 contributors, REPO_B: 20 pts × 5 contributors
+  // → (400 + 100) / 15 = 33.3333 (weighted by active contributors)
   const result = rollup([REPO_A, REPO_B]);
   const score = metricValue(result, 'org_capability_score');
   assert.ok(
-    Math.abs(score - 30) < 0.001,
-    `org_capability_score must be 30, got ${score}`
+    Math.abs(score - 500 / 15) < 0.001,
+    `org_capability_score must be contributor-weighted (500/15 ≈ 33.33), got ${score}`
   );
 });
 
-test('org_rollup: org_measurement_coverage — mean of per-repo coverage ratios, not collector reachability', () => {
+test('org_rollup: org_measurement_coverage (Standards coverage) — contributor-weighted mean of per-repo coverage', () => {
   // The old "≥1 reachable collector" definition always read 100% (git is
-  // always reachable). The metric is now the mean per-repo coverage ratio.
+  // always reachable). The metric is the contributor-weighted mean of the
+  // per-repo coverage ratios: (0.8×10 + 0.6×5 + 0.4×2) / 17 = 11.8/17.
   const result = rollup([
     { ...REPO_A, coverage: 0.8 },
     { ...REPO_B, coverage: 0.6 },
@@ -138,8 +140,30 @@ test('org_rollup: org_measurement_coverage — mean of per-repo coverage ratios,
   ]);
   const coverage = metricValue(result, 'org_measurement_coverage');
   assert.ok(
-    Math.abs(coverage - 0.6) < 0.001,
-    `org_measurement_coverage must be mean(0.8, 0.6, 0.4) = 0.6, got ${coverage}`
+    Math.abs(coverage - 11.8 / 17) < 0.001,
+    `Standards coverage must be contributor-weighted (11.8/17 ≈ 0.6941), got ${coverage}`
+  );
+});
+
+test('org_rollup: portfolio cards are ordered Standards coverage → Capability score → Repos with AI tooling', () => {
+  const result = rollup([REPO_A, REPO_B]);
+  const order = result.portfolio_metrics.map((m) => m.metric);
+  assert.deepEqual(
+    order,
+    [
+      'org_measurement_coverage',
+      'org_capability_score',
+      'org_ai_tooling_coverage',
+    ],
+    'card order must lead with Standards coverage'
+  );
+  const tooling = result.portfolio_metrics.find(
+    (m) => m.metric === 'org_ai_tooling_coverage'
+  );
+  assert.match(
+    tooling!.description,
+    /1 of 2 repositories/,
+    'the AI-tooling card description must carry the plain X-of-Y count'
   );
 });
 

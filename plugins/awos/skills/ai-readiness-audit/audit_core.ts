@@ -205,6 +205,8 @@ interface CheckRecord {
   expression?: string;
   source_date: string | null;
   source_url: string | null;
+  /** Date this check's definition was last verified against its cited source. */
+  last_verified: string | null;
   /** Data sources that fed this check (from standards.toml `sources = [...]`). */
   sources: string[];
 }
@@ -945,14 +947,24 @@ function appliesGatedOff(c: Category, topology: TopologyFlags): boolean {
  * skipped check never renders as a bare "—". Prefers naming the missing data
  * source (actionable); falls back to the applies_when condition.
  */
+/** Sources a user can actually connect. `audit` (source code) and `scale` are
+ * pseudo-sources the engine always has — telling a reader to "connect a audit
+ * source" for a topology-gated check was misleading noise. */
+const CONNECTABLE_SOURCES = new Set(['tracker', 'docs', 'ci', 'incident']);
+
 function buildSkipReason(c: Category, topology: TopologyFlags): string {
-  const nonGit = (c.sources ?? []).filter((s) => s && s !== 'git');
-  if (nonGit.length > 0) {
-    const label = nonGit.join('/');
-    return `No ${label} data available — connect a ${label} source (connector or config) to score this check.`;
-  }
+  // Applicability wins: "this check doesn't apply to this repo" is the truth
+  // even when the check also lists a connector source.
   if (appliesGatedOff(c, topology) && c.applies_when) {
     return `Not applicable — "${c.applies_when}" is false for this repository.`;
+  }
+  const connectable = (c.sources ?? []).filter((s) =>
+    CONNECTABLE_SOURCES.has(s)
+  );
+  if (connectable.length > 0) {
+    const label = connectable.join('/');
+    const article = /^[aeiou]/i.test(label) ? 'an' : 'a';
+    return `No ${label} data available — connect ${article} ${label} source (connector or config) to score this check.`;
   }
   return 'Skipped — the required data was not available.';
 }
@@ -1100,6 +1112,7 @@ function buildCheck(
     confidence,
     source_date,
     source_url,
+    last_verified: c.last_verified ?? null,
     sources: c.sources ?? [],
   };
   if (unit !== undefined) rec.unit = unit;

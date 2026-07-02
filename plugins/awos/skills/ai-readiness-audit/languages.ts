@@ -245,18 +245,24 @@ export interface DetectedLanguage {
 export function detectLanguages(repoPath: string): DetectedLanguage[] {
   const out: DetectedLanguage[] = [];
   for (const def of LANGUAGES) {
-    let count = 0;
+    let files: string[] = [];
     try {
-      count = iterFiles(repoPath, def.sourceGlobs).length;
+      files = iterFiles(repoPath, def.sourceGlobs);
     } catch {
-      count = 0;
+      files = [];
     }
+    const count = files.length;
     if (count === 0) continue;
     const dep = def.depFiles.find(
       (f) => !f.includes('*') && existsSync(join(repoPath, f))
     );
-    const ext = def.sourceGlobs[0]?.replace('*', '') ?? '';
-    const evidence = `${count} ${ext} file${count === 1 ? '' : 's'}${dep ? ` · ${dep}` : ''}`;
+    // Label with the extensions actually matched, not sourceGlobs[0] — a
+    // .tsx-only repo must read "3 .tsx files", not "3 .ts files".
+    const exts = uniq(
+      files.map((f) => extname(f).toLowerCase()).filter(Boolean)
+    ).sort();
+    const label = exts.length > 0 ? exts.join('/') : def.sourceGlobs.join('/');
+    const evidence = `${count} ${label} file${count === 1 ? '' : 's'}${dep ? ` · ${dep}` : ''}`;
     out.push({ def, evidence });
   }
   return out;

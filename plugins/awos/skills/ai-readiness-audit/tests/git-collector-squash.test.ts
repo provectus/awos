@@ -180,6 +180,46 @@ test('activeContributors falls back to commit-share (not LOC-only) when no merge
   );
 });
 
+test('Bitbucket squash format "Title (pull request #N)" is recognised and attributed to the PR author', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-squash-bb-'));
+  execFileSync('git', ['init', '-b', 'main', dir], { stdio: 'ignore' });
+  writeFileSync(join(dir, 'a.txt'), 'x\n');
+  gitAs(dir, ['add', '.'], '2025-02-01T10:00:00', 'Erin', 'erin@example.com');
+  gitAs(
+    dir,
+    ['commit', '-m', 'Add rate limiter (pull request #12)'],
+    '2025-02-01T10:00:00',
+    'Erin',
+    'erin@example.com'
+  );
+  const art = collect(dir, PERIOD) as {
+    raw: {
+      window_stats: {
+        squash_merges: number;
+        merge_strategy: string;
+        per_author: Array<{ author: string; merges: number }>;
+      };
+    };
+  };
+  const ws = art.raw.window_stats;
+  assert.equal(
+    ws.squash_merges,
+    1,
+    'a Bitbucket squashed PR ("Title (pull request #12)" subject) must count as a merge event'
+  );
+  assert.equal(
+    ws.merge_strategy,
+    'squash',
+    'a repo whose only merge events are Bitbucket squash commits must classify as squash'
+  );
+  const erin = ws.per_author.find((a) => a.author === 'Erin');
+  assert.equal(
+    erin?.merges,
+    1,
+    'the Bitbucket squash-merge event must be attributed to the commit author (= PR author)'
+  );
+});
+
 test('GitLab squash format is recognised via the merge-request ref in the body', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-squash-gl-'));
   execFileSync('git', ['init', '-b', 'main', dir], { stdio: 'ignore' });

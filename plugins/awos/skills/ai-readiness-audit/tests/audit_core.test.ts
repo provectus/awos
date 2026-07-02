@@ -666,3 +666,144 @@ test('audit-core: check records carry source_url and source_date from per-catego
     'at least one check must carry source_url from the per-category url field'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Coverage null: aggregate must emit null (not 0) when no check is applicable —
+// "no measurable surface" is not the same statement as "0% covered".
+// ---------------------------------------------------------------------------
+
+test('aggregate emits coverage null when every check SKIPs — at the dimension and audit level', () => {
+  const outDir = mkdtempSync(join(tmpdir(), 'aggregate-null-coverage-'));
+
+  const dimJson = {
+    dimension: 'ai-sdlc-adoption',
+    date: '2025-01-01',
+    score: 0,
+    coverage: 0,
+    checks: [
+      {
+        check_id: 'ADP-01',
+        code: [101],
+        method: 'computed',
+        status: 'SKIP',
+        value: null,
+        evidence: ['no tracker connector'],
+        weight_awarded: 0,
+        weight_max: 5,
+        score: 0,
+        confidence: 0,
+        applies: false,
+        sources: ['tracker'],
+        reliability: { tag: 'not-reliable', confidence: 'LOW', note: null },
+        source: '',
+        definition: '',
+        hint: '',
+        plain: '',
+      },
+    ],
+  };
+  writeFileSync(
+    join(outDir, 'ai-sdlc-adoption.json'),
+    JSON.stringify(dimJson, null, 2)
+  );
+
+  aggregate(outDir);
+
+  const dim = JSON.parse(
+    readFileSync(join(outDir, 'ai-sdlc-adoption.json'), 'utf8')
+  );
+  assert.strictEqual(
+    dim.coverage,
+    null,
+    `dimension coverage must be null (not 0) when no check applies, got ${JSON.stringify(dim.coverage)}`
+  );
+  const audit = JSON.parse(readFileSync(join(outDir, 'audit.json'), 'utf8'));
+  assert.strictEqual(
+    audit.coverage,
+    null,
+    `audit coverage must be null (not 0) when no weight is applicable, got ${JSON.stringify(audit.coverage)}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Corrupted collector artifacts: an unreadable artifact must be reported as
+// unreadable, never as "not found" — the report would otherwise tell the user
+// to connect a source they did connect.
+// ---------------------------------------------------------------------------
+
+test('aggregate reports a corrupted collected artifact as unreadable, not as a missing connector', () => {
+  const outDir = mkdtempSync(join(tmpdir(), 'aggregate-corrupt-artifact-'));
+  const collectedDir = join(outDir, 'collected');
+  mkdirSync(collectedDir, { recursive: true });
+
+  const dimJson = {
+    dimension: 'code-quality',
+    date: '2025-01-01',
+    score: 2,
+    coverage: 0.5,
+    checks: [
+      {
+        check_id: 'CQ-01',
+        code: [1],
+        method: 'detected',
+        status: 'PASS',
+        value: true,
+        evidence: [],
+        weight_awarded: 4,
+        weight_max: 4,
+        score: 1,
+        confidence: 1,
+        applies: true,
+        sources: ['git'],
+        reliability: { tag: 'maximal', confidence: 'HIGH', note: null },
+        source: '',
+        definition: '',
+        hint: '',
+        plain: '',
+      },
+    ],
+  };
+  writeFileSync(
+    join(outDir, 'code-quality.json'),
+    JSON.stringify(dimJson, null, 2)
+  );
+
+  writeFileSync(
+    join(collectedDir, 'git.json'),
+    JSON.stringify({
+      source: 'git',
+      available: true,
+      reason_if_absent: null,
+      period: { history_available_days: 365 },
+    })
+  );
+  // The tracker connector WAS fetched, but its artifact is corrupted.
+  writeFileSync(join(collectedDir, 'tracker.json'), '{ this is not JSON');
+
+  aggregate(outDir);
+
+  const audit = JSON.parse(readFileSync(join(outDir, 'audit.json'), 'utf8'));
+  const tracker = audit.sources.find(
+    (s: { source: string }) => s.source === 'tracker'
+  );
+  assert.ok(
+    tracker,
+    'a corrupted artifact must still surface in sources — it must not be silently dropped'
+  );
+  assert.equal(
+    tracker.available,
+    false,
+    'a corrupted artifact cannot count as an available source'
+  );
+  assert.match(
+    String(tracker.reason_if_absent),
+    /unreadable/,
+    `the absence reason must say the artifact is unreadable, not "not found" — got ${JSON.stringify(tracker.reason_if_absent)}`
+  );
+  const git = audit.sources.find((s: { source: string }) => s.source === 'git');
+  assert.equal(
+    git?.available,
+    true,
+    'readable artifacts must still be derived normally alongside a corrupted one'
+  );
+});

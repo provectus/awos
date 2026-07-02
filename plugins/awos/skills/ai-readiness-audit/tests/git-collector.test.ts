@@ -244,7 +244,7 @@ test('window_stats: merges, authors_total, and per_author rows are correct', () 
   );
 
   const byName = Object.fromEntries(
-    ws.per_author.map((row: { author: string }) => [row.author, row])
+    ws.per_author.map((row) => [row.author, row])
   );
 
   assert.ok(byName['Alice'] !== undefined, 'per_author must include Alice');
@@ -953,6 +953,128 @@ test('run(): allowFailure:true silences stderr for an expected-empty git call (e
   } finally {
     console.error = originalError;
   }
+});
+
+// ---------------------------------------------------------------------------
+// Broken-environment vs. empty-repo availability (review item 1).
+// A broken git environment must yield available:false (so every git metric
+// SKIPs), while a commit-less repo is a VALID state: available:true with zero
+// stats and no spurious stderr breadcrumbs.
+// ---------------------------------------------------------------------------
+
+test('collect(): a non-git directory yields available:false with the real git error, never confident all-zero stats', () => {
+  const notARepo = mkdtempSync(join(tmpdir(), 'git-broken-'));
+  const art = collect(notARepo, PERIOD);
+  assert.equal(
+    art.available,
+    false,
+    'artifact must be unavailable when the target directory is not a git repository — available:true here would let downstream metrics score all-zero stats confidently'
+  );
+  assert.match(
+    art.reason_if_absent as string,
+    /not a git repository/i,
+    `reason_if_absent must carry git's actual error so the report explains WHY git metrics skipped; got: ${art.reason_if_absent}`
+  );
+});
+
+test('collect(): a missing git binary (spawn ENOENT) yields available:false naming the missing binary', () => {
+  // Simulate a broken environment: the child git process inherits process.env,
+  // so pointing PATH at an empty dir makes execFileSync('git', ...) throw
+  // ENOENT. The fixture repo is created BEFORE mangling PATH.
+  const repoPath = repo();
+  const emptyBinDir = mkdtempSync(join(tmpdir(), 'git-nobin-'));
+  const originalPath = process.env.PATH;
+  process.env.PATH = emptyBinDir;
+  try {
+    const art = collect(repoPath, PERIOD);
+    assert.equal(
+      art.available,
+      false,
+      'artifact must be unavailable when the git binary cannot be spawned (ENOENT)'
+    );
+    assert.match(
+      art.reason_if_absent as string,
+      /git binary not found/i,
+      `reason_if_absent must say the git binary is missing; got: ${art.reason_if_absent}`
+    );
+  } finally {
+    process.env.PATH = originalPath;
+  }
+});
+
+test('collect(): a commit-less repo stays available:true with zero stats and emits NO stderr breadcrumbs', () => {
+  // git init with no commits is a valid repo state: every HEAD-based `git log`
+  // variant fatals on the unborn branch, and before the fix each of those
+  // failures spammed a spurious "[git collector]" breadcrumb (~12 per run).
+  // Contract: zero stderr output, artifact still available, all stats zero.
+  const captured: string[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    captured.push(args.map(String).join(' '));
+  };
+  try {
+    const art = collect(emptyRepo(), WINDOW_PERIOD);
+    assert.equal(
+      captured.length,
+      0,
+      `a commit-less repo must produce NO stderr breadcrumbs (unborn-HEAD git log failures are expected, not errors); got ${captured.length}: ${captured.join(' | ')}`
+    );
+    assert.equal(
+      art.available,
+      true,
+      'a commit-less repo is a valid git repo — the artifact must stay available (with zero stats), not be marked broken'
+    );
+    assert.equal(art.raw.total_commits, 0, 'empty repo → total_commits 0');
+    assert.equal(
+      art.raw.ai_marked_commits,
+      0,
+      'empty repo → ai_marked_commits 0'
+    );
+    assert.equal(art.raw.total_merges, 0, 'empty repo → total_merges 0');
+    assert.deepEqual(
+      art.raw.merge_records,
+      [],
+      'empty repo → no merge records'
+    );
+    assert.equal(
+      art.raw.window_stats.commits,
+      0,
+      'empty repo → window_stats.commits 0'
+    );
+    assert.deepEqual(
+      art.raw.numstat_totals,
+      { added: 0, deleted: 0 },
+      'empty repo → zero churn'
+    );
+  } finally {
+    console.error = originalError;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Attribution grep must run as ERE (review item 2). The Windsurf pattern
+// `Co-authored-by:.*(Windsurf|Cascade)` uses alternation, which git's default
+// BRE treats as literal `(`/`|` — so without --extended-regexp it NEVER
+// matched a real trailer.
+// ---------------------------------------------------------------------------
+
+test('ai_marked_commits matches ERE alternation patterns (Windsurf/Cascade trailer)', () => {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-ere-')), 'repo');
+  mkdirSync(r);
+  git(r, ['init', '-q', '-b', 'main']);
+  writeFileSync(join(r, 'w.txt'), 'w\n');
+  git(r, ['add', '-A']);
+  git(r, [
+    'commit',
+    '-qm',
+    'feat: windsurf work\n\nCo-authored-by: Cascade <cascade@codeium.com>',
+  ]);
+  const art = collect(r, PERIOD);
+  assert.equal(
+    art.raw.ai_marked_commits,
+    1,
+    'a Cascade trailer must match the ERE pattern Co-authored-by:.*(Windsurf|Cascade) — 0 means the grep ran as BRE where (…|…) is literal'
+  );
 });
 
 // ---------------------------------------------------------------------------

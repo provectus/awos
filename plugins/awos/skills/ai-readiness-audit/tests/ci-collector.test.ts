@@ -51,6 +51,33 @@ test('ci collector: .github/workflows present, no runs → available=false + con
   assert.deepEqual((art.raw as any).runs, []);
 });
 
+test('ci collector: connector-only path with empty runs → reason must NOT claim a config was detected', () => {
+  // Regression: with no CI config in the repo but a connector present (and
+  // reporting zero runs), the reason used to read "CI config detected but no
+  // run history…" — claiming a detection that never happened.
+  const art = collect(bareRepo(), PERIOD, { runs: [] });
+  assert.equal(
+    art.available,
+    false,
+    'no config + connector with zero runs must be available=false'
+  );
+  assert.doesNotMatch(
+    art.reason_if_absent as string,
+    /config detected but no run history/i,
+    `reason must not claim a CI config was detected when none exists in the repo; got: ${art.reason_if_absent}`
+  );
+  assert.match(
+    art.reason_if_absent as string,
+    /no CI config detected in repo/i,
+    `reason must state that no CI config was found and the connector had no runs; got: ${art.reason_if_absent}`
+  );
+  assert.equal(
+    (art.raw as any).config_detected,
+    false,
+    'raw.config_detected must be false on the connector-only path'
+  );
+});
+
 test('ci collector: connector with actual runs → available=true even with no local CI config', () => {
   const connector = { runs: [{ conclusion: 'success' }] };
   const art = collect(bareRepo(), PERIOD, connector);

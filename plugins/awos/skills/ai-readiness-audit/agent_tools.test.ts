@@ -7,6 +7,7 @@ import {
   AGENT_TOOLS,
   ALL_INSTRUCTION_FILES,
   ALL_MCP_CONFIG_PATHS,
+  ALL_COMMIT_ATTRIBUTION,
   detectAgentTools,
   ALL_LOCAL_ONLY_FILES,
   isLocalOnlyAgentFile,
@@ -41,6 +42,30 @@ test('detectAgentTools finds present tools by any attribute', () => {
     .map((t) => t.def.id)
     .sort();
   assert.deepEqual(found, ['gemini', 'windsurf']);
+});
+
+test('commit-attribution patterns stay POSIX-ERE-safe (they feed git log --grep --extended-regexp)', () => {
+  // The git collector passes each pattern's .source to `git log --grep` with
+  // --extended-regexp. JS-only regex constructs (lookarounds, backreferences,
+  // \d/\w/\s classes, non-capturing groups) are not POSIX ERE and would
+  // silently never match — so no pattern may use them.
+  for (const pat of ALL_COMMIT_ATTRIBUTION) {
+    assert.doesNotMatch(
+      pat.source,
+      /\(\?|\\[dwsbDWSB0-9]/,
+      `attribution pattern /${pat.source}/ uses a JS-only regex construct that POSIX ERE (git log --grep --extended-regexp) does not support`
+    );
+  }
+});
+
+test('Windsurf/Cascade alternation is present in the attribution registry', () => {
+  // Companion to the git-collector ERE test: the (Windsurf|Cascade) alternation
+  // is the pattern that motivated --extended-regexp; keep it alternation-based
+  // so both trailer spellings stay covered by one pattern.
+  assert.ok(
+    ALL_COMMIT_ATTRIBUTION.some((p) => p.source.includes('(Windsurf|Cascade)')),
+    'the Windsurf tool must attribute commits via the (Windsurf|Cascade) ERE alternation'
+  );
 });
 
 test('local-only agent files are recognized and excluded from tracking checks', () => {

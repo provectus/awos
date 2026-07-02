@@ -64,6 +64,49 @@ test('detectLanguages excludes htmlcov JS files (generated coverage assets are n
   }
 });
 
+test('detectLanguages evidence labels the extensions actually matched (.tsx-only repo is not ".ts files")', () => {
+  // Regression: the label derived its extension from sourceGlobs[0], so a
+  // .tsx-only repo was described as "N .ts files". The label must reflect the
+  // extensions of the files that actually matched.
+  const repo = mkdtempSync(join(tmpdir(), 'awos-lang-tsx-'));
+  try {
+    mkdirSync(join(repo, 'src'), { recursive: true });
+    writeFileSync(join(repo, 'src', 'App.tsx'), 'export const A = 1;\n');
+    writeFileSync(join(repo, 'src', 'Nav.tsx'), 'export const N = 1;\n');
+
+    const langs = detectLanguages(repo);
+    const ts = langs.find((l) => l.def.id === 'typescript');
+    assert.ok(ts, 'a .tsx-only repo must still detect TypeScript');
+    assert.match(
+      ts.evidence,
+      /2 \.tsx files/,
+      `evidence must cite the .tsx extension actually found, not sourceGlobs[0]'s .ts; got "${ts.evidence}"`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('detectLanguages evidence lists every matched extension for a mixed .ts/.tsx repo', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'awos-lang-mixed-'));
+  try {
+    mkdirSync(join(repo, 'src'), { recursive: true });
+    writeFileSync(join(repo, 'src', 'util.ts'), 'export const U = 1;\n');
+    writeFileSync(join(repo, 'src', 'App.tsx'), 'export const A = 1;\n');
+
+    const langs = detectLanguages(repo);
+    const ts = langs.find((l) => l.def.id === 'typescript');
+    assert.ok(ts, 'a mixed .ts/.tsx repo must detect TypeScript');
+    assert.match(
+      ts.evidence,
+      /2 \.ts\/\.tsx files/,
+      `evidence must list both matched extensions (.ts and .tsx); got "${ts.evidence}"`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 test('detectLanguages requires real source files (Makefile alone is not C/C++)', () => {
   const repo = mkdtempSync(join(tmpdir(), 'awos-lang-'));
   try {

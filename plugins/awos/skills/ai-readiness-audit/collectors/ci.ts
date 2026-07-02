@@ -67,17 +67,16 @@ export function collect(
     runs,
   };
 
-  // Config present but no run data (no connector, or connector has no runs).
-  // Detected but not connected — supply a CI connector for pipeline metrics.
+  // No run data. Two distinct states, each with an accurate reason:
+  // - config in repo but no connector (or connector empty): detected but not
+  //   connected — supply a CI connector for pipeline metrics.
+  // - connector-only path with no runs: nothing was detected in the repo, so
+  //   the reason must not claim a config was found.
   if (runs.length === 0) {
-    const platform = configPath ? ciPlatformName(configPath) : 'CI';
-    return makeArtifact(
-      'ci',
-      false,
-      `${platform} config detected but no run history — supply a CI connector (e.g. Azure DevOps/GitHub Actions API) for pipeline metrics`,
-      period,
-      raw
-    );
+    const reason = hasConfig
+      ? `${ciPlatformName(configPath!)} config detected but no run history — supply a CI connector (e.g. Azure DevOps/GitHub Actions API) for pipeline metrics`
+      : 'no CI config detected in repo; the CI connector reported no run history';
+    return makeArtifact('ci', false, reason, period, raw);
   }
 
   return makeArtifact('ci', true, null, period, raw);

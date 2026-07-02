@@ -24,6 +24,8 @@ import { mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 
 import { loadStandards, metaNumber } from './metrics/_base.ts';
+import type { CheckStatus, WrittenCheck } from './artifact_types.ts';
+import { SOURCE_LABEL_DEFAULTS } from './artifact_types.ts';
 import {
   computeTopology,
   detectLinkedRepos,
@@ -32,7 +34,7 @@ import {
 } from './topology.ts';
 import { detectLanguages, LANGUAGES } from './languages.ts';
 import { detectAgentTools } from './agent_tools.ts';
-import { detectCiConfigPath } from './ci_platforms.ts';
+import { detectCiConfigPath, ciPlatformName } from './ci_platforms.ts';
 import type { DetectorResult } from './detectors/_base.ts';
 import { iterFiles, DEFAULT_IGNORE } from './detectors/_base.ts';
 import type { MetricResult } from './metrics/_base.ts';
@@ -46,36 +48,6 @@ import {
 import { collect as collectCi } from './collectors/ci.ts';
 import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
-
-// ---------------------------------------------------------------------------
-// CI platform display name — derived from the config path returned by
-// detectCiConfigPath so there is a single source of truth for recognised paths.
-// ---------------------------------------------------------------------------
-function ciDisplayName(configPath: string): string {
-  if (configPath.startsWith('.github/workflows')) return 'GitHub Actions';
-  if (configPath.startsWith('.circleci')) return 'CircleCI';
-  if (configPath.startsWith('.gitlab-ci')) return 'GitLab CI';
-  if (
-    configPath.startsWith('.azure-pipelines') ||
-    configPath.startsWith('azure-pipelines')
-  )
-    return 'Azure DevOps';
-  if (configPath === 'Jenkinsfile') return 'Jenkins';
-  if (configPath.startsWith('.travis')) return 'Travis CI';
-  if (configPath.startsWith('bitbucket-pipelines'))
-    return 'Bitbucket Pipelines';
-  if (configPath.startsWith('.buildkite')) return 'Buildkite';
-  if (configPath.startsWith('.drone')) return 'Drone';
-  if (configPath.startsWith('.teamcity')) return 'TeamCity';
-  if (
-    configPath.startsWith('.concourse') ||
-    configPath.startsWith('ci/pipeline')
-  )
-    return 'Concourse CI';
-  if (configPath.startsWith('.woodpecker')) return 'Woodpecker CI';
-  if (configPath.startsWith('pipelines/')) return 'Azure DevOps';
-  return configPath;
-}
 
 // ---------------------------------------------------------------------------
 // Detection conflicts — files claimed by more than one language's sourceGlobs.
@@ -141,20 +113,26 @@ const MAX_LOOKBACK_DAYS_FALLBACK = 90;
 
 const COLLECTOR_SOURCES = ['git', 'ci', 'tracker', 'docs'] as const;
 
-/** Human-readable label for each source type (used in report tooltips). */
-const SOURCE_LABEL_DEFAULTS: Record<string, string> = {
-  git: 'git history',
-  ci: 'CI runs',
-  tracker: 'issue tracker',
-  docs: 'docs/wiki',
-  scale: 'source code (AST)',
-  audit: 'source code',
-  incident: 'incident source',
-  'org-rollup': 'portfolio',
-};
+/**
+ * Absence reason for a collector artifact that failed to read. ENOENT means
+ * the source was never collected ("not found" → the report suggests connecting
+ * it); anything else means the artifact IS there but unreadable/corrupted —
+ * a different problem, which must not be reported as a missing connector.
+ */
+function collectorArtifactAbsenceReason(err: unknown): string {
+  return (err as { code?: string }).code === 'ENOENT'
+    ? 'collector artifact not found'
+    : `collector artifact unreadable: ${String(err)}`;
+}
 
 type DetectorFn = (repoPath: string, params?: unknown) => DetectorResult;
-type MetricFn = (
+
+/**
+ * A metric compute function — may return synchronously or as a Promise
+ * (adp_g10_complexity is async — requires wasm init). Shared with cli.ts,
+ * which builds the METRICS registry auditCore consumes.
+ */
+export type MetricFn = (
   collectedDir: string,
   standards: Record<string, unknown>,
   topology: Record<string, boolean>,
@@ -182,34 +160,10 @@ interface Category {
   threshold_days?: number;
 }
 
-interface CheckRecord {
-  check_id: string;
-  code: number[];
-  method: string;
-  status: string;
-  value: unknown;
-  evidence: string[];
-  weight_awarded: number;
-  weight_max: number;
-  applies: boolean;
-  reliability: { tag: string; confidence: string; note: string | null };
-  source: string;
-  definition: string;
-  hint: string;
-  plain: string;
-  /** Fraction of capability present: ∈ [0,1]. */
-  score: number;
-  /** Fraction of applicable surface measured: ∈ [0,1]. */
-  confidence: number;
-  unit?: string;
-  expression?: string;
-  source_date: string | null;
-  source_url: string | null;
-  /** Date this check's definition was last verified against its cited source. */
-  last_verified: string | null;
-  /** Data sources that fed this check (from standards.toml `sources = [...]`). */
-  sources: string[];
-}
+// The check record audit-core writes — the writer-truth shape from
+// artifact_types.ts (every enrichment field required, since this file is the
+// one that writes them).
+type CheckRecord = WrittenCheck;
 
 export interface AuditCoreSummary {
   audit_total: number;
@@ -282,7 +236,10 @@ export async function auditCore(
     }
   }
 
-  // Build sources block from collector artifacts.
+  // Build sources block from collector artifacts. A genuinely absent artifact
+  // (ENOENT) means the source was never collected; any other error means the
+  // artifact exists but is unreadable/corrupted — say so, so the report never
+  // tells a user to "connect" a source they did connect.
   const sources = COLLECTOR_SOURCES.map((src) => {
     try {
       const art = JSON.parse(
@@ -294,11 +251,11 @@ export async function auditCore(
         reason_if_absent: art.reason_if_absent ?? null,
         history_available_days: art.period?.history_available_days ?? null,
       };
-    } catch {
+    } catch (err) {
       return {
         source: src,
         available: false,
-        reason_if_absent: 'collector artifact not found',
+        reason_if_absent: collectorArtifactAbsenceReason(err),
         history_available_days: null,
       };
     }
@@ -339,7 +296,12 @@ export async function auditCore(
       return JSON.parse(
         readFileSync(join(collectedDir, `${src}.json`), 'utf8')
       ) as Record<string, unknown>;
-    } catch {
+    } catch (err) {
+      if ((err as { code?: string }).code !== 'ENOENT') {
+        process.stderr.write(
+          `audit-core: collected/${src}.json is unreadable: ${String(err)}\n`
+        );
+      }
       return null;
     }
   };
@@ -375,10 +337,19 @@ export async function auditCore(
       note?: string | null;
     }
   >();
+  // Metrics that could not run — the id resolves to no function, or the
+  // function threw. Their categories must SKIP ("couldn't measure"), never
+  // FAIL ("measured, absent"), mirroring the detector branch's
+  // `detector-error:` annotation.
+  const metricErrors = new Map<string, string>();
   const metricResults = await Promise.all(
     [...metricIds].map(async (id) => {
       const fn = metrics[id];
-      if (!fn) return null;
+      if (!fn) {
+        process.stderr.write(`audit-core: unknown metric: ${id}\n`);
+        metricErrors.set(id, `unknown metric: ${id}`);
+        return null;
+      }
       try {
         const res = await fn(collectedDir, standards, topology, repoPath);
         return { id, res };
@@ -386,10 +357,18 @@ export async function auditCore(
         process.stderr.write(
           `audit-core: metric ${id} threw: ${String(err)}\n`
         );
+        metricErrors.set(id, `metric-error: ${String(err)}`);
         return null;
       }
     })
   );
+  for (const [id, reason] of metricErrors) {
+    for (const c of Object.values(cats)) {
+      if (c.metric !== id) continue;
+      skippedByMetric.add(c.code);
+      if (!metricMeta.has(c.code)) metricMeta.set(c.code, { note: reason });
+    }
+  }
   for (const item of metricResults) {
     if (!item) continue;
     const { id, res } = item;
@@ -497,7 +476,9 @@ export async function auditCore(
       ...(meta?.title ? { title: meta.title } : {}),
       ...(meta?.description ? { description: meta.description } : {}),
       score,
-      coverage: applicable > 0 ? score / applicable : 0,
+      // null (not 0) when nothing is applicable: "no measurable surface" is
+      // not the same statement as "0% of the surface is covered".
+      coverage: applicable > 0 ? score / applicable : null,
       checks,
       sources_used: sourcesUsed,
     };
@@ -520,7 +501,7 @@ export async function auditCore(
       name: t.def.displayName,
       evidence: t.evidence,
     })),
-    ci: ciPath ? [{ name: ciDisplayName(ciPath), evidence: ciPath }] : [],
+    ci: ciPath ? [{ name: ciPlatformName(ciPath), evidence: ciPath }] : [],
     frameworks: detectFrameworks(repoPath).map((f) => ({
       name: f.name,
       evidence: f.evidence,
@@ -550,7 +531,7 @@ export async function auditCore(
     date,
     project: basename(repoPath),
     audit_total: auditTotal,
-    coverage: auditApplicable > 0 ? auditTotal / auditApplicable : 0,
+    coverage: auditApplicable > 0 ? auditTotal / auditApplicable : null,
     standards_meta: standardsMeta,
     dimensions,
     sources,
@@ -596,7 +577,10 @@ export function aggregate(outDir: string): void {
     let dim: Record<string, unknown>;
     try {
       dim = JSON.parse(readFileSync(join(outDir, f), 'utf8'));
-    } catch {
+    } catch (err) {
+      process.stderr.write(
+        `aggregate: ${f} is unreadable (${String(err)}) — dimension left out of the totals\n`
+      );
       continue;
     }
     const checks = dim.checks as CheckRecord[] | undefined;
@@ -606,23 +590,29 @@ export function aggregate(outDir: string): void {
     // Re-derive weight_awarded from score (Correction 3) so orchestrator-patched
     // checks that carry an explicit score re-sum correctly. The orchestrator's
     // patches are untrusted input: a score outside [0,1] is clamped (a raw
-    // weight written into `score` must not inflate the audit total), and a
-    // patch that set status without a score falls back to weight_awarded /
-    // status so the patched credit isn't silently zeroed. `score` is written
-    // back so the artifact never carries a score that disagrees with its
-    // status.
+    // weight written into `score` must not inflate the audit total). Any
+    // finite score is explicit — a stored 0 stays 0 (a legal {status: WARN,
+    // score: 0} patch must not re-inflate to the status default). The one
+    // exception: a 0 score contradicting a positive weight_awarded on a
+    // passing status is a status-only patch that never touched `score` —
+    // reconcile from weight_awarded so the patched credit isn't silently
+    // zeroed. `score` is written back so the artifact never carries a score
+    // that disagrees with its status.
     for (const c of checks) {
       c.applies = c.status !== 'SKIP';
+      const passing = ['PASS', 'WARN', 'PARTIAL'].includes(c.status);
+      const awardedCredit =
+        (c.weight_max || 0) > 0 && (c.weight_awarded || 0) > 0;
       let s: number;
       if (c.status === 'SKIP') {
         s = 0;
-      } else if (typeof c.score === 'number' && c.score > 0) {
-        s = c.score;
       } else if (
-        ['PASS', 'WARN', 'PARTIAL'].includes(c.status) &&
-        (c.weight_max || 0) > 0 &&
-        (c.weight_awarded || 0) > 0
+        typeof c.score === 'number' &&
+        Number.isFinite(c.score) &&
+        (c.score !== 0 || !(passing && awardedCredit))
       ) {
+        s = c.score;
+      } else if (passing && awardedCredit) {
         s = c.weight_awarded / c.weight_max;
       } else {
         s = c.status === 'PASS' ? 1 : c.status === 'WARN' ? 0.5 : 0;
@@ -643,7 +633,7 @@ export function aggregate(outDir: string): void {
       .filter((c) => c.applies)
       .reduce((s, c) => s + (c.weight_max || 0), 0);
     dim.score = score;
-    dim.coverage = appl > 0 ? score / appl : 0;
+    dim.coverage = appl > 0 ? score / appl : null;
     // Re-derive sources_used: union of sources across applicable checks.
     dim.sources_used = [
       ...new Set(
@@ -667,11 +657,21 @@ export function aggregate(outDir: string): void {
   let existing: Record<string, unknown> = {};
   try {
     existing = JSON.parse(readFileSync(join(outDir, 'audit.json'), 'utf8'));
-  } catch {
-    /* no prior audit.json */
+  } catch (err) {
+    // Absent (ENOENT) is normal on a first aggregate; anything else means a
+    // prior audit.json exists but can't be read — its authored report blocks
+    // (headline/insights/recommendations) will be lost. Say so.
+    if ((err as { code?: string }).code !== 'ENOENT') {
+      process.stderr.write(
+        `aggregate: prior audit.json is unreadable (${String(err)}) — authored report blocks (headline/insights/recommendations) will be lost\n`
+      );
+    }
   }
 
-  // Re-derive sources and source_windows from collected/ artifacts.
+  // Re-derive sources and source_windows from collected/ artifacts. An ENOENT
+  // (artifact never collected) drops the entry so the stored block can win the
+  // fallback below; an unreadable/corrupted artifact keeps its entry with an
+  // explicit reason, never masquerading as a missing connector.
   const collectedDirAgg = join(outDir, 'collected');
   const derivedSources = COLLECTOR_SOURCES.map((src) => {
     try {
@@ -684,8 +684,14 @@ export function aggregate(outDir: string): void {
         reason_if_absent: art.reason_if_absent ?? null,
         history_available_days: art.period?.history_available_days ?? null,
       };
-    } catch {
-      return null;
+    } catch (err) {
+      if ((err as { code?: string }).code === 'ENOENT') return null;
+      return {
+        source: src,
+        available: false,
+        reason_if_absent: collectorArtifactAbsenceReason(err),
+        history_available_days: null,
+      };
     }
   }).filter(Boolean);
 
@@ -717,7 +723,7 @@ export function aggregate(outDir: string): void {
     date: existing.date ?? new Date().toISOString().slice(0, 10),
     project: existing.project ?? basename(outDir),
     audit_total: round1(total),
-    coverage: applicable > 0 ? total / applicable : 0,
+    coverage: applicable > 0 ? total / applicable : null,
     dimensions,
   };
   for (const block of [
@@ -769,10 +775,17 @@ export function patchJudgments(
 ): { patched: string[]; warnings: string[] } {
   const patched: string[] = [];
   const warnings: string[] = [];
+  const validStatuses = ['PASS', 'WARN', 'FAIL', 'SKIP'];
   const byId = new Map<string, JudgmentPatch>();
   for (const p of patches) {
     if (!p || typeof p.check_id !== 'string' || typeof p.status !== 'string') {
       warnings.push(`malformed patch skipped: ${JSON.stringify(p)}`);
+      continue;
+    }
+    if (!validStatuses.includes(p.status)) {
+      warnings.push(
+        `${p.check_id}: invalid status "${p.status}" — must be one of ${validStatuses.join('/')}; patch skipped`
+      );
       continue;
     }
     byId.set(p.check_id, p);
@@ -1091,7 +1104,10 @@ function buildCheck(
     check_id: c.check_id ?? checkIdByCode.get(c.code) ?? key,
     code: [c.code],
     method: c.method,
-    status,
+    // Always within the CheckStatus vocabulary at runtime (detector statuses
+    // are validated by makeResult; the branches above only emit union members);
+    // DetectorResult.status is typed string, so narrow once here.
+    status: status as CheckStatus,
     value,
     evidence,
     weight_awarded: weightAwarded,
@@ -1099,7 +1115,8 @@ function buildCheck(
     applies,
     reliability: {
       tag: c.reliability_default ?? 'unknown',
-      confidence: c.method === 'judgment' ? 'medium' : 'high',
+      // Same vocabulary the metrics write (metrics/_base.ts Reliability).
+      confidence: c.method === 'judgment' ? 'MED' : 'HIGH',
       note: null,
     },
     source: c.source ?? '',

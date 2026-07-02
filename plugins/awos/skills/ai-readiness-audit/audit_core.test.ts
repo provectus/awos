@@ -135,6 +135,8 @@ test('Metric-routed checks must carry the metric value+evidence into the record 
       sources_used: ['git'],
       sources_missing: [] as string[],
       status: 'OK' as const,
+      score: 1,
+      confidence: 1,
       expression: '31/50 growth',
     });
 
@@ -682,7 +684,7 @@ test('parseCheckIds maps digit-containing check-id prefixes (E2E-01) — not jus
 // patchJudgments: all verdicts in one call, self-aggregating
 // ---------------------------------------------------------------------------
 
-import { patchJudgments } from './audit_core.ts';
+import { patchJudgments, type JudgmentPatch } from './audit_core.ts';
 
 test('patchJudgments applies all verdicts in one call and re-aggregates audit.json', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-patchj-'));
@@ -776,6 +778,53 @@ test('patchJudgments applies all verdicts in one call and re-aggregates audit.js
   }
 });
 
+test('patchJudgments rejects an invalid status with a warning — only PASS/WARN/FAIL/SKIP are legal verdicts', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-patchj-badstatus-'));
+  try {
+    const dim = {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-01',
+      score: 0,
+      coverage: 0,
+      checks: [
+        makePatchableCheck({
+          check_id: 'AI-01',
+          status: 'PENDING_JUDGMENT',
+          weight_max: 8,
+        }),
+      ],
+    };
+    writeFileSync(
+      join(dir, 'ai-development-tooling.json'),
+      JSON.stringify(dim)
+    );
+    const summary = patchJudgments(dir, [
+      { check_id: 'AI-01', status: 'PARTIAL' },
+    ] as unknown as JudgmentPatch[]);
+    assert.deepEqual(
+      summary.patched,
+      [],
+      'a patch with an invalid status must not be applied'
+    );
+    assert.ok(
+      summary.warnings.some(
+        (w) => w.includes('AI-01') && w.includes('invalid status')
+      ),
+      `an invalid status must produce a warning naming the check and the problem, got ${JSON.stringify(summary.warnings)}`
+    );
+    const updated = JSON.parse(
+      readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
+    );
+    assert.equal(
+      updated.checks[0].status,
+      'PENDING_JUDGMENT',
+      'the check must be left untouched when its patch carries an invalid status'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('patchJudgments clamps a weight passed as score', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-patchj-clamp-'));
   try {
@@ -813,5 +862,249 @@ test('patchJudgments clamps a weight passed as score', () => {
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// aggregate: an explicit finite score is the score — a stored 0 stays 0
+// ---------------------------------------------------------------------------
+
+test('aggregate keeps an explicit score 0 on a WARN — a stored 0 is a measurement, not a missing score to re-inflate from the status default', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-agg-warn0-'));
+  try {
+    // A legal judgment patch: {status: WARN, score: 0} (patchJudgments also
+    // zeroes weight_awarded). The old `score > 0` guard treated the 0 as
+    // absent and re-inflated to the WARN default (0.5 → weight 4).
+    const dim = {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-01',
+      score: 0,
+      coverage: 0,
+      checks: [
+        makePatchableCheck({ status: 'WARN', score: 0, weight_awarded: 0 }),
+      ],
+    };
+    writeFileSync(
+      join(dir, 'ai-development-tooling.json'),
+      JSON.stringify(dim)
+    );
+    aggregate(dir);
+    const check = JSON.parse(
+      readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
+    ).checks[0];
+    assert.equal(
+      check.score,
+      0,
+      `an explicit score 0 must survive aggregate, got ${check.score}`
+    );
+    assert.equal(
+      check.weight_awarded,
+      0,
+      `a WARN with explicit score 0 must award 0 weight, not the 0.5 status default — got ${check.weight_awarded}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Metric errors: a metric that can't run must SKIP its categories, not FAIL
+// them. FAIL means "measured, absent"; SKIP means "couldn't measure".
+// ---------------------------------------------------------------------------
+
+function makeCustomStandardsFixture(categoryLines: string[]): {
+  base: string;
+  repoPath: string;
+  outDir: string;
+  standardsPath: string;
+} {
+  const base = mkdtempSync(join(tmpdir(), 'awos-custom-std-'));
+  const repoPath = join(base, 'repo');
+  mkdirSync(repoPath, { recursive: true });
+  execSync('git init', { cwd: repoPath, stdio: 'ignore' });
+  const outDir = join(base, 'out');
+  mkdirSync(outDir, { recursive: true });
+  const standardsPath = join(base, 'standards.toml');
+  writeFileSync(
+    standardsPath,
+    ['[meta]', 'max_lookback_days = 90', '', ...categoryLines].join('\n')
+  );
+  return { base, repoPath, outDir, standardsPath };
+}
+
+const THROWING_CATEGORY = [
+  '[category.throwing_cat]',
+  'code = 998',
+  'metric = "boom_metric"',
+  'dimension = "ai-sdlc-adoption"',
+  'weight = 5',
+  'method = "computed"',
+  'definition = "Backed by a broken metric"',
+  'applies_when = "always"',
+  'sources = ["git"]',
+];
+
+test('a metric that throws must SKIP its categories with a metric-error reason and confidence 0 — never a silent FAIL', async () => {
+  const fx = makeCustomStandardsFixture(THROWING_CATEGORY);
+  try {
+    const boom = async (): Promise<never> => {
+      throw new Error('artifact schema mismatch');
+    };
+    await auditCore(
+      fx.repoPath,
+      fx.outDir,
+      {},
+      { boom_metric: boom },
+      fx.standardsPath
+    );
+    const dim = JSON.parse(
+      readFileSync(join(fx.outDir, 'ai-sdlc-adoption.json'), 'utf8')
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const check = (dim.checks as any[]).find((c: any) => c.code.includes(998));
+    assert.equal(
+      check.status,
+      'SKIP',
+      `a throwing metric means "couldn't measure" — its category must SKIP, got ${check.status}`
+    );
+    assert.equal(
+      check.confidence,
+      0,
+      `a check the engine could not measure must carry confidence 0, got ${check.confidence}`
+    );
+    assert.equal(
+      check.weight_awarded,
+      0,
+      'an unmeasured check must award no weight'
+    );
+    assert.match(
+      String(check.evidence[0]),
+      /^metric-error: .*artifact schema mismatch/,
+      `the SKIP evidence must carry the metric-error reason, got ${JSON.stringify(check.evidence)}`
+    );
+  } finally {
+    rmSync(fx.base, { recursive: true, force: true });
+  }
+});
+
+test('a metric id that resolves to no function must SKIP its categories with an "unknown metric" reason — the old path was 100% silent and FAILed them', async () => {
+  const fx = makeCustomStandardsFixture(THROWING_CATEGORY);
+  try {
+    // Empty registry: boom_metric is declared in standards.toml but unknown.
+    await auditCore(fx.repoPath, fx.outDir, {}, {}, fx.standardsPath);
+    const dim = JSON.parse(
+      readFileSync(join(fx.outDir, 'ai-sdlc-adoption.json'), 'utf8')
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const check = (dim.checks as any[]).find((c: any) => c.code.includes(998));
+    assert.equal(
+      check.status,
+      'SKIP',
+      `an unknown metric id must SKIP its category (couldn't measure), got ${check.status}`
+    );
+    assert.equal(
+      check.confidence,
+      0,
+      `an unmeasured check must carry confidence 0, got ${check.confidence}`
+    );
+    assert.deepEqual(
+      check.evidence,
+      ['unknown metric: boom_metric'],
+      `the SKIP evidence must name the unresolvable metric id, got ${JSON.stringify(check.evidence)}`
+    );
+  } finally {
+    rmSync(fx.base, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Coverage null: "no measurable surface" (applicable = 0) must render as null,
+// not as 0% coverage.
+// ---------------------------------------------------------------------------
+
+test('audit-core emits coverage null (not 0) when a dimension has no applicable weight — at the dimension and audit level', async () => {
+  const fx = makeCustomStandardsFixture([
+    '[category.gated_cat]',
+    'code = 997',
+    'metric = "gated_metric"',
+    'dimension = "ai-sdlc-adoption"',
+    'weight = 5',
+    'method = "computed"',
+    'definition = "Needs a tracker"',
+    'applies_when = "topology.has_tracker"',
+    'sources = ["tracker"]',
+  ]);
+  try {
+    // Bare repo, no tracker connector → the only category is gated off (SKIP)
+    // → applicable weight is 0.
+    await auditCore(fx.repoPath, fx.outDir, {}, {}, fx.standardsPath);
+    const dim = JSON.parse(
+      readFileSync(join(fx.outDir, 'ai-sdlc-adoption.json'), 'utf8')
+    );
+    assert.strictEqual(
+      dim.coverage,
+      null,
+      `dimension coverage must be null when nothing is applicable, got ${JSON.stringify(dim.coverage)}`
+    );
+    const audit = JSON.parse(
+      readFileSync(join(fx.outDir, 'audit.json'), 'utf8')
+    );
+    assert.strictEqual(
+      audit.coverage,
+      null,
+      `audit coverage must be null when nothing is applicable, got ${JSON.stringify(audit.coverage)}`
+    );
+  } finally {
+    rmSync(fx.base, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Reliability confidence vocabulary: audit-core must write the same
+// 'HIGH'|'MED'|'LOW' tokens the metrics write (metrics/_base.ts Reliability),
+// never lowercase 'medium'/'high'.
+// ---------------------------------------------------------------------------
+
+test("audit-core writes reliability confidence as 'MED' for judgment checks and 'HIGH' otherwise — the metrics' vocabulary, not lowercase variants", async () => {
+  const fx = makeCustomStandardsFixture([
+    '[category.judgment_cat]',
+    'code = 996',
+    'dimension = "ai-development-tooling"',
+    'weight = 8',
+    'method = "judgment"',
+    'definition = "Needs the LLM"',
+    'applies_when = "always"',
+    'sources = ["audit"]',
+    '',
+    ...THROWING_CATEGORY,
+  ]);
+  try {
+    await auditCore(fx.repoPath, fx.outDir, {}, {}, fx.standardsPath);
+    const tooling = JSON.parse(
+      readFileSync(join(fx.outDir, 'ai-development-tooling.json'), 'utf8')
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const judgment = (tooling.checks as any[]).find((c: any) =>
+      c.code.includes(996)
+    );
+    assert.equal(
+      judgment.reliability.confidence,
+      'MED',
+      `judgment checks must carry confidence 'MED' (metrics vocabulary), got ${JSON.stringify(judgment.reliability.confidence)}`
+    );
+    const adoption = JSON.parse(
+      readFileSync(join(fx.outDir, 'ai-sdlc-adoption.json'), 'utf8')
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nonJudgment = (adoption.checks as any[]).find((c: any) =>
+      c.code.includes(998)
+    );
+    assert.equal(
+      nonJudgment.reliability.confidence,
+      'HIGH',
+      `non-judgment checks must carry confidence 'HIGH' (metrics vocabulary), got ${JSON.stringify(nonJudgment.reliability.confidence)}`
+    );
+  } finally {
+    rmSync(fx.base, { recursive: true, force: true });
   }
 });

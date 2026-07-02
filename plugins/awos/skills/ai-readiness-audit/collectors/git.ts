@@ -17,17 +17,43 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * Run a git subcommand and return its stdout as a string.
+ * Unexpected git failures recorded during the current `collect()` pass.
+ * `run()` appends to this list whenever a subcommand fails in a way that
+ * signals a broken environment (exit 128, missing/unexecutable git binary,
+ * ENOBUFS truncation); `collect()` drains it and marks the whole artifact
+ * unavailable rather than emitting confident all-zero stats.
+ */
+let runErrors: string[] = [];
+
+function resetRunErrors(): void {
+  runErrors = [];
+}
+
+function drainRunErrors(): string[] {
+  const out = runErrors;
+  runErrors = [];
+  return out;
+}
+
+/**
+ * Run a git subcommand and return its stdout as a string. Never throws; on
+ * any failure it returns `''` and classifies the failure:
  *
- * `allowFailure` signals that the call is expected to fail on certain valid
- * repo states (e.g. `symbolic-ref --short HEAD` on a detached HEAD, or a
- * `^1..^2` rev-range on a root/octopus merge). When true, a non-zero exit
- * is silently swallowed and `''` is returned. When false (the default), an
- * unexpected failure emits a one-line stderr breadcrumb naming the subcommand
- * and the error code so the failure is traceable in logs — the collector still
- * returns `''` and degrades gracefully rather than throwing.
+ * - `allowFailure: true` marks a call that is expected to fail on certain
+ *   valid repo states (e.g. `symbolic-ref --short HEAD` on a detached HEAD,
+ *   or `rev-list --count HEAD` on an unborn branch). The failure is silently
+ *   swallowed.
+ * - Exit status 1 from a log/grep-family subcommand is treated as
+ *   expected-empty (no matches) and swallowed silently, as is git's
+ *   unborn-HEAD "does not have any commits yet" fatal — both are valid repo
+ *   states, not environment failures.
+ * - Everything else (exit 128 outside the unborn-HEAD case, a missing git
+ *   binary — spawn ENOENT, EACCES, ENOBUFS output truncation) is an
+ *   unexpected environment failure: a one-line `[git collector]` breadcrumb
+ *   is written to stderr AND the failure is recorded so `collect()` can mark
+ *   the artifact unavailable instead of scoring all-zero stats.
  *
- * Exported so the allowFailure contract can be unit-tested directly.
+ * Exported so the failure-classification contract can be unit-tested directly.
  */
 export function run(
   args: string[],
@@ -51,10 +77,52 @@ export function run(
     if (allowFailure) return '';
     const status = (err as { status?: number }).status;
     const code = (err as { code?: string }).code;
-    console.error(
-      `[git collector] git ${args[0]} failed: ${status ?? code ?? 'error'}`
-    );
+    const stderr = (err as { stderr?: unknown }).stderr;
+    const stderrText = typeof stderr === 'string' ? stderr : '';
+    // Expected-empty states — silent '' with no breadcrumb:
+    //   - exit 1 from log/grep-family commands (no matches);
+    //   - the unborn-HEAD fatal (`git log` on a branch with no commits yet),
+    //     which exits 128 but is a valid repo state, not a broken environment.
+    if (status === 1 && (args[0] === 'log' || args[0] === 'grep')) return '';
+    if (/does not have any commits yet|bad default revision/i.test(stderrText))
+      return '';
+    const detail =
+      code === 'ENOENT'
+        ? 'git binary not found (ENOENT)'
+        : String(status ?? code ?? 'error');
+    const msg = `git ${args[0]} failed: ${detail}`;
+    console.error(`[git collector] ${msg}`);
+    runErrors.push(msg);
     return '';
+  }
+}
+
+/**
+ * Probe whether `repoPath` is a usable git repository. Returns `null` when it
+ * is, or a human-readable reason when it is not (not a git repo, git binary
+ * missing/unexecutable, path absent) — that reason becomes the artifact's
+ * `reason_if_absent` so every git-derived metric SKIPs instead of scoring
+ * confident all-zero stats.
+ */
+function probeGitRepo(cwd: string): string | null {
+  if (!existsSync(cwd)) return `repo path does not exist: ${cwd}`;
+  try {
+    execFileSync('git', ['rev-parse', '--git-dir'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+    return null;
+  } catch (err) {
+    const e = err as { code?: string; status?: number; stderr?: unknown };
+    if (e.code === 'ENOENT') return 'git binary not found on PATH';
+    if (e.code === 'EACCES') return 'git binary not executable (EACCES)';
+    const stderrText = typeof e.stderr === 'string' ? e.stderr : '';
+    const firstLine = stderrText.split('\n')[0]?.trim() ?? '';
+    return (
+      firstLine ||
+      `git rev-parse --git-dir failed (exit ${e.status ?? 'unknown'})`
+    );
   }
 }
 
@@ -115,7 +183,15 @@ function getAiMarkedCommits(cwd: string): number {
   // multiple `--grep` by default, so a single invocation matches the union of
   // all patterns. A commit matching several patterns still appears once in the
   // log output, so the Set naturally dedups to the same count as the old loop.
-  const args = ['log', '--regexp-ignore-case', '--format=%H'];
+  // --extended-regexp is required: the attribution patterns use ERE syntax
+  // (e.g. Windsurf's `(Windsurf|Cascade)` alternation), which git's default
+  // BRE would treat as literal `(`/`|` and never match.
+  const args = [
+    'log',
+    '--regexp-ignore-case',
+    '--extended-regexp',
+    '--format=%H',
+  ];
   for (const pat of ALL_COMMIT_ATTRIBUTION) args.push(`--grep=${pat.source}`);
   const out = run(args, cwd);
   const matchedSHAs = new Set(out.trim().split('\n').filter(Boolean));
@@ -851,6 +927,52 @@ export function collect(
     opts.activeContributorThreshold ?? ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT;
   const reworkHorizonDays =
     opts.reworkHorizonDays ?? REWORK_HORIZON_DAYS_DEFAULT;
+
+  resetRunErrors();
+
+  // Broken environment (not a git repo, git binary missing/unexecutable):
+  // return an UNAVAILABLE artifact so every git-derived metric SKIPs, instead
+  // of `available: true` with all-zero stats that downstream metrics would
+  // score confidently.
+  const probeError = probeGitRepo(repoPath);
+  if (probeError) {
+    return makeArtifact(
+      'git',
+      false,
+      probeError,
+      { ...period, history_available_days: 0 },
+      {} as GitRaw
+    );
+  }
+
+  // Commit-less repo (git init, nothing committed): a valid state, but every
+  // HEAD-based `git log` variant fatals on the unborn branch. Short-circuit to
+  // the zero-stats artifact — available (the repo exists), just empty — without
+  // spamming per-subcommand breadcrumbs.
+  if (latestCommitDate(repoPath) === null) {
+    const raw: GitRaw = {
+      default_branch: getDefaultBranch(repoPath),
+      total_commits: 0,
+      ai_marked_commits: 0,
+      total_merges: 0,
+      revert_merges: 0,
+      tooling_paths: getToolingPaths(repoPath),
+      merge_records: [],
+      // buildWindowStats/getCodeTurnover return their empty/null shapes
+      // without further git calls when the repo has no commits.
+      window_stats: buildWindowStats(repoPath, period, activeThreshold),
+      numstat_totals: { added: 0, deleted: 0 },
+      code_turnover: getCodeTurnover(repoPath, period, reworkHorizonDays),
+    };
+    return makeArtifact(
+      'git',
+      true,
+      null,
+      { ...period, history_available_days: 0 },
+      raw
+    );
+  }
+
   const default_branch = getDefaultBranch(repoPath);
   const total_commits = getTotalCommits(repoPath);
   const ai_marked_commits = getAiMarkedCommits(repoPath);
@@ -874,6 +996,21 @@ export function collect(
     numstat_totals,
     code_turnover,
   };
+
+  // If git broke mid-collection (repo vanished, ENOBUFS truncation, binary
+  // failure), the stats above are partial/zeroed — mark the artifact
+  // unavailable so downstream metrics SKIP rather than trust them.
+  const errors = drainRunErrors();
+  if (errors.length > 0) {
+    const suffix = errors.length > 1 ? ` (+${errors.length - 1} more)` : '';
+    return makeArtifact(
+      'git',
+      false,
+      `git failed during collection: ${errors[0]}${suffix}`,
+      { ...period, history_available_days },
+      raw
+    );
+  }
 
   return makeArtifact(
     'git',

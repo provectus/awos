@@ -7,12 +7,12 @@ export interface Period {
   history_available_days: number;
 }
 
-export function makeArtifact(
+export function makeArtifact<R>(
   source: string,
   available: boolean,
   reasonIfAbsent: string | null,
   period: Period,
-  raw: unknown
+  raw: R
 ) {
   return {
     source,

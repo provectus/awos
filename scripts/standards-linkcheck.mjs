@@ -14,9 +14,9 @@
  *   1 — one or more links are DEAD (404 / 5xx / network error)
  *
  * Statuses in the output table:
- *   OK              — HTTP 200 after following redirects
+ *   OK              — HTTP 200 after following redirects (and not collapsed onto a site root)
  *   REACHABLE-AUTH  — HTTP 401 or 403 (paywall / auth-gate); treated as a warning, not a failure
- *   DEAD            — HTTP 404, 5xx, or network error
+ *   DEAD            — HTTP 404, 5xx, network error, or a deep link that redirected to the site root
  *
  * The extractSourceUrls() function is exported as a pure function (no I/O) so
  * it can be unit-tested without network access.
@@ -91,6 +91,30 @@ export function findBareRootUrls(tomlText) {
   return offenders;
 }
 
+/**
+ * Detect a redirect that collapsed a deep link onto the site root.
+ * A deep page that 30x-redirects to `https://host/` almost always means the
+ * page is gone (soft-404 via redirect), so an HTTP 200 on the final URL must
+ * NOT count as OK.
+ *
+ * Pure function (no I/O) so it is unit-testable without network access.
+ *
+ * @param {string} originalUrl - the URL that was requested
+ * @param {string} finalUrl - the URL the fetch ended up at after redirects
+ * @returns {boolean} true when originalUrl had a non-root path but finalUrl is a bare root
+ */
+export function isRootRedirect(originalUrl, finalUrl) {
+  let origPath, finalPath;
+  try {
+    origPath = new URL(originalUrl).pathname;
+    finalPath = new URL(finalUrl).pathname;
+  } catch {
+    return false; // unparseable urls are handled by the reachability check
+  }
+  const isRoot = (p) => p === '' || p === '/';
+  return !isRoot(origPath) && isRoot(finalPath);
+}
+
 // ---------------------------------------------------------------------------
 // HTTP check (network I/O — not imported in tests)
 // ---------------------------------------------------------------------------
@@ -122,6 +146,14 @@ async function checkUrl(url) {
     const httpStatus = response.status;
     const finalUrl = response.url || url;
     if (httpStatus === 200) {
+      if (isRootRedirect(url, finalUrl)) {
+        return {
+          result: 'DEAD',
+          httpStatus,
+          finalUrl,
+          error: 'redirected to site root — page likely gone',
+        };
+      }
       return { result: 'OK', httpStatus, finalUrl };
     }
     if (httpStatus === 401 || httpStatus === 403) {

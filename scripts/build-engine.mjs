@@ -8,7 +8,9 @@
  * Before building, CLEANS dist/ (removes every file except .gitkeep) so that
  * stale flat + nested artefacts from the old multi-entrypoint layout disappear.
  *
- * .wasm hook is present but a no-op until web-tree-sitter is wired.
+ * The tree-sitter core wasm and every grammar in BUNDLED_GRAMMARS are required:
+ * a missing wasm fails the build (exit 1) rather than shipping a bundle whose
+ * AST metrics silently SKIP.
  */
 
 import { build } from 'esbuild';
@@ -117,9 +119,12 @@ if (webTreeSitterWasm) {
     `build-engine: copied ${webTreeSitterWasm.split('/').pop()} → dist/tree-sitter.wasm`
   );
 } else {
-  console.warn(
-    'build-engine: WARNING — tree-sitter core wasm not found; adp_g10_complexity will SKIP'
+  // Hard failure: without the core wasm every AST metric (adp_g10, adp_g13, …)
+  // silently SKIPs at runtime. A bundle missing it must never ship.
+  console.error(
+    'build-engine: ERROR — tree-sitter core wasm not found in node_modules/web-tree-sitter; refusing to produce a bundle without it'
   );
+  process.exit(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -150,12 +155,24 @@ const grammarsSourceDir = join(
 const grammarsDestDir = join(distDir, 'grammars');
 mkdirSync(grammarsDestDir, { recursive: true });
 
+const missingGrammars = [];
 for (const grammar of BUNDLED_GRAMMARS) {
   const src = join(grammarsSourceDir, grammar);
   if (existsSync(src)) {
     copyFileSync(src, join(grammarsDestDir, grammar));
     console.log(`build-engine: copied ${grammar} → dist/grammars/${grammar}`);
   } else {
-    console.warn(`build-engine: WARNING — grammar not found: ${grammar}`);
+    missingGrammars.push(grammar);
+    console.error(`build-engine: ERROR — grammar not found: ${grammar}`);
   }
+}
+
+if (missingGrammars.length > 0) {
+  // Hard failure: every grammar in BUNDLED_GRAMMARS is load-bearing for
+  // multi-language complexity/doc-coverage parsing. A bundle silently missing
+  // one would SKIP those languages at runtime — fail the build instead.
+  console.error(
+    `build-engine: ERROR — ${missingGrammars.length} grammar(s) missing from node_modules/tree-sitter-wasms/out: ${missingGrammars.join(', ')}`
+  );
+  process.exit(1);
 }

@@ -32,6 +32,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -122,19 +123,22 @@ def _marketplace_paths():
     }
 
 
-def _set_marketplace_paths(source_path, install):
+def _set_marketplace_paths(km_source_path, install, settings_source_path):
+    """Write the marketplace paths (each config file gets its OWN source path)
+    and refresh via `claude plugin marketplace update`. Returns the completed
+    update process so callers can check its returncode."""
     km = json.load(open(KM_PATH))
     s = json.load(open(SETTINGS))
     if MARKET_NAME not in km:
         die(f"marketplace '{MARKET_NAME}' not in {KM_PATH}")
-    km[MARKET_NAME].setdefault("source", {})["path"] = source_path
+    km[MARKET_NAME].setdefault("source", {})["path"] = km_source_path
     km[MARKET_NAME]["installLocation"] = install
     (s.setdefault("extraKnownMarketplaces", {}).setdefault(MARKET_NAME, {})
-     .setdefault("source", {}))["path"] = source_path
+     .setdefault("source", {}))["path"] = settings_source_path
     json.dump(km, open(KM_PATH, "w"), indent=2)
     json.dump(s, open(SETTINGS, "w"), indent=2)
-    subprocess.run(["claude", "plugin", "marketplace", "update", MARKET_NAME],
-                   capture_output=True, text=True)
+    return subprocess.run(["claude", "plugin", "marketplace", "update", MARKET_NAME],
+                          capture_output=True, text=True)
 
 
 def repoint_marketplace(worktree):
@@ -147,12 +151,28 @@ def repoint_marketplace(worktree):
     if not os.path.isfile(skill):
         die(f"worktree has no SKILL.md at {skill}")
     orig = _marketplace_paths()
-    _set_marketplace_paths(worktree, worktree)
+    up = _set_marketplace_paths(worktree, worktree, worktree)
+    if up.returncode != 0:
+        # Roll back the config edits before dying — a failed refresh must not
+        # leave the marketplace files pointing at the worktree.
+        _set_marketplace_paths(orig["km_source_path"], orig["km_install"],
+                               orig["settings_source_path"])
+        die(f"claude plugin marketplace update failed (rc={up.returncode}): "
+            f"{(up.stderr or up.stdout).strip()}")
     return orig, sha256(skill)
 
 
 def restore_marketplace(orig):
-    _set_marketplace_paths(orig["km_source_path"], orig["km_install"])
+    up = _set_marketplace_paths(orig["km_source_path"], orig["km_install"],
+                                orig["settings_source_path"])
+    if up.returncode != 0:
+        log("\n" + "!" * 70)
+        log(f"!! WARNING: `claude plugin marketplace update` FAILED during restore "
+            f"(rc={up.returncode}): {(up.stderr or up.stdout).strip()[:300]}")
+        log(f"!! Your {MARKET_NAME} marketplace may still point at the worktree.")
+        log(f"!! Check {KM_PATH} and {SETTINGS}, then run: "
+            f"claude plugin marketplace update {MARKET_NAME}")
+        log("!" * 70)
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +350,8 @@ def summarize_output(out_dir):
             d = json.load(open(org))
             import glob
             return {"mode": "org", "portfolio_metrics": d.get("portfolio_metrics"),
-                    "repos": len(glob.glob(os.path.join(out_dir, "per-repo", "*.json")))}
+                    "repos": len(glob.glob(
+                        os.path.join(out_dir, "per-repo", "*", "audit.json")))}
         if os.path.exists(single):
             d = json.load(open(single))
             return {"mode": "single", "audit_total": d.get("audit_total"),
@@ -364,22 +385,65 @@ def assess_engine_compliance(out_dir, run_log):
     That run silently passes today (rc=0, output dir exists) while having produced
     the wrong artifact type in a different, non-comparable scoring universe.
 
-    Returns the signals so the harness can fail loudly / retry."""
+    Returns the signals so the harness can fail loudly / retry.
+
+    Counting is done on the parsed stream-json transcript, NOT on raw substrings:
+    the skill prompt text itself contains "audit-core" (and "dimension-auditor"),
+    so a raw `txt.count()` was satisfied by every run — including non-compliant
+    ones. Two execution signals count:
+      * audit_core_calls — Bash tool_use blocks whose command contains
+        `audit-core` (the model ran the engine itself, e.g. org mode).
+      * injected_audit_core — the SKILL.md load-time !`…` injection ran
+        audit-core before the model acted (the normal single-repo path, which
+        produces NO Bash tool_use). Detected via the injection's echo marker
+        with the date variable ALREADY SUBSTITUTED — the raw prompt source has
+        the literal `$D`, so unexecuted prompt text cannot match."""
     has_json = bool(out_dir) and (
         os.path.isfile(os.path.join(out_dir, "audit.json"))
         or os.path.isfile(os.path.join(out_dir, "org-portfolio.json")))
     audit_core_calls = 0
     fanout_spawns = 0
+    injected = False
+    inject_marker = re.compile(
+        r"\[audit-core\] one-pass deterministic engine → context/audits/\d{4}-\d{2}-\d{2}")
     try:
         with open(run_log) as f:
-            txt = f.read()
-        audit_core_calls = txt.count("audit-core")
-        fanout_spawns = txt.count("dimension-auditor")
+            for line in f:
+                s = line.strip()
+                if not s:
+                    continue
+                try:
+                    ev = json.loads(s)
+                except Exception:
+                    continue
+                t = ev.get("type")
+                content = ev.get("message", {}).get("content", [])
+                if t == "user" and not injected:
+                    blob = (content if isinstance(content, str)
+                            else json.dumps(content, ensure_ascii=False))
+                    if inject_marker.search(blob):
+                        injected = True
+                if t != "assistant":
+                    continue
+                for b in content if isinstance(content, list) else []:
+                    if not isinstance(b, dict) or b.get("type") != "tool_use":
+                        continue
+                    name = b.get("name") or ""
+                    inp = b.get("input") or {}
+                    if name == "Bash" and "audit-core" in str(inp.get("command", "")):
+                        audit_core_calls += 1
+                    elif name in ("Agent", "Task"):
+                        blob = " ".join(str(inp.get(k, "")) for k in
+                                        ("subagent_type", "description", "prompt"))
+                        if "dimension-auditor" in blob:
+                            fanout_spawns += 1
     except Exception:
         pass
-    compliant = bool(has_json and audit_core_calls > 0)
+    compliant = bool(has_json and (audit_core_calls > 0 or injected))
     return {"engine_compliant": compliant, "has_audit_json": has_json,
-            "audit_core_calls": audit_core_calls, "fanout_agent_spawns": fanout_spawns}
+            "audit_core_calls": audit_core_calls,
+            "injected_audit_core": injected,
+            "fanout_agent_spawns": fanout_spawns}
 
 
 def seed_audit_core(engine, target, out_dir):
@@ -624,6 +688,33 @@ def main():
             log(f"⚠ no audit output dir found under {audits} (audit may have failed)")
             summary = {}
 
+        # Did the run finish? A non-zero rc or an is_error result event means
+        # the session died mid-flight; the archive may be usable but the run
+        # must not report success.
+        partial = bool(rc != 0 or result.get("is_error"))
+
+        # Were the judgment categories actually patched? A leftover
+        # "PENDING_JUDGMENT" in any archived audit.json means Step 6 never
+        # completed the LLM slice — the score is missing the judgment weight.
+        judgments_patched = None
+        audit_jsons = []
+        archived = os.path.join(run_dir, "audit-output")
+        for root, _dirs, files in os.walk(archived):
+            audit_jsons += [os.path.join(root, n) for n in files if n == "audit.json"]
+        if audit_jsons:
+            judgments_patched = True
+            for p in audit_jsons:
+                try:
+                    if "PENDING_JUDGMENT" in open(p).read():
+                        judgments_patched = False
+                        break
+                except Exception:
+                    pass
+            if not judgments_patched:
+                log("⚠ PENDING_JUDGMENT left in archived audit.json — the judgment "
+                    "categories were never patched (Step 6 incomplete); scores are "
+                    "missing the judgment weight")
+
         meta = {
             "timestamp_utc": ts, "label": args.label, "phase": args.phase,
             "model": args.model or "claude-default",
@@ -643,7 +734,10 @@ def main():
             "duration_ms": result.get("duration_ms"), "num_turns": result.get("num_turns"),
             "wall_ms": result.get("wall_ms"),
             "result_segments": result.get("result_segments"),
-            "is_error": result.get("is_error"), "summary": summary,
+            "is_error": result.get("is_error"),
+            "partial": partial,
+            "judgments_patched": judgments_patched,
+            "summary": summary,
         }
         with open(os.path.join(run_dir, "run-meta.json"), "w") as f:
             json.dump(meta, f, indent=2)
@@ -665,7 +759,14 @@ def main():
     elif summary.get("mode") == "org":
         log(f" org   : repos={summary.get('repos')} "
             f"metrics={summary.get('portfolio_metrics')}")
-    log(f"\n✓ run complete (claude rc={rc}) -> {run_dir}")
+    if partial:
+        log(f"\n✗ run INCOMPLETE (claude rc={rc}, is_error={result.get('is_error')}) "
+            f"-> {run_dir}")
+    else:
+        log(f"\n✓ run complete (claude rc={rc}) -> {run_dir}")
+    if judgments_patched is False:
+        log("  ⚠ judgments_patched=false — PENDING_JUDGMENT left in the archived "
+            "audit.json (Step 6 never patched the judgment categories)")
     log(f"  compare:  python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'compare_audit_runs.py')} --target {tgt_name}")
 
     # Loud, non-zero exit when the MODEL skipped the engine, even if the harness
@@ -673,12 +774,17 @@ def main():
     # run must never quietly report success.
     if not args.no_engine_guard and not comp.get("model_complied", True):
         salvaged = comp.get("engine_seeded_by_harness")
-        log(f"\n✗ ENGINE-SKIP REGRESSION: the model never called audit-core across "
+        log(f"\n✗ ENGINE-SKIP REGRESSION: the model never ran audit-core across "
             f"{attempts} attempt(s) — it reconstructed the per-dimension fan-out "
             f"(dimension-auditor spawns={comp.get('fanout_agent_spawns')}). "
             f"{'Harness seeded audit-core so the artifact is correct, but ' if salvaged else ''}"
             f"this is a product regression (CLAUDE.md 'Known gap'). Exiting non-zero.")
         sys.exit(3)
+
+    # A crashed / errored session must never exit 0, even when the archive was
+    # salvaged (fallback render etc.) — the run is partial, not successful.
+    if partial:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

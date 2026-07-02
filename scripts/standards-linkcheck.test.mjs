@@ -11,7 +11,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractSourceUrls, findBareRootUrls } from './standards-linkcheck.mjs';
+import {
+  extractSourceUrls,
+  findBareRootUrls,
+  isRootRedirect,
+} from './standards-linkcheck.mjs';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -187,5 +191,53 @@ url = "https://example.com/spec/v1/page.html"
     urls,
     ['https://example.com/', 'https://example.org'],
     'bare domain roots (path "" or "/") must be flagged; deep links must pass'
+  );
+});
+
+test('isRootRedirect flags a deep link that redirected to the site root', () => {
+  assert.equal(
+    isRootRedirect(
+      'https://example.com/spec/v1/page.html',
+      'https://example.com/'
+    ),
+    true,
+    'deep link → bare "/" root must be classified as a root redirect (page likely gone)'
+  );
+  assert.equal(
+    isRootRedirect(
+      'https://example.com/spec/v1/page.html',
+      'https://example.com'
+    ),
+    true,
+    'deep link → root with empty path must be classified as a root redirect'
+  );
+});
+
+test('isRootRedirect passes redirects that keep a non-root path', () => {
+  assert.equal(
+    isRootRedirect(
+      'https://example.com/spec/v1/page.html',
+      'https://example.com/spec/v2/page.html'
+    ),
+    false,
+    'deep link → another deep page is a legitimate redirect, not a root redirect'
+  );
+  assert.equal(
+    isRootRedirect('https://example.com/page', 'https://www.example.com/page'),
+    false,
+    'host-only redirect that preserves the path must not be flagged'
+  );
+});
+
+test('isRootRedirect ignores root→root and unparseable URLs', () => {
+  assert.equal(
+    isRootRedirect('https://example.com/', 'https://example.com/'),
+    false,
+    'a URL that was already a bare root is findBareRootUrls territory, not a root redirect'
+  );
+  assert.equal(
+    isRootRedirect('not a url', 'https://example.com/'),
+    false,
+    'unparseable original URL must return false (reachability check owns that failure)'
   );
 });

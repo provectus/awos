@@ -970,7 +970,11 @@ test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
   // AI attribution is framed as a lower bound, not the true adoption level.
   assert.match(src, /lower bound/i);
   // No-PII, no-money, and the MTTR-skip rule must be stated.
-  assert.match(src, /repositor/i);
+  assert.match(
+    src,
+    /no data is attributed to named individuals/i,
+    'catalog must state the actual privacy guarantee (repository granularity, no per-person attribution / no-PII)'
+  );
   assert.match(src, /never.{0,20}(money|currenc)/i);
   assert.match(src, /MTTR/);
   assert.match(src, /SKIP/);
@@ -1356,7 +1360,11 @@ test('SKILL.md sums weighted categories and emits no grade', () => {
     /standards\.toml/,
     'SKILL.md Step 5 must pass standards.toml to auditors'
   );
-  assert.match(src, /sum|total/i, 'SKILL.md Step 6 must sum weighted points');
+  assert.match(
+    src,
+    /additive weighted points/i,
+    'SKILL.md must state that scoring is additive weighted points (sum of category weights), not a grade'
+  );
   assert.match(
     src,
     /coverage ratio/i,
@@ -1727,7 +1735,7 @@ test('SKILL.md Step 6 org branch emits an org-level JSON artifact', () => {
   // any MD/HTML rendering.
   const body = readUtf8(SKILL_MD_PATH);
   assert.ok(
-    /org.portfolio\.json|org.*\.json/i.test(body),
+    body.includes('org-portfolio.json'),
     'SKILL.md must document the org-level JSON artifact (org-portfolio.json)'
   );
 });
@@ -1739,9 +1747,7 @@ test('SKILL.md Step 6 org branch emits an org-level JSON artifact', () => {
 test('report-template.md references the render verb (cli.js render)', () => {
   const src = readUtf8(path.join(skillRoot, 'report-template.md'));
   assert.ok(
-    src.includes('cli.js render') ||
-      src.includes('cli render') ||
-      /render\b/.test(src),
+    src.includes('cli.js render') || src.includes('cli render'),
     'report-template.md must reference the "render" verb (node dist/cli.js render) — report.md/report.html are produced by the renderer, not hand-written'
   );
 });

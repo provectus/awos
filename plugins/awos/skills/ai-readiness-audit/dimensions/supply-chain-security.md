@@ -13,7 +13,7 @@ Audits the project's resilience to supply chain attacks — compromised or malic
 This dimension focuses exclusively on dependency supply chain risks. Related but distinct checks live elsewhere:
 
 - **SBP-07** covers lockfile _presence_ and update automation _existence_ (Renovate/Dependabot configured)
-- **SEC-01 through SEC-05** cover secrets exposure (`.env`, API keys, gitignore)
+- **AS-12 through AS-14** cover secrets exposure (`.env`, API keys, gitignore)
 
 This dimension goes deeper: lockfiles committed to git with integrity hashes, version pinning discipline, recently published package detection (quarantine), dependency review gates, vulnerability scanning in CI, dependency override auditing, and attack surface from dependency bloat.
 

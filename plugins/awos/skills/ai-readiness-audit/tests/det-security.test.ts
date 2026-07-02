@@ -7,7 +7,6 @@ import {
   detectEnvGitignored,
   detectAgentSafetyHooks,
   detectEnvExample,
-  detectNoSecretsCommitted,
   detectSensitiveFilesGitignored,
   DETECTORS,
 } from '../detectors/security.ts';
@@ -17,10 +16,10 @@ function tmp(): string {
 }
 
 // ---------------------------------------------------------------------------
-// detectEnvGitignored (2600 — SEC-01)
+// detectEnvGitignored (2600 — AS-12)
 // ---------------------------------------------------------------------------
 
-test('SEC-01: .gitignore with .env entry is PASS', () => {
+test('AS-12: .gitignore with .env entry is PASS', () => {
   const t = tmp();
   writeFileSync(join(t, '.gitignore'), '.env\n*.log\n');
   const r = detectEnvGitignored(t);
@@ -28,21 +27,21 @@ test('SEC-01: .gitignore with .env entry is PASS', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('SEC-01: .gitignore with .env.* wildcard is PASS', () => {
+test('AS-12: .gitignore with .env.* wildcard is PASS', () => {
   const t = tmp();
   writeFileSync(join(t, '.gitignore'), '*.env.*\n.env.*\n');
   const r = detectEnvGitignored(t);
   assert.equal(r.status, 'PASS');
 });
 
-test('SEC-01: .gitignore without .env is FAIL', () => {
+test('AS-12: .gitignore without .env is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, '.gitignore'), 'node_modules/\ndist/\n*.log\n');
   const r = detectEnvGitignored(t);
   assert.equal(r.status, 'FAIL');
 });
 
-test('SEC-01: no .gitignore is FAIL', () => {
+test('AS-12: no .gitignore is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'main.py'), 'print(1)\n');
   const r = detectEnvGitignored(t);
@@ -50,10 +49,10 @@ test('SEC-01: no .gitignore is FAIL', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectAgentSafetyHooks (2601 — SEC-02)
+// detectAgentSafetyHooks (2601 — AIS-07)
 // ---------------------------------------------------------------------------
 
-test('SEC-02: settings.json with hooks key is PASS', () => {
+test('AIS-07: settings.json with hooks key is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, '.claude'), { recursive: true });
   writeFileSync(
@@ -65,13 +64,13 @@ test('SEC-02: settings.json with hooks key is PASS', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('SEC-02: no hooks configured is FAIL', () => {
+test('AIS-07: no hooks configured is FAIL', () => {
   const t = tmp();
   const r = detectAgentSafetyHooks(t);
   assert.equal(r.status, 'FAIL');
 });
 
-test('SEC-02: hook script referencing .env patterns is PASS', () => {
+test('AIS-07: hook script referencing .env patterns is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, '.claude', 'hooks'), { recursive: true });
   writeFileSync(
@@ -82,7 +81,7 @@ test('SEC-02: hook script referencing .env patterns is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
-test('SEC-02: hook script without sensitive references is WARN', () => {
+test('AIS-07: hook script without sensitive references is WARN', () => {
   const t = tmp();
   mkdirSync(join(t, '.claude', 'hooks'), { recursive: true });
   writeFileSync(
@@ -94,10 +93,10 @@ test('SEC-02: hook script without sensitive references is WARN', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectEnvExample (2602 — SEC-03)
+// detectEnvExample (2602 — AS-13)
 // ---------------------------------------------------------------------------
 
-test('SEC-03: .env.example is PASS', () => {
+test('AS-13: .env.example is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, '.env.example'),
@@ -109,21 +108,21 @@ test('SEC-03: .env.example is PASS', () => {
   assert.ok(r.evidence.some((e) => e.includes('.env.example')));
 });
 
-test('SEC-03: .env.template is PASS', () => {
+test('AS-13: .env.template is PASS', () => {
   const t = tmp();
   writeFileSync(join(t, '.env.template'), 'SECRET_KEY=changeme\n');
   const r = detectEnvExample(t);
   assert.equal(r.status, 'PASS');
 });
 
-test('SEC-03: .env.sample is PASS', () => {
+test('AS-13: .env.sample is PASS', () => {
   const t = tmp();
   writeFileSync(join(t, '.env.sample'), 'PORT=3000\n');
   const r = detectEnvExample(t);
   assert.equal(r.status, 'PASS');
 });
 
-test('SEC-03: no env template is FAIL', () => {
+test('AS-13: no env template is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'README.md'), '# project\n');
   const r = detectEnvExample(t);
@@ -131,73 +130,14 @@ test('SEC-03: no env template is FAIL', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectNoSecretsCommitted (2603 — SEC-04)
-// ---------------------------------------------------------------------------
-
-test('SEC-04: no secrets in source files is PASS', () => {
-  const t = tmp();
-  writeFileSync(
-    join(t, 'app.py'),
-    'import os\nDB_URL = os.environ["DATABASE_URL"]\n'
-  );
-  const r = detectNoSecretsCommitted(t);
-  assert.equal(r.status, 'PASS');
-  assert.equal(r.method, 'detected');
-});
-
-test('SEC-04: AWS AKIA key (non-placeholder) in source file is WARN or FAIL', () => {
-  const t = tmp();
-  // Use a realistic-looking AKIA key without placeholder words (no "example"/"test"/"fake")
-  writeFileSync(
-    join(t, 'config.py'),
-    'AWS_ACCESS_KEY_ID = "AKIAZ3WBBMQKYNQP1234"\nAWS_REGION = "us-east-1"\n'
-  );
-  const r = detectNoSecretsCommitted(t);
-  assert.ok(
-    r.status === 'WARN' || r.status === 'FAIL',
-    `expected WARN or FAIL for AWS AKIA key, got ${r.status}`
-  );
-});
-
-test('SEC-04: hardcoded api_key assignment triggers hit', () => {
-  const t = tmp();
-  writeFileSync(
-    join(t, 'client.ts'),
-    'const api_key = "sk-proj-xyz1234567890abcdefgh";\n'
-  );
-  const r = detectNoSecretsCommitted(t);
-  assert.ok(
-    r.status === 'WARN' || r.status === 'FAIL',
-    `expected WARN or FAIL for hardcoded api_key, got ${r.status}`
-  );
-});
-
-test('SEC-04: env-variable assignment is PASS (placeholder)', () => {
-  const t = tmp();
-  writeFileSync(join(t, 'config.ts'), 'const api_key = process.env.API_KEY;\n');
-  const r = detectNoSecretsCommitted(t);
-  assert.equal(r.status, 'PASS');
-});
-
-test('SEC-04: comment-only match is not flagged', () => {
-  const t = tmp();
-  writeFileSync(
-    join(t, 'notes.py'),
-    '# api_key = "sk-proj-abcdefghijklmn" (old key, do not use)\n'
-  );
-  const r = detectNoSecretsCommitted(t);
-  assert.equal(r.status, 'PASS');
-});
-
-// ---------------------------------------------------------------------------
-// detectSensitiveFilesGitignored (2604 — SEC-05)
+// detectSensitiveFilesGitignored (2604 — AS-14)
 // ---------------------------------------------------------------------------
 
 // Old behavior: PASS if .gitignore covered ≥3 patterns regardless of file presence.
 // New contract: relevance-gated — only types with matching files in repo are checked.
 // These tests now use actual secret files to exercise the new paths.
 
-test('SEC-05: actual *.pem and *.key files covered in .gitignore is PASS', () => {
+test('AS-14: actual *.pem and *.key files covered in .gitignore is PASS', () => {
   const t = tmp();
   writeFileSync(join(t, 'server.pem'), 'KEY\n');
   writeFileSync(join(t, 'client.key'), 'KEY\n');
@@ -211,7 +151,7 @@ test('SEC-05: actual *.pem and *.key files covered in .gitignore is PASS', () =>
   assert.equal(r.method, 'detected');
 });
 
-test('SEC-05: *.pem in .gitignore but Dockerfile without .dockerignore is WARN', () => {
+test('AS-14: *.pem in .gitignore but Dockerfile without .dockerignore is WARN', () => {
   const t = tmp();
   writeFileSync(join(t, 'server.pem'), 'KEY\n');
   writeFileSync(join(t, '.gitignore'), '*.pem\nnode_modules/\n');
@@ -224,7 +164,7 @@ test('SEC-05: *.pem in .gitignore but Dockerfile without .dockerignore is WARN',
   );
 });
 
-test('SEC-05: .gitignore present but missing *.pem entry when file exists is FAIL', () => {
+test('AS-14: .gitignore present but missing *.pem entry when file exists is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'server.pem'), 'KEY\n');
   writeFileSync(join(t, '.gitignore'), 'node_modules/\ndist/\n*.log\n');
@@ -236,7 +176,7 @@ test('SEC-05: .gitignore present but missing *.pem entry when file exists is FAI
   );
 });
 
-test('SEC-05: no .gitignore when a *.pem file is present is FAIL', () => {
+test('AS-14: no .gitignore when a *.pem file is present is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'server.pem'), 'KEY\n');
   const r = detectSensitiveFilesGitignored(t);
@@ -247,7 +187,7 @@ test('SEC-05: no .gitignore when a *.pem file is present is FAIL', () => {
   );
 });
 
-test('SEC-05: credentials.json file covered in .gitignore is PASS with evidence', () => {
+test('AS-14: credentials.json file covered in .gitignore is PASS with evidence', () => {
   const t = tmp();
   writeFileSync(join(t, 'credentials.json'), '{"type":"service_account"}\n');
   writeFileSync(
@@ -266,10 +206,14 @@ test('SEC-05: credentials.json file covered in .gitignore is PASS with evidence'
 // DETECTORS map
 // ---------------------------------------------------------------------------
 
-test('DETECTORS map contains codes 2600–2604', () => {
-  for (const code of [2600, 2601, 2602, 2603, 2604]) {
+test('DETECTORS map contains codes 2600-2602 and 2604 (2603 merged into AS-05/3004)', () => {
+  for (const code of [2600, 2601, 2602, 2604]) {
     assert.ok(code in DETECTORS, `DETECTORS must include ${code}`);
   }
+  assert.ok(
+    !(2603 in DETECTORS),
+    '2603 must be gone — the no-committed-secrets capability lives in application-security AS-05 (3004)'
+  );
 });
 
 test('DETECTORS[2600] dispatches to detectEnvGitignored', () => {
@@ -293,7 +237,7 @@ test('DETECTORS[2602] dispatches to detectEnvExample', () => {
 // Multi-tool registry tests (B4)
 // ---------------------------------------------------------------------------
 
-test('SEC-02: .kiro/hooks directory with hook file → PASS', () => {
+test('AIS-07: .kiro/hooks directory with hook file → PASS', () => {
   const t = tmp();
   mkdirSync(join(t, '.kiro', 'hooks'), { recursive: true });
   writeFileSync(

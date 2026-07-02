@@ -21,13 +21,11 @@ import { DETECTORS, METRICS } from '../cli.ts';
 // The scored audit dimensions (project-topology is unscored, excluded).
 const AUDIT_DIMENSIONS = new Set([
   'ai-development-tooling',
+  'ai-security',
   'application-security',
   'code-architecture',
   'documentation',
-  'end-to-end-delivery',
-  'prompt-agent-integrity',
   'quality-assurance',
-  'security',
   'software-best-practices',
   'spec-driven-development',
   'supply-chain-security',

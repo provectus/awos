@@ -4,7 +4,7 @@ import { join, relative } from 'node:path';
 import { ALL_HOOK_PATHS } from '../agent_tools.ts';
 
 // ---------------------------------------------------------------------------
-// detectEnvGitignored — category 2600 (SEC-01, method: detected)
+// detectEnvGitignored — category 2600 (AS-12, method: detected)
 //
 // PASS if .gitignore exists and contains a pattern that covers .env files.
 // FAIL if .gitignore is absent or does not cover .env.
@@ -45,7 +45,7 @@ export function detectEnvGitignored(
 }
 
 // ---------------------------------------------------------------------------
-// detectAgentSafetyHooks — category 2601 (SEC-02, method: detected)
+// detectAgentSafetyHooks — category 2601 (AIS-07, method: detected)
 //
 // Checks that Claude Code hooks are configured to guard sensitive files.
 // Looks for:
@@ -134,7 +134,7 @@ export function detectAgentSafetyHooks(
 }
 
 // ---------------------------------------------------------------------------
-// detectEnvExample — category 2602 (SEC-03, method: detected)
+// detectEnvExample — category 2602 (AS-13, method: detected)
 //
 // PASS if a template environment file exists — .env.example, .env.template,
 //   .env.sample, .env.dist, or env.example.
@@ -175,135 +175,7 @@ export function detectEnvExample(
 }
 
 // ---------------------------------------------------------------------------
-// detectNoSecretsCommitted — category 2603 (SEC-04, method: detected)
-//
-// Greps tracked source files for patterns that indicate hardcoded secrets:
-//   - High-confidence key assignment patterns (AWS keys, GCP tokens, generic
-//     API key / secret / password / token assignments with non-trivial values)
-//   - Excludes: obvious test placeholders (test, fake, example, dummy, xxx,
-//     your-*, <…>, ${…}), values that are all underscores/dashes/question
-//     marks, and comment lines.
-//
-// The scope is intentionally conservative to minimise false positives.
-//
-// PASS  if no hits found.
-// WARN  if 1–2 hits (may be false positives).
-// FAIL  if 3+ hits.
-// ---------------------------------------------------------------------------
-
-// Patterns that strongly suggest a hardcoded credential value assignment.
-const SECRET_PATTERNS = [
-  // AWS access/secret keys (long alphanumeric tokens)
-  /AKIA[0-9A-Z]{16}/,
-  // Generic assignment: key/secret/token/password/credential = "non-trivial-value"
-  /(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|password|passwd|credential|private[_-]?key)\s*[:=]\s*["']([A-Za-z0-9/+\-_.]{12,})["']/i,
-];
-
-// Values that are clearly placeholders — skip if any match.
-const PLACEHOLDER_RX =
-  /test|fake|example|dummy|xxx|your[_-]|placeholder|changeme|replace|<[^>]+>|\$\{[^}]+\}|env\(|process\.env|os\.environ|getenv/i;
-
-const SOURCE_GLOBS_SEC = [
-  '*.py',
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.java',
-  '*.kt',
-  '*.go',
-  '*.rb',
-  '*.php',
-  '*.env',
-  '*.yaml',
-  '*.yml',
-  '*.json',
-  '*.toml',
-  '*.ini',
-  '*.cfg',
-  '*.conf',
-];
-
-// Directories to always exclude from secret scanning.
-const SEC_IGNORE = [
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.venv',
-  '__pycache__',
-  '.next',
-  'target',
-  'vendor',
-  'fixtures',
-  'testdata',
-  '__tests__',
-  'test',
-  'tests',
-];
-
-export function detectNoSecretsCommitted(
-  repoPath: string,
-  _params?: unknown
-): ReturnType<typeof makeResult> {
-  const files = iterFiles(repoPath, SOURCE_GLOBS_SEC, SEC_IGNORE);
-  const hits: Array<{ file: string; line: number; pattern: string }> = [];
-
-  for (const filePath of files) {
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
-
-    const lines = content.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      // Skip comments
-      if (/^\s*(#|\/\/|\/\*)/.test(line)) continue;
-
-      for (const pat of SECRET_PATTERNS) {
-        if (!pat.test(line)) continue;
-        // Skip placeholders
-        if (PLACEHOLDER_RX.test(line)) continue;
-        hits.push({
-          file: relative(repoPath, filePath),
-          line: i + 1,
-          pattern: pat.source.slice(0, 40),
-        });
-        break; // one hit per line is enough
-      }
-    }
-
-    if (hits.length >= 20) break; // bail early — enough evidence
-  }
-
-  if (hits.length === 0) {
-    return makeResult('PASS', 0, [
-      'no hardcoded secret patterns found in tracked source files',
-    ]);
-  }
-
-  const evidence = hits
-    .slice(0, 10)
-    .map((h) => `${h.file}:${h.line} possible secret (pattern: ${h.pattern})`);
-
-  if (hits.length <= 2) {
-    return makeResult('WARN', hits.length, [
-      `${hits.length} possible secret pattern(s) found — review manually`,
-      ...evidence,
-    ]);
-  }
-
-  return makeResult('FAIL', hits.length, [
-    `${hits.length} possible hardcoded secret pattern(s) found in committed files`,
-    ...evidence,
-  ]);
-}
-
-// ---------------------------------------------------------------------------
-// detectSensitiveFilesGitignored — category 2604 (SEC-05, method: detected)
+// detectSensitiveFilesGitignored — category 2604 (AS-14, method: detected)
 //
 // Checks that sensitive file types present in the repo (or implied by the
 // stack) are excluded from both version control and container image builds.
@@ -495,9 +367,8 @@ export const DETECTORS: Record<
   number,
   (repoPath: string, params?: unknown) => ReturnType<typeof makeResult>
 > = {
-  2600: detectEnvGitignored, // SEC-01 .env gitignored
-  2601: detectAgentSafetyHooks, // SEC-02 agent safety hooks
-  2602: detectEnvExample, // SEC-03 .env.example present
-  2603: detectNoSecretsCommitted, // SEC-04 no secrets committed
-  2604: detectSensitiveFilesGitignored, // SEC-05 sensitive file types gitignored
+  2600: detectEnvGitignored, // AS-12 .env gitignored
+  2601: detectAgentSafetyHooks, // AIS-07 agent safety hooks
+  2602: detectEnvExample, // AS-13 .env.example present
+  2604: detectSensitiveFilesGitignored, // AS-14 sensitive file types gitignored
 };

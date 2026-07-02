@@ -310,12 +310,12 @@ function writeRepoAudit(
   const repoDir = join(base, repo);
   mkdirSync(join(repoDir, 'collected'), { recursive: true });
   const checks: Record<string, unknown>[] = [
-    { check_id: 'ADP-08', code: [700], status: 'OK', value: opts.deploy },
-    { check_id: 'ADP-09', code: [701], status: 'OK', value: opts.lead },
+    { check_id: 'DF-01', code: [700], status: 'OK', value: opts.deploy },
+    { check_id: 'DF-02', code: [701], status: 'OK', value: opts.lead },
   ];
   if (opts.contributors != null)
     checks.push({
-      check_id: 'ADP-07',
+      check_id: 'DESC-01',
       code: [201],
       status: 'OK',
       value: opts.contributors,
@@ -445,7 +445,7 @@ test('rollup: reads per-repo subdirs → org headline (mean matrix) + enriched p
     assert.equal(
       a['deploy_freq'],
       8,
-      'per_repo must carry deploy_freq from ADP-08 check'
+      'per_repo must carry deploy_freq from DF-01 check'
     );
     assert.equal(
       a['has_ai_tooling'],
@@ -460,7 +460,7 @@ test('rollup: reads per-repo subdirs → org headline (mean matrix) + enriched p
     assert.equal(
       a['contributors'],
       8,
-      'contributors derived from ADP-07 check value'
+      'contributors derived from DESC-01 check value'
     );
   } finally {
     rmSync(base, { recursive: true, force: true });

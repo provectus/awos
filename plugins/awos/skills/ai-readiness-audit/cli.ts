@@ -240,10 +240,10 @@ function printJson(value: unknown): void {
  * them.
  */
 const DELIVERY_CHECK_IDS: Array<[string, keyof PerRepoDelivery]> = [
-  ['ADP-08', 'deploy_freq'],
-  ['ADP-24', 'rework_rate'],
-  ['ADP-09', 'lead_time'],
-  ['ADP-12', 'change_fail'],
+  ['DF-01', 'deploy_freq'],
+  ['DF-06', 'rework_rate'],
+  ['DF-02', 'lead_time'],
+  ['DF-04', 'change_fail'],
 ];
 
 /** AI-tooling category codes (101–106); any awarded → has_ai_tooling. */
@@ -369,7 +369,7 @@ function readPerRepoAudit(
     .filter((s) => s.available)
     .map((s) => s.source ?? '')
     .filter((s) => s.length > 0);
-  const contributors = numOrNull(byCheckId.get('ADP-07')?.value);
+  const contributors = numOrNull(byCheckId.get('DESC-01')?.value);
 
   return {
     repo: repoName,

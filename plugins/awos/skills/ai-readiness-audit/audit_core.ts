@@ -458,11 +458,22 @@ export async function auditCore(
     else detected++;
   }
 
-  // 5. Per-dimension JSON + aggregated audit.json.
+  // 5. Per-dimension JSON + aggregated audit.json. Dimensions are emitted in
+  //    the presentation order from standards.toml [meta].dimension_order
+  //    (industry-standard engineering first, unscored descriptors last); each
+  //    per-dimension JSON carries its `order` index plus the title/description
+  //    from its dimensions/*.md frontmatter so aggregate/render can preserve
+  //    the order and show the description as a tooltip without re-parsing.
+  const dimOrder = metaDimensionOrder(standards);
+  const dimMeta = parseDimensionMeta(join(skillRoot, 'dimensions'));
   let auditTotal = 0;
   let auditApplicable = 0;
   const dimensions: unknown[] = [];
-  for (const [dimension, checks] of Object.entries(byDimension)) {
+  const dimNames = Object.keys(byDimension).sort(
+    (a, b) => dimOrderIndex(a, dimOrder) - dimOrderIndex(b, dimOrder)
+  );
+  for (const dimension of dimNames) {
+    const checks = byDimension[dimension];
     const score = round1(checks.reduce((s, c) => s + c.weight_awarded, 0));
     const applicable = checks
       .filter((c) => c.applies)
@@ -472,9 +483,13 @@ export async function auditCore(
     const sourcesUsed = [
       ...new Set(checks.filter((c) => c.applies).flatMap((c) => c.sources)),
     ].sort();
+    const meta = dimMeta.get(dimension);
     const dim = {
       dimension,
       date,
+      order: dimOrderIndex(dimension, dimOrder),
+      ...(meta?.title ? { title: meta.title } : {}),
+      ...(meta?.description ? { description: meta.description } : {}),
       score,
       coverage: applicable > 0 ? score / applicable : 0,
       checks,
@@ -617,6 +632,13 @@ export function aggregate(outDir: string): void {
     applicable += appl;
     dimensions.push(dim);
   }
+  // Restore the presentation order — readdirSync is alphabetical, but each
+  // per-dimension JSON carries the `order` index audit-core stamped on it.
+  dimensions.sort((a, b) => {
+    const ao = typeof a.order === 'number' ? (a.order as number) : 999;
+    const bo = typeof b.order === 'number' ? (b.order as number) : 999;
+    return ao - bo || String(a.dimension).localeCompare(String(b.dimension));
+  });
   let existing: Record<string, unknown> = {};
   try {
     existing = JSON.parse(readFileSync(join(outDir, 'audit.json'), 'utf8'));
@@ -697,6 +719,69 @@ export function aggregate(outDir: string): void {
     audit.source_windows = existing.source_windows;
   }
   writeFileSync(join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
+}
+
+/** Presentation order from standards.toml [meta].dimension_order (empty when absent). */
+function metaDimensionOrder(standards: Record<string, unknown>): string[] {
+  const meta = standards['meta'] as Record<string, unknown> | undefined;
+  const order = meta?.['dimension_order'];
+  return Array.isArray(order) ? order.map(String) : [];
+}
+
+/** Index of a dimension in the presentation order; unknown dimensions sort last, alphabetically. */
+function dimOrderIndex(dimension: string, order: string[]): number {
+  const i = order.indexOf(dimension);
+  return i === -1 ? order.length : i;
+}
+
+/**
+ * Parse `title:` and `description:` from every dimensions/*.md frontmatter,
+ * keyed by the `name:` field. The description becomes the dimension tooltip in
+ * the report. Handles plain values and `>-` folded scalars (single level).
+ */
+export function parseDimensionMeta(
+  dimensionsDir: string
+): Map<string, { title?: string; description?: string }> {
+  const map = new Map<string, { title?: string; description?: string }>();
+  let files: string[];
+  try {
+    files = readdirSync(dimensionsDir).filter((f) => f.endsWith('.md'));
+  } catch {
+    return map;
+  }
+  for (const file of files) {
+    let text: string;
+    try {
+      text = readFileSync(join(dimensionsDir, file), 'utf8');
+    } catch {
+      continue;
+    }
+    const fm = text.match(/^---\n([\s\S]*?)\n---/);
+    if (!fm) continue;
+    const lines = fm[1].split('\n');
+    const fields: Record<string, string> = {};
+    for (let i = 0; i < lines.length; i++) {
+      const kv = lines[i].match(/^(name|title|description):\s*(.*)$/);
+      if (!kv) continue;
+      let value = kv[2].trim();
+      if (value === '>-' || value === '>' || value === '') {
+        // folded scalar: join the following more-indented lines with spaces
+        const parts: string[] = [];
+        while (i + 1 < lines.length && /^\s+\S/.test(lines[i + 1])) {
+          parts.push(lines[++i].trim());
+        }
+        value = parts.join(' ');
+      }
+      fields[kv[1]] = value;
+    }
+    if (fields.name) {
+      map.set(fields.name, {
+        title: fields.title,
+        description: fields.description,
+      });
+    }
+  }
+  return map;
 }
 
 export function parseCheckIds(dimensionsDir: string): Map<number, string> {
@@ -856,6 +941,13 @@ function buildCheck(
     } else {
       status = baseStatus; // SKIP / FAIL unchanged
     }
+  }
+
+  // Weight-0 categories are informational descriptors: they carry a value but
+  // no judgment, so a PASS/FAIL/PARTIAL badge would misread as an assessment.
+  // INFO replaces any evaluated status (SKIP keeps its meaning).
+  if (c.weight === 0 && status !== 'SKIP' && status !== 'PENDING_JUDGMENT') {
+    status = 'INFO';
   }
 
   // A SKIP with no evidence renders as a bare "—"; give the reader a reason why.

@@ -13,7 +13,7 @@ function git(cwd: string, ...args: string[]) {
   execFileSync('git', ['-C', cwd, ...args], { stdio: 'ignore' });
 }
 
-test('PAI-05 does not penalize an untracked *.local.json settings file', () => {
+test('AIS-05 does not penalize an untracked *.local.json settings file', () => {
   const repo = mkdtempSync(join(tmpdir(), 'awos-pai05-'));
   try {
     git(repo, 'init', '--quiet');
@@ -47,7 +47,7 @@ test('PAI-05 does not penalize an untracked *.local.json settings file', () => {
     assert.notEqual(
       res.status,
       'FAIL',
-      'PAI-05 must not FAIL solely on a local-only file'
+      'AIS-05 must not FAIL solely on a local-only file'
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });

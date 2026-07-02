@@ -396,13 +396,13 @@ test('a category summary becomes the inline lead (plain); definition stays verbo
   try {
     await auditCore(repoPath, outDir, {}, {}, standardsPathForSkip);
     const dim = JSON.parse(
-      readFileSync(join(outDir, 'ai-sdlc-adoption.json'), 'utf8')
+      readFileSync(join(outDir, 'delivery-flow.json'), 'utf8')
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rework = (dim.checks as any[]).find((c: any) =>
       Array.isArray(c.code) ? c.code.includes(1401) : c.code === 1401
     );
-    assert.ok(rework, 'ADP-24 (code 1401) must exist');
+    assert.ok(rework, 'DF-06 (code 1401) must exist in delivery-flow');
     assert.equal(
       rework.plain,
       'DORA deployment rework rate: share of deploys that are unplanned bug-fix work.',

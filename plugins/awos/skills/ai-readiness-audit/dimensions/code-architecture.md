@@ -103,3 +103,14 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Fail:** More than 15% of source files exceed 500 lines, or any file exceeds 2000 lines
 - **Severity:** medium
 - **Category:** 2105
+
+### ARCH-07: Shared ownership enablers
+
+- **What:** The project has cross-layer tooling that enables developers to work across the full stack
+- **How:** Check for root-level tooling that spans layers: shared `Makefile` or `Taskfile` with commands for both backend and frontend, root `docker-compose.yml` that starts the full stack, shared CI/CD pipeline that builds and tests all layers, root-level `package.json` scripts or task runner.
+- **Pass:** Root-level cross-layer tooling exists (unified dev start, shared CI, etc.)
+- **Warn:** Some cross-layer tooling but incomplete (e.g., docker-compose but no unified task runner)
+- **Fail:** No shared tooling — each layer is completely independent with no unified entry point
+- **Skip-When:** Topology artifact shows single-service repo
+- **Severity:** medium
+- **Category:** 2304

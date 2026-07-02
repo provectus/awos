@@ -11,7 +11,7 @@ import {
 } from '../agent_tools.ts';
 
 // ---------------------------------------------------------------------------
-// detectInvisibleUnicode — category 2400 (PAI-01, method: detected)
+// detectInvisibleUnicode — category 2400 (AIS-01, method: detected)
 //
 // applies_when: topology.has_ai_agent_files
 //
@@ -109,7 +109,7 @@ export function detectInvisibleUnicode(
     return makeResult(
       'SKIP',
       null,
-      ['no AI agent instruction files found — PAI-01 not applicable'],
+      ['no AI agent instruction files found — AIS-01 not applicable'],
       'detected'
     );
   }
@@ -155,7 +155,7 @@ export function detectInvisibleUnicode(
 }
 
 // ---------------------------------------------------------------------------
-// detectPromptInjection — category 2401 (PAI-02, method: detected)
+// detectPromptInjection — category 2401 (AIS-02, method: detected)
 //
 // applies_when: topology.has_ai_agent_files
 //
@@ -212,7 +212,7 @@ export function detectPromptInjection(
     return makeResult(
       'SKIP',
       null,
-      ['no AI agent instruction files found — PAI-02 not applicable'],
+      ['no AI agent instruction files found — AIS-02 not applicable'],
       'detected'
     );
   }
@@ -267,7 +267,7 @@ export function detectPromptInjection(
 }
 
 // ---------------------------------------------------------------------------
-// detectHookScriptSafety — category 2402 (PAI-03, method: detected)
+// detectHookScriptSafety — category 2402 (AIS-03, method: detected)
 //
 // applies_when: topology.has_hooks
 //
@@ -321,7 +321,7 @@ export function detectHookScriptSafety(
     return makeResult(
       'SKIP',
       null,
-      ['no .claude/hooks/ directory found — PAI-03 not applicable'],
+      ['no .claude/hooks/ directory found — AIS-03 not applicable'],
       'detected'
     );
   }
@@ -335,7 +335,7 @@ export function detectHookScriptSafety(
 
   if (hookFiles.length === 0) {
     return makeResult('PASS', 0, [
-      'no hook scripts found in .claude/hooks/ — PAI-03 not applicable',
+      'no hook scripts found in .claude/hooks/ — AIS-03 not applicable',
     ]);
   }
 
@@ -381,7 +381,7 @@ export function detectHookScriptSafety(
 }
 
 // ---------------------------------------------------------------------------
-// detectMcpEndpointSafety — category 2403 (PAI-04, method: detected)
+// detectMcpEndpointSafety — category 2403 (AIS-04, method: detected)
 //
 // applies_when: topology.has_mcp_config
 //
@@ -411,7 +411,7 @@ export function detectMcpEndpointSafety(
 
   if (!existsSync(mcpPath)) {
     return makeResult('SKIP', null, [
-      'no .mcp.json found — PAI-04 not applicable',
+      'no .mcp.json found — AIS-04 not applicable',
     ]);
   }
 
@@ -420,7 +420,7 @@ export function detectMcpEndpointSafety(
     content = readFileSync(mcpPath, 'utf8');
   } catch {
     return makeResult('SKIP', null, [
-      '.mcp.json could not be read — PAI-04 skipped',
+      '.mcp.json could not be read — AIS-04 skipped',
     ]);
   }
 
@@ -460,7 +460,7 @@ export function detectMcpEndpointSafety(
 }
 
 // ---------------------------------------------------------------------------
-// detectAgentFilesTracked — category 2404 (PAI-05, method: detected)
+// detectAgentFilesTracked — category 2404 (AIS-05, method: detected)
 //
 // applies_when: topology.has_ai_agent_files
 //
@@ -468,7 +468,7 @@ export function detectMcpEndpointSafety(
 // git. Untracked agent files cannot be audited via git history.
 //
 // Algorithm:
-//   1. List agent files (same list as PAI-01).
+//   1. List agent files (same list as AIS-01).
 //   2. For each file, run `git ls-files --error-unmatch <file>` to check.
 //   3. Count untracked files.
 //
@@ -501,7 +501,7 @@ export function detectAgentFilesTracked(
     return makeResult(
       'SKIP',
       null,
-      ['no AI agent instruction files found — PAI-05 not applicable'],
+      ['no AI agent instruction files found — AIS-05 not applicable'],
       'detected'
     );
   }
@@ -515,7 +515,7 @@ export function detectAgentFilesTracked(
     });
   } catch {
     return makeResult('SKIP', null, [
-      'not a git repository — git provenance check (PAI-05) skipped',
+      'not a git repository — git provenance check (AIS-05) skipped',
     ]);
   }
 
@@ -552,7 +552,7 @@ export function detectAgentFilesTracked(
 }
 
 // ---------------------------------------------------------------------------
-// detectNoSecurityBypass — category 2405 (PAI-06, method: detected)
+// detectNoSecurityBypass — category 2405 (AIS-06, method: detected)
 //
 // applies_when: topology.has_commands_or_skills
 //
@@ -619,7 +619,7 @@ export function detectNoSecurityBypass(
       'SKIP',
       null,
       [
-        'no agentic tool command or skill directories found — PAI-06 not applicable',
+        'no agentic tool command or skill directories found — AIS-06 not applicable',
       ],
       'detected'
     );
@@ -694,10 +694,10 @@ export const DETECTORS: Record<
   number,
   (repoPath: string, params?: unknown) => ReturnType<typeof makeResult>
 > = {
-  2400: detectInvisibleUnicode, // PAI-01 no invisible Unicode in agent files
-  2401: detectPromptInjection, // PAI-02 no prompt injection patterns
-  2402: detectHookScriptSafety, // PAI-03 hook script safety (SKIP if no hooks)
-  2403: detectMcpEndpointSafety, // PAI-04 MCP endpoint safety (SKIP if no .mcp.json)
-  2404: detectAgentFilesTracked, // PAI-05 agent files tracked in git
-  2405: detectNoSecurityBypass, // PAI-06 no security bypass in commands/skills
+  2400: detectInvisibleUnicode, // AIS-01 no invisible Unicode in agent files
+  2401: detectPromptInjection, // AIS-02 no prompt injection patterns
+  2402: detectHookScriptSafety, // AIS-03 hook script safety (SKIP if no hooks)
+  2403: detectMcpEndpointSafety, // AIS-04 MCP endpoint safety (SKIP if no .mcp.json)
+  2404: detectAgentFilesTracked, // AIS-05 agent files tracked in git
+  2405: detectNoSecurityBypass, // AIS-06 no security bypass in commands/skills
 };

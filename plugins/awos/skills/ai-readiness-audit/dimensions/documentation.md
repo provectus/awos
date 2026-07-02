@@ -79,3 +79,14 @@ Audits documentation coverage across the repository. Well-documented projects ar
 - **Skip-When:** No source file in a language with a known doc convention is present
 - **Severity:** medium
 - **Category:** 2205
+
+### DOC-07: Spec-to-delivery traceability
+
+- **What:** Specifications link to implementation and implementation references specs
+- **How:** Read the spec-driven-development artifact. If SDD-04 (features are implemented through specs) is PASS or WARN, check a sample of 2-3 recent feature branches to see if commit messages or PR descriptions reference spec documents. Also check if spec files' tasks.md have checked-off items that correlate with the branch's changes.
+- **Pass:** Bidirectional tracing exists: specs → branches and branches → specs
+- **Warn:** One-directional tracing only (specs reference branches OR branches reference specs, but not both)
+- **Fail:** No traceability between specifications and implementation
+- **Skip-When:** Spec-driven-development artifact shows SDD-04 as FAIL (no specs or no spec-driven development)
+- **Severity:** high
+- **Category:** 2302

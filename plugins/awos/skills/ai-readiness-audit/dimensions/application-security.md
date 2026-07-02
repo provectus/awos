@@ -1,7 +1,7 @@
 ---
 name: application-security
 title: Application Security (ASVS 5.0.0 L1)
-description: Audits HTTP API and application-layer security controls against a curated OWASP ASVS 5.0.0 Level-1 subset — TLS, security headers, CORS, SQL injection, hardcoded secrets, authentication on mutations, password hygiene, input validation, rate limiting, authorization correctness, and insecure design
+description: Audits application-layer security against a curated OWASP ASVS 5.0.0 Level-1 subset — TLS, security headers, CORS, SQL injection, hardcoded secrets, auth on mutations, password hygiene, input validation, rate limiting, authorization — plus secret-file hygiene (.env gitignored, env templates, sensitive-file ignore coverage)
 severity: critical
 depends-on: [project-topology]
 ---
@@ -131,3 +131,50 @@ This dimension is distinct from the `security` dimension (which audits agent-saf
 - **Skip-When:** Topology reports no HTTP API present
 - **Severity:** high
 - **Category:** 3010
+
+### AS-12: .env files are gitignored
+
+- **What:** Environment files containing secrets are excluded from version control
+- **How:** Check `.gitignore` for `.env` patterns. Verify that `.env`, `.env.local`, `.env.production`, `.env.*.local` are gitignored. Also check that no `.env` files with actual secrets are tracked in git (`git ls-files '*.env*'`).
+- **Pass:** `.env` patterns are in `.gitignore` AND no `.env` files with secrets are tracked
+- **Warn:** `.gitignore` covers `.env` but some `.env.example` or `.env.template` files exist (acceptable if they contain only placeholders)
+- **Fail:** `.env` files with actual values are tracked in git, OR `.env` is not gitignored
+- **Severity:** critical
+- **Category:** 2600
+
+### AS-13: .env.example or template exists
+
+- **What:** A template environment file exists so developers know which variables to configure
+- **How:**
+  1. First, detect whether the project actually uses environment variables. Grep source files for env var access patterns:
+     - Node.js/JS/TS: `process\.env`, `import.*dotenv`, `require.*dotenv`, `config()` from dotenv
+     - Python: `os\.environ`, `os\.getenv`, `dotenv`, `load_dotenv`
+     - Java/Kotlin: `System\.getenv`, `@Value.*\$\{`, `environment\.getProperty`
+     - Go: `os\.Getenv`, `godotenv`
+     - Ruby: `ENV\[`, `dotenv`
+     - General: `.env` references in `docker-compose.yml`, `docker-compose.yaml`, or `Dockerfile` (`env_file:`, `--env-file`)
+  2. If no env var usage is detected, mark this check as **SKIP**
+  3. If env var usage is found, check for `.env.example`, `.env.template`, `.env.sample`, or equivalent at the repo root and in each detected service directory that uses env vars
+  4. Verify that template files contain only placeholder values (no real secrets)
+     For monorepos: only flag services that use env vars but lack a template. Services with no env var usage should be ignored.
+- **Pass:** Template env file exists with placeholder values at root and/or in service directories that use env vars
+- **Warn:** Template exists but only at root level (missing for individual services that use env vars in a monorepo)
+- **Fail:** Project uses environment variables but no template env file found anywhere
+- **Skip-When:** No environment variable usage detected in the project source code or configuration
+- **Severity:** high
+- **Category:** 2602
+
+### AS-14: Sensitive files in .gitignore coverage
+
+- **What:** Sensitive file types relevant to this project's stack are covered by .gitignore
+- **How:**
+  1. Read the topology summary to understand the project's languages, frameworks, and infrastructure
+  2. Based on the detected stack, determine which sensitive file types are relevant (e.g., `*.jks` for Java, `*.pfx` for .NET, `service-account*.json` for GCP projects). Always include OS files (`.DS_Store`, `Thumbs.db`) as universally relevant.
+  3. Check `.gitignore` for coverage of only the relevant patterns
+  4. Do NOT flag missing patterns for file types unrelated to the project's stack
+- **Pass:** `.gitignore` covers all sensitive file types relevant to the detected stack
+- **Warn:** Some relevant categories are covered but others are missing
+- **Fail:** `.gitignore` is missing or has minimal coverage of sensitive file types relevant to this stack
+- **Skip-When:** Project topology could not be determined (no topology artifact available), or no sensitive file types relevant to the stack are present (nothing to cover)
+- **Severity:** high
+- **Category:** 2604

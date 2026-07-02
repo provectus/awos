@@ -53,7 +53,7 @@ Per-check record schema (all fields required unless explicitly marked optional):
 
 Field notes:
 
-- **`check_id`** — taken verbatim from the dimension check heading id: the `XXX-NN` token from the `### XXX-NN:` heading (e.g. `SEC-02`, `ARCH-06`, `SDD-04`).
+- **`check_id`** — taken verbatim from the dimension check heading id: the `XXX-NN` token from the `### XXX-NN:` heading (e.g. `AIS-07`, `ARCH-06`, `SDD-04`).
 - **`code`** — array of numeric category codes from the check's `**Category:**` line (resolved against `standards.toml`).
 - **`method`** — read from `standards.toml` for the category code. One of `computed`, `detected`, or `judgment`.
 - **`status`** — for `computed`/`detected` checks this comes verbatim from the detector output (`node dist/cli.js detect <code> <repoPath>`); for `judgment` checks it is the auditor's evaluation of the category's `rubric` against its `evidence_required` items.
@@ -88,7 +88,7 @@ The renderer is deterministic and contains no LLM. The plain-language narrative 
         "label": "Deployment frequency",
         "display_value": "1.9 / wk",
         "band": "High",
-        "check_id": "ADP-08"
+        "check_id": "DF-01"
       },
       {
         "label": "Cycle time (Jira In-Progress→Done)",
@@ -122,7 +122,7 @@ The renderer is deterministic and contains no LLM. The plain-language narrative 
       "priority": "P0|P1|P2",
       "title": "Plain-language fix title",
       "dimension": "Security",
-      "check_id": "SEC-02",
+      "check_id": "AIS-07",
       "effort": "Low|Medium|High",
       "detail": "Plain-language paragraph: what to do and why."
     }
@@ -177,28 +177,28 @@ In org mode the engine reads each repo's FULL audit — `context/audits/YYYY-MM-
         "label": "Deployment frequency",
         "display_value": "7 / wk",
         "band": "elite",
-        "check_id": "ADP-08",
+        "check_id": "DF-01",
         "repos_counted": 8
       },
       {
         "label": "Rework rate (DORA)",
         "display_value": "15%",
         "band": "watch",
-        "check_id": "ADP-24",
+        "check_id": "DF-06",
         "repos_counted": 6
       },
       {
         "label": "Lead time for change",
         "display_value": "24 h",
         "band": "high",
-        "check_id": "ADP-09",
+        "check_id": "DF-02",
         "repos_counted": 8
       },
       {
         "label": "Change-failure rate",
         "display_value": "5%",
         "band": "high",
-        "check_id": "ADP-12",
+        "check_id": "DF-04",
         "repos_counted": 8
       }
     ]
@@ -223,7 +223,7 @@ In org mode the engine reads each repo's FULL audit — `context/audits/YYYY-MM-
 }
 ```
 
-The deterministic org `headline.delivery[]` has **6 rows** — the 2 git per-active rows (merges/active, LOC/active) plus the 4 git-sourced DORA metrics (deployment frequency, rework rate, lead time, change-failure rate). Cycle-time and MTTR are connector-gated (tracker / incident) and never deterministically computed, so the deterministic org headline omits them entirely. Each `display_value` is the per-metric **mean** across repos and each `band` is the mean re-banded through the same TS band functions (`doraDeployBand`, `reworkBand`, `doraLeadTimeBand`, `doraChangeFailBand`). Row 1 (capability Points + Coverage) stays the `org_capability_score` card and is not duplicated here. A metric is averaged over only the repos that supply a value; `repos_counted` notes that coverage; a metric absent in every repo is omitted. Delivery values are pulled from each repo's audit checks by `check_id` (`ADP-08`/`ADP-24`/`ADP-09`/`ADP-12`); `merges_per_active`/`loc_per_active` come from each repo's `collected/git.json` → `raw.window_stats`. The legacy `per_repo` fields are derived from the audit itself — `awarded_weight`/`audit_total` from `audit_total`, `has_ai_tooling` from any awarded AI-tooling code (101–106), `sources_reachable` from the available collector sources, `contributors` from the `ADP-07` check value — so no flat `<repo>.json` summary is required.
+The deterministic org `headline.delivery[]` has **6 rows** — the 2 git per-active rows (merges/active, LOC/active) plus the 4 git-sourced DORA metrics (deployment frequency, rework rate, lead time, change-failure rate). Cycle-time and MTTR are connector-gated (tracker / incident) and never deterministically computed, so the deterministic org headline omits them entirely. Each `display_value` is the per-metric **mean** across repos and each `band` is the mean re-banded through the same TS band functions (`doraDeployBand`, `reworkBand`, `doraLeadTimeBand`, `doraChangeFailBand`). Row 1 (capability Points + Coverage) stays the `org_capability_score` card and is not duplicated here. A metric is averaged over only the repos that supply a value; `repos_counted` notes that coverage; a metric absent in every repo is omitted. Delivery values are pulled from each repo's audit checks by `check_id` (`DF-01`/`DF-06`/`DF-02`/`DF-04`); `merges_per_active`/`loc_per_active` come from each repo's `collected/git.json` → `raw.window_stats`. The legacy `per_repo` fields are derived from the audit itself — `awarded_weight`/`audit_total` from `audit_total`, `has_ai_tooling` from any awarded AI-tooling code (101–106), `sources_reachable` from the available collector sources, `contributors` from the `DESC-01` check value — so no flat `<repo>.json` summary is required.
 
 ---
 

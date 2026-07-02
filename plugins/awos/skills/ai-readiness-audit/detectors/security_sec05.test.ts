@@ -17,7 +17,7 @@ const detect = (repo: string) =>
     })
   );
 
-test('SEC-05 flags a secret file ignored by git but exposed to Docker builds', () => {
+test('AS-14 flags a secret file ignored by git but exposed to Docker builds', () => {
   const repo = mkdtempSync(join(tmpdir(), 'awos-sec05-gap-'));
   try {
     writeFileSync(join(repo, 'server.pem'), 'KEY\n'); // a real secret file exists
@@ -35,7 +35,7 @@ test('SEC-05 flags a secret file ignored by git but exposed to Docker builds', (
   }
 });
 
-test('SEC-05 does not penalize a repo with no secret-type files', () => {
+test('AS-14 does not penalize a repo with no secret-type files', () => {
   const repo = mkdtempSync(join(tmpdir(), 'awos-sec05-none-'));
   try {
     writeFileSync(join(repo, 'main.py'), 'print(1)\n'); // no *.pem/*.key/etc.

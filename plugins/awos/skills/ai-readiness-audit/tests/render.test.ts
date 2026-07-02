@@ -135,7 +135,7 @@ function singleRepoFixture(): AuditJson {
         priority: 'P0',
         title: 'Add AI-agent guardrails that block reading secret files',
         dimension: 'Security',
-        check_id: 'SEC-02',
+        check_id: 'AIS-07',
         effort: 'Low',
         detail:
           'Add a permissions.deny entry to .claude/settings.json denying Read access to .env, *.pem, *.key.',
@@ -184,13 +184,13 @@ function singleRepoFixture(): AuditJson {
         coverage: 0.65,
         checks: [
           makeCheck({
-            check_id: 'SEC-01',
+            check_id: 'AS-12',
             status: 'PASS',
             weight_awarded: 6,
             weight_max: 6,
           }),
           makeCheck({
-            check_id: 'SEC-02',
+            check_id: 'AIS-07',
             status: 'WARN',
             weight_awarded: 0,
             weight_max: 4,
@@ -215,9 +215,9 @@ function bareFixture(): AuditJson {
         score: 50,
         coverage: 0.5,
         checks: [
-          makeCheck({ check_id: 'SEC-01', status: 'PASS' }),
+          makeCheck({ check_id: 'AS-12', status: 'PASS' }),
           makeCheck({
-            check_id: 'SEC-02',
+            check_id: 'AIS-07',
             status: 'FAIL',
             weight_awarded: 0,
             weight_max: 8,
@@ -352,7 +352,7 @@ test('renderMarkdown: five-part hint content present in check rows', () => {
 test('renderMarkdown: check_ids present in the table', () => {
   const md = renderMarkdown(singleRepoFixture());
   assert.ok(md.includes('AI-01'), 'Markdown must contain check_id AI-01');
-  assert.ok(md.includes('SEC-02'), 'Markdown must contain check_id SEC-02');
+  assert.ok(md.includes('AIS-07'), 'Markdown must contain check_id AIS-07');
 });
 
 test('renderMarkdown: audit_total and coverage present', () => {
@@ -758,7 +758,7 @@ test('insights and recommendations render as collapsible accordions; lists have 
       {
         theme: 'Strong context, weak guardrails',
         severity: 'high',
-        weak_areas: ['AI-05', 'SEC-02'],
+        weak_areas: ['AI-05', 'AIS-07'],
         so_what: 'risky',
         improves: 'add hooks',
       },
@@ -858,7 +858,7 @@ function sourcesFixture(): AuditJson {
         score: 5,
         coverage: 0.5,
         sources_used: ['git'],
-        checks: [makeCheck({ check_id: 'SEC-01', status: 'PASS' })],
+        checks: [makeCheck({ check_id: 'AS-12', status: 'PASS' })],
       },
     ],
   };
@@ -1184,7 +1184,7 @@ test('renderMarkdown: Reach lists Active Contributors → Spec coverage → AI t
   );
 });
 
-test('renderHtml: ai-sdlc-adoption dimension page echoes Merges and LOC as non-scored throughput context', () => {
+test('renderHtml: descriptors dimension page echoes Merges and LOC as non-scored throughput context', () => {
   const audit: AuditJson = {
     date: '2026-01-15',
     project: 'adoption-repo',
@@ -1203,24 +1203,31 @@ test('renderHtml: ai-sdlc-adoption dimension page echoes Merges and LOC as non-s
     },
     dimensions: [
       {
-        dimension: 'ai-sdlc-adoption',
+        dimension: 'descriptors',
         date: '2026-01-15',
-        score: 10,
-        coverage: 0.5,
-        checks: [makeCheck({ check_id: 'ADP-01', status: 'PASS' })],
+        score: 0,
+        coverage: 0,
+        checks: [
+          makeCheck({
+            check_id: 'DESC-01',
+            status: 'PASS',
+            weight_awarded: 0,
+            weight_max: 0,
+          }),
+        ],
       },
     ],
   };
   const html = renderHtml(audit);
-  const pageStart = html.indexOf('id="page-ai-sdlc-adoption"');
+  const pageStart = html.indexOf('id="page-descriptors"');
   assert.ok(
     pageStart !== -1,
-    'ai-sdlc-adoption dimension sub-page must be rendered'
+    'descriptors dimension sub-page must be rendered'
   );
   const page = html.slice(pageStart, html.indexOf('</section>', pageStart));
   assert.ok(
     page.includes('Throughput context (not scored)'),
-    'ai-sdlc-adoption page must carry a clearly non-scored throughput-context subsection'
+    'descriptors page must carry a clearly non-scored throughput-context subsection'
   );
   assert.ok(
     page.includes('3.1 / active') && page.includes('480 / active'),
@@ -1228,11 +1235,11 @@ test('renderHtml: ai-sdlc-adoption dimension page echoes Merges and LOC as non-s
   );
 });
 
-test('renderHtml: throughput-context subsection is confined to ai-sdlc-adoption', () => {
-  // singleRepoFixture has no ai-sdlc-adoption dimension → no throughput block anywhere.
+test('renderHtml: throughput-context subsection is confined to the descriptors page', () => {
+  // singleRepoFixture has no descriptors dimension → no throughput block anywhere.
   const html = renderHtml(singleRepoFixture());
   assert.ok(
     !html.includes('Throughput context (not scored)'),
-    'Non-ai-sdlc-adoption dimension pages must not render the throughput-context subsection'
+    'Non-descriptors dimension pages must not render the throughput-context subsection'
   );
 });

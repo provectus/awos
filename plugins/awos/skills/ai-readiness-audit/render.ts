@@ -160,6 +160,12 @@ export interface Check {
 export interface DimensionArtifact {
   dimension: string;
   date: string;
+  /** Presentation-order index stamped by audit-core (standards.toml [meta].dimension_order). */
+  order?: number;
+  /** Display title from the dimension .md frontmatter (fallback: labelize(dimension)). */
+  title?: string;
+  /** One-line summary from the dimension .md frontmatter — the dimension tooltip. */
+  description?: string;
   score: number;
   coverage: number;
   checks: Check[];
@@ -478,7 +484,7 @@ function fmtH(v: number | null | undefined): string {
 }
 
 function titleLabel(dim: DimensionArtifact): string {
-  return labelize(dim.dimension);
+  return dim.title ?? labelize(dim.dimension);
 }
 
 const ACRONYMS = new Set([
@@ -554,9 +560,17 @@ function statusCounts(dim: DimensionArtifact): {
     else if (c.status === 'WARN') warn++;
     else if (c.status === 'PARTIAL') partial++;
     else if (c.status === 'PASS') pass++;
+    else if (c.status === 'INFO'); // informational descriptor — not a verdict
     else skip++;
   }
   return { fail, warn, partial, pass, skip };
+}
+
+/** True for the unscored descriptors dimension: every check carries weight 0. */
+function isInformational(dim: DimensionArtifact): boolean {
+  return (
+    dim.checks.length > 0 && dim.checks.every((c) => (c.weight_max || 0) === 0)
+  );
 }
 
 /** Plain-language lead for a check: prefer `plain`, fall back to `definition`. */
@@ -739,8 +753,9 @@ export function renderMarkdown(audit: AuditJson): string {
                 s
             )
             .join(', ');
+    const info = isInformational(dim);
     lines.push(
-      `| ${rowNum++} | ${titleLabel(dim)} | ${fmtPts(dim.score)} | ${sourcesCell} | ${pct(dim.coverage)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
+      `| ${rowNum++} | ${titleLabel(dim)} | ${info ? 'info' : fmtPts(dim.score)} | ${sourcesCell} | ${info ? '—' : pct(dim.coverage)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
     );
   }
   lines.push('');
@@ -780,8 +795,14 @@ export function renderMarkdown(audit: AuditJson): string {
   for (const dim of audit.dimensions) {
     lines.push(`## Dimension: ${titleLabel(dim)}`);
     lines.push('');
+    if (dim.description) {
+      lines.push(`> ${dim.description}`);
+      lines.push('');
+    }
     lines.push(
-      `**Score:** ${fmtPts(dim.score)} pts (coverage ${pct(dim.coverage)} rel. today's standard)`
+      isInformational(dim)
+        ? '**Informational** — descriptors reported for context, not scored toward the audit total.'
+        : `**Score:** ${fmtPts(dim.score)} pts (coverage ${pct(dim.coverage)} rel. today's standard)`
     );
     lines.push('');
 
@@ -1028,6 +1049,7 @@ function statusBadge(status: string): string {
     PARTIAL: '#f59e0b',
     FAIL: '#ef4444',
     SKIP: '#9ca3af',
+    INFO: '#60a5fa', // informational descriptor — neutral, not a verdict
   };
   const bg = colors[status] ?? '#9ca3af';
   return `<span class="badge" style="background:${bg};color:#fff;padding:1px 6px;border-radius:3px;font-size:.75em;font-weight:600">${esc(status)}</span>`;
@@ -1039,6 +1061,7 @@ const STATUS_COLOR: Record<string, string> = {
   PARTIAL: '#fde68a',
   FAIL: '#fef2f2',
   SKIP: '#f9fafb',
+  INFO: '#eff6ff',
 };
 
 const BAND_COLOR: Record<string, string> = {
@@ -1297,12 +1320,12 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       );
     }
     // Derive fallback reach values from deterministic checks when the LLM
-    // headline omitted them. ADP-07 → contributors, SDD-04 → spec coverage.
+    // headline omitted them. DESC-01 → contributors, SDD-04 → spec coverage.
     const reachFallback: Partial<
       Record<'contributors' | 'spec_coverage' | 'ai_tooling', string>
     > = {};
     if (!h?.reach?.contributors) {
-      const adp07 = checkById.get('ADP-07');
+      const adp07 = checkById.get('DESC-01');
       if (adp07?.expression) reachFallback.contributors = adp07.expression;
     }
     if (!h?.reach?.spec_coverage) {
@@ -1460,12 +1483,18 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
           tooltipDetail
         );
       })();
+      // The dimension name carries its frontmatter description as a hover
+      // tooltip — what's inside this dimension, right on the main page.
+      const nameCell = dim.description
+        ? `<a href="${href}"><strong>${tip(titleLabel(dim), dim.description)}</strong></a>`
+        : `<a href="${href}"><strong>${esc(titleLabel(dim))}</strong></a>`;
+      const info = isInformational(dim);
       rows.push(`<tr class="dim-row${lowCov}" onclick="location.hash='dim/${esc(key)}'">
   <td>${n++}</td>
-  <td><a href="${href}"><strong>${esc(titleLabel(dim))}</strong></a></td>
-  <td>${fmtPts(dim.score)} pts</td>
+  <td>${nameCell}</td>
+  <td>${info ? tip('info', 'Informational descriptors — reported for context, not scored toward the audit total.') : `${fmtPts(dim.score)} pts`}</td>
   <td>${sourcesCell}</td>
-  <td>${covPct}</td>
+  <td>${info ? '—' : covPct}</td>
   <td>${tip(relStr, relTip, '')}</td>
   <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
   <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
@@ -1510,8 +1539,15 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         : '';
     if (navHtml) rows.push(navHtml);
     rows.push(`<h2>${esc(titleLabel(dim))}</h2>`);
-    // Weight-weighted mean confidence of applicable checks.
-    {
+    if (dim.description) {
+      rows.push(`<p class="dim-head">${esc(dim.description)}</p>`);
+    }
+    if (isInformational(dim)) {
+      rows.push(
+        '<div class="dim-head">Informational descriptors — reported for context, not scored toward the audit total.</div>'
+      );
+    } else {
+      // Weight-weighted mean confidence of applicable checks.
       let totalW = 0,
         weightedC = 0;
       for (const c of dim.checks) {
@@ -1645,11 +1681,11 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       );
     }
 
-    // Throughput context (ai-sdlc-adoption only): the headline "Merges" and "LOC"
-    // per-active rows have no standards.toml category, so without this they would
-    // appear only on the overview and have no dimension home. Echoed here as
-    // non-scored context — delivery normalizers, not capability points.
-    if (dim.dimension === 'ai-sdlc-adoption') {
+    // Throughput context (descriptors only): the headline "Merges" and "LOC"
+    // per-active rows have no standards.toml category, so without this they
+    // would appear only on the overview and have no dimension home. They are
+    // size/activity descriptors, so they are echoed on the Descriptors page.
+    if (dim.dimension === 'descriptors') {
       const baseLabel = (l: string) => l.replace(/\s*\(.*\)\s*$/, '').trim();
       const throughput = (audit.headline?.delivery ?? []).filter((d) => {
         const b = baseLabel(d.label);

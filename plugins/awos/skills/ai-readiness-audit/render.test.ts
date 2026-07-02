@@ -1298,7 +1298,7 @@ test('renderHtml wraps every headline metric label in a tooltip (tooltip on labe
           label: 'Deployment frequency',
           display_value: '2 / day',
           band: 'high',
-          check_id: 'ADP-08',
+          check_id: 'DF-01',
         },
         { label: 'Cycle time (Jira In-Progress→Done)', gated: 'tracker' },
       ],
@@ -1377,7 +1377,7 @@ test('object check values render as k=v pairs, never "[object Object]"', () => {
     dimensions: [
       makeDim('ai-sdlc-adoption', [
         makeCheck({
-          check_id: 'ADP-22',
+          check_id: 'DESC-04',
           value: {
             total_loc: 4821,
             file_count: 37,
@@ -1400,6 +1400,71 @@ test('object check values render as k=v pairs, never "[object Object]"', () => {
   }
   assert.ok(
     md.includes('total_loc=4821'),
-    `object values must render their primitive fields as k=v pairs, got: ${md.split('\n').find((l) => l.includes('ADP-22'))}`
+    `object values must render their primitive fields as k=v pairs, got: ${md.split('\n').find((l) => l.includes('DESC-04'))}`
+  );
+});
+
+test('dimension description renders as a tooltip on the summary-row name and on the dim page', () => {
+  const audit = makeAudit({
+    dimensions: [
+      makeDim('delivery-flow', [makeCheck({ check_id: 'DF-01' })], {
+        title: 'Delivery Flow',
+        description:
+          'DORA-style delivery-flow metrics computed from git history.',
+      }),
+    ],
+  });
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes(
+      '<strong><span class="tip" tabindex="0">Delivery Flow<span class="tipbox">'
+    ),
+    'summary row must wrap the dimension name in a tooltip carrying its description'
+  );
+  assert.ok(
+    html.includes(
+      'DORA-style delivery-flow metrics computed from git history.'
+    ),
+    'the tooltip content must be the dimension description'
+  );
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes(
+      '> DORA-style delivery-flow metrics computed from git history.'
+    ),
+    'markdown dim section must lead with the description as a blockquote'
+  );
+});
+
+test('an all-weight-0 dimension renders as informational: no points, no coverage, INFO badge allowed', () => {
+  const audit = makeAudit({
+    dimensions: [
+      makeDim(
+        'descriptors',
+        [
+          makeCheck({
+            check_id: 'DESC-01',
+            status: 'INFO' as never,
+            weight_awarded: 0,
+            weight_max: 0,
+          }),
+        ],
+        { title: 'Descriptors' }
+      ),
+    ],
+  });
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('| Descriptors | info |'),
+    `summary row must show "info" instead of points for an unscored dimension, got: ${md.split('\n').find((l) => l.includes('Descriptors'))}`
+  );
+  assert.ok(
+    md.includes('**Informational** — descriptors reported for context'),
+    'dim section must state the dimension is informational instead of a score line'
+  );
+  const html = renderHtml(audit);
+  assert.ok(
+    !html.includes('[object Object]') && html.includes('INFO'),
+    'html must render the INFO badge for descriptor checks'
   );
 });

@@ -83,3 +83,25 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Fail:** No lock files found
 - **Severity:** medium
 - **Category:** 2705
+
+### SBP-09: Cross-layer feature branches
+
+- **What:** Feature branches touch multiple layers in a single branch, indicating vertical delivery
+- **How:** Analyze recent git history (last 20 merged branches or last 3 months). For each branch, check which top-level directories were modified. In a monorepo, look for branches that touch 2+ service directories. Use `git log --all --oneline --since="3 months ago"` and `git diff --name-only` to analyze.
+- **Pass:** 50%+ of feature branches touch multiple layers
+- **Warn:** 25-49% of feature branches touch multiple layers
+- **Fail:** <25% of feature branches are cross-layer (most are single-layer)
+- **Skip-When:** Topology artifact shows single-service repo (not a monorepo)
+- **Severity:** high
+- **Category:** 2300
+
+### SBP-10: No orphaned artifacts
+
+- **What:** API definitions have corresponding UI consumers, database schemas have corresponding API layers
+- **How:** Read the topology artifact. For each detected layer pair (API↔UI, DB↔API), verify the other layer exists and uses it. For example: if OpenAPI specs define endpoints, check that the frontend has corresponding API client calls. If database migrations define tables, check that backend code references those tables.
+- **Pass:** No orphaned artifacts found — all layers are connected
+- **Warn:** 1-2 minor orphans (e.g., unused API endpoint, defined but unreferenced table)
+- **Fail:** Significant orphaned artifacts (entire API surface with no UI consumer, or schema with no API)
+- **Skip-When:** Topology artifact shows only one layer detected
+- **Severity:** medium
+- **Category:** 2303

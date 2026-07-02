@@ -1,7 +1,7 @@
 ---
 name: ai-sdlc-adoption
 title: AI-SDLC Adoption
-description: Measures the team's quantitative adoption of AI-augmented delivery practices across tooling depth, flow metrics, CI health, work-mix, and spec coverage
+description: Measures the team's quantitative adoption of AI-augmented delivery practices — tooling depth, AI attribution, CI health, ticket work-mix, and spec coverage
 severity: high
 depends-on: [project-topology, ai-development-tooling, spec-driven-development]
 ---
@@ -43,69 +43,6 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
 - **Severity:** high
 - **Category:** 101, 102, 103, 104, 105, 106
-
-### ADP-G2: Active monthly contributors
-
-- **What:** Distinct commit-author count per trailing 30-day bucket (aggregate only, no per-person data)
-- **How:** `node "<engine cli path>" metric adp_g2_contributors <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — contributor count computed from git log
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable
-- **Severity:** medium
-- **Category:** 201
-
-### ADP-G3: Deployment / merge frequency
-
-- **What:** Merges into the default branch per week (DORA deployment frequency proxy); result is DORA-banded (elite/high/medium/low)
-- **How:** `node "<engine cli path>" metric adp_g3_deploy_frequency <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — merge frequency computed and banded
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable
-- **Severity:** medium
-- **Category:** 301
-
-### ADP-G4: Lead time for change
-
-- **What:** Median time from first commit on a branch to its merge into the default branch; DORA-banded
-- **How:** `node "<engine cli path>" metric adp_g4_lead_time <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — lead time computed and banded
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable or no merge records found
-- **Severity:** medium
-- **Category:** 401
-
-### ADP-G5: PR cycle time
-
-- **What:** Time from PR open to merge; proxied from merge-record timestamps when no code-host connector is available
-- **How:** `node "<engine cli path>" metric adp_g5_pr_cycle_time <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — cycle time computed
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable
-- **Severity:** medium
-- **Category:** 501
-
-### ADP-G6: Code churn and rework
-
-- **What:** Insertions+deletions trend and rework-hotspot file count over the lookback window
-- **How:** `node "<engine cli path>" metric adp_g6_churn <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — churn trend computed
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable
-- **Severity:** low
-- **Category:** 601
-
-### ADP-G7: Change failure rate
-
-- **What:** Share of default-branch merges followed within N days by a revert or hotfix commit; DORA-banded
-- **How:** `node "<engine cli path>" metric adp_g7_change_fail_rate <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — change failure rate computed and banded
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable
-- **Severity:** high
-- **Category:** 701
-
-### ADP-G8: Review rework cycle
-
-- **What:** Review rounds and time-to-resolve review threads per PR; proxied from post-open commits when no code-host data is available
-- **How:** `node "<engine cli path>" metric adp_g8_review_rework <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — review rework computed
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable
-- **Severity:** low
-- **Category:** 801
 
 ### ADP-G9: AI-attributed change share
 
@@ -161,15 +98,6 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Severity:** medium
 - **Category:** 1102
 
-### ADP-I3: Mean time to recovery
-
-- **What:** Mean time to recovery from incidents; computed from git as a proxy by default (merge/revert/hotfix cadence), upgraded when a real incident source is present in the tracker artifact. Always included — never omitted from the artifact. SKIP only if even git is unavailable.
-- **How:** `node "<engine cli path>" metric adp_i3_mttr <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — MTTR computed (git-proxy or real source)
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable (the only valid SKIP condition)
-- **Severity:** high
-- **Category:** 1103
-
 ### ADP-I4: Ticket sub-task split ratio
 
 - **What:** Average number of direct sub-tasks per parent ticket; high averages signal AI-driven over-splitting that fragments work, raises coordination cost, and departs from INVEST "Small" right-sizing. Bands are AWOS heuristics (≤3 good, ≤6 watch, >6 concerning) — INVEST and DORA publish no numeric threshold.
@@ -188,15 +116,6 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Severity:** medium
 - **Category:** 1105
 
-### ADP-G14: Deployment rework rate
-
-- **What:** DORA deployment rework rate — share of deployments that are unplanned fix work triggered by incidents (DORA's fifth metric, introduced 2024). Proxied from git: first-parent merges in the 90-day window whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords. Bands are AWOS heuristics (DORA publishes no numeric thresholds).
-- **How:** `node "<engine cli path>" metric adp_g14_rework_rate <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — rework rate computed and banded
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable or no merges in window
-- **Severity:** high
-- **Category:** 1401
-
 ### ADP-G15: Onboarding ease (DX Core 4 time-to-10th-PR proxy)
 
 - **What:** Onboarding enabler presence as a filesystem-derived proxy for the DX Core 4 "Time to 10th PR" outcome. Four boolean signals: (1) README contains setup/install/getting-started/usage/quickstart heading or a recognizable bootstrap command; (2) agent context file (CLAUDE.md/AGENTS.md); (3) .env example file; (4) one-command bootstrap file (Makefile, justfile, Taskfile, docker-compose.yml, setup.sh, or package.json with setup/bootstrap/dev script). value = present_count/4. Bands are AWOS heuristics. Ramp-time not measured (see ADP-G4/ADP-G8).
@@ -205,30 +124,3 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Skip:** metric returns `status: "SKIP"` — repoPath does not exist
 - **Severity:** medium
 - **Category:** 1501
-
-### ADP-G10: Cyclomatic complexity
-
-- **What:** Average and maximum McCabe cyclomatic complexity (CCN) per function across the repository, computed by parsing source files with tree-sitter grammars. Bands: elite ≤5, high ≤10, medium ≤15, low >15.
-- **How:** `node "<engine cli path>" metric adp_g10_complexity <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — complexity computed for at least one function in a supported language (JS/TS/TSX/JSX/Python/Go/Java/Ruby/C#/C/C++/Rust/PHP/Kotlin)
-- **Skip:** metric returns `status: "SKIP"` — no source files in supported languages found
-- **Severity:** medium
-- **Category:** 1301
-
-### ADP-G11: Codebase scale (LOC)
-
-- **What:** Lines of code (non-blank) by language across the repository, excluding generated/vendor directories. Provides scale context for other metrics.
-- **How:** `node "<engine cli path>" metric adp_g11_scale <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — LOC counted for at least one recognized source file
-- **Skip:** metric returns `status: "SKIP"` — no recognized source files found
-- **Severity:** low
-- **Category:** 1302
-
-### ADP-G12: Dependency manifest counts
-
-- **What:** Count of direct dependencies declared in manifest files (package.json, pyproject.toml, go.mod, Cargo.toml, requirements.txt) up to three directory levels deep.
-- **How:** `node "<engine cli path>" metric adp_g12_deps <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — at least one manifest found
-- **Skip:** metric returns `status: "SKIP"` — no recognised manifest file found
-- **Severity:** low
-- **Category:** 1303

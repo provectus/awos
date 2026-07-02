@@ -6,7 +6,7 @@ import { CI_CONFIG_CANDIDATES } from '../ci_platforms.ts';
 import { ALL_SOURCE_GLOBS } from '../languages.ts';
 
 // ---------------------------------------------------------------------------
-// detectVerticalDelivery — category 2300 (E2E-01, method: computed)
+// detectVerticalDelivery — category 2300 (SBP-09, method: computed)
 //
 // applies_when: topology.is_monorepo
 //
@@ -272,7 +272,7 @@ export function detectVerticalDelivery(
 }
 
 // ---------------------------------------------------------------------------
-// detectBidirectionalLinks — category 2302 (E2E-03, method: detected)
+// detectBidirectionalLinks — category 2302 (DOC-07, method: detected)
 //
 // Checks that spec files reference implementation paths and that implementation
 // files reference spec directories. Both sides must be satisfied for PASS.
@@ -389,7 +389,7 @@ export function detectBidirectionalLinks(
 }
 
 // ---------------------------------------------------------------------------
-// detectLayerCoverage — category 2303 (E2E-04, method: detected)
+// detectLayerCoverage — category 2303 (SBP-10, method: detected)
 //
 // applies_when: topology.has_multiple_layers
 //
@@ -449,7 +449,7 @@ export function detectLayerCoverage(
 
   if (layerCount < 2) {
     return makeResult('SKIP', layerCount, [
-      'fewer than 2 distinct layers detected — single-layer project, E2E-04 not applicable',
+      'fewer than 2 distinct layers detected — single-layer project, SBP-10 not applicable',
       hasApi ? `API layer: ${apiSignal}` : 'API layer: not detected',
       hasUi ? `UI layer: ${uiSignal}` : 'UI layer: not detected',
       hasDb ? `DB layer: ${dbSignal}` : 'DB layer: not detected',
@@ -477,7 +477,7 @@ export function detectLayerCoverage(
 }
 
 // ---------------------------------------------------------------------------
-// detectCrossLayerTooling — category 2304 (E2E-05, method: detected)
+// detectCrossLayerTooling — category 2304 (ARCH-07, method: detected)
 //
 // applies_when: topology.is_monorepo
 //
@@ -567,9 +567,9 @@ export const DETECTORS: Record<
   number,
   (repoPath: string, params?: unknown) => ReturnType<typeof makeResult>
 > = {
-  2300: detectVerticalDelivery, // E2E-01 vertical delivery (computed)
+  2300: detectVerticalDelivery, // SBP-09 vertical delivery (computed)
   // 2301 intentionally omitted — E2E-02 (name-based layer-split) removed
-  2302: detectBidirectionalLinks, // E2E-03 spec↔impl bidirectional links
-  2303: detectLayerCoverage, // E2E-04 API + UI + DB layer coverage
-  2304: detectCrossLayerTooling, // E2E-05 cross-layer unified tooling
+  2302: detectBidirectionalLinks, // DOC-07 spec↔impl bidirectional links
+  2303: detectLayerCoverage, // SBP-10 API + UI + DB layer coverage
+  2304: detectCrossLayerTooling, // ARCH-07 cross-layer unified tooling
 };

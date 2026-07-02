@@ -17,7 +17,7 @@ function tmp(): string {
 }
 
 // ---------------------------------------------------------------------------
-// detectVerticalDelivery — category 2300 (E2E-01, method: computed)
+// detectVerticalDelivery — category 2300 (SBP-09, method: computed)
 // applies_when: topology.is_monorepo
 // Detects whether the repo has multiple top-level src layers (frontend+backend)
 // and git feature branches. In the absence of git we check directory signals.
@@ -102,7 +102,7 @@ test('E2E-02 detector is removed — DETECTORS has no key 2301', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectBidirectionalLinks — category 2302 (E2E-03, method: detected)
+// detectBidirectionalLinks — category 2302 (DOC-07, method: detected)
 // always applies
 // Checks that spec files reference implementation paths and implementation
 // files reference spec directories.
@@ -156,7 +156,7 @@ test('detectBidirectionalLinks: spec exists but no impl cross-refs → WARN', ()
 });
 
 // ---------------------------------------------------------------------------
-// detectLayerCoverage — category 2303 (E2E-04, method: detected)
+// detectLayerCoverage — category 2303 (SBP-10, method: detected)
 // applies_when: topology.has_multiple_layers
 // Checks that API defs have UI consumers and DB schemas have API layers.
 // ---------------------------------------------------------------------------
@@ -203,7 +203,7 @@ test('detectLayerCoverage: API only, no UI layer → WARN', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectCrossLayerTooling — category 2304 (E2E-05, method: detected)
+// detectCrossLayerTooling — category 2304 (ARCH-07, method: detected)
 // applies_when: topology.is_monorepo
 // Checks for cross-layer tooling: Makefile, docker-compose, shared CI.
 // ---------------------------------------------------------------------------

@@ -304,10 +304,10 @@ test('org_rollup: headline.delivery values are the per-metric MEAN, re-banded', 
       // label, display_value, band, check_id
       ['Merges / active contributor', '3 / contributor', undefined, undefined],
       ['LOC / active contributor', '150 / contributor', undefined, undefined],
-      ['Deployment frequency', '7 / wk', 'elite', 'ADP-08'],
-      ['Rework rate (DORA)', '15%', 'watch', 'ADP-24'],
-      ['Lead time for change', '24 h', 'high', 'ADP-09'],
-      ['Change-failure rate', '5%', 'high', 'ADP-12'],
+      ['Deployment frequency', '7 / wk', 'elite', 'DF-01'],
+      ['Rework rate (DORA)', '15%', 'watch', 'DF-06'],
+      ['Lead time for change', '24 h', 'high', 'DF-02'],
+      ['Change-failure rate', '5%', 'high', 'DF-04'],
     ];
   for (const [label, display, band, checkId] of cases) {
     const d = deliveryRow(result, label);

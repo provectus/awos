@@ -56,13 +56,13 @@ export interface PerRepoDelivery {
   merges_per_active?: number | null;
   /** git.json raw.window_stats.loc_per_active. */
   loc_per_active?: number | null;
-  /** ADP-08 deployment/merge frequency (merges per week). */
+  /** DF-01 deployment/merge frequency (merges per week). */
   deploy_freq?: number | null;
-  /** ADP-24 rework rate (0–1 fraction). */
+  /** DF-06 rework rate (0–1 fraction). */
   rework_rate?: number | null;
-  /** ADP-09 lead time for change (hours). */
+  /** DF-02 lead time for change (hours). */
   lead_time?: number | null;
-  /** ADP-12 change-failure rate (0–1 fraction). */
+  /** DF-04 change-failure rate (0–1 fraction). */
   change_fail?: number | null;
 }
 
@@ -122,7 +122,7 @@ export interface PerRepoInput {
  * Used as the deterministic seed for the orchestrator's org insights/recommendations.
  */
 export interface OrgGap {
-  /** Check identifier (e.g. "SEC-01", "AI-03"). */
+  /** Check identifier (e.g. "AS-12", "AI-03"). */
   check_id: string;
   /** Dimension slug the check belongs to (e.g. "security"). */
   dimension: string;
@@ -264,28 +264,28 @@ const DELIVERY_SPECS: DeliverySpec[] = [
   {
     key: 'deploy_freq',
     label: 'Deployment frequency',
-    check_id: 'ADP-08',
+    check_id: 'DF-01',
     band: doraDeployBand,
     format: (v) => `${round1(v)} / wk`,
   },
   {
     key: 'rework_rate',
     label: 'Rework rate (DORA)',
-    check_id: 'ADP-24',
+    check_id: 'DF-06',
     band: reworkBand,
     format: (v) => `${round1(v * 100)}%`,
   },
   {
     key: 'lead_time',
     label: 'Lead time for change',
-    check_id: 'ADP-09',
+    check_id: 'DF-02',
     band: doraLeadTimeBand,
     format: (v) => `${round1(v)} h`,
   },
   {
     key: 'change_fail',
     label: 'Change-failure rate',
-    check_id: 'ADP-12',
+    check_id: 'DF-04',
     band: doraChangeFailBand,
     format: (v) => `${round1(v * 100)}%`,
   },

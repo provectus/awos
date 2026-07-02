@@ -8,7 +8,7 @@
  * - per_repo detail is preserved for all input repos
  * - tooling coverage is correctly computed (contributor-weighted)
  * - capability score = avg awarded_weight across repos
- * - measurement coverage reflects sources_reachable correctly
+ * - measurement coverage is the mean per-repo coverage ratio
  * - contributor-weighted path activates when all repos supply contributors
  * - equal-weighted fallback when any repo is missing contributor count
  * - empty input returns 3 zero-value metrics and empty per_repo
@@ -128,16 +128,27 @@ test('org_rollup: org_capability_score — average awarded_weight across repos',
   );
 });
 
-test('org_rollup: org_measurement_coverage — contributor-weighted reachable fraction', () => {
-  // REPO_A: reachable (sources_reachable.length>0), contributors=10
-  // REPO_B: reachable, contributors=5
-  // REPO_NO_TOOLING_NO_SOURCES: not reachable, contributors=2
-  // Weighted: (10+5)/(10+5+2) = 15/17 ≈ 0.8824
-  const result = rollup([REPO_A, REPO_B, REPO_NO_TOOLING_NO_SOURCES]);
+test('org_rollup: org_measurement_coverage — mean of per-repo coverage ratios, not collector reachability', () => {
+  // The old "≥1 reachable collector" definition always read 100% (git is
+  // always reachable). The metric is now the mean per-repo coverage ratio.
+  const result = rollup([
+    { ...REPO_A, coverage: 0.8 },
+    { ...REPO_B, coverage: 0.6 },
+    { ...REPO_NO_TOOLING_NO_SOURCES, coverage: 0.4 },
+  ]);
   const coverage = metricValue(result, 'org_measurement_coverage');
   assert.ok(
-    Math.abs(coverage - 15 / 17) < 0.001,
-    `org_measurement_coverage must be ~${(15 / 17).toFixed(4)}, got ${coverage}`
+    Math.abs(coverage - 0.6) < 0.001,
+    `org_measurement_coverage must be mean(0.8, 0.6, 0.4) = 0.6, got ${coverage}`
+  );
+});
+
+test('org_rollup: org_measurement_coverage is 0 when no repo carries a coverage ratio', () => {
+  const result = rollup([REPO_A, REPO_B]);
+  assert.equal(
+    metricValue(result, 'org_measurement_coverage'),
+    0,
+    'without per-repo coverage ratios there is nothing to average'
   );
 });
 
@@ -195,6 +206,7 @@ test('org_rollup: single repo with full tooling and all sources', () => {
     repo: 'org/single',
     contributors: 3,
     awarded_weight: 75,
+    coverage: 0.5,
     sources_reachable: ['git', 'ci', 'tracker', 'docs'],
     has_ai_tooling: true,
   };
@@ -211,8 +223,8 @@ test('org_rollup: single repo with full tooling and all sources', () => {
   );
   assert.equal(
     metricValue(result, 'org_measurement_coverage'),
-    1,
-    'single repo with reachable sources → 100% measurement coverage'
+    0.5,
+    'single repo → measurement coverage equals its own coverage ratio'
   );
 });
 

@@ -6,9 +6,9 @@
  *       contributor-weighted when contributor counts are available.
  *   (b) org_capability_score      — Σ awarded category weights across repos,
  *       normalized by repo count.
- *   (c) org_measurement_coverage  — fraction of repos where at least one
- *       collector (git/ci/tracker/docs) returned available=true,
- *       contributor-weighted.
+ *   (c) org_measurement_coverage  — mean per-repo coverage ratio (awarded ÷
+ *       applicable weight): how much of today's standard the reachable data
+ *       sources could score. Not "any collector reachable" — git always is.
  *
  * Input: per-repo audit result objects (one per repo), each shaped like:
  *   {
@@ -558,13 +558,18 @@ export function rollup(
 
   // -------------------------------------------------------------------------
   // Metric (c): portfolio measurement coverage
-  // Fraction of repos (contributor-weighted) where ≥1 collector reached.
+  // Mean per-repo coverage ratio (awarded ÷ applicable weight): how much of
+  // today's standard the reachable data sources could actually score. The old
+  // "≥1 reachable collector" definition was vacuous — git is always reachable,
+  // so every portfolio read 100%.
   // -------------------------------------------------------------------------
-  const measuredNumerator = repos
-    .filter((r) => r.sources_reachable.length > 0)
-    .reduce((s, r) => s + weight(r), 0);
+  const coverages = repos
+    .map((r) => (typeof r.coverage === 'number' ? r.coverage : null))
+    .filter((v): v is number => v !== null);
   const measurementCoverage =
-    totalWeight > 0 ? measuredNumerator / totalWeight : 0;
+    coverages.length > 0
+      ? coverages.reduce((s, v) => s + v, 0) / coverages.length
+      : 0;
 
   const portfolio_metrics: PortfolioMetric[] = [
     {
@@ -588,9 +593,8 @@ export function rollup(
       metric: 'org_measurement_coverage',
       value: round4(measurementCoverage),
       description:
-        'Fraction of portfolio repos with ≥1 reachable data-source collector' +
-        (allHaveContributors ? ' (contributor-weighted)' : ' (equal-weighted)'),
-      contributor_weighted: allHaveContributors,
+        'Average per-repo measurement coverage — the share of the current standard the reachable data sources could score (mean of per-repo coverage ratios)',
+      contributor_weighted: false,
       repos_counted: repos.length,
     },
   ];
@@ -633,7 +637,7 @@ function makeMetric(
     org_capability_score:
       'Average awarded category-weight score across portfolio repos',
     org_measurement_coverage:
-      'Fraction of portfolio repos with ≥1 reachable data-source collector',
+      'Average per-repo measurement coverage — the share of the current standard the reachable data sources could score',
   };
   return {
     metric,

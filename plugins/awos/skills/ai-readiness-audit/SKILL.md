@@ -205,7 +205,7 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
    The rollup reads each `per-repo/<repo-name>/audit.json` (the full per-repo audit written by step 1) and derives `awarded_weight`, `contributors`, `sources_reachable`, and `has_ai_tooling` from it. It computes **exactly three (≤3) portfolio metrics** — never the full per-repo metric set:
    - **`org_ai_tooling_coverage`** — fraction of portfolio repos with any AI tooling present (contributor-weighted).
    - **`org_capability_score`** — average awarded category-weight score across portfolio repos (Σ weight / repo count).
-   - **`org_measurement_coverage`** — fraction of portfolio repos with ≥1 reachable data-source collector (contributor-weighted).
+   - **`org_measurement_coverage`** — average per-repo measurement coverage: the share of the current standard the reachable data sources could score (mean of per-repo coverage ratios).
 
 3. Build the org audit JSON by merging the rollup output with a minimal audit envelope and write it to:
 
@@ -228,7 +228,7 @@ When the audit ran in org mode (multiple repos, per `references/data-sources.md`
 5. Present the three portfolio metrics to the user with a brief interpretation:
    - AI-tooling coverage across the portfolio (fraction of repos, contributor-weighted).
    - Portfolio capability score (average awarded weight, reflects depth of AI-SDLC adoption).
-   - Measurement coverage (fraction of repos with reachable data sources).
+   - Measurement coverage (average per-repo coverage ratio — how much of the standard the available sources could score).
      Then present the per-repo breakdown table from `per_repo`.
 
 Contributor counts in the org report are always aggregate — no per-person data. No money figures appear in any org output.

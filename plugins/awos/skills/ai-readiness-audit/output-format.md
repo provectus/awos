@@ -155,9 +155,9 @@ In org mode the engine reads each repo's FULL audit — `context/audits/YYYY-MM-
     },
     {
       "metric": "org_measurement_coverage",
-      "value": 0.88,
+      "value": 0.69,
       "description": "…",
-      "contributor_weighted": true,
+      "contributor_weighted": false,
       "repos_counted": 8
     }
   ],

@@ -367,10 +367,11 @@ def main():
                     help="run `npm run build:engine` in worktree before the run")
     ap.add_argument("--claude-flags", default="--dangerously-skip-permissions",
                     help="extra flags passed to claude (space-separated)")
-    ap.add_argument("--model", default="claude-sonnet-5",
+    ap.add_argument("--model", default="sonnet",
                     help="model the audit session (and its subagents) run on, "
-                         "passed to `claude -p --model` (default claude-sonnet-5; "
-                         "empty string uses the claude default)")
+                         "passed to `claude -p --model` (default 'sonnet' = the "
+                         "best available Sonnet alias, no version pin; empty "
+                         "string uses the claude default)")
     ap.add_argument("--retries", type=int, default=2,
                     help="if a run skips the engine (no audit-core / no audit.json), "
                          "relaunch claude this many times before giving up (default 2)")

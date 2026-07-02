@@ -35,6 +35,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 
 HOME = os.path.expanduser("~")
 SETTINGS = os.path.join(HOME, ".claude/settings.json")
@@ -226,13 +227,29 @@ def prepare_target(target, phase, run_dir, seed_from, seed_date, today):
 
 
 # ---------------------------------------------------------------------------
+def _num_usage(ev, key):
+    u = ev.get("usage") or {}
+    v = u.get(key)
+    return v if isinstance(v, (int, float)) else 0
+
+
 def stream_run(target, claude_flags, run_log):
-    """Launch claude, tee transcript to run_log, print a live view, return the result event."""
+    """Launch claude, tee transcript to run_log, print a live view, return the result event.
+
+    A session that detours through background tasks / ScheduleWakeup emits one
+    `result` event PER resume segment. Reading only the last one massively
+    under-reports (a hops run read "78s / 9 turns" vs the true 18m47s / 94
+    turns), so metrics are aggregated across ALL segments: turns and durations
+    are summed, cost/usage take the maximum (cumulative within a session), and
+    wall time is measured start→finish here.
+    """
     cmd = ["claude", "-p", "/awos:ai-readiness-audit",
            "--output-format", "stream-json", "--verbose"] + claude_flags
     log(f"▶ {' '.join(cmd)}  (cwd={target})")
     log("─" * 60)
     result = {}
+    segments = []
+    wall_start = time.monotonic()
     proc = subprocess.Popen(cmd, cwd=target, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True, bufsize=1)
     with open(run_log, "w") as lf:
@@ -262,14 +279,44 @@ def stream_run(target, claude_flags, run_log):
                         log(f"  🔧 {b.get('name','?')} {' '.join(str(hint).split())[:80]}".rstrip())
             elif t == "result":
                 result = ev
+                segments.append(ev)
                 u = ev.get("usage") or {}
-                mark = "✗ ERROR" if ev.get("is_error") else "✓ done"
-                log(f"\n{mark} — cost=${ev.get('total_cost_usd')} "
+                mark = "✗ ERROR" if ev.get("is_error") else "✓ segment done"
+                log(f"\n{mark} — segment {len(segments)}: cost=${ev.get('total_cost_usd')} "
                     f"duration={ev.get('duration_ms')}ms turns={ev.get('num_turns')}")
                 log(f"   usage: in={u.get('input_tokens')} out={u.get('output_tokens')} "
                     f"cache_w={u.get('cache_creation_input_tokens')} "
                     f"cache_r={u.get('cache_read_input_tokens')}")
     proc.wait()
+    wall_ms = int((time.monotonic() - wall_start) * 1000)
+
+    def _num(ev, key):
+        v = ev.get(key)
+        return v if isinstance(v, (int, float)) else 0
+
+    if segments:
+        # Aggregate across segments; keep the LAST event's identity fields.
+        agg = dict(segments[-1])
+        agg["num_turns"] = sum(_num(ev, "num_turns") for ev in segments)
+        agg["duration_ms"] = sum(_num(ev, "duration_ms") for ev in segments)
+        agg["total_cost_usd"] = max(_num(ev, "total_cost_usd") for ev in segments)
+        agg["is_error"] = any(ev.get("is_error") for ev in segments)
+        # usage/modelUsage counters are cumulative within a session — take the
+        # segment with the largest input footprint.
+        biggest = max(
+            segments,
+            key=lambda ev: (_num_usage(ev, "input_tokens")
+                            + _num_usage(ev, "cache_read_input_tokens")),
+        )
+        agg["usage"] = biggest.get("usage")
+        agg["modelUsage"] = biggest.get("modelUsage")
+        agg["result_segments"] = len(segments)
+        agg["wall_ms"] = wall_ms
+        result = agg
+        if len(segments) > 1:
+            log(f"\n⚠ session split into {len(segments)} result segments "
+                f"(background tasks / wakeups) — aggregated: "
+                f"turns={agg['num_turns']} wall={wall_ms}ms cost=${agg['total_cost_usd']}")
     log("─" * 60)
     return result, proc.returncode
 
@@ -572,6 +619,8 @@ def main():
             "usage": result.get("usage"), "modelUsage": result.get("modelUsage"),
             "total_cost_usd": result.get("total_cost_usd"),
             "duration_ms": result.get("duration_ms"), "num_turns": result.get("num_turns"),
+            "wall_ms": result.get("wall_ms"),
+            "result_segments": result.get("result_segments"),
             "is_error": result.get("is_error"), "summary": summary,
         }
         with open(os.path.join(run_dir, "run-meta.json"), "w") as f:

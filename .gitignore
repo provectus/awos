@@ -10,3 +10,6 @@ scratchpad-handoff-*.md
 # Python bytecode (audit test harness)
 __pycache__/
 *.pyc
+
+# Local review drafts/plans (pr-review, pr-comments-address)
+review/

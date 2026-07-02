@@ -341,6 +341,28 @@ const TECH_SIGNALS: TechSignal[] = [
   },
 ];
 
+// Short tech names that double as ordinary English words — "before we go
+// live", "each node in the cluster", "arm the alarm", "a serverless design".
+// A lowercase prose occurrence of these is NOT a technology mention; they
+// only count with canonical capitalization (Go, Node, ARM, Serverless) or in
+// inline-code (backtick) context.
+const AMBIGUOUS_TECH_NAMES = new Set(['go', 'node', 'arm', 'serverless']);
+
+function mentionsTech(content: string, name: string): boolean {
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!AMBIGUOUS_TECH_NAMES.has(name)) {
+    return new RegExp(`\\b${esc}\\b`, 'i').test(content);
+  }
+  const capitalized = name[0].toUpperCase() + name.slice(1);
+  const allCaps = name.toUpperCase();
+  // Case-sensitive canonical capitalization ("Go", "Node", "ARM", …)
+  if (new RegExp(`\\b(?:${capitalized}|${allCaps})\\b`).test(content)) {
+    return true;
+  }
+  // Backtick/inline-code context (any case): `go build`, `node --version`
+  return new RegExp('`[^`\\n]*\\b' + esc + '\\b[^`\\n]*`', 'i').test(content);
+}
+
 function findArchDoc(repoPath: string): string | null {
   for (const candidate of [
     join(repoPath, 'context', 'architecture', 'architecture.md'),
@@ -369,7 +391,9 @@ export function detectArchTechMatch(
 
   let content: string;
   try {
-    content = readFileSync(archDoc, 'utf8').toLowerCase();
+    // Keep the original casing — ambiguous tech names (Go, Node, …) are only
+    // recognised via their canonical capitalization (see mentionsTech).
+    content = readFileSync(archDoc, 'utf8');
   } catch {
     return makeResult(
       'SKIP',
@@ -385,10 +409,7 @@ export function detectArchTechMatch(
   const verified: string[] = [];
 
   for (const signal of TECH_SIGNALS) {
-    const nameRx = new RegExp(
-      `\\b${signal.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`
-    );
-    if (!nameRx.test(content)) continue;
+    if (!mentionsTech(content, signal.name)) continue;
     if (signal.detect(repoPath)) {
       verified.push(signal.name);
     } else {
@@ -464,10 +485,16 @@ function listLocalBranches(repoPath: string): string[] {
       cwd: repoPath,
       encoding: 'utf8',
     });
-    return out
-      .split('\n')
-      .map((b) => b.trim())
-      .filter((b) => b.length > 0 && !TRUNK_BRANCHES.has(b));
+    return (
+      out
+        .split('\n')
+        .map((b) => b.trim())
+        // On a detached HEAD `git branch` emits a pseudo-entry like
+        // "(HEAD detached at abc1234)" — not a branch, filter it out.
+        .filter(
+          (b) => b.length > 0 && !b.startsWith('(') && !TRUNK_BRANCHES.has(b)
+        )
+    );
   } catch {
     return [];
   }
@@ -484,13 +511,23 @@ const SPEC_DIRS = [
   'docs/specs/',
 ] as const;
 
+// `spec/` and `specs/` are also where RSpec/Jasmine/Jest keep their TEST
+// suites — those files are tests, not spec-driven-development artifacts.
+// Under these generic roots only documentation-like files earn spec credit;
+// code files (user_spec.rb, foo.spec.ts, spec_helper.rb, …) do not. The
+// framework-specific roots (context/spec/, .kiro/specs/, …) are unambiguous.
+const GENERIC_SPEC_DIRS = new Set<string>(['specs/', 'spec/']);
+const SPEC_DOC_FILE_RX = /\.(?:md|mdx|markdown|rst|txt|adoc)$/i;
+
 /** True if a changed path falls under any recognised spec directory. Robust to a leading "./". */
 function isSpecPath(path: string): boolean {
   const p = path.replace(/^\.\//, '');
   return SPEC_DIRS.some((dir) => {
     // Prefix match ("specs/foo.md") or an interior segment equal to the dir
     // ("packages/a/specs/foo.md").
-    return p.startsWith(dir) || p.includes('/' + dir);
+    if (!p.startsWith(dir) && !p.includes('/' + dir)) return false;
+    if (GENERIC_SPEC_DIRS.has(dir) && !SPEC_DOC_FILE_RX.test(p)) return false;
+    return true;
   });
 }
 

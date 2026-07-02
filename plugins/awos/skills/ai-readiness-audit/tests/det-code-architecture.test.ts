@@ -79,7 +79,8 @@ test('ARCH-01: FAIL when no architecture signals found', () => {
 //
 // Grep-based import scanner. Detects layer violations (lower-level modules
 // importing from higher-level modules).
-// FAIL on any import layer violation.
+// FAIL on >= 2 import layer violations.
+// WARN on exactly 1 violation.
 // PASS when no violations found.
 // ---------------------------------------------------------------------------
 
@@ -124,7 +125,7 @@ test('ARCH-02: PASS when all imports go in one direction', () => {
   assert.equal(r.status, 'PASS', 'unidirectional imports should yield PASS');
 });
 
-test('ARCH-02: FAIL when models/ imports from routes/ (layer violation)', () => {
+test('ARCH-02: FAIL when 2+ files in models/ import from routes/ (repeated layer violations)', () => {
   const t = tmp();
   mkdirSync(join(t, 'routes'));
   mkdirSync(join(t, 'models'));
@@ -132,20 +133,28 @@ test('ARCH-02: FAIL when models/ imports from routes/ (layer violation)', () => 
     join(t, 'routes', 'user.ts'),
     "import { User } from '../models/user';\n"
   );
-  // Layer violation: models importing from routes
+  // Two layer violations: models importing from routes in two files
   writeFileSync(
     join(t, 'models', 'user.ts'),
     "import { router } from '../routes/user';\nexport interface User {}\n"
   );
+  writeFileSync(
+    join(t, 'models', 'post.ts'),
+    "import { router } from '../routes/user';\nexport interface Post {}\n"
+  );
   const r = detectImportGraph(t);
-  assert.equal(r.status, 'FAIL', 'models importing routes should yield FAIL');
+  assert.equal(
+    r.status,
+    'FAIL',
+    '2 layer violations (models importing routes) should yield FAIL'
+  );
   assert.ok(
     r.evidence.some((e) => e.includes('models')),
     'evidence should mention models'
   );
 });
 
-test('ARCH-02: FAIL when controllers/ imports from routes/ (layer violation)', () => {
+test('ARCH-02: WARN (not FAIL) when controllers/ imports from routes/ exactly once', () => {
   const t = tmp();
   mkdirSync(join(t, 'routes'));
   mkdirSync(join(t, 'controllers'));
@@ -153,7 +162,7 @@ test('ARCH-02: FAIL when controllers/ imports from routes/ (layer violation)', (
     join(t, 'routes', 'index.ts'),
     "import { ctrl } from '../controllers/user';\n"
   );
-  // controllers should not import routes
+  // controllers should not import routes — but a single violation is WARN
   writeFileSync(
     join(t, 'controllers', 'user.ts'),
     "import { router } from '../routes/index';\nexport function ctrl() {}\n"
@@ -161,12 +170,12 @@ test('ARCH-02: FAIL when controllers/ imports from routes/ (layer violation)', (
   const r = detectImportGraph(t);
   assert.equal(
     r.status,
-    'FAIL',
-    'controllers importing routes should yield FAIL'
+    'WARN',
+    'exactly 1 layer violation should yield WARN, not FAIL'
   );
 });
 
-test('ARCH-02: FAIL when services/ imports from routes/ (layer violation)', () => {
+test('ARCH-02: WARN (not FAIL) when services/ imports from routes/ exactly once', () => {
   const t = tmp();
   mkdirSync(join(t, 'routes'));
   mkdirSync(join(t, 'services'));
@@ -174,13 +183,17 @@ test('ARCH-02: FAIL when services/ imports from routes/ (layer violation)', () =
     join(t, 'routes', 'api.ts'),
     "import { svc } from '../services/api';\n"
   );
-  // services should not import routes
+  // services should not import routes — but a single violation is WARN
   writeFileSync(
     join(t, 'services', 'api.ts'),
     "import { router } from '../routes/api';\nexport function svc() {}\n"
   );
   const r = detectImportGraph(t);
-  assert.equal(r.status, 'FAIL', 'services importing routes should yield FAIL');
+  assert.equal(
+    r.status,
+    'WARN',
+    'exactly 1 layer violation should yield WARN, not FAIL'
+  );
 });
 
 test('ARCH-02: PASS with clean architecture src/ with no violations', () => {
@@ -200,7 +213,7 @@ test('ARCH-02: PASS with clean architecture src/ with no violations', () => {
   assert.equal(r.status, 'PASS', 'clean api→domain should yield PASS');
 });
 
-test('ARCH-02: FAIL when models/ imports from routes/ via multi-level relative path (../../routes/x)', () => {
+test('ARCH-02: multi-level relative path (../../routes/x) is detected as a layer violation', () => {
   // Regression: the old code stripped only ONE leading ../ so '../../routes/index'
   // became '../routes/index' → first segment '..' → no tier match → violation missed.
   // The fix strips ALL leading ../ segments before splitting.
@@ -220,8 +233,8 @@ test('ARCH-02: FAIL when models/ imports from routes/ via multi-level relative p
   const r = detectImportGraph(t);
   assert.equal(
     r.status,
-    'FAIL',
-    'models importing routes via ../../routes/x must be detected as a layer violation (FAIL)'
+    'WARN',
+    'models importing routes via ../../routes/x must be detected as a layer violation (single violation → WARN)'
   );
   assert.ok(
     r.evidence.some((e) => e.includes('models')),
@@ -389,6 +402,47 @@ test('ARCH-04: WARN/FAIL when route file has real ORM calls (Model.findAll / db.
   );
 });
 
+test('ARCH-04: PASS when UI strings contain SQL-verb English ("Delete item") — not raw SQL', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'views'));
+  // "Delete item", "Update profile", "Create account" are button labels, not
+  // SQL — the raw-SQL heuristic requires a SQL continuation (FROM/INTO/SET…).
+  writeFileSync(
+    join(t, 'views', 'buttons.tsx'),
+    [
+      'export function Actions() {',
+      '  return (',
+      '    <>',
+      '      <Button>Delete item</Button>',
+      '      <Button>Update profile</Button>',
+      '      <Button>Create account</Button>',
+      '    </>',
+      '  );',
+      '}',
+    ].join('\n') + '\n'
+  );
+  const r = detectSeparationOfConcerns(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `English "Delete item" button labels must not count as inline SQL; got ${r.status}`
+  );
+});
+
+test('ARCH-04: real raw SQL (SELECT id FROM users) in a route file is still detected', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'routes'));
+  writeFileSync(
+    join(t, 'routes', 'raw.ts'),
+    'export const q = "SELECT id FROM users WHERE active = 1";\n'
+  );
+  const r = detectSeparationOfConcerns(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `SELECT id FROM users must still register as raw SQL (WARN/FAIL); got ${r.status}`
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectNamingConventions — code 2104 (ARCH-05, detected)
 //
@@ -443,6 +497,26 @@ test('ARCH-05: FAIL when files are mixed with < 70% consistent', () => {
     r.status,
     'FAIL',
     'mixed naming < 70% dominant should yield FAIL'
+  );
+});
+
+test('ARCH-05: single-token lowercase names are compatible with every lowercase convention', () => {
+  const t = tmp();
+  // `utils` / `api` carry no separator evidence — they must count toward
+  // kebab-case dominance instead of being pinned to snake_case and dragging
+  // the ratio below the PASS threshold.
+  for (const n of ['utils.ts', 'api.ts', 'user-profile.ts']) {
+    writeFileSync(join(t, n), '// file\n');
+  }
+  const r = detectNamingConventions(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `utils.ts + api.ts + user-profile.ts must read as consistent kebab-case; got ${r.status}`
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('kebab-case (3/3')),
+    `dominant convention must be kebab-case with all 3 files compatible; got ${JSON.stringify(r.evidence)}`
   );
 });
 
@@ -514,7 +588,7 @@ test('ARCH-06: FAIL when > 30% of source files exceed 300 lines', () => {
   assert.equal(r.status, 'FAIL', '33% oversized → FAIL');
   // value = 2/6 ≈ 0.333...
   assert.ok(
-    r.value > 0.3 && (r.value as number) < 0.4,
+    (r.value as number) > 0.3 && (r.value as number) < 0.4,
     `expected ratio ~0.33, got ${r.value}`
   );
   assert.ok(

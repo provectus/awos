@@ -113,7 +113,10 @@ test('QA-02: Jest mock usage in test file is detected as unit signal', () => {
   );
   const r = detectUnitTests(t);
   assert.equal(r.status, 'PASS');
-  assert.ok(r.evidence.some((e) => e.includes('mock')));
+  assert.ok(
+    r.evidence.some((e) => e.includes('mock')),
+    'evidence must cite the jest.mock unit-test signal'
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -316,7 +319,10 @@ test('QA-04: playwright.config.ts at root is PASS', () => {
   const r = detectE2ETests(t);
   assert.equal(r.status, 'PASS');
   assert.equal(r.method, 'detected');
-  assert.ok(r.evidence.some((e) => e.includes('playwright')));
+  assert.ok(
+    r.evidence.some((e) => e.includes('playwright')),
+    'evidence must cite the playwright config as the E2E signal'
+  );
 });
 
 test('QA-04: cypress import in test file is PASS', () => {
@@ -410,7 +416,10 @@ test('QA-06: .coveragerc present is PASS', () => {
   const r = detectCoverageConfig(t);
   assert.equal(r.status, 'PASS');
   assert.equal(r.method, 'detected');
-  assert.ok(r.evidence.some((e) => e.includes('.coveragerc')));
+  assert.ok(
+    r.evidence.some((e) => e.includes('.coveragerc')),
+    'evidence must cite .coveragerc as the coverage config'
+  );
 });
 
 test('QA-06: codecov.yml present is PASS', () => {
@@ -432,7 +441,10 @@ test('QA-06: package.json with coverageThreshold is PASS', () => {
   );
   const r = detectCoverageConfig(t);
   assert.equal(r.status, 'PASS');
-  assert.ok(r.evidence.some((e) => e.includes('package.json')));
+  assert.ok(
+    r.evidence.some((e) => e.includes('package.json')),
+    'evidence must cite the package.json jest coverageThreshold'
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -454,7 +466,10 @@ test('QA-07: fixtures/ directory at root is PASS', () => {
   const r = detectTestDataManagement(t);
   assert.equal(r.status, 'PASS');
   assert.equal(r.method, 'detected');
-  assert.ok(r.evidence.some((e) => e.includes('fixtures')));
+  assert.ok(
+    r.evidence.some((e) => e.includes('fixtures')),
+    'evidence must cite the fixtures/ directory'
+  );
 });
 
 test('QA-07: factory_boy import in test file is PASS', () => {
@@ -476,7 +491,10 @@ test('QA-07: conftest.py present is PASS', () => {
   );
   const r = detectTestDataManagement(t);
   assert.equal(r.status, 'PASS');
-  assert.ok(r.evidence.some((e) => e.includes('conftest.py')));
+  assert.ok(
+    r.evidence.some((e) => e.includes('conftest.py')),
+    'evidence must cite conftest.py as the pytest-fixture signal'
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -500,7 +518,10 @@ test('QA-08: jest.mock in test file is PASS', () => {
   const r = detectMockingIsolation(t);
   assert.equal(r.status, 'PASS');
   assert.equal(r.method, 'detected');
-  assert.ok(r.evidence.some((e) => e.includes('app.test.ts')));
+  assert.ok(
+    r.evidence.some((e) => e.includes('app.test.ts')),
+    'evidence must name the test file using jest.mock'
+  );
 });
 
 test('QA-08: unittest.mock import in Python test is PASS', () => {
@@ -543,7 +564,10 @@ test('QA-09: pacts/ directory present is PASS', () => {
   const r = detectContractTests(t);
   assert.equal(r.status, 'PASS');
   assert.equal(r.method, 'detected');
-  assert.ok(r.evidence.some((e) => e.includes('pact')));
+  assert.ok(
+    r.evidence.some((e) => e.includes('pact')),
+    'evidence must cite the pacts/ contract directory'
+  );
 });
 
 test('QA-09: Pact import in test file is PASS', () => {
@@ -566,6 +590,22 @@ test('QA-10: no ML framework detected returns SKIP', () => {
   const r = detectMlIterationTests(t);
   assert.equal(r.status, 'SKIP');
   assert.equal(r.method, 'detected');
+});
+
+test('QA-10: pandas/numpy-only data scripts are not an ML project (SKIP)', () => {
+  const t = tmp();
+  // General data wrangling — no ML framework — must not subject the repo to
+  // the ML-iteration-tests requirement.
+  writeFileSync(
+    join(t, 'etl.py'),
+    'import pandas as pd\nimport numpy as np\ndf = pd.read_csv("data.csv")\nprint(np.mean(df["x"]))\n'
+  );
+  const r = detectMlIterationTests(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    `pandas/numpy alone must not classify the repo as ML (QA-10 SKIP); got ${r.status}`
+  );
 });
 
 test('QA-10: ML project with no quality tests is FAIL', () => {
@@ -593,7 +633,10 @@ test('QA-10: ML project with evidently-like assertions is PASS', () => {
   const r = detectMlIterationTests(t);
   assert.equal(r.status, 'PASS');
   assert.equal(r.method, 'detected');
-  assert.ok(r.evidence.some((e) => e.includes('test_model.py')));
+  assert.ok(
+    r.evidence.some((e) => e.includes('test_model.py')),
+    'evidence must name the ML quality test file'
+  );
 });
 
 // ---------------------------------------------------------------------------

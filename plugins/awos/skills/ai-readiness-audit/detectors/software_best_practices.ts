@@ -428,8 +428,10 @@ export function detectLockfiles(
 const HANDLED_RX =
   /\b(log|logger|logging|print|console\.(log|warn|error|debug)|raise|throw|re-?raise|return|traceback|sys\.exit|abort|panic)\b/i;
 
-/** A bare except/catch opener in common languages. */
-const EXCEPT_OPENER_RX = /^\s*(except\b|catch\s*\(|catch\s*$)/;
+/** A bare except/catch opener in common languages. The optional leading `}`
+ * covers K&R / Prettier style where `catch` shares a line with the closing
+ * brace of the `try` block: `} catch (err) {`. */
+const EXCEPT_OPENER_RX = /^\s*\}?\s*(except\b|catch\s*\(|catch\s*$)/;
 
 /** Python `pass` or JS/TS/Java/Kotlin bare empty block signals. */
 const EMPTY_BODY_RX = /^\s*(pass|}\s*$|{\s*}\s*)$/;

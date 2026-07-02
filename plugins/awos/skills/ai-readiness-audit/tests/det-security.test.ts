@@ -34,6 +34,24 @@ test('AS-12: .gitignore with .env.* wildcard is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
+test('AS-12: .gitignore with .env* wildcard (Next.js/Vercel default) is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, '.gitignore'), 'node_modules/\n.env*\n');
+  const r = detectEnvGitignored(t);
+  assert.equal(r.status, 'PASS', '.env* must be recognised as covering .env');
+});
+
+test('AS-12: .gitignore with .env*.local (CRA default) is PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, '.gitignore'), 'node_modules/\n.env*.local\n');
+  const r = detectEnvGitignored(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    '.env*.local must be recognised as covering .env files'
+  );
+});
+
 test('AS-12: .gitignore without .env is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, '.gitignore'), 'node_modules/\ndist/\n*.log\n');
@@ -79,6 +97,39 @@ test('AIS-07: hook script referencing .env patterns is PASS', () => {
   );
   const r = detectAgentSafetyHooks(t);
   assert.equal(r.status, 'PASS');
+});
+
+test('AIS-07: hook reading only process.env is WARN — env-var access is not a sensitive-file guard', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.claude', 'hooks'), { recursive: true });
+  // `process.env.FOO` contains the substring ".env" but references an
+  // environment variable, not the .env file — must NOT count as a
+  // sensitive-pattern reference (false PASS regression).
+  writeFileSync(
+    join(t, '.claude', 'hooks', 'notify.js'),
+    'const url = process.env.FOO;\nfetch(url);\n'
+  );
+  const r = detectAgentSafetyHooks(t);
+  assert.equal(
+    r.status,
+    'WARN',
+    `hook using process.env.FOO must not count as guarding .env files; got ${r.status}`
+  );
+});
+
+test('AIS-07: hook referencing the ".env" file token is PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.claude', 'hooks'), { recursive: true });
+  writeFileSync(
+    join(t, '.claude', 'hooks', 'guard.js'),
+    'if (input.includes(".env")) { block(); }\n'
+  );
+  const r = detectAgentSafetyHooks(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `hook referencing the ".env" file must count as a sensitive-pattern guard; got ${r.status}`
+  );
 });
 
 test('AIS-07: hook script without sensitive references is WARN', () => {

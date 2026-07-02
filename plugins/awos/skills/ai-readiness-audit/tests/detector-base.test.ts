@@ -61,6 +61,22 @@ test('makeResult rejects a bad status', () => {
   );
 });
 
+test('makeResult clamps out-of-range score/confidence into [0,1]', () => {
+  const over = makeResult('PASS', null, [], 'detected', 1.7, 2.5);
+  assert.equal(over.score, 1, 'score above 1 must be clamped to 1');
+  assert.equal(over.confidence, 1, 'confidence above 1 must be clamped to 1');
+  const under = makeResult('FAIL', null, [], 'detected', -0.3, -1);
+  assert.equal(under.score, 0, 'score below 0 must be clamped to 0');
+  assert.equal(under.confidence, 0, 'confidence below 0 must be clamped to 0');
+  const inRange = makeResult('WARN', null, [], 'detected', 0.42, 0.9);
+  assert.equal(inRange.score, 0.42, 'in-range score must pass through');
+  assert.equal(
+    inRange.confidence,
+    0.9,
+    'in-range confidence must pass through'
+  );
+});
+
 test('iterFiles is sorted and skips .git', () => {
   const t = mkdtempSync(join(tmpdir(), 'det-'));
   mkdirSync(join(t, '.git'));
@@ -69,6 +85,47 @@ test('iterFiles is sorted and skips .git', () => {
   writeFileSync(join(t, 'a.ts'), 'a');
   const names = iterFiles(t, ['**/*.ts']).map((p) => p.split('/').pop());
   assert.deepEqual(names, ['a.ts', 'b.ts']);
+});
+
+test('iterFiles matches path-qualified globs (find -name only sees basenames)', () => {
+  const t = mkdtempSync(join(tmpdir(), 'det-'));
+  mkdirSync(join(t, 'design'));
+  mkdirSync(join(t, 'ci'));
+  mkdirSync(join(t, 'other'));
+  writeFileSync(join(t, 'design', 'spec.md'), '# spec');
+  writeFileSync(join(t, 'ci', 'pipeline.yml'), 'jobs: {}');
+  writeFileSync(join(t, 'other', 'notes.md'), '# notes');
+  writeFileSync(join(t, 'pipeline.yml'), 'jobs: {}'); // root — not under ci/
+  const mdHits = iterFiles(t, ['design/*.md']).map((p) =>
+    p.slice(t.length + 1)
+  );
+  assert.deepEqual(
+    mdHits,
+    ['design/spec.md'],
+    'design/*.md must match only markdown under design/'
+  );
+  const ymlHits = iterFiles(t, ['ci/pipeline.yml']).map((p) =>
+    p.slice(t.length + 1)
+  );
+  assert.deepEqual(
+    ymlHits,
+    ['ci/pipeline.yml'],
+    'ci/pipeline.yml must match the file at that exact path, not the root copy'
+  );
+});
+
+test('iterFiles matches **/-prefixed path globs at any depth', () => {
+  const t = mkdtempSync(join(tmpdir(), 'det-'));
+  mkdirSync(join(t, 'packages', 'a', 'design'), { recursive: true });
+  writeFileSync(join(t, 'packages', 'a', 'design', 'doc.md'), '# doc');
+  const hits = iterFiles(t, ['**/design/*.md']).map((p) =>
+    p.slice(t.length + 1)
+  );
+  assert.deepEqual(
+    hits,
+    ['packages/a/design/doc.md'],
+    '**/design/*.md must match design/ dirs at any depth'
+  );
 });
 
 test('grep finds pattern with location', () => {

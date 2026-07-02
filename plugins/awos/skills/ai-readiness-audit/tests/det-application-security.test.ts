@@ -68,6 +68,43 @@ test('AS-01: localhost plain-HTTP is PASS (exempted)', () => {
   assert.equal(r.status, 'PASS');
 });
 
+test('AS-01: json-schema.org $schema identifier URL is exempted (PASS)', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'config.schema.json'),
+    '{\n  "$schema": "http://json-schema.org/draft-07/schema#",\n  "type": "object"\n}\n'
+  );
+  const r = detectTlsEnforced(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `schema identifier URLs are never fetched — must not count as insecure origins; got ${r.status}`
+  );
+});
+
+test('AS-01: w3.org / schemas.* namespace URLs are exempted, real http origin still counts', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'namespaces.yaml'),
+    'xml_ns: "http://www.w3.org/2001/XMLSchema"\nxaml_ns: "http://schemas.microsoft.com/winfx/2006/xaml"\n'
+  );
+  const clean = detectTlsEnforced(t);
+  assert.equal(
+    clean.status,
+    'PASS',
+    `XML namespace URLs must be exempted from the insecure-origin count; got ${clean.status}`
+  );
+  writeFileSync(
+    join(t, 'settings.toml'),
+    '[service]\nbase_url = "http://api.mycompany.com"\n'
+  );
+  const dirty = detectTlsEnforced(t);
+  assert.ok(
+    dirty.status === 'WARN' || dirty.status === 'FAIL',
+    `real plain-HTTP service origin must still count despite allowlist; got ${dirty.status}`
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectSecurityHeaders (3001 — AS-02)
 // ---------------------------------------------------------------------------
@@ -313,6 +350,35 @@ test('AS-06: no mutation routes is SKIP', () => {
   assert.equal(r.status, 'SKIP');
 });
 
+test('AS-06: cache.delete()/axios.post() calls are not mutation routes (SKIP)', () => {
+  const t = tmp();
+  // Bare `.post(`/`.delete(` on non-router receivers must not register as
+  // HTTP mutation endpoints.
+  writeFileSync(
+    join(t, 'client.ts'),
+    'cache.delete(key);\nawait axios.post(url, body);\nqueue.put(item);\n'
+  );
+  const r = detectAuthOnMutations(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    `non-router .post()/.delete() calls must not count as mutation routes; got ${r.status}`
+  );
+});
+
+test('AS-06: app.post()/router.delete() are mutation routes (WARN/FAIL without auth)', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'server.ts'),
+    "app.post('/x', createX);\nrouter.delete('/x/:id', deleteX);\n"
+  );
+  const r = detectAuthOnMutations(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `router-receiver mutation routes without auth must be evaluated (WARN/FAIL); got ${r.status}`
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectPasswordSessionHygiene (3006 — AS-07)
 // ---------------------------------------------------------------------------
@@ -355,6 +421,36 @@ test('AS-07: no hash patterns is SKIP', () => {
   assert.equal(r.status, 'SKIP');
 });
 
+test('AS-07: md5 for a cache key is not a password-hashing FAIL', () => {
+  const t = tmp();
+  // Generic "hash" proximity used to trip the insecure-hash check on
+  // non-credential uses of md5.
+  writeFileSync(
+    join(t, 'cache.py'),
+    'import hashlib\nimport bcrypt\n# compute the md5 hash for the cache key\nkey = hashlib.md5(url.encode()).hexdigest()\nhashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())\n'
+  );
+  const r = detectPasswordSessionHygiene(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `md5 cache-key usage next to bcrypt password hashing must not FAIL; got ${r.status}`
+  );
+});
+
+test('AS-07: md5(password) still FAILs after narrowing the proximity group', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'auth.py'),
+    'import hashlib\ndigest = hashlib.md5(password.encode()).hexdigest()\n'
+  );
+  const r = detectPasswordSessionHygiene(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    `md5 applied to a password must remain a FAIL; got ${r.status}`
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectInputValidation (3007 — AS-08)
 // ---------------------------------------------------------------------------
@@ -385,6 +481,22 @@ test('AS-08: no validation patterns is SKIP', () => {
   writeFileSync(join(t, 'app.py'), 'print("hello")\n');
   const r = detectInputValidation(t);
   assert.equal(r.status, 'SKIP');
+});
+
+test('AS-08: class-validator @IsString decorator is PASS (dead \\b@ regression)', () => {
+  const t = tmp();
+  // The old \b(...|@IsString|...)\b wrapper made every @-decorator
+  // alternative unmatchable (\b before @ never matches).
+  writeFileSync(
+    join(t, 'dto.ts'),
+    'export class CreateUserDto {\n  @IsString()\n  name: string;\n}\n'
+  );
+  const r = detectInputValidation(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `@IsString decorator must be recognised as a validation library; got ${r.status}`
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -427,6 +539,22 @@ test('AS-09: NestJS @Throttle decorator is PASS', () => {
   );
   const r = detectRateLimiting(t);
   assert.equal(r.status, 'PASS');
+});
+
+test('AS-09: @RateLimit decorator is PASS', () => {
+  const t = tmp();
+  // Covers the decorator alternative moved out of the \b(...)\b wrapper
+  // (\b before @ never matches).
+  writeFileSync(
+    join(t, 'handler.ts'),
+    '@RateLimit({ points: 5, duration: 60 })\nexport class Handler {}\n'
+  );
+  const r = detectRateLimiting(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `@RateLimit decorator must be recognised as rate limiting; got ${r.status}`
+  );
 });
 
 // ---------------------------------------------------------------------------

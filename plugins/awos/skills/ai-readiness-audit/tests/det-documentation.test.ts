@@ -149,6 +149,53 @@ test('DOC-02: majority of service dirs missing README is FAIL', () => {
   assert.ok(r.evidence.some((e) => e.includes('README MISSING')));
 });
 
+test('DOC-02: single src/ layout dir is SKIP, not FAIL — one code dir is not a multi-service repo', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'src'));
+  for (let i = 0; i < 6; i++) {
+    writeFileSync(join(t, 'src', `module${i}.ts`), `export const x = ${i};\n`);
+  }
+  const r = detectServiceReadmes(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    `single-src/ repo must SKIP DOC-02 (single-service), got ${r.status}`
+  );
+});
+
+test('DOC-02: layout dirs (src/tests/lib/app) are never counted as services', () => {
+  const t = tmp();
+  for (const dir of ['src', 'tests', 'lib', 'app']) {
+    mkdirSync(join(t, dir));
+    for (let i = 0; i < 6; i++) {
+      writeFileSync(join(t, dir, `module${i}.ts`), `export const x = ${i};\n`);
+    }
+  }
+  const r = detectServiceReadmes(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    `conventional layout dirs must not demand per-service READMEs, got ${r.status}`
+  );
+});
+
+test('DOC-02: a single non-layout candidate dir is SKIP (no multi-service structure)', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'backend'));
+  for (let i = 0; i < 6; i++) {
+    writeFileSync(
+      join(t, 'backend', `module${i}.ts`),
+      `export const x = ${i};\n`
+    );
+  }
+  const r = detectServiceReadmes(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    `one candidate dir is not a multi-service layout, got ${r.status}`
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectApiDocs (2202 — DOC-03, detected)
 // ---------------------------------------------------------------------------
@@ -199,6 +246,51 @@ test('DOC-03: Express API with no docs is FAIL', () => {
   );
   const r = detectApiDocs(t);
   assert.equal(r.status, 'FAIL');
+});
+
+// Regression for the dead \b(...)\b wrapper: `\b@` never matches and a
+// trailing `\b` after `(`/`)` killed `express()` — these API surfaces were
+// invisible, so DOC-03 SKIPped instead of evaluating.
+test('DOC-03: Flask @app.route decorator is recognised as API source (FAIL without docs)', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'views.py'),
+    'from flask import request\n\n@app.route("/users", methods=["GET"])\ndef users():\n    return []\n'
+  );
+  const r = detectApiDocs(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    `@app.route( must count as API source (not SKIP), got ${r.status}`
+  );
+});
+
+test('DOC-03: Spring @RestController is recognised as API source (FAIL without docs)', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'UserController.java'),
+    '@RestController\npublic class UserController {\n}\n'
+  );
+  const r = detectApiDocs(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    `@RestController must count as API source (not SKIP), got ${r.status}`
+  );
+});
+
+test('DOC-03: bare express() call is recognised as API source (FAIL without docs)', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'server.js'),
+    'const express = require("express");\nconst server = express();\n'
+  );
+  const r = detectApiDocs(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    `express() must count as API source (not SKIP), got ${r.status}`
+  );
 });
 
 // ---------------------------------------------------------------------------

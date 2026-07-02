@@ -27,7 +27,14 @@ const TLS_CONFIG_GLOBS = [
 
 // Must actually be http (not https)
 const PLAIN_HTTP_STRICT_RX =
-  /http:\/\/((?!localhost|127\.|0\.0\.0\.0|::1)[a-zA-Z0-9\-._]+)/i;
+  /http:\/\/((?!localhost|127\.|0\.0\.0\.0|::1)[a-zA-Z0-9\-._]+)/gi;
+
+// Schema/namespace identifier hosts. URLs like
+// `"$schema": "http://json-schema.org/draft-07/schema#"` or an XML
+// `xmlns="http://www.w3.org/..."` are opaque identifiers, never fetched over
+// the network — they say nothing about TLS enforcement.
+const SCHEMA_HOST_ALLOWLIST_RX =
+  /^(?:(?:[\w-]+\.)*json-schema\.org|www\.w3\.org|(?:[\w-]+\.)*openapis\.org|xmlns[\w.-]*|schemas\.[\w.-]+)\.?$/i;
 
 const TLS_CONFIG_IGNORE = [
   '.git',
@@ -71,12 +78,19 @@ export function detectTlsEnforced(
       // Skip example/template values
       if (/example|template|placeholder|localhost|127\.|your[_-]/i.test(line))
         continue;
-      if (PLAIN_HTTP_STRICT_RX.test(line)) {
+      PLAIN_HTTP_STRICT_RX.lastIndex = 0;
+      for (
+        let m = PLAIN_HTTP_STRICT_RX.exec(line);
+        m !== null;
+        m = PLAIN_HTTP_STRICT_RX.exec(line)
+      ) {
+        if (SCHEMA_HOST_ALLOWLIST_RX.test(m[1])) continue;
         plainHttpHits.push({
           file: relative(repoPath, filePath),
           line: i + 1,
           text: line.trim().slice(0, 100),
         });
+        break;
       }
     }
 
@@ -570,9 +584,11 @@ const ROUTE_GLOBS = [
   '*.php',
 ];
 
-// Route mutation patterns (framework-agnostic)
+// Route mutation patterns (framework-agnostic). Bare `.post(`/`.delete(`
+// would match unrelated calls (`cache.delete(key)`, `axios.post(url)`), so
+// method-call matches require a router-ish receiver before the method.
 const MUTATION_ROUTE_RX =
-  /(?:@(?:app|router|blueprint|api)\.(?:post|put|patch|delete)|router\.(?:post|put|patch|delete)|app\.(?:post|put|patch|delete)|Route\("(?:POST|PUT|PATCH|DELETE)"|\[HttpPost\]|\[HttpPut\]|\[HttpPatch\]|\[HttpDelete\]|\.post\s*\(|\.put\s*\(|\.patch\s*\(|\.delete\s*\()/i;
+  /(?:@(?:app|router|blueprint|api)\.(?:post|put|patch|delete)|Route\("(?:POST|PUT|PATCH|DELETE)"|\[HttpPost\]|\[HttpPut\]|\[HttpPatch\]|\[HttpDelete\]|\b(?:app|router|server|api|route[rs]?|fastify|express|blueprint)\w*\s*\.\s*(?:post|put|patch|delete)\s*\()/i;
 
 // Auth decorator/middleware patterns
 const AUTH_DECORATOR_RX =
@@ -690,7 +706,9 @@ const AUTH_GLOBS = [
 const STRONG_HASH_RX = /\b(?:bcrypt|argon2|scrypt|passlib|ph\.hash)\b/i;
 const WEAK_HASH_RX =
   /\b(?:pbkdf2|sha256|sha512)\b.{0,40}(?:password|passwd|hash)/i;
-const INSECURE_HASH_RX = /\b(?:md5|sha1)\b.{0,40}(?:password|passwd|hash)/i;
+// Proximity group is password terms only — a generic `hash` nearby would
+// flag innocent prose/code like "compute the md5 hash for the cache key".
+const INSECURE_HASH_RX = /\b(?:md5|sha1)\b.{0,40}(?:password|passwd|pwd)/i;
 const SESSION_CSPRNG_RX =
   /(?:secrets\.token|os\.urandom|crypto\.randomBytes|SecureRandom|rand\.Read|Random\.new)/i;
 
@@ -786,8 +804,10 @@ const HANDLER_GLOBS = [
   '*.php',
 ];
 
+// Decorator alternatives live outside the \b(...)\b group: `\b` before `@`
+// can never match (both sides are non-word characters).
 const VALIDATION_LIBRARY_RX =
-  /\b(?:pydantic|marshmallow|cerberus|voluptuous|wtforms|validator\.js|joi|yup|zod|class-validator|validate\.js|express-validator|@IsString|@IsInt|@IsEmail|@Min|@Max|@Length|@NotNull|@Valid|@Validated|javax\.validation|jakarta\.validation|ActiveRecord::Base\.validates|validates\s*:|govalidator|ozzo-validation)\b/i;
+  /\b(?:pydantic|marshmallow|cerberus|voluptuous|wtforms|validator\.js|joi|yup|zod|class-validator|validate\.js|express-validator|javax\.validation|jakarta\.validation|ActiveRecord::Base\.validates|validates\s*:|govalidator|ozzo-validation)\b|@(?:IsString|IsInt|IsEmail|Min|Max|Length|NotNull|Valid|Validated)\b/i;
 
 const MANUAL_VALIDATION_RX =
   /(?:isinstance\s*\(|typeof\s+\w+\s*===|request\.args\.get|request\.form\.get|req\.body\.|params\[|sanitize|escape\s*\()/i;
@@ -846,8 +866,10 @@ export function detectInputValidation(
 // FAIL if no rate-limiting signals are found.
 // ---------------------------------------------------------------------------
 
+// Decorator alternatives live outside the \b(...)\b group: `\b` before `@`
+// can never match (both sides are non-word characters).
 const RATE_LIMIT_RX =
-  /\b(?:rate[_-]?limit|throttle|slowDown|express-rate-limit|django[_-]?ratelimit|flask[_-]?limiter|Limiter|ratelimiter|redis[_-]?throttle|@Throttle|@RateLimit|Throttling|UserRateThrottle|AnonRateThrottle)\b/i;
+  /\b(?:rate[_-]?limit|throttle|slowDown|express-rate-limit|django[_-]?ratelimit|flask[_-]?limiter|Limiter|ratelimiter|redis[_-]?throttle|Throttling|UserRateThrottle|AnonRateThrottle)\b|@(?:Throttle|RateLimit)\b/i;
 
 const RATE_CONFIG_GLOBS = [
   '*.py',

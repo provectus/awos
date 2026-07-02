@@ -88,6 +88,35 @@ test('detectVerticalDelivery: real git repo with feature branch but single sourc
   );
 });
 
+test('detectVerticalDelivery: detached HEAD pseudo-entry is not a feature branch → SKIP', () => {
+  const t = tmp();
+  const git = (args: string[]) =>
+    execFileSync('git', args, { cwd: t, encoding: 'utf8', stdio: 'pipe' });
+  try {
+    git(['init', '-b', 'main']);
+    git(['config', 'user.email', 'test@test.com']);
+    git(['config', 'user.name', 'Test']);
+    writeFileSync(join(t, 'a.txt'), 'a\n');
+    git(['add', '.']);
+    git(['commit', '-m', 'initial']);
+    // Detach HEAD: `git branch` now emits "(HEAD detached at <sha>)" which
+    // must be filtered, not treated as a feature branch.
+    git(['checkout', '--detach', 'HEAD']);
+  } catch {
+    return; // git unavailable — skip gracefully
+  }
+  const r = detectVerticalDelivery(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    `detached-HEAD pseudo entry must not count as a feature branch (SKIP); got ${r.status}`
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('no feature branches')),
+    `SKIP must come from the no-feature-branches gate; got ${JSON.stringify(r.evidence)}`
+  );
+});
+
 // ---------------------------------------------------------------------------
 // E2E-02 (category 2301) was REMOVED — name-based layer-split detection is
 // gone. These tests confirm the absence.

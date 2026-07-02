@@ -120,6 +120,14 @@ const SKIP_DIRS = new Set([
   'static',
   'public',
   'resources',
+  // Conventional layout dirs of a SINGLE-service repo — a `src/` or `lib/`
+  // full of source files is not a "service" and must not demand its own
+  // README.
+  'src',
+  'tests',
+  'test',
+  'app',
+  'lib',
 ]);
 
 const SERVICE_SOURCE_GLOBS = [
@@ -188,7 +196,10 @@ export function detectServiceReadmes(
     serviceDirs.push({ path: dirPath, name: dirName, hasReadme });
   }
 
-  if (serviceDirs.length === 0) {
+  // A single candidate dir is not a multi-service layout — one top-level
+  // code dir is just where the (single) service lives, and DOC-02's
+  // per-service README expectation does not apply.
+  if (serviceDirs.length <= 1) {
     return makeResult('SKIP', null, [
       'no multi-service directory structure detected — DOC-02 not applicable',
     ]);
@@ -254,8 +265,12 @@ const API_DOC_GLOBS = [
   'api-docs.json',
 ];
 
+// No outer \b(...)\b wrapper: `\b` before `@` can never match (both sides
+// non-word), and a trailing `\b` after `(` / `)` kills `express()` /
+// `FastAPI(` / `gin.Default(`. Word boundaries are applied per-alternative
+// where they are meaningful.
 const API_SOURCE_RX =
-  /\b(@RestController|@app\.route|@router\.|router\.get|router\.post|app\.get|app\.post|FastAPI\(|express\(\)|flask\.Flask\(|gin\.Default\(|chi\.NewRouter|http\.HandleFunc)\b/i;
+  /(?:@RestController\b|@app\.route|@router\.|\brouter\.(?:get|post)|\bapp\.(?:get|post)|\bFastAPI\(|\bexpress\(\)|\bflask\.Flask\(|\bgin\.Default\(|\bchi\.NewRouter\b|\bhttp\.HandleFunc\b)/i;
 
 const AUTO_DOCS_RX = /FastAPI\(|app\s*=\s*FastAPI\(|springdoc|springfox/i;
 

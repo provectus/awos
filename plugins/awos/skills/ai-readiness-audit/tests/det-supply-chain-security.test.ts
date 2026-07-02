@@ -171,6 +171,23 @@ test('SCS-03: requirements.txt with >= ranges is FAIL or WARN', () => {
   assert.equal(r.status, 'FAIL');
 });
 
+test('SCS-03: pinned pyproject spec with an environment marker still counts as pinned', () => {
+  const t = tmp();
+  // Regression: a capture-group-less .replace(..., '$1') used to turn any
+  // PEP-508 spec with an env marker into the literal string "$1", counting
+  // it as unpinned.
+  writeFileSync(
+    join(t, 'pyproject.toml'),
+    '[project]\nname = "demo"\ndependencies = [\n  \'requests==2.0; python_version<"3.9"\',\n  "boto3==1.34.0",\n  "pydantic==2.5.0",\n]\n'
+  );
+  const r = detectPinnedVersions(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `env-marker spec requests==2.0; python_version<"3.9" must count as pinned; got ${r.status}`
+  );
+});
+
 test('SCS-03: no package manifests returns SKIP', () => {
   const t = tmp();
   writeFileSync(join(t, 'main.go'), 'package main\n');

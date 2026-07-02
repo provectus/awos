@@ -136,10 +136,16 @@ function listFeatureBranches(repoPath: string): string[] {
       cwd: repoPath,
       encoding: 'utf8',
     });
-    return out
-      .split('\n')
-      .map((b) => b.trim())
-      .filter((b) => b.length > 0 && !TRUNK_NAMES.has(b));
+    return (
+      out
+        .split('\n')
+        .map((b) => b.trim())
+        // On a detached HEAD `git branch` emits a pseudo-entry like
+        // "(HEAD detached at abc1234)" — not a branch, filter it out.
+        .filter(
+          (b) => b.length > 0 && !b.startsWith('(') && !TRUNK_NAMES.has(b)
+        )
+    );
   } catch {
     return [];
   }

@@ -9,11 +9,12 @@ import { ALL_HOOK_PATHS } from '../agent_tools.ts';
 // PASS if .gitignore exists and contains a pattern that covers .env files.
 // FAIL if .gitignore is absent or does not cover .env.
 //
-// Recognised patterns: `.env`, `.env.*`, `*.env`, `**/.env`, `/env`.
+// Recognised patterns: `.env`, `.env.*`, `.env*`, `.env*.local` (Next.js/CRA/
+// Vercel default gitignore lines), `*.env`, `**/.env`, `/.env`.
 // ---------------------------------------------------------------------------
 
 const ENV_GITIGNORE_RX =
-  /^\s*(\.env(\.\*)?|\*\.env|\*\*\/\.env|\/\.env)\s*(?:#.*)?$/m;
+  /^\s*(\.env(\.\*|\*(\.local)?)?|\*\.env|\*\*\/\.env|\/\.env)\s*(?:#.*)?$/m;
 
 export function detectEnvGitignored(
   repoPath: string,
@@ -59,7 +60,11 @@ export function detectEnvGitignored(
 // ---------------------------------------------------------------------------
 
 const HOOK_FILES_GLOBS = ['*.sh', '*.js', '*.ts', '*.py', '*.bash'];
-const HOOK_SENSITIVE_RX = /\.env|secret|credential|\.pem|\.key/i;
+// `.env` must be a file token (start of line/whitespace/quote/slash before
+// it), otherwise `process.env.FOO` / `os.environ` — present in virtually any
+// hook script — would count as a sensitive-file reference.
+const HOOK_SENSITIVE_RX =
+  /(?:^|[\s"'/])\.env\b|secret|credential|\.pem|\.key/im;
 
 export function detectAgentSafetyHooks(
   repoPath: string,

@@ -264,6 +264,62 @@ test('SDD-03: WARN when exactly 2 tech mentions cannot be verified in codebase',
   );
 });
 
+test('SDD-03: lowercase prose "go"/"node" is not a tech mention (PASS, not WARN)', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'context', 'architecture'), { recursive: true });
+  // "before we go live" and "each node" are ordinary English — they must not
+  // register Go/Node.js as unverified technology mentions.
+  writeFileSync(
+    join(t, 'context', 'architecture', 'architecture.md'),
+    '# Architecture\n\nWe use TypeScript. Review each node in the workflow before we go live.\n'
+  );
+  writeFileSync(join(t, 'index.ts'), 'console.log("hello");\n');
+  const r = detectArchTechMatch(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `prose "go"/"node" must not count as tech mentions; got ${r.status} (${JSON.stringify(r.evidence)})`
+  );
+});
+
+test('SDD-03: canonical "Go" capitalization still registers as a tech mention', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'context', 'architecture'), { recursive: true });
+  writeFileSync(
+    join(t, 'context', 'architecture', 'architecture.md'),
+    '# Architecture\n\nWe use TypeScript and Go for the backend.\n'
+  );
+  // TypeScript verified; no .go files → Go is an unverified mention → WARN
+  writeFileSync(join(t, 'index.ts'), 'console.log("hello");\n');
+  const r = detectArchTechMatch(t);
+  assert.equal(
+    r.status,
+    'WARN',
+    `capitalized "Go" must register as an (unverified) tech mention; got ${r.status}`
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('not evidenced') && e.includes('go')),
+    `evidence must flag go as mentioned-but-unverified; got ${JSON.stringify(r.evidence)}`
+  );
+});
+
+test('SDD-03: backticked `node` counts as a tech mention even in lowercase', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'context', 'architecture'), { recursive: true });
+  writeFileSync(
+    join(t, 'context', 'architecture', 'architecture.md'),
+    '# Architecture\n\nWe use TypeScript. Run `node dist/cli.js` to start.\n'
+  );
+  writeFileSync(join(t, 'index.ts'), 'console.log("hello");\n');
+  // No package.json / *.js → node is an unverified mention → WARN
+  const r = detectArchTechMatch(t);
+  assert.equal(
+    r.status,
+    'WARN',
+    `inline-code \`node\` must register as a tech mention; got ${r.status}`
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectBranchSpecRatio — code 2803 (SDD-04, computed)
 //
@@ -427,6 +483,52 @@ test('SDD-04: mixed frameworks — AWOS + Kiro + Agent-OS all count as spec-touc
     'all three framework spec dirs must count → 3/3 = 1.0 → PASS'
   );
   assert.equal(r.value, 1, 'AWOS + Kiro + Agent-OS all counted → ratio 1.0');
+});
+
+test('SDD-04: RSpec test files under spec/ do not earn spec-dir credit', () => {
+  const t = tmp();
+  gitInit(t);
+  // A Ruby test suite lives in spec/ — touching it is testing, not
+  // spec-driven development. 0/1 spec-touching → FAIL.
+  addBranch(t, 'feat-rspec', 'spec/models/user_spec.rb');
+  const r = detectBranchSpecRatio(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    `spec/models/user_spec.rb must NOT count as a spec artifact (SDD-04); got ${r.status}`
+  );
+  assert.equal(
+    r.value,
+    0,
+    'RSpec-only branch must yield ratio 0 (no spec credit)'
+  );
+});
+
+test('SDD-04: markdown spec document under specs/ still earns credit', () => {
+  const t = tmp();
+  gitInit(t);
+  addBranch(t, 'feat-specced', 'specs/001-feature/spec.md');
+  const r = detectBranchSpecRatio(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `specs/001-feature/spec.md must count as a spec artifact; got ${r.status}`
+  );
+  assert.equal(r.value, 1, 'spec.md branch must yield ratio 1.0');
+});
+
+test('SDD-04: detached HEAD pseudo-entry is not counted as a feature branch', () => {
+  const t = tmp();
+  gitInit(t);
+  // Detach HEAD — `git branch` now emits "(HEAD detached at <sha>)", which
+  // must be filtered out rather than treated as a plain feature branch.
+  execFileSync('git', ['checkout', '--detach', 'HEAD'], { cwd: t });
+  const r = detectBranchSpecRatio(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    `detached-HEAD pseudo branch must be ignored (no feature branches → SKIP); got ${r.status}`
+  );
 });
 
 // ---------------------------------------------------------------------------

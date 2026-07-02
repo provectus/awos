@@ -182,8 +182,6 @@ export function detectLockfileIntegrity(
 //   otherwise     → PASS (includes zero deps)
 // ---------------------------------------------------------------------------
 
-const RANGED_RX = /["']?\s*(?:\^|~=?|>=|>|!= ?|\*|x\s*\.?)\s*\d/;
-
 // ---------------------------------------------------------------------------
 // parsePyprojectDeps — minimal TOML section scanner for pyproject.toml
 //
@@ -336,7 +334,7 @@ function isPep508Ranged(spec: string): boolean {
   // A spec is pinned only if it contains == (exact version).
   // No specifier at all → ranged. >=, >, ~=, ^, != → ranged.
   // Handle "package[extra]>=1.0" forms.
-  const versionPart = spec.replace(/^[^;]+;.*$/, '$1').split(';')[0]; // strip env markers
+  const versionPart = spec.split(';')[0].trim(); // strip env markers
   if (/==\s*[\d]/.test(versionPart)) return false; // pinned
   return true; // no specifier or ranged specifier
 }

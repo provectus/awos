@@ -132,7 +132,7 @@ export function detectArchPattern(
 //   - services/ importing from routes/, controllers/, handlers/
 //   - repositories/ importing from routes/, controllers/, handlers/, services/
 //
-// FAIL if >= 2 violations (or 1 clear cycle).
+// FAIL if >= 2 violations.
 // WARN if 1 violation.
 // PASS if no violations.
 // ---------------------------------------------------------------------------
@@ -281,7 +281,15 @@ export function detectImportGraph(
         `${v.file}:${v.line} layer violation: ${v.sourceLayer}/ imports from ${v.targetLayer}/ (${v.importPath})`
     );
 
-  // Any layer violation is a clear architectural defect → FAIL
+  // A single violation may be a one-off (or a heuristic false positive) → WARN;
+  // repeated violations indicate a structural problem → FAIL.
+  if (violations.length === 1) {
+    return makeResult('WARN', 1, [
+      '1 import layer violation detected',
+      ...evidence,
+    ]);
+  }
+
   return makeResult('FAIL', violations.length, [
     `${violations.length} import layer violation(s) detected`,
     ...evidence,
@@ -333,8 +341,11 @@ const DATA_ACCESS_RX =
 const ORM_STATIC_RX =
   /\b\w+\s*\.\s*(?:objects\s*\.\s*(?:filter|get|all|exclude|create|update|delete)\s*\(|find(?:One|All|By\w+)\s*\()/i;
 
-// Raw SQL strings
-const RAW_SQL_RX = /(?:SELECT|INSERT|UPDATE|DELETE|CREATE|DROP)\s+\w+/i;
+// Raw SQL strings. Each verb requires its SQL continuation (FROM/INTO/SET/
+// TABLE…) so English prose like "Delete item" or "Update profile" in UI
+// strings never counts as inline SQL.
+const RAW_SQL_RX =
+  /\b(?:SELECT\s+[\w*]+\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|CREATE\s+(?:TABLE|INDEX|VIEW)|DROP\s+(?:TABLE|INDEX|VIEW))\b/i;
 
 function countDataAccessCalls(content: string): number {
   const lines = content.split('\n');
@@ -425,15 +436,18 @@ export function detectSeparationOfConcerns(
 //
 // Check file-naming convention adherence across source files. Test files are
 // excluded (they follow the test-naming convention, a separate axis).
-// Classifies each source filename's stem (first dot-segment) into one of:
+// Maps each source filename's stem (first dot-segment) to the conventions
+// it is COMPATIBLE with:
 //   - snake_case: all lowercase with underscores
 //   - kebab-case: all lowercase with hyphens
 //   - camelCase: starts with lowercase, has uppercase letters
 //   - PascalCase: starts with uppercase
+//   - single-token lowercase (`utils`, `api`): compatible with all lowercase
+//     conventions — no separator evidence to pin it to one
 //   - mixed/other
 //
-// The "dominant" convention is the most common.
-// PASS if >= 90% of files follow the dominant convention.
+// The "dominant" convention is the one compatible with the most files.
+// PASS if >= 90% of files are compatible with the dominant convention.
 // WARN if 70–89%.
 // FAIL if < 70%.
 // ---------------------------------------------------------------------------
@@ -445,12 +459,23 @@ type NamingConvention =
   | 'PascalCase'
   | 'other';
 
-function classifyName(name: string): NamingConvention {
-  if (/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(name)) return 'snake_case';
-  if (/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name)) return 'kebab-case';
-  if (/^[A-Z][A-Za-z0-9]*$/.test(name)) return 'PascalCase';
-  if (/^[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$/.test(name)) return 'camelCase';
-  return 'other';
+/**
+ * Conventions a filename stem is compatible with. Single-token lowercase
+ * names (`utils`, `api`) carry no separator evidence, so they are compatible
+ * with EVERY lowercase convention (snake, kebab, camel) rather than being
+ * pinned to one — otherwise they would skew dominance away from the
+ * convention the multi-word names actually follow. Returns an empty array
+ * for names that fit no recognised convention ('other').
+ */
+function compatibleConventions(name: string): NamingConvention[] {
+  if (/^[a-z][a-z0-9]*$/.test(name)) {
+    return ['snake_case', 'kebab-case', 'camelCase'];
+  }
+  if (/^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(name)) return ['snake_case'];
+  if (/^[a-z][a-z0-9]*(-[a-z0-9]+)+$/.test(name)) return ['kebab-case'];
+  if (/^[A-Z][A-Za-z0-9]*$/.test(name)) return ['PascalCase'];
+  if (/^[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$/.test(name)) return ['camelCase'];
+  return [];
 }
 
 const NAMING_SOURCE_GLOBS = ALL_SOURCE_GLOBS;
@@ -494,6 +519,8 @@ export function detectNamingConventions(
     );
   }
 
+  // counts[c] = number of files whose name is COMPATIBLE with convention c
+  // (ambiguous single-token lowercase names count toward several).
   const counts: Record<NamingConvention, number> = {
     snake_case: 0,
     'kebab-case': 0,
@@ -503,7 +530,12 @@ export function detectNamingConventions(
   };
 
   for (const f of relevantFiles) {
-    counts[classifyName(nameStem(basename(f)))]++;
+    const compat = compatibleConventions(nameStem(basename(f)));
+    if (compat.length === 0) {
+      counts.other++;
+    } else {
+      for (const c of compat) counts[c]++;
+    }
   }
 
   const total = relevantFiles.length;
@@ -522,10 +554,10 @@ export function detectNamingConventions(
   const ratio = dominantCount / total;
 
   const evidence = [
-    `dominant convention: ${dominant} (${dominantCount}/${total} = ${Math.round(ratio * 100)}%)`,
+    `dominant convention: ${dominant} (${dominantCount}/${total} = ${Math.round(ratio * 100)}% compatible)`,
     ...conventions
       .filter((c) => counts[c] > 0)
-      .map((c) => `  ${c}: ${counts[c]} file(s)`),
+      .map((c) => `  ${c}: ${counts[c]} compatible file(s)`),
   ];
 
   if (ratio >= 0.9) {

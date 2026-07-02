@@ -922,8 +922,11 @@ export function detectContractTests(
 // SKIP  if no ML-related source files detected.
 // ---------------------------------------------------------------------------
 
+// pandas/numpy are deliberately absent: they are general data-wrangling
+// libraries, and their presence alone (ETL scripts, analytics notebooks)
+// does not make a project an ML project subject to QA-10.
 const ML_SOURCE_RX =
-  /\b(?:sklearn|torch|tensorflow|keras|transformers|xgboost|lightgbm|catboost|mlflow|pandas|numpy)\b/i;
+  /\b(?:sklearn|scikit-learn|torch|tensorflow|keras|transformers|xgboost|lightgbm|catboost|mlflow)\b/i;
 
 const ML_TEST_CONTENT_RX =
   /\b(?:assert.*(?:accuracy|f1[_-]score|precision|recall|rmse|mae|auc|roc_auc)|evidently|deepchecks|great_expectations|mlflow\.evaluate|ModelCard|alibi|check_model|model_performance)\b/i;

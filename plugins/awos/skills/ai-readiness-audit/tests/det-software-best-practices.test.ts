@@ -149,6 +149,36 @@ test('no code files returns PASS (nothing to check)', () => {
   assert.equal(r.status, 'PASS');
 });
 
+test('K&R-style `} catch (err) {` openers are scanned (empty ones FAIL)', () => {
+  const t = tmp();
+  // Prettier/K&R formatting puts `catch` on the same line as the closing
+  // brace of `try` — the opener regex must still see it.
+  writeFileSync(
+    join(t, 'swallow.ts'),
+    'try {\n  f();\n} catch (err) {\n}\n\ntry {\n  g();\n} catch (err) {\n}\n'
+  );
+  const r = detectErrorHandling(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    `empty K&R catch blocks must be counted as bad blocks (FAIL); got ${r.status}`
+  );
+});
+
+test('K&R-style `} catch (err) {` with logging is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'handled.ts'),
+    'try {\n  f();\n} catch (err) {\n  console.error(err);\n  throw err;\n}\n'
+  );
+  const r = detectErrorHandling(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `logged K&R catch block must count as handled; got ${r.status}`
+  );
+});
+
 test('detects 3+-name Python-2 except clause (e.g. except A, B, C:)', () => {
   const t = tmp();
   writeFileSync(

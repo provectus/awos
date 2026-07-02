@@ -84,14 +84,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck engine
+        run: npm run typecheck
+
       - name: Build engine bundle
         run: npm run build:engine
 
       # The bundle is committed (shipped to users — they run dist/cli.js, not a
       # local build). Fail if a rebuild diverges from what was committed, so a
-      # source edit can never ship with a stale bundle.
+      # source edit can never ship with a stale bundle. Stage dist/ first so
+      # untracked additions (e.g. a newly bundled grammar) fail the check too —
+      # a plain `git diff` only sees modifications to tracked files.
       - name: Verify committed bundle is in sync with source
-        run: git diff --exit-code -- plugins/awos/skills/ai-readiness-audit/dist
+        run: |
+          git add -A plugins/awos/skills/ai-readiness-audit/dist
+          git diff --cached --exit-code -- plugins/awos/skills/ai-readiness-audit/dist
 
       - name: Run engine tests
         run: node --import tsx --test "plugins/awos/skills/ai-readiness-audit/**/*.test.ts"

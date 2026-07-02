@@ -367,6 +367,10 @@ def main():
                     help="run `npm run build:engine` in worktree before the run")
     ap.add_argument("--claude-flags", default="--dangerously-skip-permissions",
                     help="extra flags passed to claude (space-separated)")
+    ap.add_argument("--model", default="claude-sonnet-5",
+                    help="model the audit session (and its subagents) run on, "
+                         "passed to `claude -p --model` (default claude-sonnet-5; "
+                         "empty string uses the claude default)")
     ap.add_argument("--retries", type=int, default=2,
                     help="if a run skips the engine (no audit-core / no audit.json), "
                          "relaunch claude this many times before giving up (default 2)")
@@ -437,7 +441,8 @@ def main():
     if args.dry_run:
         log("▶ --dry-run: target + marketplace left untouched")
         log(f"  would repoint {MARKET_NAME} -> {worktree} (+ restore after)")
-        log(f"  would run     : claude -p /awos:ai-readiness-audit (cwd={target})")
+        log(f"  would run     : claude -p /awos:ai-readiness-audit"
+            f"{' --model ' + args.model if args.model else ''} (cwd={target})")
         log(f"  would archive : {run_dir}")
         return
 
@@ -457,6 +462,8 @@ def main():
                                      args.seed_date, today)
 
         claude_flags = args.claude_flags.split() if args.claude_flags else []
+        if args.model:
+            claude_flags += ["--model", args.model]
         audits = os.path.join(target, "context/audits")
 
         # Engine-compliance guard + auto-retry. The headless model sometimes
@@ -549,6 +556,7 @@ def main():
 
         meta = {
             "timestamp_utc": ts, "label": args.label, "phase": args.phase,
+            "model": args.model or "claude-default",
             "seeded_previous_date": seeded_date,
             "seed_from": seed_from,
             "claude_version": claude_ver, "claude_rc": rc,

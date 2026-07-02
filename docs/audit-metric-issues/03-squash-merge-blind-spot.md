@@ -25,17 +25,17 @@ Neither is a windowing bug — the merge queries use the same 90-day `since` as 
 
 `onex-discovery-api` (real run, `context/audits/.../collected/git.json`), 90-day window, 9 authors:
 
-| author | commits | merges |
-| --- | --: | --: |
-| Aleksandr Makarov | 329 | **19** |
-| Juan Andres Pasos Rua | 33 | 0 |
-| cristhiancjgs20 | 18 | 0 |
-| Alexander Shleyko | 13 | 0 |
-| Vahe Yavrumyan | 12 | 0 |
-| jpasosrua | 7 | 0 |
-| Juan | 5 | 0 |
-| juan | 1 | 0 |
-| William Wang | 1 | 0 |
+| author                | commits | merges |
+| --------------------- | ------: | -----: |
+| Aleksandr Makarov     |     329 | **19** |
+| Juan Andres Pasos Rua |      33 |      0 |
+| cristhiancjgs20       |      18 |      0 |
+| Alexander Shleyko     |      13 |      0 |
+| Vahe Yavrumyan        |      12 |      0 |
+| jpasosrua             |       7 |      0 |
+| Juan                  |       5 |      0 |
+| juan                  |       1 |      0 |
+| William Wang          |       1 |      0 |
 
 Only one author (the person who merges) has any merges; 19 merges against ~420 commits over 90 days. That ratio is the fingerprint of a squash-merge workflow — most PRs land as single squashed commits (no merge commit), and the handful of real merge commits are all authored by the one maintainer who performed them.
 

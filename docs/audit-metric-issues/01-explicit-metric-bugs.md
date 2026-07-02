@@ -17,7 +17,7 @@ const E2E_CONTENT_RX =
 
 The pyramid tier loop (`:485-511`) classifies a test file as **e2e** if its content matches `E2E_CONTENT_RX`. Vitest is a general-purpose unit-test runner, so a unit test that does `import { describe, it, expect } from "vitest"` is counted as e2e.
 
-**Effect:** unit tier = 0, so `unitDominates` is false → "test pyramid is inverted" → FAIL, even for a textbook unit-heavy Vitest suite. Confirmed live: a fixture with 4 unit + 1 integration test reported `unit: 0 | integration: 1 | e2e: 4`. The only workaround was to enable Vitest *globals* so tests don't import the string `vitest`.
+**Effect:** unit tier = 0, so `unitDominates` is false → "test pyramid is inverted" → FAIL, even for a textbook unit-heavy Vitest suite. Confirmed live: a fixture with 4 unit + 1 integration test reported `unit: 0 | integration: 1 | e2e: 4`. The only workaround was to enable Vitest _globals_ so tests don't import the string `vitest`.
 
 **Expected:** `vitest` (and arguably `supertest`, which is an HTTP assertion lib, not a browser e2e driver) should not be an e2e signal. E2E detection should rely on browser/e2e drivers + e2e dirs/config, not on the test runner name.
 
@@ -29,11 +29,11 @@ The pyramid tier loop (`:485-511`) classifies a test file as **e2e** if its cont
 
 **Where:** `detectors/code_architecture.ts:406-460`. `classifyName` (`:428-431`) buckets a basename as snake_case / kebab-case / camelCase; thresholds (`:415-417`) are PASS ≥ 90%, WARN 70–89%, FAIL < 70%. The exclusion list (`:443`) drops index/`__init__`/config files **but not test files**.
 
-A TypeScript test file is `foo.test.ts` / `foo.spec.ts` (the ecosystem's mandated convention — see the language table `languages.ts:48`). Its dotted basename matches none of snake/kebab/camel, so it counts as a naming *violation*.
+A TypeScript test file is `foo.test.ts` / `foo.spec.ts` (the ecosystem's mandated convention — see the language table `languages.ts:48`). Its dotted basename matches none of snake/kebab/camel, so it counts as a naming _violation_.
 
 **Evidence:** `data/arch05-evidence.json` — a repo of 3 snake_case source files + 3 standard `*.test.ts` files scores "dominant convention snake_case at only 50% → FAIL". To reach even the 70% WARN band you would need ~2.3× as many source files as tests; to PASS (90%) ~9× — i.e. a well-tested repo is structurally penalized for naming its tests correctly.
 
-**Expected:** exclude test files from the naming check (they follow the *test-naming* convention, a separate axis), or evaluate them against `*.test.*`/`*.spec.*` rather than the source-file conventions. This also interferes with the QA metrics — see `02-metric-range-and-interference.md` §Interference.
+**Expected:** exclude test files from the naming check (they follow the _test-naming_ convention, a separate axis), or evaluate them against `*.test.*`/`*.spec.*` rather than the source-file conventions. This also interferes with the QA metrics — see `02-metric-range-and-interference.md` §Interference.
 
 ---
 
@@ -42,15 +42,16 @@ A TypeScript test file is `foo.test.ts` / `foo.spec.ts` (the ecosystem's mandate
 **Severity:** high (inflates every audit; makes two checks non-discriminating).
 
 **Where:** `audit-core` writes its artifacts to `<repo>/context/audits/<date>/`. Two checks then read that directory as if it were project content:
+
 - `metrics/adp_g1_tooling_depth.ts:46,60` — code **106** ("spec-driven signals") explicitly counts a bare `context/` directory, which the audit itself creates.
 - `detectors/spec_driven_development.ts:14-43` — **SDD-01** ("AWOS installed": `.awos/` and `context/` present) sees `context/` from the output dir.
 
-**Evidence:** `data/self-pollution-evidence.json` — an identical single-file Python repo, scored twice, differing *only* in where the output was written:
+**Evidence:** `data/self-pollution-evidence.json` — an identical single-file Python repo, scored twice, differing _only_ in where the output was written:
 
-| output location | ADP-06 | SDD-01 | audit_total |
-| --- | --- | --- | --- |
-| inside repo (`<repo>/context/audits/…`) | PASS 8/8 | WARN 4/8 | 65 |
-| outside repo | FAIL 0/8 | FAIL 0/8 | 53 |
+| output location                         | ADP-06   | SDD-01   | audit_total |
+| --------------------------------------- | -------- | -------- | ----------- |
+| inside repo (`<repo>/context/audits/…`) | PASS 8/8 | WARN 4/8 | 65          |
+| outside repo                            | FAIL 0/8 | FAIL 0/8 | 53          |
 
 A repo with **no** spec-driven signals scores +12 pts purely because the audit wrote its output into it. Because the real skill always writes in-repo, ADP-06/SDD-01 can never reach 0.
 
@@ -81,6 +82,7 @@ c.weight_awarded = Math.round((c.weight_max || 0) * s * 10) / 10;
 **Where:** `metrics/adp_g13_doc_coverage.ts` (coverage math `:288,297-298`) plus the DOC-06 check/score mapping.
 
 **Evidence:** `data/doc06-evidence.json` — on a fully-documented TS module, DOC-05 and DOC-06 carry the **same** evidence ("6 of 6 public defs documented = 1.00") but:
+
 - DOC-05 → score 1.0 (3/3)
 - DOC-06 → score 0.857 (2.6/3)
 

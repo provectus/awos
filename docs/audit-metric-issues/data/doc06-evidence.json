@@ -6,9 +6,7 @@
     "score": 1,
     "weight_awarded": 3,
     "weight_max": 3,
-    "evidence": [
-      "6 of 6 public defs documented = 1.00"
-    ]
+    "evidence": ["6 of 6 public defs documented = 1.00"]
   },
   "DOC_06": {
     "check_id": "DOC-06",
@@ -16,9 +14,7 @@
     "score": 0.8571428571428571,
     "weight_awarded": 2.6,
     "weight_max": 3,
-    "evidence": [
-      "6 of 6 public defs documented = 1.00"
-    ]
+    "evidence": ["6 of 6 public defs documented = 1.00"]
   },
   "standalone_metric_adp_g13": "node dist/cli.js metric adp_g13_doc_coverage <fully-doc repo> → value=1.0 score=1.0",
   "anomaly": "DOC-06 evidence reports all public defs documented (=1.00) yet weight_awarded < weight_max (score ~0.86). The standalone metric returns 1.0, so the loss is introduced by the DOC-06 check/score mapping, not the coverage metric."

@@ -700,3 +700,53 @@ test('DETECTORS[2803] returns same result as detectBranchSpecRatio', () => {
   assert.equal(viaMap.status, direct.status);
   assert.equal(viaMap.method, 'computed');
 });
+
+// ---------------------------------------------------------------------------
+// SDD-04 merged-event denominator: repos whose CI deletes branches after merge
+// must count DELIVERED work (merge commits + squash-merged PRs), not just the
+// branches that happen to still exist.
+// ---------------------------------------------------------------------------
+
+function squashCommit(
+  dir: string,
+  subject: string,
+  files: Record<string, string>
+): void {
+  for (const [rel, content] of Object.entries(files)) {
+    const p = join(dir, rel);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, content);
+  }
+  execFileSync('git', ['add', '-A'], { cwd: dir });
+  execFileSync('git', ['commit', '-m', subject], { cwd: dir });
+}
+
+test('SDD-04 counts squash-merged PRs as feature work even when branches were deleted', () => {
+  const t = tmp();
+  gitInit(t);
+  // 4 squash-merged PRs on trunk, no live feature branches at all.
+  squashCommit(t, 'feat: alpha (#1)', {
+    'src/a.ts': 'a\n',
+    'context/spec/001-alpha/tasks.md': '- [x] done\n',
+  });
+  squashCommit(t, 'feat: beta (#2)', {
+    'src/b.ts': 'b\n',
+    'context/spec/002-beta/tasks.md': '- [x] done\n',
+  });
+  squashCommit(t, 'feat: gamma (#3)', {
+    'src/c.ts': 'c\n',
+    'context/spec/003-gamma/tasks.md': '- [x] done\n',
+  });
+  squashCommit(t, 'chore: bump deps (#4)', { 'package.json': '{}\n' });
+  const r = detectBranchSpecRatio(t);
+  assert.notEqual(
+    r.status,
+    'SKIP',
+    'merged PRs must be countable even with zero live feature branches'
+  );
+  assert.ok(
+    r.evidence.some((e) => /3\/4 merged branches\/PRs/.test(e)),
+    `evidence must count 3 of 4 merged PRs as spec-driven, got: ${JSON.stringify(r.evidence)}`
+  );
+  assert.equal(r.status, 'PASS', '75% spec-driven merged work ≥ 70% → PASS');
+});

@@ -1128,9 +1128,9 @@ test('renderHtml: Reach labels the contributor row "Active Contributors" with th
   );
   assert.ok(
     html.includes(
-      'Distinct commit authors with at least 2 commits in the last 90 days'
+      'an author counts as active unless BOTH their share of merged PRs and their share of changed lines fall below the activity threshold'
     ),
-    'Active Contributors tooltip must explain the ≥2-commits-in-90-days derivation'
+    'Active Contributors tooltip must state the real share-based rule, not a commit-count heuristic'
   );
   assert.ok(
     html.includes(
@@ -1159,13 +1159,13 @@ test('renderHtml: Reach renders Spec coverage and orders items Active Contributo
   );
   assert.ok(
     html.includes(
-      'Share of feature branches that touched spec files, for any spec-driven workflow (AWOS, Kiro, Agent-OS, and similar).'
+      'Share of feature work that went through a written spec: merged branches/PRs whose changes touched spec files'
     ),
-    'Spec coverage tooltip must describe any spec-driven workflow, not hardcode AWOS'
+    'Spec coverage tooltip must describe any spec-driven workflow in plain language'
   );
   assert.ok(
-    !html.includes('(AWOS SDD-04)'),
-    'Spec coverage tooltip must not hardcode the AWOS-specific "(AWOS SDD-04)" phrasing'
+    !/check SDD-04|\(AWOS SDD-04\)/.test(html),
+    'Spec coverage tooltip must not reference internal check names like SDD-04'
   );
 });
 

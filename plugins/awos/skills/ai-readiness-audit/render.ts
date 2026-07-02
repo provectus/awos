@@ -1086,9 +1086,9 @@ const HEADLINE_TIP: Record<string, string> = {
   'AI tooling':
     'AI coding tools detected in the repository (config files, agent instructions, commit markers).',
   'Active Contributors':
-    "Distinct commit authors with at least 2 commits in the last 90 days — single-commit drive-by authors are excluded. The '(of N in window)' figure is the total distinct authors who committed at all.",
+    "Contributors with a meaningful share of the 90-day window's work: an author counts as active unless BOTH their share of merged PRs and their share of changed lines fall below the activity threshold (5% by default). The '(of N in window)' figure is the total distinct authors who committed at all.",
   'Spec coverage':
-    'Share of feature branches that touched spec files, for any spec-driven workflow (AWOS, Kiro, Agent-OS, and similar). Higher means more work goes through a spec workflow (check SDD-04).',
+    'Share of feature work that went through a written spec: merged branches/PRs whose changes touched spec files (AWOS context/spec/, Kiro, Agent-OS, plain specs/ conventions). Higher means more work is spec-driven.',
   'Repos with AI tooling':
     'How many portfolio repositories have any AI tooling present.',
 };
@@ -1286,6 +1286,26 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const key = label.replace(/\s*\(.*\)\s*$/, '').trim();
       return HEADLINE_TIP[key] ?? HEADLINE_TIP[label] ?? label;
     };
+    // The VALUE carries the underlying check's evidence — how the number was
+    // derived, or (for a "—") why the value is absent. Returns null when no
+    // check backs this row (no evidence to show).
+    const headlineValueTip = (
+      value: string,
+      checkId?: string
+    ): string | null => {
+      const c = checkId ? checkById.get(checkId) : undefined;
+      if (!c) return null;
+      const evidence = (c.evidence ?? []).slice(0, 3).join(' · ');
+      const note = c.reliability?.note;
+      const parts = [evidence, note ? `note: ${note}` : '']
+        .filter(Boolean)
+        .join(' — ');
+      const plain =
+        c.status === 'SKIP'
+          ? `Not measured (${c.check_id} skipped). ${parts || 'No further detail available.'}`
+          : parts || `From check ${c.check_id}.`;
+      return tip(value, plain, `${c.check_id} · status ${c.status}`);
+    };
 
     if (h?.delivery && h.delivery.length > 0) {
       const items = h.delivery
@@ -1301,7 +1321,10 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
           const bandHtml = d.band
             ? `<span class="band" style="background:${BAND_COLOR[d.band.toLowerCase()] ?? '#94a3b8'}">${esc(d.band)}</span>`
             : '';
-          return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${esc(d.display_value ?? '—')}${bandHtml}</span></div>`;
+          const valueStr = d.display_value ?? '—';
+          const valueHtml =
+            headlineValueTip(valueStr, d.check_id) ?? esc(valueStr);
+          return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${valueHtml}${bandHtml}</span></div>`;
         })
         .join('');
       blocks.push(
@@ -1312,7 +1335,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const items = h.scale
         .map(
           (s) =>
-            `<div class="kv"><span class="k">${tip(s.label, headlineTipText(s.label, s.check_id))}</span><span class="v">${esc(s.display_value)}</span></div>`
+            `<div class="kv"><span class="k">${tip(s.label, headlineTipText(s.label, s.check_id))}</span><span class="v">${headlineValueTip(s.display_value, s.check_id) ?? esc(s.display_value)}</span></div>`
         )
         .join('');
       blocks.push(

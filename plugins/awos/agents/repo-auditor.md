@@ -32,10 +32,10 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
 
    `enrich` reuses the artifacts you wrote (never re-collects), flips the connector topology flags, and rescores connector metrics. Run it once, after all fetches. Skip it if no connector was reachable.
 
-3. **Judgment (5) + aggregate.** After `enrich`, patch the `PENDING_JUDGMENT` checks (gather all evidence in one pass), then:
+3. **Judgment (5) — one `patch-judgment` call.** After `enrich`, gather the evidence for every `PENDING_JUDGMENT` check in one pass, write all verdicts as a single JSON array (`[{check_id, status, score?, value?, evidence?}]`, `score` a 0–1 fraction), and apply them in one engine call — never hand-edit dimension JSONs, and no separate `aggregate` (it re-aggregates itself):
 
    ```bash
-   node "<ENGINE>" aggregate "<outDir>"
+   node "<ENGINE>" patch-judgment "<outDir>" /tmp/judgments.json
    ```
 
 4. **Author + render.** Author the report blocks (`headline`, `insights[]`, `recommendations[]`) into `<outDir>/audit.json`, then render both reports in one call:

@@ -62,11 +62,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 ### SDD-04: Features are implemented through specs
 
 - **What:** Significant features are built through the AWOS spec workflow (spec → tech → tasks → implement), not by ad-hoc prompting. Feature branches should show spec activity — tasks checked off, status updates — as evidence that specs drove the work.
-- **How:**
-  1. If zero spec directories exist under `context/spec/`, this is an immediate FAIL (no specs means no spec-driven development)
-  2. Analyze recent git history (last 3 months): use `git log --all --oneline --since="3 months ago"` to find feature branches. Identify branches with `feat/`, `feature/` prefixes — skip `fix/`, `chore/`, `docs/`, `ci/`, `refactor/` prefixes as these represent small work that doesn't require specs.
-  3. For each feature branch, check if it modified any files under `context/spec/` using `git diff --name-only`. Look for changes to `tasks.md` (checked-off items `[x]`) or `functional-spec.md` (status updates).
-  4. Calculate ratio: feature branches with spec activity / total feature branches. Only evaluate the feature branches that exist — do not flag branching strategy or the number of branches.
+- **How:** Computed deterministically over the trunk's last 90 days. The denominator is merged feature work — first-parent merge commits plus squash/rebase-merged PRs (forge PR ref on the subject) — so repos whose CI deletes branches after merge still count all delivered work, not just currently-open branches. An event counts as spec-driven when its first-parent diff touched a recognised spec directory (`context/spec/`, `specs/`, `.kiro/specs/`, `.agent-os/specs/`, `docs/specs/`). Repos with no merge/PR workflow fall back to evaluating live feature branches against the trunk.
 - **Pass:** 70%+ of feature branches touched spec files (tasks checked off, status updated)
 - **Warn:** 30-69% of feature branches touched spec files
 - **Fail:** Fewer than 30% of feature branches touched spec files, OR zero spec directories exist despite active development

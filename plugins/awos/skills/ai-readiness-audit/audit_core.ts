@@ -369,6 +369,8 @@ export async function auditCore(
       evidence?: string[];
       score?: number;
       confidence?: number;
+      /** Reliability note from the metric — surfaces WHY a metric skipped. */
+      note?: string | null;
     }
   >();
   const metricResults = await Promise.all(
@@ -405,6 +407,7 @@ export async function auditCore(
         evidence: perCodeEvidence ?? (res.expression ? [res.expression] : []),
         score: perCodeScore ?? res.score,
         confidence: res.confidence,
+        note: res.reliability?.note ?? null,
       });
     }
     if (res.status === 'SKIP') {
@@ -426,6 +429,7 @@ export async function auditCore(
           evidence: perCodeEvidence ?? (res.expression ? [res.expression] : []),
           score: perCodeScore ?? res.score,
           confidence: res.confidence,
+          note: res.reliability?.note ?? null,
         });
       }
     }
@@ -721,6 +725,93 @@ export function aggregate(outDir: string): void {
   writeFileSync(join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
 }
 
+export interface JudgmentPatch {
+  check_id: string;
+  status: 'PASS' | 'WARN' | 'FAIL' | 'SKIP';
+  /** Fraction of capability present ∈ [0,1]; defaults from status (PASS=1, WARN=0.5, else 0). */
+  score?: number;
+  value?: unknown;
+  evidence?: string[];
+}
+
+/**
+ * Apply the orchestrator's judgment verdicts to the per-dimension JSONs in ONE
+ * call, then re-aggregate. Replaces the per-check JSON surgery the model used
+ * to do by hand (dozens of serial shell edits — the dominant wall-clock cost
+ * of Step 6). Only `method: "judgment"` checks are patchable; anything else is
+ * reported and left untouched. Returns a summary for the caller to print.
+ */
+export function patchJudgments(
+  outDir: string,
+  patches: JudgmentPatch[]
+): { patched: string[]; warnings: string[] } {
+  const patched: string[] = [];
+  const warnings: string[] = [];
+  const byId = new Map<string, JudgmentPatch>();
+  for (const p of patches) {
+    if (!p || typeof p.check_id !== 'string' || typeof p.status !== 'string') {
+      warnings.push(`malformed patch skipped: ${JSON.stringify(p)}`);
+      continue;
+    }
+    byId.set(p.check_id, p);
+  }
+
+  const files = readdirSync(outDir).filter(
+    (f) =>
+      f.endsWith('.json') && f !== 'audit.json' && f !== 'org-portfolio.json'
+  );
+  for (const f of files) {
+    let dim: Record<string, unknown>;
+    try {
+      dim = JSON.parse(readFileSync(join(outDir, f), 'utf8'));
+    } catch {
+      continue;
+    }
+    const checks = dim.checks as CheckRecord[] | undefined;
+    if (!Array.isArray(checks)) continue;
+    let changed = false;
+    for (const c of checks) {
+      const p = byId.get(c.check_id);
+      if (!p) continue;
+      byId.delete(c.check_id);
+      if (c.method !== 'judgment') {
+        warnings.push(
+          `${c.check_id} is method "${c.method}", not judgment — left untouched (connector checks are re-scored by enrich)`
+        );
+        continue;
+      }
+      const statusDefault =
+        p.status === 'PASS' ? 1 : p.status === 'WARN' ? 0.5 : 0;
+      let s = typeof p.score === 'number' ? p.score : statusDefault;
+      if (s < 0 || s > 1) {
+        warnings.push(
+          `${c.check_id}: score ${s} out of [0,1] — clamped (pass a fraction, not a weight)`
+        );
+        s = Math.min(1, Math.max(0, s));
+      }
+      if (p.status === 'SKIP') s = 0;
+      c.status = p.status;
+      c.score = s;
+      c.confidence = p.status === 'SKIP' ? 0 : 1;
+      c.applies = p.status !== 'SKIP';
+      c.weight_awarded = Math.round((c.weight_max || 0) * s * 10) / 10;
+      if (p.value !== undefined) c.value = p.value;
+      if (Array.isArray(p.evidence)) c.evidence = p.evidence;
+      changed = true;
+      patched.push(c.check_id);
+    }
+    if (changed) {
+      writeFileSync(join(outDir, f), JSON.stringify(dim, null, 2));
+    }
+  }
+  for (const id of byId.keys()) {
+    warnings.push(`${id}: no such check in any dimension artifact — ignored`);
+  }
+
+  aggregate(outDir);
+  return { patched, warnings };
+}
+
 /** Presentation order from standards.toml [meta].dimension_order (empty when absent). */
 function metaDimensionOrder(standards: Record<string, unknown>): string[] {
   const meta = standards['meta'] as Record<string, unknown> | undefined;
@@ -864,6 +955,7 @@ function buildCheck(
       evidence?: string[];
       score?: number;
       confidence?: number;
+      note?: string | null;
     }
   >
 ): CheckRecord {
@@ -950,9 +1042,12 @@ function buildCheck(
     status = 'INFO';
   }
 
-  // A SKIP with no evidence renders as a bare "—"; give the reader a reason why.
+  // A SKIP with no evidence renders as a bare "—"; give the reader a reason
+  // why — preferring the metric's own reliability note (e.g. "squash-merge
+  // workflow: no branch merge records…") over the generic source fallback.
   if (status === 'SKIP' && evidence.length === 0) {
-    evidence = [buildSkipReason(c, topology)];
+    const metricNote = metricMeta?.get(c.code)?.note;
+    evidence = [metricNote || buildSkipReason(c, topology)];
   }
 
   const applies = status !== 'SKIP';

@@ -142,7 +142,7 @@ import { progress } from './progress.ts';
 // ---------------------------------------------------------------------------
 // audit-core (deterministic single-pass audit)
 // ---------------------------------------------------------------------------
-import { auditCore, aggregate } from './audit_core.ts';
+import { auditCore, aggregate, patchJudgments } from './audit_core.ts';
 
 /** Resolve the skill root (where references/ lives) from the bundle location. */
 function resolveSkillRoot(): string {
@@ -393,7 +393,7 @@ async function main(): Promise<void> {
     printJson({
       error: 'no command given',
       usage:
-        'collect|detect|metric|standards|progress|rollup|render|aggregate|audit-core <arg> [repoPath]',
+        'collect|detect|metric|standards|progress|rollup|render|aggregate|patch-judgment|audit-core <arg> [repoPath]',
     });
     process.exit(1);
   }
@@ -796,11 +796,53 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'patch-judgment': {
+      // Apply ALL judgment verdicts in one call and re-aggregate — replaces
+      // per-check JSON surgery. Patches come from a JSON file (or "-" for
+      // stdin): [{check_id, status, score?, value?, evidence?}, ...]
+      const dir = arg1;
+      const patchArg = arg2;
+      if (!dir || !patchArg) {
+        printJson({
+          error:
+            'patch-judgment requires <auditsDir> <patches.json|-> — patches: [{check_id, status, score?, value?, evidence?}]',
+        });
+        process.exit(1);
+      }
+      let patchText: string;
+      try {
+        patchText =
+          patchArg === '-'
+            ? readFileSync(0, 'utf8')
+            : readFileSync(patchArg, 'utf8');
+      } catch (err) {
+        printJson({ error: `cannot read patches: ${String(err)}` });
+        process.exit(1);
+      }
+      let patches: unknown;
+      try {
+        patches = JSON.parse(patchText);
+      } catch (err) {
+        printJson({ error: `patches are not valid JSON: ${String(err)}` });
+        process.exit(1);
+      }
+      if (!Array.isArray(patches)) {
+        printJson({ error: 'patches must be a JSON array' });
+        process.exit(1);
+      }
+      const summary = patchJudgments(
+        dir,
+        patches as Parameters<typeof patchJudgments>[1]
+      );
+      printJson({ ...summary, aggregated: dir });
+      break;
+    }
+
     default: {
       printJson({
         error: `unknown command "${command}"`,
         usage:
-          'collect|detect|metric|standards|progress|rollup|render|aggregate|audit-core <arg> [repoPath]',
+          'collect|detect|metric|standards|progress|rollup|render|aggregate|patch-judgment|audit-core <arg> [repoPath]',
       });
       process.exit(1);
     }

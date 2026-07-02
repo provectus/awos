@@ -677,3 +677,141 @@ test('parseCheckIds maps digit-containing check-id prefixes (E2E-01) — not jus
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// patchJudgments: all verdicts in one call, self-aggregating
+// ---------------------------------------------------------------------------
+
+import { patchJudgments } from './audit_core.ts';
+
+test('patchJudgments applies all verdicts in one call and re-aggregates audit.json', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-patchj-'));
+  try {
+    const dim = {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-01',
+      score: 0,
+      coverage: 0,
+      checks: [
+        makePatchableCheck({
+          check_id: 'AI-01',
+          status: 'PENDING_JUDGMENT',
+          weight_max: 8,
+        }),
+        makePatchableCheck({
+          check_id: 'AI-06',
+          status: 'PENDING_JUDGMENT',
+          weight_max: 4,
+        }),
+        makePatchableCheck({
+          check_id: 'AI-02',
+          method: 'detected',
+          status: 'PASS',
+          score: 1,
+          weight_awarded: 5,
+          weight_max: 5,
+        }),
+      ],
+    };
+    writeFileSync(
+      join(dir, 'ai-development-tooling.json'),
+      JSON.stringify(dim)
+    );
+
+    const summary = patchJudgments(dir, [
+      {
+        check_id: 'AI-01',
+        status: 'PASS',
+        score: 1,
+        value: 'CLAUDE.md is strong',
+        evidence: ['CLAUDE.md covers commands, architecture, conventions'],
+      },
+      { check_id: 'AI-06', status: 'WARN', score: 0.5 },
+      { check_id: 'AI-02', status: 'FAIL' }, // detected — must be refused
+      { check_id: 'NOPE-99', status: 'PASS' }, // unknown — must be reported
+    ]);
+
+    assert.deepEqual(
+      summary.patched.sort(),
+      ['AI-01', 'AI-06'],
+      'exactly the judgment checks must be patched'
+    );
+    assert.ok(
+      summary.warnings.some((w) => w.includes('AI-02')),
+      'patching a non-judgment check must be refused with a warning'
+    );
+    assert.ok(
+      summary.warnings.some((w) => w.includes('NOPE-99')),
+      'an unknown check_id must be reported'
+    );
+
+    const updated = JSON.parse(
+      readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
+    );
+    const ai01 = updated.checks.find(
+      (c: { check_id: string }) => c.check_id === 'AI-01'
+    );
+    assert.equal(ai01.status, 'PASS');
+    assert.equal(ai01.weight_awarded, 8, 'PASS at score 1 awards full weight');
+    assert.deepEqual(ai01.evidence, [
+      'CLAUDE.md covers commands, architecture, conventions',
+    ]);
+    const ai02 = updated.checks.find(
+      (c: { check_id: string }) => c.check_id === 'AI-02'
+    );
+    assert.equal(
+      ai02.status,
+      'PASS',
+      'refused patch must leave the check untouched'
+    );
+
+    const audit = JSON.parse(readFileSync(join(dir, 'audit.json'), 'utf8'));
+    assert.equal(
+      audit.audit_total,
+      15,
+      'audit.json must be re-aggregated in the same call (8 + 2 + 5)'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('patchJudgments clamps a weight passed as score', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-patchj-clamp-'));
+  try {
+    const dim = {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-01',
+      score: 0,
+      coverage: 0,
+      checks: [
+        makePatchableCheck({
+          check_id: 'AI-01',
+          status: 'PENDING_JUDGMENT',
+          weight_max: 8,
+        }),
+      ],
+    };
+    writeFileSync(
+      join(dir, 'ai-development-tooling.json'),
+      JSON.stringify(dim)
+    );
+    const summary = patchJudgments(dir, [
+      { check_id: 'AI-01', status: 'PASS', score: 8 },
+    ]);
+    assert.ok(
+      summary.warnings.some((w) => w.includes('clamped')),
+      'an out-of-range score must warn'
+    );
+    const updated = JSON.parse(
+      readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
+    );
+    assert.equal(
+      updated.checks[0].weight_awarded,
+      8,
+      'weight_awarded must be capped at weight_max'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

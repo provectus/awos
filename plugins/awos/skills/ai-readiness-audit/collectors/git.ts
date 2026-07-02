@@ -167,6 +167,11 @@ const SQUASH_SUBJECT_RXS = [
   /^Merged PR \d+:/, // Azure DevOps: "Merged PR 123: Title"
   /\(pull request #\d+\)/i, // Bitbucket: "Title (pull request #12)"
 ];
+
+/** True when a commit subject carries a forge PR ref (squash/rebase-merged PR). */
+export function isSquashMergeSubject(subject: string): boolean {
+  return SQUASH_SUBJECT_RXS.some((rx) => rx.test(subject));
+}
 /** GitLab squash keeps the MR ref in the BODY: "See merge request group/proj!45". */
 const SQUASH_BODY_RX = /^See merge request [^\s!]*!\d+/m;
 /** Mirrors the `--grep=^Revert\|hotfix\|rollback` merge-commit filter. */

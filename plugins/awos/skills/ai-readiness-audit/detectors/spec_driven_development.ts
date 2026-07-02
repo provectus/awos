@@ -2,6 +2,7 @@ import { makeResult, iterFiles } from './_base.ts';
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { isSquashMergeSubject } from '../collectors/git.ts';
 
 // ---------------------------------------------------------------------------
 // detectAwosInstalled — category 2800 (SDD-01, method: detected)
@@ -522,6 +523,65 @@ function branchTouchedSpec(
   }
 }
 
+// Lookback for merged-event scanning; matches the collectors' default window.
+const MERGED_EVENT_LOOKBACK_DAYS = 90;
+
+interface MergedEvent {
+  subject: string;
+  touchedSpec: boolean;
+}
+
+/**
+ * Merged feature work landed on the trunk in the lookback window: 2-parent
+ * merge commits AND squash/rebase-merged PRs (forge PR ref on the subject).
+ * Live branches under-count badly on repos where CI deletes branches after
+ * merge — there, the surviving refs are only "currently open" work. Each
+ * event's file list is its first-parent diff (exactly what the PR landed).
+ */
+function listMergedEvents(repoPath: string): MergedEvent[] {
+  let out: string;
+  try {
+    // Anchor the window to the newest commit (no wall-clock dependency).
+    const latest = execFileSync('git', ['log', '-1', '--format=%cI'], {
+      cwd: repoPath,
+      encoding: 'utf8',
+    }).trim();
+    if (!latest) return [];
+    const since = new Date(
+      new Date(latest).getTime() - MERGED_EVENT_LOOKBACK_DAYS * 86_400_000
+    ).toISOString();
+    out = execFileSync(
+      'git',
+      [
+        'log',
+        '--first-parent',
+        `--since=${since}`,
+        '--diff-merges=first-parent',
+        '--name-only',
+        '--format=%x1e%P%x1f%s',
+      ],
+      { cwd: repoPath, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+    );
+  } catch {
+    return [];
+  }
+  const events: MergedEvent[] = [];
+  for (const record of out.split('\x1e')) {
+    if (!record.trim()) continue;
+    const nl = record.indexOf('\n');
+    const header = nl === -1 ? record : record.slice(0, nl);
+    const files = nl === -1 ? '' : record.slice(nl + 1);
+    const [parents = '', subject = ''] = header.split('\x1f');
+    const isMergeCommit = parents.trim().split(' ').filter(Boolean).length > 1;
+    if (!isMergeCommit && !isSquashMergeSubject(subject)) continue;
+    const touchedSpec = files
+      .split('\n')
+      .some((line) => line.trim().length > 0 && isSpecPath(line.trim()));
+    events.push({ subject: subject.trim(), touchedSpec });
+  }
+  return events;
+}
+
 export function detectBranchSpecRatio(
   repoPath: string,
   params?: unknown
@@ -530,13 +590,64 @@ export function detectBranchSpecRatio(
     (params as { threshold?: number } | undefined)?.threshold ?? 0.7;
   const thresholdPct = Math.round(threshold * 100);
 
+  // Preferred denominator: feature work actually MERGED in the window (merge
+  // commits + squash-merged PRs). Fallback: live local branches — only for
+  // repos with no PR/merge workflow at all.
+  const events = listMergedEvents(repoPath);
+  if (events.length > 0) {
+    const specEvents = events.filter((e) => e.touchedSpec);
+    const total = events.length;
+    const ratio = Math.round((specEvents.length / total) * 1e10) / 1e10;
+    const evidence = [
+      `${specEvents.length}/${total} merged branches/PRs (90d) touched spec files (ratio: ${Math.round(ratio * 100)}%)`,
+      ...specEvents.slice(0, 10).map((e) => `spec PR: ${e.subject}`),
+    ];
+    if (ratio >= threshold) {
+      return makeResult(
+        'PASS',
+        ratio,
+        [
+          `${Math.round(ratio * 100)}% of merged feature work used a spec workflow (threshold: ${thresholdPct}%)`,
+          ...evidence,
+        ],
+        'computed'
+      );
+    }
+    if (ratio >= threshold / 2) {
+      return makeResult(
+        'WARN',
+        ratio,
+        [
+          `only ${Math.round(ratio * 100)}% of merged feature work used a spec workflow (threshold: ${thresholdPct}%)`,
+          ...evidence,
+        ],
+        'computed',
+        ratio,
+        1.0
+      );
+    }
+    return makeResult(
+      'FAIL',
+      ratio,
+      [
+        `only ${Math.round(ratio * 100)}% of merged feature work used a spec workflow (threshold: ${thresholdPct}%)`,
+        ...evidence,
+      ],
+      'computed',
+      ratio,
+      1.0
+    );
+  }
+
   const branches = listLocalBranches(repoPath);
 
   if (branches.length === 0) {
     return makeResult(
       'SKIP',
       null,
-      ['no feature branches found — branch→spec ratio not computable'],
+      [
+        'no merged PRs or feature branches found — branch→spec ratio not computable',
+      ],
       'computed'
     );
   }
@@ -558,7 +669,7 @@ export function detectBranchSpecRatio(
   const ratio = Math.round((specBranches.length / total) * 1e10) / 1e10;
 
   const evidence = [
-    `${specBranches.length}/${total} feature branches touched context/spec/ (ratio: ${Math.round(ratio * 100)}%)`,
+    `${specBranches.length}/${total} feature branches touched spec files (ratio: ${Math.round(ratio * 100)}%)`,
     ...specBranches.slice(0, 10).map((b) => `spec branch: ${b}`),
     ...plainBranches.slice(0, 10).map((b) => `plain branch: ${b}`),
   ];

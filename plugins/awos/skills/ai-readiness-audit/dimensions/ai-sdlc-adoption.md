@@ -35,16 +35,63 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 
 ## Checks
 
-### ADP-G1: AI tooling depth and breadth
+Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric run — a single invocation scores codes 101–106, awarding each independently.
 
-- **What:** Repository carries non-trivial AI agent configuration — CLAUDE.md/AGENTS.md, skills, commands, hooks, MCP config, and spec-driven adoption signals
-- **How:** `node "<engine cli path>" metric adp_g1_tooling_depth <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — at least one tooling category was detected
+### ADP-01: Agent instruction file
+
+- **What:** Repo has a non-trivial agent instruction file (CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md or equivalent) providing AI agent context
+- **How:** `node "<engine cli path>" metric adp_g1_tooling_depth <repoPath> context/audits/<date>/collected` — one run scores all six tooling checks
+- **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 101 as present
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
 - **Severity:** high
-- **Category:** 101, 102, 103, 104, 105, 106
+- **Category:** 101
 
-### ADP-G9: AI-attributed change share
+### ADP-02: Agent skill files
+
+- **What:** Repo defines agent skill files (e.g. `.claude/skills/*/SKILL.md` or equivalent for other AI coding tools)
+- **How:** same single `adp_g1_tooling_depth` run as ADP-01
+- **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 102 as present
+- **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
+- **Severity:** medium
+- **Category:** 102
+
+### ADP-03: Agent commands and rule files
+
+- **What:** Repo defines custom commands or rule files for an agentic coding tool (e.g. `.claude/commands/`, `.cursor/rules/`, `.gemini/commands/`)
+- **How:** same single `adp_g1_tooling_depth` run as ADP-01
+- **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 103 as present
+- **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
+- **Severity:** medium
+- **Category:** 103
+
+### ADP-04: Agent lifecycle hooks
+
+- **What:** Repo defines lifecycle hooks for an agentic coding tool (e.g. `.claude/hooks/`, `.kiro/hooks/`)
+- **How:** same single `adp_g1_tooling_depth` run as ADP-01
+- **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 104 as present
+- **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
+- **Severity:** medium
+- **Category:** 104
+
+### ADP-05: MCP server config
+
+- **What:** Repo carries an MCP server config (`.mcp.json` or equivalent)
+- **How:** same single `adp_g1_tooling_depth` run as ADP-01
+- **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 105 as present
+- **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
+- **Severity:** medium
+- **Category:** 105
+
+### ADP-06: Spec-driven adoption signals
+
+- **What:** Repo has spec-driven adoption signals: spec directories, spec-referencing hooks/scripts, or spec docs
+- **How:** same single `adp_g1_tooling_depth` run as ADP-01
+- **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 106 as present
+- **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
+- **Severity:** high
+- **Category:** 106
+
+### ADP-14: AI-attributed change share
 
 - **What:** Share of commits or PRs carrying AI markers (Co-authored-by: trailer, agent label). Always a lower bound — true usage >= shown.
 - **How:** `node "<engine cli path>" metric adp_g9_ai_attribution <repoPath> context/audits/<date>/collected`
@@ -53,7 +100,7 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Severity:** high
 - **Category:** 901
 
-### ADP-C1: CI pass rate
+### ADP-15: CI pass rate
 
 - **What:** Default-branch CI pass rate over the lookback window; feature-branch failures excluded
 - **How:** `node "<engine cli path>" metric adp_c1_ci_pass_rate <repoPath> context/audits/<date>/collected`
@@ -62,7 +109,7 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Severity:** high
 - **Category:** 1001
 
-### ADP-C2: Pipeline duration trend
+### ADP-16: Pipeline duration trend
 
 - **What:** Feedback-loop speed: CI pipeline duration trend over the lookback window
 - **How:** `node "<engine cli path>" metric adp_c2_pipeline_duration <repoPath> context/audits/<date>/collected`
@@ -71,16 +118,16 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Severity:** medium
 - **Category:** 1002
 
-### ADP-D1: External spec and doc coverage
+### ADP-20: External spec and doc coverage
 
-- **What:** External spec/doc coverage and freshness in Confluence, Coda, Notion, or equivalent; strengthens the ADP-G1 spec signal
+- **What:** External spec/doc coverage and freshness in Confluence, Coda, Notion, or equivalent; strengthens the ADP-06 spec signal
 - **How:** `node "<engine cli path>" metric adp_d1_spec_coverage <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — external spec coverage computed
 - **Skip-When:** `has_docs_connector` is false (no docs source detected)
 - **Severity:** medium
 - **Category:** 1201
 
-### ADP-I1: Work-mix allocation
+### ADP-17: Work-mix allocation
 
 - **What:** Team-FTE share across Growth / KTLO / Support issue types (DX Core 4 FTE-allocation model; never money, never per-person)
 - **How:** `node "<engine cli path>" metric adp_i1_work_mix <repoPath> context/audits/<date>/collected`
@@ -89,7 +136,7 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Severity:** medium
 - **Category:** 1101
 
-### ADP-I2: Issue throughput
+### ADP-18: Issue throughput
 
 - **What:** Delivered-issue count and backlog burn-down rate per monthly bucket
 - **How:** `node "<engine cli path>" metric adp_i2_throughput <repoPath> context/audits/<date>/collected`
@@ -116,7 +163,7 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 - **Severity:** medium
 - **Category:** 1105
 
-### ADP-G15: Onboarding ease (DX Core 4 time-to-10th-PR proxy)
+### ADP-25: Onboarding ease (DX Core 4 time-to-10th-PR proxy)
 
 - **What:** Onboarding enabler presence as a filesystem-derived proxy for the DX Core 4 "Time to 10th PR" outcome. Four boolean signals: (1) README contains setup/install/getting-started/usage/quickstart heading or a recognizable bootstrap command; (2) agent context file (CLAUDE.md/AGENTS.md); (3) .env example file; (4) one-command bootstrap file (Makefile, justfile, Taskfile, docker-compose.yml, setup.sh, or package.json with setup/bootstrap/dev script). value = present_count/4. Bands are AWOS heuristics. Ramp-time not measured (see ADP-G4/ADP-G8).
 - **How:** `node "<engine cli path>" metric adp_g15_onboarding_ease <repoPath> context/audits/<date>/collected`

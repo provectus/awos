@@ -23,7 +23,7 @@ The git collector recognizes tooling signals and AI commit attribution across al
 | Windsurf       | `.windsurfrules`                  | `.windsurf/rules/`, `.windsurf/workflows/`, `.windsurf/mcp_config.json`      |
 | Cline          | `.clinerules`                     | `.cline/mcp.json`                                                            |
 
-This table is derived from `agent_tools.ts` — the single registry that drives the git collector, all detectors, and the tooling-depth metric (ADP-G1).
+This table is derived from `agent_tools.ts` — the single registry that drives the git collector, all detectors, and the tooling-depth metric (`adp_g1_tooling_depth`, checks ADP-01..ADP-06).
 
 ---
 
@@ -39,7 +39,7 @@ No scope manifest is read; there is no configuration file to author. Point the s
 
 ### Monorepo detection (TOPO-01)
 
-The monorepo flag (`dimensions/project-topology.md` → TOPO-01) is set when a workspace manifest is present at the repo root — any of `pnpm-workspace.yaml`, `package.json` with a `workspaces` field, `turbo.json`, `nx.json`, `lerna.json`, `pants.toml`, `WORKSPACE`/`MODULE.bazel`, or a Cargo/Go workspace declaration. This flag gates the `applies_when` of the end-to-end-delivery checks. It is a per-repo topology signal — it does not split a monorepo into multiple audit targets; a monorepo is always single-repo mode over the whole folder.
+The monorepo flag (`dimensions/project-topology.md` → TOPO-01) is set when a workspace manifest is present at the repo root — any of `pnpm-workspace.yaml`, `package.json` with a `workspaces` field, `turbo.json`, `nx.json`, `lerna.json`, `pants.toml`, `WORKSPACE`/`MODULE.bazel`, or a Cargo/Go workspace declaration. This flag gates the `applies_when` of the monorepo-only checks — SBP-09 (`sbp_vertical_delivery`) and ARCH-07 (`arch_cross_layer_tooling`). It is a per-repo topology signal — it does not split a monorepo into multiple audit targets; a monorepo is always single-repo mode over the whole folder.
 
 ---
 

@@ -10,7 +10,7 @@ depends-on: [project-topology]
 
 Audits the project's application-layer security posture against a curated subset of the OWASP Application Security Verification Standard (ASVS) version 5.0.0 Level 1. ASVS 5.0.0 L1 represents the minimum baseline for any application handling user data or network traffic; checks in this dimension are deliberately scoped to what can be verified statically from source code and configuration files.
 
-This dimension is distinct from the `security` dimension (which audits agent-safety guardrails — `.env` gitignoring, Claude Code hooks, and secret-scanning of committed files) and the `supply-chain-security` dimension (which audits dependency supply chain controls).
+This dimension is distinct from the `ai-security` dimension (which audits agent-safety — malicious or suspicious content in agent definitions, skills, hooks, MCP configs and command files, plus guardrails restricting agent access to secrets) and the `supply-chain-security` dimension (which audits dependency supply chain controls).
 
 ## Checks
 

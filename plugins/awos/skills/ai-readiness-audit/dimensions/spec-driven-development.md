@@ -131,7 +131,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 
 ## SDD Summary
 
-When writing the dimension artifact, include this structured summary for downstream dimensions (especially end-to-end-delivery):
+When writing the dimension artifact, include this structured summary for downstream dimensions:
 
 ```
 - **AWOS installed:** yes | no

@@ -39,11 +39,11 @@ python3 $H/compare_audit_runs.py --target onex-discovery-api
 python3 $H/run_audit_test.py --target ~/code/onex-discovery-api --dry-run
 ```
 
-Other flags: `--worktree <path>` (skill under test; default = the checkout this script lives in), `--no-deploy` (don't repoint the marketplace — use whatever it currently serves), `--claude-flags "<flags>"` (default `--dangerously-skip-permissions`).
+Other flags: `--worktree <path>` (skill under test; default = the checkout this script lives in), `--no-deploy` (don't repoint the marketplace — use whatever it currently serves), `--claude-flags "<flags>"` (default `--dangerously-skip-permissions`), `--model <name>` (model for the audit session and its subagents, passed to `claude -p --model`; default `sonnet` — the unpinned best-Sonnet alias), `--allow-user-mcp` (skip `--strict-mcp-config`, letting the session see the operator's user-scope MCP servers — real Jira, Slack, …; default is strict isolation so a test audit can never pull live connector data).
 
 ## Org mode — pin nothing
 
-Left to the skill. If exploration finds the repo depends on another repo (e.g. via a symlink pointing outside the repo, like onex-discovery-api's `.awos`/`context/product`), the skill audits that repo too — **this is desired**. The harness does not create or rely on `sources.toml`. Output then gains `per-repo/<repo>.json` + `org-portfolio.json`; `run-meta.json` summarizes `portfolio_metrics` and repo count instead of a single `audit_total`.
+Left to the skill. `--target` also accepts a non-git parent folder of git repos — the skill then runs in org mode over its top-level git subdirectories. And if exploration finds the repo depends on another repo (e.g. via a symlink pointing outside the repo, like onex-discovery-api's `.awos`/`context/product`), the skill audits that repo too — **this is desired**. The harness does not create or rely on `sources.toml`. Output then gains `per-repo/<repo>/` — a full per-repo audit each (`audit.json`, `report.md`, `report.html`, `collected/`) — plus `org-portfolio.json`; `run-meta.json` summarizes `portfolio_metrics` and repo count instead of a single `audit_total`.
 
 ## Measuring tokens manually (fallback)
 

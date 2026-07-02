@@ -1788,7 +1788,7 @@ metric = "org_capability_score"
 dimension = "org-portfolio"
 weight = 10
 method = "computed"
-definition = "Sum of awarded category weights across all portfolio repos (Σ weight per repo), normalized by repo count; reflects breadth and depth of AI-SDLC adoption"
+definition = "Mean of awarded category weights across portfolio repos (Σ awarded weight per repo, contributor-weighted with equal-weight fallback); reflects breadth and depth of AI-SDLC adoption"
 applies_when = "always"
 sources = ["org-rollup"]
 reliability_default = "not-reliable"
@@ -1804,7 +1804,7 @@ metric = "org_measurement_coverage"
 dimension = "org-portfolio"
 weight = 10
 method = "computed"
-definition = "Fraction of portfolio repos where at least one data-source collector (git / ci / tracker / docs) returned available=true; contributor-weighted"
+definition = "Standards coverage: mean of the per-repo coverage ratios (awarded ÷ applicable weight), contributor-weighted with equal-weight fallback"
 applies_when = "always"
 sources = ["org-rollup"]
 reliability_default = "not-reliable"

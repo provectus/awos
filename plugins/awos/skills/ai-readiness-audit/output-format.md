@@ -99,12 +99,13 @@ The renderer is deterministic and contains no LLM. The plain-language narrative 
       {
         "label": "Source size",
         "display_value": "30,058 LOC · Python",
-        "check_id": "ADP-G11"
+        "check_id": "DESC-04"
       }
     ],
     "reach": {
       "ai_tooling": "AI agent config present (partial)",
-      "contributors": "4 active contributors (90d)"
+      "contributors": "4 active (of 7 in window, 90d)",
+      "spec_coverage": "3/5 feature branches touched specs (60%)"
     }
   },
   "insights": [

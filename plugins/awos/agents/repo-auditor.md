@@ -36,8 +36,10 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
 3. **Judgment (5) — one `patch-judgment` call.** After `enrich`, gather the evidence for every `PENDING_JUDGMENT` check in one pass, write all verdicts as a single JSON array (`[{check_id, status, score?, value?, evidence?}]`, `score` a 0–1 fraction), and apply them in one engine call — never hand-edit dimension JSONs, and no separate `aggregate` (it re-aggregates itself):
 
    ```bash
-   node "<ENGINE>" patch-judgment "<outDir>" /tmp/judgments.json
+   node "<ENGINE>" patch-judgment "<outDir>" "<outDir>/judgments.json"
    ```
+
+   Write the array to `<outDir>/judgments.json` — never a shared path like `/tmp/judgments.json`, which sibling auditors running concurrently would clobber, applying one repo's verdicts to another.
 
 4. **Author + render.** Author the report blocks (`headline`, `insights[]`, `recommendations[]`) into `<outDir>/audit.json`, then render both reports in one call:
 

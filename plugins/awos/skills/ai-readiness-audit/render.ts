@@ -8,7 +8,7 @@
  * rendered output. Plain-language narrative (insights, recommendations, per-check
  * `plain`, the headline blocks) is authored UPSTREAM by the orchestrator and stored
  * in the JSON — the renderer only formats it. See
- * docs/design/2026-06-25-report-redesign-design.md.
+ * docs/design/2026-06-26-audit-fairness-and-report-v2-design.md.
  *
  * =============================================================================
  * AUDIT JSON SCHEMA (consumed by this renderer)
@@ -29,6 +29,15 @@
  *   // optional org fields:
  *   "portfolio_metrics": PortfolioMetric[], // ≤3 org-level metrics (org mode only)
  *   "per_repo":    PerRepoSummary[],        // one row per repo (org mode only)
+ *   "org_connections": OrgConnections,      // aggregated connections view (org mode only)
+ *   // optional provenance/metadata (engine-stamped; the orchestrator must
+ *   // PRESERVE these when patching audit.json — the renderer consumes them all):
+ *   "sources":        SourceSummary[],      // collector availability + absence reasons
+ *   "source_windows": { [src]: { days, label } },  // per-source lookback windows
+ *   "standards_meta": { standards_date?, active_contributor_threshold? },
+ *   "linked_repos":   LinkedRepo[],         // symlink/submodule/MCP-linked repositories
+ *   "tech_stack":     TechStack,            // languages/agent_tools/ci/frameworks
+ *   "detection_conflicts": DetectionConflict[],  // files claimed by >1 detector
  * }
  *
  * DimensionArtifact (per output-format.md schema):
@@ -45,7 +54,7 @@
  *   "check_id":       "CODE-NN",
  *   "code":           number[],
  *   "method":         "detected|computed|judgment",
- *   "status":         "PASS|WARN|FAIL|SKIP",
+ *   "status":         "PASS|WARN|PARTIAL|FAIL|SKIP|INFO|PENDING_JUDGMENT",
  *   "value":          string | number | null,
  *   "evidence":       string[],
  *   "weight_awarded": number,
@@ -116,227 +125,69 @@
  *   "rework_rate":       number | null?,
  *   "lead_time":         number | null?,
  *   "change_fail":       number | null?,
+ *   "cycle_time":        string | null,   // connector-gated display value ("3.2 d")
+ *   "mttr":              string | null,   // connector-gated display value
  * }
  * =============================================================================
  */
 
-// LinkedRepo is defined once in topology.ts; imported here for local use and
-// re-exported below to preserve render.ts's public API surface.
-import type { LinkedRepo } from './topology.ts';
-
 // ---------------------------------------------------------------------------
-// Types
+// Types — the artifact shapes live in artifact_types.ts (audit_core is the
+// writer of truth); imported here and re-exported to preserve render.ts's
+// public API surface for existing consumers (cli.ts, tests).
 // ---------------------------------------------------------------------------
 
-export interface CheckReliability {
-  tag: string;
-  confidence: string;
-  note: string | null;
-}
+import type {
+  AuditJson,
+  Check,
+  CheckReliability,
+  CheckStatus,
+  DeliveryMetric,
+  DetectionConflict,
+  DimensionArtifact,
+  Headline,
+  Insight,
+  LinkedRepo,
+  OrgConnItem,
+  OrgConnections,
+  PerRepoSummary,
+  PortfolioMetric,
+  Recommendation,
+  ScaleMetric,
+  SourceSummary,
+  TechItem,
+  TechStack,
+} from './artifact_types.ts';
+import { SOURCE_LABEL_DEFAULTS } from './artifact_types.ts';
 
-export interface Check {
-  check_id: string;
-  code: number[];
-  method: string;
-  status: 'PASS' | 'WARN' | 'FAIL' | 'SKIP' | 'PARTIAL';
-  value: string | number | null;
-  evidence: string[];
-  weight_awarded: number;
-  weight_max: number;
-  applies: boolean;
-  reliability: CheckReliability;
-  source: string;
-  definition: string;
-  hint: string;
-  plain?: string;
-  unit?: string;
-  expression?: string;
-  source_date?: string | null;
-  source_url?: string | null;
-  score?: number;
-  confidence?: number;
-}
+export type {
+  AuditJson,
+  Check,
+  CheckReliability,
+  CheckStatus,
+  DeliveryMetric,
+  DetectionConflict,
+  DimensionArtifact,
+  Headline,
+  Insight,
+  LinkedRepo,
+  OrgConnItem,
+  OrgConnections,
+  PerRepoSummary,
+  PortfolioMetric,
+  Recommendation,
+  ScaleMetric,
+  SourceSummary,
+  TechItem,
+  TechStack,
+};
 
-export interface DimensionArtifact {
-  dimension: string;
-  date: string;
-  /** Presentation-order index stamped by audit-core (standards.toml [meta].dimension_order). */
-  order?: number;
-  /** Display title from the dimension .md frontmatter (fallback: labelize(dimension)). */
-  title?: string;
-  /** One-line summary from the dimension .md frontmatter — the dimension tooltip. */
-  description?: string;
-  score: number;
-  coverage: number;
-  checks: Check[];
-  [key: string]: unknown;
-}
-
-export interface DeliveryMetric {
-  label: string;
-  display_value?: string;
-  band?: string;
-  reliability?: string;
-  check_id?: string;
-  /** When set, the metric requires an external connector. If display_value is absent the renderer shows a "needs X connector" note instead of a value. */
-  gated?: 'tracker' | 'incident';
-}
-
-export interface ScaleMetric {
-  label: string;
-  display_value: string;
-  check_id?: string;
-}
-
-export interface Headline {
-  delivery?: DeliveryMetric[];
-  scale?: ScaleMetric[];
-  reach?: {
-    ai_tooling?: string;
-    contributors?: string;
-    spec_coverage?: string;
-  };
-}
-
-export interface Insight {
-  theme: string;
-  severity: 'high' | 'medium' | 'low';
-  weak_areas: string[];
-  so_what: string;
-  improves: string;
-}
-
-export interface Recommendation {
-  id: number;
-  priority: 'P0' | 'P1' | 'P2';
-  title: string;
-  dimension: string;
-  check_id: string;
-  effort: string;
-  detail: string;
-}
-
-export interface PortfolioMetric {
-  metric: string;
-  value: number;
-  description: string;
-  contributor_weighted: boolean;
-  repos_counted: number;
-}
-
-export interface PerRepoSummary {
-  repo: string;
-  contributors: number | null;
-  awarded_weight: number;
-  sources_reachable: string[];
-  has_ai_tooling: boolean;
-  // Enriched by org_rollup (Task 5.2); optional so single-repo JSON still validates.
-  audit_total?: number | null;
-  coverage?: number | null;
-  merges_per_active?: number | null;
-  loc_per_active?: number | null;
-  deploy_freq?: number | null;
-  rework_rate?: number | null;
-  lead_time?: number | null;
-  change_fail?: number | null;
-}
-
-export interface SourceSummary {
-  source: string;
-  available: boolean;
-  reason_if_absent: string | null;
-  history_available_days: number | null;
-}
-
-// Re-exported so callers that previously imported LinkedRepo from render.ts continue to work.
-export type { LinkedRepo };
-
-export interface TechItem {
-  name: string;
-  evidence: string;
-}
-
-export interface TechStack {
-  languages: TechItem[];
-  agent_tools: TechItem[];
-  ci: TechItem[];
-  frameworks: TechItem[];
-}
-
-export interface DetectionConflict {
-  file: string;
-  claimedBy: string[];
-}
-
-/** One item in the org Connections aggregated view: name + number of repos that have it. */
-export interface OrgConnItem {
-  name: string;
-  count: number;
-}
-
-/**
- * Cross-repo aggregation of connections and stack items (Task 5.4).
- * Produced by org_rollup and stored in org-portfolio.json for the renderer.
- */
-export interface OrgConnections {
-  sources: OrgConnItem[];
-  languages: OrgConnItem[];
-  frameworks: OrgConnItem[];
-  agent_tools: OrgConnItem[];
-  ci: OrgConnItem[];
-  linked_repos: OrgConnItem[];
-}
-
-export interface AuditJson {
-  date: string;
-  project: string;
-  audit_total: number;
-  coverage: number;
-  dimensions: DimensionArtifact[];
-  // plain-language blocks (optional)
-  headline?: Headline;
-  insights?: Insight[];
-  recommendations?: Recommendation[];
-  // org-mode fields (optional)
-  portfolio_metrics?: PortfolioMetric[];
-  per_repo?: PerRepoSummary[];
-  /** Aggregated connections across repos (org mode, Task 5.4). */
-  org_connections?: OrgConnections;
-  // collector availability
-  sources?: SourceSummary[];
-  // per-source lookback window (populated by audit_core from collected/ artifacts)
-  source_windows?: Record<string, { days: number | null; label: string }>;
-  /** Standards provenance stamped by audit-core: last-verified date + tunables. */
-  standards_meta?: {
-    standards_date?: string;
-    active_contributor_threshold?: number;
-  };
-  // (checks may carry last_verified — see Check)
-  // linked repos + tech-stack metadata (optional; populated by audit_core)
-  linked_repos?: LinkedRepo[];
-  tech_stack?: TechStack;
-  detection_conflicts?: DetectionConflict[];
-}
-
-// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // Module-level constants
 // ---------------------------------------------------------------------------
 
 /** Days threshold below which a source's history is flagged as limited. */
 const LIMITED_HISTORY_DAYS = 30;
-
-/** Fallback human label for each source key when source_windows is absent. */
-const SOURCE_LABEL_DEFAULTS: Record<string, string> = {
-  git: 'git history',
-  ci: 'CI runs',
-  tracker: 'issue tracker',
-  docs: 'docs/wiki',
-  scale: 'source code (AST)',
-  audit: 'source code',
-  incident: 'incident source',
-  'org-rollup': 'portfolio',
-};
 
 /**
  * Format a source's window for a tooltip line.
@@ -449,6 +300,16 @@ function pct(ratio: number): string {
 }
 
 /**
+ * Escape an untrusted string for a Markdown table cell: pipes become `\|` and
+ * newlines collapse to spaces, so hostile content can't break the row
+ * structure. Apply to interpolations of upstream-authored text (evidence,
+ * hints, titles, repo names) — not to static labels.
+ */
+function mdCell(s: string): string {
+  return s.replace(/\|/g, '\\|').replace(/\r\n|[\r\n]/g, ' ');
+}
+
+/**
  * Round floats to 2dp; integers stay integral; null/undefined → '—'.
  * Objects (e.g. the scale metric's { total_loc, file_count, … }) render their
  * primitive fields as "k=v" pairs instead of the useless "[object Object]".
@@ -547,7 +408,11 @@ function metricLabel(metric: string): string {
 }
 
 /**
- * Derive status counts for a dimension (FAIL / WARN / PARTIAL / PASS / SKIP).
+ * Derive status counts for a dimension (FAIL / WARN / PARTIAL / PASS / SKIP /
+ * PENDING_JUDGMENT). PENDING_JUDGMENT is counted explicitly — an unpatched
+ * headless run must be visibly unfinished, never disguised as SKIPs. A status
+ * outside the CheckStatus union (hand-patched artifact) is counted as SKIP
+ * with a stderr warning naming it.
  */
 function statusCounts(dim: DimensionArtifact): {
   fail: number;
@@ -555,21 +420,45 @@ function statusCounts(dim: DimensionArtifact): {
   partial: number;
   pass: number;
   skip: number;
+  pending: number;
 } {
   let fail = 0,
     warn = 0,
     partial = 0,
     pass = 0,
-    skip = 0;
+    skip = 0,
+    pending = 0;
   for (const c of dim.checks) {
-    if (c.status === 'FAIL') fail++;
-    else if (c.status === 'WARN') warn++;
-    else if (c.status === 'PARTIAL') partial++;
-    else if (c.status === 'PASS') pass++;
-    else if (c.status === 'INFO'); // informational descriptor — not a verdict
-    else skip++;
+    // Widen: parsed JSON may carry statuses outside the CheckStatus union.
+    const s: string = c.status;
+    if (s === 'FAIL') fail++;
+    else if (s === 'WARN') warn++;
+    else if (s === 'PARTIAL') partial++;
+    else if (s === 'PASS') pass++;
+    else if (s === 'PENDING_JUDGMENT') pending++;
+    else if (s === 'INFO') {
+      // informational descriptor — not a verdict
+    } else {
+      if (s !== 'SKIP') {
+        process.stderr.write(
+          `render: unknown check status "${s}" on ${c.check_id} — counted as SKIP\n`
+        );
+      }
+      skip++;
+    }
   }
-  return { fail, warn, partial, pass, skip };
+  return { fail, warn, partial, pass, skip, pending };
+}
+
+/** Total PENDING_JUDGMENT checks across all dimensions — the "unfinished audit" indicator. */
+function pendingJudgmentCount(audit: AuditJson): number {
+  let n = 0;
+  for (const dim of audit.dimensions) {
+    for (const c of dim.checks) {
+      if (c.status === 'PENDING_JUDGMENT') n++;
+    }
+  }
+  return n;
 }
 
 /** True for the unscored descriptors dimension: every check carries weight 0. */
@@ -667,9 +556,17 @@ export function renderMarkdown(
     lines.push(`**Measurement window:** ${windowLabel}`);
   }
   lines.push(
-    `**Coverage:** ${pct(audit.coverage)} — ${coverageTipText(audit)}`
+    `**Coverage:** ${pct(audit.coverage ?? 0)} — ${coverageTipText(audit)}`
   );
-  lines.push(`**Points:** ${fmtPts(audit.audit_total)} pts`);
+  const pendingTotal = pendingJudgmentCount(audit);
+  lines.push(
+    `**Points:** ${fmtPts(audit.audit_total)} pts${pendingTotal > 0 ? ` (${pendingTotal} pending judgment)` : ''}`
+  );
+  if (pendingTotal > 0) {
+    lines.push(
+      `**Pending judgment:** ${pendingTotal} check(s) await the orchestrator's judgment pass — totals are incomplete.`
+    );
+  }
   lines.push('');
 
   // Executive headline blocks (delivery / scale / reach)
@@ -686,9 +583,11 @@ export function renderMarkdown(
             d.gated === 'tracker'
               ? '— (needs ticketing connector)'
               : '— (needs incident connector)';
-          lines.push(`| ${d.label} | ${note} | |`);
+          lines.push(`| ${mdCell(d.label)} | ${note} | |`);
         } else {
-          lines.push(`| ${d.label} | ${d.display_value} | ${d.band ?? '—'} |`);
+          lines.push(
+            `| ${mdCell(d.label)} | ${mdCell(d.display_value ?? '—')} | ${mdCell(d.band ?? '—')} |`
+          );
         }
       }
       lines.push('');
@@ -759,7 +658,7 @@ export function renderMarkdown(
   let rowNum = 1;
   for (const dim of audit.dimensions) {
     const counts = statusCounts(dim);
-    const dimSourcesUsed = (dim.sources_used as string[] | undefined) ?? [];
+    const dimSourcesUsed = dim.sources_used ?? [];
     const sourcesCell =
       dimSourcesUsed.length === 0
         ? '—'
@@ -773,7 +672,7 @@ export function renderMarkdown(
             .join(', ');
     const info = isInformational(dim);
     lines.push(
-      `| ${rowNum++} | ${titleLabel(dim)} | ${info ? 'info' : pct(dim.coverage)} | ${sourcesCell} | ${info ? '—' : fmtPts(dim.score)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
+      `| ${rowNum++} | ${titleLabel(dim)} | ${info ? 'info' : pct(dim.coverage ?? 0)} | ${sourcesCell} | ${info ? '—' : fmtPts(dim.score)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
     );
   }
   lines.push('');
@@ -792,7 +691,7 @@ export function renderMarkdown(
     lines.push('| - | -------- | --------- | ----- | ------ | ---------- |');
     for (const r of recs) {
       lines.push(
-        `| ${r.id} | ${r.priority} | ${r.dimension} | ${r.check_id} | ${r.effort} | ${r.title} |`
+        `| ${r.id} | ${r.priority} | ${mdCell(r.dimension)} | ${r.check_id} | ${mdCell(r.effort)} | ${mdCell(r.title)} |`
       );
     }
     lines.push('');
@@ -820,7 +719,7 @@ export function renderMarkdown(
     lines.push(
       isInformational(dim)
         ? '**Informational** — descriptors reported for context, not scored toward the audit total.'
-        : `**Score:** ${fmtPts(dim.score)} pts (coverage ${pct(dim.coverage)} rel. today's standard)`
+        : `**Score:** ${fmtPts(dim.score)} pts (coverage ${pct(dim.coverage ?? 0)} rel. today's standard)`
     );
     lines.push('');
 
@@ -840,18 +739,19 @@ export function renderMarkdown(
       if (c.reliability.tag === 'minimal' && c.applies) hasMinimal = true;
       const confStr =
         c.status === 'SKIP' ? '—' : `${Math.round((c.confidence ?? 0) * 100)}%`;
-      const valueStr =
+      const valueStr = mdCell(
         c.status === 'SKIP' && c.evidence && c.evidence.length > 0
           ? c.evidence.join('; ')
           : c.value != null && c.unit && !c.expression
             ? `${fmtValue(c.value)} ${c.unit}`
-            : fmtValue(c.value);
-      const hint = c.hint ?? '—';
+            : fmtValue(c.value)
+      );
+      const hint = mdCell(c.hint ?? '—');
       const sourceCiteMd =
         c.source_url && c.source_date
-          ? ` — [${c.source} ${c.source_date}](${c.source_url})`
+          ? ` — [${mdCell(c.source)} ${mdCell(c.source_date)}](${c.source_url})`
           : c.source_url
-            ? ` — [${c.source}](${c.source_url})`
+            ? ` — [${mdCell(c.source)}](${c.source_url})`
             : '';
       lines.push(
         `| ${checkNum++} | ${c.check_id} | ${c.method} | ${fmtPts(c.weight_awarded)} | ${c.weight_max} | ${c.status} | ${reliabilityStr} | ${confStr} | ${valueStr} | ${hint}${sourceCiteMd} |`
@@ -875,10 +775,10 @@ export function renderMarkdown(
       '| ---- | ------ | -------- | ------------- | ---------- | ----------- | ----------- | --------- | ----------- | ----------- | ----- |'
     );
     for (const r of audit.per_repo) {
-      const repoLink = `[${r.repo}](per-repo/${r.repo}/report.html)`;
+      const repoLink = `[${mdCell(r.repo)}](per-repo/${mdCell(r.repo)}/report.html)`;
       const coverage = r.coverage != null ? pct(r.coverage) : '—';
       lines.push(
-        `| ${repoLink} | ${coverage} | ${fmtPts(r.awarded_weight)} | ${fmtN1dp(r.merges_per_active)} | ${fmtN1dp(r.loc_per_active)} | ${fmtWk(r.deploy_freq)} | ${fmtPctMul(r.rework_rate)} | ${fmtH(r.lead_time)} | ${fmtPctMul(r.change_fail)} | — | — |`
+        `| ${repoLink} | ${coverage} | ${fmtPts(r.awarded_weight)} | ${fmtN1dp(r.merges_per_active)} | ${fmtN1dp(r.loc_per_active)} | ${fmtWk(r.deploy_freq)} | ${fmtPctMul(r.rework_rate)} | ${fmtH(r.lead_time)} | ${fmtPctMul(r.change_fail)} | ${mdCell(r.cycle_time ?? '—')} | ${mdCell(r.mttr ?? '—')} |`
       );
     }
     lines.push('');
@@ -1072,6 +972,7 @@ function statusBadge(status: string): string {
     FAIL: '#ef4444',
     SKIP: '#9ca3af',
     INFO: '#60a5fa', // informational descriptor — neutral, not a verdict
+    PENDING_JUDGMENT: '#d97706', // awaiting the orchestrator's judgment pass
   };
   const bg = colors[status] ?? '#9ca3af';
   return `<span class="badge" style="background:${bg};color:#fff;padding:1px 6px;border-radius:3px;font-size:.75em;font-weight:600">${esc(status)}</span>`;
@@ -1084,6 +985,7 @@ const STATUS_COLOR: Record<string, string> = {
   FAIL: '#fef2f2',
   SKIP: '#f9fafb',
   INFO: '#eff6ff',
+  PENDING_JUDGMENT: '#fef3c7',
 };
 
 const BAND_COLOR: Record<string, string> = {
@@ -1100,8 +1002,8 @@ const BAND_COLOR: Record<string, string> = {
  */
 const HEADLINE_TIP: Record<string, string> = {
   Merges:
-    'Merged pull requests per active contributor in the window — a delivery-throughput signal.',
-  LOC: 'Lines of code changed per active contributor in the window — a delivery-volume signal.',
+    'Merged pull requests per active contributor per week — a delivery-throughput signal.',
+  LOC: 'Lines of code changed per active contributor per week — a delivery-volume signal.',
   'Cycle time':
     'Median in-progress→done duration for tickets, from the ticketing connector (Jira, Linear, GitHub Projects, …).',
   MTTR: 'Mean time to restore service after a production incident (needs an incident connector).',
@@ -1274,6 +1176,9 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
 /* reliability colours */
 .rel-minimal{color:#d97706}
 .rel-not-reliable{color:#dc2626}
+/* pending-judgment indicator: an unfinished audit must be visibly unfinished */
+.pending-chip{display:inline-block;background:#f59e0b;color:#fff;font-size:.72rem;font-weight:700;padding:1px 8px;border-radius:10px}
+.pending-note{margin-top:10px;font-size:.8rem;color:#92400e}
 /* instant plain-first tooltip */
 .tip{position:relative;cursor:help;border-bottom:1px dotted #94a3b8;outline:none}
 .tip>.tipbox{display:none;position:absolute;left:0;top:calc(100% + 4px);z-index:60;width:max-content;max-width:320px;background:#1e293b;color:#f8fafc;padding:8px 10px;border-radius:6px;font-size:.75rem;font-weight:400;line-height:1.45;white-space:normal;box-shadow:0 6px 18px rgba(0,0,0,.22)}
@@ -1320,10 +1225,19 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
     } else {
       // Single-repo capability headline — Coverage is the main figure.
       rows.push(
-        `<div class="cap-score">${tip(pct(audit.coverage) + ' Standards coverage', coverageTipText(audit), 'score ÷ Σ applicable category weights · standards.toml')}</div>`
+        `<div class="cap-score">${tip(pct(audit.coverage ?? 0) + ' Standards coverage', coverageTipText(audit), 'score ÷ Σ applicable category weights · standards.toml')}</div>`
       );
       rows.push(
         `<div class="cap-cov">${tip(fmtPts(audit.audit_total) + ' pts', 'Capability points — the sum of all capabilities the project has in place. Uncapped; rises as the standard grows.' + verifiedSuffix(audit.standards_meta?.standards_date), 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
+      );
+    }
+
+    // Unpatched judgment checks make the totals incomplete — say so up front,
+    // styled distinctly from SKIP (amber chip, not the grey skip vocabulary).
+    const pendingTotal = pendingJudgmentCount(audit);
+    if (pendingTotal > 0) {
+      rows.push(
+        `<div class="pending-note"><span class="pending-chip">${pendingTotal} pending judgment</span> check(s) await the orchestrator's judgment pass — totals are incomplete.</div>`
       );
     }
 
@@ -1532,8 +1446,8 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
     let n = 1;
     for (const dim of audit.dimensions) {
       const counts = statusCounts(dim);
-      const covPct = pct(dim.coverage);
-      const lowCov = dim.coverage < 0.4 ? ' low-cov' : '';
+      const covPct = pct(dim.coverage ?? 0);
+      const lowCov = (dim.coverage ?? 0) < 0.4 ? ' low-cov' : '';
       const anyMinimal = dim.checks.some(
         (c) => c.applies && c.reliability.tag === 'minimal'
       );
@@ -1553,7 +1467,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const key = dimKey(dim);
       const href = `#dim/${esc(key)}`;
       // Sources column: cell shows SHORT labels; tooltip adds full label + lookback window.
-      const dimSourcesUsed = (dim.sources_used as string[] | undefined) ?? [];
+      const dimSourcesUsed = dim.sources_used ?? [];
       const sourcesCell = (() => {
         if (dimSourcesUsed.length === 0) return '—';
         const cellText = dimSourcesUsed
@@ -1600,7 +1514,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
   ): string {
     const key = dimKey(dim);
     const counts = statusCounts(dim);
-    const covPct = pct(dim.coverage);
+    const covPct = pct(dim.coverage ?? 0);
     const rows: string[] = [];
     rows.push(`<section class="dim-page" id="page-${esc(key)}">`);
     rows.push('<a class="backlink" href="#">← Back to overview</a>');
@@ -1644,7 +1558,7 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const meanConfStr =
         totalW > 0 ? `${Math.round((weightedC / totalW) * 100)}%` : '—';
       rows.push(
-        `<div class="dim-head">${tip(fmtPts(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, 'Σ awarded weights · standards.toml')} · coverage ${tip(covPct, `Share of this area's expected capability that is in place.`, 'score ÷ Σ applicable weights')} · confidence ${tip(meanConfStr, 'Weight-averaged confidence: fraction of applicable surface measured for this dimension.', 'Σ(confidence × weight_max) ÷ Σ weight_max for applicable checks')} · FAIL ${counts.fail} · WARN ${counts.warn} · PARTIAL ${counts.partial} · PASS ${counts.pass} · SKIP ${counts.skip}</div>`
+        `<div class="dim-head">${tip(fmtPts(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, 'Σ awarded weights · standards.toml')} · coverage ${tip(covPct, `Share of this area's expected capability that is in place.`, 'score ÷ Σ applicable weights')} · confidence ${tip(meanConfStr, 'Weight-averaged confidence: fraction of applicable surface measured for this dimension.', 'Σ(confidence × weight_max) ÷ Σ weight_max for applicable checks')} · FAIL ${counts.fail} · WARN ${counts.warn} · PARTIAL ${counts.partial} · PASS ${counts.pass} · SKIP ${counts.skip}${counts.pending > 0 ? ` · <span class="pending-chip">${counts.pending} pending judgment</span>` : ''}</div>`
       );
     }
 
@@ -1697,12 +1611,10 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       const evidenceItems: string[] =
         c.evidence.length > 0 ? c.evidence.map(esc) : [];
       if (c.expression) {
+        // tip() escapes its arguments itself — pass the raw value, or `&`
+        // and friends get double-escaped (`&amp;amp;`).
         evidenceItems.push(
-          tip(
-            esc(fmtValue(c.value)),
-            c.expression,
-            c.unit ? `unit: ${c.unit}` : ''
-          )
+          tip(fmtValue(c.value), c.expression, c.unit ? `unit: ${c.unit}` : '')
         );
       } else if (c.value != null) {
         const numStr = `${fmtValue(c.value)}${c.unit ? ' ' + c.unit : ''}`;
@@ -1840,8 +1752,8 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
             `<td>${fmtPctMul(r.rework_rate)}</td>` +
             `<td>${fmtH(r.lead_time)}</td>` +
             `<td>${fmtPctMul(r.change_fail)}</td>` +
-            `<td>—</td>` +
-            `<td>—</td>` +
+            `<td>${esc(r.cycle_time ?? '—')}</td>` +
+            `<td>${esc(r.mttr ?? '—')}</td>` +
             `</tr>`
         );
       }

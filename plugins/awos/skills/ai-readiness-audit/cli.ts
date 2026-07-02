@@ -5,12 +5,17 @@
  * Bundled by build-engine.mjs → dist/cli.js (all imports inlined, no external deps).
  *
  * Usage:
- *   node dist/cli.js collect   <source>           <repoPath>
- *   node dist/cli.js detect    <code>             <repoPath>
- *   node dist/cli.js metric    <id>               <repoPath> [collectedDir]
- *   node dist/cli.js standards <path-to-toml>
- *   node dist/cli.js progress  <elapsed_seconds>  <done> <total>
- *   node dist/cli.js rollup    <dir-of-per-repo-jsons>
+ *   node dist/cli.js collect        <source>           <repoPath>
+ *   node dist/cli.js detect         <code>             <repoPath>
+ *   node dist/cli.js metric         <id>               <repoPath> [collectedDir]
+ *   node dist/cli.js standards      <path-to-toml>
+ *   node dist/cli.js progress       <elapsed_seconds>  <done> <total>
+ *   node dist/cli.js render         <audit.json>       --format md|html|both [--out-dir <dir>]
+ *   node dist/cli.js rollup         <dir-of-per-repo-subdirs>
+ *   node dist/cli.js audit-core     <repoPath>         <outDir>
+ *   node dist/cli.js aggregate      <auditsDir>
+ *   node dist/cli.js enrich         <repoPath>         <outDir>
+ *   node dist/cli.js patch-judgment <auditsDir>        <patches.json|->
  *
  * The optional [collectedDir] argument to `metric` is the "query-once" path:
  * if supplied, the metric reads pre-written <collectedDir>/<source>.json
@@ -46,6 +51,11 @@ import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
 import { writeArtifact } from './collectors/_base.ts';
 
+// Third parameters differ per collector: git takes standards.toml [meta]
+// tunables, while ci/tracker/docs take a CONNECTOR payload — so the registry
+// is typed two-argument and the `collect` verb passes the git tunables only
+// to the git collector (a truthy third argument would make tracker/docs
+// report available:true with zero records — a fabricated connection).
 const COLLECTORS: Record<
   string,
   (repoPath: string, period: Period) => unknown
@@ -119,7 +129,6 @@ import { compute as computeG14 } from './metrics/adp_g14_rework_rate.ts';
 import { compute as computeG15 } from './metrics/adp_g15_onboarding_ease.ts';
 // Adding a metric module is a one-line change per import + one entry in METRICS below.
 
-import type { MetricResult } from './metrics/_base.ts';
 import { loadStandards, metaNumber } from './metrics/_base.ts';
 
 // ---------------------------------------------------------------------------
@@ -132,7 +141,7 @@ import type { PerRepoInput, PerRepoDelivery } from './metrics/org_rollup.ts';
 // Renderer
 // ---------------------------------------------------------------------------
 import { renderMarkdown, renderHtml } from './render.ts';
-import type { AuditJson } from './render.ts';
+import type { AuditJson, Check } from './render.ts';
 
 // ---------------------------------------------------------------------------
 // Progress helper
@@ -142,7 +151,12 @@ import { progress } from './progress.ts';
 // ---------------------------------------------------------------------------
 // audit-core (deterministic single-pass audit)
 // ---------------------------------------------------------------------------
-import { auditCore, aggregate, patchJudgments } from './audit_core.ts';
+import {
+  auditCore,
+  aggregate,
+  patchJudgments,
+  type MetricFn,
+} from './audit_core.ts';
 
 /** Resolve the skill root (where references/ lives) from the bundle location. */
 function resolveSkillRoot(): string {
@@ -151,15 +165,6 @@ function resolveSkillRoot(): string {
     ? dirname(cliDir)
     : cliDir;
 }
-
-// MetricFn may return a MetricResult synchronously or a Promise<MetricResult>
-// (adp_g10_complexity is async — requires wasm init).
-type MetricFn = (
-  collectedDir: string,
-  standards: Record<string, unknown>,
-  topology: Record<string, boolean>,
-  repoPath?: string
-) => MetricResult | Promise<MetricResult>;
 
 export const METRICS: Record<string, MetricFn> = {
   adp_g1_tooling_depth: computeG1,
@@ -233,13 +238,16 @@ function printJson(value: unknown): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Delivery check_id → the PerRepoDelivery field it feeds.
- * Only the git-sourced DORA metrics feed the deterministic rollup. Cycle-time
+ * Delivery check_id → the numeric PerRepoDelivery field it feeds.
+ * Only the git-sourced DORA metrics feed the averaged org headline. Cycle-time
  * and MTTR are connector-gated (tracker / incident) and never derived from git,
- * so they are intentionally absent here — the deterministic org headline omits
- * them.
+ * so they are absent here; they are carried separately as the display strings
+ * the per-repo audit's headline authored (see readPerRepoAudit) for the org
+ * Repositories table.
  */
-const DELIVERY_CHECK_IDS: Array<[string, keyof PerRepoDelivery]> = [
+const DELIVERY_CHECK_IDS: Array<
+  [string, 'deploy_freq' | 'rework_rate' | 'lead_time' | 'change_fail']
+> = [
   ['DF-01', 'deploy_freq'],
   ['DF-06', 'rework_rate'],
   ['DF-02', 'lead_time'],
@@ -249,33 +257,13 @@ const DELIVERY_CHECK_IDS: Array<[string, keyof PerRepoDelivery]> = [
 /** AI-tooling category codes (101–106); any awarded → has_ai_tooling. */
 const AI_TOOLING_CODES = new Set([101, 102, 103, 104, 105, 106]);
 
-interface AuditCheck {
-  check_id?: string;
-  code?: number[];
-  status?: string;
-  value?: unknown;
-  weight_awarded?: number;
-  definition?: string;
-}
-
-interface AuditDimension {
-  dimension?: string;
-  checks?: AuditCheck[];
-}
-
-interface AuditJson {
-  audit_total?: number;
-  coverage?: number;
-  dimensions?: AuditDimension[];
-  sources?: Array<{ source?: string; available?: boolean }>;
-  tech_stack?: {
-    languages: Array<{ name: string }>;
-    agent_tools: Array<{ name: string }>;
-    ci: Array<{ name: string }>;
-    frameworks: Array<{ name: string }>;
-  };
-  linked_repos?: Array<{ name: string; via?: string; kind?: string }>;
-}
+/**
+ * Loose parse-boundary shape of a per-repo audit.json read from disk: the
+ * shared AuditJson contract (artifact_types.ts, re-exported by render.ts) with
+ * every top-level field optional, since the rollup consumes untrusted on-disk
+ * JSON and must survive partial artifacts.
+ */
+type ParsedAudit = Partial<AuditJson>;
 
 /** Coerce a check value to a finite number, else null (covers SKIP/null/NaN). */
 function numOrNull(v: unknown): number | null {
@@ -292,9 +280,9 @@ function readPerRepoAudit(
   repoName: string
 ): PerRepoInput | null {
   const auditPath = join(repoDir, 'audit.json');
-  let audit: AuditJson;
+  let audit: ParsedAudit;
   try {
-    audit = JSON.parse(readFileSync(auditPath, 'utf8')) as AuditJson;
+    audit = JSON.parse(readFileSync(auditPath, 'utf8')) as ParsedAudit;
   } catch {
     process.stderr.write(
       `rollup: skipping ${repoName} — missing or unparseable audit.json\n`
@@ -303,10 +291,10 @@ function readPerRepoAudit(
   }
 
   // Flatten every check once; index by check_id and scan for AI-tooling codes.
-  const checks: AuditCheck[] = (audit.dimensions ?? []).flatMap(
+  const checks: Check[] = (audit.dimensions ?? []).flatMap(
     (d) => d.checks ?? []
   );
-  const byCheckId = new Map<string, AuditCheck>();
+  const byCheckId = new Map<string, Check>();
   let hasAiTooling = false;
   for (const c of checks) {
     if (c.check_id && !byCheckId.has(c.check_id)) byCheckId.set(c.check_id, c);
@@ -341,6 +329,22 @@ function readPerRepoAudit(
   for (const [checkId, field] of DELIVERY_CHECK_IDS) {
     delivery[field] = numOrNull(byCheckId.get(checkId)?.value);
   }
+
+  // Connector-gated headline rows: cycle time (gated: "tracker") and MTTR
+  // (gated: "incident"). Carried as the display string the per-repo audit's
+  // headline authored (e.g. "3.2 d"); null when the row is gated with no
+  // connector (no display_value) or the headline is absent — the org
+  // Repositories table then renders its em-dash placeholder.
+  const headlineRows = audit.headline?.delivery ?? [];
+  const gatedDisplay = (gate: string): string | null => {
+    const row = headlineRows.find((r) => r.gated === gate);
+    return typeof row?.display_value === 'string' &&
+      row.display_value.length > 0
+      ? row.display_value
+      : null;
+  };
+  delivery.cycle_time = gatedDisplay('tracker');
+  delivery.mttr = gatedDisplay('incident');
 
   // Merges/LOC per active contributor from the git artifact (best-effort).
   const gitPath = join(repoDir, 'collected', 'git.json');
@@ -395,7 +399,7 @@ async function main(): Promise<void> {
     printJson({
       error: 'no command given',
       usage:
-        'collect|detect|metric|standards|progress|rollup|render|aggregate|patch-judgment|audit-core <arg> [repoPath]',
+        'collect|detect|metric|standards|progress|render|rollup|audit-core|aggregate|enrich|patch-judgment <arg> [repoPath]',
     });
     process.exit(1);
   }
@@ -420,12 +424,15 @@ async function main(): Promise<void> {
       const collectStandards = loadStandards(
         join(resolveSkillRoot(), 'references', 'standards.toml')
       );
+      const collectPeriod = periodFromMeta(collectStandards);
       printJson(
-        fn(
-          repoPath,
-          periodFromMeta(collectStandards),
-          gitOptsFromMeta(collectStandards)
-        )
+        source === 'git'
+          ? collectGit(
+              repoPath,
+              collectPeriod,
+              gitOptsFromMeta(collectStandards)
+            )
+          : fn(repoPath, collectPeriod)
       );
       break;
     }
@@ -858,7 +865,7 @@ async function main(): Promise<void> {
       printJson({
         error: `unknown command "${command}"`,
         usage:
-          'collect|detect|metric|standards|progress|rollup|render|aggregate|patch-judgment|audit-core <arg> [repoPath]',
+          'collect|detect|metric|standards|progress|render|rollup|audit-core|aggregate|enrich|patch-judgment <arg> [repoPath]',
       });
       process.exit(1);
     }

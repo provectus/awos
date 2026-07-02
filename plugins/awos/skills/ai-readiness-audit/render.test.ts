@@ -807,8 +807,9 @@ test('Markdown headline renders gated-absent delivery metrics as "needs connecto
 // ---------------------------------------------------------------------------
 
 /** Two-repo fixture for the Task 5.3 per-repo table tests. Repo A has all
- * delivery values populated; Repo B has all delivery values null to verify
- * the "—" fallback path for every column. */
+ * delivery values populated (incl. the connector-gated cycle_time/mttr
+ * display strings); Repo B has all delivery values null to verify the "—"
+ * fallback path for every column. */
 function makeOrgAuditWithPerRepo(): AuditJson {
   const repoA: PerRepoSummary = {
     repo: 'acme/backend',
@@ -824,6 +825,8 @@ function makeOrgAuditWithPerRepo(): AuditJson {
     rework_rate: 0.08,
     lead_time: 24.0,
     change_fail: 0.05,
+    cycle_time: '3.2 d',
+    mttr: '1.5 h',
   };
   const repoB: PerRepoSummary = {
     repo: 'acme/frontend',
@@ -839,6 +842,8 @@ function makeOrgAuditWithPerRepo(): AuditJson {
     rework_rate: null,
     lead_time: null,
     change_fail: null,
+    cycle_time: null,
+    mttr: null,
   };
   return makeAudit({
     portfolio_metrics: [
@@ -1112,7 +1117,7 @@ function makeOrgAuditWithConnections(): AuditJson {
   };
 
   // 8 repos: git reachable in all 8, tracker in 5, ci in 6, docs in none.
-  const per_repo = Array.from({ length: 8 }, (_, i) => ({
+  const per_repo: PerRepoSummary[] = Array.from({ length: 8 }, (_, i) => ({
     repo: `org/repo-${i}`,
     contributors: null,
     awarded_weight: 10,
@@ -1122,6 +1127,16 @@ function makeOrgAuditWithConnections(): AuditJson {
       ...(i < 6 ? ['ci'] : []),
     ],
     has_ai_tooling: true,
+    audit_total: 10,
+    coverage: null,
+    merges_per_active: null,
+    loc_per_active: null,
+    deploy_freq: null,
+    rework_rate: null,
+    lead_time: null,
+    change_fail: null,
+    cycle_time: null,
+    mttr: null,
   }));
 
   return {
@@ -1496,5 +1511,102 @@ test('an all-weight-0 dimension renders as informational: no points, no coverage
   assert.ok(
     !html.includes('[object Object]') && html.includes('INFO'),
     'html must render the INFO badge for descriptor checks'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Per-repo table: connector-gated cycle_time / mttr display values
+// ---------------------------------------------------------------------------
+
+test('per-repo table renders cycle_time and MTTR display strings when present, "—" when null', () => {
+  const audit = makeOrgAuditWithPerRepo();
+
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('<td>3.2 d</td>'),
+    'HTML per-repo table must render repo A cycle_time display value in its own cell'
+  );
+  assert.ok(
+    html.includes('<td>1.5 h</td>'),
+    'HTML per-repo table must render repo A MTTR display value in its own cell'
+  );
+
+  const md = renderMarkdown(audit);
+  const rowA = md.split('\n').find((l) => l.includes('acme/backend'));
+  assert.ok(
+    rowA !== undefined,
+    'Markdown per-repo table: repo A row must exist'
+  );
+  assert.ok(
+    rowA!.includes('| 3.2 d |') && rowA!.includes('| 1.5 h |'),
+    `Markdown repo A row must carry the cycle_time and MTTR display values, got: ${rowA}`
+  );
+  const rowB = md.split('\n').find((l) => l.includes('acme/frontend'));
+  assert.ok(
+    rowB !== undefined,
+    'Markdown per-repo table: repo B row must exist'
+  );
+  assert.ok(
+    rowB!.trimEnd().endsWith('| — | — |'),
+    `Markdown repo B row must render "—" in the cycle_time and MTTR cells when null, got: ${rowB}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// PENDING_JUDGMENT visibility — an unpatched run must look unfinished
+// ---------------------------------------------------------------------------
+
+test('reports surface a pending-judgment indicator when checks are PENDING_JUDGMENT', () => {
+  const audit = makeAudit({
+    dimensions: [
+      makeDim('governance', [
+        makeCheck({
+          check_id: 'GOV-01',
+          status: 'PENDING_JUDGMENT',
+          weight_awarded: 0,
+        }),
+        makeCheck({
+          check_id: 'GOV-02',
+          status: 'PENDING_JUDGMENT',
+          weight_awarded: 0,
+        }),
+        makeCheck({ check_id: 'GOV-03', status: 'PASS' }),
+      ]),
+    ],
+  });
+
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('(2 pending judgment)'),
+    'Markdown Points line must carry a "(N pending judgment)" suffix when judgment checks are unpatched'
+  );
+  assert.ok(
+    md.includes('**Pending judgment:** 2 check(s)'),
+    'Markdown header must state how many checks await the judgment pass'
+  );
+
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('<span class="pending-chip">2 pending judgment</span>'),
+    'HTML executive band must show the amber pending-judgment chip with the count (distinct from SKIP)'
+  );
+});
+
+test('fully-patched audit (no PENDING_JUDGMENT) shows no pending indicator', () => {
+  const audit = makeAudit({
+    dimensions: [
+      makeDim('governance', [
+        makeCheck({ check_id: 'GOV-01', status: 'PASS' }),
+        makeCheck({ check_id: 'GOV-02', status: 'SKIP', weight_awarded: 0 }),
+      ]),
+    ],
+  });
+  assert.ok(
+    !renderMarkdown(audit).includes('pending judgment'),
+    'Markdown must not mention pending judgment once every judgment check is patched'
+  );
+  assert.ok(
+    !renderHtml(audit).includes('pending judgment'),
+    'HTML must not show the pending-judgment chip once every judgment check is patched'
   );
 });

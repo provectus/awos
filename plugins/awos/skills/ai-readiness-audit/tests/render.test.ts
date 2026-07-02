@@ -228,6 +228,22 @@ function bareFixture(): AuditJson {
   };
 }
 
+/** All-null delivery fields of a PerRepoSummary (repos with no delivery data). */
+function emptyPerRepoDelivery() {
+  return {
+    audit_total: null,
+    coverage: null,
+    merges_per_active: null,
+    loc_per_active: null,
+    deploy_freq: null,
+    rework_rate: null,
+    lead_time: null,
+    change_fail: null,
+    cycle_time: null,
+    mttr: null,
+  };
+}
+
 /** Org-mode fixture with portfolio_metrics + per_repo. */
 function orgFixture(): AuditJson {
   return {
@@ -290,6 +306,7 @@ function orgFixture(): AuditJson {
         awarded_weight: 40,
         sources_reachable: ['git', 'ci'],
         has_ai_tooling: true,
+        ...emptyPerRepoDelivery(),
       },
       {
         repo: 'org/service-b',
@@ -297,6 +314,7 @@ function orgFixture(): AuditJson {
         awarded_weight: 20,
         sources_reachable: ['git'],
         has_ai_tooling: false,
+        ...emptyPerRepoDelivery(),
       },
       {
         repo: 'org/legacy',
@@ -304,6 +322,7 @@ function orgFixture(): AuditJson {
         awarded_weight: 0,
         sources_reachable: [],
         has_ai_tooling: false,
+        ...emptyPerRepoDelivery(),
       },
     ],
   };

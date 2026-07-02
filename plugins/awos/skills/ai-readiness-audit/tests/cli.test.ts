@@ -12,7 +12,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -34,6 +40,33 @@ function runCli(...args: string[]): { json: unknown; code: number } {
     const stdout = execFileSync(NODE, [CLI, ...args], {
       encoding: 'utf8',
       // suppress the "module type not specified" warning from Node
+      env: { ...process.env, NODE_NO_WARNINGS: '1' },
+    });
+    return { json: JSON.parse(stdout), code: 0 };
+  } catch (err: unknown) {
+    const e = err as NodeJS.ErrnoException & {
+      stdout?: string;
+      status?: number;
+    };
+    let json: unknown = null;
+    try {
+      json = JSON.parse(e.stdout ?? '');
+    } catch {
+      // not parseable — leave null
+    }
+    return { json, code: e.status ?? 1 };
+  }
+}
+
+/** Like runCli, but feeds `input` to the subprocess's stdin (for `-` args). */
+function runCliStdin(
+  input: string,
+  ...args: string[]
+): { json: unknown; code: number } {
+  try {
+    const stdout = execFileSync(NODE, [CLI, ...args], {
+      encoding: 'utf8',
+      input,
       env: { ...process.env, NODE_NO_WARNINGS: '1' },
     });
     return { json: JSON.parse(stdout), code: 0 };
@@ -461,6 +494,202 @@ test('rollup: reads per-repo subdirs → org headline (mean matrix) + enriched p
       a['contributors'],
       8,
       'contributors derived from DESC-01 check value'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 'patch-judgment' — the verb SKILL.md invokes to apply judgment verdicts.
+// Dispatch-layer contracts: stdin ("-") input path, invalid-JSON rejection,
+// non-array rejection.
+// ---------------------------------------------------------------------------
+
+/** Write a minimal audits dir with one dimension file carrying a judgment check. */
+function writeJudgmentAuditsDir(base: string): void {
+  mkdirSync(base, { recursive: true });
+  const dim = {
+    dimension: 'spec-driven-development',
+    date: '2026-07-01',
+    order: 0,
+    score: 0,
+    coverage: 0,
+    checks: [
+      {
+        check_id: 'SDD-03',
+        code: [303],
+        method: 'judgment',
+        status: 'PENDING_JUDGMENT',
+        value: null,
+        evidence: [],
+        weight_awarded: 0,
+        weight_max: 4,
+        applies: true,
+        reliability: { tag: 'maximal', confidence: 'high', note: null },
+        source: 'AWOS audit',
+        definition: 'Spec quality (judgment)',
+        hint: 'judged by the orchestrator',
+      },
+    ],
+  };
+  writeFileSync(
+    join(base, 'spec-driven-development.json'),
+    JSON.stringify(dim, null, 2)
+  );
+}
+
+test('patch-judgment: reads patches from stdin via "-", applies them, and re-aggregates', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-patchj-stdin-'));
+  try {
+    writeJudgmentAuditsDir(base);
+    const patches = JSON.stringify([
+      { check_id: 'SDD-03', status: 'PASS', evidence: ['spec looks solid'] },
+    ]);
+
+    const { json, code } = runCliStdin(patches, 'patch-judgment', base, '-');
+
+    assert.equal(
+      code,
+      0,
+      'patch-judgment with valid stdin patches must exit 0'
+    );
+    const r = json as Record<string, unknown>;
+    assert.ok(
+      Array.isArray(r['patched']) &&
+        (r['patched'] as string[]).includes('SDD-03'),
+      `summary.patched must list the patched check_id; got ${JSON.stringify(r['patched'])}`
+    );
+    assert.equal(
+      r['aggregated'],
+      base,
+      'summary must confirm the audits dir was re-aggregated'
+    );
+
+    // The dimension artifact on disk must carry the patched verdict + weight.
+    const dim = JSON.parse(
+      readFileSync(join(base, 'spec-driven-development.json'), 'utf8')
+    ) as { checks: Array<Record<string, unknown>> };
+    const check = dim.checks.find((c) => c['check_id'] === 'SDD-03')!;
+    assert.equal(
+      check['status'],
+      'PASS',
+      'patched judgment check must be rewritten to PASS on disk'
+    );
+    assert.equal(
+      check['weight_awarded'],
+      4,
+      'PASS patch must award the full weight_max (4)'
+    );
+    assert.deepEqual(
+      check['evidence'],
+      ['spec looks solid'],
+      'patch evidence must replace the check evidence'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('patch-judgment: invalid JSON on stdin exits non-zero with a "not valid JSON" error', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-patchj-badjson-'));
+  try {
+    writeJudgmentAuditsDir(base);
+    const { json, code } = runCliStdin(
+      'this is { not json',
+      'patch-judgment',
+      base,
+      '-'
+    );
+    assert.notEqual(code, 0, 'invalid patch JSON must exit non-zero');
+    const err = json as Record<string, unknown>;
+    assert.ok(
+      typeof err['error'] === 'string' &&
+        err['error'].includes('not valid JSON'),
+      `error must say the patches are not valid JSON; got ${JSON.stringify(err)}`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('patch-judgment: non-array JSON on stdin exits non-zero with a "must be a JSON array" error', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-patchj-nonarray-'));
+  try {
+    writeJudgmentAuditsDir(base);
+    const { json, code } = runCliStdin(
+      '{"check_id":"SDD-03","status":"PASS"}',
+      'patch-judgment',
+      base,
+      '-'
+    );
+    assert.notEqual(code, 0, 'a non-array patch document must exit non-zero');
+    const err = json as Record<string, unknown>;
+    assert.ok(
+      typeof err['error'] === 'string' &&
+        err['error'].includes('must be a JSON array'),
+      `error must say patches must be a JSON array; got ${JSON.stringify(err)}`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 'render' — dispatch-layer error paths (flag validation before any rendering)
+// ---------------------------------------------------------------------------
+
+/** Write a minimal but valid audit.json for render error-path tests. */
+function writeMinimalAudit(dir: string): string {
+  mkdirSync(dir, { recursive: true });
+  const auditPath = join(dir, 'audit.json');
+  writeFileSync(
+    auditPath,
+    JSON.stringify({
+      date: '2026-07-01',
+      project: 'render-errors',
+      audit_total: 0,
+      coverage: 0,
+      dimensions: [],
+    })
+  );
+  return auditPath;
+}
+
+test('render: unknown --format value exits non-zero naming the allowed formats', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-render-badfmt-'));
+  try {
+    const auditPath = writeMinimalAudit(base);
+    const { json, code } = runCli('render', auditPath, '--format', 'pdf');
+    assert.notEqual(code, 0, 'render with --format pdf must exit non-zero');
+    const err = json as Record<string, unknown>;
+    assert.ok(
+      typeof err['error'] === 'string' &&
+        err['error'].includes('md') &&
+        err['error'].includes('html') &&
+        err['error'].includes('both') &&
+        err['error'].includes('pdf'),
+      `error must name the allowed formats and echo the bad value; got ${JSON.stringify(err)}`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('render: --format both without --out-dir exits non-zero with a usage error', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-render-nooutdir-'));
+  try {
+    const auditPath = writeMinimalAudit(base);
+    const { json, code } = runCli('render', auditPath, '--format', 'both');
+    assert.notEqual(
+      code,
+      0,
+      'render --format both without --out-dir must exit non-zero'
+    );
+    const err = json as Record<string, unknown>;
+    assert.ok(
+      typeof err['error'] === 'string' && err['error'].includes('--out-dir'),
+      `error must say --format both requires --out-dir; got ${JSON.stringify(err)}`
     );
   } finally {
     rmSync(base, { recursive: true, force: true });

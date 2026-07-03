@@ -143,11 +143,17 @@ test('renderMarkdown: Missed/limited lines carry the source-probe log', () => {
     coverage: 0,
     dimensions: [],
     sources: [
-      { source: 'git', available: true, reason_if_absent: null },
+      {
+        source: 'git',
+        available: true,
+        reason_if_absent: null,
+        history_available_days: 365,
+      },
       {
         source: 'tracker',
         available: false,
         reason_if_absent: 'no tracker connector provided',
+        history_available_days: null,
       },
     ],
     source_probes: [

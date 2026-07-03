@@ -317,7 +317,14 @@ export interface AuditJson {
   audit_total: number;
   /** 0–1 ratio; null when nothing is applicable. */
   coverage: number | null;
-  dimensions: DimensionArtifact[];
+  /**
+   * Per-dimension scoring detail. Always present on a single-repo audit
+   * (audit-core writes it); absent on an org portfolio JSON — org rollup
+   * emits none, per-repo dimensions live in the per-repo reports, and the
+   * renderer ignores any that are injected (a concatenation across repos
+   * would render duplicate rows).
+   */
+  dimensions?: DimensionArtifact[];
   // plain-language blocks (orchestrator-authored; optional)
   headline?: Headline;
   insights?: Insight[];

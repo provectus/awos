@@ -880,6 +880,46 @@ test('render: unknown --format value exits non-zero naming the allowed formats',
   }
 });
 
+test('render --format both into a per-repo dir: HTML back-link targets the org #repos anchor', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-render-backlink-'));
+  try {
+    const auditPath = join(base, 'audit.json');
+    writeFileSync(
+      auditPath,
+      JSON.stringify({
+        date: '2026-07-01',
+        project: 'backlink',
+        audit_total: 0,
+        coverage: 0,
+        dimensions: [],
+        engine: { generated_by: 'audit-core' },
+      })
+    );
+    const outDir = join(base, 'per-repo', 'myrepo');
+    const { code } = runCli(
+      'render',
+      auditPath,
+      '--format',
+      'both',
+      '--out-dir',
+      outDir
+    );
+    assert.equal(code, 0, 'render --format both into per-repo/ must succeed');
+    const html = readFileSync(join(outDir, 'report.html'), 'utf8');
+    assert.ok(
+      html.includes('href="../../report.html#repos"'),
+      'per-repo HTML back-link must target the org Repositories anchor (#repos) so the reader returns to the table they navigated from'
+    );
+    const md = readFileSync(join(outDir, 'report.md'), 'utf8');
+    assert.ok(
+      md.includes('(../../report.md)'),
+      'per-repo Markdown back-link keeps the plain org report path'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test('render: --format both without --out-dir exits non-zero with a usage error', () => {
   const base = mkdtempSync(join(tmpdir(), 'awos-render-nooutdir-'));
   try {

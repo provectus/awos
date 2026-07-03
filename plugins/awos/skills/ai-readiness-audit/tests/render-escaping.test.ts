@@ -95,6 +95,23 @@ function hostileAudit(): AuditJson {
         ],
       },
     ],
+    linked_repos: [
+      { name: `linked & ${XSS}`, kind: 'symlink', via: '.claude/skills/x' },
+    ],
+  };
+}
+
+/**
+ * Org-mode hostile fixture. Kept separate from hostileAudit(): org audits
+ * carry no top-level dimensions (the renderer ignores them), so the per-repo
+ * table escaping is exercised on a genuine org shape.
+ */
+function hostileOrgAudit(): AuditJson {
+  return {
+    date: '2026-01-01',
+    project: `evil-org ${XSS}`,
+    audit_total: 10,
+    coverage: 0.5,
     portfolio_metrics: [
       {
         metric: 'org_capability_score',
@@ -122,9 +139,6 @@ function hostileAudit(): AuditJson {
         cycle_time: `evil|cycle ${XSS}`,
         mttr: null,
       },
-    ],
-    linked_repos: [
-      { name: `linked & ${XSS}`, kind: 'symlink', via: '.claude/skills/x' },
     ],
   };
 }
@@ -242,7 +256,7 @@ test('renderMarkdown: check-table row keeps the header cell count despite hostil
 });
 
 test('renderMarkdown: per-repo org table row keeps the header cell count despite a hostile repo name', () => {
-  const md = renderMarkdown(hostileAudit());
+  const md = renderMarkdown(hostileOrgAudit());
   const header = lineWith(md, '| Repo | Coverage |', 'per-repo table');
   const row = lineWith(md, 'evil\\|repo', 'hostile per-repo row');
   assert.equal(

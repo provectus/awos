@@ -680,6 +680,59 @@ test('renderHtml (org): Repositories & Connections section with per-repo rows', 
   );
 });
 
+test('org reports never render a top-level Dimensions section — injected per-repo dimension concatenations are ignored', () => {
+  // A measured org run hand-assembled org-portfolio.json with every repo's
+  // dimensions concatenated (12 dims × 8 repos), producing a Dimensions table
+  // full of duplicate rows. Org portfolio JSON has no legitimate top-level
+  // dimensions; the renderer must ignore any that are present.
+  const audit = orgFixture();
+  audit.dimensions = [
+    ...(audit.dimensions ?? []),
+    ...(audit.dimensions ?? []),
+    ...(audit.dimensions ?? []),
+  ];
+  const html = renderHtml(audit);
+  assert.ok(
+    !html.includes('<h2>Dimensions</h2>'),
+    'org HTML must not render the Dimensions summary table'
+  );
+  assert.ok(
+    !html.includes('id="page-'),
+    'org HTML must not render per-dimension drill-down pages'
+  );
+  const md = renderMarkdown(audit);
+  assert.ok(
+    !md.includes('## Summary'),
+    'org Markdown must not render the per-dimension Summary table'
+  );
+  assert.ok(
+    !md.includes('## Dimension:'),
+    'org Markdown must not render per-dimension detail sections'
+  );
+});
+
+test('org reports render without a dimensions key at all (rollup output shape)', () => {
+  const audit = orgFixture();
+  delete audit.dimensions;
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('Capability score'),
+    'org HTML without dimensions must still render the portfolio cards'
+  );
+  assert.ok(
+    renderMarkdown(audit).includes('Portfolio Metrics'),
+    'org Markdown without dimensions must still render the portfolio section'
+  );
+});
+
+test('org HTML Repositories heading carries the id="repos" back-link anchor', () => {
+  const html = renderHtml(orgFixture());
+  assert.ok(
+    html.includes('<h2 id="repos">Repositories</h2>'),
+    'the Repositories heading must carry id="repos" — per-repo reports link back to ../../report.html#repos'
+  );
+});
+
 test('labelize uppercases known acronyms', () => {
   assert.equal(labelize('ai-sdlc-adoption'), 'AI SDLC Adoption');
   assert.equal(labelize('ai-development-tooling'), 'AI Development Tooling');

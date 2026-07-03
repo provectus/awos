@@ -495,7 +495,7 @@ function statusCounts(dim: DimensionArtifact): {
 /** Total PENDING_JUDGMENT checks across all dimensions — the "unfinished audit" indicator. */
 function pendingJudgmentCount(audit: AuditJson): number {
   let n = 0;
-  for (const dim of audit.dimensions) {
+  for (const dim of audit.dimensions ?? []) {
     for (const c of dim.checks) {
       if (c.status === 'PENDING_JUDGMENT') n++;
     }
@@ -525,7 +525,7 @@ function derivedRecommendations(audit: AuditJson): Recommendation[] {
   let id = 1;
   const fails: Array<{ dim: DimensionArtifact; c: Check }> = [];
   const warns: Array<{ dim: DimensionArtifact; c: Check }> = [];
-  for (const dim of audit.dimensions) {
+  for (const dim of audit.dimensions ?? []) {
     for (const c of dim.checks) {
       if (c.status === 'FAIL') fails.push({ dim, c });
       else if (c.status === 'WARN') warns.push({ dim, c });
@@ -622,10 +622,14 @@ export function renderMarkdown(
       lines.push('| ------ | ----- | ---- |');
       for (const d of deliveryRows) {
         if (d.gated && deliveryValueAbsent(d.display_value)) {
-          // A row-specific note ("Jira connected — tickets lack status-transition
-          // history") beats the generic needs-connector default.
+          // A tracker that IS connected but produced no measurable data gets
+          // the short placeholder — the full explanation renders in
+          // Connections & Sources, not in the metric cell. Without any note
+          // the generic needs-connector default applies.
           const note = d.note
-            ? `— (${mdCell(d.note)})`
+            ? d.gated === 'tracker'
+              ? NO_TICKETS_NOTE
+              : `— (${mdCell(d.note)})`
             : gatedConnectorNote(d.gated);
           lines.push(`| ${mdCell(d.label)} | ${note} | |`);
         } else {
@@ -687,36 +691,41 @@ export function renderMarkdown(
     }
   }
 
-  // Summary table
-  lines.push('## Summary');
-  lines.push('');
-  lines.push(
-    '| # | Dimension | Coverage | Sources | Points | FAIL | WARN | PARTIAL | PASS | SKIP |'
-  );
-  lines.push(
-    '| - | --------- | -------- | ------- | ------ | ---- | ---- | ------- | ---- | ---- |'
-  );
-  let rowNum = 1;
-  for (const dim of audit.dimensions) {
-    const counts = statusCounts(dim);
-    const dimSourcesUsed = dim.sources_used ?? [];
-    const sourcesCell =
-      dimSourcesUsed.length === 0
-        ? '—'
-        : dimSourcesUsed
-            .map(
-              (s) =>
-                audit.source_windows?.[s]?.label ??
-                SOURCE_LABEL_DEFAULTS[s] ??
-                s
-            )
-            .join(', ');
-    const info = isInformational(dim);
+  // Summary table — single-repo only. An org portfolio JSON carries no
+  // legitimate top-level dimensions (rollup emits none; per-repo dimensions
+  // live in the per-repo reports), so any present are ignored rather than
+  // rendered as a concatenated duplicate-name table.
+  if (!isOrg) {
+    lines.push('## Summary');
+    lines.push('');
     lines.push(
-      `| ${rowNum++} | ${titleLabel(dim)} | ${info ? 'info' : pct(dim.coverage ?? 0)} | ${sourcesCell} | ${info ? '—' : fmtPts(dim.score)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
+      '| # | Dimension | Coverage | Sources | Points | FAIL | WARN | PARTIAL | PASS | SKIP |'
     );
+    lines.push(
+      '| - | --------- | -------- | ------- | ------ | ---- | ---- | ------- | ---- | ---- |'
+    );
+    let rowNum = 1;
+    for (const dim of audit.dimensions ?? []) {
+      const counts = statusCounts(dim);
+      const dimSourcesUsed = dim.sources_used ?? [];
+      const sourcesCell =
+        dimSourcesUsed.length === 0
+          ? '—'
+          : dimSourcesUsed
+              .map(
+                (s) =>
+                  audit.source_windows?.[s]?.label ??
+                  SOURCE_LABEL_DEFAULTS[s] ??
+                  s
+              )
+              .join(', ');
+      const info = isInformational(dim);
+      lines.push(
+        `| ${rowNum++} | ${titleLabel(dim)} | ${info ? 'info' : pct(dim.coverage ?? 0)} | ${sourcesCell} | ${info ? '—' : fmtPts(dim.score)} | ${counts.fail} | ${counts.warn} | ${counts.partial} | ${counts.pass} | ${counts.skip} |`
+      );
+    }
+    lines.push('');
   }
-  lines.push('');
 
   // Recommendations (structured if authored, else derived from FAIL/WARN)
   const recs =
@@ -749,8 +758,8 @@ export function renderMarkdown(
     }
   }
 
-  // Per-dimension details
-  for (const dim of audit.dimensions) {
+  // Per-dimension details — single-repo only (see the Summary-table note).
+  for (const dim of isOrg ? [] : (audit.dimensions ?? [])) {
     lines.push(`## Dimension: ${titleLabel(dim)}`);
     lines.push('');
     if (dim.description) {
@@ -889,8 +898,14 @@ export function renderMarkdown(
           s.history_available_days < LIMITED_HISTORY_DAYS
             ? ` (limited history ~${s.history_available_days} days)`
             : '';
+        // The tracker line carries the full derived cycle-time explanation —
+        // the headline cell shows only the short "no tickets data" placeholder.
+        const derivedNote =
+          s.source === 'tracker' && trackerConnectionNote(audit)
+            ? ` — ${trackerConnectionNote(audit)}`
+            : '';
         const label = sourceFullLabel(s.source, audit.source_windows);
-        lines.push(`- ${label}${limitedNote}`);
+        lines.push(`- ${label}${limitedNote}${derivedNote}`);
       }
       lines.push('');
     }
@@ -1124,6 +1139,24 @@ function deliveryValueAbsent(v: string | undefined): boolean {
 }
 
 /**
+ * The engine-derived cycle-time note ("Jira connected — per-ticket status
+ * history not fetched") for the Connections & Sources tracker line. Only
+ * meaningful when no cycle-time value was measured; with a value present the
+ * note (e.g. "partial fetch") stays on the headline row's tooltip.
+ */
+function trackerConnectionNote(audit: AuditJson): string | null {
+  const ct = audit.derived_delivery?.cycle_time;
+  if (ct && !ct.display_value && ct.note) return ct.note;
+  // Older audits without derived_delivery: the authored gated row's note.
+  const row = (audit.headline?.delivery ?? []).find(
+    (d) => d.gated === 'tracker'
+  );
+  if (row && deliveryValueAbsent(row.display_value) && row.note)
+    return row.note;
+  return null;
+}
+
+/**
  * The em-dash-prefixed fallback note for a gated delivery row that has no
  * display value and no row-specific note — the generic "needs a connector"
  * prompt, keyed by which connector the row is gated on. Shared by the Markdown
@@ -1134,6 +1167,14 @@ function gatedConnectorNote(gated: 'tracker' | 'incident'): string {
     ? '— (needs ticketing connector)'
     : '— (needs incident connector)';
 }
+
+/**
+ * Short headline placeholder for a gated tracker row whose connector IS
+ * present but yielded no measurable data. The full explanation (the
+ * derived_delivery note, e.g. "Jira connected — per-ticket status history not
+ * fetched") renders in Connections & Sources, not in the metric value cell.
+ */
+const NO_TICKETS_NOTE = '— (no tickets data)';
 
 /**
  * Delivery rows with the connector-gated ones (Cycle time, MTTR) replaced by
@@ -1287,8 +1328,12 @@ function execBand(audit: AuditJson, isOrg: boolean): string {
       .map((d) => {
         const tipText = headlineTipText(d.label, d.check_id);
         if (d.gated && deliveryValueAbsent(d.display_value)) {
-          // A row-specific note ("Jira connected — tickets lack
-          // status-transition history") beats the generic default.
+          // Tracker connected but no measurable data → short placeholder in
+          // the cell, full note in the tooltip (and in Connections & Sources).
+          // Without any note the generic needs-connector default applies.
+          if (d.gated === 'tracker' && d.note) {
+            return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${tip(NO_TICKETS_NOTE, d.note)}</span></div>`;
+          }
           const note = d.note ? `— (${d.note})` : gatedConnectorNote(d.gated);
           return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${esc(note)}</span></div>`;
         }
@@ -1412,7 +1457,7 @@ function dimensionSummary(audit: AuditJson): string {
   let mScored = 0;
   let mExecuted = 0;
   let mSupported = 0;
-  for (const dim of audit.dimensions) {
+  for (const dim of audit.dimensions ?? []) {
     for (const c of dim.checks) {
       mSupported++;
       if (c.status !== 'SKIP') mExecuted++;
@@ -1442,7 +1487,7 @@ function dimensionSummary(audit: AuditJson): string {
       '</tr></thead><tbody>'
   );
   let n = 1;
-  for (const dim of audit.dimensions) {
+  for (const dim of audit.dimensions ?? []) {
     const counts = statusCounts(dim);
     const covPct = pct(dim.coverage ?? 0);
     const lowCov = (dim.coverage ?? 0) < 0.4 ? ' low-cov' : '';
@@ -1721,7 +1766,10 @@ function dimensionPage(
 // ─── Repositories & Connections (org mode + single-repo note) ──────────────
 // Task 5.3: delivery columns + links to per-repo reports
 function reposSection(audit: AuditJson, isOrg: boolean): string {
-  const rows: string[] = ['<h2>Repositories</h2>'];
+  // id="repos" is the back-link target from per-repo reports (`← Back to org
+  // report` points at ../../report.html#repos), returning the reader to the
+  // Repositories table they navigated from instead of the page top.
+  const rows: string[] = ['<h2 id="repos">Repositories</h2>'];
   if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
     rows.push(
       '<table><thead><tr>' +
@@ -1763,7 +1811,7 @@ function reposSection(audit: AuditJson, isOrg: boolean): string {
     rows.push('<p class="footnote">² MTTR requires an incident connector.</p>');
   } else {
     rows.push(
-      `<p>Single-repo audit. Project: <strong>${esc(audit.project)}</strong>. ${audit.dimensions.length} dimension(s) evaluated.</p>`
+      `<p>Single-repo audit. Project: <strong>${esc(audit.project)}</strong>. ${(audit.dimensions ?? []).length} dimension(s) evaluated.</p>`
     );
   }
   return rows.join('\n');
@@ -1837,8 +1885,14 @@ function connectionsSection(audit: AuditJson, isOrg: boolean): string {
           s.history_available_days < LIMITED_HISTORY_DAYS
             ? ` <em>(limited history ~${s.history_available_days} days)</em>`
             : '';
+        // The tracker line carries the full derived cycle-time explanation —
+        // the headline cell shows only the short "no tickets data" placeholder.
+        const derivedNote =
+          s.source === 'tracker' && trackerConnectionNote(audit)
+            ? ` — ${esc(trackerConnectionNote(audit)!)}`
+            : '';
         const label = sourceFullLabel(s.source, audit.source_windows);
-        rows.push(`<li>${esc(label)}${limitedNote}</li>`);
+        rows.push(`<li>${esc(label)}${limitedNote}${derivedNote}</li>`);
       }
       rows.push('</ul>');
     }
@@ -2091,7 +2145,11 @@ route();
 `;
 
   // ─── Assemble HTML ─────────────────────────────────────────────────────────
-  const dimPages = audit.dimensions
+  // Dimension drill-down pages are single-repo only: an org portfolio JSON
+  // carries no legitimate top-level dimensions (rollup emits none; a
+  // concatenation of every repo's dimensions would render duplicate rows),
+  // so org mode ignores any that are present.
+  const dimPages = (isOrg ? [] : (audit.dimensions ?? []))
     .map((d, idx, all) => dimensionPage(audit, d, idx, all))
     .join('\n');
 
@@ -2118,7 +2176,7 @@ ${opts.backLink ? `<div class="backlink"><a href="${esc(opts.backLink)}">← Bac
 ${execBand(audit, isOrg)}
 ${insightsSection(audit)}
 ${recommendationsSection(audit)}
-${dimensionSummary(audit)}
+${isOrg ? '' : dimensionSummary(audit)}
 ${reposSection(audit, isOrg)}
 ${connectionsSection(audit, isOrg)}
 ${techStackSection(audit, isOrg)}

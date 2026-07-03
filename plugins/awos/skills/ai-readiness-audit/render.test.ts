@@ -1569,7 +1569,7 @@ test('fully-patched audit (no PENDING_JUDGMENT) shows no pending indicator', () 
 // the generic "needs X connector" default in BOTH renderers.
 // ---------------------------------------------------------------------------
 
-test('gated delivery row with a note renders "— (<note>)" instead of the generic default, in HTML and Markdown', () => {
+test('gated tracker row with a note renders the short "no tickets data" placeholder — the full note moves to the tooltip and Connections & Sources', () => {
   const delivery: DeliveryMetric[] = [
     {
       label: 'Cycle time (In-Progress→Done)',
@@ -1579,14 +1579,26 @@ test('gated delivery row with a note renders "— (<note>)" instead of the gener
     // Control row: gated without a note keeps the generic default.
     { label: 'MTTR', gated: 'incident' },
   ];
-  const audit = makeAudit({ headline: { delivery } });
+  const audit = makeAudit({
+    headline: { delivery },
+    sources: [
+      {
+        source: 'tracker',
+        available: true,
+        reason_if_absent: null,
+        history_available_days: 365,
+      },
+    ],
+  });
 
   const html = renderHtml(audit);
   assert.ok(
-    html.includes(
-      '— (Jira connected — tickets lack status-transition history)'
-    ),
-    'HTML gated row with a note must render "— (<note>)"'
+    html.includes('— (no tickets data)'),
+    'HTML gated tracker row with a note must render the short "— (no tickets data)" placeholder, not the full explanation'
+  );
+  assert.ok(
+    html.includes('Jira connected — tickets lack status-transition history'),
+    'HTML must still carry the full note (value tooltip + Connections & Sources)'
   );
   assert.ok(
     html.includes('needs incident connector'),
@@ -1599,8 +1611,12 @@ test('gated delivery row with a note renders "— (<note>)" instead of the gener
 
   const md = renderMarkdown(audit);
   assert.ok(
-    md.includes('— (Jira connected — tickets lack status-transition history)'),
-    'Markdown gated row with a note must render "— (<note>)"'
+    md.includes('— (no tickets data)'),
+    'Markdown gated tracker row with a note must render the short placeholder in the Delivery table'
+  );
+  assert.ok(
+    md.includes('Jira connected — tickets lack status-transition history'),
+    'Markdown must carry the full note on the Connections & Sources tracker line'
   );
   assert.ok(
     md.includes('needs incident connector'),
@@ -1612,7 +1628,7 @@ test('gated delivery row with a note renders "— (<note>)" instead of the gener
   );
 });
 
-test('gated delivery note is escaped: pipes cannot break the Markdown table, angle brackets cannot inject HTML', () => {
+test('gated delivery note is escaped: angle brackets cannot inject HTML via the value tooltip', () => {
   const delivery: DeliveryMetric[] = [
     {
       label: 'Cycle time (In-Progress→Done)',
@@ -1623,13 +1639,13 @@ test('gated delivery note is escaped: pipes cannot break the Markdown table, ang
   const audit = makeAudit({ headline: { delivery } });
   const md = renderMarkdown(audit);
   assert.ok(
-    md.includes('a\\|b'),
-    'Markdown gated note must escape pipes via mdCell'
+    md.includes('— (no tickets data)'),
+    'Markdown gated tracker note renders as the short placeholder — the raw note (with pipes) never enters the table'
   );
   const html = renderHtml(audit);
   assert.ok(
     !html.includes('<script>x</script>'),
-    'HTML gated note must be escaped, never injected as markup'
+    'HTML gated note must be escaped, never injected as markup (it now lives in the value tooltip)'
   );
   assert.ok(
     html.includes('&lt;script&gt;'),

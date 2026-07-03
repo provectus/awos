@@ -478,7 +478,11 @@ async function main(): Promise<void> {
         // orchestrator doesn't have to remember a flag.
         const isPerRepo = /[\\/]per-repo[\\/][^\\/]+[\\/]?$/.test(resolve(dir));
         const mdOpts = isPerRepo ? { backLink: '../../report.md' } : {};
-        const htmlOpts = isPerRepo ? { backLink: '../../report.html' } : {};
+        // #repos returns the reader to the org Repositories table (the place
+        // they navigated from) instead of the top of the org report.
+        const htmlOpts = isPerRepo
+          ? { backLink: '../../report.html#repos' }
+          : {};
         writeFileSync(
           join(dir, 'report.md'),
           renderMarkdown(audit, mdOpts) + '\n'

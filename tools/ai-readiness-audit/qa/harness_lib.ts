@@ -246,9 +246,11 @@ export interface SmokeSignals {
 const HAND_COMPUTE_RE = /\bpython3?\s+-c\b|\bnode\s+(-e|--eval)\b/;
 const REPORT_FILE_RE = /report\.(md|html)$/;
 const AUDIT_JSON_WRITE_RE = /context\/audits\/[^\s'"]*\.json/;
-// The two files SKILL.md sanctions the orchestrator to author, each consumed
-// by its own engine verb (patch-judgment / patch-report).
-const SANCTIONED_AUTHORED_JSON = /(judgments|report-blocks)\.json$/;
+// The files SKILL.md sanctions the orchestrator to author: the two engine-verb
+// inputs (judgments.json / report-blocks.json) and the connector artifacts
+// under collected/ (mapping reachable MCP/CLI data is Step 6.1's job).
+const SANCTIONED_AUTHORED_JSON =
+  /(judgments|report-blocks)\.json$|\/collected\/[^/]+\.json$/;
 
 /**
  * Scan a parsed stream-json transcript for go-wild signals. Complements
@@ -486,6 +488,90 @@ export function scanJudgmentsPatched(archivedDir: string): boolean | null {
 }
 
 // ---------------------------------------------------------------------------
+// Project-scope MCP config discovery
+// ---------------------------------------------------------------------------
+// The audit assesses the PROJECT, not the auditor's environment: harness runs
+// stay `--strict-mcp-config` (user-scope servers never leak in), but the
+// target's own declared MCP servers ARE part of the audited project — so they
+// are discovered here, merged, and passed back explicitly via `--mcp-config`.
+
+/** Config locations checked in each scanned directory, in precedence order. */
+export const MCP_CONFIG_CANDIDATES = [
+  '.mcp.json',
+  'mcp.json',
+  '.vscode/mcp.json',
+  '.cursor/mcp.json',
+];
+
+/**
+ * Read one MCP config file and normalize to claude's `{mcpServers}` shape.
+ * VS Code's `.vscode/mcp.json` uses a `servers` key; claude/Cursor use
+ * `mcpServers`. Returns null when unreadable or neither key is present.
+ */
+export function readMcpServers(
+  configPath: string
+): Record<string, unknown> | null {
+  let doc: any;
+  try {
+    doc = readJson(configPath);
+  } catch {
+    return null;
+  }
+  const servers = doc?.mcpServers ?? doc?.servers;
+  if (!servers || typeof servers !== 'object' || Array.isArray(servers)) {
+    return null;
+  }
+  return servers as Record<string, unknown>;
+}
+
+export interface DiscoveredMcp {
+  /** Config files that contributed servers (absolute paths). */
+  files: string[];
+  /** Merged, name-collision-safe server map (claude `mcpServers` shape). */
+  servers: Record<string, unknown>;
+}
+
+/**
+ * Discover project-declared MCP servers for a target: the target directory
+ * itself plus (org mode) each repo subdirectory. Identical duplicate
+ * definitions collapse; a name collision with a DIFFERENT definition gets the
+ * later one suffixed with its directory name so no declared server is lost.
+ */
+export function discoverProjectMcp(
+  target: string,
+  repoDirs: string[] = []
+): DiscoveredMcp {
+  const files: string[] = [];
+  const servers: Record<string, unknown> = {};
+  for (const dir of [target, ...repoDirs]) {
+    for (const rel of MCP_CONFIG_CANDIDATES) {
+      const p = path.join(dir, rel);
+      if (!isFile(p)) continue;
+      const found = readMcpServers(p);
+      if (!found || Object.keys(found).length === 0) continue;
+      files.push(p);
+      for (const [name, def] of Object.entries(found)) {
+        if (!(name in servers)) {
+          servers[name] = def;
+        } else if (JSON.stringify(servers[name]) !== JSON.stringify(def)) {
+          servers[`${name}__${path.basename(dir)}`] = def;
+        }
+      }
+    }
+  }
+  return { files, servers };
+}
+
+/** Immediate subdirectories of `dir` that are git repos (org-mode repo set). */
+export function gitRepoSubdirs(dir: string): string[] {
+  if (!isDir(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .map((n) => path.join(dir, n))
+    .filter((p) => isDir(p) && fs.existsSync(path.join(p, '.git')));
+}
+
+// ---------------------------------------------------------------------------
 // Marketplace repointing
 // ---------------------------------------------------------------------------
 // The awos-marketplace is a DIRECTORY source: `claude` serves the plugin live
@@ -495,50 +581,51 @@ export function scanJudgmentsPatched(archivedDir: string): boolean | null {
 // Shared by run_audit_test.ts (full harness) and compliance_smoke.ts.
 
 export interface MarketPaths {
-  km_source_path: string | null;
+  /** Verbatim snapshot of the known_marketplaces entry's `source` object. */
+  km_source: unknown;
   km_install: string | null;
-  settings_source_path: string | null;
+  /** Verbatim snapshot of the settings extraKnownMarketplaces entry's `source` object. */
+  settings_source: unknown;
 }
 
-/** Current awos-marketplace source.path + installLocation, from both config files. */
+/** Current awos-marketplace source + installLocation, from both config files. */
 export function marketplacePaths(): MarketPaths {
   const km = readJson(KM_PATH);
   const s = readJson(SETTINGS);
   const m = km[MARKET_NAME] ?? {};
   return {
-    km_source_path: m.source?.path ?? null,
+    km_source: m.source ?? null,
     km_install: m.installLocation ?? null,
-    settings_source_path:
-      s.extraKnownMarketplaces?.[MARKET_NAME]?.source?.path ?? null,
+    settings_source: s.extraKnownMarketplaces?.[MARKET_NAME]?.source ?? null,
   };
 }
 
 /**
- * Write the marketplace paths (each config file gets its OWN source path)
- * and refresh via `claude plugin marketplace update`. Returns the completed
- * update process so callers can check its exit status.
+ * Write the marketplace source objects VERBATIM (each config file gets its
+ * own) and refresh via `claude plugin marketplace update`. The whole `source`
+ * object is replaced, never just its `path`: the entry can be github-shaped
+ * (`{source: "github", repo}`), and mutating only `path`/`installLocation`
+ * on such an entry leaves a hybrid that claude rejects as a "corrupted
+ * installLocation" (seen 2026-07-03). Returns the update process result so
+ * callers can check its exit status.
  */
 export function setMarketplacePaths(
-  kmSourcePath: string | null,
+  kmSource: unknown,
   install: string | null,
-  settingsSourcePath: string | null
+  settingsSource: unknown
 ): { returncode: number; stdout: string; stderr: string } {
   const km = readJson(KM_PATH);
   const s = readJson(SETTINGS);
   if (!(MARKET_NAME in km)) {
     throw new Error(`marketplace '${MARKET_NAME}' not in ${KM_PATH}`);
   }
-  if (!km[MARKET_NAME].source) km[MARKET_NAME].source = {};
-  km[MARKET_NAME].source.path = kmSourcePath;
+  km[MARKET_NAME].source = kmSource;
   km[MARKET_NAME].installLocation = install;
   if (!s.extraKnownMarketplaces) s.extraKnownMarketplaces = {};
   if (!s.extraKnownMarketplaces[MARKET_NAME]) {
     s.extraKnownMarketplaces[MARKET_NAME] = {};
   }
-  if (!s.extraKnownMarketplaces[MARKET_NAME].source) {
-    s.extraKnownMarketplaces[MARKET_NAME].source = {};
-  }
-  s.extraKnownMarketplaces[MARKET_NAME].source.path = settingsSourcePath;
+  s.extraKnownMarketplaces[MARKET_NAME].source = settingsSource;
   fs.writeFileSync(KM_PATH, JSON.stringify(km, null, 2));
   fs.writeFileSync(SETTINGS, JSON.stringify(s, null, 2));
   const up = spawnSync(
@@ -551,6 +638,11 @@ export function setMarketplacePaths(
     stdout: up.stdout || '',
     stderr: up.error ? String(up.error) : up.stderr || '',
   };
+}
+
+/** A well-formed directory-source object pointing at `dir`. */
+function directorySource(dir: string): Record<string, unknown> {
+  return { source: 'directory', path: dir };
 }
 
 /**
@@ -570,15 +662,15 @@ export function repointMarketplace(worktree: string): [MarketPaths, string] {
   }
   if (!isFile(skill)) throw new Error(`worktree has no SKILL.md at ${skill}`);
   const orig = marketplacePaths();
-  const up = setMarketplacePaths(worktree, worktree, worktree);
+  const up = setMarketplacePaths(
+    directorySource(worktree),
+    worktree,
+    directorySource(worktree)
+  );
   if (up.returncode !== 0) {
     // Roll back the config edits before dying — a failed refresh must not
     // leave the marketplace files pointing at the worktree.
-    setMarketplacePaths(
-      orig.km_source_path,
-      orig.km_install,
-      orig.settings_source_path
-    );
+    setMarketplacePaths(orig.km_source, orig.km_install, orig.settings_source);
     throw new Error(
       `claude plugin marketplace update failed (rc=${up.returncode}): ` +
         (up.stderr || up.stdout).trim()
@@ -589,9 +681,9 @@ export function repointMarketplace(worktree: string): [MarketPaths, string] {
 
 export function restoreMarketplace(orig: MarketPaths): void {
   const up = setMarketplacePaths(
-    orig.km_source_path,
+    orig.km_source,
     orig.km_install,
-    orig.settings_source_path
+    orig.settings_source
   );
   if (up.returncode !== 0) {
     const w = (m: string) => process.stderr.write(m + '\n');

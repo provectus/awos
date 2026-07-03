@@ -574,12 +574,13 @@ export function renderMarkdown(
   // Executive headline blocks (delivery / scale / reach)
   if (audit.headline) {
     const h = audit.headline;
-    if (h.delivery && h.delivery.length > 0) {
+    const deliveryRows = normalizedDelivery(audit);
+    if (deliveryRows.length > 0) {
       lines.push('## Delivery');
       lines.push('');
       lines.push('| Metric | Value | Band |');
       lines.push('| ------ | ----- | ---- |');
-      for (const d of h.delivery) {
+      for (const d of deliveryRows) {
         if (d.gated && deliveryValueAbsent(d.display_value)) {
           // A row-specific note ("Jira connected — tickets lack status-transition
           // history") beats the generic needs-connector default.
@@ -858,13 +859,21 @@ export function renderMarkdown(
       }
       lines.push('');
     }
-    if (missed.length > 0) {
+    const orphans = orphanProbes(audit) ?? [];
+    if (missed.length > 0 || orphans.length > 0) {
       lines.push('**Missed / limited:**');
       lines.push('');
       for (const s of missed) {
         const reason = s.reason_if_absent ? ` — ${s.reason_if_absent}` : '';
         const label = sourceFullLabel(s.source, audit.source_windows);
-        lines.push(`- ${label}${reason}`);
+        const probe = probeSuffix(audit, s.source);
+        lines.push(`- ${label}${reason}${probe.searched}${probe.outcome}`);
+      }
+      for (const p of orphans) {
+        const probe = probeSuffix(audit, p.source);
+        lines.push(
+          `- ${sourceFullLabel(p.source, audit.source_windows)}${probe.searched}${probe.outcome}`
+        );
       }
       lines.push('');
     }
@@ -1091,6 +1100,58 @@ function deliveryValueAbsent(v: string | undefined): boolean {
   return t === '' || t === '—' || t === '-';
 }
 
+/**
+ * Delivery rows with the connector-gated ones (Cycle time, MTTR) replaced by
+ * the ENGINE-derived versions when `audit.derived_delivery` is present. The
+ * value and the honest gated note both come from the tracker artifact, so the
+ * headline row can never contradict the Connections & Sources section.
+ * Authored gated rows are dropped (the orchestrator no longer authors them);
+ * audits without `derived_delivery` (older runs) render as authored.
+ */
+function normalizedDelivery(audit: AuditJson): DeliveryMetric[] {
+  const authored = audit.headline?.delivery ?? [];
+  const dd = audit.derived_delivery;
+  if (!dd) return authored;
+  const rows = authored.filter((d) => !d.gated);
+  rows.push({
+    label: 'Cycle time (In-Progress→Done)',
+    gated: 'tracker',
+    ...(dd.cycle_time.display_value
+      ? { display_value: dd.cycle_time.display_value }
+      : {}),
+    ...(dd.cycle_time.note ? { note: dd.cycle_time.note } : {}),
+  });
+  rows.push({
+    label: 'MTTR',
+    gated: 'incident',
+    ...(dd.mttr.note ? { note: dd.mttr.note } : {}),
+  });
+  return rows;
+}
+
+/**
+ * "searched: …" suffix for a Missed/limited line, from the orchestrator's
+ * probe log — makes WHY a source is absent visible (e.g. ".mcp.json has no
+ * tracker server; acli not installed").
+ */
+function probeSuffix(
+  audit: AuditJson,
+  source: string
+): { searched: string; outcome: string } {
+  const p = (audit.source_probes ?? []).find((x) => x.source === source);
+  return {
+    searched:
+      p && p.searched?.length ? ` — searched: ${p.searched.join('; ')}` : '',
+    outcome: p?.outcome ? ` (${p.outcome})` : '',
+  };
+}
+
+/** Probes for sources that have no sources[] row at all (e.g. "incident"). */
+function orphanProbes(audit: AuditJson): AuditJson['source_probes'] {
+  const known = new Set((audit.sources ?? []).map((s) => s.source));
+  return (audit.source_probes ?? []).filter((p) => !known.has(p.source));
+}
+
 const SEVERITY_COLOR: Record<string, string> = {
   high: '#ef4444',
   medium: '#eab308',
@@ -1307,8 +1368,9 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
       return tip(value, plain, `${c.check_id} · status ${c.status}`);
     };
 
-    if (h?.delivery && h.delivery.length > 0) {
-      const items = h.delivery
+    const deliveryRowsHtml = normalizedDelivery(audit);
+    if (h && deliveryRowsHtml.length > 0) {
+      const items = deliveryRowsHtml
         .map((d) => {
           const tipText = headlineTipText(d.label, d.check_id);
           if (d.gated && deliveryValueAbsent(d.display_value)) {
@@ -1871,14 +1933,24 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         }
         rows.push('</ul>');
       }
-      if (missed.length > 0) {
+      const orphans = orphanProbes(audit) ?? [];
+      if (missed.length > 0 || orphans.length > 0) {
         rows.push('<h3>Missed / limited</h3><ul>');
         for (const s of missed) {
           const reason = s.reason_if_absent
             ? ` — ${esc(s.reason_if_absent)}`
             : '';
           const label = sourceFullLabel(s.source, audit.source_windows);
-          rows.push(`<li>${esc(label)}${reason}</li>`);
+          const probe = probeSuffix(audit, s.source);
+          rows.push(
+            `<li>${esc(label)}${reason}${esc(probe.searched)}${esc(probe.outcome)}</li>`
+          );
+        }
+        for (const p of orphans) {
+          const probe = probeSuffix(audit, p.source);
+          rows.push(
+            `<li>${esc(sourceFullLabel(p.source, audit.source_windows))}${esc(probe.searched)}${esc(probe.outcome)}</li>`
+          );
         }
         rows.push('</ul>');
       }

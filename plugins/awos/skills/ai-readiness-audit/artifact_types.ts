@@ -134,6 +134,38 @@ export interface EngineProvenance {
   generated_by: 'audit-core';
 }
 
+/**
+ * Connector-gated headline rows (Cycle time, MTTR) computed by the ENGINE
+ * from the tracker artifact — never authored by the orchestrator. Derived at
+ * audit-core/enrich/aggregate time so the headline row and the Connections &
+ * Sources section can never disagree (both read the same artifact).
+ */
+export interface DerivedDelivery {
+  cycle_time: {
+    /** Median In-Progress→Done, e.g. "3.2 d". Absent when not computable. */
+    display_value?: string;
+    median_days?: number;
+    tickets_used?: number;
+    /** Honest state when the row stays empty (e.g. "Jira connected — per-ticket status history not fetched"). */
+    note?: string;
+  };
+  mttr: {
+    note?: string;
+  };
+}
+
+/**
+ * What the orchestrator actually probed for a data source before declaring it
+ * unreachable (mcp.json files, CLIs, auth state). Rendered into the
+ * "Missed / limited" list so the reader sees WHY a source is absent —
+ * e.g. ".mcp.json has no tracker server; acli not installed".
+ */
+export interface SourceProbe {
+  source: string;
+  searched: string[];
+  outcome?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Report blocks (orchestrator-authored; all optional on AuditJson)
 // ---------------------------------------------------------------------------
@@ -307,6 +339,10 @@ export interface AuditJson {
   linked_repos?: LinkedRepo[];
   tech_stack?: TechStack;
   detection_conflicts?: DetectionConflict[];
+  /** Engine-computed connector-gated headline rows — see DerivedDelivery. */
+  derived_delivery?: DerivedDelivery;
+  /** Orchestrator probe log per unreachable source — see SourceProbe. */
+  source_probes?: SourceProbe[];
   /** Provenance stamp written only by audit-core — see EngineProvenance. */
   engine?: EngineProvenance;
 }

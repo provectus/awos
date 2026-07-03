@@ -43,7 +43,9 @@ import {
   assessEngineCompliance,
   awosMainCheckout,
   collectReportHtml,
+  discoverProjectMcp,
   formatWallTime,
+  gitRepoSubdirs,
   isDir,
   isFile,
   locateOutDir,
@@ -687,6 +689,28 @@ async function main(): Promise<void> {
       // Slack, Gmail, ...) leak into the audited session even with
       // --setting-sources project — a test audit could pull live data.
       claudeFlags = [...claudeFlags, '--strict-mcp-config'];
+    }
+    // The target's OWN declared MCP servers are part of the audited project
+    // (the audit assesses the project, not the auditor's environment) — pass
+    // them back explicitly; --strict-mcp-config honors explicit --mcp-config.
+    // Org mode: the org folder's configs plus every repo subdirectory's.
+    const repoDirs = fs.existsSync(path.join(target, '.git'))
+      ? []
+      : gitRepoSubdirs(target);
+    const projectMcp = discoverProjectMcp(target, repoDirs);
+    if (Object.keys(projectMcp.servers).length > 0) {
+      const mcpConfigPath = path.join(runDir, 'mcp-config.json');
+      fs.writeFileSync(
+        mcpConfigPath,
+        JSON.stringify({ mcpServers: projectMcp.servers }, null, 2)
+      );
+      claudeFlags = [...claudeFlags, '--mcp-config', mcpConfigPath];
+      log(
+        `▶ project MCP servers: ${Object.keys(projectMcp.servers).join(', ')} ` +
+          `(from ${projectMcp.files.length} config file(s))`
+      );
+    } else {
+      log('▶ project MCP servers: none declared in target');
     }
     const audits = path.join(target, 'context/audits');
 

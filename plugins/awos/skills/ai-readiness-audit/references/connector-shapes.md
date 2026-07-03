@@ -300,13 +300,9 @@ Tracker (Jira) → `collected/tracker.json`:
 #    pagination or the changelog pass stopped early.
 # 4. Write it once (after all pages are accumulated):
 #    context/audits/YYYY-MM-DD/collected/tracker.json
-# 5. Re-run the tracker metrics, then re-aggregate:
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i1_work_mix "<repoPath>" "context/audits/YYYY-MM-DD/collected"
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i2_throughput "<repoPath>" "context/audits/YYYY-MM-DD/collected"
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i3_mttr "<repoPath>" "context/audits/YYYY-MM-DD/collected"
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i4_subtask_split "<repoPath>" "context/audits/YYYY-MM-DD/collected"
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i5_description_quality "<repoPath>" "context/audits/YYYY-MM-DD/collected"
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
+# 5. After ALL reachable sources' artifacts are written, one enrich pass
+#    re-scores everything (never a metric call per source):
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" enrich "<repoPath>" "context/audits/YYYY-MM-DD"
 ```
 
 Docs (Confluence) → `collected/docs.json`:
@@ -316,9 +312,8 @@ Docs (Confluence) → `collected/docs.json`:
 #    searchConfluenceUsingCql with cql = "lastmodified >= now('-180d')").
 # 2. Map each page to a DocPage {title, url, updated_at} and wrap as a
 #    DocsConnector {pages: [...]}.
-# 3. Write context/audits/YYYY-MM-DD/collected/docs.json, then:
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_d1 "<repoPath>" "context/audits/YYYY-MM-DD/collected"
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" aggregate "context/audits/YYYY-MM-DD"
+# 3. Write context/audits/YYYY-MM-DD/collected/docs.json. The same single
+#    enrich pass (see the tracker recipe) re-scores it — no per-metric calls.
 ```
 
 ## Data-source resolution protocol
@@ -330,6 +325,59 @@ A reachable tracker/docs/incident MCP is enriched by default — fetching and ma
    ```
    node "${CLAUDE_SKILL_DIR}/dist/cli.js" enrich "<repoPath>" "context/audits/YYYY-MM-DD"
    ```
-3. **On failure or unclear mapping** (auth error, unfamiliar schema, broken dependency, empty result, closed port) — do not silently skip. In interactive mode, use `AskUserQuestion` with three options: mark unavailable (record the reason) / retry with guidance / show how to fix (link to this document). In headless `claude -p` runs (no interactive user), default to marking the source unavailable and record the _actual_ failure reason plus a remediation hint in the report's `missed_sources` list — the real cause (e.g. "Jira MCP returned 401"), never "no connector provided" when an MCP was in fact reachable.
+3. **On failure or unclear mapping** (auth error, unfamiliar schema, broken dependency, empty result, closed port) — do not silently skip. In interactive mode, use `AskUserQuestion` with three options: mark unavailable (record the reason) / retry with guidance / show how to fix (link to this document). In headless `claude -p` runs (no interactive user), default to marking the source unavailable and record the _actual_ failure in the source's `source_probes` entry (authored into `report-blocks.json`) — the real cause (e.g. "atlassian MCP (401 unauthorized)"), never "no connector provided" when a channel was in fact reachable.
 
 Never drop a reachable source without a recorded reason.
+
+## CLI channels
+
+When no MCP server in the session covers a source, CLI tools on PATH are the sanctioned fallback channel. MCP servers count only when the project declares them (the audit assesses the project, not the auditor's environment); CLIs are excused because a repo cannot ship them — they are measurement channels, not project capability. Label the artifact honestly (`period.source_label`: `"Jira via acli"`, `"GitHub Actions via gh"`) so the report shows the real channel. Probe each CLI with a cheap auth check before use, and log every probe (hit or miss) into the source's `source_probes` entry.
+
+### Identity discovery — what to query
+
+- **GitHub / GitLab project**: `git remote get-url origin` → `owner/repo` (works for both hosts; strip `.git`). No further discovery needed — `gh`/`glab` commands below take it from the working directory.
+- **Jira project key**: scan the repo's own history — `git log --format='%s' -500` plus branch names — for ticket references matching `\b[A-Z][A-Z0-9]{1,9}-[0-9]+\b`; the dominant prefix is the project key (e.g. `IGAL`). Verify it before trusting it: `acli jira project view <KEY>` must succeed. No dominant prefix or verification failure → record "no Jira project key derivable from history" in the probe log and stop; never guess a key.
+
+### CI runs → `collected/ci.json` (gh / glab)
+
+```
+# Probe: gh auth status   (or: glab auth status)
+# Fetch a bounded recent run history:
+gh run list --limit 200 --json databaseId,status,conclusion,createdAt,updatedAt,workflowName
+# (GitLab: glab ci list --per-page 100 --output json)
+# Map into the CiConnector shape: runs[] entries pass through opaquely;
+# set period.source_label: "GitHub Actions via gh" (or "GitLab CI via glab").
+```
+
+This alone upgrades the CI source from "config detected but no run history" to scored pipeline metrics — no MCP required.
+
+### Tracker via acli (Jira) → `collected/tracker.json`
+
+```
+# Probe: acli jira auth status   (any non-error output = authenticated)
+# 1. Derive + verify the project key (see identity discovery above).
+# 2. Fetch a bounded resolved window:
+acli jira workitem search --jql "project = <KEY> AND statusCategory = Done AND resolved >= -180d ORDER BY resolved DESC" --json
+#    plus a second query without the statusCategory filter for open work-mix.
+# 3. Changelog pass for cycle time: fetch per-issue status history for the ~50
+#    most recently resolved issues (acli jira workitem view <KEY-N> --json — if
+#    the installed acli version exposes no changelog/history field, leave
+#    in_progress_at unset; the engine then reports "connected — per-ticket
+#    status history not fetched" honestly).
+# 4. Map to TicketRecord[] exactly as the MCP recipe above; source_label: "Jira via acli".
+```
+
+### Tracker via gh/glab issues → `collected/tracker.json`
+
+Code-host issues are a legitimate tracker when nothing richer exists:
+
+```
+gh issue list --state all --limit 500 --json number,title,state,createdAt,closedAt,labels
+# (GitLab: glab issue list --output json)
+# Map: id ← number, created_at ← createdAt, resolved_at ← closedAt (closed only),
+# type ← from labels when present (bug/feature), in_progress_at ← omit (issues
+# carry no status transitions) — work-mix and throughput score; cycle time
+# stays gated with the engine's honest note. source_label: "GitHub Issues via gh".
+```
+
+Prefer richer sources when several are reachable: tracker MCP > acli > code-host issues. One tracker artifact only — never merge channels.

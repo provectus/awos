@@ -359,7 +359,11 @@ function readPerRepoAudit(
       ? row.display_value
       : null;
   };
-  delivery.cycle_time = gatedDisplay('tracker');
+  // Engine-derived rows (audit.derived_delivery) win over authored headline
+  // rows — same precedence as the renderer, same artifact truth.
+  delivery.cycle_time =
+    audit.derived_delivery?.cycle_time?.display_value ??
+    gatedDisplay('tracker');
   delivery.mttr = gatedDisplay('incident');
 
   // Merges/LOC per active contributor from the git artifact (best-effort).

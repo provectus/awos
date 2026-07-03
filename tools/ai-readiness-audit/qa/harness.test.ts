@@ -13,6 +13,7 @@ import {
   assessEngineCompliance,
   collectReportHtml,
   complianceFromTranscript,
+  discoverProjectMcp,
   formatWallTime,
   scanJudgmentsPatched,
   smokeSignalsFromTranscript,
@@ -245,6 +246,10 @@ test('smokeSignalsFromTranscript flags hand-written artifacts, inline compute, a
     toolUse('Bash', {
       command: "cat > context/audits/2026-07-03/judgments.json <<'JSON'",
     }),
+    // Connector artifact mapping is Step 6.1's sanctioned job — never a violation.
+    toolUse('Write', {
+      file_path: 'context/audits/2026-07-03/collected/tracker.json',
+    }),
     text('Which repos should I include in the audit scope?'),
   ]);
   assert.equal(
@@ -255,7 +260,7 @@ test('smokeSignalsFromTranscript flags hand-written artifacts, inline compute, a
   assert.equal(
     sig.hand_json_writes,
     2,
-    'Edit of audit.json + shell redirect into spec.json count; judgments.json/report-blocks.json writes are the sanctioned exceptions'
+    'Edit of audit.json + shell redirect into spec.json count; judgments.json/report-blocks.json/collected/*.json writes are the sanctioned exceptions'
   );
   assert.equal(
     sig.hand_compute_calls,
@@ -452,5 +457,49 @@ test('summarizeOutput reads single-repo and org archives', () => {
     summarizeOutput(org),
     { mode: 'org', portfolio_metrics: { mean: 1 }, repos: 2 },
     'org mode counts per-repo/*/audit.json and surfaces portfolio_metrics'
+  );
+});
+
+test('discoverProjectMcp: target + repo configs merge, VS Code shape normalizes, collisions get suffixed', () => {
+  const dir = tmp();
+  const write = (rel: string, doc: unknown) => {
+    const p = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(doc));
+  };
+  // Org folder: VS Code-shaped config ({servers} key, not {mcpServers}).
+  write('.vscode/mcp.json', {
+    servers: { tracker: { type: 'http', url: 'https://org.example/mcp' } },
+  });
+  // Repo A declares its own server + a colliding "tracker" with a DIFFERENT url.
+  write('repoA/.mcp.json', {
+    mcpServers: {
+      barley: { type: 'http', url: 'https://barley.example/mcp' },
+      tracker: { type: 'http', url: 'https://repoA.example/mcp' },
+    },
+  });
+  // Repo B re-declares "barley" IDENTICALLY — must collapse, not duplicate.
+  write('repoB/mcp.json', {
+    mcpServers: { barley: { type: 'http', url: 'https://barley.example/mcp' } },
+  });
+
+  const found = discoverProjectMcp(dir, [
+    path.join(dir, 'repoA'),
+    path.join(dir, 'repoB'),
+  ]);
+  assert.deepEqual(
+    Object.keys(found.servers).sort(),
+    ['barley', 'tracker', 'tracker__repoA'],
+    'org tracker kept, repoA collision suffixed, identical barley collapsed'
+  );
+  assert.equal(
+    found.files.length,
+    3,
+    'every contributing config file is reported for the probe log'
+  );
+  assert.equal(
+    (found.servers['tracker'] as any).url,
+    'https://org.example/mcp',
+    'the VS Code {servers} shape must normalize into mcpServers entries'
   );
 });

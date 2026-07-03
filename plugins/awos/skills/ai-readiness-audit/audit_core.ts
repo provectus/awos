@@ -24,7 +24,11 @@ import { mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 
 import { loadStandards, metaNumber } from './metrics/_base.ts';
-import type { CheckStatus, WrittenCheck } from './artifact_types.ts';
+import type {
+  CheckStatus,
+  DerivedDelivery,
+  WrittenCheck,
+} from './artifact_types.ts';
 import { SOURCE_LABEL_DEFAULTS } from './artifact_types.ts';
 import {
   computeTopology,
@@ -56,6 +60,71 @@ import { collect as collectDocs } from './collectors/docs.ts';
 // is actually running the engine.
 // ---------------------------------------------------------------------------
 export const ENGINE_PROVENANCE = { generated_by: 'audit-core' } as const;
+
+/**
+ * Compute the connector-gated headline rows (Cycle time, MTTR) from the
+ * tracker artifact — deterministically, in the engine. A model-authored row
+ * once said "needs ticketing connector" while "Connected: Jira via Atlassian
+ * MCP" sat two sections up (barley 2026-07-02, 994 tickets fetched, zero
+ * changelogs); deriving both the value and the honest gated note from the
+ * SAME artifact makes that contradiction impossible.
+ */
+export function computeDerivedDelivery(collectedDir: string): DerivedDelivery {
+  let tracker: Record<string, unknown> | null = null;
+  try {
+    tracker = JSON.parse(
+      readFileSync(join(collectedDir, 'tracker.json'), 'utf8')
+    );
+  } catch {
+    tracker = null;
+  }
+  const out: DerivedDelivery = { cycle_time: {}, mttr: {} };
+  if (!tracker?.available) return out;
+
+  const raw = (tracker.raw ?? {}) as Record<string, unknown>;
+  const period = (tracker.period ?? {}) as Record<string, unknown>;
+  const label =
+    (period.source_label as string | undefined) ??
+    SOURCE_LABEL_DEFAULTS['tracker'] ??
+    'tracker';
+  const tickets = Array.isArray(raw.tickets)
+    ? (raw.tickets as Array<Record<string, unknown>>)
+    : [];
+  const resolved = tickets.filter((t) => t.resolved_at);
+  const spans = resolved
+    .map((t) => {
+      if (!t.in_progress_at) return null;
+      const start = Date.parse(String(t.in_progress_at));
+      const end = Date.parse(String(t.resolved_at));
+      if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
+      return (end - start) / 86_400_000;
+    })
+    .filter((d): d is number => d !== null)
+    .sort((a, b) => a - b);
+
+  if (spans.length > 0) {
+    const mid = Math.floor(spans.length / 2);
+    const median =
+      spans.length % 2 === 1 ? spans[mid] : (spans[mid - 1] + spans[mid]) / 2;
+    out.cycle_time.median_days = Math.round(median * 10) / 10;
+    out.cycle_time.tickets_used = spans.length;
+    out.cycle_time.display_value = `${out.cycle_time.median_days} d`;
+    const fm = raw.fetch_meta as Record<string, unknown> | undefined;
+    if (fm && fm.complete === false) {
+      out.cycle_time.note = `partial fetch: ${fm.tickets_fetched ?? '?'} of ${fm.tickets_total ?? '?'} tickets`;
+    }
+  } else if (resolved.length > 0) {
+    out.cycle_time.note = `${label} connected — per-ticket status history not fetched`;
+  } else {
+    out.cycle_time.note = `${label} connected — no tickets resolved in window`;
+  }
+
+  const incident = raw.incident_source;
+  if (typeof incident === 'string' && incident) {
+    out.mttr.note = `incident source "${incident}" declared — no incident data mapped`;
+  }
+  return out;
+}
 
 /** True when `obj` carries the audit-core provenance stamp. */
 export function hasEngineProvenance(obj: unknown): boolean {
@@ -574,6 +643,7 @@ export async function auditCore(
     linked_repos: linkedRepos,
     tech_stack: techStack,
     detection_conflicts: detectionConflicts,
+    derived_delivery: computeDerivedDelivery(collectedDir),
     engine: ENGINE_PROVENANCE,
   };
   if (Object.keys(sourceWindows).length > 0)
@@ -768,6 +838,7 @@ export function aggregate(outDir: string): void {
     'headline',
     'insights',
     'recommendations',
+    'source_probes',
     'tech_stack',
     'linked_repos',
     'detection_conflicts',
@@ -775,6 +846,17 @@ export function aggregate(outDir: string): void {
   ]) {
     if (existing[block] !== undefined) audit[block] = existing[block];
   }
+  // Connector-gated headline rows: re-derive from the collected artifacts
+  // (same source of truth as `sources` below); keep the stored block when the
+  // artifacts are gone.
+  const derivedDelivery = computeDerivedDelivery(collectedDirAgg);
+  audit.derived_delivery =
+    derivedDelivery.cycle_time.display_value !== undefined ||
+    derivedDelivery.cycle_time.note !== undefined ||
+    derivedDelivery.mttr.note !== undefined ||
+    existing.derived_delivery === undefined
+      ? derivedDelivery
+      : existing.derived_delivery;
   // Prefer re-derived sources when collected/ artifacts are present; fall back
   // to the previously stored sources block so it is never silently dropped.
   if (derivedSources.length > 0) {
@@ -918,9 +1000,16 @@ export interface ReportBlocksPatch {
   headline?: Record<string, unknown>;
   insights?: unknown[];
   recommendations?: Array<Record<string, unknown>>;
+  /** Probe log per unreachable source — what was searched (mcp.json files, CLIs) and the outcome. */
+  source_probes?: Array<Record<string, unknown>>;
 }
 
-const REPORT_BLOCK_KEYS = ['headline', 'insights', 'recommendations'] as const;
+const REPORT_BLOCK_KEYS = [
+  'headline',
+  'insights',
+  'recommendations',
+  'source_probes',
+] as const;
 
 /**
  * Apply the orchestrator's plain-language report blocks (headline / insights /
@@ -971,7 +1060,7 @@ export function patchReportBlocks(
       patched.push('headline');
     }
   }
-  for (const key of ['insights', 'recommendations'] as const) {
+  for (const key of ['insights', 'recommendations', 'source_probes'] as const) {
     if (b[key] === undefined) continue;
     if (!Array.isArray(b[key])) {
       warnings.push(`${key} must be an array — skipped`);

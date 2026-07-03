@@ -47,12 +47,14 @@ The monorepo flag (`dimensions/project-topology.md` → TOPO-01) is set when a w
 
 Before prompting the user, the skill probes which connectors are reachable for each repository:
 
-| Connector     | Detection heuristic                                                                         |
-| ------------- | ------------------------------------------------------------------------------------------- |
-| Code host     | `gh` or `glab` on PATH, or a GitHub/GitLab MCP server present in the session                |
-| CI            | CI config files in-repo (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, etc.)       |
-| Issue tracker | Tracker references in docs or scripts (Jira project keys, Linear URLs, GitHub Issues links) |
-| Docs / wiki   | `confluence`, `coda`, or similar CLI on PATH, or a Confluence/Coda MCP server present       |
+| Connector     | Detection heuristic                                                                                                                                         |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code host     | `gh` or `glab` on PATH, or a GitHub/GitLab MCP server present in the session                                                                                |
+| CI            | CI config files in-repo (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, etc.); run history via `gh`/`glab`                                          |
+| Issue tracker | Tracker MCP in the session, `acli` on PATH (Jira), code-host issues via `gh`/`glab`, or tracker references in docs/commits (Jira project keys, Linear URLs) |
+| Docs / wiki   | `confluence`, `coda`, or similar CLI on PATH, or a Confluence/Coda MCP server present                                                                       |
+
+Boundary rule: the audit assesses the **project**, not the auditor's environment. MCP servers count only as the session provides them — in practice the project's own declared config (`.mcp.json`) — never the auditor's personal user-scope servers. CLI tools (`gh`, `glab`, `acli`) are the sanctioned exception: a repo cannot ship a CLI, so they act as measurement channels only (a project can still request them in its README). Fetch recipes and identity heuristics live in `connector-shapes.md` → "CLI channels".
 
 ---
 

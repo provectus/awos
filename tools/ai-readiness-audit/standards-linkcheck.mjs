@@ -7,7 +7,7 @@
  * Each unique URL is checked once; the category name(s) using it are shown.
  *
  * Usage:
- *   node scripts/standards-linkcheck.mjs [path/to/standards.toml] [--dry-run]
+ *   node tools/ai-readiness-audit/standards-linkcheck.mjs [path/to/standards.toml] [--dry-run]
  *
  * Exit codes:
  *   0 — all links are OK or REACHABLE-AUTH (paywall/auth-gate), or --dry-run
@@ -176,7 +176,7 @@ async function checkUrl(url) {
 
 const DEFAULT_TOML_PATH = resolve(
   fileURLToPath(import.meta.url),
-  '../../plugins/awos/skills/ai-readiness-audit/references/standards.toml'
+  '../../../plugins/awos/skills/ai-readiness-audit/references/standards.toml'
 );
 
 async function main() {

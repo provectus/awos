@@ -26,7 +26,7 @@ import {
 import { join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const skillRoot = join(
   repoRoot,
   'plugins',

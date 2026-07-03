@@ -39,7 +39,7 @@ After reviewing the proposal, apply it manually:
 
 1. For each category in `standards-refresh-patch.toml`, update the matching `[category.*]` block in `standards.toml` with the refreshed `source`, `url`, `date`, and `last_verified` fields.
 2. Apply the weight delta table from the proposal.
-3. Run `node scripts/standards-linkcheck.mjs` to confirm all per-category URLs resolve.
+3. Run `node tools/ai-readiness-audit/standards-linkcheck.mjs` to confirm all per-category URLs resolve.
 4. Open a PR with label `patch` (or `minor` if weights change materially).
 
 ## Methodology
@@ -85,7 +85,7 @@ Rules:
 - **Search by the metric's actual calculation, not the category label.** Before judging a source, read how the metric is really computed (`metrics/<id>.ts` / `detectors/*.ts`) — what it counts, over what window, with what threshold. Search for the backing source using *that* definition. A category named "loc_scale" whose code counts non-blank physical source lines needs a source that defines physical SLOC, not a generic "developer productivity" page. **We do not invent our own metric and then bolt on a loosely-related citation** — the source must back the thing the code actually measures.
 - **If a metric has no backing at all — it looks invented/hallucinated (no standard, no industry article defines or justifies the measurement) — do not manufacture a source. Stop and ask the user** with `AskUserQuestion`, offering to **drop the metric/category** (or its external claim) as one of the options. An unbacked metric is a bug to surface, not a citation to fake.
 - **Relevance, not just liveness.** A link is only valid if the fetched page explains the specific practice the category measures. A resolving-but-off-topic page — a product overview, a research index, a marketing page that merely mentions the topic — is a bad link even at HTTP 200. When the current link fails relevance, replace it; do not keep it because it resolves.
-- **Deep-link, never a site root.** The `url` must land on the specific page that explains the concept, never a bare domain root or landing page (`https://example.com/`). A domain root almost never defines the metric it is attached to. `node scripts/standards-linkcheck.mjs` fails on bare-root URLs — treat that as an error to fix, not a warning.
+- **Deep-link, never a site root.** The `url` must land on the specific page that explains the concept, never a bare domain root or landing page (`https://example.com/`). A domain root almost never defines the metric it is attached to. `node tools/ai-readiness-audit/standards-linkcheck.mjs` fails on bare-root URLs — treat that as an error to fix, not a warning.
 - **Recency.** Flag any source whose publication date is more than ~10 years old and search for a newer authoritative edition. Keep an old source only when it is the genuine canonical primary for the concept (e.g. McCabe 1976 for cyclomatic complexity) — and record that justification in the proposal. An old source attached to a metric it does not actually cover (e.g. a complexity paper on a plain LOC metric) is both stale and irrelevant: replace it.
 - For DOI references, use the doi.org URL as the canonical form (stable even when the landing page is paywalled). A 302 redirect from doi.org to a paywalled page (HTTP 403) is **not** a dead link — flag it as REACHABLE-AUTH and keep the DOI URL.
 - **Never fabricate a URL.** If WebFetch fails or returns 404/5xx, flag the link as DEAD and propose no replacement until a confirmed URL is found. A missing or stale link is far less harmful than a plausible-but-wrong one.
@@ -93,7 +93,7 @@ Rules:
 - For living documents (GitHub repositories, framework websites), record the date of the latest release or last commit visible on the page, not the original publication date.
 - Where a category's `date` does not match the verified publication date, flag it as a metadata correction in the proposal.
 
-After running Pass 1, run `node scripts/standards-linkcheck.mjs <path>` against the updated `standards.toml` to programmatically confirm all per-category URLs return HTTP 200 or REACHABLE-AUTH **and that none is a bare domain root.**
+After running Pass 1, run `node tools/ai-readiness-audit/standards-linkcheck.mjs <path>` against the updated `standards.toml` to programmatically confirm all per-category URLs return HTTP 200 or REACHABLE-AUTH **and that none is a bare domain root.**
 
 ### Pass 2 — Weight rescale
 

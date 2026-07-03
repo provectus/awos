@@ -6,7 +6,7 @@
  * No network I/O.
  *
  * Run:
- *   PATH=/opt/homebrew/bin:$PATH node --test scripts/standards-linkcheck.test.mjs
+ *   PATH=/opt/homebrew/bin:$PATH node --test tools/ai-readiness-audit/standards-linkcheck.test.mjs
  */
 
 import { test } from 'node:test';

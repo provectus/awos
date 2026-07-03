@@ -50,6 +50,24 @@ import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
 
 // ---------------------------------------------------------------------------
+// Engine provenance — the circuit-breaker against hand-assembled audits.
+// audit-core stamps every artifact it writes; patch-judgment, render, and
+// rollup refuse an audit.json without the stamp, so the only path to a report
+// is actually running the engine.
+// ---------------------------------------------------------------------------
+export const ENGINE_PROVENANCE = { generated_by: 'audit-core' } as const;
+
+/** True when `obj` carries the audit-core provenance stamp. */
+export function hasEngineProvenance(obj: unknown): boolean {
+  return (
+    !!obj &&
+    typeof obj === 'object' &&
+    (obj as { engine?: { generated_by?: unknown } }).engine?.generated_by ===
+      ENGINE_PROVENANCE.generated_by
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Detection conflicts — files claimed by more than one language's sourceGlobs.
 // Uses an extension-based approach on the language registry (O(languages²))
 // and a limited file scan to stay fast even on large repos.
@@ -171,6 +189,16 @@ export interface AuditCoreSummary {
   detected: number;
   computed: number;
   judgment_pending: number;
+  /**
+   * The checks awaiting the orchestrator's judgment verdict, listed so the
+   * orchestrator never has to inspect the artifacts to find them — the
+   * summary line is the complete work list for the judgment step.
+   */
+  pending_judgment_checks: Array<{
+    check_id: string;
+    dimension: string;
+    code: number[];
+  }>;
   skipped: number;
   duration_ms: number;
 }
@@ -422,6 +450,7 @@ export async function auditCore(
   let computed = 0;
   let judgmentPending = 0;
   let skipped = 0;
+  const pendingJudgmentChecks: AuditCoreSummary['pending_judgment_checks'] = [];
 
   for (const [key, c] of Object.entries(cats)) {
     if (c.dimension === 'org-portfolio') continue;
@@ -437,8 +466,14 @@ export async function auditCore(
       metricMeta
     );
     (byDimension[c.dimension] ??= []).push(rec);
-    if (rec.status === 'PENDING_JUDGMENT') judgmentPending++;
-    else if (rec.status === 'SKIP') skipped++;
+    if (rec.status === 'PENDING_JUDGMENT') {
+      judgmentPending++;
+      pendingJudgmentChecks.push({
+        check_id: rec.check_id,
+        dimension: c.dimension,
+        code: Array.isArray(rec.code) ? rec.code : [rec.code],
+      });
+    } else if (rec.status === 'SKIP') skipped++;
     else if (c.method === 'computed') computed++;
     else detected++;
   }
@@ -481,6 +516,7 @@ export async function auditCore(
       coverage: applicable > 0 ? score / applicable : null,
       checks,
       sources_used: sourcesUsed,
+      engine: ENGINE_PROVENANCE,
     };
     writeFileSync(
       join(outDir, `${dimension}.json`),
@@ -538,6 +574,7 @@ export async function auditCore(
     linked_repos: linkedRepos,
     tech_stack: techStack,
     detection_conflicts: detectionConflicts,
+    engine: ENGINE_PROVENANCE,
   };
   if (Object.keys(sourceWindows).length > 0)
     audit.source_windows = sourceWindows;
@@ -549,6 +586,7 @@ export async function auditCore(
     detected,
     computed,
     judgment_pending: judgmentPending,
+    pending_judgment_checks: pendingJudgmentChecks,
     skipped,
     duration_ms: Date.now() - start,
   };
@@ -750,6 +788,16 @@ export function aggregate(outDir: string): void {
   } else if (existing.source_windows !== undefined) {
     audit.source_windows = existing.source_windows;
   }
+  // Carry the engine provenance stamp forward: from the prior audit.json, or
+  // (repair case — audit.json deleted/corrupted) re-derive it when every
+  // per-dimension artifact is engine-stamped. Hand-built dimension files
+  // never carry the stamp, so aggregating them yields an unrenderable audit.
+  if (
+    hasEngineProvenance(existing) ||
+    (dimensions.length > 0 && dimensions.every((d) => hasEngineProvenance(d)))
+  ) {
+    audit.engine = ENGINE_PROVENANCE;
+  }
   writeFileSync(join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
 }
 
@@ -773,6 +821,24 @@ export function patchJudgments(
   outDir: string,
   patches: JudgmentPatch[]
 ): { patched: string[]; warnings: string[] } {
+  // Circuit-breaker: only an engine-produced audit may be patched. A missing
+  // or unstamped audit.json means the orchestrator hand-assembled the scores
+  // instead of running audit-core — refuse, with the fix in the message.
+  let existingAudit: unknown = null;
+  try {
+    existingAudit = JSON.parse(
+      readFileSync(join(outDir, 'audit.json'), 'utf8')
+    );
+  } catch {
+    // handled below — absent/unreadable fails the provenance check
+  }
+  if (!hasEngineProvenance(existingAudit)) {
+    throw new Error(
+      `patch-judgment: ${join(outDir, 'audit.json')} lacks engine provenance — ` +
+        `it was not produced by audit-core. Hand-assembled audits are not ` +
+        `patchable; run \`node dist/cli.js audit-core <repoPath> ${outDir}\` first.`
+    );
+  }
   const patched: string[] = [];
   const warnings: string[] = [];
   const validStatuses = ['PASS', 'WARN', 'FAIL', 'SKIP'];
@@ -845,6 +911,171 @@ export function patchJudgments(
 
   aggregate(outDir);
   return { patched, warnings };
+}
+
+/** The orchestrator-authored plain-language blocks patch-report accepts. */
+export interface ReportBlocksPatch {
+  headline?: Record<string, unknown>;
+  insights?: unknown[];
+  recommendations?: Array<Record<string, unknown>>;
+}
+
+const REPORT_BLOCK_KEYS = ['headline', 'insights', 'recommendations'] as const;
+
+/**
+ * Apply the orchestrator's plain-language report blocks (headline / insights /
+ * recommendations) to audit.json in ONE call, and emit recommendations.md
+ * from the same recommendations array. Replaces the orchestrator editing
+ * audit.json by hand (inline python/node scripts — the last remaining reason
+ * a run had to touch a scoring artifact directly). audit.json stays fully
+ * engine-managed: unknown top-level keys in the patch are rejected with a
+ * warning, and the engine provenance stamp is required and preserved.
+ */
+export function patchReportBlocks(
+  outDir: string,
+  blocks: ReportBlocksPatch
+): {
+  patched: string[];
+  recommendations_md: string | null;
+  warnings: string[];
+} {
+  const auditPath = join(outDir, 'audit.json');
+  let audit: Record<string, unknown>;
+  try {
+    audit = JSON.parse(readFileSync(auditPath, 'utf8'));
+  } catch {
+    audit = {};
+  }
+  if (!hasEngineProvenance(audit)) {
+    throw new Error(
+      `patch-report: ${auditPath} lacks engine provenance — it was not ` +
+        `produced by audit-core. Hand-assembled audits are not patchable; ` +
+        `run \`node dist/cli.js audit-core <repoPath> ${outDir}\` first.`
+    );
+  }
+  const warnings: string[] = [];
+  const patched: string[] = [];
+  for (const key of Object.keys(blocks as Record<string, unknown>)) {
+    if (!(REPORT_BLOCK_KEYS as readonly string[]).includes(key)) {
+      warnings.push(
+        `unknown block "${key}" ignored — patch-report accepts only ${REPORT_BLOCK_KEYS.join('/')}`
+      );
+    }
+  }
+  const b = blocks as Record<string, unknown>;
+  if (b.headline !== undefined) {
+    if (typeof b.headline !== 'object' || Array.isArray(b.headline)) {
+      warnings.push('headline must be an object — skipped');
+    } else {
+      audit.headline = b.headline;
+      patched.push('headline');
+    }
+  }
+  for (const key of ['insights', 'recommendations'] as const) {
+    if (b[key] === undefined) continue;
+    if (!Array.isArray(b[key])) {
+      warnings.push(`${key} must be an array — skipped`);
+      continue;
+    }
+    audit[key] = b[key];
+    patched.push(key);
+  }
+  writeFileSync(auditPath, JSON.stringify(audit, null, 2));
+
+  // recommendations.md — the long-form file /awos:roadmap consumes, derived
+  // from the exact same array so the two can never drift.
+  let recommendationsMd: string | null = null;
+  const recs = (audit.recommendations ?? []) as Array<Record<string, unknown>>;
+  if (patched.includes('recommendations') && recs.length > 0) {
+    const prioRank = (p: unknown) => ({ P0: 0, P1: 1, P2: 2 })[String(p)] ?? 3;
+    const sorted = [...recs].sort(
+      (a, r) => prioRank(a.priority) - prioRank(r.priority)
+    );
+    const lines: string[] = [
+      `# Audit Recommendations — ${audit.project ?? ''} (${audit.date ?? ''})`.trim(),
+      '',
+    ];
+    for (const r of sorted) {
+      lines.push(`## ${r.priority ?? 'P?'} — ${r.title ?? r.id ?? ''}`);
+      const meta = [
+        r.dimension ? `Dimension: ${r.dimension}` : null,
+        r.check_id ? `Check: ${r.check_id}` : null,
+        r.effort ? `Effort: ${r.effort}` : null,
+      ].filter(Boolean);
+      if (meta.length) lines.push('', meta.join(' · '));
+      if (r.detail) lines.push('', String(r.detail));
+      lines.push('');
+    }
+    recommendationsMd = join(outDir, 'recommendations.md');
+    writeFileSync(recommendationsMd, lines.join('\n'));
+  }
+  return { patched, recommendations_md: recommendationsMd, warnings };
+}
+
+/**
+ * Read-only authoring context for the report blocks: everything Step 6.4
+ * transcribes (check values/hints, git window stats, tracker fetch metadata),
+ * flattened from the artifacts in ONE call — so the orchestrator never opens
+ * or parses audit.json / collected/*.json itself. Requires the provenance
+ * stamp like every other post-audit verb.
+ */
+export function reportContext(outDir: string): Record<string, unknown> {
+  const auditPath = join(outDir, 'audit.json');
+  let audit: Record<string, unknown>;
+  try {
+    audit = JSON.parse(readFileSync(auditPath, 'utf8'));
+  } catch {
+    audit = {};
+  }
+  if (!hasEngineProvenance(audit)) {
+    throw new Error(
+      `report-context: ${auditPath} lacks engine provenance — run ` +
+        `\`node dist/cli.js audit-core <repoPath> ${outDir}\` first.`
+    );
+  }
+  const readCollected = (src: string): Record<string, unknown> | null => {
+    try {
+      return JSON.parse(
+        readFileSync(join(outDir, 'collected', `${src}.json`), 'utf8')
+      );
+    } catch {
+      return null;
+    }
+  };
+  const git = readCollected('git');
+  const tracker = readCollected('tracker');
+  const checks: Array<Record<string, unknown>> = [];
+  for (const dim of (audit.dimensions ?? []) as Array<
+    Record<string, unknown>
+  >) {
+    for (const c of (dim.checks ?? []) as Array<Record<string, unknown>>) {
+      checks.push({
+        check_id: c.check_id,
+        dimension: dim.dimension,
+        status: c.status,
+        value: c.value,
+        hint: c.hint,
+        weight_awarded: c.weight_awarded,
+        weight_max: c.weight_max,
+        evidence: c.evidence,
+      });
+    }
+  }
+  return {
+    date: audit.date,
+    project: audit.project,
+    audit_total: audit.audit_total,
+    coverage: audit.coverage,
+    window_stats:
+      (git?.raw as Record<string, unknown> | undefined)?.window_stats ?? null,
+    tracker_fetch_meta:
+      (tracker?.raw as Record<string, unknown> | undefined)?.fetch_meta ?? null,
+    incident_source:
+      (tracker?.raw as Record<string, unknown> | undefined)?.incident_source ??
+      null,
+    sources: audit.sources ?? [],
+    checks,
+  };
 }
 
 /** Presentation order from standards.toml [meta].dimension_order (empty when absent). */

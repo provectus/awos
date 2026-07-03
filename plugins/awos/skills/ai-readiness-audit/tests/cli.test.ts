@@ -371,6 +371,8 @@ function writeRepoAudit(
       source: s,
       available: true,
     })),
+    // Provenance stamp — rollup refuses per-repo audits without it.
+    engine: { generated_by: 'audit-core' },
   };
   writeFileSync(join(repoDir, 'audit.json'), JSON.stringify(audit));
   writeFileSync(
@@ -537,6 +539,18 @@ function writeJudgmentAuditsDir(base: string): void {
     join(base, 'spec-driven-development.json'),
     JSON.stringify(dim, null, 2)
   );
+  // patch-judgment refuses to run without an engine-stamped audit.json.
+  writeFileSync(
+    join(base, 'audit.json'),
+    JSON.stringify({
+      date: '2026-07-01',
+      project: 'patchj-fixture',
+      audit_total: 0,
+      coverage: 0,
+      dimensions: [],
+      engine: { generated_by: 'audit-core' },
+    })
+  );
 }
 
 test('patch-judgment: reads patches from stdin via "-", applies them, and re-aggregates', () => {
@@ -629,6 +643,196 @@ test('patch-judgment: non-array JSON on stdin exits non-zero with a "must be a J
       typeof err['error'] === 'string' &&
         err['error'].includes('must be a JSON array'),
       `error must say patches must be a JSON array; got ${JSON.stringify(err)}`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 'patch-report' — apply report blocks + emit recommendations.md. The verb
+// exists so the orchestrator never edits audit.json directly (the run-1 smoke
+// finding: models used python3 -c to inject blocks by hand).
+// ---------------------------------------------------------------------------
+
+test('patch-report: merges blocks into audit.json and writes recommendations.md', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-patchr-'));
+  try {
+    writeJudgmentAuditsDir(base); // includes an engine-stamped audit.json
+    const blocks = {
+      headline: { reach: { ai_tooling: 'CLAUDE.md present' } },
+      insights: [
+        {
+          theme: 'CI',
+          severity: 'high',
+          weak_areas: ['no pipeline'],
+          so_what: 'x',
+          improves: 'y',
+        },
+      ],
+      recommendations: [
+        {
+          id: 'R1',
+          priority: 'P1',
+          title: 'Add CI',
+          dimension: 'software-best-practices',
+          check_id: 'SBP-05',
+          effort: 'S',
+          detail: 'Set up a CI pipeline.',
+        },
+        {
+          id: 'R0',
+          priority: 'P0',
+          title: 'Add tests',
+          dimension: 'quality-assurance',
+          check_id: 'QA-01',
+          effort: 'M',
+          detail: 'Add a test suite.',
+        },
+      ],
+    };
+    const { json, code } = runCliStdin(
+      JSON.stringify(blocks),
+      'patch-report',
+      base,
+      '-'
+    );
+    assert.equal(code, 0, 'patch-report with valid blocks must exit 0');
+    const r = json as Record<string, unknown>;
+    assert.deepEqual(
+      r['patched'],
+      ['headline', 'insights', 'recommendations'],
+      'summary.patched must list every applied block'
+    );
+    const audit = JSON.parse(readFileSync(join(base, 'audit.json'), 'utf8'));
+    assert.equal(
+      (audit.headline as any).reach.ai_tooling,
+      'CLAUDE.md present',
+      'headline block must be merged into audit.json'
+    );
+    assert.equal(
+      audit.engine?.generated_by,
+      'audit-core',
+      'patch-report must preserve the engine provenance stamp'
+    );
+    const md = readFileSync(join(base, 'recommendations.md'), 'utf8');
+    assert.ok(
+      md.indexOf('P0 — Add tests') < md.indexOf('P1 — Add CI'),
+      'recommendations.md must be emitted sorted by priority (P0 before P1)'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('report-context: flattens check values + window stats so the orchestrator never parses artifacts', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-repctx-'));
+  try {
+    writeJudgmentAuditsDir(base);
+    // Give the stamped audit.json a dimension with one check, plus a git artifact.
+    const audit = JSON.parse(readFileSync(join(base, 'audit.json'), 'utf8'));
+    audit.dimensions = [
+      {
+        dimension: 'descriptors',
+        checks: [
+          {
+            check_id: 'DESC-04',
+            status: 'INFO',
+            value: '1k LOC · 12 files',
+            hint: 'scale',
+            weight_awarded: 0,
+            weight_max: 0,
+            evidence: ['src/'],
+          },
+        ],
+      },
+    ];
+    writeFileSync(join(base, 'audit.json'), JSON.stringify(audit));
+    mkdirSync(join(base, 'collected'), { recursive: true });
+    writeFileSync(
+      join(base, 'collected', 'git.json'),
+      JSON.stringify({
+        source: 'git',
+        available: true,
+        raw: {
+          window_stats: { authors_total: 7, merges_per_active_per_week: 1.5 },
+        },
+      })
+    );
+    const { json, code } = runCli('report-context', base);
+    assert.equal(code, 0, 'report-context on a stamped audit must exit 0');
+    const r = json as Record<string, any>;
+    assert.equal(
+      r.window_stats?.authors_total,
+      7,
+      'window_stats must be lifted from collected/git.json'
+    );
+    const check = (r.checks as any[]).find((c) => c.check_id === 'DESC-04');
+    assert.equal(
+      check?.value,
+      '1k LOC · 12 files',
+      'checks must be flattened with their values for transcription'
+    );
+
+    // Unstamped audit → refused, same circuit-breaker as the other verbs.
+    const unstamped = mkdtempSync(join(tmpdir(), 'awos-repctx-un-'));
+    writeFileSync(
+      join(unstamped, 'audit.json'),
+      JSON.stringify({ date: 'x', project: 'y', dimensions: [] })
+    );
+    const denied = runCli('report-context', unstamped);
+    assert.notEqual(
+      denied.code,
+      0,
+      'report-context must refuse an audit.json without engine provenance'
+    );
+    rmSync(unstamped, { recursive: true, force: true });
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('patch-report: refuses an unstamped (hand-assembled) audit.json', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-patchr-unstamped-'));
+  try {
+    mkdirSync(base, { recursive: true });
+    writeFileSync(
+      join(base, 'audit.json'),
+      JSON.stringify({
+        date: '2026-07-01',
+        project: 'x',
+        audit_total: 0,
+        coverage: 0,
+        dimensions: [],
+      })
+    );
+    const { code } = runCliStdin(
+      JSON.stringify({ insights: [] }),
+      'patch-report',
+      base,
+      '-'
+    );
+    assert.notEqual(
+      code,
+      0,
+      'patch-report must exit non-zero when audit.json lacks engine provenance'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('patch-report: non-object blocks document exits non-zero', () => {
+  const base = mkdtempSync(join(tmpdir(), 'awos-patchr-nonobj-'));
+  try {
+    writeJudgmentAuditsDir(base);
+    const { json, code } = runCliStdin('[1,2]', 'patch-report', base, '-');
+    assert.notEqual(code, 0, 'an array blocks document must exit non-zero');
+    const err = json as Record<string, unknown>;
+    assert.ok(
+      typeof err['error'] === 'string' &&
+        err['error'].includes('must be a JSON object'),
+      `error must say blocks must be an object; got ${JSON.stringify(err)}`
     );
   } finally {
     rmSync(base, { recursive: true, force: true });

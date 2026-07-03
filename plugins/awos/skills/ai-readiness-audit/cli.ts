@@ -16,6 +16,8 @@
  *   node dist/cli.js aggregate      <auditsDir>
  *   node dist/cli.js enrich         <repoPath>         <outDir>
  *   node dist/cli.js patch-judgment <auditsDir>        <patches.json|->
+ *   node dist/cli.js report-context <auditsDir>
+ *   node dist/cli.js patch-report   <auditsDir>        <blocks.json|->
  *
  * The optional [collectedDir] argument to `metric` is the "query-once" path:
  * if supplied, the metric reads pre-written <collectedDir>/<source>.json
@@ -155,7 +157,11 @@ import {
   auditCore,
   aggregate,
   patchJudgments,
+  patchReportBlocks,
+  reportContext,
+  hasEngineProvenance,
   type MetricFn,
+  type ReportBlocksPatch,
 } from './audit_core.ts';
 import { detectOrgParent } from './topology.ts';
 
@@ -273,8 +279,9 @@ function numOrNull(v: unknown): number | null {
 
 /**
  * Read <repoDir>/audit.json + <repoDir>/collected/git.json and derive a rich
- * PerRepoInput. Returns null (logging to stderr) when audit.json is missing or
- * unparseable, so one bad repo never crashes the whole rollup.
+ * PerRepoInput. Returns null (logging to stderr) when audit.json is missing,
+ * unparseable, or lacks the audit-core provenance stamp (hand-assembled),
+ * so one bad repo never crashes the whole rollup.
  */
 function readPerRepoAudit(
   repoDir: string,
@@ -287,6 +294,14 @@ function readPerRepoAudit(
   } catch {
     process.stderr.write(
       `rollup: skipping ${repoName} — missing or unparseable audit.json\n`
+    );
+    return null;
+  }
+  if (!hasEngineProvenance(audit)) {
+    process.stderr.write(
+      `rollup: skipping ${repoName} — audit.json lacks engine provenance ` +
+        `(not produced by audit-core; hand-assembled audits are excluded ` +
+        `from the portfolio)\n`
     );
     return null;
   }
@@ -719,6 +734,25 @@ async function main(): Promise<void> {
         });
         process.exit(1);
       }
+      // Circuit-breaker: a single-repo audit.json must carry audit-core's
+      // provenance stamp — a hand-assembled one is never rendered. Org
+      // portfolio JSON (portfolio_metrics/per_repo present) is exempt: the
+      // orchestrator legitimately assembles it from the rollup output, and
+      // rollup already refuses unstamped per-repo audits.
+      const isOrgAudit =
+        audit.portfolio_metrics !== undefined || audit.per_repo !== undefined;
+      if (!isOrgAudit && !hasEngineProvenance(audit)) {
+        printJson({
+          error:
+            'audit JSON lacks engine provenance — it was not produced by ' +
+            'audit-core, so it cannot be rendered. Deterministic scoring is ' +
+            "the engine's job: run `node dist/cli.js audit-core <repoPath> " +
+            '<outDir>` (then enrich / patch-judgment) and render the ' +
+            'audit.json it writes.',
+          path: auditPath,
+        });
+        process.exit(1);
+      }
       if (format === 'both') {
         const dir = outDirArg as string;
         mkdirSync(dir, { recursive: true });
@@ -879,11 +913,72 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'report-context': {
+      // Read-only: dump the flattened authoring context (check values/hints,
+      // git window stats, tracker fetch meta) so the orchestrator transcribes
+      // report blocks from ONE call instead of parsing artifacts itself.
+      const dir = arg1;
+      if (!dir) {
+        printJson({ error: 'report-context requires <auditsDir>' });
+        process.exit(1);
+      }
+      printJson(reportContext(dir));
+      break;
+    }
+
+    case 'patch-report': {
+      // Apply the orchestrator-authored report blocks (headline / insights /
+      // recommendations) to audit.json in one call and emit
+      // recommendations.md from the same array. Blocks come from a JSON file
+      // (or "-" for stdin): {headline?, insights?, recommendations?}.
+      // The orchestrator never edits audit.json directly.
+      const dir = arg1;
+      const blocksArg = arg2;
+      if (!dir || !blocksArg) {
+        printJson({
+          error:
+            'patch-report requires <auditsDir> <blocks.json|-> — blocks: {headline?, insights?, recommendations?}',
+        });
+        process.exit(1);
+      }
+      let blocksText: string;
+      try {
+        blocksText =
+          blocksArg === '-'
+            ? readFileSync(0, 'utf8')
+            : readFileSync(blocksArg, 'utf8');
+      } catch (err) {
+        printJson({ error: `cannot read blocks: ${String(err)}` });
+        process.exit(1);
+      }
+      let blocks: unknown;
+      try {
+        blocks = JSON.parse(blocksText);
+      } catch (err) {
+        printJson({ error: `blocks are not valid JSON: ${String(err)}` });
+        process.exit(1);
+      }
+      if (
+        blocks === null ||
+        typeof blocks !== 'object' ||
+        Array.isArray(blocks)
+      ) {
+        printJson({
+          error:
+            'blocks must be a JSON object with headline/insights/recommendations keys',
+        });
+        process.exit(1);
+      }
+      const summary = patchReportBlocks(dir, blocks as ReportBlocksPatch);
+      printJson(summary);
+      break;
+    }
+
     default: {
       printJson({
         error: `unknown command "${command}"`,
         usage:
-          'collect|detect|metric|standards|progress|render|rollup|audit-core|aggregate|enrich|patch-judgment <arg> [repoPath]',
+          'collect|detect|metric|standards|progress|render|rollup|audit-core|aggregate|enrich|patch-judgment|report-context|patch-report <arg> [repoPath]',
       });
       process.exit(1);
     }

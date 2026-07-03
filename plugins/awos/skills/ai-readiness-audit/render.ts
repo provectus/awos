@@ -38,6 +38,8 @@
  *   "linked_repos":   LinkedRepo[],         // symlink/submodule/MCP-linked repositories
  *   "tech_stack":     TechStack,            // languages/agent_tools/ci/frameworks
  *   "detection_conflicts": DetectionConflict[],  // files claimed by >1 detector
+ *   "engine":         { generated_by },     // audit-core provenance stamp — the render
+ *                                           // CLI refuses a single-repo audit without it
  * }
  *
  * DimensionArtifact (per output-format.md schema):

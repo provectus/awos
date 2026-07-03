@@ -120,6 +120,18 @@ export interface DimensionArtifact {
   checks: Check[];
   /** Union of data sources across applicable checks (audit_core / aggregate stamp it). */
   sources_used?: string[];
+  /** Provenance stamp written only by audit-core — see EngineProvenance. */
+  engine?: EngineProvenance;
+}
+
+/**
+ * Provenance stamp written only by the deterministic engine (audit-core /
+ * enrich). Downstream verbs (patch-judgment, render, rollup) refuse an
+ * audit.json without it — the circuit-breaker against an orchestrator
+ * hand-assembling scores instead of running the engine.
+ */
+export interface EngineProvenance {
+  generated_by: 'audit-core';
 }
 
 // ---------------------------------------------------------------------------
@@ -295,6 +307,8 @@ export interface AuditJson {
   linked_repos?: LinkedRepo[];
   tech_stack?: TechStack;
   detection_conflicts?: DetectionConflict[];
+  /** Provenance stamp written only by audit-core — see EngineProvenance. */
+  engine?: EngineProvenance;
 }
 
 // ---------------------------------------------------------------------------

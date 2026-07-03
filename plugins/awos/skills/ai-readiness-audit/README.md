@@ -30,7 +30,7 @@ The engine reads this file at run time — **adding or re-weighting a category i
 
 ## How to test it headless
 
-Behavioral testing runs the real skill through headless `claude -p` via the TypeScript harness in [`tools/audit-test-harness/`](../../../../tools/audit-test-harness/README.md) (repo-relative: `tools/audit-test-harness/`; run via `npm run audit:test`, needs `npm ci` once for `tsx`). It deploys **your worktree's** version of the plugin by repointing the local marketplace (and restores it afterward), controls the previous-audit state, guards against the known engine-skipping regression, measures tokens/cost, and archives everything under `<awos main checkout>/tmp/audit-runs/<target>/<timestamp>__<sha>__<phase>/`.
+Behavioral testing runs the real skill through headless `claude -p` via the TypeScript harness in [`tools/ai-readiness-audit/qa/`](../../../../tools/ai-readiness-audit/qa/README.md) (repo-relative: `tools/ai-readiness-audit/qa/`; run via `npm run audit:test`, needs `npm ci` once for `tsx`). It deploys **your worktree's** version of the plugin by repointing the local marketplace (and restores it afterward), controls the previous-audit state, guards against the known engine-skipping regression, measures tokens/cost, and archives everything under `<awos main checkout>/tmp/audit-runs/<target>/<timestamp>__<sha>__<phase>/`.
 
 ```sh
 # Cold single-repo run (no previous audit). --build rebuilds dist/ first — use it whenever engine .ts changed.

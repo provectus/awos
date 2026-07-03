@@ -562,6 +562,7 @@ test('aggregate clamps a patched score > 1 — a raw weight written into score c
       join(dir, 'ai-development-tooling.json'),
       JSON.stringify(dim)
     );
+    writeStampedAudit(dir);
     aggregate(dir);
     const updated = JSON.parse(
       readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
@@ -602,6 +603,7 @@ test('aggregate reconciles a status-only patch (PASS with score left at 0) inste
       join(dir, 'ai-development-tooling.json'),
       JSON.stringify(dim)
     );
+    writeStampedAudit(dir);
     aggregate(dir);
     const check = JSON.parse(
       readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
@@ -637,6 +639,7 @@ test('aggregate zeroes stale credit on a FAIL — weight_awarded cannot survive 
       join(dir, 'ai-development-tooling.json'),
       JSON.stringify(dim)
     );
+    writeStampedAudit(dir);
     aggregate(dir);
     const check = JSON.parse(
       readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
@@ -686,6 +689,21 @@ test('parseCheckIds maps digit-containing check-id prefixes (E2E-01) — not jus
 
 import { patchJudgments, type JudgmentPatch } from './audit_core.ts';
 
+/** patchJudgments refuses a dir without an engine-stamped audit.json (provenance circuit-breaker) — stamp the fixture dir. */
+function writeStampedAudit(dir: string): void {
+  writeFileSync(
+    join(dir, 'audit.json'),
+    JSON.stringify({
+      date: '2026-01-01',
+      project: 'fixture',
+      audit_total: 0,
+      coverage: 0,
+      dimensions: [],
+      engine: { generated_by: 'audit-core' },
+    })
+  );
+}
+
 test('patchJudgments applies all verdicts in one call and re-aggregates audit.json', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-patchj-'));
   try {
@@ -719,6 +737,7 @@ test('patchJudgments applies all verdicts in one call and re-aggregates audit.js
       join(dir, 'ai-development-tooling.json'),
       JSON.stringify(dim)
     );
+    writeStampedAudit(dir);
 
     const summary = patchJudgments(dir, [
       {
@@ -798,6 +817,7 @@ test('patchJudgments rejects an invalid status with a warning — only PASS/WARN
       join(dir, 'ai-development-tooling.json'),
       JSON.stringify(dim)
     );
+    writeStampedAudit(dir);
     const summary = patchJudgments(dir, [
       { check_id: 'AI-01', status: 'PARTIAL' },
     ] as unknown as JudgmentPatch[]);
@@ -845,6 +865,7 @@ test('patchJudgments clamps a weight passed as score', () => {
       join(dir, 'ai-development-tooling.json'),
       JSON.stringify(dim)
     );
+    writeStampedAudit(dir);
     const summary = patchJudgments(dir, [
       { check_id: 'AI-01', status: 'PASS', score: 8 },
     ]);
@@ -888,6 +909,7 @@ test('aggregate keeps an explicit score 0 on a WARN — a stored 0 is a measurem
       join(dir, 'ai-development-tooling.json'),
       JSON.stringify(dim)
     );
+    writeStampedAudit(dir);
     aggregate(dir);
     const check = JSON.parse(
       readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')

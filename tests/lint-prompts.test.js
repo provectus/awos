@@ -1325,6 +1325,44 @@ test('SKILL.md scores via a single audit-core pass — no per-dimension fan-out'
   );
 });
 
+test('SKILL.md Step 5 is unconditional — no pre-run escape hatch (barley 2026-07-03 regression)', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  // The load-time !`…` injection never executed in plugin skills, but its
+  // narrative gave the model a "scoring may already be done" premise it quoted
+  // to skip audit-core entirely. No line may start with a !` injection.
+  assert.doesNotMatch(
+    src,
+    /^!`/m,
+    'SKILL.md must not carry a load-time !`…` injection — it never executes in plugin skills and its narrative is what the model cites to skip audit-core'
+  );
+  // No wording may suggest the engine pass might already have happened.
+  assert.doesNotMatch(
+    src,
+    /pre-run happened|load-time pre-run|already completed step 5/i,
+    'SKILL.md must not suggest a pre-run may have already executed Step 5'
+  );
+  // Step 5 must declare pre-existing audit.json stale rather than a skip signal.
+  assert.match(
+    src,
+    /stale/,
+    'SKILL.md Step 5 must tell the orchestrator a pre-existing audit.json is stale output to overwrite, never proof that scoring already ran'
+  );
+  // The circuit-breaker must be stated at the decision point: hand-built
+  // audits are refused by the engine (provenance stamp).
+  assert.match(
+    src,
+    /provenance/,
+    'SKILL.md must state the engine provenance circuit-breaker (patch-judgment/render refuse a hand-built audit.json)'
+  );
+  // Tool-level hard block: Edit (artifact hand-editing) and ScheduleWakeup
+  // (banned polling) are removed from the tool pool while the skill runs.
+  assert.match(
+    src,
+    /^disallowed-tools:.*\bEdit\b.*\bScheduleWakeup\b/m,
+    'SKILL.md frontmatter must disallow Edit and ScheduleWakeup while the skill is active'
+  );
+});
+
 test('context/<path> references in prompts are internally consistent', () => {
   // Build a writer/reader map by scanning all prompts. A path is considered
   // consistent if every reference to it appears in at least one prompt — i.e.

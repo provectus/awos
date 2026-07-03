@@ -41,9 +41,11 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
 
    Write the array to `<outDir>/judgments.json` — never a shared path like `/tmp/judgments.json`, which sibling auditors running concurrently would clobber, applying one repo's verdicts to another.
 
-4. **Author + render.** Author the report blocks (`headline`, `insights[]`, `recommendations[]`) into `<outDir>/audit.json`, then render both reports in one call:
+4. **Author + render.** Fetch the values to transcribe with one read-only `report-context` call (never parse `audit.json`/`collected/*.json` yourself), author the report blocks (`headline`, `insights[]`, `recommendations[]`) into `<outDir>/report-blocks.json`, apply them with one `patch-report` call (it merges them into `audit.json` and writes `recommendations.md` — never edit `audit.json` directly), then render both reports in one call:
 
    ```bash
+   node "<ENGINE>" report-context "<outDir>"
+   node "<ENGINE>" patch-report "<outDir>" "<outDir>/report-blocks.json"
    node "<ENGINE>" render "<outDir>/audit.json" --format both --out-dir "<outDir>"
    ```
 

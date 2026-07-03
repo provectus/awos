@@ -9,17 +9,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compute } from '../metrics/adp_g8_review_rework.ts';
-import { writeCollected, loadStandards } from './helpers.ts';
+import { gitRaw, tmpDir, writeCollected, loadStandards } from './helpers.ts';
 
 const standards = loadStandards();
-
-function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'g8-'));
-}
 
 /** Minimal merge record for fixture purposes. */
 function mergeRecord(): { merged_at: string; branch_first_commit_at: string } {
@@ -30,19 +24,13 @@ function mergeRecord(): { merged_at: string; branch_first_commit_at: string } {
 }
 
 test('adp_g8: 10 commits, 2 merges → rework proxy = 4', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g8-');
   // total_commits=10, merge_records.length=2 → commits_per_pr=5, rework=4
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(), mergeRecord()],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 10,
-    ai_marked_commits: 0,
-    total_merges: 2,
-    revert_merges: 0,
-    numstat_totals: { added: 100, deleted: 30 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(), mergeRecord()], total_commits: 10 })
+  );
 
   const result = compute(collectedDir, standards, {});
 
@@ -64,19 +52,13 @@ test('adp_g8: 10 commits, 2 merges → rework proxy = 4', () => {
 });
 
 test('adp_g8: 1 commit, 1 merge → rework proxy = 0', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g8-');
   // total_commits=1, merge_records.length=1 → commits_per_pr=1, rework=max(0,0)=0
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord()],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 1,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 10, deleted: 2 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord()], total_commits: 1 })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(result.status, 'OK', 'status must be OK');
@@ -87,20 +69,17 @@ test('adp_g8: 1 commit, 1 merge → rework proxy = 0', () => {
 });
 
 test('adp_g8: value is floored at 0 when commits < merges', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g8-');
   // Unusual edge: more merge records than total_commits
   // total_commits=1, merge_records.length=3 → commits_per_pr≈0.33, rework=max(0,-0.67)=0
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(), mergeRecord(), mergeRecord()],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 1,
-    ai_marked_commits: 0,
-    total_merges: 3,
-    revert_merges: 0,
-    numstat_totals: { added: 5, deleted: 1 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord(), mergeRecord(), mergeRecord()],
+      total_commits: 1,
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(result.status, 'OK', 'status must be OK');
@@ -111,18 +90,12 @@ test('adp_g8: value is floored at 0 when commits < merges', () => {
 });
 
 test('adp_g8: reliability tag is not-reliable', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord()],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 50, deleted: 10 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g8-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord()], total_commits: 5 })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -133,25 +106,19 @@ test('adp_g8: reliability tag is not-reliable', () => {
 });
 
 test('adp_g8: SKIP when git.json absent', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g8-');
   const result = compute(join(tmp, 'no-collected'), standards, {});
   assert.equal(result.status, 'SKIP', 'must SKIP when git.json absent');
   assert.equal(result.value, null, 'value must be null on SKIP');
 });
 
 test('adp_g8: SKIP when merge_records empty', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g8-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [], total_commits: 5 })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -167,18 +134,15 @@ test('adp_g8: SKIP when merge_records empty', () => {
 
 /** Fixture with `commits` total commits spread over `merges` merge records. */
 function collectedWithRatio(commits: number, merges: number): string {
-  const tmp = makeTmpDir();
-  return writeCollected(tmp, 'git', {
-    merge_records: Array.from({ length: merges }, mergeRecord),
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: commits,
-    ai_marked_commits: 0,
-    total_merges: merges,
-    revert_merges: 0,
-    numstat_totals: { added: 50, deleted: 10 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g8-');
+  return writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: Array.from({ length: merges }, mergeRecord),
+      total_commits: commits,
+    })
+  );
 }
 
 test('adp_g8: best case — ≤2 commits/PR scores 1.0 with confidence 1.0', () => {
@@ -225,26 +189,23 @@ test('adp_g8: score declines between the 1.0 and 0 anchors', () => {
 });
 
 test('adp_g8: score=0 and confidence=0 on SKIP', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g8-');
   const result = compute(join(tmp, 'no-collected'), standards, {});
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
 });
 
 test('adp_g8: squash-merge strategy → SKIP (merge-record proxy unavailable)', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord()],
-    window_stats: { merge_strategy: 'squash' },
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 50,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g8-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord()],
+      window_stats: { merge_strategy: 'squash' },
+      total_commits: 50,
+    })
+  );
   const result = compute(collectedDir, standards, {});
   assert.equal(
     result.status,

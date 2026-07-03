@@ -227,7 +227,6 @@ const uniq = (xs: string[]): string[] => [...new Set(xs)];
 
 export const ALL_SOURCE_GLOBS = uniq(LANGUAGES.flatMap((l) => l.sourceGlobs));
 export const ALL_TEST_GLOBS = uniq(LANGUAGES.flatMap((l) => l.testFileGlobs));
-export const ALL_TEST_DIRS = uniq(LANGUAGES.flatMap((l) => l.testDirNames));
 export const ALL_DEP_FILES = uniq(LANGUAGES.flatMap((l) => l.depFiles));
 
 export interface DetectedLanguage {
@@ -245,12 +244,7 @@ export interface DetectedLanguage {
 export function detectLanguages(repoPath: string): DetectedLanguage[] {
   const out: DetectedLanguage[] = [];
   for (const def of LANGUAGES) {
-    let files: string[] = [];
-    try {
-      files = iterFiles(repoPath, def.sourceGlobs);
-    } catch {
-      files = [];
-    }
+    const files = iterFiles(repoPath, def.sourceGlobs);
     const count = files.length;
     if (count === 0) continue;
     const dep = def.depFiles.find(

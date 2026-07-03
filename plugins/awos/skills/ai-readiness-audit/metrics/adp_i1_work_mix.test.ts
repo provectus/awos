@@ -4,12 +4,10 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { compute } from './adp_i1_work_mix.ts';
+import { trackerArtifact } from '../tests/helpers.ts';
 
 function makeTrackerArtifact(typeCounts: Record<string, number>): string {
-  return JSON.stringify({
-    available: true,
-    raw: { type_counts: typeCounts },
-  });
+  return trackerArtifact({ type_counts: typeCounts });
 }
 
 test('adp_i1_work_mix: SKIP when tracker.json is absent', () => {

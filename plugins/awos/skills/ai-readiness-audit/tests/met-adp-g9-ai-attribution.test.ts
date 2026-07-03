@@ -10,31 +10,19 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compute } from '../metrics/adp_g9_ai_attribution.ts';
-import { writeCollected, loadStandards } from './helpers.ts';
+import { gitRaw, tmpDir, writeCollected, loadStandards } from './helpers.ts';
 
 const standards = loadStandards();
 
-function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'g9-'));
-}
-
 test('adp_g9: 1 AI commit out of 2 total → value 0.5', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 2,
-    ai_marked_commits: 1,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 10, deleted: 2 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g9-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ total_commits: 2, ai_marked_commits: 1 })
+  );
 
   const result = compute(collectedDir, standards, {});
 
@@ -52,18 +40,12 @@ test('adp_g9: 1 AI commit out of 2 total → value 0.5', () => {
 });
 
 test('adp_g9: 0 AI commits → value 0.0', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 10,
-    ai_marked_commits: 0,
-    total_merges: 2,
-    revert_merges: 0,
-    numstat_totals: { added: 80, deleted: 20 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g9-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ total_commits: 10, ai_marked_commits: 0 })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -74,18 +56,12 @@ test('adp_g9: 0 AI commits → value 0.0', () => {
 });
 
 test('adp_g9: all commits AI-attributed → value 1.0', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 5,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 50, deleted: 10 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g9-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ total_commits: 5, ai_marked_commits: 5 })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -95,18 +71,12 @@ test('adp_g9: all commits AI-attributed → value 1.0', () => {
 });
 
 test('adp_g9: 3 out of 12 commits AI-attributed → value ~0.25', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 12,
-    ai_marked_commits: 3,
-    total_merges: 2,
-    revert_merges: 0,
-    numstat_totals: { added: 120, deleted: 40 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g9-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ total_commits: 12, ai_marked_commits: 3 })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -116,18 +86,12 @@ test('adp_g9: 3 out of 12 commits AI-attributed → value ~0.25', () => {
 });
 
 test('adp_g9: reliability tag is minimal (lower bound)', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 4,
-    ai_marked_commits: 2,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 30, deleted: 8 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g9-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ total_commits: 4, ai_marked_commits: 2 })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -143,25 +107,19 @@ test('adp_g9: reliability tag is minimal (lower bound)', () => {
 });
 
 test('adp_g9: SKIP when git.json absent', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g9-');
   const result = compute(join(tmp, 'no-collected'), standards, {});
   assert.equal(result.status, 'SKIP', 'must SKIP when git.json absent');
   assert.equal(result.value, null, 'value must be null on SKIP');
 });
 
 test('adp_g9: SKIP when total_commits is 0', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 0,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g9-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ total_commits: 0, ai_marked_commits: 0 })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -176,18 +134,12 @@ test('adp_g9: SKIP when total_commits is 0', () => {
 // ---------------------------------------------------------------------------
 
 test('adp_g9: score equals attribution rate (50% → score=0.5)', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 2,
-    ai_marked_commits: 1,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 10, deleted: 2 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g9-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ total_commits: 2, ai_marked_commits: 1 })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -202,18 +154,12 @@ test('adp_g9: score equals attribution rate (50% → score=0.5)', () => {
 });
 
 test('adp_g9: score=0 when no AI commits (0% attribution)', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 10,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 80, deleted: 20 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g9-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ total_commits: 10, ai_marked_commits: 0 })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -229,7 +175,7 @@ test('adp_g9: score=0 when no AI commits (0% attribution)', () => {
 });
 
 test('adp_g9: score=0 and confidence=0 on SKIP (no git.json)', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g9-');
   const result = compute(join(tmp, 'no-collected'), standards, {});
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');

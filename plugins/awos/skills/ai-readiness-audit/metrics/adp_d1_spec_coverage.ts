@@ -23,7 +23,7 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
   type MetricResult,
 } from './_base.ts';
 import { clamp01 } from './_score.ts';
@@ -36,28 +36,23 @@ export function compute(
   // Docs source absent or unreadable → SKIP with the reason in the note.
   const read = readArtifact(collectedDir, 'docs');
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_d1_spec_coverage',
-      null,
       'coverage',
-      [],
-      skipReliability('not-reliable', 'docs', read.error),
-      [],
-      ['docs']
+      'not-reliable',
+      'docs',
+      read.error
     );
   }
   const artifact = read.artifact;
 
   // available=false means no docs connector was provided.
   if (!artifact?.available) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_d1_spec_coverage',
-      null,
       'coverage',
-      [],
-      computeReliability('not-reliable', [], ['docs']),
-      [],
-      ['docs']
+      'not-reliable',
+      'docs'
     );
   }
 
@@ -89,10 +84,6 @@ export function compute(
     reliability,
     ['docs'],
     [],
-    null,
-    undefined,
-    expression,
-    clamp01(coverage),
-    1.0
+    { expression, score: clamp01(coverage), confidence: 1.0 }
   );
 }

@@ -6,19 +6,19 @@
  * report-path collection, judgment scanning) are unit-testable without
  * launching claude. See harness.test.ts.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import * as readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
+import type { AuditJson } from '../../../plugins/awos/skills/ai-readiness-audit/artifact_types.ts';
 
-export const HOME = os.homedir();
-export const SETTINGS = path.join(HOME, '.claude/settings.json');
+const HOME = os.homedir();
+const SETTINGS = path.join(HOME, '.claude/settings.json');
 export const MARKET_NAME = 'awos-marketplace';
-export const KM_PATH = path.join(
-  HOME,
-  '.claude/plugins/known_marketplaces.json'
-);
+const KM_PATH = path.join(HOME, '.claude/plugins/known_marketplaces.json');
 
 export function readJson(p: string): any {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -93,7 +93,7 @@ function numField(ev: any, key: string): number {
   return typeof v === 'number' ? v : 0;
 }
 
-export function numUsage(ev: any, key: string): number {
+function numUsage(ev: any, key: string): number {
   const v = (ev?.usage ?? {})[key];
   return typeof v === 'number' ? v : 0;
 }
@@ -166,6 +166,49 @@ export function tokenCostSummary(result: any): TokenCostSummary {
 }
 
 // ---------------------------------------------------------------------------
+// Stream-json transcript walking
+// ---------------------------------------------------------------------------
+// One tolerant parser shared by every transcript consumer (the compliance and
+// smoke scanners here, and streamRun's live loop): trim, JSON.parse, and skip
+// anything that doesn't parse. The skill prompt text and tool results are
+// noise a raw grep would trip over, so consumers work on the PARSED events.
+
+/** Parse one transcript line; null for a blank or non-JSON line (skip it). */
+export function parseTranscriptLine(line: string): any | null {
+  const s = line.trim();
+  if (!s) return null;
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
+/** Yield every parseable stream-json event from a transcript's lines, in order. */
+export function* parseTranscriptEvents(lines: string[]): Generator<any> {
+  for (const line of lines) {
+    const ev = parseTranscriptLine(line);
+    if (ev !== null) yield ev;
+  }
+}
+
+/**
+ * Invoke `cb` for every content block of every `assistant` event in the
+ * transcript, in order. Non-assistant events and non-array content are
+ * skipped. The block's parent event is passed too for callers that need it.
+ */
+export function forEachAssistantBlock(
+  lines: string[],
+  cb: (block: any, event: any) => void
+): void {
+  for (const ev of parseTranscriptEvents(lines)) {
+    if (ev.type !== 'assistant') continue;
+    const content = ev.message?.content;
+    for (const b of Array.isArray(content) ? content : []) cb(b, ev);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Engine-compliance signals
 // ---------------------------------------------------------------------------
 
@@ -195,32 +238,19 @@ export interface Compliance extends ComplianceSignals {
 export function complianceFromTranscript(lines: string[]): ComplianceSignals {
   let auditCoreCalls = 0;
   let fanoutSpawns = 0;
-  for (const line of lines) {
-    const s = line.trim();
-    if (!s) continue;
-    let ev: any;
-    try {
-      ev = JSON.parse(s);
-    } catch {
-      continue;
+  forEachAssistantBlock(lines, (b) => {
+    if (!b || typeof b !== 'object' || b.type !== 'tool_use') return;
+    const name = b.name || '';
+    const inp = b.input || {};
+    if (name === 'Bash' && String(inp.command ?? '').includes('audit-core')) {
+      auditCoreCalls += 1;
+    } else if (name === 'Agent' || name === 'Task') {
+      const blob = ['subagent_type', 'description', 'prompt']
+        .map((k) => String(inp[k] ?? ''))
+        .join(' ');
+      if (blob.includes('dimension-auditor')) fanoutSpawns += 1;
     }
-    const t = ev.type;
-    const content = ev.message?.content ?? [];
-    if (t !== 'assistant') continue;
-    for (const b of Array.isArray(content) ? content : []) {
-      if (!b || typeof b !== 'object' || b.type !== 'tool_use') continue;
-      const name = b.name || '';
-      const inp = b.input || {};
-      if (name === 'Bash' && String(inp.command ?? '').includes('audit-core')) {
-        auditCoreCalls += 1;
-      } else if (name === 'Agent' || name === 'Task') {
-        const blob = ['subagent_type', 'description', 'prompt']
-          .map((k) => String(inp[k] ?? ''))
-          .join(' ');
-        if (blob.includes('dimension-auditor')) fanoutSpawns += 1;
-      }
-    }
-  }
+  });
   return {
     audit_core_calls: auditCoreCalls,
     fanout_agent_spawns: fanoutSpawns,
@@ -263,47 +293,33 @@ export function smokeSignalsFromTranscript(lines: string[]): SmokeSignals {
   let jsonWrites = 0;
   let handCompute = 0;
   let lastText = '';
-  for (const line of lines) {
-    const s = line.trim();
-    if (!s) continue;
-    let ev: any;
-    try {
-      ev = JSON.parse(s);
-    } catch {
-      continue;
+  forEachAssistantBlock(lines, (b) => {
+    if (!b || typeof b !== 'object') return;
+    if (b.type === 'text' && String(b.text ?? '').trim()) {
+      lastText = String(b.text).trim();
+      return;
     }
-    if (ev.type !== 'assistant') continue;
-    const content = ev.message?.content ?? [];
-    for (const b of Array.isArray(content) ? content : []) {
-      if (!b || typeof b !== 'object') continue;
-      if (b.type === 'text' && String(b.text ?? '').trim()) {
-        lastText = String(b.text).trim();
-        continue;
+    if (b.type !== 'tool_use') return;
+    const name = b.name ?? '';
+    const input = b.input ?? {};
+    if (name === 'Write' || name === 'Edit') {
+      const fp = String(input.file_path ?? '');
+      if (REPORT_FILE_RE.test(fp)) reportWrites++;
+      else if (
+        AUDIT_JSON_WRITE_RE.test(fp) &&
+        !SANCTIONED_AUTHORED_JSON.test(fp)
+      ) {
+        jsonWrites++;
       }
-      if (b.type !== 'tool_use') continue;
-      const name = b.name ?? '';
-      const input = b.input ?? {};
-      if (name === 'Write' || name === 'Edit') {
-        const fp = String(input.file_path ?? '');
-        if (REPORT_FILE_RE.test(fp)) reportWrites++;
-        else if (
-          AUDIT_JSON_WRITE_RE.test(fp) &&
-          !SANCTIONED_AUTHORED_JSON.test(fp)
-        ) {
-          jsonWrites++;
-        }
-      } else if (name === 'Bash') {
-        const cmd = String(input.command ?? '');
-        if (HAND_COMPUTE_RE.test(cmd)) handCompute++;
-        // Shell redirection into a scoring artifact counts as a hand write
-        // too (heredocs into the sanctioned authoring files are fine).
-        const redir = cmd.match(
-          />{1,2}\s*['"]?(\S*context\/audits\/\S*\.json)/
-        );
-        if (redir && !SANCTIONED_AUTHORED_JSON.test(redir[1])) jsonWrites++;
-      }
+    } else if (name === 'Bash') {
+      const cmd = String(input.command ?? '');
+      if (HAND_COMPUTE_RE.test(cmd)) handCompute++;
+      // Shell redirection into a scoring artifact counts as a hand write
+      // too (heredocs into the sanctioned authoring files are fine).
+      const redir = cmd.match(/>{1,2}\s*['"]?(\S*context\/audits\/\S*\.json)/);
+      if (redir && !SANCTIONED_AUTHORED_JSON.test(redir[1])) jsonWrites++;
     }
-  }
+  });
   return {
     handwritten_report_writes: reportWrites,
     hand_json_writes: jsonWrites,
@@ -326,22 +342,25 @@ export function smokeSignalsFromTranscript(lines: string[]): SmokeSignals {
  */
 export function assessEngineCompliance(
   outDir: string,
-  runLog: string
+  transcript: string | string[]
 ): Compliance {
   const hasJson =
     !!outDir &&
     (isFile(path.join(outDir, 'audit.json')) ||
       isFile(path.join(outDir, 'org-portfolio.json')));
-  let signals: ComplianceSignals = {
-    audit_core_calls: 0,
-    fanout_agent_spawns: 0,
-  };
-  try {
-    const lines = fs.readFileSync(runLog, 'utf8').split('\n');
-    signals = complianceFromTranscript(lines);
-  } catch {
-    // no transcript → zero signals
+  // Accept either a runLog path (read it) or already-read lines — callers that
+  // also run the smoke scan read the multi-MB transcript once and pass it in.
+  let lines: string[] = [];
+  if (Array.isArray(transcript)) {
+    lines = transcript;
+  } else {
+    try {
+      lines = fs.readFileSync(transcript, 'utf8').split('\n');
+    } catch {
+      // no transcript → zero signals
+    }
   }
+  const signals = complianceFromTranscript(lines);
   const compliant = hasJson && signals.audit_core_calls > 0;
   return {
     engine_compliant: compliant,
@@ -354,7 +373,7 @@ export function assessEngineCompliance(
 // Output-dir helpers
 // ---------------------------------------------------------------------------
 
-export function dateDirs(audits: string): string[] {
+function dateDirs(audits: string): string[] {
   if (!isDir(audits)) return [];
   const out: string[] = [];
   for (const n of fs.readdirSync(audits)) {
@@ -386,7 +405,7 @@ export function summarizeOutput(outDir: string): any {
   const single = path.join(outDir, 'audit.json');
   try {
     if (fs.existsSync(org)) {
-      const d = readJson(org);
+      const d = readJson(org) as AuditJson;
       const perRepo = path.join(outDir, 'per-repo');
       let repos = 0;
       if (isDir(perRepo)) {
@@ -397,7 +416,7 @@ export function summarizeOutput(outDir: string): any {
       return { mode: 'org', portfolio_metrics: d.portfolio_metrics, repos };
     }
     if (fs.existsSync(single)) {
-      const d = readJson(single);
+      const d = readJson(single) as AuditJson;
       const dimensions: Record<string, any> = {};
       for (const x of d.dimensions ?? []) {
         dimensions[x.dimension] = { score: x.score, coverage: x.coverage };
@@ -496,7 +515,7 @@ export function scanJudgmentsPatched(archivedDir: string): boolean | null {
 // are discovered here, merged, and passed back explicitly via `--mcp-config`.
 
 /** Config locations checked in each scanned directory, in precedence order. */
-export const MCP_CONFIG_CANDIDATES = [
+const MCP_CONFIG_CANDIDATES = [
   '.mcp.json',
   'mcp.json',
   '.vscode/mcp.json',
@@ -508,9 +527,7 @@ export const MCP_CONFIG_CANDIDATES = [
  * VS Code's `.vscode/mcp.json` uses a `servers` key; claude/Cursor use
  * `mcpServers`. Returns null when unreadable or neither key is present.
  */
-export function readMcpServers(
-  configPath: string
-): Record<string, unknown> | null {
+function readMcpServers(configPath: string): Record<string, unknown> | null {
   let doc: any;
   try {
     doc = readJson(configPath);
@@ -572,6 +589,107 @@ export function gitRepoSubdirs(dir: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// Headless claude launcher
+// ---------------------------------------------------------------------------
+// Both the full harness (run_audit_test.ts) and the smoke check
+// (compliance_smoke.ts) launch the SAME command — `claude -p
+// /awos:ai-readiness-audit --output-format stream-json --verbose …` — tee the
+// transcript to a log, poll a heartbeat, and resolve on close. This is that
+// one launcher; the callers differ only in stdin disposition, extra flags, the
+// per-event callback, and the heartbeat cadence.
+
+/** The invariant argv prefix every audit run shares (flags are appended). */
+export const CLAUDE_AUDIT_CMD = [
+  'claude',
+  '-p',
+  '/awos:ai-readiness-audit',
+  '--output-format',
+  'stream-json',
+  '--verbose',
+];
+
+export interface ClaudeAuditOpts {
+  cwd: string;
+  /** Flags appended after CLAUDE_AUDIT_CMD (model, mcp isolation, …). */
+  flags: string[];
+  /** Transcript sink: every stdout line + all stderr is teed here. */
+  runLog: string;
+  /** stdin for the child: 'inherit' (full harness) or 'ignore' (smoke). */
+  stdin?: 'inherit' | 'ignore';
+  /** Called once per parsed stdout stream-json event, in order. */
+  onEvent?: (event: any, elapsedMs: number) => void;
+  /**
+   * Heartbeat while the run is quiet. 'silence' fires only after 60s with no
+   * stream event (full harness); 'wall' fires every 60s regardless (smoke).
+   */
+  heartbeat?: { mode: 'silence' | 'wall'; tick: (elapsedMs: number) => void };
+}
+
+/**
+ * Spawn a headless audit, tee its transcript to `runLog`, and resolve with the
+ * exit code and wall-clock duration once the process closes. Parse-tolerant:
+ * unparseable stdout lines are still logged but skipped for `onEvent`.
+ */
+export async function runClaudeAudit(
+  opts: ClaudeAuditOpts
+): Promise<{ rc: number; wallMs: number }> {
+  const { cwd, flags, runLog, stdin = 'inherit', onEvent, heartbeat } = opts;
+  const cmd = [...CLAUDE_AUDIT_CMD, ...flags];
+  const wallStart = Date.now();
+  let lastEvent = Date.now();
+  const hb = heartbeat
+    ? setInterval(
+        () => {
+          const now = Date.now();
+          if (heartbeat.mode === 'silence') {
+            if (now - lastEvent >= 60_000) {
+              heartbeat.tick(now - wallStart);
+              lastEvent = now;
+            }
+          } else {
+            heartbeat.tick(now - wallStart);
+          }
+        },
+        heartbeat.mode === 'wall' ? 60_000 : 1_000
+      )
+    : null;
+
+  const lf = fs.createWriteStream(runLog);
+  const proc = spawn(cmd[0], cmd.slice(1), {
+    cwd,
+    stdio: [stdin, 'pipe', 'pipe'],
+  });
+  proc.stderr!.on('data', (d) => lf.write(d));
+  const closed = new Promise<number>((res) => {
+    proc.on('error', () => res(-1));
+    proc.on('close', (code, signal) => res(code ?? (signal ? 1 : 0)));
+  });
+  const rl = readline.createInterface({
+    input: proc.stdout!,
+    crlfDelay: Infinity,
+  });
+  for await (const line of rl) {
+    lf.write(line + '\n');
+    const ev = parseTranscriptLine(line);
+    if (ev === null) continue;
+    lastEvent = Date.now();
+    onEvent?.(ev, lastEvent - wallStart);
+  }
+  const rc = await closed;
+  if (hb) clearInterval(hb);
+  await new Promise<void>((res) => lf.end(() => res()));
+  return { rc, wallMs: Date.now() - wallStart };
+}
+
+/** True when `url` (an import.meta.url) is the process's entry module. */
+export function isMainModule(url: string): boolean {
+  const entry = process.argv[1];
+  if (entry === undefined) return false;
+  const self = fileURLToPath(url);
+  return entry === self || path.basename(entry) === path.basename(self);
+}
+
+// ---------------------------------------------------------------------------
 // Marketplace repointing
 // ---------------------------------------------------------------------------
 // The awos-marketplace is a DIRECTORY source: `claude` serves the plugin live
@@ -589,7 +707,7 @@ export interface MarketPaths {
 }
 
 /** Current awos-marketplace source + installLocation, from both config files. */
-export function marketplacePaths(): MarketPaths {
+function marketplacePaths(): MarketPaths {
   const km = readJson(KM_PATH);
   const s = readJson(SETTINGS);
   const m = km[MARKET_NAME] ?? {};
@@ -609,7 +727,7 @@ export function marketplacePaths(): MarketPaths {
  * installLocation" (seen 2026-07-03). Returns the update process result so
  * callers can check its exit status.
  */
-export function setMarketplacePaths(
+function setMarketplacePaths(
   kmSource: unknown,
   install: string | null,
   settingsSource: unknown

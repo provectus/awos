@@ -33,6 +33,7 @@ import { extname, relative } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  skipMetric,
   type MetricResult,
 } from './_base.ts';
 import { isGeneratedPath } from '../generated.ts';
@@ -84,15 +85,7 @@ export function compute(
   const repoPath = repoPathOverride ?? _collectedDir;
 
   if (!existsSync(repoPath)) {
-    return makeMetricResult(
-      'adp_g11_scale',
-      null,
-      'computed',
-      [],
-      computeReliability('not-reliable', [], ['scale']),
-      [],
-      ['scale']
-    );
+    return skipMetric('adp_g11_scale', 'computed', 'not-reliable', 'scale');
   }
 
   const byLanguage: Record<string, LangStats> = {};
@@ -121,15 +114,7 @@ export function compute(
   }
 
   if (fileCount === 0) {
-    return makeMetricResult(
-      'adp_g11_scale',
-      null,
-      'computed',
-      [],
-      computeReliability('not-reliable', [], ['scale']),
-      [],
-      ['scale']
-    );
+    return skipMetric('adp_g11_scale', 'computed', 'not-reliable', 'scale');
   }
 
   const value = {
@@ -148,10 +133,6 @@ export function compute(
     reliability,
     ['scale'],
     [],
-    null,
-    undefined,
-    expression,
-    1.0,
-    1.0
+    { expression, score: 1.0, confidence: 1.0 }
   );
 }

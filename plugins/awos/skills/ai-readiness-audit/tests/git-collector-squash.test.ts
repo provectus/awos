@@ -21,34 +21,13 @@ import {
   classifyMergeStrategy,
 } from '../collectors/git.ts';
 import type { Period } from '../collectors/_base.ts';
+import { gitAs } from './helpers.ts';
 
 const PERIOD: Period = {
   bucket_days: 30,
   lookback_days: 90,
   history_available_days: 0,
 };
-
-function gitAs(
-  cwd: string,
-  args: string[],
-  date: string,
-  name: string,
-  email: string
-): void {
-  execFileSync('git', args, {
-    cwd,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      GIT_AUTHOR_DATE: date,
-      GIT_COMMITTER_DATE: date,
-      GIT_AUTHOR_NAME: name,
-      GIT_AUTHOR_EMAIL: email,
-      GIT_COMMITTER_NAME: name,
-      GIT_COMMITTER_EMAIL: email,
-    },
-  });
-}
 
 /**
  * Squash-merge repo: every "PR" lands as one ordinary trunk commit whose

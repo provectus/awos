@@ -1,5 +1,5 @@
-import { makeResult, iterFiles } from './_base.ts';
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { isSquashMergeSubject } from '../collectors/git.ts';
@@ -66,15 +66,10 @@ export function detectAwosInstalled(
 const MIN_SUBSTANTIVE_LINES = 5;
 
 function isSubstantive(filePath: string): boolean {
-  try {
-    const content = readFileSync(filePath, 'utf8');
-    const nonBlankLines = content
-      .split('\n')
-      .filter((l) => l.trim().length > 0);
-    return nonBlankLines.length > MIN_SUBSTANTIVE_LINES;
-  } catch {
-    return false;
-  }
+  const content = readTextSafe(filePath);
+  if (content === null) return false;
+  const nonBlankLines = content.split('\n').filter((l) => l.trim().length > 0);
+  return nonBlankLines.length > MIN_SUBSTANTIVE_LINES;
 }
 
 const FOUNDATIONAL_DOC_CANDIDATES = [
@@ -183,13 +178,8 @@ const TECH_SIGNALS: TechSignal[] = [
     detect: (r) =>
       iterFiles(r, ['*.tsx', '*.jsx']).length > 0 ||
       (() => {
-        const pkg = join(r, 'package.json');
-        if (!existsSync(pkg)) return false;
-        try {
-          return readFileSync(pkg, 'utf8').includes('"react"');
-        } catch {
-          return false;
-        }
+        const raw = readTextSafe(join(r, 'package.json'));
+        return raw !== null && raw.includes('"react"');
       })(),
   },
   {
@@ -389,12 +379,10 @@ export function detectArchTechMatch(
     );
   }
 
-  let content: string;
-  try {
-    // Keep the original casing — ambiguous tech names (Go, Node, …) are only
-    // recognised via their canonical capitalization (see mentionsTech).
-    content = readFileSync(archDoc, 'utf8');
-  } catch {
+  // Keep the original casing — ambiguous tech names (Go, Node, …) are only
+  // recognised via their canonical capitalization (see mentionsTech).
+  const content = readTextSafe(archDoc);
+  if (content === null) {
     return makeResult(
       'SKIP',
       null,
@@ -890,12 +878,8 @@ export function detectStaleSpecs(
     const tasksPath = join(dir, 'tasks.md');
     if (!existsSync(tasksPath)) continue;
 
-    let content: string;
-    try {
-      content = readFileSync(tasksPath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(tasksPath);
+    if (content === null) continue;
 
     const hasTasks = TASK_LINE_RX.test(content);
     if (!hasTasks) {
@@ -959,12 +943,8 @@ export function detectAgentAnnotations(
     const tasksPath = join(dir, 'tasks.md');
     if (!existsSync(tasksPath)) continue;
 
-    let content: string;
-    try {
-      content = readFileSync(tasksPath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(tasksPath);
+    if (content === null) continue;
 
     for (const line of content.split('\n')) {
       if (TASK_CHECKBOX_RX.test(line)) {

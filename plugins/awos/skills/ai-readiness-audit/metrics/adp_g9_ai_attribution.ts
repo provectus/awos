@@ -17,7 +17,7 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
   type MetricResult,
 } from './_base.ts';
 import { clamp01 } from './_score.ts';
@@ -29,14 +29,12 @@ export function compute(
 ): MetricResult {
   const read = readArtifact(collectedDir, 'git');
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_g9_ai_attribution',
-      null,
       'computed',
-      [],
-      skipReliability('minimal', 'git', read.error),
-      [],
-      ['git']
+      'minimal',
+      'git',
+      read.error
     );
   }
 
@@ -47,15 +45,7 @@ export function compute(
     typeof raw.total_commits !== 'number' ||
     raw.total_commits === 0
   ) {
-    return makeMetricResult(
-      'adp_g9_ai_attribution',
-      null,
-      'computed',
-      [],
-      computeReliability('minimal', [], ['git']),
-      [],
-      ['git']
-    );
+    return skipMetric('adp_g9_ai_attribution', 'computed', 'minimal', 'git');
   }
 
   const totalCommits: number = raw.total_commits;
@@ -76,10 +66,6 @@ export function compute(
     reliability,
     ['git'],
     [],
-    null,
-    undefined,
-    expression,
-    clamp01(attributionRate),
-    1.0
+    { expression, score: clamp01(attributionRate), confidence: 1.0 }
   );
 }

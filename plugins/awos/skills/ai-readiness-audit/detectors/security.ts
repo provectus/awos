@@ -1,5 +1,5 @@
-import { makeResult, iterFiles } from './_base.ts';
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ALL_HOOK_PATHS } from '../agent_tools.ts';
 
@@ -27,10 +27,8 @@ export function detectEnvGitignored(
     ]);
   }
 
-  let content: string;
-  try {
-    content = readFileSync(gitignorePath, 'utf8');
-  } catch {
+  const content = readTextSafe(gitignorePath);
+  if (content === null) {
     return makeResult('FAIL', 0, ['.gitignore could not be read']);
   }
 
@@ -78,12 +76,8 @@ export function detectAgentSafetyHooks(
 
   for (const sp of settingsPaths) {
     if (!existsSync(sp)) continue;
-    let content: string;
-    try {
-      content = readFileSync(sp, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(sp);
+    if (content === null) continue;
     let parsed: unknown;
     try {
       parsed = JSON.parse(content);
@@ -112,12 +106,8 @@ export function detectAgentSafetyHooks(
     if (!existsSync(hooksDir)) continue;
     const hookFiles = iterFiles(hooksDir, HOOK_FILES_GLOBS);
     for (const f of hookFiles) {
-      let src: string;
-      try {
-        src = readFileSync(f, 'utf8');
-      } catch {
-        continue;
-      }
+      const src = readTextSafe(f);
+      if (src === null) continue;
       if (HOOK_SENSITIVE_RX.test(src)) {
         return makeResult('PASS', 1, [
           `hook script references sensitive file patterns: ${relative(repoPath, f)}`,
@@ -271,11 +261,8 @@ function readRootIgnoreFiles(repoPath: string): Map<string, string> {
   const ignoreNameRx = /^\.?\w+ignore$/;
   for (const entry of entries) {
     if (!ignoreNameRx.test(entry)) continue;
-    try {
-      map.set(entry, readFileSync(join(repoPath, entry), 'utf8'));
-    } catch {
-      // skip unreadable files
-    }
+    const content = readTextSafe(join(repoPath, entry));
+    if (content !== null) map.set(entry, content);
   }
   return map;
 }
@@ -285,13 +272,9 @@ export function detectSensitiveFilesGitignored(
   _params?: unknown
 ): ReturnType<typeof makeResult> {
   // --- Step 1: determine which types are relevant ---
-  const relevantTypes = SENSITIVE_PATTERNS.filter((p) => {
-    try {
-      return iterFiles(repoPath, [p.fileGlob]).length > 0;
-    } catch {
-      return false;
-    }
-  });
+  const relevantTypes = SENSITIVE_PATTERNS.filter(
+    (p) => iterFiles(repoPath, [p.fileGlob]).length > 0
+  );
 
   if (relevantTypes.length === 0) {
     // Nothing sensitive exists to cover — absence is not evidence of guardrails.

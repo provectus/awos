@@ -48,6 +48,7 @@ import { join } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  skipMetric,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
@@ -184,15 +185,7 @@ function hasBootstrapCommand(repoPath: string): boolean {
 // ---------------------------------------------------------------------------
 
 function makeSkip(): MetricResult {
-  return makeMetricResult(
-    'adp_g15_onboarding_ease',
-    null,
-    'computed',
-    [],
-    computeReliability('minimal', [], ['git']),
-    [],
-    ['git']
-  );
+  return skipMetric('adp_g15_onboarding_ease', 'computed', 'minimal', 'git');
 }
 
 // ---------------------------------------------------------------------------
@@ -239,9 +232,6 @@ export function compute(
     computeReliability('minimal', ['git'], []),
     ['git'],
     [],
-    band,
-    'ratio',
-    expression,
-    score
+    { band, unit: 'ratio', expression, score }
   );
 }

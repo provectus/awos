@@ -57,7 +57,7 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
   trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
@@ -87,28 +87,23 @@ export function compute(
   const read = readArtifact(collectedDir, 'tracker');
 
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_i5_description_quality',
-      null,
       'banded',
-      [],
-      skipReliability('minimal', 'tracker', read.error),
-      [],
-      ['tracker']
+      'minimal',
+      'tracker',
+      read.error
     );
   }
 
   const artifact = read.artifact;
 
   if (!artifact?.available) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_i5_description_quality',
-      null,
       'banded',
-      [],
-      computeReliability('minimal', [], ['tracker']),
-      [],
-      ['tracker']
+      'minimal',
+      'tracker'
     );
   }
 
@@ -123,14 +118,11 @@ export function compute(
   );
 
   if (eligible.length === 0) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_i5_description_quality',
-      null,
       'banded',
-      [],
-      computeReliability('minimal', [], ['tracker']),
-      [],
-      ['tracker']
+      'minimal',
+      'tracker'
     );
   }
 
@@ -169,10 +161,6 @@ export function compute(
     reliability,
     ['tracker'],
     [],
-    band,
-    'ratio',
-    expression,
-    score,
-    1.0
+    { band, unit: 'ratio', expression, score, confidence: 1.0 }
   );
 }

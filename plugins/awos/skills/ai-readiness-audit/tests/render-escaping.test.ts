@@ -17,6 +17,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderMarkdown, renderHtml } from '../render.ts';
 import type { AuditJson, Check } from '../render.ts';
+import { makeCheck } from './helpers.ts';
 
 // ---------------------------------------------------------------------------
 // Hostile payloads
@@ -25,27 +26,8 @@ import type { AuditJson, Check } from '../render.ts';
 const XSS = '<script>alert(1)</script>';
 
 // ---------------------------------------------------------------------------
-// Fixture builders (modeled on tests/render.test.ts)
+// Fixture builders
 // ---------------------------------------------------------------------------
-
-function makeCheck(overrides: Partial<Check> = {}): Check {
-  return {
-    check_id: 'TEST-01',
-    code: [1001],
-    method: 'detected',
-    status: 'PASS',
-    value: null,
-    evidence: [],
-    weight_awarded: 1,
-    weight_max: 1,
-    applies: true,
-    reliability: { tag: 'maximal', confidence: 'high', note: null },
-    source: 'git',
-    definition: 'Test check definition',
-    hint: 'Test hint',
-    ...overrides,
-  };
-}
 
 /** An audit whose untrusted strings all carry hostile content. */
 function hostileAudit(): AuditJson {

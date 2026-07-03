@@ -19,17 +19,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { compute } from '../metrics/adp_i3_mttr.ts';
-import { writeCollected, loadStandards } from './helpers.ts';
+import { gitRaw, tmpDir, writeCollected, loadStandards } from './helpers.ts';
 
 const standards = loadStandards();
-
-function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'i3-'));
-}
 
 /** Build a merge record where merged_at is `hours` after branch_first_commit_at. */
 function makeMergeRecord(
@@ -48,17 +43,12 @@ function makeMergeRecord(
 function makeGitRaw(
   mergeRecords: { merged_at: string; branch_first_commit_at: string }[]
 ) {
-  return {
+  return gitRaw({
     merge_records: mergeRecords,
-    monthly_buckets: [],
-    tooling_paths: [],
     total_commits: 10,
-    ai_marked_commits: 0,
     total_merges: mergeRecords.length,
-    revert_merges: 0,
     numstat_totals: { added: 100, deleted: 20 },
-    default_branch: 'main',
-  };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -66,7 +56,7 @@ function makeGitRaw(
 // ---------------------------------------------------------------------------
 
 test('adp_i3: git-only fixture with merge_records → status OK (never SKIP)', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   // Two merge records: 0.5h and 1.5h → median = 1.0h → band "high" (< 24h)
   const collectedDir = writeCollected(
     tmp,
@@ -86,7 +76,7 @@ test('adp_i3: git-only fixture with merge_records → status OK (never SKIP)', (
 });
 
 test('adp_i3: git.json missing → status OK (never SKIP), git-proxy note present', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   // No files written — git.json absent.
   const emptyDir = join(tmp, 'empty-collected');
   mkdirSync(emptyDir, { recursive: true });
@@ -110,7 +100,7 @@ test('adp_i3: git.json missing → status OK (never SKIP), git-proxy note presen
 // ---------------------------------------------------------------------------
 
 test('adp_i3: git-only (no incident_source) → reliability.tag=not-reliable, note has git-proxy', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   const collectedDir = writeCollected(
     tmp,
     'git',
@@ -131,7 +121,7 @@ test('adp_i3: git-only (no incident_source) → reliability.tag=not-reliable, no
 });
 
 test('adp_i3: git-only, empty merge_records → OK, value=null, band=null', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   const collectedDir = writeCollected(tmp, 'git', makeGitRaw([]));
 
   const result = compute(collectedDir, standards, {});
@@ -147,7 +137,7 @@ test('adp_i3: git-only, empty merge_records → OK, value=null, band=null', () =
 // ---------------------------------------------------------------------------
 
 test('adp_i3: median < 1h → elite band', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   // Two records: 0.3h and 0.5h → median = 0.4h → elite (< 1h)
   const collectedDir = writeCollected(
     tmp,
@@ -165,7 +155,7 @@ test('adp_i3: median < 1h → elite band', () => {
 });
 
 test('adp_i3: median 1h–24h → high band', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   // Two records: 1h and 3h → median = 2h → high (>= 1h and < 24h)
   const collectedDir = writeCollected(
     tmp,
@@ -179,7 +169,7 @@ test('adp_i3: median 1h–24h → high band', () => {
 });
 
 test('adp_i3: median 24h–168h → medium band', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   // Two records: 24h and 72h → median = 48h → medium (>= 24h and < 168h)
   const collectedDir = writeCollected(
     tmp,
@@ -193,7 +183,7 @@ test('adp_i3: median 24h–168h → medium band', () => {
 });
 
 test('adp_i3: median >= 168h → low band', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   // Two records: 168h and 200h → median = 184h → low (>= 168h)
   const collectedDir = writeCollected(
     tmp,
@@ -211,27 +201,15 @@ test('adp_i3: median >= 168h → low band', () => {
 // ---------------------------------------------------------------------------
 
 test('adp_i3: tracker with incident_source → reliability stays at the git-proxy tier (no upgrade)', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   // Write git artifact
   const collectedDir = writeCollected(
     tmp,
     'git',
     makeGitRaw([makeMergeRecord(2)])
   );
-  // Write tracker artifact with incident_source present
-  const trackerArt = {
-    source: 'tracker',
-    available: true,
-    reason_if_absent: null,
-    period: { bucket_days: 30, lookback_days: 730, history_available_days: 0 },
-    raw: {
-      tickets: [],
-      type_counts: {},
-      resolved_count: 0,
-      incident_source: 'pagerduty',
-    },
-  };
-  writeFileSync(join(collectedDir, 'tracker.json'), JSON.stringify(trackerArt));
+  // Write tracker artifact with incident_source present (available=true)
+  writeCollected(tmp, 'tracker', { incident_source: 'pagerduty' });
 
   const result = compute(collectedDir, standards, {});
 
@@ -268,7 +246,7 @@ test('adp_i3: tracker with incident_source → reliability stays at the git-prox
 });
 
 test('adp_i3: tracker available=false with incident_source → no reliability upgrade', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   // Write git artifact
   const collectedDir = writeCollected(
     tmp,
@@ -276,19 +254,7 @@ test('adp_i3: tracker available=false with incident_source → no reliability up
     makeGitRaw([makeMergeRecord(5)])
   );
   // Tracker available=false — incident_source must be ignored
-  const trackerArt = {
-    source: 'tracker',
-    available: false,
-    reason_if_absent: 'no connector',
-    period: { bucket_days: 30, lookback_days: 730, history_available_days: 0 },
-    raw: {
-      tickets: [],
-      type_counts: {},
-      resolved_count: 0,
-      incident_source: 'pagerduty',
-    },
-  };
-  writeFileSync(join(collectedDir, 'tracker.json'), JSON.stringify(trackerArt));
+  writeCollected(tmp, 'tracker', { incident_source: 'pagerduty' }, false);
 
   const result = compute(collectedDir, standards, {});
 
@@ -309,7 +275,7 @@ test('adp_i3: tracker available=false with incident_source → no reliability up
 // ---------------------------------------------------------------------------
 
 test('adp_i3: categories_awarded includes 1103 when topology.has_incident_source=true', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   const collectedDir = writeCollected(
     tmp,
     'git',
@@ -327,7 +293,7 @@ test('adp_i3: categories_awarded includes 1103 when topology.has_incident_source
 });
 
 test('adp_i3: categories_awarded empty when topology.has_incident_source=false', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   const collectedDir = writeCollected(
     tmp,
     'git',
@@ -348,7 +314,7 @@ test('adp_i3: categories_awarded empty when topology.has_incident_source=false',
 // ---------------------------------------------------------------------------
 
 test('adp_i3: metric id is correct', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   const collectedDir = writeCollected(
     tmp,
     'git',
@@ -365,7 +331,7 @@ test('adp_i3: metric id is correct', () => {
 // ---------------------------------------------------------------------------
 
 test('adp_i3: score=0.75 when median MTTR is 1h (DORA high anchor)', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   const collectedDir = writeCollected(
     tmp,
     'git',
@@ -385,7 +351,7 @@ test('adp_i3: score=0.75 when median MTTR is 1h (DORA high anchor)', () => {
 });
 
 test('adp_i3: score=0.5 when median MTTR is 24h (DORA medium anchor)', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   const collectedDir = writeCollected(
     tmp,
     'git',
@@ -400,7 +366,7 @@ test('adp_i3: score=0.5 when median MTTR is 24h (DORA medium anchor)', () => {
 });
 
 test('adp_i3: score=0 and confidence=0 when no git and no incident source', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('i3-');
   const result = compute(join(tmp, 'no-collected'), standards, {});
   assert.equal(result.score, 0, 'score must be 0 when no data sources');
   assert.equal(

@@ -31,13 +31,13 @@
  *
  * This is run mostly by Claude Code, so the CLI is intentionally explicit. See README.md.
  */
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
+  CLAUDE_AUDIT_CMD,
   MARKET_NAME,
   aggregateSegments,
   assessEngineCompliance,
@@ -48,10 +48,12 @@ import {
   gitRepoSubdirs,
   isDir,
   isFile,
+  isMainModule,
   locateOutDir,
   readJson,
   repointMarketplace,
   restoreMarketplace,
+  runClaudeAudit,
   scanJudgmentsPatched,
   scriptRepoRoot,
   summarizeOutput,
@@ -225,63 +227,19 @@ async function streamRun(
   claudeFlags: string[],
   runLog: string
 ): Promise<[any, number]> {
-  const cmd = [
-    'claude',
-    '-p',
-    '/awos:ai-readiness-audit',
-    '--output-format',
-    'stream-json',
-    '--verbose',
-    ...claudeFlags,
-  ];
-  log(`▶ ${cmd.join(' ')}  (cwd=${target})`);
+  log(`▶ ${[...CLAUDE_AUDIT_CMD, ...claudeFlags].join(' ')}  (cwd=${target})`);
   log('─'.repeat(60));
   let result: any = {};
   const segments: any[] = [];
-  const wallStart = Date.now();
-  const live = (msg: string): void => {
+  const live = (msg: string, elapsedMs: number): void => {
     if (!QUIET) {
-      process.stderr.write(
-        `[${formatWallTime(Date.now() - wallStart)}] ${msg}\n`
-      );
+      process.stderr.write(`[${formatWallTime(elapsedMs)}] ${msg}\n`);
     }
   };
-  let lastEvent = Date.now();
-  const heartbeat = setInterval(() => {
-    if (Date.now() - lastEvent >= 60_000) {
-      live('… still running (no stream events for 60s)');
-      lastEvent = Date.now();
-    }
-  }, 1_000);
-
-  const lf = fs.createWriteStream(runLog);
-  const proc = spawn(cmd[0], cmd.slice(1), {
-    cwd: target,
-    stdio: ['inherit', 'pipe', 'pipe'],
-  });
-  proc.stderr!.on('data', (d) => lf.write(d));
-  const closed = new Promise<number>((res) => {
-    proc.on('error', () => res(-1));
-    proc.on('close', (code, signal) => res(code ?? (signal ? 1 : 0)));
-  });
-  const rl = readline.createInterface({
-    input: proc.stdout!,
-    crlfDelay: Infinity,
-  });
-  for await (const line of rl) {
-    lf.write(line + '\n');
-    const s = line.trim();
-    if (!s) continue;
-    let ev: any;
-    try {
-      ev = JSON.parse(s);
-    } catch {
-      continue;
-    }
-    lastEvent = Date.now();
+  const onEvent = (ev: any, elapsedMs: number): void => {
     const t = ev.type;
     if (t === 'system' && ev.subtype === 'init') {
-      live(`▶ session — model=${ev.model ?? '?'}`);
+      live(`▶ session — model=${ev.model ?? '?'}`, elapsedMs);
     } else if (t === 'assistant') {
       for (const b of ev.message?.content ?? []) {
         if (b?.type === 'text') {
@@ -289,7 +247,7 @@ async function streamRun(
             .split(/\s+/)
             .join(' ');
           if (txt && /\[Audit\]|pct|eta_seconds/.test(txt)) {
-            live(`💬 ${txt.slice(0, 240)}`);
+            live(`💬 ${txt.slice(0, 240)}`, elapsedMs);
           }
         } else if (b?.type === 'tool_use') {
           const name = b.name ?? '?';
@@ -298,13 +256,13 @@ async function streamRun(
             const oneLine = String(inp.command ?? '')
               .split(/\s+/)
               .join(' ');
-            live(`🔧 Bash ${oneLine.slice(0, 80)}`.trimEnd());
+            live(`🔧 Bash ${oneLine.slice(0, 80)}`.trimEnd(), elapsedMs);
           } else if (name === 'Agent' || name === 'Task') {
             const hint = [inp.subagent_type, inp.description]
               .filter(Boolean)
               .map((v) => String(v).split(/\s+/).join(' '))
               .join(' — ');
-            live(`🤖 ${name} ${hint.slice(0, 120)}`.trimEnd());
+            live(`🤖 ${name} ${hint.slice(0, 120)}`.trimEnd(), elapsedMs);
           }
         }
       }
@@ -315,19 +273,30 @@ async function streamRun(
       const mark = ev.is_error ? '✗ ERROR' : '✓ segment done';
       live(
         `${mark} — segment ${segments.length}: cost=$${ev.total_cost_usd} ` +
-          `duration=${ev.duration_ms}ms turns=${ev.num_turns}`
+          `duration=${ev.duration_ms}ms turns=${ev.num_turns}`,
+        elapsedMs
       );
       live(
         `   usage: in=${u.input_tokens} out=${u.output_tokens} ` +
           `cache_w=${u.cache_creation_input_tokens} ` +
-          `cache_r=${u.cache_read_input_tokens}`
+          `cache_r=${u.cache_read_input_tokens}`,
+        elapsedMs
       );
     }
-  }
-  const rc = await closed;
-  clearInterval(heartbeat);
-  await new Promise<void>((res) => lf.end(() => res()));
-  const wallMs = Date.now() - wallStart;
+  };
+
+  const { rc, wallMs } = await runClaudeAudit({
+    cwd: target,
+    flags: claudeFlags,
+    runLog,
+    stdin: 'inherit',
+    onEvent,
+    heartbeat: {
+      mode: 'silence',
+      tick: (elapsedMs) =>
+        live('… still running (no stream events for 60s)', elapsedMs),
+    },
+  });
 
   if (segments.length) {
     // Aggregate across segments; keep the LAST event's identity fields.
@@ -336,7 +305,8 @@ async function streamRun(
       live(
         `⚠ session split into ${segments.length} result segments ` +
           `(background tasks / wakeups) — aggregated: ` +
-          `turns=${result.num_turns} wall=${wallMs}ms cost=$${result.total_cost_usd}`
+          `turns=${result.num_turns} wall=${wallMs}ms cost=$${result.total_cost_usd}`,
+        wallMs
       );
     }
   }
@@ -539,6 +509,315 @@ function printFinalSummary(opts: {
 }
 
 // ---------------------------------------------------------------------------
+/** Everything performRun needs; all read-only provenance/config from main(). */
+interface RunContext {
+  args: HarnessArgs;
+  target: string;
+  worktree: string;
+  engine: string;
+  runDir: string;
+  today: string;
+  ts: string;
+  claudeVer: string;
+  seedFrom: string | null;
+  deployedSha: string | null;
+  awosSha: string;
+  awosShort: string;
+  awosBranch: string;
+  awosDirty: boolean;
+  tgtName: string;
+  tgtShort: string;
+  tgtBranch: string;
+  tgtDirty: boolean;
+}
+
+/** The single immutable result of a run — consumed by the summary + exit logic. */
+interface RunOutcome {
+  result: any;
+  comp: Compliance;
+  summary: any;
+  judgmentsPatched: boolean | null;
+  reports: ReportHtml;
+  rc: number;
+  /** True when the session died mid-flight (non-zero rc or is_error). */
+  partial: boolean;
+  /** How many claude launches the retry loop was allowed. */
+  attempts: number;
+}
+
+/**
+ * Prepare the target, run claude (with the engine-compliance retry loop and
+ * audit-core salvage), archive the output, and write run-meta.json. Returns
+ * one immutable outcome; the caller owns the marketplace-restore finally.
+ */
+async function performRun(ctx: RunContext): Promise<RunOutcome> {
+  const {
+    args,
+    target,
+    worktree,
+    engine,
+    runDir,
+    today,
+    ts,
+    claudeVer,
+    seedFrom,
+    deployedSha,
+    awosSha,
+    awosShort,
+    awosBranch,
+    awosDirty,
+    tgtName,
+    tgtShort,
+    tgtBranch,
+    tgtDirty,
+  } = ctx;
+
+  fs.mkdirSync(runDir, { recursive: true });
+  log('▶ preparing target context/audits/');
+  const seededDate = prepareTarget(
+    target,
+    args.phase,
+    runDir,
+    seedFrom,
+    args.seedDate,
+    today
+  );
+
+  let claudeFlags = args.claudeFlags
+    ? args.claudeFlags.split(/\s+/).filter(Boolean)
+    : [];
+  if (args.model) claudeFlags = [...claudeFlags, '--model', args.model];
+  if (!args.allowUserMcp) {
+    // Test isolation: without this, user-scope MCP servers (real Jira,
+    // Slack, Gmail, ...) leak into the audited session even with
+    // --setting-sources project — a test audit could pull live data.
+    claudeFlags = [...claudeFlags, '--strict-mcp-config'];
+  }
+  // The target's OWN declared MCP servers are part of the audited project
+  // (the audit assesses the project, not the auditor's environment) — pass
+  // them back explicitly; --strict-mcp-config honors explicit --mcp-config.
+  // Org mode: the org folder's configs plus every repo subdirectory's.
+  const repoDirs = fs.existsSync(path.join(target, '.git'))
+    ? []
+    : gitRepoSubdirs(target);
+  const projectMcp = discoverProjectMcp(target, repoDirs);
+  if (Object.keys(projectMcp.servers).length > 0) {
+    const mcpConfigPath = path.join(runDir, 'mcp-config.json');
+    fs.writeFileSync(
+      mcpConfigPath,
+      JSON.stringify({ mcpServers: projectMcp.servers }, null, 2)
+    );
+    claudeFlags = [...claudeFlags, '--mcp-config', mcpConfigPath];
+    log(
+      `▶ project MCP servers: ${Object.keys(projectMcp.servers).join(', ')} ` +
+        `(from ${projectMcp.files.length} config file(s))`
+    );
+  } else {
+    log('▶ project MCP servers: none declared in target');
+  }
+  const audits = path.join(target, 'context/audits');
+
+  // Engine-compliance guard + auto-retry. The headless model sometimes
+  // reconstructs the removed per-dimension fan-out instead of calling
+  // audit-core, producing .md grade files and no audit.json — a silent
+  // regression that used to pass (rc=0, an output dir exists). Detect it,
+  // relaunch up to --retries times, and finally salvage by running the
+  // engine ourselves. `model_complied` records whether the MODEL used the
+  // engine, independent of any salvage.
+  const attempts = args.noEngineGuard ? 1 : Math.max(1, 1 + args.retries);
+  let result: any = {};
+  let comp: Compliance = {} as Compliance;
+  let rc = 0;
+  let outDir = '';
+  let finalLog = '';
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    if (attempt > 1) {
+      log(
+        `\n▶ engine-skip retry ${attempt - 1}/${attempts - 1} — relaunching claude`
+      );
+      const prev = locateOutDir(audits, today, seededDate);
+      if (prev && isDir(prev) && path.basename(prev) !== seededDate) {
+        fs.rmSync(prev, { recursive: true, force: true });
+        log(`  ✓ cleared non-compliant output ${prev}`);
+      }
+    }
+    // Retries get a corrective system prompt: the barley regression showed
+    // a bare relaunch re-confabulates the same engine skip (three attempts,
+    // ~45 min), so a retry must actually change the model's premises.
+    const attemptFlags =
+      attempt === 1
+        ? claudeFlags
+        : [...claudeFlags, '--append-system-prompt', RETRY_CORRECTIVE_PROMPT];
+    finalLog = path.join(runDir, `run.attempt${attempt}.jsonl`);
+    [result, rc] = await streamRun(target, attemptFlags, finalLog);
+    outDir = locateOutDir(audits, today, seededDate);
+    comp = assessEngineCompliance(outDir, finalLog);
+    if (args.noEngineGuard) {
+      log(
+        `  engine guard disabled — compliance signals: ${JSON.stringify(comp)}`
+      );
+      break;
+    }
+    if (comp.engine_compliant) {
+      if (attempt > 1) {
+        log(
+          `  ✓ retry ${attempt - 1} complied (audit-core called, audit.json present)`
+        );
+      }
+      break;
+    }
+    warn(
+      `⚠ NON-COMPLIANT run — the model skipped the deterministic engine ` +
+        `(audit_core_calls=${comp.audit_core_calls}, ` +
+        `has_audit_json=${comp.has_audit_json}, ` +
+        `dimension-auditor_spawns=${comp.fanout_agent_spawns}).`
+    );
+  }
+
+  const modelComplied = Boolean(comp.engine_compliant);
+  // Expose the final attempt's transcript under the canonical name for
+  // compare scripts (per-attempt transcripts are kept as run.attemptN.jsonl).
+  try {
+    fs.copyFileSync(finalLog, path.join(runDir, 'run.jsonl'));
+  } catch {
+    // best-effort copy
+  }
+
+  // Salvage: if every attempt skipped the engine, run audit-core ourselves
+  // so the archive still holds a correct audit.json (right scoring universe),
+  // not just the model's hand-graded .md. The run stays flagged as a
+  // product regression via model_complied=False.
+  let engineSeeded = false;
+  if (!args.noEngineGuard && !modelComplied) {
+    warn(
+      '⚠ all attempts skipped the engine — harness seeding audit-core to salvage the artifact'
+    );
+    if (!outDir) outDir = path.join(audits, today);
+    engineSeeded = seedAuditCore(engine, target, outDir);
+    comp = assessEngineCompliance(outDir, finalLog);
+  }
+  comp.model_complied = modelComplied;
+  comp.engine_seeded_by_harness = engineSeeded;
+
+  // Fallback render: a transport failure (e.g. "API Error: Connection
+  // closed mid-response") can kill claude after audit.json is complete but
+  // before it renders the reports — leaving a non-zero rc and no
+  // report.md/html. audit.json is the source of truth and `render` is a
+  // pure function of it, so we can finish the job ourselves and turn a
+  // failed run into a complete one. Also renders the salvage-seeded JSON.
+  if (outDir && isDir(outDir)) {
+    const srcJson = ['org-portfolio.json', 'audit.json']
+      .map((n) => path.join(outDir, n))
+      .find((p) => isFile(p));
+    if (srcJson && !isFile(path.join(outDir, 'report.html'))) {
+      log(
+        `⚠ report.html missing but ${path.basename(srcJson)} present ` +
+          `(claude rc=${rc}) — rendering reports from JSON`
+      );
+      // `render --format both --out-dir` writes report.md + report.html in
+      // one process instead of a spawn per format.
+      const rp = spawnSync(
+        'node',
+        [engine, 'render', srcJson, '--format', 'both', '--out-dir', outDir],
+        { encoding: 'utf8' }
+      );
+      if (rp.status === 0) {
+        log('  ✓ wrote report.md + report.html');
+      } else {
+        log(`  ✗ render failed: ${(rp.stderr || '').trim().slice(0, 200)}`);
+      }
+    }
+  }
+
+  const archived = path.join(runDir, 'audit-output');
+  let summary: any = {};
+  if (outDir && isDir(outDir)) {
+    fs.cpSync(outDir, archived, { recursive: true });
+    log(`▶ archived audit output -> ${runDir}/audit-output`);
+    summary = summarizeOutput(archived);
+  } else {
+    log(`⚠ no audit output dir found under ${audits} (audit may have failed)`);
+  }
+
+  // Did the run finish? A non-zero rc or an is_error result event means
+  // the session died mid-flight; the archive may be usable but the run
+  // must not report success.
+  const partial = Boolean(rc !== 0 || result.is_error);
+
+  // Were the judgment categories actually patched? A leftover
+  // "PENDING_JUDGMENT" in any archived audit.json means Step 6 never
+  // completed the LLM slice — the score is missing the judgment weight.
+  const judgmentsPatched = scanJudgmentsPatched(archived);
+  if (judgmentsPatched === false) {
+    warn(
+      '⚠ PENDING_JUDGMENT left in archived audit.json — the judgment ' +
+        'categories were never patched (Step 6 incomplete); scores are ' +
+        'missing the judgment weight'
+    );
+  }
+
+  const reports = isDir(archived)
+    ? collectReportHtml(archived)
+    : { paths: [], missing: [] };
+
+  const meta = {
+    timestamp_utc: ts,
+    label: args.label,
+    phase: args.phase,
+    model: args.model || 'claude-default',
+    seeded_previous_date: seededDate,
+    seed_from: seedFrom,
+    claude_version: claudeVer,
+    claude_rc: rc,
+    compliance: comp,
+    skill_under_test: {
+      repo: 'awos',
+      worktree,
+      commit: awosSha,
+      short: awosShort,
+      branch: awosBranch,
+      dirty: awosDirty,
+      served_via: 'marketplace-repoint',
+      deployed_sha: deployedSha,
+    },
+    target: {
+      name: tgtName,
+      path: target,
+      commit: tgtShort,
+      branch: tgtBranch,
+      dirty: tgtDirty,
+    },
+    usage: result.usage ?? null,
+    modelUsage: result.modelUsage ?? null,
+    total_cost_usd: result.total_cost_usd ?? null,
+    duration_ms: result.duration_ms ?? null,
+    num_turns: result.num_turns ?? null,
+    wall_ms: result.wall_ms ?? null,
+    result_segments: result.result_segments ?? null,
+    is_error: result.is_error ?? null,
+    partial,
+    judgments_patched: judgmentsPatched,
+    report_html: reports.paths,
+    summary,
+  };
+  fs.writeFileSync(
+    path.join(runDir, 'run-meta.json'),
+    JSON.stringify(meta, null, 2)
+  );
+
+  return {
+    result,
+    comp,
+    summary,
+    judgmentsPatched,
+    reports,
+    rc,
+    partial,
+    attempts,
+  };
+}
+
+// ---------------------------------------------------------------------------
 async function main(): Promise<void> {
   const args = parseCli(process.argv.slice(2));
   QUIET = args.quiet;
@@ -659,255 +938,30 @@ async function main(): Promise<void> {
     log(`  ✓ marketplace served from worktree (SKILL.md ${deployedSha})`);
   }
 
-  let result: any = {};
-  let comp: Compliance = {} as Compliance;
-  let summary: any = {};
-  let partial = false;
-  let judgmentsPatched: boolean | null = null;
-  let reports: ReportHtml = { paths: [], missing: [] };
-  let rc = 0;
-  let attempts = 1;
-
+  // The run itself lives in performRun; the finally guarantees the
+  // marketplace is restored even when performRun throws or dies mid-flight.
+  let outcome: RunOutcome;
   try {
-    fs.mkdirSync(runDir, { recursive: true });
-    log('▶ preparing target context/audits/');
-    const seededDate = prepareTarget(
+    outcome = await performRun({
+      args,
       target,
-      args.phase,
+      worktree,
+      engine,
       runDir,
+      today,
+      ts,
+      claudeVer,
       seedFrom,
-      args.seedDate,
-      today
-    );
-
-    let claudeFlags = args.claudeFlags
-      ? args.claudeFlags.split(/\s+/).filter(Boolean)
-      : [];
-    if (args.model) claudeFlags = [...claudeFlags, '--model', args.model];
-    if (!args.allowUserMcp) {
-      // Test isolation: without this, user-scope MCP servers (real Jira,
-      // Slack, Gmail, ...) leak into the audited session even with
-      // --setting-sources project — a test audit could pull live data.
-      claudeFlags = [...claudeFlags, '--strict-mcp-config'];
-    }
-    // The target's OWN declared MCP servers are part of the audited project
-    // (the audit assesses the project, not the auditor's environment) — pass
-    // them back explicitly; --strict-mcp-config honors explicit --mcp-config.
-    // Org mode: the org folder's configs plus every repo subdirectory's.
-    const repoDirs = fs.existsSync(path.join(target, '.git'))
-      ? []
-      : gitRepoSubdirs(target);
-    const projectMcp = discoverProjectMcp(target, repoDirs);
-    if (Object.keys(projectMcp.servers).length > 0) {
-      const mcpConfigPath = path.join(runDir, 'mcp-config.json');
-      fs.writeFileSync(
-        mcpConfigPath,
-        JSON.stringify({ mcpServers: projectMcp.servers }, null, 2)
-      );
-      claudeFlags = [...claudeFlags, '--mcp-config', mcpConfigPath];
-      log(
-        `▶ project MCP servers: ${Object.keys(projectMcp.servers).join(', ')} ` +
-          `(from ${projectMcp.files.length} config file(s))`
-      );
-    } else {
-      log('▶ project MCP servers: none declared in target');
-    }
-    const audits = path.join(target, 'context/audits');
-
-    // Engine-compliance guard + auto-retry. The headless model sometimes
-    // reconstructs the removed per-dimension fan-out instead of calling
-    // audit-core, producing .md grade files and no audit.json — a silent
-    // regression that used to pass (rc=0, an output dir exists). Detect it,
-    // relaunch up to --retries times, and finally salvage by running the
-    // engine ourselves. `model_complied` records whether the MODEL used the
-    // engine, independent of any salvage.
-    attempts = args.noEngineGuard ? 1 : Math.max(1, 1 + args.retries);
-    let outDir = '';
-    let finalLog = '';
-    for (let attempt = 1; attempt <= attempts; attempt++) {
-      if (attempt > 1) {
-        log(
-          `\n▶ engine-skip retry ${attempt - 1}/${attempts - 1} — relaunching claude`
-        );
-        const prev = locateOutDir(audits, today, seededDate);
-        if (prev && isDir(prev) && path.basename(prev) !== seededDate) {
-          fs.rmSync(prev, { recursive: true, force: true });
-          log(`  ✓ cleared non-compliant output ${prev}`);
-        }
-      }
-      // Retries get a corrective system prompt: the barley regression showed
-      // a bare relaunch re-confabulates the same engine skip (three attempts,
-      // ~45 min), so a retry must actually change the model's premises.
-      const attemptFlags =
-        attempt === 1
-          ? claudeFlags
-          : [...claudeFlags, '--append-system-prompt', RETRY_CORRECTIVE_PROMPT];
-      finalLog = path.join(runDir, `run.attempt${attempt}.jsonl`);
-      [result, rc] = await streamRun(target, attemptFlags, finalLog);
-      outDir = locateOutDir(audits, today, seededDate);
-      comp = assessEngineCompliance(outDir, finalLog);
-      if (args.noEngineGuard) {
-        log(
-          `  engine guard disabled — compliance signals: ${JSON.stringify(comp)}`
-        );
-        break;
-      }
-      if (comp.engine_compliant) {
-        if (attempt > 1) {
-          log(
-            `  ✓ retry ${attempt - 1} complied (audit-core called, audit.json present)`
-          );
-        }
-        break;
-      }
-      warn(
-        `⚠ NON-COMPLIANT run — the model skipped the deterministic engine ` +
-          `(audit_core_calls=${comp.audit_core_calls}, ` +
-          `has_audit_json=${comp.has_audit_json}, ` +
-          `dimension-auditor_spawns=${comp.fanout_agent_spawns}).`
-      );
-    }
-
-    const modelComplied = Boolean(comp.engine_compliant);
-    // Expose the final attempt's transcript under the canonical name for
-    // compare scripts (per-attempt transcripts are kept as run.attemptN.jsonl).
-    try {
-      fs.copyFileSync(finalLog, path.join(runDir, 'run.jsonl'));
-    } catch {
-      // best-effort copy
-    }
-
-    // Salvage: if every attempt skipped the engine, run audit-core ourselves
-    // so the archive still holds a correct audit.json (right scoring universe),
-    // not just the model's hand-graded .md. The run stays flagged as a
-    // product regression via model_complied=False.
-    let engineSeeded = false;
-    if (!args.noEngineGuard && !modelComplied) {
-      warn(
-        '⚠ all attempts skipped the engine — harness seeding audit-core to salvage the artifact'
-      );
-      if (!outDir) outDir = path.join(audits, today);
-      engineSeeded = seedAuditCore(engine, target, outDir);
-      comp = assessEngineCompliance(outDir, finalLog);
-    }
-    comp.model_complied = modelComplied;
-    comp.engine_seeded_by_harness = engineSeeded;
-
-    // Fallback render: a transport failure (e.g. "API Error: Connection
-    // closed mid-response") can kill claude after audit.json is complete but
-    // before it renders the reports — leaving a non-zero rc and no
-    // report.md/html. audit.json is the source of truth and `render` is a
-    // pure function of it, so we can finish the job ourselves and turn a
-    // failed run into a complete one. Also renders the salvage-seeded JSON.
-    if (outDir && isDir(outDir)) {
-      const srcJson = ['org-portfolio.json', 'audit.json']
-        .map((n) => path.join(outDir, n))
-        .find((p) => isFile(p));
-      if (srcJson && !isFile(path.join(outDir, 'report.html'))) {
-        log(
-          `⚠ report.html missing but ${path.basename(srcJson)} present ` +
-            `(claude rc=${rc}) — rendering reports from JSON`
-        );
-        for (const [fmt, outName] of [
-          ['md', 'report.md'],
-          ['html', 'report.html'],
-        ] as const) {
-          const rp = spawnSync(
-            'node',
-            [engine, 'render', srcJson, '--format', fmt],
-            {
-              encoding: 'utf8',
-            }
-          );
-          if (rp.status === 0) {
-            fs.writeFileSync(path.join(outDir, outName), rp.stdout);
-            log(`  ✓ wrote ${outName}`);
-          } else {
-            log(
-              `  ✗ render ${fmt} failed: ${(rp.stderr || '').trim().slice(0, 200)}`
-            );
-          }
-        }
-      }
-    }
-
-    const archived = path.join(runDir, 'audit-output');
-    if (outDir && isDir(outDir)) {
-      fs.cpSync(outDir, archived, { recursive: true });
-      log(`▶ archived audit output -> ${runDir}/audit-output`);
-      summary = summarizeOutput(archived);
-    } else {
-      log(
-        `⚠ no audit output dir found under ${audits} (audit may have failed)`
-      );
-      summary = {};
-    }
-
-    // Did the run finish? A non-zero rc or an is_error result event means
-    // the session died mid-flight; the archive may be usable but the run
-    // must not report success.
-    partial = Boolean(rc !== 0 || result.is_error);
-
-    // Were the judgment categories actually patched? A leftover
-    // "PENDING_JUDGMENT" in any archived audit.json means Step 6 never
-    // completed the LLM slice — the score is missing the judgment weight.
-    judgmentsPatched = scanJudgmentsPatched(archived);
-    if (judgmentsPatched === false) {
-      warn(
-        '⚠ PENDING_JUDGMENT left in archived audit.json — the judgment ' +
-          'categories were never patched (Step 6 incomplete); scores are ' +
-          'missing the judgment weight'
-      );
-    }
-
-    reports = isDir(archived)
-      ? collectReportHtml(archived)
-      : { paths: [], missing: [] };
-
-    const meta = {
-      timestamp_utc: ts,
-      label: args.label,
-      phase: args.phase,
-      model: args.model || 'claude-default',
-      seeded_previous_date: seededDate,
-      seed_from: seedFrom,
-      claude_version: claudeVer,
-      claude_rc: rc,
-      compliance: comp,
-      skill_under_test: {
-        repo: 'awos',
-        worktree,
-        commit: awosSha,
-        short: awosShort,
-        branch: awosBranch,
-        dirty: awosDirty,
-        served_via: 'marketplace-repoint',
-        deployed_sha: deployedSha,
-      },
-      target: {
-        name: tgtName,
-        path: target,
-        commit: tgtShort,
-        branch: tgtBranch,
-        dirty: tgtDirty,
-      },
-      usage: result.usage ?? null,
-      modelUsage: result.modelUsage ?? null,
-      total_cost_usd: result.total_cost_usd ?? null,
-      duration_ms: result.duration_ms ?? null,
-      num_turns: result.num_turns ?? null,
-      wall_ms: result.wall_ms ?? null,
-      result_segments: result.result_segments ?? null,
-      is_error: result.is_error ?? null,
-      partial,
-      judgments_patched: judgmentsPatched,
-      report_html: reports.paths,
-      summary,
-    };
-    fs.writeFileSync(
-      path.join(runDir, 'run-meta.json'),
-      JSON.stringify(meta, null, 2)
-    );
+      deployedSha,
+      awosSha,
+      awosShort,
+      awosBranch,
+      awosDirty,
+      tgtName,
+      tgtShort,
+      tgtBranch,
+      tgtDirty,
+    });
   } finally {
     if (origMarket !== null) {
       log(`▶ restoring ${MARKET_NAME} to original (${origMarket.km_install})`);
@@ -916,13 +970,13 @@ async function main(): Promise<void> {
   }
 
   printFinalSummary({
-    result,
-    comp,
-    summary,
-    partial,
-    judgmentsPatched,
-    reports,
-    rc,
+    result: outcome.result,
+    comp: outcome.comp,
+    summary: outcome.summary,
+    partial: outcome.partial,
+    judgmentsPatched: outcome.judgmentsPatched,
+    reports: outcome.reports,
+    rc: outcome.rc,
     runDir,
     targetName: tgtName,
   });
@@ -930,12 +984,12 @@ async function main(): Promise<void> {
   // Loud, non-zero exit when the MODEL skipped the engine, even if the harness
   // salvaged a correct audit.json. This is the QA hole the guard closes: such a
   // run must never quietly report success.
-  if (!args.noEngineGuard && comp.model_complied === false) {
-    const salvaged = comp.engine_seeded_by_harness;
+  if (!args.noEngineGuard && outcome.comp.model_complied === false) {
+    const salvaged = outcome.comp.engine_seeded_by_harness;
     warn(
       `\n✗ ENGINE-SKIP REGRESSION: the model never ran audit-core across ` +
-        `${attempts} attempt(s) — it reconstructed the per-dimension fan-out ` +
-        `(dimension-auditor spawns=${comp.fanout_agent_spawns}). ` +
+        `${outcome.attempts} attempt(s) — it reconstructed the per-dimension ` +
+        `fan-out (dimension-auditor spawns=${outcome.comp.fanout_agent_spawns}). ` +
         `${salvaged ? 'Harness seeded audit-core so the artifact is correct, but ' : ''}` +
         `this is a product regression (CLAUDE.md 'Known gap'). Exiting non-zero.`
     );
@@ -944,16 +998,10 @@ async function main(): Promise<void> {
 
   // A crashed / errored session must never exit 0, even when the archive was
   // salvaged (fallback render etc.) — the run is partial, not successful.
-  if (partial) process.exit(1);
+  if (outcome.partial) process.exit(1);
 }
 
-const isMain =
-  process.argv[1] !== undefined &&
-  (process.argv[1] === fileURLToPath(import.meta.url) ||
-    process.argv[1].endsWith('/run_audit_test.ts') ||
-    process.argv[1].endsWith('\\run_audit_test.ts'));
-
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   main().catch((err) => {
     if (err instanceof HarnessExit) {
       process.stderr.write(`error: ${err.message}\n`);

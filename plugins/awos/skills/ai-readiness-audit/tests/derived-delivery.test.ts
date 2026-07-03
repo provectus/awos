@@ -14,7 +14,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { computeDerivedDelivery, patchReportBlocks } from '../audit_core.ts';
+import { computeDerivedDelivery } from '../audit_core.ts';
+import { patchReportBlocks } from '../audit_patch.ts';
 import { renderMarkdown } from '../render.ts';
 import type { AuditJson } from '../render.ts';
 

@@ -23,7 +23,7 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
   type MetricResult,
 } from './_base.ts';
 import {
@@ -68,28 +68,18 @@ export function compute(
 ): MetricResult {
   const read = readArtifact(collectedDir, 'git');
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_g1_tooling_depth',
-      null,
       'coverage',
-      [],
-      skipReliability('maximal', 'git', read.error),
-      [],
-      ['git']
+      'maximal',
+      'git',
+      read.error
     );
   }
 
   const raw = read.artifact?.raw;
   if (!raw || !Array.isArray(raw.tooling_paths)) {
-    return makeMetricResult(
-      'adp_g1_tooling_depth',
-      null,
-      'coverage',
-      [],
-      computeReliability('maximal', [], ['git']),
-      [],
-      ['git']
-    );
+    return skipMetric('adp_g1_tooling_depth', 'coverage', 'maximal', 'git');
   }
 
   const toolingPaths: string[] = raw.tooling_paths;
@@ -129,12 +119,6 @@ export function compute(
     reliability,
     ['git'],
     [],
-    null,
-    undefined,
-    expression,
-    undefined,
-    undefined,
-    undefined,
-    evidencePerCode
+    { expression, evidencePerCode }
   );
 }

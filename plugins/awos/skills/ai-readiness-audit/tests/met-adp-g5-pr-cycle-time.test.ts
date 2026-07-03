@@ -12,17 +12,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { compute } from '../metrics/adp_g5_pr_cycle_time.ts';
-import { writeCollected, loadStandards } from './helpers.ts';
+import { gitRaw, tmpDir, writeCollected, loadStandards } from './helpers.ts';
 
 const standards = loadStandards();
-
-function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'g5-'));
-}
 
 /** Create a merge record where merged_at is N hours after branch_first_commit_at. */
 function mergeRecord(hoursApart: number): {
@@ -38,18 +33,12 @@ function mergeRecord(hoursApart: number): {
 }
 
 test('adp_g5: < 24h cycle time → elite band', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(10)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(10)] })
+  );
 
   const result = compute(collectedDir, standards, {});
 
@@ -68,18 +57,12 @@ test('adp_g5: < 24h cycle time → elite band', () => {
 });
 
 test('adp_g5: 48h cycle time → high band', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(48)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 3,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 10, deleted: 2 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(48)] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -90,18 +73,12 @@ test('adp_g5: 48h cycle time → high band', () => {
 });
 
 test('adp_g5: 240h cycle time → medium band', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(240)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 8,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 50, deleted: 10 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(240)] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -112,18 +89,12 @@ test('adp_g5: 240h cycle time → medium band', () => {
 });
 
 test('adp_g5: >= 720h cycle time → low band', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(800)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 20,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 100, deleted: 30 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(800)] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -134,19 +105,15 @@ test('adp_g5: >= 720h cycle time → low band', () => {
 });
 
 test('adp_g5: median from odd count of records', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g5-');
   // Cycle times: 10h, 50h, 300h → median = 50h → high
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(10), mergeRecord(50), mergeRecord(300)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 12,
-    ai_marked_commits: 0,
-    total_merges: 3,
-    revert_merges: 0,
-    numstat_totals: { added: 80, deleted: 20 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord(10), mergeRecord(50), mergeRecord(300)],
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -157,19 +124,13 @@ test('adp_g5: median from odd count of records', () => {
 });
 
 test('adp_g5: median from even count of records', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g5-');
   // Cycle times: 12h, 36h → median = 24h → high (>=24 so not elite)
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(12), mergeRecord(36)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 6,
-    ai_marked_commits: 0,
-    total_merges: 2,
-    revert_merges: 0,
-    numstat_totals: { added: 30, deleted: 5 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(12), mergeRecord(36)] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -184,18 +145,12 @@ test('adp_g5: median from even count of records', () => {
 });
 
 test('adp_g5: reliability tag is not-reliable (git approximation)', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(20)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 4,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 15, deleted: 3 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(20)] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -206,25 +161,19 @@ test('adp_g5: reliability tag is not-reliable (git approximation)', () => {
 });
 
 test('adp_g5: SKIP when git.json absent', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g5-');
   const result = compute(join(tmp, 'no-collected'), standards, {});
   assert.equal(result.status, 'SKIP', 'must SKIP when git.json absent');
   assert.equal(result.value, null, 'value must be null on SKIP');
 });
 
 test('adp_g5: SKIP when merge_records empty', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 2,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 5, deleted: 0 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -239,27 +188,21 @@ test('adp_g5: SKIP when merge_records empty', () => {
 // ---------------------------------------------------------------------------
 
 test('adp_g5: score=0.75 and confidence=1.0 when median cycle time is 24h (DORA high anchor)', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g5-');
   const base = new Date('2025-01-01T00:00:00Z');
   const merged = new Date(base.getTime() + 24 * 3_600_000);
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [
-      {
-        branch_first_commit_at: base.toISOString(),
-        merged_at: merged.toISOString(),
-      },
-    ],
-    monthly_buckets: [
-      { bucket_start: '2025-01-01', authors: 2, commits: 10, merges: 1 },
-    ],
-    tooling_paths: [],
-    total_commits: 10,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 50, deleted: 10 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [
+        {
+          branch_first_commit_at: base.toISOString(),
+          merged_at: merged.toISOString(),
+        },
+      ],
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -270,26 +213,22 @@ test('adp_g5: score=0.75 and confidence=1.0 when median cycle time is 24h (DORA 
 });
 
 test('adp_g5: score=0 and confidence=0 on SKIP', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g5-');
   const result = compute(join(tmp, 'no-collected'), standards, {});
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
 });
 
 test('adp_g5: squash-merge strategy → SKIP (merge-record proxy unavailable)', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(12)],
-    window_stats: { merge_strategy: 'squash' },
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 50,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord(12)],
+      window_stats: { merge_strategy: 'squash' },
+    })
+  );
   const result = compute(collectedDir, standards, {});
   assert.equal(
     result.status,
@@ -315,19 +254,13 @@ function writeTracker(
 }
 
 test('adp_g5: tracker in_progress_at→resolved_at replaces the git proxy when present', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g5-');
   // Git proxy would say 700h; tracker workflow history says 12h median.
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(700)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 10, deleted: 2 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(700)] })
+  );
   writeTracker(collectedDir, [
     {
       id: 'PROJ-1',
@@ -365,18 +298,12 @@ test('adp_g5: tracker in_progress_at→resolved_at replaces the git proxy when p
 });
 
 test('adp_g5: tickets without in_progress_at fall back to the git proxy', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(10)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 10, deleted: 2 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(10)] })
+  );
   // Tracker connected, but no ticket carries workflow history.
   writeTracker(collectedDir, [
     { id: 'PROJ-1', resolved_at: '2025-03-01T12:00:00Z' },
@@ -396,20 +323,16 @@ test('adp_g5: tickets without in_progress_at fall back to the git proxy', () => 
 });
 
 test('adp_g5: tracker workflow history rescues a squash-merge repo from the null proxy', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g5-');
   // Squash workflow: the git proxy is unrepresentative and normally yields null.
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(5)],
-    window_stats: { merge_strategy: 'squash' },
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 50,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 10, deleted: 2 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord(5)],
+      window_stats: { merge_strategy: 'squash' },
+    })
+  );
   writeTracker(collectedDir, [
     {
       id: 'PROJ-1',
@@ -436,19 +359,15 @@ test('adp_g5: tracker workflow history rescues a squash-merge repo from the null
 // ---------------------------------------------------------------------------
 
 test('adp_g5: squash repo + tracker without status-transition history → reason says changelog not fetched', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(12)],
-    window_stats: { merge_strategy: 'squash' },
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 50,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord(12)],
+      window_stats: { merge_strategy: 'squash' },
+    })
+  );
   // Tracker IS connected, but tickets carry only created/resolved dates —
   // no in_progress_at (per-ticket changelog never fetched).
   writeTracker(collectedDir, [
@@ -471,19 +390,15 @@ test('adp_g5: squash repo + tracker without status-transition history → reason
 });
 
 test('adp_g5: squash repo with NO tracker keeps the generic needs-connector reason', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(12)],
-    window_stats: { merge_strategy: 'squash' },
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 50,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord(12)],
+      window_stats: { merge_strategy: 'squash' },
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(result.status, 'SKIP', 'squash repo without tracker must SKIP');
@@ -500,18 +415,12 @@ test('adp_g5: squash repo with NO tracker keeps the generic needs-connector reas
 });
 
 test('adp_g5: tracker path appends the partial-fetch note from fetch_meta', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(700)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 10, deleted: 2 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(700)] })
+  );
   writeFileSync(
     join(collectedDir, 'tracker.json'),
     JSON.stringify({

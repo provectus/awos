@@ -25,7 +25,7 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
   type MetricResult,
 } from './_base.ts';
 import { bandScore } from './_score.ts';
@@ -52,28 +52,23 @@ export function compute(
 ): MetricResult {
   const read = readArtifact(collectedDir, 'git');
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_g3_deploy_frequency',
-      null,
       'banded',
-      [],
-      skipReliability('not-reliable', 'git', read.error),
-      [],
-      ['git']
+      'not-reliable',
+      'git',
+      read.error
     );
   }
 
   const artifact = read.artifact;
   const raw = artifact?.raw;
   if (!raw || !raw.window_stats) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_g3_deploy_frequency',
-      null,
       'banded',
-      [],
-      computeReliability('not-reliable', [], ['git']),
-      [],
-      ['git']
+      'not-reliable',
+      'git'
     );
   }
 
@@ -82,14 +77,11 @@ export function compute(
   const windowDays: number = windowStats.window_days ?? 0;
 
   if (windowDays <= 0) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_g3_deploy_frequency',
-      null,
       'banded',
-      [],
-      computeReliability('not-reliable', [], ['git']),
-      [],
-      ['git']
+      'not-reliable',
+      'git'
     );
   }
 
@@ -109,10 +101,6 @@ export function compute(
     reliability,
     ['git'],
     [],
-    band,
-    undefined,
-    expression,
-    score,
-    1.0
+    { band, expression, score, confidence: 1.0 }
   );
 }

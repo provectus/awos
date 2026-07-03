@@ -1,5 +1,5 @@
-import { makeResult, iterFiles } from './_base.ts';
-import { readFileSync, existsSync } from 'node:fs';
+import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
@@ -86,12 +86,7 @@ function listAgentFiles(repoPath: string): string[] {
   for (const relDir of ALL_TOOL_CONFIG_DIRS) {
     const toolDir = join(repoPath, relDir);
     if (!existsSync(toolDir)) continue;
-    try {
-      const files = iterFiles(toolDir, AGENT_FILE_GLOBS);
-      results.push(...files);
-    } catch {
-      // ignore scan errors
-    }
+    results.push(...iterFiles(toolDir, AGENT_FILE_GLOBS));
   }
 
   return [...new Set(results)]
@@ -117,12 +112,8 @@ export function detectInvisibleUnicode(
   const hitFiles: Array<{ file: string; count: number }> = [];
 
   for (const filePath of agentFiles) {
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
     const count = countInvisible(content);
     if (count > 0) {
       hitFiles.push({ file: relative(repoPath, filePath), count });
@@ -220,12 +211,8 @@ export function detectPromptInjection(
   const hits: Array<{ file: string; line: number; pattern: string }> = [];
 
   for (const filePath of agentFiles) {
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
     const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -326,12 +313,7 @@ export function detectHookScriptSafety(
     );
   }
 
-  let hookFiles: string[] = [];
-  try {
-    hookFiles = iterFiles(hooksDir, HOOK_SCRIPT_GLOBS);
-  } catch {
-    hookFiles = [];
-  }
+  const hookFiles = iterFiles(hooksDir, HOOK_SCRIPT_GLOBS);
 
   if (hookFiles.length === 0) {
     return makeResult('PASS', 0, [
@@ -342,12 +324,8 @@ export function detectHookScriptSafety(
   const flaggedFiles: Array<{ file: string; flags: string[] }> = [];
 
   for (const filePath of hookFiles) {
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
     const flags: string[] = [];
     for (const { name, rx } of HOOK_RED_FLAGS) {
       if (rx.test(content)) flags.push(name);
@@ -415,10 +393,8 @@ export function detectMcpEndpointSafety(
     ]);
   }
 
-  let content: string;
-  try {
-    content = readFileSync(mcpPath, 'utf8');
-  } catch {
+  const content = readTextSafe(mcpPath);
+  if (content === null) {
     return makeResult('SKIP', null, [
       '.mcp.json could not be read — AIS-04 skipped',
     ]);
@@ -628,22 +604,14 @@ export function detectNoSecurityBypass(
   const allFiles: string[] = [];
   for (const rel of existingDirs) {
     const dir = join(repoPath, rel);
-    try {
-      allFiles.push(...iterFiles(dir, COMMAND_SKILL_GLOBS));
-    } catch {
-      // skip
-    }
+    allFiles.push(...iterFiles(dir, COMMAND_SKILL_GLOBS));
   }
 
   const hits: Array<{ file: string; line: number; pattern: string }> = [];
 
   for (const filePath of allFiles) {
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
     const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];

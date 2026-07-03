@@ -26,7 +26,7 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
   trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
@@ -62,14 +62,12 @@ export function compute(
 
   // Tracker source file absent → SKIP.
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_i2_throughput',
-      null,
       'rate',
-      [],
-      skipReliability('not-reliable', 'tracker', read.error),
-      [],
-      ['tracker']
+      'not-reliable',
+      'tracker',
+      read.error
     );
   }
 
@@ -77,15 +75,7 @@ export function compute(
 
   // available=false means no tracker connector was provided.
   if (!artifact?.available) {
-    return makeMetricResult(
-      'adp_i2_throughput',
-      null,
-      'rate',
-      [],
-      computeReliability('not-reliable', [], ['tracker']),
-      [],
-      ['tracker']
-    );
+    return skipMetric('adp_i2_throughput', 'rate', 'not-reliable', 'tracker');
   }
 
   const raw = artifact?.raw ?? {};
@@ -125,10 +115,6 @@ export function compute(
     reliability,
     ['tracker'],
     [],
-    null,
-    undefined,
-    expression,
-    score,
-    1.0
+    { expression, score, confidence: 1.0 }
   );
 }

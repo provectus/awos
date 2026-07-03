@@ -34,7 +34,8 @@ import {
   writeFileSync,
   mkdirSync,
   mkdtempSync,
-  existsSync,
+  readdirSync,
+  statSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
@@ -43,15 +44,12 @@ import { fileURLToPath } from 'node:url';
 // ---------------------------------------------------------------------------
 // Collectors
 // ---------------------------------------------------------------------------
-import {
-  collect as collectGit,
-  ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT,
-  REWORK_HORIZON_DAYS_DEFAULT,
-} from './collectors/git.ts';
+import { collect as collectGit } from './collectors/git.ts';
 import { collect as collectCi } from './collectors/ci.ts';
 import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
 import { writeArtifact } from './collectors/_base.ts';
+import type { Period } from './collectors/_base.ts';
 
 // Third parameters differ per collector: git takes standards.toml [meta]
 // tunables, while ci/tracker/docs take a CONNECTOR payload — so the registry
@@ -69,81 +67,27 @@ const COLLECTORS: Record<
 };
 
 // ---------------------------------------------------------------------------
-// Detectors
+// Registries — assembled in detectors/index.ts and metrics/index.ts (adding a
+// module is a change there, not here). Re-exported for existing consumers.
 // ---------------------------------------------------------------------------
-import { DETECTORS as SBP_DETECTORS } from './detectors/software_best_practices.ts';
-import { DETECTORS as CODE_ARCH_DETECTORS } from './detectors/code_architecture.ts';
-import { DETECTORS as SDD_DETECTORS } from './detectors/spec_driven_development.ts';
-import { DETECTORS as AI_TOOLING_DETECTORS } from './detectors/ai_development_tooling.ts';
-import { DETECTORS as E2E_DETECTORS } from './detectors/end_to_end_delivery.ts';
-import { DETECTORS as SEC_DETECTORS } from './detectors/security.ts';
-import { DETECTORS as SCS_DETECTORS } from './detectors/supply_chain_security.ts';
-import { DETECTORS as PAI_DETECTORS } from './detectors/prompt_agent_integrity.ts';
-import { DETECTORS as QA_DETECTORS } from './detectors/quality_assurance.ts';
-import { DETECTORS as DOC_DETECTORS } from './detectors/documentation.ts';
-import { DETECTORS as AS_DETECTORS } from './detectors/application_security.ts';
-// Adding a detector module is a one-line change per import + one spread below.
+import { DETECTORS } from './detectors/index.ts';
+import { METRICS } from './metrics/index.ts';
+export { DETECTORS, METRICS };
 
-import { type DetectorResult } from './detectors/_base.ts';
-
-export const DETECTORS: Record<
-  number,
-  (repoPath: string, params?: unknown) => DetectorResult
-> = {
-  ...SBP_DETECTORS,
-  ...CODE_ARCH_DETECTORS,
-  ...SDD_DETECTORS,
-  ...AI_TOOLING_DETECTORS,
-  ...E2E_DETECTORS,
-  ...SEC_DETECTORS,
-  ...SCS_DETECTORS,
-  ...PAI_DETECTORS,
-  ...QA_DETECTORS,
-  ...DOC_DETECTORS,
-  ...AS_DETECTORS,
-};
-
-// ---------------------------------------------------------------------------
-// Metric modules
-// ---------------------------------------------------------------------------
-import { compute as computeG1 } from './metrics/adp_g1_tooling_depth.ts';
-import { compute as computeG2 } from './metrics/adp_g2_contributors.ts';
-import { compute as computeG3 } from './metrics/adp_g3_deploy_frequency.ts';
-import { compute as computeG4 } from './metrics/adp_g4_lead_time.ts';
-import { compute as computeG5 } from './metrics/adp_g5_pr_cycle_time.ts';
-import { compute as computeG6 } from './metrics/adp_g6_churn.ts';
-import { compute as computeG7 } from './metrics/adp_g7_change_fail_rate.ts';
-import { compute as computeG8 } from './metrics/adp_g8_review_rework.ts';
-import { compute as computeG9 } from './metrics/adp_g9_ai_attribution.ts';
-import { compute as computeC1 } from './metrics/adp_c1_ci_pass_rate.ts';
-import { compute as computeC2 } from './metrics/adp_c2_pipeline_duration.ts';
-import { compute as computeD1 } from './metrics/adp_d1_spec_coverage.ts';
-import { compute as computeI1 } from './metrics/adp_i1_work_mix.ts';
-import { compute as computeI2 } from './metrics/adp_i2_throughput.ts';
-import { compute as computeI3 } from './metrics/adp_i3_mttr.ts';
-import { compute as computeI4 } from './metrics/adp_i4_subtask_split.ts';
-import { compute as computeI5 } from './metrics/adp_i5_description_quality.ts';
-import { compute as computeG10 } from './metrics/adp_g10_complexity.ts';
-import { compute as computeG11 } from './metrics/adp_g11_scale.ts';
-import { compute as computeG12 } from './metrics/adp_g12_deps.ts';
-import { compute as computeG13 } from './metrics/adp_g13_doc_coverage.ts';
-import { compute as computeG14 } from './metrics/adp_g14_rework_rate.ts';
-import { compute as computeG15 } from './metrics/adp_g15_onboarding_ease.ts';
-// Adding a metric module is a one-line change per import + one entry in METRICS below.
-
-import { loadStandards, metaNumber } from './metrics/_base.ts';
+import { loadStandards } from './metrics/_base.ts';
 
 // ---------------------------------------------------------------------------
 // Org rollup
 // ---------------------------------------------------------------------------
 import { rollup as orgRollup } from './metrics/org_rollup.ts';
-import type { PerRepoInput, PerRepoDelivery } from './metrics/org_rollup.ts';
+import type { PerRepoInput } from './metrics/org_rollup.ts';
+import { aiToolingCodes, readPerRepoAudit } from './metrics/rollup_input.ts';
 
 // ---------------------------------------------------------------------------
 // Renderer
 // ---------------------------------------------------------------------------
 import { renderMarkdown, renderHtml } from './render.ts';
-import type { AuditJson, Check } from './render.ts';
+import type { AuditJson } from './render.ts';
 
 // ---------------------------------------------------------------------------
 // Progress helper
@@ -155,14 +99,17 @@ import { progress } from './progress.ts';
 // ---------------------------------------------------------------------------
 import {
   auditCore,
+  hasEngineProvenance,
+  periodFromStandards,
+  gitOptsFromStandards,
+} from './audit_core.ts';
+import {
   aggregate,
   patchJudgments,
   patchReportBlocks,
   reportContext,
-  hasEngineProvenance,
-  type MetricFn,
   type ReportBlocksPatch,
-} from './audit_core.ts';
+} from './audit_patch.ts';
 import { detectOrgParent } from './topology.ts';
 
 /** Resolve the skill root (where references/ lives) from the bundle location. */
@@ -173,63 +120,9 @@ function resolveSkillRoot(): string {
     : cliDir;
 }
 
-export const METRICS: Record<string, MetricFn> = {
-  adp_g1_tooling_depth: computeG1,
-  adp_g2_contributors: computeG2,
-  adp_g3_deploy_frequency: computeG3,
-  adp_g4_lead_time: computeG4,
-  adp_g5_pr_cycle_time: computeG5,
-  adp_g6_churn: computeG6,
-  adp_g7_change_fail_rate: computeG7,
-  adp_g8_review_rework: computeG8,
-  adp_g9_ai_attribution: computeG9,
-  adp_c1_ci_pass_rate: computeC1,
-  adp_c2_pipeline_duration: computeC2,
-  adp_d1_spec_coverage: computeD1,
-  adp_i1_work_mix: computeI1,
-  adp_i2_throughput: computeI2,
-  adp_i3_mttr: computeI3,
-  adp_i4_subtask_split: computeI4,
-  adp_i5_description_quality: computeI5,
-  adp_g10_complexity: computeG10,
-  adp_g11_scale: computeG11,
-  adp_g12_deps: computeG12,
-  adp_g13_doc_coverage: computeG13,
-  adp_g14_rework_rate: computeG14,
-  adp_g15_onboarding_ease: computeG15,
-};
-
-// ---------------------------------------------------------------------------
-// Default period
-// ---------------------------------------------------------------------------
-// TODO: accept period from a CLI flag or env var (e.g. AWOS_PERIOD_JSON) so
-// the orchestrator can pass real values.  For now the orchestrator runs with
-// this default and overrides values via the collector's own defaults.
-import type { Period } from './collectors/_base.ts';
-
-/** Build the collection Period from standards.toml [meta] (the source of truth). */
-function periodFromMeta(standards: Record<string, unknown>): Period {
-  return {
-    bucket_days: 30,
-    lookback_days: metaNumber(standards, 'max_lookback_days', 90),
-    history_available_days: 0,
-  };
-}
-
-/** Git collector tunables from standards.toml [meta] (the source of truth). */
-function gitOptsFromMeta(standards: Record<string, unknown>) {
-  return {
-    activeContributorThreshold: metaNumber(
-      standards,
-      'active_contributor_threshold',
-      ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
-    ),
-    reworkHorizonDays: metaNumber(
-      standards,
-      'rework_horizon_days',
-      REWORK_HORIZON_DAYS_DEFAULT
-    ),
-  };
+/** Path of the bundled standards.toml (the scoring source of truth). */
+function standardsTomlPath(): string {
+  return join(resolveSkillRoot(), 'references', 'standards.toml');
 }
 
 // ---------------------------------------------------------------------------
@@ -240,188 +133,42 @@ function printJson(value: unknown): void {
   process.stdout.write(JSON.stringify(value, null, 2) + '\n');
 }
 
-// ---------------------------------------------------------------------------
-// rollup helpers — read one repo's FULL audit into a rich PerRepoInput.
-// ---------------------------------------------------------------------------
-
-/**
- * Delivery check_id → the numeric PerRepoDelivery field it feeds.
- * Only the git-sourced DORA metrics feed the averaged org headline. Cycle-time
- * and MTTR are connector-gated (tracker / incident) and never derived from git,
- * so they are absent here; they are carried separately as the display strings
- * the per-repo audit's headline authored (see readPerRepoAudit) for the org
- * Repositories table.
- */
-const DELIVERY_CHECK_IDS: Array<
-  [string, 'deploy_freq' | 'rework_rate' | 'lead_time' | 'change_fail']
-> = [
-  ['DF-01', 'deploy_freq'],
-  ['DF-06', 'rework_rate'],
-  ['DF-02', 'lead_time'],
-  ['DF-04', 'change_fail'],
-];
-
-/** AI-tooling category codes (101–106); any awarded → has_ai_tooling. */
-const AI_TOOLING_CODES = new Set([101, 102, 103, 104, 105, 106]);
-
-/**
- * Loose parse-boundary shape of a per-repo audit.json read from disk: the
- * shared AuditJson contract (artifact_types.ts, re-exported by render.ts) with
- * every top-level field optional, since the rollup consumes untrusted on-disk
- * JSON and must survive partial artifacts.
- */
-type ParsedAudit = Partial<AuditJson>;
-
-/** Coerce a check value to a finite number, else null (covers SKIP/null/NaN). */
-function numOrNull(v: unknown): number | null {
-  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+/** Print an error object as JSON and exit non-zero — every verb's guard path. */
+function fail(value: Record<string, unknown>): never {
+  printJson(value);
+  process.exit(1);
 }
 
 /**
- * Read <repoDir>/audit.json + <repoDir>/collected/git.json and derive a rich
- * PerRepoInput. Returns null (logging to stderr) when audit.json is missing,
- * unparseable, or lacks the audit-core provenance stamp (hand-assembled),
- * so one bad repo never crashes the whole rollup.
+ * Read a JSON argument from a file path or stdin ("-"), with the standard
+ * error vocabulary shared by patch-judgment and patch-report.
  */
-function readPerRepoAudit(
-  repoDir: string,
-  repoName: string
-): PerRepoInput | null {
-  const auditPath = join(repoDir, 'audit.json');
-  let audit: ParsedAudit;
+function readJsonArg(pathOrDash: string, what: string): unknown {
+  let text: string;
   try {
-    audit = JSON.parse(readFileSync(auditPath, 'utf8')) as ParsedAudit;
-  } catch {
-    process.stderr.write(
-      `rollup: skipping ${repoName} — missing or unparseable audit.json\n`
-    );
-    return null;
+    text =
+      pathOrDash === '-'
+        ? readFileSync(0, 'utf8')
+        : readFileSync(pathOrDash, 'utf8');
+  } catch (err) {
+    fail({ error: `cannot read ${what}: ${String(err)}` });
   }
-  if (!hasEngineProvenance(audit)) {
-    process.stderr.write(
-      `rollup: skipping ${repoName} — audit.json lacks engine provenance ` +
-        `(not produced by audit-core; hand-assembled audits are excluded ` +
-        `from the portfolio)\n`
-    );
-    return null;
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    fail({ error: `${what} are not valid JSON: ${String(err)}` });
   }
-
-  // Flatten every check once; index by check_id and scan for AI-tooling codes.
-  const checks: Check[] = (audit.dimensions ?? []).flatMap(
-    (d) => d.checks ?? []
-  );
-  const byCheckId = new Map<string, Check>();
-  let hasAiTooling = false;
-  for (const c of checks) {
-    if (c.check_id && !byCheckId.has(c.check_id)) byCheckId.set(c.check_id, c);
-    const awarded = (c.weight_awarded ?? 0) > 0 || c.status === 'PASS';
-    if (awarded && (c.code ?? []).some((code) => AI_TOOLING_CODES.has(code)))
-      hasAiTooling = true;
-  }
-
-  // Build the compact checks list for cross-repo gap aggregation (Task 5.5).
-  // Iterate dimensions so each check record carries its dimension slug.
-  const checksForGaps: Array<{
-    check_id: string;
-    dimension: string;
-    definition: string;
-    status: string;
-  }> = [];
-  for (const dim of audit.dimensions ?? []) {
-    const dimSlug = dim.dimension ?? '';
-    for (const c of dim.checks ?? []) {
-      if (!c.check_id) continue;
-      checksForGaps.push({
-        check_id: c.check_id,
-        dimension: dimSlug,
-        definition: c.definition ?? '',
-        status: c.status ?? '',
-      });
-    }
-  }
-
-  // Delivery check values by check_id (null when absent / SKIP / null value).
-  const delivery: PerRepoDelivery = {};
-  for (const [checkId, field] of DELIVERY_CHECK_IDS) {
-    delivery[field] = numOrNull(byCheckId.get(checkId)?.value);
-  }
-
-  // Connector-gated headline rows: cycle time (gated: "tracker") and MTTR
-  // (gated: "incident"). Carried as the display string the per-repo audit's
-  // headline authored (e.g. "3.2 d"); null when the row is gated with no
-  // connector (no display_value) or the headline is absent — the org
-  // Repositories table then renders its em-dash placeholder.
-  const headlineRows = audit.headline?.delivery ?? [];
-  const gatedDisplay = (gate: string): string | null => {
-    const row = headlineRows.find((r) => r.gated === gate);
-    return typeof row?.display_value === 'string' &&
-      row.display_value.length > 0
-      ? row.display_value
-      : null;
-  };
-  // Engine-derived rows (audit.derived_delivery) win over authored headline
-  // rows — same precedence as the renderer, same artifact truth.
-  delivery.cycle_time =
-    audit.derived_delivery?.cycle_time?.display_value ??
-    gatedDisplay('tracker');
-  delivery.mttr = gatedDisplay('incident');
-
-  // Merges/LOC per active contributor from the git artifact (best-effort).
-  const gitPath = join(repoDir, 'collected', 'git.json');
-  if (existsSync(gitPath)) {
-    try {
-      const git = JSON.parse(readFileSync(gitPath, 'utf8')) as {
-        raw?: { window_stats?: Record<string, unknown> };
-      };
-      const ws = git.raw?.window_stats ?? {};
-      delivery.merges_per_active = numOrNull(ws.merges_per_active);
-      delivery.loc_per_active = numOrNull(ws.loc_per_active);
-    } catch {
-      process.stderr.write(
-        `rollup: ${repoName} — unparseable collected/git.json, dropping per-active stats\n`
-      );
-    }
-  } else {
-    process.stderr.write(
-      `rollup: ${repoName} — no collected/git.json, per-active stats unavailable\n`
-    );
-  }
-
-  // Legacy summary fields derived from the audit (no flat <repo>.json needed).
-  const auditTotal = numOrNull(audit.audit_total) ?? 0;
-  const sourcesReachable = (audit.sources ?? [])
-    .filter((s) => s.available)
-    .map((s) => s.source ?? '')
-    .filter((s) => s.length > 0);
-  const contributors = numOrNull(byCheckId.get('DESC-01')?.value);
-
-  return {
-    repo: repoName,
-    contributors: contributors ?? undefined,
-    awarded_weight: auditTotal,
-    sources_reachable: sourcesReachable,
-    has_ai_tooling: hasAiTooling,
-    audit_total: auditTotal,
-    coverage: numOrNull(audit.coverage) ?? undefined,
-    source_windows: audit.source_windows,
-    standards_meta: audit.standards_meta,
-    delivery,
-    tech_stack: audit.tech_stack,
-    linked_repos: audit.linked_repos,
-    checks: checksForGaps,
-  };
 }
 
 async function main(): Promise<void> {
   const [, , command, arg1, arg2] = process.argv;
 
   if (!command) {
-    printJson({
+    fail({
       error: 'no command given',
       usage:
         'collect|detect|metric|standards|progress|render|rollup|audit-core|aggregate|enrich|patch-judgment <arg> [repoPath]',
     });
-    process.exit(1);
   }
 
   switch (command) {
@@ -429,28 +176,24 @@ async function main(): Promise<void> {
       const source = arg1;
       const repoPath = arg2;
       if (!source || !repoPath) {
-        printJson({ error: 'collect requires <source> and <repoPath>' });
-        process.exit(1);
+        fail({ error: 'collect requires <source> and <repoPath>' });
       }
       const fn = COLLECTORS[source];
       if (!fn) {
-        printJson({
+        fail({
           error: `unknown collector source "${source}"`,
           known: Object.keys(COLLECTORS),
         });
-        process.exit(1);
       }
       // Period + git tunables come from standards.toml [meta], never hardcoded.
-      const collectStandards = loadStandards(
-        join(resolveSkillRoot(), 'references', 'standards.toml')
-      );
-      const collectPeriod = periodFromMeta(collectStandards);
+      const collectStandards = loadStandards(standardsTomlPath());
+      const collectPeriod = periodFromStandards(collectStandards);
       printJson(
         source === 'git'
           ? collectGit(
               repoPath,
               collectPeriod,
-              gitOptsFromMeta(collectStandards)
+              gitOptsFromStandards(collectStandards)
             )
           : fn(repoPath, collectPeriod)
       );
@@ -461,25 +204,20 @@ async function main(): Promise<void> {
       const codeStr = arg1;
       const repoPath = arg2;
       if (!codeStr || !repoPath) {
-        printJson({ error: 'detect requires <code> and <repoPath>' });
-        process.exit(1);
+        fail({ error: 'detect requires <code> and <repoPath>' });
       }
       const code = Number(codeStr);
       if (!Number.isInteger(code)) {
-        printJson({
-          error: `detector code must be an integer, got "${codeStr}"`,
-        });
-        process.exit(1);
+        fail({ error: `detector code must be an integer, got "${codeStr}"` });
       }
       const fn = DETECTORS[code];
       if (!fn) {
-        printJson({
+        fail({
           error: `unknown detector code ${code}`,
           known: Object.keys(DETECTORS)
             .map(Number)
             .sort((a, b) => a - b),
         });
-        process.exit(1);
       }
       printJson(fn(repoPath));
       break;
@@ -488,22 +226,19 @@ async function main(): Promise<void> {
     case 'standards': {
       const tomlPath = arg1;
       if (!tomlPath) {
-        printJson({ error: 'standards requires <path-to-standards.toml>' });
-        process.exit(1);
+        fail({ error: 'standards requires <path-to-standards.toml>' });
       }
       let raw: string;
       try {
         raw = readFileSync(tomlPath, 'utf8');
       } catch (err: unknown) {
         const e = err as NodeJS.ErrnoException;
-        printJson({
+        fail({
           error: `cannot read standards file: ${e.message}`,
           path: tomlPath,
         });
-        process.exit(1);
       }
-      const parsed = parseToml(raw);
-      printJson(parsed);
+      printJson(parseToml(raw));
       break;
     }
 
@@ -518,35 +253,42 @@ async function main(): Promise<void> {
       const preCollectedDir: string | undefined = arg3;
 
       if (!id || !repoPath) {
-        printJson({ error: 'metric requires <id> and <repoPath>' });
-        process.exit(1);
+        fail({ error: 'metric requires <id> and <repoPath>' });
       }
       const metricFn = METRICS[id];
       if (!metricFn) {
-        printJson({
+        fail({
           error: `unknown metric "${id}"`,
           known: Object.keys(METRICS).sort(),
         });
-        process.exit(1);
       }
 
       // Load standards up front — the Period and git tunables come from its
       // [meta] table (source of truth), and the metric needs it for scoring.
-      const standardsPath = join(
-        resolveSkillRoot(),
-        'references',
-        'standards.toml'
-      );
-      const standards = loadStandards(standardsPath);
-      const period = periodFromMeta(standards);
-      const gitOpts = gitOptsFromMeta(standards);
+      const standards = loadStandards(standardsTomlPath());
+      const period = periodFromStandards(standards);
+      const gitOpts = gitOptsFromStandards(standards);
 
-      // Scale-based metrics (G10/G11/G12) scan the repo directly and do not
-      // need a collector artifact.  They receive repoPath as the 4th argument.
+      // The sources this metric's categories declare in standards.toml decide
+      // which collectors the inline path must run — no hardcoded id → source
+      // mapping. Pseudo-sources (scale/audit/incident) have no collector.
+      const categoryTable = (standards['category'] ?? {}) as Record<
+        string,
+        Record<string, unknown>
+      >;
+      const declaredSources = new Set<string>();
+      for (const cat of Object.values(categoryTable)) {
+        if (cat['metric'] !== id) continue;
+        for (const s of (cat['sources'] as string[] | undefined) ?? []) {
+          declaredSources.add(s);
+        }
+      }
+      // Repo-scan metrics (sources: scale only — G10/G11/G12 today) need no
+      // collector artifact; they receive repoPath as the 4th argument and
+      // ignore collectedDir.
       const isScaleMetric =
-        id === 'adp_g10_complexity' ||
-        id === 'adp_g11_scale' ||
-        id === 'adp_g12_deps';
+        declaredSources.size > 0 &&
+        [...declaredSources].every((s) => s === 'scale');
 
       let collectedDir: string;
 
@@ -555,30 +297,19 @@ async function main(): Promise<void> {
         // No inline collection — artifacts were already written by `collect` verbs.
         collectedDir = preCollectedDir;
       } else if (isScaleMetric) {
-        // Scale metrics don't need a collector artifact — they scan repoPath directly.
-        // Use repoPath as collectedDir; the metric ignores it and uses the override.
         collectedDir = repoPath;
       } else {
-        // Inline path (backward-compatible): run required collectors into a temp dir.
+        // Inline path (backward-compatible): run the required collectors into
+        // a temp dir. Git is always collected — several tracker/incident
+        // metrics (e.g. MTTR) read the git artifact as their proxy source.
         const tmpRoot = mkdtempSync(join(tmpdir(), 'awos-metric-'));
         collectedDir = join(tmpRoot, 'collected');
-        // Git collector is always run for ADP-G* metrics.
         const gitArtifact = collectGit(repoPath, period, gitOpts);
         writeArtifact(gitArtifact as { source: string }, collectedDir);
-        // CI collector is run for ADP-C* metrics.
-        if (id.startsWith('adp_c')) {
-          const ciArtifact = collectCi(repoPath, period);
-          writeArtifact(ciArtifact as { source: string }, collectedDir);
-        }
-        // Docs collector is run for ADP-D* metrics.
-        if (id.startsWith('adp_d')) {
-          const docsArtifact = collectDocs(repoPath, period);
-          writeArtifact(docsArtifact as { source: string }, collectedDir);
-        }
-        // Tracker collector is run for ADP-I* metrics (also git for MTTR proxy).
-        if (id.startsWith('adp_i')) {
-          const trackerArtifact = collectTracker(repoPath, period);
-          writeArtifact(trackerArtifact as { source: string }, collectedDir);
+        for (const src of ['ci', 'tracker', 'docs']) {
+          if (!declaredSources.has(src)) continue;
+          const artifact = COLLECTORS[src](repoPath, period);
+          writeArtifact(artifact as { source: string }, collectedDir);
         }
       }
 
@@ -605,48 +336,41 @@ async function main(): Promise<void> {
       // stderr), never crashing the whole rollup.
       const dirArg = arg1;
       if (!dirArg) {
-        printJson({
+        fail({
           error: 'rollup requires <per-repo-dir>',
           usage: 'node dist/cli.js rollup <per-repo-dir>',
         });
-        process.exit(1);
       }
-      const { readdirSync: rd, statSync: st } = await import('node:fs');
       let entries: string[];
       try {
-        entries = rd(dirArg);
+        entries = readdirSync(dirArg);
       } catch (err: unknown) {
         const e = err as NodeJS.ErrnoException;
-        printJson({
+        fail({
           error: `cannot read rollup directory: ${e.message}`,
           dir: dirArg,
         });
-        process.exit(1);
       }
+      // Standards are optional for rollup — compute without weighting when
+      // they can't be loaded (the AI-tooling code set then uses its fallback).
+      let standardsR: Record<string, unknown> = {};
+      try {
+        standardsR = loadStandards(standardsTomlPath());
+      } catch {
+        /* optional */
+      }
+      const aiCodes = aiToolingCodes(standardsR);
       const perRepoResults: PerRepoInput[] = [];
       for (const entry of entries) {
         const repoDir = join(dirArg, entry);
         // Only descend into subdirectories (each a repo).
         try {
-          if (!st(repoDir).isDirectory()) continue;
+          if (!statSync(repoDir).isDirectory()) continue;
         } catch {
           continue;
         }
-        const input = readPerRepoAudit(repoDir, entry);
+        const input = readPerRepoAudit(repoDir, entry, aiCodes);
         if (input) perRepoResults.push(input);
-      }
-      // Load standards for future standards-aware normalization.
-      const cliDirR = dirname(fileURLToPath(import.meta.url));
-      const skillRootR =
-        cliDirR.endsWith('/dist') || cliDirR.endsWith('\\dist')
-          ? dirname(cliDirR)
-          : cliDirR;
-      const standardsPathR = join(skillRootR, 'references', 'standards.toml');
-      let standardsR: Record<string, unknown> = {};
-      try {
-        standardsR = loadStandards(standardsPathR);
-      } catch {
-        // Standards are optional for rollup — compute without weighting.
       }
       printJson(orgRollup(perRepoResults, standardsR));
       break;
@@ -657,19 +381,13 @@ async function main(): Promise<void> {
       const doneStr = arg2;
       const [, , , , , totalStr] = process.argv;
       if (!elapsedStr || !doneStr || !totalStr) {
-        printJson({
-          error: 'progress requires <elapsed_seconds> <done> <total>',
-        });
-        process.exit(1);
+        fail({ error: 'progress requires <elapsed_seconds> <done> <total>' });
       }
       const elapsed_seconds = Number(elapsedStr);
       const done = Number(doneStr);
       const total = Number(totalStr);
       if (isNaN(elapsed_seconds) || isNaN(done) || isNaN(total)) {
-        printJson({
-          error: 'progress: all arguments must be numbers',
-        });
-        process.exit(1);
+        fail({ error: 'progress: all arguments must be numbers' });
       }
       printJson(progress({ elapsed_seconds, done, total }));
       break;
@@ -686,21 +404,19 @@ async function main(): Promise<void> {
       // Step 6). The renderer is pure and deterministic — no clocks, no LLM.
       const auditPath = arg1;
       if (!auditPath) {
-        printJson({
+        fail({
           error: 'render requires <audit.json>',
           usage: 'node dist/cli.js render <audit.json> --format md|html',
         });
-        process.exit(1);
       }
       // Parse --format flag from remaining argv
       const remainingArgs = process.argv.slice(4);
       const fmtIdx = remainingArgs.indexOf('--format');
       const format = fmtIdx !== -1 ? remainingArgs[fmtIdx + 1] : 'md';
       if (format !== 'md' && format !== 'html' && format !== 'both') {
-        printJson({
+        fail({
           error: `render --format must be "md", "html", or "both", got "${format}"`,
         });
-        process.exit(1);
       }
       // `--format both` writes report.md + report.html into --out-dir in one
       // process (single spawn instead of two). Single-format modes keep writing
@@ -709,34 +425,31 @@ async function main(): Promise<void> {
       const outDirArg =
         outDirIdx !== -1 ? remainingArgs[outDirIdx + 1] : undefined;
       if (format === 'both' && !outDirArg) {
-        printJson({
+        fail({
           error: 'render --format both requires --out-dir <dir>',
           usage:
             'node dist/cli.js render <audit.json> --format both --out-dir <dir>',
         });
-        process.exit(1);
       }
       let rawAudit: string;
       try {
         rawAudit = readFileSync(auditPath, 'utf8');
       } catch (err: unknown) {
         const e = err as NodeJS.ErrnoException;
-        printJson({
+        fail({
           error: `cannot read audit JSON: ${e.message}`,
           path: auditPath,
         });
-        process.exit(1);
       }
       let audit: AuditJson;
       try {
         audit = JSON.parse(rawAudit) as AuditJson;
       } catch (err: unknown) {
         const e = err as Error;
-        printJson({
+        fail({
           error: `audit JSON is not valid JSON: ${e.message}`,
           path: auditPath,
         });
-        process.exit(1);
       }
       // Circuit-breaker: a single-repo audit.json must carry audit-core's
       // provenance stamp — a hand-assembled one is never rendered. Org
@@ -746,7 +459,7 @@ async function main(): Promise<void> {
       const isOrgAudit =
         audit.portfolio_metrics !== undefined || audit.per_repo !== undefined;
       if (!isOrgAudit && !hasEngineProvenance(audit)) {
-        printJson({
+        fail({
           error:
             'audit JSON lacks engine provenance — it was not produced by ' +
             'audit-core, so it cannot be rendered. Deterministic scoring is ' +
@@ -755,7 +468,6 @@ async function main(): Promise<void> {
             'audit.json it writes.',
           path: auditPath,
         });
-        process.exit(1);
       }
       if (format === 'both') {
         const dir = outDirArg as string;
@@ -788,75 +500,47 @@ async function main(): Promise<void> {
       break;
     }
 
-    case 'audit-core': {
-      // Deterministic single-pass audit: runs every detected/computed category
-      // and writes <out>/<dimension>.json + <out>/audit.json. Judgment categories
-      // are emitted as PENDING_JUDGMENT; connector metrics SKIP without a connector.
-      const repoPath = arg1;
-      const outDir = arg2;
-      if (!repoPath || !outDir) {
-        printJson({ error: 'audit-core requires <repoPath> <outDir>' });
-        process.exit(1);
-      }
-      // Org-parent guard: a folder that is not itself a git work tree but
-      // holds ≥2 git repos is the org's clone folder, not a project. A
-      // single-repo audit of it is a stray, meaningless report (judgment
-      // checks stay PENDING_JUDGMENT forever) — skip cleanly; org mode
-      // audits each child repo into per-repo/ instead.
-      const orgParent = detectOrgParent(repoPath);
-      if (orgParent.isOrgParent) {
-        process.stderr.write(
-          `audit-core: ${repoPath} is an org folder (${orgParent.gitRepoChildren} git repos inside, not itself a repo) — skipping single-repo audit; org mode audits each repo into per-repo/\n`
-        );
-        printJson({
-          skipped: 'org-parent',
-          repo_path: repoPath,
-          git_repo_children: orgParent.gitRepoChildren,
-        });
-        break;
-      }
-      const standardsPath = join(
-        resolveSkillRoot(),
-        'references',
-        'standards.toml'
-      );
-      const summary = await auditCore(
-        repoPath,
-        outDir,
-        DETECTORS,
-        METRICS,
-        standardsPath
-      );
-      printJson(summary);
-      break;
-    }
-
+    // audit-core: deterministic single-pass audit — runs every detected/
+    // computed category and writes <out>/<dimension>.json + <out>/audit.json;
+    // judgment categories are emitted as PENDING_JUDGMENT and connector
+    // metrics SKIP without a connector.
+    // enrich: the same pass re-scored against the already-populated
+    // collected/ dir (after the orchestrator fetched connectors), so
+    // connector metrics now score instead of SKIP. Judgment checks are
+    // (re)emitted as PENDING_JUDGMENT, so run enrich BEFORE the judgment patch.
+    case 'audit-core':
     case 'enrich': {
-      // Re-score a completed audit against the already-populated collected/ dir,
-      // in ONE pass. After the orchestrator fetches connectors and writes
-      // collected/<source>.json, `enrich` re-runs every detector+metric reading
-      // those artifacts (connector metrics now score instead of SKIP) and
-      // rewrites the per-dimension JSON + audit.json — replacing the old loop of
-      // one `node metric <id>` spawn per connector metric. Judgment checks are
-      // (re)emitted as PENDING_JUDGMENT, so run enrich BEFORE the judgment patch.
       const repoPath = arg1;
       const outDir = arg2;
       if (!repoPath || !outDir) {
-        printJson({ error: 'enrich requires <repoPath> <outDir>' });
-        process.exit(1);
+        fail({ error: `${command} requires <repoPath> <outDir>` });
       }
-      const standardsPath = join(
-        resolveSkillRoot(),
-        'references',
-        'standards.toml'
-      );
+      if (command === 'audit-core') {
+        // Org-parent guard: a folder that is not itself a git work tree but
+        // holds ≥2 git repos is the org's clone folder, not a project. A
+        // single-repo audit of it is a stray, meaningless report (judgment
+        // checks stay PENDING_JUDGMENT forever) — skip cleanly; org mode
+        // audits each child repo into per-repo/ instead.
+        const orgParent = detectOrgParent(repoPath);
+        if (orgParent.isOrgParent) {
+          process.stderr.write(
+            `audit-core: ${repoPath} is an org folder (${orgParent.gitRepoChildren} git repos inside, not itself a repo) — skipping single-repo audit; org mode audits each repo into per-repo/\n`
+          );
+          printJson({
+            skipped: 'org-parent',
+            repo_path: repoPath,
+            git_repo_children: orgParent.gitRepoChildren,
+          });
+          break;
+        }
+      }
       const summary = await auditCore(
         repoPath,
         outDir,
         DETECTORS,
         METRICS,
-        standardsPath,
-        join(outDir, 'collected')
+        standardsTomlPath(),
+        command === 'enrich' ? join(outDir, 'collected') : undefined
       );
       printJson(summary);
       break;
@@ -867,8 +551,7 @@ async function main(): Promise<void> {
       // patches. Preserves authored report blocks; run before render.
       const dir = arg1;
       if (!dir) {
-        printJson({ error: 'aggregate requires <auditsDir>' });
-        process.exit(1);
+        fail({ error: 'aggregate requires <auditsDir>' });
       }
       aggregate(dir);
       printJson({ aggregated: dir });
@@ -882,32 +565,14 @@ async function main(): Promise<void> {
       const dir = arg1;
       const patchArg = arg2;
       if (!dir || !patchArg) {
-        printJson({
+        fail({
           error:
             'patch-judgment requires <auditsDir> <patches.json|-> — patches: [{check_id, status, score?, value?, evidence?}]',
         });
-        process.exit(1);
       }
-      let patchText: string;
-      try {
-        patchText =
-          patchArg === '-'
-            ? readFileSync(0, 'utf8')
-            : readFileSync(patchArg, 'utf8');
-      } catch (err) {
-        printJson({ error: `cannot read patches: ${String(err)}` });
-        process.exit(1);
-      }
-      let patches: unknown;
-      try {
-        patches = JSON.parse(patchText);
-      } catch (err) {
-        printJson({ error: `patches are not valid JSON: ${String(err)}` });
-        process.exit(1);
-      }
+      const patches = readJsonArg(patchArg, 'patches');
       if (!Array.isArray(patches)) {
-        printJson({ error: 'patches must be a JSON array' });
-        process.exit(1);
+        fail({ error: 'patches must be a JSON array' });
       }
       const summary = patchJudgments(
         dir,
@@ -923,8 +588,7 @@ async function main(): Promise<void> {
       // report blocks from ONE call instead of parsing artifacts itself.
       const dir = arg1;
       if (!dir) {
-        printJson({ error: 'report-context requires <auditsDir>' });
-        process.exit(1);
+        fail({ error: 'report-context requires <auditsDir>' });
       }
       printJson(reportContext(dir));
       break;
@@ -939,39 +603,21 @@ async function main(): Promise<void> {
       const dir = arg1;
       const blocksArg = arg2;
       if (!dir || !blocksArg) {
-        printJson({
+        fail({
           error:
             'patch-report requires <auditsDir> <blocks.json|-> — blocks: {headline?, insights?, recommendations?}',
         });
-        process.exit(1);
       }
-      let blocksText: string;
-      try {
-        blocksText =
-          blocksArg === '-'
-            ? readFileSync(0, 'utf8')
-            : readFileSync(blocksArg, 'utf8');
-      } catch (err) {
-        printJson({ error: `cannot read blocks: ${String(err)}` });
-        process.exit(1);
-      }
-      let blocks: unknown;
-      try {
-        blocks = JSON.parse(blocksText);
-      } catch (err) {
-        printJson({ error: `blocks are not valid JSON: ${String(err)}` });
-        process.exit(1);
-      }
+      const blocks = readJsonArg(blocksArg, 'blocks');
       if (
         blocks === null ||
         typeof blocks !== 'object' ||
         Array.isArray(blocks)
       ) {
-        printJson({
+        fail({
           error:
             'blocks must be a JSON object with headline/insights/recommendations keys',
         });
-        process.exit(1);
       }
       const summary = patchReportBlocks(dir, blocks as ReportBlocksPatch);
       printJson(summary);
@@ -979,12 +625,11 @@ async function main(): Promise<void> {
     }
 
     default: {
-      printJson({
+      fail({
         error: `unknown command "${command}"`,
         usage:
           'collect|detect|metric|standards|progress|render|rollup|audit-core|aggregate|enrich|patch-judgment|report-context|patch-report <arg> [repoPath]',
       });
-      process.exit(1);
     }
   }
 }

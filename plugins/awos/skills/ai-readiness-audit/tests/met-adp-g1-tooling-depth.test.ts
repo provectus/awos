@@ -13,31 +13,19 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compute } from '../metrics/adp_g1_tooling_depth.ts';
-import { writeCollected, loadStandards } from './helpers.ts';
+import { gitRaw, tmpDir, writeCollected, loadStandards } from './helpers.ts';
 
 const standards = loadStandards();
 
-function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'g1-'));
-}
-
 test('adp_g1: GEMINI.md + .cursor/commands → codes 101 and 103 awarded (not 0)', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: ['GEMINI.md', '.cursor/commands'],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 3,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g1-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ tooling_paths: ['GEMINI.md', '.cursor/commands'] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -57,18 +45,12 @@ test('adp_g1: GEMINI.md + .cursor/commands → codes 101 and 103 awarded (not 0)
 });
 
 test('adp_g1: path-boundary — a sibling sharing a prefix (.awos-legacy) must not award 106', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: ['.awos-legacy'],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 3,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g1-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ tooling_paths: ['.awos-legacy'] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -78,18 +60,12 @@ test('adp_g1: path-boundary — a sibling sharing a prefix (.awos-legacy) must n
 });
 
 test('adp_g1: path-boundary — a path nested under a registry dir (.awos/commands) awards 106', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: ['.awos/commands'],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 3,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g1-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ tooling_paths: ['.awos/commands'] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -99,18 +75,12 @@ test('adp_g1: path-boundary — a path nested under a registry dir (.awos/comman
 });
 
 test('adp_g1: CLAUDE.md present → code 101 awarded, status OK, kind coverage', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: ['CLAUDE.md'],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 2,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g1-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ tooling_paths: ['CLAUDE.md'] })
+  );
 
   const result = compute(collectedDir, standards, {});
 
@@ -128,18 +98,12 @@ test('adp_g1: CLAUDE.md present → code 101 awarded, status OK, kind coverage',
 });
 
 test('adp_g1: AGENTS.md present → code 101 awarded', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: ['AGENTS.md'],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 1,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g1-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ tooling_paths: ['AGENTS.md'] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -149,19 +113,13 @@ test('adp_g1: AGENTS.md present → code 101 awarded', () => {
 });
 
 test('adp_g1: value is fraction of present categories', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g1-');
   // Only CLAUDE.md present → 1 out of 6 categories
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: ['CLAUDE.md'],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 1,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ tooling_paths: ['CLAUDE.md'] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -176,25 +134,21 @@ test('adp_g1: value is fraction of present categories', () => {
 });
 
 test('adp_g1: all tooling layers → full coverage (value === 1)', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: [
-      'CLAUDE.md',
-      '.claude/skills',
-      '.claude/commands',
-      '.claude/hooks',
-      '.mcp.json',
-      'context/spec',
-    ],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 10,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g1-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      tooling_paths: [
+        'CLAUDE.md',
+        '.claude/skills',
+        '.claude/commands',
+        '.claude/hooks',
+        '.mcp.json',
+        'context/spec',
+      ],
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -210,18 +164,12 @@ test('adp_g1: all tooling layers → full coverage (value === 1)', () => {
 });
 
 test('adp_g1: reliability tag is maximal, confidence HIGH when git present', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: ['CLAUDE.md'],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 1,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g1-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ tooling_paths: ['CLAUDE.md'] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -237,7 +185,7 @@ test('adp_g1: reliability tag is maximal, confidence HIGH when git present', () 
 });
 
 test('adp_g1: SKIP when git.json absent', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g1-');
   // Write no git.json — only a dummy other file
   const collectedDir = join(tmp, 'collected-missing');
 
@@ -256,19 +204,13 @@ test('adp_g1: SKIP when git.json absent', () => {
 });
 
 test('adp_g1: empty tooling_paths → no categories awarded, value 0, status OK (git present)', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g1-');
   // git.json is present but no tooling paths detected
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: [],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 1,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ tooling_paths: [] })
+  );
 
   const result = compute(collectedDir, standards, {});
   // git is present, so status is OK (source was used)
@@ -294,18 +236,12 @@ test('adp_g1: empty tooling_paths → no categories awarded, value 0, status OK 
 // ---------------------------------------------------------------------------
 
 test('adp_g1: evidence_per_code is present in result and keyed by layer code', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: ['CLAUDE.md'],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 1,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g1-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ tooling_paths: ['CLAUDE.md'] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -323,19 +259,13 @@ test('adp_g1: evidence_per_code is present in result and keyed by layer code', (
 });
 
 test('adp_g1: present layer emits "layer present: …", absent layer emits "layer absent: …"', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g1-');
   // Only code 101 (CLAUDE.md) and code 105 (.mcp.json) present.
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: ['CLAUDE.md', '.mcp.json'],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 2,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ tooling_paths: ['CLAUDE.md', '.mcp.json'] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(result.evidence_per_code, 'evidence_per_code must be defined');
@@ -359,19 +289,15 @@ test('adp_g1: present layer emits "layer present: …", absent layer emits "laye
 });
 
 test('adp_g1: each code 101–106 gets DIFFERENT evidence text (no shared expression across codes)', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g1-');
   // Mixed presence: 101, 102, 103 present; 104, 105, 106 absent.
-  const collectedDir = writeCollected(tmp, 'git', {
-    tooling_paths: ['CLAUDE.md', '.claude/skills', '.claude/commands'],
-    monthly_buckets: [],
-    merge_records: [],
-    total_commits: 3,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      tooling_paths: ['CLAUDE.md', '.claude/skills', '.claude/commands'],
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(result.evidence_per_code, 'evidence_per_code must be defined');

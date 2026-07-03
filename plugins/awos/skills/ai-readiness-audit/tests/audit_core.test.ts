@@ -4,7 +4,7 @@
  * Also verifies the Phase 3a Correction 3 weight_awarded re-derivation, and that
  * check source_url/source_date come from per-category fields (6a.1).
  */
-import { test } from 'node:test';
+import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   mkdirSync,
@@ -15,19 +15,26 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { auditCore, aggregate } from '../audit_core.ts';
+import { auditCore } from '../audit_core.ts';
+import { aggregate } from '../audit_patch.ts';
+import { makeCheckRecord } from './helpers.ts';
 
 const SKILL_ROOT = new URL('..', import.meta.url).pathname;
 const STANDARDS_PATH = join(SKILL_ROOT, 'references', 'standards.toml');
 
-test('audit-core output audit.json contains sources array', async () => {
-  const outDir = mkdtempSync(join(tmpdir(), 'audit-core-test-'));
-  const repoPath = SKILL_ROOT; // audit the skill itself — git is always available
+// One real-repo audit-core pass, shared by every test that only inspects the
+// output JSON shape (auditing the skill itself — git is always available). The
+// run is expensive; the tests below are read-only, so they assert against the
+// same output instead of each re-running auditCore.
+let REAL_REPO_OUT: string;
+before(async () => {
+  REAL_REPO_OUT = mkdtempSync(join(tmpdir(), 'audit-core-real-repo-'));
+  await auditCore(SKILL_ROOT, REAL_REPO_OUT, {}, {}, STANDARDS_PATH);
+});
 
-  await auditCore(repoPath, outDir, {}, {}, STANDARDS_PATH);
-
+test('audit-core output audit.json contains sources array', () => {
   const auditJson = JSON.parse(
-    readFileSync(join(outDir, 'audit.json'), 'utf8')
+    readFileSync(join(REAL_REPO_OUT, 'audit.json'), 'utf8')
   );
   assert.ok(
     Array.isArray(auditJson.sources),
@@ -171,42 +178,25 @@ test('aggregate: two-code metric — awarded code gets weight_max×score, non-aw
     score: 0,
     coverage: 0,
     checks: [
-      {
+      makeCheckRecord({
         check_id: 'DOC-05',
         code: [2204],
         method: 'computed',
         status: 'PARTIAL',
         value: 0.7,
-        evidence: [],
-        weight_awarded: 0,
         weight_max: 2,
         score: 0.7,
         confidence: 0.9,
-        applies: true,
-        reliability: { tag: 'maximal', confidence: 'HIGH', note: null },
-        source: '',
-        definition: '',
-        hint: '',
-        plain: '',
-      },
-      {
+      }),
+      makeCheckRecord({
         check_id: 'DOC-06',
         code: [2205],
         method: 'computed',
         status: 'FAIL',
         value: 0.4,
-        evidence: [],
         weight_awarded: 99,
-        weight_max: 1,
-        score: 0,
         confidence: 0.9,
-        applies: true,
-        reliability: { tag: 'maximal', confidence: 'HIGH', note: null },
-        source: '',
-        definition: '',
-        hint: '',
-        plain: '',
-      },
+      }),
     ],
   };
   writeFileSync(
@@ -257,63 +247,35 @@ test('aggregate re-derives weight_awarded = round(weight_max × score, 1) for sc
     score: 0,
     coverage: 0,
     checks: [
-      {
-        // FULL: explicit score=1 on a PASS check → weight_awarded must be weight_max
+      // FULL: explicit score=1 on a PASS check → weight_awarded must be weight_max
+      makeCheckRecord({
         check_id: 'CQ-01',
-        code: [1],
-        method: 'detected',
-        status: 'PASS',
         value: true,
-        evidence: [],
         weight_awarded: 0, // wrong initial value — aggregate must fix it
         weight_max: 6,
         score: 1,
-        confidence: 1,
-        applies: true,
-        reliability: { tag: 'maximal', confidence: 'HIGH', note: null },
-        source: '',
-        definition: '',
-        hint: '',
-        plain: '',
-      },
-      {
-        // HALF: explicit score=0.5 on a PARTIAL check → weight_awarded = round(6×0.5,1) = 3.0
+      }),
+      // HALF: explicit score=0.5 on a PARTIAL check → weight_awarded = round(6×0.5,1) = 3.0
+      makeCheckRecord({
         check_id: 'CQ-02',
         code: [2],
         method: 'computed',
         status: 'PARTIAL',
         value: 0.5,
-        evidence: [],
         weight_awarded: 0, // wrong — must become 3.0
         weight_max: 6,
         score: 0.5,
-        confidence: 1,
-        applies: true,
         reliability: { tag: 'not-reliable', confidence: 'LOW', note: null },
-        source: '',
-        definition: '',
-        hint: '',
-        plain: '',
-      },
-      {
-        // ZERO: explicit score=0 on a FAIL check → weight_awarded = 0
+      }),
+      // ZERO: explicit score=0 on a FAIL check → weight_awarded = 0
+      makeCheckRecord({
         check_id: 'CQ-03',
         code: [3],
-        method: 'detected',
         status: 'FAIL',
         value: false,
-        evidence: [],
         weight_awarded: 99, // wrong — must become 0
         weight_max: 4,
-        score: 0,
-        confidence: 1,
-        applies: true,
-        reliability: { tag: 'maximal', confidence: 'HIGH', note: null },
-        source: '',
-        definition: '',
-        hint: '',
-        plain: '',
-      },
+      }),
     ],
   };
   writeFileSync(
@@ -372,69 +334,44 @@ test("aggregate: sources_used is the sorted union of applicable checks' sources 
     score: 0,
     coverage: 0,
     checks: [
-      {
+      makeCheckRecord({
         check_id: 'AI-01',
         code: [101],
-        method: 'detected',
-        status: 'PASS',
         value: true,
-        evidence: [],
         weight_awarded: 5,
         weight_max: 5,
         score: 1,
-        confidence: 1,
-        applies: true,
         sources: ['git'],
         reliability: { tag: 'maximal', confidence: 'high', note: null },
-        source: '',
-        definition: '',
-        hint: '',
-        plain: '',
         source_date: null,
         source_url: null,
-      },
-      {
+      }),
+      makeCheckRecord({
         check_id: 'AI-02',
         code: [210],
         method: 'computed',
-        status: 'PASS',
         value: 3,
-        evidence: [],
         weight_awarded: 3,
         weight_max: 3,
         score: 1,
-        confidence: 1,
-        applies: true,
         sources: ['tracker'],
         reliability: { tag: 'maximal', confidence: 'high', note: null },
-        source: '',
-        definition: '',
-        hint: '',
-        plain: '',
         source_date: null,
         source_url: null,
-      },
-      {
+      }),
+      makeCheckRecord({
         check_id: 'AI-03',
         code: [150],
         method: 'computed',
         status: 'SKIP',
-        value: null,
-        evidence: [],
-        weight_awarded: 0,
         weight_max: 2,
-        score: 0,
         confidence: 0,
         applies: false,
         sources: ['scale'],
         reliability: { tag: 'maximal', confidence: 'high', note: null },
-        source: '',
-        definition: '',
-        hint: '',
-        plain: '',
         source_date: null,
         source_url: null,
-      },
+      }),
     ],
   };
 
@@ -445,27 +382,17 @@ test("aggregate: sources_used is the sorted union of applicable checks' sources 
     score: 0,
     coverage: 0,
     checks: [
-      {
+      makeCheckRecord({
         check_id: 'QA-01',
         code: [501],
-        method: 'detected',
         status: 'FAIL',
         value: false,
-        evidence: [],
-        weight_awarded: 0,
         weight_max: 4,
-        score: 0,
-        confidence: 1,
-        applies: true,
         sources: ['ci'],
         reliability: { tag: 'maximal', confidence: 'high', note: null },
-        source: '',
-        definition: '',
-        hint: '',
-        plain: '',
         source_date: null,
         source_url: null,
-      },
+      }),
     ],
   };
 
@@ -620,14 +547,9 @@ test("aggregate: sources_used is the sorted union of applicable checks' sources 
 // 6a.1: check source_url/source_date come from per-category fields, not resolveSource
 // ---------------------------------------------------------------------------
 
-test('audit-core: check records carry source_url and source_date from per-category fields', async () => {
-  const outDir = mkdtempSync(join(tmpdir(), 'audit-core-src-url-test-'));
-  const repoPath = SKILL_ROOT;
-
-  await auditCore(repoPath, outDir, {}, {}, STANDARDS_PATH);
-
+test('audit-core: check records carry source_url and source_date from per-category fields', () => {
   // Load any per-dimension JSON that exists and find at least one check with source_url set.
-  const dimFiles = readdirSync(outDir).filter(
+  const dimFiles = readdirSync(REAL_REPO_OUT).filter(
     (f) => f.endsWith('.json') && f !== 'audit.json'
   );
 
@@ -638,7 +560,7 @@ test('audit-core: check records carry source_url and source_date from per-catego
 
   let checkedCount = 0;
   for (const f of dimFiles) {
-    const dim = JSON.parse(readFileSync(join(outDir, f), 'utf8'));
+    const dim = JSON.parse(readFileSync(join(REAL_REPO_OUT, f), 'utf8'));
     for (const chk of dim.checks ?? []) {
       if (chk.applies && chk.source_url) {
         // A check with a source_url must also have source_date, both non-empty strings.
@@ -681,25 +603,18 @@ test('aggregate emits coverage null when every check SKIPs — at the dimension 
     score: 0,
     coverage: 0,
     checks: [
-      {
+      makeCheckRecord({
         check_id: 'ADP-01',
         code: [101],
         method: 'computed',
         status: 'SKIP',
-        value: null,
         evidence: ['no tracker connector'],
-        weight_awarded: 0,
         weight_max: 5,
-        score: 0,
         confidence: 0,
         applies: false,
         sources: ['tracker'],
         reliability: { tag: 'not-reliable', confidence: 'LOW', note: null },
-        source: '',
-        definition: '',
-        hint: '',
-        plain: '',
-      },
+      }),
     ],
   };
   writeFileSync(
@@ -742,25 +657,14 @@ test('aggregate reports a corrupted collected artifact as unreadable, not as a m
     score: 2,
     coverage: 0.5,
     checks: [
-      {
+      makeCheckRecord({
         check_id: 'CQ-01',
-        code: [1],
-        method: 'detected',
-        status: 'PASS',
         value: true,
-        evidence: [],
         weight_awarded: 4,
         weight_max: 4,
         score: 1,
-        confidence: 1,
-        applies: true,
         sources: ['git'],
-        reliability: { tag: 'maximal', confidence: 'HIGH', note: null },
-        source: '',
-        definition: '',
-        hint: '',
-        plain: '',
-      },
+      }),
     ],
   };
   writeFileSync(

@@ -41,7 +41,7 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
@@ -71,14 +71,12 @@ export function compute(
 ): MetricResult {
   const read = readArtifact(collectedDir, 'git');
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_g14_rework_rate',
-      null,
       'banded',
-      [],
-      skipReliability('minimal', 'git', read.error),
-      [],
-      ['git']
+      'minimal',
+      'git',
+      read.error
     );
   }
 
@@ -86,15 +84,7 @@ export function compute(
   const raw = artifact?.raw;
   const ws = raw?.window_stats;
   if (!ws || typeof ws.merges !== 'number' || ws.merges === 0) {
-    return makeMetricResult(
-      'adp_g14_rework_rate',
-      null,
-      'banded',
-      [],
-      computeReliability('minimal', [], ['git']),
-      [],
-      ['git']
-    );
+    return skipMetric('adp_g14_rework_rate', 'banded', 'minimal', 'git');
   }
 
   const totalMerges: number = ws.merges;
@@ -119,10 +109,6 @@ export function compute(
     reliability,
     ['git'],
     [],
-    band,
-    undefined,
-    expression,
-    score,
-    1.0
+    { band, expression, score, confidence: 1.0 }
   );
 }

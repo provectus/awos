@@ -15,21 +15,26 @@
 //
 // Topology flags are computed deterministically (topology.ts) and gate each
 // category's `applies_when` — a category whose flag is false is SKIP (excluded
-// from the coverage denominator), never run. check_id comes from the dimension
-// .md files (the `### XXX-NN:` heading), so the artifacts match the renderer's
-// expectations. The only LLM-dependent inputs left out here are connectors
+// from the coverage denominator), never run. check_id comes from each
+// category's required `check_id` in standards.toml (the single source of
+// check ids). The only LLM-dependent inputs left out here are connectors
 // (tracker/docs default to absent → those metrics SKIP) and the 5 judgments.
 // ---------------------------------------------------------------------------
 import { mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 
-import { loadStandards, metaNumber } from './metrics/_base.ts';
+import {
+  evaluateAppliesWhen,
+  loadStandards,
+  metaNumber,
+} from './metrics/_base.ts';
+import { median, round1 } from './metrics/_score.ts';
 import type {
   CheckStatus,
   DerivedDelivery,
   WrittenCheck,
 } from './artifact_types.ts';
-import { SOURCE_LABEL_DEFAULTS } from './artifact_types.ts';
+import { COLLECTOR_SOURCES, SOURCE_LABEL_DEFAULTS } from './artifact_types.ts';
 import {
   computeTopology,
   detectLinkedRepos,
@@ -69,14 +74,23 @@ export const ENGINE_PROVENANCE = { generated_by: 'audit-core' } as const;
  * changelogs); deriving both the value and the honest gated note from the
  * SAME artifact makes that contradiction impossible.
  */
-export function computeDerivedDelivery(collectedDir: string): DerivedDelivery {
-  let tracker: Record<string, unknown> | null = null;
-  try {
-    tracker = JSON.parse(
-      readFileSync(join(collectedDir, 'tracker.json'), 'utf8')
-    );
-  } catch {
-    tracker = null;
+export function computeDerivedDelivery(
+  collectedDir: string,
+  // Pre-read tracker artifact — pass it when the caller already parsed
+  // collected/tracker.json so the (potentially MB-sized) file isn't re-read.
+  preReadTracker?: Record<string, unknown> | null
+): DerivedDelivery {
+  let tracker: Record<string, unknown> | null;
+  if (preReadTracker !== undefined) {
+    tracker = preReadTracker;
+  } else {
+    try {
+      tracker = JSON.parse(
+        readFileSync(join(collectedDir, 'tracker.json'), 'utf8')
+      );
+    } catch {
+      tracker = null;
+    }
   }
   const out: DerivedDelivery = { cycle_time: {}, mttr: {} };
   if (!tracker?.available) return out;
@@ -103,10 +117,7 @@ export function computeDerivedDelivery(collectedDir: string): DerivedDelivery {
     .sort((a, b) => a - b);
 
   if (spans.length > 0) {
-    const mid = Math.floor(spans.length / 2);
-    const median =
-      spans.length % 2 === 1 ? spans[mid] : (spans[mid - 1] + spans[mid]) / 2;
-    out.cycle_time.median_days = Math.round(median * 10) / 10;
+    out.cycle_time.median_days = round1(median(spans)!);
     out.cycle_time.tickets_used = spans.length;
     out.cycle_time.display_value = `${out.cycle_time.median_days} d`;
     const fm = raw.fetch_meta as Record<string, unknown> | undefined;
@@ -192,13 +203,43 @@ function computeDetectionConflicts(
   return conflicts;
 }
 
-const round1 = (n: number) => Math.round(n * 10) / 10;
-
 // Last-resort lookback window (days) used only when meta.max_lookback_days is
 // absent from standards.toml. The source of truth is meta.max_lookback_days.
 const MAX_LOOKBACK_DAYS_FALLBACK = 90;
 
-const COLLECTOR_SOURCES = ['git', 'ci', 'tracker', 'docs'] as const;
+/** Build the collection Period from standards.toml [meta] (the source of truth). */
+export function periodFromStandards(
+  standards: Record<string, unknown>
+): Period {
+  return {
+    bucket_days: 30,
+    lookback_days: metaNumber(
+      standards,
+      'max_lookback_days',
+      MAX_LOOKBACK_DAYS_FALLBACK
+    ),
+    history_available_days: 0,
+  };
+}
+
+/** Git collector tunables from standards.toml [meta] (the source of truth). */
+export function gitOptsFromStandards(standards: Record<string, unknown>): {
+  activeContributorThreshold: number;
+  reworkHorizonDays: number;
+} {
+  return {
+    activeContributorThreshold: metaNumber(
+      standards,
+      'active_contributor_threshold',
+      ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
+    ),
+    reworkHorizonDays: metaNumber(
+      standards,
+      'rework_horizon_days',
+      REWORK_HORIZON_DAYS_DEFAULT
+    ),
+  };
+}
 
 /**
  * Absence reason for a collector artifact that failed to read. ENOENT means
@@ -212,7 +253,123 @@ function collectorArtifactAbsenceReason(err: unknown): string {
     : `collector artifact unreadable: ${String(err)}`;
 }
 
+/** One parse per collector artifact: the artifact, or the read error. */
+export type CollectedMap = Map<
+  string,
+  { art: Record<string, unknown> | null; err: unknown }
+>;
+
+/** Parse every collected/<src>.json once. Both auditCore and aggregate derive
+ * their `sources`/`source_windows`/topology blocks from this single map. */
+export function readCollectedArtifacts(collectedDir: string): CollectedMap {
+  const map: CollectedMap = new Map();
+  for (const src of COLLECTOR_SOURCES) {
+    try {
+      const art = JSON.parse(
+        readFileSync(join(collectedDir, `${src}.json`), 'utf8')
+      ) as Record<string, unknown>;
+      map.set(src, { art, err: null });
+    } catch (err) {
+      map.set(src, { art: null, err });
+    }
+  }
+  return map;
+}
+
+/**
+ * Build the audit.json `sources` block. A genuinely absent artifact (ENOENT)
+ * means the source was never collected; any other error means the artifact
+ * exists but is unreadable/corrupted — say so, so the report never tells a
+ * user to "connect" a source they did connect. With `dropEnoent` (the
+ * aggregate path) never-collected sources are omitted entirely so a previously
+ * stored block can win the fallback.
+ */
+export function deriveSources(
+  collected: CollectedMap,
+  dropEnoent: boolean
+): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const src of COLLECTOR_SOURCES) {
+    const { art, err } = collected.get(src)!;
+    if (art) {
+      const period = art.period as Record<string, unknown> | undefined;
+      out.push({
+        source: src,
+        available: Boolean(art.available),
+        reason_if_absent: art.reason_if_absent ?? null,
+        history_available_days: period?.history_available_days ?? null,
+      });
+    } else if (!dropEnoent || (err as { code?: string })?.code !== 'ENOENT') {
+      out.push({
+        source: src,
+        available: false,
+        reason_if_absent: collectorArtifactAbsenceReason(err),
+        history_available_days: null,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Build the audit.json `source_windows` block for per-dimension provenance.
+ * days = period.lookback_days ?? period.history_available_days ?? null;
+ * label = period.source_label (orchestrator-recorded) if present, else default.
+ */
+export function deriveSourceWindows(
+  collected: CollectedMap
+): Record<string, { days: number | null; label: string }> {
+  const windows: Record<string, { days: number | null; label: string }> = {};
+  for (const src of COLLECTOR_SOURCES) {
+    const { art } = collected.get(src)!;
+    if (!art) continue;
+    const p = (art.period ?? {}) as Record<string, unknown>;
+    windows[src] = {
+      days:
+        (p.lookback_days as number | undefined) ??
+        (p.history_available_days as number | undefined) ??
+        null,
+      label:
+        (p.source_label as string | undefined) ??
+        SOURCE_LABEL_DEFAULTS[src] ??
+        src,
+    };
+  }
+  return windows;
+}
+
 type DetectorFn = (repoPath: string, params?: unknown) => DetectorResult;
+
+/** Per-category display metadata captured from a metric result. */
+interface MetricMeta {
+  unit?: string;
+  expression?: string;
+  value?: unknown;
+  evidence?: string[];
+  score?: number;
+  confidence?: number;
+  /** Reliability note from the metric — surfaces WHY a metric skipped. */
+  note?: string | null;
+}
+
+/** The MetricMeta a metric result yields for one of its category codes. */
+function metaForCode(res: MetricResult, code: number): MetricMeta {
+  const perCodeScore = (
+    res.score_per_code as Record<number, number> | undefined
+  )?.[code];
+  const perCodeEvidence = (
+    res.evidence_per_code as Record<number, string[]> | undefined
+  )?.[code];
+  return {
+    unit: res.unit,
+    expression: res.expression,
+    value: res.value,
+    evidence: perCodeEvidence ?? (res.expression ? [res.expression] : []),
+    score: perCodeScore ?? res.score,
+    confidence: res.confidence,
+    note: res.reliability?.note ?? null,
+  };
+}
 
 /**
  * A metric compute function — may return synchronously or as a Promise
@@ -282,6 +439,9 @@ export async function auditCore(
   // populated collected/ directory instead. This is the `enrich` path: after the
   // orchestrator writes connector artifacts (tracker/docs/ci) into collected/,
   // re-scoring reuses them rather than overwriting them with empty ones.
+  // Repo-derived checks (detectors, AST metrics) are reused from the
+  // per-dimension artifacts already in outDir instead of being recomputed —
+  // the repo hasn't changed; only connector-affected categories re-score.
   collectedDirOverride?: string
 ): Promise<AuditCoreSummary> {
   const start = Date.now();
@@ -290,10 +450,7 @@ export async function auditCore(
   const date = new Date().toISOString().slice(0, 10);
   mkdirSync(outDir, { recursive: true });
 
-  // Map category code → human check_id (e.g. 2600 → "SEC-01") from the
-  // dimension .md files, so artifacts carry the same ids the renderer expects.
   const skillRoot = dirname(dirname(standardsPath));
-  const checkIdByCode = parseCheckIds(join(skillRoot, 'dimensions'));
 
   // 1. Deterministic collectors → collected/ artifacts. git is always present;
   //    ci self-probes; tracker/docs emit available:false without a connector.
@@ -302,27 +459,8 @@ export async function auditCore(
   const collectedDir = collectedDirOverride ?? join(outDir, 'collected');
   if (!collectedDirOverride) {
     // All tunables come from standards.toml [meta] — never hardcoded here.
-    const period: Period = {
-      bucket_days: 30,
-      lookback_days: metaNumber(
-        standards,
-        'max_lookback_days',
-        MAX_LOOKBACK_DAYS_FALLBACK
-      ),
-      history_available_days: 0,
-    };
-    const gitOpts = {
-      activeContributorThreshold: metaNumber(
-        standards,
-        'active_contributor_threshold',
-        ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
-      ),
-      reworkHorizonDays: metaNumber(
-        standards,
-        'rework_horizon_days',
-        REWORK_HORIZON_DAYS_DEFAULT
-      ),
-    };
+    const period = periodFromStandards(standards);
+    const gitOpts = gitOptsFromStandards(standards);
     for (const art of [
       collectGit(repoPath, period, gitOpts),
       collectCi(repoPath, period),
@@ -333,55 +471,11 @@ export async function auditCore(
     }
   }
 
-  // Build sources block from collector artifacts. A genuinely absent artifact
-  // (ENOENT) means the source was never collected; any other error means the
-  // artifact exists but is unreadable/corrupted — say so, so the report never
-  // tells a user to "connect" a source they did connect.
-  const sources = COLLECTOR_SOURCES.map((src) => {
-    try {
-      const art = JSON.parse(
-        readFileSync(join(collectedDir, `${src}.json`), 'utf8')
-      );
-      return {
-        source: src,
-        available: Boolean(art.available),
-        reason_if_absent: art.reason_if_absent ?? null,
-        history_available_days: art.period?.history_available_days ?? null,
-      };
-    } catch (err) {
-      return {
-        source: src,
-        available: false,
-        reason_if_absent: collectorArtifactAbsenceReason(err),
-        history_available_days: null,
-      };
-    }
-  });
-
-  // Build source_windows from collected artifacts for per-dimension provenance.
-  // days = period.lookback_days ?? period.history_available_days ?? null
-  // label = period.source_label (orchestrator-recorded) if present, else default.
-  const sourceWindows: Record<string, { days: number | null; label: string }> =
-    {};
-  for (const src of COLLECTOR_SOURCES) {
-    try {
-      const art = JSON.parse(
-        readFileSync(join(collectedDir, `${src}.json`), 'utf8')
-      );
-      const p = (art.period ?? {}) as Record<string, unknown>;
-      const days: number | null =
-        (p.lookback_days as number | undefined) ??
-        (p.history_available_days as number | undefined) ??
-        null;
-      const label =
-        (p.source_label as string | undefined) ??
-        SOURCE_LABEL_DEFAULTS[src] ??
-        src;
-      sourceWindows[src] = { days, label };
-    } catch {
-      /* artifact absent */
-    }
-  }
+  // One parse per collector artifact; sources/source_windows/topology flags
+  // all derive from the same map.
+  const collected = readCollectedArtifacts(collectedDir);
+  const sources = deriveSources(collected, false);
+  const sourceWindows = deriveSourceWindows(collected);
 
   // 2. Deterministic topology flags. Connector-dependent flags (has_tracker,
   //    has_docs_connector, has_incident_source) are derived from the collected
@@ -389,18 +483,13 @@ export async function auditCore(
   //    SKIP); once the orchestrator writes an available connector artifact and
   //    `enrich` re-scores, they flip true so the gated categories score.
   const readCollected = (src: string): Record<string, unknown> | null => {
-    try {
-      return JSON.parse(
-        readFileSync(join(collectedDir, `${src}.json`), 'utf8')
-      ) as Record<string, unknown>;
-    } catch (err) {
-      if ((err as { code?: string }).code !== 'ENOENT') {
-        process.stderr.write(
-          `audit-core: collected/${src}.json is unreadable: ${String(err)}\n`
-        );
-      }
-      return null;
+    const { art, err } = collected.get(src)!;
+    if (!art && (err as { code?: string })?.code !== 'ENOENT') {
+      process.stderr.write(
+        `audit-core: collected/${src}.json is unreadable: ${String(err)}\n`
+      );
     }
+    return art;
   };
   const trackerArt = readCollected('tracker');
   const docsArt = readCollected('docs');
@@ -412,28 +501,54 @@ export async function auditCore(
     ),
   });
 
+  // 2b. Enrich reuse: on the enrich path the repo has not changed since
+  //     audit-core wrote the per-dimension artifacts, so repo-derived results
+  //     — detector checks and repo-scan (AST) metrics, the expensive part of
+  //     the pass — are reused from the artifacts on disk. Only the categories
+  //     a connector can affect are recomputed: judgment checks (re-emitted
+  //     PENDING_JUDGMENT), categories gated by a connector topology flag, and
+  //     metrics that read a collected artifact.
+  const reusableChecks = new Map<number, CheckRecord>();
+  if (collectedDirOverride) {
+    for (const { checks } of dimensionFiles(outDir)) {
+      for (const rec of checks) {
+        for (const code of Array.isArray(rec.code) ? rec.code : [rec.code]) {
+          if (!reusableChecks.has(code)) reusableChecks.set(code, rec);
+        }
+      }
+    }
+  }
+  const canReuse = (c: Category): boolean => {
+    if (!collectedDirOverride || c.method === 'judgment') return false;
+    const flag = c.applies_when?.match(/^topology\.(.+)$/)?.[1];
+    if (flag && CONNECTOR_TOPOLOGY_FLAGS.has(flag)) return false;
+    if (!reusableChecks.has(c.code)) return false;
+    if (detectors[c.code] !== undefined) return true;
+    // Metric-routed: reusable only when the metric never reads a collected
+    // artifact (pure repo scan — the AST metrics).
+    return (
+      c.metric !== undefined &&
+      (c.sources ?? []).every((s) => !COLLECTED_ARTIFACT_SOURCES.has(s))
+    );
+  };
+
   // 3. Run each metric once. A metric reports the category codes it awarded
   //    (PASS) and whether it ran (OK) or skipped (no sources).
   const metricIds = new Set<string>();
+  const catsByMetric = new Map<string, Category[]>();
   for (const c of Object.values(cats)) {
+    if (c.metric) {
+      const list = catsByMetric.get(c.metric) ?? [];
+      list.push(c);
+      catsByMetric.set(c.metric, list);
+    }
     if (c.dimension === 'org-portfolio' || c.method === 'judgment') continue;
+    if (canReuse(c)) continue;
     if (detectors[c.code] === undefined && c.metric) metricIds.add(c.metric);
   }
   const awarded = new Set<number>();
   const skippedByMetric = new Set<number>();
-  const metricMeta = new Map<
-    number,
-    {
-      unit?: string;
-      expression?: string;
-      value?: unknown;
-      evidence?: string[];
-      score?: number;
-      confidence?: number;
-      /** Reliability note from the metric — surfaces WHY a metric skipped. */
-      note?: string | null;
-    }
-  >();
+  const metricMeta = new Map<number, MetricMeta>();
   // Metrics that could not run — the id resolves to no function, or the
   // function threw. Their categories must SKIP ("couldn't measure"), never
   // FAIL ("measured, absent"), mirroring the detector branch's
@@ -460,8 +575,7 @@ export async function auditCore(
     })
   );
   for (const [id, reason] of metricErrors) {
-    for (const c of Object.values(cats)) {
-      if (c.metric !== id) continue;
+    for (const c of catsByMetric.get(id) ?? []) {
       skippedByMetric.add(c.code);
       if (!metricMeta.has(c.code)) metricMeta.set(c.code, { note: reason });
     }
@@ -469,47 +583,16 @@ export async function auditCore(
   for (const item of metricResults) {
     if (!item) continue;
     const { id, res } = item;
-    const resEvidencePerCode = res.evidence_per_code as
-      | Record<number, string[]>
-      | undefined;
+    // Awarded codes always take the metric's fresh meta; the metric's other
+    // codes get it only when nothing was stored yet (e.g. no error note).
     for (const code of (res.categories_awarded ?? []) as number[]) {
       awarded.add(code);
-      const perCodeScore = (
-        res.score_per_code as Record<number, number> | undefined
-      )?.[code];
-      const perCodeEvidence = resEvidencePerCode?.[code];
-      metricMeta.set(code, {
-        unit: res.unit,
-        expression: res.expression,
-        value: res.value,
-        evidence: perCodeEvidence ?? (res.expression ? [res.expression] : []),
-        score: perCodeScore ?? res.score,
-        confidence: res.confidence,
-        note: res.reliability?.note ?? null,
-      });
+      metricMeta.set(code, metaForCode(res, code));
     }
-    if (res.status === 'SKIP') {
-      for (const c of Object.values(cats)) {
-        if (c.metric === id) skippedByMetric.add(c.code);
-      }
-    }
-    // Store meta for all codes this metric covers (not just awarded).
-    for (const c of Object.values(cats)) {
-      if (c.metric === id && !metricMeta.has(c.code)) {
-        const perCodeScore = (
-          res.score_per_code as Record<number, number> | undefined
-        )?.[c.code as number];
-        const perCodeEvidence = resEvidencePerCode?.[c.code as number];
-        metricMeta.set(c.code, {
-          unit: res.unit,
-          expression: res.expression,
-          value: res.value,
-          evidence: perCodeEvidence ?? (res.expression ? [res.expression] : []),
-          score: perCodeScore ?? res.score,
-          confidence: res.confidence,
-          note: res.reliability?.note ?? null,
-        });
-      }
+    for (const c of catsByMetric.get(id) ?? []) {
+      if (res.status === 'SKIP') skippedByMetric.add(c.code);
+      if (!metricMeta.has(c.code))
+        metricMeta.set(c.code, metaForCode(res, c.code));
     }
   }
 
@@ -523,17 +606,18 @@ export async function auditCore(
 
   for (const [key, c] of Object.entries(cats)) {
     if (c.dimension === 'org-portfolio') continue;
-    const rec = buildCheck(
-      key,
-      c,
-      detectors,
-      repoPath,
-      awarded,
-      skippedByMetric,
-      topology,
-      checkIdByCode,
-      metricMeta
-    );
+    const rec = canReuse(c)
+      ? reusableChecks.get(c.code)!
+      : buildCheck(
+          key,
+          c,
+          detectors,
+          repoPath,
+          awarded,
+          skippedByMetric,
+          topology,
+          metricMeta
+        );
     (byDimension[c.dimension] ??= []).push(rec);
     if (rec.status === 'PENDING_JUDGMENT') {
       judgmentPending++;
@@ -643,7 +727,7 @@ export async function auditCore(
     linked_repos: linkedRepos,
     tech_stack: techStack,
     detection_conflicts: detectionConflicts,
-    derived_delivery: computeDerivedDelivery(collectedDir),
+    derived_delivery: computeDerivedDelivery(collectedDir, trackerArt),
     engine: ENGINE_PROVENANCE,
   };
   if (Object.keys(sourceWindows).length > 0)
@@ -663,508 +747,34 @@ export async function auditCore(
 }
 
 /**
- * Parse `### XXX-NN:` headings and their `**Category:** <codes>` lines from
- * every dimension .md file, returning a code → check_id map.
+ * Iterate the per-dimension <name>.json files in `outDir` (everything but
+ * audit.json / org-portfolio.json) that parse and carry a checks array.
+ * Unreadable files go to `onError` (or are silently skipped without one).
  */
-/**
- * Re-aggregate audit.json from the per-dimension <name>.json files in `outDir`,
- * recomputing each dimension's score/coverage from its (possibly patched) checks
- * and the audit totals. Preserves the project/date and any authored report
- * blocks (headline/insights/recommendations) already on audit.json. Run after
- * the orchestrator patches judgment or connector checks, before rendering.
- */
-export function aggregate(outDir: string): void {
+export function* dimensionFiles(
+  outDir: string,
+  onError?: (file: string, err: unknown) => void
+): Generator<{
+  file: string;
+  dim: Record<string, unknown>;
+  checks: CheckRecord[];
+}> {
   const files = readdirSync(outDir).filter(
     (f) =>
       f.endsWith('.json') && f !== 'audit.json' && f !== 'org-portfolio.json'
   );
-  let total = 0;
-  let applicable = 0;
-  const dimensions: Record<string, unknown>[] = [];
-  for (const f of files) {
+  for (const file of files) {
     let dim: Record<string, unknown>;
     try {
-      dim = JSON.parse(readFileSync(join(outDir, f), 'utf8'));
+      dim = JSON.parse(readFileSync(join(outDir, file), 'utf8'));
     } catch (err) {
-      process.stderr.write(
-        `aggregate: ${f} is unreadable (${String(err)}) — dimension left out of the totals\n`
-      );
+      onError?.(file, err);
       continue;
     }
     const checks = dim.checks as CheckRecord[] | undefined;
     if (!Array.isArray(checks)) continue;
-    // Re-derive applies from status so patched-PASS connector checks count
-    // in the denominator — prevents coverage > 1 when a SKIP is patched to PASS.
-    // Re-derive weight_awarded from score (Correction 3) so orchestrator-patched
-    // checks that carry an explicit score re-sum correctly. The orchestrator's
-    // patches are untrusted input: a score outside [0,1] is clamped (a raw
-    // weight written into `score` must not inflate the audit total). Any
-    // finite score is explicit — a stored 0 stays 0 (a legal {status: WARN,
-    // score: 0} patch must not re-inflate to the status default). The one
-    // exception: a 0 score contradicting a positive weight_awarded on a
-    // passing status is a status-only patch that never touched `score` —
-    // reconcile from weight_awarded so the patched credit isn't silently
-    // zeroed. `score` is written back so the artifact never carries a score
-    // that disagrees with its status.
-    for (const c of checks) {
-      c.applies = c.status !== 'SKIP';
-      const passing = ['PASS', 'WARN', 'PARTIAL'].includes(c.status);
-      const awardedCredit =
-        (c.weight_max || 0) > 0 && (c.weight_awarded || 0) > 0;
-      let s: number;
-      if (c.status === 'SKIP') {
-        s = 0;
-      } else if (
-        typeof c.score === 'number' &&
-        Number.isFinite(c.score) &&
-        (c.score !== 0 || !(passing && awardedCredit))
-      ) {
-        s = c.score;
-      } else if (passing && awardedCredit) {
-        s = c.weight_awarded / c.weight_max;
-      } else {
-        s = c.status === 'PASS' ? 1 : c.status === 'WARN' ? 0.5 : 0;
-      }
-      if (s < 0 || s > 1) {
-        process.stderr.write(
-          `aggregate: ${c.check_id} score ${s} out of [0,1] — clamped (bad judgment/connector patch?)\n`
-        );
-        s = Math.min(1, Math.max(0, s));
-      }
-      c.score = s;
-      c.weight_awarded = Math.round((c.weight_max || 0) * s * 10) / 10;
-    }
-    const score = round1(
-      checks.reduce((s, c) => s + (c.weight_awarded || 0), 0)
-    );
-    const appl = checks
-      .filter((c) => c.applies)
-      .reduce((s, c) => s + (c.weight_max || 0), 0);
-    dim.score = score;
-    dim.coverage = appl > 0 ? score / appl : null;
-    // Re-derive sources_used: union of sources across applicable checks.
-    dim.sources_used = [
-      ...new Set(
-        checks
-          .filter((c) => c.applies)
-          .flatMap((c) => (c.sources ?? []) as string[])
-      ),
-    ].sort();
-    writeFileSync(join(outDir, f), JSON.stringify(dim, null, 2));
-    total = round1(total + score);
-    applicable += appl;
-    dimensions.push(dim);
+    yield { file, dim, checks };
   }
-  // Restore the presentation order — readdirSync is alphabetical, but each
-  // per-dimension JSON carries the `order` index audit-core stamped on it.
-  dimensions.sort((a, b) => {
-    const ao = typeof a.order === 'number' ? (a.order as number) : 999;
-    const bo = typeof b.order === 'number' ? (b.order as number) : 999;
-    return ao - bo || String(a.dimension).localeCompare(String(b.dimension));
-  });
-  let existing: Record<string, unknown> = {};
-  try {
-    existing = JSON.parse(readFileSync(join(outDir, 'audit.json'), 'utf8'));
-  } catch (err) {
-    // Absent (ENOENT) is normal on a first aggregate; anything else means a
-    // prior audit.json exists but can't be read — its authored report blocks
-    // (headline/insights/recommendations) will be lost. Say so.
-    if ((err as { code?: string }).code !== 'ENOENT') {
-      process.stderr.write(
-        `aggregate: prior audit.json is unreadable (${String(err)}) — authored report blocks (headline/insights/recommendations) will be lost\n`
-      );
-    }
-  }
-
-  // Re-derive sources and source_windows from collected/ artifacts. An ENOENT
-  // (artifact never collected) drops the entry so the stored block can win the
-  // fallback below; an unreadable/corrupted artifact keeps its entry with an
-  // explicit reason, never masquerading as a missing connector.
-  const collectedDirAgg = join(outDir, 'collected');
-  const derivedSources = COLLECTOR_SOURCES.map((src) => {
-    try {
-      const art = JSON.parse(
-        readFileSync(join(collectedDirAgg, `${src}.json`), 'utf8')
-      );
-      return {
-        source: src,
-        available: Boolean(art.available),
-        reason_if_absent: art.reason_if_absent ?? null,
-        history_available_days: art.period?.history_available_days ?? null,
-      };
-    } catch (err) {
-      if ((err as { code?: string }).code === 'ENOENT') return null;
-      return {
-        source: src,
-        available: false,
-        reason_if_absent: collectorArtifactAbsenceReason(err),
-        history_available_days: null,
-      };
-    }
-  }).filter(Boolean);
-
-  const derivedSourceWindows: Record<
-    string,
-    { days: number | null; label: string }
-  > = {};
-  for (const src of COLLECTOR_SOURCES) {
-    try {
-      const art = JSON.parse(
-        readFileSync(join(collectedDirAgg, `${src}.json`), 'utf8')
-      );
-      const p = (art.period ?? {}) as Record<string, unknown>;
-      const days: number | null =
-        (p.lookback_days as number | undefined) ??
-        (p.history_available_days as number | undefined) ??
-        null;
-      const label =
-        (p.source_label as string | undefined) ??
-        SOURCE_LABEL_DEFAULTS[src] ??
-        src;
-      derivedSourceWindows[src] = { days, label };
-    } catch {
-      /* artifact absent */
-    }
-  }
-
-  const audit: Record<string, unknown> = {
-    date: existing.date ?? new Date().toISOString().slice(0, 10),
-    project: existing.project ?? basename(outDir),
-    audit_total: round1(total),
-    coverage: applicable > 0 ? total / applicable : null,
-    dimensions,
-  };
-  for (const block of [
-    'headline',
-    'insights',
-    'recommendations',
-    'source_probes',
-    'tech_stack',
-    'linked_repos',
-    'detection_conflicts',
-    'standards_meta',
-  ]) {
-    if (existing[block] !== undefined) audit[block] = existing[block];
-  }
-  // Connector-gated headline rows: re-derive from the collected artifacts
-  // (same source of truth as `sources` below); keep the stored block when the
-  // artifacts are gone.
-  const derivedDelivery = computeDerivedDelivery(collectedDirAgg);
-  audit.derived_delivery =
-    derivedDelivery.cycle_time.display_value !== undefined ||
-    derivedDelivery.cycle_time.note !== undefined ||
-    derivedDelivery.mttr.note !== undefined ||
-    existing.derived_delivery === undefined
-      ? derivedDelivery
-      : existing.derived_delivery;
-  // Prefer re-derived sources when collected/ artifacts are present; fall back
-  // to the previously stored sources block so it is never silently dropped.
-  if (derivedSources.length > 0) {
-    audit.sources = derivedSources;
-  } else if (existing.sources !== undefined) {
-    audit.sources = existing.sources;
-  }
-  // Same fallback logic for source_windows.
-  if (Object.keys(derivedSourceWindows).length > 0) {
-    audit.source_windows = derivedSourceWindows;
-  } else if (existing.source_windows !== undefined) {
-    audit.source_windows = existing.source_windows;
-  }
-  // Carry the engine provenance stamp forward: from the prior audit.json, or
-  // (repair case — audit.json deleted/corrupted) re-derive it when every
-  // per-dimension artifact is engine-stamped. Hand-built dimension files
-  // never carry the stamp, so aggregating them yields an unrenderable audit.
-  if (
-    hasEngineProvenance(existing) ||
-    (dimensions.length > 0 && dimensions.every((d) => hasEngineProvenance(d)))
-  ) {
-    audit.engine = ENGINE_PROVENANCE;
-  }
-  writeFileSync(join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
-}
-
-export interface JudgmentPatch {
-  check_id: string;
-  status: 'PASS' | 'WARN' | 'FAIL' | 'SKIP';
-  /** Fraction of capability present ∈ [0,1]; defaults from status (PASS=1, WARN=0.5, else 0). */
-  score?: number;
-  value?: unknown;
-  evidence?: string[];
-}
-
-/**
- * Apply the orchestrator's judgment verdicts to the per-dimension JSONs in ONE
- * call, then re-aggregate. Replaces the per-check JSON surgery the model used
- * to do by hand (dozens of serial shell edits — the dominant wall-clock cost
- * of Step 6). Only `method: "judgment"` checks are patchable; anything else is
- * reported and left untouched. Returns a summary for the caller to print.
- */
-export function patchJudgments(
-  outDir: string,
-  patches: JudgmentPatch[]
-): { patched: string[]; warnings: string[] } {
-  // Circuit-breaker: only an engine-produced audit may be patched. A missing
-  // or unstamped audit.json means the orchestrator hand-assembled the scores
-  // instead of running audit-core — refuse, with the fix in the message.
-  let existingAudit: unknown = null;
-  try {
-    existingAudit = JSON.parse(
-      readFileSync(join(outDir, 'audit.json'), 'utf8')
-    );
-  } catch {
-    // handled below — absent/unreadable fails the provenance check
-  }
-  if (!hasEngineProvenance(existingAudit)) {
-    throw new Error(
-      `patch-judgment: ${join(outDir, 'audit.json')} lacks engine provenance — ` +
-        `it was not produced by audit-core. Hand-assembled audits are not ` +
-        `patchable; run \`node dist/cli.js audit-core <repoPath> ${outDir}\` first.`
-    );
-  }
-  const patched: string[] = [];
-  const warnings: string[] = [];
-  const validStatuses = ['PASS', 'WARN', 'FAIL', 'SKIP'];
-  const byId = new Map<string, JudgmentPatch>();
-  for (const p of patches) {
-    if (!p || typeof p.check_id !== 'string' || typeof p.status !== 'string') {
-      warnings.push(`malformed patch skipped: ${JSON.stringify(p)}`);
-      continue;
-    }
-    if (!validStatuses.includes(p.status)) {
-      warnings.push(
-        `${p.check_id}: invalid status "${p.status}" — must be one of ${validStatuses.join('/')}; patch skipped`
-      );
-      continue;
-    }
-    byId.set(p.check_id, p);
-  }
-
-  const files = readdirSync(outDir).filter(
-    (f) =>
-      f.endsWith('.json') && f !== 'audit.json' && f !== 'org-portfolio.json'
-  );
-  for (const f of files) {
-    let dim: Record<string, unknown>;
-    try {
-      dim = JSON.parse(readFileSync(join(outDir, f), 'utf8'));
-    } catch {
-      continue;
-    }
-    const checks = dim.checks as CheckRecord[] | undefined;
-    if (!Array.isArray(checks)) continue;
-    let changed = false;
-    for (const c of checks) {
-      const p = byId.get(c.check_id);
-      if (!p) continue;
-      byId.delete(c.check_id);
-      if (c.method !== 'judgment') {
-        warnings.push(
-          `${c.check_id} is method "${c.method}", not judgment — left untouched (connector checks are re-scored by enrich)`
-        );
-        continue;
-      }
-      const statusDefault =
-        p.status === 'PASS' ? 1 : p.status === 'WARN' ? 0.5 : 0;
-      let s = typeof p.score === 'number' ? p.score : statusDefault;
-      if (s < 0 || s > 1) {
-        warnings.push(
-          `${c.check_id}: score ${s} out of [0,1] — clamped (pass a fraction, not a weight)`
-        );
-        s = Math.min(1, Math.max(0, s));
-      }
-      if (p.status === 'SKIP') s = 0;
-      c.status = p.status;
-      c.score = s;
-      c.confidence = p.status === 'SKIP' ? 0 : 1;
-      c.applies = p.status !== 'SKIP';
-      c.weight_awarded = Math.round((c.weight_max || 0) * s * 10) / 10;
-      if (p.value !== undefined) c.value = p.value;
-      if (Array.isArray(p.evidence)) c.evidence = p.evidence;
-      changed = true;
-      patched.push(c.check_id);
-    }
-    if (changed) {
-      writeFileSync(join(outDir, f), JSON.stringify(dim, null, 2));
-    }
-  }
-  for (const id of byId.keys()) {
-    warnings.push(`${id}: no such check in any dimension artifact — ignored`);
-  }
-
-  aggregate(outDir);
-  return { patched, warnings };
-}
-
-/** The orchestrator-authored plain-language blocks patch-report accepts. */
-export interface ReportBlocksPatch {
-  headline?: Record<string, unknown>;
-  insights?: unknown[];
-  recommendations?: Array<Record<string, unknown>>;
-  /** Probe log per unreachable source — what was searched (mcp.json files, CLIs) and the outcome. */
-  source_probes?: Array<Record<string, unknown>>;
-}
-
-const REPORT_BLOCK_KEYS = [
-  'headline',
-  'insights',
-  'recommendations',
-  'source_probes',
-] as const;
-
-/**
- * Apply the orchestrator's plain-language report blocks (headline / insights /
- * recommendations) to audit.json in ONE call, and emit recommendations.md
- * from the same recommendations array. Replaces the orchestrator editing
- * audit.json by hand (inline python/node scripts — the last remaining reason
- * a run had to touch a scoring artifact directly). audit.json stays fully
- * engine-managed: unknown top-level keys in the patch are rejected with a
- * warning, and the engine provenance stamp is required and preserved.
- */
-export function patchReportBlocks(
-  outDir: string,
-  blocks: ReportBlocksPatch
-): {
-  patched: string[];
-  recommendations_md: string | null;
-  warnings: string[];
-} {
-  const auditPath = join(outDir, 'audit.json');
-  let audit: Record<string, unknown>;
-  try {
-    audit = JSON.parse(readFileSync(auditPath, 'utf8'));
-  } catch {
-    audit = {};
-  }
-  if (!hasEngineProvenance(audit)) {
-    throw new Error(
-      `patch-report: ${auditPath} lacks engine provenance — it was not ` +
-        `produced by audit-core. Hand-assembled audits are not patchable; ` +
-        `run \`node dist/cli.js audit-core <repoPath> ${outDir}\` first.`
-    );
-  }
-  const warnings: string[] = [];
-  const patched: string[] = [];
-  for (const key of Object.keys(blocks as Record<string, unknown>)) {
-    if (!(REPORT_BLOCK_KEYS as readonly string[]).includes(key)) {
-      warnings.push(
-        `unknown block "${key}" ignored — patch-report accepts only ${REPORT_BLOCK_KEYS.join('/')}`
-      );
-    }
-  }
-  const b = blocks as Record<string, unknown>;
-  if (b.headline !== undefined) {
-    if (typeof b.headline !== 'object' || Array.isArray(b.headline)) {
-      warnings.push('headline must be an object — skipped');
-    } else {
-      audit.headline = b.headline;
-      patched.push('headline');
-    }
-  }
-  for (const key of ['insights', 'recommendations', 'source_probes'] as const) {
-    if (b[key] === undefined) continue;
-    if (!Array.isArray(b[key])) {
-      warnings.push(`${key} must be an array — skipped`);
-      continue;
-    }
-    audit[key] = b[key];
-    patched.push(key);
-  }
-  writeFileSync(auditPath, JSON.stringify(audit, null, 2));
-
-  // recommendations.md — the long-form file /awos:roadmap consumes, derived
-  // from the exact same array so the two can never drift.
-  let recommendationsMd: string | null = null;
-  const recs = (audit.recommendations ?? []) as Array<Record<string, unknown>>;
-  if (patched.includes('recommendations') && recs.length > 0) {
-    const prioRank = (p: unknown) => ({ P0: 0, P1: 1, P2: 2 })[String(p)] ?? 3;
-    const sorted = [...recs].sort(
-      (a, r) => prioRank(a.priority) - prioRank(r.priority)
-    );
-    const lines: string[] = [
-      `# Audit Recommendations — ${audit.project ?? ''} (${audit.date ?? ''})`.trim(),
-      '',
-    ];
-    for (const r of sorted) {
-      lines.push(`## ${r.priority ?? 'P?'} — ${r.title ?? r.id ?? ''}`);
-      const meta = [
-        r.dimension ? `Dimension: ${r.dimension}` : null,
-        r.check_id ? `Check: ${r.check_id}` : null,
-        r.effort ? `Effort: ${r.effort}` : null,
-      ].filter(Boolean);
-      if (meta.length) lines.push('', meta.join(' · '));
-      if (r.detail) lines.push('', String(r.detail));
-      lines.push('');
-    }
-    recommendationsMd = join(outDir, 'recommendations.md');
-    writeFileSync(recommendationsMd, lines.join('\n'));
-  }
-  return { patched, recommendations_md: recommendationsMd, warnings };
-}
-
-/**
- * Read-only authoring context for the report blocks: everything Step 6.4
- * transcribes (check values/hints, git window stats, tracker fetch metadata),
- * flattened from the artifacts in ONE call — so the orchestrator never opens
- * or parses audit.json / collected/*.json itself. Requires the provenance
- * stamp like every other post-audit verb.
- */
-export function reportContext(outDir: string): Record<string, unknown> {
-  const auditPath = join(outDir, 'audit.json');
-  let audit: Record<string, unknown>;
-  try {
-    audit = JSON.parse(readFileSync(auditPath, 'utf8'));
-  } catch {
-    audit = {};
-  }
-  if (!hasEngineProvenance(audit)) {
-    throw new Error(
-      `report-context: ${auditPath} lacks engine provenance — run ` +
-        `\`node dist/cli.js audit-core <repoPath> ${outDir}\` first.`
-    );
-  }
-  const readCollected = (src: string): Record<string, unknown> | null => {
-    try {
-      return JSON.parse(
-        readFileSync(join(outDir, 'collected', `${src}.json`), 'utf8')
-      );
-    } catch {
-      return null;
-    }
-  };
-  const git = readCollected('git');
-  const tracker = readCollected('tracker');
-  const checks: Array<Record<string, unknown>> = [];
-  for (const dim of (audit.dimensions ?? []) as Array<
-    Record<string, unknown>
-  >) {
-    for (const c of (dim.checks ?? []) as Array<Record<string, unknown>>) {
-      checks.push({
-        check_id: c.check_id,
-        dimension: dim.dimension,
-        status: c.status,
-        value: c.value,
-        hint: c.hint,
-        weight_awarded: c.weight_awarded,
-        weight_max: c.weight_max,
-        evidence: c.evidence,
-      });
-    }
-  }
-  return {
-    date: audit.date,
-    project: audit.project,
-    audit_total: audit.audit_total,
-    coverage: audit.coverage,
-    window_stats:
-      (git?.raw as Record<string, unknown> | undefined)?.window_stats ?? null,
-    tracker_fetch_meta:
-      (tracker?.raw as Record<string, unknown> | undefined)?.fetch_meta ?? null,
-    incident_source:
-      (tracker?.raw as Record<string, unknown> | undefined)?.incident_source ??
-      null,
-    sources: audit.sources ?? [],
-    checks,
-  };
 }
 
 /** Presentation order from standards.toml [meta].dimension_order (empty when absent). */
@@ -1230,49 +840,10 @@ export function parseDimensionMeta(
   return map;
 }
 
-export function parseCheckIds(dimensionsDir: string): Map<number, string> {
-  const map = new Map<number, string>();
-  let files: string[];
-  try {
-    files = readdirSync(dimensionsDir).filter((f) => f.endsWith('.md'));
-  } catch {
-    return map;
-  }
-  // Prefix may contain digits after the first letter (E2E-01, E2ED-01).
-  const headingRe = /^###\s+([A-Z][A-Z0-9]*-\d+)\s*:/;
-  const categoryRe = /^[-*]\s*\*\*Category:\*\*\s*([\d,\s]+)/;
-  for (const file of files) {
-    let text: string;
-    try {
-      text = readFileSync(join(dimensionsDir, file), 'utf8');
-    } catch {
-      continue;
-    }
-    let current: string | null = null;
-    for (const line of text.split('\n')) {
-      const h = line.match(headingRe);
-      if (h) {
-        current = h[1];
-        continue;
-      }
-      const cat = line.match(categoryRe);
-      if (cat && current) {
-        for (const codeStr of cat[1].split(',')) {
-          const code = Number(codeStr.trim());
-          if (Number.isInteger(code) && !map.has(code)) map.set(code, current);
-        }
-      }
-    }
-  }
-  return map;
-}
-
-/** Evaluate a category's applies_when against topology flags. */
+/** Evaluate a category's applies_when against topology flags — via the shared
+ * applies_when interpreter so audit_core and awardCategories can't drift. */
 function appliesGatedOff(c: Category, topology: TopologyFlags): boolean {
-  const aw = c.applies_when;
-  if (!aw || aw === 'always') return false;
-  const m = aw.match(/^topology\.(.+)$/);
-  return m ? !topology[m[1]] : false;
+  return !evaluateAppliesWhen(c.applies_when, topology);
 }
 
 /**
@@ -1284,6 +855,25 @@ function appliesGatedOff(c: Category, topology: TopologyFlags): boolean {
  * pseudo-sources the engine always has — telling a reader to "connect a audit
  * source" for a topology-gated check was misleading noise. */
 const CONNECTABLE_SOURCES = new Set(['tracker', 'docs', 'ci', 'incident']);
+
+/** Sources whose data lives in a collected/<src>.json artifact — a metric
+ * declaring any of these can change between audit-core and enrich. */
+const COLLECTED_ARTIFACT_SOURCES = new Set([
+  'git',
+  'ci',
+  'tracker',
+  'docs',
+  'incident',
+]);
+
+/** Topology flags that flip when a connector artifact appears (see
+ * computeTopology's connectors argument) — categories gated on them must be
+ * re-evaluated on enrich. */
+const CONNECTOR_TOPOLOGY_FLAGS = new Set([
+  'has_tracker',
+  'has_docs_connector',
+  'has_incident_source',
+]);
 
 function buildSkipReason(c: Category, topology: TopologyFlags): string {
   // Applicability wins: "this check doesn't apply to this repo" is the truth
@@ -1310,21 +900,9 @@ function buildCheck(
   awarded: Set<number>,
   skippedByMetric: Set<number>,
   topology: TopologyFlags,
-  checkIdByCode: Map<number, string>,
-  metricMeta?: Map<
-    number,
-    {
-      unit?: string;
-      expression?: string;
-      value?: unknown;
-      evidence?: string[];
-      score?: number;
-      confidence?: number;
-      note?: string | null;
-    }
-  >
+  metricMeta?: Map<number, MetricMeta>
 ): CheckRecord {
-  let status: string;
+  let status: CheckStatus;
   let value: unknown = null;
   let evidence: string[] = [];
   let unit: string | undefined;
@@ -1368,7 +946,7 @@ function buildCheck(
   } else {
     // Metric-routed branch (Correction 2): score is gated by applicability —
     // only an AWARDED (PASS) code carries the metric's continuous score.
-    let baseStatus: string;
+    let baseStatus: CheckStatus;
     if (awarded.has(c.code)) baseStatus = 'PASS';
     else if (skippedByMetric.has(c.code)) baseStatus = 'SKIP';
     else baseStatus = 'FAIL';
@@ -1416,18 +994,18 @@ function buildCheck(
   }
 
   const applies = status !== 'SKIP';
-  const weightAwarded = Math.round(c.weight * score * 10) / 10;
+  const weightAwarded = round1(c.weight * score);
   const source_date = c.date ?? null;
   const source_url = c.url ?? null;
   const hintDate = source_date ?? '';
   const rec: CheckRecord = {
-    check_id: c.check_id ?? checkIdByCode.get(c.code) ?? key,
+    // standards.toml is the single source of truth for check ids (a Layer-1
+    // lint requires check_id on every category); the table key is a last-
+    // resort fallback so a malformed record still yields a stable id.
+    check_id: c.check_id ?? key,
     code: [c.code],
     method: c.method,
-    // Always within the CheckStatus vocabulary at runtime (detector statuses
-    // are validated by makeResult; the branches above only emit union members);
-    // DetectorResult.status is typed string, so narrow once here.
-    status: status as CheckStatus,
+    status,
     value,
     evidence,
     weight_awarded: weightAwarded,

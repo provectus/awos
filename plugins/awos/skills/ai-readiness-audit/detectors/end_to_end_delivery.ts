@@ -1,5 +1,5 @@
-import { makeResult, iterFiles } from './_base.ts';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { existsSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { CI_CONFIG_CANDIDATES } from '../ci_platforms.ts';
@@ -92,11 +92,7 @@ function detectedLayers(repoPath: string): {
   });
   let hasUi = uiDir;
   if (!hasUi) {
-    try {
-      hasUi = iterFiles(repoPath, ['*.tsx', '*.jsx']).length > 0;
-    } catch {
-      hasUi = false;
-    }
+    hasUi = iterFiles(repoPath, ['*.tsx', '*.jsx']).length > 0;
   }
 
   const dbDir = DB_LAYER_DIRS.some((d) => {
@@ -105,11 +101,7 @@ function detectedLayers(repoPath: string): {
   });
   let hasDb = dbDir;
   if (!hasDb) {
-    try {
-      hasDb = iterFiles(repoPath, DB_LAYER_FILE_GLOBS).length > 0;
-    } catch {
-      hasDb = false;
-    }
+    hasDb = iterFiles(repoPath, DB_LAYER_FILE_GLOBS).length > 0;
   }
 
   return { hasApi, hasUi, hasDb };
@@ -309,12 +301,7 @@ export function detectBidirectionalLinks(
   }
 
   // Collect spec markdown files
-  let specFiles: string[] = [];
-  try {
-    specFiles = iterFiles(specBase, ['*.md']);
-  } catch {
-    specFiles = [];
-  }
+  const specFiles = iterFiles(specBase, ['*.md']);
 
   if (specFiles.length === 0) {
     return makeResult('FAIL', 0, [
@@ -326,12 +313,8 @@ export function detectBidirectionalLinks(
   let specRefsImpl = false;
   const specImplEvidence: string[] = [];
   for (const f of specFiles) {
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     if (IMPL_PATH_RX.test(content)) {
       specRefsImpl = true;
       specImplEvidence.push(`spec→impl reference in: ${relative(repoPath, f)}`);
@@ -344,20 +327,11 @@ export function detectBidirectionalLinks(
   let implRefsSpec = false;
   const implSpecEvidence: string[] = [];
 
-  let sourceFiles: string[] = [];
-  try {
-    sourceFiles = iterFiles(repoPath, SOURCE_GLOBS);
-  } catch {
-    sourceFiles = [];
-  }
+  const sourceFiles = iterFiles(repoPath, SOURCE_GLOBS);
 
   for (const f of sourceFiles) {
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     if (SPEC_REF_RX.test(content)) {
       implRefsSpec = true;
       implSpecEvidence.push(`impl→spec reference in: ${relative(repoPath, f)}`);
@@ -427,12 +401,7 @@ export function detectLayerCoverage(
   });
   let uiSignal: string | null = uiDirName ? `directory: ${uiDirName}/` : null;
   if (!uiSignal && hasUi) {
-    let uiFiles: string[] = [];
-    try {
-      uiFiles = iterFiles(repoPath, ['*.tsx', '*.jsx']);
-    } catch {
-      uiFiles = [];
-    }
+    const uiFiles = iterFiles(repoPath, ['*.tsx', '*.jsx']);
     uiSignal = `${uiFiles.length} .tsx/.jsx file(s)`;
   }
 
@@ -442,12 +411,7 @@ export function detectLayerCoverage(
   });
   let dbSignal: string | null = dbDirName ? `directory: ${dbDirName}/` : null;
   if (!dbSignal && hasDb) {
-    let dbFiles: string[] = [];
-    try {
-      dbFiles = iterFiles(repoPath, DB_LAYER_FILE_GLOBS);
-    } catch {
-      dbFiles = [];
-    }
+    const dbFiles = iterFiles(repoPath, DB_LAYER_FILE_GLOBS);
     dbSignal = `${dbFiles.length} schema/SQL file(s)`;
   }
 
@@ -538,12 +502,11 @@ export function detectCrossLayerTooling(
     if (!existsSync(candidatePath)) continue;
     const s = statSync(candidatePath);
     if (s.isDirectory()) {
-      let ciFiles: string[] = [];
-      try {
-        ciFiles = iterFiles(candidatePath, ['*.yml', '*.yaml', 'Jenkinsfile']);
-      } catch {
-        ciFiles = [];
-      }
+      const ciFiles = iterFiles(candidatePath, [
+        '*.yml',
+        '*.yaml',
+        'Jenkinsfile',
+      ]);
       if (ciFiles.length > 0) {
         found.push(`${candidate}/ (${ciFiles.length} workflow file(s))`);
       }

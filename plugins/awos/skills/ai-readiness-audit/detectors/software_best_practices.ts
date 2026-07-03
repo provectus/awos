@@ -1,6 +1,5 @@
-import { makeResult, grep, iterFiles } from './_base.ts';
+import { makeResult, grep, iterFiles, readTextSafe } from './_base.ts';
 import { basename, relative } from 'node:path';
-import { readFileSync } from 'node:fs';
 import { CI_FILES, isCiWorkflowPath } from '../ci_platforms.ts';
 
 // ---------------------------------------------------------------------------
@@ -54,15 +53,11 @@ export function detectLinting(
   // Check pyproject.toml for [tool.ruff] / [tool.pylint] / [tool.flake8]
   const pyprojects = iterFiles(repoPath, ['pyproject.toml']);
   for (const p of pyprojects) {
-    try {
-      const content = readFileSync(p, 'utf8');
-      if (PYPROJECT_LINTER_RX.test(content)) {
-        return makeResult('PASS', 1, [
-          `linter config found in ${relative(repoPath, p)} ([tool.ruff] or [tool.pylint])`,
-        ]);
-      }
-    } catch {
-      // skip unreadable files
+    const content = readTextSafe(p);
+    if (content !== null && PYPROJECT_LINTER_RX.test(content)) {
+      return makeResult('PASS', 1, [
+        `linter config found in ${relative(repoPath, p)} ([tool.ruff] or [tool.pylint])`,
+      ]);
     }
   }
   return makeResult('FAIL', 0, ['no linter configuration found']);
@@ -117,29 +112,21 @@ export function detectFormatting(
   // Check pyproject.toml for [tool.black] / [tool.ruff.format]
   const pyprojects = iterFiles(repoPath, ['pyproject.toml']);
   for (const p of pyprojects) {
-    try {
-      const content = readFileSync(p, 'utf8');
-      if (PYPROJECT_FORMATTER_RX.test(content)) {
-        return makeResult('PASS', 1, [
-          `formatter config found in ${relative(repoPath, p)} ([tool.black] or [tool.ruff.format])`,
-        ]);
-      }
-    } catch {
-      // skip unreadable files
+    const content = readTextSafe(p);
+    if (content !== null && PYPROJECT_FORMATTER_RX.test(content)) {
+      return makeResult('PASS', 1, [
+        `formatter config found in ${relative(repoPath, p)} ([tool.black] or [tool.ruff.format])`,
+      ]);
     }
   }
   // Check pre-commit config for a formatting hook
   const precommit = iterFiles(repoPath, ['.pre-commit-config.yaml']);
   for (const p of precommit) {
-    try {
-      const content = readFileSync(p, 'utf8');
-      if (PRECOMMIT_FORMATTER_RX.test(content)) {
-        return makeResult('PASS', 1, [
-          `formatting hook found in ${relative(repoPath, p)}`,
-        ]);
-      }
-    } catch {
-      // skip unreadable files
+    const content = readTextSafe(p);
+    if (content !== null && PRECOMMIT_FORMATTER_RX.test(content)) {
+      return makeResult('PASS', 1, [
+        `formatting hook found in ${relative(repoPath, p)}`,
+      ]);
     }
   }
   return makeResult('FAIL', 0, ['no formatter configuration found']);
@@ -182,16 +169,13 @@ function samplePythonAnnotationRatio(repoPath: string): number | null {
   let totalDefs = 0;
   let annotatedDefs = 0;
   for (const f of pyFiles) {
-    try {
-      const lines = readFileSync(f, 'utf8').split('\n');
-      for (const line of lines) {
-        if (PY_DEF_RX.test(line)) {
-          totalDefs++;
-          if (PY_DEF_ANNOTATED_RX.test(line)) annotatedDefs++;
-        }
+    const raw = readTextSafe(f);
+    if (raw === null) continue;
+    for (const line of raw.split('\n')) {
+      if (PY_DEF_RX.test(line)) {
+        totalDefs++;
+        if (PY_DEF_ANNOTATED_RX.test(line)) annotatedDefs++;
       }
-    } catch {
-      // skip unreadable files
     }
   }
   if (totalDefs === 0) return null;
@@ -215,15 +199,11 @@ export function detectTypeSafety(
   // Check pyproject.toml for [tool.mypy]
   const pyprojects = iterFiles(repoPath, ['pyproject.toml']);
   for (const p of pyprojects) {
-    try {
-      const content = readFileSync(p, 'utf8');
-      if (/^\[tool\.mypy\]/m.test(content)) {
-        return makeResult('PASS', 1, [
-          `type-safety config found in ${relative(repoPath, p)} ([tool.mypy])`,
-        ]);
-      }
-    } catch {
-      // skip unreadable files
+    const content = readTextSafe(p);
+    if (content !== null && /^\[tool\.mypy\]/m.test(content)) {
+      return makeResult('PASS', 1, [
+        `type-safety config found in ${relative(repoPath, p)} ([tool.mypy])`,
+      ]);
     }
   }
   // Check for PEP 561 py.typed marker (typed package declaration)
@@ -238,13 +218,9 @@ export function detectTypeSafety(
   if (tsconfigs.length) {
     const strictConfigs: string[] = [];
     for (const p of tsconfigs) {
-      try {
-        const content = readFileSync(p, 'utf8');
-        if (TSCONFIG_STRICT_RX.test(content)) {
-          strictConfigs.push(relative(repoPath, p));
-        }
-      } catch {
-        // skip unreadable files
+      const content = readTextSafe(p);
+      if (content !== null && TSCONFIG_STRICT_RX.test(content)) {
+        strictConfigs.push(relative(repoPath, p));
       }
     }
     if (strictConfigs.length) {
@@ -443,12 +419,8 @@ interface BlockSample {
 }
 
 function analyseFile(repoPath: string, filePath: string): BlockSample[] {
-  let src: string;
-  try {
-    src = readFileSync(filePath, 'utf8');
-  } catch {
-    return [];
-  }
+  const src = readTextSafe(filePath);
+  if (src === null) return [];
   const lines = src.split('\n');
   const samples: BlockSample[] = [];
   const rel = relative(repoPath, filePath);

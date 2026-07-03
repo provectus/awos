@@ -27,7 +27,7 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
   type MetricResult,
 } from './_base.ts';
 import { clamp01 } from './_score.ts';
@@ -57,14 +57,12 @@ export function compute(
 
   // CI source absent entirely → SKIP.
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_c1_ci_pass_rate',
-      null,
       'banded',
-      [],
-      skipReliability('not-reliable', 'ci', read.error),
-      [],
-      ['ci']
+      'not-reliable',
+      'ci',
+      read.error
     );
   }
 
@@ -72,15 +70,7 @@ export function compute(
 
   // available=false: collector found no CI config, no connector, or config-only with no run history.
   if (!artifact?.available) {
-    return makeMetricResult(
-      'adp_c1_ci_pass_rate',
-      null,
-      'banded',
-      [],
-      computeReliability('not-reliable', [], ['ci']),
-      [],
-      ['ci']
-    );
+    return skipMetric('adp_c1_ci_pass_rate', 'banded', 'not-reliable', 'ci');
   }
 
   const raw = artifact?.raw ?? {};
@@ -125,10 +115,6 @@ export function compute(
     reliability,
     ['ci'],
     [],
-    band,
-    undefined,
-    expression,
-    clamp01(rate),
-    1.0
+    { band, expression, score: clamp01(rate), confidence: 1.0 }
   );
 }

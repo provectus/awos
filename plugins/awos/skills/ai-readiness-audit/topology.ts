@@ -20,7 +20,7 @@ import {
   realpathSync,
 } from 'node:fs';
 import { join, dirname, basename, resolve, sep } from 'node:path';
-import { iterFiles, grep } from './detectors/_base.ts';
+import { iterFiles, hasMatch } from './detectors/_base.ts';
 import { detectCiConfigPath } from './ci_platforms.ts';
 import {
   ALL_INSTRUCTION_FILES,
@@ -43,7 +43,9 @@ const CODE_GLOBS = ALL_SOURCE_GLOBS;
 
 function codeMatches(repoPath: string, pattern: RegExp): boolean {
   try {
-    return grep(repoPath, pattern, CODE_GLOBS).length > 0;
+    // hasMatch early-exits on the first matching line instead of reading the
+    // whole repo to answer a boolean.
+    return hasMatch(repoPath, pattern, CODE_GLOBS);
   } catch {
     return false;
   }
@@ -136,18 +138,21 @@ export function computeTopology(
       'nx.json',
     ]) || manifestHits >= 2;
 
+  // has_ai_agent_files and has_agent_instruction_files are semantically
+  // identical (both used by standards.toml). Both are kept but share the same
+  // registry-driven expression, computed once. Pending future consolidation.
+  const hasAgentFiles =
+    anyPath(repoPath, [...ALL_INSTRUCTION_FILES, ...ALL_TOOL_CONFIG_DIRS]) ||
+    anyGlob(repoPath, ALL_INSTRUCTION_FILES);
+  // Shared by uses_env_vars and handles_secrets.
+  const hasEnvFiles =
+    anyPath(repoPath, ['.env']) || anyGlob(repoPath, ['.env', '.env.*']);
+
   const flags: TopologyFlags = {
     has_topology: true,
     has_ci: detectCiConfigPath(repoPath) !== null,
-    // has_ai_agent_files and has_agent_instruction_files are semantically
-    // identical (both used by standards.toml). Both are kept but share the
-    // same registry-driven expression. Pending future consolidation.
-    has_ai_agent_files:
-      anyPath(repoPath, [...ALL_INSTRUCTION_FILES, ...ALL_TOOL_CONFIG_DIRS]) ||
-      anyGlob(repoPath, ALL_INSTRUCTION_FILES),
-    has_agent_instruction_files:
-      anyPath(repoPath, [...ALL_INSTRUCTION_FILES, ...ALL_TOOL_CONFIG_DIRS]) ||
-      anyGlob(repoPath, ALL_INSTRUCTION_FILES),
+    has_ai_agent_files: hasAgentFiles,
+    has_agent_instruction_files: hasAgentFiles,
     has_commands_or_skills: anyPath(repoPath, [
       ...ALL_RULE_COMMAND_DIRS,
       ...ALL_SKILL_DIRS,
@@ -192,15 +197,14 @@ export function computeTopology(
       /\b(jwt|oauth2?|passport|keycloak|auth0|@login_required|authenticate|bearer\s+token|rbac)\b/i
     ),
     uses_env_vars:
-      anyPath(repoPath, ['.env', '.env.example']) ||
-      anyGlob(repoPath, ['.env', '.env.*']) ||
+      hasEnvFiles ||
+      anyPath(repoPath, ['.env.example']) ||
       codeMatches(
         repoPath,
         /\b(os\.environ|os\.getenv|process\.env|dotenv|godotenv)\b/
       ),
     handles_secrets:
-      anyPath(repoPath, ['.env']) ||
-      anyGlob(repoPath, ['.env', '.env.*']) ||
+      hasEnvFiles ||
       codeMatches(
         repoPath,
         /\b(keyvault|secretsmanager|secret_?manager|hashicorp.?vault|SECRET_KEY|API_KEY|getSecret)\b/i

@@ -9,54 +9,7 @@ import type {
   DeliveryMetric,
   PerRepoSummary,
 } from './render.ts';
-
-/** Minimal valid Check fixture — extend per test. */
-function makeCheck(overrides: Partial<Check> = {}): Check {
-  return {
-    check_id: 'TEST-01',
-    code: [1001],
-    method: 'detected',
-    status: 'PASS',
-    value: null,
-    evidence: [],
-    weight_awarded: 1,
-    weight_max: 1,
-    applies: true,
-    reliability: { tag: 'maximal', confidence: 'high', note: null },
-    source: 'git',
-    definition: 'Test check definition',
-    hint: 'Test hint',
-    ...overrides,
-  };
-}
-
-/** Minimal valid DimensionArtifact fixture. */
-function makeDim(
-  dimension: string,
-  checks: Check[] = [],
-  overrides: Partial<DimensionArtifact> = {}
-): DimensionArtifact {
-  return {
-    dimension,
-    date: '2026-01-01',
-    score: 0,
-    coverage: 0,
-    checks,
-    ...overrides,
-  };
-}
-
-/** Minimal valid audit fixture — extend per test. */
-function makeAudit(overrides: Partial<AuditJson> = {}): AuditJson {
-  return {
-    date: '2026-01-01',
-    project: 'test-project',
-    audit_total: 10,
-    coverage: 0.5,
-    dimensions: [],
-    ...overrides,
-  };
-}
+import { makeCheck, makeDim, makeAudit } from './tests/helpers.ts';
 
 test('renderMarkdown includes Tech Stack section when tech_stack is present', () => {
   const audit = makeAudit({

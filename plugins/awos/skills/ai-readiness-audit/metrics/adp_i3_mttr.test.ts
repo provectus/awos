@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { compute } from './adp_i3_mttr.ts';
+import { trackerArtifact } from '../tests/helpers.ts';
 
 function mergeRecord(mergedAt: Date, firstCommitAt: Date) {
   return {
@@ -24,10 +25,7 @@ function makeGitArtifact(mergeRecords: object[]): string {
 }
 
 function makeTrackerArtifact(incidentSource: string | null = null): string {
-  return JSON.stringify({
-    available: true,
-    raw: { incident_source: incidentSource },
-  });
+  return trackerArtifact({ incident_source: incidentSource });
 }
 
 test('adp_i3_mttr: confidence=0.0 when tracker available but git.json absent (no intervals)', () => {

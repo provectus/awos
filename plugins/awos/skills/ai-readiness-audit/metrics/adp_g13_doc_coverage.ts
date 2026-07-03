@@ -328,12 +328,12 @@ export async function compute(
     computeReliability('maximal', ['audit'], []),
     ['audit'],
     [],
-    null,
-    undefined,
-    expression,
-    score2204,
-    docConfidence,
-    { 2204: score2204, 2205: score2205 },
-    { 2204: [publicLine], 2205: [overallLine] }
+    {
+      expression,
+      score: score2204,
+      confidence: docConfidence,
+      scorePerCode: { 2204: score2204, 2205: score2205 },
+      evidencePerCode: { 2204: [publicLine], 2205: [overallLine] },
+    }
   );
 }

@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { compute } from './adp_i4_subtask_split.ts';
 import { loadStandards } from './_base.ts';
+import { trackerArtifact } from '../tests/helpers.ts';
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -23,10 +24,7 @@ function makeTrackerArtifact(
   tickets: TicketFixture[],
   available = true
 ): string {
-  return JSON.stringify({
-    available,
-    raw: { tickets },
-  });
+  return trackerArtifact({ tickets }, available);
 }
 
 // ---------------------------------------------------------------------------

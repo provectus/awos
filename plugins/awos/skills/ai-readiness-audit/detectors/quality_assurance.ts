@@ -1,5 +1,5 @@
-import { makeResult, iterFiles } from './_base.ts';
-import { readFileSync, existsSync } from 'node:fs';
+import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { existsSync } from 'node:fs';
 import { join, relative, basename } from 'node:path';
 import { ALL_TEST_GLOBS, ALL_SOURCE_GLOBS } from '../languages.ts';
 
@@ -86,20 +86,10 @@ export function detectTestInfrastructure(
   const thresholdPct = Math.round(threshold * 100);
 
   // Collect test files
-  let testFiles: string[] = [];
-  try {
-    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
-  } catch {
-    testFiles = [];
-  }
+  const testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
 
   // Collect all source files
-  let allSourceFiles: string[] = [];
-  try {
-    allSourceFiles = iterFiles(repoPath, SOURCE_FILE_GLOBS, SOURCE_IGNORE);
-  } catch {
-    allSourceFiles = [];
-  }
+  const allSourceFiles = iterFiles(repoPath, SOURCE_FILE_GLOBS, SOURCE_IGNORE);
 
   // Filter out test files from source count
   const testFileSet = new Set(testFiles);
@@ -191,12 +181,7 @@ export function detectUnitTests(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  let testFiles: string[] = [];
-  try {
-    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
-  } catch {
-    testFiles = [];
-  }
+  const testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
 
   if (testFiles.length === 0) {
     return makeResult('FAIL', 0, [
@@ -213,12 +198,8 @@ export function detectUnitTests(
       unitSignals.push(`unit dir: ${rel}`);
       continue;
     }
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     if (MOCK_CONTENT_RX.test(content)) {
       unitSignals.push(`mock/stub patterns in: ${rel}`);
     }
@@ -278,12 +259,7 @@ export function detectIntegrationTests(
   const signals: string[] = [];
 
   // Signal 1: directories named integration*
-  let allTestFiles: string[] = [];
-  try {
-    allTestFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
-  } catch {
-    allTestFiles = [];
-  }
+  const allTestFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
 
   for (const f of allTestFiles) {
     const rel = relative(repoPath, f);
@@ -299,12 +275,8 @@ export function detectIntegrationTests(
   // Signal 2: content-level integration patterns in test files
   if (signals.length < 5) {
     for (const f of allTestFiles.slice(0, 100)) {
-      let content: string;
-      try {
-        content = readFileSync(f, 'utf8');
-      } catch {
-        continue;
-      }
+      const content = readTextSafe(f);
+      if (content === null) continue;
       if (INTEGRATION_CONTENT_RX.test(content)) {
         signals.push(`integration patterns in: ${relative(repoPath, f)}`);
         if (signals.length >= 5) break;
@@ -314,19 +286,10 @@ export function detectIntegrationTests(
 
   // Signal 3: conftest.py / test setup files — real projects often put DB/HTTP fixtures there
   if (signals.length < 5) {
-    let confFiles: string[] = [];
-    try {
-      confFiles = iterFiles(repoPath, ['conftest.py'], SOURCE_IGNORE);
-    } catch {
-      confFiles = [];
-    }
+    const confFiles = iterFiles(repoPath, ['conftest.py'], SOURCE_IGNORE);
     for (const f of confFiles.slice(0, 20)) {
-      let content: string;
-      try {
-        content = readFileSync(f, 'utf8');
-      } catch {
-        continue;
-      }
+      const content = readTextSafe(f);
+      if (content === null) continue;
       if (INTEGRATION_CONTENT_RX.test(content)) {
         signals.push(`integration patterns in: ${relative(repoPath, f)}`);
         if (signals.length >= 5) break;
@@ -339,12 +302,7 @@ export function detectIntegrationTests(
   const testDir2 = join(repoPath, 'test');
   for (const tDir of [testsDir, testDir2]) {
     if (!existsSync(tDir)) continue;
-    let dcFiles: string[] = [];
-    try {
-      dcFiles = iterFiles(tDir, TEST_DOCKER_GLOBS);
-    } catch {
-      dcFiles = [];
-    }
+    const dcFiles = iterFiles(tDir, TEST_DOCKER_GLOBS);
     if (dcFiles.length > 0) {
       signals.push(
         `docker-compose in tests dir: ${relative(repoPath, dcFiles[0])}`
@@ -398,12 +356,7 @@ export function detectE2ETests(
   }
 
   // Signal 2: test files in e2e/ directories
-  let testFiles: string[] = [];
-  try {
-    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
-  } catch {
-    testFiles = [];
-  }
+  const testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
 
   for (const f of testFiles) {
     const rel = relative(repoPath, f);
@@ -416,12 +369,8 @@ export function detectE2ETests(
   // Signal 3: E2E framework references in test files
   if (signals.length < 5) {
     for (const f of testFiles.slice(0, 100)) {
-      let content: string;
-      try {
-        content = readFileSync(f, 'utf8');
-      } catch {
-        continue;
-      }
+      const content = readTextSafe(f);
+      if (content === null) continue;
       if (E2E_CONTENT_RX.test(content)) {
         signals.push(`E2E framework in: ${relative(repoPath, f)}`);
         if (signals.length >= 5) break;
@@ -465,12 +414,7 @@ export function detectTestPyramid(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  let testFiles: string[] = [];
-  try {
-    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
-  } catch {
-    testFiles = [];
-  }
+  const testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
 
   if (testFiles.length === 0) {
     return makeResult(
@@ -499,13 +443,8 @@ export function detectTestPyramid(
     }
 
     // Check content for E2E markers (quick scan)
-    let isE2E = false;
-    try {
-      const content = readFileSync(f, 'utf8');
-      isE2E = E2E_CONTENT_RX.test(content);
-    } catch {
-      // ignore
-    }
+    const content = readTextSafe(f);
+    const isE2E = content !== null && E2E_CONTENT_RX.test(content);
 
     if (isE2E) {
       e2eCount++;
@@ -639,12 +578,8 @@ export function detectCoverageConfig(
   for (const name of COVERAGE_CONTENT_SCAN_FILES) {
     const full = join(repoPath, name);
     if (!existsSync(full)) continue;
-    let content: string;
-    try {
-      content = readFileSync(full, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(full);
+    if (content === null) continue;
     if (COVERAGE_CONTENT_RX.test(content)) {
       signals.push(`coverage settings in ${name}`);
     }
@@ -718,20 +653,11 @@ export function detectTestDataManagement(
   }
 
   // Signal 2: factory / faker patterns in test files
-  let testFiles: string[] = [];
-  try {
-    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
-  } catch {
-    testFiles = [];
-  }
+  const testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
 
   for (const f of testFiles.slice(0, 80)) {
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     if (FACTORY_CONTENT_RX.test(content)) {
       signals.push(`factory/faker patterns in: ${relative(repoPath, f)}`);
       if (signals.length >= 3) break;
@@ -778,12 +704,7 @@ export function detectMockingIsolation(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  let testFiles: string[] = [];
-  try {
-    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
-  } catch {
-    testFiles = [];
-  }
+  const testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
 
   if (testFiles.length === 0) {
     return makeResult('FAIL', 0, [
@@ -794,12 +715,8 @@ export function detectMockingIsolation(
   const signals: string[] = [];
 
   for (const f of testFiles.slice(0, 100)) {
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     if (MOCK_IMPORT_RX.test(content)) {
       signals.push(`mock/stub usage in: ${relative(repoPath, f)}`);
       if (signals.length >= 5) break;
@@ -871,19 +788,10 @@ export function detectContractTests(
 
   // Content scan in test files
   if (signals.length < 3) {
-    let testFiles: string[] = [];
-    try {
-      testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
-    } catch {
-      testFiles = [];
-    }
+    const testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
     for (const f of testFiles.slice(0, 100)) {
-      let content: string;
-      try {
-        content = readFileSync(f, 'utf8');
-      } catch {
-        continue;
-      }
+      const content = readTextSafe(f);
+      if (content === null) continue;
       if (CONTRACT_CONTENT_RX.test(content)) {
         signals.push(`Pact/contract patterns in: ${relative(repoPath, f)}`);
         if (signals.length >= 3) break;
@@ -947,12 +855,8 @@ export function detectMlIterationTests(
   ).slice(0, 50);
 
   for (const f of sourceSample) {
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     if (ML_SOURCE_RX.test(content)) {
       hasML = true;
       break;
@@ -971,12 +875,7 @@ export function detectMlIterationTests(
   // Look for ML quality test signals
   const signals: string[] = [];
 
-  let testFiles: string[] = [];
-  try {
-    testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
-  } catch {
-    testFiles = [];
-  }
+  const testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
 
   for (const f of testFiles.slice(0, 100)) {
     const rel = relative(repoPath, f);
@@ -984,12 +883,8 @@ export function detectMlIterationTests(
       signals.push(`ML test file: ${rel}`);
       if (signals.length >= 5) break;
     }
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     if (ML_TEST_CONTENT_RX.test(content)) {
       signals.push(`ML quality assertions in: ${rel}`);
       if (signals.length >= 5) break;

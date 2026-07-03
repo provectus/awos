@@ -1,8 +1,29 @@
-import { makeResult, iterFiles, grep } from './_base.ts';
-import { readFileSync } from 'node:fs';
+import {
+  makeResult,
+  iterFiles,
+  grep,
+  hasMatch,
+  readTextSafe,
+} from './_base.ts';
 import { relative } from 'node:path';
 import { ALL_SOURCE_GLOBS } from '../languages.ts';
 import { FRAMEWORK_AUTH_PATTERNS } from '../frameworks.ts';
+
+// The web-application source languages several checks below share. Route/auth/
+// handler scanning all target this exact set, and the config-oriented lists
+// (headers, CORS, secrets) extend it with their own file types.
+const WEB_SOURCE_GLOBS = [
+  '*.py',
+  '*.ts',
+  '*.tsx',
+  '*.js',
+  '*.jsx',
+  '*.go',
+  '*.java',
+  '*.kt',
+  '*.rb',
+  '*.php',
+];
 
 // ---------------------------------------------------------------------------
 // detectTlsEnforced — category 3000 (AS-01, method: detected)
@@ -63,12 +84,8 @@ export function detectTlsEnforced(
   const files = iterFiles(repoPath, TLS_CONFIG_GLOBS, TLS_CONFIG_IGNORE);
 
   for (const filePath of files) {
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
 
     const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -132,16 +149,7 @@ export function detectTlsEnforced(
 // ---------------------------------------------------------------------------
 
 const HEADER_GLOBS = [
-  '*.py',
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.go',
-  '*.java',
-  '*.kt',
-  '*.rb',
-  '*.php',
+  ...WEB_SOURCE_GLOBS,
   '*.conf',
   '*.yaml',
   '*.yml',
@@ -170,8 +178,7 @@ export function detectSecurityHeaders(
   const found: string[] = [];
 
   for (const { name, rx } of SECURITY_HEADERS) {
-    const hits = grep(repoPath, rx, HEADER_GLOBS);
-    if (hits.length > 0) {
+    if (hasMatch(repoPath, rx, HEADER_GLOBS)) {
       found.push(name);
     }
   }
@@ -234,16 +241,7 @@ export function detectSecurityHeaders(
 // ---------------------------------------------------------------------------
 
 const CORS_GLOBS = [
-  '*.py',
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.go',
-  '*.java',
-  '*.kt',
-  '*.rb',
-  '*.php',
+  ...WEB_SOURCE_GLOBS,
   '*.conf',
   '*.yaml',
   '*.yml',
@@ -277,12 +275,8 @@ export function detectCorsNotWildcard(
   const files = iterFiles(repoPath, CORS_GLOBS);
 
   for (const filePath of files) {
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
 
     const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -379,12 +373,8 @@ export function detectParameterizedSql(
   const files = iterFiles(repoPath, SQL_GLOBS);
 
   for (const filePath of files) {
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
 
     const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -449,16 +439,7 @@ export function detectParameterizedSql(
 // ---------------------------------------------------------------------------
 
 const APPSEC_SOURCE_GLOBS = [
-  '*.py',
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.go',
-  '*.java',
-  '*.kt',
-  '*.rb',
-  '*.php',
+  ...WEB_SOURCE_GLOBS,
   '*.yaml',
   '*.yml',
   '*.toml',
@@ -507,12 +488,8 @@ export function detectNoHardcodedSecrets(
   const hits: Array<{ file: string; line: number; pattern: string }> = [];
 
   for (const filePath of files) {
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
 
     const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -571,19 +548,6 @@ export function detectNoHardcodedSecrets(
 // SKIP if no route definitions are found.
 // ---------------------------------------------------------------------------
 
-const ROUTE_GLOBS = [
-  '*.py',
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.go',
-  '*.rb',
-  '*.java',
-  '*.kt',
-  '*.php',
-];
-
 // Route mutation patterns (framework-agnostic). Bare `.post(`/`.delete(`
 // would match unrelated calls (`cache.delete(key)`, `axios.post(url)`), so
 // method-call matches require a router-ish receiver before the method.
@@ -601,19 +565,15 @@ export function detectAuthOnMutations(
   const filesWithMutations: string[] = [];
   const filesWithAuth: string[] = [];
 
-  const files = iterFiles(repoPath, ROUTE_GLOBS);
+  const files = iterFiles(repoPath, WEB_SOURCE_GLOBS);
 
   for (const filePath of files) {
     // Skip test files
     const rel = relative(repoPath, filePath);
     if (/test|spec|mock|fixture/i.test(rel.toLowerCase())) continue;
 
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
 
     const hasMutation = MUTATION_ROUTE_RX.test(content);
     const fileHasAuth =
@@ -690,19 +650,6 @@ export function detectAuthOnMutations(
 // SKIP if no password-hashing patterns are found at all.
 // ---------------------------------------------------------------------------
 
-const AUTH_GLOBS = [
-  '*.py',
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.go',
-  '*.java',
-  '*.kt',
-  '*.rb',
-  '*.php',
-];
-
 const STRONG_HASH_RX = /\b(?:bcrypt|argon2|scrypt|passlib|ph\.hash)\b/i;
 const WEAK_HASH_RX =
   /\b(?:pbkdf2|sha256|sha512)\b.{0,40}(?:password|passwd|hash)/i;
@@ -722,18 +669,14 @@ export function detectPasswordSessionHygiene(
   let csprngFound = false;
   const evidence: string[] = [];
 
-  const files = iterFiles(repoPath, AUTH_GLOBS);
+  const files = iterFiles(repoPath, WEB_SOURCE_GLOBS);
 
   for (const filePath of files) {
     const rel = relative(repoPath, filePath);
     if (/test|spec|mock|fixture/i.test(rel.toLowerCase())) continue;
 
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
 
     if (STRONG_HASH_RX.test(content)) {
       strongHashFound = true;
@@ -791,19 +734,6 @@ export function detectPasswordSessionHygiene(
 // SKIP if no HTTP handler files are found.
 // ---------------------------------------------------------------------------
 
-const HANDLER_GLOBS = [
-  '*.py',
-  '*.ts',
-  '*.tsx',
-  '*.js',
-  '*.jsx',
-  '*.go',
-  '*.java',
-  '*.kt',
-  '*.rb',
-  '*.php',
-];
-
 // Decorator alternatives live outside the \b(...)\b group: `\b` before `@`
 // can never match (both sides are non-word characters).
 const VALIDATION_LIBRARY_RX =
@@ -820,18 +750,14 @@ export function detectInputValidation(
   let manualFound = false;
   const evidence: string[] = [];
 
-  const files = iterFiles(repoPath, HANDLER_GLOBS);
+  const files = iterFiles(repoPath, WEB_SOURCE_GLOBS);
 
   for (const filePath of files) {
     const rel = relative(repoPath, filePath);
     if (/test|spec|mock|fixture/i.test(rel.toLowerCase())) continue;
 
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
 
     if (VALIDATION_LIBRARY_RX.test(content)) {
       libraryFound = true;

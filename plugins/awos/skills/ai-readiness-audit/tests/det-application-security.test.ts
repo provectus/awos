@@ -94,11 +94,18 @@ test('AS-01: w3.org / schemas.* namespace URLs are exempted, real http origin st
     'PASS',
     `XML namespace URLs must be exempted from the insecure-origin count; got ${clean.status}`
   );
+  // Fresh temp dir: a real plain-HTTP service origin alongside the exempted
+  // namespace URLs must still be flagged.
+  const t2 = tmp();
   writeFileSync(
-    join(t, 'settings.toml'),
+    join(t2, 'namespaces.yaml'),
+    'xml_ns: "http://www.w3.org/2001/XMLSchema"\nxaml_ns: "http://schemas.microsoft.com/winfx/2006/xaml"\n'
+  );
+  writeFileSync(
+    join(t2, 'settings.toml'),
     '[service]\nbase_url = "http://api.mycompany.com"\n'
   );
-  const dirty = detectTlsEnforced(t);
+  const dirty = detectTlsEnforced(t2);
   assert.ok(
     dirty.status === 'WARN' || dirty.status === 'FAIL',
     `real plain-HTTP service origin must still count despite allowlist; got ${dirty.status}`

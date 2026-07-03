@@ -24,7 +24,8 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-import { auditCore, aggregate, hasEngineProvenance } from './audit_core.ts';
+import { auditCore, hasEngineProvenance } from './audit_core.ts';
+import { aggregate } from './audit_patch.ts';
 
 const SKILL = dirname(fileURLToPath(import.meta.url));
 const CLI = join(SKILL, 'dist', 'cli.js');

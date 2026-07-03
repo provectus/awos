@@ -23,7 +23,7 @@ import {
   makeMetricResult,
   metaNumber,
   readArtifact,
-  skipReliability,
+  skipMetric,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
@@ -50,27 +50,15 @@ function turnoverBand(ratio: number): string {
   return 'concerning';
 }
 
-function skip(note?: string): MetricResult {
-  return makeMetricResult(
-    'adp_g6_churn',
-    null,
-    'computed',
-    [],
-    note
-      ? skipReliability('minimal', 'git', note)
-      : computeReliability('minimal', [], ['git']),
-    [],
-    ['git']
-  );
-}
-
 export function compute(
   collectedDir: string,
   standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
   const read = readArtifact(collectedDir, 'git');
-  if ('error' in read) return skip(read.error);
+  if ('error' in read) {
+    return skipMetric('adp_g6_churn', 'computed', 'minimal', 'git', read.error);
+  }
 
   const raw = read.artifact?.raw;
   const turnover = raw?.code_turnover;
@@ -79,7 +67,7 @@ export function compute(
     typeof turnover !== 'object' ||
     typeof turnover.ratio !== 'number'
   ) {
-    return skip();
+    return skipMetric('adp_g6_churn', 'computed', 'minimal', 'git');
   }
 
   const ratio: number = turnover.ratio;
@@ -105,10 +93,6 @@ export function compute(
     reliability,
     ['git'],
     [],
-    band,
-    'ratio',
-    expression,
-    score,
-    1.0
+    { band, unit: 'ratio', expression, score, confidence: 1.0 }
   );
 }

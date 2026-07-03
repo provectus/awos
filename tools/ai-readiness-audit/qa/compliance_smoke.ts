@@ -35,7 +35,6 @@
  *   no_fanout     zero dimension-auditor Agent spawns
  *   no_stall      the run didn't end by asking the (absent) user a question
  */
-import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,10 +45,12 @@ import {
   awosMainCheckout,
   formatWallTime,
   isFile,
+  isMainModule,
   locateOutDir,
   readJson,
   repointMarketplace,
   restoreMarketplace,
+  runClaudeAudit,
   scanJudgmentsPatched,
   scriptRepoRoot,
   sha256,
@@ -144,36 +145,18 @@ async function headlessRun(
   runLog: string,
   quiet: boolean
 ): Promise<number> {
-  const cmd = [
-    'claude',
-    '-p',
-    '/awos:ai-readiness-audit',
-    '--output-format',
-    'stream-json',
-    '--verbose',
-    '--strict-mcp-config',
-    '--model',
-    model,
-  ];
-  const started = Date.now();
-  const lf = fs.createWriteStream(runLog);
-  const proc = spawn(cmd[0], cmd.slice(1), {
+  const { rc } = await runClaudeAudit({
     cwd,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    flags: ['--strict-mcp-config', '--model', model],
+    runLog,
+    stdin: 'ignore',
+    heartbeat: {
+      mode: 'wall',
+      tick: (elapsedMs) => {
+        if (!quiet) log(`    … running (${formatWallTime(elapsedMs)})`);
+      },
+    },
   });
-  proc.stdout!.on('data', (d) => lf.write(d));
-  proc.stderr!.on('data', (d) => lf.write(d));
-  const tick = setInterval(() => {
-    if (!quiet) {
-      log(`    … running (${formatWallTime(Date.now() - started)})`);
-    }
-  }, 60_000);
-  const rc = await new Promise<number>((res) => {
-    proc.on('error', () => res(-1));
-    proc.on('close', (code, signal) => res(code ?? (signal ? 1 : 0)));
-  });
-  clearInterval(tick);
-  await new Promise<void>((res) => lf.end(() => res()));
   return rc;
 }
 
@@ -195,13 +178,14 @@ function assessRun(
   const audits = path.join(fixture, 'context/audits');
   const today = new Date().toISOString().slice(0, 10);
   const outDir = locateOutDir(audits, today, null);
-  const comp = assessEngineCompliance(outDir, runLog);
+  // Read the (multi-MB) transcript once and feed both scanners.
   let lines: string[] = [];
   try {
     lines = fs.readFileSync(runLog, 'utf8').split('\n');
   } catch {
     // no transcript — every transcript-based signal stays at defaults
   }
+  const comp = assessEngineCompliance(outDir, lines);
   const smoke = smokeSignalsFromTranscript(lines);
 
   let provenance = false;
@@ -382,13 +366,7 @@ async function main(): Promise<void> {
   if (passed !== verdicts.length) process.exit(1);
 }
 
-const isMain =
-  process.argv[1] !== undefined &&
-  (process.argv[1] === fileURLToPath(import.meta.url) ||
-    process.argv[1].endsWith('/compliance_smoke.ts') ||
-    process.argv[1].endsWith('\\compliance_smoke.ts'));
-
-if (isMain) {
+if (isMainModule(import.meta.url)) {
   main().catch((err) => {
     console.error(err);
     process.exit(1);

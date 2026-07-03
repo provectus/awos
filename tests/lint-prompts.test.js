@@ -1209,6 +1209,19 @@ test('standards.toml exists and matches the category/band schema', () => {
       `[category.*] tables must declare ${key}`
     );
   }
+  // check_id is required on EVERY category — standards.toml is the single
+  // source of truth for check ids (the engine no longer parses dimension .md
+  // headings at runtime; a heading rename must not change artifact ids).
+  // Anchored to line start so the commented schema sketch in the file header
+  // (`# [category.<slug>]`) is not mistaken for a real block.
+  for (const m of src.matchAll(/\n\[category\.[^\]]+\]([\s\S]*?)(?=\n\[|$)/g)) {
+    const b = m[1];
+    const code = (b.match(/^\s*code\s*=\s*(\d+)/m) || [])[1];
+    assert.ok(
+      /^\s*check_id\s*=\s*"/m.test(b),
+      `[category.*] block${code ? ` (code ${code})` : ''} must declare check_id — standards.toml is the sole source of check ids`
+    );
+  }
   // Reliability defaults use the locked vocabulary only.
   const relTags = src.match(/reliability_default\s*=\s*"([^"]+)"/g) || [];
   for (const m of relTags) {
@@ -1589,6 +1602,52 @@ test('every dimension check maps to a standards.toml category', () => {
             `${f}: check "${head}" references undefined standards.toml code ${c}`
           );
         }
+      }
+    }
+  }
+});
+
+test('dimension check headings agree with standards.toml check_id', () => {
+  // standards.toml owns check ids (the engine reads only the TOML); the
+  // dimension .md headings are documentation and must not silently drift.
+  // Where a code's md heading and its TOML check_id disagree, the TOML wins
+  // at runtime — this lint makes the disagreement a build failure instead.
+  const standards = readUtf8(path.join(referencesDir, 'standards.toml'));
+  const checkIdByCode = new Map();
+  for (const m of standards.matchAll(
+    /\n\[category\.[^\]]+\]([\s\S]*?)(?=\n\[|$)/g
+  )) {
+    const code = (m[1].match(/^\s*code\s*=\s*(\d+)/m) || [])[1];
+    const checkId = (m[1].match(/^\s*check_id\s*=\s*"([^"]+)"/m) || [])[1];
+    if (code && checkId && !checkIdByCode.has(code))
+      checkIdByCode.set(code, checkId);
+  }
+  for (const f of listMarkdown(dimensionsDir)) {
+    if (f === 'project-topology.md') continue;
+    const body = readUtf8(path.join(dimensionsDir, f));
+    for (const block of body.split(/^### /m).slice(1)) {
+      const head = block.split('\n', 1)[0];
+      const headingId = (head.match(/^([A-Z][A-Z0-9]*-\w+)\s*:/) || [])[1];
+      const codes =
+        ((block.match(/\*\*Category:\*\*\s*(.+)/) || [])[1] || '').match(
+          /\d+/g
+        ) || [];
+      if (!headingId || codes.length === 0) continue;
+      const tomlId = checkIdByCode.get(codes[0]);
+      assert.ok(
+        tomlId !== undefined,
+        `${f}: "${head}" — code ${codes[0]} has no check_id in standards.toml`
+      );
+      // A single-code heading must agree exactly. Multi-code headings share
+      // one heading across several categories whose TOML ids may legitimately
+      // differ (e.g. ADP-18 covering ADP-I4/ADP-I5), so only presence is
+      // enforced there.
+      if (codes.length === 1) {
+        assert.equal(
+          tomlId,
+          headingId,
+          `${f}: "${head}" — heading id ${headingId} disagrees with standards.toml check_id ${tomlId} for code ${codes[0]} (TOML wins at runtime; fix whichever is stale)`
+        );
       }
     }
   }

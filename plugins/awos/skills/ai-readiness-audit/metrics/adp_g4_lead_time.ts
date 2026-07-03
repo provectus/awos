@@ -28,10 +28,11 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
+  squashSkipReliability,
   type MetricResult,
 } from './_base.ts';
-import { bandScore, clamp01 } from './_score.ts';
+import { bandScore, clamp01, median } from './_score.ts';
 
 const LEAD_TIME_ANCHORS = [
   { x: 1, y: 1.0 },
@@ -44,13 +45,6 @@ const LEAD_TIME_ANCHORS = [
 interface MergeRecord {
   merged_at: string;
   branch_first_commit_at: string;
-}
-
-/** Compute median of a sorted numeric array. */
-function median(sorted: number[]): number {
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[mid];
-  return (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 /** Map median lead-time hours to a DORA band label. */
@@ -68,14 +62,12 @@ export function compute(
 ): MetricResult {
   const read = readArtifact(collectedDir, 'git');
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_g4_lead_time',
-      null,
       'banded',
-      [],
-      skipReliability('minimal', 'git', read.error),
-      [],
-      ['git']
+      'minimal',
+      'git',
+      read.error
     );
   }
 
@@ -86,15 +78,7 @@ export function compute(
     !Array.isArray(raw.merge_records) ||
     raw.merge_records.length === 0
   ) {
-    return makeMetricResult(
-      'adp_g4_lead_time',
-      null,
-      'banded',
-      [],
-      computeReliability('minimal', [], ['git']),
-      [],
-      ['git']
-    );
+    return skipMetric('adp_g4_lead_time', 'banded', 'minimal', 'git');
   }
 
   // Squash/rebase-merge workflows produce no merge commits, so merge_records
@@ -107,11 +91,7 @@ export function compute(
       null,
       'banded',
       [],
-      {
-        tag: 'not-reliable',
-        confidence: 'LOW',
-        note: 'squash-merge workflow: no branch merge records in git — connect a code-host connector (PR API) to measure this',
-      },
+      squashSkipReliability(),
       [],
       ['git']
     );
@@ -146,19 +126,10 @@ export function compute(
   }
 
   if (leadTimesHours.length === 0) {
-    return makeMetricResult(
-      'adp_g4_lead_time',
-      null,
-      'banded',
-      [],
-      computeReliability('minimal', [], ['git']),
-      [],
-      ['git']
-    );
+    return skipMetric('adp_g4_lead_time', 'banded', 'minimal', 'git');
   }
 
-  leadTimesHours.sort((a, b) => a - b);
-  const medianHours = median(leadTimesHours);
+  const medianHours = median(leadTimesHours)!;
   const band = doraLeadTimeBand(medianHours);
 
   // Reliability is "minimal" — git-approximated: branch_first_commit_at is
@@ -177,10 +148,6 @@ export function compute(
     reliability,
     ['git'],
     [],
-    band,
-    undefined,
-    expression,
-    score,
-    1.0
+    { band, expression, score, confidence: 1.0 }
   );
 }

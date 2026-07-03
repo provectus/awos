@@ -54,11 +54,11 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
   trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
-import { bandScore, clamp01 } from './_score.ts';
+import { bandScore, clamp01, mean } from './_score.ts';
 
 const ANCHORS = [
   { x: 0, y: 1 },
@@ -74,11 +74,6 @@ function subtaskBand(avg: number): 'good' | 'watch' | 'concerning' {
   return 'concerning';
 }
 
-/** Arithmetic mean of a non-empty numeric array. */
-function mean(values: number[]): number {
-  return values.reduce((s, v) => s + v, 0) / values.length;
-}
-
 export function compute(
   collectedDir: string,
   standards: Record<string, unknown>,
@@ -88,14 +83,12 @@ export function compute(
 
   // Tracker source file absent → SKIP.
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_i4_subtask_split',
-      null,
       'banded',
-      [],
-      skipReliability('minimal', 'tracker', read.error),
-      [],
-      ['tracker']
+      'minimal',
+      'tracker',
+      read.error
     );
   }
 
@@ -103,15 +96,7 @@ export function compute(
 
   // available=false means no tracker connector was provided.
   if (!artifact?.available) {
-    return makeMetricResult(
-      'adp_i4_subtask_split',
-      null,
-      'banded',
-      [],
-      computeReliability('minimal', [], ['tracker']),
-      [],
-      ['tracker']
-    );
+    return skipMetric('adp_i4_subtask_split', 'banded', 'minimal', 'tracker');
   }
 
   const raw = artifact?.raw ?? {};
@@ -126,15 +111,7 @@ export function compute(
     (t) => typeof t['subtask_count'] === 'number'
   );
   if (!hasSubtaskData) {
-    return makeMetricResult(
-      'adp_i4_subtask_split',
-      null,
-      'banded',
-      [],
-      computeReliability('minimal', [], ['tracker']),
-      [],
-      ['tracker']
-    );
+    return skipMetric('adp_i4_subtask_split', 'banded', 'minimal', 'tracker');
   }
 
   // Parent-eligible tickets: every ticket that is not itself a sub-task
@@ -144,15 +121,7 @@ export function compute(
   // {x:0} anchor unreachable) and let a single over-split epic dominate.
   const parents = tickets.filter((t) => t['parent'] == null);
   if (parents.length === 0) {
-    return makeMetricResult(
-      'adp_i4_subtask_split',
-      null,
-      'banded',
-      [],
-      computeReliability('minimal', [], ['tracker']),
-      [],
-      ['tracker']
-    );
+    return skipMetric('adp_i4_subtask_split', 'banded', 'minimal', 'tracker');
   }
 
   const avgSubtasks = mean(
@@ -189,10 +158,6 @@ export function compute(
     reliability,
     ['tracker'],
     [],
-    band,
-    undefined,
-    expression,
-    score,
-    1.0
+    { band, expression, score, confidence: 1.0 }
   );
 }

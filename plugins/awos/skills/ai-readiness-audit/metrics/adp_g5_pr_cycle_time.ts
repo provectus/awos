@@ -32,12 +32,13 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
+  SQUASH_MERGE_NOTE,
   trackerFetchNote,
   type MetricResult,
   type Reliability,
 } from './_base.ts';
-import { bandScore, clamp01 } from './_score.ts';
+import { bandScore, clamp01, median } from './_score.ts';
 
 const CYCLE_TIME_ANCHORS = [
   { x: 1, y: 1.0 },
@@ -52,15 +53,8 @@ interface MergeRecord {
   branch_first_commit_at: string;
 }
 
-/** Compute median of a sorted numeric array. */
-function median(sorted: number[]): number {
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[mid];
-  return (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
 /** Map median cycle-time hours to a DORA band label. */
-export function doraCycleTimeBand(hours: number): string {
+function doraCycleTimeBand(hours: number): string {
   if (hours < 24) return 'elite';
   if (hours < 168) return 'high';
   if (hours < 720) return 'medium';
@@ -135,8 +129,7 @@ export function compute(
   // in-progress→done duration replaces the git branch-lifetime proxy.
   const tracker = readTrackerCycle(collectedDir);
   if (tracker.hours.length > 0) {
-    const trackerHours = [...tracker.hours].sort((a, b) => a - b);
-    const medianHours = median(trackerHours);
+    const medianHours = median(tracker.hours)!;
     const band = doraCycleTimeBand(medianHours);
     const score = clamp01(bandScore(medianHours, CYCLE_TIME_ANCHORS, 'log'));
     const reliability: Reliability = appendReliabilityNote(
@@ -147,7 +140,8 @@ export function compute(
       },
       trackerFetchNote(tracker.raw)
     );
-    const expression = `median ${medianHours.toFixed(1)}h cycle time from ${trackerHours.length} tracker ticket${trackerHours.length !== 1 ? 's' : ''} (${band})`;
+    const ticketCount = tracker.hours.length;
+    const expression = `median ${medianHours.toFixed(1)}h cycle time from ${ticketCount} tracker ticket${ticketCount !== 1 ? 's' : ''} (${band})`;
     return makeMetricResult(
       'adp_g5_pr_cycle_time',
       medianHours,
@@ -156,25 +150,19 @@ export function compute(
       reliability,
       ['tracker'],
       [],
-      band,
-      undefined,
-      expression,
-      score,
-      1.0
+      { band, expression, score, confidence: 1.0 }
     );
   }
 
   // Fallback: git branch-lifetime proxy.
   const read = readArtifact(collectedDir, 'git');
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_g5_pr_cycle_time',
-      null,
       'banded',
-      [],
-      skipReliability('not-reliable', 'git', read.error),
-      [],
-      ['git']
+      'not-reliable',
+      'git',
+      read.error
     );
   }
 
@@ -184,15 +172,7 @@ export function compute(
     !Array.isArray(raw.merge_records) ||
     raw.merge_records.length === 0
   ) {
-    return makeMetricResult(
-      'adp_g5_pr_cycle_time',
-      null,
-      'banded',
-      [],
-      computeReliability('not-reliable', [], ['git']),
-      [],
-      ['git']
-    );
+    return skipMetric('adp_g5_pr_cycle_time', 'banded', 'not-reliable', 'git');
   }
 
   // Squash/rebase-merge workflows produce no merge commits, so merge_records
@@ -208,7 +188,7 @@ export function compute(
         ? 'squash-merge workflow: no branch merge records in git; tracker connected but tickets lack per-ticket status-transition history (changelog not fetched) — fetch ticket changelogs (or connect a code-host PR API) to measure cycle time'
         : tracker.available
           ? 'squash-merge workflow: no branch merge records in git; tracker connected but returned no tickets — connect a code-host connector (PR API) or fetch tracker tickets with status-transition history to measure this'
-          : 'squash-merge workflow: no branch merge records in git — connect a code-host connector (PR API) to measure this';
+          : SQUASH_MERGE_NOTE;
     return makeMetricResult(
       'adp_g5_pr_cycle_time',
       null,
@@ -242,19 +222,10 @@ export function compute(
   }
 
   if (cycleTimesHours.length === 0) {
-    return makeMetricResult(
-      'adp_g5_pr_cycle_time',
-      null,
-      'banded',
-      [],
-      computeReliability('not-reliable', [], ['git']),
-      [],
-      ['git']
-    );
+    return skipMetric('adp_g5_pr_cycle_time', 'banded', 'not-reliable', 'git');
   }
 
-  cycleTimesHours.sort((a, b) => a - b);
-  const medianHours = median(cycleTimesHours);
+  const medianHours = median(cycleTimesHours)!;
   const band = doraCycleTimeBand(medianHours);
 
   // Reliability is "not-reliable" — git approximation: branch_first_commit_at
@@ -272,10 +243,6 @@ export function compute(
     reliability,
     ['git'],
     [],
-    band,
-    undefined,
-    expression,
-    score,
-    1.0
+    { band, expression, score, confidence: 1.0 }
   );
 }

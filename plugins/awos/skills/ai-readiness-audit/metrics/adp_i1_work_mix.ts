@@ -31,7 +31,7 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
   trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
@@ -61,29 +61,19 @@ export function compute(
   // Tracker source absent or unreadable → SKIP with the reason in the note.
   const read = readArtifact(collectedDir, 'tracker');
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_i1_work_mix',
-      null,
       'banded',
-      [],
-      skipReliability('not-reliable', 'tracker', read.error),
-      [],
-      ['tracker']
+      'not-reliable',
+      'tracker',
+      read.error
     );
   }
   const artifact = read.artifact;
 
   // available=false means no tracker connector was provided.
   if (!artifact?.available) {
-    return makeMetricResult(
-      'adp_i1_work_mix',
-      null,
-      'banded',
-      [],
-      computeReliability('not-reliable', [], ['tracker']),
-      [],
-      ['tracker']
-    );
+    return skipMetric('adp_i1_work_mix', 'banded', 'not-reliable', 'tracker');
   }
 
   const raw = artifact?.raw ?? {};
@@ -115,11 +105,7 @@ export function compute(
       reliability,
       ['tracker'],
       [],
-      null,
-      undefined,
-      undefined,
-      0,
-      1.0
+      { score: 0, confidence: 1.0 }
     );
   }
 
@@ -144,10 +130,6 @@ export function compute(
     reliability,
     ['tracker'],
     [],
-    band,
-    undefined,
-    expression,
-    clamp01(growthFrac / 0.6),
-    1.0
+    { band, expression, score: clamp01(growthFrac / 0.6), confidence: 1.0 }
   );
 }

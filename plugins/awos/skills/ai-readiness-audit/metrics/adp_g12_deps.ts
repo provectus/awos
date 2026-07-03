@@ -28,22 +28,10 @@ import { join, basename } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  skipMetric,
   type MetricResult,
 } from './_base.ts';
-
-const PRUNE_DIRS = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.venv',
-  '__pycache__',
-  '.next',
-  'target',
-  'vendor',
-  '.cache',
-  'coverage',
-]);
+import { PRUNE_DIRS } from './_ast.ts';
 
 const MANIFEST_NAMES = new Set([
   'package.json',
@@ -202,29 +190,13 @@ export function compute(
   const repoPath = repoPathOverride ?? _collectedDir;
 
   if (!existsSync(repoPath)) {
-    return makeMetricResult(
-      'adp_g12_deps',
-      null,
-      'computed',
-      [],
-      computeReliability('not-reliable', [], ['scale']),
-      [],
-      ['scale']
-    );
+    return skipMetric('adp_g12_deps', 'computed', 'not-reliable', 'scale');
   }
 
   const manifests = findManifests(repoPath);
 
   if (manifests.length === 0) {
-    return makeMetricResult(
-      'adp_g12_deps',
-      null,
-      'computed',
-      [],
-      computeReliability('not-reliable', [], ['scale']),
-      [],
-      ['scale']
-    );
+    return skipMetric('adp_g12_deps', 'computed', 'not-reliable', 'scale');
   }
 
   const byManifest: Record<string, number> = {};
@@ -254,10 +226,6 @@ export function compute(
     reliability,
     ['scale'],
     [],
-    null,
-    undefined,
-    expression,
-    1.0,
-    1.0
+    { expression, score: 1.0, confidence: 1.0 }
   );
 }

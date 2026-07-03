@@ -160,7 +160,7 @@ import type {
   TechItem,
   TechStack,
 } from './artifact_types.ts';
-import { SOURCE_LABEL_DEFAULTS } from './artifact_types.ts';
+import { COLLECTOR_SOURCES, SOURCE_LABEL_DEFAULTS } from './artifact_types.ts';
 
 export type {
   AuditJson,
@@ -297,8 +297,48 @@ function groupLinkedByName(
   return order.map((name) => ({ name, vias: viasByName.get(name)! }));
 }
 
+/**
+ * Bucket linked repos into the three kinds (Symlinks / Git submodules / MCP
+ * servers) in fixed display order, dropping empty kinds and grouping each
+ * bucket's repos by name. Shared by the Markdown and HTML "Linked Repositories"
+ * sections — each caller formats the returned `{ label, groups }` list in its
+ * own markup, so the bucketing/labels/order can't drift apart.
+ */
+function groupLinkedByKind(
+  linked: LinkedRepo[]
+): Array<{ label: string; groups: Array<{ name: string; vias: string[] }> }> {
+  const byKind: Record<string, LinkedRepo[]> = {};
+  for (const r of linked) (byKind[r.kind] ??= []).push(r);
+  const KIND_LABEL: Record<string, string> = {
+    symlink: 'Symlinks',
+    submodule: 'Git submodules',
+    mcp: 'MCP servers',
+  };
+  const out: Array<{
+    label: string;
+    groups: Array<{ name: string; vias: string[] }>;
+  }> = [];
+  for (const kind of ['symlink', 'submodule', 'mcp']) {
+    const bucket = byKind[kind];
+    if (!bucket || bucket.length === 0) continue;
+    out.push({ label: KIND_LABEL[kind], groups: groupLinkedByName(bucket) });
+  }
+  return out;
+}
+
 function pct(ratio: number): string {
   return (ratio * 100).toFixed(1) + '%';
+}
+
+/**
+ * Display value for a portfolio (org) metric: the capability score in points,
+ * every other metric as a percentage. Shared by the Markdown table and the HTML
+ * metric cards so the two can't format the same metric differently.
+ */
+function portfolioMetricValue(m: PortfolioMetric): string {
+  return m.metric === 'org_capability_score'
+    ? m.value.toFixed(2) + ' pts'
+    : pct(m.value);
 }
 
 /**
@@ -586,9 +626,7 @@ export function renderMarkdown(
           // history") beats the generic needs-connector default.
           const note = d.note
             ? `— (${mdCell(d.note)})`
-            : d.gated === 'tracker'
-              ? '— (needs ticketing connector)'
-              : '— (needs incident connector)';
+            : gatedConnectorNote(d.gated);
           lines.push(`| ${mdCell(d.label)} | ${note} | |`);
         } else {
           lines.push(
@@ -624,10 +662,7 @@ export function renderMarkdown(
     lines.push('| Metric | Value | Description | Repos Counted | Weighted |');
     lines.push('| ------ | ----- | ----------- | ------------- | -------- |');
     for (const m of audit.portfolio_metrics) {
-      const val =
-        m.metric === 'org_capability_score'
-          ? m.value.toFixed(2) + ' pts'
-          : pct(m.value);
+      const val = portfolioMetricValue(m);
       lines.push(
         `| ${metricLabel(m.metric)} | ${val} | ${m.description} | ${m.repos_counted} | ${m.contributor_weighted ? 'contributor-weighted' : 'equal-weighted'} |`
       );
@@ -885,25 +920,13 @@ export function renderMarkdown(
   lines.push('');
   const linked = audit.linked_repos ?? [];
   if (linked.length > 0) {
-    const byKindMd: Record<string, LinkedRepo[]> = {};
-    for (const r of linked) (byKindMd[r.kind] ??= []).push(r);
-    const KIND_LABEL_MD: Record<string, string> = {
-      symlink: 'Symlinks',
-      submodule: 'Git submodules',
-      mcp: 'MCP servers',
-    };
-    const pushBucket = (bucket: LinkedRepo[]): void => {
-      for (const g of groupLinkedByName(bucket)) {
+    for (const { label, groups } of groupLinkedByKind(linked)) {
+      lines.push(`**${label}:**`);
+      lines.push('');
+      for (const g of groups) {
         lines.push(`- ${g.name} (via ${g.vias.join(', ')})`);
       }
       lines.push('');
-    };
-    for (const kind of ['symlink', 'submodule', 'mcp']) {
-      const bucket = byKindMd[kind];
-      if (!bucket || bucket.length === 0) continue;
-      lines.push(`**${KIND_LABEL_MD[kind]}:**`);
-      lines.push('');
-      pushBucket(bucket);
     }
   } else {
     lines.push('None detected.');
@@ -1101,6 +1124,18 @@ function deliveryValueAbsent(v: string | undefined): boolean {
 }
 
 /**
+ * The em-dash-prefixed fallback note for a gated delivery row that has no
+ * display value and no row-specific note — the generic "needs a connector"
+ * prompt, keyed by which connector the row is gated on. Shared by the Markdown
+ * and HTML delivery renderers (a row-specific `note` overrides this in both).
+ */
+function gatedConnectorNote(gated: 'tracker' | 'incident'): string {
+  return gated === 'tracker'
+    ? '— (needs ticketing connector)'
+    : '— (needs incident connector)';
+}
+
+/**
  * Delivery rows with the connector-gated ones (Cycle time, MTTR) replaced by
  * the ENGINE-derived versions when `audit.derived_delivery` is present. The
  * value and the honest gated note both come from the tracker artifact, so the
@@ -1163,6 +1198,756 @@ const PRIORITY_COLOR: Record<string, string> = {
   P1: '#eab308',
   P2: '#6366f1',
 };
+
+// ---------------------------------------------------------------------------
+// HTML section renderers — hoisted from renderHtml so each is a pure function
+// of the audit (and isOrg where the org / single-repo split matters).
+// ---------------------------------------------------------------------------
+
+// ─── Executive band (CEO stops here) ───────────────────────────────────────
+function execBand(audit: AuditJson, isOrg: boolean): string {
+  const rows: string[] = [];
+  rows.push('<div class="exec">');
+
+  if (isOrg && audit.portfolio_metrics) {
+    // Org: capability is the org capability score; show ≤3 portfolio cards.
+    rows.push('<div class="metric-grid">');
+    for (const m of audit.portfolio_metrics) {
+      const val = portfolioMetricValue(m);
+      const cardTip =
+        (m.metric === 'org_measurement_coverage'
+          ? `${coverageTipText(audit)}. ${m.description}`
+          : m.description) +
+        verifiedSuffix(audit.standards_meta?.standards_date);
+      rows.push(`<div class="metric-card">
+  <div class="metric-name">${esc(metricLabel(m.metric))}</div>
+  <div class="metric-val">${tip(val, cardTip, `${m.repos_counted} repos · ${m.contributor_weighted ? 'weighted by active contributors' : 'equal-weighted'}`)}</div>
+  <div class="metric-desc">${esc(m.description)}</div>
+</div>`);
+    }
+    rows.push('</div>');
+  } else {
+    // Single-repo capability headline — Coverage is the main figure.
+    rows.push(
+      `<div class="cap-score">${tip(pct(audit.coverage ?? 0) + ' Standards coverage', coverageTipText(audit), 'score ÷ Σ applicable category weights · standards.toml')}</div>`
+    );
+    rows.push(
+      `<div class="cap-cov">${tip(fmtPts(audit.audit_total) + ' pts', 'Capability points — the sum of all capabilities the project has in place. Uncapped; rises as the standard grows.' + verifiedSuffix(audit.standards_meta?.standards_date), 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
+    );
+  }
+
+  // Unpatched judgment checks make the totals incomplete — say so up front,
+  // styled distinctly from SKIP (amber chip, not the grey skip vocabulary).
+  const pendingTotal = pendingJudgmentCount(audit);
+  if (pendingTotal > 0) {
+    rows.push(
+      `<div class="pending-note"><span class="pending-chip">${pendingTotal} pending judgment</span> check(s) await the orchestrator's judgment pass — totals are incomplete.</div>`
+    );
+  }
+
+  // Headline blocks: delivery / scale / reach (single-repo and org)
+  const h = audit.headline;
+  const blocks: string[] = [];
+
+  // Every headline metric gets a tooltip (parity with per-dimension rows).
+  // Prefer the referenced check's definition; fall back to a static blurb.
+  const checkById = new Map<string, Check>();
+  for (const dim of audit.dimensions ?? []) {
+    for (const c of dim.checks) checkById.set(c.check_id, c);
+  }
+  const headlineTipText = (label: string, checkId?: string): string => {
+    if (checkId) {
+      const c = checkById.get(checkId);
+      if (c) return c.plain && c.plain.trim() ? c.plain : c.definition;
+    }
+    const key = label.replace(/\s*\(.*\)\s*$/, '').trim();
+    return resolveTip(HEADLINE_TIP[key] ?? HEADLINE_TIP[label] ?? label, audit);
+  };
+  // The VALUE carries the underlying check's evidence — how the number was
+  // derived, or (for a "—") why the value is absent. Returns null when no
+  // check backs this row (no evidence to show).
+  const headlineValueTip = (value: string, checkId?: string): string | null => {
+    const c = checkId ? checkById.get(checkId) : undefined;
+    if (!c) return null;
+    const evidence = (c.evidence ?? []).slice(0, 3).join(' · ');
+    const note = c.reliability?.note;
+    const parts = [evidence, note ? `note: ${note}` : '']
+      .filter(Boolean)
+      .join(' — ');
+    const plain =
+      c.status === 'SKIP'
+        ? `Not measured (${c.check_id} skipped). ${parts || 'No further detail available.'}`
+        : parts || `From check ${c.check_id}.`;
+    return tip(value, plain, `${c.check_id} · status ${c.status}`);
+  };
+
+  const deliveryRowsHtml = normalizedDelivery(audit);
+  if (h && deliveryRowsHtml.length > 0) {
+    const items = deliveryRowsHtml
+      .map((d) => {
+        const tipText = headlineTipText(d.label, d.check_id);
+        if (d.gated && deliveryValueAbsent(d.display_value)) {
+          // A row-specific note ("Jira connected — tickets lack
+          // status-transition history") beats the generic default.
+          const note = d.note ? `— (${d.note})` : gatedConnectorNote(d.gated);
+          return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${esc(note)}</span></div>`;
+        }
+        const bandHtml = d.band
+          ? `<span class="band" style="background:${BAND_COLOR[d.band.toLowerCase()] ?? '#94a3b8'}">${esc(d.band)}</span>`
+          : '';
+        const valueStr = d.display_value ?? '—';
+        const valueHtml =
+          headlineValueTip(valueStr, d.check_id) ?? esc(valueStr);
+        return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${valueHtml}${bandHtml}</span></div>`;
+      })
+      .join('');
+    blocks.push(
+      `<div class="exec-col"><h3>Delivery (vs DORA bands)</h3>${items}</div>`
+    );
+  }
+  if (h?.scale && h.scale.length > 0) {
+    const items = h.scale
+      .map(
+        (s) =>
+          `<div class="kv"><span class="k">${tip(s.label, headlineTipText(s.label, s.check_id))}</span><span class="v">${headlineValueTip(s.display_value, s.check_id) ?? esc(s.display_value)}</span></div>`
+      )
+      .join('');
+    blocks.push(
+      `<div class="exec-col"><h3>Code scale &amp; complexity</h3>${items}</div>`
+    );
+  }
+  // Derive fallback reach values from deterministic checks when the LLM
+  // headline omitted them. DESC-01 → contributors, SDD-04 → spec coverage.
+  const reachFallback: Partial<
+    Record<'contributors' | 'spec_coverage' | 'ai_tooling', string>
+  > = {};
+  if (!h?.reach?.contributors) {
+    const adp07 = checkById.get('DESC-01');
+    if (adp07?.expression) reachFallback.contributors = adp07.expression;
+  }
+  if (!h?.reach?.spec_coverage) {
+    const sdd04 = checkById.get('SDD-04');
+    if (sdd04) {
+      const ev = sdd04.evidence?.[0];
+      const pct =
+        typeof sdd04.value === 'number'
+          ? `${Math.round(sdd04.value * 100)}%`
+          : null;
+      reachFallback.spec_coverage =
+        ev ?? (pct ? `spec branch coverage ${pct}` : null) ?? undefined;
+    }
+  }
+  const reachItems: string[] = [];
+  for (const [key, label] of REACH_FIELDS) {
+    const v =
+      h?.reach?.[key as keyof typeof h.reach] ??
+      reachFallback[key as keyof typeof reachFallback];
+    if (v)
+      reachItems.push(
+        `<div class="kv"><span class="k">${tip(label, resolveTip(HEADLINE_TIP[label], audit) + verifiedSuffix(audit.standards_meta?.standards_date))}</span><span class="v">${esc(v)}</span></div>`
+      );
+  }
+  if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
+    const withTooling = audit.per_repo.filter((r) => r.has_ai_tooling).length;
+    reachItems.push(
+      `<div class="kv"><span class="k">${tip('Repos with AI tooling', resolveTip(HEADLINE_TIP['Repos with AI tooling'], audit) + ` ${withTooling} of ${audit.per_repo.length} repositories.` + verifiedSuffix(audit.standards_meta?.standards_date))}</span><span class="v">${esc(`${withTooling} / ${audit.per_repo.length}`)}</span></div>`
+    );
+  }
+  if (reachItems.length > 0) {
+    blocks.push(
+      `<div class="exec-col"><h3>Reach</h3>${reachItems.join('')}</div>`
+    );
+  }
+  if (blocks.length > 0) {
+    rows.push(`<div class="exec-blocks">${blocks.join('')}</div>`);
+  }
+
+  rows.push('</div>'); // .exec
+  return rows.join('\n');
+}
+
+// ─── Top insights (the narrative READ) ─────────────────────────────────────
+function insightsSection(audit: AuditJson): string {
+  if (!audit.insights || audit.insights.length === 0) return '';
+  const rows: string[] = ['<h2>Top insights</h2>', '<div class="insights">'];
+  for (const ins of audit.insights) {
+    const color = SEVERITY_COLOR[ins.severity] ?? '#6366f1';
+    rows.push(`<details class="insight" style="border-left-color:${color}">
+  <summary><span class="theme">${esc(ins.theme)}</span>${ins.weak_areas.length ? ` <span class="areas">Weak: ${esc(ins.weak_areas.join(', '))}</span>` : ''}</summary>
+  <div class="so">${esc(ins.so_what)}</div>
+  <div class="improves">→ ${esc(ins.improves)}</div>
+</details>`);
+  }
+  rows.push('</div>');
+  return rows.join('\n');
+}
+
+// ─── What to improve (recommendations) ─────────────────────────────────────
+function recommendationsSection(audit: AuditJson): string {
+  const recs =
+    audit.recommendations && audit.recommendations.length > 0
+      ? audit.recommendations
+      : derivedRecommendations(audit);
+  if (recs.length === 0) {
+    return '<h2>What to improve</h2><p>No failing or warning checks. Audit is fully green.</p>';
+  }
+  const rows: string[] = ['<h2>What to improve</h2>'];
+  for (const r of recs) {
+    const prioColor = PRIORITY_COLOR[r.priority] ?? '#6366f1';
+    rows.push(`<details class="rec">
+  <summary><span class="prio" style="background:${prioColor}">${esc(r.priority)}</span> <span class="rec-title">${esc(r.title)}</span> <span class="rec-where">${esc(r.dimension)} · ${esc(r.check_id)} · effort ${esc(r.effort)}</span></summary>
+  ${r.detail ? `<div class="rec-detail">${esc(r.detail)}</div>` : ''}
+</details>`);
+  }
+  return rows.join('\n');
+}
+
+// ─── Dimension summary table (overview; rows link to sub-pages) ─────────────
+function dimensionSummary(audit: AuditJson): string {
+  const rows: string[] = ['<h2>Dimensions</h2>'];
+  // Three-value metrics count (summed across all checks in all dimensions):
+  //   scored    = checks with weight_awarded > 0 (contributed to score)
+  //   executed  = checks with status !== 'SKIP' (actually ran)
+  //   supported = all checks in the catalog for this repo
+  let mScored = 0;
+  let mExecuted = 0;
+  let mSupported = 0;
+  for (const dim of audit.dimensions) {
+    for (const c of dim.checks) {
+      mSupported++;
+      if (c.status !== 'SKIP') mExecuted++;
+      if (c.weight_awarded > 0 && c.status !== 'SKIP') mScored++;
+    }
+  }
+  rows.push(
+    `<p class="metrics-found">${tip(
+      `Metrics: ${mScored} scored · ${mExecuted} executed · ${mSupported} supported`,
+      'Three-level metric counts across all checks',
+      'scored = weight_awarded > 0 · executed = status ≠ SKIP · supported = all checks in catalog'
+    )}</p>`
+  );
+  rows.push(
+    '<table><thead><tr>' +
+      `<th>${tip('#', 'Row number — dimensions are listed in a fixed order.')}</th>` +
+      `<th>${tip('Dimension', 'A capability area being audited: a group of related checks scored together. Click a row to open its checks.')}</th>` +
+      `<th>${tip('Coverage', `Share of this area's expected capability that is in place. ${coverageTipText(audit)}.`)}</th>` +
+      `<th>${tip('Sources', 'Data sources feeding this dimension.')}</th>` +
+      `<th>${tip('Points', 'Capability points earned in this area.')}</th>` +
+      `<th>${tip('Reliability', 'How trustworthy the numbers in this area are — maximal, minimal (lower bound), or not-reliable (rough proxy).')}</th>` +
+      `<th>${tip('FAIL', 'Checks where the capability is absent or below its failing threshold.')}</th>` +
+      `<th>${tip('WARN', 'Checks partly in place but below target — worth attention.')}</th>` +
+      `<th>${tip('PARTIAL', 'Checks partly satisfied: some criteria met, not all.')}</th>` +
+      `<th>${tip('PASS', 'Checks fully satisfied.')}</th>` +
+      `<th>${tip('SKIP', 'Checks not evaluated because a required data source or precondition was unavailable — e.g. no ticketing/incident connector, or the check does not apply to this project.')}</th>` +
+      '</tr></thead><tbody>'
+  );
+  let n = 1;
+  for (const dim of audit.dimensions) {
+    const counts = statusCounts(dim);
+    const covPct = pct(dim.coverage ?? 0);
+    const lowCov = (dim.coverage ?? 0) < 0.4 ? ' low-cov' : '';
+    const anyMinimal = dim.checks.some(
+      (c) => c.applies && c.reliability.tag === 'minimal'
+    );
+    const anyNotReliable = dim.checks.some(
+      (c) => c.applies && c.reliability.tag === 'not-reliable'
+    );
+    const relStr = anyMinimal
+      ? 'minimal *'
+      : anyNotReliable
+        ? 'not-reliable'
+        : 'maximal';
+    const relTip = anyMinimal
+      ? 'Some numbers here are lower bounds — the true value may be higher.'
+      : anyNotReliable
+        ? 'Numbers here carry rough estimates; the true value may differ significantly.'
+        : 'Numbers here are upper-bound reliable for what was reachable.';
+    const key = dimKey(dim);
+    const href = `#dim/${esc(key)}`;
+    // Sources column: cell shows SHORT labels; tooltip adds full label + lookback window.
+    const dimSourcesUsed = dim.sources_used ?? [];
+    const sourcesCell = (() => {
+      if (dimSourcesUsed.length === 0) return '—';
+      const cellText = dimSourcesUsed
+        .map((s) => shortSourceLabel(s, audit.source_windows))
+        .join(', ');
+      const tooltipDetail = dimSourcesUsed
+        .map((s) => formatSourceWindow(s, audit.source_windows))
+        .join(' · ');
+      return tip(
+        cellText,
+        'Data sources feeding this dimension',
+        tooltipDetail
+      );
+    })();
+    // The dimension name carries its frontmatter description as a hover
+    // tooltip — what's inside this dimension, right on the main page.
+    const nameCell = dim.description
+      ? `<a href="${href}"><strong>${tip(titleLabel(dim), dim.description)}</strong></a>`
+      : `<a href="${href}"><strong>${esc(titleLabel(dim))}</strong></a>`;
+    const info = isInformational(dim);
+    rows.push(`<tr class="dim-row${lowCov}" onclick="location.hash='dim/${esc(key)}'">
+  <td>${n++}</td>
+  <td>${nameCell}</td>
+  <td>${info ? tip('info', 'Informational descriptors — reported for context, not scored toward the audit total.') : covPct}</td>
+  <td>${sourcesCell}</td>
+  <td>${info ? '—' : `${fmtPts(dim.score)} pts`}</td>
+  <td>${tip(relStr, relTip, '')}</td>
+  <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
+  <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
+  <td>${counts.partial > 0 ? `<span style="color:#d97706;font-weight:600">${counts.partial}</span>` : counts.partial}</td>
+  <td>${counts.pass > 0 ? `<span style="color:#16a34a;font-weight:600">${counts.pass}</span>` : counts.pass}</td>
+  <td>${counts.skip}</td>
+</tr>`);
+  }
+  rows.push('</tbody></table>');
+  return rows.join('\n');
+}
+
+// ─── One drill-down sub-page per dimension ─────────────────────────────────
+function dimensionPage(
+  audit: AuditJson,
+  dim: DimensionArtifact,
+  idx: number,
+  all: DimensionArtifact[]
+): string {
+  const key = dimKey(dim);
+  const counts = statusCounts(dim);
+  const covPct = pct(dim.coverage ?? 0);
+  const rows: string[] = [];
+  rows.push(`<section class="dim-page" id="page-${esc(key)}">`);
+  rows.push('<a class="backlink" href="#">← Back to overview</a>');
+  // Prev/next navigation between dimension pages.
+  const prev = all[idx - 1];
+  const next = all[idx + 1];
+  const navParts: string[] = [];
+  if (prev) {
+    navParts.push(
+      `<a href="#dim/${esc(dimKey(prev))}">← ${esc(titleLabel(prev))}</a>`
+    );
+  }
+  if (next) {
+    navParts.push(
+      `<a href="#dim/${esc(dimKey(next))}">${esc(titleLabel(next))} →</a>`
+    );
+  }
+  const navHtml =
+    navParts.length > 0
+      ? `<nav class="dim-nav">${navParts.join(' ')}</nav>`
+      : '';
+  if (navHtml) rows.push(navHtml);
+  rows.push(`<h2>${esc(titleLabel(dim))}</h2>`);
+  if (dim.description) {
+    rows.push(`<p class="dim-head">${esc(dim.description)}</p>`);
+  }
+  if (isInformational(dim)) {
+    rows.push(
+      '<div class="dim-head">Informational descriptors — reported for context, not scored toward the audit total.</div>'
+    );
+  } else {
+    // Weight-weighted mean confidence of applicable checks.
+    let totalW = 0,
+      weightedC = 0;
+    for (const c of dim.checks) {
+      if (c.status === 'SKIP' || !c.applies) continue;
+      const w = c.weight_max ?? 0;
+      totalW += w;
+      weightedC += (c.confidence ?? 0) * w;
+    }
+    const meanConfStr =
+      totalW > 0 ? `${Math.round((weightedC / totalW) * 100)}%` : '—';
+    rows.push(
+      `<div class="dim-head">${tip(fmtPts(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, 'Σ awarded weights · standards.toml')} · coverage ${tip(covPct, `Share of this area's expected capability that is in place.`, 'score ÷ Σ applicable weights')} · confidence ${tip(meanConfStr, 'Weight-averaged confidence: fraction of applicable surface measured for this dimension.', 'Σ(confidence × weight_max) ÷ Σ weight_max for applicable checks')} · FAIL ${counts.fail} · WARN ${counts.warn} · PARTIAL ${counts.partial} · PASS ${counts.pass} · SKIP ${counts.skip}${counts.pending > 0 ? ` · <span class="pending-chip">${counts.pending} pending judgment</span>` : ''}</div>`
+    );
+  }
+
+  // Recommendations scoped to this dimension
+  const dimLabel = titleLabel(dim);
+  const dimRecs = (audit.recommendations ?? []).filter(
+    (r) => r.dimension === dimLabel || r.dimension === dim.dimension
+  );
+  if (dimRecs.length > 0) {
+    rows.push('<h3>What to improve here</h3>');
+    for (const r of dimRecs) {
+      const prioColor = PRIORITY_COLOR[r.priority] ?? '#6366f1';
+      rows.push(`<div class="rec">
+  <div class="rec-head"><span class="prio" style="background:${prioColor}">${esc(r.priority)}</span><span class="rec-title">${esc(r.title)}</span><span class="rec-where">${esc(r.check_id)} · effort ${esc(r.effort)}</span></div>
+  ${r.detail ? `<div class="rec-detail">${esc(r.detail)}</div>` : ''}
+</div>`);
+    }
+  }
+
+  rows.push(
+    '<div class="toolbar"><button onclick="toggleIssues(this)">Show issues only</button></div>'
+  );
+  rows.push(
+    '<table class="checks"><colgroup><col style="width:3%"><col style="width:22%"><col style="width:8%"><col style="width:7%"><col style="width:9%"><col style="width:8%"><col style="width:43%"></colgroup>'
+  );
+  rows.push(
+    '<thead><tr><th>#</th><th>Check</th><th>Status</th><th>Points</th><th>Reliability</th><th>Confidence</th><th>Evidence</th></tr></thead><tbody>'
+  );
+  let ckn = 1;
+  let hasMinimal = false;
+  for (const c of dim.checks) {
+    const rowBg = STATUS_COLOR[c.status] ?? '#fff';
+    const relClass =
+      c.reliability.tag === 'minimal'
+        ? 'rel-minimal'
+        : c.reliability.tag === 'not-reliable'
+          ? 'rel-not-reliable'
+          : '';
+    if (c.reliability.tag === 'minimal' && c.applies) hasMinimal = true;
+    const relLabel = c.applies
+      ? `${c.reliability.tag} (${c.reliability.confidence})${c.reliability.tag === 'minimal' ? ' *' : ''}`
+      : '—';
+    const relTipPlain =
+      c.reliability.tag === 'minimal'
+        ? 'This is a lower bound — the real value may be higher.'
+        : c.reliability.tag === 'not-reliable'
+          ? 'A rough proxy — treat as indicative, not exact.'
+          : 'Reliable for what was reachable.';
+    // Build evidence items; append expression/value when present (moved from removed Value column).
+    const evidenceItems: string[] =
+      c.evidence.length > 0 ? c.evidence.map(esc) : [];
+    if (c.expression) {
+      // tip() escapes its arguments itself — pass the raw value, or `&`
+      // and friends get double-escaped (`&amp;amp;`).
+      evidenceItems.push(
+        tip(fmtValue(c.value), c.expression, c.unit ? `unit: ${c.unit}` : '')
+      );
+    } else if (c.value != null) {
+      const numStr = `${fmtValue(c.value)}${c.unit ? ' ' + c.unit : ''}`;
+      const escaped = esc(fmtValue(c.value));
+      if (!evidenceItems.some((item) => item.includes(escaped))) {
+        evidenceItems.push(esc(numStr));
+      }
+    }
+    const evidence =
+      evidenceItems.length > 0 ? evidenceItems.join('<br>') : '—';
+    // Technical detail (code · source · method) folded into the Check tooltip.
+    const codeStr = c.code && c.code.length > 0 ? c.code.join(', ') : '—';
+    const checkMeta = `${esc(c.definition)} — source: ${esc(c.source || '—')} · method: ${esc(c.method)} · category ${esc(codeStr)}${esc(verifiedSuffix(c.last_verified ?? audit.standards_meta?.standards_date))}`;
+    // Points cell: tooltip enriched with standards.toml-derived meta.
+    // Renders source as a clickable link when source_url is available.
+    let pointsMetaHtml: string;
+    if (c.source) {
+      const sourceText = esc(c.source);
+      if (c.source_url && c.source_date) {
+        const escapedUrl = esc(c.source_url);
+        const escapedDate = esc(c.source_date);
+        pointsMetaHtml = `${esc(c.definition)} · ${sourceText} <a href="${escapedUrl}" target="_blank" rel="noopener">${escapedDate}</a>`;
+      } else if (c.source_date) {
+        pointsMetaHtml = `${esc(c.definition)} · ${sourceText} · ${esc(c.source_date)}`;
+      } else {
+        pointsMetaHtml = `${esc(c.definition)} · ${sourceText}`;
+      }
+    } else {
+      pointsMetaHtml = esc(c.definition);
+    }
+    const pointsPct =
+      (c.weight_max || 0) > 0
+        ? ` (${((c.weight_awarded / c.weight_max) * 100).toFixed(1)}%)`
+        : '';
+    const pointsCell =
+      (c.weight_max || 0) === 0
+        ? tipHtml(
+            '—',
+            'Informational descriptor — carries no weight.',
+            pointsMetaHtml
+          )
+        : tipHtml(
+            `${fmtPts(c.weight_awarded)}/${fmtPts(c.weight_max)}${pointsPct}`,
+            `Worth up to ${c.weight_max} points · ${c.method}`,
+            pointsMetaHtml
+          );
+    // Confidence cell: percent for applicable checks, dash for SKIP.
+    const confCell =
+      c.status === 'SKIP' ? '—' : `${Math.round((c.confidence ?? 0) * 100)}%`;
+    // Visible per-metric source citation link (6c.4) — shown inline under the
+    // Check name, where the reader looks for what defines/standardises a check.
+    const sourceCiteHtml =
+      c.source_url && c.source_date
+        ? `<br><small class="src-cite"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source)} ${esc(c.source_date)}</a></small>`
+        : c.source_url
+          ? `<br><small class="src-cite"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source)}</a></small>`
+          : '';
+    rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
+  <td>${ckn++}</td>
+  <td class="check"><span class="tip" tabindex="0"><b>${esc(c.check_id)}</b><span class="tipbox"><b>${esc(plainLead(c))}</b><span class="tipmeta">${checkMeta}</span></span></span><span class="plain">${esc(plainLead(c))}</span>${sourceCiteHtml}</td>
+  <td>${statusBadge(c.status)}</td>
+  <td>${pointsCell}</td>
+  <td class="${relClass}">${tip(relLabel, relTipPlain, c.reliability.note ?? '')}</td>
+  <td>${confCell}</td>
+  <td class="evidence">${evidence}</td>
+</tr>`);
+  }
+  rows.push('</tbody></table>');
+  if (hasMinimal) {
+    rows.push(
+      '<p style="font-size:.78rem;color:#64748b">* lower-bound measurement (reliability tag: minimal).</p>'
+    );
+  }
+
+  // Throughput context (descriptors only): the headline "Merges" and "LOC"
+  // per-active rows have no standards.toml category, so without this they
+  // would appear only on the overview and have no dimension home. They are
+  // size/activity descriptors, so they are echoed on the Descriptors page.
+  if (dim.dimension === 'descriptors') {
+    const baseLabel = (l: string) => l.replace(/\s*\(.*\)\s*$/, '').trim();
+    const throughput = (audit.headline?.delivery ?? []).filter((d) => {
+      const b = baseLabel(d.label);
+      return b === 'Merges' || b === 'LOC';
+    });
+    if (throughput.length > 0) {
+      rows.push('<h3>Throughput context (not scored)</h3>');
+      rows.push(
+        '<p class="dim-head">Delivery-throughput normalizers echoed from the overview — context only, not part of this dimension’s capability score.</p>'
+      );
+      const items = throughput
+        .map(
+          (d) =>
+            `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(d.display_value ?? '—', resolveTip(HEADLINE_TIP[baseLabel(d.label)] ?? d.label, audit) + verifiedSuffix(audit.standards_meta?.standards_date))}</span></div>`
+        )
+        .join('');
+      rows.push(`<div class="exec-col">${items}</div>`);
+    }
+  }
+
+  if (navHtml) rows.push(navHtml);
+  rows.push('</section>');
+  return rows.join('\n');
+}
+
+// ─── Repositories & Connections (org mode + single-repo note) ──────────────
+// Task 5.3: delivery columns + links to per-repo reports
+function reposSection(audit: AuditJson, isOrg: boolean): string {
+  const rows: string[] = ['<h2>Repositories</h2>'];
+  if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
+    rows.push(
+      '<table><thead><tr>' +
+        `<th>${tip('Repo', 'One repository in the portfolio. Click the name to open its full per-repo report.')}</th>` +
+        `<th>${tip('Coverage', `${coverageTipText(audit)}. 100% would mean the repo has everything the standard currently asks for.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+        `<th>${tip('Points', `Capability points the repo has earned — every practice it has in place adds its weight. Uncapped: the number grows as the standard grows, so compare repos against each other, not against a maximum.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+        `<th>${tip('Merges/active', `${resolveTip(HEADLINE_TIP['Merges / active contributor'], audit)}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+        `<th>${tip('LOC/active', `${resolveTip(HEADLINE_TIP['LOC / active contributor'], audit)}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+        `<th>${tip('Deploy freq', `How often finished work reaches the main branch, per week. The DORA research uses this as the primary speed measure: elite teams ship many small changes often.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+        `<th>${tip('Rework rate', `What share of the shipped changes are fixes for earlier changes. High rework means the team spends its time repairing recent work instead of building new things.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+        `<th>${tip('Lead time', `How long a piece of work takes from the first commit until it lands on the main branch, in hours (median). Shorter means ideas become shipped software faster.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+        `<th>${tip('Change-fail', `What share of shipped changes had to be rolled back or hot-fixed. The DORA quality measure: lower is better.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+        `<th>${tip('Cycle time¹', `${CYCLE_TIME_TIP}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+        `<th>${tip('MTTR²', `${MTTR_TIP}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+        '</tr></thead><tbody>'
+    );
+    for (const r of audit.per_repo) {
+      const coverage = r.coverage != null ? pct(r.coverage) : '—';
+      rows.push(
+        `<tr>` +
+          `<td><a href="per-repo/${esc(r.repo)}/report.html">${esc(r.repo)}</a></td>` +
+          `<td>${coverage}</td>` +
+          `<td>${tip(fmtPts(r.awarded_weight), `Capability points earned by this repo: ${r.awarded_weight}.`, '')}</td>` +
+          `<td>${fmtN1dp(r.merges_per_active)}</td>` +
+          `<td>${fmtN1dp(r.loc_per_active)}</td>` +
+          `<td>${fmtWk(r.deploy_freq)}</td>` +
+          `<td>${fmtPctMul(r.rework_rate)}</td>` +
+          `<td>${fmtH(r.lead_time)}</td>` +
+          `<td>${fmtPctMul(r.change_fail)}</td>` +
+          `<td>${esc(r.cycle_time ?? '—')}</td>` +
+          `<td>${esc(r.mttr ?? '—')}</td>` +
+          `</tr>`
+      );
+    }
+    rows.push('</tbody></table>');
+    rows.push(
+      '<p class="footnote">¹ Cycle time (Jira In-Progress→Done) requires a ticketing connector.</p>'
+    );
+    rows.push('<p class="footnote">² MTTR requires an incident connector.</p>');
+  } else {
+    rows.push(
+      `<p>Single-repo audit. Project: <strong>${esc(audit.project)}</strong>. ${audit.dimensions.length} dimension(s) evaluated.</p>`
+    );
+  }
+  return rows.join('\n');
+}
+
+// ─── Connections & Sources section ─────────────────────────────────────────
+function connectionsSection(audit: AuditJson, isOrg: boolean): string {
+  const rows: string[] = ['<h2>Connections &amp; Sources</h2>'];
+
+  // Org mode: same Connected / Missed template as the per-repo report, with
+  // each item carrying an (n/N) repo count — e.g. "CI runs (3/8)" means 3 of
+  // the 8 portfolio repos have that data source available.
+  if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
+    const total = audit.per_repo.length;
+    const countBySource = new Map<string, number>();
+    for (const r of audit.per_repo) {
+      for (const src of r.sources_reachable ?? []) {
+        countBySource.set(src, (countBySource.get(src) ?? 0) + 1);
+      }
+    }
+    const connected = COLLECTOR_SOURCES.filter(
+      (c) => (countBySource.get(c) ?? 0) > 0
+    );
+    const missed = COLLECTOR_SOURCES.filter(
+      (c) => (countBySource.get(c) ?? 0) === 0
+    );
+    if (connected.length > 0) {
+      rows.push('<h3>Connected</h3><ul>');
+      for (const src of connected) {
+        const label = sourceFullLabel(src, audit.source_windows);
+        rows.push(
+          `<li>${esc(label)} (${countBySource.get(src)}/${total})</li>`
+        );
+      }
+      rows.push('</ul>');
+    }
+    if (missed.length > 0) {
+      rows.push('<h3>Missed / limited</h3><ul>');
+      for (const src of missed) {
+        const label = sourceFullLabel(src, audit.source_windows);
+        rows.push(
+          `<li>${esc(label)} (0/${total}) — not available in any repo</li>`
+        );
+      }
+      rows.push('</ul>');
+    }
+    rows.push('<h3>Linked repositories</h3>');
+    const orgLinked = audit.org_connections?.linked_repos ?? [];
+    if (orgLinked.length > 0) {
+      rows.push('<ul>');
+      for (const l of orgLinked) {
+        rows.push(`<li><b>${esc(l.name)}</b> (${l.count}/${total})</li>`);
+      }
+      rows.push('</ul>');
+    } else {
+      rows.push('<p><em>No linked repositories detected.</em></p>');
+    }
+    return rows.join('\n');
+  }
+
+  // Single-repo mode: connected / missed sub-blocks.
+  if (audit.sources && audit.sources.length > 0) {
+    const connected = audit.sources.filter((s) => s.available);
+    const missed = audit.sources.filter((s) => !s.available);
+    if (connected.length > 0) {
+      rows.push('<h3>Connected</h3><ul>');
+      for (const s of connected) {
+        const limitedNote =
+          s.history_available_days !== null &&
+          s.history_available_days > 0 &&
+          s.history_available_days < LIMITED_HISTORY_DAYS
+            ? ` <em>(limited history ~${s.history_available_days} days)</em>`
+            : '';
+        const label = sourceFullLabel(s.source, audit.source_windows);
+        rows.push(`<li>${esc(label)}${limitedNote}</li>`);
+      }
+      rows.push('</ul>');
+    }
+    const orphans = orphanProbes(audit) ?? [];
+    if (missed.length > 0 || orphans.length > 0) {
+      rows.push('<h3>Missed / limited</h3><ul>');
+      for (const s of missed) {
+        const reason = s.reason_if_absent
+          ? ` — ${esc(s.reason_if_absent)}`
+          : '';
+        const label = sourceFullLabel(s.source, audit.source_windows);
+        const probe = probeSuffix(audit, s.source);
+        rows.push(
+          `<li>${esc(label)}${reason}${esc(probe.searched)}${esc(probe.outcome)}</li>`
+        );
+      }
+      for (const p of orphans) {
+        const probe = probeSuffix(audit, p.source);
+        rows.push(
+          `<li>${esc(sourceFullLabel(p.source, audit.source_windows))}${esc(probe.searched)}${esc(probe.outcome)}</li>`
+        );
+      }
+      rows.push('</ul>');
+    }
+  }
+
+  // Linked repositories — always rendered so the reader can see it was checked.
+  // Grouped by kind: Symlinks / Git submodules / MCP servers.
+  rows.push('<h3>Linked repositories</h3>');
+  const linked = audit.linked_repos ?? [];
+  if (linked.length > 0) {
+    // One <li> per linked repo, with every `via` path that reaches it joined
+    // — so all distinct links (e.g. three symlinks into one repo) are shown
+    // together rather than collapsed to the first one.
+    for (const { label, groups } of groupLinkedByKind(linked)) {
+      rows.push(`<h4>${label}</h4>`);
+      rows.push('<ul>');
+      for (const g of groups) {
+        const vias = g.vias.map((v) => esc(v)).join(', ');
+        rows.push(`<li><b>${esc(g.name)}</b> <em>via ${vias}</em></li>`);
+      }
+      rows.push('</ul>');
+    }
+  } else {
+    rows.push('<p><em>No linked repositories detected.</em></p>');
+  }
+
+  return rows.join('\n');
+}
+
+// ─── Tech Stack section ────────────────────────────────────────────────────
+function techStackSection(audit: AuditJson, isOrg: boolean): string {
+  // Org mode: same section shape as per-repo, each item counted (n/N repos).
+  if (isOrg && audit.org_connections && audit.per_repo?.length) {
+    const oc = audit.org_connections;
+    const total = audit.per_repo.length;
+    const rows: string[] = ['<h2>Tech Stack</h2>'];
+    const group = (label: string, items: OrgConnItem[]): void => {
+      if (items.length === 0) return;
+      rows.push(
+        `<h3>${esc(label)}</h3><p>${items
+          .map((i) =>
+            tip(
+              `${i.name} (${i.count}/${total})`,
+              `${i.count} of ${total} portfolio repos have ${i.name}.`
+            )
+          )
+          .join(', ')}</p>`
+      );
+    };
+    group('Languages', oc.languages);
+    group('Agent tools', oc.agent_tools);
+    group('CI', oc.ci);
+    group('Frameworks', oc.frameworks);
+    return rows.length > 1 ? rows.join('\n') : '';
+  }
+  const ts = audit.tech_stack;
+  if (!ts) return '';
+  const rows: string[] = ['<h2>Tech Stack</h2>'];
+
+  function techItemsHtml(items: TechItem[]): string {
+    return items.map((i) => tip(i.name, i.evidence, '')).join(', ');
+  }
+
+  function listGroup(label: string, items: TechItem[]): void {
+    if (items.length === 0) return;
+    rows.push(`<h3>${esc(label)}</h3><p>${techItemsHtml(items)}</p>`);
+  }
+
+  listGroup('Languages', ts.languages);
+  listGroup('Agent tools', ts.agent_tools);
+  listGroup('CI', ts.ci);
+  listGroup('Frameworks', ts.frameworks);
+
+  const conflicts = audit.detection_conflicts ?? [];
+  if (conflicts.length > 0) {
+    rows.push('<h3>Ambiguous detections</h3>');
+    rows.push(
+      '<p>The following files were matched by more than one language detector:</p>'
+    );
+    rows.push('<ul>');
+    for (const c of conflicts) {
+      rows.push(`<li>${esc(c.file)} → ${esc(c.claimedBy.join(', '))}</li>`);
+    }
+    rows.push('</ul>');
+  }
+
+  return rows.join('\n');
+}
 
 /**
  * Render the audit JSON to a self-contained HTML file: ONE scrolling page.
@@ -1282,778 +2067,6 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
 }
 `;
 
-  // ─── Executive band (CEO stops here) ───────────────────────────────────────
-  function execBand(): string {
-    const rows: string[] = [];
-    rows.push('<div class="exec">');
-
-    if (isOrg && audit.portfolio_metrics) {
-      // Org: capability is the org capability score; show ≤3 portfolio cards.
-      rows.push('<div class="metric-grid">');
-      for (const m of audit.portfolio_metrics) {
-        const val =
-          m.metric === 'org_capability_score'
-            ? m.value.toFixed(2) + ' pts'
-            : pct(m.value);
-        const cardTip =
-          (m.metric === 'org_measurement_coverage'
-            ? `${coverageTipText(audit)}. ${m.description}`
-            : m.description) +
-          verifiedSuffix(audit.standards_meta?.standards_date);
-        rows.push(`<div class="metric-card">
-  <div class="metric-name">${esc(metricLabel(m.metric))}</div>
-  <div class="metric-val">${tip(val, cardTip, `${m.repos_counted} repos · ${m.contributor_weighted ? 'weighted by active contributors' : 'equal-weighted'}`)}</div>
-  <div class="metric-desc">${esc(m.description)}</div>
-</div>`);
-      }
-      rows.push('</div>');
-    } else {
-      // Single-repo capability headline — Coverage is the main figure.
-      rows.push(
-        `<div class="cap-score">${tip(pct(audit.coverage ?? 0) + ' Standards coverage', coverageTipText(audit), 'score ÷ Σ applicable category weights · standards.toml')}</div>`
-      );
-      rows.push(
-        `<div class="cap-cov">${tip(fmtPts(audit.audit_total) + ' pts', 'Capability points — the sum of all capabilities the project has in place. Uncapped; rises as the standard grows.' + verifiedSuffix(audit.standards_meta?.standards_date), 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
-      );
-    }
-
-    // Unpatched judgment checks make the totals incomplete — say so up front,
-    // styled distinctly from SKIP (amber chip, not the grey skip vocabulary).
-    const pendingTotal = pendingJudgmentCount(audit);
-    if (pendingTotal > 0) {
-      rows.push(
-        `<div class="pending-note"><span class="pending-chip">${pendingTotal} pending judgment</span> check(s) await the orchestrator's judgment pass — totals are incomplete.</div>`
-      );
-    }
-
-    // Headline blocks: delivery / scale / reach (single-repo and org)
-    const h = audit.headline;
-    const blocks: string[] = [];
-
-    // Every headline metric gets a tooltip (parity with per-dimension rows).
-    // Prefer the referenced check's definition; fall back to a static blurb.
-    const checkById = new Map<string, Check>();
-    for (const dim of audit.dimensions ?? []) {
-      for (const c of dim.checks) checkById.set(c.check_id, c);
-    }
-    const headlineTipText = (label: string, checkId?: string): string => {
-      if (checkId) {
-        const c = checkById.get(checkId);
-        if (c) return c.plain && c.plain.trim() ? c.plain : c.definition;
-      }
-      const key = label.replace(/\s*\(.*\)\s*$/, '').trim();
-      return resolveTip(
-        HEADLINE_TIP[key] ?? HEADLINE_TIP[label] ?? label,
-        audit
-      );
-    };
-    // The VALUE carries the underlying check's evidence — how the number was
-    // derived, or (for a "—") why the value is absent. Returns null when no
-    // check backs this row (no evidence to show).
-    const headlineValueTip = (
-      value: string,
-      checkId?: string
-    ): string | null => {
-      const c = checkId ? checkById.get(checkId) : undefined;
-      if (!c) return null;
-      const evidence = (c.evidence ?? []).slice(0, 3).join(' · ');
-      const note = c.reliability?.note;
-      const parts = [evidence, note ? `note: ${note}` : '']
-        .filter(Boolean)
-        .join(' — ');
-      const plain =
-        c.status === 'SKIP'
-          ? `Not measured (${c.check_id} skipped). ${parts || 'No further detail available.'}`
-          : parts || `From check ${c.check_id}.`;
-      return tip(value, plain, `${c.check_id} · status ${c.status}`);
-    };
-
-    const deliveryRowsHtml = normalizedDelivery(audit);
-    if (h && deliveryRowsHtml.length > 0) {
-      const items = deliveryRowsHtml
-        .map((d) => {
-          const tipText = headlineTipText(d.label, d.check_id);
-          if (d.gated && deliveryValueAbsent(d.display_value)) {
-            // A row-specific note ("Jira connected — tickets lack
-            // status-transition history") beats the generic default.
-            const note = d.note
-              ? `— (${d.note})`
-              : d.gated === 'tracker'
-                ? '— (needs ticketing connector)'
-                : '— (needs incident connector)';
-            return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${esc(note)}</span></div>`;
-          }
-          const bandHtml = d.band
-            ? `<span class="band" style="background:${BAND_COLOR[d.band.toLowerCase()] ?? '#94a3b8'}">${esc(d.band)}</span>`
-            : '';
-          const valueStr = d.display_value ?? '—';
-          const valueHtml =
-            headlineValueTip(valueStr, d.check_id) ?? esc(valueStr);
-          return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${valueHtml}${bandHtml}</span></div>`;
-        })
-        .join('');
-      blocks.push(
-        `<div class="exec-col"><h3>Delivery (vs DORA bands)</h3>${items}</div>`
-      );
-    }
-    if (h?.scale && h.scale.length > 0) {
-      const items = h.scale
-        .map(
-          (s) =>
-            `<div class="kv"><span class="k">${tip(s.label, headlineTipText(s.label, s.check_id))}</span><span class="v">${headlineValueTip(s.display_value, s.check_id) ?? esc(s.display_value)}</span></div>`
-        )
-        .join('');
-      blocks.push(
-        `<div class="exec-col"><h3>Code scale &amp; complexity</h3>${items}</div>`
-      );
-    }
-    // Derive fallback reach values from deterministic checks when the LLM
-    // headline omitted them. DESC-01 → contributors, SDD-04 → spec coverage.
-    const reachFallback: Partial<
-      Record<'contributors' | 'spec_coverage' | 'ai_tooling', string>
-    > = {};
-    if (!h?.reach?.contributors) {
-      const adp07 = checkById.get('DESC-01');
-      if (adp07?.expression) reachFallback.contributors = adp07.expression;
-    }
-    if (!h?.reach?.spec_coverage) {
-      const sdd04 = checkById.get('SDD-04');
-      if (sdd04) {
-        const ev = sdd04.evidence?.[0];
-        const pct =
-          typeof sdd04.value === 'number'
-            ? `${Math.round(sdd04.value * 100)}%`
-            : null;
-        reachFallback.spec_coverage =
-          ev ?? (pct ? `spec branch coverage ${pct}` : null) ?? undefined;
-      }
-    }
-    const reachItems: string[] = [];
-    for (const [key, label] of REACH_FIELDS) {
-      const v =
-        h?.reach?.[key as keyof typeof h.reach] ??
-        reachFallback[key as keyof typeof reachFallback];
-      if (v)
-        reachItems.push(
-          `<div class="kv"><span class="k">${tip(label, resolveTip(HEADLINE_TIP[label], audit) + verifiedSuffix(audit.standards_meta?.standards_date))}</span><span class="v">${esc(v)}</span></div>`
-        );
-    }
-    if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
-      const withTooling = audit.per_repo.filter((r) => r.has_ai_tooling).length;
-      reachItems.push(
-        `<div class="kv"><span class="k">${tip('Repos with AI tooling', resolveTip(HEADLINE_TIP['Repos with AI tooling'], audit) + ` ${withTooling} of ${audit.per_repo.length} repositories.` + verifiedSuffix(audit.standards_meta?.standards_date))}</span><span class="v">${esc(`${withTooling} / ${audit.per_repo.length}`)}</span></div>`
-      );
-    }
-    if (reachItems.length > 0) {
-      blocks.push(
-        `<div class="exec-col"><h3>Reach</h3>${reachItems.join('')}</div>`
-      );
-    }
-    if (blocks.length > 0) {
-      rows.push(`<div class="exec-blocks">${blocks.join('')}</div>`);
-    }
-
-    rows.push('</div>'); // .exec
-    return rows.join('\n');
-  }
-
-  // ─── Top insights (the narrative READ) ─────────────────────────────────────
-  function insightsSection(): string {
-    if (!audit.insights || audit.insights.length === 0) return '';
-    const rows: string[] = ['<h2>Top insights</h2>', '<div class="insights">'];
-    for (const ins of audit.insights) {
-      const color = SEVERITY_COLOR[ins.severity] ?? '#6366f1';
-      rows.push(`<details class="insight" style="border-left-color:${color}">
-  <summary><span class="theme">${esc(ins.theme)}</span>${ins.weak_areas.length ? ` <span class="areas">Weak: ${esc(ins.weak_areas.join(', '))}</span>` : ''}</summary>
-  <div class="so">${esc(ins.so_what)}</div>
-  <div class="improves">→ ${esc(ins.improves)}</div>
-</details>`);
-    }
-    rows.push('</div>');
-    return rows.join('\n');
-  }
-
-  // ─── What to improve (recommendations) ─────────────────────────────────────
-  function recommendationsSection(): string {
-    const recs =
-      audit.recommendations && audit.recommendations.length > 0
-        ? audit.recommendations
-        : derivedRecommendations(audit);
-    if (recs.length === 0) {
-      return '<h2>What to improve</h2><p>No failing or warning checks. Audit is fully green.</p>';
-    }
-    const rows: string[] = ['<h2>What to improve</h2>'];
-    for (const r of recs) {
-      const prioColor = PRIORITY_COLOR[r.priority] ?? '#6366f1';
-      rows.push(`<details class="rec">
-  <summary><span class="prio" style="background:${prioColor}">${esc(r.priority)}</span> <span class="rec-title">${esc(r.title)}</span> <span class="rec-where">${esc(r.dimension)} · ${esc(r.check_id)} · effort ${esc(r.effort)}</span></summary>
-  ${r.detail ? `<div class="rec-detail">${esc(r.detail)}</div>` : ''}
-</details>`);
-    }
-    return rows.join('\n');
-  }
-
-  // ─── Dimension summary table (overview; rows link to sub-pages) ─────────────
-  function dimensionSummary(): string {
-    const rows: string[] = ['<h2>Dimensions</h2>'];
-    // Three-value metrics count (summed across all checks in all dimensions):
-    //   scored    = checks with weight_awarded > 0 (contributed to score)
-    //   executed  = checks with status !== 'SKIP' (actually ran)
-    //   supported = all checks in the catalog for this repo
-    let mScored = 0;
-    let mExecuted = 0;
-    let mSupported = 0;
-    for (const dim of audit.dimensions) {
-      for (const c of dim.checks) {
-        mSupported++;
-        if (c.status !== 'SKIP') mExecuted++;
-        if (c.weight_awarded > 0 && c.status !== 'SKIP') mScored++;
-      }
-    }
-    rows.push(
-      `<p class="metrics-found">${tip(
-        `Metrics: ${mScored} scored · ${mExecuted} executed · ${mSupported} supported`,
-        'Three-level metric counts across all checks',
-        'scored = weight_awarded > 0 · executed = status ≠ SKIP · supported = all checks in catalog'
-      )}</p>`
-    );
-    rows.push(
-      '<table><thead><tr>' +
-        `<th>${tip('#', 'Row number — dimensions are listed in a fixed order.')}</th>` +
-        `<th>${tip('Dimension', 'A capability area being audited: a group of related checks scored together. Click a row to open its checks.')}</th>` +
-        `<th>${tip('Coverage', `Share of this area's expected capability that is in place. ${coverageTipText(audit)}.`)}</th>` +
-        `<th>${tip('Sources', 'Data sources feeding this dimension.')}</th>` +
-        `<th>${tip('Points', 'Capability points earned in this area.')}</th>` +
-        `<th>${tip('Reliability', 'How trustworthy the numbers in this area are — maximal, minimal (lower bound), or not-reliable (rough proxy).')}</th>` +
-        `<th>${tip('FAIL', 'Checks where the capability is absent or below its failing threshold.')}</th>` +
-        `<th>${tip('WARN', 'Checks partly in place but below target — worth attention.')}</th>` +
-        `<th>${tip('PARTIAL', 'Checks partly satisfied: some criteria met, not all.')}</th>` +
-        `<th>${tip('PASS', 'Checks fully satisfied.')}</th>` +
-        `<th>${tip('SKIP', 'Checks not evaluated because a required data source or precondition was unavailable — e.g. no ticketing/incident connector, or the check does not apply to this project.')}</th>` +
-        '</tr></thead><tbody>'
-    );
-    let n = 1;
-    for (const dim of audit.dimensions) {
-      const counts = statusCounts(dim);
-      const covPct = pct(dim.coverage ?? 0);
-      const lowCov = (dim.coverage ?? 0) < 0.4 ? ' low-cov' : '';
-      const anyMinimal = dim.checks.some(
-        (c) => c.applies && c.reliability.tag === 'minimal'
-      );
-      const anyNotReliable = dim.checks.some(
-        (c) => c.applies && c.reliability.tag === 'not-reliable'
-      );
-      const relStr = anyMinimal
-        ? 'minimal *'
-        : anyNotReliable
-          ? 'not-reliable'
-          : 'maximal';
-      const relTip = anyMinimal
-        ? 'Some numbers here are lower bounds — the true value may be higher.'
-        : anyNotReliable
-          ? 'Numbers here carry rough estimates; the true value may differ significantly.'
-          : 'Numbers here are upper-bound reliable for what was reachable.';
-      const key = dimKey(dim);
-      const href = `#dim/${esc(key)}`;
-      // Sources column: cell shows SHORT labels; tooltip adds full label + lookback window.
-      const dimSourcesUsed = dim.sources_used ?? [];
-      const sourcesCell = (() => {
-        if (dimSourcesUsed.length === 0) return '—';
-        const cellText = dimSourcesUsed
-          .map((s) => shortSourceLabel(s, audit.source_windows))
-          .join(', ');
-        const tooltipDetail = dimSourcesUsed
-          .map((s) => formatSourceWindow(s, audit.source_windows))
-          .join(' · ');
-        return tip(
-          cellText,
-          'Data sources feeding this dimension',
-          tooltipDetail
-        );
-      })();
-      // The dimension name carries its frontmatter description as a hover
-      // tooltip — what's inside this dimension, right on the main page.
-      const nameCell = dim.description
-        ? `<a href="${href}"><strong>${tip(titleLabel(dim), dim.description)}</strong></a>`
-        : `<a href="${href}"><strong>${esc(titleLabel(dim))}</strong></a>`;
-      const info = isInformational(dim);
-      rows.push(`<tr class="dim-row${lowCov}" onclick="location.hash='dim/${esc(key)}'">
-  <td>${n++}</td>
-  <td>${nameCell}</td>
-  <td>${info ? tip('info', 'Informational descriptors — reported for context, not scored toward the audit total.') : covPct}</td>
-  <td>${sourcesCell}</td>
-  <td>${info ? '—' : `${fmtPts(dim.score)} pts`}</td>
-  <td>${tip(relStr, relTip, '')}</td>
-  <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
-  <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
-  <td>${counts.partial > 0 ? `<span style="color:#d97706;font-weight:600">${counts.partial}</span>` : counts.partial}</td>
-  <td>${counts.pass > 0 ? `<span style="color:#16a34a;font-weight:600">${counts.pass}</span>` : counts.pass}</td>
-  <td>${counts.skip}</td>
-</tr>`);
-    }
-    rows.push('</tbody></table>');
-    return rows.join('\n');
-  }
-
-  // ─── One drill-down sub-page per dimension ─────────────────────────────────
-  function dimensionPage(
-    dim: DimensionArtifact,
-    idx: number,
-    all: DimensionArtifact[]
-  ): string {
-    const key = dimKey(dim);
-    const counts = statusCounts(dim);
-    const covPct = pct(dim.coverage ?? 0);
-    const rows: string[] = [];
-    rows.push(`<section class="dim-page" id="page-${esc(key)}">`);
-    rows.push('<a class="backlink" href="#">← Back to overview</a>');
-    // Prev/next navigation between dimension pages.
-    const prev = all[idx - 1];
-    const next = all[idx + 1];
-    const navParts: string[] = [];
-    if (prev) {
-      navParts.push(
-        `<a href="#dim/${esc(dimKey(prev))}">← ${esc(titleLabel(prev))}</a>`
-      );
-    }
-    if (next) {
-      navParts.push(
-        `<a href="#dim/${esc(dimKey(next))}">${esc(titleLabel(next))} →</a>`
-      );
-    }
-    const navHtml =
-      navParts.length > 0
-        ? `<nav class="dim-nav">${navParts.join(' ')}</nav>`
-        : '';
-    if (navHtml) rows.push(navHtml);
-    rows.push(`<h2>${esc(titleLabel(dim))}</h2>`);
-    if (dim.description) {
-      rows.push(`<p class="dim-head">${esc(dim.description)}</p>`);
-    }
-    if (isInformational(dim)) {
-      rows.push(
-        '<div class="dim-head">Informational descriptors — reported for context, not scored toward the audit total.</div>'
-      );
-    } else {
-      // Weight-weighted mean confidence of applicable checks.
-      let totalW = 0,
-        weightedC = 0;
-      for (const c of dim.checks) {
-        if (c.status === 'SKIP' || !c.applies) continue;
-        const w = c.weight_max ?? 0;
-        totalW += w;
-        weightedC += (c.confidence ?? 0) * w;
-      }
-      const meanConfStr =
-        totalW > 0 ? `${Math.round((weightedC / totalW) * 100)}%` : '—';
-      rows.push(
-        `<div class="dim-head">${tip(fmtPts(dim.score) + ' pts', `Capability earned in this area: ${dim.score} points.`, 'Σ awarded weights · standards.toml')} · coverage ${tip(covPct, `Share of this area's expected capability that is in place.`, 'score ÷ Σ applicable weights')} · confidence ${tip(meanConfStr, 'Weight-averaged confidence: fraction of applicable surface measured for this dimension.', 'Σ(confidence × weight_max) ÷ Σ weight_max for applicable checks')} · FAIL ${counts.fail} · WARN ${counts.warn} · PARTIAL ${counts.partial} · PASS ${counts.pass} · SKIP ${counts.skip}${counts.pending > 0 ? ` · <span class="pending-chip">${counts.pending} pending judgment</span>` : ''}</div>`
-      );
-    }
-
-    // Recommendations scoped to this dimension
-    const dimLabel = titleLabel(dim);
-    const dimRecs = (audit.recommendations ?? []).filter(
-      (r) => r.dimension === dimLabel || r.dimension === dim.dimension
-    );
-    if (dimRecs.length > 0) {
-      rows.push('<h3>What to improve here</h3>');
-      for (const r of dimRecs) {
-        const prioColor = PRIORITY_COLOR[r.priority] ?? '#6366f1';
-        rows.push(`<div class="rec">
-  <div class="rec-head"><span class="prio" style="background:${prioColor}">${esc(r.priority)}</span><span class="rec-title">${esc(r.title)}</span><span class="rec-where">${esc(r.check_id)} · effort ${esc(r.effort)}</span></div>
-  ${r.detail ? `<div class="rec-detail">${esc(r.detail)}</div>` : ''}
-</div>`);
-      }
-    }
-
-    rows.push(
-      '<div class="toolbar"><button onclick="toggleIssues(this)">Show issues only</button></div>'
-    );
-    rows.push(
-      '<table class="checks"><colgroup><col style="width:3%"><col style="width:22%"><col style="width:8%"><col style="width:7%"><col style="width:9%"><col style="width:8%"><col style="width:43%"></colgroup>'
-    );
-    rows.push(
-      '<thead><tr><th>#</th><th>Check</th><th>Status</th><th>Points</th><th>Reliability</th><th>Confidence</th><th>Evidence</th></tr></thead><tbody>'
-    );
-    let ckn = 1;
-    let hasMinimal = false;
-    for (const c of dim.checks) {
-      const rowBg = STATUS_COLOR[c.status] ?? '#fff';
-      const relClass =
-        c.reliability.tag === 'minimal'
-          ? 'rel-minimal'
-          : c.reliability.tag === 'not-reliable'
-            ? 'rel-not-reliable'
-            : '';
-      if (c.reliability.tag === 'minimal' && c.applies) hasMinimal = true;
-      const relLabel = c.applies
-        ? `${c.reliability.tag} (${c.reliability.confidence})${c.reliability.tag === 'minimal' ? ' *' : ''}`
-        : '—';
-      const relTipPlain =
-        c.reliability.tag === 'minimal'
-          ? 'This is a lower bound — the real value may be higher.'
-          : c.reliability.tag === 'not-reliable'
-            ? 'A rough proxy — treat as indicative, not exact.'
-            : 'Reliable for what was reachable.';
-      // Build evidence items; append expression/value when present (moved from removed Value column).
-      const evidenceItems: string[] =
-        c.evidence.length > 0 ? c.evidence.map(esc) : [];
-      if (c.expression) {
-        // tip() escapes its arguments itself — pass the raw value, or `&`
-        // and friends get double-escaped (`&amp;amp;`).
-        evidenceItems.push(
-          tip(fmtValue(c.value), c.expression, c.unit ? `unit: ${c.unit}` : '')
-        );
-      } else if (c.value != null) {
-        const numStr = `${fmtValue(c.value)}${c.unit ? ' ' + c.unit : ''}`;
-        const escaped = esc(fmtValue(c.value));
-        if (!evidenceItems.some((item) => item.includes(escaped))) {
-          evidenceItems.push(esc(numStr));
-        }
-      }
-      const evidence =
-        evidenceItems.length > 0 ? evidenceItems.join('<br>') : '—';
-      // Technical detail (code · source · method) folded into the Check tooltip.
-      const codeStr = c.code && c.code.length > 0 ? c.code.join(', ') : '—';
-      const checkMeta = `${esc(c.definition)} — source: ${esc(c.source || '—')} · method: ${esc(c.method)} · category ${esc(codeStr)}${esc(verifiedSuffix(c.last_verified ?? audit.standards_meta?.standards_date))}`;
-      // Points cell: tooltip enriched with standards.toml-derived meta.
-      // Renders source as a clickable link when source_url is available.
-      let pointsMetaHtml: string;
-      if (c.source) {
-        const sourceText = esc(c.source);
-        if (c.source_url && c.source_date) {
-          const escapedUrl = esc(c.source_url);
-          const escapedDate = esc(c.source_date);
-          pointsMetaHtml = `${esc(c.definition)} · ${sourceText} <a href="${escapedUrl}" target="_blank" rel="noopener">${escapedDate}</a>`;
-        } else if (c.source_date) {
-          pointsMetaHtml = `${esc(c.definition)} · ${sourceText} · ${esc(c.source_date)}`;
-        } else {
-          pointsMetaHtml = `${esc(c.definition)} · ${sourceText}`;
-        }
-      } else {
-        pointsMetaHtml = esc(c.definition);
-      }
-      const pointsPct =
-        (c.weight_max || 0) > 0
-          ? ` (${((c.weight_awarded / c.weight_max) * 100).toFixed(1)}%)`
-          : '';
-      const pointsCell =
-        (c.weight_max || 0) === 0
-          ? tipHtml(
-              '—',
-              'Informational descriptor — carries no weight.',
-              pointsMetaHtml
-            )
-          : tipHtml(
-              `${fmtPts(c.weight_awarded)}/${fmtPts(c.weight_max)}${pointsPct}`,
-              `Worth up to ${c.weight_max} points · ${c.method}`,
-              pointsMetaHtml
-            );
-      // Confidence cell: percent for applicable checks, dash for SKIP.
-      const confCell =
-        c.status === 'SKIP' ? '—' : `${Math.round((c.confidence ?? 0) * 100)}%`;
-      // Visible per-metric source citation link (6c.4) — shown inline under the
-      // Check name, where the reader looks for what defines/standardises a check.
-      const sourceCiteHtml =
-        c.source_url && c.source_date
-          ? `<br><small class="src-cite"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source)} ${esc(c.source_date)}</a></small>`
-          : c.source_url
-            ? `<br><small class="src-cite"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source)}</a></small>`
-            : '';
-      rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
-  <td>${ckn++}</td>
-  <td class="check"><span class="tip" tabindex="0"><b>${esc(c.check_id)}</b><span class="tipbox"><b>${esc(plainLead(c))}</b><span class="tipmeta">${checkMeta}</span></span></span><span class="plain">${esc(plainLead(c))}</span>${sourceCiteHtml}</td>
-  <td>${statusBadge(c.status)}</td>
-  <td>${pointsCell}</td>
-  <td class="${relClass}">${tip(relLabel, relTipPlain, c.reliability.note ?? '')}</td>
-  <td>${confCell}</td>
-  <td class="evidence">${evidence}</td>
-</tr>`);
-    }
-    rows.push('</tbody></table>');
-    if (hasMinimal) {
-      rows.push(
-        '<p style="font-size:.78rem;color:#64748b">* lower-bound measurement (reliability tag: minimal).</p>'
-      );
-    }
-
-    // Throughput context (descriptors only): the headline "Merges" and "LOC"
-    // per-active rows have no standards.toml category, so without this they
-    // would appear only on the overview and have no dimension home. They are
-    // size/activity descriptors, so they are echoed on the Descriptors page.
-    if (dim.dimension === 'descriptors') {
-      const baseLabel = (l: string) => l.replace(/\s*\(.*\)\s*$/, '').trim();
-      const throughput = (audit.headline?.delivery ?? []).filter((d) => {
-        const b = baseLabel(d.label);
-        return b === 'Merges' || b === 'LOC';
-      });
-      if (throughput.length > 0) {
-        rows.push('<h3>Throughput context (not scored)</h3>');
-        rows.push(
-          '<p class="dim-head">Delivery-throughput normalizers echoed from the overview — context only, not part of this dimension’s capability score.</p>'
-        );
-        const items = throughput
-          .map(
-            (d) =>
-              `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(d.display_value ?? '—', resolveTip(HEADLINE_TIP[baseLabel(d.label)] ?? d.label, audit) + verifiedSuffix(audit.standards_meta?.standards_date))}</span></div>`
-          )
-          .join('');
-        rows.push(`<div class="exec-col">${items}</div>`);
-      }
-    }
-
-    if (navHtml) rows.push(navHtml);
-    rows.push('</section>');
-    return rows.join('\n');
-  }
-
-  // ─── Repositories & Connections (org mode + single-repo note) ──────────────
-  // Task 5.3: delivery columns + links to per-repo reports
-  function reposSection(): string {
-    const rows: string[] = ['<h2>Repositories</h2>'];
-    if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
-      rows.push(
-        '<table><thead><tr>' +
-          `<th>${tip('Repo', 'One repository in the portfolio. Click the name to open its full per-repo report.')}</th>` +
-          `<th>${tip('Coverage', `${coverageTipText(audit)}. 100% would mean the repo has everything the standard currently asks for.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          `<th>${tip('Points', `Capability points the repo has earned — every practice it has in place adds its weight. Uncapped: the number grows as the standard grows, so compare repos against each other, not against a maximum.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          `<th>${tip('Merges/active', `${resolveTip(HEADLINE_TIP['Merges / active contributor'], audit)}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          `<th>${tip('LOC/active', `${resolveTip(HEADLINE_TIP['LOC / active contributor'], audit)}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          `<th>${tip('Deploy freq', `How often finished work reaches the main branch, per week. The DORA research uses this as the primary speed measure: elite teams ship many small changes often.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          `<th>${tip('Rework rate', `What share of the shipped changes are fixes for earlier changes. High rework means the team spends its time repairing recent work instead of building new things.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          `<th>${tip('Lead time', `How long a piece of work takes from the first commit until it lands on the main branch, in hours (median). Shorter means ideas become shipped software faster.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          `<th>${tip('Change-fail', `What share of shipped changes had to be rolled back or hot-fixed. The DORA quality measure: lower is better.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          `<th>${tip('Cycle time¹', `${CYCLE_TIME_TIP}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          `<th>${tip('MTTR²', `${MTTR_TIP}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          '</tr></thead><tbody>'
-      );
-      for (const r of audit.per_repo) {
-        const coverage = r.coverage != null ? pct(r.coverage) : '—';
-        rows.push(
-          `<tr>` +
-            `<td><a href="per-repo/${esc(r.repo)}/report.html">${esc(r.repo)}</a></td>` +
-            `<td>${coverage}</td>` +
-            `<td>${tip(fmtPts(r.awarded_weight), `Capability points earned by this repo: ${r.awarded_weight}.`, '')}</td>` +
-            `<td>${fmtN1dp(r.merges_per_active)}</td>` +
-            `<td>${fmtN1dp(r.loc_per_active)}</td>` +
-            `<td>${fmtWk(r.deploy_freq)}</td>` +
-            `<td>${fmtPctMul(r.rework_rate)}</td>` +
-            `<td>${fmtH(r.lead_time)}</td>` +
-            `<td>${fmtPctMul(r.change_fail)}</td>` +
-            `<td>${esc(r.cycle_time ?? '—')}</td>` +
-            `<td>${esc(r.mttr ?? '—')}</td>` +
-            `</tr>`
-        );
-      }
-      rows.push('</tbody></table>');
-      rows.push(
-        '<p class="footnote">¹ Cycle time (Jira In-Progress→Done) requires a ticketing connector.</p>'
-      );
-      rows.push(
-        '<p class="footnote">² MTTR requires an incident connector.</p>'
-      );
-    } else {
-      rows.push(
-        `<p>Single-repo audit. Project: <strong>${esc(audit.project)}</strong>. ${audit.dimensions.length} dimension(s) evaluated.</p>`
-      );
-    }
-    return rows.join('\n');
-  }
-
-  // ─── Connections & Sources section ─────────────────────────────────────────
-  function connectionsSection(): string {
-    const rows: string[] = ['<h2>Connections &amp; Sources</h2>'];
-
-    // Org mode: same Connected / Missed template as the per-repo report, with
-    // each item carrying an (n/N) repo count — e.g. "CI runs (3/8)" means 3 of
-    // the 8 portfolio repos have that data source available.
-    if (isOrg && audit.per_repo && audit.per_repo.length > 0) {
-      const total = audit.per_repo.length;
-      const countBySource = new Map<string, number>();
-      for (const r of audit.per_repo) {
-        for (const src of r.sources_reachable ?? []) {
-          countBySource.set(src, (countBySource.get(src) ?? 0) + 1);
-        }
-      }
-      const canonical = ['git', 'ci', 'tracker', 'docs'];
-      const connected = canonical.filter(
-        (c) => (countBySource.get(c) ?? 0) > 0
-      );
-      const missed = canonical.filter((c) => (countBySource.get(c) ?? 0) === 0);
-      if (connected.length > 0) {
-        rows.push('<h3>Connected</h3><ul>');
-        for (const src of connected) {
-          const label = sourceFullLabel(src, audit.source_windows);
-          rows.push(
-            `<li>${esc(label)} (${countBySource.get(src)}/${total})</li>`
-          );
-        }
-        rows.push('</ul>');
-      }
-      if (missed.length > 0) {
-        rows.push('<h3>Missed / limited</h3><ul>');
-        for (const src of missed) {
-          const label = sourceFullLabel(src, audit.source_windows);
-          rows.push(
-            `<li>${esc(label)} (0/${total}) — not available in any repo</li>`
-          );
-        }
-        rows.push('</ul>');
-      }
-      rows.push('<h3>Linked repositories</h3>');
-      const orgLinked = audit.org_connections?.linked_repos ?? [];
-      if (orgLinked.length > 0) {
-        rows.push('<ul>');
-        for (const l of orgLinked) {
-          rows.push(`<li><b>${esc(l.name)}</b> (${l.count}/${total})</li>`);
-        }
-        rows.push('</ul>');
-      } else {
-        rows.push('<p><em>No linked repositories detected.</em></p>');
-      }
-      return rows.join('\n');
-    }
-
-    // Single-repo mode: connected / missed sub-blocks.
-    if (audit.sources && audit.sources.length > 0) {
-      const connected = audit.sources.filter((s) => s.available);
-      const missed = audit.sources.filter((s) => !s.available);
-      if (connected.length > 0) {
-        rows.push('<h3>Connected</h3><ul>');
-        for (const s of connected) {
-          const limitedNote =
-            s.history_available_days !== null &&
-            s.history_available_days > 0 &&
-            s.history_available_days < LIMITED_HISTORY_DAYS
-              ? ` <em>(limited history ~${s.history_available_days} days)</em>`
-              : '';
-          const label = sourceFullLabel(s.source, audit.source_windows);
-          rows.push(`<li>${esc(label)}${limitedNote}</li>`);
-        }
-        rows.push('</ul>');
-      }
-      const orphans = orphanProbes(audit) ?? [];
-      if (missed.length > 0 || orphans.length > 0) {
-        rows.push('<h3>Missed / limited</h3><ul>');
-        for (const s of missed) {
-          const reason = s.reason_if_absent
-            ? ` — ${esc(s.reason_if_absent)}`
-            : '';
-          const label = sourceFullLabel(s.source, audit.source_windows);
-          const probe = probeSuffix(audit, s.source);
-          rows.push(
-            `<li>${esc(label)}${reason}${esc(probe.searched)}${esc(probe.outcome)}</li>`
-          );
-        }
-        for (const p of orphans) {
-          const probe = probeSuffix(audit, p.source);
-          rows.push(
-            `<li>${esc(sourceFullLabel(p.source, audit.source_windows))}${esc(probe.searched)}${esc(probe.outcome)}</li>`
-          );
-        }
-        rows.push('</ul>');
-      }
-    }
-
-    // Linked repositories — always rendered so the reader can see it was checked.
-    // Grouped by kind: Symlinks / Git submodules / MCP servers.
-    rows.push('<h3>Linked repositories</h3>');
-    const linked = audit.linked_repos ?? [];
-    if (linked.length > 0) {
-      const byKind: Record<string, LinkedRepo[]> = {};
-      for (const r of linked) {
-        (byKind[r.kind] ??= []).push(r);
-      }
-      const KIND_LABEL: Record<string, string> = {
-        symlink: 'Symlinks',
-        submodule: 'Git submodules',
-        mcp: 'MCP servers',
-      };
-      // One <li> per linked repo, with every `via` path that reaches it joined
-      // — so all distinct links (e.g. three symlinks into one repo) are shown
-      // together rather than collapsed to the first one.
-      const renderBucket = (bucket: LinkedRepo[]): void => {
-        rows.push('<ul>');
-        for (const g of groupLinkedByName(bucket)) {
-          const vias = g.vias.map((v) => esc(v)).join(', ');
-          rows.push(`<li><b>${esc(g.name)}</b> <em>via ${vias}</em></li>`);
-        }
-        rows.push('</ul>');
-      };
-      for (const kind of ['symlink', 'submodule', 'mcp']) {
-        const bucket = byKind[kind];
-        if (!bucket || bucket.length === 0) continue;
-        rows.push(`<h4>${KIND_LABEL[kind]}</h4>`);
-        renderBucket(bucket);
-      }
-    } else {
-      rows.push('<p><em>No linked repositories detected.</em></p>');
-    }
-
-    return rows.join('\n');
-  }
-
-  // ─── Tech Stack section ────────────────────────────────────────────────────
-  function techStackSection(): string {
-    // Org mode: same section shape as per-repo, each item counted (n/N repos).
-    if (isOrg && audit.org_connections && audit.per_repo?.length) {
-      const oc = audit.org_connections;
-      const total = audit.per_repo.length;
-      const rows: string[] = ['<h2>Tech Stack</h2>'];
-      const group = (label: string, items: OrgConnItem[]): void => {
-        if (items.length === 0) return;
-        rows.push(
-          `<h3>${esc(label)}</h3><p>${items
-            .map((i) =>
-              tip(
-                `${i.name} (${i.count}/${total})`,
-                `${i.count} of ${total} portfolio repos have ${i.name}.`
-              )
-            )
-            .join(', ')}</p>`
-        );
-      };
-      group('Languages', oc.languages);
-      group('Agent tools', oc.agent_tools);
-      group('CI', oc.ci);
-      group('Frameworks', oc.frameworks);
-      return rows.length > 1 ? rows.join('\n') : '';
-    }
-    const ts = audit.tech_stack;
-    if (!ts) return '';
-    const rows: string[] = ['<h2>Tech Stack</h2>'];
-
-    function techItemsHtml(items: TechItem[]): string {
-      return items.map((i) => tip(i.name, i.evidence, '')).join(', ');
-    }
-
-    function listGroup(label: string, items: TechItem[]): void {
-      if (items.length === 0) return;
-      rows.push(`<h3>${esc(label)}</h3><p>${techItemsHtml(items)}</p>`);
-    }
-
-    listGroup('Languages', ts.languages);
-    listGroup('Agent tools', ts.agent_tools);
-    listGroup('CI', ts.ci);
-    listGroup('Frameworks', ts.frameworks);
-
-    const conflicts = audit.detection_conflicts ?? [];
-    if (conflicts.length > 0) {
-      rows.push('<h3>Ambiguous detections</h3>');
-      rows.push(
-        '<p>The following files were matched by more than one language detector:</p>'
-      );
-      rows.push('<ul>');
-      for (const c of conflicts) {
-        rows.push(`<li>${esc(c.file)} → ${esc(c.claimedBy.join(', '))}</li>`);
-      }
-      rows.push('</ul>');
-    }
-
-    return rows.join('\n');
-  }
-
   // ─── Inline JS — hash routing + issues filter ──────────────────────────────
   const inlineJs = `
 function route(){
@@ -2079,7 +2092,7 @@ route();
 
   // ─── Assemble HTML ─────────────────────────────────────────────────────────
   const dimPages = audit.dimensions
-    .map((d, idx, all) => dimensionPage(d, idx, all))
+    .map((d, idx, all) => dimensionPage(audit, d, idx, all))
     .join('\n');
 
   return `<!DOCTYPE html>
@@ -2102,13 +2115,13 @@ ${opts.backLink ? `<div class="backlink"><a href="${esc(opts.backLink)}">← Bac
 </div>
 
 <div id="overview">
-${execBand()}
-${insightsSection()}
-${recommendationsSection()}
-${dimensionSummary()}
-${reposSection()}
-${connectionsSection()}
-${techStackSection()}
+${execBand(audit, isOrg)}
+${insightsSection(audit)}
+${recommendationsSection(audit)}
+${dimensionSummary(audit)}
+${reposSection(audit, isOrg)}
+${connectionsSection(audit, isOrg)}
+${techStackSection(audit, isOrg)}
 </div>
 
 ${dimPages}

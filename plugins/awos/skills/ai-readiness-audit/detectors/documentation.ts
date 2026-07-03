@@ -1,5 +1,5 @@
-import { makeResult, iterFiles } from './_base.ts';
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { existsSync, readdirSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
 
 // ---------------------------------------------------------------------------
@@ -51,10 +51,8 @@ export function detectRootReadme(
     ]);
   }
 
-  let content: string;
-  try {
-    content = readFileSync(readmePath, 'utf8');
-  } catch {
+  const content = readTextSafe(readmePath);
+  if (content === null) {
     return makeResult('WARN', 0, [
       `README found but could not be read: ${relative(repoPath, readmePath)}`,
     ]);
@@ -177,19 +175,14 @@ export function detectServiceReadmes(
   for (const dirName of topDirs) {
     const dirPath = join(repoPath, dirName);
     // Check if directory has source files (is a code service, not docs/config)
-    let srcFiles: string[] = [];
-    try {
-      srcFiles = iterFiles(dirPath, SERVICE_SOURCE_GLOBS, [
-        'node_modules',
-        '.venv',
-        '__pycache__',
-        'dist',
-        'build',
-        'target',
-      ]);
-    } catch {
-      srcFiles = [];
-    }
+    const srcFiles = iterFiles(dirPath, SERVICE_SOURCE_GLOBS, [
+      'node_modules',
+      '.venv',
+      '__pycache__',
+      'dist',
+      'build',
+      'target',
+    ]);
     if (srcFiles.length < 5) continue; // Skip tiny dirs
 
     const hasReadme = existsSync(join(dirPath, 'README.md'));
@@ -296,12 +289,8 @@ export function detectApiDocs(
 
   let hasApiSource = false;
   for (const f of apiSourceFiles.slice(0, 100)) {
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     if (API_SOURCE_RX.test(content)) {
       hasApiSource = true;
       break;
@@ -328,12 +317,8 @@ export function detectApiDocs(
 
   // Check for auto-docs (FastAPI, Springdoc)
   for (const f of apiSourceFiles.slice(0, 50)) {
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     if (AUTO_DOCS_RX.test(content)) {
       signals.push(`auto-docs framework in: ${relative(repoPath, f)}`);
       break;
@@ -406,12 +391,8 @@ function loadMakefileTargets(repoPath: string): Set<string> {
   for (const name of makefileNames) {
     const full = join(repoPath, name);
     if (!existsSync(full)) continue;
-    let content: string;
-    try {
-      content = readFileSync(full, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(full);
+    if (content === null) continue;
     const targets = new Set<string>();
     let m: RegExpExecArray | null;
     MAKEFILE_TARGET_RX.lastIndex = 0;
@@ -465,10 +446,8 @@ export function detectDocsAccuracy(
     ]);
   }
 
-  let readmeContent: string;
-  try {
-    readmeContent = readFileSync(readmePath, 'utf8');
-  } catch {
+  const readmeContent = readTextSafe(readmePath);
+  if (readmeContent === null) {
     return makeResult('SKIP', null, [
       'README.md could not be read — DOC-04 skipped',
     ]);

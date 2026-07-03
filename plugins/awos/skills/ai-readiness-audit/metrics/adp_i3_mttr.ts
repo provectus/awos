@@ -47,7 +47,7 @@ import {
   type MetricResult,
   type Reliability,
 } from './_base.ts';
-import { bandScore, clamp01 } from './_score.ts';
+import { bandScore, clamp01, median } from './_score.ts';
 
 const MTTR_ANCHORS = [
   { x: 0.1, y: 1.0 },
@@ -57,20 +57,11 @@ const MTTR_ANCHORS = [
 ] as const;
 
 /** Map median hours to a DORA MTTR band label. */
-export function mtttrBand(medianHours: number): string {
+function mttrBand(medianHours: number): string {
   if (medianHours < 1) return 'elite';
   if (medianHours < 24) return 'high';
   if (medianHours < 168) return 'medium';
   return 'low';
-}
-
-/** Compute the median of a numeric array. Returns null for empty arrays. */
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[mid];
-  return (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 interface MergeRecord {
@@ -143,11 +134,7 @@ export function compute(
         reliability,
         ['tracker'],
         ['git'],
-        null,
-        undefined,
-        undefined,
-        0,
-        0.0
+        { score: 0, confidence: 0.0 }
       );
     }
     // Neither source present — but we must not SKIP. Return with git listed as
@@ -165,11 +152,7 @@ export function compute(
       reliability,
       ['git'],
       [],
-      null,
-      undefined,
-      undefined,
-      0,
-      0
+      { score: 0, confidence: 0 }
     );
   }
   const raw = gitRead.artifact?.raw ?? {};
@@ -204,7 +187,7 @@ export function compute(
     };
   }
 
-  const band = medianHours !== null ? mtttrBand(medianHours) : null;
+  const band = medianHours !== null ? mttrBand(medianHours) : null;
 
   // Categories awarded only when topology has incident source flag.
   const categories = awardCategories(standards, 'adp_i3_mttr', topology);
@@ -235,10 +218,6 @@ export function compute(
     reliability,
     sourcesUsed,
     sourcesMissing,
-    band,
-    undefined,
-    expression,
-    score,
-    confidence
+    { band, expression, score, confidence }
   );
 }

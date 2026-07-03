@@ -5,32 +5,11 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { collect, run, activeContributors } from '../collectors/git.ts';
+import { gitAs } from './helpers.ts';
 
 // ---------------------------------------------------------------------------
 // window_stats test helpers
 // ---------------------------------------------------------------------------
-
-function gitAs(
-  cwd: string,
-  args: string[],
-  date: string,
-  name: string,
-  email: string
-): void {
-  execFileSync('git', args, {
-    cwd,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      GIT_AUTHOR_DATE: date,
-      GIT_COMMITTER_DATE: date,
-      GIT_AUTHOR_NAME: name,
-      GIT_AUTHOR_EMAIL: email,
-      GIT_COMMITTER_NAME: name,
-      GIT_COMMITTER_EMAIL: email,
-    },
-  });
-}
 
 /**
  * Build a hermetic multi-author git repo for window_stats tests.
@@ -95,19 +74,7 @@ const WINDOW_PERIOD = {
 };
 
 function git(cwd: string, args: string[], date = '2025-01-01T00:00:00') {
-  execFileSync('git', args, {
-    cwd,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      GIT_AUTHOR_DATE: date,
-      GIT_COMMITTER_DATE: date,
-      GIT_AUTHOR_NAME: 'A',
-      GIT_AUTHOR_EMAIL: 'a@x',
-      GIT_COMMITTER_NAME: 'A',
-      GIT_COMMITTER_EMAIL: 'a@x',
-    },
-  });
+  gitAs(cwd, args, date, 'A', 'a@x');
 }
 
 function repo(): string {

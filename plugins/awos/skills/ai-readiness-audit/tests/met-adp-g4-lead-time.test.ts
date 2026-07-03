@@ -13,17 +13,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compute } from '../metrics/adp_g4_lead_time.ts';
-import { writeCollected, loadStandards } from './helpers.ts';
+import { gitRaw, tmpDir, writeCollected, loadStandards } from './helpers.ts';
 
 const standards = loadStandards();
-
-function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'g4-'));
-}
 
 /** Create a merge record where merged_at is N hours after branch_first_commit_at. */
 function mergeRecord(hoursApart: number): {
@@ -39,19 +33,13 @@ function mergeRecord(hoursApart: number): {
 }
 
 test('adp_g4: < 24h lead time → elite band', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   // Single merge record with 12-hour lead time → elite
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(12)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(12)] })
+  );
 
   const result = compute(collectedDir, standards, {});
 
@@ -70,18 +58,12 @@ test('adp_g4: < 24h lead time → elite band', () => {
 });
 
 test('adp_g4: 48h lead time → high band (< 1 week)', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(48)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g4-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(48)] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -92,19 +74,13 @@ test('adp_g4: 48h lead time → high band (< 1 week)', () => {
 });
 
 test('adp_g4: 240h lead time → medium band (< 1 month)', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   // 240 hours = 10 days, < 720h (30 days) → medium
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(240)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(240)] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -115,19 +91,13 @@ test('adp_g4: 240h lead time → medium band (< 1 month)', () => {
 });
 
 test('adp_g4: >= 720h lead time → low band', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   // 800 hours > 720h (30 days) → low
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(800)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(800)] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -138,19 +108,15 @@ test('adp_g4: >= 720h lead time → low band', () => {
 });
 
 test('adp_g4: median from odd count of records', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   // Lead times: 10h, 50h, 300h → median = 50h → high
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(10), mergeRecord(50), mergeRecord(300)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 10,
-    ai_marked_commits: 0,
-    total_merges: 3,
-    revert_merges: 0,
-    numstat_totals: { added: 50, deleted: 10 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord(10), mergeRecord(50), mergeRecord(300)],
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -161,19 +127,13 @@ test('adp_g4: median from odd count of records', () => {
 });
 
 test('adp_g4: median from even count of records', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   // Lead times: 12h, 36h → median = 24h → high (just at boundary, <168)
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(12), mergeRecord(36)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 2,
-    revert_merges: 0,
-    numstat_totals: { added: 30, deleted: 5 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(12), mergeRecord(36)] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -189,18 +149,12 @@ test('adp_g4: median from even count of records', () => {
 });
 
 test('adp_g4: reliability tag is minimal (git approximation)', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(20)],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g4-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [mergeRecord(20)] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -211,25 +165,19 @@ test('adp_g4: reliability tag is minimal (git approximation)', () => {
 });
 
 test('adp_g4: SKIP when git.json absent', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   const result = compute(join(tmp, 'no-collected'), standards, {});
   assert.equal(result.status, 'SKIP', 'must SKIP when git.json absent');
   assert.equal(result.value, null, 'value must be null on SKIP');
 });
 
 test('adp_g4: SKIP when merge_records empty', () => {
-  const tmp = makeTmpDir();
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [],
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 2,
-    ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
-    numstat_totals: { added: 5, deleted: 0 },
-    default_branch: 'main',
-  });
+  const tmp = tmpDir('g4-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [] })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -244,28 +192,22 @@ test('adp_g4: SKIP when merge_records empty', () => {
 // ---------------------------------------------------------------------------
 
 test('adp_g4: score=0.75 and confidence=1.0 when median lead time is 24h (DORA high anchor)', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   // Single merge record with 24h lead time → median = 24h → score = 0.75 (log anchor)
   const base = new Date('2025-01-01T00:00:00Z');
   const merged = new Date(base.getTime() + 24 * 3_600_000);
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [
-      {
-        branch_first_commit_at: base.toISOString(),
-        merged_at: merged.toISOString(),
-      },
-    ],
-    monthly_buckets: [
-      { bucket_start: '2025-01-01', authors: 2, commits: 10, merges: 1 },
-    ],
-    tooling_paths: [],
-    total_commits: 10,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 50, deleted: 10 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [
+        {
+          branch_first_commit_at: base.toISOString(),
+          merged_at: merged.toISOString(),
+        },
+      ],
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.ok(
@@ -280,27 +222,21 @@ test('adp_g4: score=0.75 and confidence=1.0 when median lead time is 24h (DORA h
 });
 
 test('adp_g4: score=1.0 when median lead time is <= 1h (below first anchor)', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   const base = new Date('2025-01-01T00:00:00Z');
   const merged = new Date(base.getTime() + 1 * 3_600_000);
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [
-      {
-        branch_first_commit_at: base.toISOString(),
-        merged_at: merged.toISOString(),
-      },
-    ],
-    monthly_buckets: [
-      { bucket_start: '2025-01-01', authors: 2, commits: 5, merges: 1 },
-    ],
-    tooling_paths: [],
-    total_commits: 5,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [
+        {
+          branch_first_commit_at: base.toISOString(),
+          merged_at: merged.toISOString(),
+        },
+      ],
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -311,7 +247,7 @@ test('adp_g4: score=1.0 when median lead time is <= 1h (below first anchor)', ()
 });
 
 test('adp_g4: score=0 and confidence=0 on SKIP', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   const result = compute(join(tmp, 'no-collected'), standards, {});
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
@@ -330,7 +266,7 @@ test('adp_g4: window_start filter — only in-window records count toward median
   // Without filtering: median of [12h, 216h] = (12+216)/2 = 114h → "high" band
   // With filtering (only Record A): median of [12h] = 12h → "elite" band
   // If the result is "elite", the filter worked correctly.
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   const windowStart = '2025-01-15T00:00:00.000Z';
 
   const inWindowRecord = {
@@ -342,26 +278,23 @@ test('adp_g4: window_start filter — only in-window records count toward median
     merged_at: '2025-01-10T00:00:00.000Z', // 9d=216h lead time, merged_at Jan 10 < Jan 15 → OUT
   };
 
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [outOfWindowRecord, inWindowRecord],
-    window_stats: {
-      window_days: 90,
-      window_start: windowStart,
-      merges: 1,
-      commits: 0,
-      authors_total: 0,
-      per_author: [],
-      merges_per_active: null,
-      loc_per_active: null,
-    },
-    tooling_paths: [],
-    total_commits: 2,
-    ai_marked_commits: 0,
-    total_merges: 2,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [outOfWindowRecord, inWindowRecord],
+      window_stats: {
+        window_days: 90,
+        window_start: windowStart,
+        merges: 1,
+        commits: 0,
+        authors_total: 0,
+        per_author: [],
+        merges_per_active: null,
+        loc_per_active: null,
+      },
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
 
@@ -397,7 +330,7 @@ test('adp_g4: window_start filter is chronological, not lexicographic (non-UTC m
   //
   // With the (buggy) string compare: the only record is excluded → SKIP.
   // With chronological (epoch) compare: record is included → OK, elite band.
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   const windowStart = '2025-01-15T00:00:00.000Z';
 
   const boundaryRecord = {
@@ -405,26 +338,23 @@ test('adp_g4: window_start filter is chronological, not lexicographic (non-UTC m
     merged_at: '2025-01-14T20:00:00-08:00', // = 2025-01-15T04:00:00Z, INSIDE window
   };
 
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [boundaryRecord],
-    window_stats: {
-      window_days: 90,
-      window_start: windowStart,
-      merges: 1,
-      commits: 0,
-      authors_total: 0,
-      per_author: [],
-      merges_per_active: null,
-      loc_per_active: null,
-    },
-    tooling_paths: [],
-    total_commits: 1,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [boundaryRecord],
+      window_stats: {
+        window_days: 90,
+        window_start: windowStart,
+        merges: 1,
+        commits: 0,
+        authors_total: 0,
+        per_author: [],
+        merges_per_active: null,
+        loc_per_active: null,
+      },
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
 
@@ -453,7 +383,7 @@ test('adp_g4: window_start absent → all records used (graceful fallback)', () 
   // Fixture: two records with 12h and 800h lead times; no window_stats.
   // Without fallback (incorrect): zero records → SKIP.
   // With fallback (correct): median of [12h, 800h] = 406h → "low" band.
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
 
   const record12h = {
     branch_first_commit_at: '2025-02-01T00:00:00.000Z',
@@ -465,17 +395,12 @@ test('adp_g4: window_start absent → all records used (graceful fallback)', () 
     merged_at: '2025-02-12T08:00:00.000Z', // 800h lead time
   };
 
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [record12h, record800h],
-    // no window_stats — simulates an older artifact or collector without window_start
-    tooling_paths: [],
-    total_commits: 2,
-    ai_marked_commits: 0,
-    total_merges: 2,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  // no window_stats — simulates an older artifact or collector without window_start
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({ merge_records: [record12h, record800h] })
+  );
 
   const result = compute(collectedDir, standards, {});
 
@@ -492,7 +417,7 @@ test('adp_g4: window_start absent → all records used (graceful fallback)', () 
 
 test('adp_g4: SKIP when all records are outside the window', () => {
   // When window_start filters ALL records out, the metric must SKIP (no valid data).
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   const windowStart = '2025-06-01T00:00:00.000Z';
 
   const oldRecord = {
@@ -500,26 +425,23 @@ test('adp_g4: SKIP when all records are outside the window', () => {
     merged_at: '2025-01-02T00:00:00.000Z', // well before window_start
   };
 
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [oldRecord],
-    window_stats: {
-      window_days: 90,
-      window_start: windowStart,
-      merges: 0,
-      commits: 0,
-      authors_total: 0,
-      per_author: [],
-      merges_per_active: null,
-      loc_per_active: null,
-    },
-    tooling_paths: [],
-    total_commits: 1,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 0, deleted: 0 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [oldRecord],
+      window_stats: {
+        window_days: 90,
+        window_start: windowStart,
+        merges: 0,
+        commits: 0,
+        authors_total: 0,
+        per_author: [],
+        merges_per_active: null,
+        loc_per_active: null,
+      },
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(
@@ -545,21 +467,17 @@ test('adp_g4: lead_time_for_change weight is 10 in standards.toml (Task 2.1)', (
 });
 
 test('adp_g4: squash-merge strategy → SKIP with a connector-pointing reason, never a confident number', () => {
-  const tmp = makeTmpDir();
+  const tmp = tmpDir('g4-');
   // One stray real merge record exists, but the repo squash-merges: the
   // record is unrepresentative residue and must not produce a lead time.
-  const collectedDir = writeCollected(tmp, 'git', {
-    merge_records: [mergeRecord(12)],
-    window_stats: { merge_strategy: 'squash' },
-    monthly_buckets: [],
-    tooling_paths: [],
-    total_commits: 50,
-    ai_marked_commits: 0,
-    total_merges: 1,
-    revert_merges: 0,
-    numstat_totals: { added: 20, deleted: 5 },
-    default_branch: 'main',
-  });
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord(12)],
+      window_stats: { merge_strategy: 'squash' },
+    })
+  );
 
   const result = compute(collectedDir, standards, {});
   assert.equal(

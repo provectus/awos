@@ -1,5 +1,4 @@
-import { makeResult, iterFiles } from './_base.ts';
-import { readFileSync } from 'node:fs';
+import { makeResult, iterFiles, readTextSafe } from './_base.ts';
 import { basename, dirname, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { ALL_SOURCE_GLOBS, sizeThresholdForFile } from '../languages.ts';
@@ -212,12 +211,8 @@ export function detectImportGraph(
     if (sourceTier === undefined) continue; // not in a known layer
     layeredFiles++;
 
-    let src: string;
-    try {
-      src = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const src = readTextSafe(filePath);
+    if (src === null) continue;
 
     const lines = src.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -390,12 +385,8 @@ export function detectSeparationOfConcerns(
 
   for (const filePath of presentationFiles) {
     const relPath = relative(repoPath, filePath);
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
     const count = countDataAccessCalls(content);
     if (count >= 3) {
       failFiles.push({ file: relPath, count });
@@ -602,12 +593,8 @@ export function detectNamingConventions(
 const FILE_SIZE_GLOBS = ALL_SOURCE_GLOBS;
 
 function countLines(filePath: string): number {
-  try {
-    const content = readFileSync(filePath, 'utf8');
-    return content.split('\n').length;
-  } catch {
-    return 0;
-  }
+  const content = readTextSafe(filePath);
+  return content === null ? 0 : content.split('\n').length;
 }
 
 export function detectFileSizes(

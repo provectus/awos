@@ -319,10 +319,11 @@ export async function compute(
     computeReliability('not-reliable', ['scale'], []),
     ['scale'],
     [],
-    band,
-    undefined,
-    complexityExpression,
-    complexityScore,
-    complexityConfidence
+    {
+      band,
+      expression: complexityExpression,
+      score: complexityScore,
+      confidence: complexityConfidence,
+    }
   );
 }

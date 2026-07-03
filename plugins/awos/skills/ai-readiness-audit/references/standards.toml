@@ -207,6 +207,7 @@ last_verified = "2026-06-30"
 
 [category.software_best_practices_sbp_01]
 code = 2700
+check_id = "SBP-01"
 metric = "SBP-01"
 dimension = "software-best-practices"
 weight = 5
@@ -222,6 +223,7 @@ last_verified = "2026-06-30"
 
 [category.software_best_practices_sbp_02]
 code = 2701
+check_id = "SBP-02"
 metric = "SBP-02"
 dimension = "software-best-practices"
 weight = 3
@@ -237,6 +239,7 @@ last_verified = "2026-06-30"
 
 [category.software_best_practices_sbp_03]
 code = 2702
+check_id = "SBP-03"
 metric = "SBP-03"
 dimension = "software-best-practices"
 weight = 5
@@ -252,6 +255,7 @@ last_verified = "2026-06-30"
 
 [category.software_best_practices_sbp_05]
 code = 2703
+check_id = "SBP-05"
 metric = "SBP-05"
 dimension = "software-best-practices"
 weight = 5
@@ -267,6 +271,7 @@ last_verified = "2026-06-30"
 
 [category.software_best_practices_sbp_06]
 code = 2704
+check_id = "SBP-06"
 metric = "SBP-06"
 dimension = "software-best-practices"
 weight = 5
@@ -282,6 +287,7 @@ last_verified = "2026-06-30"
 
 [category.software_best_practices_sbp_07]
 code = 2705
+check_id = "SBP-07"
 metric = "SBP-07"
 dimension = "software-best-practices"
 weight = 3
@@ -297,6 +303,7 @@ last_verified = "2026-06-30"
 
 [category.sbp_except_clause_syntax]
 code = 2706
+check_id = "SBP-08"
 metric = "SBP-08"
 dimension = "software-best-practices"
 weight = 1
@@ -314,6 +321,7 @@ last_verified = "2026-06-30"
 
 [category.code_architecture_arch_01]
 code = 2100
+check_id = "ARCH-01"
 metric = "ARCH-01"
 dimension = "code-architecture"
 weight = 5
@@ -329,6 +337,7 @@ last_verified = "2026-06-30"
 
 [category.code_architecture_arch_02]
 code = 2101
+check_id = "ARCH-02"
 metric = "ARCH-02"
 dimension = "code-architecture"
 weight = 5
@@ -344,6 +353,7 @@ last_verified = "2026-06-30"
 
 [category.code_architecture_arch_03]
 code = 2102
+check_id = "ARCH-03"
 metric = "ARCH-03"
 dimension = "code-architecture"
 weight = 3
@@ -361,6 +371,7 @@ last_verified = "2026-06-30"
 
 [category.code_architecture_arch_04]
 code = 2103
+check_id = "ARCH-04"
 metric = "ARCH-04"
 dimension = "code-architecture"
 weight = 5
@@ -376,6 +387,7 @@ last_verified = "2026-06-30"
 
 [category.code_architecture_arch_05]
 code = 2104
+check_id = "ARCH-05"
 metric = "ARCH-05"
 dimension = "code-architecture"
 weight = 3
@@ -391,6 +403,7 @@ last_verified = "2026-06-30"
 
 [category.code_architecture_arch_06]
 code = 2105
+check_id = "ARCH-06"
 metric = "ARCH-06"
 dimension = "code-architecture"
 weight = 3
@@ -424,6 +437,7 @@ last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_01]
 code = 2500
+check_id = "QA-01"
 metric = "QA-01"
 dimension = "quality-assurance"
 weight = 8
@@ -440,6 +454,7 @@ last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_02]
 code = 2501
+check_id = "QA-02"
 metric = "QA-02"
 dimension = "quality-assurance"
 weight = 5
@@ -455,6 +470,7 @@ last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_03]
 code = 2502
+check_id = "QA-03"
 metric = "QA-03"
 dimension = "quality-assurance"
 weight = 5
@@ -470,6 +486,7 @@ last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_04]
 code = 2503
+check_id = "QA-04"
 metric = "QA-04"
 dimension = "quality-assurance"
 weight = 5
@@ -485,6 +502,7 @@ last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_05]
 code = 2504
+check_id = "QA-05"
 metric = "QA-05"
 dimension = "quality-assurance"
 weight = 3
@@ -500,6 +518,7 @@ last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_06]
 code = 2505
+check_id = "QA-06"
 metric = "QA-06"
 dimension = "quality-assurance"
 weight = 1
@@ -515,6 +534,7 @@ last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_07]
 code = 2506
+check_id = "QA-07"
 metric = "QA-07"
 dimension = "quality-assurance"
 weight = 1
@@ -530,6 +550,7 @@ last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_08]
 code = 2507
+check_id = "QA-08"
 metric = "QA-08"
 dimension = "quality-assurance"
 weight = 3
@@ -545,6 +566,7 @@ last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_09]
 code = 2508
+check_id = "QA-09"
 metric = "QA-09"
 dimension = "quality-assurance"
 weight = 5
@@ -560,6 +582,7 @@ last_verified = "2026-06-30"
 
 [category.quality_assurance_qa_10]
 code = 2509
+check_id = "QA-10"
 metric = "QA-10"
 dimension = "quality-assurance"
 weight = 5
@@ -632,6 +655,7 @@ last_verified = "2026-06-30"
 # AS-01: TLS enforced — no plain-HTTP fallback
 [category.appsec_tls_enforced]
 code = 3000
+check_id = "AS-01"
 metric = "AS-01"
 dimension = "application-security"
 weight = 8
@@ -648,6 +672,7 @@ last_verified = "2026-06-29"
 # AS-02: Security headers present (X-Content-Type-Options, X-Frame-Options, etc.)
 [category.appsec_security_headers]
 code = 3001
+check_id = "AS-02"
 metric = "AS-02"
 dimension = "application-security"
 weight = 5
@@ -664,6 +689,7 @@ last_verified = "2026-06-29"
 # AS-03: CORS not wildcard
 [category.appsec_cors_not_wildcard]
 code = 3002
+check_id = "AS-03"
 metric = "AS-03"
 dimension = "application-security"
 weight = 5
@@ -680,6 +706,7 @@ last_verified = "2026-06-29"
 # AS-04: Parameterized SQL / no string-built queries
 [category.appsec_parameterized_sql]
 code = 3003
+check_id = "AS-04"
 metric = "AS-04"
 dimension = "application-security"
 weight = 8
@@ -696,6 +723,7 @@ last_verified = "2026-06-29"
 # AS-05: Secrets not hardcoded in source
 [category.appsec_no_hardcoded_secrets]
 code = 3004
+check_id = "AS-05"
 metric = "AS-05"
 dimension = "application-security"
 weight = 8
@@ -712,6 +740,7 @@ last_verified = "2026-06-29"
 # AS-06: Authentication required on state-changing endpoints
 [category.appsec_auth_on_mutations]
 code = 3005
+check_id = "AS-06"
 metric = "AS-06"
 dimension = "application-security"
 weight = 8
@@ -728,6 +757,7 @@ last_verified = "2026-06-29"
 # AS-07: Password / session hygiene signals
 [category.appsec_password_session_hygiene]
 code = 3006
+check_id = "AS-07"
 metric = "AS-07"
 dimension = "application-security"
 weight = 5
@@ -744,6 +774,7 @@ last_verified = "2026-06-29"
 # AS-08: Input validation / output encoding present
 [category.appsec_input_validation]
 code = 3007
+check_id = "AS-08"
 metric = "AS-08"
 dimension = "application-security"
 weight = 5
@@ -760,6 +791,7 @@ last_verified = "2026-06-29"
 # AS-09: Rate limiting / brute-force protection
 [category.appsec_rate_limiting]
 code = 3008
+check_id = "AS-09"
 metric = "AS-09"
 dimension = "application-security"
 weight = 3
@@ -776,6 +808,7 @@ last_verified = "2026-06-29"
 # AS-10: Authorization correctness (judgment)
 [category.appsec_authorization_correctness]
 code = 3009
+check_id = "AS-10"
 metric = "AS-10"
 dimension = "application-security"
 weight = 8
@@ -794,6 +827,7 @@ last_verified = "2026-06-29"
 # AS-11: Insecure design review (judgment)
 [category.appsec_insecure_design]
 code = 3010
+check_id = "AS-11"
 metric = "AS-11"
 dimension = "application-security"
 weight = 5
@@ -813,6 +847,7 @@ last_verified = "2026-06-29"
 
 [category.supply_chain_security_scs_01]
 code = 2900
+check_id = "SCS-01"
 metric = "SCS-01"
 dimension = "supply-chain-security"
 weight = 8
@@ -828,6 +863,7 @@ last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_02]
 code = 2901
+check_id = "SCS-02"
 metric = "SCS-02"
 dimension = "supply-chain-security"
 weight = 5
@@ -843,6 +879,7 @@ last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_03]
 code = 2902
+check_id = "SCS-03"
 metric = "SCS-03"
 dimension = "supply-chain-security"
 weight = 5
@@ -858,6 +895,7 @@ last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_04]
 code = 2903
+check_id = "SCS-04"
 metric = "SCS-04"
 dimension = "supply-chain-security"
 weight = 8
@@ -874,6 +912,7 @@ last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_05]
 code = 2904
+check_id = "SCS-05"
 metric = "SCS-05"
 dimension = "supply-chain-security"
 weight = 5
@@ -889,6 +928,7 @@ last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_06]
 code = 2905
+check_id = "SCS-06"
 metric = "SCS-06"
 dimension = "supply-chain-security"
 weight = 8
@@ -904,6 +944,7 @@ last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_07]
 code = 2906
+check_id = "SCS-07"
 metric = "SCS-07"
 dimension = "supply-chain-security"
 weight = 5
@@ -919,6 +960,7 @@ last_verified = "2026-06-30"
 
 [category.supply_chain_security_scs_08]
 code = 2907
+check_id = "SCS-08"
 metric = "SCS-08"
 dimension = "supply-chain-security"
 weight = 3
@@ -1050,6 +1092,7 @@ last_verified = "2026-06-30"
 
 [category.documentation_doc_01]
 code = 2200
+check_id = "DOC-01"
 metric = "DOC-01"
 dimension = "documentation"
 weight = 8
@@ -1065,6 +1108,7 @@ last_verified = "2026-06-30"
 
 [category.documentation_doc_02]
 code = 2201
+check_id = "DOC-02"
 metric = "DOC-02"
 dimension = "documentation"
 weight = 3
@@ -1080,6 +1124,7 @@ last_verified = "2026-06-30"
 
 [category.documentation_doc_03]
 code = 2202
+check_id = "DOC-03"
 metric = "DOC-03"
 dimension = "documentation"
 weight = 5
@@ -1095,6 +1140,7 @@ last_verified = "2026-06-30"
 
 [category.documentation_doc_04]
 code = 2203
+check_id = "DOC-04"
 metric = "DOC-04"
 dimension = "documentation"
 weight = 3
@@ -1110,6 +1156,7 @@ last_verified = "2026-06-30"
 
 [category.documentation_doc_05]
 code = 2204
+check_id = "DOC-05"
 metric = "adp_g13_doc_coverage"
 dimension = "documentation"
 weight = 3
@@ -1125,6 +1172,7 @@ last_verified = "2026-06-30"
 
 [category.documentation_doc_06]
 code = 2205
+check_id = "DOC-06"
 metric = "adp_g13_doc_coverage"
 dimension = "documentation"
 weight = 3
@@ -1172,6 +1220,7 @@ last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_01]
 code = 2000
+check_id = "AI-01"
 metric = "AI-01"
 dimension = "ai-development-tooling"
 weight = 8
@@ -1189,6 +1238,7 @@ last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_02]
 code = 2001
+check_id = "AI-02"
 metric = "AI-02"
 dimension = "ai-development-tooling"
 weight = 3
@@ -1204,6 +1254,7 @@ last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_03]
 code = 2002
+check_id = "AI-03"
 metric = "AI-03"
 dimension = "ai-development-tooling"
 weight = 1
@@ -1219,6 +1270,7 @@ last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_04]
 code = 2003
+check_id = "AI-04"
 metric = "AI-04"
 dimension = "ai-development-tooling"
 weight = 3
@@ -1234,6 +1286,7 @@ last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_05]
 code = 2004
+check_id = "AI-05"
 metric = "AI-05"
 dimension = "ai-development-tooling"
 weight = 1
@@ -1249,6 +1302,7 @@ last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_06]
 code = 2005
+check_id = "AI-06"
 metric = "AI-06"
 dimension = "ai-development-tooling"
 weight = 5
@@ -1266,6 +1320,7 @@ last_verified = "2026-06-30"
 
 [category.ai_development_tooling_ai_07]
 code = 2006
+check_id = "AI-07"
 metric = "AI-07"
 dimension = "ai-development-tooling"
 weight = 8
@@ -1283,6 +1338,7 @@ last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_01]
 code = 2800
+check_id = "SDD-01"
 metric = "SDD-01"
 dimension = "spec-driven-development"
 weight = 8
@@ -1298,6 +1354,7 @@ last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_02]
 code = 2801
+check_id = "SDD-02"
 metric = "SDD-02"
 dimension = "spec-driven-development"
 weight = 5
@@ -1313,6 +1370,7 @@ last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_03]
 code = 2802
+check_id = "SDD-03"
 metric = "SDD-03"
 dimension = "spec-driven-development"
 weight = 5
@@ -1328,6 +1386,7 @@ last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_04]
 code = 2803
+check_id = "SDD-04"
 metric = "SDD-04"
 dimension = "spec-driven-development"
 weight = 8
@@ -1344,6 +1403,7 @@ last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_05]
 code = 2804
+check_id = "SDD-05"
 metric = "SDD-05"
 dimension = "spec-driven-development"
 weight = 2
@@ -1359,6 +1419,7 @@ last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_06]
 code = 2805
+check_id = "SDD-06"
 metric = "SDD-06"
 dimension = "spec-driven-development"
 weight = 3
@@ -1374,6 +1435,7 @@ last_verified = "2026-06-30"
 
 [category.spec_driven_development_sdd_07]
 code = 2806
+check_id = "SDD-07"
 metric = "SDD-07"
 dimension = "spec-driven-development"
 weight = 3

@@ -27,7 +27,8 @@ import {
   computeReliability,
   makeMetricResult,
   readArtifact,
-  skipReliability,
+  skipMetric,
+  squashSkipReliability,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
@@ -55,14 +56,12 @@ export function compute(
 ): MetricResult {
   const read = readArtifact(collectedDir, 'git');
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_g8_review_rework',
-      null,
       'computed',
-      [],
-      skipReliability('not-reliable', 'git', read.error),
-      [],
-      ['git']
+      'not-reliable',
+      'git',
+      read.error
     );
   }
 
@@ -72,14 +71,11 @@ export function compute(
     !Array.isArray(raw.merge_records) ||
     raw.merge_records.length === 0
   ) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_g8_review_rework',
-      null,
       'computed',
-      [],
-      computeReliability('not-reliable', [], ['git']),
-      [],
-      ['git']
+      'not-reliable',
+      'git'
     );
   }
 
@@ -92,11 +88,7 @@ export function compute(
       null,
       'computed',
       [],
-      {
-        tag: 'not-reliable',
-        confidence: 'LOW',
-        note: 'squash-merge workflow: no branch merge records in git — connect a code-host connector (PR API) to measure this',
-      },
+      squashSkipReliability(),
       [],
       ['git']
     );
@@ -130,10 +122,6 @@ export function compute(
     reliability,
     ['git'],
     [],
-    null,
-    undefined,
-    expression,
-    score,
-    1.0
+    { expression, score, confidence: 1.0 }
   );
 }

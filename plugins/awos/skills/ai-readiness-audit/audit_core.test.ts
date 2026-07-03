@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { aggregate } from './audit_core.ts';
+import { aggregate } from './audit_patch.ts';
 
 // ---------------------------------------------------------------------------
 // Task 2.1: aggregate re-derives applies from status
@@ -655,39 +655,10 @@ test('aggregate zeroes stale credit on a FAIL — weight_awarded cannot survive 
 });
 
 // ---------------------------------------------------------------------------
-// parseCheckIds: heading prefixes may contain digits (E2E-01, E2ED-01)
-// ---------------------------------------------------------------------------
-
-import { parseCheckIds } from './audit_core.ts';
-
-test('parseCheckIds maps digit-containing check-id prefixes (E2E-01) — not just pure-letter ones', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-checkids-'));
-  try {
-    writeFileSync(
-      join(dir, 'end-to-end-delivery.md'),
-      '# E2ED\n\n### E2E-01: Cross-layer branches\n\n- **Category:** 2300\n\n### SEC-01: Env files\n\n- **Category:** 2600\n'
-    );
-    const map = parseCheckIds(dir);
-    assert.equal(
-      map.get(2300),
-      'E2E-01',
-      `code 2300 must map to E2E-01 (digit-containing prefix), got ${map.get(2300)}`
-    );
-    assert.equal(
-      map.get(2600),
-      'SEC-01',
-      `plain-letter prefixes must keep working, got ${map.get(2600)}`
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// ---------------------------------------------------------------------------
 // patchJudgments: all verdicts in one call, self-aggregating
 // ---------------------------------------------------------------------------
 
-import { patchJudgments, type JudgmentPatch } from './audit_core.ts';
+import { patchJudgments, type JudgmentPatch } from './audit_patch.ts';
 
 /** patchJudgments refuses a dir without an engine-stamped audit.json (provenance circuit-breaker) — stamp the fixture dir. */
 function writeStampedAudit(dir: string): void {

@@ -87,7 +87,7 @@ export interface PerRepoDelivery {
 }
 
 /** The numeric (averageable) PerRepoDelivery keys — the org headline spec is restricted to these. */
-type NumericDeliveryKey =
+export type NumericDeliveryKey =
   | 'merges_per_active'
   | 'loc_per_active'
   | 'deploy_freq'
@@ -279,6 +279,18 @@ const DELIVERY_SPECS: DeliverySpec[] = [
     format: (v) => `${round1(v * 100)}%`,
   },
 ];
+
+/**
+ * Delivery check_id → the numeric PerRepoDelivery field it feeds, derived from
+ * DELIVERY_SPECS so the rollup reader (rollup_input.ts) and the org headline
+ * can never disagree on the mapping. Only the git-sourced DORA rows carry a
+ * check_id; cycle-time/MTTR are connector-gated display strings, not averaged.
+ */
+export const DELIVERY_CHECK_FIELDS: Array<[string, NumericDeliveryKey]> =
+  DELIVERY_SPECS.filter((s) => s.check_id !== undefined).map((s) => [
+    s.check_id as string,
+    s.key,
+  ]);
 
 /**
  * Build the org headline: per-metric mean across repos, re-banded.

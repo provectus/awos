@@ -1,5 +1,5 @@
-import { makeResult, iterFiles } from './_base.ts';
-import { readFileSync, existsSync } from 'node:fs';
+import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { existsSync } from 'node:fs';
 import { join, relative, basename } from 'node:path';
 import { CI_DIRS } from '../ci_platforms.ts';
 
@@ -130,12 +130,8 @@ export function detectLockfileIntegrity(
     );
     if (!check) continue;
 
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(filePath);
+    if (content === null) continue;
 
     if (check.integrityRx.test(content)) {
       withHashes.push(name);
@@ -403,12 +399,8 @@ export function detectPinnedVersions(
   const pkgJsonFiles = iterFiles(repoPath, ['package.json']);
   for (const f of pkgJsonFiles) {
     if (f.includes('node_modules')) continue;
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     const counts = countPackageJsonRanges(content);
     totalDeps += counts.total;
     rangedDeps += counts.ranged;
@@ -425,12 +417,8 @@ export function detectPinnedVersions(
     'requirements*.txt',
   ]);
   for (const f of reqFiles) {
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     const counts = countRequirementsTxtRanges(content);
     totalDeps += counts.total;
     rangedDeps += counts.ranged;
@@ -446,12 +434,8 @@ export function detectPinnedVersions(
   // a separate requirements.txt.
   const pyprojectFiles = iterFiles(repoPath, ['pyproject.toml']);
   for (const f of pyprojectFiles) {
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     const specifiers = parsePyprojectDeps(content);
     if (specifiers.length === 0) continue;
     const ranged = specifiers.filter(isPep508Ranged).length;
@@ -579,12 +563,8 @@ export function detectDependencyAutomationReview(
     const full = join(repoPath, relPath);
     if (!existsSync(full)) continue;
     foundFiles.push(relPath);
-    let content: string;
-    try {
-      content = readFileSync(full, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(full);
+    if (content === null) continue;
     if (AUTOMERGE_ENABLED_RX.test(content)) {
       automergeEnabled = true;
     }
@@ -638,19 +618,10 @@ export function detectVulnerabilityScanning(
   for (const ciDir of CI_DIRS) {
     const ciDirPath = join(repoPath, ciDir);
     if (!existsSync(ciDirPath)) continue;
-    let files: string[] = [];
-    try {
-      files = iterFiles(ciDirPath, CI_WORKFLOW_GLOBS);
-    } catch {
-      continue;
-    }
+    const files = iterFiles(ciDirPath, CI_WORKFLOW_GLOBS);
     for (const f of files) {
-      let content: string;
-      try {
-        content = readFileSync(f, 'utf8');
-      } catch {
-        continue;
-      }
+      const content = readTextSafe(f);
+      if (content === null) continue;
       const match = content.match(VULN_SCANNER_RX);
       if (match) {
         scanners.push(`${relative(repoPath, f)} (${match[1]})`);
@@ -662,12 +633,8 @@ export function detectVulnerabilityScanning(
   for (const p of DEPENDABOT_PATHS) {
     const full = join(repoPath, p);
     if (!existsSync(full)) continue;
-    let content: string;
-    try {
-      content = readFileSync(full, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(full);
+    if (content === null) continue;
     // Dependabot security-updates is always on if the file exists with package-ecosystem
     if (/package-ecosystem/i.test(content)) {
       scanners.push(`${p} (Dependabot security-updates)`);
@@ -712,12 +679,8 @@ export function detectDependencyOverrides(
   const pkgJsonFiles = iterFiles(repoPath, ['package.json']);
   for (const f of pkgJsonFiles) {
     if (f.includes('node_modules')) continue;
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     if (
       OVERRIDE_PACKAGE_JSON_RX.test(content) ||
       PNPM_OVERRIDES_RX.test(content)
@@ -729,12 +692,8 @@ export function detectDependencyOverrides(
   // Cargo.toml patch sections
   const cargoFiles = iterFiles(repoPath, ['Cargo.toml']);
   for (const f of cargoFiles) {
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     if (/^\[patch\s*\./m.test(content)) {
       foundOverrides.push(`${relative(repoPath, f)}: [patch.*] section`);
     }
@@ -810,12 +769,8 @@ export function detectDependencyAttackSurface(
   const pkgJsonFiles = iterFiles(repoPath, ['package.json']);
   for (const f of pkgJsonFiles) {
     if (f.includes('node_modules')) continue;
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     const count = countPackageJsonDeps(content);
     if (count > 0) {
       totalDeps += count;
@@ -825,12 +780,8 @@ export function detectDependencyAttackSurface(
 
   const reqFiles = iterFiles(repoPath, ['requirements.txt']);
   for (const f of reqFiles) {
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     const count = countRequirementsDeps(content);
     if (count > 0) {
       totalDeps += count;
@@ -844,12 +795,8 @@ export function detectDependencyAttackSurface(
   const pyprojectFiles2 = iterFiles(repoPath, ['pyproject.toml']);
   for (const f of pyprojectFiles2) {
     if (sources.some((s) => s.startsWith(relative(repoPath, f)))) continue; // already counted
-    let content: string;
-    try {
-      content = readFileSync(f, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(f);
+    if (content === null) continue;
     const specifiers = parsePyprojectDeps(content);
     if (specifiers.length > 0) {
       totalDeps += specifiers.length;

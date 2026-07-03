@@ -20,7 +20,7 @@ import {
   makeMetricResult,
   metaNumber,
   readArtifact,
-  skipReliability,
+  skipMetric,
   type MetricResult,
 } from './_base.ts';
 import {
@@ -36,14 +36,12 @@ export function compute(
 ): MetricResult {
   const read = readArtifact(collectedDir, 'git');
   if ('error' in read) {
-    return makeMetricResult(
+    return skipMetric(
       'adp_g2_contributors',
-      null,
       'computed',
-      [],
-      skipReliability('not-reliable', 'git', read.error),
-      [],
-      ['git']
+      'not-reliable',
+      'git',
+      read.error
     );
   }
 
@@ -51,15 +49,7 @@ export function compute(
   const perAuthor: AuthorRow[] | undefined = raw?.window_stats?.per_author;
 
   if (!Array.isArray(perAuthor) || perAuthor.length === 0) {
-    return makeMetricResult(
-      'adp_g2_contributors',
-      null,
-      'computed',
-      [],
-      computeReliability('not-reliable', [], ['git']),
-      [],
-      ['git']
-    );
+    return skipMetric('adp_g2_contributors', 'computed', 'not-reliable', 'git');
   }
 
   const T: number = metaNumber(
@@ -86,10 +76,6 @@ export function compute(
     reliability,
     ['git'],
     [],
-    null,
-    undefined,
-    expression,
-    1.0,
-    1.0
+    { expression, score: 1.0, confidence: 1.0 }
   );
 }

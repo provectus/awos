@@ -1,11 +1,5 @@
-import { makeResult, iterFiles } from './_base.ts';
-import {
-  existsSync,
-  readFileSync,
-  lstatSync,
-  readdirSync,
-  realpathSync,
-} from 'node:fs';
+import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { existsSync, lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import {
   ALL_RULE_COMMAND_DIRS,
@@ -194,12 +188,8 @@ export function detectClaudeHooks(
   ];
   for (const settingsPath of settingsFiles) {
     if (!existsSync(settingsPath)) continue;
-    let content: string;
-    try {
-      content = readFileSync(settingsPath, 'utf8');
-    } catch {
-      continue;
-    }
+    const content = readTextSafe(settingsPath);
+    if (content === null) continue;
     let parsed: unknown;
     try {
       parsed = JSON.parse(content);
@@ -255,10 +245,11 @@ const ROOT_RUN_FILES = [
 
 function hasPackageJsonRunScript(repoPath: string): boolean {
   const pkgPath = join(repoPath, 'package.json');
-  if (!existsSync(pkgPath)) return false;
+  const raw = readTextSafe(pkgPath);
+  if (raw === null) return false;
   let pkg: unknown;
   try {
-    pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    pkg = JSON.parse(raw);
   } catch {
     return false;
   }

@@ -262,38 +262,67 @@ interface SquashScan {
   perAuthor: Map<string, number>;
 }
 
+/** One squash-merged PR found on the first-parent trunk, committer-dated. */
+interface SquashEvent {
+  author: string;
+  /** Committer date, epoch ms — lets callers window without a second scan. */
+  date: number;
+  isRevert: boolean;
+  isFix: boolean;
+}
+
 /**
  * Scan first-parent NON-merge trunk commits for squash-merged PRs (a PR ref on
- * the subject, or GitLab's merge-request ref in the body). `since` bounds the
- * scan to a window; omit for all history. Records are separated by \x1e and
- * fields by \x1f so multi-line bodies parse unambiguously.
+ * the subject, or GitLab's merge-request ref in the body) over ALL history —
+ * one git pass; callers window the returned events in memory (squashStats).
+ * Records are separated by \x1e and fields by \x1f so multi-line bodies parse
+ * unambiguously.
  */
-function scanSquashMerges(cwd: string, since?: string): SquashScan {
+function scanSquashMerges(cwd: string): SquashEvent[] {
   const args = [
     'log',
     '--first-parent',
     '--no-merges',
-    '--format=%x1e%aN%x1f%s%x1f%b',
+    '--format=%x1e%aN%x1f%cI%x1f%s%x1f%b',
   ];
-  if (since) args.push(`--since=${since}`);
+  const events: SquashEvent[] = [];
+  for (const record of run(args, cwd).split('\x1e')) {
+    if (!record.trim()) continue;
+    const [author = '', dateStr = '', subject = '', body = ''] =
+      record.split('\x1f');
+    const isSquash =
+      SQUASH_SUBJECT_RXS.some((rx) => rx.test(subject)) ||
+      SQUASH_BODY_RX.test(body);
+    if (!isSquash) continue;
+    const d = parseDate(dateStr);
+    events.push({
+      author: author.trim(),
+      date: isNaN(d.getTime()) ? 0 : d.getTime(),
+      isRevert: REVERT_SUBJECT_RX.test(subject),
+      isFix: FIX_SUBJECT_RX.test(subject),
+    });
+  }
+  return events;
+}
+
+/**
+ * Fold squash events into counts, optionally windowed. `sinceMs` mirrors git
+ * `--since` semantics (committer date >= since), so the windowed counts match
+ * what a `--since`-bounded scan produced.
+ */
+function squashStats(events: SquashEvent[], sinceMs?: number): SquashScan {
   const scan: SquashScan = {
     total: 0,
     reverts: 0,
     fixes: 0,
     perAuthor: new Map(),
   };
-  for (const record of run(args, cwd).split('\x1e')) {
-    if (!record.trim()) continue;
-    const [author = '', subject = '', body = ''] = record.split('\x1f');
-    const isSquash =
-      SQUASH_SUBJECT_RXS.some((rx) => rx.test(subject)) ||
-      SQUASH_BODY_RX.test(body);
-    if (!isSquash) continue;
+  for (const e of events) {
+    if (sinceMs !== undefined && e.date < sinceMs) continue;
     scan.total++;
-    if (REVERT_SUBJECT_RX.test(subject)) scan.reverts++;
-    if (FIX_SUBJECT_RX.test(subject)) scan.fixes++;
-    const name = author.trim();
-    scan.perAuthor.set(name, (scan.perAuthor.get(name) ?? 0) + 1);
+    if (e.isRevert) scan.reverts++;
+    if (e.isFix) scan.fixes++;
+    scan.perAuthor.set(e.author, (scan.perAuthor.get(e.author) ?? 0) + 1);
   }
   return scan;
 }
@@ -311,7 +340,7 @@ export function classifyMergeStrategy(
   return squashMerges >= mergeCommits * 3 ? 'squash' : 'mixed';
 }
 
-function getMergeStats(cwd: string): MergeStats {
+function getMergeStats(cwd: string, squashEvents: SquashEvent[]): MergeStats {
   const allMerges = run(
     ['log', '--first-parent', '--merges', '--format=%H'],
     cwd
@@ -336,7 +365,7 @@ function getMergeStats(cwd: string): MergeStats {
 
   // Merge EVENTS = merge commits + squash-merged PRs, so squash-merge repos
   // don't read as "never merges anything".
-  const squash = scanSquashMerges(cwd);
+  const squash = squashStats(squashEvents);
   return {
     total_merges: allMerges.length + squash.total,
     revert_merges: revertOut.length + squash.reverts,
@@ -542,7 +571,11 @@ export function activeContributors(perAuthor: AuthorRow[], T: number): number {
 function buildWindowStats(
   cwd: string,
   period: Period,
-  activeThreshold: number
+  activeThreshold: number,
+  // Newest commit date (the window anchor), computed once in collect();
+  // null on an empty repo → the empty stats shape without any git calls.
+  anchor: Date | null,
+  squashEvents: SquashEvent[]
 ): WindowStats {
   const windowDays = period.lookback_days;
   const empty: WindowStats = {
@@ -564,12 +597,10 @@ function buildWindowStats(
   };
 
   // Anchor to the newest commit date — no wall-clock dependency.
-  const latest = latestCommitDate(cwd);
-  if (!latest) return empty;
+  if (!anchor) return empty;
 
-  const since = new Date(
-    latest.getTime() - windowDays * 86_400_000
-  ).toISOString();
+  const sinceMs = anchor.getTime() - windowDays * 86_400_000;
+  const since = new Date(sinceMs).toISOString();
 
   // 0a. In-window revert/hotfix/rollback merges — bounded to the same window as the rest.
   const revertOut = run(
@@ -609,7 +640,7 @@ function buildWindowStats(
   // 0c. In-window squash-merged PRs — merge events with no merge commit.
   //     Counted into merges/revert/fix totals and attributed to their commit
   //     author (= the PR author for a squash merge).
-  const squash = scanSquashMerges(cwd, since);
+  const squash = squashStats(squashEvents, sinceMs);
   const revert_merges = revertOut.length + squash.reverts;
   const fix_merges = fixOut.length + squash.fixes;
 
@@ -773,11 +804,11 @@ export interface CodeTurnover {
 function getCodeTurnover(
   cwd: string,
   period: Period,
-  horizonDays: number
+  horizonDays: number,
+  // Newest commit date, computed once in collect(); null on an empty repo.
+  anchor: Date | null
 ): CodeTurnover | null {
   const lookbackDays = period.lookback_days;
-
-  const anchor = latestCommitDate(cwd);
   if (!anchor) return null;
 
   const dayMs = 86_400_000;
@@ -948,8 +979,10 @@ export function collect(
   // Commit-less repo (git init, nothing committed): a valid state, but every
   // HEAD-based `git log` variant fatals on the unborn branch. Short-circuit to
   // the zero-stats artifact — available (the repo exists), just empty — without
-  // spamming per-subcommand breadcrumbs.
-  if (latestCommitDate(repoPath) === null) {
+  // spamming per-subcommand breadcrumbs. The anchor (newest commit date) is
+  // computed ONCE here and threaded into every windowed fact collector.
+  const anchor = latestCommitDate(repoPath);
+  if (anchor === null) {
     const raw: GitRaw = {
       default_branch: getDefaultBranch(repoPath),
       total_commits: 0,
@@ -960,9 +993,15 @@ export function collect(
       merge_records: [],
       // buildWindowStats/getCodeTurnover return their empty/null shapes
       // without further git calls when the repo has no commits.
-      window_stats: buildWindowStats(repoPath, period, activeThreshold),
+      window_stats: buildWindowStats(
+        repoPath,
+        period,
+        activeThreshold,
+        null,
+        []
+      ),
       numstat_totals: { added: 0, deleted: 0 },
-      code_turnover: getCodeTurnover(repoPath, period, reworkHorizonDays),
+      code_turnover: getCodeTurnover(repoPath, period, reworkHorizonDays, null),
     };
     return makeArtifact(
       'git',
@@ -977,11 +1016,25 @@ export function collect(
   const total_commits = getTotalCommits(repoPath);
   const ai_marked_commits = getAiMarkedCommits(repoPath);
   const tooling_paths = getToolingPaths(repoPath);
-  const { total_merges, revert_merges } = getMergeStats(repoPath);
+  // One squash scan over all history; getMergeStats and buildWindowStats fold
+  // it (unbounded / windowed) instead of each running its own log pass.
+  const squashEvents = scanSquashMerges(repoPath);
+  const { total_merges, revert_merges } = getMergeStats(repoPath, squashEvents);
   const merge_records = getMergeRecords(repoPath);
-  const window_stats = buildWindowStats(repoPath, period, activeThreshold);
+  const window_stats = buildWindowStats(
+    repoPath,
+    period,
+    activeThreshold,
+    anchor,
+    squashEvents
+  );
   const numstat_totals = getNumstatTotals(repoPath);
-  const code_turnover = getCodeTurnover(repoPath, period, reworkHorizonDays);
+  const code_turnover = getCodeTurnover(
+    repoPath,
+    period,
+    reworkHorizonDays,
+    anchor
+  );
   const history_available_days = getHistoryAvailableDays(repoPath);
 
   const raw: GitRaw = {

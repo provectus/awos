@@ -356,6 +356,13 @@ export interface AuditJson {
  * collector artifact carries no source_label, and by the renderer when
  * source_windows is absent, so the two can never disagree.
  */
+/**
+ * The four collector sources, in canonical order. Shared by audit_core (which
+ * derives `sources`/`source_windows` from them) and render (which orders the
+ * connections section by them).
+ */
+export const COLLECTOR_SOURCES = ['git', 'ci', 'tracker', 'docs'] as const;
+
 export const SOURCE_LABEL_DEFAULTS: Record<string, string> = {
   git: 'git history',
   ci: 'CI runs',

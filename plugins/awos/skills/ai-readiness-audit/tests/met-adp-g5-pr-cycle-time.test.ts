@@ -429,3 +429,113 @@ test('adp_g5: tracker workflow history rescues a squash-merge repo from the null
     `value must come from the tracker (48h), got ${result.value}`
   );
 });
+
+// ---------------------------------------------------------------------------
+// SKIP-reason precision: a connected tracker whose tickets lack workflow
+// history must be named as such — not folded into "needs a connector".
+// ---------------------------------------------------------------------------
+
+test('adp_g5: squash repo + tracker without status-transition history → reason says changelog not fetched', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [mergeRecord(12)],
+    window_stats: { merge_strategy: 'squash' },
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 50,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 20, deleted: 5 },
+    default_branch: 'main',
+  });
+  // Tracker IS connected, but tickets carry only created/resolved dates —
+  // no in_progress_at (per-ticket changelog never fetched).
+  writeTracker(collectedDir, [
+    { id: 'PROJ-1', resolved_at: '2025-03-01T12:00:00Z' },
+    { id: 'PROJ-2', resolved_at: '2025-03-02T12:00:00Z' },
+  ]);
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.status,
+    'SKIP',
+    'squash repo without tracker workflow history must still SKIP'
+  );
+  assert.ok(
+    (result.reliability.note ?? '').includes(
+      'tracker connected but tickets lack per-ticket status-transition history (changelog not fetched)'
+    ),
+    `SKIP reason must say the tracker is connected but its changelog was not fetched; got: ${result.reliability.note}`
+  );
+});
+
+test('adp_g5: squash repo with NO tracker keeps the generic needs-connector reason', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [mergeRecord(12)],
+    window_stats: { merge_strategy: 'squash' },
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 50,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 20, deleted: 5 },
+    default_branch: 'main',
+  });
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(result.status, 'SKIP', 'squash repo without tracker must SKIP');
+  assert.ok(
+    (result.reliability.note ?? '').includes(
+      'connect a code-host connector (PR API) to measure this'
+    ),
+    `without any tracker the generic connector guidance must remain; got: ${result.reliability.note}`
+  );
+  assert.ok(
+    !(result.reliability.note ?? '').includes('tracker connected'),
+    'without a tracker the reason must not claim one is connected'
+  );
+});
+
+test('adp_g5: tracker path appends the partial-fetch note from fetch_meta', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'git', {
+    merge_records: [mergeRecord(700)],
+    monthly_buckets: [],
+    tooling_paths: [],
+    total_commits: 5,
+    ai_marked_commits: 0,
+    total_merges: 1,
+    revert_merges: 0,
+    numstat_totals: { added: 10, deleted: 2 },
+    default_branch: 'main',
+  });
+  writeFileSync(
+    join(collectedDir, 'tracker.json'),
+    JSON.stringify({
+      source: 'tracker',
+      available: true,
+      raw: {
+        tickets: [
+          {
+            id: 'PROJ-1',
+            in_progress_at: '2025-03-01T00:00:00Z',
+            resolved_at: '2025-03-01T12:00:00Z',
+          },
+        ],
+        fetch_meta: { tickets_fetched: 100, tickets_total: 432 },
+      },
+    })
+  );
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(result.status, 'OK', 'tracker workflow history must score');
+  assert.ok(
+    (result.reliability.note ?? '').includes(
+      'partial tracker fetch: 100 of 432 tickets'
+    ),
+    `tracker-path reliability note must disclose the partial fetch; got: ${result.reliability.note}`
+  );
+});

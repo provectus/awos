@@ -157,6 +157,7 @@ import {
   patchJudgments,
   type MetricFn,
 } from './audit_core.ts';
+import { detectOrgParent } from './topology.ts';
 
 /** Resolve the skill root (where references/ lives) from the bundle location. */
 function resolveSkillRoot(): string {
@@ -758,6 +759,23 @@ async function main(): Promise<void> {
       if (!repoPath || !outDir) {
         printJson({ error: 'audit-core requires <repoPath> <outDir>' });
         process.exit(1);
+      }
+      // Org-parent guard: a folder that is not itself a git work tree but
+      // holds ≥2 git repos is the org's clone folder, not a project. A
+      // single-repo audit of it is a stray, meaningless report (judgment
+      // checks stay PENDING_JUDGMENT forever) — skip cleanly; org mode
+      // audits each child repo into per-repo/ instead.
+      const orgParent = detectOrgParent(repoPath);
+      if (orgParent.isOrgParent) {
+        process.stderr.write(
+          `audit-core: ${repoPath} is an org folder (${orgParent.gitRepoChildren} git repos inside, not itself a repo) — skipping single-repo audit; org mode audits each repo into per-repo/\n`
+        );
+        printJson({
+          skipped: 'org-parent',
+          repo_path: repoPath,
+          git_repo_children: orgParent.gitRepoChildren,
+        });
+        break;
       }
       const standardsPath = join(
         resolveSkillRoot(),

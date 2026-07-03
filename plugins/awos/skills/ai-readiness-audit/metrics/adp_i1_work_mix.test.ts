@@ -90,3 +90,76 @@ test('adp_i1_work_mix: score capped at 1.0 when growth fraction >= 60%', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Tracker fetch completeness (raw.fetch_meta) — partial fetches must be
+// visible in the reliability note; complete/absent fetch_meta adds nothing.
+// ---------------------------------------------------------------------------
+
+test('adp_i1_work_mix: partial tracker fetch (fetch_meta) is appended to the reliability note', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i1-partial-'));
+  try {
+    writeFileSync(
+      join(dir, 'tracker.json'),
+      JSON.stringify({
+        available: true,
+        raw: {
+          type_counts: { feature: 60, bug: 40 },
+          fetch_meta: { tickets_fetched: 100, tickets_total: 432 },
+        },
+      })
+    );
+    const res = compute(dir, {}, {});
+    assert.equal(
+      res.status,
+      'OK',
+      'metric must still score on a partial fetch'
+    );
+    assert.ok(
+      (res.reliability.note ?? '').includes(
+        'partial tracker fetch: 100 of 432 tickets'
+      ),
+      `reliability note must disclose the partial fetch; got: ${res.reliability.note}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('adp_i1_work_mix: no partial-fetch note when fetch_meta is absent or complete', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i1-complete-'));
+  try {
+    // fetch_meta absent
+    writeFileSync(
+      join(dir, 'tracker.json'),
+      makeTrackerArtifact({ feature: 60, bug: 40 })
+    );
+    let res = compute(dir, {}, {});
+    assert.ok(
+      !(res.reliability.note ?? '').includes('partial tracker fetch'),
+      `no fetch_meta → no partial-fetch note; got: ${res.reliability.note}`
+    );
+    // fetch_meta present and complete
+    writeFileSync(
+      join(dir, 'tracker.json'),
+      JSON.stringify({
+        available: true,
+        raw: {
+          type_counts: { feature: 60, bug: 40 },
+          fetch_meta: {
+            tickets_fetched: 100,
+            tickets_total: 100,
+            complete: true,
+          },
+        },
+      })
+    );
+    res = compute(dir, {}, {});
+    assert.ok(
+      !(res.reliability.note ?? '').includes('partial tracker fetch'),
+      `complete fetch_meta → no partial-fetch note; got: ${res.reliability.note}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

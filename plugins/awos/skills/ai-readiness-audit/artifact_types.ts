@@ -134,6 +134,12 @@ export interface DeliveryMetric {
   check_id?: string;
   /** When set, the metric requires an external connector. If display_value is absent the renderer shows a "needs X connector" note instead of a value. */
   gated?: 'tracker' | 'incident';
+  /**
+   * Precise reason for a gated-absent row (e.g. "Jira connected — tickets lack
+   * status-transition history"). When set, the renderer prints "— (<note>)"
+   * instead of the generic "needs X connector" default.
+   */
+  note?: string;
 }
 
 export interface ScaleMetric {

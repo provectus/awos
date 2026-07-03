@@ -84,6 +84,73 @@ export function skipReliability(
 }
 
 // ---------------------------------------------------------------------------
+// Tracker fetch-completeness note
+// ---------------------------------------------------------------------------
+
+/**
+ * Optional fetch-completeness block the orchestrator writes into the tracker
+ * artifact's `raw` (see references/connector-shapes.md). Absent on older
+ * artifacts; every field is optional.
+ */
+interface TrackerFetchMeta {
+  tickets_fetched?: number;
+  tickets_total?: number | null;
+  complete?: boolean;
+  pages_fetched?: number;
+  changelog_fetched_for?: number;
+  note?: string;
+}
+
+/**
+ * Human note when the tracker fetch was PARTIAL — `fetch_meta.complete` is
+ * explicitly false, or `tickets_total` exceeds `tickets_fetched` (e.g. exactly
+ * one Jira page of 100 out of 432 tickets). Returns null when fetch_meta is
+ * absent or the fetch looks complete, so metrics can append it unconditionally.
+ * Tracker-consuming metrics append this to their reliability note so a
+ * silently-truncated fetch is visible in the report.
+ */
+export function trackerFetchNote(raw: unknown): string | null {
+  const meta = (raw as { fetch_meta?: unknown } | null | undefined)?.fetch_meta;
+  if (!meta || typeof meta !== 'object') return null;
+  const fm = meta as TrackerFetchMeta;
+  const fetched =
+    typeof fm.tickets_fetched === 'number' &&
+    Number.isFinite(fm.tickets_fetched)
+      ? fm.tickets_fetched
+      : null;
+  const total =
+    typeof fm.tickets_total === 'number' && Number.isFinite(fm.tickets_total)
+      ? fm.tickets_total
+      : null;
+  const partial =
+    fm.complete === false ||
+    (total !== null && fetched !== null && total > fetched);
+  if (!partial) return null;
+  let note = 'partial tracker fetch';
+  if (fetched !== null && total !== null) {
+    note += `: ${fetched} of ${total} tickets`;
+  } else if (fetched !== null) {
+    note += `: ${fetched} tickets fetched`;
+  }
+  if (typeof fm.note === 'string' && fm.note.trim().length > 0) {
+    note += `; ${fm.note.trim()}`;
+  }
+  return note;
+}
+
+/**
+ * Return `rel` with `extra` appended to its note (semicolon-joined), or `rel`
+ * unchanged when `extra` is null/empty. Never mutates the input.
+ */
+export function appendReliabilityNote(
+  rel: Reliability,
+  extra: string | null
+): Reliability {
+  if (!extra) return rel;
+  return { ...rel, note: rel.note ? `${rel.note}; ${extra}` : extra };
+}
+
+// ---------------------------------------------------------------------------
 // Reliability computation
 // ---------------------------------------------------------------------------
 

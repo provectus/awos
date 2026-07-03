@@ -1610,3 +1610,134 @@ test('fully-patched audit (no PENDING_JUDGMENT) shows no pending indicator', () 
     'HTML must not show the pending-judgment chip once every judgment check is patched'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Gated-row precise reasons (DeliveryMetric.note) — a row-specific note beats
+// the generic "needs X connector" default in BOTH renderers.
+// ---------------------------------------------------------------------------
+
+test('gated delivery row with a note renders "— (<note>)" instead of the generic default, in HTML and Markdown', () => {
+  const delivery: DeliveryMetric[] = [
+    {
+      label: 'Cycle time (In-Progress→Done)',
+      gated: 'tracker',
+      note: 'Jira connected — tickets lack status-transition history',
+    },
+    // Control row: gated without a note keeps the generic default.
+    { label: 'MTTR', gated: 'incident' },
+  ];
+  const audit = makeAudit({ headline: { delivery } });
+
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes(
+      '— (Jira connected — tickets lack status-transition history)'
+    ),
+    'HTML gated row with a note must render "— (<note>)"'
+  );
+  assert.ok(
+    html.includes('needs incident connector'),
+    'HTML gated row WITHOUT a note must keep the generic incident default'
+  );
+  assert.ok(
+    !html.includes('needs ticketing connector'),
+    'HTML gated row WITH a note must not also render the generic tracker default'
+  );
+
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('— (Jira connected — tickets lack status-transition history)'),
+    'Markdown gated row with a note must render "— (<note>)"'
+  );
+  assert.ok(
+    md.includes('needs incident connector'),
+    'Markdown gated row WITHOUT a note must keep the generic incident default'
+  );
+  assert.ok(
+    !md.includes('needs ticketing connector'),
+    'Markdown gated row WITH a note must not also render the generic tracker default'
+  );
+});
+
+test('gated delivery note is escaped: pipes cannot break the Markdown table, angle brackets cannot inject HTML', () => {
+  const delivery: DeliveryMetric[] = [
+    {
+      label: 'Cycle time (In-Progress→Done)',
+      gated: 'tracker',
+      note: 'a|b <script>x</script>',
+    },
+  ];
+  const audit = makeAudit({ headline: { delivery } });
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('a\\|b'),
+    'Markdown gated note must escape pipes via mdCell'
+  );
+  const html = renderHtml(audit);
+  assert.ok(
+    !html.includes('<script>x</script>'),
+    'HTML gated note must be escaped, never injected as markup'
+  );
+  assert.ok(
+    html.includes('&lt;script&gt;'),
+    'HTML gated note must show the escaped form of injected markup'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Reader-grade tooltips for the connector-gated headline rows (Cycle time /
+// MTTR) and the org Repositories table's matching column headers.
+// ---------------------------------------------------------------------------
+
+test('gated Cycle time / MTTR headline rows carry reader-grade tooltips (HEADLINE_TIP lookup handles the arrow label)', () => {
+  // Gated rows are authored with NO check_id (SKILL.md), so the tooltip must
+  // resolve from HEADLINE_TIP via the label — including the arrow-suffixed
+  // cycle-time label.
+  const delivery: DeliveryMetric[] = [
+    { label: 'Cycle time (In-Progress→Done)', gated: 'tracker' },
+    { label: 'MTTR', gated: 'incident' },
+  ];
+  const audit = makeAudit({ headline: { delivery } });
+  const html = renderHtml(audit);
+
+  assert.ok(
+    html.includes('per-ticket status-transition history (the changelog)'),
+    'Cycle time tooltip must explain the changelog requirement (why it can be gated even with a tracker connected)'
+  );
+  assert.ok(
+    html.includes('Never derived from git.'),
+    'Cycle time tooltip must state the value never comes from git'
+  );
+  assert.ok(
+    html.includes('mean time to restore service'),
+    'MTTR tooltip must define the metric in plain language'
+  );
+  assert.ok(
+    html.includes('The git branch-lifetime proxy scores DF-07 separately'),
+    'MTTR tooltip must distinguish the DF-07 git proxy from this row'
+  );
+});
+
+test('org Repositories table: Cycle time and MTTR column headers carry the same reader-grade tooltips', () => {
+  // Org fixture has NO headline block, so any tooltip text present must come
+  // from the Repositories table column headers.
+  const audit = makeOrgAuditWithPerRepo();
+  const html = renderHtml(audit);
+
+  assert.ok(
+    html.includes('Cycle time¹'),
+    'org Repositories table must render the Cycle time column header'
+  );
+  assert.ok(
+    html.includes('per-ticket status-transition history (the changelog)'),
+    'org Cycle time column header tooltip must explain the changelog requirement'
+  );
+  assert.ok(
+    html.includes('MTTR²'),
+    'org Repositories table must render the MTTR column header'
+  );
+  assert.ok(
+    html.includes('The git branch-lifetime proxy scores DF-07 separately'),
+    'org MTTR column header tooltip must distinguish the DF-07 git proxy'
+  );
+});

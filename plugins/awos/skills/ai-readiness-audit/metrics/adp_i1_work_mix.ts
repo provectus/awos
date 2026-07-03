@@ -26,11 +26,13 @@
  * SKIP: if tracker.json is absent or available=false (no tracker connector).
  */
 import {
+  appendReliabilityNote,
   awardCategories,
   computeReliability,
   makeMetricResult,
   readArtifact,
   skipReliability,
+  trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
 import { clamp01 } from './_score.ts';
@@ -85,6 +87,8 @@ export function compute(
   }
 
   const raw = artifact?.raw ?? {};
+  // Surface a partial tracker fetch (fetch_meta) in the reliability note.
+  const partialNote = trackerFetchNote(raw);
   const typeCounts: Record<string, number> =
     typeof raw.type_counts === 'object' && raw.type_counts !== null
       ? (raw.type_counts as Record<string, number>)
@@ -99,7 +103,10 @@ export function compute(
   // score=0: an empty / all-unknown-type tracker has 0 growth fraction.
   if (total === 0) {
     const categories = awardCategories(standards, 'adp_i1_work_mix', topology);
-    const reliability = computeReliability('not-reliable', ['tracker'], []);
+    const reliability = appendReliabilityNote(
+      computeReliability('not-reliable', ['tracker'], []),
+      partialNote
+    );
     return makeMetricResult(
       'adp_i1_work_mix',
       null,
@@ -123,7 +130,10 @@ export function compute(
   const growthFrac = growthCount / total;
   const band = workMixBand(growthFrac);
   const categories = awardCategories(standards, 'adp_i1_work_mix', topology);
-  const reliability = computeReliability('not-reliable', ['tracker'], []);
+  const reliability = appendReliabilityNote(
+    computeReliability('not-reliable', ['tracker'], []),
+    partialNote
+  );
 
   const expression = `${growthCount}/${total} growth tickets = ${growthFrac.toFixed(2)}`;
   return makeMetricResult(

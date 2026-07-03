@@ -10,6 +10,7 @@
 // cannot be derived from the repo alone — they default to false and are patched
 // by the orchestrator when an MCP connector is available.
 // ---------------------------------------------------------------------------
+import { execFileSync } from 'node:child_process';
 import {
   existsSync,
   readFileSync,
@@ -640,4 +641,50 @@ export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
   }
 
   return [...found.values()];
+}
+
+// ---------------------------------------------------------------------------
+// Org-parent detection
+// ---------------------------------------------------------------------------
+
+export interface OrgParentDetection {
+  /** True when the dir is NOT itself in a git work tree but holds ≥2 immediate child dirs that are git repos. */
+  isOrgParent: boolean;
+  /** Immediate child directories containing a `.git` entry (dir or worktree file). */
+  gitRepoChildren: number;
+}
+
+/**
+ * Detect the "org folder" case: a plain directory that is not a git work tree
+ * but contains two or more git repositories as immediate children — e.g. the
+ * parent folder a user keeps their org's clones in. Running a single-repo
+ * audit against such a folder produces a stray, meaningless report (its
+ * judgment checks stay PENDING_JUDGMENT forever); org mode audits each child
+ * repo into per-repo/ instead. cli.ts's `audit-core` verb calls this before
+ * doing any work and skips cleanly when it returns isOrgParent.
+ *
+ * A git repo (or any dir inside one) is never an org parent, and neither is a
+ * plain non-git project dir with fewer than two git-repo children.
+ */
+export function detectOrgParent(dir: string): OrgParentDetection {
+  // Inside a git work tree → definitely a repo, not an org parent.
+  try {
+    execFileSync('git', ['-C', dir, 'rev-parse', '--is-inside-work-tree'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return { isOrgParent: false, gitRepoChildren: 0 };
+  } catch {
+    // Not a work tree (or git unavailable) — fall through to the child scan.
+  }
+  let gitRepoChildren = 0;
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      // `.git` may be a directory (normal clone) or a file (worktree/submodule).
+      if (existsSync(join(dir, entry.name, '.git'))) gitRepoChildren++;
+    }
+  } catch {
+    return { isOrgParent: false, gitRepoChildren: 0 };
+  }
+  return { isOrgParent: gitRepoChildren >= 2, gitRepoChildren };
 }

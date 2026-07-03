@@ -21,11 +21,13 @@
  * SKIP: if tracker.json is absent or available=false (no tracker connector).
  */
 import {
+  appendReliabilityNote,
   awardCategories,
   computeReliability,
   makeMetricResult,
   readArtifact,
   skipReliability,
+  trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
@@ -91,7 +93,12 @@ export function compute(
     typeof raw.resolved_count === 'number' ? raw.resolved_count : 0;
 
   const categories = awardCategories(standards, 'adp_i2_throughput', topology);
-  const reliability = computeReliability('not-reliable', ['tracker'], []);
+  // Surface a partial tracker fetch (fetch_meta) — a truncated fetch
+  // undercounts resolved tickets, so the note must say so.
+  const reliability = appendReliabilityNote(
+    computeReliability('not-reliable', ['tracker'], []),
+    trackerFetchNote(raw)
+  );
 
   // Normalise the count to a per-week rate over the collected window so the
   // score does not depend on how long a window the connector fetched.

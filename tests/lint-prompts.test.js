@@ -1652,6 +1652,51 @@ test('SKILL.md Step 6.2 fetches independent connector sources concurrently', () 
   );
 });
 
+test('SKILL.md Step 6 requires fetch_meta and the tracker changelog pass', () => {
+  // A prior org run fetched exactly one 100-ticket page per repo with zero
+  // changelogs — cycle time stayed blank everywhere and ticket counts drifted
+  // run to run. These two requirements are what prevent that regression.
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    src.includes('fetch_meta'),
+    'SKILL.md Step 6 must require a fetch_meta block in paginated tracker artifacts (honest partial-fetch accounting)'
+  );
+  assert.ok(
+    /changelog/i.test(src) && src.includes('in_progress_at'),
+    'SKILL.md Step 6 must require the per-ticket changelog pass that populates in_progress_at (cycle time)'
+  );
+});
+
+test('connector-shapes.md documents the per-ticket changelog fetch and fetch_meta shape', () => {
+  const src = readUtf8(path.join(referencesDir, 'connector-shapes.md'));
+  assert.ok(
+    src.includes('expand: "changelog"'),
+    'connector-shapes.md must document the per-ticket getJiraIssue(expand: "changelog") fetch — Jira search results never include changelogs'
+  );
+  assert.ok(
+    src.includes('fetch_meta'),
+    'connector-shapes.md must document the fetch_meta block (tickets_fetched/tickets_total/complete/pages_fetched/changelog_fetched_for/note)'
+  );
+  assert.ok(
+    /statusCategory|indeterminate/.test(src),
+    'connector-shapes.md must define in_progress_at by status category (statusCategory "indeterminate"), not the literal "In Progress" name'
+  );
+});
+
+test('repo-auditor.md requires tracker pagination to completion and the changelog pass', () => {
+  const src = readUtf8(
+    path.join(repoRoot, 'plugins', 'awos', 'agents', 'repo-auditor.md')
+  );
+  assert.ok(
+    /paginat/i.test(src) && src.includes('fetch_meta'),
+    'repo-auditor.md must require paginating tracker sources to completion and flagging partial fetches in fetch_meta'
+  );
+  assert.ok(
+    /changelog/i.test(src),
+    'repo-auditor.md must require fetching per-ticket status changelogs so cycle time computes'
+  );
+});
+
 test('SKILL.md org branch dispatches the repo-auditor subagent per repo', () => {
   const src = readUtf8(SKILL_MD_PATH);
   assert.ok(

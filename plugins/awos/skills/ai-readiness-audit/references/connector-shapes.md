@@ -36,7 +36,7 @@ Represents a single work item returned by a project tracker (Jira, Linear, GitHu
 | `has_acceptance_criteria` | `boolean`      | no       | Whether the ticket body contains acceptance criteria (structure signal — **no raw text**; used by ADP-I5)                                                                                                                                                                                                                                                                            |
 | _(any)_                   | `unknown`      | no       | Additional fields from the source system are passed through unchanged                                                                                                                                                                                                                                                                                                                |
 
-**Systems vary — normalize into this shape.** Field names and state labels differ across trackers, so map each system's own vocabulary onto the canonical fields; the metrics never see the vendor terms. `status` is a free-text label from the source (Jira `fields.status.name`, Linear `state.name`, GitHub Projects column, Asana section). A ticket counts toward `resolved_count` when it is in any **terminal / completed** state — `done`, `closed`, `resolved`, `completed`, `shipped`, `merged` (case-insensitive) — **or** when `resolved_at` is non-null. Likewise the in-progress→done cycle-time headline uses whichever states the system calls "in progress" and "done". When in doubt, set `resolved_at` from the source's completion timestamp so throughput does not depend on state-name matching at all. Set `in_progress_at` when the source exposes status-transition history cheaply (Jira: `expand=changelog` on the search request — the first transition into an in-progress status); omit it rather than issuing an extra API call per ticket.
+**Systems vary — normalize into this shape.** Field names and state labels differ across trackers, so map each system's own vocabulary onto the canonical fields; the metrics never see the vendor terms. `status` is a free-text label from the source (Jira `fields.status.name`, Linear `state.name`, GitHub Projects column, Asana section). A ticket counts toward `resolved_count` when it is in any **terminal / completed** state — `done`, `closed`, `resolved`, `completed`, `shipped`, `merged` (case-insensitive) — **or** when `resolved_at` is non-null. Likewise the in-progress→done cycle-time headline uses whichever states the system calls "in progress" and "done". When in doubt, set `resolved_at` from the source's completion timestamp so throughput does not depend on state-name matching at all. Set `in_progress_at` from real status-transition history — Jira search results never include changelogs, so this takes a per-ticket changelog pass over the resolved tickets (see the worked example below); omit the field for tickets whose history was not fetched.
 
 ### TrackerConnector
 
@@ -67,6 +67,30 @@ The connector object the orchestrator assembles and passes to the collector. Wri
 | ----------------- | ---------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tickets`         | `TicketRecord[]` | no       | Work items within the audit period; omit or use `[]` if none                                                                                                                                                                           |
 | `incident_source` | `string \| null` | no       | Identifier for the incident-management system feeding MTTR (e.g. `"pagerduty"`, `"opsgenie"`). When present, MTTR reliability upgrades from `"git-proxy"` to first-class. Omit or set `null` when no dedicated incident source exists. |
+| `fetch_meta`      | `FetchMeta`      | yes\*    | Honest accounting of how much of the source was actually fetched (see [FetchMeta](#fetchmeta) below). \*Required whenever the source paginates — never write a paginated tracker artifact without it.                                  |
+
+### FetchMeta
+
+The engine reads this block (passed through into the computed `raw` artifact) and annotates affected metrics with a partial-fetch reliability note when `complete` is false. A partial fetch is data, not a failure — write the artifact with an honest `fetch_meta` rather than dropping the source.
+
+```json
+{
+  "tickets_fetched": 437,
+  "tickets_total": 437,
+  "complete": true,
+  "pages_fetched": 5,
+  "changelog_fetched_for": 50
+}
+```
+
+| Field                   | Type      | Required | Meaning                                                                                                                                                                                  |
+| ----------------------- | --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tickets_fetched`       | `number`  | yes      | Tickets actually accumulated into `tickets[]`                                                                                                                                            |
+| `tickets_total`         | `number`  | yes      | The query total (Jira: from the one `computeIssueCount: true` call); equal to `tickets_fetched` when the source exposes no count                                                         |
+| `complete`              | `boolean` | yes      | `false` whenever pagination stopped early or `tickets_total > tickets_fetched`                                                                                                           |
+| `pages_fetched`         | `number`  | yes      | Search pages actually retrieved                                                                                                                                                          |
+| `changelog_fetched_for` | `number`  | yes      | Resolved tickets whose per-ticket changelog pass succeeded (0 = cycle time cannot compute)                                                                                               |
+| `note`                  | `string`  | no       | The real cause whenever anything was partial — e.g. `"stopped at page 1"`, `"rate-limited after page 3"`, `"changelog fetch failed for 4 tickets"`. Never a generic "connector missing". |
 
 ### TrackerRaw
 
@@ -81,12 +105,20 @@ The computed artifact the engine derives from `TrackerConnector`. The orchestrat
 
 ### Worked example — Jira issue-search → `collected/tracker.json`
 
-Jira returns at most ~100 issues per request regardless of `maxResults`, so a single call silently under-samples long-lived projects. Page through all results and accumulate into one `tickets[]` before writing the artifact. Two paging modes depending on the MCP / Jira cloud version:
+Jira hard-caps `maxResults` at 100 regardless of what you pass, so a single call silently under-samples any long-lived project — and because default ordering is unstable, the sampled 100 differ run to run. Page through all results and accumulate into one `tickets[]` before writing the artifact:
 
-- **`startAt` (classic JQL):** call `searchJiraIssuesUsingJql({ jql: "project = PROJ AND updated >= -180d ORDER BY updated DESC", maxResults: 100, startAt: 0 })`, then repeat with `startAt += page_size` until the returned page is shorter than `maxResults` or empty. Cap at ~2000 tickets total, or stop when issues fall outside the lookback window.
-- **`nextPageToken` (cloud `searchJiraIssuesUsingJql`):** pass the `nextPageToken` from each response back as a parameter in the next call; stop when `isLast: true` or no token is returned. Apply the same ~2000-ticket cap.
+1. First call: `searchJiraIssuesUsingJql({ jql: "project = PROJ AND updated >= -180d ORDER BY created DESC", maxResults: 100, computeIssueCount: true })`. `ORDER BY created DESC` keeps ordering stable across pages; `computeIssueCount: true` (once, on this call only) returns the query total, so `fetch_meta.tickets_total` and completeness are known.
+2. Loop: pass each response's `nextPageToken` back as a parameter in the next call; stop when `isLast: true`, when no token is returned, or at the ~2000-ticket cap. (Classic on-prem JQL paginates with `startAt += page_size` until a short/empty page instead.)
 
-Write `collected/tracker.json` once after all pages are accumulated — not per page. Linear paginates via `pageInfo.hasNextPage` + `endCursor` (GraphQL cursor); GitHub Issues via the `Link: rel="next"` header or `page` query param.
+Write `collected/tracker.json` once after all pages are accumulated — not per page — and record what happened in `fetch_meta` (pages fetched, tickets fetched vs. total, `complete: false` with the real cause in `note` if the loop stopped early). Linear paginates via `pageInfo.hasNextPage` + `endCursor` (GraphQL cursor); GitHub Issues via the `Link: rel="next"` header or `page` query param.
+
+#### Changelog pass — `in_progress_at` for cycle time
+
+Jira search results never include changelogs and search has no expand parameter, so status-transition history takes one extra call per ticket: `getJiraIssue(cloudId, issueIdOrKey, expand: "changelog", fields: ["status"])`. The response's `changelog.histories[]` entries each carry a `created` timestamp and `items[]`; items with `field: "status"` carry `fromString`/`toString`.
+
+After pagination, take the resolved tickets — cap at ~50, most recently resolved — and fetch each one's changelog. The per-ticket calls are independent: issue them as parallel tool calls in batched messages, never one per turn.
+
+Set `in_progress_at` to the `created` timestamp of the first transition into an in-progress-category status. Match by category, not the literal name — real workflows skip a status literally named "In Progress" entirely (observed: Backlog → To Do → In Review → Done). When the search results carry `status.statusCategory`, an in-progress status is any whose statusCategory key is `indeterminate`; otherwise match `toString` against `/in progress|in review|in development|development|doing|started|coding/i`. Omit the field for tickets with no such transition, and record how many changelogs were fetched in `fetch_meta.changelog_fetched_for` (with the failure cause in `note` if some fetches failed).
 
 Map each collected issue to a `TicketRecord`:
 
@@ -98,8 +130,9 @@ issue.fields.issuetype.name        → type          ("Bug")
 issue.fields.status.name           → status        ("Done")
 issue.fields.created               → created_at    (ISO 8601 string)
 issue.fields.resolutiondate        → resolved_at   (ISO 8601 string or null → omit)
-issue.changelog: first transition
-  into an in-progress status       → in_progress_at (ISO 8601 string; needs expand=changelog on the search request — omit when transition history was not fetched)
+changelog pass: first transition
+  into an in-progress-category
+  status                           → in_progress_at (ISO 8601 string; from the per-ticket getJiraIssue changelog pass above — omit when transition history was not fetched)
 issue.fields.subtasks.length       → subtask_count           (number; omit when 0 or absent)
 issue.fields.parent?.key           → parent                  (string or null → omit when null)
 issue.fields.description?.length   → description_length      (number; char count only — never include raw text; omit when absent)
@@ -126,6 +159,13 @@ Write the assembled `TrackerConnector` to `collected/tracker.json`. Include a `p
     }
   ],
   "incident_source": null,
+  "fetch_meta": {
+    "tickets_fetched": 437,
+    "tickets_total": 437,
+    "complete": true,
+    "pages_fetched": 5,
+    "changelog_fetched_for": 50
+  },
   "period": {
     "lookback_days": 180,
     "source_label": "Jira via Atlassian MCP"
@@ -243,16 +283,24 @@ Tracker (Jira) → `collected/tracker.json`:
 
 ```
 # 1. Fetch a bounded recent window (e.g. issues updated in the last ~180 days).
-#    maxResults is server-capped (~100), so a single call under-samples. Page to completion:
+#    maxResults is hard-capped at 100, so a single call under-samples. Page to completion:
+#      Cloud MCP:   loop on nextPageToken until isLast: true or no token returned;
+#                   first call adds computeIssueCount: true to learn the query total.
 #      Classic JQL: loop on startAt (increment by page size) until a short/empty page.
-#      Cloud MCP:   loop on nextPageToken until isLast: true or no token returned.
-#    jql = "updated >= -180d ORDER BY updated DESC", cap at ~2000 tickets.
+#    jql = "updated >= -180d ORDER BY created DESC", cap at ~2000 tickets.
 #    Accumulate all pages into one tickets[], then proceed to step 2.
-# 2. Map each issue to a TicketRecord {id, type, status, created_at, resolved_at}
-#    and wrap as a TrackerConnector {tickets: [...], incident_source: null}.
-# 3. Write it once (after all pages are accumulated):
+# 2. Changelog pass (cycle time): for the ~50 most recently resolved tickets, call
+#    getJiraIssue(cloudId, key, expand: "changelog", fields: ["status"]) as parallel
+#    tool calls in batched messages; set in_progress_at from the first transition
+#    into an in-progress-category status (see the worked example above).
+# 3. Map each issue to a TicketRecord {id, type, status, created_at, resolved_at,
+#    in_progress_at?} and wrap as a TrackerConnector {tickets: [...],
+#    incident_source: null, fetch_meta: {...}} — fetch_meta is required for any
+#    paginated source; set complete: false with the real cause in note when
+#    pagination or the changelog pass stopped early.
+# 4. Write it once (after all pages are accumulated):
 #    context/audits/YYYY-MM-DD/collected/tracker.json
-# 4. Re-run the tracker metrics, then re-aggregate:
+# 5. Re-run the tracker metrics, then re-aggregate:
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i1_work_mix "<repoPath>" "context/audits/YYYY-MM-DD/collected"
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i2_throughput "<repoPath>" "context/audits/YYYY-MM-DD/collected"
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" metric adp_i3_mttr "<repoPath>" "context/audits/YYYY-MM-DD/collected"

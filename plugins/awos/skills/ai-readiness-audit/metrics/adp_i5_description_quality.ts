@@ -52,11 +52,13 @@
  * @see https://www.agilealliance.org/glossary/definition-of-ready/  (Agile Alliance, 2012)
  */
 import {
+  appendReliabilityNote,
   awardCategories,
   computeReliability,
   makeMetricResult,
   readArtifact,
   skipReliability,
+  trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
@@ -147,7 +149,11 @@ export function compute(
     'adp_i5_description_quality',
     topology
   );
-  const reliability = computeReliability('minimal', ['tracker'], []);
+  // Surface a partial tracker fetch (fetch_meta) in the reliability note.
+  const reliability = appendReliabilityNote(
+    computeReliability('minimal', ['tracker'], []),
+    trackerFetchNote(raw)
+  );
 
   const expression =
     `${wellDescribed.length} of ${eligible.length} tickets with description ≥${MIN_DESC_CHARS} chars + acceptance criteria = ` +

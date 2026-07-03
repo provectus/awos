@@ -579,8 +579,11 @@ export function renderMarkdown(
       lines.push('| ------ | ----- | ---- |');
       for (const d of h.delivery) {
         if (d.gated && deliveryValueAbsent(d.display_value)) {
-          const note =
-            d.gated === 'tracker'
+          // A row-specific note ("Jira connected — tickets lack status-transition
+          // history") beats the generic needs-connector default.
+          const note = d.note
+            ? `— (${mdCell(d.note)})`
+            : d.gated === 'tracker'
               ? '— (needs ticketing connector)'
               : '— (needs incident connector)';
           lines.push(`| ${mdCell(d.label)} | ${note} | |`);
@@ -996,17 +999,36 @@ const BAND_COLOR: Record<string, string> = {
 };
 
 /**
+ * Reader-grade tooltip for the connector-gated Cycle time headline row and the
+ * org Repositories "Cycle time" column. Explains what the number is, why the
+ * row can stay gated even when a tracker IS connected, and that it never comes
+ * from git.
+ */
+const CYCLE_TIME_TIP =
+  'Median working time on a ticket: from its first transition into an In-Progress-category status to Done, across resolved tickets. Needs the ticketing connector’s per-ticket status-transition history (the changelog) — a plain ticket list carries only created/resolved dates, so this row can stay "—" even when a tracker is connected until changelogs are fetched. Never derived from git.';
+
+/**
+ * Reader-grade tooltip for the connector-gated MTTR headline row and the org
+ * Repositories "MTTR" column. The git branch-lifetime proxy scores DF-07
+ * separately and never feeds this row.
+ */
+const MTTR_TIP =
+  'Median time from incident start to resolution (mean time to restore service). Comes only from an incident source (PagerDuty, Opsgenie, incident-labeled tickets, …). The git branch-lifetime proxy scores DF-07 separately, but it is a rough stand-in and does not feed this row.';
+
+/**
  * Tooltip text for headline-band metrics that have no `check_id` to resolve a
  * definition from (git-derived rows and connector-gated rows). Keyed by the
- * metric label with any trailing "(...)" unit clause stripped.
+ * metric label with any trailing "(...)" unit clause stripped — the stripped
+ * key is tried first, then the exact label (so 'Cycle time (In-Progress→Done)'
+ * resolves either way).
  */
 const HEADLINE_TIP: Record<string, string> = {
   Merges:
     'Merged pull requests per active contributor per week — a delivery-throughput signal.',
   LOC: 'Lines of code changed per active contributor per week — a delivery-volume signal.',
-  'Cycle time':
-    'Median in-progress→done duration for tickets, from the ticketing connector (Jira, Linear, GitHub Projects, …).',
-  MTTR: 'Mean time to restore service after a production incident (needs an incident connector).',
+  'Cycle time': CYCLE_TIME_TIP,
+  'Cycle time (In-Progress→Done)': CYCLE_TIME_TIP,
+  MTTR: MTTR_TIP,
   'AI tooling':
     'AI coding tools detected in the repository (config files, agent instructions, commit markers).',
   'Active Contributors':
@@ -1288,8 +1310,11 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
         .map((d) => {
           const tipText = headlineTipText(d.label, d.check_id);
           if (d.gated && deliveryValueAbsent(d.display_value)) {
-            const note =
-              d.gated === 'tracker'
+            // A row-specific note ("Jira connected — tickets lack
+            // status-transition history") beats the generic default.
+            const note = d.note
+              ? `— (${d.note})`
+              : d.gated === 'tracker'
                 ? '— (needs ticketing connector)'
                 : '— (needs incident connector)';
             return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${esc(note)}</span></div>`;
@@ -1735,8 +1760,8 @@ body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],
           `<th>${tip('Rework rate', `What share of the shipped changes are fixes for earlier changes. High rework means the team spends its time repairing recent work instead of building new things.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
           `<th>${tip('Lead time', `How long a piece of work takes from the first commit until it lands on the main branch, in hours (median). Shorter means ideas become shipped software faster.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
           `<th>${tip('Change-fail', `What share of shipped changes had to be rolled back or hot-fixed. The DORA quality measure: lower is better.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          `<th>${tip('Cycle time¹', `How long a ticket stays in progress before it is done (median). Comes from the ticketing system (Jira, Linear, …), so it needs that connector.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
-          `<th>${tip('MTTR²', `Mean time to restore service after a production incident. Comes only from an incident system (PagerDuty, Opsgenie, …), so it needs that connector.${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+          `<th>${tip('Cycle time¹', `${CYCLE_TIME_TIP}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
+          `<th>${tip('MTTR²', `${MTTR_TIP}${verifiedSuffix(audit.standards_meta?.standards_date)}`)}</th>` +
           '</tr></thead><tbody>'
       );
       for (const r of audit.per_repo) {

@@ -28,10 +28,12 @@
  * or merge_records is empty.
  */
 import {
+  appendReliabilityNote,
   computeReliability,
   makeMetricResult,
   readArtifact,
   skipReliability,
+  trackerFetchNote,
   type MetricResult,
   type Reliability,
 } from './_base.ts';
@@ -65,17 +67,37 @@ export function doraCycleTimeBand(hours: number): string {
   return 'low';
 }
 
+/** What the tracker artifact yields for cycle-time purposes. */
+interface TrackerCycleRead {
+  /** Tracker artifact present and available=true. */
+  available: boolean;
+  /** Number of tickets in the artifact (0 when unavailable). */
+  ticketCount: number;
+  /** in-progress→done durations (hours) — empty when no ticket has usable timestamps. */
+  hours: number[];
+  /** The artifact's raw block (for fetch_meta), null when unavailable. */
+  raw: unknown;
+}
+
 /**
- * Compute in-progress→done durations (hours) from tracker tickets that carry
- * BOTH in_progress_at and resolved_at (changelog-derived workflow history —
- * see references/connector-shapes.md). Returns [] when the tracker artifact
- * is absent/unavailable or no ticket has usable timestamps.
+ * Read the tracker artifact and compute in-progress→done durations (hours)
+ * from tickets that carry BOTH in_progress_at and resolved_at
+ * (changelog-derived workflow history — see references/connector-shapes.md).
+ * `hours` is empty when the artifact is absent/unavailable or no ticket has
+ * usable timestamps; `available`/`ticketCount` distinguish "no tracker" from
+ * "tracker connected but status-transition history not fetched".
  */
-function trackerCycleTimesHours(collectedDir: string): number[] {
+function readTrackerCycle(collectedDir: string): TrackerCycleRead {
+  const empty: TrackerCycleRead = {
+    available: false,
+    ticketCount: 0,
+    hours: [],
+    raw: null,
+  };
   const read = readArtifact(collectedDir, 'tracker');
-  if ('error' in read) return [];
+  if ('error' in read) return empty;
   const artifact = read.artifact;
-  if (!artifact?.available) return [];
+  if (!artifact?.available) return empty;
   const tickets: Array<Record<string, unknown>> = Array.isArray(
     artifact?.raw?.tickets
   )
@@ -95,7 +117,12 @@ function trackerCycleTimesHours(collectedDir: string): number[] {
     const diffHours = (resolved - started) / 3_600_000;
     if (diffHours >= 0) hours.push(diffHours);
   }
-  return hours;
+  return {
+    available: true,
+    ticketCount: tickets.length,
+    hours,
+    raw: artifact?.raw ?? null,
+  };
 }
 
 export function compute(
@@ -106,17 +133,20 @@ export function compute(
   // Preferred source: real workflow history from the tracker connector.
   // When tickets carry in_progress_at + resolved_at, the median
   // in-progress→done duration replaces the git branch-lifetime proxy.
-  const trackerHours = trackerCycleTimesHours(collectedDir);
-  if (trackerHours.length > 0) {
-    trackerHours.sort((a, b) => a - b);
+  const tracker = readTrackerCycle(collectedDir);
+  if (tracker.hours.length > 0) {
+    const trackerHours = [...tracker.hours].sort((a, b) => a - b);
     const medianHours = median(trackerHours);
     const band = doraCycleTimeBand(medianHours);
     const score = clamp01(bandScore(medianHours, CYCLE_TIME_ANCHORS, 'log'));
-    const reliability: Reliability = {
-      tag: 'not-reliable',
-      confidence: 'HIGH',
-      note: 'in-progress→done durations from tracker workflow history',
-    };
+    const reliability: Reliability = appendReliabilityNote(
+      {
+        tag: 'not-reliable',
+        confidence: 'HIGH',
+        note: 'in-progress→done durations from tracker workflow history',
+      },
+      trackerFetchNote(tracker.raw)
+    );
     const expression = `median ${medianHours.toFixed(1)}h cycle time from ${trackerHours.length} tracker ticket${trackerHours.length !== 1 ? 's' : ''} (${band})`;
     return makeMetricResult(
       'adp_g5_pr_cycle_time',
@@ -168,17 +198,30 @@ export function compute(
   // Squash/rebase-merge workflows produce no merge commits, so merge_records
   // is empty or unrepresentative (only the rare true merge). Reporting a
   // confident number from that residue would mis-measure a healthy repo.
+  // The SKIP reason must be precise about which source is missing what:
+  // a tracker that IS connected but whose tickets carry no in_progress_at
+  // means the per-ticket status-transition history (changelog) was never
+  // fetched — that is not "needs a connector".
   if (raw.window_stats?.merge_strategy === 'squash') {
+    const note =
+      tracker.available && tracker.ticketCount > 0
+        ? 'squash-merge workflow: no branch merge records in git; tracker connected but tickets lack per-ticket status-transition history (changelog not fetched) — fetch ticket changelogs (or connect a code-host PR API) to measure cycle time'
+        : tracker.available
+          ? 'squash-merge workflow: no branch merge records in git; tracker connected but returned no tickets — connect a code-host connector (PR API) or fetch tracker tickets with status-transition history to measure this'
+          : 'squash-merge workflow: no branch merge records in git — connect a code-host connector (PR API) to measure this';
     return makeMetricResult(
       'adp_g5_pr_cycle_time',
       null,
       'banded',
       [],
-      {
-        tag: 'not-reliable',
-        confidence: 'LOW',
-        note: 'squash-merge workflow: no branch merge records in git — connect a code-host connector (PR API) to measure this',
-      },
+      appendReliabilityNote(
+        {
+          tag: 'not-reliable',
+          confidence: 'LOW',
+          note,
+        },
+        trackerFetchNote(tracker.raw)
+      ),
       [],
       ['git']
     );

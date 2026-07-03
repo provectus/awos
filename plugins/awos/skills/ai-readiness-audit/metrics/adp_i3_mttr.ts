@@ -39,9 +39,11 @@
  * SKIP: never. Returns OK with null value when no merge records exist (minimal git history).
  */
 import {
+  appendReliabilityNote,
   awardCategories,
   makeMetricResult,
   readArtifact,
+  trackerFetchNote,
   type MetricResult,
   type Reliability,
 } from './_base.ts';
@@ -102,11 +104,16 @@ export function compute(
 ): MetricResult {
   // --- Load tracker (optional — only used for incident_source) ---
   let incidentSource: string | null = null;
+  // Partial-fetch note for the tracker path (null when fetch_meta absent/complete).
+  let trackerPartialNote: string | null = null;
   const trackerRead = readArtifact(collectedDir, 'tracker');
   if (!('error' in trackerRead)) {
     const trackerArtifact = trackerRead.artifact;
     if (trackerArtifact?.available && trackerArtifact?.raw?.incident_source) {
       incidentSource = trackerArtifact.raw.incident_source as string;
+    }
+    if (trackerArtifact?.available) {
+      trackerPartialNote = trackerFetchNote(trackerArtifact?.raw);
     }
   }
 
@@ -120,11 +127,14 @@ export function compute(
     // there is no value at all, let alone one computed from incident data.
     if (incidentSource) {
       const categories = awardCategories(standards, 'adp_i3_mttr', topology);
-      const reliability: Reliability = {
-        tag: 'not-reliable',
-        confidence: 'LOW',
-        note: `incident source declared but MTTR is not computed from incident data; ${gitRead.error}`,
-      };
+      const reliability: Reliability = appendReliabilityNote(
+        {
+          tag: 'not-reliable',
+          confidence: 'LOW',
+          note: `incident source declared but MTTR is not computed from incident data; ${gitRead.error}`,
+        },
+        trackerPartialNote
+      );
       return makeMetricResult(
         'adp_i3_mttr',
         null,
@@ -202,6 +212,11 @@ export function compute(
   // Sources: git is always used. Tracker is also used when incident_source is present.
   const sourcesUsed = incidentSource ? ['git', 'tracker'] : ['git'];
   const sourcesMissing: string[] = [];
+
+  // Tracker path: surface a partial tracker fetch in the reliability note.
+  if (incidentSource) {
+    reliability = appendReliabilityNote(reliability, trackerPartialNote);
+  }
 
   const score =
     medianHours !== null

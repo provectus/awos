@@ -49,11 +49,13 @@
  * @see https://agilealliance.org/glossary/invest/  (Bill Wake, 2003)
  */
 import {
+  appendReliabilityNote,
   awardCategories,
   computeReliability,
   makeMetricResult,
   readArtifact,
   skipReliability,
+  trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
 import { bandScore, clamp01 } from './_score.ts';
@@ -168,7 +170,11 @@ export function compute(
     'adp_i4_subtask_split',
     topology
   );
-  const reliability = computeReliability('minimal', ['tracker'], []);
+  // Surface a partial tracker fetch (fetch_meta) in the reliability note.
+  const reliability = appendReliabilityNote(
+    computeReliability('minimal', ['tracker'], []),
+    trackerFetchNote(raw)
+  );
 
   const expression =
     `${parents.length} parent ticket${parents.length === 1 ? '' : 's'} ` +

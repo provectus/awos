@@ -2,7 +2,7 @@
 /**
  * run_audit_test.ts — repeatable test harness for the /awos:ai-readiness-audit skill.
  *
- * Run with: node --import tsx tools/audit-test-harness/run_audit_test.ts …
+ * Run with: node --import tsx tools/ai-readiness-audit/qa/run_audit_test.ts …
  * (or `npm run audit:test -- …`; `npm ci` first — tsx is a devDependency).
  *
  * Pipeline per run:
@@ -32,16 +32,13 @@
  * This is run mostly by Claude Code, so the CLI is intentionally explicit. See README.md.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
-  KM_PATH,
   MARKET_NAME,
-  SETTINGS,
   aggregateSegments,
   assessEngineCompliance,
   awosMainCheckout,
@@ -51,14 +48,29 @@ import {
   isFile,
   locateOutDir,
   readJson,
+  repointMarketplace,
+  restoreMarketplace,
   scanJudgmentsPatched,
   scriptRepoRoot,
   summarizeOutput,
   tokenCostSummary,
 } from './harness_lib.ts';
-import type { Compliance, ReportHtml } from './harness_lib.ts';
+import type { Compliance, MarketPaths, ReportHtml } from './harness_lib.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+// Appended to the system prompt on engine-skip retries only. The previous
+// attempt's leftover artifacts are what the model cites to justify skipping
+// audit-core, so the retry must explicitly demolish that premise.
+const RETRY_CORRECTIVE_PROMPT =
+  'CORRECTIVE NOTE (the previous attempt was non-compliant and its output ' +
+  'was discarded): nothing has scored anything yet. There is no pre-run; ' +
+  'any existing context/audits/<date>/ content is stale and must be ' +
+  'overwritten. Your first scoring action MUST be running the deterministic ' +
+  'engine yourself: node "<skill-dir>/dist/cli.js" audit-core <repoPath> ' +
+  '<outDir>. Never hand-compute metrics (no grep/python/inline scripts for ' +
+  'scoring), never hand-assemble audit JSON, and never spawn per-dimension ' +
+  'auditor subagents.';
 
 // Archive lives in the awos main checkout's tmp/ (kept here on purpose, gitignored).
 // Resolved, not hardcoded, so the location is stable but portable.
@@ -100,10 +112,6 @@ function git(repo: string, ...args: string[]): string {
   return (p.stdout || '').trim();
 }
 
-function sha256(p: string): string {
-  return createHash('sha256').update(fs.readFileSync(p)).digest('hex');
-}
-
 /** shutil.move equivalent: rename, falling back to copy+delete across devices. */
 function moveSync(src: string, dest: string): void {
   try {
@@ -112,127 +120,6 @@ function moveSync(src: string, dest: string): void {
     if (e?.code !== 'EXDEV') throw e;
     fs.cpSync(src, dest, { recursive: true });
     fs.rmSync(src, { recursive: true, force: true });
-  }
-}
-
-// ---------------------------------------------------------------------------
-// The awos-marketplace is a DIRECTORY source: `claude` serves the plugin live
-// from its installLocation/source.path, NOT from the version caches under
-// cache/awos-marketplace/awos/<version>/. So to test worktree code we repoint
-// the marketplace at the worktree and refresh, then restore afterwards.
-// (Deploying to the version caches — the old approach — was never loaded.)
-
-interface MarketPaths {
-  km_source_path: string | null;
-  km_install: string | null;
-  settings_source_path: string | null;
-}
-
-/** Current awos-marketplace source.path + installLocation, from both config files. */
-function marketplacePaths(): MarketPaths {
-  const km = readJson(KM_PATH);
-  const s = readJson(SETTINGS);
-  const m = km[MARKET_NAME] ?? {};
-  return {
-    km_source_path: m.source?.path ?? null,
-    km_install: m.installLocation ?? null,
-    settings_source_path:
-      s.extraKnownMarketplaces?.[MARKET_NAME]?.source?.path ?? null,
-  };
-}
-
-/**
- * Write the marketplace paths (each config file gets its OWN source path)
- * and refresh via `claude plugin marketplace update`. Returns the completed
- * update process so callers can check its exit status.
- */
-function setMarketplacePaths(
-  kmSourcePath: string | null,
-  install: string | null,
-  settingsSourcePath: string | null
-) {
-  const km = readJson(KM_PATH);
-  const s = readJson(SETTINGS);
-  if (!(MARKET_NAME in km)) {
-    die(`marketplace '${MARKET_NAME}' not in ${KM_PATH}`);
-  }
-  if (!km[MARKET_NAME].source) km[MARKET_NAME].source = {};
-  km[MARKET_NAME].source.path = kmSourcePath;
-  km[MARKET_NAME].installLocation = install;
-  if (!s.extraKnownMarketplaces) s.extraKnownMarketplaces = {};
-  if (!s.extraKnownMarketplaces[MARKET_NAME]) {
-    s.extraKnownMarketplaces[MARKET_NAME] = {};
-  }
-  if (!s.extraKnownMarketplaces[MARKET_NAME].source) {
-    s.extraKnownMarketplaces[MARKET_NAME].source = {};
-  }
-  s.extraKnownMarketplaces[MARKET_NAME].source.path = settingsSourcePath;
-  fs.writeFileSync(KM_PATH, JSON.stringify(km, null, 2));
-  fs.writeFileSync(SETTINGS, JSON.stringify(s, null, 2));
-  const up = spawnSync(
-    'claude',
-    ['plugin', 'marketplace', 'update', MARKET_NAME],
-    { encoding: 'utf8' }
-  );
-  return {
-    returncode: up.status ?? -1,
-    stdout: up.stdout || '',
-    stderr: up.error ? String(up.error) : up.stderr || '',
-  };
-}
-
-/**
- * Point awos-marketplace at the worktree and refresh so `claude` serves the
- * worktree's plugin. Returns the original paths for restore. Verifies the
- * worktree is a valid marketplace + has a built engine.
- */
-function repointMarketplace(worktree: string): [MarketPaths, string] {
-  const skill = path.join(
-    worktree,
-    'plugins/awos/skills/ai-readiness-audit/SKILL.md'
-  );
-  if (!isFile(path.join(worktree, '.claude-plugin/marketplace.json'))) {
-    die(
-      `worktree is not a marketplace (no .claude-plugin/marketplace.json): ${worktree}`
-    );
-  }
-  if (!isFile(skill)) die(`worktree has no SKILL.md at ${skill}`);
-  const orig = marketplacePaths();
-  const up = setMarketplacePaths(worktree, worktree, worktree);
-  if (up.returncode !== 0) {
-    // Roll back the config edits before dying — a failed refresh must not
-    // leave the marketplace files pointing at the worktree.
-    setMarketplacePaths(
-      orig.km_source_path,
-      orig.km_install,
-      orig.settings_source_path
-    );
-    die(
-      `claude plugin marketplace update failed (rc=${up.returncode}): ` +
-        (up.stderr || up.stdout).trim()
-    );
-  }
-  return [orig, sha256(skill)];
-}
-
-function restoreMarketplace(orig: MarketPaths): void {
-  const up = setMarketplacePaths(
-    orig.km_source_path,
-    orig.km_install,
-    orig.settings_source_path
-  );
-  if (up.returncode !== 0) {
-    warn('\n' + '!'.repeat(70));
-    warn(
-      `!! WARNING: \`claude plugin marketplace update\` FAILED during restore ` +
-        `(rc=${up.returncode}): ${(up.stderr || up.stdout).trim().slice(0, 300)}`
-    );
-    warn(`!! Your ${MARKET_NAME} marketplace may still point at the worktree.`);
-    warn(
-      `!! Check ${KM_PATH} and ${SETTINGS}, then run: ` +
-        `claude plugin marketplace update ${MARKET_NAME}`
-    );
-    warn('!'.repeat(70));
   }
 }
 
@@ -610,7 +497,6 @@ function printFinalSummary(opts: {
             ? ' (harness salvaged audit-core)'
             : '')
     } — audit_core_calls=${comp.audit_core_calls} ` +
-      `injected=${comp.injected_audit_core} ` +
       `fanout_spawns=${comp.fanout_agent_spawns}`
   );
   out(
@@ -825,8 +711,15 @@ async function main(): Promise<void> {
           log(`  ✓ cleared non-compliant output ${prev}`);
         }
       }
+      // Retries get a corrective system prompt: the barley regression showed
+      // a bare relaunch re-confabulates the same engine skip (three attempts,
+      // ~45 min), so a retry must actually change the model's premises.
+      const attemptFlags =
+        attempt === 1
+          ? claudeFlags
+          : [...claudeFlags, '--append-system-prompt', RETRY_CORRECTIVE_PROMPT];
       finalLog = path.join(runDir, `run.attempt${attempt}.jsonl`);
-      [result, rc] = await streamRun(target, claudeFlags, finalLog);
+      [result, rc] = await streamRun(target, attemptFlags, finalLog);
       outDir = locateOutDir(audits, today, seededDate);
       comp = assessEngineCompliance(outDir, finalLog);
       if (args.noEngineGuard) {

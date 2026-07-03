@@ -17,6 +17,6 @@
   },
   "include": [
     "plugins/awos/skills/ai-readiness-audit/**/*.ts",
-    "tools/audit-test-harness/**/*.ts"
+    "tools/ai-readiness-audit/qa/**/*.ts"
   ]
 }

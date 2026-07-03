@@ -2,8 +2,8 @@
 /**
  * compare_audit_runs.ts — diff two archived audit runs.
  *
- *   node --import tsx tools/audit-test-harness/compare_audit_runs.ts <runDirA> <runDirB>
- *   node --import tsx tools/audit-test-harness/compare_audit_runs.ts --target <repo-name>
+ *   node --import tsx tools/ai-readiness-audit/qa/compare_audit_runs.ts <runDirA> <runDirB>
+ *   node --import tsx tools/ai-readiness-audit/qa/compare_audit_runs.ts --target <repo-name>
  *   (or `npm run audit:compare -- --target <repo-name>`)
  *
  * `--target` picks the two newest runs for that repo. Prints side by side:

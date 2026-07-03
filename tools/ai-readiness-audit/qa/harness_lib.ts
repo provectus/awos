@@ -7,6 +7,7 @@
  * launching claude. See harness.test.ts.
  */
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -21,6 +22,10 @@ export const KM_PATH = path.join(
 
 export function readJson(p: string): any {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
+}
+
+export function sha256(p: string): string {
+  return createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 }
 
 export function isDir(p: string): boolean {
@@ -166,7 +171,6 @@ export function tokenCostSummary(result: any): TokenCostSummary {
 
 export interface ComplianceSignals {
   audit_core_calls: number;
-  injected_audit_core: boolean;
   fanout_agent_spawns: number;
 }
 
@@ -177,28 +181,20 @@ export interface Compliance extends ComplianceSignals {
   engine_seeded_by_harness?: boolean;
 }
 
-// The injection's echo marker with the date variable ALREADY SUBSTITUTED —
-// the raw prompt source has the literal `$D`, so unexecuted prompt text
-// cannot match.
-const INJECT_MARKER =
-  /\[audit-core\] one-pass deterministic engine → context\/audits\/\d{4}-\d{2}-\d{2}/;
-
 /**
  * Count the execution signals in a parsed stream-json transcript.
  *
  * Counting is done on the parsed transcript, NOT on raw substrings: the skill
  * prompt text itself contains "audit-core" (and "dimension-auditor"), so a raw
  * substring count is satisfied by every run — including non-compliant ones.
- * Two execution signals count:
- *   - audit_core_calls — Bash tool_use blocks whose command contains
- *     `audit-core` (the model ran the engine itself, e.g. org mode).
- *   - injected_audit_core — the SKILL.md load-time !`…` injection ran
- *     audit-core before the model acted (produces NO Bash tool_use).
+ * The one compliance signal is audit_core_calls — Bash tool_use blocks whose
+ * command contains `audit-core` (the model ran the engine itself). Echoed
+ * marker text in user/tool-result messages deliberately does NOT count: only
+ * an actual engine invocation is compliance.
  */
 export function complianceFromTranscript(lines: string[]): ComplianceSignals {
   let auditCoreCalls = 0;
   let fanoutSpawns = 0;
-  let injected = false;
   for (const line of lines) {
     const s = line.trim();
     if (!s) continue;
@@ -210,11 +206,6 @@ export function complianceFromTranscript(lines: string[]): ComplianceSignals {
     }
     const t = ev.type;
     const content = ev.message?.content ?? [];
-    if (t === 'user' && !injected) {
-      const blob =
-        typeof content === 'string' ? content : JSON.stringify(content);
-      if (INJECT_MARKER.test(blob)) injected = true;
-    }
     if (t !== 'assistant') continue;
     for (const b of Array.isArray(content) ? content : []) {
       if (!b || typeof b !== 'object' || b.type !== 'tool_use') continue;
@@ -232,8 +223,90 @@ export function complianceFromTranscript(lines: string[]): ComplianceSignals {
   }
   return {
     audit_core_calls: auditCoreCalls,
-    injected_audit_core: injected,
     fanout_agent_spawns: fanoutSpawns,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Smoke-test signals — "did the model go wild?" markers beyond the basic
+// engine-compliance count. Used by compliance_smoke.ts.
+// ---------------------------------------------------------------------------
+
+export interface SmokeSignals {
+  /** Write/Edit tool_use targeting report.md / report.html — the renderer must produce those, never the model. */
+  handwritten_report_writes: number;
+  /** Write/Edit tool_use targeting context/audits/**\/*.json other than the two sanctioned authoring files (judgments.json, report-blocks.json) — hand-assembled scoring artifacts. */
+  hand_json_writes: number;
+  /** Bash `python -c` / `node -e` inline-compute calls — the hand-scoring improvisation marker. */
+  hand_compute_calls: number;
+  /** The final assistant text ends in a question — the run stalled waiting for a user that isn't there. */
+  final_text_is_question: boolean;
+}
+
+const HAND_COMPUTE_RE = /\bpython3?\s+-c\b|\bnode\s+(-e|--eval)\b/;
+const REPORT_FILE_RE = /report\.(md|html)$/;
+const AUDIT_JSON_WRITE_RE = /context\/audits\/[^\s'"]*\.json/;
+// The two files SKILL.md sanctions the orchestrator to author, each consumed
+// by its own engine verb (patch-judgment / patch-report).
+const SANCTIONED_AUTHORED_JSON = /(judgments|report-blocks)\.json$/;
+
+/**
+ * Scan a parsed stream-json transcript for go-wild signals. Complements
+ * complianceFromTranscript (which only counts engine/fan-out signals).
+ * Writes of `judgments.json` / `report-blocks.json` are legitimate (SKILL.md
+ * Step 6.3/6.4 authoring files) and excluded from hand_json_writes.
+ */
+export function smokeSignalsFromTranscript(lines: string[]): SmokeSignals {
+  let reportWrites = 0;
+  let jsonWrites = 0;
+  let handCompute = 0;
+  let lastText = '';
+  for (const line of lines) {
+    const s = line.trim();
+    if (!s) continue;
+    let ev: any;
+    try {
+      ev = JSON.parse(s);
+    } catch {
+      continue;
+    }
+    if (ev.type !== 'assistant') continue;
+    const content = ev.message?.content ?? [];
+    for (const b of Array.isArray(content) ? content : []) {
+      if (!b || typeof b !== 'object') continue;
+      if (b.type === 'text' && String(b.text ?? '').trim()) {
+        lastText = String(b.text).trim();
+        continue;
+      }
+      if (b.type !== 'tool_use') continue;
+      const name = b.name ?? '';
+      const input = b.input ?? {};
+      if (name === 'Write' || name === 'Edit') {
+        const fp = String(input.file_path ?? '');
+        if (REPORT_FILE_RE.test(fp)) reportWrites++;
+        else if (
+          AUDIT_JSON_WRITE_RE.test(fp) &&
+          !SANCTIONED_AUTHORED_JSON.test(fp)
+        ) {
+          jsonWrites++;
+        }
+      } else if (name === 'Bash') {
+        const cmd = String(input.command ?? '');
+        if (HAND_COMPUTE_RE.test(cmd)) handCompute++;
+        // Shell redirection into a scoring artifact counts as a hand write
+        // too (heredocs into the sanctioned authoring files are fine).
+        const redir = cmd.match(
+          />{1,2}\s*['"]?(\S*context\/audits\/\S*\.json)/
+        );
+        if (redir && !SANCTIONED_AUTHORED_JSON.test(redir[1])) jsonWrites++;
+      }
+    }
+  }
+  return {
+    handwritten_report_writes: reportWrites,
+    hand_json_writes: jsonWrites,
+    hand_compute_calls: handCompute,
+    final_text_is_question: /\?\s*$/.test(lastText),
   };
 }
 
@@ -259,7 +332,6 @@ export function assessEngineCompliance(
       isFile(path.join(outDir, 'org-portfolio.json')));
   let signals: ComplianceSignals = {
     audit_core_calls: 0,
-    injected_audit_core: false,
     fanout_agent_spawns: 0,
   };
   try {
@@ -268,8 +340,7 @@ export function assessEngineCompliance(
   } catch {
     // no transcript → zero signals
   }
-  const compliant =
-    hasJson && (signals.audit_core_calls > 0 || signals.injected_audit_core);
+  const compliant = hasJson && signals.audit_core_calls > 0;
   return {
     engine_compliant: compliant,
     has_audit_json: hasJson,
@@ -412,4 +483,128 @@ export function scanJudgmentsPatched(archivedDir: string): boolean | null {
     }
   }
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace repointing
+// ---------------------------------------------------------------------------
+// The awos-marketplace is a DIRECTORY source: `claude` serves the plugin live
+// from its installLocation/source.path, NOT from the version caches under
+// cache/awos-marketplace/awos/<version>/. So to test worktree code we repoint
+// the marketplace at the worktree and refresh, then restore afterwards.
+// Shared by run_audit_test.ts (full harness) and compliance_smoke.ts.
+
+export interface MarketPaths {
+  km_source_path: string | null;
+  km_install: string | null;
+  settings_source_path: string | null;
+}
+
+/** Current awos-marketplace source.path + installLocation, from both config files. */
+export function marketplacePaths(): MarketPaths {
+  const km = readJson(KM_PATH);
+  const s = readJson(SETTINGS);
+  const m = km[MARKET_NAME] ?? {};
+  return {
+    km_source_path: m.source?.path ?? null,
+    km_install: m.installLocation ?? null,
+    settings_source_path:
+      s.extraKnownMarketplaces?.[MARKET_NAME]?.source?.path ?? null,
+  };
+}
+
+/**
+ * Write the marketplace paths (each config file gets its OWN source path)
+ * and refresh via `claude plugin marketplace update`. Returns the completed
+ * update process so callers can check its exit status.
+ */
+export function setMarketplacePaths(
+  kmSourcePath: string | null,
+  install: string | null,
+  settingsSourcePath: string | null
+): { returncode: number; stdout: string; stderr: string } {
+  const km = readJson(KM_PATH);
+  const s = readJson(SETTINGS);
+  if (!(MARKET_NAME in km)) {
+    throw new Error(`marketplace '${MARKET_NAME}' not in ${KM_PATH}`);
+  }
+  if (!km[MARKET_NAME].source) km[MARKET_NAME].source = {};
+  km[MARKET_NAME].source.path = kmSourcePath;
+  km[MARKET_NAME].installLocation = install;
+  if (!s.extraKnownMarketplaces) s.extraKnownMarketplaces = {};
+  if (!s.extraKnownMarketplaces[MARKET_NAME]) {
+    s.extraKnownMarketplaces[MARKET_NAME] = {};
+  }
+  if (!s.extraKnownMarketplaces[MARKET_NAME].source) {
+    s.extraKnownMarketplaces[MARKET_NAME].source = {};
+  }
+  s.extraKnownMarketplaces[MARKET_NAME].source.path = settingsSourcePath;
+  fs.writeFileSync(KM_PATH, JSON.stringify(km, null, 2));
+  fs.writeFileSync(SETTINGS, JSON.stringify(s, null, 2));
+  const up = spawnSync(
+    'claude',
+    ['plugin', 'marketplace', 'update', MARKET_NAME],
+    { encoding: 'utf8' }
+  );
+  return {
+    returncode: up.status ?? -1,
+    stdout: up.stdout || '',
+    stderr: up.error ? String(up.error) : up.stderr || '',
+  };
+}
+
+/**
+ * Point awos-marketplace at the worktree and refresh so `claude` serves the
+ * worktree's plugin. Returns the original paths for restore. Verifies the
+ * worktree is a valid marketplace + has a built engine.
+ */
+export function repointMarketplace(worktree: string): [MarketPaths, string] {
+  const skill = path.join(
+    worktree,
+    'plugins/awos/skills/ai-readiness-audit/SKILL.md'
+  );
+  if (!isFile(path.join(worktree, '.claude-plugin/marketplace.json'))) {
+    throw new Error(
+      `worktree is not a marketplace (no .claude-plugin/marketplace.json): ${worktree}`
+    );
+  }
+  if (!isFile(skill)) throw new Error(`worktree has no SKILL.md at ${skill}`);
+  const orig = marketplacePaths();
+  const up = setMarketplacePaths(worktree, worktree, worktree);
+  if (up.returncode !== 0) {
+    // Roll back the config edits before dying — a failed refresh must not
+    // leave the marketplace files pointing at the worktree.
+    setMarketplacePaths(
+      orig.km_source_path,
+      orig.km_install,
+      orig.settings_source_path
+    );
+    throw new Error(
+      `claude plugin marketplace update failed (rc=${up.returncode}): ` +
+        (up.stderr || up.stdout).trim()
+    );
+  }
+  return [orig, sha256(skill)];
+}
+
+export function restoreMarketplace(orig: MarketPaths): void {
+  const up = setMarketplacePaths(
+    orig.km_source_path,
+    orig.km_install,
+    orig.settings_source_path
+  );
+  if (up.returncode !== 0) {
+    const w = (m: string) => process.stderr.write(m + '\n');
+    w('\n' + '!'.repeat(70));
+    w(
+      `!! WARNING: \`claude plugin marketplace update\` FAILED during restore ` +
+        `(rc=${up.returncode}): ${(up.stderr || up.stdout).trim().slice(0, 300)}`
+    );
+    w(`!! Your ${MARKET_NAME} marketplace may still point at the worktree.`);
+    w(
+      `!! Check ${KM_PATH} and ${SETTINGS}, then run: ` +
+        `claude plugin marketplace update ${MARKET_NAME}`
+    );
+    w('!'.repeat(70));
+  }
 }

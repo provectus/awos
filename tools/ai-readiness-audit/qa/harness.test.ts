@@ -15,6 +15,7 @@ import {
   complianceFromTranscript,
   formatWallTime,
   scanJudgmentsPatched,
+  smokeSignalsFromTranscript,
   summarizeOutput,
   tokenCostSummary,
 } from './harness_lib.ts';
@@ -170,24 +171,17 @@ const FANOUT_SPAWN = transcriptLine({
     ],
   },
 });
-const INJECTED_MARKER = transcriptLine({
+// Echo of the retired load-time injection's marker (date substituted). The
+// injection is deleted from SKILL.md; the marker must never count as
+// compliance again — a model could produce it with a plain `echo` without
+// ever running the engine.
+const ECHOED_MARKER = transcriptLine({
   type: 'user',
   message: {
     content: [
       {
         type: 'text',
         text: '[audit-core] one-pass deterministic engine → context/audits/2026-07-03',
-      },
-    ],
-  },
-});
-const UNSUBSTITUTED_MARKER = transcriptLine({
-  type: 'user',
-  message: {
-    content: [
-      {
-        type: 'text',
-        text: '[audit-core] one-pass deterministic engine → context/audits/$D',
       },
     ],
   },
@@ -201,7 +195,7 @@ test('complianceFromTranscript counts execution signals, not prompt text', () =>
     BASH_AUDIT_CORE,
     BASH_AUDIT_CORE,
     FANOUT_SPAWN,
-    UNSUBSTITUTED_MARKER,
+    ECHOED_MARKER,
   ]);
   assert.equal(
     sig.audit_core_calls,
@@ -213,16 +207,82 @@ test('complianceFromTranscript counts execution signals, not prompt text', () =>
     1,
     'dimension-auditor Agent spawns are counted'
   );
+  const echoOnly = complianceFromTranscript([ECHOED_MARKER]);
   assert.equal(
-    sig.injected_audit_core,
-    false,
-    'the unsubstituted $D marker (raw prompt text) must NOT count as injection'
+    echoOnly.audit_core_calls,
+    0,
+    'an echoed injection marker is not an engine invocation — only a Bash tool_use running audit-core counts'
   );
-  const injected = complianceFromTranscript([INJECTED_MARKER]);
+});
+
+test('smokeSignalsFromTranscript flags hand-written artifacts, inline compute, and question stalls', () => {
+  const toolUse = (name: string, input: Record<string, unknown>) =>
+    transcriptLine({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', name, input }] },
+    });
+  const text = (t: string) =>
+    transcriptLine({
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: t }] },
+    });
+
+  const sig = smokeSignalsFromTranscript([
+    toolUse('Write', {
+      file_path: '/repo/context/audits/2026-07-03/report.md',
+    }),
+    toolUse('Edit', { file_path: 'context/audits/2026-07-03/audit.json' }),
+    toolUse('Write', {
+      file_path: 'context/audits/2026-07-03/judgments.json',
+    }),
+    toolUse('Write', {
+      file_path: 'context/audits/2026-07-03/report-blocks.json',
+    }),
+    toolUse('Bash', { command: 'python3 -c "print(1+1)"' }),
+    toolUse('Bash', {
+      command: 'echo "{}" > context/audits/2026-07-03/spec.json',
+    }),
+    toolUse('Bash', {
+      command: "cat > context/audits/2026-07-03/judgments.json <<'JSON'",
+    }),
+    text('Which repos should I include in the audit scope?'),
+  ]);
   assert.equal(
-    injected.injected_audit_core,
+    sig.handwritten_report_writes,
+    1,
+    'a Write to report.md is a hand-written report'
+  );
+  assert.equal(
+    sig.hand_json_writes,
+    2,
+    'Edit of audit.json + shell redirect into spec.json count; judgments.json/report-blocks.json writes are the sanctioned exceptions'
+  );
+  assert.equal(
+    sig.hand_compute_calls,
+    1,
+    'python3 -c is the hand-scoring improvisation marker'
+  );
+  assert.equal(
+    sig.final_text_is_question,
     true,
-    'the date-substituted echo marker proves the load-time injection ran'
+    'a run whose final assistant text ends with "?" stalled asking an absent user'
+  );
+
+  const clean = smokeSignalsFromTranscript([
+    toolUse('Bash', {
+      command: 'node "/skill/dist/cli.js" audit-core /repo out',
+    }),
+    text('Audit complete — report at context/audits/2026-07-03/report.html.'),
+  ]);
+  assert.deepEqual(
+    clean,
+    {
+      handwritten_report_writes: 0,
+      hand_json_writes: 0,
+      hand_compute_calls: 0,
+      final_text_is_question: false,
+    },
+    'a compliant engine-driven run must produce zero go-wild signals'
   );
 });
 

@@ -2,8 +2,11 @@
 
 Repeatable, provenance-tagged test runs of the `/awos:ai-readiness-audit` skill against real local repos. A developer/QA aid — not shipped product (the installer only copies `commands/`, `templates/`, `scripts/`, `claude/commands/`, so this `tools/` dir never reaches a user's project).
 
-- `run_audit_test.py` — deploy worktree skill → prepare target → run headless → guard engine compliance (retry/salvage) → measure tokens → archive.
-- `compare_audit_runs.py` — diff two archived runs (per-dimension score deltas + tokens/cost).
+- `run_audit_test.ts` — deploy worktree skill → prepare target → run headless (with a live progress log) → guard engine compliance (retry/salvage) → measure tokens → archive → print a final summary.
+- `compare_audit_runs.ts` — diff two archived runs (per-dimension score deltas + tokens/cost).
+- `harness_lib.ts` — the pure helpers both scripts share (compliance counting, token aggregation, report-path collection), unit-tested by `harness.test.ts` (`npm run test:harness`, part of `npm test`).
+
+The harness is TypeScript, run under `node --import tsx`; `tsx` is a devDependency, so run `npm ci` in the awos checkout once before first use.
 
 **Where things live.** The scripts are committed here (`tools/audit-test-harness/`). The run archive stays at `<awos main checkout>/tmp/audit-runs/` (gitignored). Both scripts resolve that path automatically from the `awos-marketplace` directory source (falling back to the script's own repo root), so runs accumulate in one place no matter which checkout — main or a worktree — you invoke the harness from. `--worktree` defaults to the checkout the script lives in.
 
@@ -24,22 +27,31 @@ Whatever is already in the target's `context/audits/` is **stashed into the run'
 ## Usage
 
 ```sh
-H=<awos>/tools/audit-test-harness   # e.g. ~/code/awos/.worktrees/feat-ai-sdlc-metrics/tools/audit-test-harness
+# From the awos checkout whose skill is under test (npm ci once beforehand):
 
 # Cold run (empty). --build only when you changed engine .ts (rebuilds dist/ before deploy).
-python3 $H/run_audit_test.py --target ~/code/onex-discovery-api --phase first --label baseline
+npm run audit:test -- --target ~/code/onex-discovery-api --phase first --label baseline
 
 # After changing the skill, run the warm case seeded from that baseline:
-python3 $H/run_audit_test.py --target ~/code/onex-discovery-api --phase second --label "tweaked QA-03" --build
+npm run audit:test -- --target ~/code/onex-discovery-api --phase second --label "tweaked QA-03" --build
 
 # Compare the two newest runs (or pass two run dirs):
-python3 $H/compare_audit_runs.py --target onex-discovery-api
+npm run audit:compare -- --target onex-discovery-api
 
 # Preview without launching claude or touching the target or the marketplace:
-python3 $H/run_audit_test.py --target ~/code/onex-discovery-api --dry-run
+npm run audit:test -- --target ~/code/onex-discovery-api --dry-run
+
+# Equivalent direct form (any checkout):
+node --import tsx <awos>/tools/audit-test-harness/run_audit_test.ts --target ~/code/onex-discovery-api --dry-run
 ```
 
-Other flags: `--worktree <path>` (skill under test; default = the checkout this script lives in), `--no-deploy` (don't repoint the marketplace — use whatever it currently serves), `--claude-flags "<flags>"` (default `--dangerously-skip-permissions`), `--model <name>` (model for the audit session and its subagents, passed to `claude -p --model`; default `sonnet` — the unpinned best-Sonnet alias), `--allow-user-mcp` (skip `--strict-mcp-config`, letting the session see the operator's user-scope MCP servers — real Jira, Slack, …; default is strict isolation so a test audit can never pull live connector data).
+Other flags: `--worktree <path>` (skill under test; default = the checkout this script lives in), `--no-deploy` (don't repoint the marketplace — use whatever it currently serves), `--claude-flags "<flags>"` (default `--dangerously-skip-permissions`), `--model <name>` (model for the audit session and its subagents, passed to `claude -p --model`; default `sonnet` — the unpinned best-Sonnet alias), `--allow-user-mcp` (skip `--strict-mcp-config`, letting the session see the operator's user-scope MCP servers — real Jira, Slack, …; default is strict isolation so a test audit can never pull live connector data), `--quiet` (suppress the live log and progress output; only the final summary is printed).
+
+## Live log + final summary
+
+While the run is in flight, a concise live log streams to stderr, each line prefixed with the elapsed wall time `[MmSSs]`: every `Bash` tool call (first ~80 chars — so `audit-core`, `enrich`, `patch-judgment`, `render` invocations are visible), every `Agent`/`Task` subagent spawn, any assistant text matching the skill's progress emissions (`[Audit]` / `pct` / `eta_seconds`), per-segment result summaries, and a heartbeat after every 60s without stream events. `--quiet` suppresses it.
+
+After archiving, a delimited **run summary** block is always printed (even with `--quiet`): wall time as `NmSSs`, tokens (in / out / cache-read / cache-write), cost as `$X.XXXX`, turns, the engine-compliance verdict, the judgments-patched verdict, the headline score, and the **absolute archived path(s) to `report.html`** (org mode lists the org report plus each `per-repo/<repo>/report.html`; a missing report is called out explicitly). The same `report_html` paths array is persisted into `run-meta.json`.
 
 ## Org mode — pin nothing
 
@@ -50,7 +62,7 @@ Left to the skill. `--target` also accepts a non-git parent folder of git repos 
 The script is the primary measure. If you instead run the audit **interactively** (in the Claude Code TUI rather than via this harness):
 
 - Type **`/cost`** in that session for a running token + USD total.
-- Or capture the same way the script does: run with `--output-format stream-json --verbose`, tee to a file, and read the final line: `tail -1 run.jsonl | python3 -c "import json,sys; r=json.load(sys.stdin); print(r['total_cost_usd'], r['usage'])"`.
+- Or capture the same way the script does: run with `--output-format stream-json --verbose`, tee to a file, and read the final line: `tail -1 run.jsonl | node -e "let s='';process.stdin.on('data',(d)=>(s+=d)).on('end',()=>{const r=JSON.parse(s);console.log(r.total_cost_usd, JSON.stringify(r.usage))})"`.
 - Per-model / per-turn breakdown lives in the result event's `modelUsage`; a per-sub-agent view can be reconstructed from the `assistant` events in `run.jsonl`.
 
 ## Archive layout
@@ -69,7 +81,7 @@ Each run records the original `awos-marketplace` `source.path` + `installLocatio
 
 ```sh
 # inspect — should be your main checkout, not a worktree
-python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.claude/plugins/known_marketplaces.json')))['awos-marketplace']['installLocation'])"
+node -p "JSON.parse(require('fs').readFileSync(process.env.HOME + '/.claude/plugins/known_marketplaces.json', 'utf8'))['awos-marketplace'].installLocation"
 # if it shows a worktree, repoint by hand then refresh:
 #   edit ~/.claude/plugins/known_marketplaces.json + ~/.claude/settings.json back to the main checkout, then:
 claude plugin marketplace update awos-marketplace

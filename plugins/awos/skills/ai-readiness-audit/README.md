@@ -30,32 +30,30 @@ The engine reads this file at run time — **adding or re-weighting a category i
 
 ## How to test it headless
 
-Behavioral testing runs the real skill through headless `claude -p` via the Python harness in [`tools/audit-test-harness/`](../../../../tools/audit-test-harness/README.md) (repo-relative: `tools/audit-test-harness/`). It deploys **your worktree's** version of the plugin by repointing the local marketplace (and restores it afterward), controls the previous-audit state, guards against the known engine-skipping regression, measures tokens/cost, and archives everything under `<awos main checkout>/tmp/audit-runs/<target>/<timestamp>__<sha>__<phase>/`.
+Behavioral testing runs the real skill through headless `claude -p` via the TypeScript harness in [`tools/audit-test-harness/`](../../../../tools/audit-test-harness/README.md) (repo-relative: `tools/audit-test-harness/`; run via `npm run audit:test`, needs `npm ci` once for `tsx`). It deploys **your worktree's** version of the plugin by repointing the local marketplace (and restores it afterward), controls the previous-audit state, guards against the known engine-skipping regression, measures tokens/cost, and archives everything under `<awos main checkout>/tmp/audit-runs/<target>/<timestamp>__<sha>__<phase>/`.
 
 ```sh
-H=tools/audit-test-harness
-
 # Cold single-repo run (no previous audit). --build rebuilds dist/ first — use it whenever engine .ts changed.
-python3 $H/run_audit_test.py --target ~/code/some-repo --phase first --label "my change" --build
+npm run audit:test -- --target ~/code/some-repo --phase first --label "my change" --build
 
 # Warm run (previous audit seeded from the newest archived run, so the delta logic fires):
-python3 $H/run_audit_test.py --target ~/code/some-repo --phase second --label "my change"
+npm run audit:test -- --target ~/code/some-repo --phase second --label "my change"
 
 # Org mode — point at a non-git parent folder of git repos:
-python3 $H/run_audit_test.py --target ~/code/some-org-folder --phase first --label "org run"
+npm run audit:test -- --target ~/code/some-org-folder --phase first --label "org run"
 
 # Compare the two newest archived runs for a target (scores per dimension + tokens/cost):
-python3 $H/compare_audit_runs.py --target some-repo
+npm run audit:compare -- --target some-repo
 ```
 
-Flags worth knowing: `--model` (default `sonnet`), `--dry-run` (preview, touches nothing), `--no-deploy` (test whatever the marketplace currently serves), `--allow-user-mcp` (let the session see your real MCP servers — required for testing live Jira/Confluence connector fetches; the default is strict isolation), `--retries` (engine-compliance retry count). Each run's `run-meta.json` records provenance (worktree SHA, model), token usage, `compliance` (did the model actually call `audit-core`), `partial`, and `judgments_patched` — a run that died mid-flight or skipped the engine exits non-zero instead of looking green.
+Flags worth knowing: `--model` (default `sonnet`), `--dry-run` (preview, touches nothing), `--no-deploy` (test whatever the marketplace currently serves), `--allow-user-mcp` (let the session see your real MCP servers — required for testing live Jira/Confluence connector fetches; the default is strict isolation), `--retries` (engine-compliance retry count), `--quiet` (only the final summary). While in flight the harness streams a `[MmSSs]`-prefixed live log (engine Bash calls, subagent spawns, progress emissions, a 60s heartbeat) and finishes with a summary block: wall time, tokens, cost, compliance/judgment verdicts, and the absolute archived `report.html` path(s). Each run's `run-meta.json` records provenance (worktree SHA, model), token usage, `compliance` (did the model actually call `audit-core`), `partial`, `judgments_patched`, and `report_html` — a run that died mid-flight or skipped the engine exits non-zero instead of looking green.
 
 Deterministic unit/integration tests for the engine itself don't need the harness: `npm run test:engine` (needs `npm ci` once), `npm run typecheck`. After any engine `.ts` edit, `npm run build:engine` and commit the regenerated `dist/` — CI fails on a stale bundle.
 
 ## How to update it over time
 
-- **standards.toml (the scoring model)** — run the maintainer skill [`/standards-refresh`](../../../../.claude/skills/standards-refresh/SKILL.md) once per major AWOS release, or whenever a cited standard publishes a new edition. It re-verifies every `source`/`url` (dead links, redirects-to-home, self-references to the AWOS repo), proposes replacement authorities, and re-evaluates weights against current practice — emitting a cited proposal document plus a ready-to-paste `standards-refresh-patch.toml`. Review the proposal, apply the patch to `standards.toml`, and update `last_verified`. `scripts/standards-linkcheck.mjs` is the quick mechanical subset (link liveness only).
+- **standards.toml (the scoring model)** — run the maintainer skill [`/standards-refresh`](../../../../.claude/skills/standards-refresh/SKILL.md) once per major AWOS release, or whenever a cited standard publishes a new edition. It re-verifies every `source`/`url` (dead links, redirects-to-home, self-references to the AWOS repo), proposes replacement authorities, and re-evaluates weights against current practice — emitting a cited proposal document plus a ready-to-paste `standards-refresh-patch.toml`. Review the proposal, apply the patch to `standards.toml`, and update `last_verified`. `tools/ai-readiness-audit/standards-linkcheck.mjs` is the quick mechanical subset (link liveness only).
 - **Adding a dimension** — drop a new `dimensions/<name>.md` with frontmatter and per-check sections, add its `[category.*]` records to standards.toml, and (for `detected`/`computed` categories) register the detector/metric functions. The `detector-coverage` test fails until every non-judgment category has an implementation; `[meta].dimension_order` controls report order.
 - **Adding or tuning a metric** — implement in `metrics/`, map it to a category code, and keep the fixture contract: every scored metric must reach 0 on a worst-case repo and its max on a best-case one, and must SKIP (with a reason) rather than FAIL when its data source is absent or unreadable.
-- **Prompt changes** (SKILL.md, dimension docs, connector-shapes) — the Layer-1 lint (`npm run test:lint`) pins the load-bearing phrases; after behavioral edits, validate with a harness run rather than trusting a read-through, and compare against the previous archive with `compare_audit_runs.py`.
+- **Prompt changes** (SKILL.md, dimension docs, connector-shapes) — the Layer-1 lint (`npm run test:lint`) pins the load-bearing phrases; after behavioral edits, validate with a harness run rather than trusting a read-through, and compare against the previous archive with `npm run audit:compare`.
 - **Versioning** — when skill behavior changes, bump the version in both `.claude-plugin/marketplace.json` and `plugins/awos/.claude-plugin/plugin.json` (release-drafter drives the actual release from PR labels).

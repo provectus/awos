@@ -1,4 +1,5 @@
 import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { findApiSpecFiles } from './api_specs.ts';
 import { existsSync, readdirSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
 
@@ -234,9 +235,9 @@ export function detectServiceReadmes(
 // equivalent.
 //
 // Signals:
-//   - openapi.yaml / openapi.json / swagger.yaml / swagger.json
-//   - asyncapi.yaml
-//   - *api-docs* files
+//   - any YAML/JSON document carrying a top-level OpenAPI/Swagger/AsyncAPI
+//     version key (content-sniffed via api_specs.ts — file naming varies by
+//     team; the standard's mandatory version field does not)
 //   - FastAPI auto-docs indicator: `app = FastAPI(` present
 //   - Springdoc / Springfox import in Java/Kotlin source
 //
@@ -244,19 +245,6 @@ export function detectServiceReadmes(
 // FAIL  if no API documentation found.
 // SKIP  if no API source files detected.
 // ---------------------------------------------------------------------------
-
-const API_DOC_GLOBS = [
-  'openapi.yaml',
-  'openapi.yml',
-  'openapi.json',
-  'swagger.yaml',
-  'swagger.yml',
-  'swagger.json',
-  'asyncapi.yaml',
-  'asyncapi.yml',
-  'api-docs.yaml',
-  'api-docs.json',
-];
 
 // No outer \b(...)\b wrapper: `\b` before `@` can never match (both sides
 // non-word), and a trailing `\b` after `(` / `)` kills `express()` /
@@ -305,8 +293,9 @@ export function detectApiDocs(
 
   const signals: string[] = [];
 
-  // Check for static API doc files
-  const apiDocFiles = iterFiles(repoPath, API_DOC_GLOBS);
+  // Check for static API doc files by CONTENT (top-level spec version key),
+  // not by basename — see api_specs.ts.
+  const apiDocFiles = findApiSpecFiles(repoPath);
   if (apiDocFiles.length > 0) {
     signals.push(
       ...apiDocFiles

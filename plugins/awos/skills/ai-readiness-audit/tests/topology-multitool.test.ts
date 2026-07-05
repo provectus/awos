@@ -74,3 +74,20 @@ test('Rust API repo: has_api is true when Cargo.toml + axum keyword in .rs file'
     'has_api must be true for Rust repo with axum keyword in .rs source (was false before CODE_GLOBS broadening)'
   );
 });
+
+test('spec-only repo: has_api is true when the only API signal is a custom-named OpenAPI document', () => {
+  const t = makeTmpDir();
+  mkdirSync(join(t, 'swagger'), { recursive: true });
+  writeFileSync(
+    join(t, 'swagger', 'api.yaml'),
+    'openapi: 3.0.3\ninfo:\n  title: Contract\n  version: 1.0.0\n'
+  );
+
+  const flags = computeTopology(t);
+
+  assert.equal(
+    flags.has_api,
+    true,
+    'a contract-first repo with no server code must still count as an API project — spec discovery is by content, not basename'
+  );
+});

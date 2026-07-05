@@ -21,6 +21,7 @@ import {
 } from 'node:fs';
 import { join, dirname, basename, resolve, sep } from 'node:path';
 import { iterFiles, hasMatch } from './detectors/_base.ts';
+import { findApiSpecFiles } from './detectors/api_specs.ts';
 import { detectCiConfigPath } from './ci_platforms.ts';
 import {
   ALL_INSTRUCTION_FILES,
@@ -124,7 +125,9 @@ export function computeTopology(
   );
   const hasApi =
     hasHttpApi ||
-    anyGlob(repoPath, ['openapi.json', 'openapi.yaml', 'swagger.json']) ||
+    // Content-sniffed spec discovery (top-level openapi:/swagger:/asyncapi:
+    // version key) — file naming varies by team; see detectors/api_specs.ts.
+    findApiSpecFiles(repoPath).length > 0 ||
     codeMatches(
       repoPath,
       /\b(graphql|grpc|@grpc|protobuf|router\.(get|post|put))\b/i

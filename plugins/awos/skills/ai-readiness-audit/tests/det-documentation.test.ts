@@ -495,3 +495,72 @@ test('DETECTORS[2203]: fixture README referencing only existing make targets →
   assert.equal(r.status, 'PASS');
   assert.equal(r.method, 'detected');
 });
+
+// ---------------------------------------------------------------------------
+// DOC-03 content-sniffed spec discovery (regression: an OpenAPI-first repo
+// keeping its root spec at swagger/api.yaml — a valid `openapi: 3.0.3`
+// document plus 64 per-resource path files — FAILed DOC-03 because detection
+// matched an exact-basename allow-list instead of the standard's mandatory
+// top-level version key).
+// ---------------------------------------------------------------------------
+
+test('DOC-03: spec under a custom name/path (swagger/api.yaml) is found by content', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'contract', 'swagger', 'paths'), { recursive: true });
+  writeFileSync(
+    join(t, 'server.kt'),
+    '@RestController\nclass ProjectsController(val svc: Service)\n'
+  );
+  writeFileSync(
+    join(t, 'contract', 'swagger', 'api.yaml'),
+    'openapi: 3.0.3\ninfo:\n  title: HOP\n  version: 1.0.0\n'
+  );
+  writeFileSync(
+    join(t, 'contract', 'swagger', 'paths', 'projects.yaml'),
+    'get:\n  summary: list projects\n'
+  );
+  const r = detectApiDocs(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'a document with a top-level `openapi:` version key IS the API documentation, whatever the file is named'
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('api.yaml')),
+    `evidence must name the discovered spec file, got ${JSON.stringify(r.evidence)}`
+  );
+});
+
+test('DOC-03: a file merely NAMED openapi.yaml without spec content is not documentation', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'server.ts'),
+    'import express from "express";\nconst app = express();\napp.get("/users", handler);\n'
+  );
+  writeFileSync(
+    join(t, 'openapi.yaml'),
+    '# TODO: write the spec someday\nplaceholder: true\n'
+  );
+  const r = detectApiDocs(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'an empty placeholder must not pass on its filename — the standard requires a top-level version key'
+  );
+});
+
+test('DOC-03: JSON spec with a custom name is found by content', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'server.ts'),
+    'import express from "express";\nconst app = express();\napp.get("/users", handler);\n'
+  );
+  mkdirSync(join(t, 'docs'), { recursive: true });
+  writeFileSync(
+    join(t, 'docs', 'service-api.json'),
+    '{\n  "openapi": "3.1.0",\n  "info": { "title": "Svc", "version": "1.0" }\n}\n'
+  );
+  const r = detectApiDocs(t);
+  assert.equal(r.status, 'PASS', 'JSON specs must be sniffed too');
+  assert.ok(r.evidence.some((e) => e.includes('service-api.json')));
+});

@@ -27,13 +27,18 @@
  *     >6  → "concerning"  likely over-splitting; coordination cost signal
  *
  * Score anchors (linear piecewise interpolation):
- *   ANCHORS = [{x:0,y:1},{x:3,y:0.8},{x:6,y:0.4},{x:10,y:0}]
+ *   ANCHORS = [{x:1,y:1},{x:3,y:0.8},{x:6,y:0.4},{x:10,y:0}]
  *   score = clamp01(bandScore(avg, ANCHORS, 'linear'))
+ *   The first anchor is a PLATEAU: bandScore clamps values left of it to its
+ *   y, so any avg ≤ 1 subtask/parent scores a full 1.0. A point-anchor at
+ *   x=0 made a perfect score unreachable in practice — one subtask anywhere
+ *   in the tracker pushed the average above 0 and branded a healthy project
+ *   PARTIAL forever.
  *
  * Averaging denominator: all parent-eligible tickets — every ticket that is
  * not itself a sub-task (no `parent`), including those with zero sub-tasks
  * (missing subtask_count on a parent-eligible ticket counts as 0). This keeps
- * the {x:0, y:1} anchor reachable and stops one over-split epic from
+ * the full-score plateau reachable and stops one over-split epic from
  * dominating the mean.
  *
  * SKIP conditions:
@@ -61,7 +66,9 @@ import {
 import { bandScore, clamp01, mean } from './_score.ts';
 
 const ANCHORS = [
-  { x: 0, y: 1 },
+  // Plateau: any avg ≤ 1 scores 1.0 (bandScore clamps left of the first
+  // anchor) — see the header rationale.
+  { x: 1, y: 1 },
   { x: 3, y: 0.8 },
   { x: 6, y: 0.4 },
   { x: 10, y: 0 },

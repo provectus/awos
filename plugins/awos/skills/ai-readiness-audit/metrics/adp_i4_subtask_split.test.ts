@@ -116,11 +116,11 @@ test('adp_i4_subtask_split: SKIP when raw.tickets is absent from artifact', () =
 // Computation — good band (avg ≤ 3)
 // ---------------------------------------------------------------------------
 
-test('adp_i4_subtask_split: avg=2 subtasks/parent → band=good, score≈0.867', () => {
+test('adp_i4_subtask_split: avg=2 subtasks/parent → band=good, score=0.9', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-i4-good-'));
   try {
     // Two parent tickets each with 2 subtasks → avg = 2.0
-    // ANCHORS: (0,1)→(3,0.8): at x=2 → 1 + (0.8-1)*(2/3) ≈ 0.8667
+    // ANCHORS: (1,1)→(3,0.8): at x=2 → 1 + (0.8-1)*((2-1)/2) = 0.9
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', subtask_count: 2 },
       { id: 'PROJ-2', subtask_count: 2 },
@@ -130,7 +130,7 @@ test('adp_i4_subtask_split: avg=2 subtasks/parent → band=good, score≈0.867',
     const res = compute(dir, {}, {});
     assert.equal(res.status, 'OK', 'status must be OK with subtask data');
     assert.equal(res.band, 'good', 'band must be "good" for avg subtasks ≤ 3');
-    const expected = 1 + (0.8 - 1) * (2 / 3);
+    const expected = 1 + (0.8 - 1) * ((2 - 1) / 2);
     assert.ok(
       Math.abs((res.score ?? 0) - expected) < 1e-4,
       `score must be ≈${expected.toFixed(4)} at avg=2.0 (linear ANCHOR interpolation), got ${res.score}`
@@ -211,8 +211,8 @@ test('adp_i4_subtask_split: avg=8 subtasks/parent → band=concerning, score=0.2
 test('adp_i4_subtask_split: 0-subtask parents count in the average (best case reachable)', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-i4-zeros-'));
   try {
-    // Every parent-eligible ticket has an explicit 0 → avg = 0 → the
-    // {x:0, y:1} anchor is reachable: best case scores exactly 1.0.
+    // Every parent-eligible ticket has an explicit 0 → avg = 0 → on the
+    // full-score plateau (avg ≤ 1): best case scores exactly 1.0.
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', subtask_count: 0 },
       { id: 'PROJ-2', subtask_count: 0 },
@@ -228,7 +228,7 @@ test('adp_i4_subtask_split: 0-subtask parents count in the average (best case re
     assert.equal(
       res.score,
       1,
-      'score must be 1.0 at avg=0 subtasks/parent (best case — anchor {x:0,y:1} reachable)'
+      'score must be 1.0 at avg=0 subtasks/parent (best case — on the plateau)'
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -405,4 +405,35 @@ test('adp_i4_subtask_split: standards.toml [category.ticket_subtask_split].weigh
     'computed',
     '[category.ticket_subtask_split].method must be "computed"'
   );
+});
+
+// ---------------------------------------------------------------------------
+// Full-score plateau (regression: a point-anchor at x=0 made score 1.0
+// unreachable — hops averaged 0.06 subtasks/parent, clearly healthy, yet
+// scored 0.996 and wore a PARTIAL badge beside a rounded "3/3 (100.0%)").
+// ---------------------------------------------------------------------------
+
+test('adp_i4_subtask_split: tiny nonzero average (0.06) sits on the plateau → score exactly 1.0', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-plateau-'));
+  try {
+    // 1 subtask across ~17 parents ≈ 0.06 avg — the real-world shape that
+    // exposed the unreachable perfect score.
+    const tickets: TicketFixture[] = [
+      { id: 'PROJ-1', subtask_count: 1 },
+      ...Array.from({ length: 16 }, (_, i) => ({
+        id: `PROJ-${i + 2}`,
+        subtask_count: 0,
+      })),
+    ];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.equal(res.band, 'good', 'band must be "good" for a tiny average');
+    assert.equal(
+      res.score,
+      1,
+      `any avg ≤ 1 subtask/parent must score a full 1.0 (plateau) — a healthy tracker must be able to PASS, got ${res.score}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

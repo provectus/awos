@@ -15,7 +15,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { auditCore } from '../audit_core.ts';
+import { auditCore, scoreBadge } from '../audit_core.ts';
 import { aggregate } from '../audit_patch.ts';
 import { makeCheckRecord } from './helpers.ts';
 
@@ -710,4 +710,47 @@ test('aggregate reports a corrupted collected artifact as unreadable, not as a m
     true,
     'readable artifacts must still be derived normally alongside a corrupted one'
   );
+});
+
+// ---------------------------------------------------------------------------
+// scoreBadge — badge must agree with the DISPLAYED (rounded) weight columns
+// (regression: score 0.996 rendered "3/3 (100.0%)" yet wore a PARTIAL badge,
+// because the badge compared the raw score against 0.999).
+// ---------------------------------------------------------------------------
+
+test('scoreBadge: a score that rounds to full weight is PASS, not PARTIAL', () => {
+  assert.equal(
+    scoreBadge(3, 0.996),
+    'PASS',
+    'round1(3×0.996)=3.0 displays as "3/3 (100.0%)" — the badge must not contradict the row'
+  );
+  assert.equal(
+    scoreBadge(1, 0.96),
+    'PASS',
+    'round1(1×0.96)=1.0 displays as full weight — badge must match'
+  );
+});
+
+test('scoreBadge: a score that rounds to zero weight is FAIL, mid-range stays PARTIAL', () => {
+  assert.equal(
+    scoreBadge(3, 0.01),
+    'FAIL',
+    'round1(3×0.01)=0.0 displays as "0/3 (0.0%)" — the badge must not claim PARTIAL credit'
+  );
+  assert.equal(
+    scoreBadge(2, 0.7),
+    'PARTIAL',
+    'round1(2×0.7)=1.4 of 2 is genuinely partial'
+  );
+  assert.equal(
+    scoreBadge(6, 0.5),
+    'PARTIAL',
+    'round1(6×0.5)=3.0 of 6 is genuinely partial'
+  );
+});
+
+test('scoreBadge: weight-0 categories keep raw-score thresholds (INFO replaces the badge downstream)', () => {
+  assert.equal(scoreBadge(0, 1), 'PASS', 'weight 0, perfect score → PASS');
+  assert.equal(scoreBadge(0, 0.5), 'PARTIAL', 'weight 0, mid score → PARTIAL');
+  assert.equal(scoreBadge(0, 0), 'FAIL', 'weight 0, zero score → FAIL');
 });

@@ -923,6 +923,27 @@ function buildSkipReason(c: Category, topology: TopologyFlags): string {
   return 'Skipped — the required data was not available.';
 }
 
+/**
+ * Badge for an awarded metric-routed check, derived from the SAME rounded
+ * weight the report displays (weight_awarded = round1(weight × score)). The
+ * old raw-score cutoff (PASS at ≥0.999) could contradict the row: a 0.996
+ * score rendered as "3/3 (100.0%)" yet wore a PARTIAL badge. Rounds-to-full
+ * → PASS; rounds-to-zero → FAIL; anything between → PARTIAL. Weight-0
+ * categories keep raw-score thresholds (they become INFO downstream anyway).
+ */
+export function scoreBadge(
+  weight: number,
+  score: number
+): 'PASS' | 'PARTIAL' | 'FAIL' {
+  if (weight > 0) {
+    const awardedRounded = round1(weight * score);
+    if (awardedRounded >= weight) return 'PASS';
+    if (awardedRounded <= 0) return 'FAIL';
+    return 'PARTIAL';
+  }
+  return score >= 0.999 ? 'PASS' : score <= 0.001 ? 'FAIL' : 'PARTIAL';
+}
+
 function buildCheck(
   key: string,
   c: Category,
@@ -1003,7 +1024,7 @@ function buildCheck(
 
     // Derive the display badge from the score for awarded continuous metrics:
     if (baseStatus === 'PASS') {
-      status = score >= 0.999 ? 'PASS' : score <= 0.001 ? 'FAIL' : 'PARTIAL';
+      status = scoreBadge(c.weight, score);
     } else {
       status = baseStatus; // SKIP / FAIL unchanged
     }

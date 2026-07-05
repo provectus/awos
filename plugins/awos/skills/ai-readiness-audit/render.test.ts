@@ -5,7 +5,6 @@ import { renderMarkdown, renderHtml } from './render.ts';
 import type {
   AuditJson,
   Check,
-  DimensionArtifact,
   DeliveryMetric,
   PerRepoSummary,
 } from './render.ts';
@@ -99,7 +98,7 @@ test('Dimensions table must green-highlight non-zero PASS counts (issue #4)', ()
   const html = renderHtml(audit);
   assert.match(
     html,
-    /color:#16a34a;font-weight:600">\s*\d+<\/span>/,
+    /class="n-pass">\s*\d+<\/span>/,
     'Dimensions table must green-highlight non-zero PASS counts (issue #4)'
   );
 });
@@ -200,8 +199,8 @@ test('PARTIAL status badge renders with amber color for a PARTIAL check', () => 
   );
   assert.match(
     pageHtml,
-    /#f59e0b/,
-    'PARTIAL badge must use the amber badge color (#f59e0b)'
+    /<span class="badge" data-s="PARTIAL">PARTIAL<\/span>/,
+    'PARTIAL badge must be data-attribute-driven (data-s="PARTIAL"; colour lives in CSS)'
   );
 });
 

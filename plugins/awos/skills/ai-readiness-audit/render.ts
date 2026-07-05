@@ -161,6 +161,7 @@ import type {
   TechStack,
 } from './artifact_types.ts';
 import { COLLECTOR_SOURCES, SOURCE_LABEL_DEFAULTS } from './artifact_types.ts';
+import { PROVECTUS_LOGO_SVG } from './logo.ts';
 
 export type {
   AuditJson,
@@ -1018,36 +1019,13 @@ function tipHtml(value: string, plain: string, metaHtml = ''): string {
   return `<span class="tip" tabindex="0">${esc(value)}<span class="tipbox"><b>${esc(plain)}</b>${metaSpan}</span></span>`;
 }
 
+/**
+ * Status badge — colour lives in CSS keyed on `data-s`, so the palette is
+ * defined once in the stylesheet (Foundry White v2) rather than inline here.
+ */
 function statusBadge(status: string): string {
-  const colors: Record<string, string> = {
-    PASS: '#22c55e',
-    WARN: '#eab308',
-    PARTIAL: '#f59e0b',
-    FAIL: '#ef4444',
-    SKIP: '#9ca3af',
-    INFO: '#60a5fa', // informational descriptor — neutral, not a verdict
-    PENDING_JUDGMENT: '#d97706', // awaiting the orchestrator's judgment pass
-  };
-  const bg = colors[status] ?? '#9ca3af';
-  return `<span class="badge" style="background:${bg};color:#fff;padding:1px 6px;border-radius:3px;font-size:.75em;font-weight:600">${esc(status)}</span>`;
+  return `<span class="badge" data-s="${esc(status)}">${esc(status)}</span>`;
 }
-
-const STATUS_COLOR: Record<string, string> = {
-  PASS: '#f0fdf4',
-  WARN: '#fefce8',
-  PARTIAL: '#fde68a',
-  FAIL: '#fef2f2',
-  SKIP: '#f9fafb',
-  INFO: '#eff6ff',
-  PENDING_JUDGMENT: '#fef3c7',
-};
-
-const BAND_COLOR: Record<string, string> = {
-  elite: '#16a34a',
-  high: '#22c55e',
-  medium: '#eab308',
-  low: '#ef4444',
-};
 
 /**
  * Reader-grade tooltip for the connector-gated Cycle time headline row and the
@@ -1230,18 +1208,6 @@ function orphanProbes(audit: AuditJson): AuditJson['source_probes'] {
   return (audit.source_probes ?? []).filter((p) => !known.has(p.source));
 }
 
-const SEVERITY_COLOR: Record<string, string> = {
-  high: '#ef4444',
-  medium: '#eab308',
-  low: '#6366f1',
-};
-
-const PRIORITY_COLOR: Record<string, string> = {
-  P0: '#ef4444',
-  P1: '#eab308',
-  P2: '#6366f1',
-};
-
 // ---------------------------------------------------------------------------
 // HTML section renderers — hoisted from renderHtml so each is a pure function
 // of the audit (and isOrg where the org / single-repo split matters).
@@ -1250,7 +1216,9 @@ const PRIORITY_COLOR: Record<string, string> = {
 // ─── Executive band (CEO stops here) ───────────────────────────────────────
 function execBand(audit: AuditJson, isOrg: boolean): string {
   const rows: string[] = [];
-  rows.push('<div class="exec">');
+  rows.push('<section class="exec">');
+  rows.push('<div class="container">');
+  rows.push('<div class="exec-eyebrow">Executive Summary</div>');
 
   if (isOrg && audit.portfolio_metrics) {
     // Org: capability is the org capability score; show ≤3 portfolio cards.
@@ -1262,7 +1230,9 @@ function execBand(audit: AuditJson, isOrg: boolean): string {
           ? `${coverageTipText(audit)}. ${m.description}`
           : m.description) +
         verifiedSuffix(audit.standards_meta?.standards_date);
-      rows.push(`<div class="metric-card">
+      // The org headline number (capability score) is the single indigo-pill
+      // accent — flagged with data-metric so CSS can pill just that value.
+      rows.push(`<div class="metric-card" data-metric="${esc(m.metric)}">
   <div class="metric-name">${esc(metricLabel(m.metric))}</div>
   <div class="metric-val">${tip(val, cardTip, `${m.repos_counted} repos · ${m.contributor_weighted ? 'weighted by active contributors' : 'equal-weighted'}`)}</div>
   <div class="metric-desc">${esc(m.description)}</div>
@@ -1270,13 +1240,19 @@ function execBand(audit: AuditJson, isOrg: boolean): string {
     }
     rows.push('</div>');
   } else {
-    // Single-repo capability headline — Coverage is the main figure.
+    // Single-repo capability headline — Coverage is the main figure, shown as
+    // the single indigo-pill accent; capability points read as a mono caption.
+    rows.push('<div class="cap-head">');
     rows.push(
-      `<div class="cap-score">${tip(pct(audit.coverage ?? 0) + ' Standards coverage', coverageTipText(audit), 'score ÷ Σ applicable category weights · standards.toml')}</div>`
+      `<div class="cap-score">${tip(pct(audit.coverage ?? 0), coverageTipText(audit), 'score ÷ Σ applicable category weights · standards.toml')}</div>`
     );
+    rows.push('<div class="cap-meta">');
+    rows.push('<div class="cap-caption">Standards coverage</div>');
     rows.push(
       `<div class="cap-cov">${tip(fmtPts(audit.audit_total) + ' pts', 'Capability points — the sum of all capabilities the project has in place. Uncapped; rises as the standard grows.' + verifiedSuffix(audit.standards_meta?.standards_date), 'Σ awarded category weights across all dimensions · standards.toml')}</div>`
     );
+    rows.push('</div>'); // .cap-meta
+    rows.push('</div>'); // .cap-head
   }
 
   // Unpatched judgment checks make the totals incomplete — say so up front,
@@ -1340,7 +1316,7 @@ function execBand(audit: AuditJson, isOrg: boolean): string {
           return `<div class="kv"><span class="k">${tip(d.label, tipText)}</span><span class="v">${esc(note)}</span></div>`;
         }
         const bandHtml = d.band
-          ? `<span class="band" style="background:${BAND_COLOR[d.band.toLowerCase()] ?? '#94a3b8'}">${esc(d.band)}</span>`
+          ? `<span class="band" data-band="${esc(d.band.toLowerCase())}">${esc(d.band)}</span>`
           : '';
         const valueStr = d.display_value ?? '—';
         const valueHtml =
@@ -1409,7 +1385,8 @@ function execBand(audit: AuditJson, isOrg: boolean): string {
     rows.push(`<div class="exec-blocks">${blocks.join('')}</div>`);
   }
 
-  rows.push('</div>'); // .exec
+  rows.push('</div>'); // .container
+  rows.push('</section>'); // .exec
   return rows.join('\n');
 }
 
@@ -1418,8 +1395,7 @@ function insightsSection(audit: AuditJson): string {
   if (!audit.insights || audit.insights.length === 0) return '';
   const rows: string[] = ['<h2>Top insights</h2>', '<div class="insights">'];
   for (const ins of audit.insights) {
-    const color = SEVERITY_COLOR[ins.severity] ?? '#6366f1';
-    rows.push(`<details class="insight" style="border-left-color:${color}">
+    rows.push(`<details class="insight" data-sev="${esc(ins.severity)}">
   <summary><span class="theme">${esc(ins.theme)}</span>${ins.weak_areas.length ? ` <span class="areas">Weak: ${esc(ins.weak_areas.join(', '))}</span>` : ''}</summary>
   <div class="so">${esc(ins.so_what)}</div>
   <div class="improves">→ ${esc(ins.improves)}</div>
@@ -1440,9 +1416,8 @@ function recommendationsSection(audit: AuditJson): string {
   }
   const rows: string[] = ['<h2>What to improve</h2>'];
   for (const r of recs) {
-    const prioColor = PRIORITY_COLOR[r.priority] ?? '#6366f1';
     rows.push(`<details class="rec">
-  <summary><span class="prio" style="background:${prioColor}">${esc(r.priority)}</span> <span class="rec-title">${esc(r.title)}</span> <span class="rec-where">${esc(r.dimension)} · ${esc(r.check_id)} · effort ${esc(r.effort)}</span></summary>
+  <summary><span class="prio" data-p="${esc(r.priority)}">${esc(r.priority)}</span> <span class="rec-title">${esc(r.title)}</span> <span class="rec-where">${esc(r.dimension)} · ${esc(r.check_id)} · effort ${esc(r.effort)}</span></summary>
   ${r.detail ? `<div class="rec-detail">${esc(r.detail)}</div>` : ''}
 </details>`);
   }
@@ -1473,6 +1448,7 @@ function dimensionSummary(audit: AuditJson): string {
       'scored = weight_awarded > 0 · executed = status ≠ SKIP · supported = all checks in catalog'
     )}</p>`
   );
+  rows.push('<div class="dim-card">');
   rows.push(
     '<table><thead><tr>' +
       `<th>${tip('#', 'Row number — dimensions are listed in a fixed order.')}</th>` +
@@ -1540,14 +1516,15 @@ function dimensionSummary(audit: AuditJson): string {
   <td>${sourcesCell}</td>
   <td>${info ? '—' : `${fmtPts(dim.score)} pts`}</td>
   <td>${tip(relStr, relTip, '')}</td>
-  <td>${counts.fail > 0 ? `<span style="color:#ef4444;font-weight:600">${counts.fail}</span>` : counts.fail}</td>
-  <td>${counts.warn > 0 ? `<span style="color:#eab308;font-weight:600">${counts.warn}</span>` : counts.warn}</td>
-  <td>${counts.partial > 0 ? `<span style="color:#d97706;font-weight:600">${counts.partial}</span>` : counts.partial}</td>
-  <td>${counts.pass > 0 ? `<span style="color:#16a34a;font-weight:600">${counts.pass}</span>` : counts.pass}</td>
+  <td>${counts.fail > 0 ? `<span class="n-fail">${counts.fail}</span>` : counts.fail}</td>
+  <td>${counts.warn > 0 ? `<span class="n-warn">${counts.warn}</span>` : counts.warn}</td>
+  <td>${counts.partial > 0 ? `<span class="n-partial">${counts.partial}</span>` : counts.partial}</td>
+  <td>${counts.pass > 0 ? `<span class="n-pass">${counts.pass}</span>` : counts.pass}</td>
   <td>${counts.skip}</td>
 </tr>`);
   }
   rows.push('</tbody></table>');
+  rows.push('</div>'); // .dim-card
   return rows.join('\n');
 }
 
@@ -1564,6 +1541,7 @@ function dimensionPage(
   const rows: string[] = [];
   rows.push(`<section class="dim-page" id="page-${esc(key)}">`);
   rows.push('<a class="backlink" href="#">← Back to overview</a>');
+  rows.push(`<div class="dim-eyebrow">Detail · ${esc(titleLabel(dim))}</div>`);
   // Prev/next navigation between dimension pages.
   const prev = all[idx - 1];
   const next = all[idx + 1];
@@ -1616,9 +1594,8 @@ function dimensionPage(
   if (dimRecs.length > 0) {
     rows.push('<h3>What to improve here</h3>');
     for (const r of dimRecs) {
-      const prioColor = PRIORITY_COLOR[r.priority] ?? '#6366f1';
       rows.push(`<div class="rec">
-  <div class="rec-head"><span class="prio" style="background:${prioColor}">${esc(r.priority)}</span><span class="rec-title">${esc(r.title)}</span><span class="rec-where">${esc(r.check_id)} · effort ${esc(r.effort)}</span></div>
+  <div class="rec-head"><span class="prio" data-p="${esc(r.priority)}">${esc(r.priority)}</span><span class="rec-title">${esc(r.title)}</span><span class="rec-where">${esc(r.check_id)} · effort ${esc(r.effort)}</span></div>
   ${r.detail ? `<div class="rec-detail">${esc(r.detail)}</div>` : ''}
 </div>`);
     }
@@ -1636,7 +1613,6 @@ function dimensionPage(
   let ckn = 1;
   let hasMinimal = false;
   for (const c of dim.checks) {
-    const rowBg = STATUS_COLOR[c.status] ?? '#fff';
     const relClass =
       c.reliability.tag === 'minimal'
         ? 'rel-minimal'
@@ -1718,7 +1694,7 @@ function dimensionPage(
         : c.source_url
           ? `<br><small class="src-cite"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source)}</a></small>`
           : '';
-    rows.push(`<tr data-status="${esc(c.status)}" style="background:${rowBg}">
+    rows.push(`<tr data-status="${esc(c.status)}">
   <td>${ckn++}</td>
   <td class="check"><span class="tip" tabindex="0"><b>${esc(c.check_id)}</b><span class="tipbox"><b>${esc(plainLead(c))}</b><span class="tipmeta">${checkMeta}</span></span></span><span class="plain">${esc(plainLead(c))}</span>${sourceCiteHtml}</td>
   <td>${statusBadge(c.status)}</td>
@@ -1731,7 +1707,7 @@ function dimensionPage(
   rows.push('</tbody></table>');
   if (hasMinimal) {
     rows.push(
-      '<p style="font-size:.78rem;color:#64748b">* lower-bound measurement (reliability tag: minimal).</p>'
+      '<p class="minimal-note">* lower-bound measurement (reliability tag: minimal).</p>'
     );
   }
 
@@ -2029,101 +2005,209 @@ export function renderHtml(audit: AuditJson, opts: RenderOptions = {}): string {
     Array.isArray(audit.portfolio_metrics) &&
     audit.portfolio_metrics.length > 0;
 
-  // ─── CSS ──────────────────────────────────────────────────────────────────
+  // ─── CSS ────────────────────────────────────────────────────────────────
+  // Provectus "Foundry White v2" design system. One inline stylesheet, driven
+  // by CSS custom properties (tokens) and data-attribute selectors so the
+  // renderer never emits inline colour. Light-only (matches the report's
+  // print-first, single-look brief). Organised: tokens → base → brand header →
+  // exec band (+ dark overrides) → tier-2 cards → tables/tier-3 → badges/pills
+  // → tooltips → toolbar/focus → print → responsive.
   const css = `
+/* ── tokens ─────────────────────────────────────────────────────────────── */
+:root{
+  --font-sans:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sage-50:#EEF3F0;--sage-100:#DCE8E2;--sage-200:#B8CEC4;--sage-400:#6B8B7B;--sage-600:#3B5249;--sage-700:#33473F;--sage-800:#263831;
+  --ink-300:#828598;--ink-400:#5D6076;--ink-700:#313449;--ink-800:#282B3C;--ink-900:#1C1F2E;--ink-950:#121420;
+  --charcoal-500:#82827A;--charcoal-700:#4A4A43;
+  --cream:#FDF8F4;--sienna-surface:#FBF1EE;--divider:#ECECEA;
+  --stat-number:#D3DAE1;--stat-caption:#90ACC3;--eyebrow-band:#EDF5FB;--label-band:#B0D4EC;
+  --indigo:#4255F9;--sienna:#B33A22;
+  --shadow-sm:0 2px 6px -1px rgb(28 31 46/.06),0 1px 3px -1px rgb(28 31 46/.04);
+  --shadow-md:0 4px 12px -2px rgb(28 31 46/.07),0 2px 4px -2px rgb(28 31 46/.04);
+}
+/* ── base ───────────────────────────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0}
-ul{margin:.4em 0 .6em 1.4em}
-li{margin:.2em 0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:var(--font-sans);background:#fff;color:var(--charcoal-700);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.container{max-width:1100px;margin:0 auto;padding:0 32px}
+ul{margin:.4em 0 .8em 1.3em}
+li{margin:.25em 0}
 summary{cursor:pointer}
-details{margin-bottom:8px}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#1e293b;font-size:14px;line-height:1.5}
-.container{max-width:980px;margin:0 auto;padding:24px}
-h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
-h2{font-size:1.15rem;font-weight:600;margin:24px 0 10px}
-h3{font-size:.95rem;font-weight:600;margin:0 0 6px;color:#475569}
-h4{font-size:.85rem;font-weight:600;margin:10px 0 4px;color:#64748b}
-.src-cite{font-size:.75rem;color:#64748b}
-.src-cite a{color:#6366f1}
-.meta{color:#64748b;font-size:.85rem;margin-bottom:8px}
-.meta span{margin-right:16px}
-a{color:#4f46e5;text-decoration:none}
+details{margin-bottom:0}
+a{color:var(--sage-600);text-decoration:none}
 a:hover{text-decoration:underline}
-/* executive band */
-.exec{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px 20px;margin-bottom:20px}
-.cap-score{font-size:2.2rem;font-weight:800;color:#4f46e5;line-height:1.1}
-.cap-cov{font-size:.95rem;color:#64748b;margin-top:2px}
-.exec-blocks{display:flex;flex-direction:column;gap:18px;margin-top:16px}
-.exec-col{border-top:1px solid #eef2f7;padding-top:12px}
-.kv{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:3px 0;font-size:.85rem}
-.kv .k{color:#475569}
-.kv .v{font-weight:600;text-align:right}
-.band{display:inline-block;color:#fff;font-size:.68rem;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:6px;vertical-align:middle}
-/* metric cards (org) */
-.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:12px 0}
-.metric-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px}
-.metric-card .metric-val{font-size:1.6rem;font-weight:700;color:#4f46e5;margin:4px 0}
-.metric-card .metric-desc{font-size:.78rem;color:#64748b}
-/* insights */
-.insights{display:grid;gap:12px;margin-bottom:8px}
-.insight{background:#fff;border:1px solid #e2e8f0;border-left-width:4px;border-radius:8px;padding:12px 16px}
-.insight .theme{font-weight:700;margin-bottom:4px}
-.insight .so{margin-bottom:4px}
-.insight .improves{color:#475569}
-.insight .areas{font-size:.78rem;color:#94a3b8;margin-top:6px}
-/* recommendations */
-.rec{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:8px}
-.rec .rec-head{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
-.rec .prio{color:#fff;font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:4px}
-.rec .rec-title{font-weight:600}
-.rec .rec-where{font-size:.75rem;color:#94a3b8}
-.rec .rec-detail{font-size:.85rem;color:#475569;margin-top:6px}
-/* tables */
-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-bottom:16px}
-th{background:#f1f5f9;text-align:left;padding:6px 8px;border-bottom:2px solid #e2e8f0;font-weight:600}
-td{padding:6px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
-tr[data-status='PASS'] td{background:#f0fdf4}
-tr[data-status='WARN'] td{background:#fefce8}
-tr[data-status='PARTIAL'] td{background:#fde68a}
-tr[data-status='FAIL'] td{background:#fef2f2}
-tr[data-status='SKIP'] td{background:#f9fafb}
-tr.low-cov td{background:#fff7ed}
-/* dimension summary rows are clickable */
-tr.dim-row{cursor:pointer}
-tr.dim-row:hover td{background:#eef2ff}
-/* check table: fixed layout so Evidence gets the room it needs */
-table.checks{table-layout:fixed}
-table.checks td.evidence{font-size:.78rem;white-space:normal;overflow-wrap:anywhere;word-break:break-word;color:#334155}
-table.checks td.check b{font-size:.82rem}
-table.checks td.check .plain{display:block;font-size:.75rem;color:#64748b;margin-top:2px}
+h1{font-size:27px;font-weight:700;color:var(--ink-900);letter-spacing:-.01em;line-height:1.15}
+h2{font-size:23px;font-weight:600;color:var(--ink-900);margin:22px 0 12px;letter-spacing:-.005em}
+h3{font-size:15px;font-weight:600;margin:0 0 6px;color:var(--ink-700)}
+h4{font-size:13px;font-weight:600;margin:12px 0 4px;color:var(--ink-400)}
+p{margin:0 0 10px}
+.src-cite{font-size:11px;color:var(--charcoal-500)}
+.src-cite a{color:var(--sage-600)}
+/* ── brand header ───────────────────────────────────────────────────────── */
+.brand{background:#fff;border-bottom:1px solid var(--divider)}
+.brand-inner{padding:24px 0 22px}
+.brand .backlink{font-family:var(--font-mono);font-size:12px;color:var(--sage-600);margin-bottom:14px}
+.brand-logo{display:block;line-height:0}
+.brand-logo svg{height:22px;width:auto;color:var(--ink-900)}
+.brand-title{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-top:16px}
+.brand-title h1{margin:0}
+.brand-kicker{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-300)}
+.meta{margin-top:12px;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.02em;color:var(--ink-400);display:flex;flex-wrap:wrap;gap:6px 22px}
+.meta span{display:inline-flex;gap:6px}
+.meta strong{font-weight:500;color:var(--ink-700)}
+/* ── TIER 1 · executive band ────────────────────────────────────────────── */
+.exec{background:var(--ink-900);color:var(--stat-number);padding:46px 0 42px;margin-bottom:8px}
+.exec-eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--eyebrow-band);margin-bottom:22px}
+.cap-head{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.cap-score{display:inline-block;background:var(--indigo);color:#fff;font-size:38px;font-weight:700;line-height:1;padding:10px 22px;border-radius:9999px;letter-spacing:-.01em}
+.cap-score>.tip{border-bottom:none}
+.cap-meta{display:flex;flex-direction:column;gap:2px}
+.cap-caption{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--label-band)}
+.cap-cov{font-size:17px;font-weight:600;color:var(--stat-number)}
+.exec-blocks{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:30px}
+.exec-col{background:var(--ink-800);border-radius:8px;padding:18px 20px}
+.exec-col h3{display:flex;align-items:center;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--label-band);margin-bottom:12px}
+.exec-col h3::before{content:'';display:inline-block;width:6px;height:6px;background:var(--indigo);border-radius:1px;margin-right:9px;flex:none}
+.exec .kv{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.exec .kv:last-child{border-bottom:none}
+.exec .kv .k{font-size:13px;color:var(--stat-caption)}
+.exec .kv .v{font-size:13.5px;font-weight:600;color:var(--stat-number);text-align:right}
+/* org portfolio cards live in the same band as ink-800 stat cards */
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:6px}
+.metric-card{background:var(--ink-800);border-radius:8px;padding:20px 22px}
+.metric-card .metric-name{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--label-band)}
+.metric-card .metric-val{font-size:40px;font-weight:700;line-height:1.1;color:var(--stat-number);margin:8px 0 6px;letter-spacing:-.01em}
+.metric-card .metric-desc{font-size:12.5px;color:var(--stat-caption);line-height:1.5}
+/* the org headline number (capability score) is the single indigo-pill accent */
+.metric-card[data-metric="org_capability_score"] .metric-val>.tip{background:var(--indigo);color:#fff;padding:2px 14px;border-radius:9999px;border-bottom:none}
+/* dark-context overrides for shared components inside the band */
+.exec .tip{border-bottom-color:rgba(176,212,236,.5)}
+.exec .tipbox{background:var(--ink-950);border:1px solid var(--ink-700)}
+.exec .pending-note{color:var(--label-band)}
+.exec .pending-chip{background:#EAD9A6;color:var(--ink-950)}
+.exec .band[data-band="elite"]{background:var(--sage-200);color:var(--ink-950)}
+.exec .band[data-band="high"]{background:var(--sage-100);color:var(--ink-950)}
+.exec .band[data-band="medium"]{background:#EAD9A6;color:var(--ink-950)}
+.exec .band[data-band="low"]{background:#F3C3B5;color:var(--ink-950)}
+/* ── TIER 2 · findings ──────────────────────────────────────────────────── */
+.tier-eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-300);margin:48px 0 4px}
+.insights{display:grid;gap:14px;margin-bottom:8px}
+.insight{background:#fff;border-radius:12px;box-shadow:var(--shadow-sm);border-left:4px solid var(--sage-400);padding:16px 20px}
+.insight[data-sev="high"]{border-left-color:var(--sienna)}
+.insight[data-sev="medium"]{border-left-color:#A85B00}
+.insight[data-sev="low"]{border-left-color:var(--sage-400)}
+.insight>summary{list-style:none}
+.insight>summary::-webkit-details-marker{display:none}
+.insight .theme{font-size:17px;font-weight:600;color:var(--ink-900)}
+.insight .areas{display:block;font-family:var(--font-mono);font-size:11.5px;color:var(--ink-300);margin-top:6px;letter-spacing:.01em}
+.insight .so{font-size:15px;color:var(--charcoal-700);margin-top:10px}
+.insight .improves{font-size:15px;color:var(--sage-600);margin-top:8px}
+.rec{background:#fff;border-radius:12px;box-shadow:var(--shadow-sm);padding:14px 18px;margin-bottom:12px}
+.rec>summary{list-style:none}
+.rec>summary::-webkit-details-marker{display:none}
+.rec .rec-head,.rec>summary{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline}
+.rec .rec-title{font-size:15.5px;font-weight:600;color:var(--ink-900)}
+.rec .rec-where{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-300)}
+.rec .rec-detail{font-size:14.5px;color:var(--charcoal-700);margin-top:10px}
+/* dimension summary = the single cream featured card (the one bordered card) */
+.dim-card{background:var(--cream);border:1px solid var(--divider);border-radius:16px;padding:6px 22px 10px;margin-bottom:8px;overflow-x:auto}
+.dim-card table{margin:0}
+.dim-card th{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-300);background:transparent;border-bottom:1px solid var(--divider);padding:12px 10px}
+.dim-card td{border-bottom:1px solid var(--divider);padding:11px 10px;color:var(--charcoal-700)}
+.dim-card tr:last-child td{border-bottom:none}
+.dim-card tr.dim-row{cursor:pointer}
+.dim-card tr.dim-row:hover td{background:var(--sage-50)}
+.dim-card a{color:var(--sage-600);font-weight:600}
+.metrics-found{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-300);margin:4px 0 14px}
+/* ── TIER 3 · detail (dimension pages + repos/connections/tech) ──────────── */
+.tier-detail h2,.dim-page h2{font-size:20px}
+.dim-page{display:none;padding:34px 0 40px}
+.dim-page .backlink{display:inline-block;font-family:var(--font-mono);font-size:12px;color:var(--sage-600);margin-bottom:14px}
+.dim-page .dim-eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-300);margin-bottom:8px}
+.dim-nav{display:flex;gap:20px;font-family:var(--font-mono);font-size:12px;margin:10px 0}
+.dim-head{font-size:14px;color:var(--ink-400);margin:6px 0 16px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:18px}
+th{text-align:left;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-300);padding:10px 10px;border-bottom:1px solid var(--divider)}
+td{padding:10px 10px;border-bottom:1px solid var(--divider);vertical-align:top;color:var(--charcoal-700)}
+tr[data-status='PASS'] td{background:#F1F6F3}
+tr[data-status='WARN'] td{background:#FAF5E4}
+tr[data-status='PARTIAL'] td{background:#F7EEDC}
+tr[data-status='FAIL'] td{background:#FBF1EE}
+tr[data-status='SKIP'] td{background:#F7F7F5}
+tr[data-status='INFO'] td{background:#F2F6FA}
+tr[data-status='PENDING_JUDGMENT'] td{background:#F9F1DA}
+tr.low-cov td{background:#FBF4EC}
 /* issues-only filter: PARTIAL is a partial pass, not an issue — hidden with PASS */
 body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],body.issues-only tr[data-status='PARTIAL']{display:none}
-.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
-.toolbar button{padding:5px 12px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:.8rem}
-.toolbar button.active{background:#4f46e5;color:#fff;border-color:#4f46e5}
-.backlink{display:inline-block;margin-bottom:10px;font-size:.85rem}
-.dim-nav{display:flex;gap:16px;font-size:.85rem;margin:8px 0}
-.dim-head{font-size:.9rem;color:#64748b;margin-bottom:12px}
+.footnote{font-size:12px;color:var(--charcoal-500);margin:2px 0}
+.minimal-note{font-size:12px;color:var(--charcoal-500)}
+/* check table: fixed layout so Evidence gets the room it needs */
+table.checks{table-layout:fixed;font-size:12.5px}
+table.checks td.evidence{font-size:12px;white-space:normal;overflow-wrap:anywhere;word-break:break-word;color:var(--ink-400)}
+table.checks td.check b{font-size:12.5px;color:var(--ink-900)}
+table.checks td.check .plain{display:block;font-size:11.5px;color:var(--ink-400);margin-top:3px}
+/* dimension-summary count spans */
+.n-fail{color:var(--sienna);font-weight:600}
+.n-warn{color:#8A6100;font-weight:600}
+.n-partial{color:#A85B00;font-weight:600}
+.n-pass{color:var(--sage-700);font-weight:600}
 /* reliability colours */
-.rel-minimal{color:#d97706}
-.rel-not-reliable{color:#dc2626}
-/* pending-judgment indicator: an unfinished audit must be visibly unfinished */
-.pending-chip{display:inline-block;background:#f59e0b;color:#fff;font-size:.72rem;font-weight:700;padding:1px 8px;border-radius:10px}
-.pending-note{margin-top:10px;font-size:.8rem;color:#92400e}
-/* instant plain-first tooltip */
-.tip{position:relative;cursor:help;border-bottom:1px dotted #94a3b8;outline:none}
-.tip>.tipbox{display:none;position:absolute;left:0;top:calc(100% + 4px);z-index:60;width:max-content;max-width:320px;background:#1e293b;color:#f8fafc;padding:8px 10px;border-radius:6px;font-size:.75rem;font-weight:400;line-height:1.45;white-space:normal;box-shadow:0 6px 18px rgba(0,0,0,.22)}
+.rel-minimal{color:#A85B00}
+.rel-not-reliable{color:var(--sienna)}
+/* ── badges / pills / bands ─────────────────────────────────────────────── */
+.badge{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.02em;padding:2px 8px;border-radius:6px}
+.badge[data-s='PASS']{background:var(--sage-600);color:#fff}
+.badge[data-s='WARN']{background:#8A6100;color:#fff}
+.badge[data-s='PARTIAL']{background:#A85B00;color:#fff}
+.badge[data-s='FAIL']{background:var(--sienna);color:#fff}
+.badge[data-s='SKIP']{background:#E9E9E5;color:var(--charcoal-700)}
+.badge[data-s='INFO']{background:#E3EAF2;color:#33506B}
+.badge[data-s='PENDING_JUDGMENT']{background:#8A6100;color:#fff}
+.band{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.02em;padding:2px 9px;border-radius:9999px;margin-left:8px;vertical-align:middle;color:#fff}
+.band[data-band="elite"]{background:var(--sage-800)}
+.band[data-band="high"]{background:var(--sage-600)}
+.band[data-band="medium"]{background:#8A6100}
+.band[data-band="low"]{background:var(--sienna)}
+.prio{font-family:var(--font-mono);font-size:11px;font-weight:600;color:#fff;padding:2px 9px;border-radius:6px;letter-spacing:.02em}
+.prio[data-p='P0']{background:var(--sienna)}
+.prio[data-p='P1']{background:#A85B00}
+.prio[data-p='P2']{background:var(--ink-400)}
+.pending-chip{display:inline-block;background:#8A6100;color:#fff;font-family:var(--font-mono);font-size:11px;font-weight:600;padding:2px 9px;border-radius:9999px}
+.pending-note{margin-top:14px;font-size:13px;color:#8A6100}
+/* ── tooltips (instant, plain-first) ────────────────────────────────────── */
+.tip{position:relative;cursor:help;border-bottom:1px dotted var(--ink-300);outline:none}
+.tip>.tipbox{display:none;position:absolute;left:0;top:calc(100% + 5px);z-index:60;width:max-content;max-width:340px;background:var(--ink-900);color:var(--eyebrow-band);padding:10px 12px;border-radius:8px;font-family:var(--font-sans);font-size:12px;font-weight:400;line-height:1.5;letter-spacing:normal;text-transform:none;white-space:normal;box-shadow:var(--shadow-md)}
 .tip:hover>.tipbox,.tip:focus>.tipbox,.tip:focus-within>.tipbox{display:block}
-.tipbox b{display:block;margin-bottom:4px;font-weight:700}
-.tipbox .tipmeta{color:#cbd5e1;font-size:.7rem}
-.badge{display:inline-block}
-.dim-page{display:none}
-/* print: show everything, drop interactive chrome */
+.tipbox b{display:block;margin-bottom:4px;font-weight:600;color:#fff}
+.tipbox .tipmeta{color:var(--label-band);font-size:11px}
+.tipbox a{color:var(--sage-200)}
+/* ── toolbar / focus ────────────────────────────────────────────────────── */
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px}
+.toolbar button{font-family:var(--font-sans);padding:6px 14px;border:1px solid #C9CBD5;border-radius:8px;background:#fff;color:var(--ink-700);cursor:pointer;font-size:13px;font-weight:500}
+.toolbar button:hover{background:var(--sage-50)}
+.toolbar button.active{background:var(--sage-600);color:#fff;border-color:var(--sage-600)}
+:focus-visible{outline:2px solid var(--sage-400);outline-offset:2px}
+/* ── print ──────────────────────────────────────────────────────────────── */
 @media print{
   .toolbar{display:none}
   .backlink{display:none}
   .dim-page{display:block!important}
   #overview{display:block!important}
   .tip>.tipbox{display:none!important}
+  .exec,.exec *{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .dim-page{break-before:page}
+}
+/* ── responsive ─────────────────────────────────────────────────────────── */
+@media (max-width:720px){
+  .container{padding:0 20px}
+  h1{font-size:23px}
+  .exec-blocks,.metric-grid{grid-template-columns:1fr}
+  .cap-head{gap:14px}
+  .cap-score{font-size:32px;padding:8px 18px}
+  .metric-card .metric-val{font-size:32px}
+  table{font-size:12px}
+  .dim-card{padding:4px 14px 8px}
 }
 `;
 
@@ -2165,31 +2249,47 @@ route();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>AI-SDLC Audit — ${esc(audit.project)} — ${esc(audit.date)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <style>${css}</style>
 </head>
 <body>
-<div class="container">
+<header class="brand">
+<div class="container brand-inner">
 ${opts.backLink ? `<div class="backlink"><a href="${esc(opts.backLink)}">← Back to org report</a></div>` : ''}
-<h1>AI-SDLC Readiness Audit</h1>
+<span class="brand-logo">${PROVECTUS_LOGO_SVG}</span>
+<div class="brand-title">
+  <h1>AI-SDLC Readiness Audit</h1>
+  <span class="brand-kicker">Agentic SDLC · Readiness Report</span>
+</div>
 <div class="meta">
   <span><strong>Date:</strong> ${esc(audit.date)}</span>
   <span><strong>Project:</strong> ${esc(audit.project)}</span>
   ${isOrg ? `<span><strong>Mode:</strong> Organization (${audit.per_repo?.length ?? 0} repos)</span>` : ''}
   ${measurementWindowLabel(audit.source_windows, audit.date) ? `<span><strong>Measurement window:</strong> ${esc(measurementWindowLabel(audit.source_windows, audit.date)!)}</span>` : ''}
 </div>
+</div>
+</header>
 
 <div id="overview">
 ${execBand(audit, isOrg)}
+<main class="container">
+<div class="tier-eyebrow">Findings</div>
 ${insightsSection(audit)}
 ${recommendationsSection(audit)}
 ${isOrg ? '' : dimensionSummary(audit)}
+<section class="tier-detail">
+<div class="tier-eyebrow">Detail</div>
 ${reposSection(audit, isOrg)}
 ${connectionsSection(audit, isOrg)}
 ${techStackSection(audit, isOrg)}
+</section>
+</main>
 </div>
 
+<div class="container">
 ${dimPages}
-
 </div>
 <script>${inlineJs}</script>
 </body>

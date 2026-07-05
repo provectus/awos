@@ -606,6 +606,13 @@ test('renderHtml: issues-only filter toggle present', () => {
     html.includes('Show issues only'),
     'HTML must have a "Show issues only" button label'
   );
+  // The toggle only adds the body class; the CSS rule is what hides the rows.
+  assert.ok(
+    html.includes(
+      "body.issues-only tr[data-status='PASS'],body.issues-only tr[data-status='SKIP'],body.issues-only tr[data-status='PARTIAL']{display:none}"
+    ),
+    'HTML must carry the CSS rule that hides PASS/SKIP/PARTIAL rows under body.issues-only'
+  );
 });
 
 test('renderHtml: @media print rule present', () => {

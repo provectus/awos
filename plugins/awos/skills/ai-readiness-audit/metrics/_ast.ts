@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 
 import webTreeSitter from 'web-tree-sitter';
 
+import { dropIgnored } from '../git_ignore.ts';
+
 export const MAX_FILE_BYTES = 512 * 1024; // skip files > 512 KB
 
 // Extension → grammar wasm file name (inside dist/grammars/ or tree-sitter-wasms/out/).
@@ -302,8 +304,12 @@ const fileListCache = new Map<string, string[]>();
 export function listRepoFiles(repoPath: string): string[] {
   const cached = fileListCache.get(repoPath);
   if (cached) return cached;
-  const files: string[] = [];
+  let files: string[] = [];
   walkDir(repoPath, (p) => files.push(p));
+  // Honor the repo's own .gitignore (plus the built-in .claude/worktrees
+  // prune) — same project-file universe as the detectors' walker, so scale
+  // and complexity never parse a gitignored nested checkout.
+  files = dropIgnored(repoPath, files);
   fileListCache.set(repoPath, files);
   return files;
 }

@@ -91,6 +91,7 @@ const LOCKFILES = [
   'Gemfile.lock',
   'go.sum',
   'composer.lock',
+  'gradle.lockfile',
 ];
 
 export function computeTopology(
@@ -104,7 +105,19 @@ export function computeTopology(
 ): TopologyFlags {
   const settings = readIfExists(repoPath, '.claude/settings.json');
 
-  const hasPackageEcosystem = anyPath(repoPath, PKG_MANIFESTS);
+  // Manifests are probed at any depth (walker prunes node_modules/build/etc.
+  // and honors .gitignore): multi-module monorepos often keep every manifest
+  // in subdirectories with nothing at the root. Deduped by directory so
+  // co-located manifests (pyproject.toml + setup.py) count as one build root.
+  const manifestDirCount = (() => {
+    try {
+      return new Set(iterFiles(repoPath, PKG_MANIFESTS).map((p) => dirname(p)))
+        .size;
+    } catch {
+      return 0;
+    }
+  })();
+  const hasPackageEcosystem = manifestDirCount >= 1;
   const hasHttpApi = codeMatches(
     repoPath,
     /\b(fastapi|flask|django|express|@nestjs|gin-gonic|fiber|spring(framework|boot)?|sinatra|rails|actix_web|axum|aiohttp|starlette)\b/i
@@ -117,27 +130,14 @@ export function computeTopology(
       /\b(graphql|grpc|@grpc|protobuf|router\.(get|post|put))\b/i
     );
 
-  // Two or more independent build roots (manifests in subdirectories) → monorepo.
-  const manifestHits = (() => {
-    try {
-      return iterFiles(repoPath, [
-        'package.json',
-        'pyproject.toml',
-        'go.mod',
-        'Cargo.toml',
-        'pom.xml',
-      ]).length;
-    } catch {
-      return 0;
-    }
-  })();
+  // Two or more independent build roots (manifest-bearing directories) → monorepo.
   const isMonorepo =
     anyPath(repoPath, [
       'pnpm-workspace.yaml',
       'turbo.json',
       'lerna.json',
       'nx.json',
-    ]) || manifestHits >= 2;
+    ]) || manifestDirCount >= 2;
 
   // has_ai_agent_files and has_agent_instruction_files are semantically
   // identical (both used by standards.toml). Both are kept but share the same
@@ -164,7 +164,7 @@ export function computeTopology(
     has_mcp_config:
       anyPath(repoPath, ALL_MCP_CONFIG_PATHS) ||
       /"mcpServers"\s*:/.test(settings),
-    has_lockfiles: anyPath(repoPath, LOCKFILES),
+    has_lockfiles: anyGlob(repoPath, LOCKFILES),
     has_package_ecosystem: hasPackageEcosystem,
     has_package_manifests: hasPackageEcosystem,
     has_dependency_automation: anyPath(repoPath, [

@@ -15,7 +15,10 @@
  *   - available=true, runs present → OK + HIGH reliability, compute avg duration
  *
  * Each run record is expected to have: duration_seconds (number).
- * Runs missing duration_seconds are excluded from the average.
+ * Runs missing duration_seconds are excluded from the average, and so are
+ * runs without a pass/fail verdict (see _ci_runs.ts): a skipped trigger run
+ * finishes in ~1 s without building anything — averaging it in once made a
+ * repo's pipeline look 10× faster than its real (decided) runs.
  *
  * Source shape: collectedDir/ci.json
  * Input raw fields: config_detected (bool), runs (array of run records)
@@ -28,6 +31,7 @@ import {
   skipMetric,
   type MetricResult,
 } from './_base.ts';
+import { describeExcluded, partitionRuns } from './_ci_runs.ts';
 import { bandScore, clamp01 } from './_score.ts';
 
 /**
@@ -91,10 +95,16 @@ export function compute(
   const raw = artifact?.raw ?? {};
   const runs: unknown[] = Array.isArray(raw.runs) ? raw.runs : [];
 
-  // Compute average duration from run records. null when no run carries a
-  // usable duration_seconds → SKIP with the reason (never a free 1.0 score).
-  const avgDuration = averageDuration(runs);
+  // Average over DECIDED runs only (see _ci_runs.ts) — a skipped trigger
+  // run's ~1 s "duration" measures nothing. null when no decided run carries
+  // a usable duration_seconds → SKIP with the reason (never a free 1.0 score).
+  const partition = partitionRuns(runs);
+  const avgDuration = averageDuration(partition.decided);
   if (avgDuration === null) {
+    const excludedNote =
+      partition.total > partition.decided.length
+        ? ` (${describeExcluded(partition)} excluded — no verdict)`
+        : '';
     return makeMetricResult(
       'adp_c2_pipeline_duration',
       null,
@@ -103,7 +113,7 @@ export function compute(
       {
         tag: 'not-reliable',
         confidence: 'LOW',
-        note: `${runs.length} CI run${runs.length !== 1 ? 's' : ''} present but none carries duration_seconds — cannot compute pipeline duration`,
+        note: `${runs.length} CI run${runs.length !== 1 ? 's' : ''} present but no decided run carries duration_seconds — cannot compute pipeline duration${excludedNote}`,
       },
       [],
       ['ci']
@@ -121,7 +131,10 @@ export function compute(
   // pipeline keeps the inner loop tight (1.0); ≥2 h is worst case (0).
   const score = clamp01(bandScore(avgDuration, DURATION_ANCHORS, 'log'));
 
-  const expression = `avg pipeline duration ${avgDuration.toFixed(0)}s across ${runs.length} run${runs.length !== 1 ? 's' : ''}`;
+  const excludedTotal = partition.total - partition.decided.length;
+  const expression =
+    `avg pipeline duration ${avgDuration.toFixed(0)}s across ${partition.decided.length} decided run${partition.decided.length !== 1 ? 's' : ''}` +
+    (excludedTotal > 0 ? ` (${excludedTotal} without a verdict excluded)` : '');
   return makeMetricResult(
     'adp_c2_pipeline_duration',
     avgDuration,

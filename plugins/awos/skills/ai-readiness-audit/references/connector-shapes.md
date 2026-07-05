@@ -428,6 +428,8 @@ gh run list --limit 200 --json databaseId,status,conclusion,createdAt,updatedAt,
 
 This alone upgrades the CI source from "config detected but no run history" to scored pipeline metrics — no MCP required.
 
+Pass every fetched run through with its `conclusion` string **verbatim** — do not pre-filter or re-label. The engine classifies conclusions itself (pass / fail / no-verdict) across the major providers' vocabularies, computes the pass rate over decided runs only, and discloses what it excluded. Chatty trigger-style workflows can fill the fetch window with `skipped` runs (observed: 456 of 500), leaving few decided runs — if the fetched sample looks skip-dominated, raise `--limit` (500–1000) so enough decided runs land in the artifact.
+
 ### Tracker via acli (Jira) → `collected/tracker.json`
 
 ```

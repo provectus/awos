@@ -2,7 +2,12 @@
  * adp_c1_ci_pass_rate — Default-branch CI pass rate.
  *
  * kind: "banded"
- * value: fraction of successful runs (0–1), or null when no run data
+ * value: fraction of DECIDED runs that passed (0–1), or null when no run data.
+ *   Decided = passed + failed (see _ci_runs.ts): skipped/cancelled/pending
+ *   runs never reached a verdict on the code, so they belong in neither the
+ *   numerator nor the denominator — counting them as failures once reported
+ *   7.6% "low" for a repo whose decided runs pass at 86%. Excluded runs are
+ *   disclosed in the expression; unknown conclusion vocab is called out.
  * band: "elite" | "high" | "medium" | "low" per standards.toml band.ci_pass_rate
  * categories_awarded: [1001] when topology.has_ci is true and data available
  * reliability_default: "not-reliable"
@@ -30,6 +35,7 @@ import {
   skipMetric,
   type MetricResult,
 } from './_base.ts';
+import { describeExcluded, partitionRuns } from './_ci_runs.ts';
 import { clamp01 } from './_score.ts';
 
 /** Map pass-rate fraction to a band label. */
@@ -38,14 +44,6 @@ function ciPassBand(rate: number): string {
   if (rate >= 0.95) return 'high';
   if (rate >= 0.9) return 'medium';
   return 'low';
-}
-
-/** Count successful runs. A run is successful when its conclusion is "success". */
-function countSuccessful(runs: unknown[]): number {
-  return runs.filter((r) => {
-    const rec = r as Record<string, unknown>;
-    return rec['conclusion'] === 'success';
-  }).length;
 }
 
 export function compute(
@@ -95,9 +93,28 @@ export function compute(
     );
   }
 
-  // Compute pass rate from run records.
-  const successful = countSuccessful(runs);
-  const rate = successful / runs.length;
+  // Pass rate over DECIDED runs only (see _ci_runs.ts).
+  const partition = partitionRuns(runs);
+  if (partition.decided.length === 0) {
+    return makeMetricResult(
+      'adp_c1_ci_pass_rate',
+      null,
+      'banded',
+      [],
+      {
+        tag: 'not-reliable',
+        confidence: 'LOW',
+        note:
+          `${partition.total} CI runs fetched but none reached a pass/fail verdict ` +
+          `(${describeExcluded(partition)}) — widen the run fetch or exclude ` +
+          `trigger-style workflows so decided runs land in the sample`,
+      },
+      [],
+      ['ci']
+    );
+  }
+
+  const rate = partition.passed / partition.decided.length;
   const band = ciPassBand(rate);
   const categories = awardCategories(
     standards,
@@ -106,7 +123,16 @@ export function compute(
   );
   const reliability = computeReliability('not-reliable', ['ci'], []);
 
-  const expression = `${successful}/${runs.length} CI runs passed = ${(rate * 100).toFixed(1)}% pass rate (${band})`;
+  const excludedTotal = partition.total - partition.decided.length;
+  const excludedNote =
+    excludedTotal > 0
+      ? `; ${excludedTotal} run${excludedTotal !== 1 ? 's' : ''} without a verdict excluded: ${describeExcluded(partition)}`
+      : '';
+  const unknownNote =
+    partition.unknown.length > 0
+      ? ` (unrecognized conclusions treated as no-verdict: ${partition.unknown.join(', ')})`
+      : '';
+  const expression = `${partition.passed}/${partition.decided.length} decided CI runs passed = ${(rate * 100).toFixed(1)}% pass rate (${band})${excludedNote}${unknownNote}`;
   return makeMetricResult(
     'adp_c1_ci_pass_rate',
     rate,

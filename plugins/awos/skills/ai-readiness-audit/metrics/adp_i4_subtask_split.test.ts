@@ -437,3 +437,27 @@ test('adp_i4_subtask_split: tiny nonzero average (0.06) sits on the plateau → 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Field-gap SKIP note (same contract as adp_i5: a connected tracker missing
+// the field must not claim the tracker source itself is missing).
+// ---------------------------------------------------------------------------
+
+test('adp_i4_subtask_split: field-gap SKIP names the unmapped field, not a missing connector', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-fieldgap-'));
+  try {
+    const tickets: TicketFixture[] = [
+      { id: 'PROJ-1', type: 'story', status: 'Done' },
+    ];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.equal(res.status, 'SKIP', 'must still SKIP without the field');
+    const note = res.reliability?.note ?? '';
+    assert.ok(
+      note.includes('tracker connected') && note.includes('subtask_count'),
+      `SKIP note must say the tracker IS connected and name the unmapped field; got "${note}"`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

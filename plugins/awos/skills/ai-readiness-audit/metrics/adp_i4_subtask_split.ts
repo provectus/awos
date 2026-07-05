@@ -118,7 +118,24 @@ export function compute(
     (t) => typeof t['subtask_count'] === 'number'
   );
   if (!hasSubtaskData) {
-    return skipMetric('adp_i4_subtask_split', 'banded', 'minimal', 'tracker');
+    // The tracker IS connected — the generic "missing sources: tracker" SKIP
+    // reason would misreport a field-mapping gap as a missing connector.
+    return makeMetricResult(
+      'adp_i4_subtask_split',
+      null,
+      'banded',
+      [],
+      {
+        tag: 'minimal',
+        confidence: 'LOW',
+        note:
+          `tracker connected (${tickets.length} tickets) but none carries subtask_count — ` +
+          `the fetch did not map sub-task counts; map issue.fields.subtasks.length per ` +
+          `connector-shapes.md to measure this`,
+      },
+      [],
+      ['tracker']
+    );
   }
 
   // Parent-eligible tickets: every ticket that is not itself a sub-task
@@ -128,7 +145,19 @@ export function compute(
   // {x:0} anchor unreachable) and let a single over-split epic dominate.
   const parents = tickets.filter((t) => t['parent'] == null);
   if (parents.length === 0) {
-    return skipMetric('adp_i4_subtask_split', 'banded', 'minimal', 'tracker');
+    return makeMetricResult(
+      'adp_i4_subtask_split',
+      null,
+      'banded',
+      [],
+      {
+        tag: 'minimal',
+        confidence: 'LOW',
+        note: 'tracker connected, but every fetched ticket is itself a sub-task — no parent-eligible ticket in the window to average over',
+      },
+      [],
+      ['tracker']
+    );
   }
 
   const avgSubtasks = mean(

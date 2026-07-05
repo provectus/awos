@@ -118,11 +118,23 @@ export function compute(
   );
 
   if (eligible.length === 0) {
-    return skipMetric(
+    // The tracker IS connected — the generic "missing sources: tracker" SKIP
+    // reason would misreport a field-mapping gap as a missing connector.
+    return makeMetricResult(
       'adp_i5_description_quality',
+      null,
       'banded',
-      'minimal',
-      'tracker'
+      [],
+      {
+        tag: 'minimal',
+        confidence: 'LOW',
+        note:
+          `tracker connected (${tickets.length} tickets) but none carries description_length — ` +
+          `the fetch did not request/map ticket descriptions; include the description field ` +
+          `and map its length per connector-shapes.md to measure this`,
+      },
+      [],
+      ['tracker']
     );
   }
 

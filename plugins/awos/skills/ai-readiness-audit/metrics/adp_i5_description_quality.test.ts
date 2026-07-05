@@ -500,3 +500,29 @@ test('adp_i5_description_quality: standards.toml [category.ticket_description_qu
     '[category.ticket_description_quality].method must be "computed"'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Field-gap SKIP note (regression: a connected tracker whose fetch never
+// mapped description_length SKIPped with the generic "missing sources:
+// tracker" — misreporting a field-mapping gap as a missing connector).
+// ---------------------------------------------------------------------------
+
+test('adp_i5_description_quality: field-gap SKIP names the unmapped field, not a missing connector', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-fieldgap-'));
+  try {
+    const tickets: TicketFixture[] = [
+      { id: 'PROJ-1', type: 'story', status: 'Done' },
+      { id: 'PROJ-2', type: 'bug', status: 'Done' },
+    ];
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
+    const res = compute(dir, {}, {});
+    assert.equal(res.status, 'SKIP', 'must still SKIP without the field');
+    const note = res.reliability?.note ?? '';
+    assert.ok(
+      note.includes('tracker connected') && note.includes('description_length'),
+      `SKIP note must say the tracker IS connected and name the unmapped field so the reader fixes the fetch, not the connector; got "${note}"`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

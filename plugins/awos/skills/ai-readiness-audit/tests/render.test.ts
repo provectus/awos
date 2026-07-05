@@ -1236,7 +1236,7 @@ test('renderHtml: Reach renders Spec coverage and orders items Active Contributo
   );
   assert.ok(
     html.includes(
-      'Share of feature work that went through a written spec: merged branches/PRs whose changes touched spec files'
+      'Share of feature work that went through a written spec: merged feature branches/PRs whose changes touched spec files'
     ),
     'Spec coverage tooltip must describe any spec-driven workflow in plain language'
   );

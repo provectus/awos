@@ -275,6 +275,83 @@ The `period.lookback_days` and `period.source_label` fields follow the same sche
 
 ---
 
+## Code host (`collected/code_host.json`)
+
+Merged-PR records from the code host (GitHub via `gh`, GitLab via `glab`, or a code-host MCP). This is the real source for PR timings on squash-merge repos, where git history alone cannot reconstruct branch lifetimes — it feeds DF-02 lead time (`first_commit_at → merged_at`), DF-03 PR cycle time (`created_at → merged_at`), and DF-05 review rework (`commit_count`). Whenever `gh`/`glab` is reachable for the repo's remote, fetching this artifact is part of doing the audit, not an optional extra.
+
+### PrRecord
+
+```json
+{
+  "number": 310,
+  "created_at": "2026-06-28T09:12:00Z",
+  "merged_at": "2026-07-02T10:45:52Z",
+  "first_commit_at": "2026-06-27T16:03:11Z",
+  "commit_count": 7
+}
+```
+
+| Field             | Type     | Required | Meaning                                                                                  |
+| ----------------- | -------- | -------- | ---------------------------------------------------------------------------------------- |
+| `number`          | `number` | no       | PR/MR number, for traceability                                                           |
+| `created_at`      | `string` | yes      | ISO 8601 PR open time — with `merged_at`, the literal DF-03 PR cycle time                |
+| `merged_at`       | `string` | yes      | ISO 8601 merge time                                                                      |
+| `first_commit_at` | `string` | no       | Earliest commit authored on the PR — with `merged_at`, the DF-02 lead-time approximation |
+| `commit_count`    | `number` | no       | Commits on the PR at merge time — feeds the DF-05 review-rework proxy                    |
+
+### CodeHostRaw
+
+Written by the orchestrator directly (no engine collector transforms it):
+
+```json
+{
+  "source": "code_host",
+  "available": true,
+  "reason_if_absent": null,
+  "period": {
+    "bucket_days": 30,
+    "lookback_days": 90,
+    "history_available_days": 90,
+    "source_label": "GitHub PRs via gh"
+  },
+  "raw": {
+    "prs": [],
+    "fetch_meta": { "prs_fetched": 200, "complete": true }
+  }
+}
+```
+
+Fetch only PRs merged inside the audit window (90 days by default) — the metrics use every record in the artifact and rely on the fetch window, and record the window actually used in `period.lookback_days`.
+
+### Worked example — GitHub → `collected/code_host.json`
+
+Do NOT use `gh pr list --json commits` — that field expands every commit's author list and exceeds GitHub's GraphQL node budget even at `--limit 50`. PR commits are ordered oldest-first, so `commits(first: 1)` + `totalCount` gives everything the metrics need at trivial cost:
+
+```
+gh api graphql -f owner=<owner> -f repo=<repo> -f query='
+  query($owner:String!,$repo:String!,$cursor:String){
+    repository(owner:$owner,name:$repo){
+      pullRequests(states:MERGED,first:100,after:$cursor,
+                   orderBy:{field:UPDATED_AT,direction:DESC}){
+        pageInfo{hasNextPage endCursor}
+        nodes{number createdAt mergedAt
+              commits(first:1){totalCount nodes{commit{authoredDate}}}}}}}'
+
+# Paginate on pageInfo.endCursor until a page's oldest mergedAt predates the
+# audit window (UPDATED_AT ordering is not merge order — expect a small
+# overshoot and filter by mergedAt when mapping). Map each node:
+#   number                              → number
+#   createdAt                           → created_at
+#   mergedAt                            → merged_at
+#   commits.nodes[0].commit.authoredDate → first_commit_at
+#   commits.totalCount                  → commit_count
+# Drop PRs whose mergedAt is older than the audit window.
+```
+
+Fallback when GraphQL is unavailable: `gh pr list --state merged --limit 200 --json number,createdAt,mergedAt` (no `commits`) — DF-03 still computes exactly; DF-02/DF-05 fall back to their git proxies. GitLab equivalent: `glab mr list --state merged` (MR `sha`/commit counts via `glab api projects/:id/merge_requests/:iid/commits` when cheap).
+
+---
+
 ## Turnkey enrichment recipe
 
 When a tracker or docs MCP is reachable, enriching it is a small, bounded operation — not a 730-day data migration. The engine buckets whatever you provide; a recent window is enough. Mapping reachable data into the shapes above is expected, not fabrication. Reachability is decided by attempting the call, not by any config file.

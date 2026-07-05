@@ -17,15 +17,18 @@
  *   medium → < 1 month  (< 720 hours)
  *   low    → >= 1 month (>= 720 hours)
  *
- * Source shapes:
- *   collectedDir/tracker.json — preferred when tickets carry workflow history:
+ * Source shapes (in preference order):
+ *   collectedDir/code_host.json — the real thing: merged-PR records with
+ *     created_at → merged_at, the literal PR open→merge duration. Works for
+ *     every merge strategy, including squash.
+ *   collectedDir/tracker.json — when tickets carry workflow history:
  *     tickets with BOTH in_progress_at and resolved_at yield real
  *     in-progress→done durations (median hours), replacing the git proxy.
  *   collectedDir/git.json — fallback proxy:
  *     merge_records (Array<{ merged_at: string; branch_first_commit_at: string }>)
  *
- * SKIP: if no tracker workflow history is available AND git.json is absent
- * or merge_records is empty.
+ * SKIP: if no code-host PR data, no tracker workflow history is available,
+ * AND git.json is absent or merge_records is empty.
  */
 import {
   appendReliabilityNote,
@@ -38,6 +41,7 @@ import {
   type MetricResult,
   type Reliability,
 } from './_base.ts';
+import { readCodeHostPrs } from './_code_host.ts';
 import { bandScore, clamp01, median } from './_score.ts';
 
 const CYCLE_TIME_ANCHORS = [
@@ -124,7 +128,35 @@ export function compute(
   _standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
-  // Preferred source: real workflow history from the tracker connector.
+  // Preferred source: the code-host connector — created_at → merged_at is the
+  // literal PR open→merge duration this metric is defined as, with no proxy.
+  const codeHost = readCodeHostPrs(collectedDir);
+  const prCycleTimes = codeHost.prs
+    .map((p) =>
+      p.mergedMs !== null && p.createdMs !== null
+        ? (p.mergedMs - p.createdMs) / 3_600_000
+        : null
+    )
+    .filter((h): h is number => h !== null && h >= 0);
+  if (prCycleTimes.length > 0) {
+    const medianHours = median(prCycleTimes)!;
+    const band = doraCycleTimeBand(medianHours);
+    const score = clamp01(bandScore(medianHours, CYCLE_TIME_ANCHORS, 'log'));
+    const reliability = computeReliability('maximal', ['code_host'], []);
+    const expression = `median ${medianHours.toFixed(1)}h PR open→merge over ${prCycleTimes.length} merged PR${prCycleTimes.length !== 1 ? 's' : ''} from the code host (${band})`;
+    return makeMetricResult(
+      'adp_g5_pr_cycle_time',
+      medianHours,
+      'banded',
+      [501],
+      reliability,
+      ['code_host'],
+      [],
+      { band, expression, score, confidence: 1.0 }
+    );
+  }
+
+  // Next: real workflow history from the tracker connector.
   // When tickets carry in_progress_at + resolved_at, the median
   // in-progress→done duration replaces the git branch-lifetime proxy.
   const tracker = readTrackerCycle(collectedDir);

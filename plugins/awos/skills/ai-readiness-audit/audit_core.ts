@@ -293,12 +293,22 @@ export function deriveSources(
     const { art, err } = collected.get(src)!;
     if (art) {
       const period = art.period as Record<string, unknown> | undefined;
-      out.push({
+      const row: Record<string, unknown> = {
         source: src,
         available: Boolean(art.available),
         reason_if_absent: art.reason_if_absent ?? null,
         history_available_days: period?.history_available_days ?? null,
-      });
+      };
+      // Provenance note: which trunk ref the git walks used. Omitted for the
+      // plain local fallback (nothing remote to disclose) and added only when
+      // present so rows keep their existing shape everywhere else.
+      const trunk = (art.raw as Record<string, unknown> | undefined)?.trunk as
+        | { source?: string; summary?: string }
+        | undefined;
+      if (src === 'git' && trunk?.summary && trunk.source !== 'local') {
+        row.note = trunk.summary;
+      }
+      out.push(row);
     } else if (!dropEnoent || (err as { code?: string })?.code !== 'ENOENT') {
       out.push({
         source: src,
@@ -350,6 +360,13 @@ interface MetricMeta {
   confidence?: number;
   /** Reliability note from the metric — surfaces WHY a metric skipped. */
   note?: string | null;
+  /** Per-run reliability tag from the metric — a better source can upgrade
+   * the standards default (e.g. code-host PR data beats the git proxy). */
+  reliability_tag?: string | null;
+  /** Sources the metric actually read this run — supersedes the standards
+   * declaration in the check record so the report's Sources column reflects
+   * what was measured, not what was expected. */
+  sources_used?: string[];
 }
 
 /** The MetricMeta a metric result yields for one of its category codes. */
@@ -368,6 +385,10 @@ function metaForCode(res: MetricResult, code: number): MetricMeta {
     score: perCodeScore ?? res.score,
     confidence: res.confidence,
     note: res.reliability?.note ?? null,
+    reliability_tag: res.reliability?.tag ?? null,
+    sources_used: Array.isArray(res.sources_used)
+      ? (res.sources_used as string[])
+      : undefined,
   };
 }
 
@@ -493,12 +514,14 @@ export async function auditCore(
   };
   const trackerArt = readCollected('tracker');
   const docsArt = readCollected('docs');
+  const codeHostArt = readCollected('code_host');
   const topology: TopologyFlags = computeTopology(repoPath, {
     has_tracker: Boolean(trackerArt?.available),
     has_docs_connector: Boolean(docsArt?.available),
     has_incident_source: Boolean(
       trackerArt?.available && trackerArt?.incident_source
     ),
+    has_code_host: Boolean(codeHostArt?.available),
   });
 
   // 2b. Enrich reuse: on the enrich path the repo has not changed since
@@ -854,7 +877,13 @@ function appliesGatedOff(c: Category, topology: TopologyFlags): boolean {
 /** Sources a user can actually connect. `audit` (source code) and `scale` are
  * pseudo-sources the engine always has — telling a reader to "connect a audit
  * source" for a topology-gated check was misleading noise. */
-const CONNECTABLE_SOURCES = new Set(['tracker', 'docs', 'ci', 'incident']);
+const CONNECTABLE_SOURCES = new Set([
+  'tracker',
+  'docs',
+  'ci',
+  'incident',
+  'code_host',
+]);
 
 /** Sources whose data lives in a collected/<src>.json artifact — a metric
  * declaring any of these can change between audit-core and enrich. */
@@ -864,6 +893,7 @@ const COLLECTED_ARTIFACT_SOURCES = new Set([
   'tracker',
   'docs',
   'incident',
+  'code_host',
 ]);
 
 /** Topology flags that flip when a connector artifact appears (see
@@ -873,6 +903,7 @@ const CONNECTOR_TOPOLOGY_FLAGS = new Set([
   'has_tracker',
   'has_docs_connector',
   'has_incident_source',
+  'has_code_host',
 ]);
 
 function buildSkipReason(c: Category, topology: TopologyFlags): string {
@@ -1012,7 +1043,14 @@ function buildCheck(
     weight_max: c.weight,
     applies,
     reliability: {
-      tag: c.reliability_default ?? 'unknown',
+      // Prefer the metric's PER-RUN tag: which sources were actually used
+      // this run decides the regime (code-host PR data upgrades a metric
+      // whose standards default assumes the git proxy). Detectors and
+      // judgment checks have no metric result and keep the default.
+      tag:
+        metricMeta?.get(c.code)?.reliability_tag ??
+        c.reliability_default ??
+        'unknown',
       // Same vocabulary the metrics write (metrics/_base.ts Reliability).
       confidence: c.method === 'judgment' ? 'MED' : 'HIGH',
       note: null,
@@ -1028,7 +1066,12 @@ function buildCheck(
     source_date,
     source_url,
     last_verified: c.last_verified ?? null,
-    sources: c.sources ?? [],
+    // Per-run provenance beats the standards declaration: a metric scored
+    // from the code-host connector must list code_host in the report's
+    // Sources column, not the git proxy it would have fallen back to.
+    sources: metricMeta?.get(c.code)?.sources_used?.length
+      ? metricMeta.get(c.code)!.sources_used!
+      : (c.sources ?? []),
   };
   if (unit !== undefined) rec.unit = unit;
   if (expression !== undefined) rec.expression = expression;

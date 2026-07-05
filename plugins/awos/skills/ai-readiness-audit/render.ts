@@ -904,8 +904,10 @@ export function renderMarkdown(
           s.source === 'tracker' && trackerConnectionNote(audit)
             ? ` — ${trackerConnectionNote(audit)}`
             : '';
+        // Provenance note (e.g. the trunk ref the git walks used).
+        const sourceNote = s.note ? ` — ${s.note}` : '';
         const label = sourceFullLabel(s.source, audit.source_windows);
-        lines.push(`- ${label}${limitedNote}${derivedNote}`);
+        lines.push(`- ${label}${limitedNote}${derivedNote}${sourceNote}`);
       }
       lines.push('');
     }
@@ -1083,7 +1085,7 @@ const HEADLINE_TIP: Record<string, string> = {
   'Active Contributors':
     "Contributors with a meaningful share of the 90-day window's work: an author counts as active unless BOTH their share of merged PRs and their share of changed lines fall below {threshold}. The '(of N in window)' figure is the total distinct authors who committed at all.",
   'Spec coverage':
-    'Share of feature work that went through a written spec: merged branches/PRs whose changes touched spec files (AWOS context/spec/, Kiro, Agent-OS, plain specs/ conventions). Higher means more work is spec-driven.',
+    'Share of feature work that went through a written spec: merged feature branches/PRs whose changes touched spec files (AWOS context/spec/, Kiro, Agent-OS, plain specs/ conventions); fixes, reverts, and chores are excluded because maintenance needs no spec. Higher means more work is spec-driven.',
   'Repos with AI tooling':
     'How much of the portfolio works with AI tooling set up in the repository (agent instructions, skills, commands, hooks, or MCP config). Weighted by each repo\u2019s active contributors, so a large team\u2019s repo counts for more than a two-person one.',
   'Merges / active contributor':
@@ -1891,8 +1893,12 @@ function connectionsSection(audit: AuditJson, isOrg: boolean): string {
           s.source === 'tracker' && trackerConnectionNote(audit)
             ? ` — ${esc(trackerConnectionNote(audit)!)}`
             : '';
+        // Provenance note (e.g. the trunk ref the git walks used).
+        const sourceNote = s.note ? ` — ${esc(s.note)}` : '';
         const label = sourceFullLabel(s.source, audit.source_windows);
-        rows.push(`<li>${esc(label)}${limitedNote}${derivedNote}</li>`);
+        rows.push(
+          `<li>${esc(label)}${limitedNote}${derivedNote}${sourceNote}</li>`
+        );
       }
       rows.push('</ul>');
     }

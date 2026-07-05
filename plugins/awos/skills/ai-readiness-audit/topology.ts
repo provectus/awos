@@ -99,6 +99,7 @@ export function computeTopology(
     has_tracker?: boolean;
     has_docs_connector?: boolean;
     has_incident_source?: boolean;
+    has_code_host?: boolean;
   }
 ): TopologyFlags {
   const settings = readIfExists(repoPath, '.claude/settings.json');
@@ -265,6 +266,7 @@ export function computeTopology(
     has_tracker: Boolean(connectors?.has_tracker),
     has_docs_connector: Boolean(connectors?.has_docs_connector),
     has_incident_source: Boolean(connectors?.has_incident_source),
+    has_code_host: Boolean(connectors?.has_code_host),
   };
   return flags;
 }

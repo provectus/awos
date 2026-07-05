@@ -839,7 +839,11 @@ test('SDD-04 counts squash-merged PRs as feature work even when branches were de
     'src/c.ts': 'c\n',
     'context/spec/003-gamma/tasks.md': '- [x] done\n',
   });
-  squashCommit(t, 'chore: bump deps (#4)', { 'package.json': '{}\n' });
+  // A feature PR without a spec — stays in the denominator...
+  squashCommit(t, 'feat: delta, straight to code (#4)', { 'src/d.ts': 'd\n' });
+  // ...while maintenance PRs are excluded entirely (no spec expected).
+  squashCommit(t, 'chore: bump deps (#5)', { 'package.json': '{}\n' });
+  squashCommit(t, 'fix: crash on empty input (#6)', { 'src/a.ts': 'a2\n' });
   const r = detectBranchSpecRatio(t);
   assert.notEqual(
     r.status,
@@ -847,8 +851,12 @@ test('SDD-04 counts squash-merged PRs as feature work even when branches were de
     'merged PRs must be countable even with zero live feature branches'
   );
   assert.ok(
-    r.evidence.some((e) => /3\/4 merged branches\/PRs/.test(e)),
-    `evidence must count 3 of 4 merged PRs as spec-driven, got: ${JSON.stringify(r.evidence)}`
+    r.evidence.some((e) => /3\/4 merged feature PRs/.test(e)),
+    `evidence must count 3 of the 4 FEATURE PRs as spec-driven (chore/fix PRs excluded from the denominator), got: ${JSON.stringify(r.evidence)}`
   );
-  assert.equal(r.status, 'PASS', '75% spec-driven merged work ≥ 70% → PASS');
+  assert.ok(
+    r.evidence.some((e) => /2 fix\/maintenance PRs excluded/.test(e)),
+    `evidence must disclose how many maintenance PRs were excluded, got: ${JSON.stringify(r.evidence)}`
+  );
+  assert.equal(r.status, 'PASS', '75% spec-driven feature work ≥ 70% → PASS');
 });

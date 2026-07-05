@@ -10,7 +10,9 @@
  *   it cannot distinguish review-driven rework commits from normal feature work.
  *   True review-round count requires a code-host connector (GitHub/GitLab API).
  *
- * Source shape: collectedDir/git.json
+ * Source shape (preferred): collectedDir/code_host.json — per-PR commit
+ *   counts from the code-host connector (works for squash-merge repos).
+ * Source shape (fallback): collectedDir/git.json
  * Input raw fields: merge_records (Array<{ merged_at: string; branch_first_commit_at: string }>)
  *
  * Note: git.json does not capture per-branch commit counts directly. We use
@@ -31,6 +33,7 @@ import {
   squashSkipReliability,
   type MetricResult,
 } from './_base.ts';
+import { readCodeHostPrs } from './_code_host.ts';
 import { bandScore, clamp01 } from './_score.ts';
 
 /**
@@ -54,6 +57,37 @@ export function compute(
   _standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
+  // Preferred source: per-PR commit counts from the code-host connector —
+  // a real per-PR distribution instead of the total_commits/total_merges
+  // average, and it works for every merge strategy, including squash.
+  const codeHost = readCodeHostPrs(collectedDir);
+  const prCommitCounts = codeHost.prs
+    .map((p) => p.commitCount)
+    .filter((n): n is number => n !== null && n > 0);
+  if (prCommitCounts.length > 0) {
+    const commitsPerPr =
+      prCommitCounts.reduce((s, n) => s + n, 0) / prCommitCounts.length;
+    const reworkProxy = Math.max(0, commitsPerPr - 1);
+    // Still "minimal": commit count cannot distinguish review-driven rework
+    // from normal iteration, but per-PR counts from the host beat the
+    // whole-history average.
+    const reliability = computeReliability('minimal', ['code_host'], []);
+    const score = clamp01(
+      bandScore(commitsPerPr, COMMITS_PER_PR_ANCHORS, 'linear')
+    );
+    const expression = `avg ${commitsPerPr.toFixed(1)} commits/PR over ${prCommitCounts.length} merged PRs from the code host → ${reworkProxy.toFixed(1)} estimated rework commits`;
+    return makeMetricResult(
+      'adp_g8_review_rework',
+      reworkProxy,
+      'computed',
+      [801],
+      reliability,
+      ['code_host'],
+      [],
+      { expression, score, confidence: 1.0 }
+    );
+  }
+
   const read = readArtifact(collectedDir, 'git');
   if ('error' in read) {
     return skipMetric(

@@ -154,23 +154,232 @@ function latestCommitDate(cwd: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Trunk-tip commit date — the window anchor. Anchoring on the trunk (not
+ * `--all`) keeps one fresh local-only commit from shifting the window forward
+ * and silently dropping the oldest days of real trunk merges. Callers fall
+ * back to latestCommitDate() when this returns null (e.g. unborn HEAD).
+ */
+function trunkTipDate(cwd: string, ref: string): Date | null {
+  const s = run(
+    ['log', '--max-count=1', '--format=%cI', ...refArgs(ref)],
+    cwd
+  ).trim();
+  if (!s) return null;
+  const d = parseDate(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// ---------------------------------------------------------------------------
+// Trunk resolution
+// ---------------------------------------------------------------------------
+// The trunk every delivery metric walks is the team's SHARED branch, which a
+// developer's working clone represents best via its remote-tracking ref: a
+// local default branch routinely diverges from the real trunk through `git
+// pull` sync-merge commits, hiding every squash-merged PR from a first-parent
+// walk (observed in the wild: 6 personal pull-merges masking 220 squashed PRs,
+// a 36× deployment-frequency undercount). Unpushed local commits are not
+// delivered work, so the upstream ref wins even when local is merely ahead.
+// No `git fetch` is ever run — the audit trusts the local remote-tracking refs
+// (they refresh on both fetch and push; a never-fetched stale ref is
+// undetectable offline and accepted as a documented limitation).
+
+/** How the trunk ref was chosen; recorded in the artifact for transparency. */
+export type TrunkSource =
+  | 'upstream' // checked-out branch's configured @{upstream}
+  | 'same-name-remote' // refs/remotes/<remote>/<branch> matching the local name
+  | 'origin-head' // remote default branch (detached HEAD, e.g. CI checkouts)
+  | 'local'; // no usable remote ref — walk the local checkout as before
+
+export interface TrunkInfo {
+  /** Ref every trunk walk uses: "origin/main", or the literal "HEAD" for the local fallback. */
+  ref: string;
+  /** Branch NAME the ref represents (the artifact's default_branch), e.g. "main". */
+  branch: string;
+  /** Locally checked-out branch, or null on a detached HEAD. */
+  local_branch: string | null;
+  source: TrunkSource;
+  /** Commits on the local branch that are not on the trunk (unpushed/diverged); null when either side is missing. */
+  local_ahead: number | null;
+  /** Commits on the trunk that are not on the local branch; null when either side is missing. */
+  local_behind: number | null;
+  /** Human-readable one-liner for the report's Connections & Sources section. */
+  summary: string;
+}
+
+/**
+ * Revision argument for a `git log`-family walk. The local fallback uses the
+ * literal 'HEAD' sentinel and gets NO explicit argument, so repos without a
+ * usable remote ref keep today's implicit-HEAD behavior bit-for-bit —
+ * including run()'s unborn-HEAD failure classification. Exported for
+ * detectors that run their own trunk walks (e.g. SDD-04 merged-event scan).
+ */
+export function refArgs(ref: string): string[] {
+  return ref === 'HEAD' ? [] : [ref];
+}
+
+/** True when `ref` resolves to a commit (guards dangling upstream configs). */
+function refExists(cwd: string, ref: string): boolean {
+  return (
+    run(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], cwd, {
+      allowFailure: true,
+    }).trim() !== ''
+  );
+}
+
+/** The remote whose refs we consult: literal `origin` when present, else the sole remote. */
+function pickRemote(cwd: string): string | null {
+  const remotes = run(['remote'], cwd, { allowFailure: true })
+    .split('\n')
+    .map((r) => r.trim())
+    .filter(Boolean);
+  if (remotes.includes('origin')) return 'origin';
+  return remotes.length === 1 ? remotes[0] : null;
+}
+
+/** Pure formatter for TrunkInfo.summary — exported for direct unit testing. */
+export function describeTrunk(t: Omit<TrunkInfo, 'summary'>): string {
+  const divergence =
+    t.local_ahead !== null && t.local_behind !== null
+      ? `, local +${t.local_ahead}/-${t.local_behind}`
+      : '';
+  switch (t.source) {
+    case 'upstream':
+      return `trunk: ${t.ref} (upstream of checked-out ${t.local_branch}${divergence})`;
+    case 'same-name-remote':
+      return `trunk: ${t.ref} (remote branch matching checked-out ${t.local_branch}${divergence})`;
+    case 'origin-head':
+      return `trunk: ${t.ref} (remote default branch; detached HEAD)`;
+    case 'local':
+      return `trunk: local ${t.branch} (no remote tracking ref)`;
+  }
+}
+
+/**
+ * Local-vs-trunk divergence counts. `rev-list --left-right --count A...B`
+ * prints "<only-in-A>\t<only-in-B>": with A = trunk and B = the local branch,
+ * left = local_behind (trunk-only commits) and right = local_ahead
+ * (local-only commits).
+ */
+function divergenceCounts(
+  cwd: string,
+  trunkRef: string,
+  localBranch: string
+): { local_ahead: number | null; local_behind: number | null } {
+  const out = run(
+    ['rev-list', '--left-right', '--count', `${trunkRef}...${localBranch}`],
+    cwd,
+    { allowFailure: true }
+  ).trim();
+  const m = out.match(/^(\d+)\s+(\d+)$/);
+  if (!m) return { local_ahead: null, local_behind: null };
+  return {
+    local_behind: parseInt(m[1], 10),
+    local_ahead: parseInt(m[2], 10),
+  };
+}
+
+/**
+ * Resolve the trunk ref once per collect() pass. Order:
+ *
+ * 1. The checked-out branch's configured upstream — the strongest signal, and
+ *    it deliberately outranks origin/HEAD, which is stamped at clone time and
+ *    goes stale (observed pointing at a dead pre-migration `develop`).
+ * 2. The same-name remote-tracking branch (tracking not configured).
+ * 3. On a detached HEAD, the remote's default branch (origin/HEAD).
+ * 4. The local checkout, exactly as before this resolver existed.
+ */
+export function resolveTrunk(cwd: string): TrunkInfo {
+  // symbolic-ref exits non-zero on a detached HEAD — a valid repo state, so
+  // allowFailure prevents a spurious breadcrumb.
+  const localBranch =
+    run(['symbolic-ref', '--short', 'HEAD'], cwd, {
+      allowFailure: true,
+    }).trim() || null;
+
+  if (localBranch) {
+    // 1. Configured upstream. rev-parse exits non-zero when no upstream is set.
+    const upstream = run(
+      [
+        'rev-parse',
+        '--abbrev-ref',
+        '--symbolic-full-name',
+        `${localBranch}@{upstream}`,
+      ],
+      cwd,
+      { allowFailure: true }
+    ).trim();
+    if (upstream && refExists(cwd, upstream)) {
+      const base = {
+        ref: upstream,
+        branch: localBranch,
+        local_branch: localBranch,
+        source: 'upstream' as const,
+        ...divergenceCounts(cwd, upstream, localBranch),
+      };
+      return { ...base, summary: describeTrunk(base) };
+    }
+
+    // 2. Same-name remote-tracking branch. Verified via the full refs/remotes/
+    //    path so a local branch literally named "origin/main" cannot shadow it.
+    const remote = pickRemote(cwd);
+    if (remote && refExists(cwd, `refs/remotes/${remote}/${localBranch}`)) {
+      const candidate = `${remote}/${localBranch}`;
+      const base = {
+        ref: candidate,
+        branch: localBranch,
+        local_branch: localBranch,
+        source: 'same-name-remote' as const,
+        ...divergenceCounts(cwd, candidate, localBranch),
+      };
+      return { ...base, summary: describeTrunk(base) };
+    }
+  } else {
+    // 3. Detached HEAD (CI checkouts): the remote's recorded default branch.
+    const remote = pickRemote(cwd);
+    if (remote) {
+      const target = run(['symbolic-ref', `refs/remotes/${remote}/HEAD`], cwd, {
+        allowFailure: true,
+      }).trim();
+      const short = target.replace(/^refs\/remotes\//, '');
+      if (short && refExists(cwd, short)) {
+        const base = {
+          ref: short,
+          branch: short.startsWith(`${remote}/`)
+            ? short.slice(remote.length + 1)
+            : short,
+          local_branch: null,
+          source: 'origin-head' as const,
+          local_ahead: null,
+          local_behind: null,
+        };
+        return { ...base, summary: describeTrunk(base) };
+      }
+    }
+  }
+
+  // 4. Local fallback — the literal 'HEAD' sentinel keeps every walk implicit
+  //    (see refArgs). On a detached HEAD with no usable remote, 'main' keeps
+  //    default_branch a plausible branch name rather than a raw SHA.
+  const base = {
+    ref: 'HEAD',
+    branch: localBranch ?? 'main',
+    local_branch: localBranch,
+    source: 'local' as const,
+    local_ahead: null,
+    local_behind: null,
+  };
+  return { ...base, summary: describeTrunk(base) };
+}
+
 // ---------------------------------------------------------------------------
 // Individual fact collectors
 // ---------------------------------------------------------------------------
 
-function getDefaultBranch(cwd: string): string {
-  // symbolic-ref exits non-zero on a detached HEAD — that is a valid repo state,
-  // so allowFailure prevents a spurious breadcrumb; '' correctly falls back to 'main'.
-  const out = run(['symbolic-ref', '--short', 'HEAD'], cwd, {
-    allowFailure: true,
-  }).trim();
-  return out || 'main';
-}
-
-function getTotalCommits(cwd: string): number {
-  // rev-list --count HEAD exits non-zero on an empty repo (no HEAD ref yet),
+function getTotalCommits(cwd: string, ref: string): number {
+  // rev-list --count exits non-zero on an empty repo (no HEAD ref yet),
   // which is a valid state — allowFailure keeps the output clean; '' parses to 0.
-  const out = run(['rev-list', '--count', 'HEAD'], cwd, {
+  const out = run(['rev-list', '--count', ref], cwd, {
     allowFailure: true,
   }).trim();
   const n = parseInt(out, 10);
@@ -178,7 +387,7 @@ function getTotalCommits(cwd: string): number {
 }
 
 /** Count commits that carry AI agent attribution trailers (any supported tool). */
-function getAiMarkedCommits(cwd: string): number {
+function getAiMarkedCommits(cwd: string, ref: string): number {
   // One `git log` pass instead of one per attribution pattern: git OR-combines
   // multiple `--grep` by default, so a single invocation matches the union of
   // all patterns. A commit matching several patterns still appears once in the
@@ -193,6 +402,7 @@ function getAiMarkedCommits(cwd: string): number {
     '--format=%H',
   ];
   for (const pat of ALL_COMMIT_ATTRIBUTION) args.push(`--grep=${pat.source}`);
+  args.push(...refArgs(ref));
   const out = run(args, cwd);
   const matchedSHAs = new Set(out.trim().split('\n').filter(Boolean));
   return matchedSHAs.size;
@@ -250,10 +460,14 @@ export function isSquashMergeSubject(subject: string): boolean {
 }
 /** GitLab squash keeps the MR ref in the BODY: "See merge request group/proj!45". */
 const SQUASH_BODY_RX = /^See merge request [^\s!]*!\d+/m;
-/** Mirrors the `--grep=^Revert\|hotfix\|rollback` merge-commit filter. */
-const REVERT_SUBJECT_RX = /^Revert|hotfix|rollback/;
-/** Mirrors the case-insensitive fix-keyword merge-commit filter (adp_g14). */
-const FIX_SUBJECT_RX = /fix|bugfix|hotfix|patch|defect|regression/i;
+/** Mirrors the `--grep=^Revert\|hotfix\|rollback` merge-commit filter.
+ * Exported so detectors classify merge subjects consistently with the
+ * change-failure proxy. */
+export const REVERT_SUBJECT_RX = /^Revert|hotfix|rollback/;
+/** Mirrors the case-insensitive fix-keyword merge-commit filter (adp_g14).
+ * Exported so detectors classify merge subjects consistently with the
+ * DORA rework-rate proxy. */
+export const FIX_SUBJECT_RX = /fix|bugfix|hotfix|patch|defect|regression/i;
 
 interface SquashScan {
   total: number;
@@ -278,12 +492,13 @@ interface SquashEvent {
  * Records are separated by \x1e and fields by \x1f so multi-line bodies parse
  * unambiguously.
  */
-function scanSquashMerges(cwd: string): SquashEvent[] {
+function scanSquashMerges(cwd: string, ref: string): SquashEvent[] {
   const args = [
     'log',
     '--first-parent',
     '--no-merges',
     '--format=%x1e%aN%x1f%cI%x1f%s%x1f%b',
+    ...refArgs(ref),
   ];
   const events: SquashEvent[] = [];
   for (const record of run(args, cwd).split('\x1e')) {
@@ -340,9 +555,13 @@ export function classifyMergeStrategy(
   return squashMerges >= mergeCommits * 3 ? 'squash' : 'mixed';
 }
 
-function getMergeStats(cwd: string, squashEvents: SquashEvent[]): MergeStats {
+function getMergeStats(
+  cwd: string,
+  squashEvents: SquashEvent[],
+  ref: string
+): MergeStats {
   const allMerges = run(
-    ['log', '--first-parent', '--merges', '--format=%H'],
+    ['log', '--first-parent', '--merges', '--format=%H', ...refArgs(ref)],
     cwd
   )
     .trim()
@@ -356,6 +575,7 @@ function getMergeStats(cwd: string, squashEvents: SquashEvent[]): MergeStats {
       '--merges',
       '--grep=^Revert\\|hotfix\\|rollback',
       '--format=%H',
+      ...refArgs(ref),
     ],
     cwd
   )
@@ -377,7 +597,7 @@ interface MergeRecord {
   branch_first_commit_at: string;
 }
 
-function getMergeRecords(cwd: string): MergeRecord[] {
+function getMergeRecords(cwd: string, ref: string): MergeRecord[] {
   // Two batched `git log` passes replace the old per-merge fork. The original
   // ran one `git log <sha>^1..<sha>^2` per first-parent merge — O(merges)
   // subprocess forks (the heaviest git cost, and the path that hit maxBuffer
@@ -400,7 +620,10 @@ function getMergeRecords(cwd: string): MergeRecord[] {
   // the work was written.
 
   // Pass 1: mainline first-parent chain, newest first.
-  const mainlineOut = run(['log', '--first-parent', '--format=%H|%cI|%P'], cwd)
+  const mainlineOut = run(
+    ['log', '--first-parent', '--format=%H|%cI|%P', ...refArgs(ref)],
+    cwd
+  )
     .trim()
     .split('\n')
     .filter(Boolean);
@@ -416,9 +639,14 @@ function getMergeRecords(cwd: string): MergeRecord[] {
     return { sha, mergedAt, parents: parentStr.split(' ').filter(Boolean) };
   });
 
-  // Pass 2: full ancestor graph — sha → { authorMs, parents }.
+  // Pass 2: full ancestor graph — sha → { authorMs, parents }. Scoped to the
+  // trunk's ancestry: the mainline sweep only ever resolves side branches
+  // reachable from trunk merges, so anc(trunk) is sufficient.
   const graph = new Map<string, { authorMs: number; parents: string[] }>();
-  for (const line of run(['log', '--format=%H|%aI|%P'], cwd).split('\n')) {
+  for (const line of run(
+    ['log', '--format=%H|%aI|%P', ...refArgs(ref)],
+    cwd
+  ).split('\n')) {
     if (!line) continue;
     const [sha, authorAt = '', parentStr = ''] = line.split('|');
     if (!sha) continue;
@@ -572,10 +800,11 @@ function buildWindowStats(
   cwd: string,
   period: Period,
   activeThreshold: number,
-  // Newest commit date (the window anchor), computed once in collect();
+  // Trunk-tip commit date (the window anchor), computed once in collect();
   // null on an empty repo → the empty stats shape without any git calls.
   anchor: Date | null,
-  squashEvents: SquashEvent[]
+  squashEvents: SquashEvent[],
+  ref: string
 ): WindowStats {
   const windowDays = period.lookback_days;
   const empty: WindowStats = {
@@ -611,6 +840,7 @@ function buildWindowStats(
       '--grep=^Revert\\|hotfix\\|rollback',
       `--since=${since}`,
       '--format=%H',
+      ...refArgs(ref),
     ],
     cwd
   )
@@ -630,6 +860,7 @@ function buildWindowStats(
       '--regexp-ignore-case',
       `--since=${since}`,
       '--format=%H',
+      ...refArgs(ref),
     ],
     cwd
   )
@@ -646,6 +877,9 @@ function buildWindowStats(
 
   // 1. Non-merge commits — derive per-author commit counts and line churn.
   //    Format: one "%H\t%aN" header line per commit, then numstat lines.
+  //    Deliberately stays --all (not trunk-scoped): this pass measures
+  //    contributor ACTIVITY and churn, and in-flight branch work is real
+  //    activity even before it lands on the trunk.
   const numstatOut = run(
     [
       'log',
@@ -688,7 +922,14 @@ function buildWindowStats(
   //    events so a squash-merge repo's per-author merges reflect PR authors,
   //    not just whoever performs the occasional real merge.
   const mergeOut = run(
-    ['log', '--first-parent', '--merges', `--since=${since}`, '--format=%aN'],
+    [
+      'log',
+      '--first-parent',
+      '--merges',
+      `--since=${since}`,
+      '--format=%aN',
+      ...refArgs(ref),
+    ],
     cwd
   );
 
@@ -759,8 +1000,8 @@ interface NumstatTotals {
   deleted: number;
 }
 
-function getNumstatTotals(cwd: string): NumstatTotals {
-  const out = run(['log', '--numstat', '--format='], cwd);
+function getNumstatTotals(cwd: string, ref: string): NumstatTotals {
+  const out = run(['log', '--numstat', '--format=', ...refArgs(ref)], cwd);
   let added = 0;
   let deleted = 0;
   for (const line of out.split('\n')) {
@@ -805,8 +1046,9 @@ function getCodeTurnover(
   cwd: string,
   period: Period,
   horizonDays: number,
-  // Newest commit date, computed once in collect(); null on an empty repo.
-  anchor: Date | null
+  // Trunk-tip commit date, computed once in collect(); null on an empty repo.
+  anchor: Date | null,
+  ref: string
 ): CodeTurnover | null {
   const lookbackDays = period.lookback_days;
   if (!anchor) return null;
@@ -835,6 +1077,7 @@ function getCodeTurnover(
       '--numstat',
       `--since=${replayStartISO}`,
       '--format=%H\t%cI',
+      ...refArgs(ref),
     ],
     cwd
   );
@@ -926,6 +1169,8 @@ function getHistoryAvailableDays(cwd: string): number {
 
 export interface GitRaw {
   default_branch: string;
+  /** Which ref the trunk walks used and why — see resolveTrunk(). */
+  trunk: TrunkInfo;
   total_commits: number;
   ai_marked_commits: number;
   total_merges: number;
@@ -976,15 +1221,22 @@ export function collect(
     );
   }
 
+  // The trunk ref is resolved ONCE and threaded into every trunk walk below —
+  // this is what keeps a diverged developer clone from hiding the real trunk.
+  const trunk = resolveTrunk(repoPath);
+
   // Commit-less repo (git init, nothing committed): a valid state, but every
   // HEAD-based `git log` variant fatals on the unborn branch. Short-circuit to
   // the zero-stats artifact — available (the repo exists), just empty — without
-  // spamming per-subcommand breadcrumbs. The anchor (newest commit date) is
-  // computed ONCE here and threaded into every windowed fact collector.
-  const anchor = latestCommitDate(repoPath);
+  // spamming per-subcommand breadcrumbs. The anchor (trunk-tip commit date,
+  // falling back to newest-across-refs) is computed ONCE here and threaded
+  // into every windowed fact collector.
+  const anchor =
+    trunkTipDate(repoPath, trunk.ref) ?? latestCommitDate(repoPath);
   if (anchor === null) {
     const raw: GitRaw = {
-      default_branch: getDefaultBranch(repoPath),
+      default_branch: trunk.branch,
+      trunk,
       total_commits: 0,
       ai_marked_commits: 0,
       total_merges: 0,
@@ -998,10 +1250,17 @@ export function collect(
         period,
         activeThreshold,
         null,
-        []
+        [],
+        trunk.ref
       ),
       numstat_totals: { added: 0, deleted: 0 },
-      code_turnover: getCodeTurnover(repoPath, period, reworkHorizonDays, null),
+      code_turnover: getCodeTurnover(
+        repoPath,
+        period,
+        reworkHorizonDays,
+        null,
+        trunk.ref
+      ),
     };
     return makeArtifact(
       'git',
@@ -1012,33 +1271,39 @@ export function collect(
     );
   }
 
-  const default_branch = getDefaultBranch(repoPath);
-  const total_commits = getTotalCommits(repoPath);
-  const ai_marked_commits = getAiMarkedCommits(repoPath);
+  const total_commits = getTotalCommits(repoPath, trunk.ref);
+  const ai_marked_commits = getAiMarkedCommits(repoPath, trunk.ref);
   const tooling_paths = getToolingPaths(repoPath);
   // One squash scan over all history; getMergeStats and buildWindowStats fold
   // it (unbounded / windowed) instead of each running its own log pass.
-  const squashEvents = scanSquashMerges(repoPath);
-  const { total_merges, revert_merges } = getMergeStats(repoPath, squashEvents);
-  const merge_records = getMergeRecords(repoPath);
+  const squashEvents = scanSquashMerges(repoPath, trunk.ref);
+  const { total_merges, revert_merges } = getMergeStats(
+    repoPath,
+    squashEvents,
+    trunk.ref
+  );
+  const merge_records = getMergeRecords(repoPath, trunk.ref);
   const window_stats = buildWindowStats(
     repoPath,
     period,
     activeThreshold,
     anchor,
-    squashEvents
+    squashEvents,
+    trunk.ref
   );
-  const numstat_totals = getNumstatTotals(repoPath);
+  const numstat_totals = getNumstatTotals(repoPath, trunk.ref);
   const code_turnover = getCodeTurnover(
     repoPath,
     period,
     reworkHorizonDays,
-    anchor
+    anchor,
+    trunk.ref
   );
   const history_available_days = getHistoryAvailableDays(repoPath);
 
   const raw: GitRaw = {
-    default_branch,
+    default_branch: trunk.branch,
+    trunk,
     total_commits,
     ai_marked_commits,
     total_merges,

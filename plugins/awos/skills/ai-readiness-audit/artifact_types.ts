@@ -287,6 +287,9 @@ export interface SourceSummary {
   available: boolean;
   reason_if_absent: string | null;
   history_available_days: number | null;
+  /** Optional provenance detail shown next to the source in the report's
+   * Connections & Sources section (e.g. which trunk ref the git walks used). */
+  note?: string | null;
 }
 
 export interface TechItem {
@@ -364,17 +367,25 @@ export interface AuditJson {
  * source_windows is absent, so the two can never disagree.
  */
 /**
- * The four collector sources, in canonical order. Shared by audit_core (which
+ * The collector sources, in canonical order. Shared by audit_core (which
  * derives `sources`/`source_windows` from them) and render (which orders the
- * connections section by them).
+ * connections section by them). `code_host` is orchestrator-fetched (merged-PR
+ * history via gh/glab or a code-host MCP), like `ci`/`tracker`/`docs`.
  */
-export const COLLECTOR_SOURCES = ['git', 'ci', 'tracker', 'docs'] as const;
+export const COLLECTOR_SOURCES = [
+  'git',
+  'ci',
+  'tracker',
+  'docs',
+  'code_host',
+] as const;
 
 export const SOURCE_LABEL_DEFAULTS: Record<string, string> = {
   git: 'git history',
   ci: 'CI runs',
   tracker: 'issue tracker',
   docs: 'docs/wiki',
+  code_host: 'code host PRs',
   scale: 'source code (AST)',
   audit: 'source code',
   incident: 'incident source',

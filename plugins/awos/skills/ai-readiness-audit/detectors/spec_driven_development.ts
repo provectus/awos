@@ -2,7 +2,13 @@ import { makeResult, iterFiles, readTextSafe } from './_base.ts';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { isSquashMergeSubject } from '../collectors/git.ts';
+import {
+  isSquashMergeSubject,
+  resolveTrunk,
+  refArgs,
+  FIX_SUBJECT_RX,
+  REVERT_SUBJECT_RX,
+} from '../collectors/git.ts';
 
 // ---------------------------------------------------------------------------
 // detectAwosInstalled — category 2800 (SDD-01, method: detected)
@@ -451,8 +457,14 @@ export function detectArchTechMatch(
 
 const TRUNK_BRANCHES = new Set(['main', 'master', 'develop', 'development']);
 
-/** Detect the actual trunk branch by probing common names in order. */
+/**
+ * The rev feature-branch diffs are excluded against. Prefer the shared trunk
+ * ref from resolveTrunk() (a diverged local main hides the real trunk); only
+ * when no remote ref exists fall back to probing common local branch names.
+ */
 function detectTrunk(repoPath: string): string {
+  const trunk = resolveTrunk(repoPath);
+  if (trunk.ref !== 'HEAD') return trunk.ref;
   for (const candidate of ['main', 'master', 'develop', 'development']) {
     try {
       execFileSync('git', ['rev-parse', '--verify', candidate], {
@@ -551,6 +563,24 @@ function branchTouchedSpec(
 // Lookback for merged-event scanning; matches the collectors' default window.
 const MERGED_EVENT_LOOKBACK_DAYS = 90;
 
+// Maintenance work needs no spec — a bug fix, revert, or dependency bump is
+// not expected to flow through a spec workflow. SDD-04 measures whether
+// FEATURE work is spec-driven, so maintenance subjects are excluded from both
+// numerator and denominator. Fix/revert classification reuses the collector's
+// regexes so this partition matches the DORA rework/change-failure proxies;
+// the prefix regex adds the conventional-commit chore family and bot bumps.
+const MAINTENANCE_PREFIX_RX =
+  /^(?:chore|docs|ci|build|test|style|deps|release)\b[(:!]?|\bbump\b|\bdependabot\b|\brenovate\b/i;
+
+/** True when a merged-event subject is feature work (not fix/revert/chore). */
+function isFeatureSubject(subject: string): boolean {
+  return (
+    !FIX_SUBJECT_RX.test(subject) &&
+    !REVERT_SUBJECT_RX.test(subject) &&
+    !MAINTENANCE_PREFIX_RX.test(subject)
+  );
+}
+
 interface MergedEvent {
   subject: string;
   touchedSpec: boolean;
@@ -566,11 +596,16 @@ interface MergedEvent {
 function listMergedEvents(repoPath: string): MergedEvent[] {
   let out: string;
   try {
-    // Anchor the window to the newest commit (no wall-clock dependency).
-    const latest = execFileSync('git', ['log', '-1', '--format=%cI'], {
-      cwd: repoPath,
-      encoding: 'utf8',
-    }).trim();
+    // Walk the SHARED trunk ref, not the local checkout — a diverged local
+    // main's first-parent chain is the developer's own pull merges, which
+    // would both miss every real PR and count the pull merges as feature work.
+    const trunkRef = resolveTrunk(repoPath).ref;
+    // Anchor the window to the trunk's newest commit (no wall-clock dependency).
+    const latest = execFileSync(
+      'git',
+      ['log', '-1', '--format=%cI', ...refArgs(trunkRef)],
+      { cwd: repoPath, encoding: 'utf8' }
+    ).trim();
     if (!latest) return [];
     const since = new Date(
       new Date(latest).getTime() - MERGED_EVENT_LOOKBACK_DAYS * 86_400_000
@@ -584,6 +619,7 @@ function listMergedEvents(repoPath: string): MergedEvent[] {
         '--diff-merges=first-parent',
         '--name-only',
         '--format=%x1e%P%x1f%s',
+        ...refArgs(trunkRef),
       ],
       { cwd: repoPath, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
     );
@@ -615,16 +651,29 @@ export function detectBranchSpecRatio(
     (params as { threshold?: number } | undefined)?.threshold ?? 0.7;
   const thresholdPct = Math.round(threshold * 100);
 
-  // Preferred denominator: feature work actually MERGED in the window (merge
-  // commits + squash-merged PRs). Fallback: live local branches — only for
-  // repos with no PR/merge workflow at all.
-  const events = listMergedEvents(repoPath);
+  // Preferred denominator: FEATURE work actually MERGED in the window (merge
+  // commits + squash-merged PRs, minus fixes/reverts/chores — maintenance
+  // needs no spec). Fallback: live local branches — only for repos with no
+  // PR/merge workflow at all.
+  const allEvents = listMergedEvents(repoPath);
+  const events = allEvents.filter((e) => isFeatureSubject(e.subject));
+  const excluded = allEvents.length - events.length;
+  if (allEvents.length > 0 && events.length === 0) {
+    return makeResult(
+      'SKIP',
+      null,
+      [
+        `all ${allEvents.length} merged PRs in the window are fixes/maintenance — no feature work to measure spec coverage against`,
+      ],
+      'computed'
+    );
+  }
   if (events.length > 0) {
     const specEvents = events.filter((e) => e.touchedSpec);
     const total = events.length;
     const ratio = Math.round((specEvents.length / total) * 1e10) / 1e10;
     const evidence = [
-      `${specEvents.length}/${total} merged branches/PRs (90d) touched spec files (ratio: ${Math.round(ratio * 100)}%)`,
+      `${specEvents.length}/${total} merged feature PRs (90d) touched spec files (ratio: ${Math.round(ratio * 100)}%; ${excluded} fix/maintenance PRs excluded — no spec expected)`,
       ...specEvents.slice(0, 10).map((e) => `spec PR: ${e.subject}`),
     ];
     if (ratio >= threshold) {

@@ -376,10 +376,13 @@ export function resolveTrunk(cwd: string): TrunkInfo {
 // Individual fact collectors
 // ---------------------------------------------------------------------------
 
-function getTotalCommits(cwd: string, ref: string): number {
+function getTotalCommits(cwd: string, ref: string, since?: string): number {
   // rev-list --count exits non-zero on an empty repo (no HEAD ref yet),
   // which is a valid state — allowFailure keeps the output clean; '' parses to 0.
-  const out = run(['rev-list', '--count', ref], cwd, {
+  const args = ['rev-list', '--count'];
+  if (since) args.push(`--since=${since}`);
+  args.push(ref);
+  const out = run(args, cwd, {
     allowFailure: true,
   }).trim();
   const n = parseInt(out, 10);
@@ -387,7 +390,7 @@ function getTotalCommits(cwd: string, ref: string): number {
 }
 
 /** Count commits that carry AI agent attribution trailers (any supported tool). */
-function getAiMarkedCommits(cwd: string, ref: string): number {
+function getAiMarkedCommits(cwd: string, ref: string, since?: string): number {
   // One `git log` pass instead of one per attribution pattern: git OR-combines
   // multiple `--grep` by default, so a single invocation matches the union of
   // all patterns. A commit matching several patterns still appears once in the
@@ -402,6 +405,7 @@ function getAiMarkedCommits(cwd: string, ref: string): number {
     '--format=%H',
   ];
   for (const pat of ALL_COMMIT_ATTRIBUTION) args.push(`--grep=${pat.source}`);
+  if (since) args.push(`--since=${since}`);
   args.push(...refArgs(ref));
   const out = run(args, cwd);
   const matchedSHAs = new Set(out.trim().split('\n').filter(Boolean));
@@ -715,6 +719,15 @@ export interface AuthorRow {
 export interface WindowStats {
   window_days: number;
   commits: number;
+  /**
+   * In-window commits reachable from the trunk ref (`rev-list --count --since`,
+   * merge commits included) — the windowed counterpart of the top-level
+   * all-history `total_commits`. Distinct from `commits` above, which is the
+   * `--all` non-merge count used for per-author activity.
+   */
+  trunk_commits: number;
+  /** In-window trunk commits carrying AI agent attribution trailers (windowed counterpart of the top-level `ai_marked_commits`). */
+  ai_marked_commits: number;
   merges: number;
   /** First-parent merges in the window whose subject matches revert/hotfix/rollback keywords. */
   revert_merges: number;
@@ -810,6 +823,8 @@ function buildWindowStats(
   const empty: WindowStats = {
     window_days: windowDays,
     commits: 0,
+    trunk_commits: 0,
+    ai_marked_commits: 0,
     merges: 0,
     revert_merges: 0,
     fix_merges: 0,
@@ -975,6 +990,8 @@ function buildWindowStats(
   return {
     window_days: windowDays,
     commits: totalCommits,
+    trunk_commits: getTotalCommits(cwd, ref, since),
+    ai_marked_commits: getAiMarkedCommits(cwd, ref, since),
     merges: totalMerges,
     revert_merges,
     fix_merges,

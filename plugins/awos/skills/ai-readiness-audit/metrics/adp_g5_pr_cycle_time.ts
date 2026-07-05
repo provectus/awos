@@ -239,9 +239,22 @@ export function compute(
     );
   }
 
-  const records: MergeRecord[] = raw.merge_records;
+  // If window_stats.window_start is available, restrict to in-window merges
+  // only — mirrors adp_g4_lead_time exactly. When absent/null (older artifact
+  // or empty repo), fall back to all records so existing fixtures and
+  // pre-window audits continue to produce results. Compare by epoch-ms, not
+  // ISO string: merged_at carries the committer's LOCAL timezone offset while
+  // window_start is UTC — lexicographic compare is not chronological.
+  const windowStart: string | null = raw.window_stats?.window_start ?? null;
+  let records: MergeRecord[] = raw.merge_records;
+  if (windowStart) {
+    const windowStartMs = new Date(windowStart).getTime();
+    records = records.filter(
+      (r) => new Date(r.merged_at).getTime() >= windowStartMs
+    );
+  }
 
-  // Compute cycle times in hours for each merge record.
+  // Compute cycle times in hours for each (in-window) merge record.
   const cycleTimesHours: number[] = [];
   for (const r of records) {
     const mergedAt = new Date(r.merged_at).getTime();
@@ -266,7 +279,8 @@ export function compute(
   const reliability = computeReliability('not-reliable', ['git'], []);
 
   const score = clamp01(bandScore(medianHours, CYCLE_TIME_ANCHORS, 'log'));
-  const expression = `median ${medianHours.toFixed(1)}h cycle time (${band})`;
+  const windowLabel = windowStart ? ' (in-window)' : '';
+  const expression = `median ${medianHours.toFixed(1)}h cycle time over ${cycleTimesHours.length} merge${cycleTimesHours.length !== 1 ? 's' : ''}${windowLabel} (${band})`;
   return makeMetricResult(
     'adp_g5_pr_cycle_time',
     medianHours,

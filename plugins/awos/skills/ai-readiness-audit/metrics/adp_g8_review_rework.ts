@@ -15,10 +15,13 @@
  * Source shape (fallback): collectedDir/git.json
  * Input raw fields: merge_records (Array<{ merged_at: string; branch_first_commit_at: string }>)
  *
- * Note: git.json does not capture per-branch commit counts directly. We use
- * merge_records length as a denominator and estimate rework as the ratio of
- * total_commits to total_merges (commits per PR on average) minus 1 (for the
- * initial commit). When total_merges is 0 or merge_records is empty, SKIP.
+ * Note: git.json does not capture per-branch commit counts directly. We
+ * estimate rework as commits-per-merged-PR minus 1 (for the initial commit),
+ * preferring the windowed trunk-scoped counts (window_stats.trunk_commits /
+ * window_stats.merges) so the proxy reflects current practice; the
+ * all-history total_commits / merge_records.length ratio remains only as a
+ * legacy fallback for pre-window artifacts. When the usable merge count is 0
+ * or merge_records is empty, SKIP.
  *
  * score: banded on avg commits/PR via COMMITS_PER_PR_ANCHORS — ~1–2 commits/PR
  * scores 1.0, declining linearly to 0 at ≥10 commits/PR (AWOS heuristics).
@@ -128,8 +131,25 @@ export function compute(
     );
   }
 
-  const totalMerges: number = raw.merge_records.length;
-  const totalCommits: number = raw.total_commits ?? 0;
+  // Prefer the windowed, trunk-scoped counts so the proxy measures current
+  // practice like every other DORA metric; fall back to the all-history
+  // totals only for pre-window artifacts that lack the fields. A windowed
+  // artifact with zero in-window merges SKIPs — reporting a number from
+  // merges outside the window would defeat the windowing.
+  const ws = raw.window_stats;
+  const windowed = typeof ws?.trunk_commits === 'number';
+  if (windowed && !(ws.merges > 0)) {
+    return skipMetric(
+      'adp_g8_review_rework',
+      'computed',
+      'not-reliable',
+      'git'
+    );
+  }
+  const totalMerges: number = windowed ? ws.merges : raw.merge_records.length;
+  const totalCommits: number = windowed
+    ? ws.trunk_commits
+    : (raw.total_commits ?? 0);
 
   // Average commits per merged PR as a rework proxy.
   // Subtract 1 to estimate "rework commits" beyond the initial commit.
@@ -147,7 +167,8 @@ export function compute(
     bandScore(commitsPerPr, COMMITS_PER_PR_ANCHORS, 'linear')
   );
 
-  const expression = `avg ${commitsPerPr.toFixed(1)} commits/PR → ${reworkProxy.toFixed(1)} estimated rework commits`;
+  const windowLabel = windowed ? ` over the last ${ws.window_days} days` : '';
+  const expression = `avg ${commitsPerPr.toFixed(1)} commits/PR${windowLabel} → ${reworkProxy.toFixed(1)} estimated rework commits`;
   return makeMetricResult(
     'adp_g8_review_rework',
     reworkProxy,

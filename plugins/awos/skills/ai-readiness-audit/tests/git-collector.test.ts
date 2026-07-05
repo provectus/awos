@@ -1234,3 +1234,65 @@ test('merge_records: branch_first_commit_at uses author date, so a rebased branc
     `lead time must reflect the author-date span (~52 days here), not ~0: branch_first_commit_at=${recs[0].branch_first_commit_at}, merged_at=${recs[0].merged_at}, diff=${days.toFixed(1)}d — a ~0 diff means committer date (rewritten by rebase) leaked in`
   );
 });
+
+// ---------------------------------------------------------------------------
+// Windowed trunk commit counts (regression: adp_g9 AI attribution divided
+// all-history counts, so pre-AI eras diluted the rate forever).
+// ---------------------------------------------------------------------------
+
+test('window_stats carries windowed trunk_commits and ai_marked_commits alongside the all-history totals', () => {
+  const r = join(mkdtempSync(join(tmpdir(), 'git-')), 'repo');
+  mkdirSync(r);
+  git(r, ['init', '-q', '-b', 'main']);
+  writeFileSync(join(r, 'a.txt'), '1');
+  git(r, ['add', '-A'], '2024-01-01T00:00:00');
+  // Old AI-marked commit — far outside the 90-day window.
+  git(
+    r,
+    [
+      'commit',
+      '-qm',
+      'feat: old ai work\n\nCo-authored-by: Claude <claude@anthropic.com>',
+    ],
+    '2024-01-01T00:00:00'
+  );
+  writeFileSync(join(r, 'b.txt'), '2');
+  git(r, ['add', '-A'], '2025-03-01T00:00:00');
+  git(r, ['commit', '-qm', 'feat: plain recent work'], '2025-03-01T00:00:00');
+  writeFileSync(join(r, 'c.txt'), '3');
+  git(r, ['add', '-A'], '2025-03-20T00:00:00');
+  // Recent AI-marked commit — inside the window anchored at this trunk tip.
+  git(
+    r,
+    [
+      'commit',
+      '-qm',
+      'feat: recent ai work\n\nCo-authored-by: Claude <claude@anthropic.com>',
+    ],
+    '2025-03-20T00:00:00'
+  );
+
+  const art = collect(r, WINDOW_PERIOD);
+  const ws = art.raw.window_stats;
+
+  assert.equal(
+    art.raw.total_commits,
+    3,
+    'all-history total_commits must still count every commit'
+  );
+  assert.equal(
+    art.raw.ai_marked_commits,
+    2,
+    'all-history ai_marked_commits must still count every attributed commit'
+  );
+  assert.equal(
+    ws.trunk_commits,
+    2,
+    'trunk_commits must count only in-window commits (the 2024 commit is outside the 90-day window)'
+  );
+  assert.equal(
+    ws.ai_marked_commits,
+    1,
+    'windowed ai_marked_commits must exclude the pre-window AI commit — current practice, not historical penetration'
+  );
+});

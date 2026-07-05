@@ -218,3 +218,64 @@ test('adp_g8: squash-merge strategy → SKIP (merge-record proxy unavailable)', 
     'squash SKIP must report the same kind ("computed") as the scored path'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Windowed git fallback (regression: the merge-commit-repo fallback divided
+// all-history total_commits by all-history merge count, so old workflow eras
+// dominated the "current" rework proxy).
+// ---------------------------------------------------------------------------
+
+test('adp_g8: windowed trunk counts outrank all-history totals in the git fallback', () => {
+  const tmp = tmpDir('g8-');
+  // All-history says 100/2 = 50 commits/PR; the window says 12/4 = 3.
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord(), mergeRecord()],
+      total_commits: 100,
+      window_stats: {
+        window_days: 90,
+        trunk_commits: 12,
+        merges: 4,
+        merge_strategy: 'merge-commit',
+      },
+    })
+  );
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(result.status, 'OK', 'windowed fallback must produce a result');
+  assert.ok(
+    Math.abs((result.value as number) - 2) < 0.0001,
+    `rework proxy must use WINDOWED 12 commits / 4 merges - 1 = 2, not the all-history 100/2-1 = 49; got ${result.value}`
+  );
+  assert.ok(
+    String(result.expression).includes('over the last 90 days'),
+    `expression must state the window, got "${result.expression}"`
+  );
+});
+
+test('adp_g8: windowed artifact with zero in-window merges SKIPs instead of reporting stale history', () => {
+  const tmp = tmpDir('g8-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord()],
+      total_commits: 100,
+      window_stats: {
+        window_days: 90,
+        trunk_commits: 5,
+        merges: 0,
+        merge_strategy: 'unknown',
+      },
+    })
+  );
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.status,
+    'SKIP',
+    'no in-window merges means current review practice is unmeasurable — falling back to all-history merges would defeat the windowing'
+  );
+});

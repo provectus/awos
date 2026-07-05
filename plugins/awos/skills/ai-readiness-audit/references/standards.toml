@@ -1567,7 +1567,7 @@ metric = "adp_g9_ai_attribution"
 dimension = "ai-sdlc-adoption"
 weight = 2
 method = "computed"
-definition = "Share of commits/PRs carrying AI markers (Co-authored-by: trailer, agent label). Always a lower bound — true usage >= shown."
+definition = "Share of commits/PRs in the audit window carrying AI markers (Co-authored-by: trailer, agent label) — current practice, not historical penetration. Always a lower bound — true usage >= shown."
 applies_when = "always"
 sources = ["git"]
 reliability_default = "minimal"   # true usage >= shown: attribution is easily disabled

@@ -448,3 +448,54 @@ test('adp_g5: tracker path appends the partial-fetch note from fetch_meta', () =
     `tracker-path reliability note must disclose the partial fetch; got: ${result.reliability.note}`
   );
 });
+
+// ---------------------------------------------------------------------------
+// Window restriction (regression: the git fallback iterated ALL merge_records
+// with no window filter — its sibling adp_g4 filtered to the 90-day window,
+// so DF-03's git path silently mixed years-old merges into the median).
+// ---------------------------------------------------------------------------
+
+test('adp_g5: merges before window_start are excluded from the median (mirrors adp_g4)', () => {
+  const tmp = tmpDir('g5-');
+  // mergeRecord bases branch_first_commit_at at 2025-03-01T12:00Z; a
+  // window_start after the +10h record's merge time (22:00Z) keeps only the
+  // +50h record in scope.
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord(10), mergeRecord(50)],
+      window_stats: { window_start: '2025-03-02T00:00:00Z' },
+    })
+  );
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(result.status, 'OK', 'in-window records must still compute');
+  assert.ok(
+    Math.abs((result.value as number) - 50) < 0.0001,
+    `median must come from the in-window merge only (50h), not the all-records median 30h; got ${result.value}`
+  );
+  assert.ok(
+    String(result.expression).includes('(in-window)'),
+    `expression must state the window restriction, got "${result.expression}"`
+  );
+});
+
+test('adp_g5: all merges outside the window → SKIP, not a stale median', () => {
+  const tmp = tmpDir('g5-');
+  const collectedDir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [mergeRecord(10)],
+      window_stats: { window_start: '2026-01-01T00:00:00Z' },
+    })
+  );
+
+  const result = compute(collectedDir, standards, {});
+  assert.equal(
+    result.status,
+    'SKIP',
+    'a repo with no in-window merges has no current cycle time to report'
+  );
+});

@@ -1,5 +1,3 @@
-
-
 # standards.toml — capability-category data for the ai-readiness-audit plugin
 #
 # Single source of truth for every scoring category used by the
@@ -12,6 +10,9 @@
 # ------
 # [meta]                  — global cadence / lookback constants
 # [category.<slug>]       — one table per scoring category (ten required keys)
+# [category.<slug>.scoring] — declared score curve for banded metrics
+#                           (scale, anchors, basis, basis_note); the engine
+#                           refuses to score a banded metric without one
 # [band.<slug>]           — one table per banded metric (DORA-style thresholds)
 #
 # Weight-seeding heuristic (deterministic, so Task A.4 is mechanical):
@@ -66,6 +67,13 @@ last_verified = "2026-06-29"
 
 # lead_time_for_change: Lead time for change (DORA banded)
 
+[category.merge_frequency.scoring]
+scale = "log"
+anchors = [[0.03, 0.0], [0.25, 0.1], [1.0, 0.5], [7.0, 1.0]]
+anchor_unit = "merges into the default branch per week"
+basis = "derived"
+basis_note = "x boundaries transcribe the DORA deployment-frequency bands (elite ≈ daily+, high = weekly–daily, medium = monthly–weekly, low < monthly) onto merges/week; the score awarded at each boundary is AWOS calibration — DORA publishes band labels, not scores."
+
 [category.lead_time_for_change]
 code = 401
 check_id = "DF-02"
@@ -83,6 +91,13 @@ date = "2025-09"
 last_verified = "2026-06-29"
 
 # pr_cycle_time: PR cycle time (banded)
+
+[category.lead_time_for_change.scoring]
+scale = "log"
+anchors = [[1, 1.0], [24, 0.75], [168, 0.5], [720, 0.25], [2160, 0.0]]
+anchor_unit = "median hours from first branch commit to merge"
+basis = "derived"
+basis_note = "x boundaries transcribe the DORA lead-time bands (elite < 1 day, high < 1 week, medium < 1 month, low ≥ 1 month, expressed in hours); the score at each boundary is AWOS calibration."
 
 [category.pr_cycle_time]
 code = 501
@@ -102,6 +117,13 @@ last_verified = "2026-06-29"
 
 # change_failure_rate: Change failure rate proxy (DORA banded)
 
+[category.pr_cycle_time.scoring]
+scale = "log"
+anchors = [[1, 1.0], [24, 0.75], [168, 0.5], [720, 0.25], [2160, 0.0]]
+anchor_unit = "median hours from PR open to merge"
+basis = "heuristic"
+basis_note = "No published numeric bands exist for PR cycle time; the curve mirrors the DORA lead-time bands as an AWOS heuristic."
+
 [category.change_failure_rate]
 code = 701
 check_id = "DF-04"
@@ -119,6 +141,13 @@ date = "2025-09"
 last_verified = "2026-06-29"
 
 # review_rework: Review rework cycle (banded)
+
+[category.change_failure_rate.scoring]
+scale = "linear"
+anchors = [[0.0, 1.0], [0.15, 0.0]]
+anchor_unit = "share of default-branch merges that are reverts/rollbacks (0..1)"
+basis = "derived"
+basis_note = "The 15% zero-score point is DORA's medium/low change-failure-rate boundary (elite 0–5%, high 5–10%, medium 10–15%, low > 15%); the straight-line decay from 0% is AWOS calibration."
 
 [category.review_rework]
 code = 801
@@ -138,6 +167,13 @@ last_verified = "2026-06-30"
 
 # rework_rate: Deployment rework rate (DORA 2024, git keyword proxy)
 
+[category.review_rework.scoring]
+scale = "linear"
+anchors = [[2, 1.0], [4, 0.7], [6, 0.4], [10, 0.0]]
+anchor_unit = "average commits per PR after open (post-review rework proxy)"
+basis = "heuristic"
+basis_note = "DX Core 4 publishes no numeric commits-per-PR thresholds; anchors are AWOS heuristics (~1–2 commits/PR = clean review flow, ≥10 = heavy rework)."
+
 [category.rework_rate]
 code = 1401
 check_id = "DF-06"
@@ -154,6 +190,13 @@ source = "DORA"
 url = "https://dora.dev/guides/dora-metrics/"
 date = "2025"
 last_verified = "2026-06-30"
+
+[category.rework_rate.scoring]
+scale = "linear"
+anchors = [[0.0, 1.0], [0.15, 0.8], [0.3, 0.4], [0.5, 0.0]]
+anchor_unit = "share of window merges whose subject matches fix/hotfix keywords (0..1)"
+basis = "heuristic"
+basis_note = "DORA publishes no numeric rework-rate thresholds; the good <15% / watch <30% / concerning ≥30% shape is an AWOS heuristic (already stated in the definition)."
 
 [category.mttr]
 code = 1103
@@ -172,6 +215,13 @@ date = "2025-09"
 last_verified = "2026-06-29"
 
 # --- software-best-practices (9 checks) ---
+
+[category.mttr.scoring]
+scale = "log"
+anchors = [[0.1, 1.0], [1, 0.75], [24, 0.5], [168, 0.0]]
+anchor_unit = "median hours from incident start to resolution"
+basis = "derived"
+basis_note = "x boundaries transcribe the DORA time-to-restore bands (elite < 1 hour, high < 1 day, medium < 1 week, expressed in hours); the score at each boundary is AWOS calibration."
 
 [category.software_best_practices_sbp_01]
 code = 2700
@@ -1589,7 +1639,7 @@ metric = "ci_pass_rate"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "computed"
-definition = "Default-branch CI pass rate; feature-branch failures excluded; treated as supporting evidence, not headline"
+definition = "Default-branch CI pass rate over decided runs; feature-branch failures excluded; treated as supporting evidence, not headline. The score is the pass rate itself; band labels (elite >=99%) are AWOS heuristics — Fowler publishes no numeric targets."
 applies_when = "topology.has_ci"
 sources = ["ci"]
 reliability_default = "not-reliable"
@@ -1598,6 +1648,13 @@ url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
 last_verified = "2026-06-29"
 
+[category.ci_pass_rate.scoring]
+scale = "linear"
+anchors = [[0.0, 0.0], [1.0, 1.0]]
+anchor_unit = "default-branch CI pass rate over decided runs (0..1)"
+basis = "heuristic"
+basis_note = "Fowler's CI article publishes no numeric pass-rate targets; the score is the pass rate itself (identity curve), band labels (elite ≥ 99% …) are AWOS heuristics."
+
 [category.pipeline_duration_trend]
 code = 1002
 check_id = "ADP-09"
@@ -1605,7 +1662,7 @@ metric = "pipeline_duration"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
-definition = "Feedback-loop speed: pipeline duration trend over the lookback window"
+definition = "Feedback-loop speed: average pipeline duration over decided runs in the window. Scored via the declared log curve (full score at Fowler's 10-minute build, zero at 2h); all but the 10-minute anchor are AWOS heuristics."
 applies_when = "topology.has_ci"
 sources = ["ci"]
 reliability_default = "not-reliable"
@@ -1617,6 +1674,13 @@ last_verified = "2026-06-29"
 # ---------------------------------------------------------------------------
 # Tier I: Issue tracker categories
 # ---------------------------------------------------------------------------
+
+[category.pipeline_duration_trend.scoring]
+scale = "log"
+anchors = [[600, 1.0], [1800, 0.7], [3600, 0.4], [7200, 0.0]]
+anchor_unit = "average pipeline duration in seconds over decided runs"
+basis = "heuristic"
+basis_note = "The 10-minute full-score anchor transcribes Fowler's CI ten-minute-build guideline; the decay through 30 min / 1 h to zero at 2 h is an AWOS heuristic — Fowler publishes no such curve."
 
 [category.work_mix_allocation]
 code = 1101
@@ -1634,6 +1698,13 @@ url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-c
 date = "2024-12"
 last_verified = "2026-06-29"
 
+[category.work_mix_allocation.scoring]
+scale = "linear"
+anchors = [[0.0, 0.0], [0.6, 1.0]]
+anchor_unit = "Growth share of ticket work (0..1)"
+basis = "heuristic"
+basis_note = "DX Core 4 frames Growth/KTLO/Support allocation but publishes no numeric target; full score at ≥ 60% Growth is an AWOS heuristic (mirrors [band.work_mix])."
+
 [category.issue_throughput]
 code = 1102
 check_id = "ADP-11"
@@ -1650,6 +1721,13 @@ url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-c
 date = "2024-12"
 last_verified = "2026-06-30"
 
+[category.issue_throughput.scoring]
+scale = "log"
+anchors = [[0.25, 0.1], [1, 0.4], [3, 0.7], [10, 1.0]]
+anchor_unit = "tickets resolved per week"
+basis = "heuristic"
+basis_note = "DX Core 4 publishes no numeric throughput thresholds; anchors are AWOS heuristics and deliberately team-size-blind (see reliability_default)."
+
 [category.ticket_subtask_split]
 code = 1104
 check_id = "ADP-12"
@@ -1665,6 +1743,13 @@ source = "Agile Alliance (INVEST)"
 url = "https://agilealliance.org/glossary/invest/"
 date = "2003"
 last_verified = "2026-06-30"
+
+[category.ticket_subtask_split.scoring]
+scale = "linear"
+anchors = [[1, 1.0], [3, 0.8], [6, 0.4], [10, 0.0]]
+anchor_unit = "average direct sub-tasks per parent ticket"
+basis = "heuristic"
+basis_note = "INVEST/DORA publish no numeric sub-task threshold (already stated in the definition); ≤3 good / ≤6 watch / >6 concerning is an AWOS heuristic. The first anchor is a plateau: any average ≤ 1 scores 1.0."
 
 [category.ticket_description_quality]
 code = 1105
@@ -1686,6 +1771,13 @@ last_verified = "2026-06-30"
 # ---------------------------------------------------------------------------
 # Tier D: Docs / wiki categories
 # ---------------------------------------------------------------------------
+
+[category.ticket_description_quality.scoring]
+scale = "linear"
+anchors = [[0.0, 0.0], [0.4, 0.4], [0.7, 0.8], [1.0, 1.0]]
+anchor_unit = "share of tickets with a ≥50-char description AND acceptance criteria (0..1)"
+basis = "heuristic"
+basis_note = "Agile Alliance's Definition of Ready names acceptance criteria but publishes no numeric thresholds (already stated in the definition); the curve is an AWOS heuristic."
 
 [category.external_spec_coverage]
 code = 1201
@@ -1725,6 +1817,13 @@ last_verified = "2026-07-01"
 # --- descriptors (5 checks) ---
 
 # active_contributors: Active monthly contributors
+
+[category.onboarding_ease.scoring]
+scale = "linear"
+anchors = [[0.0, 0.0], [0.5, 0.5], [0.75, 0.8], [1.0, 1.0]]
+anchor_unit = "share of the four onboarding enablers present (0..1)"
+basis = "heuristic"
+basis_note = "DX Core 4 publishes no numeric Time-to-10th-PR proxy targets (already stated in the definition); the enabler-count curve is an AWOS heuristic."
 
 [category.active_contributors]
 code = 201
@@ -1767,6 +1866,13 @@ last_verified = "2026-06-30"
 
 # cyclomatic_complexity: Cyclomatic complexity (via web-tree-sitter AST)
 
+[category.code_churn.scoring]
+scale = "linear"
+anchors = [[0.0, 1.0], [0.12, 0.8], [0.18, 0.4], [0.3, 0.0]]
+anchor_unit = "share of recently-authored lines deleted again inside the window (0..1)"
+basis = "heuristic"
+basis_note = "DX Core 4 publishes no numeric code-turnover thresholds; anchors are AWOS heuristics."
+
 [category.cyclomatic_complexity]
 code = 1301
 check_id = "DESC-03"
@@ -1784,6 +1890,13 @@ date = "1976-07"
 last_verified = "2026-06-29"
 
 # loc_scale: Lines of code and scale
+
+[category.cyclomatic_complexity.scoring]
+scale = "linear"
+anchors = [[1, 1.0], [5, 1.0], [10, 0.75], [15, 0.5], [30, 0.0]]
+anchor_unit = "average cyclomatic complexity per function"
+basis = "derived"
+basis_note = "The CCN 10 boundary is McCabe's published 'reasonable upper limit'; the plateau below 5 and the decay to 30 are AWOS calibration."
 
 [category.loc_scale]
 code = 1302

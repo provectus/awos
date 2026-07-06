@@ -1,15 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { compute } from './cyclomatic_complexity.ts';
+import { loadStandards } from './_base.ts';
+
+// Real standards.toml — compute() reads its score curve from
+// [category.cyclomatic_complexity.scoring].
+const STANDARDS = loadStandards(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'references',
+    'standards.toml'
+  )
+);
 
 test('cyclomatic_complexity: SKIP when no supported source files exist', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-g10-empty-'));
   try {
     writeFileSync(join(dir, 'README.md'), '# no source\n');
-    const res = await compute(dir, {}, {}, dir);
+    const res = await compute(dir, STANDARDS, {}, dir);
     assert.equal(
       res.status,
       'SKIP',
@@ -30,7 +43,7 @@ test('cyclomatic_complexity: score and confidence for a simple JS file', async (
       join(dir, 'a.js'),
       'export function add(a, b) { return a + b; }\n'
     );
-    const res = await compute(dir, {}, {}, dir);
+    const res = await compute(dir, STANDARDS, {}, dir);
     if (res.status === 'SKIP') {
       // Grammar wasm may not be available in test env — skip assertion
       return;
@@ -57,7 +70,7 @@ test('cyclomatic_complexity: confidence reflects analysed/total file ratio', asy
     // Two JS files that will both be analysed → confidence = 1.0 (2/2)
     writeFileSync(join(dir, 'a.js'), 'export function f() { return 1; }\n');
     writeFileSync(join(dir, 'b.js'), 'export function g() { return 2; }\n');
-    const res = await compute(dir, {}, {}, dir);
+    const res = await compute(dir, STANDARDS, {}, dir);
     if (res.status === 'SKIP') return;
     assert.equal(res.status, 'OK');
     // With only JS files and grammar available, all files analysed → confidence = 1.0

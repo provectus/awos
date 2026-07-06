@@ -14,6 +14,17 @@ import { compute } from './ticket_subtask_split.ts';
 import { loadStandards } from './_base.ts';
 import { trackerArtifact } from '../tests/helpers.ts';
 
+// Real standards.toml — compute() reads its score curve from
+// [category.ticket_subtask_split.scoring].
+const STANDARDS = loadStandards(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'references',
+    'standards.toml'
+  )
+);
+
 // ---------------------------------------------------------------------------
 // Fixture helpers
 // ---------------------------------------------------------------------------
@@ -34,7 +45,7 @@ function makeTrackerArtifact(
 test('ticket_subtask_split: SKIP when tracker.json absent', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-i4-nofile-'));
   try {
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'SKIP',
@@ -56,7 +67,7 @@ test('ticket_subtask_split: SKIP when tracker.json available=false', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-i4-unavail-'));
   try {
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact([], false));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'SKIP',
@@ -78,7 +89,7 @@ test('ticket_subtask_split: SKIP when no ticket has subtask_count data', () => {
       { id: 'PROJ-2', type: 'bug', status: 'Done' },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'SKIP',
@@ -101,7 +112,7 @@ test('ticket_subtask_split: SKIP when raw.tickets is absent from artifact', () =
       join(dir, 'tracker.json'),
       JSON.stringify({ available: true, raw: {} })
     );
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'SKIP',
@@ -127,7 +138,7 @@ test('ticket_subtask_split: avg=2 subtasks/parent → band=good, score=0.9', () 
       { id: 'PROJ-3', parent: 'PROJ-1' }, // a sub-task itself — excluded from the parent average
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'OK', 'status must be OK with subtask data');
     assert.equal(res.band, 'good', 'band must be "good" for avg subtasks ≤ 3');
     const expected = 1 + (0.8 - 1) * ((2 - 1) / 2);
@@ -158,7 +169,7 @@ test('ticket_subtask_split: avg=4.5 subtasks/parent → band=watch, score=0.6', 
       { id: 'PROJ-2', subtask_count: 5 },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'OK', 'status must be OK with subtask data');
     assert.equal(
       res.band,
@@ -188,7 +199,7 @@ test('ticket_subtask_split: avg=8 subtasks/parent → band=concerning, score=0.2
       { id: 'PROJ-2', subtask_count: 8 },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'OK', 'status must be OK with subtask data');
     assert.equal(
       res.band,
@@ -218,7 +229,7 @@ test('ticket_subtask_split: 0-subtask parents count in the average (best case re
       { id: 'PROJ-2', subtask_count: 0 },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'OK',
@@ -246,7 +257,7 @@ test('ticket_subtask_split: one over-split epic cannot dominate many plain ticke
       ...Array.from({ length: 9 }, (_, i) => ({ id: `PROJ-${i + 1}` })),
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.ok(
       Math.abs((res.value as number) - 2) < 1e-9,
       `avg must be 2.0 (20 subtasks over 10 parent-eligible tickets), got ${res.value}`
@@ -273,7 +284,7 @@ test('ticket_subtask_split: worst case — every parent ≥10 subtasks scores 0'
       { id: 'PROJ-2', subtask_count: 15 },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'OK', 'worst-case repo must still be scored (OK)');
     assert.equal(
       res.score,
@@ -302,6 +313,17 @@ test('ticket_subtask_split: awards category 1104 when topology.has_tracker=true'
           metric: 'ticket_subtask_split',
           applies_when: 'topology.has_tracker',
           weight: 3,
+          scoring: {
+            scale: 'linear',
+            anchors: [
+              [1, 1.0],
+              [3, 0.8],
+              [6, 0.4],
+              [10, 0.0],
+            ],
+            basis: 'heuristic',
+            basis_note: 'test fixture mirroring standards.toml',
+          },
         },
       },
     };
@@ -327,6 +349,17 @@ test('ticket_subtask_split: does not award 1104 when topology.has_tracker=false'
           metric: 'ticket_subtask_split',
           applies_when: 'topology.has_tracker',
           weight: 3,
+          scoring: {
+            scale: 'linear',
+            anchors: [
+              [1, 1.0],
+              [3, 0.8],
+              [6, 0.4],
+              [10, 0.0],
+            ],
+            basis: 'heuristic',
+            basis_note: 'test fixture mirroring standards.toml',
+          },
         },
       },
     };
@@ -345,7 +378,7 @@ test('ticket_subtask_split: reliability.tag is "minimal"', () => {
   try {
     const tickets: TicketFixture[] = [{ id: 'PROJ-1', subtask_count: 2 }];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.reliability.tag,
       'minimal',
@@ -364,7 +397,7 @@ test('ticket_subtask_split: expression describes the computation', () => {
       { id: 'PROJ-2', subtask_count: 4 },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.ok(
       typeof res.expression === 'string' && res.expression.length > 0,
       `expression must be a non-empty string describing the computation, got ${JSON.stringify(res.expression)}`
@@ -426,7 +459,7 @@ test('ticket_subtask_split: tiny nonzero average (0.06) sits on the plateau → 
       })),
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.band, 'good', 'band must be "good" for a tiny average');
     assert.equal(
       res.score,
@@ -450,7 +483,7 @@ test('ticket_subtask_split: field-gap SKIP names the unmapped field, not a missi
       { id: 'PROJ-1', type: 'story', status: 'Done' },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'SKIP', 'must still SKIP without the field');
     const note = res.reliability?.note ?? '';
     assert.ok(

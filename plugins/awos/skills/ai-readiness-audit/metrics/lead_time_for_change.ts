@@ -37,15 +37,7 @@ import {
   type MetricResult,
 } from './_base.ts';
 import { readCodeHostPrs } from './_code_host.ts';
-import { bandScore, clamp01, median } from './_score.ts';
-
-const LEAD_TIME_ANCHORS = [
-  { x: 1, y: 1.0 },
-  { x: 24, y: 0.75 },
-  { x: 168, y: 0.5 },
-  { x: 720, y: 0.25 },
-  { x: 2160, y: 0.0 },
-] as const;
+import { median, scoreFromConfig, scoringFor } from './_score.ts';
 
 interface MergeRecord {
   merged_at: string;
@@ -62,7 +54,7 @@ export function doraLeadTimeBand(hours: number): string {
 
 export function compute(
   collectedDir: string,
-  _standards: Record<string, unknown>,
+  standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
   // Preferred source: the code-host connector's merged-PR records. Real PR
@@ -79,7 +71,11 @@ export function compute(
   if (prLeadTimes.length > 0) {
     const medianHours = median(prLeadTimes)!;
     const band = doraLeadTimeBand(medianHours);
-    const score = clamp01(bandScore(medianHours, LEAD_TIME_ANCHORS, 'log'));
+    // Score curve lives in standards.toml [category.lead_time_for_change.scoring].
+    const score = scoreFromConfig(
+      medianHours,
+      scoringFor(standards, 'lead_time_for_change')
+    );
     // "minimal" (lower-bound), not "maximal": first_commit_at is the earliest
     // commit authored on the PR — work that predates the first commit is
     // still invisible, same approximation class as the git proxy but from
@@ -175,7 +171,10 @@ export function compute(
   // or overcount if work predated branching.
   const reliability = computeReliability('minimal', ['git'], []);
 
-  const score = clamp01(bandScore(medianHours, LEAD_TIME_ANCHORS, 'log'));
+  const score = scoreFromConfig(
+    medianHours,
+    scoringFor(standards, 'lead_time_for_change')
+  );
   const windowLabel = windowStart ? ' (in-window)' : '';
   const expression = `median ${medianHours.toFixed(1)}h lead time over ${leadTimesHours.length} merge${leadTimesHours.length !== 1 ? 's' : ''}${windowLabel} (${band})`;
   return makeMetricResult(

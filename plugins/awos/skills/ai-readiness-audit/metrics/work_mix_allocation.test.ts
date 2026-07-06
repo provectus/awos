@@ -1,10 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { compute } from './work_mix_allocation.ts';
+import { loadStandards } from './_base.ts';
 import { trackerArtifact } from '../tests/helpers.ts';
+
+// Real standards.toml — compute() reads its score curve from
+// [category.work_mix_allocation.scoring].
+const STANDARDS = loadStandards(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'references',
+    'standards.toml'
+  )
+);
 
 function makeTrackerArtifact(typeCounts: Record<string, number>): string {
   return trackerArtifact({ type_counts: typeCounts });
@@ -13,7 +26,7 @@ function makeTrackerArtifact(typeCounts: Record<string, number>): string {
 test('work_mix_allocation: SKIP when tracker.json is absent', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-i1-'));
   try {
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'SKIP', 'must SKIP when tracker.json absent');
     assert.equal(res.score, 0, 'score must be 0 on SKIP');
     assert.equal(res.confidence, 0, 'confidence must be 0 on SKIP');
@@ -26,7 +39,7 @@ test('work_mix_allocation: score=0 when tracker available but type_counts total 
   const dir = mkdtempSync(join(tmpdir(), 'awos-i1-empty-'));
   try {
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact({}));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'OK',
@@ -55,7 +68,7 @@ test('work_mix_allocation: score interpolates linearly — 30% growth yields sco
       join(dir, 'tracker.json'),
       makeTrackerArtifact({ feature: 30, bug: 70 })
     );
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'OK', 'must be OK with ticket data');
     assert.ok(
       Math.abs((res.score ?? 0) - 0.5) < 1e-6,
@@ -79,7 +92,7 @@ test('work_mix_allocation: score capped at 1.0 when growth fraction >= 60%', () 
       join(dir, 'tracker.json'),
       makeTrackerArtifact({ feature: 80, bug: 20 })
     );
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.ok(
       (res.score ?? 0) >= 1.0,
       `score must be clamped to 1.0 for elite growth fraction, got ${res.score}`
@@ -107,7 +120,7 @@ test('work_mix_allocation: partial tracker fetch (fetch_meta) is appended to the
         },
       })
     );
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'OK',
@@ -132,7 +145,7 @@ test('work_mix_allocation: no partial-fetch note when fetch_meta is absent or co
       join(dir, 'tracker.json'),
       makeTrackerArtifact({ feature: 60, bug: 40 })
     );
-    let res = compute(dir, {}, {});
+    let res = compute(dir, STANDARDS, {});
     assert.ok(
       !(res.reliability.note ?? '').includes('partial tracker fetch'),
       `no fetch_meta → no partial-fetch note; got: ${res.reliability.note}`
@@ -152,7 +165,7 @@ test('work_mix_allocation: no partial-fetch note when fetch_meta is absent or co
         },
       })
     );
-    res = compute(dir, {}, {});
+    res = compute(dir, STANDARDS, {});
     assert.ok(
       !(res.reliability.note ?? '').includes('partial tracker fetch'),
       `complete fetch_meta → no partial-fetch note; got: ${res.reliability.note}`

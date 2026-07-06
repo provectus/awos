@@ -47,14 +47,7 @@ import {
   type MetricResult,
   type Reliability,
 } from './_base.ts';
-import { bandScore, clamp01, median } from './_score.ts';
-
-const MTTR_ANCHORS = [
-  { x: 0.1, y: 1.0 },
-  { x: 1, y: 0.75 },
-  { x: 24, y: 0.5 },
-  { x: 168, y: 0.0 },
-] as const;
+import { median, scoreFromConfig, scoringFor } from './_score.ts';
 
 /** Map median hours to a DORA MTTR band label. */
 function mttrBand(medianHours: number): string {
@@ -201,9 +194,10 @@ export function compute(
     reliability = appendReliabilityNote(reliability, trackerPartialNote);
   }
 
+  // Score curve lives in standards.toml [category.mttr.scoring].
   const score =
     medianHours !== null
-      ? clamp01(bandScore(medianHours, MTTR_ANCHORS, 'log'))
+      ? scoreFromConfig(medianHours, scoringFor(standards, 'mttr'))
       : 0;
   const confidence = allIntervals.length > 0 ? 0.3 : 0.0;
   const expression =

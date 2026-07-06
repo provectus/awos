@@ -35,7 +35,7 @@ import {
   trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
-import { clamp01 } from './_score.ts';
+import { scoreFromConfig, scoringFor } from './_score.ts';
 
 const GROWTH_TYPES = new Set([
   'feature',
@@ -134,6 +134,8 @@ export function compute(
     partialNote
   );
 
+  // Score curve lives in standards.toml [category.work_mix_allocation.scoring].
+  const scoring = scoringFor(standards, 'work_mix_allocation');
   const expression = `${growthCount}/${total} growth tickets = ${growthFrac.toFixed(2)}`;
   return makeMetricResult(
     'work_mix_allocation',
@@ -143,6 +145,11 @@ export function compute(
     reliability,
     ['tracker'],
     [],
-    { band, expression, score: clamp01(growthFrac / 0.6), confidence: 1.0 }
+    {
+      band,
+      expression,
+      score: scoreFromConfig(growthFrac, scoring),
+      confidence: 1.0,
+    }
   );
 }

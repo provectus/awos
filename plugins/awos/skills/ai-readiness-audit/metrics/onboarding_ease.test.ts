@@ -26,6 +26,9 @@ import { dirname } from 'node:path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const STANDARDS_PATH = join(__dirname, '..', 'references', 'standards.toml');
+// Real standards.toml — compute() reads its score curve from
+// [category.onboarding_ease.scoring].
+const STANDARDS = loadStandards(STANDARDS_PATH);
 
 function makeTempDir(): string {
   return mkdtempSync(join(tmpdir(), 'awos-g15-'));
@@ -66,7 +69,7 @@ test('adp_g15: all 4 enablers present → value 1.0, band "good", OK (not SKIP)'
     writeEnvExample(dir);
     writeMakefile(dir);
 
-    const res = await compute(dir, {}, {}, dir);
+    const res = await compute(dir, STANDARDS, {}, dir);
 
     assert.equal(res.status, 'OK', 'status must be OK when repoPath exists');
     assert.equal(res.value, 1.0, 'value must be 1.0 (4/4 enablers)');
@@ -104,7 +107,7 @@ test('adp_g15: 2 of 4 enablers (README + .env.example) → value 0.5, band "watc
     writeEnvExample(dir);
     // No CLAUDE.md, no Makefile/bootstrap
 
-    const res = await compute(dir, {}, {}, dir);
+    const res = await compute(dir, STANDARDS, {}, dir);
 
     assert.equal(res.status, 'OK', 'status must be OK');
     assert.ok(
@@ -127,7 +130,7 @@ test('adp_g15: 0 enablers → value 0, band "concerning", status OK (not SKIP)',
     );
     // No CLAUDE.md, no .env.example, no Makefile
 
-    const res = await compute(dir, {}, {}, dir);
+    const res = await compute(dir, STANDARDS, {}, dir);
 
     assert.equal(
       res.status,
@@ -152,7 +155,7 @@ test('adp_g15: 0 enablers → value 0, band "concerning", status OK (not SKIP)',
 test('adp_g15: repoPath nonexistent → status SKIP', async () => {
   const res = await compute(
     '/nonexistent/path/that/does/not/exist',
-    {},
+    STANDARDS,
     {},
     '/nonexistent/path/that/does/not/exist'
   );
@@ -167,14 +170,14 @@ test('adp_g15: more enablers → higher score (band direction: higher = better)'
   const dirAll = makeTempDir();
   try {
     // dirNone: empty dir (no readme at all)
-    const resNone = await compute(dirNone, {}, {}, dirNone);
+    const resNone = await compute(dirNone, STANDARDS, {}, dirNone);
 
     // dirAll: all 4 enablers
     writeReadme(dirAll, '# Setup\n\npip install -r requirements.txt\n');
     writeAgentContext(dirAll);
     writeEnvExample(dirAll);
     writeMakefile(dirAll);
-    const resAll = await compute(dirAll, {}, {}, dirAll);
+    const resAll = await compute(dirAll, STANDARDS, {}, dirAll);
 
     assert.ok(
       Number(resAll.score ?? 0) > Number(resNone.score ?? 0),
@@ -197,14 +200,14 @@ test('adp_g15: topology.has_agent_instruction_files counts as agent-context enab
     // dirNoFile: README + env.example but no agent context file
     writeReadme(dirNoFile, '## Install\n\nyarn install\n');
     writeEnvExample(dirNoFile);
-    const resNoFlag = await compute(dirNoFile, {}, {}, dirNoFile);
+    const resNoFlag = await compute(dirNoFile, STANDARDS, {}, dirNoFile);
 
     // dirWithFlag: same files + topology flag set (no actual CLAUDE.md)
     writeReadme(dirWithFlag, '## Install\n\nyarn install\n');
     writeEnvExample(dirWithFlag);
     const resWithFlag = await compute(
       dirWithFlag,
-      {},
+      STANDARDS,
       { has_agent_instruction_files: true },
       dirWithFlag
     );
@@ -254,7 +257,7 @@ test('adp_g15: README bootstrap command detection — various package managers',
         `# Project\n\nTo get started:\n\n\`\`\`\n${cmd}\n\`\`\`\n`
       );
 
-      const res = await compute(dir, {}, {}, dir);
+      const res = await compute(dir, STANDARDS, {}, dir);
 
       assert.equal(res.status, 'OK', `${label}: status must be OK`);
       // README signal should be true (at least 1/4 enabler)
@@ -283,7 +286,7 @@ test('adp_g15: README heading detection — setup/install/quickstart/usage headi
     try {
       writeFileSync(join(dir, 'README.md'), `# My Project\n\n${content}\n`);
 
-      const res = await compute(dir, {}, {}, dir);
+      const res = await compute(dir, STANDARDS, {}, dir);
 
       assert.ok(
         Number(res.value ?? 0) >= 0.25,
@@ -303,7 +306,7 @@ test('adp_g15: one-command bootstrap — package.json with dev/setup/bootstrap s
       JSON.stringify({ scripts: { dev: 'node server.js', test: 'jest' } })
     );
 
-    const res = await compute(dir, {}, {}, dir);
+    const res = await compute(dir, STANDARDS, {}, dir);
 
     assert.equal(res.status, 'OK', 'status must be OK');
     // package.json dev script = bootstrap signal (1/4 = 0.25)
@@ -321,7 +324,7 @@ test('adp_g15: justfile counts as one-command bootstrap', async () => {
   try {
     writeFileSync(join(dir, 'Justfile'), 'setup:\n    npm install\n');
 
-    const res = await compute(dir, {}, {}, dir);
+    const res = await compute(dir, STANDARDS, {}, dir);
 
     assert.ok(
       Number(res.value ?? 0) >= 0.25,

@@ -26,9 +26,8 @@
  *     ≤6  → "watch"       moderate decomposition, monitor for coordination cost
  *     >6  → "concerning"  likely over-splitting; coordination cost signal
  *
- * Score anchors (linear piecewise interpolation):
- *   ANCHORS = [{x:1,y:1},{x:3,y:0.8},{x:6,y:0.4},{x:10,y:0}]
- *   score = clamp01(bandScore(avg, ANCHORS, 'linear'))
+ * Score curve: standards.toml [category.ticket_subtask_split.scoring]
+ *   (linear piecewise interpolation over the declared anchors).
  *   The first anchor is a PLATEAU: bandScore clamps values left of it to its
  *   y, so any avg ≤ 1 subtask/parent scores a full 1.0. A point-anchor at
  *   x=0 made a perfect score unreachable in practice — one subtask anywhere
@@ -63,16 +62,7 @@ import {
   trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
-import { bandScore, clamp01, mean } from './_score.ts';
-
-const ANCHORS = [
-  // Plateau: any avg ≤ 1 scores 1.0 (bandScore clamps left of the first
-  // anchor) — see the header rationale.
-  { x: 1, y: 1 },
-  { x: 3, y: 0.8 },
-  { x: 6, y: 0.4 },
-  { x: 10, y: 0 },
-] as const;
+import { mean, scoreFromConfig, scoringFor } from './_score.ts';
 
 /** Map avg subtasks per parent to a band label. */
 function subtaskBand(avg: number): 'good' | 'watch' | 'concerning' {
@@ -168,7 +158,11 @@ export function compute(
     )
   );
   const band = subtaskBand(avgSubtasks);
-  const score = clamp01(bandScore(avgSubtasks, ANCHORS, 'linear'));
+  // Score curve lives in standards.toml [category.ticket_subtask_split.scoring].
+  const score = scoreFromConfig(
+    avgSubtasks,
+    scoringFor(standards, 'ticket_subtask_split')
+  );
 
   const categories = awardCategories(
     standards,

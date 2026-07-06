@@ -1,16 +1,16 @@
 ---
 name: standards-refresh
 description: >-
-  Maintainer skill for re-verifying the source links and re-evaluating the
+  Maintainer skill for re-verifying the source links, scoring curves, and
   weights in plugins/awos/skills/ai-readiness-audit/references/standards.toml.
-  Runs three passes (authoritative-source replacement + link verification +
-  weight rescale) and emits a cited proposal document plus a ready-to-paste
-  sources patch.
+  Runs four passes (authoritative-source replacement + link verification +
+  weight rescale + scoring-curve verification) and emits a cited proposal
+  document plus a ready-to-paste sources patch.
 ---
 
 # Standards Refresh
 
-A periodic maintainer task to keep `standards.toml` honest: every category must cite a genuine external authority, those links must resolve, and weights must reflect current (not original) importance. Run this once per major AWOS release or whenever a cited external standard publishes a new edition.
+A periodic maintainer task to keep `standards.toml` honest: every category must cite a genuine external authority, those links must resolve, weights must reflect current (not original) importance, and every scoring curve (`[category.*.scoring]`) must either transcribe published values or say plainly that it is an AWOS heuristic. Run this once per major AWOS release or whenever a cited external standard publishes a new edition.
 
 **Why each category needs a real external source.** Each scoring category cites the standard that justifies *why* the capability matters, and that citation is surfaced in the audit report next to the check (the "source" label and its link). A reader clicks it to learn the industry rationale. A link to the AWOS repository itself does not do this — `https://github.com/provectus/awos` is the tool's own page, not a write-up of an industry standard. Categories whose `source` is `"AWOS audit"` or `"AWOS conventions"` and whose `url` is the AWOS repo are **self-references**: they tell the reader "we measure this because we measure this." Pass 0 replaces them with the external authority that actually defines the practice.
 
@@ -22,7 +22,7 @@ Invoke this skill in a Claude Code session from the repo root:
 /standards-refresh
 ```
 
-No arguments needed. The skill is self-contained: it reads `standards.toml`, runs all three passes, and writes its output to a scratchpad you specify (or a default under `tmp/`).
+No arguments needed. The skill is self-contained: it reads `standards.toml`, runs all four passes, and writes its output to a scratchpad you specify (or a default under `tmp/`).
 
 Before starting, confirm you have network access — Pass 0 and Pass 1 issue live WebSearch/WebFetch calls.
 
@@ -32,7 +32,7 @@ The skill writes two files:
 
 | File | Contents |
 |------|----------|
-| `standards-refresh-proposal.md` | Full three-pass report: a **self-reference audit** table (every category whose source is the AWOS repo, with the proposed external authority and its verified URL); a per-category url/date/last_verified table with HTTP status and verified dates; a weights table with proposed changes and citations; a "considered but not proposed" table; and a "left unchanged" rationale summary. |
+| `standards-refresh-proposal.md` | Full four-pass report: a **self-reference audit** table (every category whose source is the AWOS repo, with the proposed external authority and its verified URL); a per-category url/date/last_verified table with HTTP status and verified dates; a weights table with proposed changes and citations; a "considered but not proposed" table; a scoring-audit table (per-category basis verdicts and proposed anchor corrections); and a "left unchanged" rationale summary. |
 | `standards-refresh-patch.toml` | Ready-to-paste per-category field updates (`source`, `url`, `date`, `last_verified`) for every category whose proposed URL resolved successfully. Categories with dead or unverified links are excluded and flagged in the proposal instead. |
 
 After reviewing the proposal, apply it manually:
@@ -86,6 +86,7 @@ Rules:
 - **If a metric has no backing at all — it looks invented/hallucinated (no standard, no industry article defines or justifies the measurement) — do not manufacture a source. Stop and ask the user** with `AskUserQuestion`, offering to **drop the metric/category** (or its external claim) as one of the options. An unbacked metric is a bug to surface, not a citation to fake.
 - **Relevance, not just liveness.** A link is only valid if the fetched page explains the specific practice the category measures. A resolving-but-off-topic page — a product overview, a research index, a marketing page that merely mentions the topic — is a bad link even at HTTP 200. When the current link fails relevance, replace it; do not keep it because it resolves.
 - **Deep-link, never a site root.** The `url` must land on the specific page that explains the concept, never a bare domain root or landing page (`https://example.com/`). A domain root almost never defines the metric it is attached to. `node tools/ai-readiness-audit/standards-linkcheck.mjs` fails on bare-root URLs — treat that as an error to fix, not a warning.
+- **When the check's verdict uses numbers, the url must be the page containing those numbers.** A project landing page is not a citation for a numeric threshold. Example of the failure mode: AS-14 scores 100%/70%/20% verdict steps while citing the OWASP ASVS *project* page, which contains no such values — the link must go to the specific ASVS section (or other page) that states the requirement the numbers implement, or the numbers must be declared AWOS heuristics in Pass 3. When no page containing the values exists, that is a Pass 3 finding, not an excuse for a looser link.
 - **Recency.** Flag any source whose publication date is more than ~10 years old and search for a newer authoritative edition. Keep an old source only when it is the genuine canonical primary for the concept (e.g. McCabe 1976 for cyclomatic complexity) — and record that justification in the proposal. An old source attached to a metric it does not actually cover (e.g. a complexity paper on a plain LOC metric) is both stale and irrelevant: replace it.
 - For DOI references, use the doi.org URL as the canonical form (stable even when the landing page is paywalled). A 302 redirect from doi.org to a paywalled page (HTTP 403) is **not** a dead link — flag it as REACHABLE-AUTH and keep the DOI URL.
 - **Never fabricate a URL.** If WebFetch fails or returns 404/5xx, flag the link as DEAD and propose no replacement until a confirmed URL is found. A missing or stale link is far less harmful than a plausible-but-wrong one.
@@ -111,6 +112,18 @@ Propose a change only when the evidence is clear. Most weights are calibrated co
 - `citation` (URL or source name + year)
 
 For each category you considered but did not propose changing, include a row in the "Considered but not proposed" table with a brief decision rationale. This creates an audit trail that prevents the same case from being re-argued in the next refresh.
+
+### Pass 3 — Scoring-curve verification
+
+Every metric whose score is not simply the measured 0..1 fraction declares its curve in a `[category.<key>.scoring]` sub-table: `scale` (`linear`/`log`), `anchors = [[value, score], …]`, `basis` (`published` / `derived` / `heuristic`), and `basis_note`. The engine refuses to score a banded metric without one (`metrics/_score.ts` `scoringFor` throws), so this pass is about keeping the declared curves *honest*, and about numeric verdict values that still live in code:
+
+1. **Verify each `scoring` table against its category's cited page.** Fetch the category `url` (already verified live in Pass 1) and check the anchors against what the page actually publishes:
+   - `basis = "published"` — every anchor value must appear on the cited page. Any mismatch is a finding: propose the corrected anchors, citing the exact passage.
+   - `basis = "derived"` — the anchor **x** boundaries must appear on the cited page (e.g. DORA's elite/high/medium/low boundaries); the scores at each boundary are AWOS calibration and the `basis_note` must say so.
+   - `basis = "heuristic"` — confirm the page indeed publishes no numbers for this metric (if it now does, propose upgrading to `derived`/`published` with the page's values), and confirm the `basis_note` and the category `definition` admit the heuristic. An unadmitted heuristic is a finding.
+2. **Hunt unconfigured verdict numbers in code.** Grep `metrics/*.ts` and `detectors/*.ts` for hardcoded scoring constants (interpolation anchors, score steps like `score: 0.7`, threshold comparisons that decide PASS/WARN/FAIL). For each hit, check whether the number traces to the category's cited page, a `threshold`/`scoring` field in `standards.toml`, or nothing. Numbers backed by nothing are the finding this pass exists for.
+3. **When a metric's numbers turn out to be invented — declared or not — do not paper over it. Stop and ask the user** with `AskUserQuestion`: which values should this metric use? Offer: (a) transcribe the values from a specific published source you found (name it), (b) keep the numbers as an explicit AWOS heuristic (adding/updating `basis = "heuristic"` + `basis_note` + a definition that admits it), or (c) drop the metric's scoring claim (weight 0 / descriptor). The run does not silently pass a made-up curve — an unbacked curve is a failure of the refresh until the user decides.
+4. In the proposal, emit a scoring-audit table: `category key`, `basis`, `verdict` (CONFIRMED / MISMATCH / UNSOURCED / UPGRADE-AVAILABLE), the page passage or its absence, and the proposed anchor changes if any.
 
 ### Reproducibility
 

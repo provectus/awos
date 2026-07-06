@@ -18,6 +18,17 @@ import { compute } from './ticket_description_quality.ts';
 import { loadStandards } from './_base.ts';
 import { trackerArtifact } from '../tests/helpers.ts';
 
+// Real standards.toml — compute() reads its score curve from
+// [category.ticket_description_quality.scoring].
+const STANDARDS = loadStandards(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'references',
+    'standards.toml'
+  )
+);
+
 // ---------------------------------------------------------------------------
 // Fixture helpers
 // ---------------------------------------------------------------------------
@@ -38,7 +49,7 @@ function makeTrackerArtifact(
 test('ticket_description_quality: SKIP when tracker.json absent', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-i5-nofile-'));
   try {
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'SKIP',
@@ -60,7 +71,7 @@ test('ticket_description_quality: SKIP when tracker.json available=false', () =>
   const dir = mkdtempSync(join(tmpdir(), 'awos-i5-unavail-'));
   try {
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact([], false));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'SKIP',
@@ -80,7 +91,7 @@ test('ticket_description_quality: SKIP when no ticket has description_length', (
       { id: 'PROJ-2', type: 'bug', status: 'Done' },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'SKIP',
@@ -103,7 +114,7 @@ test('ticket_description_quality: SKIP when raw.tickets is absent from artifact'
       join(dir, 'tracker.json'),
       JSON.stringify({ available: true, raw: {} })
     );
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'SKIP',
@@ -129,7 +140,7 @@ test('ticket_description_quality: share=1.0 (all well-described) → band=good, 
       { id: 'PROJ-3', description_length: 50, has_acceptance_criteria: true },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'OK',
@@ -163,7 +174,7 @@ test('ticket_description_quality: 3 of 4 well-described (long desc w/o AC exclud
       { id: 'PROJ-4', description_length: 500, has_acceptance_criteria: false }, // long but NO AC
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'OK',
@@ -202,7 +213,7 @@ test('ticket_description_quality: share=0.7 → band=good, score=0.8', () => {
       { id: 'PROJ-10', description_length: 30, has_acceptance_criteria: false }, // both fail
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'OK',
@@ -243,7 +254,7 @@ test('ticket_description_quality: share=0.55 → band=watch, score≈0.6', () =>
     }));
     const tickets: TicketFixture[] = [...good, ...thin];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'OK',
@@ -286,7 +297,7 @@ test('ticket_description_quality: share=0.2 → band=concerning, score=0.2', () 
       { id: 'PROJ-10', description_length: 1, has_acceptance_criteria: false },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'OK',
@@ -320,7 +331,7 @@ test('ticket_description_quality: long description without acceptance criteria i
       { id: 'PROJ-3', description_length: 80 }, // AC flag absent → treated as not present
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'OK',
@@ -354,7 +365,7 @@ test('ticket_description_quality: tickets without description_length excluded fr
       { id: 'PROJ-5' }, // no description_length → excluded from total
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.status,
       'OK',
@@ -388,6 +399,17 @@ test('ticket_description_quality: awards category 1105 when topology.has_tracker
           metric: 'ticket_description_quality',
           applies_when: 'topology.has_tracker',
           weight: 3,
+          scoring: {
+            scale: 'linear',
+            anchors: [
+              [0.0, 0.0],
+              [0.4, 0.4],
+              [0.7, 0.8],
+              [1.0, 1.0],
+            ],
+            basis: 'heuristic',
+            basis_note: 'test fixture mirroring standards.toml',
+          },
         },
       },
     };
@@ -415,6 +437,17 @@ test('ticket_description_quality: does not award 1105 when topology.has_tracker=
           metric: 'ticket_description_quality',
           applies_when: 'topology.has_tracker',
           weight: 3,
+          scoring: {
+            scale: 'linear',
+            anchors: [
+              [0.0, 0.0],
+              [0.4, 0.4],
+              [0.7, 0.8],
+              [1.0, 1.0],
+            ],
+            basis: 'heuristic',
+            basis_note: 'test fixture mirroring standards.toml',
+          },
         },
       },
     };
@@ -435,7 +468,7 @@ test('ticket_description_quality: reliability.tag is "minimal"', () => {
       { id: 'PROJ-1', description_length: 100, has_acceptance_criteria: true },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(
       res.reliability.tag,
       'minimal',
@@ -454,7 +487,7 @@ test('ticket_description_quality: expression mentions both description size and 
       { id: 'PROJ-2', description_length: 10, has_acceptance_criteria: false },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.ok(
       typeof res.expression === 'string' && res.expression.length > 0,
       `expression must be a non-empty string describing the computation, got ${JSON.stringify(res.expression)}`
@@ -515,7 +548,7 @@ test('ticket_description_quality: field-gap SKIP names the unmapped field, not a
       { id: 'PROJ-2', type: 'bug', status: 'Done' },
     ];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'SKIP', 'must still SKIP without the field');
     const note = res.reliability?.note ?? '';
     assert.ok(

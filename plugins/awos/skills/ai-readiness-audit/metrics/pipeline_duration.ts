@@ -3,8 +3,9 @@
  *
  * kind: "duration_seconds"
  * value: average duration in seconds (number)
- * band: null (no label; the score is banded via DURATION_ANCHORS)
- * score: log-interp over DURATION_ANCHORS — ≤10 min → 1.0 down to ≥2 h → 0.
+ * band: null (no label; the score is banded via the curve in standards.toml)
+ * score: banded on the average duration via the curve declared in
+ *   standards.toml [category.pipeline_duration_trend.scoring].
  * SKIP (with reason) when runs exist but none carries duration_seconds.
  * categories_awarded: [1002] when topology.has_ci is true and data available
  * reliability_default: "not-reliable"
@@ -32,22 +33,7 @@ import {
   type MetricResult,
 } from './_base.ts';
 import { describeExcluded, partitionRuns } from './_ci_runs.ts';
-import { bandScore, clamp01 } from './_score.ts';
-
-/**
- * Duration→score anchors in seconds (log-interp, like the other duration
- * metrics — pipeline time spans orders of magnitude). AWOS heuristics:
- *   ≤600 s (10 min) → 1.0   (tight inner loop)
- *   1800 s (30 min) → 0.7
- *   3600 s (1 h)    → 0.4
- *   ≥7200 s (2 h)   → 0.0   (worst case: feedback arrives hours later)
- */
-const DURATION_ANCHORS = [
-  { x: 600, y: 1.0 },
-  { x: 1800, y: 0.7 },
-  { x: 3600, y: 0.4 },
-  { x: 7200, y: 0.0 },
-];
+import { scoreFromConfig, scoringFor } from './_score.ts';
 
 /** Compute average duration_seconds from an array of run records. */
 function averageDuration(runs: unknown[]): number | null {
@@ -123,9 +109,10 @@ export function compute(
   const categories = awardCategories(standards, 'pipeline_duration', topology);
   const reliability = computeReliability('not-reliable', ['ci'], []);
 
-  // Score from the average duration (see DURATION_ANCHORS): a ≤10-minute
-  // pipeline keeps the inner loop tight (1.0); ≥2 h is worst case (0).
-  const score = clamp01(bandScore(avgDuration, DURATION_ANCHORS, 'log'));
+  // Score from the average duration via the declared curve
+  // (standards.toml [category.pipeline_duration_trend.scoring]).
+  const scoring = scoringFor(standards, 'pipeline_duration_trend');
+  const score = scoreFromConfig(avgDuration, scoring);
 
   const excludedTotal = partition.total - partition.decided.length;
   const expression =

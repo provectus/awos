@@ -40,15 +40,7 @@ import {
   makeMetricResult,
   type MetricResult,
 } from './_base.ts';
-import { bandScore, clamp01 } from './_score.ts';
-
-const COMPLEXITY_ANCHORS = [
-  { x: 1, y: 1.0 },
-  { x: 5, y: 1.0 },
-  { x: 10, y: 0.75 },
-  { x: 15, y: 0.5 },
-  { x: 30, y: 0.0 },
-] as const;
+import { scoreFromConfig, scoringFor } from './_score.ts';
 import { isGeneratedPath } from '../generated.ts';
 import {
   EXT_TO_GRAMMAR,
@@ -189,7 +181,7 @@ function makeSkip(reason?: string): MetricResult {
 
 export async function compute(
   _collectedDir: string,
-  _standards: Record<string, unknown>,
+  standards: Record<string, unknown>,
   _topology: Record<string, boolean>,
   repoPathOverride?: string
 ): Promise<MetricResult> {
@@ -305,9 +297,9 @@ export async function compute(
   };
 
   const filesTotal = filesAnalysed + filesSkipped;
-  const complexityScore = clamp01(
-    bandScore(avgCcn, COMPLEXITY_ANCHORS, 'linear')
-  );
+  // Score curve lives in standards.toml [category.cyclomatic_complexity.scoring].
+  const scoring = scoringFor(standards, 'cyclomatic_complexity');
+  const complexityScore = scoreFromConfig(avgCcn, scoring);
   const complexityConfidence = filesTotal > 0 ? filesAnalysed / filesTotal : 0;
   const complexityExpression = `avg_ccn=${avgCcn.toFixed(1)} (${band}), ${hotspotCount} hotspot${hotspotCount !== 1 ? 's' : ''} > CCN 10`;
 

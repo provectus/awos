@@ -28,14 +28,7 @@ import {
   skipMetric,
   type MetricResult,
 } from './_base.ts';
-import { bandScore } from './_score.ts';
-
-const DEPLOY_FREQ_ANCHORS = [
-  { x: 0.03, y: 0 },
-  { x: 0.25, y: 0.1 },
-  { x: 1.0, y: 0.5 },
-  { x: 7.0, y: 1.0 },
-] as const;
+import { scoreFromConfig, scoringFor } from './_score.ts';
 
 /** Map merges-per-week to a DORA band label. */
 export function doraDeployBand(mergesPerWeek: number): string {
@@ -47,7 +40,7 @@ export function doraDeployBand(mergesPerWeek: number): string {
 
 export function compute(
   collectedDir: string,
-  _standards: Record<string, unknown>,
+  standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
   const read = readArtifact(collectedDir, 'git');
@@ -81,7 +74,9 @@ export function compute(
   const band = doraDeployBand(mergesPerWeek);
   const reliability = computeReliability('not-reliable', ['git'], []);
 
-  const score = bandScore(mergesPerWeek, DEPLOY_FREQ_ANCHORS, 'log');
+  // Score curve lives in standards.toml [category.merge_frequency.scoring].
+  const scoring = scoringFor(standards, 'merge_frequency');
+  const score = scoreFromConfig(mergesPerWeek, scoring);
   const expression = `${totalMerges} merges / ${totalWeeks.toFixed(1)}w = ${mergesPerWeek.toFixed(2)}/week (${band})`;
   return makeMetricResult(
     'merge_frequency',

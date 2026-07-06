@@ -42,15 +42,7 @@ import {
   type Reliability,
 } from './_base.ts';
 import { readCodeHostPrs } from './_code_host.ts';
-import { bandScore, clamp01, median } from './_score.ts';
-
-const CYCLE_TIME_ANCHORS = [
-  { x: 1, y: 1.0 },
-  { x: 24, y: 0.75 },
-  { x: 168, y: 0.5 },
-  { x: 720, y: 0.25 },
-  { x: 2160, y: 0.0 },
-] as const;
+import { median, scoreFromConfig, scoringFor } from './_score.ts';
 
 interface MergeRecord {
   merged_at: string;
@@ -125,7 +117,7 @@ function readTrackerCycle(collectedDir: string): TrackerCycleRead {
 
 export function compute(
   collectedDir: string,
-  _standards: Record<string, unknown>,
+  standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
   // Preferred source: the code-host connector — created_at → merged_at is the
@@ -141,7 +133,11 @@ export function compute(
   if (prCycleTimes.length > 0) {
     const medianHours = median(prCycleTimes)!;
     const band = doraCycleTimeBand(medianHours);
-    const score = clamp01(bandScore(medianHours, CYCLE_TIME_ANCHORS, 'log'));
+    // Score curve lives in standards.toml [category.pr_cycle_time.scoring].
+    const score = scoreFromConfig(
+      medianHours,
+      scoringFor(standards, 'pr_cycle_time')
+    );
     const reliability = computeReliability('maximal', ['code_host'], []);
     const expression = `median ${medianHours.toFixed(1)}h PR open→merge over ${prCycleTimes.length} merged PR${prCycleTimes.length !== 1 ? 's' : ''} from the code host (${band})`;
     return makeMetricResult(
@@ -163,7 +159,10 @@ export function compute(
   if (tracker.hours.length > 0) {
     const medianHours = median(tracker.hours)!;
     const band = doraCycleTimeBand(medianHours);
-    const score = clamp01(bandScore(medianHours, CYCLE_TIME_ANCHORS, 'log'));
+    const score = scoreFromConfig(
+      medianHours,
+      scoringFor(standards, 'pr_cycle_time')
+    );
     const reliability: Reliability = appendReliabilityNote(
       {
         tag: 'not-reliable',
@@ -278,7 +277,10 @@ export function compute(
   // True PR cycle time requires a code-host connector (GitHub/GitLab API).
   const reliability = computeReliability('not-reliable', ['git'], []);
 
-  const score = clamp01(bandScore(medianHours, CYCLE_TIME_ANCHORS, 'log'));
+  const score = scoreFromConfig(
+    medianHours,
+    scoringFor(standards, 'pr_cycle_time')
+  );
   const windowLabel = windowStart ? ' (in-window)' : '';
   const expression = `median ${medianHours.toFixed(1)}h cycle time over ${cycleTimesHours.length} merge${cycleTimesHours.length !== 1 ? 's' : ''}${windowLabel} (${band})`;
   return makeMetricResult(

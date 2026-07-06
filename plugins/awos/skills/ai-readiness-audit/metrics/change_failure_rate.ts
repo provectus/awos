@@ -28,7 +28,7 @@ import {
   skipMetric,
   type MetricResult,
 } from './_base.ts';
-import { clamp01 } from './_score.ts';
+import { scoreFromConfig, scoringFor } from './_score.ts';
 
 /** Map change failure rate fraction to a DORA band label. */
 export function doraChangeFailBand(rate: number): string {
@@ -40,7 +40,7 @@ export function doraChangeFailBand(rate: number): string {
 
 export function compute(
   collectedDir: string,
-  _standards: Record<string, unknown>,
+  standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
   const read = readArtifact(collectedDir, 'git');
@@ -71,6 +71,8 @@ export function compute(
   // failures result in a reverting merge commit with the right keywords.
   const reliability = computeReliability('minimal', ['git'], []);
 
+  // Score curve lives in standards.toml [category.change_failure_rate.scoring].
+  const scoring = scoringFor(standards, 'change_failure_rate');
   const expression = `${revertMerges}/${totalMerges} reverts = ${(rate * 100).toFixed(1)}% change failure rate (${band})`;
   return makeMetricResult(
     'change_failure_rate',
@@ -80,6 +82,6 @@ export function compute(
     reliability,
     ['git'],
     [],
-    { band, expression, score: clamp01(1 - rate / 0.15), confidence: 1.0 }
+    { band, expression, score: scoreFromConfig(rate, scoring), confidence: 1.0 }
   );
 }

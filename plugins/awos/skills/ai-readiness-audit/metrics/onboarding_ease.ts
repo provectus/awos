@@ -31,7 +31,7 @@
  *
  * value = present_count / 4  (0..1)
  * band  = 'good' (≥0.75) / 'watch' (≥0.5) / 'concerning' (<0.5)
- * score = clamp01(bandScore(value, ANCHORS, 'linear')) — higher = better
+ * score = banded on value via standards.toml [category.onboarding_ease.scoring] — higher = better
  *
  * Awards code 1501. reliability "minimal" (lower-bound filesystem signal only).
  *
@@ -51,18 +51,7 @@ import {
   skipMetric,
   type MetricResult,
 } from './_base.ts';
-import { bandScore, clamp01 } from './_score.ts';
-
-// ---------------------------------------------------------------------------
-// Band anchors (linear piecewise, increasing — higher enabler count → higher score)
-// ---------------------------------------------------------------------------
-
-const ANCHORS = [
-  { x: 0, y: 0 },
-  { x: 0.5, y: 0.5 },
-  { x: 0.75, y: 0.8 },
-  { x: 1, y: 1 },
-];
+import { scoreFromConfig, scoringFor } from './_score.ts';
 
 /** AWOS heuristic band label (no published DX Core 4 thresholds). */
 function onboardingBand(value: number): string {
@@ -194,7 +183,7 @@ function makeSkip(): MetricResult {
 
 export function compute(
   _collectedDir: string,
-  _standards: Record<string, unknown>,
+  standards: Record<string, unknown>,
   topology: Record<string, boolean>,
   repoPathOverride?: string
 ): MetricResult {
@@ -211,7 +200,8 @@ export function compute(
   const present = Object.values(signals).filter(Boolean).length;
   const value = present / 4;
   const band = onboardingBand(value);
-  const score = clamp01(bandScore(value, ANCHORS, 'linear'));
+  const scoring = scoringFor(standards, 'onboarding_ease');
+  const score = scoreFromConfig(value, scoring);
 
   const enablerLabels: string[] = [];
   if (signals.readme) enablerLabels.push('README setup');

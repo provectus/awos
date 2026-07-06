@@ -65,6 +65,107 @@ export function clamp01(x: number): number {
   return Math.min(1, Math.max(0, x));
 }
 
+/**
+ * Declarative score curve for one standards.toml category — the
+ * `[category.<key>.scoring]` sub-table. Every metric whose score is not the
+ * measured 0..1 fraction itself MUST read its curve from here, so the
+ * value→score mapping is reviewable configuration, not code.
+ */
+export interface ScoringConfig {
+  /** Interpolation between anchors: 'linear' or 'log' (x on a log scale). */
+  scale: 'linear' | 'log';
+  /** Sorted [x, y] anchor points; y is the 0..1 score awarded at value x. */
+  anchors: ReadonlyArray<{ x: number; y: number }>;
+  /** What x is measured in (documentation for reviewers). */
+  anchor_unit?: string;
+  /** 'published' = anchors transcribe numbers from the cited url;
+   *  'derived' = boundary values come from the cited source, the score at
+   *  each boundary is AWOS calibration;
+   *  'heuristic' = the cited source publishes no numbers — anchors are AWOS
+   *  judgment and say so. */
+  basis: 'published' | 'derived' | 'heuristic';
+  /** Required for 'derived'/'heuristic': what part is sourced vs invented. */
+  basis_note?: string;
+}
+
+/**
+ * Read the `[category.<key>.scoring]` table from parsed standards.toml.
+ * Throws when the table is missing or malformed — a banded metric with no
+ * declared curve means its numbers were made up in code, which is exactly
+ * the state this guard exists to keep out of the plugin.
+ */
+export function scoringFor(
+  standards: Record<string, unknown>,
+  categoryKey: string
+): ScoringConfig {
+  const cats = (standards['category'] ?? {}) as Record<
+    string,
+    Record<string, unknown>
+  >;
+  const raw = cats[categoryKey]?.['scoring'] as
+    | Record<string, unknown>
+    | undefined;
+  if (!raw) {
+    throw new Error(
+      `standards.toml [category.${categoryKey}] has no [category.${categoryKey}.scoring] table — ` +
+        `banded metrics must declare their score curve in standards.toml ` +
+        `(scale, anchors = [[x, y], …], basis, basis_note), not hardcode it. ` +
+        `Decide which published values the curve should transcribe (see the category's url) ` +
+        `or mark it basis = "heuristic" with a basis_note.`
+    );
+  }
+  const scale = raw['scale'];
+  if (scale !== 'linear' && scale !== 'log') {
+    throw new Error(
+      `[category.${categoryKey}.scoring] scale must be "linear" or "log", got ${JSON.stringify(scale)}`
+    );
+  }
+  const basis = raw['basis'];
+  if (basis !== 'published' && basis !== 'derived' && basis !== 'heuristic') {
+    throw new Error(
+      `[category.${categoryKey}.scoring] basis must be "published", "derived", or "heuristic", got ${JSON.stringify(basis)}`
+    );
+  }
+  const pairs = raw['anchors'];
+  if (!Array.isArray(pairs) || pairs.length < 2) {
+    throw new Error(
+      `[category.${categoryKey}.scoring] anchors must be an array of at least two [x, y] pairs`
+    );
+  }
+  const anchors = pairs.map((p, i) => {
+    if (
+      !Array.isArray(p) ||
+      p.length !== 2 ||
+      typeof p[0] !== 'number' ||
+      typeof p[1] !== 'number'
+    ) {
+      throw new Error(
+        `[category.${categoryKey}.scoring] anchors[${i}] must be a numeric [x, y] pair`
+      );
+    }
+    return { x: p[0], y: p[1] };
+  });
+  for (let i = 1; i < anchors.length; i++) {
+    if (anchors[i].x <= anchors[i - 1].x) {
+      throw new Error(
+        `[category.${categoryKey}.scoring] anchors must be strictly increasing in x`
+      );
+    }
+  }
+  return {
+    scale,
+    anchors,
+    anchor_unit: raw['anchor_unit'] as string | undefined,
+    basis,
+    basis_note: raw['basis_note'] as string | undefined,
+  };
+}
+
+/** Score a measured value through a category's declared curve, clamped to [0,1]. */
+export function scoreFromConfig(x: number, cfg: ScoringConfig): number {
+  return clamp01(bandScore(x, cfg.anchors, cfg.scale));
+}
+
 /** Median of a numeric array (sorts a copy). Returns null for empty input. */
 export function median(values: number[]): number | null {
   if (values.length === 0) return null;

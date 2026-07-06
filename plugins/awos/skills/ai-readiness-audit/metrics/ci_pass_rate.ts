@@ -36,7 +36,7 @@ import {
   type MetricResult,
 } from './_base.ts';
 import { describeExcluded, partitionRuns } from './_ci_runs.ts';
-import { clamp01 } from './_score.ts';
+import { scoreFromConfig, scoringFor } from './_score.ts';
 
 /** Map pass-rate fraction to a band label. */
 function ciPassBand(rate: number): string {
@@ -118,6 +118,8 @@ export function compute(
   const band = ciPassBand(rate);
   const categories = awardCategories(standards, 'ci_pass_rate', topology);
   const reliability = computeReliability('not-reliable', ['ci'], []);
+  // Score curve lives in standards.toml [category.ci_pass_rate.scoring].
+  const scoring = scoringFor(standards, 'ci_pass_rate');
 
   const excludedTotal = partition.total - partition.decided.length;
   const excludedNote =
@@ -137,6 +139,6 @@ export function compute(
     reliability,
     ['ci'],
     [],
-    { band, expression, score: clamp01(rate), confidence: 1.0 }
+    { band, expression, score: scoreFromConfig(rate, scoring), confidence: 1.0 }
   );
 }

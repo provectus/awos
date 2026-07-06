@@ -31,9 +31,8 @@
  *     ≥40%  → "watch"       moderate description coverage, room to improve
  *     <40%  → "concerning"  thin tickets dominate; AI-agent context is severely limited
  *
- * Score anchors (piecewise linear interpolation, higher share = higher score):
- *   ANCHORS = [{x:0,y:0},{x:0.4,y:0.4},{x:0.7,y:0.8},{x:1,y:1}]
- *   score = clamp01(bandScore(share, ANCHORS, 'linear'))
+ * Score curve: standards.toml [category.ticket_description_quality.scoring]
+ *   (piecewise linear interpolation over the declared anchors, higher share = higher score).
  *
  * SKIP conditions:
  *   - tracker.json absent
@@ -61,16 +60,9 @@ import {
   trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
-import { bandScore, clamp01 } from './_score.ts';
+import { scoreFromConfig, scoringFor } from './_score.ts';
 
 const MIN_DESC_CHARS = 50;
-
-const ANCHORS = [
-  { x: 0, y: 0 },
-  { x: 0.4, y: 0.4 },
-  { x: 0.7, y: 0.8 },
-  { x: 1, y: 1 },
-] as const;
 
 /** Map share of well-described tickets to a band label. */
 function descriptionBand(share: number): 'good' | 'watch' | 'concerning' {
@@ -146,7 +138,11 @@ export function compute(
   );
   const share = wellDescribed.length / eligible.length;
   const band = descriptionBand(share);
-  const score = clamp01(bandScore(share, ANCHORS, 'linear'));
+  // Score curve lives in standards.toml [category.ticket_description_quality.scoring].
+  const score = scoreFromConfig(
+    share,
+    scoringFor(standards, 'ticket_description_quality')
+  );
 
   const categories = awardCategories(
     standards,

@@ -1,10 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { compute } from './mttr.ts';
+import { loadStandards } from './_base.ts';
 import { trackerArtifact } from '../tests/helpers.ts';
+
+// Real standards.toml — compute() reads its score curve from
+// [category.mttr.scoring].
+const STANDARDS = loadStandards(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'references',
+    'standards.toml'
+  )
+);
 
 function mergeRecord(mergedAt: Date, firstCommitAt: Date) {
   return {
@@ -33,7 +46,7 @@ test('mttr: confidence=0.0 when tracker available but git.json absent (no interv
   try {
     // Tracker present with an incident_source but no git.json
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact('jira'));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'OK', 'must not SKIP — metric never skips');
     assert.equal(res.score, 0, 'score must be 0 with no intervals');
     assert.equal(
@@ -55,7 +68,7 @@ test('mttr: score interpolates for 1-hour median (elite/high boundary → 0.75)'
       join(dir, 'git.json'),
       makeGitArtifact([mergeRecord(merged, first)])
     );
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'OK', 'must be OK with git data');
     assert.ok(
       Math.abs((res.score ?? 0) - 0.75) < 1e-6,
@@ -75,7 +88,7 @@ test('mttr: score=0 and confidence=0 when no merge records in git.json', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awos-i3-norecords-'));
   try {
     writeFileSync(join(dir, 'git.json'), makeGitArtifact([]));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'OK', 'must be OK (never SKIP)');
     assert.equal(res.score, 0, 'score must be 0 with no merge records');
     assert.equal(
@@ -98,7 +111,7 @@ test('mttr: incident_source does NOT upgrade confidence while the value is the g
       makeGitArtifact([mergeRecord(merged, first)])
     );
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact('pagerduty'));
-    const res = compute(dir, {}, {});
+    const res = compute(dir, STANDARDS, {});
     // The value is still computed from git branch lifetimes, not incident
     // data, so declaring an incident source must not raise confidence beyond
     // the proxy tier (0.3 when intervals exist).

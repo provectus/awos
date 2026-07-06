@@ -25,11 +25,8 @@
  *   watch      → rate < 0.30  (15–29%)
  *   concerning → rate >= 0.30 (30%+)
  *
- * Score anchors (linear piecewise, clamped to [0,1]):
- *   x=0.00 → y=1.0
- *   x=0.15 → y=0.8
- *   x=0.30 → y=0.4
- *   x=0.50 → y=0.0
+ * score: banded on the rate via the curve declared in
+ *   standards.toml [category.rework_rate.scoring].
  *
  * kind: "banded"
  * awards_code: 1401
@@ -44,15 +41,7 @@ import {
   skipMetric,
   type MetricResult,
 } from './_base.ts';
-import { bandScore, clamp01 } from './_score.ts';
-
-/** AWOS heuristic band anchors for rework rate (no DORA published thresholds). */
-const REWORK_ANCHORS = [
-  { x: 0, y: 1 },
-  { x: 0.15, y: 0.8 },
-  { x: 0.3, y: 0.4 },
-  { x: 0.5, y: 0 },
-];
+import { scoreFromConfig, scoringFor } from './_score.ts';
 
 /**
  * Map rework rate fraction to an AWOS heuristic band label.
@@ -66,7 +55,7 @@ export function reworkBand(rate: number): string {
 
 export function compute(
   collectedDir: string,
-  _standards: Record<string, unknown>,
+  standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
   const read = readArtifact(collectedDir, 'git');
@@ -93,7 +82,8 @@ export function compute(
   const pct = (rate * 100).toFixed(1);
   const expression = `${fixMerges}/${totalMerges} merges are unplanned fix work = ${pct}% rework rate (${band})`;
 
-  const score = clamp01(bandScore(rate, REWORK_ANCHORS, 'linear'));
+  const scoring = scoringFor(standards, 'rework_rate');
+  const score = scoreFromConfig(rate, scoring);
 
   return makeMetricResult(
     'rework_rate',

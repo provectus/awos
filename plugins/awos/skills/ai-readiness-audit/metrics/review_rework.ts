@@ -23,8 +23,8 @@
  * legacy fallback for pre-window artifacts. When the usable merge count is 0
  * or merge_records is empty, SKIP.
  *
- * score: banded on avg commits/PR via COMMITS_PER_PR_ANCHORS — ~1–2 commits/PR
- * scores 1.0, declining linearly to 0 at ≥10 commits/PR (AWOS heuristics).
+ * score: banded on avg commits/PR via the curve declared in
+ *   standards.toml [category.review_rework.scoring].
  *
  * SKIP: if git.json is absent, merge_records is empty, or total_merges is 0.
  */
@@ -37,27 +37,11 @@ import {
   type MetricResult,
 } from './_base.ts';
 import { readCodeHostPrs } from './_code_host.ts';
-import { bandScore, clamp01 } from './_score.ts';
-
-/**
- * Score anchors on avg commits per merged PR (linear piecewise, clamped to
- * [0,1]) in the style of rework_rate. AWOS heuristics — DX Core 4
- * publishes no numeric commits-per-PR thresholds:
- *   ≤2   → 1.0   (1–2 commits/PR: focused merges, little in-review rework)
- *   4    → 0.7
- *   6    → 0.4
- *   ≥10  → 0.0   (heavy in-review thrashing)
- */
-const COMMITS_PER_PR_ANCHORS = [
-  { x: 2, y: 1.0 },
-  { x: 4, y: 0.7 },
-  { x: 6, y: 0.4 },
-  { x: 10, y: 0.0 },
-];
+import { scoreFromConfig, scoringFor } from './_score.ts';
 
 export function compute(
   collectedDir: string,
-  _standards: Record<string, unknown>,
+  standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
   // Preferred source: per-PR commit counts from the code-host connector —
@@ -75,8 +59,10 @@ export function compute(
     // from normal iteration, but per-PR counts from the host beat the
     // whole-history average.
     const reliability = computeReliability('minimal', ['code_host'], []);
-    const score = clamp01(
-      bandScore(commitsPerPr, COMMITS_PER_PR_ANCHORS, 'linear')
+    // Score curve lives in standards.toml [category.review_rework.scoring].
+    const score = scoreFromConfig(
+      commitsPerPr,
+      scoringFor(standards, 'review_rework')
     );
     const expression = `avg ${commitsPerPr.toFixed(1)} commits/PR over ${prCommitCounts.length} merged PRs from the code host → ${reworkProxy.toFixed(1)} estimated rework commits`;
     return makeMetricResult(
@@ -151,10 +137,11 @@ export function compute(
   // Review round count requires code-host data (PR comments, review requests).
   const reliability = computeReliability('not-reliable', ['git'], []);
 
-  // Score from the commits-per-PR proxy: ~1–2 commits/PR is best-case (1.0),
-  // declining to 0 at ≥10 commits/PR — see COMMITS_PER_PR_ANCHORS.
-  const score = clamp01(
-    bandScore(commitsPerPr, COMMITS_PER_PR_ANCHORS, 'linear')
+  // Score from the commits-per-PR proxy via the declared curve
+  // (standards.toml [category.review_rework.scoring]).
+  const score = scoreFromConfig(
+    commitsPerPr,
+    scoringFor(standards, 'review_rework')
   );
 
   const windowLabel = windowed ? ` over the last ${ws.window_days} days` : '';

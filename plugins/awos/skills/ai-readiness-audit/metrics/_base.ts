@@ -27,6 +27,55 @@ export function metaNumber(
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
+/** The audit-wide measurement window in days (`[meta].max_lookback_days`). */
+export function lookbackDays(standards: Record<string, unknown>): number {
+  return metaNumber(standards, 'max_lookback_days', 90);
+}
+
+// ---------------------------------------------------------------------------
+// Window clamping for connector records
+// ---------------------------------------------------------------------------
+
+export interface WindowClamp<T> {
+  /** Records inside the window (plus records with no parseable timestamp). */
+  kept: T[];
+  /** Records older than the window, excluded from the metric. */
+  dropped: number;
+}
+
+/**
+ * Clamp connector records (CI runs, tracker tickets) to the audit window,
+ * anchored to the NEWEST record timestamp — mirroring the git collector,
+ * which anchors its window to the newest commit — so the result is
+ * deterministic for a given artifact. Connectors routinely over-fetch
+ * (e.g. `gh run list --limit 500` reaching months back); without this clamp
+ * that history would leak into metrics that must measure the last
+ * `[meta].max_lookback_days` only. Records with no parseable timestamp are
+ * kept: they cannot be judged against the window, and silently dropping them
+ * would misreport the sample.
+ */
+export function clampToWindow<T>(
+  records: T[],
+  days: number,
+  tsOf: (r: T) => unknown
+): WindowClamp<T> {
+  let anchor = -Infinity;
+  const stamps = records.map((r) => {
+    const t = Date.parse(String(tsOf(r) ?? ''));
+    if (Number.isFinite(t) && t > anchor) anchor = t;
+    return t;
+  });
+  if (!Number.isFinite(anchor)) return { kept: records, dropped: 0 };
+  const since = anchor - days * 86_400_000;
+  const kept: T[] = [];
+  let dropped = 0;
+  records.forEach((r, i) => {
+    if (Number.isFinite(stamps[i]) && stamps[i] < since) dropped++;
+    else kept.push(r);
+  });
+  return { kept, dropped };
+}
+
 // ---------------------------------------------------------------------------
 // Collected-artifact reader
 // ---------------------------------------------------------------------------

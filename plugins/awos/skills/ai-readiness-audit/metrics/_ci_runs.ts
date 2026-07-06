@@ -71,6 +71,24 @@ const INDECISIVE_CONCLUSIONS = new Set([
 
 export type RunVerdict = 'passed' | 'failed' | 'indecisive';
 
+/**
+ * Best-effort creation timestamp of a raw run record, across the field names
+ * the sanctioned connectors emit (gh: createdAt; snake_case APIs: created_at;
+ * fallbacks: startedAt/started_at, updatedAt/updated_at). Used to clamp the
+ * fetched run history to the audit window.
+ */
+export function runTimestamp(r: unknown): unknown {
+  const rec = (r ?? {}) as Record<string, unknown>;
+  return (
+    rec['createdAt'] ??
+    rec['created_at'] ??
+    rec['startedAt'] ??
+    rec['started_at'] ??
+    rec['updatedAt'] ??
+    rec['updated_at']
+  );
+}
+
 export interface RunPartition {
   /** Runs whose durations/verdicts are meaningful: passed + failed. */
   decided: unknown[];

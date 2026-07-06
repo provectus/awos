@@ -26,13 +26,15 @@
  */
 import {
   awardCategories,
+  clampToWindow,
   computeReliability,
+  lookbackDays,
   makeMetricResult,
   readArtifact,
   skipMetric,
   type MetricResult,
 } from './_base.ts';
-import { describeExcluded, partitionRuns } from './_ci_runs.ts';
+import { describeExcluded, partitionRuns, runTimestamp } from './_ci_runs.ts';
 import { scoreFromConfig, scoringFor } from './_score.ts';
 
 /** Compute average duration_seconds from an array of run records. */
@@ -81,10 +83,16 @@ export function compute(
   const raw = artifact?.raw ?? {};
   const runs: unknown[] = Array.isArray(raw.runs) ? raw.runs : [];
 
+  // Clamp the fetched history to the audit window (anchored to the newest
+  // run) — connectors over-fetch, and runs older than [meta].max_lookback_days
+  // must not shape the average duration.
+  const windowDays = lookbackDays(standards);
+  const windowed = clampToWindow(runs, windowDays, runTimestamp);
+
   // Average over DECIDED runs only (see _ci_runs.ts) — a skipped trigger
   // run's ~1 s "duration" measures nothing. null when no decided run carries
   // a usable duration_seconds → SKIP with the reason (never a free 1.0 score).
-  const partition = partitionRuns(runs);
+  const partition = partitionRuns(windowed.kept);
   const avgDuration = averageDuration(partition.decided);
   if (avgDuration === null) {
     const excludedNote =
@@ -117,7 +125,12 @@ export function compute(
   const excludedTotal = partition.total - partition.decided.length;
   const expression =
     `avg pipeline duration ${avgDuration.toFixed(0)}s across ${partition.decided.length} decided run${partition.decided.length !== 1 ? 's' : ''}` +
-    (excludedTotal > 0 ? ` (${excludedTotal} without a verdict excluded)` : '');
+    (excludedTotal > 0
+      ? ` (${excludedTotal} without a verdict excluded)`
+      : '') +
+    (windowed.dropped > 0
+      ? `; ${windowed.dropped} run${windowed.dropped !== 1 ? 's' : ''} older than the ${windowDays}-day window dropped`
+      : '');
   return makeMetricResult(
     'pipeline_duration',
     avgDuration,

@@ -29,13 +29,15 @@
  */
 import {
   awardCategories,
+  clampToWindow,
   computeReliability,
+  lookbackDays,
   makeMetricResult,
   readArtifact,
   skipMetric,
   type MetricResult,
 } from './_base.ts';
-import { describeExcluded, partitionRuns } from './_ci_runs.ts';
+import { describeExcluded, partitionRuns, runTimestamp } from './_ci_runs.ts';
 import { scoreFromConfig, scoringFor } from './_score.ts';
 
 /** Map pass-rate fraction to a band label. */
@@ -93,8 +95,14 @@ export function compute(
     );
   }
 
+  // Clamp the fetched history to the audit window (anchored to the newest
+  // run) — connectors over-fetch, and runs older than [meta].max_lookback_days
+  // must not shape the pass rate.
+  const windowDays = lookbackDays(standards);
+  const windowed = clampToWindow(runs, windowDays, runTimestamp);
+
   // Pass rate over DECIDED runs only (see _ci_runs.ts).
-  const partition = partitionRuns(runs);
+  const partition = partitionRuns(windowed.kept);
   if (partition.decided.length === 0) {
     return makeMetricResult(
       'ci_pass_rate',
@@ -130,7 +138,11 @@ export function compute(
     partition.unknown.length > 0
       ? ` (unrecognized conclusions treated as no-verdict: ${partition.unknown.join(', ')})`
       : '';
-  const expression = `${partition.passed}/${partition.decided.length} decided CI runs passed = ${(rate * 100).toFixed(1)}% pass rate (${band})${excludedNote}${unknownNote}`;
+  const windowNote =
+    windowed.dropped > 0
+      ? `; ${windowed.dropped} run${windowed.dropped !== 1 ? 's' : ''} older than the ${windowDays}-day window dropped`
+      : '';
+  const expression = `${partition.passed}/${partition.decided.length} decided CI runs passed = ${(rate * 100).toFixed(1)}% pass rate (${band})${excludedNote}${unknownNote}${windowNote}`;
   return makeMetricResult(
     'ci_pass_rate',
     rate,

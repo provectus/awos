@@ -55,7 +55,9 @@
 import {
   appendReliabilityNote,
   awardCategories,
+  clampToWindow,
   computeReliability,
+  lookbackDays,
   makeMetricResult,
   readArtifact,
   skipMetric,
@@ -69,6 +71,11 @@ function subtaskBand(avg: number): 'good' | 'watch' | 'concerning' {
   if (avg <= 3) return 'good';
   if (avg <= 6) return 'watch';
   return 'concerning';
+}
+
+/** Best-effort ticket timestamp for window clamping (resolution, else creation). */
+function ticketTimestamp(t: Record<string, unknown>): unknown {
+  return t['resolved_at'] ?? t['created_at'] ?? t['updated_at'];
 }
 
 export function compute(
@@ -97,9 +104,16 @@ export function compute(
   }
 
   const raw = artifact?.raw ?? {};
-  const tickets: Array<Record<string, unknown>> = Array.isArray(raw.tickets)
-    ? (raw.tickets as Array<Record<string, unknown>>)
-    : [];
+  // Clamp the fetched tickets to the audit window (anchored to the newest
+  // ticket timestamp) — an over-fetched tracker window must not leak older
+  // history into the metric.
+  const tickets: Array<Record<string, unknown>> = clampToWindow(
+    Array.isArray(raw.tickets)
+      ? (raw.tickets as Array<Record<string, unknown>>)
+      : [],
+    lookbackDays(standards),
+    ticketTimestamp
+  ).kept;
 
   // No ticket in the window carries subtask data at all → the connector did
   // not map the field; SKIP rather than guess. (An explicit subtask_count of

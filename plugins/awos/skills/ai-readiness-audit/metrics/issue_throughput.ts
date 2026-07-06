@@ -16,7 +16,7 @@
  *
  * score: 0 when resolved_count === 0 (worst case); otherwise banded by
  * resolved-per-week over the artifact's period.lookback_days window
- * (default 180 days) via the curve declared in
+ * (default 90 days) via the curve declared in
  * standards.toml [category.issue_throughput.scoring].
  *
  * SKIP: if tracker.json is absent or available=false (no tracker connector).
@@ -34,7 +34,7 @@ import {
 import { scoreFromConfig, scoringFor } from './_score.ts';
 
 /** Default tracker lookback (days) when the artifact carries no period block. */
-const DEFAULT_LOOKBACK_DAYS = 180;
+const DEFAULT_LOOKBACK_DAYS = 90;
 
 export function compute(
   collectedDir: string,

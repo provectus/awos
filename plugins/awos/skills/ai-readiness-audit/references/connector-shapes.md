@@ -1,5 +1,7 @@
 # Connector Shapes Reference
 
+**The `<lookback>` placeholder.** Every windowed query below writes `<lookback>` where a day count belongs (e.g. `updated >= -<lookback>d`). Substitute the audit window in days — the `lookback_days` field of the `audit-core`/`enrich` summary, which carries `[meta].max_lookback_days` from `standards.toml` (90 by default). Never hardcode a day count: the recipes must follow the configured window.
+
 This document specifies the exact JSON shapes the orchestrator must produce when it maps MCP or integration data into collector artifacts. Shapes are copied verbatim from `collectors/tracker.ts` and `collectors/docs.ts`.
 
 Producing these artifacts is not fabrication — it is straightforward field mapping from a live, reachable data source. The [data-source resolution protocol](#data-source-resolution-protocol) at the bottom of this document describes when and how to attempt each source.
@@ -107,7 +109,7 @@ The computed artifact the engine derives from `TrackerConnector`. The orchestrat
 
 Jira hard-caps `maxResults` at 100 regardless of what you pass, so a single call silently under-samples any long-lived project — and because default ordering is unstable, the sampled 100 differ run to run. Page through all results and accumulate into one `tickets[]` before writing the artifact:
 
-1. First call: `searchJiraIssuesUsingJql({ jql: "project = PROJ AND updated >= -90d ORDER BY created DESC", maxResults: 100, computeIssueCount: true, fields: ["issuetype", "status", "created", "resolutiondate", "parent", "subtasks", "description"] })`. `ORDER BY created DESC` keeps ordering stable across pages; `computeIssueCount: true` (once, on this call only) returns the query total, so `fetch_meta.tickets_total` and completeness are known. **Request `description` and `subtasks` explicitly** — compact/default field sets omit them, and every ticket then lacks `description_length`/`subtask_count`, silently SKIPping ADP-13 and ADP-12 on an otherwise-connected tracker (observed in the wild). Map `description` to its character count immediately and discard the raw text — it never enters the artifact.
+1. First call: `searchJiraIssuesUsingJql({ jql: "project = PROJ AND updated >= -<lookback>d ORDER BY created DESC", maxResults: 100, computeIssueCount: true, fields: ["issuetype", "status", "created", "resolutiondate", "parent", "subtasks", "description"] })`. `ORDER BY created DESC` keeps ordering stable across pages; `computeIssueCount: true` (once, on this call only) returns the query total, so `fetch_meta.tickets_total` and completeness are known. **Request `description` and `subtasks` explicitly** — compact/default field sets omit them, and every ticket then lacks `description_length`/`subtask_count`, silently SKIPping ADP-13 and ADP-12 on an otherwise-connected tracker (observed in the wild). Map `description` to its character count immediately and discard the raw text — it never enters the artifact.
 2. Loop: pass each response's `nextPageToken` back as a parameter in the next call; stop when `isLast: true`, when no token is returned, or at the ~2000-ticket cap. (Classic on-prem JQL paginates with `startAt += page_size` until a short/empty page instead.)
 
 Write `collected/tracker.json` once after all pages are accumulated — not per page — and record what happened in `fetch_meta` (pages fetched, tickets fetched vs. total, `complete: false` with the real cause in `note` if the loop stopped early). Linear paginates via `pageInfo.hasNextPage` + `endCursor` (GraphQL cursor); GitHub Issues via the `Link: rel="next"` header or `page` query param.
@@ -173,10 +175,10 @@ Write the assembled `TrackerConnector` to `collected/tracker.json`. Include a `p
 }
 ```
 
-| `period` field  | Type     | Meaning                                                                                                                                                                                  |
-| --------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lookback_days` | `number` | The actual query window in days (90 for the standard `updated >= -90d` Jira query — the audit-wide `[meta].max_lookback_days`). The renderer converts ≥60 days to months in the tooltip. |
-| `source_label`  | `string` | Human-readable name shown in the Sources tooltip, e.g. `"Jira via Atlassian MCP"`, `"GitHub Issues"`, `"Linear"`.                                                                        |
+| `period` field  | Type     | Meaning                                                                                                                                                                                 |
+| --------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lookback_days` | `number` | The actual query window in days — normally the `<lookback>` value you substituted (the audit-wide `[meta].max_lookback_days`). The renderer converts ≥60 days to months in the tooltip. |
+| `source_label`  | `string` | Human-readable name shown in the Sources tooltip, e.g. `"Jira via Atlassian MCP"`, `"GitHub Issues"`, `"Linear"`.                                                                       |
 
 ---
 
@@ -321,7 +323,7 @@ Written by the orchestrator directly (no engine collector transforms it):
 }
 ```
 
-Fetch only PRs merged inside the audit window (90 days by default) — the metrics use every record in the artifact and rely on the fetch window, and record the window actually used in `period.lookback_days`.
+Fetch only PRs merged inside the audit window (`<lookback>` days) — the metrics use every record in the artifact and rely on the fetch window, and record the window actually used in `period.lookback_days`.
 
 ### Worked example — GitHub → `collected/code_host.json`
 
@@ -354,17 +356,17 @@ Fallback when GraphQL is unavailable: `gh pr list --state merged --limit 200 --j
 
 ## Turnkey enrichment recipe
 
-When a tracker or docs MCP is reachable, enriching it is a small, bounded operation — not a bulk data migration. Query the audit's standard 90-day window; the engine clamps records to it regardless. Mapping reachable data into the shapes above is expected, not fabrication. Reachability is decided by attempting the call, not by any config file.
+When a tracker or docs MCP is reachable, enriching it is a small, bounded operation — not a bulk data migration. Query the audit window (`<lookback>` days); the engine clamps records to it regardless. Mapping reachable data into the shapes above is expected, not fabrication. Reachability is decided by attempting the call, not by any config file.
 
 Tracker (Jira) → `collected/tracker.json`:
 
 ```
-# 1. Fetch the standard 90-day window (issues updated in the last 90 days).
+# 1. Fetch the audit window (issues updated in the last <lookback> days).
 #    maxResults is hard-capped at 100, so a single call under-samples. Page to completion:
 #      Cloud MCP:   loop on nextPageToken until isLast: true or no token returned;
 #                   first call adds computeIssueCount: true to learn the query total.
 #      Classic JQL: loop on startAt (increment by page size) until a short/empty page.
-#    jql = "updated >= -90d ORDER BY created DESC", cap at ~2000 tickets.
+#    jql = "updated >= -<lookback>d ORDER BY created DESC", cap at ~2000 tickets.
 #    Accumulate all pages into one tickets[], then proceed to step 2.
 # 2. Changelog pass (cycle time): for the ~50 most recently resolved tickets, call
 #    getJiraIssue(cloudId, key, expand: "changelog", fields: ["status"]) as parallel
@@ -386,7 +388,7 @@ Docs (Confluence) → `collected/docs.json`:
 
 ```
 # 1. List recent space pages (e.g. Confluence MCP: getPagesInConfluenceSpace, or
-#    searchConfluenceUsingCql with cql = "lastmodified >= now('-90d')").
+#    searchConfluenceUsingCql with cql = "lastmodified >= now('-<lookback>d')").
 # 2. Map each page to a DocPage {title, url, updated_at} and wrap as a
 #    DocsConnector {pages: [...]}.
 # 3. Write context/audits/YYYY-MM-DD/collected/docs.json. The same single
@@ -436,7 +438,7 @@ Pass every fetched run through with its `conclusion` string **verbatim** — do 
 # Probe: acli jira auth status   (any non-error output = authenticated)
 # 1. Derive + verify the project key (see identity discovery above).
 # 2. Fetch a bounded resolved window:
-acli jira workitem search --jql "project = <KEY> AND statusCategory = Done AND resolved >= -90d ORDER BY resolved DESC" --json
+acli jira workitem search --jql "project = <KEY> AND statusCategory = Done AND resolved >= -<lookback>d ORDER BY resolved DESC" --json
 #    plus a second query without the statusCategory filter for open work-mix.
 # 3. Changelog pass for cycle time: fetch per-issue status history for the ~50
 #    most recently resolved issues (acli jira workitem view <KEY-N> --json — if

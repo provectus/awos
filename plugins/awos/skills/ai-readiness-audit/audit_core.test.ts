@@ -140,12 +140,17 @@ test('Metric-routed checks must carry the metric value+evidence into the record 
       expression: '31/50 growth',
     });
 
-    await auditCore(
+    const summary = await auditCore(
       repoPath,
       outDir,
       {},
       { test_metric: mockMetric },
       standardsPath
+    );
+    assert.equal(
+      summary.lookback_days,
+      730,
+      'the summary must echo [meta].max_lookback_days — the orchestrator substitutes it into connector query recipes instead of hardcoding a day count'
     );
 
     const dimJson = JSON.parse(

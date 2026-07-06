@@ -188,7 +188,7 @@ dimension = "delivery-flow"
 weight = 10
 method = "computed"
 summary = "DORA deployment rework rate: share of deploys that are unplanned bug-fix work."
-definition = "DORA deployment rework rate: ratio of deployments that are unplanned work to fix bugs triggered by incidents in production. Proxied from git: first-parent merges in the 90-day window whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords (case-insensitive). Distinct from change_failure_rate (DF-04), which counts revert/rollback deployments, and from code_churn (DESC-02), which measures line-level turnover. DORA publishes no numeric thresholds for rework rate; bands (good <15%, watch <30%, concerning >=30%) are AWOS heuristics."
+definition = "DORA deployment rework rate: ratio of deployments that are unplanned work to fix bugs triggered by incidents in production. Proxied from git: first-parent merges in the audit window ([meta].max_lookback_days) whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords (case-insensitive). Distinct from change_failure_rate (DF-04), which counts revert/rollback deployments, and from code_churn (DESC-02), which measures line-level turnover. DORA publishes no numeric thresholds for rework rate; bands (good <15%, watch <30%, concerning >=30%) are AWOS heuristics."
 applies_when = "always"
 sources = ["git"]
 reliability_default = "minimal"
@@ -1893,7 +1893,7 @@ metric = "active_contributors"
 dimension = "descriptors"
 weight = 0
 method = "computed"
-definition = "Active contributor count over the 90-day window: authors excluded only when both their merge-share and LOC-share fall below the active_contributor_threshold (default 5 %), filtering out drive-by reviewers and non-code participants (aggregate only, no PII)"
+definition = "Active contributor count over the audit window ([meta].max_lookback_days): authors excluded only when both their merge-share and LOC-share fall below the active_contributor_threshold (default 5 %), filtering out drive-by reviewers and non-code participants (aggregate only, no PII)"
 applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # raw count; no direction implied without context
@@ -1911,7 +1911,7 @@ metric = "code_churn"
 dimension = "descriptors"
 weight = 0
 method = "computed"
-definition = "Windowed code-turnover: share of recently-authored lines (within the rework horizon) that are deleted again inside the 90-day window — a bounded, directional rework signal (lower is better)."
+definition = "Windowed code-turnover: share of recently-authored lines (within the rework horizon) that are deleted again inside the audit window — a bounded, directional rework signal (lower is better)."
 applies_when = "always"
 sources = ["git"]
 reliability_default = "minimal"   # windowed turnover metric; directional signal, not raw count

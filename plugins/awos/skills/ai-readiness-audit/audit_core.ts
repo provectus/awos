@@ -459,6 +459,12 @@ export interface AuditCoreSummary {
     code: number[];
   }>;
   skipped: number;
+  /**
+   * The audit measurement window in days ([meta].max_lookback_days) — the
+   * orchestrator substitutes this into every connector query recipe instead
+   * of hardcoding a day count.
+   */
+  lookback_days: number;
   duration_ms: number;
 }
 
@@ -787,6 +793,7 @@ export async function auditCore(
     judgment_pending: judgmentPending,
     pending_judgment_checks: pendingJudgmentChecks,
     skipped,
+    lookback_days: periodFromStandards(standards).lookback_days,
     duration_ms: Date.now() - start,
   };
 }

@@ -64,7 +64,7 @@ Measures how fast and how safely change flows from commit to the default branch,
 
 ### DF-06: Deployment rework rate
 
-- **What:** DORA deployment rework rate — share of deployments that are unplanned fix work triggered by incidents (DORA's fifth metric, introduced 2024). Proxied from git: first-parent merges in the 90-day window whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords. Bands are AWOS heuristics (DORA publishes no numeric thresholds).
+- **What:** DORA deployment rework rate — share of deployments that are unplanned fix work triggered by incidents (DORA's fifth metric, introduced 2024). Proxied from git: first-parent merges in the audit window (`[meta].max_lookback_days`) whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords. Bands are AWOS heuristics (DORA publishes no numeric thresholds).
 - **How:** `node "<engine cli path>" metric rework_rate <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — rework rate computed and banded
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable or no merges in window

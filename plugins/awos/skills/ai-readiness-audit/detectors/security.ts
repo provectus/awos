@@ -1,4 +1,9 @@
-import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import {
+  makeResult,
+  iterFiles,
+  iterFilesIgnoreInsensitive,
+  readTextSafe,
+} from './_base.ts';
 import { existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ALL_HOOK_PATHS } from '../agent_tools.ts';
@@ -272,8 +277,12 @@ export function detectSensitiveFilesGitignored(
   _params?: unknown
 ): ReturnType<typeof makeResult> {
   // --- Step 1: determine which types are relevant ---
+  // Ignore-INSENSITIVE walk, deliberately: this check rewards gitignore
+  // coverage, so a correctly-covered file must stay visible to the scan —
+  // with the ignore-honoring walk, coverage made the file invisible (SKIP)
+  // and visibility meant no coverage (FAIL), leaving PASS unreachable.
   const relevantTypes = SENSITIVE_PATTERNS.filter(
-    (p) => iterFiles(repoPath, [p.fileGlob]).length > 0
+    (p) => iterFilesIgnoreInsensitive(repoPath, [p.fileGlob]).length > 0
   );
 
   if (relevantTypes.length === 0) {

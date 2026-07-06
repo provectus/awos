@@ -82,3 +82,19 @@ export function dropIgnored(repoPath: string, paths: string[]): string[] {
     return !dirPrefixes.some((d) => rel.startsWith(d));
   });
 }
+
+/**
+ * Drop only the built-in always-ignored dirs (tool infrastructure like
+ * `.claude/worktrees/`), keeping gitignore-covered files visible. For checks
+ * whose PURPOSE is to examine ignored-ness (AS-14 sensitive-file coverage):
+ * an ignore-honoring walk can never see a correctly-gitignored `*.pem`, which
+ * made AS-14's PASS unreachable — covered file → invisible → SKIP, visible
+ * file → by definition uncovered → FAIL.
+ */
+export function dropAlwaysIgnored(repoPath: string, paths: string[]): string[] {
+  const prefix = `${repoPath.replace(/\/+$/, '')}/`;
+  return paths.filter((p) => {
+    const rel = p.startsWith(prefix) ? p.slice(prefix.length) : p;
+    return !ALWAYS_IGNORED_DIR_PREFIXES.some((d) => rel.startsWith(d));
+  });
+}

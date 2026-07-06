@@ -860,3 +860,64 @@ test('SDD-04 counts squash-merged PRs as feature work even when branches were de
   );
   assert.equal(r.status, 'PASS', '75% spec-driven feature work ≥ 70% → PASS');
 });
+
+// ---------------------------------------------------------------------------
+// Verdict-threshold params (standards.toml pass_at/warn_at/fail_at)
+// ---------------------------------------------------------------------------
+
+test('SDD-04: warn_at param is honored — 0.5 ratio is WARN by default but FAIL with warn_at 0.6', () => {
+  const t = tmp();
+  gitInit(t);
+  // 2 spec branches, 2 plain → ratio = 0.5
+  addBranch(t, 'feat-one', 'context/spec/001-one/functional-spec.md');
+  addBranch(t, 'feat-two', 'context/spec/002-two/functional-spec.md');
+  addBranch(t, 'feat-three');
+  addBranch(t, 'feat-four');
+  assert.equal(
+    detectBranchSpecRatio(t).status,
+    'WARN',
+    '0.5 ratio must be WARN under the default warn_at 0.4'
+  );
+  assert.equal(
+    detectBranchSpecRatio(t, { warn_at: 0.6 }).status,
+    'FAIL',
+    'warn_at param must be honored: raising warn_at to 0.6 must flip to FAIL'
+  );
+});
+
+test('SDD-07: pass_at/warn_at params are honored — 2/3 annotated flips WARN→PASS and WARN→FAIL', () => {
+  const t = tmp();
+  const specDir = join(t, 'context', 'spec', '001-params');
+  mkdirSync(specDir, { recursive: true });
+  writeFileSync(
+    join(specDir, 'tasks.md'),
+    [
+      '# Tasks',
+      '',
+      '- [ ] Task one **[Agent: backend-development]**',
+      '- [ ] Task two **[Agent: frontend-design]**',
+      '- [ ] Task three (no annotation)',
+    ].join('\n') + '\n'
+  );
+  // 2/3 ≈ 0.667: WARN under defaults (pass_at 0.7 / warn_at 0.4)
+  assert.equal(
+    detectAgentAnnotations(t).status,
+    'WARN',
+    '0.667 ratio must be WARN under default pass_at 0.7 / warn_at 0.4'
+  );
+  assert.equal(
+    detectAgentAnnotations(t, { pass_at: 0.6 }).status,
+    'PASS',
+    'pass_at param must be honored: lowering pass_at to 0.6 must flip to PASS'
+  );
+  const r = detectAgentAnnotations(t, { warn_at: 0.7 });
+  assert.equal(
+    r.status,
+    'FAIL',
+    'warn_at param must be honored: raising warn_at to 0.7 must flip to FAIL'
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('threshold: 70%')),
+    `evidence must cite the resolved pass_at threshold; got: ${r.evidence[0]}`
+  );
+});

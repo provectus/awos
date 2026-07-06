@@ -679,3 +679,36 @@ test('DETECTORS[2105] returns same result as detectFileSizes', () => {
   assert.equal(viaMap.status, direct.status);
   assert.equal(viaMap.method, 'computed');
 });
+
+// ---------------------------------------------------------------------------
+// Verdict-threshold params (standards.toml pass_at/warn_at/fail_at)
+// ---------------------------------------------------------------------------
+
+test('ARCH-06: fail_at/warn_at params are honored — 20% oversized share flips WARN→FAIL and WARN→PASS', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'src'));
+  // 4 small files + 1 oversized (700 lines > any per-language threshold) → share 0.2
+  for (let i = 0; i < 4; i++) {
+    writeFileSync(join(t, 'src', `small${i}.py`), 'x = 1\n');
+  }
+  writeFileSync(
+    join(t, 'src', 'big.py'),
+    Array.from({ length: 700 }, (_, i) => `v${i} = ${i}`).join('\n') + '\n'
+  );
+  // Default steps (lower-is-better): 0.2 is > warn_at (0.1) but <= fail_at (0.3) → WARN
+  assert.equal(
+    detectFileSizes(t).status,
+    'WARN',
+    '0.2 oversized share must be WARN under default fail_at 0.3 / warn_at 0.1'
+  );
+  assert.equal(
+    detectFileSizes(t, { fail_at: 0.15 }).status,
+    'FAIL',
+    'fail_at param must be honored: lowering fail_at to 0.15 must flip to FAIL'
+  );
+  assert.equal(
+    detectFileSizes(t, { warn_at: 0.25 }).status,
+    'PASS',
+    'warn_at param must be honored: raising warn_at to 0.25 must flip to PASS'
+  );
+});

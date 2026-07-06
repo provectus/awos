@@ -1235,6 +1235,71 @@ test('standards.toml exists and matches the category/band schema', () => {
       `reliability_default must be one of minimal|maximal|not-reliable: ${m}`
     );
   }
+  // Verdict-step thresholds: detectors read their PASS/WARN/FAIL steps from
+  // pass_at / warn_at / fail_at fields, not from code. Validate every
+  // declared field and require them on the categories whose steps were
+  // lifted out of detector code (2026-07-06 standards refresh follow-up).
+  for (const m of src.matchAll(
+    /\n\[category\.([^.\]]+)\]([\s\S]*?)(?=\n\[|$)/g
+  )) {
+    const [, slug, b] = m;
+    const read = (key) => {
+      const km = b.match(new RegExp(`^${key}\\s*=\\s*([\\d.]+)`, 'm'));
+      return km ? Number(km[1]) : null;
+    };
+    const passAt = read('pass_at');
+    const warnAt = read('warn_at');
+    const failAt = read('fail_at');
+    for (const [k, v] of [
+      ['pass_at', passAt],
+      ['warn_at', warnAt],
+      ['fail_at', failAt],
+    ]) {
+      assert.ok(
+        v === null || (v > 0 && v < 1),
+        `[category.${slug}] ${k} must be a share in (0, 1); got ${v}`
+      );
+    }
+    if (passAt !== null && warnAt !== null) {
+      assert.ok(
+        warnAt < passAt,
+        `[category.${slug}] warn_at (${warnAt}) must be below pass_at (${passAt})`
+      );
+    }
+    if (failAt !== null && warnAt !== null) {
+      assert.ok(
+        warnAt < failAt,
+        `[category.${slug}] warn_at (${warnAt}) must be below fail_at (${failAt}) — bad-share checks WARN before they FAIL`
+      );
+    }
+    if (failAt !== null && passAt !== null) {
+      assert.fail(
+        `[category.${slug}] declares both pass_at and fail_at — a check grades one direction, not both`
+      );
+    }
+  }
+  for (const slug of [
+    'quality_assurance_qa_01',
+    'appsec_auth_on_mutations',
+    'software_best_practices_sbp_03',
+    'software_best_practices_sbp_05',
+    'sbp_vertical_delivery',
+    'spec_driven_development_sdd_04',
+    'spec_driven_development_sdd_07',
+    'supply_chain_security_scs_03',
+    'code_architecture_arch_06',
+  ]) {
+    const block = src.match(
+      new RegExp(`\\n\\[category\\.${slug}\\]([\\s\\S]*?)(?=\\n\\[|$)`)
+    );
+    assert.ok(block, `[category.${slug}] must exist`);
+    assert.match(
+      block[1],
+      /^\s*(pass_at|fail_at|warn_at)\s*=/m,
+      `[category.${slug}] must declare its verdict thresholds (pass_at/warn_at or fail_at/warn_at) — they were lifted out of detector code so the linter can police them`
+    );
+  }
+
   // Scoring sub-tables: every [category.<slug>.scoring] declares the full
   // curve schema — scale, anchors, and a basis with the locked vocabulary.
   const scoringBlocks = [

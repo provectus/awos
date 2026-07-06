@@ -647,8 +647,9 @@ export function detectBranchSpecRatio(
   repoPath: string,
   params?: unknown
 ): ReturnType<typeof makeResult> {
-  const threshold =
-    (params as { threshold?: number } | undefined)?.threshold ?? 0.7;
+  const p = params as { threshold?: number; warn_at?: number } | undefined;
+  const threshold = p?.threshold ?? 0.7;
+  const warnAt = p?.warn_at ?? 0.4;
   const thresholdPct = Math.round(threshold * 100);
 
   // Preferred denominator: FEATURE work actually MERGED in the window (merge
@@ -760,7 +761,7 @@ export function detectBranchSpecRatio(
     );
   }
 
-  if (ratio >= 0.4) {
+  if (ratio >= warnAt) {
     return makeResult(
       'WARN',
       ratio,
@@ -981,8 +982,12 @@ const AGENT_ANNOTATION_RX = /\*\*\[Agent:\s*[^\]]+\]\*\*/;
 
 export function detectAgentAnnotations(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
+  const p = params as { pass_at?: number; warn_at?: number } | undefined;
+  const passAt = p?.pass_at ?? 0.7;
+  const warnAt = p?.warn_at ?? 0.4;
+  const passAtPct = Math.round(passAt * 100);
   const specDirs = listSpecDirs(repoPath);
 
   let totalTasks = 0;
@@ -1016,22 +1021,22 @@ export function detectAgentAnnotations(
     `${annotatedTasks}/${totalTasks} task lines have **[Agent: ...]** annotations (${Math.round(ratio * 100)}%)`,
   ];
 
-  if (ratio >= 0.7) {
+  if (ratio >= passAt) {
     return makeResult('PASS', ratio, [
-      `${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: 70%)`,
+      `${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`,
       ...evidence,
     ]);
   }
 
-  if (ratio >= 0.4) {
+  if (ratio >= warnAt) {
     return makeResult('WARN', ratio, [
-      `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (below 70%)`,
+      `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (below ${passAtPct}%)`,
       ...evidence,
     ]);
   }
 
   return makeResult('FAIL', ratio, [
-    `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: 70%)`,
+    `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`,
     ...evidence,
   ]);
 }

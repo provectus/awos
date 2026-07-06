@@ -81,9 +81,11 @@ export function detectTestInfrastructure(
   repoPath: string,
   params?: unknown
 ): ReturnType<typeof makeResult> {
-  const threshold =
-    (params as { threshold?: number } | undefined)?.threshold ?? 0.6;
+  const p = params as { threshold?: number; warn_at?: number } | undefined;
+  const threshold = p?.threshold ?? 0.6;
+  const warnAt = p?.warn_at ?? 0.3;
   const thresholdPct = Math.round(threshold * 100);
+  const warnAtPct = Math.round(warnAt * 100);
 
   // Collect test files
   const testFiles = iterFiles(repoPath, TEST_FILE_GLOBS, SOURCE_IGNORE);
@@ -131,7 +133,7 @@ export function detectTestInfrastructure(
     );
   }
 
-  if (ratio >= 0.3) {
+  if (ratio >= warnAt) {
     return makeResult(
       'WARN',
       ratio,
@@ -149,7 +151,7 @@ export function detectTestInfrastructure(
     'FAIL',
     ratio,
     [
-      `test coverage proxy: ${pct}% — insufficient test coverage (below 30% threshold)`,
+      `test coverage proxy: ${pct}% — insufficient test coverage (below ${warnAtPct}% threshold)`,
       ...evidence,
     ],
     'computed',

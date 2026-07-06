@@ -184,8 +184,11 @@ function samplePythonAnnotationRatio(repoPath: string): number | null {
 
 export function detectTypeSafety(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
+  const p = params as { pass_at?: number; warn_at?: number } | undefined;
+  const passAt = p?.pass_at ?? 0.6;
+  const warnAt = p?.warn_at ?? 0.25;
   // Check for mypy.ini / pyrightconfig.json / sorbet
   const pyTyping = iterFiles(repoPath, TYPE_SAFETY_CONFIGS);
   if (pyTyping.length) {
@@ -239,12 +242,12 @@ export function detectTypeSafety(
   const ratio = samplePythonAnnotationRatio(repoPath);
   if (ratio !== null) {
     const pct = Math.round(ratio * 100);
-    if (ratio >= 0.6) {
+    if (ratio >= passAt) {
       return makeResult('PASS', pct, [
         `${pct}% of Python function signatures carry return-type annotations (no mypy/pyright config, but well-typed)`,
       ]);
     }
-    if (ratio >= 0.25) {
+    if (ratio >= warnAt) {
       return makeResult('WARN', pct, [
         `${pct}% of Python function signatures carry return-type annotations — some typing present but not enforced by a type checker`,
       ]);
@@ -453,8 +456,11 @@ const SOURCE_GLOBS = [
 
 export function detectErrorHandling(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
+  const p = params as { fail_at?: number; warn_at?: number } | undefined;
+  const failAt = p?.fail_at ?? 0.5;
+  const warnAt = p?.warn_at ?? 0.1;
   const files = iterFiles(repoPath, SOURCE_GLOBS);
   const allSamples: BlockSample[] = files.flatMap((f) =>
     analyseFile(repoPath, f)
@@ -473,13 +479,13 @@ export function detectErrorHandling(
     .slice(0, 10)
     .map((s) => `${s.file}:${s.line} empty or unhandled catch/except block`);
 
-  if (badRatio >= 0.5) {
+  if (badRatio >= failAt) {
     return makeResult('FAIL', badSamples.length, [
       `${badSamples.length}/${allSamples.length} catch/except blocks are empty or unhandled (${Math.round(badRatio * 100)}%)`,
       ...evidence,
     ]);
   }
-  if (badRatio >= 0.1) {
+  if (badRatio >= warnAt) {
     return makeResult('WARN', badSamples.length, [
       `${badSamples.length}/${allSamples.length} catch/except blocks are empty or unhandled (${Math.round(badRatio * 100)}%) — mixed patterns`,
       ...evidence,

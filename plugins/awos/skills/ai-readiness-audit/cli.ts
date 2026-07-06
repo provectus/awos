@@ -219,7 +219,23 @@ async function main(): Promise<void> {
             .sort((a, b) => a - b),
         });
       }
-      printJson(fn(repoPath));
+      // Pass the category's declared verdict thresholds, exactly like the
+      // audit-core path — standards.toml is the source of truth for them.
+      const detectStandards = loadStandards(standardsTomlPath());
+      const detectCats = (detectStandards['category'] ?? {}) as Record<
+        string,
+        Record<string, unknown>
+      >;
+      const cat = Object.values(detectCats).find((c) => c['code'] === code);
+      printJson(
+        fn(repoPath, {
+          threshold: cat?.['threshold'],
+          threshold_days: cat?.['threshold_days'],
+          pass_at: cat?.['pass_at'],
+          warn_at: cat?.['warn_at'],
+          fail_at: cat?.['fail_at'],
+        })
+      );
       break;
     }
 

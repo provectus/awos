@@ -523,3 +523,82 @@ test('DETECTORS[2706] returns same result as detectExceptClauseDefect', () => {
   assert.equal(viaMap.status, direct.status);
   assert.equal(viaMap.method, 'detected');
 });
+
+// ---------------------------------------------------------------------------
+// Verdict-threshold params (standards.toml pass_at/warn_at/fail_at)
+// ---------------------------------------------------------------------------
+
+test('SBP-03: pass_at param is honored — 50% annotation ratio flips WARN→PASS with pass_at 0.5', () => {
+  const t = tmp();
+  // No type-checker config — falls through to the Python annotation sample.
+  // 1 of 2 defs annotated → ratio 0.5.
+  writeFileSync(
+    join(t, 'app.py'),
+    'def typed(x) -> int:\n    return x\n\ndef untyped(x):\n    return x\n'
+  );
+  // Default steps: 0.5 is >= warn_at (0.25) but < pass_at (0.6) → WARN
+  assert.equal(
+    detectTypeSafety(t).status,
+    'WARN',
+    '0.5 annotation ratio must be WARN under default pass_at 0.6'
+  );
+  assert.equal(
+    detectTypeSafety(t, { pass_at: 0.5 }).status,
+    'PASS',
+    'pass_at param must be honored: lowering pass_at to 0.5 must flip to PASS'
+  );
+  assert.equal(
+    detectTypeSafety(t, { warn_at: 0.6 }).status,
+    'FAIL',
+    'warn_at param must be honored: raising warn_at to 0.6 must flip to FAIL'
+  );
+});
+
+test('SBP-05: fail_at param is honored — 25% bad-catch ratio flips WARN→FAIL with fail_at 0.2', () => {
+  const t = tmp();
+  // 4 except blocks: 1 empty (bad), 3 re-raising (handled) → badRatio 0.25.
+  writeFileSync(
+    join(t, 'handlers.py'),
+    [
+      'def a():',
+      '    try:',
+      '        f()',
+      '    except ValueError:',
+      '        pass',
+      '',
+      'def b():',
+      '    try:',
+      '        f()',
+      '    except ValueError:',
+      '        raise',
+      '',
+      'def c():',
+      '    try:',
+      '        f()',
+      '    except ValueError:',
+      '        raise',
+      '',
+      'def d():',
+      '    try:',
+      '        f()',
+      '    except ValueError:',
+      '        raise',
+    ].join('\n') + '\n'
+  );
+  // Default steps (lower-is-better): 0.25 is >= warn_at (0.1) but < fail_at (0.5) → WARN
+  assert.equal(
+    detectErrorHandling(t).status,
+    'WARN',
+    '0.25 bad ratio must be WARN under default fail_at 0.5 / warn_at 0.1'
+  );
+  assert.equal(
+    detectErrorHandling(t, { fail_at: 0.2 }).status,
+    'FAIL',
+    'fail_at param must be honored: lowering fail_at to 0.2 must flip to FAIL'
+  );
+  assert.equal(
+    detectErrorHandling(t, { warn_at: 0.3 }).status,
+    'PASS',
+    'warn_at param must be honored: raising warn_at to 0.3 must flip to PASS'
+  );
+});

@@ -191,8 +191,12 @@ function branchLayerCount(
 
 export function detectVerticalDelivery(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
+  const p = params as { pass_at?: number; warn_at?: number } | undefined;
+  const passAt = p?.pass_at ?? 0.5;
+  const warnAt = p?.warn_at ?? 0.25;
+  const passAtPct = Math.round(passAt * 100);
   const branches = listFeatureBranches(repoPath);
 
   if (branches.length === 0) {
@@ -243,24 +247,24 @@ export function detectVerticalDelivery(
     ...singleLayerBranches.slice(0, 5).map((b) => `single-layer branch: ${b}`),
   ];
 
-  if (ratio >= 0.5) {
+  if (ratio >= passAt) {
     return makeResult(
       'PASS',
       ratio,
       [
-        `${Math.round(ratio * 100)}% of feature branches touch multiple layers (threshold: 50%)`,
+        `${Math.round(ratio * 100)}% of feature branches touch multiple layers (threshold: ${passAtPct}%)`,
         ...evidence,
       ],
       'computed'
     );
   }
 
-  if (ratio >= 0.25) {
+  if (ratio >= warnAt) {
     return makeResult(
       'WARN',
       ratio,
       [
-        `only ${Math.round(ratio * 100)}% of feature branches touch multiple layers (below 50%)`,
+        `only ${Math.round(ratio * 100)}% of feature branches touch multiple layers (below ${passAtPct}%)`,
         ...evidence,
       ],
       'computed'
@@ -271,7 +275,7 @@ export function detectVerticalDelivery(
     'FAIL',
     ratio,
     [
-      `only ${Math.round(ratio * 100)}% of feature branches touch multiple layers (threshold: 50%)`,
+      `only ${Math.round(ratio * 100)}% of feature branches touch multiple layers (threshold: ${passAtPct}%)`,
       ...evidence,
     ],
     'computed'

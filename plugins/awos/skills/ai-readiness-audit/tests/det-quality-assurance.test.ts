@@ -753,3 +753,35 @@ test('DETECTORS[2509] dispatches to detectMlIterationTests', () => {
   assert.equal(r.status, 'SKIP');
   assert.equal(r.method, 'detected');
 });
+
+// ---------------------------------------------------------------------------
+// Verdict-threshold params (standards.toml pass_at/warn_at/fail_at)
+// ---------------------------------------------------------------------------
+
+test('QA-01: warn_at param is honored — 40% ratio is WARN by default but FAIL with warn_at 0.5', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'src'));
+  for (let i = 0; i < 10; i++) {
+    writeFileSync(join(t, 'src', `m${i}.ts`), `export const x = ${i};\n`);
+  }
+  for (let i = 0; i < 4; i++) {
+    writeFileSync(join(t, 'src', `m${i}.test.ts`), `test("m${i}", () => {})\n`);
+  }
+  // 4/10 = 0.4 — WARN with the default warn_at (0.3)
+  assert.equal(
+    detectTestInfrastructure(t).status,
+    'WARN',
+    '0.4 ratio must be WARN under the default warn_at 0.3'
+  );
+  // Raising warn_at above the ratio must flip the verdict to FAIL
+  const r = detectTestInfrastructure(t, { warn_at: 0.5 });
+  assert.equal(
+    r.status,
+    'FAIL',
+    'warn_at param must be honored: 0.4 ratio with warn_at 0.5 must FAIL'
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('below 50% threshold')),
+    `FAIL evidence must cite the resolved warn_at (50%), got: ${r.evidence[0]}`
+  );
+});

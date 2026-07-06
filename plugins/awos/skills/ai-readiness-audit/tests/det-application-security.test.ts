@@ -620,3 +620,36 @@ test('DETECTORS map does not include judgment codes 3009/3010', () => {
     'code 3010 (insecure design) is judgment — must not have a detector'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Verdict-threshold params (standards.toml pass_at/warn_at/fail_at)
+// ---------------------------------------------------------------------------
+
+test('AS-06: pass_at/warn_at params are honored — 50% coverage flips WARN→PASS and WARN→FAIL', () => {
+  const t = tmp();
+  // One mutation-route file with auth, one without → coverage = 1/2 = 0.5
+  writeFileSync(
+    join(t, 'secured.py'),
+    "@login_required\n@app.post('/api/items')\ndef create_item():\n    pass\n"
+  );
+  writeFileSync(
+    join(t, 'open.py'),
+    "@app.delete('/api/items/<id>')\ndef delete_item(id):\n    pass\n"
+  );
+  // Default steps: 0.5 is >= warn_at (0.3) but < pass_at (0.7) → WARN
+  assert.equal(
+    detectAuthOnMutations(t).status,
+    'WARN',
+    '0.5 coverage must be WARN under default pass_at 0.7 / warn_at 0.3'
+  );
+  assert.equal(
+    detectAuthOnMutations(t, { pass_at: 0.5 }).status,
+    'PASS',
+    'pass_at param must be honored: lowering pass_at to 0.5 must flip to PASS'
+  );
+  assert.equal(
+    detectAuthOnMutations(t, { warn_at: 0.6 }).status,
+    'FAIL',
+    'warn_at param must be honored: raising warn_at to 0.6 must flip to FAIL'
+  );
+});

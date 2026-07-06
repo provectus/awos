@@ -594,3 +594,36 @@ test('DETECTORS[2907] dispatches to detectDependencyAttackSurface', () => {
   assert.equal(r.status, 'PASS');
   assert.equal(r.method, 'computed');
 });
+
+// ---------------------------------------------------------------------------
+// Verdict-threshold params (standards.toml pass_at/warn_at/fail_at)
+// ---------------------------------------------------------------------------
+
+test('SCS-03: fail_at/warn_at params are honored — 20% ranged deps flips WARN→FAIL and WARN→PASS', () => {
+  const t = tmp();
+  // 2 of 10 dependencies use open-ended ranges → ratio 0.2.
+  const deps: Record<string, string> = {};
+  for (let i = 0; i < 8; i++) deps[`pinned-${i}`] = '1.0.0';
+  deps['ranged-a'] = '^2.0.0';
+  deps['ranged-b'] = '~3.1.0';
+  writeFileSync(
+    join(t, 'package.json'),
+    JSON.stringify({ dependencies: deps })
+  );
+  // Default steps (lower-is-better): 0.2 is >= warn_at (0.1) but < fail_at (0.3) → WARN
+  assert.equal(
+    detectPinnedVersions(t).status,
+    'WARN',
+    '0.2 ranged ratio must be WARN under default fail_at 0.3 / warn_at 0.1'
+  );
+  assert.equal(
+    detectPinnedVersions(t, { fail_at: 0.2 }).status,
+    'FAIL',
+    'fail_at param must be honored: lowering fail_at to 0.2 must flip to FAIL'
+  );
+  assert.equal(
+    detectPinnedVersions(t, { warn_at: 0.25 }).status,
+    'PASS',
+    'warn_at param must be honored: raising warn_at to 0.25 must flip to PASS'
+  );
+});

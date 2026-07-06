@@ -429,6 +429,12 @@ interface Category {
   last_verified?: string;
   threshold?: number;
   threshold_days?: number;
+  /** Verdict-step thresholds (0..1 shares) — see references/standards.md.
+   * pass_at/warn_at grade higher-is-better shares; fail_at/warn_at grade
+   * lower-is-better (bad-share) checks. Detectors read them via params. */
+  pass_at?: number;
+  warn_at?: number;
+  fail_at?: number;
 }
 
 // The check record audit-core writes — the writer-truth shape from
@@ -995,6 +1001,9 @@ function buildCheck(
       r = detectors[c.code](repoPath, {
         threshold: c.threshold,
         threshold_days: c.threshold_days,
+        pass_at: c.pass_at,
+        warn_at: c.warn_at,
+        fail_at: c.fail_at,
       });
     } catch (err) {
       r = {

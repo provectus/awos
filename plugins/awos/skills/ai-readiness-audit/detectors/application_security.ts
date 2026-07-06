@@ -560,8 +560,11 @@ const AUTH_DECORATOR_RX =
 
 export function detectAuthOnMutations(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
+  const p = params as { pass_at?: number; warn_at?: number } | undefined;
+  const passAt = p?.pass_at ?? 0.7;
+  const warnAt = p?.warn_at ?? 0.3;
   const filesWithMutations: string[] = [];
   const filesWithAuth: string[] = [];
 
@@ -594,7 +597,7 @@ export function detectAuthOnMutations(
   // score: continuous auth-coverage ratio clamped to [0,1]
   const score = Math.min(1, Math.max(0, coverage));
 
-  if (coverage >= 0.7) {
+  if (coverage >= passAt) {
     return makeResult(
       'PASS',
       filesWithAuth.length,
@@ -608,7 +611,7 @@ export function detectAuthOnMutations(
     );
   }
 
-  if (coverage >= 0.3) {
+  if (coverage >= warnAt) {
     return makeResult(
       'WARN',
       filesWithAuth.length,

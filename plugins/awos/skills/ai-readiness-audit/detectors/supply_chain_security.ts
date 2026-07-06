@@ -389,8 +389,11 @@ function countRequirementsTxtRanges(content: string): {
 
 export function detectPinnedVersions(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
+  const p = params as { fail_at?: number; warn_at?: number } | undefined;
+  const failAt = p?.fail_at ?? 0.3;
+  const warnAt = p?.warn_at ?? 0.1;
   let totalDeps = 0;
   let rangedDeps = 0;
   const evidence: string[] = [];
@@ -456,7 +459,7 @@ export function detectPinnedVersions(
 
   const ratio = rangedDeps / totalDeps;
 
-  if (ratio >= 0.3) {
+  if (ratio >= failAt) {
     return makeResult(
       'FAIL',
       rangedDeps,
@@ -468,7 +471,7 @@ export function detectPinnedVersions(
     );
   }
 
-  if (ratio >= 0.1) {
+  if (ratio >= warnAt) {
     return makeResult(
       'WARN',
       rangedDeps,

@@ -575,9 +575,10 @@ export function detectNamingConventions(
 // detectFileSizes — category 2105 (ARCH-06, method: computed)
 //
 // Computes the percentage of source files that exceed a per-language size threshold (default 300 lines).
-// PASS if <= 10% of files are over the threshold.
-// WARN if 11–30%.
-// FAIL if > 30%.
+// Verdict steps come from params (standards.toml), with code defaults:
+// PASS if the oversized share is <= warn_at (default 10%).
+// WARN if the share is above warn_at but <= fail_at (default 30%).
+// FAIL if the share is above fail_at.
 // Value is the exact ratio (0–1 float, rounded to 10 decimal places for stability).
 // ---------------------------------------------------------------------------
 
@@ -590,8 +591,11 @@ function countLines(filePath: string): number {
 
 export function detectFileSizes(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
+  const p = params as { fail_at?: number; warn_at?: number } | undefined;
+  const failAt = p?.fail_at ?? 0.3;
+  const warnAt = p?.warn_at ?? 0.1;
   const files = iterFiles(repoPath, FILE_SIZE_GLOBS);
 
   if (files.length === 0) {
@@ -637,12 +641,12 @@ export function detectFileSizes(
     ...oversized.slice(0, 10).map((f) => `${f.file}: ${f.lines} lines`),
   ];
 
-  if (ratio > 0.3) {
+  if (ratio > failAt) {
     return makeResult(
       'FAIL',
       ratio,
       [
-        `${Math.round(ratio * 100)}% of source files exceed their per-language size threshold (threshold: 30%)`,
+        `${Math.round(ratio * 100)}% of source files exceed their per-language size threshold (threshold: ${Math.round(failAt * 100)}%)`,
         ...evidence,
       ],
       'computed',
@@ -650,12 +654,12 @@ export function detectFileSizes(
       1.0
     );
   }
-  if (ratio > 0.1) {
+  if (ratio > warnAt) {
     return makeResult(
       'WARN',
       ratio,
       [
-        `${Math.round(ratio * 100)}% of source files exceed their per-language size threshold (threshold: 10%)`,
+        `${Math.round(ratio * 100)}% of source files exceed their per-language size threshold (threshold: ${Math.round(warnAt * 100)}%)`,
         ...evidence,
       ],
       'computed',

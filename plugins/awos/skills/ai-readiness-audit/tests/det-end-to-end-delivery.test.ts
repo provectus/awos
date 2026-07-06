@@ -325,3 +325,63 @@ test('DETECTORS[2304] returns same result as detectCrossLayerTooling', () => {
   assert.equal(viaMap.status, direct.status);
   assert.equal(viaMap.method, 'detected');
 });
+
+// ---------------------------------------------------------------------------
+// Verdict-threshold params (standards.toml pass_at/warn_at/fail_at)
+// ---------------------------------------------------------------------------
+
+test('detectVerticalDelivery: pass_at param is honored — 0.5 ratio is PASS by default but WARN with pass_at 0.6', () => {
+  const t = tmp();
+  const git = (args: string[]) =>
+    execFileSync('git', args, { cwd: t, encoding: 'utf8', stdio: 'pipe' });
+  try {
+    // Two layers present on trunk: api/ (hasApi) + frontend/ (hasUi)
+    mkdirSync(join(t, 'api'), { recursive: true });
+    mkdirSync(join(t, 'frontend'), { recursive: true });
+    writeFileSync(join(t, 'api', 'routes.ts'), 'export const routes = [];\n');
+    writeFileSync(
+      join(t, 'frontend', 'App.tsx'),
+      'export default function App() {}\n'
+    );
+    git(['init', '-b', 'main']);
+    git(['config', 'user.email', 'test@test.com']);
+    git(['config', 'user.name', 'Test']);
+    git(['add', '.']);
+    git(['commit', '-m', 'initial']);
+    // Vertical branch: touches api/ AND frontend/ (2 layers)
+    git(['checkout', '-b', 'feat/vertical']);
+    writeFileSync(join(t, 'api', 'items.ts'), 'export const items = [];\n');
+    writeFileSync(
+      join(t, 'frontend', 'Items.tsx'),
+      'export function Items() {}\n'
+    );
+    git(['add', '.']);
+    git(['commit', '-m', 'vertical slice']);
+    git(['checkout', 'main']);
+    // Flat branch: touches api/ only (1 layer)
+    git(['checkout', '-b', 'feat/flat']);
+    writeFileSync(join(t, 'api', 'flat.ts'), 'export const flat = 1;\n');
+    git(['add', '.']);
+    git(['commit', '-m', 'api-only change']);
+    git(['checkout', 'main']);
+  } catch {
+    return; // git unavailable — skip gracefully
+  }
+
+  // 1 of 2 feature branches is vertical → ratio 0.5 → PASS at default pass_at 0.5
+  assert.equal(
+    detectVerticalDelivery(t).status,
+    'PASS',
+    '0.5 vertical ratio must be PASS under the default pass_at 0.5'
+  );
+  const r = detectVerticalDelivery(t, { pass_at: 0.6 });
+  assert.equal(
+    r.status,
+    'WARN',
+    'pass_at param must be honored: raising pass_at to 0.6 must flip to WARN'
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('below 60%')),
+    `WARN evidence must cite the resolved pass_at (60%); got: ${r.evidence[0]}`
+  );
+});

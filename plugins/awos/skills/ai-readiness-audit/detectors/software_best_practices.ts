@@ -257,7 +257,7 @@ export function detectTypeSafety(
 }
 
 // ---------------------------------------------------------------------------
-// detectCiCd — category 2703 (method: detected, SBP-05)
+// detectCiCd — category 2703 (method: detected, SBP-04)
 //
 // PASS if any recognised CI/CD pipeline config file or directory is present.
 // Uses iterFiles with bare filename patterns (stripped of path components)
@@ -501,8 +501,8 @@ export const DETECTORS: Record<
   2700: detectLinting, // SBP-01 linting configured
   2701: detectFormatting, // SBP-02 formatting automated
   2702: detectTypeSafety, // SBP-03 type safety enforced
-  2703: detectCiCd, // SBP-05 CI/CD pipeline exists
-  2704: detectErrorHandling, // SBP-06 error-handling consistency
-  2705: detectLockfiles, // SBP-07 dependency lockfiles
-  2706: detectExceptClauseDefect, // SBP-06 sibling: Python-2 except-clause syntax
+  2703: detectCiCd, // SBP-04 CI/CD pipeline exists
+  2704: detectErrorHandling, // SBP-05 error-handling consistency
+  2705: detectLockfiles, // SBP-06 dependency lockfiles
+  2706: detectExceptClauseDefect, // SBP-05 sibling: Python-2 except-clause syntax
 };

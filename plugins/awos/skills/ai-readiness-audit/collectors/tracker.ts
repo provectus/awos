@@ -11,13 +11,13 @@ export interface TicketRecord {
   status?: string;
   created_at?: string;
   resolved_at?: string;
-  /** Count of direct sub-tasks (e.g. Jira issue.fields.subtasks.length). Used by ADP-I4. */
+  /** Count of direct sub-tasks (e.g. Jira issue.fields.subtasks.length). Used by ADP-12. */
   subtask_count?: number;
-  /** Parent ticket key (e.g. Jira issue.fields.parent?.key). Used by ADP-I4. */
+  /** Parent ticket key (e.g. Jira issue.fields.parent?.key). Used by ADP-12. */
   parent?: string | null;
-  /** Character count of the ticket description (size/structure signal only — no raw text). Used by ADP-I5. */
+  /** Character count of the ticket description (size/structure signal only — no raw text). Used by ADP-13. */
   description_length?: number;
-  /** Whether the ticket body contains acceptance criteria (structure signal only — no raw text). Used by ADP-I5. */
+  /** Whether the ticket body contains acceptance criteria (structure signal only — no raw text). Used by ADP-13. */
   has_acceptance_criteria?: boolean;
   [key: string]: unknown;
 }

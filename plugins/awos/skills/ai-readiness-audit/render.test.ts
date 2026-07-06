@@ -1347,7 +1347,7 @@ test('renderHtml wraps every headline metric label in a tooltip (tooltip on labe
 // ── R4: SKIP reason renders in the evidence column ────────────────────────
 test('renderHtml shows the skip reason in the evidence column instead of a bare "—"', () => {
   const skip = makeCheck({
-    check_id: 'ADP-15',
+    check_id: 'ADP-08',
     status: 'SKIP',
     applies: false,
     evidence: [

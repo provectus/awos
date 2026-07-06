@@ -7,7 +7,7 @@ import { ALL_SOURCE_GLOBS } from '../languages.ts';
 import { resolveTrunk } from '../collectors/git.ts';
 
 // ---------------------------------------------------------------------------
-// detectVerticalDelivery — category 2300 (SBP-09, method: computed)
+// detectVerticalDelivery — category 2300 (SBP-08, method: computed)
 //
 // applies_when: topology.is_monorepo
 //
@@ -378,7 +378,7 @@ export function detectBidirectionalLinks(
 }
 
 // ---------------------------------------------------------------------------
-// detectLayerCoverage — category 2303 (SBP-10, method: detected)
+// detectLayerCoverage — category 2303 (SBP-09, method: detected)
 //
 // applies_when: topology.has_multiple_layers
 //
@@ -428,7 +428,7 @@ export function detectLayerCoverage(
 
   if (layerCount < 2) {
     return makeResult('SKIP', layerCount, [
-      'fewer than 2 distinct layers detected — single-layer project, SBP-10 not applicable',
+      'fewer than 2 distinct layers detected — single-layer project, SBP-09 not applicable',
       hasApi ? `API layer: ${apiSignal}` : 'API layer: not detected',
       hasUi ? `UI layer: ${uiSignal}` : 'UI layer: not detected',
       hasDb ? `DB layer: ${dbSignal}` : 'DB layer: not detected',
@@ -545,9 +545,9 @@ export const DETECTORS: Record<
   number,
   (repoPath: string, params?: unknown) => ReturnType<typeof makeResult>
 > = {
-  2300: detectVerticalDelivery, // SBP-09 vertical delivery (computed)
+  2300: detectVerticalDelivery, // SBP-08 vertical delivery (computed)
   // 2301 intentionally omitted — E2E-02 (name-based layer-split) removed
   2302: detectBidirectionalLinks, // DOC-07 spec↔impl bidirectional links
-  2303: detectLayerCoverage, // SBP-10 API + UI + DB layer coverage
+  2303: detectLayerCoverage, // SBP-09 API + UI + DB layer coverage
   2304: detectCrossLayerTooling, // ARCH-07 cross-layer unified tooling
 };

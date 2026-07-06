@@ -676,7 +676,7 @@ test('patch-report: merges blocks into audit.json and writes recommendations.md'
           priority: 'P1',
           title: 'Add CI',
           dimension: 'software-best-practices',
-          check_id: 'SBP-05',
+          check_id: 'SBP-04',
           effort: 'S',
           detail: 'Set up a CI pipeline.',
         },

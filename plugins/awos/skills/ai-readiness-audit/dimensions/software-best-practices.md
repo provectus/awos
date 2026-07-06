@@ -44,7 +44,7 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 
 > _Test infrastructure and coverage are evaluated in the **Quality Assurance** dimension (`quality-assurance.md`), which provides a full testing pyramid analysis._
 
-### SBP-05: CI/CD pipeline exists
+### SBP-04: CI/CD pipeline exists
 
 - **What:** Automated build/test/deploy pipeline is configured
 - **How:** Check for `.gitlab-ci.yml`, `.github/workflows/`, `Jenkinsfile`, or equivalent CI config files
@@ -54,7 +54,7 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Severity:** high
 - **Category:** 2703
 
-### SBP-06: Error handling patterns are consistent
+### SBP-05: Error handling patterns are consistent
 
 - **What:** The codebase follows consistent error handling rather than silent swallowing
 - **How:** Sample 5 catch blocks across backend and frontend. Check whether errors are logged, re-thrown, or silently ignored. Look for global error handlers.
@@ -64,17 +64,7 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Severity:** high
 - **Category:** 2704
 
-### SBP-08: No Python-2 except-clause syntax
-
-- **What:** Python source contains no Python-2 `except A, B:` syntax, which is a SyntaxError under Python 3
-- **How:** Scan Python source files for the Python-2 except-clause pattern
-- **Pass:** No Python-2 except-clause syntax found
-- **Fail:** Python-2 except-clause syntax defects found
-- **Skip-When:** No Python source in the repository
-- **Severity:** medium
-- **Category:** 2706
-
-### SBP-07: Dependencies are managed
+### SBP-06: Dependencies are managed
 
 - **What:** Dependencies are locked and reasonably up-to-date
 - **How:** Check for lock files (`pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, `gradle.lockfile`). Check if there's a strategy for updates (renovate config, dependabot config).
@@ -84,7 +74,17 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Severity:** medium
 - **Category:** 2705
 
-### SBP-09: Cross-layer feature branches
+### SBP-07: No Python-2 except-clause syntax
+
+- **What:** Python source contains no Python-2 `except A, B:` syntax, which is a SyntaxError under Python 3
+- **How:** Scan Python source files for the Python-2 except-clause pattern
+- **Pass:** No Python-2 except-clause syntax found
+- **Fail:** Python-2 except-clause syntax defects found
+- **Skip-When:** No Python source in the repository
+- **Severity:** medium
+- **Category:** 2706
+
+### SBP-08: Cross-layer feature branches
 
 - **What:** Feature branches touch multiple layers in a single branch, indicating vertical delivery
 - **How:** Analyze recent git history (last 20 merged branches or last 3 months). For each branch, check which top-level directories were modified. In a monorepo, look for branches that touch 2+ service directories. Use `git log --all --oneline --since="3 months ago"` and `git diff --name-only` to analyze.
@@ -95,7 +95,7 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Severity:** high
 - **Category:** 2300
 
-### SBP-10: No orphaned artifacts
+### SBP-09: No orphaned artifacts
 
 - **What:** API definitions have corresponding UI consumers, database schemas have corresponding API layers
 - **How:** Read the topology artifact. For each detected layer pair (API↔UI, DB↔API), verify the other layer exists and uses it. For example: if OpenAPI specs define endpoints, check that the frontend has corresponding API client calls. If database migrations define tables, check that backend code references those tables.

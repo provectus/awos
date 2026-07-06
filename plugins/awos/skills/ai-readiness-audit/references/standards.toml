@@ -136,22 +136,6 @@ url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-c
 date = "2024-12"
 last_verified = "2026-06-30"
 
-[category.mttr]
-code = 1103
-check_id = "DF-07"
-metric = "adp_i3_mttr"
-dimension = "delivery-flow"
-weight = 5
-method = "computed"
-definition = "Mean time to recovery from incidents; SKIP unless a real incident source (PagerDuty/OpsGenie/incident.io) is explicitly provided"
-applies_when = "topology.has_incident_source"
-sources = ["tracker", "incident"]
-reliability_default = "not-reliable"
-source = "DORA State of DevOps"
-url = "https://dora.dev/dora-report-2025/"
-date = "2025-09"
-last_verified = "2026-06-29"
-
 # ADP-G14: Deployment rework rate (DORA 2024, git keyword proxy)
 
 [category.rework_rate]
@@ -171,39 +155,23 @@ url = "https://dora.dev/guides/dora-metrics/"
 date = "2025"
 last_verified = "2026-06-30"
 
-# --- software-best-practices (9 checks) ---
-
-[category.sbp_vertical_delivery]
-code = 2300
-metric = "SBP-09"
-check_id = "SBP-09"
-dimension = "software-best-practices"
+[category.mttr]
+code = 1103
+check_id = "DF-07"
+metric = "adp_i3_mttr"
+dimension = "delivery-flow"
 weight = 5
 method = "computed"
-definition = "Feature branches touch multiple layers in a single branch, indicating vertical delivery"
-applies_when = "topology.is_monorepo"
-sources = ["git"]
-reliability_default = "maximal"
-source = "Martin Fowler — Software Architecture Guide"
-url = "https://martinfowler.com/architecture/"
-date = "2019"
-last_verified = "2026-06-30"
+definition = "Mean time to recovery from incidents; SKIP unless a real incident source (PagerDuty/OpsGenie/incident.io) is explicitly provided"
+applies_when = "topology.has_incident_source"
+sources = ["tracker", "incident"]
+reliability_default = "not-reliable"
+source = "DORA State of DevOps"
+url = "https://dora.dev/dora-report-2025/"
+date = "2025-09"
+last_verified = "2026-06-29"
 
-[category.sbp_no_orphaned_artifacts]
-code = 2303
-metric = "SBP-10"
-check_id = "SBP-10"
-dimension = "software-best-practices"
-weight = 3
-method = "detected"
-definition = "API definitions have corresponding UI consumers and database schemas have corresponding API layers"
-applies_when = "topology.has_multiple_layers"
-sources = ["audit"]
-reliability_default = "maximal"
-source = "Martin Fowler — Software Architecture Guide"
-url = "https://martinfowler.com/architecture/"
-date = "2019"
-last_verified = "2026-06-30"
+# --- software-best-practices (9 checks) ---
 
 [category.software_best_practices_sbp_01]
 code = 2700
@@ -253,10 +221,10 @@ url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
 last_verified = "2026-06-30"
 
-[category.software_best_practices_sbp_05]
+[category.software_best_practices_sbp_04]
 code = 2703
-check_id = "SBP-05"
-metric = "SBP-05"
+check_id = "SBP-04"
+metric = "SBP-04"
 dimension = "software-best-practices"
 weight = 5
 method = "detected"
@@ -269,10 +237,10 @@ url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
 last_verified = "2026-06-30"
 
-[category.software_best_practices_sbp_06]
+[category.software_best_practices_sbp_05]
 code = 2704
-check_id = "SBP-06"
-metric = "SBP-06"
+check_id = "SBP-05"
+metric = "SBP-05"
 dimension = "software-best-practices"
 weight = 5
 method = "detected"
@@ -285,10 +253,10 @@ url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
 last_verified = "2026-06-30"
 
-[category.software_best_practices_sbp_07]
+[category.software_best_practices_sbp_06]
 code = 2705
-check_id = "SBP-07"
-metric = "SBP-07"
+check_id = "SBP-06"
+metric = "SBP-06"
 dimension = "software-best-practices"
 weight = 3
 method = "detected"
@@ -303,8 +271,8 @@ last_verified = "2026-06-30"
 
 [category.sbp_except_clause_syntax]
 code = 2706
-check_id = "SBP-08"
-metric = "SBP-08"
+check_id = "SBP-07"
+metric = "SBP-07"
 dimension = "software-best-practices"
 weight = 1
 method = "detected"
@@ -315,6 +283,38 @@ reliability_default = "maximal"
 source = "Python 3 — What's New (PEP 3110)"
 url = "https://docs.python.org/3/whatsnew/3.0.html"
 date = "2008-12"
+last_verified = "2026-06-30"
+
+[category.sbp_vertical_delivery]
+code = 2300
+metric = "SBP-08"
+check_id = "SBP-08"
+dimension = "software-best-practices"
+weight = 5
+method = "computed"
+definition = "Feature branches touch multiple layers in a single branch, indicating vertical delivery"
+applies_when = "topology.is_monorepo"
+sources = ["git"]
+reliability_default = "maximal"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-06-30"
+
+[category.sbp_no_orphaned_artifacts]
+code = 2303
+metric = "SBP-09"
+check_id = "SBP-09"
+dimension = "software-best-practices"
+weight = 3
+method = "detected"
+definition = "API definitions have corresponding UI consumers and database schemas have corresponding API layers"
+applies_when = "topology.has_multiple_layers"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
 last_verified = "2026-06-30"
 
 # --- code-architecture (7 checks) ---
@@ -598,54 +598,6 @@ last_verified = "2026-06-30"
 
 # --- application-security (14 checks) ---
 
-[category.appsec_env_gitignored]
-code = 2600
-metric = "AS-12"
-check_id = "AS-12"
-dimension = "application-security"
-weight = 8
-method = "detected"
-definition = "Environment files containing secrets are excluded from version control via .gitignore"
-applies_when = "always"
-sources = ["audit"]
-reliability_default = "maximal"
-source = "OWASP ASVS"
-url = "https://owasp.org/www-project-application-security-verification-standard/"
-date = "2025-05-30"
-last_verified = "2026-06-30"
-
-[category.appsec_env_template]
-code = 2602
-metric = "AS-13"
-check_id = "AS-13"
-dimension = "application-security"
-weight = 5
-method = "detected"
-definition = "A template environment file exists so developers know which variables to configure"
-applies_when = "topology.uses_env_vars"
-sources = ["audit"]
-reliability_default = "maximal"
-source = "OWASP ASVS"
-url = "https://owasp.org/www-project-application-security-verification-standard/"
-date = "2025-05-30"
-last_verified = "2026-06-30"
-
-[category.appsec_sensitive_files_gitignored]
-code = 2604
-metric = "AS-14"
-check_id = "AS-14"
-dimension = "application-security"
-weight = 5
-method = "detected"
-definition = "Sensitive file types present in the stack are excluded from version control AND from container image builds (.gitignore + .dockerignore); inconsistency that would leak a secret into an image is flagged"
-applies_when = "topology.has_topology"
-sources = ["audit"]
-reliability_default = "maximal"
-source = "OWASP ASVS"
-url = "https://owasp.org/www-project-application-security-verification-standard/"
-date = "2025-05-30"
-last_verified = "2026-06-30"
-
 # ---------------------------------------------------------------------------
 # application-security (OWASP ASVS 5.0.0 Level 1 — curated subset)
 # Code range 3000–3099.  detected = static file/config heuristic detector;
@@ -842,6 +794,54 @@ source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
 last_verified = "2026-06-29"
+
+[category.appsec_env_gitignored]
+code = 2600
+metric = "AS-12"
+check_id = "AS-12"
+dimension = "application-security"
+weight = 8
+method = "detected"
+definition = "Environment files containing secrets are excluded from version control via .gitignore"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-30"
+
+[category.appsec_env_template]
+code = 2602
+metric = "AS-13"
+check_id = "AS-13"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "A template environment file exists so developers know which variables to configure"
+applies_when = "topology.uses_env_vars"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-30"
+
+[category.appsec_sensitive_files_gitignored]
+code = 2604
+metric = "AS-14"
+check_id = "AS-14"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "Sensitive file types present in the stack are excluded from version control AND from container image builds (.gitignore + .dockerignore); inconsistency that would leak a secret into an image is flagged"
+applies_when = "topology.has_topology"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-06-30"
 
 # --- supply-chain-security (8 checks) ---
 
@@ -1562,7 +1562,7 @@ last_verified = "2026-06-30"
 
 [category.ai_attribution]
 code = 901
-check_id = "ADP-14"
+check_id = "ADP-07"
 metric = "adp_g9_ai_attribution"
 dimension = "ai-sdlc-adoption"
 weight = 2
@@ -1584,7 +1584,7 @@ last_verified = "2026-07-01"
 # it is a ratio metric (percentage), not a presence signal — true usage is not bounded above by the observed value.
 [category.ci_pass_rate]
 code = 1001
-check_id = "ADP-15"
+check_id = "ADP-08"
 metric = "adp_c1_ci_pass_rate"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -1600,7 +1600,7 @@ last_verified = "2026-06-29"
 
 [category.pipeline_duration_trend]
 code = 1002
-check_id = "ADP-16"
+check_id = "ADP-09"
 metric = "adp_c2_pipeline_duration"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -1620,7 +1620,7 @@ last_verified = "2026-06-29"
 
 [category.work_mix_allocation]
 code = 1101
-check_id = "ADP-17"
+check_id = "ADP-10"
 metric = "adp_i1_work_mix"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -1636,7 +1636,7 @@ last_verified = "2026-06-29"
 
 [category.issue_throughput]
 code = 1102
-check_id = "ADP-18"
+check_id = "ADP-11"
 metric = "adp_i2_throughput"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -1652,7 +1652,7 @@ last_verified = "2026-06-30"
 
 [category.ticket_subtask_split]
 code = 1104
-check_id = "ADP-I4"
+check_id = "ADP-12"
 metric = "adp_i4_subtask_split"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -1668,7 +1668,7 @@ last_verified = "2026-06-30"
 
 [category.ticket_description_quality]
 code = 1105
-check_id = "ADP-I5"
+check_id = "ADP-13"
 metric = "adp_i5_description_quality"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -1689,7 +1689,7 @@ last_verified = "2026-06-30"
 
 [category.external_spec_coverage]
 code = 1201
-check_id = "ADP-20"
+check_id = "ADP-14"
 metric = "adp_d1_spec_coverage"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -1707,7 +1707,7 @@ last_verified = "2026-06-30"
 
 [category.onboarding_ease]
 code = 1501
-check_id = "ADP-25"
+check_id = "ADP-15"
 metric = "adp_g15_onboarding_ease"
 dimension = "ai-sdlc-adoption"
 weight = 3

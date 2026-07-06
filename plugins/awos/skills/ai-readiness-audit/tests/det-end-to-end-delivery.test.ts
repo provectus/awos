@@ -17,7 +17,7 @@ function tmp(): string {
 }
 
 // ---------------------------------------------------------------------------
-// detectVerticalDelivery — category 2300 (SBP-09, method: computed)
+// detectVerticalDelivery — category 2300 (SBP-08, method: computed)
 // applies_when: topology.is_monorepo
 // Detects whether the repo has multiple top-level src layers (frontend+backend)
 // and git feature branches. In the absence of git we check directory signals.
@@ -185,7 +185,7 @@ test('detectBidirectionalLinks: spec exists but no impl cross-refs → WARN', ()
 });
 
 // ---------------------------------------------------------------------------
-// detectLayerCoverage — category 2303 (SBP-10, method: detected)
+// detectLayerCoverage — category 2303 (SBP-09, method: detected)
 // applies_when: topology.has_multiple_layers
 // Checks that API defs have UI consumers and DB schemas have API layers.
 // ---------------------------------------------------------------------------

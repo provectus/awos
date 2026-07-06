@@ -3,7 +3,7 @@
  *
  * Contracts verified:
  * - collected/code_host.json (merged-PR records) is PREFERRED over the git
- *   proxy by adp_g4_lead_time, adp_g5_pr_cycle_time, and adp_g8_review_rework
+ *   proxy by lead_time_for_change, pr_cycle_time, and review_rework
  * - on a squash-merge repo (where the git path SKIPs), PR data produces a
  *   scored result — the whole point of the connector
  * - each metric uses its own PR fields (first_commit_at→merged_at for g4,
@@ -14,9 +14,9 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compute as g4 } from '../metrics/adp_g4_lead_time.ts';
-import { compute as g5 } from '../metrics/adp_g5_pr_cycle_time.ts';
-import { compute as g8 } from '../metrics/adp_g8_review_rework.ts';
+import { compute as g4 } from '../metrics/lead_time_for_change.ts';
+import { compute as g5 } from '../metrics/pr_cycle_time.ts';
+import { compute as g8 } from '../metrics/review_rework.ts';
 import { gitRaw, tmpDir, writeCollected, loadStandards } from './helpers.ts';
 
 const standards = loadStandards();

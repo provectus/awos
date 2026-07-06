@@ -313,7 +313,7 @@ async function main(): Promise<void> {
         }
       }
 
-      // Await in case the metric is async (e.g. adp_g10_complexity uses wasm init).
+      // Await in case the metric is async (e.g. cyclomatic_complexity uses wasm init).
       const result = await metricFn(collectedDir, standards, {}, repoPath);
       printJson(result);
       break;

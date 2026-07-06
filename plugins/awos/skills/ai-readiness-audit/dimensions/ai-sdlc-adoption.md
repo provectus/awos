@@ -35,12 +35,12 @@ node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/c
 
 ## Checks
 
-Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric run — a single invocation scores codes 101–106, awarding each independently.
+Checks ADP-01 through ADP-06 are all scored by one `tooling_depth` metric run — a single invocation scores codes 101–106, awarding each independently.
 
 ### ADP-01: Agent instruction file
 
 - **What:** Repo has a non-trivial agent instruction file (CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md or equivalent) providing AI agent context
-- **How:** `node "<engine cli path>" metric adp_g1_tooling_depth <repoPath> context/audits/<date>/collected` — one run scores all six tooling checks
+- **How:** `node "<engine cli path>" metric tooling_depth <repoPath> context/audits/<date>/collected` — one run scores all six tooling checks
 - **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 101 as present
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
 - **Severity:** high
@@ -49,7 +49,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-02: Agent skill files
 
 - **What:** Repo defines agent skill files (e.g. `.claude/skills/*/SKILL.md` or equivalent for other AI coding tools)
-- **How:** same single `adp_g1_tooling_depth` run as ADP-01
+- **How:** same single `tooling_depth` run as ADP-01
 - **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 102 as present
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
 - **Severity:** medium
@@ -58,7 +58,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-03: Agent commands and rule files
 
 - **What:** Repo defines custom commands or rule files for an agentic coding tool (e.g. `.claude/commands/`, `.cursor/rules/`, `.gemini/commands/`)
-- **How:** same single `adp_g1_tooling_depth` run as ADP-01
+- **How:** same single `tooling_depth` run as ADP-01
 - **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 103 as present
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
 - **Severity:** medium
@@ -67,7 +67,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-04: Agent lifecycle hooks
 
 - **What:** Repo defines lifecycle hooks for an agentic coding tool (e.g. `.claude/hooks/`, `.kiro/hooks/`)
-- **How:** same single `adp_g1_tooling_depth` run as ADP-01
+- **How:** same single `tooling_depth` run as ADP-01
 - **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 104 as present
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
 - **Severity:** medium
@@ -76,7 +76,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-05: MCP server config
 
 - **What:** Repo carries an MCP server config (`.mcp.json` or equivalent)
-- **How:** same single `adp_g1_tooling_depth` run as ADP-01
+- **How:** same single `tooling_depth` run as ADP-01
 - **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 105 as present
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
 - **Severity:** medium
@@ -85,7 +85,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-06: Spec-driven adoption signals
 
 - **What:** Repo has spec-driven adoption signals: spec directories, spec-referencing hooks/scripts, or spec docs
-- **How:** same single `adp_g1_tooling_depth` run as ADP-01
+- **How:** same single `tooling_depth` run as ADP-01
 - **Pass (OK):** the shared metric run returns `status: "OK"` and scores code 106 as present
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable (rare)
 - **Severity:** high
@@ -94,7 +94,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-07: AI-attributed change share
 
 - **What:** Share of commits or PRs carrying AI markers (Co-authored-by: trailer, agent label). Always a lower bound — true usage >= shown.
-- **How:** `node "<engine cli path>" metric adp_g9_ai_attribution <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric ai_attribution <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — AI attribution share computed
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable
 - **Severity:** high
@@ -103,7 +103,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-08: CI pass rate
 
 - **What:** Default-branch CI pass rate over the lookback window; feature-branch failures excluded
-- **How:** `node "<engine cli path>" metric adp_c1_ci_pass_rate <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric ci_pass_rate <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — CI pass rate computed
 - **Skip-When:** `has_ci` is false (CI source not detected or CI collector artifact absent)
 - **Severity:** high
@@ -112,7 +112,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-09: Pipeline duration trend
 
 - **What:** Feedback-loop speed: CI pipeline duration trend over the lookback window
-- **How:** `node "<engine cli path>" metric adp_c2_pipeline_duration <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric pipeline_duration <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — pipeline duration trend computed
 - **Skip-When:** `has_ci` is false
 - **Severity:** medium
@@ -121,7 +121,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-10: Work-mix allocation
 
 - **What:** Team-FTE share across Growth / KTLO / Support issue types (DX Core 4 FTE-allocation model; never money, never per-person)
-- **How:** `node "<engine cli path>" metric adp_i1_work_mix <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric work_mix_allocation <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — work-mix computed from tracker artifact
 - **Skip-When:** `has_tracker` is false (no issue tracker source detected)
 - **Severity:** medium
@@ -130,7 +130,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-11: Issue throughput
 
 - **What:** Delivered-issue count and backlog burn-down rate per monthly bucket
-- **How:** `node "<engine cli path>" metric adp_i2_throughput <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric issue_throughput <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — throughput computed from tracker artifact
 - **Skip-When:** `has_tracker` is false
 - **Severity:** medium
@@ -139,7 +139,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-12: Ticket sub-task split ratio
 
 - **What:** Average number of direct sub-tasks per parent ticket; high averages signal AI-driven over-splitting that fragments work, raises coordination cost, and departs from INVEST "Small" right-sizing. Bands are AWOS heuristics (≤3 good, ≤6 watch, >6 concerning) — INVEST and DORA publish no numeric threshold.
-- **How:** `node "<engine cli path>" metric adp_i4_subtask_split <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric ticket_subtask_split <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — at least one parent ticket with `subtask_count > 0` found in the tracker artifact
 - **Skip-When:** `has_tracker` is false, or tracker artifact has `available=false`, or no ticket in the window carries a numeric `subtask_count > 0`
 - **Severity:** medium
@@ -148,7 +148,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-13: Ticket description quality
 
 - **What:** Share of tickets with a non-trivial description (≥50 characters) AND acceptance criteria; thin tickets ("fix bug") starve both humans and AI agents of context needed to understand scope, intent, and done-criteria. A ticket counts as well-described only when both signals are present. The 50-char threshold is an AWOS heuristic — Agile Alliance's Definition of Ready specifies descriptive acceptance criteria but publishes no numeric character-count threshold. Size/structure signals only; no raw description text is stored.
-- **How:** `node "<engine cli path>" metric adp_i5_description_quality <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric ticket_description_quality <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — at least one ticket with a numeric `description_length` found in the tracker artifact
 - **Skip-When:** `has_tracker` is false, or tracker artifact has `available=false`, or no ticket in the window carries a numeric `description_length`
 - **Severity:** medium
@@ -157,7 +157,7 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 ### ADP-14: External spec and doc coverage
 
 - **What:** External spec/doc coverage and freshness in Confluence, Coda, Notion, or equivalent; strengthens the ADP-06 spec signal
-- **How:** `node "<engine cli path>" metric adp_d1_spec_coverage <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric external_spec_coverage <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — external spec coverage computed
 - **Skip-When:** `has_docs_connector` is false (no docs source detected)
 - **Severity:** medium
@@ -165,8 +165,8 @@ Checks ADP-01 through ADP-06 are all scored by one `adp_g1_tooling_depth` metric
 
 ### ADP-15: Onboarding ease (DX Core 4 time-to-10th-PR proxy)
 
-- **What:** Onboarding enabler presence as a filesystem-derived proxy for the DX Core 4 "Time to 10th PR" outcome. Four boolean signals: (1) README contains setup/install/getting-started/usage/quickstart heading or a recognizable bootstrap command; (2) agent context file (CLAUDE.md/AGENTS.md); (3) .env example file; (4) one-command bootstrap file (Makefile, justfile, Taskfile, docker-compose.yml, setup.sh, or package.json with setup/bootstrap/dev script). value = present_count/4. Bands are AWOS heuristics. Ramp-time not measured (see ADP-G4/ADP-G8).
-- **How:** `node "<engine cli path>" metric adp_g15_onboarding_ease <repoPath> context/audits/<date>/collected`
+- **What:** Onboarding enabler presence as a filesystem-derived proxy for the DX Core 4 "Time to 10th PR" outcome. Four boolean signals: (1) README contains setup/install/getting-started/usage/quickstart heading or a recognizable bootstrap command; (2) agent context file (CLAUDE.md/AGENTS.md); (3) .env example file; (4) one-command bootstrap file (Makefile, justfile, Taskfile, docker-compose.yml, setup.sh, or package.json with setup/bootstrap/dev script). value = present_count/4. Bands are AWOS heuristics. Ramp-time not measured (see lead_time_for_change/review_rework).
+- **How:** `node "<engine cli path>" metric onboarding_ease <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — always OK when repoPath exists (0 enablers → value 0 / band "concerning", not SKIP)
 - **Skip:** metric returns `status: "SKIP"` — repoPath does not exist
 - **Severity:** medium

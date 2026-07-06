@@ -28,7 +28,7 @@ One table per scoring category. Every category table declares exactly eleven req
 | Key                   | Type   | Description                                                                                             |
 | --------------------- | ------ | ------------------------------------------------------------------------------------------------------- |
 | `code`                | int    | Globally unique numeric code (used in metric output and reports)                                        |
-| `metric`              | string | Which metric/check awards this category (e.g. `"adp_g1_tooling_depth"`)                                 |
+| `metric`              | string | Which metric/check awards this category (e.g. `"tooling_depth"`)                                        |
 | `dimension`           | string | Owning audit dimension `name` (e.g. `"ai-sdlc-adoption"`)                                               |
 | `weight`              | int    | Relative scoring weight. Starting heuristic: critical → 8, high → 5, medium → 3, low → 1                |
 | `method`              | string | How the verdict is produced: `"computed"`, `"detected"`, or `"judgment"` (see the Method section below) |
@@ -55,7 +55,7 @@ The TOML is parsed in Node via `smol-toml` (no Python required for the test laye
 **`reliability_default`** reflects the intrinsic reliability ceiling for the signal:
 
 - `"maximal"` — presence does not imply active use; true usage is at most what is shown (e.g. an agent instruction file exists but may not be actively followed).
-- `"minimal"` — the measurement is a floor; true value is at least what is shown (e.g. ADP-G9 AI-attribution counts only commits with explicit markers — real usage is ≥ this).
+- `"minimal"` — the measurement is a floor; true value is at least what is shown (e.g. ai_attribution AI-attribution counts only commits with explicit markers — real usage is ≥ this).
 - `"not-reliable"` — the metric is a proxy or trend indicator; banded comparison against DORA/DX Core 4 thresholds is the signal, not the raw number.
 
 ### `[band.<slug>]`
@@ -72,21 +72,21 @@ One table per banded metric. Band tables define the DORA-style threshold tiers (
 
 This task seeds the `ai-sdlc-adoption` metric set:
 
-- **ADP-G1** (tooling depth): `ai_tooling_claude_md` (101), `ai_tooling_skills` (102), `ai_tooling_commands` (103), `ai_tooling_hooks` (104), `ai_tooling_mcp` (105), `ai_tooling_spec_signals` (106)
-- **ADP-G2** (contributors): `active_contributors` (201)
-- **ADP-G3** (deploy frequency): `merge_frequency` (301) + `band.deploy_frequency`
-- **ADP-G4** (lead time): `lead_time_for_change` (401) + `band.lead_time_for_change`
-- **ADP-G5** (PR cycle time): `pr_cycle_time` (501)
-- **ADP-G6** (churn): `code_churn` (601)
-- **ADP-G7** (change fail rate): `change_failure_rate` (701) + `band.change_failure_rate`
-- **ADP-G8** (review rework): `review_rework` (801)
-- **ADP-G9** (AI attribution): `ai_attribution` (901) — `reliability_default = "minimal"`
-- **ADP-C1** (CI pass rate): `ci_pass_rate` (1001) + `band.ci_pass_rate`
-- **ADP-C2** (pipeline duration): `pipeline_duration_trend` (1002)
-- **ADP-I1** (work mix): `work_mix_allocation` (1101) + `band.work_mix`
-- **ADP-I2** (throughput): `issue_throughput` (1102)
-- **ADP-I3** (MTTR): `mttr` (1103) + `band.mttr`
-- **ADP-D1** (spec coverage): `external_spec_coverage` (1201)
+- **tooling_depth** (tooling depth): `ai_tooling_claude_md` (101), `ai_tooling_skills` (102), `ai_tooling_commands` (103), `ai_tooling_hooks` (104), `ai_tooling_mcp` (105), `ai_tooling_spec_signals` (106)
+- **active_contributors** (contributors): `active_contributors` (201)
+- **merge_frequency** (deploy frequency): `merge_frequency` (301) + `band.deploy_frequency`
+- **lead_time_for_change** (lead time): `lead_time_for_change` (401) + `band.lead_time_for_change`
+- **pr_cycle_time** (PR cycle time): `pr_cycle_time` (501)
+- **code_churn** (churn): `code_churn` (601)
+- **change_failure_rate** (change fail rate): `change_failure_rate` (701) + `band.change_failure_rate`
+- **review_rework** (review rework): `review_rework` (801)
+- **ai_attribution** (AI attribution): `ai_attribution` (901) — `reliability_default = "minimal"`
+- **ci_pass_rate** (CI pass rate): `ci_pass_rate` (1001) + `band.ci_pass_rate`
+- **pipeline_duration** (pipeline duration): `pipeline_duration_trend` (1002)
+- **work_mix_allocation** (work mix): `work_mix_allocation` (1101) + `band.work_mix`
+- **issue_throughput** (throughput): `issue_throughput` (1102)
+- **mttr** (MTTR): `mttr` (1103) + `band.mttr`
+- **external_spec_coverage** (spec coverage): `external_spec_coverage` (1201)
 
 The 11 existing audit dimensions' categories are added in Task A.4.
 

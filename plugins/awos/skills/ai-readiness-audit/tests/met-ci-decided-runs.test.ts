@@ -12,8 +12,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { compute as computeC1 } from '../metrics/adp_c1_ci_pass_rate.ts';
-import { compute as computeC2 } from '../metrics/adp_c2_pipeline_duration.ts';
+import { compute as computeC1 } from '../metrics/ci_pass_rate.ts';
+import { compute as computeC2 } from '../metrics/pipeline_duration.ts';
 import { classifyConclusion, partitionRuns } from '../metrics/_ci_runs.ts';
 import { tmpDir, loadStandards } from './helpers.ts';
 

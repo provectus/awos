@@ -23,7 +23,7 @@ The git collector recognizes tooling signals and AI commit attribution across al
 | Windsurf       | `.windsurfrules`                  | `.windsurf/rules/`, `.windsurf/workflows/`, `.windsurf/mcp_config.json`      |
 | Cline          | `.clinerules`                     | `.cline/mcp.json`                                                            |
 
-This table is derived from `agent_tools.ts` — the single registry that drives the git collector, all detectors, and the tooling-depth metric (`adp_g1_tooling_depth`, checks ADP-01..ADP-06).
+This table is derived from `agent_tools.ts` — the single registry that drives the git collector, all detectors, and the tooling-depth metric (`tooling_depth`, checks ADP-01..ADP-06).
 
 ---
 

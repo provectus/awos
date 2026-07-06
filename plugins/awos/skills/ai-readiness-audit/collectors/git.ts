@@ -421,7 +421,7 @@ const TOOLING_CANDIDATES = [
     ...ALL_HOOK_PATHS,
     ...ALL_MCP_CONFIG_PATHS,
     ...ALL_TOOL_CONFIG_DIRS,
-    // Spec-driven adoption signals (ADP-G1 code 106). A bare `context/` is NOT
+    // Spec-driven adoption signals (tooling_depth code 106). A bare `context/` is NOT
     // a signal: the audit itself writes context/audits/, so counting it would
     // let the audit score its own output. Only real spec-workspace content
     // (context/spec, context/product) or the framework dir counts.
@@ -733,7 +733,7 @@ export interface WindowStats {
   revert_merges: number;
   /**
    * First-parent merges in the window whose subject matches fix/bugfix/hotfix/patch/defect/regression
-   * keywords (case-insensitive). Used by adp_g14_rework_rate (DORA deployment rework rate proxy).
+   * keywords (case-insensitive). Used by rework_rate (DORA deployment rework rate proxy).
    *
    * Note: `hotfix` intentionally overlaps with revert_merges. That is inherent to message-keyword
    * proxies — revert_merges measures change-failure (DORA g7) and fix_merges measures rework rate
@@ -757,7 +757,7 @@ export interface WindowStats {
   /** Display-only: LOC per active contributor per week (loc_per_active ÷ (window_days / 7)). */
   loc_per_active_per_week: number | null;
   /** ISO 8601 timestamp of the window anchor minus lookback_days (the oldest commit included).
-   * Used by adp_g4_lead_time to filter merge_records to the same window. Null on empty repos. */
+   * Used by lead_time_for_change to filter merge_records to the same window. Null on empty repos. */
   window_start: string | null;
 }
 
@@ -863,7 +863,7 @@ function buildWindowStats(
     .split('\n')
     .filter(Boolean);
 
-  // 0b. In-window fix/bugfix/hotfix/patch/defect/regression merges — used by adp_g14_rework_rate
+  // 0b. In-window fix/bugfix/hotfix/patch/defect/regression merges — used by rework_rate
   //     (DORA deployment rework rate proxy). Distinct from revert_merges above: both grep for
   //     "hotfix" by design — they measure different DORA metrics (change-failure vs. rework rate).
   const fixOut = run(

@@ -9,9 +9,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { compute as computeI1 } from '../metrics/adp_i1_work_mix.ts';
-import { compute as computeI2 } from '../metrics/adp_i2_throughput.ts';
-import { compute as computeG2 } from '../metrics/adp_g2_contributors.ts';
+import { compute as computeI1 } from '../metrics/work_mix_allocation.ts';
+import { compute as computeI2 } from '../metrics/issue_throughput.ts';
+import { compute as computeG2 } from '../metrics/active_contributors.ts';
 import { writeCollected, loadStandards } from './helpers.ts';
 
 const standards = loadStandards();
@@ -20,7 +20,7 @@ function makeTmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'awos-expr-'));
 }
 
-test('Every computed metric must emit a human-readable expression so the report shows evidence (issue #12): adp_i1_work_mix', () => {
+test('Every computed metric must emit a human-readable expression so the report shows evidence (issue #12): work_mix_allocation', () => {
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(tmp, 'tracker', {
     tickets: [],
@@ -32,11 +32,11 @@ test('Every computed metric must emit a human-readable expression so the report 
   assert.equal(result.status, 'OK', 'status must be OK');
   assert.ok(
     typeof result.expression === 'string' && result.expression.length > 0,
-    `adp_i1_work_mix must emit a non-empty expression when computing work mix, got ${JSON.stringify(result.expression)}`
+    `work_mix_allocation must emit a non-empty expression when computing work mix, got ${JSON.stringify(result.expression)}`
   );
 });
 
-test('Every computed metric must emit a human-readable expression so the report shows evidence (issue #12): adp_i2_throughput', () => {
+test('Every computed metric must emit a human-readable expression so the report shows evidence (issue #12): issue_throughput', () => {
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(tmp, 'tracker', {
     tickets: [],
@@ -48,11 +48,11 @@ test('Every computed metric must emit a human-readable expression so the report 
   assert.equal(result.status, 'OK', 'status must be OK');
   assert.ok(
     typeof result.expression === 'string' && result.expression.length > 0,
-    `adp_i2_throughput must emit a non-empty expression when computing throughput, got ${JSON.stringify(result.expression)}`
+    `issue_throughput must emit a non-empty expression when computing throughput, got ${JSON.stringify(result.expression)}`
   );
 });
 
-test('Every computed metric must emit a human-readable expression so the report shows evidence (issue #12): adp_g2_contributors', () => {
+test('Every computed metric must emit a human-readable expression so the report shows evidence (issue #12): active_contributors', () => {
   const tmp = makeTmpDir();
   const collectedDir = writeCollected(tmp, 'git', {
     window_stats: {
@@ -74,6 +74,6 @@ test('Every computed metric must emit a human-readable expression so the report 
   assert.equal(result.status, 'OK', 'status must be OK');
   assert.ok(
     typeof result.expression === 'string' && result.expression.length > 0,
-    `adp_g2_contributors must emit a non-empty expression when computing active contributor count, got ${JSON.stringify(result.expression)}`
+    `active_contributors must emit a non-empty expression when computing active contributor count, got ${JSON.stringify(result.expression)}`
   );
 });

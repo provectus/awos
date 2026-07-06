@@ -39,10 +39,10 @@
  * (Task 5.3) can render a full row per repo.
  */
 
-import { doraDeployBand } from './adp_g3_deploy_frequency.ts';
-import { doraLeadTimeBand } from './adp_g4_lead_time.ts';
-import { doraChangeFailBand } from './adp_g7_change_fail_rate.ts';
-import { reworkBand } from './adp_g14_rework_rate.ts';
+import { doraDeployBand } from './merge_frequency.ts';
+import { doraLeadTimeBand } from './lead_time_for_change.ts';
+import { doraChangeFailBand } from './change_failure_rate.ts';
+import { reworkBand } from './rework_rate.ts';
 
 // ---------------------------------------------------------------------------
 // Types — the output shapes shared with the renderer live in artifact_types.ts

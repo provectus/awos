@@ -41,11 +41,11 @@ export interface TrackerRaw {
   /** All ticket records from the connector within the period. */
   tickets: TicketRecord[];
   /** Breakdown of tickets by type (e.g. { bug: 3, feature: 12 }). Used by
-   *  work-mix metric (ADP-I1). */
+   *  work-mix metric (work_mix_allocation). */
   type_counts: Record<string, number>;
-  /** Total tickets resolved during the period (throughput, ADP-I2). */
+  /** Total tickets resolved during the period (throughput, issue_throughput). */
   resolved_count: number;
-  /** Incident-data source for MTTR reliability upgrade (ADP-I3). null means
+  /** Incident-data source for MTTR reliability upgrade (mttr). null means
    *  the git-proxy fallback will be used — the metric never SKIPs for this. */
   incident_source: string | null;
 }

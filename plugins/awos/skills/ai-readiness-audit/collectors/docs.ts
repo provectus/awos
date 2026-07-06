@@ -25,11 +25,11 @@ export interface DocsConnector {
 // ---------------------------------------------------------------------------
 
 export interface DocsRaw {
-  /** All page records from the connector. Used for coverage (ADP-D1). */
+  /** All page records from the connector. Used for coverage (external_spec_coverage). */
   pages: DocPage[];
   /** Total number of pages returned by the connector. */
   page_count: number;
-  /** Pages updated within the lookback period (freshness indicator, ADP-D1). */
+  /** Pages updated within the lookback period (freshness indicator, external_spec_coverage). */
   recently_updated_count: number;
 }
 
@@ -57,7 +57,7 @@ function countRecentlyUpdated(pages: DocPage[], lookbackDays: number): number {
  * - `available=false` when no connector is provided (external docs cannot be
  *   inferred from the local filesystem alone).
  * - `available=true` when a connector is passed. Raw carries coverage and
- *   freshness data for the ADP-D1 metric.
+ *   freshness data for the external_spec_coverage metric.
  */
 export function collect(
   _repoPath: string,

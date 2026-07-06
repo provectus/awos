@@ -20,7 +20,7 @@ The headline "Merges/active" and "LOC/active" delivery-throughput figures shown 
 ### DESC-01: Active monthly contributors
 
 - **What:** Distinct commit-author count per trailing 30-day bucket (aggregate only, no per-person data)
-- **How:** `node "<engine cli path>" metric adp_g2_contributors <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric active_contributors <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — contributor count computed from git log
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable
 - **Severity:** medium
@@ -30,7 +30,7 @@ The headline "Merges/active" and "LOC/active" delivery-throughput figures shown 
 ### DESC-02: Code churn and rework
 
 - **What:** Insertions+deletions trend and rework-hotspot file count over the lookback window
-- **How:** `node "<engine cli path>" metric adp_g6_churn <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric code_churn <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — churn trend computed
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable
 - **Severity:** low
@@ -40,7 +40,7 @@ The headline "Merges/active" and "LOC/active" delivery-throughput figures shown 
 ### DESC-03: Cyclomatic complexity
 
 - **What:** Average and maximum McCabe cyclomatic complexity (CCN) per function across the repository, computed by parsing source files with tree-sitter grammars. Bands: elite ≤5, high ≤10, medium ≤15, low >15.
-- **How:** `node "<engine cli path>" metric adp_g10_complexity <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric cyclomatic_complexity <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — complexity computed for at least one function in a supported language (JS/TS/TSX/JSX/Python/Go/Java/Ruby/C#/C/C++/Rust/PHP/Kotlin)
 - **Skip:** metric returns `status: "SKIP"` — no source files in supported languages found
 - **Severity:** medium
@@ -50,7 +50,7 @@ The headline "Merges/active" and "LOC/active" delivery-throughput figures shown 
 ### DESC-04: Codebase scale (LOC)
 
 - **What:** Lines of code (non-blank) by language across the repository, excluding generated/vendor directories. Provides scale context for other metrics.
-- **How:** `node "<engine cli path>" metric adp_g11_scale <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric loc_scale <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — LOC counted for at least one recognized source file
 - **Skip:** metric returns `status: "SKIP"` — no recognized source files found
 - **Severity:** low
@@ -60,7 +60,7 @@ The headline "Merges/active" and "LOC/active" delivery-throughput figures shown 
 ### DESC-05: Dependency manifest counts
 
 - **What:** Count of direct dependencies declared in manifest files (package.json, pyproject.toml, go.mod, Cargo.toml, requirements.txt) up to three directory levels deep.
-- **How:** `node "<engine cli path>" metric adp_g12_deps <repoPath> context/audits/<date>/collected`
+- **How:** `node "<engine cli path>" metric dependency_count <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — at least one manifest found
 - **Skip:** metric returns `status: "SKIP"` — no recognised manifest file found
 - **Severity:** low

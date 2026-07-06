@@ -27,7 +27,7 @@ const AI_TOOLING_CODES_FALLBACK = new Set([101, 102, 103, 104, 105, 106]);
 
 /**
  * Category codes whose award means "this repo has AI tooling": the layers of
- * the adp_g1_tooling_depth metric (ADP-01…06 today). Derived from standards
+ * the tooling_depth metric (ADP-01…06 today). Derived from standards
  * so a new tooling layer is included automatically; falls back to the static
  * set when standards are unavailable.
  */
@@ -39,7 +39,7 @@ export function aiToolingCodes(
     | undefined;
   const codes = new Set<number>();
   for (const cat of Object.values(categoryTable ?? {})) {
-    if (cat['metric'] === 'adp_g1_tooling_depth') {
+    if (cat['metric'] === 'tooling_depth') {
       codes.add(cat['code'] as number);
     }
   }

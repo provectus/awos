@@ -169,7 +169,7 @@ test('aggregate preserves existing sources block when collected/ is absent', () 
 test('aggregate: two-code metric — awarded code gets weight_max×score, non-awarded code gets 0', () => {
   const outDir = mkdtempSync(join(tmpdir(), 'aggregate-leak-test-'));
 
-  // Simulates adp_g13_doc_coverage: two codes (2204, 2205) in the same metric.
+  // Simulates doc_coverage: two codes (2204, 2205) in the same metric.
   // Code 2204 awarded (PARTIAL, score=0.7 → weight_awarded = round(2×0.7,1) = 1.4)
   // Code 2205 NOT awarded (FAIL, score=0 → weight_awarded = 0), even though the metric ran.
   const dimJson = {

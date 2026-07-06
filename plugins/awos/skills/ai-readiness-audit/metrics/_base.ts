@@ -228,7 +228,7 @@ export interface MetricResult {
   confidence: number;
   /** Per-category-code score overrides for metrics that award multiple codes with different natural scores. */
   score_per_code?: Record<number, number>;
-  /** Per-category-code evidence lines for metrics that emit layer-specific evidence (e.g. adp_g1_tooling_depth). */
+  /** Per-category-code evidence lines for metrics that emit layer-specific evidence (e.g. tooling_depth). */
   evidence_per_code?: Record<number, string[]>;
   /** Human-readable derivation of the value (e.g. "42 of 50 public defs documented = 0.84"). */
   expression?: string;
@@ -245,7 +245,7 @@ export interface MetricResult {
  * score defaults to 1 when any category is awarded, 0 otherwise (and 0 on SKIP).
  * confidence defaults to 1 when OK, 0 on SKIP.
  * scorePerCode provides per-code overrides for metrics that feed multiple codes
- * with different natural scores (e.g. adp_g13_doc_coverage).
+ * with different natural scores (e.g. doc_coverage).
  */
 export interface MetricResultOptions {
   band?: string | null;

@@ -13,7 +13,7 @@ export interface LanguageDef {
   sizeThreshold?: number;
   /**
    * AST node types that should carry a doc-comment, for doc-coverage
-   * (adp_g13_doc_coverage). Tree-sitter node type names confirmed against the
+   * (doc_coverage). Tree-sitter node type names confirmed against the
    * bundled grammars. Populated only for languages with a well-defined
    * doc-comment convention; the metric's per-language doc/export logic keys off
    * the language `id`.

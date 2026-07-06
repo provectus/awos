@@ -63,7 +63,7 @@ Audits documentation coverage across the repository. Well-documented projects ar
 ### DOC-05: Public API surface is documented
 
 - **What:** Public/exported definitions (functions, classes, methods, types) carry doc-comments — docstrings, JSDoc, KDoc, or Go doc comments
-- **How:** Computed deterministically by `adp_g13_doc_coverage`, which parses each non-generated source file with the bundled tree-sitter grammars (python, typescript, javascript, go, java, kotlin), counts documentable definitions, and decides "documented" per the language's doc convention. Coverage = documented public defs ÷ public defs.
+- **How:** Computed deterministically by `doc_coverage`, which parses each non-generated source file with the bundled tree-sitter grammars (python, typescript, javascript, go, java, kotlin), counts documentable definitions, and decides "documented" per the language's doc convention. Coverage = documented public defs ÷ public defs.
 - **Pass:** Public/exported coverage ≥ 0.8
 - **Fail:** Public/exported coverage below the band
 - **Skip-When:** No source file in a language with a known doc convention is present
@@ -73,7 +73,7 @@ Audits documentation coverage across the repository. Well-documented projects ar
 ### DOC-06: Overall definition documentation
 
 - **What:** Doc-comment coverage across all source definitions, not just the public surface
-- **How:** Same `adp_g13_doc_coverage` pass; coverage = documented defs ÷ all defs.
+- **How:** Same `doc_coverage` pass; coverage = documented defs ÷ all defs.
 - **Pass:** Overall coverage ≥ 0.6
 - **Fail:** Overall coverage below the band
 - **Skip-When:** No source file in a language with a known doc convention is present

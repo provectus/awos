@@ -27,7 +27,7 @@ standards_version = "2026.06"
 
 [category.merge_frequency]
 code = 301
-metric = "adp_g3_deploy_frequency"
+metric = "merge_frequency"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "computed"
@@ -38,7 +38,7 @@ last_verified = "2026-06-29"
 
 [category.lead_time]
 code = 401
-metric = "adp_g4_lead_time"
+metric = "lead_time_for_change"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "computed"

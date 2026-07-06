@@ -426,12 +426,12 @@ test('a category summary becomes the inline lead (plain); definition stays verbo
 // connector artifacts, and it must flip the gated check from SKIP to scored.
 // ---------------------------------------------------------------------------
 
-import { compute as i1WorkMix } from './metrics/adp_i1_work_mix.ts';
+import { compute as i1WorkMix } from './metrics/work_mix_allocation.ts';
 
 test('enrich re-scores a connector metric from a populated collected/ dir without clobbering it', async () => {
   const { repoPath, outDir, base } = buildBareRepo();
   try {
-    const registry = { adp_i1_work_mix: i1WorkMix };
+    const registry = { work_mix_allocation: i1WorkMix };
     // Baseline: no tracker connector → adp_i1 (code 1101) is gated off → SKIP.
     await auditCore(repoPath, outDir, {}, registry, standardsPathForSkip);
     const readI1 = () => {

@@ -8,7 +8,7 @@ Every metric function returns a `MetricResult` (the interface in `_base.ts`, sna
 
 ```ts
 {
-  metric: string;           // metric ID, e.g. "adp_g1_tooling_depth"
+  metric: string;           // metric ID, e.g. "tooling_depth"
   value: unknown;           // computed value (number, string, etc.) or null when SKIPped
   kind: string;             // value semantics: "raw" | "coverage" | "rate" | "score" | …
   band: string | null;      // DORA-style band label, or null when not banded
@@ -24,7 +24,7 @@ Every metric function returns a `MetricResult` (the interface in `_base.ts`, sna
   score: number;            // fraction of capability present ∈ [0,1]; defaults to 1 when any category awarded, else 0 (0 on SKIP)
   confidence: number;       // fraction of applicable surface measured ∈ [0,1]; defaults to 1 when OK, 0 on SKIP
   score_per_code?: Record<number, number>;     // per-code score overrides when one metric feeds codes with different natural scores
-  evidence_per_code?: Record<number, string[]>; // per-code evidence lines (e.g. adp_g1_tooling_depth's per-layer evidence)
+  evidence_per_code?: Record<number, string[]>; // per-code evidence lines (e.g. tooling_depth's per-layer evidence)
   expression?: string;      // human-readable derivation ("42 of 50 public defs documented = 0.84")
   unit?: string;            // unit of the value ("ratio", "days", "count", …)
 }

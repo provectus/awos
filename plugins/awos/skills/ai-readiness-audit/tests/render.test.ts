@@ -90,26 +90,26 @@ function singleRepoFixture(): AuditJson {
           display_value: '4.2 / wk',
           band: 'High',
           reliability: 'maximal',
-          check_id: 'ADP-G3',
+          check_id: 'merge_frequency',
         },
         {
           label: 'Change failure rate',
           display_value: '9%',
           band: 'High',
           reliability: 'minimal',
-          check_id: 'ADP-G7',
+          check_id: 'change_failure_rate',
         },
       ],
       scale: [
         {
           label: 'Source size',
           display_value: '30,058 LOC · 1 language',
-          check_id: 'ADP-G11',
+          check_id: 'loc_scale',
         },
         {
           label: 'Avg complexity',
           display_value: 'CCN 1.66 (healthy)',
-          check_id: 'ADP-G10',
+          check_id: 'cyclomatic_complexity',
         },
       ],
       reach: {

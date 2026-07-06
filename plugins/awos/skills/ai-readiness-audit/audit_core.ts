@@ -394,7 +394,7 @@ function metaForCode(res: MetricResult, code: number): MetricMeta {
 
 /**
  * A metric compute function — may return synchronously or as a Promise
- * (adp_g10_complexity is async — requires wasm init). Shared with cli.ts,
+ * (cyclomatic_complexity is async — requires wasm init). Shared with cli.ts,
  * which builds the METRICS registry auditCore consumes.
  */
 export type MetricFn = (

@@ -170,7 +170,7 @@ test('collect git: artifact has source === "git" and required fields', () => {
 // ---------------------------------------------------------------------------
 
 test('metric <id>: exits non-zero with error JSON for unknown metric id', () => {
-  const { json, code } = runCli('metric', 'ADP-I1', '/tmp');
+  const { json, code } = runCli('metric', 'no_such_metric', '/tmp');
   assert.notEqual(code, 0, 'unknown metric id must exit non-zero');
   assert.ok(json && typeof json === 'object', 'must print JSON error');
   const err = json as Record<string, unknown>;
@@ -230,7 +230,7 @@ test('standards: parses standards.toml, emits JSON with expected codes and meta'
     .map((v) => (v as Record<string, unknown>)['code'])
     .filter((c) => typeof c === 'number');
 
-  // At minimum the first three ADP-G1 codes (101, 102, 103) must be present.
+  // At minimum the first three tooling_depth codes (101, 102, 103) must be present.
   for (const expectedCode of [101, 102, 103]) {
     assert.ok(
       categoryCodes.includes(expectedCode),
@@ -254,7 +254,7 @@ test('standards: exits non-zero with error JSON when file does not exist', () =>
 // 'metric' query-once path — collectedDir argument reads pre-written artifacts
 // ---------------------------------------------------------------------------
 
-test('metric adp_g2_contributors: query-once path reads pre-collected git.json', () => {
+test('metric active_contributors: query-once path reads pre-collected git.json', () => {
   const tmpRepo = mkdtempSync(join(tmpdir(), 'awos-cli-queryonce-'));
   const collectedDir = join(tmpRepo, 'collected');
   try {
@@ -288,12 +288,12 @@ test('metric adp_g2_contributors: query-once path reads pre-collected git.json',
     // Step 2: run metric with pre-collected dir (query-once path).
     const { json: result, code: metricCode } = runCli(
       'metric',
-      'adp_g2_contributors',
+      'active_contributors',
       tmpRepo,
       collectedDir
     );
 
-    assert.equal(metricCode, 0, 'metric adp_g2_contributors must exit 0');
+    assert.equal(metricCode, 0, 'metric active_contributors must exit 0');
     assert.ok(
       result && typeof result === 'object',
       'output must be a JSON object'
@@ -301,8 +301,8 @@ test('metric adp_g2_contributors: query-once path reads pre-collected git.json',
     const r = result as Record<string, unknown>;
     assert.equal(
       r['metric'],
-      'adp_g2_contributors',
-      'metric field must be "adp_g2_contributors"'
+      'active_contributors',
+      'metric field must be "active_contributors"'
     );
     assert.equal(
       r['status'],

@@ -46,12 +46,12 @@ dimension_order = [
 
 # --- delivery-flow (7 checks) ---
 
-# ADP-G3: Deployment / merge frequency (DORA banded)
+# merge_frequency: Deployment / merge frequency (DORA banded)
 
 [category.merge_frequency]
 code = 301
 check_id = "DF-01"
-metric = "adp_g3_deploy_frequency"
+metric = "merge_frequency"
 dimension = "delivery-flow"
 weight = 10
 method = "computed"
@@ -64,12 +64,12 @@ url = "https://dora.dev/dora-report-2025/"
 date = "2025-09"
 last_verified = "2026-06-29"
 
-# ADP-G4: Lead time for change (DORA banded)
+# lead_time_for_change: Lead time for change (DORA banded)
 
 [category.lead_time_for_change]
 code = 401
 check_id = "DF-02"
-metric = "adp_g4_lead_time"
+metric = "lead_time_for_change"
 dimension = "delivery-flow"
 weight = 10
 method = "computed"
@@ -82,12 +82,12 @@ url = "https://dora.dev/dora-report-2025/"
 date = "2025-09"
 last_verified = "2026-06-29"
 
-# ADP-G5: PR cycle time (banded)
+# pr_cycle_time: PR cycle time (banded)
 
 [category.pr_cycle_time]
 code = 501
 check_id = "DF-03"
-metric = "adp_g5_pr_cycle_time"
+metric = "pr_cycle_time"
 dimension = "delivery-flow"
 weight = 3
 method = "computed"
@@ -100,12 +100,12 @@ url = "https://dora.dev/dora-report-2025/"
 date = "2025-09"
 last_verified = "2026-06-29"
 
-# ADP-G7: Change failure rate proxy (DORA banded)
+# change_failure_rate: Change failure rate proxy (DORA banded)
 
 [category.change_failure_rate]
 code = 701
 check_id = "DF-04"
-metric = "adp_g7_change_fail_rate"
+metric = "change_failure_rate"
 dimension = "delivery-flow"
 weight = 10
 method = "computed"
@@ -118,12 +118,12 @@ url = "https://dora.dev/dora-report-2025/"
 date = "2025-09"
 last_verified = "2026-06-29"
 
-# ADP-G8: Review rework cycle (banded)
+# review_rework: Review rework cycle (banded)
 
 [category.review_rework]
 code = 801
 check_id = "DF-05"
-metric = "adp_g8_review_rework"
+metric = "review_rework"
 dimension = "delivery-flow"
 weight = 3
 method = "computed"
@@ -136,17 +136,17 @@ url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-c
 date = "2024-12"
 last_verified = "2026-06-30"
 
-# ADP-G14: Deployment rework rate (DORA 2024, git keyword proxy)
+# rework_rate: Deployment rework rate (DORA 2024, git keyword proxy)
 
 [category.rework_rate]
 code = 1401
 check_id = "DF-06"
-metric = "adp_g14_rework_rate"
+metric = "rework_rate"
 dimension = "delivery-flow"
 weight = 10
 method = "computed"
 summary = "DORA deployment rework rate: share of deploys that are unplanned bug-fix work."
-definition = "DORA deployment rework rate: ratio of deployments that are unplanned work to fix bugs triggered by incidents in production. Proxied from git: first-parent merges in the 90-day window whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords (case-insensitive). Distinct from change_failure_rate (g7), which counts revert/rollback deployments, and from code_churn (g6), which measures line-level turnover. DORA publishes no numeric thresholds for rework rate; bands (good <15%, watch <30%, concerning >=30%) are AWOS heuristics."
+definition = "DORA deployment rework rate: ratio of deployments that are unplanned work to fix bugs triggered by incidents in production. Proxied from git: first-parent merges in the 90-day window whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords (case-insensitive). Distinct from change_failure_rate (DF-04), which counts revert/rollback deployments, and from code_churn (DESC-02), which measures line-level turnover. DORA publishes no numeric thresholds for rework rate; bands (good <15%, watch <30%, concerning >=30%) are AWOS heuristics."
 applies_when = "always"
 sources = ["git"]
 reliability_default = "minimal"
@@ -158,7 +158,7 @@ last_verified = "2026-06-30"
 [category.mttr]
 code = 1103
 check_id = "DF-07"
-metric = "adp_i3_mttr"
+metric = "mttr"
 dimension = "delivery-flow"
 weight = 5
 method = "computed"
@@ -1157,7 +1157,7 @@ last_verified = "2026-06-30"
 [category.documentation_doc_05]
 code = 2204
 check_id = "DOC-05"
-metric = "adp_g13_doc_coverage"
+metric = "doc_coverage"
 dimension = "documentation"
 weight = 3
 method = "computed"
@@ -1173,7 +1173,7 @@ last_verified = "2026-06-30"
 [category.documentation_doc_06]
 code = 2205
 check_id = "DOC-06"
-metric = "adp_g13_doc_coverage"
+metric = "doc_coverage"
 dimension = "documentation"
 weight = 3
 method = "computed"
@@ -1457,15 +1457,15 @@ last_verified = "2026-06-30"
 # Tier G: git-only signals
 # ---------------------------------------------------------------------------
 
-# ADP-G1: AI tooling depth & breadth
+# tooling_depth: AI tooling depth & breadth
 # One category per detectable tooling layer.  The canonical collector for all
 # tooling-presence signals (CLAUDE.md/AGENTS.md/.claude/skills/commands/hooks/MCP)
-# is the git collector — sources = ["git"] for every ADP-G1 category.
+# is the git collector — sources = ["git"] for every tooling_depth category.
 
 [category.ai_tooling_claude_md]
 code = 101
 check_id = "ADP-01"
-metric = "adp_g1_tooling_depth"
+metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 10
 method = "detected"
@@ -1481,7 +1481,7 @@ last_verified = "2026-06-30"
 [category.ai_tooling_skills]
 code = 102
 check_id = "ADP-02"
-metric = "adp_g1_tooling_depth"
+metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 6
 method = "detected"
@@ -1497,7 +1497,7 @@ last_verified = "2026-06-30"
 [category.ai_tooling_commands]
 code = 103
 check_id = "ADP-03"
-metric = "adp_g1_tooling_depth"
+metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "detected"
@@ -1513,7 +1513,7 @@ last_verified = "2026-06-30"
 [category.ai_tooling_hooks]
 code = 104
 check_id = "ADP-04"
-metric = "adp_g1_tooling_depth"
+metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "detected"
@@ -1529,7 +1529,7 @@ last_verified = "2026-06-30"
 [category.ai_tooling_mcp]
 code = 105
 check_id = "ADP-05"
-metric = "adp_g1_tooling_depth"
+metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "detected"
@@ -1545,7 +1545,7 @@ last_verified = "2026-06-30"
 [category.ai_tooling_spec_signals]
 code = 106
 check_id = "ADP-06"
-metric = "adp_g1_tooling_depth"
+metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 8
 method = "detected"
@@ -1558,12 +1558,12 @@ url = "https://github.com/provectus/awos/tree/main/commands"
 date = "2026-06"
 last_verified = "2026-06-30"
 
-# ADP-G9: AI-attributed change share (lower bound)
+# ai_attribution: AI-attributed change share (lower bound)
 
 [category.ai_attribution]
 code = 901
 check_id = "ADP-07"
-metric = "adp_g9_ai_attribution"
+metric = "ai_attribution"
 dimension = "ai-sdlc-adoption"
 weight = 2
 method = "computed"
@@ -1585,7 +1585,7 @@ last_verified = "2026-07-01"
 [category.ci_pass_rate]
 code = 1001
 check_id = "ADP-08"
-metric = "adp_c1_ci_pass_rate"
+metric = "ci_pass_rate"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "computed"
@@ -1601,7 +1601,7 @@ last_verified = "2026-06-29"
 [category.pipeline_duration_trend]
 code = 1002
 check_id = "ADP-09"
-metric = "adp_c2_pipeline_duration"
+metric = "pipeline_duration"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
@@ -1621,7 +1621,7 @@ last_verified = "2026-06-29"
 [category.work_mix_allocation]
 code = 1101
 check_id = "ADP-10"
-metric = "adp_i1_work_mix"
+metric = "work_mix_allocation"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "computed"
@@ -1637,7 +1637,7 @@ last_verified = "2026-06-29"
 [category.issue_throughput]
 code = 1102
 check_id = "ADP-11"
-metric = "adp_i2_throughput"
+metric = "issue_throughput"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
@@ -1653,7 +1653,7 @@ last_verified = "2026-06-30"
 [category.ticket_subtask_split]
 code = 1104
 check_id = "ADP-12"
-metric = "adp_i4_subtask_split"
+metric = "ticket_subtask_split"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
@@ -1669,7 +1669,7 @@ last_verified = "2026-06-30"
 [category.ticket_description_quality]
 code = 1105
 check_id = "ADP-13"
-metric = "adp_i5_description_quality"
+metric = "ticket_description_quality"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
@@ -1690,11 +1690,11 @@ last_verified = "2026-06-30"
 [category.external_spec_coverage]
 code = 1201
 check_id = "ADP-14"
-metric = "adp_d1_spec_coverage"
+metric = "external_spec_coverage"
 dimension = "ai-sdlc-adoption"
 weight = 5
 method = "computed"
-definition = "External spec/doc coverage & freshness in Confluence/Coda/Notion; strengthens ADP-G1 spec signal"
+definition = "External spec/doc coverage & freshness in Confluence/Coda/Notion; strengthens tooling_depth spec signal"
 applies_when = "topology.has_docs_connector"
 sources = ["docs"]
 reliability_default = "not-reliable"
@@ -1703,12 +1703,12 @@ url = "https://diataxis.fr/quality/"
 date = "2024"
 last_verified = "2026-06-30"
 
-# ADP-G15: Onboarding ease — enabler presence proxy (DX Core 4 time-to-10th-PR)
+# onboarding_ease: Onboarding ease — enabler presence proxy (DX Core 4 time-to-10th-PR)
 
 [category.onboarding_ease]
 code = 1501
 check_id = "ADP-15"
-metric = "adp_g15_onboarding_ease"
+metric = "onboarding_ease"
 dimension = "ai-sdlc-adoption"
 weight = 3
 method = "computed"
@@ -1724,12 +1724,12 @@ last_verified = "2026-07-01"
 
 # --- descriptors (5 checks) ---
 
-# ADP-G2: Active monthly contributors
+# active_contributors: Active monthly contributors
 
 [category.active_contributors]
 code = 201
 check_id = "DESC-01"
-metric = "adp_g2_contributors"
+metric = "active_contributors"
 dimension = "descriptors"
 weight = 0
 method = "computed"
@@ -1742,12 +1742,12 @@ url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-c
 date = "2024-12"
 last_verified = "2026-06-30"
 
-# ADP-G6: Code churn & rework
+# code_churn: Code churn & rework
 
 [category.code_churn]
 code = 601
 check_id = "DESC-02"
-metric = "adp_g6_churn"
+metric = "code_churn"
 dimension = "descriptors"
 weight = 0
 method = "computed"
@@ -1761,16 +1761,16 @@ date = "2024-12"
 last_verified = "2026-06-30"
 
 # ---------------------------------------------------------------------------
-# Tier G: code complexity / scale / dependency metrics (ADP-G10–G12)
+# Tier G: code complexity / scale / dependency metrics (cyclomatic_complexity–G12)
 # Code block 1300–1399. method = "computed". All three are ai-sdlc-adoption.
 # ---------------------------------------------------------------------------
 
-# ADP-G10: Cyclomatic complexity (via web-tree-sitter AST)
+# cyclomatic_complexity: Cyclomatic complexity (via web-tree-sitter AST)
 
 [category.cyclomatic_complexity]
 code = 1301
 check_id = "DESC-03"
-metric = "adp_g10_complexity"
+metric = "cyclomatic_complexity"
 dimension = "descriptors"
 weight = 0
 method = "computed"
@@ -1783,12 +1783,12 @@ url = "https://doi.org/10.1109/TSE.1976.233837"
 date = "1976-07"
 last_verified = "2026-06-29"
 
-# ADP-G11: Lines of code and scale
+# loc_scale: Lines of code and scale
 
 [category.loc_scale]
 code = 1302
 check_id = "DESC-04"
-metric = "adp_g11_scale"
+metric = "loc_scale"
 dimension = "descriptors"
 weight = 0
 method = "computed"
@@ -1801,12 +1801,12 @@ url = "https://en.wikipedia.org/wiki/Source_lines_of_code"
 date = "2025"
 last_verified = "2026-07-01"
 
-# ADP-G12: Direct dependency count (manifest-based)
+# dependency_count: Direct dependency count (manifest-based)
 
 [category.dependency_count]
 code = 1303
 check_id = "DESC-05"
-metric = "adp_g12_deps"
+metric = "dependency_count"
 dimension = "descriptors"
 weight = 0
 method = "computed"
@@ -1881,10 +1881,10 @@ last_verified = "2026-06-30"
 # [band.*] — thresholds for banded metrics
 # ---------------------------------------------------------------------------
 
-# ADP-G10: Cyclomatic complexity bands (McCabe 1976 thresholds)
+# cyclomatic_complexity: Cyclomatic complexity bands (McCabe 1976 thresholds)
 
 [band.cyclomatic_complexity]
-metric = "adp_g10_complexity"
+metric = "cyclomatic_complexity"
 source = "McCabe 1976"
 elite = "avg_ccn <= 5"
 high = "avg_ccn <= 10"
@@ -1892,7 +1892,7 @@ medium = "avg_ccn <= 15"
 low = "avg_ccn > 15"
 
 [band.complexity_hotspots]
-metric = "adp_g10_complexity"
+metric = "cyclomatic_complexity"
 source = "McCabe 1976"
 elite = "hotspots = 0"
 high = "hotspots <= 5"
@@ -1903,10 +1903,10 @@ low = "hotspots > 20"
 # [band.*] — thresholds for banded metrics
 # ---------------------------------------------------------------------------
 
-# ADP-G3 / ADP-G4: DORA delivery bands
+# merge_frequency / lead_time_for_change: DORA delivery bands
 
 [band.deploy_frequency]
-metric = "adp_g3_deploy_frequency"
+metric = "merge_frequency"
 source = "DORA State of DevOps"
 elite = "multiple per day"
 high = "once per day to once per week"
@@ -1914,7 +1914,7 @@ medium = "once per week to once per month"
 low = "< once per month"
 
 [band.lead_time_for_change]
-metric = "adp_g4_lead_time"
+metric = "lead_time_for_change"
 source = "DORA State of DevOps"
 elite = "< 1 day"
 high = "< 1 week"
@@ -1922,7 +1922,7 @@ medium = "< 1 month"
 low = ">= 1 month"
 
 [band.change_failure_rate]
-metric = "adp_g7_change_fail_rate"
+metric = "change_failure_rate"
 source = "DORA State of DevOps"
 elite = "0–5%"
 high = "5–10%"
@@ -1930,7 +1930,7 @@ medium = "10–15%"
 low = "> 15%"
 
 [band.mttr]
-metric = "adp_i3_mttr"
+metric = "mttr"
 source = "DORA State of DevOps"
 elite = "< 1 hour"
 high = "< 1 day"
@@ -1938,7 +1938,7 @@ medium = "< 1 week"
 low = ">= 1 week"
 
 [band.ci_pass_rate]
-metric = "adp_c1_ci_pass_rate"
+metric = "ci_pass_rate"
 source = "Martin Fowler CI/CD"
 elite = ">= 99%"
 high = ">= 95%"
@@ -1946,7 +1946,7 @@ medium = ">= 90%"
 low = "< 90%"
 
 [band.work_mix]
-metric = "adp_i1_work_mix"
+metric = "work_mix_allocation"
 source = "DX Core 4"
 elite = "Growth >= 60%"
 high = "Growth >= 45%"

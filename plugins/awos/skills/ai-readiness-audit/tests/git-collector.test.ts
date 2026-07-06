@@ -834,7 +834,7 @@ test('window_stats: fix_merges counts in-window fix/bugfix merges and excludes o
 
   assert.ok(
     'fix_merges' in ws,
-    'window_stats must include fix_merges field (required for adp_g14_rework_rate)'
+    'window_stats must include fix_merges field (required for rework_rate)'
   );
   assert.equal(
     ws.fix_merges,

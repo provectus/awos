@@ -26,6 +26,16 @@ No arguments needed. The skill is self-contained: it reads `standards.toml`, run
 
 Before starting, confirm you have network access — Pass 0 and Pass 1 issue live WebSearch/WebFetch calls.
 
+## Execution model — fan out, report progress, verify against current editions
+
+**Web verification runs in parallel subagents, not in the main agent.** A refresh means 20–40 independent lookups; issuing them one per turn in the main context serializes ~25 minutes of I/O (a measured 2026-07-06 run did exactly that). Group the distinct URLs into slices of ~5–8 (keep every category sharing a URL in the same slice) and dispatch one general-purpose `Agent` per slice — all in a single message so they run concurrently. Each subagent gets: its URL list with the categories, definitions, and scoring anchors they must back; the Pass 1 verification rules; and returns one structured verdict per URL (`status, final_url, date, relevance quote, band/anchor evidence`). Pass 3's threshold-hunting and any bulk research (e.g. an ASVS mapping) are likewise subagent work. The main agent only orchestrates: builds the slices, synthesizes results into the proposal/patch, runs the linkcheck script, and asks the `AskUserQuestion`s — user decisions never move into a subagent.
+
+**Large PDFs don't fit WebFetch.** WebFetch caps content at 10 MB; official report PDFs (e.g. the DORA Accelerate reports, ~19 MB) exceed it. When a needed source is a large PDF, have the subagent `curl` it into the scratchpad and extract text with Python `pypdf` (one venv, reused) — do not burn turns on ad-hoc stream-decoding pipelines, and never verify a PDF by title alone.
+
+**Verify against the CURRENT edition first.** Derive today's date from the environment and start every source at its newest edition. Fall back to an older edition ONLY when the newer editions demonstrably no longer publish the content the category needs — verify that absence by fetching, don't assume — and record the fallback in the proposal (which editions were checked, what the newest one dropped). Example: the 2025 DORA report repurposed the series and dropped the four-keys band table, so the band citations legitimately point at the 2023 PDF — but that conclusion must come from having fetched the 2025/2024 editions this run, never from searching an old year out of habit.
+
+**Report progress throughout.** A full refresh runs many minutes; emit a one-line status at every pass boundary and as verification slices return — e.g. `[standards-refresh] Pass 1 — 14/22 URLs verified (2 slices pending)`, `[standards-refresh] Pass 3 — 9 detector threshold pairs hunted, 2 pending user decision`. Never go multiple minutes of tool calls without a status line.
+
 ## What it outputs
 
 The skill writes two files:

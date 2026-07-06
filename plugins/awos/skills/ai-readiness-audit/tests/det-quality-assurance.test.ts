@@ -74,10 +74,10 @@ test('QA-01: 4 test files for 10 source files is WARN (40% ratio)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectUnitTests (2501 — QA-02, detected)
+// detectUnitTests (2501 — QA-04, detected)
 // ---------------------------------------------------------------------------
 
-test('QA-02: no test files is FAIL', () => {
+test('QA-04: no test files is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'app.py'), 'print(1)\n');
   const r = detectUnitTests(t);
@@ -85,7 +85,7 @@ test('QA-02: no test files is FAIL', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('QA-02: test files present is PASS', () => {
+test('QA-04: test files present is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, 'tests'));
   writeFileSync(
@@ -97,7 +97,7 @@ test('QA-02: test files present is PASS', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('QA-02: spec file is PASS', () => {
+test('QA-04: spec file is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, 'spec'));
   writeFileSync(join(t, 'spec', 'app.spec.ts'), 'it("works", () => {})\n');
@@ -105,7 +105,7 @@ test('QA-02: spec file is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
-test('QA-02: Jest mock usage in test file is detected as unit signal', () => {
+test('QA-04: Jest mock usage in test file is detected as unit signal', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'app.test.ts'),
@@ -120,10 +120,10 @@ test('QA-02: Jest mock usage in test file is detected as unit signal', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectIntegrationTests (2502 — QA-03, detected)
+// detectIntegrationTests (2502 — QA-05, detected)
 // ---------------------------------------------------------------------------
 
-test('QA-03: no integration signals is FAIL', () => {
+test('QA-05: no integration signals is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'app.py'), 'print(1)\n');
   const r = detectIntegrationTests(t);
@@ -131,7 +131,7 @@ test('QA-03: no integration signals is FAIL', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('QA-03: integration/ directory with test files is PASS', () => {
+test('QA-05: integration/ directory with test files is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, 'integration'));
   writeFileSync(
@@ -143,7 +143,7 @@ test('QA-03: integration/ directory with test files is PASS', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('QA-03: TestContainers import in test file is PASS', () => {
+test('QA-05: TestContainers import in test file is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'app.test.ts'),
@@ -153,7 +153,7 @@ test('QA-03: TestContainers import in test file is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
-test('QA-03: httpx + DB fixture in test file (no integration dir/marker) is PASS', () => {
+test('QA-05: httpx + DB fixture in test file (no integration dir/marker) is PASS', () => {
   // Regression: real integration tests using httpx + asyncpg without an
   // explicit "integration/" directory or @pytest.mark.integration must
   // still be detected via content signals.
@@ -197,7 +197,7 @@ test('QA-03: httpx + DB fixture in test file (no integration dir/marker) is PASS
   assert.ok((r.value as number) > 0, 'signal count must be positive');
 });
 
-test('QA-03: pure mock unit test (no real I/O) is NOT counted as integration — stays FAIL', () => {
+test('QA-05: pure mock unit test (no real I/O) is NOT counted as integration — stays FAIL', () => {
   // A test that only uses MagicMock / jest.fn — no real HTTP or DB client.
   // The overall result should be FAIL because no integration signals are present.
   const t = tmp();
@@ -222,7 +222,7 @@ test('QA-03: pure mock unit test (no real I/O) is NOT counted as integration —
   );
 });
 
-test('QA-03: httpx.AsyncClient in test file alone is PASS', () => {
+test('QA-05: httpx.AsyncClient in test file alone is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'test_http.py'),
@@ -232,7 +232,7 @@ test('QA-03: httpx.AsyncClient in test file alone is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
-test('QA-03: sqlalchemy create_engine in test file is PASS', () => {
+test('QA-05: sqlalchemy create_engine in test file is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'test_db.py'),
@@ -242,7 +242,7 @@ test('QA-03: sqlalchemy create_engine in test file is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
-test('QA-03: TestClient (ASGI transport) in test file is PASS', () => {
+test('QA-05: TestClient (ASGI transport) in test file is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'test_asgi.py'),
@@ -252,7 +252,7 @@ test('QA-03: TestClient (ASGI transport) in test file is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
-test('QA-03: from httpx import AsyncClient + from asyncpg import (unqualified, conftest) — PASS', () => {
+test('QA-05: from httpx import AsyncClient + from asyncpg import (unqualified, conftest) — PASS', () => {
   // Mirrors the onex-discovery-api pattern: conftest.py uses import-based
   // unqualified forms only — no httpx.AsyncClient or asyncpg.connect prefix.
   // The detector must catch this via import signals + conftest scanning.
@@ -299,10 +299,10 @@ test('QA-03: from httpx import AsyncClient + from asyncpg import (unqualified, c
 });
 
 // ---------------------------------------------------------------------------
-// detectE2ETests (2503 — QA-04, detected)
+// detectE2ETests (2503 — QA-06, detected)
 // ---------------------------------------------------------------------------
 
-test('QA-04: no E2E signals is FAIL', () => {
+test('QA-06: no E2E signals is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'app.py'), 'print(1)\n');
   const r = detectE2ETests(t);
@@ -310,7 +310,7 @@ test('QA-04: no E2E signals is FAIL', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('QA-04: playwright.config.ts at root is PASS', () => {
+test('QA-06: playwright.config.ts at root is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'playwright.config.ts'),
@@ -325,7 +325,7 @@ test('QA-04: playwright.config.ts at root is PASS', () => {
   );
 });
 
-test('QA-04: cypress import in test file is PASS', () => {
+test('QA-06: cypress import in test file is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, 'e2e'));
   writeFileSync(
@@ -336,7 +336,7 @@ test('QA-04: cypress import in test file is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
-test('QA-04: test file in e2e/ dir is PASS', () => {
+test('QA-06: test file in e2e/ dir is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, 'e2e-tests'));
   writeFileSync(
@@ -348,10 +348,10 @@ test('QA-04: test file in e2e/ dir is PASS', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectTestPyramid (2504 — QA-05, computed)
+// detectTestPyramid (2504 — QA-07, computed)
 // ---------------------------------------------------------------------------
 
-test('QA-05: no test files returns SKIP', () => {
+test('QA-07: no test files returns SKIP', () => {
   const t = tmp();
   writeFileSync(join(t, 'app.py'), 'print(1)\n');
   const r = detectTestPyramid(t);
@@ -359,7 +359,7 @@ test('QA-05: no test files returns SKIP', () => {
   assert.equal(r.method, 'computed');
 });
 
-test('QA-05: mostly unit tests with no E2E is PASS', () => {
+test('QA-07: mostly unit tests with no E2E is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, 'tests'));
   for (let i = 0; i < 8; i++) {
@@ -375,7 +375,7 @@ test('QA-05: mostly unit tests with no E2E is PASS', () => {
   assert.equal(r.method, 'computed');
 });
 
-test('QA-05: more integration than unit is WARN or FAIL', () => {
+test('QA-07: more integration than unit is WARN or FAIL', () => {
   const t = tmp();
   // 2 unit, 10 integration
   writeFileSync(join(t, 'unit1.test.ts'), 'test("u1", () => {})\n');
@@ -396,10 +396,10 @@ test('QA-05: more integration than unit is WARN or FAIL', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectCoverageConfig (2505 — QA-06, detected)
+// detectCoverageConfig (2505 — QA-03, detected)
 // ---------------------------------------------------------------------------
 
-test('QA-06: no coverage config is FAIL', () => {
+test('QA-03: no coverage config is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'app.py'), 'print(1)\n');
   const r = detectCoverageConfig(t);
@@ -407,7 +407,7 @@ test('QA-06: no coverage config is FAIL', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('QA-06: .coveragerc present is PASS', () => {
+test('QA-03: .coveragerc present is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, '.coveragerc'),
@@ -422,14 +422,14 @@ test('QA-06: .coveragerc present is PASS', () => {
   );
 });
 
-test('QA-06: codecov.yml present is PASS', () => {
+test('QA-03: codecov.yml present is PASS', () => {
   const t = tmp();
   writeFileSync(join(t, 'codecov.yml'), 'coverage:\n  minimum: 80\n');
   const r = detectCoverageConfig(t);
   assert.equal(r.status, 'PASS');
 });
 
-test('QA-06: package.json with coverageThreshold is PASS', () => {
+test('QA-03: package.json with coverageThreshold is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'package.json'),
@@ -448,10 +448,10 @@ test('QA-06: package.json with coverageThreshold is PASS', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectTestDataManagement (2506 — QA-07, detected)
+// detectTestDataManagement (2506 — QA-08, detected)
 // ---------------------------------------------------------------------------
 
-test('QA-07: no test data signals is FAIL', () => {
+test('QA-08: no test data signals is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'app.py'), 'print(1)\n');
   const r = detectTestDataManagement(t);
@@ -459,7 +459,7 @@ test('QA-07: no test data signals is FAIL', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('QA-07: fixtures/ directory at root is PASS', () => {
+test('QA-08: fixtures/ directory at root is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, 'fixtures'));
   writeFileSync(join(t, 'fixtures', 'user.json'), '{"id": 1}\n');
@@ -472,7 +472,7 @@ test('QA-07: fixtures/ directory at root is PASS', () => {
   );
 });
 
-test('QA-07: factory_boy import in test file is PASS', () => {
+test('QA-08: factory_boy import in test file is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, 'tests'));
   writeFileSync(
@@ -483,7 +483,7 @@ test('QA-07: factory_boy import in test file is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
-test('QA-07: conftest.py present is PASS', () => {
+test('QA-08: conftest.py present is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'conftest.py'),
@@ -498,10 +498,10 @@ test('QA-07: conftest.py present is PASS', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectMockingIsolation (2507 — QA-08, detected)
+// detectMockingIsolation (2507 — QA-09, detected)
 // ---------------------------------------------------------------------------
 
-test('QA-08: no test files is FAIL', () => {
+test('QA-09: no test files is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'app.py'), 'print(1)\n');
   const r = detectMockingIsolation(t);
@@ -509,7 +509,7 @@ test('QA-08: no test files is FAIL', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('QA-08: jest.mock in test file is PASS', () => {
+test('QA-09: jest.mock in test file is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'app.test.ts'),
@@ -524,7 +524,7 @@ test('QA-08: jest.mock in test file is PASS', () => {
   );
 });
 
-test('QA-08: unittest.mock import in Python test is PASS', () => {
+test('QA-09: unittest.mock import in Python test is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, 'tests'));
   writeFileSync(
@@ -535,7 +535,7 @@ test('QA-08: unittest.mock import in Python test is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
-test('QA-08: test file without mock signals is FAIL', () => {
+test('QA-09: test file without mock signals is FAIL', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'app.test.ts'),
@@ -546,10 +546,10 @@ test('QA-08: test file without mock signals is FAIL', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectContractTests (2508 — QA-09, detected)
+// detectContractTests (2508 — QA-10, detected)
 // ---------------------------------------------------------------------------
 
-test('QA-09: no contract signals is FAIL', () => {
+test('QA-10: no contract signals is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'app.py'), 'print(1)\n');
   const r = detectContractTests(t);
@@ -557,7 +557,7 @@ test('QA-09: no contract signals is FAIL', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('QA-09: pacts/ directory present is PASS', () => {
+test('QA-10: pacts/ directory present is PASS', () => {
   const t = tmp();
   mkdirSync(join(t, 'pacts'));
   writeFileSync(join(t, 'pacts', 'consumer-provider.json'), '{}');
@@ -570,7 +570,7 @@ test('QA-09: pacts/ directory present is PASS', () => {
   );
 });
 
-test('QA-09: Pact import in test file is PASS', () => {
+test('QA-10: Pact import in test file is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'consumer.test.ts'),
@@ -581,10 +581,10 @@ test('QA-09: Pact import in test file is PASS', () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectMlIterationTests (2509 — QA-10, detected)
+// detectMlIterationTests (2509 — QA-11, detected)
 // ---------------------------------------------------------------------------
 
-test('QA-10: no ML framework detected returns SKIP', () => {
+test('QA-11: no ML framework detected returns SKIP', () => {
   const t = tmp();
   writeFileSync(join(t, 'app.ts'), 'console.log("hello")\n');
   const r = detectMlIterationTests(t);
@@ -592,7 +592,7 @@ test('QA-10: no ML framework detected returns SKIP', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('QA-10: pandas/numpy-only data scripts are not an ML project (SKIP)', () => {
+test('QA-11: pandas/numpy-only data scripts are not an ML project (SKIP)', () => {
   const t = tmp();
   // General data wrangling — no ML framework — must not subject the repo to
   // the ML-iteration-tests requirement.
@@ -604,11 +604,11 @@ test('QA-10: pandas/numpy-only data scripts are not an ML project (SKIP)', () =>
   assert.equal(
     r.status,
     'SKIP',
-    `pandas/numpy alone must not classify the repo as ML (QA-10 SKIP); got ${r.status}`
+    `pandas/numpy alone must not classify the repo as ML (QA-11 SKIP); got ${r.status}`
   );
 });
 
-test('QA-10: ML project with no quality tests is FAIL', () => {
+test('QA-11: ML project with no quality tests is FAIL', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'train.py'),
@@ -620,7 +620,7 @@ test('QA-10: ML project with no quality tests is FAIL', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('QA-10: ML project with evidently-like assertions is PASS', () => {
+test('QA-11: ML project with evidently-like assertions is PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'train.py'),
@@ -643,7 +643,7 @@ test('QA-10: ML project with evidently-like assertions is PASS', () => {
 // C5 broadened coverage — new tests for Phase C additions
 // ---------------------------------------------------------------------------
 
-test('QA-02: flat tests/ dir (no unit/ subdir) still returns PASS', () => {
+test('QA-04: flat tests/ dir (no unit/ subdir) still returns PASS', () => {
   // Flat tests/ directory with no unit/ or __tests__/ tier split.
   // The broadened globs should find the test files and still return PASS.
   const t = tmp();
@@ -658,7 +658,7 @@ test('QA-02: flat tests/ dir (no unit/ subdir) still returns PASS', () => {
   );
 });
 
-test('QA-06: pytest.ini with --cov returns PASS', () => {
+test('QA-03: pytest.ini with --cov returns PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'pytest.ini'),
@@ -668,14 +668,14 @@ test('QA-06: pytest.ini with --cov returns PASS', () => {
   assert.equal(r.status, 'PASS', 'pytest.ini with --cov must return PASS');
 });
 
-test('QA-06: tox.ini with pytest-cov returns PASS', () => {
+test('QA-03: tox.ini with pytest-cov returns PASS', () => {
   const t = tmp();
   writeFileSync(join(t, 'tox.ini'), '[pytest]\naddopts = --cov=mypackage\n');
   const r = detectCoverageConfig(t);
   assert.equal(r.status, 'PASS', 'tox.ini with pytest-cov must return PASS');
 });
 
-test('QA-04: Vitest reference is NOT an E2E signal (unit runner, not a browser driver) — B1', () => {
+test('QA-06: Vitest reference is NOT an E2E signal (unit runner, not a browser driver) — B1', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'app.spec.ts'),
@@ -689,7 +689,7 @@ test('QA-04: Vitest reference is NOT an E2E signal (unit runner, not a browser d
   );
 });
 
-test('QA-04: Playwright reference in test file IS detected as E2E signal', () => {
+test('QA-06: Playwright reference in test file IS detected as E2E signal', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'flow.spec.ts'),
@@ -703,7 +703,7 @@ test('QA-04: Playwright reference in test file IS detected as E2E signal', () =>
   );
 });
 
-test('QA-03: k6 reference in test file returns PASS', () => {
+test('QA-05: k6 reference in test file returns PASS', () => {
   const t = tmp();
   writeFileSync(
     join(t, 'load.test.js'),

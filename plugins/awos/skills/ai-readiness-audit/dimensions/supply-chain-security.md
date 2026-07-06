@@ -12,7 +12,7 @@ Audits the project's resilience to supply chain attacks — compromised or malic
 
 This dimension focuses exclusively on dependency supply chain risks. Related but distinct checks live elsewhere:
 
-- **SBP-06** covers lockfile _presence_ and update automation _existence_ (Renovate/Dependabot configured)
+- **SBP-05** covers lockfile _presence_ and update automation _existence_ (Renovate/Dependabot configured)
 - **AS-12 through AS-14** cover secrets exposure (`.env`, API keys, gitignore)
 
 This dimension goes deeper: lockfiles committed to git with integrity hashes, version pinning discipline, recently published package detection (quarantine), dependency review gates, vulnerability scanning in CI, dependency override auditing, and attack surface from dependency bloat.
@@ -137,7 +137,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Pass:** Dependency update tool configured with automerge disabled (or restricted to safe types only), AND lockfiles/manifests have CODEOWNERS entries
 - **Warn:** Dependency update tool configured with automerge disabled but no CODEOWNERS on lockfiles/manifests (or vice versa)
 - **Fail:** Automerge enabled globally for dependency updates, OR auto-approve workflow detected for Dependabot PRs
-- **Skip-When:** No dependency update automation detected (no Renovate or Dependabot config found). The absence of a dependency update strategy is already covered by SBP-06 — this check only evaluates the safety of automation that exists.
+- **Skip-When:** No dependency update automation detected (no Renovate or Dependabot config found). The absence of a dependency update strategy is already covered by SBP-05 — this check only evaluates the safety of automation that exists.
 - **Severity:** high
 - **Category:** 2904
 

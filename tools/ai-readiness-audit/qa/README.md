@@ -33,7 +33,7 @@ Whatever is already in the target's `context/audits/` is **stashed into the run'
 npm run audit:test -- --target ~/code/onex-discovery-api --phase first --label baseline
 
 # After changing the skill, run the warm case seeded from that baseline:
-npm run audit:test -- --target ~/code/onex-discovery-api --phase second --label "tweaked QA-03" --build
+npm run audit:test -- --target ~/code/onex-discovery-api --phase second --label "tweaked QA-05" --build
 
 # Compare the two newest runs (or pass two run dirs):
 npm run audit:compare -- --target onex-discovery-api

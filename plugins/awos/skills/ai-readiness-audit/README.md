@@ -19,7 +19,7 @@ Flow, end to end: scope discovery + one `AskUserQuestion` → `audit-core` → c
 
 [references/standards.toml](references/standards.toml) is the **scoring model as data**. Every capability category the audit can award lives there as a `[category.*]` record:
 
-- `code` (numeric id) and `check_id` (the `ADP-01`/`DF-02`/`QA-05`-style id that appears in reports and dimension docs);
+- `code` (numeric id) and `check_id` (the `ADP-01`/`DF-02`/`QA-07`-style id that appears in reports and dimension docs);
 - `weight` — the points awarded when present; a dimension's score is the sum of its awarded weights, the audit total is the sum across dimensions, nothing is capped;
 - `method` — who evaluates it: `detected` (a detector in `detectors/`), `computed` (a metric in `metrics/`), or `judgment` (the orchestrator, against the rubric in the dimension file);
 - `applies_when` — a project-topology expression (e.g. `topology.is_monorepo`, `topology.has_tracker`) that gates whether the category counts toward the applicable weight at all;

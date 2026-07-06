@@ -43,7 +43,36 @@ Audits the depth and structure of the project's testing approach. Checks whether
 
 ---
 
-### QA-02: Unit tier present
+### QA-02: Measured line coverage (Google bands)
+
+- **What:** Measured line/statement coverage parsed from coverage reports on disk, scored against Google Testing Blog's published guidance (60% acceptable, 75% commendable, 90% exemplary). Distinct from QA-01 (module-has-tests proxy) and QA-03 (whether coverage is measured at all). Per the same source, coverage percentage must never be a sole quality target.
+- **How:** `node "<engine cli path>" metric line_coverage <repoPath>` — parses lcov.info/\*.lcov, cobertura XML (coverage.xml), istanbul coverage-summary.json, JaCoCo XML, and clover.xml; the scan is ignore-insensitive because coverage artifacts are normally gitignored build outputs
+- **Pass (OK):** metric returns `status: "OK"` — line coverage computed from at least one parseable report
+- **Skip-When:** no parseable coverage report exists in the working tree
+- **Severity:** medium
+- **Category:** 2510
+
+---
+
+### QA-03: Coverage reporting configured
+
+- **What:** The project measures what percentage of source code is exercised by tests, optionally enforcing a minimum threshold
+- **How:** Check for coverage tool configuration:
+  - Jest: `collectCoverage: true` or `coverageThreshold` key in `jest.config.*`
+  - Vitest: `coverage` section in `vitest.config.*`
+  - pytest-cov: `pytest-cov` in `requirements*.txt` or `pyproject.toml`; `--cov` flag in `pytest.ini` or `pyproject.toml` `addopts`
+  - JaCoCo: `jacoco` plugin in `build.gradle` or `build.gradle.kts`
+  - nyc / c8: `.nycrc`, `.nycrc.json`, or `c8` / `nyc` script in `package.json`
+  - Go: `go test -coverprofile` flag in `Makefile`, CI config, or `go test ./... -cover` in CI scripts
+  - Ruby: `simplecov` gem in `Gemfile` or `require 'simplecov'` in `spec_helper.rb` / `.simplecov`
+- **Pass:** Coverage tool configured with thresholds defined
+- **Warn:** Coverage tool present but no thresholds defined, OR no coverage tooling found
+- **Severity:** low
+- **Category:** 2505
+
+---
+
+### QA-04: Unit tier present
 
 - **What:** The project has tests that verify individual units of logic in isolation, without real I/O or external dependencies
 - **How:** Look for any of the following signals:
@@ -73,7 +102,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 
 ---
 
-### QA-03: Integration tier present
+### QA-05: Integration tier present
 
 - **What:** The project has tests that verify interactions between components — across real databases, real HTTP calls, or real message queues
 - **How:** Look for any of the following signals:
@@ -100,7 +129,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 
 ---
 
-### QA-04: E2E tier present
+### QA-06: E2E tier present
 
 - **What:** The project has end-to-end tests that exercise complete user flows through a real UI, API surface, or CLI
 - **How:** Look for any of the following signals:
@@ -138,38 +167,20 @@ Audits the depth and structure of the project's testing approach. Checks whether
 
 ---
 
-### QA-05: Pyramid shape — no inversion
+### QA-07: Pyramid shape — no inversion
 
 - **What:** The distribution of tests across tiers follows a healthy pyramid: most tests are unit-level, fewer are integration-level, fewest are E2E
-- **How:** Use findings from QA-02, QA-03, and QA-04 to estimate test counts at each tier. Count test files (or test definitions for declarative stacks) matched by each tier's signals. A healthy pyramid satisfies: unit_count >= integration_count >= e2e_count.
+- **How:** Use findings from QA-04, QA-05, and QA-06 to estimate test counts at each tier. Count test files (or test definitions for declarative stacks) matched by each tier's signals. A healthy pyramid satisfies: unit_count >= integration_count >= e2e_count.
 - **Pass:** unit_count >= integration_count >= e2e_count, or only one tier is present
 - **Warn:** E2E count exceeds unit count but integration layer exists as a buffer, OR integration count exceeds unit count by less than 2×
 - **Fail:** E2E count > unit count (inverted pyramid), or integration count > unit count by a significant margin (2× or more)
-- **Skip-When:** Fewer than 2 tiers received a Pass result in QA-02, QA-03, or QA-04
+- **Skip-When:** Fewer than 2 tiers received a Pass result in QA-04, QA-05, or QA-06
 - **Severity:** medium
 - **Category:** 2504
 
 ---
 
-### QA-06: Coverage reporting configured
-
-- **What:** The project measures what percentage of source code is exercised by tests, optionally enforcing a minimum threshold
-- **How:** Check for coverage tool configuration:
-  - Jest: `collectCoverage: true` or `coverageThreshold` key in `jest.config.*`
-  - Vitest: `coverage` section in `vitest.config.*`
-  - pytest-cov: `pytest-cov` in `requirements*.txt` or `pyproject.toml`; `--cov` flag in `pytest.ini` or `pyproject.toml` `addopts`
-  - JaCoCo: `jacoco` plugin in `build.gradle` or `build.gradle.kts`
-  - nyc / c8: `.nycrc`, `.nycrc.json`, or `c8` / `nyc` script in `package.json`
-  - Go: `go test -coverprofile` flag in `Makefile`, CI config, or `go test ./... -cover` in CI scripts
-  - Ruby: `simplecov` gem in `Gemfile` or `require 'simplecov'` in `spec_helper.rb` / `.simplecov`
-- **Pass:** Coverage tool configured with thresholds defined
-- **Warn:** Coverage tool present but no thresholds defined, OR no coverage tooling found
-- **Severity:** low
-- **Category:** 2505
-
----
-
-### QA-07: Test data management
+### QA-08: Test data management
 
 - **What:** Tests use a structured approach to create and manage test data, rather than scattering hardcoded inline values across test files
 - **How:** Check for:
@@ -186,7 +197,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 
 ---
 
-### QA-08: Test isolation — mocking infrastructure
+### QA-09: Test isolation — mocking infrastructure
 
 - **What:** Unit and integration tests use mocking/stubbing to isolate the code under test from external dependencies
 - **How:** Check for mocking libraries in dependencies or imports:
@@ -209,7 +220,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 
 ---
 
-### QA-09: Contract testing
+### QA-10: Contract testing
 
 - **What:** Service boundaries are verified through consumer-driven contract tests, ensuring producers don't break consumers
 - **How:** Check for contract testing frameworks:
@@ -226,7 +237,7 @@ Audits the depth and structure of the project's testing approach. Checks whether
 
 ---
 
-### QA-10: ML model iteration testing
+### QA-11: ML model iteration testing
 
 - **What:** ML models are tested for quality metrics as part of the development cycle, not just functional correctness
 - **How:** Check for ML evaluation frameworks or patterns in test files:
@@ -241,14 +252,3 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Skip-When:** Topology shows no ML layer — no ML framework imports (`sklearn`, `torch`, `tensorflow`, `xgboost`, `transformers`) found in non-test source files
 - **Severity:** high
 - **Category:** 2509
-
----
-
-### QA-11: Measured line coverage (Google bands)
-
-- **What:** Measured line/statement coverage parsed from coverage reports on disk, scored against Google Testing Blog's published guidance (60% acceptable, 75% commendable, 90% exemplary). Distinct from QA-01 (module-has-tests proxy) and QA-06 (whether coverage is measured at all). Per the same source, coverage percentage must never be a sole quality target.
-- **How:** `node "<engine cli path>" metric line_coverage <repoPath>` — parses lcov.info/\*.lcov, cobertura XML (coverage.xml), istanbul coverage-summary.json, JaCoCo XML, and clover.xml; the scan is ignore-insensitive because coverage artifacts are normally gitignored build outputs
-- **Pass (OK):** metric returns `status: "OK"` — line coverage computed from at least one parseable report
-- **Skip-When:** no parseable coverage report exists in the working tree
-- **Severity:** medium
-- **Category:** 2510

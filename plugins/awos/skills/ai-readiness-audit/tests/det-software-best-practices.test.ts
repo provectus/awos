@@ -554,7 +554,7 @@ test('SBP-03: pass_at param is honored — 50% annotation ratio flips WARN→PAS
   );
 });
 
-test('SBP-05: fail_at param is honored — 25% bad-catch ratio flips WARN→FAIL with fail_at 0.2', () => {
+test('SBP-06: fail_at param is honored — 25% bad-catch ratio flips WARN→FAIL with fail_at 0.2', () => {
   const t = tmp();
   // 4 except blocks: 1 empty (bad), 3 re-raising (handled) → badRatio 0.25.
   writeFileSync(

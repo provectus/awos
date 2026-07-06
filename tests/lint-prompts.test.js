@@ -1282,7 +1282,7 @@ test('standards.toml exists and matches the category/band schema', () => {
     'quality_assurance_qa_01',
     'appsec_auth_on_mutations',
     'software_best_practices_sbp_03',
-    'software_best_practices_sbp_05',
+    'software_best_practices_sbp_06',
     'sbp_vertical_delivery',
     'spec_driven_development_sdd_04',
     'spec_driven_development_sdd_07',

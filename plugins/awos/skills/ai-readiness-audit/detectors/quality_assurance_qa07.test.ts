@@ -1,4 +1,4 @@
-// detectors/quality_assurance_qa05.test.ts — QA-05 test-pyramid tier classification.
+// detectors/quality_assurance_qa05.test.ts — QA-07 test-pyramid tier classification.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -19,7 +19,7 @@ function detect(repo: string) {
   );
 }
 
-test('QA-05 classifies vitest-importing unit tests as unit, not e2e (B1)', () => {
+test('QA-07 classifies vitest-importing unit tests as unit, not e2e (B1)', () => {
   const repo = mkdtempSync(join(tmpdir(), 'awos-qa05-vitest-'));
   try {
     mkdirSync(join(repo, 'src'), { recursive: true });
@@ -59,7 +59,7 @@ test('QA-05 classifies vitest-importing unit tests as unit, not e2e (B1)', () =>
   }
 });
 
-test('QA-05 still classifies browser-driver tests (playwright import) as e2e', () => {
+test('QA-07 still classifies browser-driver tests (playwright import) as e2e', () => {
   const repo = mkdtempSync(join(tmpdir(), 'awos-qa05-e2e-'));
   try {
     mkdirSync(join(repo, 'src'), { recursive: true });

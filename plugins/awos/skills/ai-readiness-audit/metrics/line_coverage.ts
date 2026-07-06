@@ -1,6 +1,6 @@
 /**
  * line_coverage — measured line/statement coverage from coverage reports
- * (QA-11, code 2510).
+ * (QA-02, code 2510).
  *
  * kind: "coverage"
  * value: covered / total lines across every parseable coverage report (0..1)
@@ -9,7 +9,7 @@
  *   (60% "acceptable", 75% "commendable", 90% "exemplary").
  *
  * This is REAL measured coverage, distinct from QA-01 (share of source
- * modules that have any test — a proxy) and QA-06 (whether coverage is
+ * modules that have any test — a proxy) and QA-03 (whether coverage is
  * measured at all — presence). It reads the artifacts a coverage run leaves
  * behind:
  *   - lcov.info / *.lcov               — LH/LF line sums

@@ -508,7 +508,7 @@ export const DETECTORS: Record<
   2701: detectFormatting, // SBP-02 formatting automated
   2702: detectTypeSafety, // SBP-03 type safety enforced
   2703: detectCiCd, // SBP-04 CI/CD pipeline exists
-  2704: detectErrorHandling, // SBP-05 error-handling consistency
-  2705: detectLockfiles, // SBP-06 dependency lockfiles
-  2706: detectExceptClauseDefect, // SBP-05 sibling: Python-2 except-clause syntax
+  2704: detectErrorHandling, // SBP-06 error-handling consistency
+  2705: detectLockfiles, // SBP-05 dependency lockfiles
+  2706: detectExceptClauseDefect, // SBP-06 sibling: Python-2 except-clause syntax
 };

@@ -220,14 +220,15 @@ url = "https://dora.dev/research/2023/dora-report/2023-dora-accelerate-state-of-
 date = "2023-12"
 last_verified = "2026-07-06"
 
-# --- software-best-practices (9 checks) ---
-
 [category.mttr.scoring]
 scale = "log"
 anchors = [[0.1, 1.0], [1, 0.75], [24, 0.5], [168, 0.0]]
 anchor_unit = "median hours from incident start to resolution"
 basis = "derived"
 basis_note = "x boundaries transcribe the DORA time-to-restore bands (elite < 1 hour, high < 1 day, medium < 1 week, expressed in hours); the score at each boundary is AWOS calibration."
+
+# --- software-best-practices (9 checks) ---
+
 
 [category.software_best_practices_sbp_01]
 code = 2700
@@ -296,9 +297,25 @@ date = "2024-01-18"
 last_verified = "2026-07-06"
 
 [category.software_best_practices_sbp_05]
-code = 2704
+code = 2705
 check_id = "SBP-05"
 metric = "SBP-05"
+dimension = "software-best-practices"
+weight = 3
+method = "detected"
+definition = "Dependencies are locked with lockfiles and dependency update automation is configured"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-07-06"
+
+[category.software_best_practices_sbp_06]
+code = 2704
+check_id = "SBP-06"
+metric = "SBP-06"
 dimension = "software-best-practices"
 weight = 5
 fail_at = 0.50
@@ -311,22 +328,6 @@ reliability_default = "maximal"
 source = "Martin Fowler CI/CD"
 url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
-last_verified = "2026-07-06"
-
-[category.software_best_practices_sbp_06]
-code = 2705
-check_id = "SBP-06"
-metric = "SBP-06"
-dimension = "software-best-practices"
-weight = 3
-method = "detected"
-definition = "Dependencies are locked with lockfiles and dependency update automation is configured"
-applies_when = "always"
-sources = ["audit"]
-reliability_default = "maximal"
-source = "OWASP SCVS"
-url = "https://owasp.org/www-project-software-component-verification-standard/"
-date = "2020"
 last_verified = "2026-07-06"
 
 [category.sbp_except_clause_syntax]
@@ -518,74 +519,35 @@ url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
 last_verified = "2026-07-06"
 
-[category.quality_assurance_qa_02]
-code = 2501
+[category.line_coverage]
+code = 2510
 check_id = "QA-02"
-metric = "QA-02"
-dimension = "quality-assurance"
-weight = 5
-method = "detected"
-definition = "The project has tests that verify individual units of logic in isolation, without real I/O or external dependencies"
-applies_when = "always"
-sources = ["audit"]
-reliability_default = "maximal"
-source = "Martin Fowler — Practical Test Pyramid"
-url = "https://martinfowler.com/articles/practical-test-pyramid.html"
-date = "2018-02"
-last_verified = "2026-07-06"
-
-[category.quality_assurance_qa_03]
-code = 2502
-check_id = "QA-03"
-metric = "QA-03"
-dimension = "quality-assurance"
-weight = 5
-method = "detected"
-definition = "The project has tests that verify interactions between components across real databases, HTTP calls, or message queues"
-applies_when = "always"
-sources = ["audit"]
-reliability_default = "maximal"
-source = "Martin Fowler — Practical Test Pyramid"
-url = "https://martinfowler.com/articles/practical-test-pyramid.html"
-date = "2018-02"
-last_verified = "2026-07-06"
-
-[category.quality_assurance_qa_04]
-code = 2503
-check_id = "QA-04"
-metric = "QA-04"
-dimension = "quality-assurance"
-weight = 5
-method = "detected"
-definition = "The project has end-to-end tests exercising complete user flows through a real UI, API surface, or CLI"
-applies_when = "topology.is_not_library"
-sources = ["audit"]
-reliability_default = "maximal"
-source = "Martin Fowler — Practical Test Pyramid"
-url = "https://martinfowler.com/articles/practical-test-pyramid.html"
-date = "2018-02"
-last_verified = "2026-07-06"
-
-[category.quality_assurance_qa_05]
-code = 2504
-check_id = "QA-05"
-metric = "QA-05"
+metric = "line_coverage"
 dimension = "quality-assurance"
 weight = 3
 method = "computed"
-definition = "Test distribution follows a healthy pyramid: most tests unit-level, fewer integration, fewest E2E"
+summary = "Measured line coverage from a coverage report, scored against Google's published 60/75/90 bands."
+definition = "Measured line/statement coverage parsed from coverage reports on disk (lcov, cobertura, istanbul summary, JaCoCo, clover), scored against Google's published guidance: 60% acceptable, 75% commendable, 90% exemplary. Distinct from QA-01 (module-has-tests proxy) and QA-03 (coverage measurement presence). Per the same source, a coverage percentage must never be a sole quality target. SKIP when no report exists."
 applies_when = "always"
-sources = ["audit"]
-reliability_default = "maximal"
-source = "Martin Fowler — Practical Test Pyramid"
-url = "https://martinfowler.com/articles/practical-test-pyramid.html"
-date = "2018-02"
+sources = ["scale"]
+reliability_default = "not-reliable"
+source = "Google Testing Blog — Code Coverage Best Practices"
+url = "https://testing.googleblog.com/2020/08/code-coverage-best-practices.html"
+date = "2020-08-07"
 last_verified = "2026-07-06"
 
-[category.quality_assurance_qa_06]
+[category.line_coverage.scoring]
+scale = "linear"
+anchors = [[0.0, 0.0], [0.6, 0.5], [0.75, 0.8], [0.9, 1.0]]
+anchor_unit = "measured line coverage (0..1)"
+basis = "derived"
+basis_note = "The 60/75/90 boundaries transcribe Google Testing Blog's published guidance (60% acceptable, 75% commendable, 90% exemplary); the score awarded at each boundary is AWOS calibration."
+
+
+[category.quality_assurance_qa_03]
 code = 2505
-check_id = "QA-06"
-metric = "QA-06"
+check_id = "QA-03"
+metric = "QA-03"
 dimension = "quality-assurance"
 weight = 1
 method = "detected"
@@ -598,10 +560,74 @@ url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
 last_verified = "2026-07-06"
 
+[category.quality_assurance_qa_04]
+code = 2501
+check_id = "QA-04"
+metric = "QA-04"
+dimension = "quality-assurance"
+weight = 5
+method = "detected"
+definition = "The project has tests that verify individual units of logic in isolation, without real I/O or external dependencies"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.quality_assurance_qa_05]
+code = 2502
+check_id = "QA-05"
+metric = "QA-05"
+dimension = "quality-assurance"
+weight = 5
+method = "detected"
+definition = "The project has tests that verify interactions between components across real databases, HTTP calls, or message queues"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.quality_assurance_qa_06]
+code = 2503
+check_id = "QA-06"
+metric = "QA-06"
+dimension = "quality-assurance"
+weight = 5
+method = "detected"
+definition = "The project has end-to-end tests exercising complete user flows through a real UI, API surface, or CLI"
+applies_when = "topology.is_not_library"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
 [category.quality_assurance_qa_07]
-code = 2506
+code = 2504
 check_id = "QA-07"
 metric = "QA-07"
+dimension = "quality-assurance"
+weight = 3
+method = "computed"
+definition = "Test distribution follows a healthy pyramid: most tests unit-level, fewer integration, fewest E2E"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.quality_assurance_qa_08]
+code = 2506
+check_id = "QA-08"
+metric = "QA-08"
 dimension = "quality-assurance"
 weight = 1
 method = "detected"
@@ -614,10 +640,10 @@ url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
 last_verified = "2026-07-06"
 
-[category.quality_assurance_qa_08]
+[category.quality_assurance_qa_09]
 code = 2507
-check_id = "QA-08"
-metric = "QA-08"
+check_id = "QA-09"
+metric = "QA-09"
 dimension = "quality-assurance"
 weight = 3
 method = "detected"
@@ -630,10 +656,10 @@ url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
 last_verified = "2026-07-06"
 
-[category.quality_assurance_qa_09]
+[category.quality_assurance_qa_10]
 code = 2508
-check_id = "QA-09"
-metric = "QA-09"
+check_id = "QA-10"
+metric = "QA-10"
 dimension = "quality-assurance"
 weight = 5
 method = "detected"
@@ -646,10 +672,10 @@ url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
 last_verified = "2026-07-06"
 
-[category.quality_assurance_qa_10]
+[category.quality_assurance_qa_11]
 code = 2509
-check_id = "QA-10"
-metric = "QA-10"
+check_id = "QA-11"
+metric = "QA-11"
 dimension = "quality-assurance"
 weight = 5
 method = "detected"
@@ -671,29 +697,7 @@ last_verified = "2026-07-06"
 # ---------------------------------------------------------------------------
 
 # AS-01: TLS enforced — no plain-HTTP fallback
-[category.line_coverage]
-code = 2510
-check_id = "QA-11"
-metric = "line_coverage"
-dimension = "quality-assurance"
-weight = 3
-method = "computed"
-summary = "Measured line coverage from a coverage report, scored against Google's published 60/75/90 bands."
-definition = "Measured line/statement coverage parsed from coverage reports on disk (lcov, cobertura, istanbul summary, JaCoCo, clover), scored against Google's published guidance: 60% acceptable, 75% commendable, 90% exemplary. Distinct from QA-01 (module-has-tests proxy) and QA-06 (coverage measurement presence). Per the same source, a coverage percentage must never be a sole quality target. SKIP when no report exists."
-applies_when = "always"
-sources = ["scale"]
-reliability_default = "not-reliable"
-source = "Google Testing Blog — Code Coverage Best Practices"
-url = "https://testing.googleblog.com/2020/08/code-coverage-best-practices.html"
-date = "2020-08-07"
-last_verified = "2026-07-06"
 
-[category.line_coverage.scoring]
-scale = "linear"
-anchors = [[0.0, 0.0], [0.6, 0.5], [0.75, 0.8], [0.9, 1.0]]
-anchor_unit = "measured line coverage (0..1)"
-basis = "derived"
-basis_note = "The 60/75/90 boundaries transcribe Google Testing Blog's published guidance (60% acceptable, 75% commendable, 90% exemplary); the score awarded at each boundary is AWOS calibration."
 
 [category.appsec_tls_enforced]
 code = 3000
@@ -1870,16 +1874,17 @@ url = "https://getdx.com/blog/software-development-metrics/"
 date = "2025-09"
 last_verified = "2026-07-06"
 
-# --- descriptors (5 checks) ---
-
-# active_contributors: Active monthly contributors
-
 [category.onboarding_ease.scoring]
 scale = "linear"
 anchors = [[0.0, 0.0], [0.5, 0.5], [0.75, 0.8], [1.0, 1.0]]
 anchor_unit = "share of the four onboarding enablers present (0..1)"
 basis = "heuristic"
 basis_note = "DX Core 4 publishes no numeric Time-to-10th-PR proxy targets (already stated in the definition); the enabler-count curve is an AWOS heuristic."
+
+# --- descriptors (5 checks) ---
+
+# active_contributors: Active monthly contributors
+
 
 [category.active_contributors]
 code = 201

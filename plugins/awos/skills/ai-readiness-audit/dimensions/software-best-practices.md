@@ -54,17 +54,7 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Severity:** high
 - **Category:** 2703
 
-### SBP-05: Error handling patterns are consistent
-
-- **What:** The codebase follows consistent error handling rather than silent swallowing
-- **How:** Sample 5 catch blocks across backend and frontend. Check whether errors are logged, re-thrown, or silently ignored. Look for global error handlers.
-- **Pass:** Errors are consistently logged or propagated; global handlers exist
-- **Warn:** Mixed patterns — some errors handled well, some silently swallowed
-- **Fail:** Widespread silent error swallowing (empty catch blocks, no logging)
-- **Severity:** high
-- **Category:** 2704
-
-### SBP-06: Dependencies are managed
+### SBP-05: Dependencies are managed
 
 - **What:** Dependencies are locked and reasonably up-to-date
 - **How:** Check for lock files (`pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, `gradle.lockfile`). Check if there's a strategy for updates (renovate config, dependabot config).
@@ -73,6 +63,16 @@ Audits the codebase for adherence to software engineering fundamentals: clean ar
 - **Fail:** No lock files found
 - **Severity:** medium
 - **Category:** 2705
+
+### SBP-06: Error handling patterns are consistent
+
+- **What:** The codebase follows consistent error handling rather than silent swallowing
+- **How:** Sample 5 catch blocks across backend and frontend. Check whether errors are logged, re-thrown, or silently ignored. Look for global error handlers.
+- **Pass:** Errors are consistently logged or propagated; global handlers exist
+- **Warn:** Mixed patterns — some errors handled well, some silently swallowed
+- **Fail:** Widespread silent error swallowing (empty catch blocks, no logging)
+- **Severity:** high
+- **Category:** 2704
 
 ### SBP-07: No Python-2 except-clause syntax
 

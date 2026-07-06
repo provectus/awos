@@ -1,5 +1,5 @@
 /**
- * line_coverage (QA-11) — measured line coverage from coverage reports,
+ * line_coverage (QA-02) — measured line coverage from coverage reports,
  * scored against Google's published 60/75/90 bands.
  *
  * Contracts:
@@ -28,7 +28,7 @@ function tmp(): string {
   return mkdtempSync(join(tmpdir(), 'awos-linecov-'));
 }
 
-test('QA-11: SKIP with a how-to-fix note when no coverage report exists', () => {
+test('QA-02: SKIP with a how-to-fix note when no coverage report exists', () => {
   const repo = tmp();
   writeFileSync(join(repo, 'index.ts'), 'export const x = 1;\n');
   const r = run(repo);
@@ -40,7 +40,7 @@ test('QA-11: SKIP with a how-to-fix note when no coverage report exists', () => 
   );
 });
 
-test('QA-11: lcov LH/LF records aggregate into line coverage', () => {
+test('QA-02: lcov LH/LF records aggregate into line coverage', () => {
   const repo = tmp();
   mkdirSync(join(repo, 'coverage'));
   writeFileSync(
@@ -66,7 +66,7 @@ test('QA-11: lcov LH/LF records aggregate into line coverage', () => {
   );
 });
 
-test('QA-11: a gitignored lcov report is still measured', () => {
+test('QA-02: a gitignored lcov report is still measured', () => {
   const repo = tmp();
   execFileSync('git', ['init', '--quiet', repo]);
   writeFileSync(join(repo, '.gitignore'), 'coverage/\n');
@@ -85,7 +85,7 @@ test('QA-11: a gitignored lcov report is still measured', () => {
   assert.equal(r.band, 'exemplary');
 });
 
-test('QA-11: cobertura lines-covered/lines-valid parses', () => {
+test('QA-02: cobertura lines-covered/lines-valid parses', () => {
   const repo = tmp();
   writeFileSync(
     join(repo, 'coverage.xml'),
@@ -97,7 +97,7 @@ test('QA-11: cobertura lines-covered/lines-valid parses', () => {
   assert.equal(r.band, 'acceptable');
 });
 
-test('QA-11: istanbul coverage-summary.json parses', () => {
+test('QA-02: istanbul coverage-summary.json parses', () => {
   const repo = tmp();
   mkdirSync(join(repo, 'coverage'));
   writeFileSync(
@@ -112,7 +112,7 @@ test('QA-11: istanbul coverage-summary.json parses', () => {
   assert.equal(r.band, 'low', 'below 60% is below Google’s acceptable band');
 });
 
-test('QA-11: JaCoCo report-level LINE counter parses', () => {
+test('QA-02: JaCoCo report-level LINE counter parses', () => {
   const repo = tmp();
   writeFileSync(
     join(repo, 'jacoco.xml'),
@@ -124,7 +124,7 @@ test('QA-11: JaCoCo report-level LINE counter parses', () => {
   assert.equal(r.band, 'exemplary');
 });
 
-test('QA-11: clover coveredstatements/statements parses', () => {
+test('QA-02: clover coveredstatements/statements parses', () => {
   const repo = tmp();
   writeFileSync(
     join(repo, 'clover.xml'),
@@ -136,7 +136,7 @@ test('QA-11: clover coveredstatements/statements parses', () => {
   assert.equal(r.band, 'acceptable');
 });
 
-test('QA-11: multiple reports aggregate by summed lines and list each in evidence', () => {
+test('QA-02: multiple reports aggregate by summed lines and list each in evidence', () => {
   const repo = tmp();
   mkdirSync(join(repo, 'pkg-a'));
   mkdirSync(join(repo, 'pkg-b'));
@@ -155,7 +155,7 @@ test('QA-11: multiple reports aggregate by summed lines and list each in evidenc
   assert.equal(ev.length, 2, 'each parsed report must appear in evidence');
 });
 
-test('QA-11: awards category 2510 and reports the Google-band expression', () => {
+test('QA-02: awards category 2510 and reports the Google-band expression', () => {
   const repo = tmp();
   writeFileSync(
     join(repo, 'lcov.info'),

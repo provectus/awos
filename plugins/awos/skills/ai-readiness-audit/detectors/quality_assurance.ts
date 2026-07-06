@@ -161,7 +161,7 @@ export function detectTestInfrastructure(
 }
 
 // ---------------------------------------------------------------------------
-// detectUnitTests — category 2501 (QA-02, method: detected)
+// detectUnitTests — category 2501 (QA-04, method: detected)
 //
 // Detects the presence of unit tests — tests that verify individual units of
 // logic in isolation, without real I/O.
@@ -221,7 +221,7 @@ export function detectUnitTests(
 }
 
 // ---------------------------------------------------------------------------
-// detectIntegrationTests — category 2502 (QA-03, method: detected)
+// detectIntegrationTests — category 2502 (QA-05, method: detected)
 //
 // Detects integration tests — tests that verify interactions between
 // components across real databases, HTTP calls, or message queues.
@@ -325,7 +325,7 @@ export function detectIntegrationTests(
 }
 
 // ---------------------------------------------------------------------------
-// detectE2ETests — category 2503 (QA-04, method: detected)
+// detectE2ETests — category 2503 (QA-06, method: detected)
 //
 // applies_when: topology.is_not_library
 //
@@ -393,7 +393,7 @@ export function detectE2ETests(
 }
 
 // ---------------------------------------------------------------------------
-// detectTestPyramid — category 2504 (QA-05, method: computed)
+// detectTestPyramid — category 2504 (QA-07, method: computed)
 //
 // Checks that test distribution follows a healthy pyramid:
 //   most tests unit-level, fewer integration, fewest E2E.
@@ -510,7 +510,7 @@ export function detectTestPyramid(
 }
 
 // ---------------------------------------------------------------------------
-// detectCoverageConfig — category 2505 (QA-06, method: detected)
+// detectCoverageConfig — category 2505 (QA-03, method: detected)
 //
 // Detects whether the project measures what percentage of source code is
 // exercised by tests.
@@ -600,7 +600,7 @@ export function detectCoverageConfig(
 }
 
 // ---------------------------------------------------------------------------
-// detectTestDataManagement — category 2506 (QA-07, method: detected)
+// detectTestDataManagement — category 2506 (QA-08, method: detected)
 //
 // Detects whether tests use a structured approach to test data rather than
 // scattering hardcoded inline values.
@@ -685,7 +685,7 @@ export function detectTestDataManagement(
 }
 
 // ---------------------------------------------------------------------------
-// detectMockingIsolation — category 2507 (QA-08, method: detected)
+// detectMockingIsolation — category 2507 (QA-09, method: detected)
 //
 // Detects whether tests use mocking/stubbing to isolate the code under test
 // from external dependencies.
@@ -738,7 +738,7 @@ export function detectMockingIsolation(
 }
 
 // ---------------------------------------------------------------------------
-// detectContractTests — category 2508 (QA-09, method: detected)
+// detectContractTests — category 2508 (QA-10, method: detected)
 //
 // applies_when: topology.is_multi_service
 //
@@ -814,7 +814,7 @@ export function detectContractTests(
 }
 
 // ---------------------------------------------------------------------------
-// detectMlIterationTests — category 2509 (QA-10, method: detected)
+// detectMlIterationTests — category 2509 (QA-11, method: detected)
 //
 // applies_when: topology.has_ml_layer
 //
@@ -834,7 +834,7 @@ export function detectContractTests(
 
 // pandas/numpy are deliberately absent: they are general data-wrangling
 // libraries, and their presence alone (ETL scripts, analytics notebooks)
-// does not make a project an ML project subject to QA-10.
+// does not make a project an ML project subject to QA-11.
 const ML_SOURCE_RX =
   /\b(?:sklearn|scikit-learn|torch|tensorflow|keras|transformers|xgboost|lightgbm|catboost|mlflow)\b/i;
 
@@ -869,7 +869,7 @@ export function detectMlIterationTests(
     return makeResult(
       'SKIP',
       null,
-      ['no ML framework usage detected — QA-10 not applicable'],
+      ['no ML framework usage detected — QA-11 not applicable'],
       'detected'
     );
   }
@@ -914,13 +914,13 @@ export const DETECTORS: Record<
   (repoPath: string, params?: unknown) => ReturnType<typeof makeResult>
 > = {
   2500: detectTestInfrastructure, // QA-01 test infrastructure + coverage proxy (computed)
-  2501: detectUnitTests, // QA-02 unit test tier (detected)
-  2502: detectIntegrationTests, // QA-03 integration test tier (detected)
-  2503: detectE2ETests, // QA-04 E2E test tier (detected)
-  2504: detectTestPyramid, // QA-05 pyramid shape (computed)
-  2505: detectCoverageConfig, // QA-06 coverage reporting config (detected)
-  2506: detectTestDataManagement, // QA-07 test data management (detected)
-  2507: detectMockingIsolation, // QA-08 test isolation/mocking (detected)
-  2508: detectContractTests, // QA-09 contract testing (detected)
-  2509: detectMlIterationTests, // QA-10 ML iteration testing (detected)
+  2501: detectUnitTests, // QA-04 unit test tier (detected)
+  2502: detectIntegrationTests, // QA-05 integration test tier (detected)
+  2503: detectE2ETests, // QA-06 E2E test tier (detected)
+  2504: detectTestPyramid, // QA-07 pyramid shape (computed)
+  2505: detectCoverageConfig, // QA-03 coverage reporting config (detected)
+  2506: detectTestDataManagement, // QA-08 test data management (detected)
+  2507: detectMockingIsolation, // QA-09 test isolation/mocking (detected)
+  2508: detectContractTests, // QA-10 contract testing (detected)
+  2509: detectMlIterationTests, // QA-11 ML iteration testing (detected)
 };

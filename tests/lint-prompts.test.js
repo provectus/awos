@@ -958,12 +958,12 @@ test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
     assert.match(src, new RegExp(tier), `catalog must define ${tier}`);
   }
   for (const id of [
-    'ADP-G1',
-    'ADP-G7',
-    'ADP-G9',
-    'ADP-I1',
-    'ADP-I3',
-    'ADP-D1',
+    'tooling_depth',
+    'change_failure_rate',
+    'ai_attribution',
+    'work_mix_allocation',
+    'mttr',
+    'external_spec_coverage',
   ]) {
     assert.match(src, new RegExp(id), `catalog must define ${id}`);
   }
@@ -1009,21 +1009,21 @@ test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
   );
   // Each metric row must name its real metrics/<id>.ts file.
   for (const id of [
-    'adp_g1_tooling_depth',
-    'adp_g2_contributors',
-    'adp_g3_deploy_frequency',
-    'adp_g4_lead_time',
-    'adp_g5_pr_cycle_time',
-    'adp_g6_churn',
-    'adp_g7_change_fail_rate',
-    'adp_g8_review_rework',
-    'adp_g9_ai_attribution',
-    'adp_c1_ci_pass_rate',
-    'adp_c2_pipeline_duration',
-    'adp_d1_spec_coverage',
-    'adp_i1_work_mix',
-    'adp_i2_throughput',
-    'adp_i3_mttr',
+    'tooling_depth',
+    'active_contributors',
+    'merge_frequency',
+    'lead_time_for_change',
+    'pr_cycle_time',
+    'code_churn',
+    'change_failure_rate',
+    'review_rework',
+    'ai_attribution',
+    'ci_pass_rate',
+    'pipeline_duration',
+    'external_spec_coverage',
+    'work_mix_allocation',
+    'issue_throughput',
+    'mttr',
   ]) {
     assert.match(
       src,
@@ -1186,8 +1186,10 @@ test('standards.toml exists and matches the category/band schema', () => {
   // Required keys must appear inside a [category.*] table block, not merely
   // somewhere in the file — slice each block and assert against it so a key
   // declared only in (say) a [source.*] table can't satisfy the check.
+  // [category.<slug>] only — [category.<slug>.scoring] sub-tables have their
+  // own schema, asserted separately below.
   const categoryBlocks = [
-    ...src.matchAll(/\[category\.[^\]]+\]([\s\S]*?)(?=\n\[|$)/g),
+    ...src.matchAll(/\[category\.[^.\]]+\]([\s\S]*?)(?=\n\[|$)/g),
   ].map((m) => m[1]);
   assert.ok(
     categoryBlocks.length > 0,
@@ -1214,7 +1216,9 @@ test('standards.toml exists and matches the category/band schema', () => {
   // headings at runtime; a heading rename must not change artifact ids).
   // Anchored to line start so the commented schema sketch in the file header
   // (`# [category.<slug>]`) is not mistaken for a real block.
-  for (const m of src.matchAll(/\n\[category\.[^\]]+\]([\s\S]*?)(?=\n\[|$)/g)) {
+  for (const m of src.matchAll(
+    /\n\[category\.[^.\]]+\]([\s\S]*?)(?=\n\[|$)/g
+  )) {
     const b = m[1];
     const code = (b.match(/^\s*code\s*=\s*(\d+)/m) || [])[1];
     assert.ok(
@@ -1231,6 +1235,32 @@ test('standards.toml exists and matches the category/band schema', () => {
       `reliability_default must be one of minimal|maximal|not-reliable: ${m}`
     );
   }
+  // Scoring sub-tables: every [category.<slug>.scoring] declares the full
+  // curve schema — scale, anchors, and a basis with the locked vocabulary.
+  const scoringBlocks = [
+    ...src.matchAll(/\n\[category\.[^.\]]+\.scoring\]([\s\S]*?)(?=\n\[|$)/g),
+  ].map((m) => m[1]);
+  assert.ok(
+    scoringBlocks.length > 0,
+    'standards.toml must define [category.*.scoring] curve tables'
+  );
+  for (const b of scoringBlocks) {
+    assert.match(
+      b,
+      /^\s*scale\s*=\s*"(linear|log)"/m,
+      'every scoring table must declare scale = "linear"|"log"'
+    );
+    assert.match(
+      b,
+      /^\s*anchors\s*=\s*\[/m,
+      'every scoring table must declare anchors = [[x, y], …]'
+    );
+    assert.match(
+      b,
+      /^\s*basis\s*=\s*"(published|derived|heuristic)"/m,
+      'every scoring table must declare basis = published|derived|heuristic'
+    );
+  }
   // At least one band table for banded metrics.
   assert.match(
     src,
@@ -1239,7 +1269,7 @@ test('standards.toml exists and matches the category/band schema', () => {
   );
   // Every category declares a method from the locked vocabulary.
   const methods = src.match(/\n\s*method\s*=\s*"([^"]+)"/g) || [];
-  const categoryCount = (src.match(/^\[category\./gm) || []).length;
+  const categoryCount = (src.match(/^\[category\.[^.\]]+\]/gm) || []).length;
   assert.equal(
     methods.length,
     categoryCount,

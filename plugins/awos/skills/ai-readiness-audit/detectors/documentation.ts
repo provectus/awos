@@ -209,19 +209,16 @@ export function detectServiceReadmes(
     ),
   ];
 
-  if (ratio >= 0.8) {
+  // All-or-nothing per AWOS's own standard (2026-07-06 standards refresh):
+  // the sources treat a per-service README as universally expected and
+  // publish no acceptable share, so the old graded 80%/50% curve was an
+  // undeclared invention. Every service directory needs one.
+  if (ratio === 1) {
     return makeResult('PASS', withReadme.length, evidence);
   }
 
-  if (ratio >= 0.5) {
-    return makeResult('WARN', withReadme.length, [
-      `only ${withReadme.length}/${serviceDirs.length} service directories have README.md`,
-      ...evidence.slice(1),
-    ]);
-  }
-
   return makeResult('FAIL', withReadme.length, [
-    `only ${withReadme.length}/${serviceDirs.length} service directories have README.md — most are missing docs`,
+    `${serviceDirs.length - withReadme.length} of ${serviceDirs.length} service directories lack a README.md (all-or-nothing — AWOS's own standard)`,
     ...evidence.slice(1),
   ]);
 }

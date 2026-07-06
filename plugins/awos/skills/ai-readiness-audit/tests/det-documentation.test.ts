@@ -131,6 +131,32 @@ test('DOC-02: all service dirs have README is PASS', () => {
   assert.equal(r.method, 'detected');
 });
 
+test('DOC-02 is all-or-nothing: a single service dir missing its README FAILs (AWOS own standard)', () => {
+  const t = tmp();
+  for (const svc of ['api', 'frontend', 'worker', 'scheduler']) {
+    mkdirSync(join(t, svc));
+    for (let i = 0; i < 6; i++) {
+      writeFileSync(join(t, svc, `module${i}.ts`), `export const x = ${i};\n`);
+    }
+    if (svc !== 'scheduler') {
+      writeFileSync(
+        join(t, svc, 'README.md'),
+        `# ${svc}\n\n## Setup\n\nRun npm install\n`
+      );
+    }
+  }
+  const r = detectServiceReadmes(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    `3/4 READMEs must FAIL under all-or-nothing (was WARN under the retired 80% curve), got ${r.status}`
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('all-or-nothing')),
+    'evidence must state the all-or-nothing standard'
+  );
+});
+
 test('DOC-02: majority of service dirs missing README is FAIL', () => {
   const t = tmp();
   for (const svc of ['api', 'frontend', 'worker', 'scheduler']) {

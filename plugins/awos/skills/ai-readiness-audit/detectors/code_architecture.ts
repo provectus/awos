@@ -551,31 +551,22 @@ export function detectNamingConventions(
       .map((c) => `  ${c}: ${counts[c]} compatible file(s)`),
   ];
 
-  if (ratio >= 0.9) {
-    return makeResult('PASS', ratio, evidence, 'detected', ratio, 1.0);
-  }
-  if (ratio >= 0.7) {
-    return makeResult(
-      'WARN',
-      ratio,
-      [
-        `inconsistent file naming: dominant convention ${dominant} at ${Math.round(ratio * 100)}% (below 90% threshold)`,
-        ...evidence,
-      ],
-      'detected',
-      ratio,
-      1.0
-    );
+  // All-or-nothing per AWOS's own standard (2026-07-06 standards refresh):
+  // no source publishes an acceptable inconsistency rate, so the old graded
+  // 90%/70% curve was an undeclared invention. Every file must follow the
+  // dominant convention; any departure is a FAIL naming the stragglers.
+  if (dominantCount === total) {
+    return makeResult('PASS', ratio, evidence, 'detected', 1.0, 1.0);
   }
   return makeResult(
     'FAIL',
     ratio,
     [
-      `inconsistent file naming: dominant convention ${dominant} at only ${Math.round(ratio * 100)}% (below 70% threshold)`,
+      `inconsistent file naming: ${total - dominantCount} file(s) depart from the dominant ${dominant} convention (all-or-nothing — AWOS's own standard)`,
       ...evidence,
     ],
     'detected',
-    ratio,
+    0,
     1.0
   );
 }

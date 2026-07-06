@@ -19,11 +19,13 @@ function detect(repo: string) {
   );
 }
 
-test('ARCH-05 graded score equals dominant-convention ratio (WARN at 75%)', () => {
+test('ARCH-05 is all-or-nothing: one deviating file FAILs with score 0 (AWOS own standard)', () => {
   const repo = mkdtempSync(join(tmpdir(), 'awos-arch05-graded-'));
   try {
     mkdirSync(join(repo, 'app'), { recursive: true });
-    // 3 snake_case + 1 camelCase = ratio 3/4 = 0.75 → WARN
+    // 3 snake_case + 1 camelCase: any departure from the dominant convention
+    // fails — no source publishes an acceptable inconsistency rate, so there
+    // is no graded WARN band to hide in.
     writeFileSync(join(repo, 'app', 'user_service.py'), 'x = 1\n');
     writeFileSync(join(repo, 'app', 'auth_handler.py'), 'x = 1\n');
     writeFileSync(join(repo, 'app', 'data_model.py'), 'x = 1\n');
@@ -31,16 +33,17 @@ test('ARCH-05 graded score equals dominant-convention ratio (WARN at 75%)', () =
     const res = detect(repo);
     assert.equal(
       res.status,
-      'WARN',
-      `3/4 snake_case must be WARN; got ${res.status}`
+      'FAIL',
+      `3/4 dominance must FAIL under all-or-nothing; got ${res.status}`
+    );
+    assert.equal(
+      res.score,
+      0,
+      `all-or-nothing FAIL must award score 0; got ${res.score}`
     );
     assert.ok(
-      typeof res.score === 'number',
-      `score must be a number; got ${typeof res.score}`
-    );
-    assert.ok(
-      Math.abs(res.score - 0.75) < 0.01,
-      `score must be ≈ 0.75 (3/4 ratio); got ${res.score}`
+      (res.evidence ?? []).join(' ').includes('all-or-nothing'),
+      'evidence must state the all-or-nothing standard'
     );
     assert.equal(
       res.confidence,
@@ -75,7 +78,7 @@ test('ARCH-05 score equals 1.0 on full PASS (dominant 100%)', () => {
   }
 });
 
-test('ARCH-05 score equals ratio below 0.70 on FAIL', () => {
+test('ARCH-05 FAILs mixed naming with score 0', () => {
   const repo = mkdtempSync(join(tmpdir(), 'awos-arch05-fail-'));
   try {
     mkdirSync(join(repo, 'app'), { recursive: true });
@@ -92,9 +95,10 @@ test('ARCH-05 score equals ratio below 0.70 on FAIL', () => {
       'FAIL',
       `mixed naming must be FAIL; got ${res.status}`
     );
-    assert.ok(
-      typeof res.score === 'number' && res.score >= 0 && res.score < 0.7,
-      `score must be < 0.70 for FAIL; got ${res.score}`
+    assert.equal(
+      res.score,
+      0,
+      `all-or-nothing FAIL must award score 0; got ${res.score}`
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });

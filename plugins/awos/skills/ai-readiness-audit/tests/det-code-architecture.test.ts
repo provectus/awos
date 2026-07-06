@@ -527,9 +527,9 @@ test('ARCH-05: SKIP when no source files found — absence is not compliance', (
   assert.equal(r.status, 'SKIP', 'no source files → SKIP (nothing to check)');
 });
 
-test('ARCH-05: WARN when 70-89% files are consistent', () => {
+test('ARCH-05: FAIL when any file departs from the dominant convention (all-or-nothing)', () => {
   const t = tmp();
-  // 7 snake_case, 3 others → 7/10 = 70% → WARN
+  // 7 snake_case, 3 others → any departure FAILs (the graded WARN band is retired)
   const snakeNames = [
     'a_module.ts',
     'b_module.ts',
@@ -543,7 +543,11 @@ test('ARCH-05: WARN when 70-89% files are consistent', () => {
   for (const n of snakeNames) writeFileSync(join(t, n), '// file\n');
   for (const n of otherNames) writeFileSync(join(t, n), '// file\n');
   const r = detectNamingConventions(t);
-  assert.equal(r.status, 'WARN', '70% dominant should yield WARN');
+  assert.equal(
+    r.status,
+    'FAIL',
+    '70% dominance must FAIL under the all-or-nothing standard'
+  );
 });
 
 // ---------------------------------------------------------------------------

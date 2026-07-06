@@ -26,9 +26,8 @@ Audits documentation coverage across the repository. Well-documented projects ar
 
 - **What:** Each major service directory has its own README.md
 - **How:** Read the topology artifact to get the list of service directories. For each detected service directory, check for a README.md
-- **Pass:** Every service directory has a README.md with build/run instructions
-- **Warn:** Some service directories are missing READMEs
-- **Fail:** No service-level READMEs exist
+- **Pass:** Every service directory has a README.md with build/run instructions (all-or-nothing — AWOS's own standard; sources treat per-service READMEs as universally expected)
+- **Fail:** Any service directory lacks a README.md
 - **Severity:** high
 - **Category:** 2201
 

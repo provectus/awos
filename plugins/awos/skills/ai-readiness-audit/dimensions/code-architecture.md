@@ -85,9 +85,8 @@ Uses the topology artifact to know which layers exist and what technologies they
   2. Test file colocation: are test files colocated with source (`Button.test.tsx` next to `Button.tsx`) or in a separate `__tests__/` directory? Is this consistent?
   3. Component/class naming: do file names match their default export names?
   4. Directory naming: consistent casing and naming pattern
-- **Pass:** Consistent naming conventions across the layer (one pattern, consistently applied)
-- **Warn:** Mostly consistent but with 3-5 deviations
-- **Fail:** No consistent naming convention — mixed patterns with no clear standard
+- **Pass:** Every file follows the dominant convention (all-or-nothing — AWOS's own standard; no source publishes an acceptable inconsistency rate)
+- **Fail:** Any file departs from the dominant convention
 - **Severity:** medium
 - **Category:** 2104
 

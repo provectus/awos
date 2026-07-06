@@ -1,14 +1,14 @@
 ---
 name: application-security
-title: Application Security (ASVS 5.0.0 L1)
-description: Audits application-layer security against a curated OWASP ASVS 5.0.0 Level-1 subset — TLS, security headers, CORS, SQL injection, hardcoded secrets, auth on mutations, password hygiene, input validation, rate limiting, authorization — plus secret-file hygiene (.env gitignored, env templates, sensitive-file ignore coverage)
+title: Application Security (OWASP ASVS 5.0.0)
+description: Audits application-layer security against a curated OWASP ASVS 5.0.0 subset (Level-1 core plus a few Level-2 requirements) — TLS, security headers, CORS, SQL injection, hardcoded secrets, auth on mutations, password hygiene, input validation, rate limiting, authorization — plus secret-file hygiene (.env gitignored, env templates, sensitive-file ignore coverage)
 severity: critical
 depends-on: [project-topology]
 ---
 
-# Application Security (ASVS 5.0.0 L1)
+# Application Security (OWASP ASVS 5.0.0)
 
-Audits the project's application-layer security posture against a curated subset of the OWASP Application Security Verification Standard (ASVS) version 5.0.0 Level 1. ASVS 5.0.0 L1 represents the minimum baseline for any application handling user data or network traffic; checks in this dimension are deliberately scoped to what can be verified statically from source code and configuration files.
+Audits the project's application-layer security posture against a curated subset of the OWASP Application Security Verification Standard (ASVS) version 5.0.0 — the Level-1 baseline plus a few Level-2 requirements where 5.0 reclassified a check we keep (secrets in source, security headers, password hashing); each check's definition names its requirement ID and level. Checks in this dimension are deliberately scoped to what can be verified statically from source code and configuration files.
 
 This dimension is distinct from the `ai-security` dimension (which audits agent-safety — malicious or suspicious content in agent definitions, skills, hooks, MCP configs and command files, plus guardrails restricting agent access to secrets) and the `supply-chain-security` dimension (which audits dependency supply chain controls).
 

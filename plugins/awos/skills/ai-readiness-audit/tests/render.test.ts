@@ -43,7 +43,7 @@ import type { AuditJson } from '../render.ts';
 function makeCheck(
   overrides: Partial<{
     check_id: string;
-    status: 'PASS' | 'WARN' | 'FAIL' | 'SKIP';
+    status: 'PASS' | 'WARN' | 'PARTIAL' | 'FAIL' | 'SKIP';
     weight_awarded: number;
     weight_max: number;
     applies: boolean;
@@ -1325,5 +1325,134 @@ test('renderHtml: throughput-context subsection is confined to the descriptors p
   assert.ok(
     !html.includes('Throughput context (not scored)'),
     'Non-descriptors dimension pages must not render the throughput-context subsection'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Row highlight follows the awarded-weight share (standards.toml thresholds),
+// while the status label/badge stays untouched.
+// ---------------------------------------------------------------------------
+
+test('renderHtml: row color keys on weight share via data-hl, not on status', () => {
+  const audit = singleRepoFixture();
+  audit.standards_meta = {
+    highlight_yellow_below: 0.95,
+    highlight_red_below: 0.05,
+  };
+  audit.dimensions = [
+    {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-15',
+      score: 10,
+      coverage: 0.8,
+      checks: [
+        // 91% of weight: stays PARTIAL, paints yellow (< 0.95)
+        makeCheck({
+          check_id: 'HL-01',
+          status: 'PARTIAL',
+          weight_awarded: 9.1,
+          weight_max: 10,
+        }),
+        // 96% of weight: stays PARTIAL, paints green (>= 0.95)
+        makeCheck({
+          check_id: 'HL-02',
+          status: 'PARTIAL',
+          weight_awarded: 9.6,
+          weight_max: 10,
+        }),
+        // 3% of weight: paints red (< 0.05)
+        makeCheck({
+          check_id: 'HL-03',
+          status: 'PARTIAL',
+          weight_awarded: 0.3,
+          weight_max: 10,
+        }),
+        // full award: green
+        makeCheck({
+          check_id: 'HL-04',
+          status: 'PASS',
+          weight_awarded: 5,
+          weight_max: 5,
+        }),
+        // SKIP is unscored: keeps its status-keyed neutral, no data-hl
+        makeCheck({
+          check_id: 'HL-05',
+          status: 'SKIP',
+          weight_awarded: 0,
+          weight_max: 5,
+          applies: false,
+        }),
+      ],
+    },
+  ];
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('<tr data-status="PARTIAL" data-hl="yellow">'),
+    'a 91%-awarded PARTIAL row must paint yellow (share < highlight_yellow_below) while keeping status PARTIAL'
+  );
+  assert.ok(
+    html.includes('<tr data-status="PARTIAL" data-hl="green">'),
+    'a 96%-awarded PARTIAL row must paint green (share >= highlight_yellow_below) while keeping status PARTIAL'
+  );
+  assert.ok(
+    html.includes('<tr data-status="PARTIAL" data-hl="red">'),
+    'a 3%-awarded row must paint red (share < highlight_red_below)'
+  );
+  assert.ok(
+    html.includes('<tr data-status="PASS" data-hl="green">'),
+    'a fully-awarded PASS row must paint green'
+  );
+  assert.ok(
+    html.includes('<tr data-status="SKIP">'),
+    'a SKIP row must carry no data-hl — unscored rows keep status-keyed neutrals'
+  );
+  assert.ok(
+    !html.includes("tr[data-status='PARTIAL'] td{background"),
+    'row background CSS must no longer key on the PARTIAL status'
+  );
+  assert.ok(
+    html.includes("tr[data-hl='yellow'] td{background"),
+    'row background CSS must key on data-hl'
+  );
+});
+
+test('renderHtml: honours custom highlight thresholds from standards_meta', () => {
+  const audit = singleRepoFixture();
+  audit.standards_meta = {
+    highlight_yellow_below: 0.5,
+    highlight_red_below: 0.2,
+  };
+  audit.dimensions = [
+    {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-15',
+      score: 10,
+      coverage: 0.8,
+      checks: [
+        // 60% share: green under a 0.5 yellow threshold
+        makeCheck({
+          check_id: 'HL-10',
+          status: 'PARTIAL',
+          weight_awarded: 6,
+          weight_max: 10,
+        }),
+        // 10% share: red under a 0.2 red threshold
+        makeCheck({
+          check_id: 'HL-11',
+          status: 'PARTIAL',
+          weight_awarded: 1,
+          weight_max: 10,
+        }),
+      ],
+    },
+  ];
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('data-hl="green"'),
+    'a 60% share must be green when highlight_yellow_below is lowered to 0.5'
+  );
+  assert.ok(
+    html.includes('data-hl="red"'),
+    'a 10% share must be red when highlight_red_below is raised to 0.2'
   );
 });

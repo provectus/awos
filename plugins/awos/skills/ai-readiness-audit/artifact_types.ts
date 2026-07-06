@@ -344,6 +344,9 @@ export interface AuditJson {
   standards_meta?: {
     standards_date?: string;
     active_contributor_threshold?: number;
+    /** Row-highlight thresholds on the awarded-weight share (weight_awarded / weight_max). */
+    highlight_yellow_below?: number;
+    highlight_red_below?: number;
   };
   // linked repos + tech-stack metadata (optional; populated by audit_core)
   linked_repos?: LinkedRepo[];

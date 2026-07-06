@@ -28,6 +28,12 @@ max_lookback_days = 90
 active_contributor_threshold = 0.05
 rework_horizon_days = 21
 standards_version = "2026.06"
+# Report row-highlight thresholds, applied to each check's awarded-weight
+# share (weight_awarded / weight_max) — NOT to its status label. A check keeps
+# its status; the row color says how much of the weight it actually earned:
+# green >= yellow threshold, yellow below it, red below the red threshold.
+highlight_yellow_below = 0.95
+highlight_red_below = 0.05
 # Report/dimension presentation order — industry-standard engineering first,
 # AI-frontier dimensions last, unscored descriptors at the very end.
 dimension_order = [

@@ -1612,6 +1612,12 @@ function dimensionPage(
   );
   let ckn = 1;
   let hasMinimal = false;
+  // Row highlight thresholds on the awarded-weight share (weight_awarded /
+  // weight_max) — from standards.toml [meta] via standards_meta. The STATUS
+  // label stays untouched; only the row color follows the earned share, so a
+  // 91%-awarded PARTIAL no longer paints as alarming as a 3%-awarded one.
+  const hlYellow = audit.standards_meta?.highlight_yellow_below ?? 0.95;
+  const hlRed = audit.standards_meta?.highlight_red_below ?? 0.05;
   for (const c of dim.checks) {
     const relClass =
       c.reliability.tag === 'minimal'
@@ -1694,7 +1700,17 @@ function dimensionPage(
         : c.source_url
           ? `<br><small class="src-cite"><a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source)}</a></small>`
           : '';
-    rows.push(`<tr data-status="${esc(c.status)}">
+    const scored =
+      (c.weight_max || 0) > 0 &&
+      c.status !== 'SKIP' &&
+      c.status !== 'INFO' &&
+      c.status !== 'PENDING_JUDGMENT';
+    const hlShare = scored ? c.weight_awarded / c.weight_max : null;
+    const hlAttr =
+      hlShare === null
+        ? ''
+        : ` data-hl="${hlShare < hlRed ? 'red' : hlShare < hlYellow ? 'yellow' : 'green'}"`;
+    rows.push(`<tr data-status="${esc(c.status)}"${hlAttr}>
   <td>${ckn++}</td>
   <td class="check"><span class="tip" tabindex="0"><b>${esc(c.check_id)}</b><span class="tipbox"><b>${esc(plainLead(c))}</b><span class="tipmeta">${checkMeta}</span></span></span><span class="plain">${esc(plainLead(c))}</span>${sourceCiteHtml}</td>
   <td>${statusBadge(c.status)}</td>
@@ -2130,10 +2146,12 @@ p{margin:0 0 10px}
 table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:18px}
 th{text-align:left;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-300);padding:10px 10px;border-bottom:1px solid var(--divider)}
 td{padding:10px 10px;border-bottom:1px solid var(--divider);vertical-align:top;color:var(--charcoal-700)}
-tr[data-status='PASS'] td{background:#F1F6F3}
-tr[data-status='WARN'] td{background:#FAF5E4}
-tr[data-status='PARTIAL'] td{background:#F7EEDC}
-tr[data-status='FAIL'] td{background:#FBF1EE}
+/* scored rows: color follows the awarded-weight share (data-hl), not the
+   status label — thresholds come from standards.toml [meta] */
+tr[data-hl='green'] td{background:#F1F6F3}
+tr[data-hl='yellow'] td{background:#F7EEDC}
+tr[data-hl='red'] td{background:#FBF1EE}
+/* unscored rows keep status-keyed neutrals */
 tr[data-status='SKIP'] td{background:#F7F7F5}
 tr[data-status='INFO'] td{background:#F2F6FA}
 tr[data-status='PENDING_JUDGMENT'] td{background:#F9F1DA}

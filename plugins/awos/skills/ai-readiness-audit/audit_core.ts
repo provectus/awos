@@ -207,6 +207,12 @@ function computeDetectionConflicts(
 // absent from standards.toml. The source of truth is meta.max_lookback_days.
 const MAX_LOOKBACK_DAYS_FALLBACK = 90;
 
+// Fallbacks for the report row-highlight thresholds when standards.toml
+// [meta] omits them. The source of truth is meta.highlight_yellow_below /
+// meta.highlight_red_below (share of weight_awarded / weight_max).
+const HIGHLIGHT_YELLOW_BELOW_DEFAULT = 0.95;
+const HIGHLIGHT_RED_BELOW_DEFAULT = 0.05;
+
 /** Build the collection Period from standards.toml [meta] (the source of truth). */
 export function periodFromStandards(
   standards: Record<string, unknown>
@@ -736,6 +742,16 @@ export async function auditCore(
       standards,
       'active_contributor_threshold',
       ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT
+    ),
+    highlight_yellow_below: metaNumber(
+      standards,
+      'highlight_yellow_below',
+      HIGHLIGHT_YELLOW_BELOW_DEFAULT
+    ),
+    highlight_red_below: metaNumber(
+      standards,
+      'highlight_red_below',
+      HIGHLIGHT_RED_BELOW_DEFAULT
     ),
   };
 

@@ -156,7 +156,11 @@ async function checkUrl(url) {
       }
       return { result: 'OK', httpStatus, finalUrl };
     }
-    if (httpStatus === 401 || httpStatus === 403) {
+    // 401/403: paywall or auth wall. 202/429: bot challenge or rate limit on
+    // the redirect target (e.g. doi.org → ieeexplore answers 202 to non-browser
+    // clients while rendering fine in a browser). All four mean the link
+    // reaches a live page a human can read — REACHABLE-AUTH, not DEAD.
+    if ([401, 403, 202, 429].includes(httpStatus)) {
       return { result: 'REACHABLE-AUTH', httpStatus, finalUrl };
     }
     return { result: 'DEAD', httpStatus, finalUrl };

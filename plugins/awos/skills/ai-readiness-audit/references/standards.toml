@@ -66,10 +66,10 @@ definition = "Merges into the default branch per week (DORA deployment frequency
 applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # direction depends on team size; banded comparison is the signal
-source = "DORA State of DevOps"
-url = "https://dora.dev/dora-report-2025/"
-date = "2025-09"
-last_verified = "2026-06-29"
+source = "DORA Accelerate State of DevOps 2023"
+url = "https://dora.dev/research/2023/dora-report/2023-dora-accelerate-state-of-devops-report.pdf"
+date = "2023-12"
+last_verified = "2026-07-06"
 
 # lead_time_for_change: Lead time for change (DORA banded)
 
@@ -91,10 +91,10 @@ definition = "Median time from first commit on a branch to its merge into the de
 applies_when = "always"
 sources = ["git"]
 reliability_default = "minimal"   # git-approximated branch-first-commit is a lower bound; direction is the signal
-source = "DORA State of DevOps"
-url = "https://dora.dev/dora-report-2025/"
-date = "2025-09"
-last_verified = "2026-06-29"
+source = "DORA Accelerate State of DevOps 2023"
+url = "https://dora.dev/research/2023/dora-report/2023-dora-accelerate-state-of-devops-report.pdf"
+date = "2023-12"
+last_verified = "2026-07-06"
 
 # pr_cycle_time: PR cycle time (banded)
 
@@ -116,10 +116,10 @@ definition = "Time from PR open to merge; low-confidence (git-approximation) whe
 applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"
-source = "DORA State of DevOps"
-url = "https://dora.dev/dora-report-2025/"
-date = "2025-09"
-last_verified = "2026-06-29"
+source = "DORA Accelerate State of DevOps 2023"
+url = "https://dora.dev/research/2023/dora-report/2023-dora-accelerate-state-of-devops-report.pdf"
+date = "2023-12"
+last_verified = "2026-07-06"
 
 # change_failure_rate: Change failure rate proxy (DORA banded)
 
@@ -141,10 +141,10 @@ definition = "Share of the window's default-branch merge events that are reverts
 applies_when = "always"
 sources = ["git"]
 reliability_default = "minimal"   # keyword-detected reverts only; lower bound, true rate may be higher
-source = "DORA State of DevOps"
-url = "https://dora.dev/dora-report-2025/"
-date = "2025-09"
-last_verified = "2026-06-29"
+source = "DORA Accelerate State of DevOps 2023"
+url = "https://dora.dev/research/2023/dora-report/2023-dora-accelerate-state-of-devops-report.pdf"
+date = "2023-12"
+last_verified = "2026-07-06"
 
 # review_rework: Review rework cycle (banded)
 
@@ -169,7 +169,7 @@ reliability_default = "not-reliable"
 source = "DX Core 4"
 url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
 date = "2024-12"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # rework_rate: Deployment rework rate (DORA 2024, git keyword proxy)
 
@@ -194,8 +194,8 @@ sources = ["git"]
 reliability_default = "minimal"
 source = "DORA"
 url = "https://dora.dev/guides/dora-metrics/"
-date = "2025"
-last_verified = "2026-06-30"
+date = "2026-01"
+last_verified = "2026-07-06"
 
 [category.rework_rate.scoring]
 scale = "linear"
@@ -215,10 +215,10 @@ definition = "Mean time to recovery from incidents; SKIP unless a real incident 
 applies_when = "topology.has_incident_source"
 sources = ["tracker", "incident"]
 reliability_default = "not-reliable"
-source = "DORA State of DevOps"
-url = "https://dora.dev/dora-report-2025/"
-date = "2025-09"
-last_verified = "2026-06-29"
+source = "DORA Accelerate State of DevOps 2023"
+url = "https://dora.dev/research/2023/dora-report/2023-dora-accelerate-state-of-devops-report.pdf"
+date = "2023-12"
+last_verified = "2026-07-06"
 
 # --- software-best-practices (9 checks) ---
 
@@ -243,7 +243,7 @@ reliability_default = "maximal"
 source = "Martin Fowler CI/CD"
 url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.software_best_practices_sbp_02]
 code = 2701
@@ -259,7 +259,7 @@ reliability_default = "maximal"
 source = "Martin Fowler CI/CD"
 url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.software_best_practices_sbp_03]
 code = 2702
@@ -275,7 +275,7 @@ reliability_default = "maximal"
 source = "Martin Fowler CI/CD"
 url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.software_best_practices_sbp_04]
 code = 2703
@@ -291,7 +291,7 @@ reliability_default = "maximal"
 source = "Martin Fowler CI/CD"
 url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.software_best_practices_sbp_05]
 code = 2704
@@ -307,7 +307,7 @@ reliability_default = "maximal"
 source = "Martin Fowler CI/CD"
 url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.software_best_practices_sbp_06]
 code = 2705
@@ -323,7 +323,7 @@ reliability_default = "maximal"
 source = "OWASP SCVS"
 url = "https://owasp.org/www-project-software-component-verification-standard/"
 date = "2020"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.sbp_except_clause_syntax]
 code = 2706
@@ -339,7 +339,7 @@ reliability_default = "maximal"
 source = "Python 3 — What's New (PEP 3110)"
 url = "https://docs.python.org/3/whatsnew/3.0.html"
 date = "2008-12"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.sbp_vertical_delivery]
 code = 2300
@@ -355,7 +355,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Software Architecture Guide"
 url = "https://martinfowler.com/architecture/"
 date = "2019"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.sbp_no_orphaned_artifacts]
 code = 2303
@@ -371,7 +371,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Software Architecture Guide"
 url = "https://martinfowler.com/architecture/"
 date = "2019"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # --- code-architecture (7 checks) ---
 
@@ -389,7 +389,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Software Architecture Guide"
 url = "https://martinfowler.com/architecture/"
 date = "2019"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.code_architecture_arch_02]
 code = 2101
@@ -405,7 +405,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Software Architecture Guide"
 url = "https://martinfowler.com/architecture/"
 date = "2019"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.code_architecture_arch_03]
 code = 2102
@@ -423,7 +423,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Software Architecture Guide"
 url = "https://martinfowler.com/architecture/"
 date = "2019"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.code_architecture_arch_04]
 code = 2103
@@ -439,7 +439,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Software Architecture Guide"
 url = "https://martinfowler.com/architecture/"
 date = "2019"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.code_architecture_arch_05]
 code = 2104
@@ -455,7 +455,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Software Architecture Guide"
 url = "https://martinfowler.com/architecture/"
 date = "2019"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.code_architecture_arch_06]
 code = 2105
@@ -471,7 +471,7 @@ reliability_default = "maximal"
 source = "McCabe 1976"
 url = "https://doi.org/10.1109/TSE.1976.233837"
 date = "1976-07"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.arch_cross_layer_tooling]
 code = 2304
@@ -487,7 +487,7 @@ reliability_default = "maximal"
 source = "Martin Fowler CI/CD"
 url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # --- quality-assurance (10 checks) ---
 
@@ -506,7 +506,7 @@ threshold = 0.60
 source = "Martin Fowler — Practical Test Pyramid"
 url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.quality_assurance_qa_02]
 code = 2501
@@ -522,7 +522,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Practical Test Pyramid"
 url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.quality_assurance_qa_03]
 code = 2502
@@ -538,7 +538,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Practical Test Pyramid"
 url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.quality_assurance_qa_04]
 code = 2503
@@ -554,7 +554,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Practical Test Pyramid"
 url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.quality_assurance_qa_05]
 code = 2504
@@ -570,7 +570,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Practical Test Pyramid"
 url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.quality_assurance_qa_06]
 code = 2505
@@ -586,7 +586,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Practical Test Pyramid"
 url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.quality_assurance_qa_07]
 code = 2506
@@ -602,7 +602,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Practical Test Pyramid"
 url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.quality_assurance_qa_08]
 code = 2507
@@ -618,7 +618,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Practical Test Pyramid"
 url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.quality_assurance_qa_09]
 code = 2508
@@ -634,7 +634,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Practical Test Pyramid"
 url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.quality_assurance_qa_10]
 code = 2509
@@ -650,7 +650,7 @@ reliability_default = "maximal"
 source = "Martin Fowler — Practical Test Pyramid"
 url = "https://martinfowler.com/articles/practical-test-pyramid.html"
 date = "2018-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # --- application-security (14 checks) ---
 
@@ -675,7 +675,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # AS-02: Security headers present (X-Content-Type-Options, X-Frame-Options, etc.)
 [category.appsec_security_headers]
@@ -692,7 +692,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # AS-03: CORS not wildcard
 [category.appsec_cors_not_wildcard]
@@ -709,7 +709,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # AS-04: Parameterized SQL / no string-built queries
 [category.appsec_parameterized_sql]
@@ -726,7 +726,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # AS-05: Secrets not hardcoded in source
 [category.appsec_no_hardcoded_secrets]
@@ -743,7 +743,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # AS-06: Authentication required on state-changing endpoints
 [category.appsec_auth_on_mutations]
@@ -760,7 +760,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # AS-07: Password / session hygiene signals
 [category.appsec_password_session_hygiene]
@@ -777,7 +777,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # AS-08: Input validation / output encoding present
 [category.appsec_input_validation]
@@ -794,7 +794,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # AS-09: Rate limiting / brute-force protection
 [category.appsec_rate_limiting]
@@ -811,7 +811,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # AS-10: Authorization correctness (judgment)
 [category.appsec_authorization_correctness]
@@ -830,7 +830,7 @@ evidence_required = ["list of protected endpoints and their auth middleware/deco
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # AS-11: Insecure design review (judgment)
 [category.appsec_insecure_design]
@@ -849,7 +849,7 @@ evidence_required = ["API surface overview (routes, methods, input models)", "er
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 [category.appsec_env_gitignored]
 code = 2600
@@ -865,7 +865,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.appsec_env_template]
 code = 2602
@@ -881,7 +881,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.appsec_sensitive_files_gitignored]
 code = 2604
@@ -897,7 +897,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # --- supply-chain-security (8 checks) ---
 
@@ -915,7 +915,7 @@ reliability_default = "maximal"
 source = "OWASP SCVS"
 url = "https://owasp.org/www-project-software-component-verification-standard/"
 date = "2020"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.supply_chain_security_scs_02]
 code = 2901
@@ -931,7 +931,7 @@ reliability_default = "maximal"
 source = "OWASP SCVS"
 url = "https://owasp.org/www-project-software-component-verification-standard/"
 date = "2020"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.supply_chain_security_scs_03]
 code = 2902
@@ -947,7 +947,7 @@ reliability_default = "maximal"
 source = "OWASP SCVS"
 url = "https://owasp.org/www-project-software-component-verification-standard/"
 date = "2020"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.supply_chain_security_scs_04]
 code = 2903
@@ -961,10 +961,10 @@ applies_when = "topology.has_package_ecosystem"
 sources = ["audit"]
 reliability_default = "maximal"
 threshold_days = 7
-source = "SLSA"
-url = "https://slsa.dev/spec/v1.0/"
+source = "pnpm — Supply chain security (minimumReleaseAge)"
+url = "https://pnpm.io/supply-chain-security"
 date = "2025"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.supply_chain_security_scs_05]
 code = 2904
@@ -980,7 +980,7 @@ reliability_default = "maximal"
 source = "NIST SSDF (SP 800-218)"
 url = "https://csrc.nist.gov/pubs/sp/800/218/final"
 date = "2022-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.supply_chain_security_scs_06]
 code = 2905
@@ -996,7 +996,7 @@ reliability_default = "maximal"
 source = "NIST SSDF (SP 800-218)"
 url = "https://csrc.nist.gov/pubs/sp/800/218/final"
 date = "2022-02"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.supply_chain_security_scs_07]
 code = 2906
@@ -1012,7 +1012,7 @@ reliability_default = "maximal"
 source = "OWASP SCVS"
 url = "https://owasp.org/www-project-software-component-verification-standard/"
 date = "2020"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.supply_chain_security_scs_08]
 code = 2907
@@ -1028,7 +1028,7 @@ reliability_default = "maximal"
 source = "OWASP SCVS"
 url = "https://owasp.org/www-project-software-component-verification-standard/"
 date = "2020"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # --- ai-security (7 checks) ---
 
@@ -1046,7 +1046,7 @@ reliability_default = "maximal"
 source = "OWASP Top 10 for LLM Applications"
 url = "https://genai.owasp.org/llm-top-10/"
 date = "2025"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_security_ais_02]
 code = 2401
@@ -1062,7 +1062,7 @@ reliability_default = "maximal"
 source = "OWASP Top 10 for LLM Applications"
 url = "https://genai.owasp.org/llm-top-10/"
 date = "2025"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_security_ais_03]
 code = 2402
@@ -1078,7 +1078,7 @@ reliability_default = "maximal"
 source = "OWASP Top 10 for LLM Applications"
 url = "https://genai.owasp.org/llm-top-10/"
 date = "2025"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_security_ais_04]
 code = 2403
@@ -1094,7 +1094,7 @@ reliability_default = "maximal"
 source = "OWASP Top 10 for LLM Applications"
 url = "https://genai.owasp.org/llm-top-10/"
 date = "2025"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_security_ais_05]
 code = 2404
@@ -1110,7 +1110,7 @@ reliability_default = "maximal"
 source = "OWASP Top 10 for LLM Applications"
 url = "https://genai.owasp.org/llm-top-10/"
 date = "2025"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_security_ais_06]
 code = 2405
@@ -1126,7 +1126,7 @@ reliability_default = "maximal"
 source = "OWASP Top 10 for LLM Applications"
 url = "https://genai.owasp.org/llm-top-10/"
 date = "2025"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ais_agent_safety_hooks]
 code = 2601
@@ -1142,7 +1142,7 @@ reliability_default = "maximal"
 source = "OWASP ASVS"
 url = "https://owasp.org/www-project-application-security-verification-standard/"
 date = "2025-05-30"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # --- documentation (7 checks) ---
 
@@ -1160,7 +1160,7 @@ reliability_default = "maximal"
 source = "Diátaxis — quality (completeness)"
 url = "https://diataxis.fr/quality/"
 date = "2024"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.documentation_doc_02]
 code = 2201
@@ -1176,7 +1176,7 @@ reliability_default = "maximal"
 source = "Diátaxis — quality (completeness)"
 url = "https://diataxis.fr/quality/"
 date = "2024"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.documentation_doc_03]
 code = 2202
@@ -1191,8 +1191,8 @@ sources = ["audit"]
 reliability_default = "maximal"
 source = "OpenAPI Specification"
 url = "https://spec.openapis.org/oas/latest.html"
-date = "2025"
-last_verified = "2026-06-30"
+date = "2025-09-19"
+last_verified = "2026-07-06"
 
 [category.documentation_doc_04]
 code = 2203
@@ -1208,7 +1208,7 @@ reliability_default = "maximal"
 source = "Diátaxis — quality (completeness)"
 url = "https://diataxis.fr/quality/"
 date = "2024"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.documentation_doc_05]
 code = 2204
@@ -1224,7 +1224,7 @@ reliability_default = "maximal"
 source = "Diátaxis — quality (completeness)"
 url = "https://diataxis.fr/quality/"
 date = "2024"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.documentation_doc_06]
 code = 2205
@@ -1240,7 +1240,7 @@ reliability_default = "maximal"
 source = "Diátaxis — quality (completeness)"
 url = "https://diataxis.fr/quality/"
 date = "2024"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.doc_spec_traceability]
 code = 2302
@@ -1254,9 +1254,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS convention"
-url = "https://github.com/provectus/awos/tree/main/commands"
+url = "https://github.com/provectus/awos/blob/main/README.md"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # --- ai-development-tooling (7 checks) ---
 
@@ -1290,7 +1290,7 @@ reliability_default = "maximal"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_development_tooling_ai_02]
 code = 2001
@@ -1306,7 +1306,7 @@ reliability_default = "maximal"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_development_tooling_ai_03]
 code = 2002
@@ -1322,7 +1322,7 @@ reliability_default = "maximal"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_development_tooling_ai_04]
 code = 2003
@@ -1338,7 +1338,7 @@ reliability_default = "maximal"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_development_tooling_ai_05]
 code = 2004
@@ -1354,7 +1354,7 @@ reliability_default = "maximal"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_development_tooling_ai_06]
 code = 2005
@@ -1372,7 +1372,7 @@ reliability_default = "maximal"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_development_tooling_ai_07]
 code = 2006
@@ -1388,7 +1388,7 @@ reliability_default = "maximal"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # --- spec-driven-development (7 checks) ---
 
@@ -1404,9 +1404,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS convention"
-url = "https://github.com/provectus/awos/tree/main/commands"
+url = "https://github.com/provectus/awos/blob/main/README.md"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.spec_driven_development_sdd_02]
 code = 2801
@@ -1420,9 +1420,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS convention"
-url = "https://github.com/provectus/awos/tree/main/commands"
+url = "https://github.com/provectus/awos/blob/main/README.md"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.spec_driven_development_sdd_03]
 code = 2802
@@ -1436,9 +1436,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS convention"
-url = "https://github.com/provectus/awos/tree/main/commands"
+url = "https://github.com/provectus/awos/blob/main/README.md"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.spec_driven_development_sdd_04]
 code = 2803
@@ -1452,10 +1452,10 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 threshold = 0.70
-source = "AWOS convention"
-url = "https://github.com/provectus/awos/tree/main/commands"
-date = "2026-06"
-last_verified = "2026-06-30"
+source = "GitHub — Spec-driven development with AI (Spec Kit)"
+url = "https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/"
+date = "2025-09-02"
+last_verified = "2026-07-06"
 
 [category.spec_driven_development_sdd_05]
 code = 2804
@@ -1469,9 +1469,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS convention"
-url = "https://github.com/provectus/awos/tree/main/commands"
+url = "https://github.com/provectus/awos/blob/main/README.md"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.spec_driven_development_sdd_06]
 code = 2805
@@ -1485,9 +1485,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS convention"
-url = "https://github.com/provectus/awos/tree/main/commands"
+url = "https://github.com/provectus/awos/blob/main/README.md"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.spec_driven_development_sdd_07]
 code = 2806
@@ -1501,9 +1501,9 @@ applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
 source = "AWOS convention"
-url = "https://github.com/provectus/awos/tree/main/commands"
+url = "https://github.com/provectus/awos/blob/main/README.md"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # --- ai-sdlc-adoption (15 checks) ---
 
@@ -1532,7 +1532,7 @@ reliability_default = "maximal"   # presence != active use → true usage ≤ sh
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_tooling_skills]
 code = 102
@@ -1548,7 +1548,7 @@ reliability_default = "maximal"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_tooling_commands]
 code = 103
@@ -1564,7 +1564,7 @@ reliability_default = "maximal"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_tooling_hooks]
 code = 104
@@ -1580,7 +1580,7 @@ reliability_default = "maximal"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_tooling_mcp]
 code = 105
@@ -1596,7 +1596,7 @@ reliability_default = "maximal"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ai_tooling_spec_signals]
 code = 106
@@ -1609,10 +1609,10 @@ definition = "Repo has spec-driven adoption signals: spec directories, spec-refe
 applies_when = "always"
 sources = ["git"]
 reliability_default = "maximal"
-source = "AWOS convention"
-url = "https://github.com/provectus/awos/tree/main/commands"
-date = "2026-06"
-last_verified = "2026-06-30"
+source = "GitHub — Spec-driven development with AI (Spec Kit)"
+url = "https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/"
+date = "2025-09-02"
+last_verified = "2026-07-06"
 
 # ai_attribution: AI-attributed change share (lower bound)
 
@@ -1630,7 +1630,7 @@ reliability_default = "minimal"   # true usage >= shown: attribution is easily d
 source = "GitHub Docs — Co-authored-by"
 url = "https://docs.github.com/en/pull-requests/committing-changes-to-your-project/creating-and-editing-commits/creating-a-commit-with-multiple-authors"
 date = "2025"
-last_verified = "2026-07-01"
+last_verified = "2026-07-06"
 
 # ---------------------------------------------------------------------------
 # Tier C: CI source categories
@@ -1652,7 +1652,7 @@ reliability_default = "not-reliable"
 source = "Martin Fowler CI/CD"
 url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 [category.ci_pass_rate.scoring]
 scale = "linear"
@@ -1675,7 +1675,7 @@ reliability_default = "not-reliable"
 source = "Martin Fowler CI/CD"
 url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # ---------------------------------------------------------------------------
 # Tier I: Issue tracker categories
@@ -1702,7 +1702,7 @@ reliability_default = "not-reliable"
 source = "DX Core 4"
 url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
 date = "2024-12"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 [category.work_mix_allocation.scoring]
 scale = "linear"
@@ -1725,7 +1725,7 @@ reliability_default = "not-reliable"
 source = "DX Core 4"
 url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
 date = "2024-12"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.issue_throughput.scoring]
 scale = "log"
@@ -1748,7 +1748,7 @@ reliability_default = "minimal"
 source = "Agile Alliance (INVEST)"
 url = "https://agilealliance.org/glossary/invest/"
 date = "2003"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.ticket_subtask_split.scoring]
 scale = "linear"
@@ -1772,7 +1772,7 @@ reliability_default = "minimal"
 source = "Agile Alliance (Definition of Ready)"
 url = "https://www.agilealliance.org/glossary/definition-of-ready/"
 date = "2012"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # ---------------------------------------------------------------------------
 # Tier D: Docs / wiki categories
@@ -1799,7 +1799,7 @@ reliability_default = "not-reliable"
 source = "Diátaxis — quality (completeness)"
 url = "https://diataxis.fr/quality/"
 date = "2024"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # onboarding_ease: Onboarding ease — enabler presence proxy (DX Core 4 time-to-10th-PR)
 
@@ -1817,8 +1817,8 @@ sources = ["git"]
 reliability_default = "minimal"
 source = "DX Core 4 (GetDX) — Time to 10th PR"
 url = "https://getdx.com/blog/software-development-metrics/"
-date = "2024"
-last_verified = "2026-07-01"
+date = "2025-09"
+last_verified = "2026-07-06"
 
 # --- descriptors (5 checks) ---
 
@@ -1845,7 +1845,7 @@ reliability_default = "not-reliable"   # raw count; no direction implied without
 source = "DX Core 4"
 url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
 date = "2024-12"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # code_churn: Code churn & rework
 
@@ -1863,7 +1863,7 @@ reliability_default = "minimal"   # windowed turnover metric; directional signal
 source = "DX Core 4"
 url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
 date = "2024-12"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # ---------------------------------------------------------------------------
 # Tier G: code complexity / scale / dependency metrics (cyclomatic_complexity–G12)
@@ -1893,7 +1893,7 @@ reliability_default = "not-reliable"
 source = "McCabe 1976"
 url = "https://doi.org/10.1109/TSE.1976.233837"
 date = "1976-07"
-last_verified = "2026-06-29"
+last_verified = "2026-07-06"
 
 # loc_scale: Lines of code and scale
 
@@ -1918,7 +1918,7 @@ reliability_default = "not-reliable"
 source = "Wikipedia — Source lines of code (physical SLOC)"
 url = "https://en.wikipedia.org/wiki/Source_lines_of_code"
 date = "2025"
-last_verified = "2026-07-01"
+last_verified = "2026-07-06"
 
 # dependency_count: Direct dependency count (manifest-based)
 
@@ -1936,7 +1936,7 @@ reliability_default = "not-reliable"
 source = "OWASP SCVS"
 url = "https://owasp.org/www-project-software-component-verification-standard/"
 date = "2020"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # --- org-portfolio (3 checks) ---
 
@@ -1960,7 +1960,7 @@ reliability_default = "not-reliable"
 source = "Anthropic — Claude Code best practices"
 url = "https://code.claude.com/docs/en/best-practices"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.org_capability_score]
 code = 9001
@@ -1974,9 +1974,9 @@ applies_when = "always"
 sources = ["org-rollup"]
 reliability_default = "not-reliable"
 source = "AWOS convention"
-url = "https://github.com/provectus/awos/tree/main/commands"
+url = "https://github.com/provectus/awos/blob/main/README.md"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 [category.org_measurement_coverage]
 code = 9002
@@ -1990,9 +1990,9 @@ applies_when = "always"
 sources = ["org-rollup"]
 reliability_default = "not-reliable"
 source = "AWOS convention"
-url = "https://github.com/provectus/awos/tree/main/commands"
+url = "https://github.com/provectus/awos/blob/main/README.md"
 date = "2026-06"
-last_verified = "2026-06-30"
+last_verified = "2026-07-06"
 
 # --- bands (DORA-style thresholds) ---
 

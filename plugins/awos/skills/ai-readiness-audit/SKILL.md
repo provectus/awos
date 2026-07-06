@@ -41,6 +41,8 @@ After discovery completes, present the resolved boundary to the user with a sing
 
 Headless default: when `AskUserQuestion` receives its default answer (no interactive input, e.g. in CI or `--output-format stream-json` mode), proceed using only the auto-discovered repos and connectors — no interactive entry required. This means the audit is always runnable headlessly without any prompting.
 
+**Scope confirmation must never end the run.** Presenting the resolved scope as a plain text message and ending your turn is a failed audit — a headless session has no user to reply, so the run dies at Phase 0b with nothing scored (a measured org run burned a full attempt exactly this way). Call `AskUserQuestion` (load it via ToolSearch first if its schema is deferred); if the call is unavailable or returns the default, that IS the confirmation — continue into Step 5 in the same turn without further ceremony.
+
 Never prompt mid-run after this step.
 
 ### Phase 0c — Determine audit mode
@@ -50,7 +52,7 @@ Never prompt mid-run after this step.
 
 Contributor counts are always reported in aggregate (never per-person). No money, no PII.
 
-Dispatch this discovery work as `Agent` subagents pinned to the cheapest tier — pass `model: haiku` on the Agent call. It is mechanical file/PATH probing, so Haiku is sufficient and avoids spending the orchestrator's model on it. In org mode, issue one Haiku probe per repo in a single message so they run concurrently.
+Dispatch this discovery work as `Agent` subagents pinned to the cheapest tier — pass `model: haiku` on the Agent call. It is mechanical file/PATH probing, so Haiku is sufficient and avoids spending the orchestrator's model on it. In org mode, issue one Haiku probe per repo in a single message so they run concurrently — as FOREGROUND calls, whose results the turn waits for. Never poll for probe completion with filler commands (`echo waiting`-style turns): foreground Agent calls issued together return together, and every polling turn is a wasted model round-trip.
 
 ## Step 1 — Dimensions are the engine's job, not yours
 
@@ -93,6 +95,8 @@ It prints a one-line summary (`audit_total`, counts of `detected`/`computed`/`ju
 - the tracker/docs/code-host connector metrics, emitted `SKIP` when no connector is reachable.
 
 Every other check is final and engine-computed. Do not re-score, re-grade, or "verify" a `detected`/`computed` check by hand — the detector verdict is authoritative.
+
+The measurement window is deterministic and not yours to investigate: 90 days (`[meta].max_lookback_days` in `references/standards.toml`), anchored to the newest commit (git) or newest record (CI runs, tracker tickets) — never to wall-clock "now". If a windowed value looks surprising (e.g. on a freshly-pulled repo), record it and move on. Do not hand-compute cutoff dates, grep the engine source, or spawn agents to read engine internals mid-run — a measured org run replaced its mandatory `rollup` step with exactly that investigation and failed the whole attempt. Questions about engine behavior are follow-up material for the report notes, never a reason to stall the remaining steps.
 
 **If you find yourself grepping source, running `python3 -c` or other inline scripts, or assembling scoring JSON by hand, stop — that is the engine's job, and the engine enforces it.** `audit-core` stamps `audit.json` with an engine provenance marker; `patch-judgment`, `patch-report`, and `render` refuse to operate on an `audit.json` that lacks it, and the org `rollup` skips per-repo audits without it. A hand-built audit cannot be patched or rendered — the only path to a report is running `audit-core`.
 
@@ -202,9 +206,11 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" patch-judgment "context/audits/YYYY-MM-DD
 
 ### Step 6 org branch — Portfolio rollup (org mode only)
 
-When the audit ran in org mode (multiple repos, per `references/data-sources.md`), after all per-repo audits are complete, produce the org-level portfolio summary:
+When the audit ran in org mode (multiple repos, per `references/data-sources.md`), after all per-repo audits are complete, produce the org-level portfolio summary.
 
-1. Dispatch one `awos:repo-auditor` Agent per repo in a single message — this is the only place per-repo audits are launched, and issuing them together is what makes them run concurrently. All the Agent tool calls go in one message; org-mode wall time is won here, because the repos audit simultaneously rather than one after another. Give each subagent its `<repoPath>`, its output subdir `context/audits/YYYY-MM-DD/per-repo/<repo-name>`, the engine path `${CLAUDE_SKILL_DIR}/dist/cli.js`, and the skill dir `${CLAUDE_SKILL_DIR}`. Each subagent runs the full single-repo flow — Step 5 `audit-core` → Step 6 connector `enrich` + `patch-judgment` + `patch-report` → `render --format both` — into its own subdir, so per-repo outputs never collide (each repo's `audit-core`/`enrich`/`render` uses `context/audits/YYYY-MM-DD/per-repo/<repo-name>` as its artifacts/output dir, never the shared `context/audits/YYYY-MM-DD/`). For a large portfolio, cap the fan-out to a handful of concurrent subagents at a time.
+**The org run is complete only when `context/audits/YYYY-MM-DD/org-portfolio.json` and the org `report.md`/`report.html` exist.** Finishing the per-repo audits is NOT the end of the run — a measured run dispatched all 8 repo-auditors successfully and then ended its session without `rollup`, failing the whole attempt. The moment the last repo-auditor returns, your next actions are, immediately and unconditionally: `rollup` (step 2), assemble `org-portfolio.json` (step 3), `render --format both` (step 4). Nothing is allowed to displace them.
+
+1. Dispatch one `awos:repo-auditor` Agent per repo in a single message — this is the only place per-repo audits are launched, and issuing them together is what makes them run concurrently. Resume, don't redo: before dispatching, check each `per-repo/<repo-name>/audit.json` — a repo whose audit already exists with the engine provenance stamp (e.g. from an interrupted earlier attempt) is done; dispatch auditors ONLY for the repos still missing theirs, and if none are missing skip straight to the rollup (step 2). All the Agent tool calls go in one message; org-mode wall time is won here, because the repos audit simultaneously rather than one after another. Give each subagent its `<repoPath>`, its output subdir `context/audits/YYYY-MM-DD/per-repo/<repo-name>`, the engine path `${CLAUDE_SKILL_DIR}/dist/cli.js`, and the skill dir `${CLAUDE_SKILL_DIR}`. Each subagent runs the full single-repo flow — Step 5 `audit-core` → Step 6 connector `enrich` + `patch-judgment` + `patch-report` → `render --format both` — into its own subdir, so per-repo outputs never collide (each repo's `audit-core`/`enrich`/`render` uses `context/audits/YYYY-MM-DD/per-repo/<repo-name>` as its artifacts/output dir, never the shared `context/audits/YYYY-MM-DD/`). For a large portfolio, cap the fan-out to a handful of concurrent subagents at a time.
 
    **Each repo is audited exactly once, by exactly one subagent.** Before dispatching, write down the resolved repo list and dispatch one Agent per entry — never two for the same repo, and never a second wave "to be safe". In org mode the orchestrator itself never runs `audit-core`/`enrich` on any repo — that is the repo-auditor's job; an engine run in the orchestrator's own context duplicates a subagent's work and doubles cost. Re-dispatch a repo only after its subagent has returned AND `per-repo/<repo-name>/audit.json` is still missing — and then only that one repo, once. (A measured org run double-audited 3 of 8 repos and re-ran 5 more in the main context; the portfolio was correct but the run paid for ~11 audits of 8 repos.)
 

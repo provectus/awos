@@ -56,6 +56,7 @@ import {
   runClaudeAudit,
   scanJudgmentsPatched,
   scriptRepoRoot,
+  stampedPerRepoAudits,
   summarizeOutput,
   tokenCostSummary,
 } from './harness_lib.ts';
@@ -75,6 +76,21 @@ const RETRY_CORRECTIVE_PROMPT =
   '<outDir>. Never hand-compute metrics (no grep/python/inline scripts for ' +
   'scoring), never hand-assemble audit JSON, and never spawn per-dimension ' +
   'auditor subagents.';
+
+// Appended instead when an org-mode attempt finished its per-repo audits but
+// ended without the portfolio rollup (observed: 8/8 per-repo audit.json
+// written, session over, no org-portfolio.json). Those audits are engine
+// output and are deliberately PRESERVED across the retry — re-dispatching
+// the whole fan-out turned one missed step into a ~$35 re-run.
+const RETRY_ROLLUP_PROMPT =
+  'CORRECTIVE NOTE (the previous attempt completed every per-repo audit but ' +
+  'ended without the portfolio rollup): the per-repo audits under ' +
+  'context/audits/<date>/per-repo/ are DONE and preserved. Do not re-dispatch ' +
+  'repo-auditor subagents and do not re-run audit-core for any repo whose ' +
+  'per-repo/<repo>/audit.json already exists. Your only remaining actions, in ' +
+  'order: node "<skill-dir>/dist/cli.js" rollup <outDir>/per-repo/, assemble ' +
+  'org-portfolio.json per the skill, then render --format both. Do not ' +
+  'investigate metric values or engine internals — run those steps and finish.';
 
 // Archive lives in the awos main checkout's tmp/ (kept here on purpose, gitignored).
 // Resolved, not hardcoded, so the location is stable but portable.
@@ -432,6 +448,7 @@ function printFinalSummary(opts: {
   rc: number;
   runDir: string;
   targetName: string;
+  attemptCosts?: number[];
 }): void {
   const {
     result,
@@ -443,15 +460,23 @@ function printFinalSummary(opts: {
     rc,
     runDir,
     targetName,
+    attemptCosts = [],
   } = opts;
   const t = tokenCostSummary(result);
   const out = (m = '') => console.log(m);
   out('\n' + '='.repeat(60));
   out('== run summary ==');
   out(` wall time : ${t.wall_ms != null ? formatWallTime(t.wall_ms) : 'n/a'}`);
-  out(
-    ` cost      : ${t.total_cost_usd != null ? '$' + t.total_cost_usd.toFixed(4) : 'n/a'}`
-  );
+  // Every retried attempt bills separately — the honest figure is the sum.
+  const summedCost = attemptCosts.reduce((s, c) => s + c, 0);
+  const costLine =
+    attemptCosts.length > 1
+      ? `$${summedCost.toFixed(4)} across ${attemptCosts.length} attempts ` +
+        `(${attemptCosts.map((c) => '$' + c.toFixed(2)).join(' + ')})`
+      : t.total_cost_usd != null
+        ? '$' + t.total_cost_usd.toFixed(4)
+        : 'n/a';
+  out(` cost      : ${costLine}`);
   out(
     ` tokens    : in=${t.input_tokens} out=${t.output_tokens} ` +
       `cache_r=${t.cache_read_input_tokens} cache_w=${t.cache_creation_input_tokens}`
@@ -543,6 +568,8 @@ interface RunOutcome {
   partial: boolean;
   /** How many claude launches the retry loop was allowed. */
   attempts: number;
+  /** Per-attempt costs (each attempt bills separately). */
+  attemptCosts: number[];
 }
 
 /**
@@ -630,15 +657,32 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
   let rc = 0;
   let outDir = '';
   let finalLog = '';
+  const attemptCosts: number[] = [];
   for (let attempt = 1; attempt <= attempts; attempt++) {
+    let retryPrompt = RETRY_CORRECTIVE_PROMPT;
     if (attempt > 1) {
       log(
         `\n▶ engine-skip retry ${attempt - 1}/${attempts - 1} — relaunching claude`
       );
       const prev = locateOutDir(audits, today, seededDate);
       if (prev && isDir(prev) && path.basename(prev) !== seededDate) {
-        fs.rmSync(prev, { recursive: true, force: true });
-        log(`  ✓ cleared non-compliant output ${prev}`);
+        // Rollup-only failure: the org fan-out finished (per-repo audit.json
+        // files exist) but the org root artifact was never written. Those
+        // per-repo audits are real engine output — keep them and steer the
+        // retry to the rollup instead of re-running the whole portfolio.
+        const perRepoDone = stampedPerRepoAudits(prev);
+        const orgRootMissing =
+          !isFile(path.join(prev, 'org-portfolio.json')) &&
+          !isFile(path.join(prev, 'audit.json'));
+        if (perRepoDone.length > 0 && orgRootMissing) {
+          retryPrompt = RETRY_ROLLUP_PROMPT;
+          log(
+            `  ✓ keeping ${perRepoDone.length} completed per-repo audit(s) — retry only needs rollup + render`
+          );
+        } else {
+          fs.rmSync(prev, { recursive: true, force: true });
+          log(`  ✓ cleared non-compliant output ${prev}`);
+        }
       }
     }
     // Retries get a corrective system prompt: the barley regression showed
@@ -647,9 +691,12 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
     const attemptFlags =
       attempt === 1
         ? claudeFlags
-        : [...claudeFlags, '--append-system-prompt', RETRY_CORRECTIVE_PROMPT];
+        : [...claudeFlags, '--append-system-prompt', retryPrompt];
     finalLog = path.join(runDir, `run.attempt${attempt}.jsonl`);
     [result, rc] = await streamRun(target, attemptFlags, finalLog);
+    attemptCosts.push(
+      typeof result.total_cost_usd === 'number' ? result.total_cost_usd : 0
+    );
     outDir = locateOutDir(audits, today, seededDate);
     comp = assessEngineCompliance(outDir, finalLog);
     if (args.noEngineGuard) {
@@ -789,7 +836,14 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
     },
     usage: result.usage ?? null,
     modelUsage: result.modelUsage ?? null,
-    total_cost_usd: result.total_cost_usd ?? null,
+    // True spend of the run: retried attempts each bill separately, so the
+    // total sums every attempt (a 3-attempt org run cost ~2× its final
+    // attempt's figure). Per-attempt costs are kept alongside.
+    total_cost_usd: attemptCosts.length
+      ? attemptCosts.reduce((s, c) => s + c, 0)
+      : (result.total_cost_usd ?? null),
+    attempt_costs_usd: attemptCosts.length ? attemptCosts : null,
+    final_attempt_cost_usd: result.total_cost_usd ?? null,
     duration_ms: result.duration_ms ?? null,
     num_turns: result.num_turns ?? null,
     wall_ms: result.wall_ms ?? null,
@@ -814,6 +868,7 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
     rc,
     partial,
     attempts,
+    attemptCosts,
   };
 }
 
@@ -979,6 +1034,7 @@ async function main(): Promise<void> {
     rc: outcome.rc,
     runDir,
     targetName: tgtName,
+    attemptCosts: outcome.attemptCosts,
   });
 
   // Loud, non-zero exit when the MODEL skipped the engine, even if the harness

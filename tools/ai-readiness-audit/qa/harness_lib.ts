@@ -400,6 +400,28 @@ export function locateOutDir(
   return dd.length ? path.join(audits, dd[dd.length - 1]) : '';
 }
 
+/**
+ * Per-repo audits already completed by an org attempt: every
+ * per-repo/<repo>/audit.json carrying the engine provenance stamp. Used by
+ * the retry loop to preserve finished engine output when only the rollup is
+ * missing — re-running a completed 8-repo fan-out over one missed step is
+ * the amplification this guards against.
+ */
+export function stampedPerRepoAudits(outDir: string): string[] {
+  const perRepo = path.join(outDir, 'per-repo');
+  if (!isDir(perRepo)) return [];
+  return fs.readdirSync(perRepo).filter((n) => {
+    const p = path.join(perRepo, n, 'audit.json');
+    if (!isFile(p)) return false;
+    try {
+      const audit = readJson(p) as { engine?: { generated_by?: string } };
+      return Boolean(audit.engine?.generated_by);
+    } catch {
+      return false;
+    }
+  });
+}
+
 export function summarizeOutput(outDir: string): any {
   const org = path.join(outDir, 'org-portfolio.json');
   const single = path.join(outDir, 'audit.json');

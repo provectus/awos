@@ -17,6 +17,7 @@ import {
   formatWallTime,
   scanJudgmentsPatched,
   smokeSignalsFromTranscript,
+  stampedPerRepoAudits,
   summarizeOutput,
   tokenCostSummary,
 } from './harness_lib.ts';
@@ -501,5 +502,29 @@ test('discoverProjectMcp: target + repo configs merge, VS Code shape normalizes,
     (found.servers['tracker'] as any).url,
     'https://org.example/mcp',
     'the VS Code {servers} shape must normalize into mcpServers entries'
+  );
+});
+
+test('stampedPerRepoAudits keeps only engine-stamped per-repo audits (retry must not redo them)', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-stamped-'));
+  const mk = (repo: string, content: string | null) => {
+    fs.mkdirSync(path.join(out, 'per-repo', repo), { recursive: true });
+    if (content !== null) {
+      fs.writeFileSync(path.join(out, 'per-repo', repo, 'audit.json'), content);
+    }
+  };
+  mk('done', JSON.stringify({ engine: { generated_by: 'audit-core@x' } }));
+  mk('hand-built', JSON.stringify({ audit_total: 12 })); // no provenance stamp
+  mk('unfinished', null); // dispatched but never wrote audit.json
+  mk('corrupt', '{not json');
+  assert.deepEqual(
+    stampedPerRepoAudits(out),
+    ['done'],
+    'only the engine-stamped audit counts as completed; unstamped/missing/corrupt repos must be re-dispatched'
+  );
+  assert.deepEqual(
+    stampedPerRepoAudits(path.join(out, 'nowhere')),
+    [],
+    'a missing per-repo dir means nothing is preserved'
   );
 });

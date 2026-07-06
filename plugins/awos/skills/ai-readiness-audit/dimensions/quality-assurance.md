@@ -241,3 +241,14 @@ Audits the depth and structure of the project's testing approach. Checks whether
 - **Skip-When:** Topology shows no ML layer — no ML framework imports (`sklearn`, `torch`, `tensorflow`, `xgboost`, `transformers`) found in non-test source files
 - **Severity:** high
 - **Category:** 2509
+
+---
+
+### QA-11: Measured line coverage (Google bands)
+
+- **What:** Measured line/statement coverage parsed from coverage reports on disk, scored against Google Testing Blog's published guidance (60% acceptable, 75% commendable, 90% exemplary). Distinct from QA-01 (module-has-tests proxy) and QA-06 (whether coverage is measured at all). Per the same source, coverage percentage must never be a sole quality target.
+- **How:** `node "<engine cli path>" metric line_coverage <repoPath>` — parses lcov.info/\*.lcov, cobertura XML (coverage.xml), istanbul coverage-summary.json, JaCoCo XML, and clover.xml; the scan is ignore-insensitive because coverage artifacts are normally gitignored build outputs
+- **Pass (OK):** metric returns `status: "OK"` — line coverage computed from at least one parseable report
+- **Skip-When:** no parseable coverage report exists in the working tree
+- **Severity:** medium
+- **Category:** 2510

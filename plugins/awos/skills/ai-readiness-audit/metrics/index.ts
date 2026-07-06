@@ -27,6 +27,7 @@ import { compute as computeG10 } from './cyclomatic_complexity.ts';
 import { compute as computeG11 } from './loc_scale.ts';
 import { compute as computeG12 } from './dependency_count.ts';
 import { compute as computeG13 } from './doc_coverage.ts';
+import { compute as computeLineCoverage } from './line_coverage.ts';
 import { compute as computeG14 } from './rework_rate.ts';
 import { compute as computeG15 } from './onboarding_ease.ts';
 
@@ -52,6 +53,7 @@ export const METRICS: Record<string, MetricFn> = {
   loc_scale: computeG11,
   dependency_count: computeG12,
   doc_coverage: computeG13,
+  line_coverage: computeLineCoverage,
   rework_rate: computeG14,
   onboarding_ease: computeG15,
 };

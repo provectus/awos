@@ -497,7 +497,7 @@ url = "https://martinfowler.com/articles/continuousIntegration.html"
 date = "2024-01-18"
 last_verified = "2026-07-06"
 
-# --- quality-assurance (10 checks) ---
+# --- quality-assurance (11 checks) ---
 
 [category.quality_assurance_qa_01]
 code = 2500
@@ -671,6 +671,30 @@ last_verified = "2026-07-06"
 # ---------------------------------------------------------------------------
 
 # AS-01: TLS enforced — no plain-HTTP fallback
+[category.line_coverage]
+code = 2510
+check_id = "QA-11"
+metric = "line_coverage"
+dimension = "quality-assurance"
+weight = 3
+method = "computed"
+summary = "Measured line coverage from a coverage report, scored against Google's published 60/75/90 bands."
+definition = "Measured line/statement coverage parsed from coverage reports on disk (lcov, cobertura, istanbul summary, JaCoCo, clover), scored against Google's published guidance: 60% acceptable, 75% commendable, 90% exemplary. Distinct from QA-01 (module-has-tests proxy) and QA-06 (coverage measurement presence). Per the same source, a coverage percentage must never be a sole quality target. SKIP when no report exists."
+applies_when = "always"
+sources = ["scale"]
+reliability_default = "not-reliable"
+source = "Google Testing Blog — Code Coverage Best Practices"
+url = "https://testing.googleblog.com/2020/08/code-coverage-best-practices.html"
+date = "2020-08-07"
+last_verified = "2026-07-06"
+
+[category.line_coverage.scoring]
+scale = "linear"
+anchors = [[0.0, 0.0], [0.6, 0.5], [0.75, 0.8], [0.9, 1.0]]
+anchor_unit = "measured line coverage (0..1)"
+basis = "derived"
+basis_note = "The 60/75/90 boundaries transcribe Google Testing Blog's published guidance (60% acceptable, 75% commendable, 90% exemplary); the score awarded at each boundary is AWOS calibration."
+
 [category.appsec_tls_enforced]
 code = 3000
 check_id = "AS-01"
@@ -870,7 +894,7 @@ check_id = "AS-12"
 dimension = "application-security"
 weight = 8
 method = "detected"
-definition = "Environment files containing secrets are excluded from version control via .gitignore"
+definition = "Environment files containing secrets are excluded from version control via .gitignore (nearest ASVS 5.0.0 requirement: 13.3.1 secrets management)"
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
@@ -886,7 +910,7 @@ check_id = "AS-13"
 dimension = "application-security"
 weight = 5
 method = "detected"
-definition = "A template environment file exists so developers know which variables to configure"
+definition = "A template environment file exists so developers know which variables to configure (nearest ASVS 5.0.0 requirement: 13.3.1 secrets management)"
 applies_when = "topology.uses_env_vars"
 sources = ["audit"]
 reliability_default = "maximal"
@@ -902,7 +926,7 @@ check_id = "AS-14"
 dimension = "application-security"
 weight = 5
 method = "detected"
-definition = "Sensitive file types present in the stack are excluded from version control AND from container image builds (.gitignore + .dockerignore); inconsistency that would leak a secret into an image is flagged"
+definition = "Sensitive file types present in the stack are excluded from version control AND from container image builds (.gitignore + .dockerignore); inconsistency that would leak a secret into an image is flagged (nearest ASVS 5.0.0 requirement: 13.3.1 secrets management)"
 applies_when = "topology.has_topology"
 sources = ["audit"]
 reliability_default = "maximal"
@@ -1484,9 +1508,9 @@ definition = "Each spec directory contains the full AWOS spec triad: functional-
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS convention"
-url = "https://github.com/provectus/awos/blob/main/README.md"
-date = "2026-06"
+source = "AWS Kiro — Specs"
+url = "https://kiro.dev/docs/specs/"
+date = "2025"
 last_verified = "2026-07-06"
 
 [category.spec_driven_development_sdd_06]
@@ -1717,8 +1741,8 @@ definition = "Team capacity split across Growth (new features/value), KTLO (Keep
 applies_when = "topology.has_tracker"
 sources = ["tracker"]
 reliability_default = "not-reliable"
-source = "DX Core 4"
-url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
+source = "DX Core 4 (whitepaper)"
+url = "https://getdx.com/uploads/dx-core-4.pdf"
 date = "2024-12"
 last_verified = "2026-07-06"
 
@@ -1728,6 +1752,14 @@ anchors = [[0.0, 0.0], [0.6, 1.0]]
 anchor_unit = "Growth share of ticket work (0..1)"
 basis = "heuristic"
 basis_note = "DX Core 4 frames Growth/KTLO/Support allocation but publishes no numeric target; full score at ≥ 60% Growth is an AWOS heuristic (mirrors [band.work_mix])."
+
+[band.line_coverage]
+metric = "line_coverage"
+source = "Google Testing Blog — Code Coverage Best Practices"
+elite = "exemplary: >= 90% lines covered"
+high = "commendable: >= 75%"
+medium = "acceptable: >= 60%"
+low = "< 60%"
 
 [category.issue_throughput]
 code = 1102
@@ -1740,8 +1772,8 @@ definition = "Delivered-issue count and backlog burn-down rate per monthly bucke
 applies_when = "topology.has_tracker"
 sources = ["tracker"]
 reliability_default = "not-reliable"
-source = "DX Core 4"
-url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
+source = "DX Core 4 (whitepaper)"
+url = "https://getdx.com/uploads/dx-core-4.pdf"
 date = "2024-12"
 last_verified = "2026-07-06"
 
@@ -1860,8 +1892,8 @@ definition = "Active contributor count over the 90-day window: authors excluded 
 applies_when = "always"
 sources = ["git"]
 reliability_default = "not-reliable"   # raw count; no direction implied without context
-source = "DX Core 4"
-url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
+source = "DX Core 4 (whitepaper)"
+url = "https://getdx.com/uploads/dx-core-4.pdf"
 date = "2024-12"
 last_verified = "2026-07-06"
 

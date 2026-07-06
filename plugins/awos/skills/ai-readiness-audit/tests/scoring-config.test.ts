@@ -42,6 +42,7 @@ const BANDED_CATEGORIES = [
   'onboarding_ease',
   'cyclomatic_complexity',
   'code_churn',
+  'line_coverage',
 ] as const;
 
 test('every banded category declares a well-formed [.scoring] table', () => {

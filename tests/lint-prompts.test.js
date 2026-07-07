@@ -851,6 +851,79 @@ test('flow.md generator version constant matches plugin.json and stamps the arti
   }
 });
 
+test('flow.md flags routing policies that route agents around the generated commands', () => {
+  // Road-test #2 item 8 (narrowed): the generated commands are
+  // auto-discovered by autocomplete, but an agent follows the loaded
+  // routing policy — hops' CLAUDE.md "AWOS Workflow (Required)" section
+  // prescribed the manual /awos:* chain, so agents routed around
+  // /implement-feature and /fix-bug by instruction, and nothing
+  // auto-loads delivery-flow.md. flow.md must check always-loaded docs
+  // for such a policy at investigation time and advise the wording fix
+  // in the Step 8 project-side setup fixes (flag, never auto-edit).
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /Routing policy in always-loaded docs/i.test(flow),
+    'flow.md Step 2 must inspect CLAUDE.md/AGENTS.md-style always-loaded docs for a prescribed-workflow section that routes agents through the manual /awos:* chain'
+  );
+  assert.ok(
+    /routes around/i.test(flow),
+    'flow.md must state why the policy matters: an agent following a manual-chain-only policy routes around the generated commands by instruction'
+  );
+  assert.ok(
+    /advise updating it and offer the concrete wording/i.test(flow),
+    'flow.md Step 8 must advise the routing-policy update with concrete wording as a project-side fix the user applies — the flow flags it, it does not edit CLAUDE.md'
+  );
+});
+
+test('generated commands carry a self-correction loop scoped to facts, never decisions', () => {
+  // Road-test #2 item 9, scoped: three fact corrections (pre-commit
+  // hook, transition chain, worktree bootstrap) landed in a separate
+  // project-side PR because the generated flow had no in-run correction
+  // loop — and a flow carrying a known-wrong fact between runs is a
+  // silent time bomb. The governance boundary: a run may correct a
+  // disproven FACT in the decision record (with evidence, in the same
+  // PR, logged), but decision changes route to the flow owner and
+  // generator defects route to AWOS as feedback.
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /## Flow Self-Correction/.test(body),
+      `${tmpl} must carry the fixed Flow Self-Correction section`
+    );
+    assert.ok(
+      /Correct facts, never decisions/i.test(body),
+      `${tmpl} self-correction must be scoped to recorded facts — dimension decisions stay with the flow owner`
+    );
+    assert.ok(
+      /correction without reproducible evidence is not applied/i.test(body),
+      `${tmpl} must require the disproving evidence before applying a fact correction`
+    );
+    assert.ok(
+      /report it as feedback to the AWOS maintainers/i.test(body),
+      `${tmpl} must route generator defects to AWOS feedback instead of editing around them`
+    );
+    assert.ok(
+      /Never edit a decision/i.test(body),
+      `${tmpl} must forbid a run from changing a delivery decision on its own`
+    );
+  }
+
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /Flow Self-Correction/.test(flow) &&
+      /never changes a delivery decision on its own/i.test(flow),
+    'flow.md Step 6 must instruct keeping the Flow Self-Correction section verbatim and restate the facts-only boundary'
+  );
+
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /in-run fact correction/i.test(dfTemplate),
+    'delivery-flow-template.md Generation Log must define the in-run fact-correction entry format (what was corrected + evidence)'
+  );
+});
+
 test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
   // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
   // propose a QA agent by searching the registry, not by always

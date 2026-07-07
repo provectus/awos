@@ -49,6 +49,14 @@ A flow degrades in one long context window. Per §8 of delivery-flow.md:
 
 This command is an orchestrator. It diagnoses and decides, but the code change goes through a delegated specialist — **do not edit code in the main context**.
 
+## Flow Self-Correction
+
+When a run disproves something this flow believes — a hook fires that this file says doesn't exist, the tracker rejects a recorded transition, a fresh worktree fails on an unrecorded bring-up step — classify the defect and route it. Never work around it silently: a flow carrying a known-wrong instruction between runs is a time bomb for the next engineer.
+
+- **Fact defect** — a recorded fact in `context/product/delivery-flow.md` (Project Setup, tooling inventory, transition chains, the worktree recipe, probe results) is false. Correct facts, never decisions: fix the fact in the decision record, update the affected stage prose in every generated command that embeds it, and append a Generation Log entry naming the correction and the disproving evidence (the command output or API response that contradicted the record). A correction without reproducible evidence is not applied. Because the fact is fixed in the decision record itself, regeneration re-derives the right prose — this is not a Local Customization. Apply corrections only while the flow can still commit (before the change request opens — the flow-log discipline), so they ship in the same commit and the PR review sees them; discovered later, report the correction as pending in the close-out and let the next run apply it at the workspace stage. Interactive runs show the correction diff for a quick confirm; unattended runs apply fact corrections and announce them via Notifications.
+- **Decision friction** — a delivery-flow.md _choice_ (a gate, the autonomy level, the merge policy, a §1–§9 decision) caused the problem. Never edit a decision: report what happened to the user and record which dimension produced friction, for the flow owner to take into a `/awos:flow` re-run. Decisions belong to whoever owns the team's delivery process, not to a run of this command.
+- **Generator defect** — the flaw is in how `/awos:flow` generated this command, not in this project's facts. Don't edit; report it as feedback to the AWOS maintainers.
+
 <!-- awos:flow:stage=fetch-bug -->
 
 ### Step 1: Fetch & Normalize the Bug

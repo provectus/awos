@@ -122,4 +122,4 @@ Manual edits to the generated command that the user chose to keep during regener
 
 ## Generation Log
 
-- [YYYY-MM-DD] — [initial generation | re-run: which dimensions changed]
+- [YYYY-MM-DD] — [initial generation | re-run: which dimensions changed | in-run fact correction by `<command>` run `<ticket>`: what was corrected — evidence: the disproving observation]

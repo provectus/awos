@@ -37,7 +37,7 @@ Which commands `/awos:flow` generated and their names — re-runs reconcile exac
 - **Branch naming:** [convention + example]
 - **Submodules:** [none | init/update steps]
 - **Target sync & conflicts:** [rebase onto target | merge target in — checked before opening the change request and again before merging (the target moves while gates run); conflicts resolved by a subagent, non-trivial resolutions confirmed with the user, local gates re-run after any sync]
-- **Worktrees:** [viable — isolation recipe | main-repo-only — blocking shared resources and why]
+- **Worktrees:** [viable — isolation recipe, including the bring-up steps a fresh worktree needs for its git-ignored prerequisites (install command, codegen steps, env-file copies — derived from `.gitignore`, the lockfile, and package scripts) | main-repo-only — blocking shared resources and why]
 - **Sanctioned verification path:** [when a shared resource (a port a running service holds, a single database, a device) is reserved by the guardrail, how the verify stage still drives the app against a real render — stop/restart the service, an alternate port, a throwaway instance, or the §5 deploy/run step. The generated command uses this to self-verify rather than handing the user a `run` command; "n/a — nothing shared blocks a run" when no such resource exists]
 
 ## 3. Repository Topology
@@ -70,7 +70,7 @@ Which commands `/awos:flow` generated and their names — re-runs reconcile exac
 - **Approvals:** [who signs off, where recorded]
 - **Versioning:** [what gets bumped, where, by whom]
 - **Deployment:** [manual CD job | scheduled | fully automatic | local deploy step — the command, and when the flow runs it: after the merge | after post-merge CI is green | never]
-- **Ticket state transitions:** [the event→state map across the whole cycle, in the tracker's own state names — start (→ In Progress), change request opened (→ In Review), a gate/review failing (→ back to needs-work, e.g. To Do), merged, done; or "n/a — ticketless source"]
+- **Ticket state transitions:** [the event→state map across the whole cycle, in the tracker's own state names — start (→ In Progress), change request opened (→ In Review), a gate/review failing (→ back to needs-work, e.g. To Do), merged, done — validated at generation time against a sample issue's available transitions: record the full transition chain per event (e.g. `Open → In Progress → In Review` when the tracker has no direct hop) plus transition IDs where the tracker exposes them; or "n/a — ticketless source"]
 - **Definition of Done:** [the evidence that closes the loop — may include post-merge pipelines green; plus the final ticket transition, only when the source has tickets to transition]
 
 ## 6. Trigger

@@ -44,6 +44,7 @@ A flow degrades in one long context window. Per §8 of delivery-flow.md:
 - After each completed stage, append an entry to `context/spec/{SPEC_NAME}/flow-log.md` (or `context/fix-log-{BUG_ID}.md` when the bug maps to no spec): the stage name, what was produced and where (paths, branch, commit), the classification verdict once known, any decisions taken, and which stage comes next. The log is the flow's memory outside the context window — a fresh session resumes by reading this one small file. It is committed with the work (commit-push stages it alongside the code), so it must never become an uncommittable leftover: **once the change request is opened — or the change is merged — stop writing to the tracked log.** New commits are unwelcome on a change request under review or already merged, so a late append would strand a change that can never reach it. From that point, report late-stage progress (gate results, merge, close-out evidence) to the user and via §9 notifications, and resume the remote stages from remote state — the open/merged change request and the ticket status, which the resume-detection stage already inspects. The close stage leaves a clean working tree and never writes a final entry it cannot commit.
 - Never launch a nested headless session (`claude -p`) from this command — permission modes, PATH, and timeouts differ per machine. Unattended chaining belongs to the trigger setup (§6), outside this command.
 - Tell every dispatched subagent: tools are functional — do not test them or make exploratory calls; every call needs a purpose. Run each delegated stage on the model tier recorded in §8 — the fast tier for mechanical transport work, the strongest for judgment (diagnosis, classification, review).
+- A subagent's report is a claim, not a fact. Before acting on a report that names files and lines, asserts a root cause, or reports a test outcome, spot-check it — read the named lines, run the named test. The diagnose and regression-test stages spell out their specific checks; the principle applies to every delegated report.
 - An unanswered `AskUserQuestion` (the harness returns `No response after 60s` — its guard so unattended runs never hang) is handled by run mode. Read the `AWOS_UNATTENDED` environment variable: when it is set (the §6 trigger setup exports it for cron/`/loop`/`claude -p` drivers), a no-answer is expected — take the safe default and continue. When it is unset the run is interactive, and a timeout usually means the user is thinking or briefly away, not that they have no preference — re-ask the question once, then proceed naming the default you took so they can correct it. A timeout never authorizes an irreversible step: the merge confirmation and the divergence spec-amendment confirmation each treat an unanswered prompt as a no in either mode.
 
 This command is an orchestrator. It diagnoses and decides, but the code change goes through a delegated specialist — **do not edit code in the main context**.
@@ -53,6 +54,8 @@ This command is an orchestrator. It diagnoses and decides, but the code change g
 ### Step 1: Fetch & Normalize the Bug
 
 [Connector-specific fetch using the chosen transport from §7 of delivery-flow.md, with its recorded fallback — reuse §1, but the source is a bug report rather than a feature ticket. Extract and keep: bug ID, title, the reported symptom, reproduction steps if given, affected area, link. For description-only sources this stage just normalizes the input. Store the bug ID as `BUG_ID`.]
+
+[Ticket sources: also fetch the ticket's **remote links, attachments, and linked conversations** (tracker remote links, attached screenshots, a linked chat thread) via the §7 transports and read the reachable ones — the report's real context often lives there, not in the description: a screenshot names WHICH surface renders the broken data while the description names another. List anything linked but unreachable in the normalized report instead of silently skipping it, so the diagnosis knows context is missing. Omit this paragraph for description-only sources.]
 
 [Crash-report source (per the Bug-fix Flow source decision — e.g. Crashlytics, Sentry): fetch the issue and its most recent events via the §7 transport for the crash tool, and use the title/subtitle as the problem statement. Map every app-frame in the stack to a real `file:line` in the local checkout (Grep/Read), ignoring system frames. **If the stack is unsymbolicated** (raw addresses, no file/line), say so explicitly and do not invent line numbers — the symbol file (dSYM/source map) for that build was likely not uploaded. Capture impact — affected versions, user count, first/last-seen — and prefer a source-typed branch name (e.g. `bug/crash-<short-id>`) per §2. The diagnose stage starts from this stack context. Omit this paragraph when the bug-fix source decision does not include crash reports.]
 
@@ -79,6 +82,10 @@ Same resume logic as implement-feature. Start with a cheap preflight on the fast
 ### Step 4: Diagnose
 
 Reproduce the bug and find the root cause. Delegate the investigation to the built-in `Explore` subagent or a debugging specialist via **[Agent: name]** (per §8 model tier — judgment work) — the orchestrator does not read the whole codebase or write code itself. The subagent returns terse: the reproduction, the root-cause location (file/function), and a proposed minimal fix shape. If the bug cannot be reproduced, report that and stop rather than guessing at a fix.
+
+A symptom rarely has exactly one renderer. The diagnosis is not done at the first root cause: it must enumerate **every surface that renders or consumes the symptom data** — grep for sibling composers of the same output (other builders of the same title/string, widgets showing the same records, backend notification builders) — and return a verdict per surface, affected or clean. One data gap routinely hides behind several surfaces; fixing the named one and shipping leaves the others to come back as "reopened".
+
+The diagnosis report labels every claim **verified** (the subagent read the named `file:line`, or executed the reproduction) or **hypothesis** — and the orchestrator re-reads the named lines before accepting the fix shape, trimming it to what the code actually shows. A subagent report is a claim, not a fact: a road-test diagnosis proposed a three-file fix where re-reading the cited lines showed one changed line sufficed.
 
 <!-- /awos:flow:stage -->
 
@@ -109,6 +116,8 @@ Delegate the code change to a specialist via **[Agent: name]** (chosen from §8 
 
 Add one test that fails on the old code and passes on the fix, capturing the bug so it cannot silently return. Delegate it to the testing specialist via **[Agent: name]**. Honor the `<!-- skip-tests: true -->` marker: if the owning spec's `tasks.md` carries it (the team opted out of generated test suites), skip adding an automated test and note that the regression is covered by the look-and-feel check in the next stage instead.
 
+"Fails on the old code" is demonstrated, not asserted. The orchestrator verifies the test targets a **changed** site: revert the fix hunk (e.g. stash the fixed files), run the test and watch it fail, restore the fix, watch it pass — then record the fail→pass evidence in the flow log. A subagent can return a green-but-vacuous test that asserts a path that was already correct before the fix; green-on-old-code means the test captures nothing — reject it and have the specialist retarget the changed lines.
+
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=verify-criteria -->
@@ -118,6 +127,8 @@ Add one test that fails on the old code and passes on the fix, capturing the bug
 Re-check **only** the acceptance criteria the bug touched, with `/awos:verify`'s evidence discipline — drive the UI/API for real, screenshot visual criteria to `docs/screenshots/`, and `AskUserQuestion` only when a criterion has no agent-driven render path at all. This is scoped: it does not re-run the whole acceptance set, does not flip the spec's Status, and honors `<!-- skip-tests: true -->` (look-and-feel walk-through only, no test suites). Report the criteria checked and their evidence.
 
 Running the app to verify is the flow's job, not the user's. [If §2/§3 recorded a shared resource the app binds — a port a running service holds, a single database, a device — the workspace guardrail reserves it for normal work, but this stage still verifies against a real render: reclaim the resource (stop the service, use an alternate port, spin a throwaway instance) or drive the project's own §5 deploy/run step and verify against that, per the sanctioned verification path §2/§3 records. Do not hand the user a `run` command to execute, and do not defer a drivable criterion to a later manual deploy — the manual `AskUserQuestion` fallback is only for a criterion the agent genuinely cannot render here.]
+
+Scale the evidence to what changed. When the fix touched only the data or payload and the diff contains no render-path edits, the sanctioned evidence is the demonstrated failing→passing regression test plus a unit-level render of the changed data with mocks — standing up the full stack (backend, database, seeded data) to watch an unchanged render branch repeat itself is disproportionate. This tier applies only when the render path is provably untouched by the diff; a fix that edits the render path itself still drives the UI/API for real.
 
 <!-- /awos:flow:stage -->
 
@@ -152,7 +163,7 @@ From here the change request is open — **do not append to the tracked flow-log
 
 [Per §4: open the change request via the chosen transport from §7, then wait on every remote gate concurrently — CI checks, the automatic reviewer's pass (address its findings), human review (wait-or-poll policy), environment/soak/compliance gates — and join them before merge. On CI failure, per the recorded policy: delegate diagnosis and the fix to a subagent working from the failed job's logs, push, re-check until green — or report the first results and hand off. For a repo with no code host, the local suite already served as the gate — omit this stage and any other gate §4 rules out.]
 
-[Per §5's ticket-state map (omit for ticketless sources): transition the ticket to the in-review state when the change request opens, and back to the needs-work state if a gate or review fails, re-advancing it when the gates go green again.]
+[Per §5's ticket-state map (omit for ticketless sources): transition the ticket to the in-review state when the change request opens, and back to the needs-work state if a gate or review fails, re-advancing it when the gates go green again. Follow the recorded transition chain for each event (including intermediate hops), not just the target state name.]
 
 Wait with the `Monitor` tool, never foreground `sleep` loops: a poll loop that emits each gate's terminal result and exits when all are settled, its timeout sized to the typical pipeline duration recorded in §4, the poll interval 30s+ against remote APIs, and the filter covering every terminal state — failures and cancellations, not just success. Apply §4's max-wait & escalation policy when a poll window expires without the gates settling — auto-relaunch the monitor, or ask the human past the recorded threshold; never wait forever.
 
@@ -188,4 +199,4 @@ Leave a clean working tree: do not write a closing flow-log entry (the log was f
 
 ---
 
-<!-- awos:flow:generated date=[YYYY-MM-DD] source=context/product/delivery-flow.md -->
+<!-- awos:flow:generated date=[YYYY-MM-DD] version=[generator version constant from /awos:flow] source=context/product/delivery-flow.md -->

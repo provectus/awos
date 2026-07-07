@@ -725,6 +725,132 @@ test('the flow distinguishes interactive vs unattended AskUserQuestion timeouts'
   );
 });
 
+test('flow.md investigation probes before claiming absence and validates ticket transitions', () => {
+  // Road-test #2 regressions (HOP-3749): (1) the investigation missed a
+  // versioned pre-commit hook installed via core.hooksPath and the
+  // generated command confidently asserted "there are no pre-commit
+  // hooks"; (2) the decision record said "PR opened → In Review" but the
+  // tracker had no direct Open → In Review transition, so an unattended
+  // run would fail its first transition; (3) the worktree recipe skipped
+  // git-ignored build prerequisites, costing the fix agent an
+  // undocumented install + codegen. Lock the probe list, the
+  // no-absence-claims rule, transition-chain validation, and the
+  // bring-up steps into flow.md and the decision-record template.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /core\.hooksPath/.test(flow) && /\.pre-commit-config\.yaml/.test(flow),
+    'flow.md Step 2 must carry an explicit pre-commit-hook probe list (core.hooksPath, .husky/, .pre-commit-config.yaml, …) — a hook found only in the conventional place is how the road-test missed a versioned one'
+  );
+  assert.ok(
+    /No absence claims without a probe/i.test(flow),
+    'flow.md Step 2 must forbid the decision record and generated commands from asserting "no X" unless X was explicitly probed — an unprobed signal is unknown, not absent'
+  );
+  assert.ok(
+    /validate it at generation time/i.test(flow) &&
+      /transition.*chain/i.test(flow),
+    'flow.md §5 ticket-state map must be validated at generation time against a sample issue and record full transition chains (intermediate hops), not just target state names'
+  );
+  assert.ok(
+    /bring-up steps/i.test(flow) && /\.gitignore/.test(flow),
+    'flow.md worktree sub-interview must probe .gitignore for build-required artifacts and put the bring-up steps (install, codegen, env files) into the isolation recipe'
+  );
+
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /transition chain/i.test(dfTemplate),
+    'delivery-flow-template.md §5 must record validated transition chains (with IDs where exposed), not just target states'
+  );
+  assert.ok(
+    /bring-up steps/i.test(dfTemplate),
+    'delivery-flow-template.md §2 Worktrees field must include the bring-up steps for git-ignored prerequisites'
+  );
+
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /recorded transition chain/i.test(body),
+      `${tmpl} remote-gates stage must follow the recorded transition chain (intermediate hops), not just the target state name`
+    );
+  }
+});
+
+test('fix-bug template reads remote links, sweeps all surfaces, and verifies subagent claims', () => {
+  // Road-test #2 regressions (HOP-3749): the bug's real context (a
+  // screenshot naming the broken surface) lived in a Jira remote link;
+  // diagnosis stopped at the first of three affected surfaces; an
+  // Explore report proposed a 3-file fix where one line sufficed; and a
+  // subagent returned a green-but-vacuous regression test asserting an
+  // already-correct path. Lock the fetch-remote-links step, the
+  // all-surfaces sweep, verified-vs-hypothesis labels, the demonstrated
+  // fail-on-old-code check, and the verify-evidence proportionality
+  // tier into the fix-bug template.
+  const body = readUtf8(path.join(pluginTemplatesDir, 'fix-bug-template.md'));
+  assert.ok(
+    /remote links, attachments/i.test(body),
+    "fix-bug fetch stage must pull the ticket's remote links and attachments — the real repro context often lives there, not in the description"
+  );
+  assert.ok(
+    /every surface that renders or consumes the symptom data/i.test(body),
+    'fix-bug diagnose stage must enumerate every renderer/consumer of the symptom data (sibling composers), not stop at the first root cause'
+  );
+  assert.ok(
+    /\*\*verified\*\*/.test(body) && /\*\*hypothesis\*\*/.test(body),
+    'fix-bug diagnose reports must label each claim verified vs hypothesis, and the orchestrator re-reads the named lines before accepting the fix shape'
+  );
+  assert.ok(
+    /demonstrated, not asserted/i.test(body) && /green-but-vacuous/i.test(body),
+    'fix-bug regression-test stage must demonstrate fail-on-old-code on a changed path (revert → fail → restore → pass) and reject a test that is green pre-fix'
+  );
+  assert.ok(
+    /Scale the evidence to what changed/i.test(body),
+    'fix-bug verify stage must carry the proportionality tier: for a payload-only fix with an untouched render path, regression test + unit-level render with mocks is sanctioned evidence'
+  );
+
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const t = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /report is a claim, not a fact/i.test(t),
+      `${tmpl} Context Discipline must state that subagent reports are claims to spot-check, not facts to relay`
+    );
+  }
+});
+
+test('flow.md generator version constant matches plugin.json and stamps the artifacts', () => {
+  // Road-test #2 finding: after `git pull` in the marketplace clone, an
+  // already-running session kept executing the stale cached command text
+  // with no signal. flow.md carries a literal generator-version constant
+  // checked against plugin.json on invocation (a mismatch means the
+  // session must restart), and every generated artifact's footer marker
+  // is stamped with that version. This test keeps the constant in sync
+  // with the manifest so the stale-session check stays truthful.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const manifest = JSON.parse(
+    readUtf8(
+      path.join(repoRoot, 'plugins', 'awos', '.claude-plugin', 'plugin.json')
+    )
+  );
+  const constant = flow.match(/generator version is `([^`]+)`/);
+  assert.ok(
+    constant,
+    'flow.md Step 1 must declare a literal generator-version constant ("generator version is `X.Y.Z`") for the stale-session check'
+  );
+  assert.strictEqual(
+    constant[1],
+    manifest.version,
+    `flow.md generator-version constant (${constant[1]}) must equal plugins/awos/.claude-plugin/plugin.json version (${manifest.version}) — bump them together or the stale-session check misfires`
+  );
+
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /awos:flow:generated date=\[YYYY-MM-DD\] version=\[/.test(body),
+      `${tmpl} footer marker must carry a version=[…] stamp so re-runs can tell which generator produced the on-disk artifacts`
+    );
+  }
+});
+
 test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
   // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
   // propose a QA agent by searching the registry, not by always

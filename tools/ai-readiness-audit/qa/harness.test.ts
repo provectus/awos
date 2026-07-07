@@ -15,6 +15,7 @@ import {
   complianceFromTranscript,
   discoverProjectMcp,
   formatWallTime,
+  planRetry,
   scanJudgmentsPatched,
   smokeSignalsFromTranscript,
   stampedPerRepoAudits,
@@ -335,6 +336,178 @@ test('assessEngineCompliance requires audit.json AND an engine signal', () => {
     comp.fanout_agent_spawns,
     1,
     'fan-out spawns recorded as evidence'
+  );
+});
+
+// Regression pin: barhopping org run 2026-07-06. The rollup-corrective retry
+// is TOLD not to re-run audit-core (the per-repo audits are done and
+// preserved), so a CORRECT rollup-only retry has audit_core_calls=0 in its own
+// transcript. Gating on the current transcript alone rejected every such
+// retry — the harness discarded a valid org-portfolio.json and re-ran the
+// whole 8-repo fan-out to retry exhaustion.
+test('assessEngineCompliance accepts a rollup-only retry via carried engine calls', () => {
+  const dir = tmp();
+  const outDir = path.join(dir, 'out');
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(path.join(outDir, 'org-portfolio.json'), '{}');
+  const runLog = path.join(dir, 'run.jsonl');
+  // The rollup retry's transcript: rollup + render, but NO audit-core call.
+  fs.writeFileSync(
+    runLog,
+    transcriptLine({
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            name: 'Bash',
+            input: { command: 'node "$ENGINE" rollup out/per-repo/' },
+          },
+        ],
+      },
+    }) + '\n'
+  );
+
+  const rejected = assessEngineCompliance(outDir, runLog);
+  assert.equal(
+    rejected.engine_compliant,
+    false,
+    'without carried calls a zero-audit-core attempt stays non-compliant (this was the bug: the gate could never pass a correct rollup retry)'
+  );
+
+  const carried = assessEngineCompliance(outDir, runLog, 8);
+  assert.equal(
+    carried.engine_compliant,
+    true,
+    'org-portfolio.json + engine calls carried from the preserved earlier attempt → the rollup-only retry is compliant'
+  );
+  assert.equal(
+    carried.audit_core_calls,
+    0,
+    'the current transcript honestly reports zero audit-core calls'
+  );
+  assert.equal(
+    carried.carried_audit_core_calls,
+    8,
+    'the carried count is recorded for run-meta/summary transparency'
+  );
+
+  fs.rmSync(path.join(outDir, 'org-portfolio.json'));
+  const noArtifact = assessEngineCompliance(outDir, runLog, 8);
+  assert.equal(
+    noArtifact.engine_compliant,
+    false,
+    'carried calls never vouch for a run that produced no org root artifact'
+  );
+});
+
+test('carried calls do not launder stale artifacts — an update run must re-run audit-core', () => {
+  // Update mode (phase=second) seeds a previous audit; a model could satisfy
+  // a disk-only gate by copying it into today's dir without ever running the
+  // engine. With zero calls in the transcript AND zero carried (nothing was
+  // preserved by the harness), the copied artifact must stay non-compliant.
+  const dir = tmp();
+  const outDir = path.join(dir, 'out');
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(outDir, 'audit.json'),
+    JSON.stringify({ engine: { generated_by: 'audit-core' }, audit_total: 1 })
+  );
+  const runLog = path.join(dir, 'run.jsonl');
+  fs.writeFileSync(
+    runLog,
+    transcriptLine({
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            name: 'Bash',
+            input: { command: 'cp -r context/audits/2026-07-01 out' },
+          },
+        ],
+      },
+    }) + '\n'
+  );
+  const comp = assessEngineCompliance(outDir, runLog, 0);
+  assert.equal(
+    comp.engine_compliant,
+    false,
+    'a stamped-but-copied audit.json with no engine call anywhere in the run is non-compliant — the stamp is provenance of a PAST run, not this one'
+  );
+});
+
+test('planRetry keeps a finished org fan-out, clears everything else, never touches the seed', () => {
+  const audits = tmp();
+  const mkOut = (name: string): string => {
+    const d = path.join(audits, name);
+    fs.mkdirSync(d, { recursive: true });
+    return d;
+  };
+  const stampRepo = (outDir: string, repo: string) => {
+    fs.mkdirSync(path.join(outDir, 'per-repo', repo), { recursive: true });
+    fs.writeFileSync(
+      path.join(outDir, 'per-repo', repo, 'audit.json'),
+      JSON.stringify({ engine: { generated_by: 'audit-core' } })
+    );
+  };
+
+  assert.deepEqual(
+    planRetry('', null),
+    { kind: 'fresh' },
+    'no previous output dir → fresh relaunch, nothing to clear or keep'
+  );
+  assert.deepEqual(
+    planRetry(path.join(audits, 'missing'), null),
+    { kind: 'fresh' },
+    'a nonexistent dir → fresh relaunch'
+  );
+
+  const seeded = mkOut('2026-07-05');
+  assert.deepEqual(
+    planRetry(seeded, '2026-07-05'),
+    { kind: 'fresh' },
+    'the phase=second seeded previous audit is INPUT, not output — a retry must never clear it'
+  );
+
+  const rollupReady = mkOut('rollup-ready');
+  stampRepo(rollupReady, 'repo-a');
+  stampRepo(rollupReady, 'repo-b');
+  assert.deepEqual(
+    planRetry(rollupReady, null),
+    { kind: 'rollup', dir: rollupReady, repos: ['repo-a', 'repo-b'] },
+    'stamped per-repo audits with no org root artifact → preserve them, retry only rollup+render'
+  );
+
+  const rolledUp = mkOut('rolled-up');
+  stampRepo(rolledUp, 'repo-a');
+  fs.writeFileSync(path.join(rolledUp, 'org-portfolio.json'), '{}');
+  assert.deepEqual(
+    planRetry(rolledUp, null),
+    { kind: 'clear', dir: rolledUp },
+    'org root already present but the attempt still failed compliance → the output is suspect, clear it'
+  );
+
+  const handBuilt = mkOut('hand-built');
+  fs.mkdirSync(path.join(handBuilt, 'per-repo', 'repo-a'), {
+    recursive: true,
+  });
+  fs.writeFileSync(
+    path.join(handBuilt, 'per-repo', 'repo-a', 'audit.json'),
+    JSON.stringify({ audit_total: 12 }) // no engine provenance stamp
+  );
+  assert.deepEqual(
+    planRetry(handBuilt, null),
+    { kind: 'clear', dir: handBuilt },
+    'unstamped per-repo audits are not engine output — nothing to preserve, clear and restart'
+  );
+
+  const singleRepo = mkOut('single');
+  fs.writeFileSync(path.join(singleRepo, 'audit.json'), '{}');
+  assert.deepEqual(
+    planRetry(singleRepo, null),
+    { kind: 'clear', dir: singleRepo },
+    'single-repo non-compliant output (audit.json present, gate failed) is cleared as before'
   );
 });
 

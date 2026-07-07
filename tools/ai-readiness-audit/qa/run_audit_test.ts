@@ -50,13 +50,13 @@ import {
   isFile,
   isMainModule,
   locateOutDir,
+  planRetry,
   readJson,
   repointMarketplace,
   restoreMarketplace,
   runClaudeAudit,
   scanJudgmentsPatched,
   scriptRepoRoot,
-  stampedPerRepoAudits,
   summarizeOutput,
   tokenCostSummary,
 } from './harness_lib.ts';
@@ -493,8 +493,11 @@ function printFinalSummary(opts: {
           (comp.engine_seeded_by_harness
             ? ' (harness salvaged audit-core)'
             : '')
-    } — audit_core_calls=${comp.audit_core_calls} ` +
-      `fanout_spawns=${comp.fanout_agent_spawns}`
+    } — audit_core_calls=${comp.audit_core_calls}` +
+      (comp.carried_audit_core_calls
+        ? ` (+${comp.carried_audit_core_calls} carried from earlier attempts)`
+        : '') +
+      ` fanout_spawns=${comp.fanout_agent_spawns}`
   );
   out(
     ` judgments : ${
@@ -657,6 +660,13 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
   let rc = 0;
   let outDir = '';
   let finalLog = '';
+  // audit-core calls from earlier attempts whose stamped artifacts were
+  // preserved on disk (rollup-only retries). The rollup-corrective prompt
+  // forbids re-running audit-core, so the retry's own transcript legitimately
+  // has zero engine calls — without this carry, a CORRECT rollup retry could
+  // never pass the compliance gate and the harness discarded valid org
+  // audits until retry exhaustion (barhopping 2026-07-06).
+  let carriedCalls = 0;
   const attemptCosts: number[] = [];
   for (let attempt = 1; attempt <= attempts; attempt++) {
     let retryPrompt = RETRY_CORRECTIVE_PROMPT;
@@ -664,24 +674,30 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
       log(
         `\n▶ engine-skip retry ${attempt - 1}/${attempts - 1} — relaunching claude`
       );
-      const prev = locateOutDir(audits, today, seededDate);
-      if (prev && isDir(prev) && path.basename(prev) !== seededDate) {
-        // Rollup-only failure: the org fan-out finished (per-repo audit.json
-        // files exist) but the org root artifact was never written. Those
-        // per-repo audits are real engine output — keep them and steer the
-        // retry to the rollup instead of re-running the whole portfolio.
-        const perRepoDone = stampedPerRepoAudits(prev);
-        const orgRootMissing =
-          !isFile(path.join(prev, 'org-portfolio.json')) &&
-          !isFile(path.join(prev, 'audit.json'));
-        if (perRepoDone.length > 0 && orgRootMissing) {
-          retryPrompt = RETRY_ROLLUP_PROMPT;
-          log(
-            `  ✓ keeping ${perRepoDone.length} completed per-repo audit(s) — retry only needs rollup + render`
-          );
-        } else {
-          fs.rmSync(prev, { recursive: true, force: true });
-          log(`  ✓ cleared non-compliant output ${prev}`);
+      const plan = planRetry(
+        locateOutDir(audits, today, seededDate),
+        seededDate
+      );
+      if (plan.kind === 'rollup') {
+        // Rollup-only failure: the org fan-out finished (stamped per-repo
+        // audit.json files exist) but the org root artifact was never
+        // written. Those audits are real engine output — keep them, carry
+        // their engine calls into the retry's compliance ledger, and steer
+        // the retry to the rollup instead of re-running the whole portfolio.
+        retryPrompt = RETRY_ROLLUP_PROMPT;
+        carriedCalls += comp.audit_core_calls ?? 0;
+        log(
+          `  ✓ keeping ${plan.repos.length} completed per-repo audit(s) — ` +
+            `retry only needs rollup + render ` +
+            `(carrying ${carriedCalls} engine call(s) toward compliance)`
+        );
+      } else {
+        // Nothing preserved → nothing to carry. Calls whose artifacts were
+        // cleared must not vouch for whatever the next attempt produces.
+        carriedCalls = 0;
+        if (plan.kind === 'clear') {
+          fs.rmSync(plan.dir, { recursive: true, force: true });
+          log(`  ✓ cleared non-compliant output ${plan.dir}`);
         }
       }
     }
@@ -698,7 +714,7 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
       typeof result.total_cost_usd === 'number' ? result.total_cost_usd : 0
     );
     outDir = locateOutDir(audits, today, seededDate);
-    comp = assessEngineCompliance(outDir, finalLog);
+    comp = assessEngineCompliance(outDir, finalLog, carriedCalls);
     if (args.noEngineGuard) {
       log(
         `  engine guard disabled — compliance signals: ${JSON.stringify(comp)}`
@@ -708,7 +724,9 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
     if (comp.engine_compliant) {
       if (attempt > 1) {
         log(
-          `  ✓ retry ${attempt - 1} complied (audit-core called, audit.json present)`
+          comp.audit_core_calls > 0
+            ? `  ✓ retry ${attempt - 1} complied (audit-core called, audit.json present)`
+            : `  ✓ retry ${attempt - 1} complied (rollup finished; engine calls carried from earlier attempts)`
         );
       }
       break;
@@ -741,7 +759,7 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
     );
     if (!outDir) outDir = path.join(audits, today);
     engineSeeded = seedAuditCore(engine, target, outDir);
-    comp = assessEngineCompliance(outDir, finalLog);
+    comp = assessEngineCompliance(outDir, finalLog, carriedCalls);
   }
   comp.model_complied = modelComplied;
   comp.engine_seeded_by_harness = engineSeeded;

@@ -220,6 +220,13 @@ export interface ComplianceSignals {
 export interface Compliance extends ComplianceSignals {
   engine_compliant: boolean;
   has_audit_json: boolean;
+  /**
+   * audit-core calls inherited from EARLIER attempts of the same run whose
+   * engine-stamped artifacts were deliberately preserved on disk (the org
+   * rollup-only retry). A rollup-only retry legitimately makes zero engine
+   * calls itself, so these carried calls count toward compliance.
+   */
+  carried_audit_core_calls: number;
   model_complied?: boolean;
   engine_seeded_by_harness?: boolean;
 }
@@ -342,7 +349,8 @@ export function smokeSignalsFromTranscript(lines: string[]): SmokeSignals {
  */
 export function assessEngineCompliance(
   outDir: string,
-  transcript: string | string[]
+  transcript: string | string[],
+  carriedAuditCoreCalls = 0
 ): Compliance {
   const hasJson =
     !!outDir &&
@@ -361,10 +369,19 @@ export function assessEngineCompliance(
     }
   }
   const signals = complianceFromTranscript(lines);
-  const compliant = hasJson && signals.audit_core_calls > 0;
+  // Engine evidence = calls in THIS attempt's transcript plus calls carried
+  // from earlier attempts whose stamped artifacts were preserved (the org
+  // rollup-only retry is TOLD not to re-run audit-core, so gating on the
+  // current transcript alone rejected every correct rollup retry —
+  // barhopping 2026-07-06). Artifacts alone never suffice: a copied or
+  // stale audit.json with zero engine calls anywhere in the run stays
+  // non-compliant, so an update run must actually re-run audit-core.
+  const compliant =
+    hasJson && signals.audit_core_calls + carriedAuditCoreCalls > 0;
   return {
     engine_compliant: compliant,
     has_audit_json: hasJson,
+    carried_audit_core_calls: carriedAuditCoreCalls,
     ...signals,
   };
 }
@@ -420,6 +437,45 @@ export function stampedPerRepoAudits(outDir: string): string[] {
       return false;
     }
   });
+}
+
+/** What a compliance retry does with the previous attempt's on-disk output. */
+export type RetryPlan =
+  | { kind: 'fresh' } // nothing usable on disk — plain relaunch
+  | { kind: 'clear'; dir: string } // discard non-compliant output, restart
+  | { kind: 'rollup'; dir: string; repos: string[] }; // keep per-repo audits, retry only rollup+render
+
+/**
+ * Decide the retry disposition for the previous attempt's output dir.
+ *
+ * - No dir (or it's the phase=second seeded previous audit, which is input,
+ *   not output) → 'fresh': nothing to clear or keep.
+ * - Stamped per-repo audits exist but the org root artifact
+ *   (org-portfolio.json / audit.json) is missing → 'rollup': the fan-out
+ *   finished and only the final steps were dropped. Preserve the engine
+ *   output and steer the retry to rollup+render — re-running a completed
+ *   8-repo fan-out over one missed step is the ~$35 amplification this
+ *   avoids.
+ * - Anything else → 'clear': the output is non-compliant (hand-built,
+ *   partial, or in the wrong scoring universe) and must not survive as
+ *   "evidence" that scoring already happened.
+ */
+export function planRetry(
+  prevOutDir: string,
+  seededDate: string | null
+): RetryPlan {
+  if (!prevOutDir || !isDir(prevOutDir)) return { kind: 'fresh' };
+  if (seededDate && path.basename(prevOutDir) === seededDate) {
+    return { kind: 'fresh' };
+  }
+  const orgRootMissing =
+    !isFile(path.join(prevOutDir, 'org-portfolio.json')) &&
+    !isFile(path.join(prevOutDir, 'audit.json'));
+  const repos = stampedPerRepoAudits(prevOutDir);
+  if (repos.length > 0 && orgRootMissing) {
+    return { kind: 'rollup', dir: prevOutDir, repos };
+  }
+  return { kind: 'clear', dir: prevOutDir };
 }
 
 export function summarizeOutput(outDir: string): any {

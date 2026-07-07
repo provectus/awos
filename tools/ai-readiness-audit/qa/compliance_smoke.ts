@@ -41,6 +41,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import {
+  acquireRunLock,
   assessEngineCompliance,
   awosMainCheckout,
   formatWallTime,
@@ -48,6 +49,7 @@ import {
   isMainModule,
   locateOutDir,
   readJson,
+  releaseRunLock,
   repointMarketplace,
   restoreMarketplace,
   runClaudeAudit,
@@ -279,6 +281,10 @@ async function main(): Promise<void> {
   );
   fs.mkdirSync(archive, { recursive: true });
 
+  // Same machine-wide lock as the full harness: the smoke repoints the
+  // SHARED marketplace, so a concurrent harness/smoke run would corrupt it.
+  acquireRunLock(`smoke:${worktree}`);
+
   let origMarket: MarketPaths | null = null;
   let deployedSha = '(marketplace as-is)';
   if (!args['no-deploy']) {
@@ -330,6 +336,7 @@ async function main(): Promise<void> {
     }
   } finally {
     if (origMarket) restoreMarketplace(origMarket);
+    releaseRunLock();
   }
 
   const passed = verdicts.filter((v) => v.pass).length;

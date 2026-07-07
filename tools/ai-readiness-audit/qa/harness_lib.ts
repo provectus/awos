@@ -768,6 +768,96 @@ export function isMainModule(url: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Run lock — one harness run at a time, machine-wide
+// ---------------------------------------------------------------------------
+// Every harness run mutates state shared beyond its own target: it repoints
+// the user's single awos-marketplace (a global config), and a same-target run
+// additionally shares the live `context/audits/<date>/` directory. Observed
+// 2026-07-07 (barhopping): a second run launched 13 min into a live one — it
+// stashed the live run's half-written output as "_preexisting", its
+// orchestrator then adopted the other session's artifacts as "already
+// audited" and spun ~10 min re-verifying files that kept changing under it,
+// and its finally-restore left the marketplace pointing at the WORKTREE
+// (the "original" it captured was the first run's repoint). The lock makes
+// the second run die immediately with a pointer to the live one instead.
+
+export const RUN_LOCK_PATH = path.join(os.tmpdir(), 'awos-audit-harness.lock');
+
+export interface RunLockInfo {
+  pid: number;
+  target: string;
+  started_utc: string;
+}
+
+/** True when `pid` is a live process we can see (EPERM still means alive). */
+function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e: any) {
+    return e?.code === 'EPERM';
+  }
+}
+
+/**
+ * Take the machine-wide harness lock or throw with the live holder's details.
+ * A lock whose holder pid is dead (crash, SIGKILL — the finally never ran) is
+ * stale and silently taken over.
+ */
+export function acquireRunLock(target: string, lockPath = RUN_LOCK_PATH): void {
+  const info: RunLockInfo = {
+    pid: process.pid,
+    target,
+    started_utc: new Date().toISOString(),
+  };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      fs.writeFileSync(lockPath, JSON.stringify(info, null, 2), {
+        flag: 'wx',
+      });
+      return;
+    } catch (e: any) {
+      if (e?.code !== 'EEXIST') throw e;
+    }
+    let holder: Partial<RunLockInfo> = {};
+    try {
+      holder = readJson(lockPath);
+    } catch {
+      // unreadable/corrupt lock → treat as stale
+    }
+    if (holder.pid !== undefined && pidAlive(holder.pid)) {
+      throw new Error(
+        `another audit harness run is already active (pid ${holder.pid}, ` +
+          `target ${holder.target ?? '?'}, started ${holder.started_utc ?? '?'}). ` +
+          `Concurrent runs corrupt each other: both repoint the shared ` +
+          `awos-marketplace, and same-target runs interleave writes in ` +
+          `context/audits/<date>/. Wait for it to finish (or kill it), ` +
+          `then re-run. Stale-crash locks are taken over automatically; ` +
+          `if this holder is truly gone, remove ${lockPath}.`
+      );
+    }
+    // Stale (dead pid or corrupt) — remove and retry the exclusive create.
+    try {
+      fs.rmSync(lockPath, { force: true });
+    } catch {
+      // raced with someone else's cleanup; the retry will decide
+    }
+  }
+  throw new Error(`could not acquire harness run lock at ${lockPath}`);
+}
+
+/** Release the lock if THIS process holds it (never someone else's). */
+export function releaseRunLock(lockPath = RUN_LOCK_PATH): void {
+  try {
+    const holder = readJson(lockPath) as Partial<RunLockInfo>;
+    if (holder.pid === process.pid) fs.rmSync(lockPath, { force: true });
+  } catch {
+    // missing or unreadable — nothing to release
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Marketplace repointing
 // ---------------------------------------------------------------------------
 // The awos-marketplace is a DIRECTORY source: `claude` serves the plugin live

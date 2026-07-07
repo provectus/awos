@@ -39,6 +39,7 @@ import { parseArgs } from 'node:util';
 import {
   CLAUDE_AUDIT_CMD,
   MARKET_NAME,
+  acquireRunLock,
   aggregateSegments,
   assessEngineCompliance,
   awosMainCheckout,
@@ -52,6 +53,7 @@ import {
   locateOutDir,
   planRetry,
   readJson,
+  releaseRunLock,
   repointMarketplace,
   restoreMarketplace,
   runClaudeAudit,
@@ -1001,6 +1003,15 @@ async function main(): Promise<void> {
     return;
   }
 
+  // One harness run at a time, machine-wide: runs repoint the SHARED
+  // marketplace and same-target runs interleave writes in the live
+  // context/audits/<date>/ (see acquireRunLock for the observed corruption).
+  try {
+    acquireRunLock(target);
+  } catch (e: any) {
+    die(String(e?.message ?? e));
+  }
+
   let deployedSha: string | null = null;
   let origMarket: MarketPaths | null = null;
   if (args.noDeploy) {
@@ -1040,6 +1051,7 @@ async function main(): Promise<void> {
       log(`▶ restoring ${MARKET_NAME} to original (${origMarket.km_install})`);
       restoreMarketplace(origMarket);
     }
+    releaseRunLock();
   }
 
   printFinalSummary({

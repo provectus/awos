@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
+  acquireRunLock,
   aggregateSegments,
   assessEngineCompliance,
   collectReportHtml,
@@ -16,6 +17,7 @@ import {
   discoverProjectMcp,
   formatWallTime,
   planRetry,
+  releaseRunLock,
   scanJudgmentsPatched,
   smokeSignalsFromTranscript,
   stampedPerRepoAudits,
@@ -508,6 +510,75 @@ test('planRetry keeps a finished org fan-out, clears everything else, never touc
     planRetry(singleRepo, null),
     { kind: 'clear', dir: singleRepo },
     'single-repo non-compliant output (audit.json present, gate failed) is cleared as before'
+  );
+});
+
+// Regression pin: barhopping 2026-07-07. A second harness run launched 13 min
+// into a live one — it stashed the live run's half-written output, its
+// orchestrator adopted the other session's artifacts as "already audited" and
+// spun ~10 min re-verifying files that kept changing under it, and its
+// finally-restore left the marketplace pointing at the worktree. The lock
+// makes the second run die immediately instead.
+test('run lock: second acquire fails while the holder lives, stale locks are taken over, release is owner-only', () => {
+  const lockPath = path.join(tmp(), 'harness.lock');
+
+  acquireRunLock('/some/target', lockPath);
+  const holder = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+  assert.equal(
+    holder.pid,
+    process.pid,
+    'the lock file records the holding pid'
+  );
+  assert.equal(
+    holder.target,
+    '/some/target',
+    'the lock file records the held target for the error message'
+  );
+
+  assert.throws(
+    () => acquireRunLock('/other/target', lockPath),
+    /already active/,
+    'a second run must die fast while the holder process is alive — concurrent runs corrupt the shared marketplace and the live context/audits/<date>/'
+  );
+
+  releaseRunLock(lockPath);
+  assert.equal(
+    fs.existsSync(lockPath),
+    false,
+    'release removes the lock the process holds'
+  );
+
+  // Stale lock: holder pid is dead (crash/SIGKILL — no finally ran).
+  fs.writeFileSync(
+    lockPath,
+    JSON.stringify({ pid: 999999999, target: '/dead', started_utc: 'x' })
+  );
+  acquireRunLock('/new/target', lockPath);
+  assert.equal(
+    JSON.parse(fs.readFileSync(lockPath, 'utf8')).pid,
+    process.pid,
+    'a lock whose holder is dead is stale and silently taken over'
+  );
+
+  // Corrupt lock file → also stale.
+  fs.writeFileSync(lockPath, '{not json');
+  acquireRunLock('/new/target', lockPath);
+  assert.equal(
+    JSON.parse(fs.readFileSync(lockPath, 'utf8')).pid,
+    process.pid,
+    'an unreadable lock file is treated as stale, not as a live holder'
+  );
+
+  // Release never removes someone else's lock.
+  fs.writeFileSync(
+    lockPath,
+    JSON.stringify({ pid: 999999999, target: '/other', started_utc: 'x' })
+  );
+  releaseRunLock(lockPath);
+  assert.equal(
+    fs.existsSync(lockPath),
+    true,
+    'release is owner-only — it must never delete a lock held by another pid'
   );
 });
 

@@ -16,6 +16,7 @@ import {
   complianceFromTranscript,
   discoverProjectMcp,
   formatWallTime,
+  locateOutDir,
   planRetry,
   releaseRunLock,
   restoreTarget,
@@ -768,33 +769,28 @@ test('stampedPerRepoAudits keeps only engine-stamped per-repo audits (retry must
 });
 
 // ---------------------------------------------------------------------------
-test('restoreTarget removes archived generated output and restores the stashed pre-existing audits', () => {
+test('restoreTarget removes only run-added dirs once archived, never pre-existing audits', () => {
   const target = tmp();
   const runDir = tmp();
-  // Generated output in the target + its archived copy in the run dir.
-  const gen = path.join(target, 'context/audits/2026-07-07_10-00-00');
+  const audits = path.join(target, 'context/audits');
+  // Pre-existing audit (in the pre-run snapshot) + run-generated output.
+  const old = path.join(audits, '2026-06-01_09-00-00');
+  fs.mkdirSync(old, { recursive: true });
+  fs.writeFileSync(path.join(old, 'audit.json'), '{"old":true}');
+  const gen = path.join(audits, '2026-07-07_10-00-00');
   fs.mkdirSync(gen, { recursive: true });
   fs.writeFileSync(path.join(gen, 'audit.json'), '{}');
   fs.mkdirSync(path.join(runDir, 'audit-output'), { recursive: true });
-  // Stashed pre-existing audit from before the run.
-  const stashed = path.join(runDir, '_preexisting/2026-06-01_09-00-00');
-  fs.mkdirSync(stashed, { recursive: true });
-  fs.writeFileSync(path.join(stashed, 'audit.json'), '{"old":true}');
 
-  restoreTarget(target, runDir);
+  restoreTarget(target, runDir, ['2026-06-01_09-00-00']);
 
-  const audits = path.join(target, 'context/audits');
   assert.ok(
-    !fs.existsSync(path.join(audits, '2026-07-07_10-00-00')),
-    'generated audit output must be removed from the target once archived — harness runs must not persist reports in real repos'
+    !fs.existsSync(gen),
+    'run-generated audit output must be removed from the target once archived — harness runs must not persist reports in real repos'
   );
   assert.ok(
-    fs.existsSync(path.join(audits, '2026-06-01_09-00-00/audit.json')),
-    'stashed pre-existing audits must be restored into the target'
-  );
-  assert.ok(
-    fs.existsSync(path.join(stashed, 'audit.json')),
-    'the archive must keep its copy of the stashed audits after restore'
+    fs.existsSync(path.join(old, 'audit.json')),
+    'pre-existing audits (in the pre-run snapshot) must never be touched'
   );
 });
 
@@ -805,10 +801,30 @@ test('restoreTarget keeps generated output in the target when nothing was archiv
   fs.mkdirSync(gen, { recursive: true });
   fs.writeFileSync(path.join(gen, 'audit.json'), '{}');
 
-  restoreTarget(target, runDir);
+  restoreTarget(target, runDir, []);
 
   assert.ok(
     fs.existsSync(path.join(gen, 'audit.json')),
     'un-archived output must never be deleted — a dead run keeps its only copy in the target'
+  );
+});
+
+test('locateOutDir skips pre-existing snapshot dirs and finds only the run-created one', () => {
+  const audits = tmp();
+  fs.mkdirSync(path.join(audits, '2026-07-07_09-00-00'), { recursive: true });
+  fs.mkdirSync(path.join(audits, '2026-07-07_10-30-00'), { recursive: true });
+  const found = locateOutDir(audits, '2026-07-07', ['2026-07-07_09-00-00']);
+  assert.equal(
+    path.basename(found),
+    '2026-07-07_10-30-00',
+    'locateOutDir must ignore dirs from the pre-run snapshot and return the dir the run created'
+  );
+  assert.equal(
+    locateOutDir(audits, '2026-07-07', [
+      '2026-07-07_09-00-00',
+      '2026-07-07_10-30-00',
+    ]),
+    '',
+    'when every dir is pre-existing, locateOutDir must report no output rather than adopt an old audit'
   );
 });

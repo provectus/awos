@@ -14,10 +14,10 @@
  *      and `claude plugin marketplace update`, then RESTORE the originals in a finally block
  *      after the run (and a failed run still restores). Deploying to the caches — the old
  *      approach — was never loaded by claude. `--no-deploy` skips the repoint.
- *   3. Prepare target context/audits/ — blank it for isolation so the run starts from a
- *      clean slate. Whatever was there is stashed into the run archive first; nothing is
- *      deleted outright. There is no previous-audit seeding: output dirs are datetime-stamped
- *      (context/audits/YYYY-MM-DD_HH-MM-SS) and the audit has no delta concept.
+ *   3. Snapshot target context/audits/ — pre-existing audits are left untouched (output
+ *      dirs are datetime-stamped, context/audits/YYYY-MM-DD_HH-MM-SS, and the audit has
+ *      no previous-audit/delta concept). The snapshot scopes output location and the
+ *      post-run cleanup to dirs this run created.
  *   4. Run the audit headless via `claude -p … --output-format stream-json`, tee the full
  *      transcript to disk while streaming a concise live log to stderr (see --quiet).
  *   5. Measure tokens — parse the stream-json `result` events for total_cost_usd, usage
@@ -72,8 +72,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RETRY_CORRECTIVE_PROMPT =
   'CORRECTIVE NOTE (the previous attempt was non-compliant and its output ' +
   'was discarded): nothing has scored anything yet. There is no pre-run; ' +
-  'any existing context/audits/<date>/ content is stale and must be ' +
-  'overwritten. Your first scoring action MUST be running the deterministic ' +
+  'start a fresh timestamped context/audits/ output directory for this ' +
+  'attempt. Your first scoring action MUST be running the deterministic ' +
   'engine yourself: node "<skill-dir>/dist/cli.js" audit-core <repoPath> ' +
   '<outDir>. Never hand-compute metrics (no grep/python/inline scripts for ' +
   'scoring), never hand-assemble audit JSON, and never spawn per-dimension ' +
@@ -134,36 +134,17 @@ function git(repo: string, ...args: string[]): string {
   return (p.stdout || '').trim();
 }
 
-/** shutil.move equivalent: rename, falling back to copy+delete across devices. */
-function moveSync(src: string, dest: string): void {
-  try {
-    fs.renameSync(src, dest);
-  } catch (e: any) {
-    if (e?.code !== 'EXDEV') throw e;
-    fs.cpSync(src, dest, { recursive: true });
-    fs.rmSync(src, { recursive: true, force: true });
-  }
-}
-
 // ---------------------------------------------------------------------------
 /**
- * Blank context/audits/ so the run starts from a clean slate (isolation).
- * Whatever was there is stashed into the run archive first — never deleted
- * outright. Nothing is seeded: output dirs are datetime-stamped and the audit
- * has no previous-audit / delta concept.
+ * Snapshot of the target's context/audits/ entry names before the run.
+ * Pre-existing audits are left untouched (datetime-stamped dirs never
+ * collide and nothing reads previous audits); the snapshot lets locateOutDir
+ * consider only dirs this run created and lets restoreTarget remove only
+ * what the run added.
  */
-function prepareTarget(target: string, runDir: string): void {
+function snapshotAudits(target: string): string[] {
   const audits = path.join(target, 'context/audits');
-  if (isDir(audits) && fs.readdirSync(audits).length) {
-    const stash = path.join(runDir, '_preexisting');
-    fs.mkdirSync(stash, { recursive: true });
-    for (const n of fs.readdirSync(audits)) {
-      moveSync(path.join(audits, n), path.join(stash, n));
-    }
-    log(`  ✓ stashed pre-existing context/audits -> ${stash}`);
-  }
-  fs.mkdirSync(audits, { recursive: true });
-  log('  ✓ context/audits blanked for isolation (no previous audit seeded)');
+  return isDir(audits) ? fs.readdirSync(audits).sort() : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -486,6 +467,8 @@ interface RunContext {
   tgtShort: string;
   tgtBranch: string;
   tgtDirty: boolean;
+  /** context/audits entry names present before the run (never touched). */
+  preRunAudits: string[];
 }
 
 /** The single immutable result of a run — consumed by the summary + exit logic. */
@@ -531,8 +514,11 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
   } = ctx;
 
   fs.mkdirSync(runDir, { recursive: true });
-  log('▶ preparing target context/audits/');
-  prepareTarget(target, runDir);
+  if (ctx.preRunAudits.length) {
+    log(
+      `▶ target has ${ctx.preRunAudits.length} pre-existing audit dir(s) — left untouched (datetime dirs never collide)`
+    );
+  }
 
   let claudeFlags = args.claudeFlags
     ? args.claudeFlags.split(/\s+/).filter(Boolean)
@@ -595,7 +581,7 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
       log(
         `\n▶ engine-skip retry ${attempt - 1}/${attempts - 1} — relaunching claude`
       );
-      const plan = planRetry(locateOutDir(audits, today));
+      const plan = planRetry(locateOutDir(audits, today, ctx.preRunAudits));
       if (plan.kind === 'rollup') {
         // Rollup-only failure: the org fan-out finished (stamped per-repo
         // audit.json files exist) but the org root artifact was never
@@ -631,7 +617,7 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
     attemptCosts.push(
       typeof result.total_cost_usd === 'number' ? result.total_cost_usd : 0
     );
-    outDir = locateOutDir(audits, today);
+    outDir = locateOutDir(audits, today, ctx.preRunAudits);
     comp = assessEngineCompliance(outDir, finalLog, carriedCalls);
     if (args.noEngineGuard) {
       log(
@@ -918,6 +904,7 @@ async function main(): Promise<void> {
 
   // The run itself lives in performRun; the finally guarantees the
   // marketplace is restored even when performRun throws or dies mid-flight.
+  const preRunAudits = snapshotAudits(target);
   let outcome: RunOutcome;
   try {
     outcome = await performRun({
@@ -938,20 +925,22 @@ async function main(): Promise<void> {
       tgtShort,
       tgtBranch,
       tgtDirty,
+      preRunAudits,
     });
   } finally {
     if (origMarket !== null) {
       log(`▶ restoring ${MARKET_NAME} to original (${origMarket.km_install})`);
       restoreMarketplace(origMarket);
     }
-    // Leave the target repo as we found it — generated output lives in the
-    // archive, stashed pre-existing audits go back. Never mask the original
-    // error with a restore failure.
+    // Remove only what the run added to the target (archive is canonical);
+    // pre-existing audits are never touched. Never mask the original error
+    // with a cleanup failure.
     try {
-      log('▶ restoring target context/audits/');
-      for (const line of restoreTarget(target, runDir)) log(`  ${line}`);
+      log('▶ cleaning generated audit output from target');
+      for (const line of restoreTarget(target, runDir, preRunAudits))
+        log(`  ${line}`);
     } catch (e) {
-      warn(`⚠ target restore failed: ${String(e)}`);
+      warn(`⚠ target cleanup failed: ${String(e)}`);
     }
     releaseRunLock();
   }

@@ -47,40 +47,43 @@ export function isFile(p: string): boolean {
 /**
  * Leave the target repo as the harness found it. The harness is a test tool:
  * its generated audit belongs in the run archive, never persisted in the real
- * target repo. Removes the run's generated `context/audits/` content ONLY
- * when the archive holds a copy (`<runDir>/audit-output`) — a run that died
- * before archiving keeps its output in place so nothing is lost — then moves
- * any stashed pre-existing audits (`<runDir>/_preexisting`) back, keeping a
- * copy in the archive. Returns human-readable log lines for the caller.
+ * target repo — while the target's own pre-existing audits are never touched
+ * (no blanking, no stash). `preexisting` is the snapshot of
+ * `context/audits/` entry names taken before the run; only entries the run
+ * ADDED are removed, and only when the archive holds a copy
+ * (`<runDir>/audit-output`) — a run that died before archiving keeps its
+ * output in place so nothing is lost. Returns log lines for the caller.
  */
-export function restoreTarget(target: string, runDir: string): string[] {
+export function restoreTarget(
+  target: string,
+  runDir: string,
+  preexisting: Iterable<string>
+): string[] {
   const lines: string[] = [];
   const audits = path.join(target, 'context/audits');
   const archived = path.join(runDir, 'audit-output');
-  const stash = path.join(runDir, '_preexisting');
-  if (isDir(audits)) {
-    const entries = fs.readdirSync(audits);
-    if (entries.length === 0 || isDir(archived)) {
-      fs.rmSync(audits, { recursive: true, force: true });
-      lines.push(
-        '✓ removed generated audit output from target (archived copy is canonical)'
-      );
-    } else {
-      lines.push(
-        '⚠ generated audit output left in target — nothing was archived'
-      );
-    }
-  }
-  if (isDir(stash)) {
-    fs.mkdirSync(audits, { recursive: true });
-    for (const n of fs.readdirSync(stash)) {
-      fs.cpSync(path.join(stash, n), path.join(audits, n), {
-        recursive: true,
-      });
-    }
+  if (!isDir(audits)) return lines;
+  const keep = new Set(preexisting);
+  const added = fs.readdirSync(audits).filter((n) => !keep.has(n));
+  if (added.length === 0) return lines;
+  if (!isDir(archived)) {
     lines.push(
-      '✓ restored pre-existing context/audits from stash (archive keeps a copy)'
+      '⚠ generated audit output left in target — nothing was archived'
     );
+    return lines;
+  }
+  for (const n of added) {
+    fs.rmSync(path.join(audits, n), { recursive: true, force: true });
+  }
+  lines.push(
+    `✓ removed ${added.length} generated audit dir(s) from target (archived copy is canonical); pre-existing audits untouched`
+  );
+  // Best-effort: don't leave behind an empty context/audits the run created.
+  try {
+    fs.rmdirSync(audits);
+    fs.rmdirSync(path.dirname(audits));
+  } catch {
+    // non-empty or pre-existing — leave it
   }
   return lines;
 }
@@ -446,14 +449,20 @@ function dateDirs(audits: string): string[] {
 
 /**
  * The output dir the run produced: today's exact date-named dir if a legacy
- * date-only run wrote one, else the newest date/datetime-stamped dir. The
- * harness blanks context/audits/ before every run, so afterward this is the
- * single dir the audit just created.
+ * date-only run wrote one, else the newest date/datetime-stamped dir.
+ * Pre-existing audits stay in place (the harness never blanks
+ * context/audits/), so pass `exclude` — the pre-run snapshot of entry
+ * names — to consider only dirs this run created.
  */
-export function locateOutDir(audits: string, today: string): string {
+export function locateOutDir(
+  audits: string,
+  today: string,
+  exclude: Iterable<string> = []
+): string {
+  const skip = new Set(exclude);
   const outDir = path.join(audits, today);
-  if (isDir(outDir)) return outDir;
-  const dd = dateDirs(audits);
+  if (!skip.has(today) && isDir(outDir)) return outDir;
+  const dd = dateDirs(audits).filter((n) => !skip.has(n));
   return dd.length ? path.join(audits, dd[dd.length - 1]) : '';
 }
 

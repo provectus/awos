@@ -1,4 +1,4 @@
-import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { makeResult, iterFiles, readTextSafe, detectTrunk } from './_base.ts';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -456,28 +456,6 @@ export function detectArchTechMatch(
 // ---------------------------------------------------------------------------
 
 const TRUNK_BRANCHES = new Set(['main', 'master', 'develop', 'development']);
-
-/**
- * The rev feature-branch diffs are excluded against. Prefer the shared trunk
- * ref from resolveTrunk() (a diverged local main hides the real trunk); only
- * when no remote ref exists fall back to probing common local branch names.
- */
-function detectTrunk(repoPath: string): string {
-  const trunk = resolveTrunk(repoPath);
-  if (trunk.ref !== 'HEAD') return trunk.ref;
-  for (const candidate of ['main', 'master', 'develop', 'development']) {
-    try {
-      execFileSync('git', ['rev-parse', '--verify', candidate], {
-        cwd: repoPath,
-        encoding: 'utf8',
-      });
-      return candidate;
-    } catch {
-      // try next candidate
-    }
-  }
-  return 'main'; // fallback — no exclusion will apply if branch absent
-}
 
 function listLocalBranches(repoPath: string): string[] {
   try {

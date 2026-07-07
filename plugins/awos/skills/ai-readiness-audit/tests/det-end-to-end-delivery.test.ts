@@ -1,8 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   detectVerticalDelivery,
@@ -11,9 +10,10 @@ import {
   detectCrossLayerTooling,
   DETECTORS,
 } from '../detectors/end_to_end_delivery.ts';
+import { tmpDir, writeRepo } from './helpers.ts';
 
 function tmp(): string {
-  return mkdtempSync(join(tmpdir(), 'e2e-'));
+  return tmpDir('e2e-');
 }
 
 // ---------------------------------------------------------------------------
@@ -192,17 +192,14 @@ test('detectBidirectionalLinks: spec exists but no impl cross-refs → WARN', ()
 
 test('detectLayerCoverage: API + UI + DB all present → PASS', () => {
   const t = tmp();
-  // API layer
-  mkdirSync(join(t, 'api'), { recursive: true });
-  writeFileSync(join(t, 'api', 'routes.ts'), 'export const routes = [];\n');
-  // UI layer
-  mkdirSync(join(t, 'frontend', 'src'), { recursive: true });
-  writeFileSync(
-    join(t, 'frontend', 'src', 'App.tsx'),
-    'export default function App() {}\n'
-  );
-  // DB schema
-  writeFileSync(join(t, 'schema.sql'), 'CREATE TABLE users (id INT);\n');
+  writeRepo(t, {
+    // API layer
+    'api/routes.ts': 'export const routes = [];\n',
+    // UI layer
+    'frontend/src/App.tsx': 'export default function App() {}\n',
+    // DB schema
+    'schema.sql': 'CREATE TABLE users (id INT);\n',
+  });
   const r = detectLayerCoverage(t);
   assert.equal(
     r.status,

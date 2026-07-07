@@ -10,8 +10,8 @@
  * and never stalls waiting for a user that isn't there.
  *
  * This is NOT the full harness (run_audit_test.ts): no token comparison, no
- * phase seeding, no retries, no salvage. Raw model behavior, tiny synthetic
- * fixture repo (audits in ~1-3 min), pass/fail per run plus a compliance rate.
+ * retries, no salvage. Raw model behavior, tiny synthetic fixture repo (audits
+ * in ~1-3 min), pass/fail per run plus a compliance rate.
  *
  * Usage:
  *   npm run audit:smoke                       # 3 runs, sonnet, worktree skill
@@ -179,7 +179,7 @@ function assessRun(
 ): Omit<RunVerdict, 'run' | 'wall'> {
   const audits = path.join(fixture, 'context/audits');
   const today = new Date().toISOString().slice(0, 10);
-  const outDir = locateOutDir(audits, today, null);
+  const outDir = locateOutDir(audits, today);
   // Read the (multi-MB) transcript once and feed both scanners.
   let lines: string[] = [];
   try {

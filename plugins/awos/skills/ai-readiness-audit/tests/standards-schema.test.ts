@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {} from 'node:fs';
 import { join } from 'node:path';
 import { loadStandards } from './helpers.ts';
 import { metaNumber } from '../metrics/_base.ts';
 import { computeTopology } from '../topology.ts';
+import { tmpDir } from './helpers.ts';
 
 const VALID = new Set(['computed', 'detected', 'judgment']);
 const categories = () => loadStandards().category as Record<string, any>;
@@ -94,8 +94,8 @@ test('every [category.*] has a non-empty url and date field', () => {
 });
 
 test('every topology.* applies_when flag is computed by topology.ts', () => {
-  const tmpDir = mkdtempSync(join(tmpdir(), 'topology-guard-'));
-  const topologyFlags = computeTopology(tmpDir);
+  const guardDir = tmpDir('topology-guard-');
+  const topologyFlags = computeTopology(guardDir);
   const missing: string[] = [];
   for (const [slug, cat] of Object.entries(categories())) {
     const aw: string | undefined = (cat as any).applies_when;

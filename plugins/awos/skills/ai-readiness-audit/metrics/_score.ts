@@ -166,6 +166,21 @@ export function scoreFromConfig(x: number, cfg: ScoringConfig): number {
   return clamp01(bandScore(x, cfg.anchors, cfg.scale));
 }
 
+/**
+ * DORA duration band from a median interval in hours, shared by
+ * lead_time_for_change and pr_cycle_time (identical thresholds):
+ *   elite  → < 1 day    (< 24 h)
+ *   high   → < 1 week   (< 168 h)
+ *   medium → < 1 month  (< 720 h, ~30 days)
+ *   low    → >= 1 month (>= 720 h)
+ */
+export function doraDurationBand(hours: number): string {
+  if (hours < 24) return 'elite';
+  if (hours < 168) return 'high';
+  if (hours < 720) return 'medium';
+  return 'low';
+}
+
 /** Median of a numeric array (sorts a copy). Returns null for empty input. */
 export function median(values: number[]): number | null {
   if (values.length === 0) return null;

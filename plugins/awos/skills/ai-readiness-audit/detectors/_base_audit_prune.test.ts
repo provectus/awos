@@ -4,21 +4,20 @@
 // (detectors) and the recursive walkDir (AST metrics).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { iterFiles } from './_base.ts';
 import { walkDir } from '../metrics/_ast.ts';
+import { tmpDir, writeRepo } from '../tests/helpers.ts';
 
 function makeRepoWithAuditOutput(): string {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-prune-'));
-  mkdirSync(join(repo, 'src'), { recursive: true });
-  writeFileSync(join(repo, 'src', 'real_module.py'), 'x = 1\n');
-  writeFileSync(join(repo, 'README.md'), '# real\n');
-  const auditDir = join(repo, 'context', 'audits', '2026-07-02');
-  mkdirSync(auditDir, { recursive: true });
-  writeFileSync(join(auditDir, 'report.md'), '# audit output\n');
-  writeFileSync(join(auditDir, 'polluter.py'), 'api_key = "AKIA1234"\n');
+  const repo = tmpDir('awos-prune-');
+  writeRepo(repo, {
+    'src/real_module.py': 'x = 1\n',
+    'README.md': '# real\n',
+    'context/audits/2026-07-02/report.md': '# audit output\n',
+    'context/audits/2026-07-02/polluter.py': 'api_key = "AKIA1234"\n',
+  });
   return repo;
 }
 
@@ -63,7 +62,7 @@ test('walkDir prunes context/audits — AST metrics never parse audit output', (
 });
 
 test('a context dir nested deeper (services/api/context/audits) is pruned too', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-prune-nested-'));
+  const repo = tmpDir('awos-prune-nested-');
   try {
     const nested = join(repo, 'services', 'api', 'context', 'audits');
     mkdirSync(nested, { recursive: true });

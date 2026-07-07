@@ -1,35 +1,25 @@
 // detectors/code_architecture_arch05.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { runDetector } from '../tests/helpers.ts';
+import { tmpDir, writeRepo } from '../tests/helpers.ts';
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli.ts');
-const NODE = process.env.NODE_BIN || process.execPath;
-
-function detect(repo: string) {
-  return JSON.parse(
-    execFileSync(NODE, ['--import', 'tsx', CLI, 'detect', '2104', repo], {
-      encoding: 'utf8',
-      env: { ...process.env, NODE_NO_WARNINGS: '1' },
-    })
-  );
-}
+const detect = (repo: string) => runDetector(2104, repo);
 
 test('ARCH-05 is all-or-nothing: one deviating file FAILs with score 0 (AWOS own standard)', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-arch05-graded-'));
+  const repo = tmpDir('awos-arch05-graded-');
   try {
-    mkdirSync(join(repo, 'app'), { recursive: true });
     // 3 snake_case + 1 camelCase: any departure from the dominant convention
     // fails — no source publishes an acceptable inconsistency rate, so there
     // is no graded WARN band to hide in.
-    writeFileSync(join(repo, 'app', 'user_service.py'), 'x = 1\n');
-    writeFileSync(join(repo, 'app', 'auth_handler.py'), 'x = 1\n');
-    writeFileSync(join(repo, 'app', 'data_model.py'), 'x = 1\n');
-    writeFileSync(join(repo, 'app', 'myController.py'), 'x = 1\n');
+    writeRepo(repo, {
+      'app/user_service.py': 'x = 1\n',
+      'app/auth_handler.py': 'x = 1\n',
+      'app/data_model.py': 'x = 1\n',
+      'app/myController.py': 'x = 1\n',
+    });
     const res = detect(repo);
     assert.equal(
       res.status,
@@ -56,13 +46,14 @@ test('ARCH-05 is all-or-nothing: one deviating file FAILs with score 0 (AWOS own
 });
 
 test('ARCH-05 score equals 1.0 on full PASS (dominant 100%)', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-arch05-pass-'));
+  const repo = tmpDir('awos-arch05-pass-');
   try {
-    mkdirSync(join(repo, 'app'), { recursive: true });
     // All snake_case → ratio = 1.0 → PASS, score = 1.0
-    writeFileSync(join(repo, 'app', 'user_service.py'), 'x = 1\n');
-    writeFileSync(join(repo, 'app', 'auth_handler.py'), 'x = 1\n');
-    writeFileSync(join(repo, 'app', 'data_model.py'), 'x = 1\n');
+    writeRepo(repo, {
+      'app/user_service.py': 'x = 1\n',
+      'app/auth_handler.py': 'x = 1\n',
+      'app/data_model.py': 'x = 1\n',
+    });
     const res = detect(repo);
     assert.equal(
       res.status,
@@ -79,16 +70,17 @@ test('ARCH-05 score equals 1.0 on full PASS (dominant 100%)', () => {
 });
 
 test('ARCH-05 FAILs mixed naming with score 0', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-arch05-fail-'));
+  const repo = tmpDir('awos-arch05-fail-');
   try {
-    mkdirSync(join(repo, 'app'), { recursive: true });
     // 2 snake_case + 2 camelCase + 2 PascalCase = 2/6 ≈ 0.33 → FAIL
-    writeFileSync(join(repo, 'app', 'user_service.py'), 'x = 1\n');
-    writeFileSync(join(repo, 'app', 'data_model.py'), 'x = 1\n');
-    writeFileSync(join(repo, 'app', 'myController.py'), 'x = 1\n');
-    writeFileSync(join(repo, 'app', 'authHandler.py'), 'x = 1\n');
-    writeFileSync(join(repo, 'app', 'MyService.py'), 'x = 1\n');
-    writeFileSync(join(repo, 'app', 'UserModel.py'), 'x = 1\n');
+    writeRepo(repo, {
+      'app/user_service.py': 'x = 1\n',
+      'app/data_model.py': 'x = 1\n',
+      'app/myController.py': 'x = 1\n',
+      'app/authHandler.py': 'x = 1\n',
+      'app/MyService.py': 'x = 1\n',
+      'app/UserModel.py': 'x = 1\n',
+    });
     const res = detect(repo);
     assert.equal(
       res.status,
@@ -106,7 +98,7 @@ test('ARCH-05 FAILs mixed naming with score 0', () => {
 });
 
 test('ARCH-05 excludes test files from the naming check (B2) — well-tested repo can PASS', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-arch05-tests-'));
+  const repo = tmpDir('awos-arch05-tests-');
   try {
     mkdirSync(join(repo, 'src'), { recursive: true });
     // 3 snake_case sources + 3 standard *.test.ts files. Before the fix the
@@ -134,18 +126,13 @@ test('ARCH-05 excludes test files from the naming check (B2) — well-tested rep
 });
 
 test('ARCH-05 classifies dotted role qualifiers (.d.ts, .stories.tsx) by their stem', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-arch05-dotted-'));
+  const repo = tmpDir('awos-arch05-dotted-');
   try {
-    mkdirSync(join(repo, 'src'), { recursive: true });
-    writeFileSync(
-      join(repo, 'src', 'user_service.ts'),
-      'export const x = 1;\n'
-    );
-    writeFileSync(
-      join(repo, 'src', 'auth_handler.ts'),
-      'export const x = 1;\n'
-    );
-    writeFileSync(join(repo, 'src', 'api_types.d.ts'), 'export type T = 1;\n');
+    writeRepo(repo, {
+      'src/user_service.ts': 'export const x = 1;\n',
+      'src/auth_handler.ts': 'export const x = 1;\n',
+      'src/api_types.d.ts': 'export type T = 1;\n',
+    });
     const res = detect(repo);
     assert.equal(
       res.status,
@@ -158,7 +145,7 @@ test('ARCH-05 classifies dotted role qualifiers (.d.ts, .stories.tsx) by their s
 });
 
 test('ARCH-05 emits SKIP, not PASS, when there are no source files to evaluate', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-arch05-empty-'));
+  const repo = tmpDir('awos-arch05-empty-');
   try {
     mkdirSync(join(repo, 'docs'), { recursive: true });
     writeFileSync(join(repo, 'docs', 'readme.txt'), 'hello\n');

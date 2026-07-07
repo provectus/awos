@@ -40,6 +40,8 @@ Each **dimension** is a self-contained `.md` file in `skills/ai-readiness-audit/
 4. The orchestrator fills only the LLM-only slice (the few `judgment` categories, the tracker/docs connector metrics) and authors the plain-language report blocks
 5. The renderer produces `report.md` + `report.html` from `audit.json` (additive weighted scoring — no letter grade)
 
+The HTML report is written for two audiences at once: it opens with an executive band (capability score, DORA-band delivery matrix, code scale, reach) where every number carries a plain-language hover explanation — a CEO or Head of Engineering can stop there — while engineers drill into hash-routed per-dimension pages with full check tables and evidence. The page is self-contained (Provectus-styled, no external fetches) and renders identically offline.
+
 ### Scoring
 
 Scoring is additive and weighted — there is no letter grade and no deduction table. Every check maps to one or more capability categories in `skills/ai-readiness-audit/references/standards.toml`, each carrying a numeric weight. A check that passes awards its categories' weights; a dimension's score is the sum of awarded weights; the audit total is the sum across dimensions, uncapped. A secondary **coverage ratio** (awarded ÷ currently-defined applicable weight) shows how much of the current industry standard is in place, and every check carries a reliability tag (`maximal`/`minimal`/`not-reliable` plus confidence) derived from which data sources were available.
@@ -66,10 +68,10 @@ Project Topology is evaluated first inside the engine pass — its flags decide 
 
 ## Outputs
 
-Each audit run writes to `context/audits/YYYY-MM-DD/`:
+Each audit run writes to `context/audits/YYYY-MM-DD_HH-MM-SS/`:
 
 ```
-context/audits/YYYY-MM-DD/
+context/audits/YYYY-MM-DD_HH-MM-SS/
 ├── collected/                   # one JSON artifact per data source (git, ci, tracker, docs)
 ├── <dimension>.json             # per-dimension results, one file per dimension
 ├── audit.json                   # aggregated audit — the source of truth
@@ -79,7 +81,7 @@ context/audits/YYYY-MM-DD/
 └── per-repo/<repo>/             # org mode only: a full per-repo audit per repository
 ```
 
-`report.md` and `report.html` are always rendered together from `audit.json` — never hand-written. In org mode each `per-repo/<repo>/` subdir holds that repo's full audit, and an `org-portfolio.json` drives the org-level report. When a previous audit exists, the report includes score deltas per dimension.
+`report.md` and `report.html` are always rendered together from `audit.json` — never hand-written. In org mode each `per-repo/<repo>/` subdir holds that repo's full audit, and an `org-portfolio.json` drives the org-level report. The directory name is the run's start timestamp, so every audit — including same-day re-runs — stands alone; earlier directories are history, never input.
 
 ## Plugin Structure
 

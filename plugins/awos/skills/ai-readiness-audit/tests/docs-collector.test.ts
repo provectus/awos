@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {} from 'node:fs';
 import { join } from 'node:path';
 import { collect } from '../collectors/docs.ts';
+import { tmpDir } from './helpers.ts';
 
 const PERIOD = {
   bucket_days: 30,
@@ -12,7 +12,7 @@ const PERIOD = {
 };
 
 function bareRepo(): string {
-  return mkdtempSync(join(tmpdir(), 'docs-'));
+  return tmpDir('docs-');
 }
 
 test('docs collector: no connector → available=false', () => {

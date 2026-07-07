@@ -5,10 +5,6 @@
  * Bundled by build-engine.mjs → dist/cli.js (all imports inlined, no external deps).
  *
  * Usage:
- *   node dist/cli.js collect        <source>           <repoPath>
- *   node dist/cli.js detect         <code>             <repoPath>
- *   node dist/cli.js metric         <id>               <repoPath> [collectedDir]
- *   node dist/cli.js standards      <path-to-toml>
  *   node dist/cli.js progress       <elapsed_seconds>  <done> <total>
  *   node dist/cli.js render         <audit.json>       --format md|html|both [--out-dir <dir>]
  *   node dist/cli.js rollup         <dir-of-per-repo-subdirs>
@@ -18,53 +14,17 @@
  *   node dist/cli.js patch-judgment <auditsDir>        <patches.json|->
  *   node dist/cli.js report-context <auditsDir>
  *   node dist/cli.js patch-report   <auditsDir>        <blocks.json|->
- *
- * The optional [collectedDir] argument to `metric` is the "query-once" path:
- * if supplied, the metric reads pre-written <collectedDir>/<source>.json
- * artifacts instead of running collectors inline.  Omit for the original
- * self-collect behavior.
  */
 
-// ---------------------------------------------------------------------------
-// Standards parser (smol-toml — bundled, no Python required)
-// ---------------------------------------------------------------------------
-import { parse as parseToml } from 'smol-toml';
 import {
   readFileSync,
   writeFileSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   statSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-// ---------------------------------------------------------------------------
-// Collectors
-// ---------------------------------------------------------------------------
-import { collect as collectGit } from './collectors/git.ts';
-import { collect as collectCi } from './collectors/ci.ts';
-import { collect as collectTracker } from './collectors/tracker.ts';
-import { collect as collectDocs } from './collectors/docs.ts';
-import { writeArtifact } from './collectors/_base.ts';
-import type { Period } from './collectors/_base.ts';
-
-// Third parameters differ per collector: git takes standards.toml [meta]
-// tunables, while ci/tracker/docs take a CONNECTOR payload — so the registry
-// is typed two-argument and the `collect` verb passes the git tunables only
-// to the git collector (a truthy third argument would make tracker/docs
-// report available:true with zero records — a fabricated connection).
-const COLLECTORS: Record<
-  string,
-  (repoPath: string, period: Period) => unknown
-> = {
-  git: collectGit,
-  ci: collectCi,
-  tracker: collectTracker,
-  docs: collectDocs,
-};
 
 // ---------------------------------------------------------------------------
 // Registries — assembled in detectors/index.ts and metrics/index.ts (adding a
@@ -97,12 +57,8 @@ import { progress } from './progress.ts';
 // ---------------------------------------------------------------------------
 // audit-core (deterministic single-pass audit)
 // ---------------------------------------------------------------------------
-import {
-  auditCore,
-  hasEngineProvenance,
-  periodFromStandards,
-  gitOptsFromStandards,
-} from './audit_core.ts';
+import { auditCore } from './audit_core.ts';
+import { hasEngineProvenance } from './provenance.ts';
 import {
   aggregate,
   patchJudgments,
@@ -167,174 +123,11 @@ async function main(): Promise<void> {
     fail({
       error: 'no command given',
       usage:
-        'collect|detect|metric|standards|progress|render|rollup|audit-core|aggregate|enrich|patch-judgment <arg> [repoPath]',
+        'progress|render|rollup|audit-core|aggregate|enrich|patch-judgment|report-context|patch-report <arg> [repoPath]',
     });
   }
 
   switch (command) {
-    case 'collect': {
-      const source = arg1;
-      const repoPath = arg2;
-      if (!source || !repoPath) {
-        fail({ error: 'collect requires <source> and <repoPath>' });
-      }
-      const fn = COLLECTORS[source];
-      if (!fn) {
-        fail({
-          error: `unknown collector source "${source}"`,
-          known: Object.keys(COLLECTORS),
-        });
-      }
-      // Period + git tunables come from standards.toml [meta], never hardcoded.
-      const collectStandards = loadStandards(standardsTomlPath());
-      const collectPeriod = periodFromStandards(collectStandards);
-      printJson(
-        source === 'git'
-          ? collectGit(
-              repoPath,
-              collectPeriod,
-              gitOptsFromStandards(collectStandards)
-            )
-          : fn(repoPath, collectPeriod)
-      );
-      break;
-    }
-
-    case 'detect': {
-      const codeStr = arg1;
-      const repoPath = arg2;
-      if (!codeStr || !repoPath) {
-        fail({ error: 'detect requires <code> and <repoPath>' });
-      }
-      const code = Number(codeStr);
-      if (!Number.isInteger(code)) {
-        fail({ error: `detector code must be an integer, got "${codeStr}"` });
-      }
-      const fn = DETECTORS[code];
-      if (!fn) {
-        fail({
-          error: `unknown detector code ${code}`,
-          known: Object.keys(DETECTORS)
-            .map(Number)
-            .sort((a, b) => a - b),
-        });
-      }
-      // Pass the category's declared verdict thresholds, exactly like the
-      // audit-core path — standards.toml is the source of truth for them.
-      const detectStandards = loadStandards(standardsTomlPath());
-      const detectCats = (detectStandards['category'] ?? {}) as Record<
-        string,
-        Record<string, unknown>
-      >;
-      const cat = Object.values(detectCats).find((c) => c['code'] === code);
-      printJson(
-        fn(repoPath, {
-          threshold: cat?.['threshold'],
-          threshold_days: cat?.['threshold_days'],
-          pass_at: cat?.['pass_at'],
-          warn_at: cat?.['warn_at'],
-          fail_at: cat?.['fail_at'],
-        })
-      );
-      break;
-    }
-
-    case 'standards': {
-      const tomlPath = arg1;
-      if (!tomlPath) {
-        fail({ error: 'standards requires <path-to-standards.toml>' });
-      }
-      let raw: string;
-      try {
-        raw = readFileSync(tomlPath, 'utf8');
-      } catch (err: unknown) {
-        const e = err as NodeJS.ErrnoException;
-        fail({
-          error: `cannot read standards file: ${e.message}`,
-          path: tomlPath,
-        });
-      }
-      printJson(parseToml(raw));
-      break;
-    }
-
-    case 'metric': {
-      const id = arg1;
-      const repoPath = arg2;
-      // Optional 3rd argument: a pre-populated collected/ directory.
-      // When provided, no inline collection is performed — the metric reads
-      // the existing <collectedDir>/<source>.json artifacts directly.
-      // This is the "query-once" path used by the ai-sdlc-adoption orchestrator.
-      const [, , , , , arg3] = process.argv;
-      const preCollectedDir: string | undefined = arg3;
-
-      if (!id || !repoPath) {
-        fail({ error: 'metric requires <id> and <repoPath>' });
-      }
-      const metricFn = METRICS[id];
-      if (!metricFn) {
-        fail({
-          error: `unknown metric "${id}"`,
-          known: Object.keys(METRICS).sort(),
-        });
-      }
-
-      // Load standards up front — the Period and git tunables come from its
-      // [meta] table (source of truth), and the metric needs it for scoring.
-      const standards = loadStandards(standardsTomlPath());
-      const period = periodFromStandards(standards);
-      const gitOpts = gitOptsFromStandards(standards);
-
-      // The sources this metric's categories declare in standards.toml decide
-      // which collectors the inline path must run — no hardcoded id → source
-      // mapping. Pseudo-sources (scale/audit/incident) have no collector.
-      const categoryTable = (standards['category'] ?? {}) as Record<
-        string,
-        Record<string, unknown>
-      >;
-      const declaredSources = new Set<string>();
-      for (const cat of Object.values(categoryTable)) {
-        if (cat['metric'] !== id) continue;
-        for (const s of (cat['sources'] as string[] | undefined) ?? []) {
-          declaredSources.add(s);
-        }
-      }
-      // Repo-scan metrics (sources: scale only — G10/G11/G12 today) need no
-      // collector artifact; they receive repoPath as the 4th argument and
-      // ignore collectedDir.
-      const isScaleMetric =
-        declaredSources.size > 0 &&
-        [...declaredSources].every((s) => s === 'scale');
-
-      let collectedDir: string;
-
-      if (preCollectedDir) {
-        // Query-once path: use the caller-supplied collected/ directory.
-        // No inline collection — artifacts were already written by `collect` verbs.
-        collectedDir = preCollectedDir;
-      } else if (isScaleMetric) {
-        collectedDir = repoPath;
-      } else {
-        // Inline path (backward-compatible): run the required collectors into
-        // a temp dir. Git is always collected — several tracker/incident
-        // metrics (e.g. MTTR) read the git artifact as their proxy source.
-        const tmpRoot = mkdtempSync(join(tmpdir(), 'awos-metric-'));
-        collectedDir = join(tmpRoot, 'collected');
-        const gitArtifact = collectGit(repoPath, period, gitOpts);
-        writeArtifact(gitArtifact as { source: string }, collectedDir);
-        for (const src of ['ci', 'tracker', 'docs']) {
-          if (!declaredSources.has(src)) continue;
-          const artifact = COLLECTORS[src](repoPath, period);
-          writeArtifact(artifact as { source: string }, collectedDir);
-        }
-      }
-
-      // Await in case the metric is async (e.g. cyclomatic_complexity uses wasm init).
-      const result = await metricFn(collectedDir, standards, {}, repoPath);
-      printJson(result);
-      break;
-    }
-
     case 'rollup': {
       // Aggregate the FULL per-repo audits into ≤3 portfolio metrics, an org
       // headline (average delivery matrix), and enriched per-repo rows.
@@ -343,7 +136,7 @@ async function main(): Promise<void> {
       //   node dist/cli.js rollup <per-repo-dir>
       //
       // <per-repo-dir> holds one SUBDIRECTORY per repo (as written by SKILL.md
-      // Step 6's org branch): <per-repo-dir>/<repo>/audit.json plus
+      // Step 5's org branch): <per-repo-dir>/<repo>/audit.json plus
       // <per-repo-dir>/<repo>/collected/git.json. For each repo we read the
       // full audit — audit_total, coverage, the six delivery check values by
       // check_id — and the git artifact's per-active-contributor stats, then
@@ -417,7 +210,7 @@ async function main(): Promise<void> {
       //   node dist/cli.js render <audit.json> --format html
       //
       // The audit JSON is the single source of truth (produced by SKILL.md
-      // Step 6). The renderer is pure and deterministic — no clocks, no LLM.
+      // Step 5). The renderer is pure and deterministic — no clocks, no LLM.
       const auditPath = arg1;
       if (!auditPath) {
         fail({
@@ -648,7 +441,7 @@ async function main(): Promise<void> {
       fail({
         error: `unknown command "${command}"`,
         usage:
-          'collect|detect|metric|standards|progress|render|rollup|audit-core|aggregate|enrich|patch-judgment|report-context|patch-report <arg> [repoPath]',
+          'progress|render|rollup|audit-core|aggregate|enrich|patch-judgment|report-context|patch-report <arg> [repoPath]',
       });
     }
   }

@@ -10,13 +10,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { compute } from './ticket_description_quality.ts';
 import { loadStandards } from './_base.ts';
 import { trackerArtifact } from '../tests/helpers.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
 // Real standards.toml — compute() reads its score curve from
 // [category.ticket_description_quality.scoring].
@@ -47,7 +47,7 @@ function makeTrackerArtifact(
 // ---------------------------------------------------------------------------
 
 test('ticket_description_quality: SKIP when tracker.json absent', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-nofile-'));
+  const dir = tmpDir('awos-i5-nofile-');
   try {
     const res = compute(dir, STANDARDS, {});
     assert.equal(
@@ -68,7 +68,7 @@ test('ticket_description_quality: SKIP when tracker.json absent', () => {
 });
 
 test('ticket_description_quality: SKIP when tracker.json available=false', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-unavail-'));
+  const dir = tmpDir('awos-i5-unavail-');
   try {
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact([], false));
     const res = compute(dir, STANDARDS, {});
@@ -84,7 +84,7 @@ test('ticket_description_quality: SKIP when tracker.json available=false', () =>
 });
 
 test('ticket_description_quality: SKIP when no ticket has description_length', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-nodata-'));
+  const dir = tmpDir('awos-i5-nodata-');
   try {
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', type: 'story', status: 'Done' },
@@ -108,7 +108,7 @@ test('ticket_description_quality: SKIP when no ticket has description_length', (
 });
 
 test('ticket_description_quality: SKIP when raw.tickets is absent from artifact', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-notickets-'));
+  const dir = tmpDir('awos-i5-notickets-');
   try {
     writeFileSync(
       join(dir, 'tracker.json'),
@@ -130,7 +130,7 @@ test('ticket_description_quality: SKIP when raw.tickets is absent from artifact'
 // ---------------------------------------------------------------------------
 
 test('ticket_description_quality: share=1.0 (all well-described) → band=good, score=1', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-good-'));
+  const dir = tmpDir('awos-i5-good-');
   try {
     // All 3 tickets have description_length ≥ 50 AND has_acceptance_criteria → share = 1.0
     // ANCHORS last segment (0.7,0.8)→(1,1): at x=1 → y=1
@@ -161,7 +161,7 @@ test('ticket_description_quality: share=1.0 (all well-described) → band=good, 
 });
 
 test('ticket_description_quality: 3 of 4 well-described (long desc w/o AC excluded) → share=0.75, band=good', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-and-'));
+  const dir = tmpDir('awos-i5-and-');
   try {
     // 4 eligible tickets (all carry description_length). Only 3 are well-described:
     // PROJ-4 has a LONG description but has_acceptance_criteria=false → NOT well-described.
@@ -196,7 +196,7 @@ test('ticket_description_quality: 3 of 4 well-described (long desc w/o AC exclud
 });
 
 test('ticket_description_quality: share=0.7 → band=good, score=0.8', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-good2-'));
+  const dir = tmpDir('awos-i5-good2-');
   try {
     // 7 of 10 eligible tickets well-described (≥50 chars AND AC) → share = 0.7
     // ANCHORS: (0.4,0.4)→(0.7,0.8): at x=0.7 → y=0.8
@@ -238,7 +238,7 @@ test('ticket_description_quality: share=0.7 → band=good, score=0.8', () => {
 // ---------------------------------------------------------------------------
 
 test('ticket_description_quality: share=0.55 → band=watch, score≈0.6', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-watch-'));
+  const dir = tmpDir('awos-i5-watch-');
   try {
     // 11 of 20 eligible tickets well-described → share = 0.55
     // ANCHORS: (0.4,0.4)→(0.7,0.8): at x=0.55 → 0.4 + (0.8-0.4)*(0.15/0.3) = 0.4 + 0.2 = 0.6
@@ -280,7 +280,7 @@ test('ticket_description_quality: share=0.55 → band=watch, score≈0.6', () =>
 // ---------------------------------------------------------------------------
 
 test('ticket_description_quality: share=0.2 → band=concerning, score=0.2', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-concern-'));
+  const dir = tmpDir('awos-i5-concern-');
   try {
     // 2 of 10 eligible tickets well-described → share = 0.2
     // ANCHORS: (0,0)→(0.4,0.4): at x=0.2 → 0 + 0.4*(0.2/0.4) = 0.2
@@ -318,7 +318,7 @@ test('ticket_description_quality: share=0.2 → band=concerning, score=0.2', () 
 });
 
 test('ticket_description_quality: long description without acceptance criteria is NOT well-described', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-noac-'));
+  const dir = tmpDir('awos-i5-noac-');
   try {
     // 3 eligible tickets, only 1 well-described:
     //   PROJ-1: long desc + AC          → well-described
@@ -352,7 +352,7 @@ test('ticket_description_quality: long description without acceptance criteria i
 });
 
 test('ticket_description_quality: tickets without description_length excluded from total', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-mixed-'));
+  const dir = tmpDir('awos-i5-mixed-');
   try {
     // 2 tickets carry description_length: 1 well-described, 1 not.
     // 3 tickets have no description_length → excluded from eligible total.
@@ -386,7 +386,7 @@ test('ticket_description_quality: tickets without description_length excluded fr
 // ---------------------------------------------------------------------------
 
 test('ticket_description_quality: awards category 1105 when topology.has_tracker=true', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-cat-'));
+  const dir = tmpDir('awos-i5-cat-');
   try {
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', description_length: 100, has_acceptance_criteria: true },
@@ -424,7 +424,7 @@ test('ticket_description_quality: awards category 1105 when topology.has_tracker
 });
 
 test('ticket_description_quality: does not award 1105 when topology.has_tracker=false', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-notopol-'));
+  const dir = tmpDir('awos-i5-notopol-');
   try {
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', description_length: 100, has_acceptance_criteria: true },
@@ -462,7 +462,7 @@ test('ticket_description_quality: does not award 1105 when topology.has_tracker=
 });
 
 test('ticket_description_quality: reliability.tag is "minimal"', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-rel-'));
+  const dir = tmpDir('awos-i5-rel-');
   try {
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', description_length: 100, has_acceptance_criteria: true },
@@ -480,7 +480,7 @@ test('ticket_description_quality: reliability.tag is "minimal"', () => {
 });
 
 test('ticket_description_quality: expression mentions both description size and acceptance criteria', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-expr-'));
+  const dir = tmpDir('awos-i5-expr-');
   try {
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', description_length: 100, has_acceptance_criteria: true },
@@ -541,7 +541,7 @@ test('ticket_description_quality: standards.toml [category.ticket_description_qu
 // ---------------------------------------------------------------------------
 
 test('ticket_description_quality: field-gap SKIP names the unmapped field, not a missing connector', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i5-fieldgap-'));
+  const dir = tmpDir('awos-i5-fieldgap-');
   try {
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', type: 'story', status: 'Done' },

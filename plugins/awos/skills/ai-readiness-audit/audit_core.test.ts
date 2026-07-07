@@ -9,7 +9,6 @@ import {
   rmSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { aggregate } from './audit_patch.ts';
 
 // ---------------------------------------------------------------------------
@@ -17,7 +16,7 @@ import { aggregate } from './audit_patch.ts';
 // ---------------------------------------------------------------------------
 
 test('aggregate must include patched-PASS connector checks in the coverage denominator — coverage cannot exceed 100% (issue #12)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-agg-'));
+  const dir = tmpDir('awos-agg-');
   try {
     // Connector check: patched SKIP→PASS but applies still false (the bug).
     const connectorCheck = {
@@ -90,7 +89,7 @@ import { mkdirSync } from 'node:fs';
 import { auditCore } from './audit_core.ts';
 
 test('Metric-routed checks must carry the metric value+evidence into the record (issue #12 blank connector values)', async () => {
-  const tmpBase = mkdtempSync(join(tmpdir(), 'awos-buildcheck-'));
+  const tmpBase = tmpDir('awos-buildcheck-');
   try {
     const repoPath = join(tmpBase, 'repo');
     mkdirSync(repoPath, { recursive: true });
@@ -189,7 +188,7 @@ test('ai-sdlc-adoption checks must use short ADP-NN ids, not category slugs (iss
   const skillRoot = pathJoin(dirname(fileURLToPath(import.meta.url)), '.');
   const standardsPath = pathJoin(skillRoot, 'references', 'standards.toml');
 
-  const tmpBase = mkdtempSync(join(tmpdir(), 'awos-adpid-'));
+  const tmpBase = tmpDir('awos-adpid-');
   try {
     const repoPath = join(tmpBase, 'repo');
     mkdirSync(repoPath, { recursive: true });
@@ -245,7 +244,7 @@ test('ai-sdlc-adoption checks must use short ADP-NN ids, not category slugs (iss
 // ---------------------------------------------------------------------------
 
 test('aggregate must round dim.score and audit_total to 1 dp — no float dust (e.g. 2.1 + 0.8 must be 2.9, not 2.9000000000000004)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-rnd-'));
+  const dir = tmpDir('awos-rnd-');
   try {
     // aggregate re-derives weight_awarded = round(weight_max * score * 10)/10.
     // We need: dim1 checks → 1.4 + 0.7 = 2.1, dim2 check → 0.8.
@@ -337,7 +336,7 @@ test('aggregate must round dim.score and audit_total to 1 dp — no float dust (
 // ---------------------------------------------------------------------------
 
 function buildBareRepo(): { repoPath: string; outDir: string; base: string } {
-  const base = mkdtempSync(join(tmpdir(), 'awos-skipreason-'));
+  const base = tmpDir('awos-skipreason-');
   const repoPath = join(base, 'repo');
   mkdirSync(repoPath, { recursive: true });
   execSync('git init && git add . && git commit -m init --allow-empty', {
@@ -552,7 +551,7 @@ function makePatchableCheck(overrides: Record<string, unknown>) {
 }
 
 test('aggregate clamps a patched score > 1 — a raw weight written into score cannot inflate the total (B4)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-agg-clamp-'));
+  const dir = tmpDir('awos-agg-clamp-');
   try {
     // Observed live: the orchestrator patched score=8 (the weight) instead of a
     // 0–1 fraction, producing weight_awarded 64/8.
@@ -594,7 +593,7 @@ test('aggregate clamps a patched score > 1 — a raw weight written into score c
 });
 
 test('aggregate reconciles a status-only patch (PASS with score left at 0) instead of zeroing the credit', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-agg-reconcile-'));
+  const dir = tmpDir('awos-agg-reconcile-');
   try {
     // Orchestrator set status/weight_awarded but never touched score.
     const dim = {
@@ -629,7 +628,7 @@ test('aggregate reconciles a status-only patch (PASS with score left at 0) inste
 });
 
 test('aggregate zeroes stale credit on a FAIL — weight_awarded cannot survive a failing status', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-agg-fail-'));
+  const dir = tmpDir('awos-agg-fail-');
   try {
     const dim = {
       dimension: 'ai-development-tooling',
@@ -664,6 +663,7 @@ test('aggregate zeroes stale credit on a FAIL — weight_awarded cannot survive 
 // ---------------------------------------------------------------------------
 
 import { patchJudgments, type JudgmentPatch } from './audit_patch.ts';
+import { tmpDir } from './tests/helpers.ts';
 
 /** patchJudgments refuses a dir without an engine-stamped audit.json (provenance circuit-breaker) — stamp the fixture dir. */
 function writeStampedAudit(dir: string): void {
@@ -681,7 +681,7 @@ function writeStampedAudit(dir: string): void {
 }
 
 test('patchJudgments applies all verdicts in one call and re-aggregates audit.json', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-patchj-'));
+  const dir = tmpDir('awos-patchj-');
   try {
     const dim = {
       dimension: 'ai-development-tooling',
@@ -774,7 +774,7 @@ test('patchJudgments applies all verdicts in one call and re-aggregates audit.js
 });
 
 test('patchJudgments rejects an invalid status with a warning — only PASS/WARN/FAIL/SKIP are legal verdicts', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-patchj-badstatus-'));
+  const dir = tmpDir('awos-patchj-badstatus-');
   try {
     const dim = {
       dimension: 'ai-development-tooling',
@@ -822,7 +822,7 @@ test('patchJudgments rejects an invalid status with a warning — only PASS/WARN
 });
 
 test('patchJudgments clamps a weight passed as score', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-patchj-clamp-'));
+  const dir = tmpDir('awos-patchj-clamp-');
   try {
     const dim = {
       dimension: 'ai-development-tooling',
@@ -867,7 +867,7 @@ test('patchJudgments clamps a weight passed as score', () => {
 // ---------------------------------------------------------------------------
 
 test('aggregate keeps an explicit score 0 on a WARN — a stored 0 is a measurement, not a missing score to re-inflate from the status default', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-agg-warn0-'));
+  const dir = tmpDir('awos-agg-warn0-');
   try {
     // A legal judgment patch: {status: WARN, score: 0} (patchJudgments also
     // zeroes weight_awarded). The old `score > 0` guard treated the 0 as
@@ -916,7 +916,7 @@ function makeCustomStandardsFixture(categoryLines: string[]): {
   outDir: string;
   standardsPath: string;
 } {
-  const base = mkdtempSync(join(tmpdir(), 'awos-custom-std-'));
+  const base = tmpDir('awos-custom-std-');
   const repoPath = join(base, 'repo');
   mkdirSync(repoPath, { recursive: true });
   execSync('git init', { cwd: repoPath, stdio: 'ignore' });

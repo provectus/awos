@@ -12,13 +12,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { computeTopology } from '../topology.ts';
+import { tmpDir } from './helpers.ts';
 
 function makeRepo(files: Record<string, string>): string {
-  const t = mkdtempSync(join(tmpdir(), 'topo-nested-'));
+  const t = tmpDir('topo-nested-');
   for (const [rel, content] of Object.entries(files)) {
     const p = join(t, rel);
     mkdirSync(dirname(p), { recursive: true });

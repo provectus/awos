@@ -47,6 +47,10 @@ import {
   type MetricResult,
   type Reliability,
 } from './_base.ts';
+import {
+  mergeRecordDurationsHours,
+  type MergeRecord,
+} from './_merge_records.ts';
 import { median, scoreFromConfig, scoringFor } from './_score.ts';
 
 /** Map median hours to a DORA MTTR band label. */
@@ -55,30 +59,6 @@ function mttrBand(medianHours: number): string {
   if (medianHours < 24) return 'high';
   if (medianHours < 168) return 'medium';
   return 'low';
-}
-
-interface MergeRecord {
-  merged_at: string;
-  branch_first_commit_at: string;
-}
-
-/**
- * Compute git-proxy MTTR intervals (hours) from merge records.
- *
- * Each merge record's interval = time from first branch commit to merge.
- * This approximates "how long it took to ship the fix/revert".
- */
-function computeGitProxyIntervals(mergeRecords: MergeRecord[]): number[] {
-  const intervals: number[] = [];
-  for (const rec of mergeRecords) {
-    const mergedAt = new Date(rec.merged_at);
-    const firstCommit = new Date(rec.branch_first_commit_at);
-    if (isNaN(mergedAt.getTime()) || isNaN(firstCommit.getTime())) continue;
-    const diffMs = mergedAt.getTime() - firstCommit.getTime();
-    if (diffMs < 0) continue;
-    intervals.push(diffMs / 3_600_000); // ms → hours
-  }
-  return intervals;
 }
 
 export function compute(
@@ -154,7 +134,7 @@ export function compute(
     : [];
 
   // Compute git-proxy intervals from all merge records.
-  const allIntervals = computeGitProxyIntervals(mergeRecords);
+  const allIntervals = mergeRecordDurationsHours(mergeRecords);
   const medianHours = median(allIntervals);
 
   // Build reliability. The value below is ALWAYS the git branch-lifetime

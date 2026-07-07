@@ -14,18 +14,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { compute } from '../metrics/line_coverage.ts';
 import { loadStandards } from './helpers.ts';
+import { tmpDir } from './helpers.ts';
 
 const standards = loadStandards();
 const run = (repo: string) => compute(repo, standards, {}, repo);
 
 function tmp(): string {
-  return mkdtempSync(join(tmpdir(), 'awos-linecov-'));
+  return tmpDir('awos-linecov-');
 }
 
 test('QA-02: SKIP with a how-to-fix note when no coverage report exists', () => {

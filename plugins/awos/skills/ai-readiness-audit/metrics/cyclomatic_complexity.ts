@@ -33,114 +33,18 @@
  *
  * CCN_THRESHOLD: 10 (McCabe classic threshold for "high complexity" hotspots).
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { extname, relative } from 'node:path';
+import { existsSync } from 'node:fs';
 import {
   computeReliability,
   makeMetricResult,
+  plural,
   type MetricResult,
 } from './_base.ts';
 import { scoreFromConfig, scoringFor } from './_score.ts';
-import { isGeneratedPath } from '../generated.ts';
-import {
-  EXT_TO_GRAMMAR,
-  MAX_FILE_BYTES,
-  getInitError,
-  getParserClass,
-  getSharedLoader,
-  initParser,
-  listRepoFiles,
-  type TSNode,
-} from './_ast.ts';
+import { analyzeRepoAst, getInitError, initParser } from './_ast.ts';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const CCN_THRESHOLD = 10;
-
-// Node types that increment the cyclomatic complexity counter.
-const DECISION_NODE_TYPES = new Set([
-  'if_statement',
-  'elif_clause', // Python
-  'elsif_clause', // Ruby
-  'else_if_clause', // Kotlin
-  'for_statement',
-  'for_in_statement',
-  'for_of_statement',
-  'foreach_statement', // C#
-  'while_statement',
-  'do_statement',
-  'switch_case',
-  'catch_clause',
-  'conditional_expression', // ternary ?:
-  'when_expression', // Kotlin when
-]);
-
-// Node types that are function boundaries — each is a separate CCN unit.
-// Note: 'function' is the keyword token inside 'function_declaration' in JS/TS;
-// we use isNamed check to skip such anonymous tokens.
-const FUNCTION_BOUNDARY_TYPES = new Set([
-  'function_declaration',
-  'function_definition',
-  'function_expression', // JS: const f = function() {}
-  'arrow_function',
-  'method_definition',
-  'method_declaration',
-  'constructor_declaration',
-  'function_item', // Rust fn
-  'lambda_expression',
-  'closure_expression', // Rust |...| {}
-]);
-
-// ---------------------------------------------------------------------------
-// CCN counting from tree-sitter AST
-// ---------------------------------------------------------------------------
-
-/** Count decision points within a subtree, not recursing into nested functions. */
-function countDecisions(node: TSNode): number {
-  let count = 0;
-  function visit(n: TSNode): void {
-    if (DECISION_NODE_TYPES.has(n.type)) count++;
-    // binary_expression with && or || increments CCN.
-    if (n.type === 'binary_expression') {
-      for (let i = 0; i < n.childCount; i++) {
-        const child = n.child(i);
-        if (
-          child &&
-          (child.type === '&&' ||
-            child.type === '||' ||
-            child.type === 'and' ||
-            child.type === 'or')
-        ) {
-          count++;
-        }
-      }
-    }
-    for (let i = 0; i < n.childCount; i++) {
-      const child = n.child(i);
-      if (!child) continue;
-      // Stop at nested named function boundaries — they are separate CCN units.
-      if (FUNCTION_BOUNDARY_TYPES.has(child.type) && child.isNamed) continue;
-      visit(child);
-    }
-  }
-  visit(node);
-  return count;
-}
-
-/** Collect all named function/method nodes from the tree (recursive). */
-function collectFunctions(node: TSNode, out: TSNode[]): void {
-  // Only collect named nodes — skip anonymous keyword tokens like 'function'.
-  if (FUNCTION_BOUNDARY_TYPES.has(node.type) && node.isNamed) {
-    out.push(node);
-    // Continue recursing to find nested functions.
-  }
-  for (let i = 0; i < node.childCount; i++) {
-    const child = node.child(i);
-    if (child) collectFunctions(child, out);
-  }
-}
+// The repo walk, per-file parse, and CCN visitor live in analyzeRepoAst (shared
+// single pass); this module owns only the banding, scoring, and result shape.
 
 // ---------------------------------------------------------------------------
 // Band helper
@@ -189,119 +93,36 @@ export async function compute(
 
   if (!existsSync(repoPath)) return makeSkip();
 
-  const Parser = getParserClass();
   if (!(await initParser())) {
     return makeSkip(getInitError() ?? 'tree-sitter init failed');
   }
 
-  const loader = getSharedLoader();
-  const loadLanguage = (grammarFile: string) => loader.load(grammarFile);
+  const { complexity: cx } = await analyzeRepoAst(repoPath);
 
-  // Collect source files: any file whose extension is in EXT_TO_GRAMMAR.
-  // Files in languages not in EXT_TO_GRAMMAR are not collected; they are
-  // neither analysed nor counted as skipped.
-  const filePaths: string[] = [];
-  for (const p of listRepoFiles(repoPath)) {
-    if (isGeneratedPath(relative(repoPath, p))) continue;
-    if (EXT_TO_GRAMMAR[extname(p).toLowerCase()]) filePaths.push(p);
-  }
+  // No grammar-supported files → nothing to analyse (was filePaths.length===0).
+  if (cx.grammarFileCount === 0) return makeSkip();
+  if (cx.functionsAnalysed === 0) return makeSkip();
 
-  if (filePaths.length === 0) return makeSkip();
-
-  const parser = new Parser();
-
-  let totalCcn = 0;
-  let maxCcn = 0;
-  let hotspotCount = 0;
-  let functionsAnalysed = 0;
-  let filesAnalysed = 0;
-  let filesSkipped = 0;
-
-  for (const filePath of filePaths) {
-    const ext = extname(filePath).toLowerCase();
-    const grammarFile = EXT_TO_GRAMMAR[ext];
-    if (!grammarFile) {
-      filesSkipped++;
-      continue;
-    }
-
-    const lang = await loadLanguage(grammarFile);
-    if (!lang) {
-      filesSkipped++;
-      continue;
-    }
-
-    let source: string;
-    try {
-      const buf = readFileSync(filePath);
-      if (buf.length > MAX_FILE_BYTES) {
-        filesSkipped++;
-        continue;
-      }
-      source = buf.toString('utf8');
-    } catch {
-      filesSkipped++;
-      continue;
-    }
-
-    try {
-      parser.setLanguage(lang);
-      const tree = parser.parse(source);
-      if (!tree) {
-        filesSkipped++;
-        continue;
-      }
-
-      const fns: TSNode[] = [];
-      collectFunctions(tree.rootNode, fns);
-      filesAnalysed++;
-
-      if (fns.length === 0) {
-        // File-level code with no function boundaries: treat as one unit.
-        const ccn = 1 + countDecisions(tree.rootNode);
-        totalCcn += ccn;
-        functionsAnalysed++;
-        if (ccn > maxCcn) maxCcn = ccn;
-        if (ccn > CCN_THRESHOLD) hotspotCount++;
-      } else {
-        for (const fn of fns) {
-          const ccn = 1 + countDecisions(fn);
-          totalCcn += ccn;
-          functionsAnalysed++;
-          if (ccn > maxCcn) maxCcn = ccn;
-          if (ccn > CCN_THRESHOLD) hotspotCount++;
-        }
-      }
-
-      tree.delete();
-    } catch {
-      filesSkipped++;
-    }
-  }
-
-  parser.delete();
-
-  if (functionsAnalysed === 0) return makeSkip();
-
-  const avgCcn = totalCcn / functionsAnalysed;
+  const avgCcn = cx.totalCcn / cx.functionsAnalysed;
   const band = bandFromAvg(avgCcn);
 
   const value = {
     avg_ccn: Math.round(avgCcn * 100) / 100,
-    max_ccn: maxCcn,
-    hotspot_count: hotspotCount,
-    functions_analysed: functionsAnalysed,
-    files_analysed: filesAnalysed,
-    files_skipped: filesSkipped,
+    max_ccn: cx.maxCcn,
+    hotspot_count: cx.hotspotCount,
+    functions_analysed: cx.functionsAnalysed,
+    files_analysed: cx.filesAnalysed,
+    files_skipped: cx.filesSkipped,
     band,
   };
 
-  const filesTotal = filesAnalysed + filesSkipped;
+  const filesTotal = cx.filesAnalysed + cx.filesSkipped;
   // Score curve lives in standards.toml [category.cyclomatic_complexity.scoring].
   const scoring = scoringFor(standards, 'cyclomatic_complexity');
   const complexityScore = scoreFromConfig(avgCcn, scoring);
-  const complexityConfidence = filesTotal > 0 ? filesAnalysed / filesTotal : 0;
-  const complexityExpression = `avg_ccn=${avgCcn.toFixed(1)} (${band}), ${hotspotCount} hotspot${hotspotCount !== 1 ? 's' : ''} > CCN 10`;
+  const complexityConfidence =
+    filesTotal > 0 ? cx.filesAnalysed / filesTotal : 0;
+  const complexityExpression = `avg_ccn=${avgCcn.toFixed(1)} (${band}), ${cx.hotspotCount} ${plural(cx.hotspotCount, 'hotspot')} > CCN 10`;
 
   return makeMetricResult(
     'cyclomatic_complexity',

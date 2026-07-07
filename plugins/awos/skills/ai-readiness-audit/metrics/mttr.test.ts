@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { writeFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { compute } from './mttr.ts';
 import { loadStandards } from './_base.ts';
 import { trackerArtifact } from '../tests/helpers.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
 // Real standards.toml — compute() reads its score curve from
 // [category.mttr.scoring].
@@ -42,7 +42,7 @@ function makeTrackerArtifact(incidentSource: string | null = null): string {
 }
 
 test('mttr: confidence=0.0 when tracker available but git.json absent (no intervals)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i3-nogit-'));
+  const dir = tmpDir('awos-i3-nogit-');
   try {
     // Tracker present with an incident_source but no git.json
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact('jira'));
@@ -60,7 +60,7 @@ test('mttr: confidence=0.0 when tracker available but git.json absent (no interv
 });
 
 test('mttr: score interpolates for 1-hour median (elite/high boundary → 0.75)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i3-1h-'));
+  const dir = tmpDir('awos-i3-1h-');
   try {
     const merged = new Date('2026-01-01T02:00:00Z');
     const first = new Date('2026-01-01T01:00:00Z'); // 1h interval
@@ -85,7 +85,7 @@ test('mttr: score interpolates for 1-hour median (elite/high boundary → 0.75)'
 });
 
 test('mttr: score=0 and confidence=0 when no merge records in git.json', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i3-norecords-'));
+  const dir = tmpDir('awos-i3-norecords-');
   try {
     writeFileSync(join(dir, 'git.json'), makeGitArtifact([]));
     const res = compute(dir, STANDARDS, {});
@@ -102,7 +102,7 @@ test('mttr: score=0 and confidence=0 when no merge records in git.json', () => {
 });
 
 test('mttr: incident_source does NOT upgrade confidence while the value is the git proxy', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i3-incident-'));
+  const dir = tmpDir('awos-i3-incident-');
   try {
     const merged = new Date('2026-01-01T02:00:00Z');
     const first = new Date('2026-01-01T01:00:00Z');

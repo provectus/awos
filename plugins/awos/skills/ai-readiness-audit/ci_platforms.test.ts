@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { detectCiConfigPath, CI_DIRS, CI_FILES } from './ci_platforms.ts';
+import { tmpDir } from './tests/helpers.ts';
 
 function tmp(): string {
-  return mkdtempSync(join(tmpdir(), 'ci-'));
+  return tmpDir('ci-');
 }
 
 test('detects GitHub Actions workflows dir', () => {

@@ -1,26 +1,15 @@
 // detectors/application_security_as06.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { runDetector } from '../tests/helpers.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli.ts');
-const NODE = process.env.NODE_BIN || process.execPath;
-
-function detect(repo: string) {
-  return JSON.parse(
-    execFileSync(NODE, ['--import', 'tsx', CLI, 'detect', '3005', repo], {
-      encoding: 'utf8',
-      env: { ...process.env, NODE_NO_WARNINGS: '1' },
-    })
-  );
-}
+const detect = (repo: string) => runDetector(3005, repo);
 
 test('AS-06 treats FastAPI Depends-based auth on mutations as protected', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-as06-'));
+  const repo = tmpDir('awos-as06-');
   try {
     mkdirSync(join(repo, 'app'), { recursive: true });
     writeFileSync(
@@ -39,15 +28,7 @@ test('AS-06 treats FastAPI Depends-based auth on mutations as protected', () => 
         '    return {"ok": True}',
       ].join('\n') + '\n'
     );
-    const out = execFileSync(
-      NODE,
-      ['--import', 'tsx', CLI, 'detect', '3005', repo],
-      {
-        encoding: 'utf8',
-        env: { ...process.env, NODE_NO_WARNINGS: '1' },
-      }
-    );
-    const res = JSON.parse(out);
+    const res = detect(repo);
     assert.notEqual(
       res.status,
       'FAIL',
@@ -60,7 +41,7 @@ test('AS-06 treats FastAPI Depends-based auth on mutations as protected', () => 
 
 test('AS-06 graded score equals auth-coverage ratio (WARN at 0.5)', () => {
   // 2 files with mutations: 1 has auth, 1 does not → coverage = 0.5 → WARN, score = 0.5
-  const repo = mkdtempSync(join(tmpdir(), 'awos-as06-graded-'));
+  const repo = tmpDir('awos-as06-graded-');
   try {
     mkdirSync(join(repo, 'app'), { recursive: true });
     // File 1: has mutations AND auth
@@ -113,7 +94,7 @@ test('AS-06 graded score equals auth-coverage ratio (WARN at 0.5)', () => {
 });
 
 test('AS-06 SKIP when no mutation routes found — score=0 confidence=0', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-as06-skip-'));
+  const repo = tmpDir('awos-as06-skip-');
   try {
     writeFileSync(join(repo, 'util.py'), 'def helper(): pass\n');
     const res = detect(repo);

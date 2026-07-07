@@ -76,6 +76,22 @@ export function clampToWindow<T>(
   return { kept, dropped };
 }
 
+/** Pluralize `word` by suffixing "s" unless `n` is exactly 1. */
+export function plural(n: number, word: string): string {
+  return `${word}${n !== 1 ? 's' : ''}`;
+}
+
+/**
+ * Trailing note for connector records dropped for falling outside the audit
+ * window (see clampToWindow). Empty string when none were dropped, so callers
+ * append it unconditionally.
+ */
+export function windowDropNote(dropped: number, days: number): string {
+  return dropped > 0
+    ? `; ${dropped} ${plural(dropped, 'run')} older than the ${days}-day window dropped`
+    : '';
+}
+
 // ---------------------------------------------------------------------------
 // Collected-artifact reader
 // ---------------------------------------------------------------------------
@@ -285,6 +301,14 @@ export interface MetricResult {
   unit?: string;
 }
 
+/** The uniform signature every metric module exports into the METRICS registry. */
+export type MetricFn = (
+  collectedDir: string,
+  standards: Record<string, unknown>,
+  topology: Record<string, boolean>,
+  repoPath?: string
+) => MetricResult | Promise<MetricResult>;
+
 /**
  * Build a standardised metric result object.
  *
@@ -377,6 +401,60 @@ export function skipMetric(
     ? skipReliability(tag, source, error)
     : computeReliability(tag, [], [source]);
   return makeMetricResult(metric, null, kind, [], reliability, [], [source]);
+}
+
+/** Common (metric, kind, tag) identity a connector metric SKIPs under. */
+export interface SkipIdentity {
+  metric: string;
+  kind: string;
+  tag: string;
+}
+
+/**
+ * Load a connector artifact for a metric, short-circuiting to the metric's
+ * standard SKIP when the source is unusable. Collapses the four-line dance
+ * every connector metric opens with: read → SKIP on read error → SKIP when
+ * `available` is false → default `raw` to `{}`. On success returns the parsed
+ * `raw` block and the whole `artifact` (callers that also read `period` etc.).
+ */
+export function loadArtifactOrSkip(
+  collectedDir: string,
+  source: string,
+  id: SkipIdentity
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): { raw: any; artifact: any } | { skip: MetricResult } {
+  const read = readArtifact(collectedDir, source);
+  if ('error' in read) {
+    return { skip: skipMetric(id.metric, id.kind, id.tag, source, read.error) };
+  }
+  const artifact = read.artifact;
+  if (!artifact?.available) {
+    return { skip: skipMetric(id.metric, id.kind, id.tag, source) };
+  }
+  return { raw: artifact?.raw ?? {}, artifact };
+}
+
+/**
+ * Load git.json's `window_stats` for a metric, short-circuiting to the metric's
+ * standard SKIP when git.json is unreadable or carries no `window_stats`.
+ * Returns both `raw` (some callers also read `merge_records`) and `ws` (the
+ * `window_stats` block). Git is not availability-gated, so — unlike
+ * loadArtifactOrSkip — there is no `available` check.
+ */
+export function readGitWindow(
+  collectedDir: string,
+  id: SkipIdentity
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): { raw: any; ws: any } | { skip: MetricResult } {
+  const read = readArtifact(collectedDir, 'git');
+  if ('error' in read) {
+    return { skip: skipMetric(id.metric, id.kind, id.tag, 'git', read.error) };
+  }
+  const raw = read.artifact?.raw;
+  if (!raw || !raw.window_stats) {
+    return { skip: skipMetric(id.metric, id.kind, id.tag, 'git') };
+  }
+  return { raw, ws: raw.window_stats };
 }
 
 /**

@@ -1,26 +1,14 @@
 // detectors/quality_assurance_qa05.test.ts — QA-07 test-pyramid tier classification.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { runDetector, tmpDir } from '../tests/helpers.ts';
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli.ts');
-const NODE = process.env.NODE_BIN || process.execPath;
-
-function detect(repo: string) {
-  return JSON.parse(
-    execFileSync(NODE, ['--import', 'tsx', CLI, 'detect', '2504', repo], {
-      encoding: 'utf8',
-      env: { ...process.env, NODE_NO_WARNINGS: '1' },
-    })
-  );
-}
+const detect = (repo: string) => runDetector(2504, repo);
 
 test('QA-07 classifies vitest-importing unit tests as unit, not e2e (B1)', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-qa05-vitest-'));
+  const repo = tmpDir('awos-qa05-vitest-');
   try {
     mkdirSync(join(repo, 'src'), { recursive: true });
     writeFileSync(join(repo, 'src', 'a.ts'), 'export const a = 1;\n');
@@ -60,7 +48,7 @@ test('QA-07 classifies vitest-importing unit tests as unit, not e2e (B1)', () =>
 });
 
 test('QA-07 still classifies browser-driver tests (playwright import) as e2e', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-qa05-e2e-'));
+  const repo = tmpDir('awos-qa05-e2e-');
   try {
     mkdirSync(join(repo, 'src'), { recursive: true });
     writeFileSync(join(repo, 'src', 'a.ts'), 'export const a = 1;\n');

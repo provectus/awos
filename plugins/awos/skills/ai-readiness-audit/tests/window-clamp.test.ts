@@ -10,8 +10,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {} from 'node:fs';
 import { join } from 'node:path';
 
 import { clampToWindow } from '../metrics/_base.ts';
@@ -19,6 +18,7 @@ import { compute as ciPassRate } from '../metrics/ci_pass_rate.ts';
 import { compute as pipelineDuration } from '../metrics/pipeline_duration.ts';
 import { compute as subtaskSplit } from '../metrics/ticket_subtask_split.ts';
 import { writeCollected, loadStandards } from './helpers.ts';
+import { tmpDir } from './helpers.ts';
 
 const standards = loadStandards();
 
@@ -62,7 +62,7 @@ test('clampToWindow with no parseable timestamps at all keeps everything', () =>
 });
 
 test('ci_pass_rate ignores runs older than the 90-day window', () => {
-  const tmp = mkdtempSync(join(tmpdir(), 'win-c1-'));
+  const tmp = tmpDir('win-c1-');
   // 3 recent passes + 2 ancient failures: an unwindowed rate would be 3/5.
   const runs = [
     { conclusion: 'success', createdAt: iso(1) },
@@ -90,7 +90,7 @@ test('ci_pass_rate ignores runs older than the 90-day window', () => {
 });
 
 test('pipeline_duration averages in-window runs only', () => {
-  const tmp = mkdtempSync(join(tmpdir(), 'win-c2-'));
+  const tmp = tmpDir('win-c2-');
   // Recent runs at 600 s; an ancient 7200 s run must not drag the average.
   const runs = [
     { conclusion: 'success', duration_seconds: 600, createdAt: iso(5) },
@@ -111,7 +111,7 @@ test('pipeline_duration averages in-window runs only', () => {
 });
 
 test('ticket_subtask_split ignores tickets resolved before the window', () => {
-  const tmp = mkdtempSync(join(tmpdir(), 'win-i4-'));
+  const tmp = tmpDir('win-i4-');
   // One recent parent with 2 sub-tasks; one ancient parent with 40 sub-tasks
   // that would tank the score if history leaked in.
   const tickets = [

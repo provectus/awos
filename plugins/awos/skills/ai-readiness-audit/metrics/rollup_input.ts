@@ -11,7 +11,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { AuditJson, Check } from '../artifact_types.ts';
-import { hasEngineProvenance } from '../audit_core.ts';
+import { hasEngineProvenance } from '../provenance.ts';
 import {
   DELIVERY_CHECK_FIELDS,
   type PerRepoDelivery,

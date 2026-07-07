@@ -24,7 +24,7 @@
 import {
   computeReliability,
   makeMetricResult,
-  readArtifact,
+  readGitWindow,
   skipMetric,
   type MetricResult,
 } from './_base.ts';
@@ -43,24 +43,14 @@ export function compute(
   standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
-  const read = readArtifact(collectedDir, 'git');
-  if ('error' in read) {
-    return skipMetric(
-      'merge_frequency',
-      'banded',
-      'not-reliable',
-      'git',
-      read.error
-    );
-  }
+  const loaded = readGitWindow(collectedDir, {
+    metric: 'merge_frequency',
+    kind: 'banded',
+    tag: 'not-reliable',
+  });
+  if ('skip' in loaded) return loaded.skip;
 
-  const artifact = read.artifact;
-  const raw = artifact?.raw;
-  if (!raw || !raw.window_stats) {
-    return skipMetric('merge_frequency', 'banded', 'not-reliable', 'git');
-  }
-
-  const windowStats = raw.window_stats;
+  const windowStats = loaded.ws;
   const totalMerges: number = windowStats.merges ?? 0;
   const windowDays: number = windowStats.window_days ?? 0;
 

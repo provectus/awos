@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   computeReliability,
@@ -9,6 +8,7 @@ import {
   readArtifact,
   skipReliability,
 } from '../metrics/_base.ts';
+import { tmpDir } from './helpers.ts';
 
 test('reliability HIGH when all present', () => {
   const r = computeReliability('maximal', ['git'], []);
@@ -56,7 +56,7 @@ test('OK when at least one source', () => {
 // ---------------------------------------------------------------------------
 
 test('readArtifact returns {artifact} for a parseable collected artifact', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-readart-'));
+  const dir = tmpDir('awos-readart-');
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, 'git.json'),
@@ -77,7 +77,7 @@ test('readArtifact returns {artifact} for a parseable collected artifact', () =>
 });
 
 test('readArtifact returns {error} naming the source when the file is absent', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-readart-absent-'));
+  const dir = tmpDir('awos-readart-absent-');
   const res = readArtifact(dir, 'tracker');
   assert.ok('error' in res, 'a missing artifact file must yield {error}');
   if ('error' in res) {
@@ -90,7 +90,7 @@ test('readArtifact returns {error} naming the source when the file is absent', (
 });
 
 test('readArtifact returns {error} instead of throwing on malformed JSON', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-readart-bad-'));
+  const dir = tmpDir('awos-readart-bad-');
   writeFileSync(join(dir, 'ci.json'), '{ truncated');
   const res = readArtifact(dir, 'ci');
   assert.ok(

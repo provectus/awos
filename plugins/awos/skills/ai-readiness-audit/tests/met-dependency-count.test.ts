@@ -13,16 +13,16 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { compute } from '../metrics/dependency_count.ts';
 import { loadStandards } from './helpers.ts';
+import { tmpDir } from './helpers.ts';
 
 const standards = loadStandards();
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'g12-'));
+  return tmpDir('g12-');
 }
 
 test('adp_g12: counts dependencies from package.json', () => {

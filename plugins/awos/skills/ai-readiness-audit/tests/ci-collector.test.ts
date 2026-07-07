@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { collect } from '../collectors/ci.ts';
+import { tmpDir } from './helpers.ts';
 
 const PERIOD = {
   bucket_days: 30,
@@ -12,12 +12,12 @@ const PERIOD = {
 };
 
 function bareRepo(): string {
-  const r = mkdtempSync(join(tmpdir(), 'ci-'));
+  const r = tmpDir('ci-');
   return r;
 }
 
 function repoWithGithubWorkflow(): string {
-  const r = mkdtempSync(join(tmpdir(), 'ci-'));
+  const r = tmpDir('ci-');
   const wfDir = join(r, '.github', 'workflows');
   mkdirSync(wfDir, { recursive: true });
   writeFileSync(
@@ -89,7 +89,7 @@ test('ci collector: connector with actual runs → available=true even with no l
 // so CircleCI- and Azure-only repos were misreported as "no CI". The canonical
 // platform list (ci_platforms.ts) now covers them — these pin that.
 function repoWithDir(dir: string): string {
-  const r = mkdtempSync(join(tmpdir(), 'ci-'));
+  const r = tmpDir('ci-');
   const d = join(r, ...dir.split('/'));
   mkdirSync(d, { recursive: true });
   writeFileSync(join(d, 'config.yml'), 'jobs: {}\n');
@@ -97,7 +97,7 @@ function repoWithDir(dir: string): string {
 }
 
 function repoWithFile(name: string): string {
-  const r = mkdtempSync(join(tmpdir(), 'ci-'));
+  const r = tmpDir('ci-');
   writeFileSync(join(r, name), 'pipeline: {}\n');
   return r;
 }

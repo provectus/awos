@@ -1,10 +1,9 @@
-import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { makeResult, iterFiles, readTextSafe, detectTrunk } from './_base.ts';
 import { existsSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { CI_CONFIG_CANDIDATES } from '../ci_platforms.ts';
 import { ALL_SOURCE_GLOBS } from '../languages.ts';
-import { resolveTrunk } from '../collectors/git.ts';
 
 // ---------------------------------------------------------------------------
 // detectVerticalDelivery — category 2300 (SBP-08, method: computed)
@@ -106,29 +105,6 @@ function detectedLayers(repoPath: string): {
   }
 
   return { hasApi, hasUi, hasDb };
-}
-
-/**
- * The rev feature-branch diffs are excluded against. Prefer the shared trunk
- * ref from resolveTrunk() (a diverged local main misattributes trunk commits
- * to feature branches); only when no remote ref exists fall back to probing
- * common local branch names.
- */
-function detectTrunk(repoPath: string): string {
-  const trunk = resolveTrunk(repoPath);
-  if (trunk.ref !== 'HEAD') return trunk.ref;
-  for (const candidate of ['main', 'master', 'develop', 'development']) {
-    try {
-      execFileSync('git', ['rev-parse', '--verify', candidate], {
-        cwd: repoPath,
-        encoding: 'utf8',
-      });
-      return candidate;
-    } catch {
-      // try next
-    }
-  }
-  return 'main';
 }
 
 function listFeatureBranches(repoPath: string): string[] {

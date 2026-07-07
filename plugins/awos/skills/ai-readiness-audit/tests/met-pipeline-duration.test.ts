@@ -15,16 +15,16 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {} from 'node:fs';
 import { join } from 'node:path';
 import { compute } from '../metrics/pipeline_duration.ts';
 import { writeCollected, loadStandards } from './helpers.ts';
+import { tmpDir } from './helpers.ts';
 
 const standards = loadStandards();
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'c2-'));
+  return tmpDir('c2-');
 }
 
 // ---------------------------------------------------------------------------

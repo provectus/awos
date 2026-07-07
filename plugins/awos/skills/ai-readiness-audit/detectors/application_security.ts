@@ -4,6 +4,7 @@ import {
   grep,
   hasMatch,
   readTextSafe,
+  SOURCE_IGNORE,
 } from './_base.ts';
 import { relative } from 'node:path';
 import { ALL_SOURCE_GLOBS } from '../languages.ts';
@@ -58,14 +59,7 @@ const SCHEMA_HOST_ALLOWLIST_RX =
   /^(?:(?:[\w-]+\.)*json-schema\.org|www\.w3\.org|(?:[\w-]+\.)*openapis\.org|xmlns[\w.-]*|schemas\.[\w.-]+)\.?$/i;
 
 const TLS_CONFIG_IGNORE = [
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.venv',
-  '__pycache__',
-  '.next',
-  'target',
+  ...SOURCE_IGNORE,
   'fixtures',
   'testdata',
   '__tests__',
@@ -464,14 +458,7 @@ const APPSEC_PLACEHOLDER_RX =
   /test|fake|example|dummy|xxx|your[_-]|placeholder|changeme|replace|<[^>]+>|\$\{[^}]+\}|env\(|process\.env|os\.environ|getenv|ENV\[|config\[/i;
 
 const APPSEC_SECRET_IGNORE = [
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.venv',
-  '__pycache__',
-  '.next',
-  'target',
+  ...SOURCE_IGNORE,
   'vendor',
   'fixtures',
   'testdata',

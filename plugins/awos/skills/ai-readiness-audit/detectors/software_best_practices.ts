@@ -1,4 +1,10 @@
-import { makeResult, grep, iterFiles, readTextSafe } from './_base.ts';
+import {
+  makeResult,
+  grep,
+  iterFiles,
+  readTextSafe,
+  presencePass,
+} from './_base.ts';
 import { basename, relative } from 'node:path';
 import { CI_FILES, isCiWorkflowPath } from '../ci_platforms.ts';
 
@@ -41,15 +47,8 @@ export function detectLinting(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  const found = iterFiles(repoPath, LINTER_CONFIGS).map((p) => basename(p));
-  if (found.length) {
-    const uniq = [...new Set(found)].sort();
-    return makeResult(
-      'PASS',
-      uniq.length,
-      uniq.map((n) => `linter config found: ${n}`)
-    );
-  }
+  const hit = presencePass(repoPath, LINTER_CONFIGS, 'linter config found');
+  if (hit) return hit;
   // Check pyproject.toml for [tool.ruff] / [tool.pylint] / [tool.flake8]
   const pyprojects = iterFiles(repoPath, ['pyproject.toml']);
   for (const p of pyprojects) {
@@ -100,15 +99,12 @@ export function detectFormatting(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  const found = iterFiles(repoPath, FORMATTER_CONFIGS).map((p) => basename(p));
-  if (found.length) {
-    const uniq = [...new Set(found)].sort();
-    return makeResult(
-      'PASS',
-      uniq.length,
-      uniq.map((n) => `formatter config found: ${n}`)
-    );
-  }
+  const hit = presencePass(
+    repoPath,
+    FORMATTER_CONFIGS,
+    'formatter config found'
+  );
+  if (hit) return hit;
   // Check pyproject.toml for [tool.black] / [tool.ruff.format]
   const pyprojects = iterFiles(repoPath, ['pyproject.toml']);
   for (const p of pyprojects) {
@@ -368,16 +364,10 @@ export function detectLockfiles(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  const found = iterFiles(repoPath, LOCKFILES).map((p) => basename(p));
-  if (found.length) {
-    const uniq = [...new Set(found)].sort();
-    return makeResult(
-      'PASS',
-      uniq.length,
-      uniq.map((n) => `lock file present: ${n}`)
-    );
-  }
-  return makeResult('FAIL', 0, ['no dependency lock file found']);
+  return (
+    presencePass(repoPath, LOCKFILES, 'lock file present') ??
+    makeResult('FAIL', 0, ['no dependency lock file found'])
+  );
 }
 
 // ---------------------------------------------------------------------------

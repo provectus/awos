@@ -1,4 +1,4 @@
-import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { makeResult, iterFiles, readTextSafe, presencePass } from './_base.ts';
 import { existsSync } from 'node:fs';
 import { join, relative, basename } from 'node:path';
 import { CI_DIRS } from '../ci_platforms.ts';
@@ -36,16 +36,10 @@ export function detectScsLockfiles(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
-  const found = iterFiles(repoPath, LOCKFILES).map((p) => basename(p));
-  if (found.length > 0) {
-    const uniq = [...new Set(found)].sort();
-    return makeResult(
-      'PASS',
-      uniq.length,
-      uniq.map((n) => `lockfile present: ${n}`)
-    );
-  }
-  return makeResult('FAIL', 0, ['no dependency lockfile found']);
+  return (
+    presencePass(repoPath, LOCKFILES, 'lockfile present') ??
+    makeResult('FAIL', 0, ['no dependency lockfile found'])
+  );
 }
 
 // ---------------------------------------------------------------------------

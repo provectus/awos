@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   detectRootReadme,
@@ -10,9 +9,10 @@ import {
   detectDocsAccuracy,
   DETECTORS,
 } from '../detectors/documentation.ts';
+import { tmpDir, writeRepo } from './helpers.ts';
 
 function tmp(): string {
-  return mkdtempSync(join(tmpdir(), 'doc-'));
+  return tmpDir('doc-');
 }
 
 // ---------------------------------------------------------------------------
@@ -532,19 +532,13 @@ test('DETECTORS[2203]: fixture README referencing only existing make targets →
 
 test('DOC-03: spec under a custom name/path (swagger/api.yaml) is found by content', () => {
   const t = tmp();
-  mkdirSync(join(t, 'contract', 'swagger', 'paths'), { recursive: true });
-  writeFileSync(
-    join(t, 'server.kt'),
-    '@RestController\nclass ProjectsController(val svc: Service)\n'
-  );
-  writeFileSync(
-    join(t, 'contract', 'swagger', 'api.yaml'),
-    'openapi: 3.0.3\ninfo:\n  title: HOP\n  version: 1.0.0\n'
-  );
-  writeFileSync(
-    join(t, 'contract', 'swagger', 'paths', 'projects.yaml'),
-    'get:\n  summary: list projects\n'
-  );
+  writeRepo(t, {
+    'server.kt':
+      '@RestController\nclass ProjectsController(val svc: Service)\n',
+    'contract/swagger/api.yaml':
+      'openapi: 3.0.3\ninfo:\n  title: HOP\n  version: 1.0.0\n',
+    'contract/swagger/paths/projects.yaml': 'get:\n  summary: list projects\n',
+  });
   const r = detectApiDocs(t);
   assert.equal(
     r.status,

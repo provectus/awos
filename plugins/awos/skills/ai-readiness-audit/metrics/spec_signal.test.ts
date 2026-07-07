@@ -1,15 +1,15 @@
 // spec_signal.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { collect } from '../collectors/git.ts';
 import { compute } from './tooling_depth.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
 function tmpRepoWithSpec(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-spec-'));
+  const dir = tmpDir('awos-spec-');
   mkdirSync(join(dir, 'context', 'spec', '001-feature'), { recursive: true });
   writeFileSync(
     join(dir, 'context', 'spec', '001-feature', 'functional-spec.md'),
@@ -23,7 +23,7 @@ function tmpRepoWithSpec(): string {
 
 test('tooling_depth code 106 fires when context/spec/ exists', () => {
   const repo = tmpRepoWithSpec();
-  const collected = mkdtempSync(join(tmpdir(), 'awos-collected-'));
+  const collected = tmpDir('awos-collected-');
   try {
     const art = collect(repo, {
       bucket_days: 30,

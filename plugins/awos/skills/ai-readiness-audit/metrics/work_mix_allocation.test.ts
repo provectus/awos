@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { writeFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { compute } from './work_mix_allocation.ts';
 import { loadStandards } from './_base.ts';
 import { trackerArtifact } from '../tests/helpers.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
 // Real standards.toml — compute() reads its score curve from
 // [category.work_mix_allocation.scoring].
@@ -24,7 +24,7 @@ function makeTrackerArtifact(typeCounts: Record<string, number>): string {
 }
 
 test('work_mix_allocation: SKIP when tracker.json is absent', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i1-'));
+  const dir = tmpDir('awos-i1-');
   try {
     const res = compute(dir, STANDARDS, {});
     assert.equal(res.status, 'SKIP', 'must SKIP when tracker.json absent');
@@ -36,7 +36,7 @@ test('work_mix_allocation: SKIP when tracker.json is absent', () => {
 });
 
 test('work_mix_allocation: score=0 when tracker available but type_counts total is 0 (empty tracker)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i1-empty-'));
+  const dir = tmpDir('awos-i1-empty-');
   try {
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact({}));
     const res = compute(dir, STANDARDS, {});
@@ -61,7 +61,7 @@ test('work_mix_allocation: score=0 when tracker available but type_counts total 
 });
 
 test('work_mix_allocation: score interpolates linearly — 30% growth yields score 0.5', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i1-med-'));
+  const dir = tmpDir('awos-i1-med-');
   try {
     // 30 feature tickets, 70 bug tickets = 30% growth → score = 0.30/0.60 = 0.5
     writeFileSync(
@@ -85,7 +85,7 @@ test('work_mix_allocation: score interpolates linearly — 30% growth yields sco
 });
 
 test('work_mix_allocation: score capped at 1.0 when growth fraction >= 60%', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i1-elite-'));
+  const dir = tmpDir('awos-i1-elite-');
   try {
     // 80% growth → clamp01(0.8/0.6) = 1.0
     writeFileSync(
@@ -108,7 +108,7 @@ test('work_mix_allocation: score capped at 1.0 when growth fraction >= 60%', () 
 // ---------------------------------------------------------------------------
 
 test('work_mix_allocation: partial tracker fetch (fetch_meta) is appended to the reliability note', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i1-partial-'));
+  const dir = tmpDir('awos-i1-partial-');
   try {
     writeFileSync(
       join(dir, 'tracker.json'),
@@ -138,7 +138,7 @@ test('work_mix_allocation: partial tracker fetch (fetch_meta) is appended to the
 });
 
 test('work_mix_allocation: no partial-fetch note when fetch_meta is absent or complete', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i1-complete-'));
+  const dir = tmpDir('awos-i1-complete-');
   try {
     // fetch_meta absent
     writeFileSync(

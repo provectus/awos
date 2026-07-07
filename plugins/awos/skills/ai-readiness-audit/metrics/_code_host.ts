@@ -68,3 +68,23 @@ export function readCodeHostPrs(collectedDir: string): CodeHostData {
   }
   return { available: true, prs };
 }
+
+/**
+ * Durations (hours) from a PR's start field to its merge, dropping PRs missing
+ * either timestamp or with a negative interval. `startField` selects the
+ * definition: `firstCommitMs` for lead time (first commit → merge),
+ * `createdMs` for cycle time (PR open → merge). Order follows the input.
+ */
+export function prDurationsHours(
+  prs: CodeHostPr[],
+  startField: 'firstCommitMs' | 'createdMs'
+): number[] {
+  const hours: number[] = [];
+  for (const p of prs) {
+    const start = p[startField];
+    if (p.mergedMs === null || start === null) continue;
+    const h = (p.mergedMs - start) / 3_600_000;
+    if (h >= 0) hours.push(h);
+  }
+  return hours;
+}

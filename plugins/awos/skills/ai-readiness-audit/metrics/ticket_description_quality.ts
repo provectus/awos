@@ -55,10 +55,9 @@ import {
   awardCategories,
   clampToWindow,
   computeReliability,
+  loadArtifactOrSkip,
   lookbackDays,
   makeMetricResult,
-  readArtifact,
-  skipMetric,
   trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
@@ -83,30 +82,14 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  const read = readArtifact(collectedDir, 'tracker');
+  const loaded = loadArtifactOrSkip(collectedDir, 'tracker', {
+    metric: 'ticket_description_quality',
+    kind: 'banded',
+    tag: 'minimal',
+  });
+  if ('skip' in loaded) return loaded.skip;
 
-  if ('error' in read) {
-    return skipMetric(
-      'ticket_description_quality',
-      'banded',
-      'minimal',
-      'tracker',
-      read.error
-    );
-  }
-
-  const artifact = read.artifact;
-
-  if (!artifact?.available) {
-    return skipMetric(
-      'ticket_description_quality',
-      'banded',
-      'minimal',
-      'tracker'
-    );
-  }
-
-  const raw = artifact?.raw ?? {};
+  const raw = loaded.raw;
   // Clamp the fetched tickets to the audit window (anchored to the newest
   // ticket timestamp) — an over-fetched tracker window must not leak older
   // history into the metric.

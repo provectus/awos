@@ -1,4 +1,10 @@
-import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import {
+  makeResult,
+  iterFiles,
+  readTextSafe,
+  scanForSignal,
+  SOURCE_IGNORE as BASE_SOURCE_IGNORE,
+} from './_base.ts';
 import { existsSync } from 'node:fs';
 import { join, relative, basename } from 'node:path';
 import { ALL_TEST_GLOBS, ALL_SOURCE_GLOBS } from '../languages.ts';
@@ -14,18 +20,7 @@ const TEST_FILE_GLOBS = ALL_TEST_GLOBS;
 const SOURCE_FILE_GLOBS = ALL_SOURCE_GLOBS;
 
 // Directories to skip for source file scanning.
-const SOURCE_IGNORE = [
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.venv',
-  '__pycache__',
-  '.next',
-  'target',
-  'vendor',
-  '.tox',
-];
+const SOURCE_IGNORE = [...BASE_SOURCE_IGNORE, 'vendor', '.tox'];
 
 // Test directories that imply integration-level tests.
 // Also matches plain "integration/" (without the "test(s)" suffix).
@@ -714,16 +709,11 @@ export function detectMockingIsolation(
     ]);
   }
 
-  const signals: string[] = [];
-
-  for (const f of testFiles.slice(0, 100)) {
-    const content = readTextSafe(f);
-    if (content === null) continue;
-    if (MOCK_IMPORT_RX.test(content)) {
-      signals.push(`mock/stub usage in: ${relative(repoPath, f)}`);
-      if (signals.length >= 5) break;
-    }
-  }
+  const signals = scanForSignal(repoPath, TEST_FILE_GLOBS, MOCK_IMPORT_RX, {
+    fileLimit: 100,
+    matchLimit: 5,
+    ignore: SOURCE_IGNORE,
+  }).map((rel) => `mock/stub usage in: ${rel}`);
 
   if (signals.length > 0) {
     return makeResult('PASS', signals.length, [

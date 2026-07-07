@@ -19,7 +19,7 @@ import {
   computeReliability,
   makeMetricResult,
   metaNumber,
-  readArtifact,
+  readGitWindow,
   skipMetric,
   type MetricResult,
 } from './_base.ts';
@@ -34,19 +34,14 @@ export function compute(
   _standards: Record<string, unknown>,
   _topology: Record<string, boolean>
 ): MetricResult {
-  const read = readArtifact(collectedDir, 'git');
-  if ('error' in read) {
-    return skipMetric(
-      'active_contributors',
-      'computed',
-      'not-reliable',
-      'git',
-      read.error
-    );
-  }
+  const loaded = readGitWindow(collectedDir, {
+    metric: 'active_contributors',
+    kind: 'computed',
+    tag: 'not-reliable',
+  });
+  if ('skip' in loaded) return loaded.skip;
 
-  const raw = read.artifact?.raw;
-  const perAuthor: AuthorRow[] | undefined = raw?.window_stats?.per_author;
+  const perAuthor: AuthorRow[] | undefined = loaded.ws.per_author;
 
   if (!Array.isArray(perAuthor) || perAuthor.length === 0) {
     return skipMetric('active_contributors', 'computed', 'not-reliable', 'git');

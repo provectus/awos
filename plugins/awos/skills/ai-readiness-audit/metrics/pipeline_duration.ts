@@ -28,10 +28,11 @@ import {
   awardCategories,
   clampToWindow,
   computeReliability,
+  loadArtifactOrSkip,
   lookbackDays,
   makeMetricResult,
-  readArtifact,
-  skipMetric,
+  plural,
+  windowDropNote,
   type MetricResult,
 } from './_base.ts';
 import { describeExcluded, partitionRuns, runTimestamp } from './_ci_runs.ts';
@@ -55,32 +56,16 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  const read = readArtifact(collectedDir, 'ci');
+  // available=false covers no CI config, no connector, and config-only with no
+  // run history — the collector sets available=false for each.
+  const loaded = loadArtifactOrSkip(collectedDir, 'ci', {
+    metric: 'pipeline_duration',
+    kind: 'duration_seconds',
+    tag: 'not-reliable',
+  });
+  if ('skip' in loaded) return loaded.skip;
 
-  // CI source absent entirely → SKIP.
-  if ('error' in read) {
-    return skipMetric(
-      'pipeline_duration',
-      'duration_seconds',
-      'not-reliable',
-      'ci',
-      read.error
-    );
-  }
-
-  const artifact = read.artifact;
-
-  // available=false: collector found no CI config, no connector, or config-only with no run history.
-  if (!artifact?.available) {
-    return skipMetric(
-      'pipeline_duration',
-      'duration_seconds',
-      'not-reliable',
-      'ci'
-    );
-  }
-
-  const raw = artifact?.raw ?? {};
+  const raw = loaded.raw;
   const runs: unknown[] = Array.isArray(raw.runs) ? raw.runs : [];
 
   // Clamp the fetched history to the audit window (anchored to the newest
@@ -107,7 +92,7 @@ export function compute(
       {
         tag: 'not-reliable',
         confidence: 'LOW',
-        note: `${runs.length} CI run${runs.length !== 1 ? 's' : ''} present but no decided run carries duration_seconds — cannot compute pipeline duration${excludedNote}`,
+        note: `${runs.length} CI ${plural(runs.length, 'run')} present but no decided run carries duration_seconds — cannot compute pipeline duration${excludedNote}`,
       },
       [],
       ['ci']
@@ -124,13 +109,11 @@ export function compute(
 
   const excludedTotal = partition.total - partition.decided.length;
   const expression =
-    `avg pipeline duration ${avgDuration.toFixed(0)}s across ${partition.decided.length} decided run${partition.decided.length !== 1 ? 's' : ''}` +
+    `avg pipeline duration ${avgDuration.toFixed(0)}s across ${partition.decided.length} decided ${plural(partition.decided.length, 'run')}` +
     (excludedTotal > 0
       ? ` (${excludedTotal} without a verdict excluded)`
       : '') +
-    (windowed.dropped > 0
-      ? `; ${windowed.dropped} run${windowed.dropped !== 1 ? 's' : ''} older than the ${windowDays}-day window dropped`
-      : '');
+    windowDropNote(windowed.dropped, windowDays);
   return makeMetricResult(
     'pipeline_duration',
     avgDuration,

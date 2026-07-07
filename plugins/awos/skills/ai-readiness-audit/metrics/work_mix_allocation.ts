@@ -29,9 +29,8 @@ import {
   appendReliabilityNote,
   awardCategories,
   computeReliability,
+  loadArtifactOrSkip,
   makeMetricResult,
-  readArtifact,
-  skipMetric,
   trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
@@ -58,30 +57,16 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  // Tracker source absent or unreadable → SKIP with the reason in the note.
-  const read = readArtifact(collectedDir, 'tracker');
-  if ('error' in read) {
-    return skipMetric(
-      'work_mix_allocation',
-      'banded',
-      'not-reliable',
-      'tracker',
-      read.error
-    );
-  }
-  const artifact = read.artifact;
+  // Tracker source absent/unreadable → SKIP with the reason; available=false
+  // means no tracker connector was provided → SKIP.
+  const loaded = loadArtifactOrSkip(collectedDir, 'tracker', {
+    metric: 'work_mix_allocation',
+    kind: 'banded',
+    tag: 'not-reliable',
+  });
+  if ('skip' in loaded) return loaded.skip;
 
-  // available=false means no tracker connector was provided.
-  if (!artifact?.available) {
-    return skipMetric(
-      'work_mix_allocation',
-      'banded',
-      'not-reliable',
-      'tracker'
-    );
-  }
-
-  const raw = artifact?.raw ?? {};
+  const raw = loaded.raw;
   // Surface a partial tracker fetch (fetch_meta) in the reliability note.
   const partialNote = trackerFetchNote(raw);
   const typeCounts: Record<string, number> =

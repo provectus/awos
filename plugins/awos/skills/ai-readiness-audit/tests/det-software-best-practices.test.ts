@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   detectExceptClauseDefect,
@@ -13,9 +12,10 @@ import {
   detectCiCd,
   DETECTORS,
 } from '../detectors/software_best_practices.ts';
+import { tmpDir } from './helpers.ts';
 
 function tmp(): string {
-  return mkdtempSync(join(tmpdir(), 'sbp-'));
+  return tmpDir('sbp-');
 }
 
 // ---------------------------------------------------------------------------

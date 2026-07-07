@@ -9,11 +9,11 @@ import {
   rmSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { detectLinkedRepos, type LinkedRepo } from './topology.ts';
+import { tmpDir } from './tests/helpers.ts';
 
 test('detectLinkedRepos finds git submodules', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-linked-'));
+  const repo = tmpDir('awos-linked-');
   try {
     writeFileSync(
       join(repo, '.gitmodules'),
@@ -30,7 +30,7 @@ test('detectLinkedRepos finds git submodules', () => {
 });
 
 test('detectLinkedRepos returns empty array for repo with no submodules or symlinks', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-linked-empty-'));
+  const repo = tmpDir('awos-linked-empty-');
   try {
     const linked = detectLinkedRepos(repo);
     assert.deepStrictEqual(
@@ -44,7 +44,7 @@ test('detectLinkedRepos returns empty array for repo with no submodules or symli
 });
 
 test('detectLinkedRepos sets kind=submodule and via=.gitmodules', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-linked-meta-'));
+  const repo = tmpDir('awos-linked-meta-');
   try {
     writeFileSync(
       join(repo, '.gitmodules'),
@@ -70,7 +70,7 @@ test('detectLinkedRepos sets kind=submodule and via=.gitmodules', () => {
 
 test('detectLinkedRepos finds a nested symlink pointing outside the repo', () => {
   // Simulates .claude/skills/<name> → <outside-repo-dir>
-  const base = mkdtempSync(join(tmpdir(), 'awos-linked-nested-'));
+  const base = tmpDir('awos-linked-nested-');
   const repo = join(base, 'repo');
   const outsideRepo = join(base, 'other-repo-x');
   try {
@@ -99,7 +99,7 @@ test('detectLinkedRepos finds a nested symlink pointing outside the repo', () =>
 });
 
 test('detectLinkedRepos ignores a symlink pointing inside the repo', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-linked-inrepo-'));
+  const repo = tmpDir('awos-linked-inrepo-');
   try {
     // Create a target directory inside the repo
     mkdirSync(join(repo, 'local-module'), { recursive: true });
@@ -121,7 +121,7 @@ test('detectLinkedRepos ignores a symlink pointing inside the repo', () => {
 });
 
 test('linked repo named from target repo root, not the symlink leaf', () => {
-  const root = mkdtempSync(join(tmpdir(), 'awos-link-root-'));
+  const root = tmpDir('awos-link-root-');
   try {
     // sibling "repo" with a .git marker
     const sibling = join(root, 'onex-discovery-awos');
@@ -150,7 +150,7 @@ test('linked repo named from target repo root, not the symlink leaf', () => {
 });
 
 test('Symlink scan must surface AWOS context/* symlinks, not only agent-tool config dirs (issue #6)', () => {
-  const base = mkdtempSync(join(tmpdir(), 'awos-ctx-symlink-'));
+  const base = tmpDir('awos-ctx-symlink-');
   const outsideRepo = join(base, 'another-context-repo');
   const repo = join(base, 'repo');
   try {
@@ -184,7 +184,7 @@ test('Symlink scan must surface AWOS context/* symlinks, not only agent-tool con
 test('detectLinkedRepos: symlink outside repo NOT under tool-config dir surfaces as kind=symlink', () => {
   // The expanded walk must find symlinks in arbitrary dirs (e.g. src/), not just
   // agent-tool config dirs or AWOS framework dirs.
-  const base = mkdtempSync(join(tmpdir(), 'awos-broad-symlink-'));
+  const base = tmpDir('awos-broad-symlink-');
   const outsideRepo = join(base, 'shared-lib');
   const repo = join(base, 'repo');
   try {
@@ -215,7 +215,7 @@ test('detectLinkedRepos: symlink outside repo NOT under tool-config dir surfaces
 });
 
 test('detectLinkedRepos: .mcp.json servers appear as kind=mcp entries', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-mcp-json-'));
+  const repo = tmpDir('awos-mcp-json-');
   try {
     writeFileSync(
       join(repo, '.mcp.json'),
@@ -268,7 +268,7 @@ test('detectLinkedRepos: .mcp.json servers appear as kind=mcp entries', () => {
 });
 
 test('detectLinkedRepos: .claude/settings.json mcpServers appear as kind=mcp entries', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-claude-settings-mcp-'));
+  const repo = tmpDir('awos-claude-settings-mcp-');
   try {
     mkdirSync(join(repo, '.claude'), { recursive: true });
     writeFileSync(
@@ -303,7 +303,7 @@ test('detectLinkedRepos: all three kinds (symlink + submodule + mcp) surface tog
   // - an outside symlink NOT under a tool-config dir (under lib/)
   // - .mcp.json with 2 MCP servers
   // All three kinds must appear in the result.
-  const base = mkdtempSync(join(tmpdir(), 'awos-all-kinds-'));
+  const base = tmpDir('awos-all-kinds-');
   const outsideTarget = join(base, 'external-repo');
   const repo = join(base, 'my-repo');
   try {
@@ -378,7 +378,7 @@ test('detectLinkedRepos: all three kinds (symlink + submodule + mcp) surface tog
 
 test('detectLinkedRepos: dangling relative symlink pointing OUTSIDE repo IS recorded', () => {
   // link x -> ../outside-thing  (resolves outside repo, target does not exist)
-  const base = mkdtempSync(join(tmpdir(), 'awos-dangle-out-'));
+  const base = tmpDir('awos-dangle-out-');
   const repo = join(base, 'repo');
   try {
     mkdirSync(repo, { recursive: true });
@@ -397,7 +397,7 @@ test('detectLinkedRepos: dangling relative symlink pointing OUTSIDE repo IS reco
 
 test('detectLinkedRepos: dangling relative symlink pointing INSIDE repo is NOT recorded', () => {
   // link y -> ./does-not-exist-yet  (resolves inside repo, target does not exist)
-  const repo = mkdtempSync(join(tmpdir(), 'awos-dangle-in-'));
+  const repo = tmpDir('awos-dangle-in-');
   try {
     // ./does-not-exist-yet resolves to repo/does-not-exist-yet — inside repo, dangling
     symlinkSync('./does-not-exist-yet', join(repo, 'y'));
@@ -415,7 +415,7 @@ test('detectLinkedRepos: dangling relative symlink pointing INSIDE repo is NOT r
 test('detectLinkedRepos: dangling absolute symlink pointing outside repo IS recorded (regression)', () => {
   // Absolute dangling path — the old rawTarget.startsWith(realRepoRoot) check
   // handled this; must still work after the relative-path fix.
-  const repo = mkdtempSync(join(tmpdir(), 'awos-dangle-abs-'));
+  const repo = tmpDir('awos-dangle-abs-');
   try {
     // /tmp/absolute-outside-dangling does not exist and is outside repo
     symlinkSync('/tmp/absolute-outside-dangling', join(repo, 'z'));

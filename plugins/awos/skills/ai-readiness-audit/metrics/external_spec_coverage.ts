@@ -21,9 +21,8 @@
 import {
   awardCategories,
   computeReliability,
+  loadArtifactOrSkip,
   makeMetricResult,
-  readArtifact,
-  skipMetric,
   type MetricResult,
 } from './_base.ts';
 import { clamp01 } from './_score.ts';
@@ -33,30 +32,16 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  // Docs source absent or unreadable → SKIP with the reason in the note.
-  const read = readArtifact(collectedDir, 'docs');
-  if ('error' in read) {
-    return skipMetric(
-      'external_spec_coverage',
-      'coverage',
-      'not-reliable',
-      'docs',
-      read.error
-    );
-  }
-  const artifact = read.artifact;
+  // Docs source absent/unreadable → SKIP with the reason; available=false
+  // means no docs connector was provided → SKIP.
+  const loaded = loadArtifactOrSkip(collectedDir, 'docs', {
+    metric: 'external_spec_coverage',
+    kind: 'coverage',
+    tag: 'not-reliable',
+  });
+  if ('skip' in loaded) return loaded.skip;
 
-  // available=false means no docs connector was provided.
-  if (!artifact?.available) {
-    return skipMetric(
-      'external_spec_coverage',
-      'coverage',
-      'not-reliable',
-      'docs'
-    );
-  }
-
-  const raw = artifact?.raw ?? {};
+  const raw = loaded.raw;
   const pageCount: number =
     typeof raw.page_count === 'number' ? raw.page_count : 0;
   const recentlyUpdatedCount: number =

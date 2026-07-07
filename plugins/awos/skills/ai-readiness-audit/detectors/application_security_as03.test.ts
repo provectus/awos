@@ -1,26 +1,15 @@
 // detectors/application_security_as03.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
+import { writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { runDetector } from '../tests/helpers.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli.ts');
-const NODE = process.env.NODE_BIN || process.execPath;
-
-function detect(repo: string) {
-  return JSON.parse(
-    execFileSync(NODE, ['--import', 'tsx', CLI, 'detect', '3002', repo], {
-      encoding: 'utf8',
-      env: { ...process.env, NODE_NO_WARNINGS: '1' },
-    })
-  );
-}
+const detect = (repo: string) => runDetector(3002, repo);
 
 test('AS-03 returns N/A (not a value-0 PASS) when no CORS config exists', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-as03-none-'));
+  const repo = tmpDir('awos-as03-none-');
   try {
     writeFileSync(join(repo, 'app.py'), 'print("no cors here")\n');
     const res = detect(repo);
@@ -35,7 +24,7 @@ test('AS-03 returns N/A (not a value-0 PASS) when no CORS config exists', () => 
 });
 
 test('AS-03 FAILs on a wildcard origin', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-as03-wild-'));
+  const repo = tmpDir('awos-as03-wild-');
   try {
     writeFileSync(
       join(repo, 'app.py'),

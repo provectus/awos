@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { collect, run, activeContributors } from '../collectors/git.ts';
 import { gitAs } from './helpers.ts';
+import { tmpDir } from './helpers.ts';
 
 // ---------------------------------------------------------------------------
 // window_stats test helpers
@@ -31,7 +31,7 @@ import { gitAs } from './helpers.ts';
  *     Bob:   { commits:1, merges:0, lines:5 }
  */
 function windowRepo(): string {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-window-')), 'repo');
+  const r = join(tmpDir('git-window-'), 'repo');
   mkdirSync(r);
 
   const alice = (args: string[], date: string) =>
@@ -78,7 +78,7 @@ function git(cwd: string, args: string[], date = '2025-01-01T00:00:00') {
 }
 
 function repo(): string {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-')), 'repo');
+  const r = join(tmpDir('git-'), 'repo');
   mkdirSync(r);
   git(r, ['init', '-q', '-b', 'main']);
   writeFileSync(join(r, 'CLAUDE.md'), '# ctx\nbuild: make\n');
@@ -127,7 +127,7 @@ test('git collector history bound', () => {
 });
 
 test('git collector counts non-Claude AI commits and tooling', () => {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-')), 'repo2');
+  const r = join(tmpDir('git-'), 'repo2');
   mkdirSync(r);
   git(r, ['init', '-q', '-b', 'main']);
   writeFileSync(join(r, 'GEMINI.md'), '# gemini\n');
@@ -152,7 +152,7 @@ test('git collector reads >1MiB of git output without truncation (maxBuffer regr
   // (so DORA contributors/deploy-frequency silently SKIP). Here one commit adds
   // enough files that `git log --numstat` clears 1 MiB; with the old cap
   // numstat_totals.added would be 0, with the fix it is the true total.
-  const r = join(mkdtempSync(join(tmpdir(), 'git-big-')), 'repo');
+  const r = join(tmpDir('git-big-'), 'repo');
   mkdirSync(r);
   git(r, ['init', '-q', '-b', 'main']);
   const FILES = 5000; // ~250 B/numstat-line → ~1.25 MiB, like the repo that tripped it
@@ -292,7 +292,7 @@ test('window_stats: monthly_buckets is not emitted (field removed in task 0.2)',
  * per_author is [] → activeCount is 0 → both ratios must be null.
  */
 function emptyRepo(): string {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-empty-')), 'repo');
+  const r = join(tmpDir('git-empty-'), 'repo');
   mkdirSync(r);
   execFileSync('git', ['init', '-q', '-b', 'main'], {
     cwd: r,
@@ -336,7 +336,7 @@ test('window_stats: merges_per_active and loc_per_active are null when there are
  * Dave, Eve all fall below the 5% share on both dimensions).
  */
 function activeRuleRepo(): string {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-active-')), 'repo');
+  const r = join(tmpDir('git-active-'), 'repo');
   mkdirSync(r);
   const dom = (args: string[], date: string) =>
     gitAs(r, args, date, 'Dom', 'dom@example.com');
@@ -497,7 +497,7 @@ test('window_stats: per-week throughput fields are null when there are no active
  * Out-of-window: 2024-10-01 → excluded.
  */
 function revertRepo(): string {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-revert-')), 'repo');
+  const r = join(tmpDir('git-revert-'), 'repo');
   mkdirSync(r);
 
   const alice = (args: string[], date: string) =>
@@ -620,7 +620,7 @@ const TWO_LINES = 'l1\nl2\n';
  * Expected: reworked_lines=8, total_added=12, ratio = 8/12.
  */
 function highTurnoverRepo(): string {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-turnover-')), 'repo');
+  const r = join(tmpDir('git-turnover-'), 'repo');
   mkdirSync(r);
   git(r, ['init', '-q', '-b', 'main'], '2025-03-01T00:00:00');
   writeFileSync(join(r, 'foo.txt'), TEN_LINES);
@@ -644,7 +644,7 @@ function highTurnoverRepo(): string {
  * Expected: reworked_lines=0, total_added=8, ratio = 0.
  */
 function addOnlyRepo(): string {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-addonly-')), 'repo');
+  const r = join(tmpDir('git-addonly-'), 'repo');
   mkdirSync(r);
   git(r, ['init', '-q', '-b', 'main'], '2025-03-01T00:00:00');
   writeFileSync(join(r, 'a.txt'), 'a1\na2\na3\na4\na5\n');
@@ -665,7 +665,7 @@ function addOnlyRepo(): string {
  * Expected: reworked_lines=0, total_added=11, ratio = 0.
  */
 function outOfHorizonRepo(): string {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-far-')), 'repo');
+  const r = join(tmpDir('git-far-'), 'repo');
   mkdirSync(r);
   git(r, ['init', '-q', '-b', 'main'], '2025-01-01T00:00:00');
   writeFileSync(join(r, 'foo.txt'), TEN_LINES);
@@ -758,7 +758,7 @@ test('code_turnover: deletions beyond the rework horizon are NOT counted as turn
  * Out-of-window: 2024-11-01 → excluded.
  */
 function fixMergeRepo(): string {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-fix-')), 'repo');
+  const r = join(tmpDir('git-fix-'), 'repo');
   mkdirSync(r);
 
   const alice = (args: string[], date: string) =>
@@ -866,7 +866,7 @@ test('run(): unexpected git failure emits a [git collector] stderr breadcrumb (a
   // and containing the subcommand name so failures are traceable in logs.
   // The call still returns '' so the collector degrades gracefully.
   // console.error is spied-on and restored to keep test output pristine.
-  const cwd = mkdtempSync(join(tmpdir(), 'git-run-'));
+  const cwd = tmpDir('git-run-');
   const captured: string[] = [];
   const originalError = console.error;
   console.error = (...args: unknown[]) => {
@@ -903,7 +903,7 @@ test('run(): allowFailure:true silences stderr for an expected-empty git call (e
   // logging it would be noisy (e.g. symbolic-ref --short HEAD on a detached HEAD,
   // or ${sha}^1..${sha}^2 on a root/octopus merge commit).
   // console.error is spied-on and restored to keep test output pristine.
-  const cwd = mkdtempSync(join(tmpdir(), 'git-run-'));
+  const cwd = tmpDir('git-run-');
   const captured: string[] = [];
   const originalError = console.error;
   console.error = (...args: unknown[]) => {
@@ -930,7 +930,7 @@ test('run(): allowFailure:true silences stderr for an expected-empty git call (e
 // ---------------------------------------------------------------------------
 
 test('collect(): a non-git directory yields available:false with the real git error, never confident all-zero stats', () => {
-  const notARepo = mkdtempSync(join(tmpdir(), 'git-broken-'));
+  const notARepo = tmpDir('git-broken-');
   const art = collect(notARepo, PERIOD);
   assert.equal(
     art.available,
@@ -949,7 +949,7 @@ test('collect(): a missing git binary (spawn ENOENT) yields available:false nami
   // so pointing PATH at an empty dir makes execFileSync('git', ...) throw
   // ENOENT. The fixture repo is created BEFORE mangling PATH.
   const repoPath = repo();
-  const emptyBinDir = mkdtempSync(join(tmpdir(), 'git-nobin-'));
+  const emptyBinDir = tmpDir('git-nobin-');
   const originalPath = process.env.PATH;
   process.env.PATH = emptyBinDir;
   try {
@@ -997,7 +997,6 @@ test('collect(): a commit-less repo stays available:true with zero stats and emi
       0,
       'empty repo → ai_marked_commits 0'
     );
-    assert.equal(art.raw.total_merges, 0, 'empty repo → total_merges 0');
     assert.deepEqual(
       art.raw.merge_records,
       [],
@@ -1026,7 +1025,7 @@ test('collect(): a commit-less repo stays available:true with zero stats and emi
 // ---------------------------------------------------------------------------
 
 test('ai_marked_commits matches ERE alternation patterns (Windsurf/Cascade trailer)', () => {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-ere-')), 'repo');
+  const r = join(tmpDir('git-ere-'), 'repo');
   mkdirSync(r);
   git(r, ['init', '-q', '-b', 'main']);
   writeFileSync(join(r, 'w.txt'), 'w\n');
@@ -1101,7 +1100,7 @@ test('merge_records: batched resolution assigns each side branch to its own merg
   // sequential feature branches merge into main; feature-A has two commits so
   // the "earliest author date on the branch" logic is exercised, and the
   // per-merge assignment (anc(p2) \ anc(p1)) must not bleed A's commits into B.
-  const r = join(mkdtempSync(join(tmpdir(), 'git-merges-')), 'repo');
+  const r = join(tmpDir('git-merges-'), 'repo');
   mkdirSync(r);
   const alice = (args: string[], date: string) =>
     gitAs(r, args, date, 'Alice', 'alice@example.com');
@@ -1170,7 +1169,7 @@ test('merge_records: batched resolution assigns each side branch to its own merg
 });
 
 test('merge_records: branch_first_commit_at uses author date, so a rebased branch keeps a non-zero lead time', () => {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-leadtime-')), 'repo');
+  const r = join(tmpDir('git-leadtime-'), 'repo');
   mkdirSync(r);
 
   gitDates(
@@ -1241,7 +1240,7 @@ test('merge_records: branch_first_commit_at uses author date, so a rebased branc
 // ---------------------------------------------------------------------------
 
 test('window_stats carries windowed trunk_commits and ai_marked_commits alongside the all-history totals', () => {
-  const r = join(mkdtempSync(join(tmpdir(), 'git-')), 'repo');
+  const r = join(tmpDir('git-'), 'repo');
   mkdirSync(r);
   git(r, ['init', '-q', '-b', 'main']);
   writeFileSync(join(r, 'a.txt'), '1');

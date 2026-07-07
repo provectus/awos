@@ -6,18 +6,18 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {} from 'node:fs';
 import { join } from 'node:path';
 import { compute as computeI1 } from '../metrics/work_mix_allocation.ts';
 import { compute as computeI2 } from '../metrics/issue_throughput.ts';
 import { compute as computeG2 } from '../metrics/active_contributors.ts';
 import { writeCollected, loadStandards } from './helpers.ts';
+import { tmpDir } from './helpers.ts';
 
 const standards = loadStandards();
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'awos-expr-'));
+  return tmpDir('awos-expr-');
 }
 
 test('Every computed metric must emit a human-readable expression so the report shows evidence (issue #12): work_mix_allocation', () => {

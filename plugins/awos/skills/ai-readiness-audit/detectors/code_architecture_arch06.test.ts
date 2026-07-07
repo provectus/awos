@@ -1,14 +1,11 @@
 // detectors/code_architecture_arch06.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
+import { runDetector } from '../tests/helpers.ts';
+import { tmpDir, writeRepo } from '../tests/helpers.ts';
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli.ts');
-const NODE = process.env.NODE_BIN || process.execPath;
+const detect = (repo: string) => runDetector(2105, repo);
 const smallFile = (n: number) =>
   Array.from({ length: n }, (_, i) => `x${i} = ${i}`).join('\n') + '\n';
 const bigFile = (n: number) =>
@@ -16,20 +13,16 @@ const bigFile = (n: number) =>
 
 test('ARCH-06 graded score equals 1 - oversized_ratio (WARN at ~80%)', () => {
   // 1 oversized + 4 small = 20% oversized ratio → WARN, score ≈ 0.80
-  const repo = mkdtempSync(join(tmpdir(), 'awos-arch06-graded-'));
+  const repo = tmpDir('awos-arch06-graded-');
   try {
-    mkdirSync(join(repo, 'app'), { recursive: true });
-    writeFileSync(join(repo, 'app', 'big.py'), bigFile(400)); // oversized (>300 lines)
-    writeFileSync(join(repo, 'app', 'a.py'), smallFile(50));
-    writeFileSync(join(repo, 'app', 'b.py'), smallFile(50));
-    writeFileSync(join(repo, 'app', 'c.py'), smallFile(50));
-    writeFileSync(join(repo, 'app', 'd.py'), smallFile(50));
-    const out = execFileSync(
-      NODE,
-      ['--import', 'tsx', CLI, 'detect', '2105', repo],
-      { encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' } }
-    );
-    const res = JSON.parse(out);
+    writeRepo(repo, {
+      'app/big.py': bigFile(400), // oversized (>300 lines)
+      'app/a.py': smallFile(50),
+      'app/b.py': smallFile(50),
+      'app/c.py': smallFile(50),
+      'app/d.py': smallFile(50),
+    });
+    const res = detect(repo);
     assert.equal(
       res.status,
       'WARN',
@@ -55,22 +48,14 @@ test('ARCH-06 graded score equals 1 - oversized_ratio (WARN at ~80%)', () => {
 });
 
 test('ARCH-06 ignores generated files when judging file size', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-arch06-'));
+  const repo = tmpDir('awos-arch06-');
   try {
-    mkdirSync(join(repo, 'app'), { recursive: true });
-    mkdirSync(join(repo, 'htmlcov'), { recursive: true });
-    writeFileSync(join(repo, 'app', 'main.py'), bigFile(50)); // small, hand-written
-    writeFileSync(join(repo, 'htmlcov', 'coverage_html.js'), bigFile(2000)); // generated, huge
-    writeFileSync(join(repo, 'app', 'user_pb2.py'), bigFile(2000)); // generated, huge
-    const out = execFileSync(
-      NODE,
-      ['--import', 'tsx', CLI, 'detect', '2105', repo],
-      {
-        encoding: 'utf8',
-        env: { ...process.env, NODE_NO_WARNINGS: '1' },
-      }
-    );
-    const res = JSON.parse(out);
+    writeRepo(repo, {
+      'app/main.py': bigFile(50), // small, hand-written
+      'htmlcov/coverage_html.js': bigFile(2000), // generated, huge
+      'app/user_pb2.py': bigFile(2000), // generated, huge
+    });
+    const res = detect(repo);
     const ev = (res.evidence ?? []).join(' ');
     assert.ok(
       !ev.includes('htmlcov'),

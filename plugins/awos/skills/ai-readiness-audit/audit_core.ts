@@ -35,6 +35,7 @@ import type {
   WrittenCheck,
 } from './artifact_types.ts';
 import { COLLECTOR_SOURCES, SOURCE_LABEL_DEFAULTS } from './artifact_types.ts';
+import { ENGINE_PROVENANCE } from './provenance.ts';
 import {
   computeTopology,
   detectLinkedRepos,
@@ -46,7 +47,7 @@ import { detectAgentTools } from './agent_tools.ts';
 import { detectCiConfigPath, ciPlatformName } from './ci_platforms.ts';
 import type { DetectorResult } from './detectors/_base.ts';
 import { iterFiles, DEFAULT_IGNORE } from './detectors/_base.ts';
-import type { MetricResult } from './metrics/_base.ts';
+import type { MetricFn, MetricResult } from './metrics/_base.ts';
 import type { Period } from './collectors/_base.ts';
 import { writeArtifact } from './collectors/_base.ts';
 import {
@@ -57,14 +58,6 @@ import {
 import { collect as collectCi } from './collectors/ci.ts';
 import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
-
-// ---------------------------------------------------------------------------
-// Engine provenance — the circuit-breaker against hand-assembled audits.
-// audit-core stamps every artifact it writes; patch-judgment, render, and
-// rollup refuse an audit.json without the stamp, so the only path to a report
-// is actually running the engine.
-// ---------------------------------------------------------------------------
-export const ENGINE_PROVENANCE = { generated_by: 'audit-core' } as const;
 
 /**
  * Compute the connector-gated headline rows (Cycle time, MTTR) from the
@@ -135,16 +128,6 @@ export function computeDerivedDelivery(
     out.mttr.note = `incident source "${incident}" declared — no incident data mapped`;
   }
   return out;
-}
-
-/** True when `obj` carries the audit-core provenance stamp. */
-export function hasEngineProvenance(obj: unknown): boolean {
-  return (
-    !!obj &&
-    typeof obj === 'object' &&
-    (obj as { engine?: { generated_by?: unknown } }).engine?.generated_by ===
-      ENGINE_PROVENANCE.generated_by
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -403,13 +386,6 @@ function metaForCode(res: MetricResult, code: number): MetricMeta {
  * (cyclomatic_complexity is async — requires wasm init). Shared with cli.ts,
  * which builds the METRICS registry auditCore consumes.
  */
-export type MetricFn = (
-  collectedDir: string,
-  standards: Record<string, unknown>,
-  topology: Record<string, boolean>,
-  repoPath?: string
-) => MetricResult | Promise<MetricResult>;
-
 interface Category {
   code: number;
   check_id?: string;
@@ -435,6 +411,8 @@ interface Category {
   pass_at?: number;
   warn_at?: number;
   fail_at?: number;
+  /** Headline slot this check backfills when the authored headline omits it. */
+  headline_role?: string;
 }
 
 // The check record audit-core writes — the writer-truth shape from
@@ -688,15 +666,9 @@ export async function auditCore(
   );
   for (const dimension of dimNames) {
     const checks = byDimension[dimension];
-    const score = round1(checks.reduce((s, c) => s + c.weight_awarded, 0));
-    const applicable = checks
-      .filter((c) => c.applies)
-      .reduce((s, c) => s + c.weight_max, 0);
-    auditTotal = round1(auditTotal + score);
-    auditApplicable += applicable;
-    const sourcesUsed = [
-      ...new Set(checks.filter((c) => c.applies).flatMap((c) => c.sources)),
-    ].sort();
+    const agg = aggregateChecks(checks);
+    auditTotal = round1(auditTotal + agg.score);
+    auditApplicable += agg.applicable;
     const meta = dimMeta.get(dimension);
     const dim = {
       dimension,
@@ -704,12 +676,10 @@ export async function auditCore(
       order: dimOrderIndex(dimension, dimOrder),
       ...(meta?.title ? { title: meta.title } : {}),
       ...(meta?.description ? { description: meta.description } : {}),
-      score,
-      // null (not 0) when nothing is applicable: "no measurable surface" is
-      // not the same statement as "0% of the surface is covered".
-      coverage: applicable > 0 ? score / applicable : null,
+      score: agg.score,
+      coverage: agg.coverage,
       checks,
-      sources_used: sourcesUsed,
+      sources_used: agg.sources_used,
       engine: ENGINE_PROVENANCE,
     };
     writeFileSync(
@@ -795,6 +765,37 @@ export async function auditCore(
     skipped,
     lookback_days: periodFromStandards(standards).lookback_days,
     duration_ms: Date.now() - start,
+  };
+}
+
+/**
+ * Sum a dimension's checks into its score/coverage/sources_used — the single
+ * implementation shared by audit-core and the post-audit aggregate/patch
+ * verbs, so a fresh audit and a re-aggregation can never drift.
+ * `coverage` is null (not 0) when nothing is applicable: "no measurable
+ * surface" is not the same statement as "0% of the surface is covered".
+ */
+export function aggregateChecks(checks: CheckRecord[]): {
+  score: number;
+  applicable: number;
+  coverage: number | null;
+  sources_used: string[];
+} {
+  const score = round1(checks.reduce((s, c) => s + (c.weight_awarded || 0), 0));
+  const applicable = checks
+    .filter((c) => c.applies)
+    .reduce((s, c) => s + (c.weight_max || 0), 0);
+  return {
+    score,
+    applicable,
+    coverage: applicable > 0 ? score / applicable : null,
+    sources_used: [
+      ...new Set(
+        checks
+          .filter((c) => c.applies)
+          .flatMap((c) => (c.sources ?? []) as string[])
+      ),
+    ].sort(),
   };
 }
 
@@ -1128,5 +1129,6 @@ function buildCheck(
   };
   if (unit !== undefined) rec.unit = unit;
   if (expression !== undefined) rec.expression = expression;
+  if (c.headline_role !== undefined) rec.headline_role = c.headline_role;
   return rec;
 }

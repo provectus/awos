@@ -10,19 +10,19 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { compute } from '../metrics/loc_scale.ts';
 import { loadStandards } from './helpers.ts';
+import { tmpDir } from './helpers.ts';
 
 const standards = loadStandards();
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'g11-'));
+  return tmpDir('g11-');
 }
 
-test('adp_g11: counts LOC and files for a JS repo', () => {
+test('adp_g11: counts LOC and files for a JS repo', async () => {
   const tmp = makeTmpDir();
   // Write 5 non-blank lines in a JS file and 3 blank lines
   writeFileSync(
@@ -39,7 +39,7 @@ test('adp_g11: counts LOC and files for a JS repo', () => {
     ].join('\n')
   );
 
-  const result = compute('', standards, {}, tmp);
+  const result = await compute('', standards, {}, tmp);
 
   assert.equal(result.status, 'OK', 'status must be OK when JS files found');
   assert.equal(result.kind, 'computed', 'kind must be "computed"');
@@ -65,12 +65,12 @@ test('adp_g11: counts LOC and files for a JS repo', () => {
   assert.equal(val.by_language['JavaScript'].loc, 6, 'JS LOC');
 });
 
-test('adp_g11: multi-language breakdown', () => {
+test('adp_g11: multi-language breakdown', async () => {
   const tmp = makeTmpDir();
   writeFileSync(join(tmp, 'main.py'), 'def f():\n    pass\n\nx = 1\n');
   writeFileSync(join(tmp, 'app.ts'), 'export function g(): void {}\n');
 
-  const result = compute('', standards, {}, tmp);
+  const result = await compute('', standards, {}, tmp);
 
   assert.equal(result.status, 'OK');
   const val = result.value as {
@@ -91,12 +91,12 @@ test('adp_g11: multi-language breakdown', () => {
   assert.equal(val.by_language['TypeScript'].loc, 1, 'TypeScript LOC');
 });
 
-test('adp_g11: SKIP when no recognized source files', () => {
+test('adp_g11: SKIP when no recognized source files', async () => {
   const tmp = makeTmpDir();
   writeFileSync(join(tmp, 'README.md'), '# hello\n');
   writeFileSync(join(tmp, 'config.yaml'), 'key: value\n');
 
-  const result = compute('', standards, {}, tmp);
+  const result = await compute('', standards, {}, tmp);
 
   assert.equal(
     result.status,
@@ -106,8 +106,8 @@ test('adp_g11: SKIP when no recognized source files', () => {
   assert.equal(result.value, null, 'value must be null on SKIP');
 });
 
-test('adp_g11: SKIP when repo path does not exist', () => {
-  const result = compute(
+test('adp_g11: SKIP when repo path does not exist', async () => {
+  const result = await compute(
     '',
     standards,
     {},
@@ -117,7 +117,7 @@ test('adp_g11: SKIP when repo path does not exist', () => {
   assert.equal(result.value, null);
 });
 
-test('adp_g11: node_modules and .git dirs are excluded', () => {
+test('adp_g11: node_modules and .git dirs are excluded', async () => {
   const tmp = makeTmpDir();
   // Source file in root
   writeFileSync(join(tmp, 'app.js'), 'const x = 1;\n');
@@ -128,7 +128,7 @@ test('adp_g11: node_modules and .git dirs are excluded', () => {
     'const big = 1;\nconst big2 = 2;\nconst big3 = 3;\n'
   );
 
-  const result = compute('', standards, {}, tmp);
+  const result = await compute('', standards, {}, tmp);
 
   assert.equal(result.status, 'OK');
   const val = result.value as { total_loc: number; file_count: number };
@@ -136,10 +136,10 @@ test('adp_g11: node_modules and .git dirs are excluded', () => {
   assert.equal(val.total_loc, 1, 'only 1 LOC (node_modules excluded)');
 });
 
-test('adp_g11: reliability tag is not-reliable', () => {
+test('adp_g11: reliability tag is not-reliable', async () => {
   const tmp = makeTmpDir();
   writeFileSync(join(tmp, 'f.go'), 'package main\nfunc main() {}\n');
-  const result = compute('', standards, {}, tmp);
+  const result = await compute('', standards, {}, tmp);
   assert.equal(
     result.reliability.tag,
     'not-reliable',
@@ -148,10 +148,10 @@ test('adp_g11: reliability tag is not-reliable', () => {
   assert.equal(result.reliability.confidence, 'HIGH');
 });
 
-test('adp_g11: metric id is loc_scale', () => {
+test('adp_g11: metric id is loc_scale', async () => {
   const tmp = makeTmpDir();
   writeFileSync(join(tmp, 'f.rs'), 'fn main() {}\n');
-  const result = compute('', standards, {}, tmp);
+  const result = await compute('', standards, {}, tmp);
   assert.equal(result.metric, 'loc_scale');
 });
 
@@ -159,11 +159,11 @@ test('adp_g11: metric id is loc_scale', () => {
 // Phase 3b: score/confidence contracts
 // ---------------------------------------------------------------------------
 
-test('adp_g11: score=1.0 and confidence=1.0 when files found (observational metric)', () => {
+test('adp_g11: score=1.0 and confidence=1.0 when files found (observational metric)', async () => {
   const tmp = makeTmpDir();
   writeFileSync(join(tmp, 'app.js'), 'const x = 1;\nconst y = 2;\n');
 
-  const result = compute('', standards, {}, tmp);
+  const result = await compute('', standards, {}, tmp);
   assert.equal(
     result.score,
     1.0,
@@ -176,9 +176,9 @@ test('adp_g11: score=1.0 and confidence=1.0 when files found (observational metr
   );
 });
 
-test('adp_g11: score=0 and confidence=0 on SKIP (no files)', () => {
+test('adp_g11: score=0 and confidence=0 on SKIP (no files)', async () => {
   const tmp = makeTmpDir();
-  const result = compute('', standards, {}, tmp);
+  const result = await compute('', standards, {}, tmp);
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
 });

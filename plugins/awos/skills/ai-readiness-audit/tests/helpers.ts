@@ -5,6 +5,9 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AuditJson, Check, DimensionArtifact } from '../artifact_types.ts';
+import { DETECTORS } from '../detectors/index.ts';
+import { clearDetectorCaches } from '../detectors/_base.ts';
+import type { DetectorResult } from '../detectors/_base.ts';
 
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -39,10 +42,46 @@ export function gitAs(
   });
 }
 
+/**
+ * Write a file tree into `dir`: keys are repo-relative paths (subdirectories
+ * created as needed), values the file contents.
+ */
+export function writeRepo(dir: string, files: Record<string, string>): void {
+  for (const [rel, contents] of Object.entries(files)) {
+    const abs = join(dir, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, contents);
+  }
+}
+
 export function loadStandards(): any {
   return parse(
     readFileSync(join(SKILL, 'references', 'standards.toml'), 'utf8')
   );
+}
+
+let standardsCache: any = null;
+
+/**
+ * Run one detector by category code with its standards.toml verdict params —
+ * the in-process equivalent of the retired `cli.ts detect <code> <repo>` verb.
+ * Clears the repo-immutability caches first, so repeated calls against a
+ * mutated temp repo behave like the fresh subprocess each spawn used to be.
+ */
+export function runDetector(code: number, repoPath: string): DetectorResult {
+  clearDetectorCaches();
+  const fn = DETECTORS[code];
+  if (!fn) throw new Error(`no detector registered for code ${code}`);
+  standardsCache ??= loadStandards();
+  const cats = (standardsCache['category'] ?? {}) as Record<string, any>;
+  const cat = Object.values(cats).find((c) => c.code === code);
+  return fn(repoPath, {
+    threshold: cat?.threshold,
+    threshold_days: cat?.threshold_days,
+    pass_at: cat?.pass_at,
+    warn_at: cat?.warn_at,
+    fail_at: cat?.fail_at,
+  });
 }
 
 /**
@@ -60,8 +99,6 @@ export function gitRaw(
     tooling_paths: [],
     total_commits: 0,
     ai_marked_commits: 0,
-    total_merges: 0,
-    revert_merges: 0,
     numstat_totals: { added: 0, deleted: 0 },
     default_branch: 'main',
     ...overrides,

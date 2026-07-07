@@ -1,13 +1,13 @@
 // topology_frameworks.test.ts — detectFrameworks unit tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { detectFrameworks } from './topology.ts';
+import { tmpDir } from './tests/helpers.ts';
 
 test('detectFrameworks returns ["FastAPI"] for a FastAPI Python repo', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-fastapi-'));
+  const repo = tmpDir('awos-fw-fastapi-');
   try {
     writeFileSync(
       join(repo, 'main.py'),
@@ -24,8 +24,8 @@ test('detectFrameworks returns ["FastAPI"] for a FastAPI Python repo', () => {
 });
 
 test('detectFrameworks: prose "express" does NOT yield Express; manifest dep does', () => {
-  const proseRepo = mkdtempSync(join(tmpdir(), 'awos-fw-prose-'));
-  const realRepo = mkdtempSync(join(tmpdir(), 'awos-fw-real-'));
+  const proseRepo = tmpDir('awos-fw-prose-');
+  const realRepo = tmpDir('awos-fw-real-');
   try {
     mkdirSync(join(proseRepo, 'src'), { recursive: true });
     writeFileSync(
@@ -67,7 +67,7 @@ test('detectFrameworks: prose "express" does NOT yield Express; manifest dep doe
 });
 
 test('detectFrameworks returns [] for a plain repo with no framework signals', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-empty-'));
+  const repo = tmpDir('awos-fw-empty-');
   try {
     writeFileSync(join(repo, 'main.go'), 'package main\nfunc main() {}\n');
     const frameworks = detectFrameworks(repo);
@@ -82,7 +82,7 @@ test('detectFrameworks returns [] for a plain repo with no framework signals', (
 });
 
 test('detectFrameworks detects GraphQL and gRPC stack components', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-api-'));
+  const repo = tmpDir('awos-fw-api-');
   try {
     writeFileSync(
       join(repo, 'schema.ts'),
@@ -103,7 +103,7 @@ test('detectFrameworks detects GraphQL and gRPC stack components', () => {
 });
 
 test('detectFrameworks detects AWOS layout', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-awos-'));
+  const repo = tmpDir('awos-fw-awos-');
   try {
     mkdirSync(join(repo, 'context'));
     mkdirSync(join(repo, '.awos'));
@@ -118,7 +118,7 @@ test('detectFrameworks detects AWOS layout', () => {
 });
 
 test('detectFrameworks does not report AWOS when only context/ exists', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-ctx-only-'));
+  const repo = tmpDir('awos-fw-ctx-only-');
   try {
     mkdirSync(join(repo, 'context'));
     const frameworks = detectFrameworks(repo).map((f) => f.name);
@@ -132,7 +132,7 @@ test('detectFrameworks does not report AWOS when only context/ exists', () => {
 });
 
 test('detectFrameworks does not report Spring Boot for bare "spring" word', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-spring-bare-'));
+  const repo = tmpDir('awos-fw-spring-bare-');
   try {
     writeFileSync(
       join(repo, 'util.py'),
@@ -149,7 +149,7 @@ test('detectFrameworks does not report Spring Boot for bare "spring" word', () =
 });
 
 test('detectFrameworks: guardrails-ai dep must NOT yield Rails (false positive guard)', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-guardrails-'));
+  const repo = tmpDir('awos-fw-guardrails-');
   try {
     writeFileSync(
       join(repo, 'pyproject.toml'),
@@ -170,7 +170,7 @@ test('detectFrameworks: guardrails-ai dep must NOT yield Rails (false positive g
 });
 
 test('detectFrameworks: PyPI "expression" dep must NOT yield Express (false positive guard)', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-expression-'));
+  const repo = tmpDir('awos-fw-expression-');
   try {
     writeFileSync(
       join(repo, 'requirements.txt'),
@@ -191,7 +191,7 @@ test('detectFrameworks: PyPI "expression" dep must NOT yield Express (false posi
 });
 
 test('detectFrameworks: spring-boot-starter-web in build.gradle still yields Spring Boot', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-fw-spring-starter-'));
+  const repo = tmpDir('awos-fw-spring-starter-');
   try {
     writeFileSync(
       join(repo, 'build.gradle'),

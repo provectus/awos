@@ -13,11 +13,11 @@ import {
   readdirSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { auditCore, scoreBadge } from '../audit_core.ts';
 import { aggregate } from '../audit_patch.ts';
 import { makeCheckRecord } from './helpers.ts';
+import { tmpDir } from './helpers.ts';
 
 const SKILL_ROOT = new URL('..', import.meta.url).pathname;
 const STANDARDS_PATH = join(SKILL_ROOT, 'references', 'standards.toml');
@@ -28,7 +28,7 @@ const STANDARDS_PATH = join(SKILL_ROOT, 'references', 'standards.toml');
 // same output instead of each re-running auditCore.
 let REAL_REPO_OUT: string;
 before(async () => {
-  REAL_REPO_OUT = mkdtempSync(join(tmpdir(), 'audit-core-real-repo-'));
+  REAL_REPO_OUT = tmpDir('audit-core-real-repo-');
   await auditCore(SKILL_ROOT, REAL_REPO_OUT, {}, {}, STANDARDS_PATH);
 });
 
@@ -66,7 +66,7 @@ test('audit-core output audit.json contains sources array', () => {
 test('aggregate preserves existing sources block when collected/ is absent', () => {
   // Regression test for: aggregate silently dropped sources when collected/ was missing.
   // The fix: if derivedSources is empty, fall back to existing.sources.
-  const outDir = mkdtempSync(join(tmpdir(), 'aggregate-sources-test-'));
+  const outDir = tmpDir('aggregate-sources-test-');
 
   // Write a minimal dimension JSON so aggregate has something to process.
   const dimJson = {
@@ -167,7 +167,7 @@ test('aggregate preserves existing sources block when collected/ is absent', () 
 // ---------------------------------------------------------------------------
 
 test('aggregate: two-code metric — awarded code gets weight_max×score, non-awarded code gets 0', () => {
-  const outDir = mkdtempSync(join(tmpdir(), 'aggregate-leak-test-'));
+  const outDir = tmpDir('aggregate-leak-test-');
 
   // Simulates doc_coverage: two codes (2204, 2205) in the same metric.
   // Code 2204 awarded (PARTIAL, score=0.7 → weight_awarded = round(2×0.7,1) = 1.4)
@@ -238,7 +238,7 @@ test('aggregate: two-code metric — awarded code gets weight_max×score, non-aw
 // ---------------------------------------------------------------------------
 
 test('aggregate re-derives weight_awarded = round(weight_max × score, 1) for score=1, score=0.5, score=0', () => {
-  const outDir = mkdtempSync(join(tmpdir(), 'aggregate-weight-test-'));
+  const outDir = tmpDir('aggregate-weight-test-');
 
   // Three checks with explicit score values covering the three cases.
   const dimJson = {
@@ -324,7 +324,7 @@ test('aggregate re-derives weight_awarded = round(weight_max × score, 1) for sc
 // ---------------------------------------------------------------------------
 
 test("aggregate: sources_used is the sorted union of applicable checks' sources per dimension, and audit.source_windows is built from collected/ period blocks", () => {
-  const outDir = mkdtempSync(join(tmpdir(), 'aggregate-sources-used-test-'));
+  const outDir = tmpDir('aggregate-sources-used-test-');
   const collectedDir = join(outDir, 'collected');
 
   // Dimension A: git + tracker checks (one SKIP check with scale should be excluded)
@@ -595,7 +595,7 @@ test('audit-core: check records carry source_url and source_date from per-catego
 // ---------------------------------------------------------------------------
 
 test('aggregate emits coverage null when every check SKIPs — at the dimension and audit level', () => {
-  const outDir = mkdtempSync(join(tmpdir(), 'aggregate-null-coverage-'));
+  const outDir = tmpDir('aggregate-null-coverage-');
 
   const dimJson = {
     dimension: 'ai-sdlc-adoption',
@@ -647,7 +647,7 @@ test('aggregate emits coverage null when every check SKIPs — at the dimension 
 // ---------------------------------------------------------------------------
 
 test('aggregate reports a corrupted collected artifact as unreadable, not as a missing connector', () => {
-  const outDir = mkdtempSync(join(tmpdir(), 'aggregate-corrupt-artifact-'));
+  const outDir = tmpDir('aggregate-corrupt-artifact-');
   const collectedDir = join(outDir, 'collected');
   mkdirSync(collectedDir, { recursive: true });
 

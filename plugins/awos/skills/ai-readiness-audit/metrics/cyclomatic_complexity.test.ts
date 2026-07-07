@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { writeFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { compute } from './cyclomatic_complexity.ts';
 import { loadStandards } from './_base.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
 // Real standards.toml — compute() reads its score curve from
 // [category.cyclomatic_complexity.scoring].
@@ -19,7 +19,7 @@ const STANDARDS = loadStandards(
 );
 
 test('cyclomatic_complexity: SKIP when no supported source files exist', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-g10-empty-'));
+  const dir = tmpDir('awos-g10-empty-');
   try {
     writeFileSync(join(dir, 'README.md'), '# no source\n');
     const res = await compute(dir, STANDARDS, {}, dir);
@@ -36,7 +36,7 @@ test('cyclomatic_complexity: SKIP when no supported source files exist', async (
 });
 
 test('cyclomatic_complexity: score and confidence for a simple JS file', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-g10-js-'));
+  const dir = tmpDir('awos-g10-js-');
   try {
     // A trivially simple function: avg_ccn = 1 → score = 1.0 (elite band: ccn ≤ 5)
     writeFileSync(
@@ -65,7 +65,7 @@ test('cyclomatic_complexity: score and confidence for a simple JS file', async (
 });
 
 test('cyclomatic_complexity: confidence reflects analysed/total file ratio', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-g10-conf-'));
+  const dir = tmpDir('awos-g10-conf-');
   try {
     // Two JS files that will both be analysed → confidence = 1.0 (2/2)
     writeFileSync(join(dir, 'a.js'), 'export function f() { return 1; }\n');

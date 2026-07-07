@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeArtifact, writeArtifact } from '../collectors/_base.ts';
+import { tmpDir } from './helpers.ts';
 
 const PERIOD = {
   bucket_days: 30,
@@ -33,7 +33,7 @@ test('absent artifact records reason', () => {
 });
 
 test('writeArtifact writes <source>.json', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'col-'));
+  const dir = tmpDir('col-');
   const a = makeArtifact(
     'docs',
     false,

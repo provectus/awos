@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { compute } from './doc_coverage.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
 test('doc-coverage rewards documented definitions over undocumented ones', async () => {
-  const documented = mkdtempSync(join(tmpdir(), 'awos-doc-yes-'));
-  const bare = mkdtempSync(join(tmpdir(), 'awos-doc-no-'));
+  const documented = tmpDir('awos-doc-yes-');
+  const bare = tmpDir('awos-doc-no-');
   try {
     writeFileSync(
       join(documented, 'a.py'),
@@ -30,7 +30,7 @@ test('doc-coverage rewards documented definitions over undocumented ones', async
 });
 
 test('doc-coverage awards 2204 (public) when public defs are well documented', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-pub-'));
+  const dir = tmpDir('awos-doc-pub-');
   try {
     // Two public defs, both documented; one private undocumented (ignored by 2204).
     writeFileSync(
@@ -64,7 +64,7 @@ test('doc-coverage awards 2204 (public) when public defs are well documented', a
 });
 
 test('doc-coverage score and confidence reflect partial documentation', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-partial-'));
+  const dir = tmpDir('awos-doc-partial-');
   try {
     // One public def documented, one not → publicCoverage = 0.5 → score2204 = 0.5
     writeFileSync(
@@ -89,7 +89,7 @@ test('doc-coverage score and confidence reflect partial documentation', async ()
 });
 
 test('doc-coverage SKIPs when no documentable-language files are present', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-skip-'));
+  const dir = tmpDir('awos-doc-skip-');
   try {
     writeFileSync(join(dir, 'README.txt'), 'no source here\n');
     const res = await compute(dir, {}, {}, dir);
@@ -101,8 +101,8 @@ test('doc-coverage SKIPs when no documentable-language files are present', async
 });
 
 test('doc-coverage detects JSDoc on exported TypeScript functions', async () => {
-  const documented = mkdtempSync(join(tmpdir(), 'awos-doc-ts-yes-'));
-  const bare = mkdtempSync(join(tmpdir(), 'awos-doc-ts-no-'));
+  const documented = tmpDir('awos-doc-ts-yes-');
+  const bare = tmpDir('awos-doc-ts-no-');
   try {
     writeFileSync(
       join(documented, 'a.ts'),
@@ -125,8 +125,8 @@ test('doc-coverage detects JSDoc on exported TypeScript functions', async () => 
 });
 
 test('doc-coverage detects JSDoc on exported JavaScript functions', async () => {
-  const documented = mkdtempSync(join(tmpdir(), 'awos-doc-js-yes-'));
-  const bare = mkdtempSync(join(tmpdir(), 'awos-doc-js-no-'));
+  const documented = tmpDir('awos-doc-js-yes-');
+  const bare = tmpDir('awos-doc-js-no-');
   try {
     writeFileSync(
       join(documented, 'a.js'),
@@ -149,8 +149,8 @@ test('doc-coverage detects JSDoc on exported JavaScript functions', async () => 
 });
 
 test('doc-coverage detects doc-comments on exported Go functions', async () => {
-  const documented = mkdtempSync(join(tmpdir(), 'awos-doc-go-yes-'));
-  const bare = mkdtempSync(join(tmpdir(), 'awos-doc-go-no-'));
+  const documented = tmpDir('awos-doc-go-yes-');
+  const bare = tmpDir('awos-doc-go-no-');
   try {
     writeFileSync(
       join(documented, 'a.go'),
@@ -173,8 +173,8 @@ test('doc-coverage detects doc-comments on exported Go functions', async () => {
 });
 
 test('doc-coverage detects Javadoc on public Java methods and classes', async () => {
-  const documented = mkdtempSync(join(tmpdir(), 'awos-doc-java-yes-'));
-  const bare = mkdtempSync(join(tmpdir(), 'awos-doc-java-no-'));
+  const documented = tmpDir('awos-doc-java-yes-');
+  const bare = tmpDir('awos-doc-java-no-');
   try {
     writeFileSync(
       join(documented, 'Calculator.java'),
@@ -197,7 +197,7 @@ test('doc-coverage detects Javadoc on public Java methods and classes', async ()
 });
 
 test('doc-coverage does not penalize 2204 when repo has no public/exported definitions', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-no-public-'));
+  const dir = tmpDir('awos-doc-no-public-');
   try {
     // Only private helpers (prefixed with _) — all documented, none public.
     writeFileSync(
@@ -225,8 +225,8 @@ test('doc-coverage does not penalize 2204 when repo has no public/exported defin
 });
 
 test('doc-coverage detects KDoc on public Kotlin functions', async () => {
-  const documented = mkdtempSync(join(tmpdir(), 'awos-doc-kt-yes-'));
-  const bare = mkdtempSync(join(tmpdir(), 'awos-doc-kt-no-'));
+  const documented = tmpDir('awos-doc-kt-yes-');
+  const bare = tmpDir('awos-doc-kt-no-');
   try {
     writeFileSync(
       join(documented, 'a.kt'),
@@ -246,7 +246,7 @@ test('doc-coverage detects KDoc on public Kotlin functions', async () => {
 });
 
 test('doc-coverage carries per-code evidence — the all-defs code (2205) must not reuse the public-defs line (B5)', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-percode-'));
+  const dir = tmpDir('awos-doc-percode-');
   try {
     // 1 public documented def + 1 private undocumented def:
     // public coverage (2204) = 1/1 = 1.00, overall coverage (2205) = 1/2 = 0.50.
@@ -286,7 +286,7 @@ test('doc-coverage carries per-code evidence — the all-defs code (2205) must n
 });
 
 test('doc-coverage has no award cliff: sub-threshold coverage still awards with a proportional score', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-cliff-'));
+  const dir = tmpDir('awos-doc-cliff-');
   try {
     // 4 public defs, 3 documented → publicCoverage = 0.75 (below the old 0.8
     // gate). The award must still be granted with score ≈ 0.75 — a 0.799
@@ -331,7 +331,7 @@ test('doc-coverage has no award cliff: sub-threshold coverage still awards with 
 });
 
 test('doc-coverage worst case: nothing documented awards with score 0 (FAIL badge, no free points)', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-doc-zero-'));
+  const dir = tmpDir('awos-doc-zero-');
   try {
     writeFileSync(
       join(dir, 'a.py'),

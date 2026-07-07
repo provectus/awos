@@ -14,15 +14,15 @@
  *      and `claude plugin marketplace update`, then RESTORE the originals in a finally block
  *      after the run (and a failed run still restores). Deploying to the caches — the old
  *      approach — was never loaded by claude. `--no-deploy` skips the repoint.
- *   3. Prepare target context/audits/ for the chosen --phase:
- *        first  → blank slate, NO previous audit (tests the empty case).
- *        second → seed a previous audit from the archive (tests the delta case).
- *      Whatever was there is stashed into the run archive first; nothing is deleted outright.
+ *   3. Prepare target context/audits/ — blank it for isolation so the run starts from a
+ *      clean slate. Whatever was there is stashed into the run archive first; nothing is
+ *      deleted outright. There is no previous-audit seeding: output dirs are datetime-stamped
+ *      (context/audits/YYYY-MM-DD_HH-MM-SS) and the audit has no delta concept.
  *   4. Run the audit headless via `claude -p … --output-format stream-json`, tee the full
  *      transcript to disk while streaming a concise live log to stderr (see --quiet).
  *   5. Measure tokens — parse the stream-json `result` events for total_cost_usd, usage
  *      (in/out/cache), duration, turns. The skill does NOT report tokens; this script does.
- *   6. Archive the whole context/audits/<date>/ output + run-meta.json under a
+ *   6. Archive the whole context/audits/<stamp>/ output + run-meta.json under a
  *      timestamp+commit-keyed dir, so every run is kept and is comparable, then print a
  *      final summary block (wall time, tokens, cost, compliance, archived report.html).
  *
@@ -52,10 +52,10 @@ import {
   isMainModule,
   locateOutDir,
   planRetry,
-  readJson,
   releaseRunLock,
   repointMarketplace,
   restoreMarketplace,
+  restoreTarget,
   runClaudeAudit,
   scanJudgmentsPatched,
   scriptRepoRoot,
@@ -146,40 +146,14 @@ function moveSync(src: string, dest: string): void {
 }
 
 // ---------------------------------------------------------------------------
-/** Newest archived run for this target that has a usable audit-output/audit.json. */
-function newestSeedFor(targetName: string, excludeRun: string): string | null {
-  const base = path.join(ARCHIVE_ROOT, targetName);
-  if (!isDir(base)) return null;
-  const runs = fs
-    .readdirSync(base)
-    .sort()
-    .reverse()
-    .map((d) => path.join(base, d));
-  for (const r of runs) {
-    if (path.resolve(r) === path.resolve(excludeRun)) continue;
-    if (isFile(path.join(r, 'audit-output', 'audit.json'))) return r;
-  }
-  return null;
-}
-
-/** Accept an archived run dir, an audit-output dir, or a context/audits/<date> dir. */
-function resolveSeedOutput(seedFrom: string): string {
-  const cand = path.join(seedFrom, 'audit-output');
-  if (isFile(path.join(cand, 'audit.json'))) return cand;
-  if (isFile(path.join(seedFrom, 'audit.json'))) return seedFrom;
-  die(`--seed-from has no audit.json: ${seedFrom}`);
-}
-
-function prepareTarget(
-  target: string,
-  phase: string,
-  runDir: string,
-  seedFrom: string | null,
-  seedDate: string,
-  today: string
-): string | null {
+/**
+ * Blank context/audits/ so the run starts from a clean slate (isolation).
+ * Whatever was there is stashed into the run archive first — never deleted
+ * outright. Nothing is seeded: output dirs are datetime-stamped and the audit
+ * has no previous-audit / delta concept.
+ */
+function prepareTarget(target: string, runDir: string): void {
   const audits = path.join(target, 'context/audits');
-  // stash whatever exists (safety; never deleted) then blank
   if (isDir(audits) && fs.readdirSync(audits).length) {
     const stash = path.join(runDir, '_preexisting');
     fs.mkdirSync(stash, { recursive: true });
@@ -189,41 +163,7 @@ function prepareTarget(
     log(`  ✓ stashed pre-existing context/audits -> ${stash}`);
   }
   fs.mkdirSync(audits, { recursive: true });
-
-  if (phase === 'first') {
-    log('  phase=first → blank slate, no previous audit');
-    return null;
-  }
-
-  // phase == second: seed a previous audit under a non-today date
-  const out = resolveSeedOutput(seedFrom as string);
-  let sd = seedDate;
-  if (!sd) {
-    let fromSeed: string | null = null;
-    try {
-      fromSeed = readJson(path.join(out, 'audit.json')).date ?? null;
-    } catch {
-      fromSeed = null;
-    }
-    if (!fromSeed || fromSeed === today) {
-      const d = new Date(`${today}T00:00:00Z`);
-      d.setUTCDate(d.getUTCDate() - 1);
-      fromSeed = d.toISOString().slice(0, 10);
-    }
-    sd = fromSeed;
-  }
-  if (sd === today) {
-    die(
-      'seed date must differ from today (skill only treats other dates as previous)'
-    );
-  }
-  const dest = path.join(audits, sd);
-  fs.rmSync(dest, { recursive: true, force: true });
-  fs.cpSync(out, dest, { recursive: true });
-  log(
-    `  phase=second → seeded previous audit at context/audits/${sd} (from ${out})`
-  );
-  return sd;
+  log('  ✓ context/audits blanked for isolation (no previous audit seeded)');
 }
 
 // ---------------------------------------------------------------------------
@@ -362,9 +302,6 @@ function seedAuditCore(
 interface HarnessArgs {
   target: string;
   worktree: string;
-  phase: 'first' | 'second';
-  seedFrom: string;
-  seedDate: string;
   label: string;
   build: boolean;
   claudeFlags: string;
@@ -385,9 +322,6 @@ function parseCli(argv: string[]): HarnessArgs {
       options: {
         target: { type: 'string' },
         worktree: { type: 'string', default: DEFAULT_WORKTREE },
-        phase: { type: 'string', default: 'first' },
-        'seed-from': { type: 'string', default: 'auto' },
-        'seed-date': { type: 'string', default: '' },
         label: { type: 'string', default: '' },
         build: { type: 'boolean', default: false },
         'claude-flags': {
@@ -409,9 +343,6 @@ function parseCli(argv: string[]): HarnessArgs {
   }
   const v = parsed.values as Record<string, any>;
   if (!v.target) die('--target is required (repo to audit, cwd of the run)');
-  if (v.phase !== 'first' && v.phase !== 'second') {
-    die(`--phase must be 'first' or 'second' (got '${v.phase}')`);
-  }
   const retries = Number.parseInt(v.retries, 10);
   if (
     !Number.isFinite(retries) ||
@@ -422,9 +353,6 @@ function parseCli(argv: string[]): HarnessArgs {
   return {
     target: v.target,
     worktree: v.worktree,
-    phase: v.phase,
-    seedFrom: v['seed-from'],
-    seedDate: v['seed-date'],
     label: v.label,
     build: v.build,
     claudeFlags: v['claude-flags'],
@@ -507,7 +435,7 @@ function printFinalSummary(opts: {
         ? 'n/a (no audit.json archived)'
         : judgmentsPatched
           ? 'patched'
-          : '✗ PENDING_JUDGMENT left (Step 6 incomplete)'
+          : '✗ PENDING_JUDGMENT left (Step 5 incomplete)'
     }`
   );
   if (summary?.mode === 'single') {
@@ -549,7 +477,6 @@ interface RunContext {
   today: string;
   ts: string;
   claudeVer: string;
-  seedFrom: string | null;
   deployedSha: string | null;
   awosSha: string;
   awosShort: string;
@@ -592,7 +519,6 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
     today,
     ts,
     claudeVer,
-    seedFrom,
     deployedSha,
     awosSha,
     awosShort,
@@ -606,14 +532,7 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
 
   fs.mkdirSync(runDir, { recursive: true });
   log('▶ preparing target context/audits/');
-  const seededDate = prepareTarget(
-    target,
-    args.phase,
-    runDir,
-    seedFrom,
-    args.seedDate,
-    today
-  );
+  prepareTarget(target, runDir);
 
   let claudeFlags = args.claudeFlags
     ? args.claudeFlags.split(/\s+/).filter(Boolean)
@@ -676,10 +595,7 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
       log(
         `\n▶ engine-skip retry ${attempt - 1}/${attempts - 1} — relaunching claude`
       );
-      const plan = planRetry(
-        locateOutDir(audits, today, seededDate),
-        seededDate
-      );
+      const plan = planRetry(locateOutDir(audits, today));
       if (plan.kind === 'rollup') {
         // Rollup-only failure: the org fan-out finished (stamped per-repo
         // audit.json files exist) but the org root artifact was never
@@ -715,7 +631,7 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
     attemptCosts.push(
       typeof result.total_cost_usd === 'number' ? result.total_cost_usd : 0
     );
-    outDir = locateOutDir(audits, today, seededDate);
+    outDir = locateOutDir(audits, today);
     comp = assessEngineCompliance(outDir, finalLog, carriedCalls);
     if (args.noEngineGuard) {
       log(
@@ -812,13 +728,13 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
   const partial = Boolean(rc !== 0 || result.is_error);
 
   // Were the judgment categories actually patched? A leftover
-  // "PENDING_JUDGMENT" in any archived audit.json means Step 6 never
+  // "PENDING_JUDGMENT" in any archived audit.json means Step 5 never
   // completed the LLM slice — the score is missing the judgment weight.
   const judgmentsPatched = scanJudgmentsPatched(archived);
   if (judgmentsPatched === false) {
     warn(
       '⚠ PENDING_JUDGMENT left in archived audit.json — the judgment ' +
-        'categories were never patched (Step 6 incomplete); scores are ' +
+        'categories were never patched (Step 5 incomplete); scores are ' +
         'missing the judgment weight'
     );
   }
@@ -830,10 +746,7 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
   const meta = {
     timestamp_utc: ts,
     label: args.label,
-    phase: args.phase,
     model: args.model || 'claude-default',
-    seeded_previous_date: seededDate,
-    seed_from: seedFrom,
     claude_version: claudeVer,
     claude_rc: rc,
     compliance: comp,
@@ -950,13 +863,12 @@ async function main(): Promise<void> {
   const runDir = path.join(
     ARCHIVE_ROOT,
     tgtName,
-    `${ts}__awos-${awosShort}${dirtyTag}__${args.phase}`
+    `${ts}__awos-${awosShort}${dirtyTag}`
   );
 
   log('─'.repeat(60));
   log(` target : ${tgtName} @ ${tgtShort} (${tgtBranch}, dirty=${tgtDirty})`);
   log(` skill  : awos @ ${awosShort} (${awosBranch}, dirty=${awosDirty})`);
-  log(` phase  : ${args.phase}`);
   log(` run    : ${runDir}`);
   log('─'.repeat(60));
 
@@ -973,24 +885,6 @@ async function main(): Promise<void> {
     'plugins/awos/skills/ai-readiness-audit/dist/cli.js'
   );
   if (!isFile(engine)) die('dist/cli.js missing — run with --build');
-
-  // resolve seed if phase=second (read-only)
-  let seedFrom: string | null = null;
-  if (args.phase === 'second') {
-    if (args.seedFrom === 'auto') {
-      seedFrom = newestSeedFor(tgtName, runDir);
-      if (!seedFrom) {
-        die(
-          `phase=second but no prior archived run for ${tgtName}; do a ` +
-            `--phase first run before testing the delta case`
-        );
-      }
-    } else {
-      seedFrom = path.resolve(args.seedFrom);
-    }
-    log(`▶ seed source: ${seedFrom}`);
-    resolveSeedOutput(seedFrom); // validate it has an audit.json (read-only)
-  }
 
   if (args.dryRun) {
     log('▶ --dry-run: target + marketplace left untouched');
@@ -1035,7 +929,6 @@ async function main(): Promise<void> {
       today,
       ts,
       claudeVer,
-      seedFrom,
       deployedSha,
       awosSha,
       awosShort,
@@ -1050,6 +943,15 @@ async function main(): Promise<void> {
     if (origMarket !== null) {
       log(`▶ restoring ${MARKET_NAME} to original (${origMarket.km_install})`);
       restoreMarketplace(origMarket);
+    }
+    // Leave the target repo as we found it — generated output lives in the
+    // archive, stashed pre-existing audits go back. Never mask the original
+    // error with a restore failure.
+    try {
+      log('▶ restoring target context/audits/');
+      for (const line of restoreTarget(target, runDir)) log(`  ${line}`);
+    } catch (e) {
+      warn(`⚠ target restore failed: ${String(e)}`);
     }
     releaseRunLock();
   }

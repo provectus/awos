@@ -28,6 +28,7 @@ import { join, basename } from 'node:path';
 import {
   computeReliability,
   makeMetricResult,
+  plural,
   skipMetric,
   type MetricResult,
 } from './_base.ts';
@@ -216,7 +217,7 @@ export function compute(
 
   const value = { total_direct_deps: total, by_manifest: byManifest };
   const reliability = computeReliability('not-reliable', ['scale'], []);
-  const expression = `${total} direct dependencies across ${Object.keys(byManifest).length} manifest${Object.keys(byManifest).length !== 1 ? 's' : ''}`;
+  const expression = `${total} direct dependencies across ${Object.keys(byManifest).length} ${plural(Object.keys(byManifest).length, 'manifest')}`;
 
   return makeMetricResult(
     'dependency_count',

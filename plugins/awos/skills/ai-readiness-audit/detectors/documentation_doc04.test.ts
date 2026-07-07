@@ -1,17 +1,15 @@
 // detectors/documentation_doc04.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
+import { writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { runDetector } from '../tests/helpers.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli.ts');
-const NODE = process.env.NODE_BIN || process.execPath;
+const detect = (repo: string) => runDetector(2203, repo);
 
 test('DOC-04 ignores route/command-like references, flags real dead file links', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-doc04-'));
+  const repo = tmpDir('awos-doc04-');
   try {
     writeFileSync(
       join(repo, 'README.md'),
@@ -21,15 +19,7 @@ test('DOC-04 ignores route/command-like references, flags real dead file links',
         'See [missing doc](./docs/gone.md).',
       ].join('\n') + '\n'
     );
-    const out = execFileSync(
-      NODE,
-      ['--import', 'tsx', CLI, 'detect', '2203', repo],
-      {
-        encoding: 'utf8',
-        env: { ...process.env, NODE_NO_WARNINGS: '1' },
-      }
-    );
-    const res = JSON.parse(out);
+    const res = detect(repo);
     const ev = (res.evidence ?? []).join(' ');
     assert.ok(
       !ev.includes('/api'),

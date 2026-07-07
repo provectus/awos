@@ -1,20 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { runDetector } from '../tests/helpers.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli.ts');
-const NODE = process.env.NODE_BIN || process.execPath;
+const detect = (repo: string) => runDetector(2404, repo);
 
 function git(cwd: string, ...args: string[]) {
   execFileSync('git', ['-C', cwd, ...args], { stdio: 'ignore' });
 }
 
 test('AIS-05 does not penalize an untracked *.local.json settings file', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-pai05-'));
+  const repo = tmpDir('awos-pai05-');
   try {
     git(repo, 'init', '--quiet');
     git(repo, 'config', 'user.email', 't@e.com');
@@ -30,15 +29,7 @@ test('AIS-05 does not penalize an untracked *.local.json settings file', () => {
     git(repo, 'add', 'CLAUDE.md', '.claude/settings.json', '.gitignore');
     git(repo, 'commit', '--quiet', '-m', 'init');
 
-    const out = execFileSync(
-      NODE,
-      ['--import', 'tsx', CLI, 'detect', '2404', repo],
-      {
-        encoding: 'utf8',
-        env: { ...process.env, NODE_NO_WARNINGS: '1' },
-      }
-    );
-    const res = JSON.parse(out);
+    const res = detect(repo);
     const ev = JSON.stringify(res.evidence ?? []);
     assert.ok(
       !ev.includes('settings.local.json'),

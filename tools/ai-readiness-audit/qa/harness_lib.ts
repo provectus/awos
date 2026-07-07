@@ -44,6 +44,47 @@ export function isFile(p: string): boolean {
   }
 }
 
+/**
+ * Leave the target repo as the harness found it. The harness is a test tool:
+ * its generated audit belongs in the run archive, never persisted in the real
+ * target repo. Removes the run's generated `context/audits/` content ONLY
+ * when the archive holds a copy (`<runDir>/audit-output`) — a run that died
+ * before archiving keeps its output in place so nothing is lost — then moves
+ * any stashed pre-existing audits (`<runDir>/_preexisting`) back, keeping a
+ * copy in the archive. Returns human-readable log lines for the caller.
+ */
+export function restoreTarget(target: string, runDir: string): string[] {
+  const lines: string[] = [];
+  const audits = path.join(target, 'context/audits');
+  const archived = path.join(runDir, 'audit-output');
+  const stash = path.join(runDir, '_preexisting');
+  if (isDir(audits)) {
+    const entries = fs.readdirSync(audits);
+    if (entries.length === 0 || isDir(archived)) {
+      fs.rmSync(audits, { recursive: true, force: true });
+      lines.push(
+        '✓ removed generated audit output from target (archived copy is canonical)'
+      );
+    } else {
+      lines.push(
+        '⚠ generated audit output left in target — nothing was archived'
+      );
+    }
+  }
+  if (isDir(stash)) {
+    fs.mkdirSync(audits, { recursive: true });
+    for (const n of fs.readdirSync(stash)) {
+      fs.cpSync(path.join(stash, n), path.join(audits, n), {
+        recursive: true,
+      });
+    }
+    lines.push(
+      '✓ restored pre-existing context/audits from stash (archive keeps a copy)'
+    );
+  }
+  return lines;
+}
+
 /** git toplevel of the checkout a script lives in (the skill under test by default). */
 export function scriptRepoRoot(scriptDir: string): string {
   const p = spawnSync(
@@ -285,7 +326,7 @@ const REPORT_FILE_RE = /report\.(md|html)$/;
 const AUDIT_JSON_WRITE_RE = /context\/audits\/[^\s'"]*\.json/;
 // The files SKILL.md sanctions the orchestrator to author: the two engine-verb
 // inputs (judgments.json / report-blocks.json) and the connector artifacts
-// under collected/ (mapping reachable MCP/CLI data is Step 6.1's job).
+// under collected/ (mapping reachable MCP/CLI data is Step 5.1's job).
 const SANCTIONED_AUTHORED_JSON =
   /(judgments|report-blocks)\.json$|\/collected\/[^/]+\.json$/;
 
@@ -293,7 +334,7 @@ const SANCTIONED_AUTHORED_JSON =
  * Scan a parsed stream-json transcript for go-wild signals. Complements
  * complianceFromTranscript (which only counts engine/fan-out signals).
  * Writes of `judgments.json` / `report-blocks.json` are legitimate (SKILL.md
- * Step 6.3/6.4 authoring files) and excluded from hand_json_writes.
+ * Step 5.3/5.4 authoring files) and excluded from hand_json_writes.
  */
 export function smokeSignalsFromTranscript(lines: string[]): SmokeSignals {
   let reportWrites = 0;
@@ -390,30 +431,29 @@ export function assessEngineCompliance(
 // Output-dir helpers
 // ---------------------------------------------------------------------------
 
+// Output dirs are datetime-stamped (context/audits/YYYY-MM-DD_HH-MM-SS); older
+// runs used a date-only name (context/audits/YYYY-MM-DD). Match both by the
+// leading YYYY-MM-DD prefix so either layout is discovered.
+const DATE_DIR_RE = /^\d{4}-\d{2}-\d{2}/;
+
 function dateDirs(audits: string): string[] {
   if (!isDir(audits)) return [];
-  const out: string[] = [];
-  for (const n of fs.readdirSync(audits)) {
-    const p = path.join(audits, n);
-    if (isDir(p) && n.length === 10 && n[4] === '-' && n[7] === '-') {
-      out.push(n);
-    }
-  }
-  return out.sort();
+  return fs
+    .readdirSync(audits)
+    .filter((n) => DATE_DIR_RE.test(n) && isDir(path.join(audits, n)))
+    .sort();
 }
 
 /**
- * The date-named output dir the run produced: today's if present, else the
- * newest date dir that isn't the seeded previous one.
+ * The output dir the run produced: today's exact date-named dir if a legacy
+ * date-only run wrote one, else the newest date/datetime-stamped dir. The
+ * harness blanks context/audits/ before every run, so afterward this is the
+ * single dir the audit just created.
  */
-export function locateOutDir(
-  audits: string,
-  today: string,
-  seededDate: string | null
-): string {
+export function locateOutDir(audits: string, today: string): string {
   const outDir = path.join(audits, today);
   if (isDir(outDir)) return outDir;
-  const dd = dateDirs(audits).filter((d) => d !== seededDate);
+  const dd = dateDirs(audits);
   return dd.length ? path.join(audits, dd[dd.length - 1]) : '';
 }
 
@@ -448,8 +488,7 @@ export type RetryPlan =
 /**
  * Decide the retry disposition for the previous attempt's output dir.
  *
- * - No dir (or it's the phase=second seeded previous audit, which is input,
- *   not output) → 'fresh': nothing to clear or keep.
+ * - No dir → 'fresh': nothing to clear or keep.
  * - Stamped per-repo audits exist but the org root artifact
  *   (org-portfolio.json / audit.json) is missing → 'rollup': the fan-out
  *   finished and only the final steps were dropped. Preserve the engine
@@ -460,14 +499,8 @@ export type RetryPlan =
  *   partial, or in the wrong scoring universe) and must not survive as
  *   "evidence" that scoring already happened.
  */
-export function planRetry(
-  prevOutDir: string,
-  seededDate: string | null
-): RetryPlan {
+export function planRetry(prevOutDir: string): RetryPlan {
   if (!prevOutDir || !isDir(prevOutDir)) return { kind: 'fresh' };
-  if (seededDate && path.basename(prevOutDir) === seededDate) {
-    return { kind: 'fresh' };
-  }
   const orgRootMissing =
     !isFile(path.join(prevOutDir, 'org-portfolio.json')) &&
     !isFile(path.join(prevOutDir, 'audit.json'));
@@ -553,7 +586,7 @@ export function collectReportHtml(archivedOut: string): ReportHtml {
 
 /**
  * Were the judgment categories actually patched? A leftover "PENDING_JUDGMENT"
- * in any archived audit.json means Step 6 never completed the LLM slice — the
+ * in any archived audit.json means Step 5 never completed the LLM slice — the
  * score is missing the judgment weight. Returns null when no audit.json was
  * archived at all.
  */

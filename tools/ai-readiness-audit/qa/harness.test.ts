@@ -18,6 +18,7 @@ import {
   formatWallTime,
   planRetry,
   releaseRunLock,
+  restoreTarget,
   scanJudgmentsPatched,
   smokeSignalsFromTranscript,
   stampedPerRepoAudits,
@@ -250,7 +251,7 @@ test('smokeSignalsFromTranscript flags hand-written artifacts, inline compute, a
     toolUse('Bash', {
       command: "cat > context/audits/2026-07-03/judgments.json <<'JSON'",
     }),
-    // Connector artifact mapping is Step 6.1's sanctioned job — never a violation.
+    // Connector artifact mapping is Step 5.1's sanctioned job — never a violation.
     toolUse('Write', {
       file_path: 'context/audits/2026-07-03/collected/tracker.json',
     }),
@@ -403,11 +404,11 @@ test('assessEngineCompliance accepts a rollup-only retry via carried engine call
   );
 });
 
-test('carried calls do not launder stale artifacts — an update run must re-run audit-core', () => {
-  // Update mode (phase=second) seeds a previous audit; a model could satisfy
-  // a disk-only gate by copying it into today's dir without ever running the
-  // engine. With zero calls in the transcript AND zero carried (nothing was
-  // preserved by the harness), the copied artifact must stay non-compliant.
+test('carried calls do not launder stale artifacts — a run must re-run audit-core', () => {
+  // A model could satisfy a disk-only gate by copying a leftover audit.json
+  // into the output dir without ever running the engine. With zero calls in
+  // the transcript AND zero carried (nothing was preserved by the harness),
+  // the copied artifact must stay non-compliant.
   const dir = tmp();
   const outDir = path.join(dir, 'out');
   fs.mkdirSync(outDir, { recursive: true });
@@ -439,7 +440,7 @@ test('carried calls do not launder stale artifacts — an update run must re-run
   );
 });
 
-test('planRetry keeps a finished org fan-out, clears everything else, never touches the seed', () => {
+test('planRetry keeps a finished org fan-out and clears everything else', () => {
   const audits = tmp();
   const mkOut = (name: string): string => {
     const d = path.join(audits, name);
@@ -455,28 +456,21 @@ test('planRetry keeps a finished org fan-out, clears everything else, never touc
   };
 
   assert.deepEqual(
-    planRetry('', null),
+    planRetry(''),
     { kind: 'fresh' },
     'no previous output dir → fresh relaunch, nothing to clear or keep'
   );
   assert.deepEqual(
-    planRetry(path.join(audits, 'missing'), null),
+    planRetry(path.join(audits, 'missing')),
     { kind: 'fresh' },
     'a nonexistent dir → fresh relaunch'
-  );
-
-  const seeded = mkOut('2026-07-05');
-  assert.deepEqual(
-    planRetry(seeded, '2026-07-05'),
-    { kind: 'fresh' },
-    'the phase=second seeded previous audit is INPUT, not output — a retry must never clear it'
   );
 
   const rollupReady = mkOut('rollup-ready');
   stampRepo(rollupReady, 'repo-a');
   stampRepo(rollupReady, 'repo-b');
   assert.deepEqual(
-    planRetry(rollupReady, null),
+    planRetry(rollupReady),
     { kind: 'rollup', dir: rollupReady, repos: ['repo-a', 'repo-b'] },
     'stamped per-repo audits with no org root artifact → preserve them, retry only rollup+render'
   );
@@ -485,7 +479,7 @@ test('planRetry keeps a finished org fan-out, clears everything else, never touc
   stampRepo(rolledUp, 'repo-a');
   fs.writeFileSync(path.join(rolledUp, 'org-portfolio.json'), '{}');
   assert.deepEqual(
-    planRetry(rolledUp, null),
+    planRetry(rolledUp),
     { kind: 'clear', dir: rolledUp },
     'org root already present but the attempt still failed compliance → the output is suspect, clear it'
   );
@@ -499,7 +493,7 @@ test('planRetry keeps a finished org fan-out, clears everything else, never touc
     JSON.stringify({ audit_total: 12 }) // no engine provenance stamp
   );
   assert.deepEqual(
-    planRetry(handBuilt, null),
+    planRetry(handBuilt),
     { kind: 'clear', dir: handBuilt },
     'unstamped per-repo audits are not engine output — nothing to preserve, clear and restart'
   );
@@ -507,7 +501,7 @@ test('planRetry keeps a finished org fan-out, clears everything else, never touc
   const singleRepo = mkOut('single');
   fs.writeFileSync(path.join(singleRepo, 'audit.json'), '{}');
   assert.deepEqual(
-    planRetry(singleRepo, null),
+    planRetry(singleRepo),
     { kind: 'clear', dir: singleRepo },
     'single-repo non-compliant output (audit.json present, gate failed) is cleared as before'
   );
@@ -770,5 +764,51 @@ test('stampedPerRepoAudits keeps only engine-stamped per-repo audits (retry must
     stampedPerRepoAudits(path.join(out, 'nowhere')),
     [],
     'a missing per-repo dir means nothing is preserved'
+  );
+});
+
+// ---------------------------------------------------------------------------
+test('restoreTarget removes archived generated output and restores the stashed pre-existing audits', () => {
+  const target = tmp();
+  const runDir = tmp();
+  // Generated output in the target + its archived copy in the run dir.
+  const gen = path.join(target, 'context/audits/2026-07-07_10-00-00');
+  fs.mkdirSync(gen, { recursive: true });
+  fs.writeFileSync(path.join(gen, 'audit.json'), '{}');
+  fs.mkdirSync(path.join(runDir, 'audit-output'), { recursive: true });
+  // Stashed pre-existing audit from before the run.
+  const stashed = path.join(runDir, '_preexisting/2026-06-01_09-00-00');
+  fs.mkdirSync(stashed, { recursive: true });
+  fs.writeFileSync(path.join(stashed, 'audit.json'), '{"old":true}');
+
+  restoreTarget(target, runDir);
+
+  const audits = path.join(target, 'context/audits');
+  assert.ok(
+    !fs.existsSync(path.join(audits, '2026-07-07_10-00-00')),
+    'generated audit output must be removed from the target once archived — harness runs must not persist reports in real repos'
+  );
+  assert.ok(
+    fs.existsSync(path.join(audits, '2026-06-01_09-00-00/audit.json')),
+    'stashed pre-existing audits must be restored into the target'
+  );
+  assert.ok(
+    fs.existsSync(path.join(stashed, 'audit.json')),
+    'the archive must keep its copy of the stashed audits after restore'
+  );
+});
+
+test('restoreTarget keeps generated output in the target when nothing was archived', () => {
+  const target = tmp();
+  const runDir = tmp(); // no audit-output/ → the run died before archiving
+  const gen = path.join(target, 'context/audits/2026-07-07_11-00-00');
+  fs.mkdirSync(gen, { recursive: true });
+  fs.writeFileSync(path.join(gen, 'audit.json'), '{}');
+
+  restoreTarget(target, runDir);
+
+  assert.ok(
+    fs.existsSync(path.join(gen, 'audit.json')),
+    'un-archived output must never be deleted — a dead run keeps its only copy in the target'
   );
 });

@@ -1,14 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import {
   LANGUAGES,
   ALL_SOURCE_GLOBS,
   ALL_DEP_FILES,
   detectLanguages,
 } from './languages.ts';
+import { tmpDir, writeRepo } from './tests/helpers.ts';
 
 test('registry covers the grammar languages plus glob-only ones', () => {
   const ids = new Set(LANGUAGES.map((l) => l.id));
@@ -41,16 +41,13 @@ test('union helpers aggregate per-language attributes', () => {
 });
 
 test('detectLanguages excludes htmlcov JS files (generated coverage assets are not language evidence)', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-lang-htmlcov-'));
+  const repo = tmpDir('awos-lang-htmlcov-');
   try {
-    mkdirSync(join(repo, 'htmlcov'), { recursive: true });
-    writeFileSync(
-      join(repo, 'htmlcov', 'coverage_html_cb_dd2e7eb5.js'),
-      'var x=1;\n'
-    );
-    mkdirSync(join(repo, 'src'), { recursive: true });
-    writeFileSync(join(repo, 'src', 'a.py'), 'print(1)\n');
-    writeFileSync(join(repo, 'pyproject.toml'), '[project]\nname="x"\n');
+    writeRepo(repo, {
+      'htmlcov/coverage_html_cb_dd2e7eb5.js': 'var x=1;\n',
+      'src/a.py': 'print(1)\n',
+      'pyproject.toml': '[project]\nname="x"\n',
+    });
 
     const langs = detectLanguages(repo);
     const names = langs.map((l) => l.def.displayName).sort();
@@ -68,7 +65,7 @@ test('detectLanguages evidence labels the extensions actually matched (.tsx-only
   // Regression: the label derived its extension from sourceGlobs[0], so a
   // .tsx-only repo was described as "N .ts files". The label must reflect the
   // extensions of the files that actually matched.
-  const repo = mkdtempSync(join(tmpdir(), 'awos-lang-tsx-'));
+  const repo = tmpDir('awos-lang-tsx-');
   try {
     mkdirSync(join(repo, 'src'), { recursive: true });
     writeFileSync(join(repo, 'src', 'App.tsx'), 'export const A = 1;\n');
@@ -88,7 +85,7 @@ test('detectLanguages evidence labels the extensions actually matched (.tsx-only
 });
 
 test('detectLanguages evidence lists every matched extension for a mixed .ts/.tsx repo', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-lang-mixed-'));
+  const repo = tmpDir('awos-lang-mixed-');
   try {
     mkdirSync(join(repo, 'src'), { recursive: true });
     writeFileSync(join(repo, 'src', 'util.ts'), 'export const U = 1;\n');
@@ -108,16 +105,16 @@ test('detectLanguages evidence lists every matched extension for a mixed .ts/.ts
 });
 
 test('detectLanguages requires real source files (Makefile alone is not C/C++)', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-lang-'));
+  const repo = tmpDir('awos-lang-');
   try {
-    writeFileSync(join(repo, 'Makefile'), 'test:\n\tpytest\n');
-    writeFileSync(join(repo, 'pyproject.toml'), '[project]\nname="x"\n');
-    mkdirSync(join(repo, 'src'), { recursive: true });
-    writeFileSync(join(repo, 'src', 'a.py'), 'print(1)\n');
-    writeFileSync(join(repo, 'src', 'b.py'), 'print(2)\n');
     // a C file ONLY inside an ignored dir must not trigger C
-    mkdirSync(join(repo, '.venv'), { recursive: true });
-    writeFileSync(join(repo, '.venv', 'native.c'), 'int main(){}\n');
+    writeRepo(repo, {
+      Makefile: 'test:\n\tpytest\n',
+      'pyproject.toml': '[project]\nname="x"\n',
+      'src/a.py': 'print(1)\n',
+      'src/b.py': 'print(2)\n',
+      '.venv/native.c': 'int main(){}\n',
+    });
 
     const langs = detectLanguages(repo);
     const names = langs.map((l) => l.def.displayName).sort();

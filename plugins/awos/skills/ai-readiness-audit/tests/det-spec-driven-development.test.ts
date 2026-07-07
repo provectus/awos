@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
@@ -14,13 +13,14 @@ import {
   detectAgentAnnotations,
   DETECTORS,
 } from '../detectors/spec_driven_development.ts';
+import { tmpDir, writeRepo } from './helpers.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function tmp(): string {
-  return mkdtempSync(join(tmpdir(), 'sdd-'));
+  return tmpDir('sdd-');
 }
 
 /** Initialise a bare git repo in dir and create an initial empty commit on the given trunk branch. */
@@ -552,11 +552,11 @@ test('SDD-05: SKIP when no spec directories exist — absence is not compliance'
 
 test('SDD-05: PASS when all spec dirs have the full triad', () => {
   const t = tmp();
-  const specDir = join(t, 'context', 'spec', '001-feature');
-  mkdirSync(specDir, { recursive: true });
-  writeFileSync(join(specDir, 'functional-spec.md'), '# spec\n');
-  writeFileSync(join(specDir, 'technical-considerations.md'), '# tech\n');
-  writeFileSync(join(specDir, 'tasks.md'), '# tasks\n');
+  writeRepo(t, {
+    'context/spec/001-feature/functional-spec.md': '# spec\n',
+    'context/spec/001-feature/technical-considerations.md': '# tech\n',
+    'context/spec/001-feature/tasks.md': '# tasks\n',
+  });
   const r = detectSpecTriadComplete(t);
   assert.equal(r.status, 'PASS', 'full triad → PASS');
   assert.equal(r.method, 'detected');
@@ -584,15 +584,13 @@ test('SDD-05: FAIL when a spec dir is completely empty (0 of 3 files)', () => {
 
 test('SDD-05: WARN when one spec dir is complete but another is incomplete', () => {
   const t = tmp();
-  const dir1 = join(t, 'context', 'spec', '001-ok');
-  const dir2 = join(t, 'context', 'spec', '002-incomplete');
-  mkdirSync(dir1, { recursive: true });
-  mkdirSync(dir2, { recursive: true });
-  writeFileSync(join(dir1, 'functional-spec.md'), '# spec\n');
-  writeFileSync(join(dir1, 'technical-considerations.md'), '# tech\n');
-  writeFileSync(join(dir1, 'tasks.md'), '# tasks\n');
-  writeFileSync(join(dir2, 'functional-spec.md'), '# spec\n');
-  // dir2 missing technical-considerations.md and tasks.md → WARN (not 0 of 3)
+  writeRepo(t, {
+    'context/spec/001-ok/functional-spec.md': '# spec\n',
+    'context/spec/001-ok/technical-considerations.md': '# tech\n',
+    'context/spec/001-ok/tasks.md': '# tasks\n',
+    // dir2 missing technical-considerations.md and tasks.md → WARN (not 0 of 3)
+    'context/spec/002-incomplete/functional-spec.md': '# spec\n',
+  });
   const r = detectSpecTriadComplete(t);
   assert.equal(r.status, 'WARN', 'mixed completeness → WARN');
 });

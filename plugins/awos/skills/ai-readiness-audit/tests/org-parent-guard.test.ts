@@ -15,11 +15,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
 import { detectOrgParent } from '../topology.ts';
+import { tmpDir } from './helpers.ts';
 
 const NODE = process.env.NODE_BIN || process.execPath;
 const SKILL = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,7 +34,7 @@ function gitInit(dir: string): void {
 }
 
 test('detectOrgParent: non-git dir with 2 git-repo children IS an org parent', () => {
-  const base = mkdtempSync(join(tmpdir(), 'awos-orgparent-'));
+  const base = tmpDir('awos-orgparent-');
   try {
     gitInit(join(base, 'repo-a'));
     gitInit(join(base, 'repo-b'));
@@ -56,7 +56,7 @@ test('detectOrgParent: non-git dir with 2 git-repo children IS an org parent', (
 });
 
 test('detectOrgParent: a git repo is never an org parent, even with git-repo children inside', () => {
-  const base = mkdtempSync(join(tmpdir(), 'awos-orgparent-repo-'));
+  const base = tmpDir('awos-orgparent-repo-');
   try {
     gitInit(base);
     // Vendored/nested clones inside a real repo must not flip the verdict.
@@ -74,7 +74,7 @@ test('detectOrgParent: a git repo is never an org parent, even with git-repo chi
 });
 
 test('detectOrgParent: plain non-git project dirs (0 or 1 git children) are NOT org parents', () => {
-  const base = mkdtempSync(join(tmpdir(), 'awos-orgparent-plain-'));
+  const base = tmpDir('awos-orgparent-plain-');
   try {
     mkdirSync(join(base, 'src'));
     let det = detectOrgParent(base);
@@ -97,7 +97,7 @@ test('detectOrgParent: plain non-git project dirs (0 or 1 git children) are NOT 
 });
 
 test('audit-core CLI: org-parent target exits 0, writes no artifacts, explains on stderr', () => {
-  const base = mkdtempSync(join(tmpdir(), 'awos-orgparent-cli-'));
+  const base = tmpDir('awos-orgparent-cli-');
   try {
     gitInit(join(base, 'repo-a'));
     gitInit(join(base, 'repo-b'));

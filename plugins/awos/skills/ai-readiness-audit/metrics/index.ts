@@ -4,7 +4,7 @@
  * cli.ts and audit-core consume the merged registry and never enumerate
  * modules themselves.
  */
-import type { MetricFn } from '../audit_core.ts';
+import type { MetricFn } from './_base.ts';
 
 import { compute as computeG1 } from './tooling_depth.ts';
 import { compute as computeG2 } from './active_contributors.ts';

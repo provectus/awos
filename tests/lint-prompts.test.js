@@ -1433,7 +1433,7 @@ test('SKILL.md scores via a single audit-core pass — no per-dimension fan-out'
   );
 });
 
-test('SKILL.md Step 5 is unconditional — no pre-run escape hatch (barley 2026-07-03 regression)', () => {
+test('SKILL.md Step 4 is unconditional — no pre-run escape hatch (barley 2026-07-03 regression)', () => {
   const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
   // The load-time !`…` injection never executed in plugin skills, but its
   // narrative gave the model a "scoring may already be done" premise it quoted
@@ -1446,14 +1446,15 @@ test('SKILL.md Step 5 is unconditional — no pre-run escape hatch (barley 2026-
   // No wording may suggest the engine pass might already have happened.
   assert.doesNotMatch(
     src,
-    /pre-run happened|load-time pre-run|already completed step 5/i,
-    'SKILL.md must not suggest a pre-run may have already executed Step 5'
+    /pre-run happened|load-time pre-run|already completed step 4/i,
+    'SKILL.md must not suggest a pre-run may have already executed Step 4'
   );
-  // Step 5 must declare pre-existing audit.json stale rather than a skip signal.
-  assert.match(
+  // Audits are independent timestamped snapshots — no previous-audit/delta
+  // logic may reappear in the skill.
+  assert.doesNotMatch(
     src,
-    /stale/,
-    'SKILL.md Step 5 must tell the orchestrator a pre-existing audit.json is stale output to overwrite, never proof that scoring already ran'
+    /previous audit|delta comparison/i,
+    'SKILL.md must not read previous audits or compute deltas — each run is an independent timestamped snapshot'
   );
   // The circuit-breaker must be stated at the decision point: hand-built
   // audits are refused by the engine (provenance stamp).
@@ -1504,7 +1505,7 @@ test('SKILL.md sums weighted categories and emits no grade', () => {
   assert.match(
     src,
     /standards\.toml/,
-    'SKILL.md Step 5 must pass standards.toml to auditors'
+    'SKILL.md Step 4 must pass standards.toml to auditors'
   );
   assert.match(
     src,
@@ -1825,37 +1826,37 @@ test('SKILL.md Step 0 documents headless default to auto-discovered repos', () =
 });
 
 // ---------------------------------------------------------------------------
-// PERF: Step 6 batches connector re-scoring via the `enrich` verb, and org mode
+// PERF: Step 5 batches connector re-scoring via the `enrich` verb, and org mode
 // fans out per-repo `repo-auditor` subagents (Part 1 wall-time improvements).
 
-test('SKILL.md Step 6 re-scores connectors via one `enrich` pass (not per-metric spawns)', () => {
+test('SKILL.md Step 5 re-scores connectors via one `enrich` pass (not per-metric spawns)', () => {
   const src = readUtf8(SKILL_MD_PATH);
   assert.ok(
     /dist\/cli\.js["']?\s+enrich/.test(src),
-    'SKILL.md Step 6 must invoke the `enrich` engine verb to re-score connector metrics in one pass'
+    'SKILL.md Step 5 must invoke the `enrich` engine verb to re-score connector metrics in one pass'
   );
 });
 
-test('SKILL.md Step 6.2 fetches independent connector sources concurrently', () => {
+test('SKILL.md Step 5.2 fetches independent connector sources concurrently', () => {
   const src = readUtf8(SKILL_MD_PATH);
   assert.ok(
     /concurrent|in a single message|parallel tool calls/i.test(src),
-    'SKILL.md Step 6 must instruct fetching the independent connector sources concurrently'
+    'SKILL.md Step 5 must instruct fetching the independent connector sources concurrently'
   );
 });
 
-test('SKILL.md Step 6 requires fetch_meta and the tracker changelog pass', () => {
+test('SKILL.md Step 5 requires fetch_meta and the tracker changelog pass', () => {
   // A prior org run fetched exactly one 100-ticket page per repo with zero
   // changelogs — cycle time stayed blank everywhere and ticket counts drifted
   // run to run. These two requirements are what prevent that regression.
   const src = readUtf8(SKILL_MD_PATH);
   assert.ok(
     src.includes('fetch_meta'),
-    'SKILL.md Step 6 must require a fetch_meta block in paginated tracker artifacts (honest partial-fetch accounting)'
+    'SKILL.md Step 5 must require a fetch_meta block in paginated tracker artifacts (honest partial-fetch accounting)'
   );
   assert.ok(
     /changelog/i.test(src) && src.includes('in_progress_at'),
-    'SKILL.md Step 6 must require the per-ticket changelog pass that populates in_progress_at (cycle time)'
+    'SKILL.md Step 5 must require the per-ticket changelog pass that populates in_progress_at (cycle time)'
   );
 });
 
@@ -1918,16 +1919,16 @@ test('the repo-auditor plugin agent exists with valid frontmatter', () => {
   );
 });
 
-// ORG.2: SKILL.md Step 6 org branch — ≤3 portfolio metrics + org rollup
+// ORG.2: SKILL.md Step 5 org branch — ≤3 portfolio metrics + org rollup
 // ---------------------------------------------------------------------------
 
-test('SKILL.md Step 6 org branch references the org rollup', () => {
-  // The org rollup is invoked by SKILL.md Step 6 via the CLI. The reference
+test('SKILL.md Step 5 org branch references the org rollup', () => {
+  // The org rollup is invoked by SKILL.md Step 5 via the CLI. The reference
   // ties the orchestrator to the rollup implementation.
   const body = readUtf8(SKILL_MD_PATH);
   assert.ok(
     /org.rollup|rollup/i.test(body),
-    'SKILL.md Step 6 org branch must reference the org rollup'
+    'SKILL.md Step 5 org branch must reference the org rollup'
   );
   assert.ok(
     body.includes('node dist/cli.js rollup') ||
@@ -1937,7 +1938,7 @@ test('SKILL.md Step 6 org branch references the org rollup', () => {
   );
 });
 
-test('SKILL.md Step 6 org branch names the three portfolio metrics', () => {
+test('SKILL.md Step 5 org branch names the three portfolio metrics', () => {
   // Exactly three portfolio metrics are computed — no more. All three must
   // be named so the orchestrator and the user both know what was computed.
   const body = readUtf8(SKILL_MD_PATH);
@@ -1955,7 +1956,7 @@ test('SKILL.md Step 6 org branch names the three portfolio metrics', () => {
   );
 });
 
-test('SKILL.md Step 6 states the ≤3 portfolio metrics constraint', () => {
+test('SKILL.md Step 5 states the ≤3 portfolio metrics constraint', () => {
   // The brief is explicit: "≤3 org metrics" is a hard constraint, not a
   // style choice. SKILL.md must state it so the orchestrator does not add
   // more metrics without revisiting the design.
@@ -1966,7 +1967,7 @@ test('SKILL.md Step 6 states the ≤3 portfolio metrics constraint', () => {
   );
 });
 
-test('SKILL.md Step 6 org branch emits an org-level JSON artifact', () => {
+test('SKILL.md Step 5 org branch emits an org-level JSON artifact', () => {
   // JSON is the source-of-truth (JSON-source-of-truth rule). SKILL.md must
   // document that the org rollup result is written to a JSON file before
   // any MD/HTML rendering.
@@ -2033,26 +2034,26 @@ test('output-format.md states that reports are produced by cli.js render (not ha
 });
 
 // ---------------------------------------------------------------------------
-// POL-B: SKILL.md Step 6 aggregates JSON → audit.json + renders MD;
+// POL-B: SKILL.md Step 5 aggregates JSON → audit.json + renders MD;
 //         Step 6 unconditionally renders HTML (incl. headless)
 // ---------------------------------------------------------------------------
 
-test('SKILL.md Step 6 aggregates per-dimension JSON into audit.json', () => {
+test('SKILL.md Step 5 aggregates per-dimension JSON into audit.json', () => {
   // JSON is the source of truth (global constraint). Step 6 must aggregate
   // per-dimension artifacts into a single audit.json before producing any
   // rendered output. The orchestrator must never hand-write report.md.
   const src = readUtf8(SKILL_MD_PATH);
   assert.ok(
     src.includes('audit.json'),
-    'SKILL.md Step 6 must reference audit.json as the aggregated result artifact'
+    'SKILL.md Step 5 must reference audit.json as the aggregated result artifact'
   );
   assert.ok(
     /per.dimension.*json|<dimension>\.json|dimensions?\.json/i.test(src),
-    'SKILL.md Step 6 must describe reading per-dimension JSON artifacts before aggregating'
+    'SKILL.md Step 5 must describe reading per-dimension JSON artifacts before aggregating'
   );
 });
 
-test('SKILL.md Step 6 renders report.md via cli.js render (--format md or both)', () => {
+test('SKILL.md Step 5 renders report.md via cli.js render (--format md or both)', () => {
   // The orchestrator must call the renderer for markdown output, not write it
   // by hand. `--format both` writes report.md + report.html in one invocation.
   const src = readUtf8(SKILL_MD_PATH);
@@ -2060,19 +2061,19 @@ test('SKILL.md Step 6 renders report.md via cli.js render (--format md or both)'
     src.includes('node dist/cli.js render') ||
       src.includes('dist/cli.js render') ||
       /dist\/cli\.js["']?\s+render/.test(src),
-    'SKILL.md Step 6 must invoke the render CLI command to produce report.md (never hand-write it)'
+    'SKILL.md Step 5 must invoke the render CLI command to produce report.md (never hand-write it)'
   );
   assert.ok(
     /--format (md|both)/.test(src),
-    'SKILL.md Step 6 must pass "--format md" or "--format both" to the renderer for the markdown report'
+    'SKILL.md Step 5 must pass "--format md" or "--format both" to the renderer for the markdown report'
   );
   assert.ok(
     /report\.md/.test(src),
-    'SKILL.md Step 6 must name the output file report.md'
+    'SKILL.md Step 5 must name the output file report.md'
   );
 });
 
-test('SKILL.md Step 6 states the data-loss guarantee (no hand-written report)', () => {
+test('SKILL.md Step 5 states the data-loss guarantee (no hand-written report)', () => {
   // The explicit "never hand-writes" guarantee is what prevents the orchestrator
   // from bypassing the renderer and losing structured data.
   const src = readUtf8(SKILL_MD_PATH);
@@ -2084,32 +2085,32 @@ test('SKILL.md Step 6 states the data-loss guarantee (no hand-written report)', 
   );
 });
 
-test('SKILL.md Step 6 unconditionally renders report.html via --format html', () => {
+test('SKILL.md Step 5 unconditionally renders report.html via --format html', () => {
   // HTML is the headline deliverable. Step 6 produces it for every run,
   // including headless — generated unconditionally, never gated on Step 7 or
   // on interactivity. (Moving it out of Step 6 is the regression this pins.)
   const src = readUtf8(SKILL_MD_PATH);
   assert.ok(
     /unconditional|always produce both|headless runs always produce/i.test(src),
-    'SKILL.md Step 6 must state report.html is generated unconditionally (incl. headless), never gated on interactivity'
+    'SKILL.md Step 5 must state report.html is generated unconditionally (incl. headless), never gated on interactivity'
   );
   assert.ok(
     /--format (html|both)/.test(src),
-    'SKILL.md Step 6 must show "--format html" or "--format both" as the HTML render flag'
+    'SKILL.md Step 5 must show "--format html" or "--format both" as the HTML render flag'
   );
   assert.ok(
     /report\.html/.test(src),
-    'SKILL.md Step 6 must name the output file report.html'
+    'SKILL.md Step 5 must name the output file report.html'
   );
 });
 
-test('SKILL.md Step 6 HTML always produced (never gated/skipped)', () => {
+test('SKILL.md Step 5 HTML always produced (never gated/skipped)', () => {
   // The "never skip" contract is the key headless guarantee. Lint pins it
   // so future edits do not accidentally make HTML optional in headless mode.
   const src = readUtf8(SKILL_MD_PATH);
   assert.ok(
     /always produc|never skip|never gated|unconditional/i.test(src),
-    'SKILL.md Step 6 must state that report.html is always produced (never skipped/gated)'
+    'SKILL.md Step 5 must state that report.html is always produced (never skipped/gated)'
   );
 });
 

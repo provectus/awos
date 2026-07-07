@@ -10,13 +10,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { computeTopology } from '../topology.ts';
+import { tmpDir } from './helpers.ts';
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'topo-mt-'));
+  return tmpDir('topo-mt-');
 }
 
 test('GEMINI-only repo: has_ai_agent_files and has_agent_instruction_files are true', () => {

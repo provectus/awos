@@ -12,9 +12,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import {
   collect,
   activeContributors,
@@ -22,6 +21,7 @@ import {
 } from '../collectors/git.ts';
 import type { Period } from '../collectors/_base.ts';
 import { gitAs } from './helpers.ts';
+import { tmpDir } from './helpers.ts';
 
 const PERIOD: Period = {
   bucket_days: 30,
@@ -34,7 +34,7 @@ const PERIOD: Period = {
  * subject carries the forge's PR ref. Three authors, zero merge commits.
  */
 function buildSquashRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-squash-'));
+  const dir = tmpDir('awos-squash-');
   execFileSync('git', ['init', '-b', 'main', dir], { stdio: 'ignore' });
   const commits: Array<[string, string, string, string]> = [
     // [date, author, subject, file]
@@ -83,7 +83,6 @@ test('squash-merged PRs count as merge events attributed to their authors', () =
         fix_merges: number;
         per_author: Array<{ author: string; merges: number }>;
       };
-      total_merges: number;
     };
   };
   const ws = art.raw.window_stats;
@@ -123,11 +122,6 @@ test('squash-merged PRs count as merge events attributed to their authors', () =
     ws.fix_merges >= 1,
     'the squashed fix PR must count as a fix event'
   );
-  assert.equal(
-    art.raw.total_merges,
-    5,
-    'all-history total_merges must include squash events'
-  );
 });
 
 test('classifyMergeStrategy: merge-commit / squash / mixed / unknown', () => {
@@ -160,7 +154,7 @@ test('activeContributors falls back to commit-share (not LOC-only) when no merge
 });
 
 test('Bitbucket squash format "Title (pull request #N)" is recognised and attributed to the PR author', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-squash-bb-'));
+  const dir = tmpDir('awos-squash-bb-');
   execFileSync('git', ['init', '-b', 'main', dir], { stdio: 'ignore' });
   writeFileSync(join(dir, 'a.txt'), 'x\n');
   gitAs(dir, ['add', '.'], '2025-02-01T10:00:00', 'Erin', 'erin@example.com');
@@ -200,7 +194,7 @@ test('Bitbucket squash format "Title (pull request #N)" is recognised and attrib
 });
 
 test('GitLab squash format is recognised via the merge-request ref in the body', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-squash-gl-'));
+  const dir = tmpDir('awos-squash-gl-');
   execFileSync('git', ['init', '-b', 'main', dir], { stdio: 'ignore' });
   writeFileSync(join(dir, 'a.txt'), 'x\n');
   gitAs(dir, ['add', '.'], '2025-02-01T10:00:00', 'Dana', 'dana@example.com');

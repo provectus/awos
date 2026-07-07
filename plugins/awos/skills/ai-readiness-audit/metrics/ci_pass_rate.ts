@@ -31,10 +31,11 @@ import {
   awardCategories,
   clampToWindow,
   computeReliability,
+  loadArtifactOrSkip,
   lookbackDays,
   makeMetricResult,
-  readArtifact,
-  skipMetric,
+  plural,
+  windowDropNote,
   type MetricResult,
 } from './_base.ts';
 import { describeExcluded, partitionRuns, runTimestamp } from './_ci_runs.ts';
@@ -53,27 +54,16 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  const read = readArtifact(collectedDir, 'ci');
+  // available=false covers no CI config, no connector, and config-only with no
+  // run history — the collector sets available=false for each.
+  const loaded = loadArtifactOrSkip(collectedDir, 'ci', {
+    metric: 'ci_pass_rate',
+    kind: 'banded',
+    tag: 'not-reliable',
+  });
+  if ('skip' in loaded) return loaded.skip;
 
-  // CI source absent entirely → SKIP.
-  if ('error' in read) {
-    return skipMetric(
-      'ci_pass_rate',
-      'banded',
-      'not-reliable',
-      'ci',
-      read.error
-    );
-  }
-
-  const artifact = read.artifact;
-
-  // available=false: collector found no CI config, no connector, or config-only with no run history.
-  if (!artifact?.available) {
-    return skipMetric('ci_pass_rate', 'banded', 'not-reliable', 'ci');
-  }
-
-  const raw = artifact?.raw ?? {};
+  const raw = loaded.raw;
   const runs: unknown[] = Array.isArray(raw.runs) ? raw.runs : [];
 
   // The collector normally guarantees runs.length > 0 when available=true,
@@ -132,16 +122,13 @@ export function compute(
   const excludedTotal = partition.total - partition.decided.length;
   const excludedNote =
     excludedTotal > 0
-      ? `; ${excludedTotal} run${excludedTotal !== 1 ? 's' : ''} without a verdict excluded: ${describeExcluded(partition)}`
+      ? `; ${excludedTotal} ${plural(excludedTotal, 'run')} without a verdict excluded: ${describeExcluded(partition)}`
       : '';
   const unknownNote =
     partition.unknown.length > 0
       ? ` (unrecognized conclusions treated as no-verdict: ${partition.unknown.join(', ')})`
       : '';
-  const windowNote =
-    windowed.dropped > 0
-      ? `; ${windowed.dropped} run${windowed.dropped !== 1 ? 's' : ''} older than the ${windowDays}-day window dropped`
-      : '';
+  const windowNote = windowDropNote(windowed.dropped, windowDays);
   const expression = `${partition.passed}/${partition.decided.length} decided CI runs passed = ${(rate * 100).toFixed(1)}% pass rate (${band})${excludedNote}${unknownNote}${windowNote}`;
   return makeMetricResult(
     'ci_pass_rate',

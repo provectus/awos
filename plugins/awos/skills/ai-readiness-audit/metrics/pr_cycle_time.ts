@@ -34,6 +34,7 @@ import {
   appendReliabilityNote,
   computeReliability,
   makeMetricResult,
+  plural,
   readArtifact,
   skipMetric,
   SQUASH_MERGE_NOTE,
@@ -41,21 +42,14 @@ import {
   type MetricResult,
   type Reliability,
 } from './_base.ts';
-import { readCodeHostPrs } from './_code_host.ts';
-import { median, scoreFromConfig, scoringFor } from './_score.ts';
-
-interface MergeRecord {
-  merged_at: string;
-  branch_first_commit_at: string;
-}
-
-/** Map median cycle-time hours to a DORA band label. */
-function doraCycleTimeBand(hours: number): string {
-  if (hours < 24) return 'elite';
-  if (hours < 168) return 'high';
-  if (hours < 720) return 'medium';
-  return 'low';
-}
+import { prDurationsHours, readCodeHostPrs } from './_code_host.ts';
+import { mergeRecordDurationsHours } from './_merge_records.ts';
+import {
+  doraDurationBand,
+  median,
+  scoreFromConfig,
+  scoringFor,
+} from './_score.ts';
 
 /** What the tracker artifact yields for cycle-time purposes. */
 interface TrackerCycleRead {
@@ -123,23 +117,17 @@ export function compute(
   // Preferred source: the code-host connector — created_at → merged_at is the
   // literal PR open→merge duration this metric is defined as, with no proxy.
   const codeHost = readCodeHostPrs(collectedDir);
-  const prCycleTimes = codeHost.prs
-    .map((p) =>
-      p.mergedMs !== null && p.createdMs !== null
-        ? (p.mergedMs - p.createdMs) / 3_600_000
-        : null
-    )
-    .filter((h): h is number => h !== null && h >= 0);
+  const prCycleTimes = prDurationsHours(codeHost.prs, 'createdMs');
   if (prCycleTimes.length > 0) {
     const medianHours = median(prCycleTimes)!;
-    const band = doraCycleTimeBand(medianHours);
+    const band = doraDurationBand(medianHours);
     // Score curve lives in standards.toml [category.pr_cycle_time.scoring].
     const score = scoreFromConfig(
       medianHours,
       scoringFor(standards, 'pr_cycle_time')
     );
     const reliability = computeReliability('maximal', ['code_host'], []);
-    const expression = `median ${medianHours.toFixed(1)}h PR open→merge over ${prCycleTimes.length} merged PR${prCycleTimes.length !== 1 ? 's' : ''} from the code host (${band})`;
+    const expression = `median ${medianHours.toFixed(1)}h PR open→merge over ${prCycleTimes.length} merged ${plural(prCycleTimes.length, 'PR')} from the code host (${band})`;
     return makeMetricResult(
       'pr_cycle_time',
       medianHours,
@@ -158,7 +146,7 @@ export function compute(
   const tracker = readTrackerCycle(collectedDir);
   if (tracker.hours.length > 0) {
     const medianHours = median(tracker.hours)!;
-    const band = doraCycleTimeBand(medianHours);
+    const band = doraDurationBand(medianHours);
     const score = scoreFromConfig(
       medianHours,
       scoringFor(standards, 'pr_cycle_time')
@@ -172,7 +160,7 @@ export function compute(
       trackerFetchNote(tracker.raw)
     );
     const ticketCount = tracker.hours.length;
-    const expression = `median ${medianHours.toFixed(1)}h cycle time from ${ticketCount} tracker ticket${ticketCount !== 1 ? 's' : ''} (${band})`;
+    const expression = `median ${medianHours.toFixed(1)}h cycle time from ${ticketCount} tracker ${plural(ticketCount, 'ticket')} (${band})`;
     return makeMetricResult(
       'pr_cycle_time',
       medianHours,
@@ -245,32 +233,18 @@ export function compute(
   // ISO string: merged_at carries the committer's LOCAL timezone offset while
   // window_start is UTC — lexicographic compare is not chronological.
   const windowStart: string | null = raw.window_stats?.window_start ?? null;
-  let records: MergeRecord[] = raw.merge_records;
-  if (windowStart) {
-    const windowStartMs = new Date(windowStart).getTime();
-    records = records.filter(
-      (r) => new Date(r.merged_at).getTime() >= windowStartMs
-    );
-  }
-
-  // Compute cycle times in hours for each (in-window) merge record.
-  const cycleTimesHours: number[] = [];
-  for (const r of records) {
-    const mergedAt = new Date(r.merged_at).getTime();
-    const firstCommit = new Date(r.branch_first_commit_at).getTime();
-    if (isNaN(mergedAt) || isNaN(firstCommit)) continue;
-    const diffHours = (mergedAt - firstCommit) / 3_600_000;
-    if (diffHours >= 0) {
-      cycleTimesHours.push(diffHours);
-    }
-  }
+  const windowStartMs = windowStart ? new Date(windowStart).getTime() : null;
+  const cycleTimesHours = mergeRecordDurationsHours(
+    raw.merge_records,
+    windowStartMs
+  );
 
   if (cycleTimesHours.length === 0) {
     return skipMetric('pr_cycle_time', 'banded', 'not-reliable', 'git');
   }
 
   const medianHours = median(cycleTimesHours)!;
-  const band = doraCycleTimeBand(medianHours);
+  const band = doraDurationBand(medianHours);
 
   // Reliability is "not-reliable" — git approximation: branch_first_commit_at
   // is the earliest commit on the merged branch, not the PR open time.
@@ -282,7 +256,7 @@ export function compute(
     scoringFor(standards, 'pr_cycle_time')
   );
   const windowLabel = windowStart ? ' (in-window)' : '';
-  const expression = `median ${medianHours.toFixed(1)}h cycle time over ${cycleTimesHours.length} merge${cycleTimesHours.length !== 1 ? 's' : ''}${windowLabel} (${band})`;
+  const expression = `median ${medianHours.toFixed(1)}h cycle time over ${cycleTimesHours.length} ${plural(cycleTimesHours.length, 'merge')}${windowLabel} (${band})`;
   return makeMetricResult(
     'pr_cycle_time',
     medianHours,

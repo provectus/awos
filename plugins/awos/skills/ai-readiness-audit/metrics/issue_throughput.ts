@@ -25,9 +25,8 @@ import {
   appendReliabilityNote,
   awardCategories,
   computeReliability,
+  loadArtifactOrSkip,
   makeMetricResult,
-  readArtifact,
-  skipMetric,
   trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
@@ -41,27 +40,14 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  const read = readArtifact(collectedDir, 'tracker');
+  const loaded = loadArtifactOrSkip(collectedDir, 'tracker', {
+    metric: 'issue_throughput',
+    kind: 'rate',
+    tag: 'not-reliable',
+  });
+  if ('skip' in loaded) return loaded.skip;
 
-  // Tracker source file absent → SKIP.
-  if ('error' in read) {
-    return skipMetric(
-      'issue_throughput',
-      'rate',
-      'not-reliable',
-      'tracker',
-      read.error
-    );
-  }
-
-  const artifact = read.artifact;
-
-  // available=false means no tracker connector was provided.
-  if (!artifact?.available) {
-    return skipMetric('issue_throughput', 'rate', 'not-reliable', 'tracker');
-  }
-
-  const raw = artifact?.raw ?? {};
+  const { raw, artifact } = loaded;
   const resolvedCount: number =
     typeof raw.resolved_count === 'number' ? raw.resolved_count : 0;
 

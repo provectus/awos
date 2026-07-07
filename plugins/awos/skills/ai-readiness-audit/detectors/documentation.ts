@@ -1,4 +1,4 @@
-import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import { makeResult, iterFiles, readTextSafe, SOURCE_IGNORE } from './_base.ts';
 import { findApiSpecFiles } from './api_specs.ts';
 import { existsSync, readdirSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
@@ -101,14 +101,7 @@ export function detectRootReadme(
 // ---------------------------------------------------------------------------
 
 const SKIP_DIRS = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.venv',
-  '__pycache__',
-  '.next',
-  'target',
+  ...SOURCE_IGNORE,
   'vendor',
   '.github',
   '.claude',

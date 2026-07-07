@@ -12,13 +12,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
 import { iterFiles } from '../detectors/_base.ts';
 import { listRepoFiles } from '../metrics/_ast.ts';
 import { gitIgnoredSets, dropIgnored } from '../git_ignore.ts';
 import { gitAs } from './helpers.ts';
+import { tmpDir } from './helpers.ts';
 
 function write(repo: string, rel: string, content = 'x\n'): void {
   const p = join(repo, rel);
@@ -29,7 +29,7 @@ function write(repo: string, rel: string, content = 'x\n'): void {
 /** A git repo with a .gitignore, tracked sources, a gitignored nested
  * checkout, gitignored junk, and an untracked-but-not-ignored new file. */
 function buildRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-gitignore-'));
+  const repo = tmpDir('awos-gitignore-');
   execFileSync('git', ['init', '-b', 'main', repo], { stdio: 'ignore' });
   write(repo, '.gitignore', 'scratch/\n*.log\n');
   write(repo, 'src/app.ts', 'export const a = 1;\n');
@@ -101,7 +101,7 @@ test('listRepoFiles (AST metrics walker) applies the same pruning', () => {
 });
 
 test('non-git directory: walkers behave exactly as before (empty ignore set)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-nogit-'));
+  const dir = tmpDir('awos-nogit-');
   write(dir, 'src/app.ts', 'x\n');
   write(dir, 'scratch/copy.ts', 'y\n');
 

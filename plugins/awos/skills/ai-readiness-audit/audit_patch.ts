@@ -11,9 +11,9 @@ import { writeFileSync, readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 
 import { round1 } from './metrics/_score.ts';
+import { ENGINE_PROVENANCE, hasEngineProvenance } from './provenance.ts';
 import {
-  ENGINE_PROVENANCE,
-  hasEngineProvenance,
+  aggregateChecks,
   computeDerivedDelivery,
   dimensionFiles,
   readCollectedArtifacts,
@@ -78,25 +78,13 @@ export function aggregate(outDir: string): void {
       c.score = s;
       c.weight_awarded = round1((c.weight_max || 0) * s);
     }
-    const score = round1(
-      checks.reduce((s, c) => s + (c.weight_awarded || 0), 0)
-    );
-    const appl = checks
-      .filter((c) => c.applies)
-      .reduce((s, c) => s + (c.weight_max || 0), 0);
-    dim.score = score;
-    dim.coverage = appl > 0 ? score / appl : null;
-    // Re-derive sources_used: union of sources across applicable checks.
-    dim.sources_used = [
-      ...new Set(
-        checks
-          .filter((c) => c.applies)
-          .flatMap((c) => (c.sources ?? []) as string[])
-      ),
-    ].sort();
+    const agg = aggregateChecks(checks);
+    dim.score = agg.score;
+    dim.coverage = agg.coverage;
+    dim.sources_used = agg.sources_used;
     writeFileSync(join(outDir, f), JSON.stringify(dim, null, 2));
-    total = round1(total + score);
-    applicable += appl;
+    total = round1(total + agg.score);
+    applicable += agg.applicable;
     dimensions.push(dim);
   }
   // Restore the presentation order — readdirSync is alphabetical, but each
@@ -188,6 +176,34 @@ export function aggregate(outDir: string): void {
   writeFileSync(join(outDir, 'audit.json'), JSON.stringify(audit, null, 2));
 }
 
+/**
+ * Circuit-breaker shared by every post-audit verb: only an engine-produced
+ * audit may be patched or read for authoring. A missing or unstamped
+ * audit.json means the orchestrator hand-assembled the scores instead of
+ * running audit-core — refuse, with the fix in the message. Returns the
+ * parsed audit.json.
+ */
+function requireStampedAudit(
+  outDir: string,
+  verb: string
+): Record<string, unknown> {
+  const auditPath = join(outDir, 'audit.json');
+  let audit: Record<string, unknown> | null = null;
+  try {
+    audit = JSON.parse(readFileSync(auditPath, 'utf8'));
+  } catch {
+    // handled below — absent/unreadable fails the provenance check
+  }
+  if (!hasEngineProvenance(audit)) {
+    throw new Error(
+      `${verb}: ${auditPath} lacks engine provenance — it was not produced ` +
+        `by audit-core. Hand-assembled audits are not patchable; run ` +
+        `\`node dist/cli.js audit-core <repoPath> ${outDir}\` first.`
+    );
+  }
+  return audit as Record<string, unknown>;
+}
+
 export interface JudgmentPatch {
   check_id: string;
   status: 'PASS' | 'WARN' | 'FAIL' | 'SKIP';
@@ -201,31 +217,14 @@ export interface JudgmentPatch {
  * Apply the orchestrator's judgment verdicts to the per-dimension JSONs in ONE
  * call, then re-aggregate. Replaces the per-check JSON surgery the model used
  * to do by hand (dozens of serial shell edits — the dominant wall-clock cost
- * of Step 6). Only `method: "judgment"` checks are patchable; anything else is
+ * of Step 5). Only `method: "judgment"` checks are patchable; anything else is
  * reported and left untouched. Returns a summary for the caller to print.
  */
 export function patchJudgments(
   outDir: string,
   patches: JudgmentPatch[]
 ): { patched: string[]; warnings: string[] } {
-  // Circuit-breaker: only an engine-produced audit may be patched. A missing
-  // or unstamped audit.json means the orchestrator hand-assembled the scores
-  // instead of running audit-core — refuse, with the fix in the message.
-  let existingAudit: unknown = null;
-  try {
-    existingAudit = JSON.parse(
-      readFileSync(join(outDir, 'audit.json'), 'utf8')
-    );
-  } catch {
-    // handled below — absent/unreadable fails the provenance check
-  }
-  if (!hasEngineProvenance(existingAudit)) {
-    throw new Error(
-      `patch-judgment: ${join(outDir, 'audit.json')} lacks engine provenance — ` +
-        `it was not produced by audit-core. Hand-assembled audits are not ` +
-        `patchable; run \`node dist/cli.js audit-core <repoPath> ${outDir}\` first.`
-    );
-  }
+  requireStampedAudit(outDir, 'patch-judgment');
   const patched: string[] = [];
   const warnings: string[] = [];
   const validStatuses = ['PASS', 'WARN', 'FAIL', 'SKIP'];
@@ -322,19 +321,7 @@ export function patchReportBlocks(
   warnings: string[];
 } {
   const auditPath = join(outDir, 'audit.json');
-  let audit: Record<string, unknown>;
-  try {
-    audit = JSON.parse(readFileSync(auditPath, 'utf8'));
-  } catch {
-    audit = {};
-  }
-  if (!hasEngineProvenance(audit)) {
-    throw new Error(
-      `patch-report: ${auditPath} lacks engine provenance — it was not ` +
-        `produced by audit-core. Hand-assembled audits are not patchable; ` +
-        `run \`node dist/cli.js audit-core <repoPath> ${outDir}\` first.`
-    );
-  }
+  const audit = requireStampedAudit(outDir, 'patch-report');
   const warnings: string[] = [];
   const patched: string[] = [];
   for (const key of Object.keys(blocks as Record<string, unknown>)) {
@@ -395,26 +382,14 @@ export function patchReportBlocks(
 }
 
 /**
- * Read-only authoring context for the report blocks: everything Step 6.4
+ * Read-only authoring context for the report blocks: everything Step 5.4
  * transcribes (check values/hints, git window stats, tracker fetch metadata),
  * flattened from the artifacts in ONE call — so the orchestrator never opens
  * or parses audit.json / collected/*.json itself. Requires the provenance
  * stamp like every other post-audit verb.
  */
 export function reportContext(outDir: string): Record<string, unknown> {
-  const auditPath = join(outDir, 'audit.json');
-  let audit: Record<string, unknown>;
-  try {
-    audit = JSON.parse(readFileSync(auditPath, 'utf8'));
-  } catch {
-    audit = {};
-  }
-  if (!hasEngineProvenance(audit)) {
-    throw new Error(
-      `report-context: ${auditPath} lacks engine provenance — run ` +
-        `\`node dist/cli.js audit-core <repoPath> ${outDir}\` first.`
-    );
-  }
+  const audit = requireStampedAudit(outDir, 'report-context');
   const readCollected = (src: string): Record<string, unknown> | null => {
     try {
       return JSON.parse(

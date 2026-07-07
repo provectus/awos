@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeResult, iterFiles, grep } from '../detectors/_base.ts';
+import { tmpDir, writeRepo } from './helpers.ts';
 
 test('makeResult shape', () => {
   const r = makeResult('PASS', 3, ['src/a.ts:10 found X']);
@@ -78,24 +78,24 @@ test('makeResult clamps out-of-range score/confidence into [0,1]', () => {
 });
 
 test('iterFiles is sorted and skips .git', () => {
-  const t = mkdtempSync(join(tmpdir(), 'det-'));
-  mkdirSync(join(t, '.git'));
-  writeFileSync(join(t, '.git', 'x.ts'), 'x');
-  writeFileSync(join(t, 'b.ts'), 'b');
-  writeFileSync(join(t, 'a.ts'), 'a');
+  const t = tmpDir('det-');
+  writeRepo(t, {
+    '.git/x.ts': 'x',
+    'b.ts': 'b',
+    'a.ts': 'a',
+  });
   const names = iterFiles(t, ['**/*.ts']).map((p) => p.split('/').pop());
   assert.deepEqual(names, ['a.ts', 'b.ts']);
 });
 
 test('iterFiles matches path-qualified globs (find -name only sees basenames)', () => {
-  const t = mkdtempSync(join(tmpdir(), 'det-'));
-  mkdirSync(join(t, 'design'));
-  mkdirSync(join(t, 'ci'));
-  mkdirSync(join(t, 'other'));
-  writeFileSync(join(t, 'design', 'spec.md'), '# spec');
-  writeFileSync(join(t, 'ci', 'pipeline.yml'), 'jobs: {}');
-  writeFileSync(join(t, 'other', 'notes.md'), '# notes');
-  writeFileSync(join(t, 'pipeline.yml'), 'jobs: {}'); // root — not under ci/
+  const t = tmpDir('det-');
+  writeRepo(t, {
+    'design/spec.md': '# spec',
+    'ci/pipeline.yml': 'jobs: {}',
+    'other/notes.md': '# notes',
+    'pipeline.yml': 'jobs: {}', // root — not under ci/
+  });
   const mdHits = iterFiles(t, ['design/*.md']).map((p) =>
     p.slice(t.length + 1)
   );
@@ -115,7 +115,7 @@ test('iterFiles matches path-qualified globs (find -name only sees basenames)', 
 });
 
 test('iterFiles matches **/-prefixed path globs at any depth', () => {
-  const t = mkdtempSync(join(tmpdir(), 'det-'));
+  const t = tmpDir('det-');
   mkdirSync(join(t, 'packages', 'a', 'design'), { recursive: true });
   writeFileSync(join(t, 'packages', 'a', 'design', 'doc.md'), '# doc');
   const hits = iterFiles(t, ['**/design/*.md']).map((p) =>
@@ -129,7 +129,7 @@ test('iterFiles matches **/-prefixed path globs at any depth', () => {
 });
 
 test('grep finds pattern with location', () => {
-  const t = mkdtempSync(join(tmpdir(), 'det-'));
+  const t = tmpDir('det-');
   writeFileSync(join(t, 'm.py'), 'ok\nexcept A, B:\n');
   const hits = grep(t, /except\s+\w+\s*,\s*\w+\s*:/, ['**/*.py']);
   assert.ok(

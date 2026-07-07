@@ -15,13 +15,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { compute } from './onboarding_ease.ts';
 import { loadStandards } from './_base.ts';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { tmpDir } from '../tests/helpers.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,7 +31,7 @@ const STANDARDS_PATH = join(__dirname, '..', 'references', 'standards.toml');
 const STANDARDS = loadStandards(STANDARDS_PATH);
 
 function makeTempDir(): string {
-  return mkdtempSync(join(tmpdir(), 'awos-g15-'));
+  return tmpDir('awos-g15-');
 }
 
 // ---------------------------------------------------------------------------

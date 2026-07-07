@@ -435,11 +435,6 @@ function getToolingPaths(repoPath: string): string[] {
   return TOOLING_CANDIDATES.filter((p) => existsSync(join(repoPath, p)));
 }
 
-interface MergeStats {
-  total_merges: number;
-  revert_merges: number;
-}
-
 // ---------------------------------------------------------------------------
 // Squash/rebase-merge awareness. GitHub/GitLab/Bitbucket squash-merge collapses
 // a whole PR into ONE ordinary commit on the trunk — no 2-parent merge commit
@@ -557,43 +552,6 @@ export function classifyMergeStrategy(
   // A handful of real merge commits amid many squashed PRs is still a squash
   // workflow (e.g. one maintainer occasionally merge-committing).
   return squashMerges >= mergeCommits * 3 ? 'squash' : 'mixed';
-}
-
-function getMergeStats(
-  cwd: string,
-  squashEvents: SquashEvent[],
-  ref: string
-): MergeStats {
-  const allMerges = run(
-    ['log', '--first-parent', '--merges', '--format=%H', ...refArgs(ref)],
-    cwd
-  )
-    .trim()
-    .split('\n')
-    .filter(Boolean);
-
-  const revertOut = run(
-    [
-      'log',
-      '--first-parent',
-      '--merges',
-      '--grep=^Revert\\|hotfix\\|rollback',
-      '--format=%H',
-      ...refArgs(ref),
-    ],
-    cwd
-  )
-    .trim()
-    .split('\n')
-    .filter(Boolean);
-
-  // Merge EVENTS = merge commits + squash-merged PRs, so squash-merge repos
-  // don't read as "never merges anything".
-  const squash = squashStats(squashEvents);
-  return {
-    total_merges: allMerges.length + squash.total,
-    revert_merges: revertOut.length + squash.reverts,
-  };
 }
 
 interface MergeRecord {
@@ -1190,8 +1148,6 @@ export interface GitRaw {
   trunk: TrunkInfo;
   total_commits: number;
   ai_marked_commits: number;
-  total_merges: number;
-  revert_merges: number;
   tooling_paths: string[];
   merge_records: MergeRecord[];
   window_stats: WindowStats;
@@ -1256,8 +1212,6 @@ export function collect(
       trunk,
       total_commits: 0,
       ai_marked_commits: 0,
-      total_merges: 0,
-      revert_merges: 0,
       tooling_paths: getToolingPaths(repoPath),
       merge_records: [],
       // buildWindowStats/getCodeTurnover return their empty/null shapes
@@ -1291,14 +1245,9 @@ export function collect(
   const total_commits = getTotalCommits(repoPath, trunk.ref);
   const ai_marked_commits = getAiMarkedCommits(repoPath, trunk.ref);
   const tooling_paths = getToolingPaths(repoPath);
-  // One squash scan over all history; getMergeStats and buildWindowStats fold
-  // it (unbounded / windowed) instead of each running its own log pass.
+  // One squash scan over all history; buildWindowStats folds it instead of
+  // running its own log pass.
   const squashEvents = scanSquashMerges(repoPath, trunk.ref);
-  const { total_merges, revert_merges } = getMergeStats(
-    repoPath,
-    squashEvents,
-    trunk.ref
-  );
   const merge_records = getMergeRecords(repoPath, trunk.ref);
   const window_stats = buildWindowStats(
     repoPath,
@@ -1323,8 +1272,6 @@ export function collect(
     trunk,
     total_commits,
     ai_marked_commits,
-    total_merges,
-    revert_merges,
     tooling_paths,
     merge_records,
     window_stats,

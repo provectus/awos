@@ -378,10 +378,10 @@ Tracker (Jira) → `collected/tracker.json`:
 #    paginated source; set complete: false with the real cause in note when
 #    pagination or the changelog pass stopped early.
 # 4. Write it once (after all pages are accumulated):
-#    context/audits/YYYY-MM-DD/collected/tracker.json
+#    context/audits/YYYY-MM-DD_HH-MM-SS/collected/tracker.json
 # 5. After ALL reachable sources' artifacts are written, one enrich pass
 #    re-scores everything (never a metric call per source):
-node "${CLAUDE_SKILL_DIR}/dist/cli.js" enrich "<repoPath>" "context/audits/YYYY-MM-DD"
+node "${CLAUDE_SKILL_DIR}/dist/cli.js" enrich "<repoPath>" "context/audits/YYYY-MM-DD_HH-MM-SS"
 ```
 
 Docs (Confluence) → `collected/docs.json`:
@@ -391,7 +391,7 @@ Docs (Confluence) → `collected/docs.json`:
 #    searchConfluenceUsingCql with cql = "lastmodified >= now('-<lookback>d')").
 # 2. Map each page to a DocPage {title, url, updated_at} and wrap as a
 #    DocsConnector {pages: [...]}.
-# 3. Write context/audits/YYYY-MM-DD/collected/docs.json. The same single
+# 3. Write context/audits/YYYY-MM-DD_HH-MM-SS/collected/docs.json. The same single
 #    enrich pass (see the tracker recipe) re-scores it — no per-metric calls.
 ```
 
@@ -402,7 +402,7 @@ A reachable tracker/docs/incident MCP is enriched by default — fetching and ma
 1. **Attempt to fetch.** Try the MCP call or API request. If it is reachable, fetch it — do not pre-decide it is out of scope.
 2. **On success** — map each returned record into the shape above and write the `TrackerConnector` or `DocsConnector` JSON to `collected/<source>.json`. Mapping reachable data into the documented shape is not fabrication. Do **not** re-run a metric per source here — once every reachable source's artifact is written, the orchestrator re-scores them all in one pass:
    ```
-   node "${CLAUDE_SKILL_DIR}/dist/cli.js" enrich "<repoPath>" "context/audits/YYYY-MM-DD"
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" enrich "<repoPath>" "context/audits/YYYY-MM-DD_HH-MM-SS"
    ```
 3. **On failure or unclear mapping** (auth error, unfamiliar schema, broken dependency, empty result, closed port) — do not silently skip. In interactive mode, use `AskUserQuestion` with three options: mark unavailable (record the reason) / retry with guidance / show how to fix (link to this document). In headless `claude -p` runs (no interactive user), default to marking the source unavailable and record the _actual_ failure in the source's `source_probes` entry (authored into `report-blocks.json`) — the real cause (e.g. "atlassian MCP (401 unauthorized)"), never "no connector provided" when a channel was in fact reachable.
 

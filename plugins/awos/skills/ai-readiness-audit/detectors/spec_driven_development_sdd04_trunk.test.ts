@@ -13,11 +13,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
 import { detectBranchSpecRatio } from './spec_driven_development.ts';
 import { gitAs } from '../tests/helpers.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
 /** Commit one file with a pinned author/date. */
 function commitFile(
@@ -37,7 +37,7 @@ test('SDD-04 counts merged events on the trunk ref, not the diverged local linea
   // Origin: 6 squash-merged PRs on main — 4 feature PRs touch context/spec/,
   // 1 feature PR does not, and 1 fix PR is maintenance (excluded from the
   // feature denominator).
-  const origin = mkdtempSync(join(tmpdir(), 'awos-sdd04-origin-'));
+  const origin = tmpDir('awos-sdd04-origin-');
   execFileSync('git', ['init', '-b', 'main', origin], { stdio: 'ignore' });
   for (let i = 1; i <= 4; i++) {
     commitFile(
@@ -61,7 +61,7 @@ test('SDD-04 counts merged events on the trunk ref, not the diverged local linea
   );
 
   // Developer clone: local commit + pull-style sync merge → local main diverges.
-  const clone = mkdtempSync(join(tmpdir(), 'awos-sdd04-clone-'));
+  const clone = tmpDir('awos-sdd04-clone-');
   execFileSync('git', ['clone', '--quiet', origin, clone], { stdio: 'ignore' });
   gitAs(
     clone,

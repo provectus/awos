@@ -11,16 +11,16 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {} from 'node:fs';
 import { join } from 'node:path';
 import { compute } from '../metrics/change_failure_rate.ts';
 import { writeCollected, loadStandards } from './helpers.ts';
+import { tmpDir } from './helpers.ts';
 
 const standards = loadStandards();
 
 function makeTmpDir(): string {
-  return mkdtempSync(join(tmpdir(), 'g7-'));
+  return tmpDir('g7-');
 }
 
 /** Minimal window_stats fixture — only the fields g7 reads. */

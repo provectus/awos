@@ -56,7 +56,7 @@ Field notes:
 - **`check_id`** — taken verbatim from the dimension check heading id: the `XXX-NN` token from the `### XXX-NN:` heading (e.g. `AIS-07`, `ARCH-06`, `SDD-04`).
 - **`code`** — array of numeric category codes from the check's `**Category:**` line (resolved against `standards.toml`).
 - **`method`** — read from `standards.toml` for the category code. One of `computed`, `detected`, or `judgment`.
-- **`status`** — for `computed`/`detected` checks this comes verbatim from the detector output (`node dist/cli.js detect <code> <repoPath>`); for `judgment` checks it is the auditor's evaluation of the category's `rubric` against its `evidence_required` items.
+- **`status`** — for `computed`/`detected` checks this comes verbatim from the engine's `audit-core` pass; for `judgment` checks it is the auditor's evaluation of the category's `rubric` against its `evidence_required` items.
 - **`value`** — `string | number | null`. Detectors may return a numeric value (e.g. file sizes, counts, ratios); judgment checks return a string conclusion. Use `null` only if the value is genuinely unavailable.
 - **`evidence`** — array of evidence strings (file paths, counts, snippets). For computed/detected, taken verbatim from the detector output.
 - **`weight_awarded`** — equals `weight_max` on PASS; 0 otherwise (WARN, FAIL, SKIP).
@@ -142,7 +142,7 @@ Authoring integrity: `headline` numbers and `recommendations` are **transcribed 
 
 ### Org rollup output (`org-portfolio.json`)
 
-In org mode the engine reads each repo's FULL audit — `context/audits/YYYY-MM-DD/per-repo/<repo>/audit.json` plus its `collected/git.json` — via `node dist/cli.js rollup <per-repo-dir>` and emits an `OrgRollupResult`. It carries the three portfolio cards, an org **headline** (the delivery matrix averaged across repos and re-banded), and an enriched **per_repo** row per repo so the org report's per-repo table can render every column.
+In org mode the engine reads each repo's FULL audit — `context/audits/YYYY-MM-DD_HH-MM-SS/per-repo/<repo>/audit.json` plus its `collected/git.json` — via `node dist/cli.js rollup <per-repo-dir>` and emits an `OrgRollupResult`. It carries the three portfolio cards, an org **headline** (the delivery matrix averaged across repos and re-banded), and an enriched **per_repo** row per repo so the org report's per-repo table can render every column.
 
 ```json
 {
@@ -237,7 +237,7 @@ The deterministic org `headline.delivery[]` has **6 rows** — the 2 git per-act
 
 ## Report Template
 
-Write the full report to `context/audits/YYYY-MM-DD/report.md` and also display it to the user.
+Write the full report to `context/audits/YYYY-MM-DD_HH-MM-SS/report.md` and also display it to the user.
 
 ```markdown
 # Code Audit Report
@@ -246,14 +246,13 @@ Write the full report to `context/audits/YYYY-MM-DD/report.md` and also display 
 **Scope:** [all dimensions | single dimension name]
 **Audit Total:** N pts
 **Coverage Ratio:** XX% rel. today's standard
-**Previous Audit:** [YYYY-MM-DD — N pts, XX% | none]
 
 ## Summary
 
-| #   | Dimension | Points | Coverage | Delta | Critical | High | Medium | Low |
-| --- | --------- | ------ | -------- | ----- | -------- | ---- | ------ | --- |
-| 1   | Name      | N      | XX%      | +/-N  | 0        | 0    | 0      | 0   |
-| …   | …         | …      | …        | …     | …        | …    | …      | …   |
+| #   | Dimension | Points | Coverage | Critical | High | Medium | Low |
+| --- | --------- | ------ | -------- | -------- | ---- | ------ | --- |
+| 1   | Name      | N      | XX%      | 0        | 0    | 0      | 0   |
+| …   | …         | …      | …        | …        | …    | …      | …   |
 
 ## Dimension: [Name]
 
@@ -289,7 +288,7 @@ Limit to the top 10 most impactful recommendations.
 
 ## Recommendations File
 
-Write actionable recommendations to `context/audits/YYYY-MM-DD/recommendations.md`:
+Write actionable recommendations to `context/audits/YYYY-MM-DD_HH-MM-SS/recommendations.md`:
 
 ```markdown
 # Audit Recommendations — YYYY-MM-DD

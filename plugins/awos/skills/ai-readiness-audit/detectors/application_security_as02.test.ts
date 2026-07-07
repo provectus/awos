@@ -1,27 +1,16 @@
 // detectors/application_security_as02.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
+import { writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { runDetector } from '../tests/helpers.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli.ts');
-const NODE = process.env.NODE_BIN || process.execPath;
-
-function detect(repo: string) {
-  return JSON.parse(
-    execFileSync(NODE, ['--import', 'tsx', CLI, 'detect', '3001', repo], {
-      encoding: 'utf8',
-      env: { ...process.env, NODE_NO_WARNINGS: '1' },
-    })
-  );
-}
+const detect = (repo: string) => runDetector(3001, repo);
 
 test('AS-02 graded score = 1/3 when only one security header found (WARN)', () => {
   // Only X-Content-Type-Options → 1 of 3 headers → score ≈ 0.333 → WARN
-  const repo = mkdtempSync(join(tmpdir(), 'awos-as02-one-'));
+  const repo = tmpDir('awos-as02-one-');
   try {
     writeFileSync(
       join(repo, 'middleware.py'),
@@ -52,7 +41,7 @@ test('AS-02 graded score = 1/3 when only one security header found (WARN)', () =
 });
 
 test('AS-02 score = 0 when no security headers found (FAIL)', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-as02-none-'));
+  const repo = tmpDir('awos-as02-none-');
   try {
     writeFileSync(join(repo, 'app.py'), 'def handler(): pass\n');
     const res = detect(repo);
@@ -78,7 +67,7 @@ test('AS-02 score = 0 when no security headers found (FAIL)', () => {
 
 test('AS-02 score = 2/3 when two security headers found (PASS)', () => {
   // X-Content-Type-Options + X-Frame-Options → 2 of 3 → score ≈ 0.667 → PASS
-  const repo = mkdtempSync(join(tmpdir(), 'awos-as02-two-'));
+  const repo = tmpDir('awos-as02-two-');
   try {
     writeFileSync(
       join(repo, 'middleware.py'),
@@ -103,7 +92,7 @@ test('AS-02 score = 2/3 when two security headers found (PASS)', () => {
 });
 
 test('AS-02 score = 1.0 when all three security headers found (PASS)', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-as02-all-'));
+  const repo = tmpDir('awos-as02-all-');
   try {
     writeFileSync(
       join(repo, 'middleware.py'),

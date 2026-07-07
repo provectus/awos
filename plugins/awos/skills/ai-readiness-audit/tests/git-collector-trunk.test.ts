@@ -13,15 +13,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { collect, resolveTrunk, describeTrunk } from '../collectors/git.ts';
 import type { Period } from '../collectors/_base.ts';
 import { gitAs } from './helpers.ts';
 import { readCollectedArtifacts, deriveSources } from '../audit_core.ts';
 import { renderMarkdown, renderHtml } from '../render.ts';
 import type { AuditJson } from '../artifact_types.ts';
+import { tmpDir } from './helpers.ts';
 
 const PERIOD: Period = {
   bucket_days: 30,
@@ -51,7 +51,7 @@ function commitFile(
  * ordinary commit with a forge PR ref in the subject. No merge commits.
  */
 function buildSquashOrigin(prCount: number): string {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-trunk-origin-'));
+  const dir = tmpDir('awos-trunk-origin-');
   execFileSync('git', ['init', '-b', 'main', dir], { stdio: 'ignore' });
   for (let i = 1; i <= prCount; i++) {
     const day = String(i).padStart(2, '0');
@@ -67,7 +67,7 @@ function buildSquashOrigin(prCount: number): string {
 
 /** Clone `origin` (file transport — offline) into a fresh temp dir. */
 function cloneRepo(origin: string): string {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-trunk-clone-'));
+  const dir = tmpDir('awos-trunk-clone-');
   execFileSync('git', ['clone', '--quiet', origin, dir], { stdio: 'ignore' });
   return dir;
 }
@@ -232,7 +232,7 @@ test('divergence counts pin --left-right order: ahead=local-only, behind=trunk-o
 // ---------------------------------------------------------------------------
 
 test('local-only repo (no remote): source=local, behavior unchanged', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-trunk-local-'));
+  const dir = tmpDir('awos-trunk-local-');
   execFileSync('git', ['init', '-b', 'main', dir], { stdio: 'ignore' });
   commitFile(dir, 'a.txt', 'feat: direct work (#1)', '2025-01-05T10:00:00');
   commitFile(dir, 'b.txt', 'feat: more work (#2)', '2025-01-06T10:00:00');
@@ -423,7 +423,7 @@ test('describeTrunk: one summary shape per source', () => {
 test('deriveSources: git row carries the trunk note; local fallback stays silent', () => {
   const origin = buildSquashOrigin(3);
   const clone = cloneRepo(origin);
-  const outDir = mkdtempSync(join(tmpdir(), 'awos-trunk-derive-'));
+  const outDir = tmpDir('awos-trunk-derive-');
   const collectedDir = join(outDir, 'collected');
   mkdirSync(collectedDir, { recursive: true });
   const art = collect(clone, PERIOD);
@@ -442,11 +442,11 @@ test('deriveSources: git row carries the trunk note; local fallback stays silent
   );
 
   // Local-only repo: no note — nothing remote to disclose.
-  const localDir = mkdtempSync(join(tmpdir(), 'awos-trunk-derive-local-'));
+  const localDir = tmpDir('awos-trunk-derive-local-');
   execFileSync('git', ['init', '-b', 'main', localDir], { stdio: 'ignore' });
   commitFile(localDir, 'a.txt', 'feat: work', '2025-01-05T10:00:00');
   const localArt = collect(localDir, PERIOD);
-  const localOut = mkdtempSync(join(tmpdir(), 'awos-trunk-derive-local-out-'));
+  const localOut = tmpDir('awos-trunk-derive-local-out-');
   mkdirSync(join(localOut, 'collected'), { recursive: true });
   writeFileSync(
     join(localOut, 'collected', 'git.json'),

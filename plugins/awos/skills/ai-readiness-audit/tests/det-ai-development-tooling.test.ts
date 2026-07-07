@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, mkdirSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   detectCustomCommands,
@@ -11,9 +10,10 @@ import {
   detectCanRunApp,
   DETECTORS,
 } from '../detectors/ai_development_tooling.ts';
+import { tmpDir } from './helpers.ts';
 
 function tmp(): string {
-  return mkdtempSync(join(tmpdir(), 'ai-tooling-'));
+  return tmpDir('ai-tooling-');
 }
 
 // ---------------------------------------------------------------------------

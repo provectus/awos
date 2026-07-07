@@ -7,7 +7,7 @@
  *   (or `npm run audit:compare -- --target <repo-name>`)
  *
  * `--target` picks the two newest runs for that repo. Prints side by side:
- * phase, skill commit, tokens, cost, wall-clock, audit_total, coverage, and
+ * skill commit, label, tokens, cost, wall-clock, audit_total, coverage, and
  * per-dimension score deltas — so a skill change's effect on the numbers is
  * visible at a glance. A = older, B = newer.
  */
@@ -96,7 +96,6 @@ function main(): void {
     `  ${''.padEnd(22)} ${'A (older)'.padEnd(W)} ${'B (newer)'.padEnd(W)}`
   );
   console.log('='.repeat(86));
-  row('phase', A.phase, B.phase);
   row(
     'skill commit',
     g(A, 'skill_under_test', 'short'),

@@ -1,28 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { runDetector } from '../tests/helpers.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli.ts');
-const NODE = process.env.NODE_BIN || process.execPath;
+const detect = (repo: string) => runDetector(2804, repo);
 
 test('SDD-05 gives partial credit (WARN, not FAIL) for a mostly-complete spec set', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-sdd05-'));
+  const repo = tmpDir('awos-sdd05-');
   try {
     const d = join(repo, 'context', 'spec', '001-x');
     mkdirSync(d, { recursive: true });
     writeFileSync(join(d, 'functional-spec.md'), '# f\n');
     writeFileSync(join(d, 'technical-considerations.md'), '# t\n');
     // tasks.md intentionally missing → 2 of 3
-    const res = JSON.parse(
-      execFileSync(NODE, ['--import', 'tsx', CLI, 'detect', '2804', repo], {
-        encoding: 'utf8',
-        env: { ...process.env, NODE_NO_WARNINGS: '1' },
-      })
-    );
+    const res = detect(repo);
     assert.notEqual(
       res.status,
       'FAIL',

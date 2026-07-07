@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   detectTestInfrastructure,
@@ -16,9 +15,10 @@ import {
   detectMlIterationTests,
   DETECTORS,
 } from '../detectors/quality_assurance.ts';
+import { tmpDir } from './helpers.ts';
 
 function tmp(): string {
-  return mkdtempSync(join(tmpdir(), 'qa-'));
+  return tmpDir('qa-');
 }
 
 // ---------------------------------------------------------------------------

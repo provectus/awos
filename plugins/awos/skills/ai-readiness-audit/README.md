@@ -4,9 +4,9 @@ This file is for people working **on** the skill (in the AWOS repo). The runtime
 
 ## What the skill does
 
-It measures how ready a codebase (or a whole portfolio of repos) is for AI-assisted development, and renders the result as a report (`report.md` + a self-contained `report.html`) backed by JSON artifacts under `context/audits/YYYY-MM-DD/` in the audited project.
+It measures how ready a codebase (or a whole portfolio of repos) is for AI-assisted development, and renders the result as a report (`report.md` + a self-contained `report.html`) backed by JSON artifacts under `context/audits/YYYY-MM-DD_HH-MM-SS/` in the audited project.
 
-The design premise: **scoring must be deterministic and repeatable**, so almost none of it is done by the model. The split is:
+The design premise: **scoring must be deterministic and repeatable**, so almost none of it is done by the model — and the engine enforces this with a provenance circuit-breaker: only `audit-core` stamps `audit.json` (`engine.generated_by`), and `patch-judgment`/`render`/`rollup` refuse an unstamped audit, so a hand-assembled score can never become a report. The split is:
 
 - **The engine** (`dist/cli.js`, bundled from the TypeScript in this directory) does the measurement. One command — `audit-core <repo> <outDir>` — evaluates project-topology flags, runs every `detected`/`computed` category across all dimensions in a single pass, and writes one `<dimension>.json` per dimension plus the aggregated `audit.json`. Layers inside the engine: `collectors/` (git/ci/tracker/docs → one JSON artifact each), `detectors/` (per-category filesystem/grep checks), `metrics/` (DORA-style computations over collector artifacts, complexity/scale via bundled tree-sitter grammars), `render.ts` (JSON → both report formats), `metrics/org_rollup.ts` (portfolio aggregation).
 - **The orchestrator** (the model, following SKILL.md) fills only the slice the engine cannot compute: it fetches reachable connector sources (Jira/Confluence/… via MCP, per [references/connector-shapes.md](references/connector-shapes.md)), re-scores them with one `enrich` pass, decides the 5 `judgment` categories against fixed rubrics and applies them with one `patch-judgment` call, authors the narrative report blocks (headline/insights/recommendations), and renders with one `render --format both` call.
@@ -30,17 +30,14 @@ The engine reads this file at run time — **adding or re-weighting a category i
 
 ## How to test it headless
 
-Behavioral testing runs the real skill through headless `claude -p` via the TypeScript harness in [`tools/ai-readiness-audit/qa/`](../../../../tools/ai-readiness-audit/qa/README.md) (repo-relative: `tools/ai-readiness-audit/qa/`; run via `npm run audit:test`, needs `npm ci` once for `tsx`). It deploys **your worktree's** version of the plugin by repointing the local marketplace (and restores it afterward), controls the previous-audit state, guards against the known engine-skipping regression, measures tokens/cost, and archives everything under `<awos main checkout>/tmp/audit-runs/<target>/<timestamp>__<sha>__<phase>/`.
+Behavioral testing runs the real skill through headless `claude -p` via the TypeScript harness in [`tools/ai-readiness-audit/qa/`](../../../../tools/ai-readiness-audit/qa/README.md) (repo-relative: `tools/ai-readiness-audit/qa/`; run via `npm run audit:test`, needs `npm ci` once for `tsx`). It deploys **your worktree's** version of the plugin by repointing the local marketplace (and restores it afterward), blanks the target's `context/audits/` for isolation, guards against the known engine-skipping regression, measures tokens/cost, and archives everything under `<awos main checkout>/tmp/audit-runs/<target>/<timestamp>__<sha>/`.
 
 ```sh
-# Cold single-repo run (no previous audit). --build rebuilds dist/ first — use it whenever engine .ts changed.
-npm run audit:test -- --target ~/code/some-repo --phase first --label "my change" --build
-
-# Warm run (previous audit seeded from the newest archived run, so the delta logic fires):
-npm run audit:test -- --target ~/code/some-repo --phase second --label "my change"
+# Single-repo run. --build rebuilds dist/ first — use it whenever engine .ts changed.
+npm run audit:test -- --target ~/code/some-repo --label "my change" --build
 
 # Org mode — point at a non-git parent folder of git repos:
-npm run audit:test -- --target ~/code/some-org-folder --phase first --label "org run"
+npm run audit:test -- --target ~/code/some-org-folder --label "org run"
 
 # Compare the two newest archived runs for a target (scores per dimension + tokens/cost):
 npm run audit:compare -- --target some-repo

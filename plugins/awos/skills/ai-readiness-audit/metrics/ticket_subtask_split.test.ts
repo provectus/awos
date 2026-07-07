@@ -6,13 +6,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { compute } from './ticket_subtask_split.ts';
 import { loadStandards } from './_base.ts';
 import { trackerArtifact } from '../tests/helpers.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
 // Real standards.toml — compute() reads its score curve from
 // [category.ticket_subtask_split.scoring].
@@ -43,7 +43,7 @@ function makeTrackerArtifact(
 // ---------------------------------------------------------------------------
 
 test('ticket_subtask_split: SKIP when tracker.json absent', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-nofile-'));
+  const dir = tmpDir('awos-i4-nofile-');
   try {
     const res = compute(dir, STANDARDS, {});
     assert.equal(
@@ -64,7 +64,7 @@ test('ticket_subtask_split: SKIP when tracker.json absent', () => {
 });
 
 test('ticket_subtask_split: SKIP when tracker.json available=false', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-unavail-'));
+  const dir = tmpDir('awos-i4-unavail-');
   try {
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact([], false));
     const res = compute(dir, STANDARDS, {});
@@ -80,7 +80,7 @@ test('ticket_subtask_split: SKIP when tracker.json available=false', () => {
 });
 
 test('ticket_subtask_split: SKIP when no ticket has subtask_count data', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-nodata-'));
+  const dir = tmpDir('awos-i4-nodata-');
   try {
     // Tickets present but none carry a numeric subtask_count at all —
     // the connector did not map the field, so there is nothing to measure.
@@ -106,7 +106,7 @@ test('ticket_subtask_split: SKIP when no ticket has subtask_count data', () => {
 });
 
 test('ticket_subtask_split: SKIP when raw.tickets is absent from artifact', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-notickets-'));
+  const dir = tmpDir('awos-i4-notickets-');
   try {
     writeFileSync(
       join(dir, 'tracker.json'),
@@ -128,7 +128,7 @@ test('ticket_subtask_split: SKIP when raw.tickets is absent from artifact', () =
 // ---------------------------------------------------------------------------
 
 test('ticket_subtask_split: avg=2 subtasks/parent → band=good, score=0.9', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-good-'));
+  const dir = tmpDir('awos-i4-good-');
   try {
     // Two parent tickets each with 2 subtasks → avg = 2.0
     // ANCHORS: (1,1)→(3,0.8): at x=2 → 1 + (0.8-1)*((2-1)/2) = 0.9
@@ -160,7 +160,7 @@ test('ticket_subtask_split: avg=2 subtasks/parent → band=good, score=0.9', () 
 // ---------------------------------------------------------------------------
 
 test('ticket_subtask_split: avg=4.5 subtasks/parent → band=watch, score=0.6', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-watch-'));
+  const dir = tmpDir('awos-i4-watch-');
   try {
     // Parents: 4 and 5 subtasks → avg = 4.5
     // ANCHORS: (3,0.8)→(6,0.4): at x=4.5 → 0.8 + (0.4-0.8)*(1.5/3) = 0.6
@@ -190,7 +190,7 @@ test('ticket_subtask_split: avg=4.5 subtasks/parent → band=watch, score=0.6', 
 // ---------------------------------------------------------------------------
 
 test('ticket_subtask_split: avg=8 subtasks/parent → band=concerning, score=0.2', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-concern-'));
+  const dir = tmpDir('awos-i4-concern-');
   try {
     // Both parents with 8 subtasks → avg = 8
     // ANCHORS: (6,0.4)→(10,0): at x=8 → 0.4 + (0-0.4)*(2/4) = 0.2
@@ -220,7 +220,7 @@ test('ticket_subtask_split: avg=8 subtasks/parent → band=concerning, score=0.2
 // ---------------------------------------------------------------------------
 
 test('ticket_subtask_split: 0-subtask parents count in the average (best case reachable)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-zeros-'));
+  const dir = tmpDir('awos-i4-zeros-');
   try {
     // Every parent-eligible ticket has an explicit 0 → avg = 0 → on the
     // full-score plateau (avg ≤ 1): best case scores exactly 1.0.
@@ -247,7 +247,7 @@ test('ticket_subtask_split: 0-subtask parents count in the average (best case re
 });
 
 test('ticket_subtask_split: one over-split epic cannot dominate many plain tickets', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-epic-'));
+  const dir = tmpDir('awos-i4-epic-');
   try {
     // 1 epic with 20 subtasks + 9 plain tickets (no subtask_count → 0).
     // Old buggy behaviour averaged only the epic (avg=20 → score 0);
@@ -277,7 +277,7 @@ test('ticket_subtask_split: one over-split epic cannot dominate many plain ticke
 });
 
 test('ticket_subtask_split: worst case — every parent ≥10 subtasks scores 0', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-worst-'));
+  const dir = tmpDir('awos-i4-worst-');
   try {
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', subtask_count: 12 },
@@ -301,7 +301,7 @@ test('ticket_subtask_split: worst case — every parent ≥10 subtasks scores 0'
 // ---------------------------------------------------------------------------
 
 test('ticket_subtask_split: awards category 1104 when topology.has_tracker=true', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-cat-'));
+  const dir = tmpDir('awos-i4-cat-');
   try {
     const tickets: TicketFixture[] = [{ id: 'PROJ-1', subtask_count: 3 }];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
@@ -338,7 +338,7 @@ test('ticket_subtask_split: awards category 1104 when topology.has_tracker=true'
 });
 
 test('ticket_subtask_split: does not award 1104 when topology.has_tracker=false', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-notopol-'));
+  const dir = tmpDir('awos-i4-notopol-');
   try {
     const tickets: TicketFixture[] = [{ id: 'PROJ-1', subtask_count: 2 }];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
@@ -374,7 +374,7 @@ test('ticket_subtask_split: does not award 1104 when topology.has_tracker=false'
 });
 
 test('ticket_subtask_split: reliability.tag is "minimal"', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-rel-'));
+  const dir = tmpDir('awos-i4-rel-');
   try {
     const tickets: TicketFixture[] = [{ id: 'PROJ-1', subtask_count: 2 }];
     writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact(tickets));
@@ -390,7 +390,7 @@ test('ticket_subtask_split: reliability.tag is "minimal"', () => {
 });
 
 test('ticket_subtask_split: expression describes the computation', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-expr-'));
+  const dir = tmpDir('awos-i4-expr-');
   try {
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', subtask_count: 2 },
@@ -447,7 +447,7 @@ test('ticket_subtask_split: standards.toml [category.ticket_subtask_split].weigh
 // ---------------------------------------------------------------------------
 
 test('ticket_subtask_split: tiny nonzero average (0.06) sits on the plateau → score exactly 1.0', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-plateau-'));
+  const dir = tmpDir('awos-i4-plateau-');
   try {
     // 1 subtask across ~17 parents ≈ 0.06 avg — the real-world shape that
     // exposed the unreachable perfect score.
@@ -477,7 +477,7 @@ test('ticket_subtask_split: tiny nonzero average (0.06) sits on the plateau → 
 // ---------------------------------------------------------------------------
 
 test('ticket_subtask_split: field-gap SKIP names the unmapped field, not a missing connector', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-i4-fieldgap-'));
+  const dir = tmpDir('awos-i4-fieldgap-');
   try {
     const tickets: TicketFixture[] = [
       { id: 'PROJ-1', type: 'story', status: 'Done' },

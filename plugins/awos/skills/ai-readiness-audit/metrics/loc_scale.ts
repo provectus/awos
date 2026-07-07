@@ -28,58 +28,21 @@
  *
  * SKIP: if repoPath cannot be read or no recognized source files are found.
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { extname, relative } from 'node:path';
+import { existsSync } from 'node:fs';
 import {
   computeReliability,
   makeMetricResult,
   skipMetric,
   type MetricResult,
 } from './_base.ts';
-import { isGeneratedPath } from '../generated.ts';
-import { listRepoFiles } from './_ast.ts';
+import { analyzeRepoAst } from './_ast.ts';
 
-// Extension → language name mapping.
-const EXT_TO_LANG: Record<string, string> = {
-  '.js': 'JavaScript',
-  '.mjs': 'JavaScript',
-  '.cjs': 'JavaScript',
-  '.ts': 'TypeScript',
-  '.mts': 'TypeScript',
-  '.cts': 'TypeScript',
-  '.tsx': 'TSX',
-  '.jsx': 'JSX',
-  '.py': 'Python',
-  '.go': 'Go',
-  '.java': 'Java',
-  '.rb': 'Ruby',
-  '.cs': 'C#',
-  '.c': 'C',
-  '.cpp': 'C++',
-  '.cc': 'C++',
-  '.cxx': 'C++',
-  '.rs': 'Rust',
-  '.php': 'PHP',
-  '.kt': 'Kotlin',
-  '.kts': 'Kotlin',
-};
-
-interface LangStats {
-  files: number;
-  loc: number;
-}
-
-/** Count non-blank lines in a string. */
-function countLines(content: string): number {
-  return content.split('\n').filter((l) => l.trim().length > 0).length;
-}
-
-export function compute(
+export async function compute(
   _collectedDir: string,
   _standards: Record<string, unknown>,
   _topology: Record<string, boolean>,
   repoPathOverride?: string
-): MetricResult {
+): Promise<MetricResult> {
   // repoPathOverride is injected by the CLI for G11 (and G12/G10) so they can
   // scan the repo directly rather than reading a collector artifact.
   const repoPath = repoPathOverride ?? _collectedDir;
@@ -88,43 +51,22 @@ export function compute(
     return skipMetric('loc_scale', 'computed', 'not-reliable', 'scale');
   }
 
-  const byLanguage: Record<string, LangStats> = {};
-  let totalLoc = 0;
-  let fileCount = 0;
+  // Shared single-pass walk/read (see analyzeRepoAst) — LOC needs no parse, so
+  // its counts hold even when tree-sitter is unavailable.
+  const { loc } = await analyzeRepoAst(repoPath);
 
-  for (const filePath of listRepoFiles(repoPath)) {
-    if (isGeneratedPath(relative(repoPath, filePath))) continue;
-    const ext = extname(filePath).toLowerCase();
-    const lang = EXT_TO_LANG[ext];
-    if (!lang) continue;
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
-    const loc = countLines(content);
-    totalLoc += loc;
-    fileCount += 1;
-    if (!byLanguage[lang]) {
-      byLanguage[lang] = { files: 0, loc: 0 };
-    }
-    byLanguage[lang].files += 1;
-    byLanguage[lang].loc += loc;
-  }
-
-  if (fileCount === 0) {
+  if (loc.fileCount === 0) {
     return skipMetric('loc_scale', 'computed', 'not-reliable', 'scale');
   }
 
   const value = {
-    total_loc: totalLoc,
-    file_count: fileCount,
-    by_language: byLanguage,
+    total_loc: loc.totalLoc,
+    file_count: loc.fileCount,
+    by_language: loc.byLanguage,
   };
   const reliability = computeReliability('not-reliable', ['scale'], []);
 
-  const expression = `${totalLoc} LOC across ${fileCount} files`;
+  const expression = `${loc.totalLoc} LOC across ${loc.fileCount} files`;
   return makeMetricResult(
     'loc_scale',
     value,

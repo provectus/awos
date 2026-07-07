@@ -9,7 +9,7 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
 ## Inputs (from the dispatch prompt)
 
 - `<repoPath>` — absolute path to the repository to audit.
-- `<outDir>` — this repo's output directory, e.g. `context/audits/YYYY-MM-DD/per-repo/<repo-name>`.
+- `<outDir>` — this repo's output directory, e.g. `context/audits/YYYY-MM-DD_HH-MM-SS/per-repo/<repo-name>`.
 - `<ENGINE>` — absolute path to the bundled engine `dist/cli.js`.
 - `<SKILL_DIR>` — the ai-readiness-audit skill directory (for `references/`).
 
@@ -49,7 +49,7 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
    node "<ENGINE>" render "<outDir>/audit.json" --format both --out-dir "<outDir>"
    ```
 
-Follow the canonical single-repo Step 5 / Step 6 in the ai-readiness-audit `SKILL.md` for the detail of each step; the commands above are the exact same flow, scoped to your `<outDir>`.
+Follow the canonical single-repo Step 4 / Step 5 in the ai-readiness-audit `SKILL.md` for the detail of each step; the commands above are the exact same flow, scoped to your `<outDir>`.
 
 ## Deliverable
 

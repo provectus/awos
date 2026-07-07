@@ -10,14 +10,14 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 
 import { computeDerivedDelivery } from '../audit_core.ts';
 import { patchReportBlocks } from '../audit_patch.ts';
 import { renderMarkdown } from '../render.ts';
 import type { AuditJson } from '../render.ts';
+import { tmpDir } from './helpers.ts';
 
 function writeTracker(dir: string, artifact: Record<string, unknown>): string {
   const collected = join(dir, 'collected');
@@ -31,7 +31,7 @@ const t0 = Date.parse('2026-06-01T00:00:00Z');
 const iso = (ms: number) => new Date(ms).toISOString();
 
 test('computeDerivedDelivery: median cycle time from tickets with status history', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-dd-median-'));
+  const dir = tmpDir('awos-dd-median-');
   try {
     const tickets = [1, 2, 10].map((days, i) => ({
       key: `T-${i}`,
@@ -62,7 +62,7 @@ test('computeDerivedDelivery: median cycle time from tickets with status history
 });
 
 test('computeDerivedDelivery: connected tracker without changelogs yields the honest note (barley 2026-07-02)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-dd-nohist-'));
+  const dir = tmpDir('awos-dd-nohist-');
   try {
     const collected = writeTracker(dir, {
       source: 'tracker',
@@ -90,7 +90,7 @@ test('computeDerivedDelivery: connected tracker without changelogs yields the ho
 });
 
 test('computeDerivedDelivery: absent tracker artifact leaves both rows empty (renderer default applies)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-dd-absent-'));
+  const dir = tmpDir('awos-dd-absent-');
   try {
     mkdirSync(join(dir, 'collected'), { recursive: true });
     const dd = computeDerivedDelivery(join(dir, 'collected'));
@@ -180,7 +180,7 @@ test('renderMarkdown: Missed/limited lines carry the source-probe log', () => {
 });
 
 test('patchReportBlocks: accepts the source_probes block', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-dd-probes-'));
+  const dir = tmpDir('awos-dd-probes-');
   try {
     writeFileSync(
       join(dir, 'audit.json'),

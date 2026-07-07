@@ -78,6 +78,12 @@ export interface Check {
   confidence?: number;
   unit?: string;
   expression?: string;
+  /**
+   * Headline slot this check can backfill when the authored headline omits it
+   * (e.g. "reach.contributors"). From standards.toml `headline_role` — the
+   * renderer resolves by role, never by a hardcoded check_id.
+   */
+  headline_role?: string;
   source_date?: string | null;
   source_url?: string | null;
   /** Date this check's definition was last verified against its cited source. */
@@ -132,6 +138,8 @@ export interface DimensionArtifact {
  */
 export interface EngineProvenance {
   generated_by: 'audit-core';
+  /** Audit plugin version (from .claude-plugin/plugin.json) that produced this audit. */
+  version?: string;
 }
 
 /**

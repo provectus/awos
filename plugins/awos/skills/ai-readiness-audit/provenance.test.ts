@@ -21,11 +21,12 @@ import {
   rmSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-import { auditCore, hasEngineProvenance } from './audit_core.ts';
+import { auditCore } from './audit_core.ts';
+import { ENGINE_PROVENANCE, hasEngineProvenance } from './provenance.ts';
 import { aggregate } from './audit_patch.ts';
+import { tmpDir } from './tests/helpers.ts';
 
 const SKILL = dirname(fileURLToPath(import.meta.url));
 const CLI = join(SKILL, 'dist', 'cli.js');
@@ -60,7 +61,7 @@ function handBuiltAudit(): Record<string, unknown> {
 }
 
 test('render refuses a single-repo audit.json without engine provenance', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-prov-render-'));
+  const dir = tmpDir('awos-prov-render-');
   try {
     const auditPath = join(dir, 'audit.json');
     writeFileSync(auditPath, JSON.stringify(handBuiltAudit()));
@@ -87,7 +88,7 @@ test('render refuses a single-repo audit.json without engine provenance', () => 
 });
 
 test('render still accepts an orchestrator-assembled org portfolio JSON (exempt from the stamp)', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-prov-org-'));
+  const dir = tmpDir('awos-prov-org-');
   try {
     const orgPath = join(dir, 'org-portfolio.json');
     writeFileSync(
@@ -111,7 +112,7 @@ test('render still accepts an orchestrator-assembled org portfolio JSON (exempt 
 });
 
 test('patch-judgment refuses an audits dir whose audit.json is missing or unstamped', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-prov-patchj-'));
+  const dir = tmpDir('awos-prov-patchj-');
   try {
     const patches = join(dir, 'judgments.json');
     writeFileSync(
@@ -143,7 +144,7 @@ test('patch-judgment refuses an audits dir whose audit.json is missing or unstam
 });
 
 test('rollup skips a per-repo audit.json without engine provenance, naming the reason', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'awos-prov-rollup-'));
+  const dir = tmpDir('awos-prov-rollup-');
   try {
     const repoDir = join(dir, 'hand-built-repo');
     mkdirSync(repoDir, { recursive: true });
@@ -166,7 +167,7 @@ test('rollup skips a per-repo audit.json without engine provenance, naming the r
 });
 
 test('audit-core stamps audit.json + dimension JSONs; aggregate preserves and re-derives the stamp', async () => {
-  const base = mkdtempSync(join(tmpdir(), 'awos-prov-core-'));
+  const base = tmpDir('awos-prov-core-');
   try {
     const repoPath = join(base, 'repo');
     mkdirSync(repoPath, { recursive: true });
@@ -217,4 +218,22 @@ test('audit-core stamps audit.json + dimension JSONs; aggregate preserves and re
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
+});
+
+test('engine provenance carries the plugin version from plugin.json (never hardcoded)', () => {
+  const manifest = JSON.parse(
+    readFileSync(
+      join(SKILL, '..', '..', '.claude-plugin', 'plugin.json'),
+      'utf8'
+    )
+  );
+  assert.equal(
+    ENGINE_PROVENANCE.version,
+    manifest.version,
+    'ENGINE_PROVENANCE.version must equal .claude-plugin/plugin.json version — the report and audit.json must name the exact released plugin version'
+  );
+  assert.ok(
+    ENGINE_PROVENANCE.version && ENGINE_PROVENANCE.version !== 'unknown',
+    'version must resolve from the manifest in a source checkout, not fall back to "unknown"'
+  );
 });

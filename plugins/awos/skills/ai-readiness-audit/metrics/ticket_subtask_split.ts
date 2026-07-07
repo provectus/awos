@@ -57,10 +57,10 @@ import {
   awardCategories,
   clampToWindow,
   computeReliability,
+  loadArtifactOrSkip,
   lookbackDays,
   makeMetricResult,
-  readArtifact,
-  skipMetric,
+  plural,
   trackerFetchNote,
   type MetricResult,
 } from './_base.ts';
@@ -83,27 +83,14 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
-  const read = readArtifact(collectedDir, 'tracker');
+  const loaded = loadArtifactOrSkip(collectedDir, 'tracker', {
+    metric: 'ticket_subtask_split',
+    kind: 'banded',
+    tag: 'minimal',
+  });
+  if ('skip' in loaded) return loaded.skip;
 
-  // Tracker source file absent → SKIP.
-  if ('error' in read) {
-    return skipMetric(
-      'ticket_subtask_split',
-      'banded',
-      'minimal',
-      'tracker',
-      read.error
-    );
-  }
-
-  const artifact = read.artifact;
-
-  // available=false means no tracker connector was provided.
-  if (!artifact?.available) {
-    return skipMetric('ticket_subtask_split', 'banded', 'minimal', 'tracker');
-  }
-
-  const raw = artifact?.raw ?? {};
+  const raw = loaded.raw;
   // Clamp the fetched tickets to the audit window (anchored to the newest
   // ticket timestamp) — an over-fetched tracker window must not leak older
   // history into the metric.
@@ -190,8 +177,8 @@ export function compute(
   );
 
   const expression =
-    `${parents.length} parent ticket${parents.length === 1 ? '' : 's'} ` +
-    `avg ${avgSubtasks.toFixed(1)} subtask${avgSubtasks !== 1 ? 's' : ''} each = ${band} ` +
+    `${parents.length} parent ${plural(parents.length, 'ticket')} ` +
+    `avg ${avgSubtasks.toFixed(1)} ${plural(avgSubtasks, 'subtask')} each = ${band} ` +
     `(over-splitting signal; bands are AWOS heuristics, no published numeric threshold)`;
 
   return makeMetricResult(

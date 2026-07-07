@@ -3,13 +3,13 @@
 // evidence of a spec workspace (self-pollution, B3).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { detectAwosInstalled } from './spec_driven_development.ts';
+import { tmpDir } from '../tests/helpers.ts';
 
 test('SDD-01 FAILs when context/ holds only the audit output dir', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-sdd01-polluted-'));
+  const repo = tmpDir('awos-sdd01-polluted-');
   try {
     mkdirSync(join(repo, 'context', 'audits', '2026-07-02'), {
       recursive: true,
@@ -26,7 +26,7 @@ test('SDD-01 FAILs when context/ holds only the audit output dir', () => {
 });
 
 test('SDD-01 PASSes with .awos/ plus a real spec workspace (context/product)', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-sdd01-real-'));
+  const repo = tmpDir('awos-sdd01-real-');
   try {
     mkdirSync(join(repo, '.awos'), { recursive: true });
     mkdirSync(join(repo, 'context', 'product'), { recursive: true });
@@ -42,7 +42,7 @@ test('SDD-01 PASSes with .awos/ plus a real spec workspace (context/product)', (
 });
 
 test('SDD-01 WARNs when only the workspace exists (context/spec, no .awos/)', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'awos-sdd01-warn-'));
+  const repo = tmpDir('awos-sdd01-warn-');
   try {
     mkdirSync(join(repo, 'context', 'spec'), { recursive: true });
     const res = detectAwosInstalled(repo);

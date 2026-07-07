@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   detectArchPattern,
@@ -11,9 +10,10 @@ import {
   detectFileSizes,
   DETECTORS,
 } from '../detectors/code_architecture.ts';
+import { tmpDir, writeRepo } from './helpers.ts';
 
 function tmp(): string {
-  return mkdtempSync(join(tmpdir(), 'arch-'));
+  return tmpDir('arch-');
 }
 
 // ---------------------------------------------------------------------------
@@ -105,43 +105,26 @@ test('ARCH-02: SKIP when no files live under recognised layer directories', () =
 
 test('ARCH-02: PASS when all imports go in one direction', () => {
   const t = tmp();
-  mkdirSync(join(t, 'routes'));
-  mkdirSync(join(t, 'services'));
-  mkdirSync(join(t, 'models'));
   // routes → services → models (unidirectional, valid)
-  writeFileSync(
-    join(t, 'routes', 'user.ts'),
-    "import { UserService } from '../services/user';\n"
-  );
-  writeFileSync(
-    join(t, 'services', 'user.ts'),
-    "import { User } from '../models/user';\n"
-  );
-  writeFileSync(
-    join(t, 'models', 'user.ts'),
-    'export interface User { id: string; }\n'
-  );
+  writeRepo(t, {
+    'routes/user.ts': "import { UserService } from '../services/user';\n",
+    'services/user.ts': "import { User } from '../models/user';\n",
+    'models/user.ts': 'export interface User { id: string; }\n',
+  });
   const r = detectImportGraph(t);
   assert.equal(r.status, 'PASS', 'unidirectional imports should yield PASS');
 });
 
 test('ARCH-02: FAIL when 2+ files in models/ import from routes/ (repeated layer violations)', () => {
   const t = tmp();
-  mkdirSync(join(t, 'routes'));
-  mkdirSync(join(t, 'models'));
-  writeFileSync(
-    join(t, 'routes', 'user.ts'),
-    "import { User } from '../models/user';\n"
-  );
   // Two layer violations: models importing from routes in two files
-  writeFileSync(
-    join(t, 'models', 'user.ts'),
-    "import { router } from '../routes/user';\nexport interface User {}\n"
-  );
-  writeFileSync(
-    join(t, 'models', 'post.ts'),
-    "import { router } from '../routes/user';\nexport interface Post {}\n"
-  );
+  writeRepo(t, {
+    'routes/user.ts': "import { User } from '../models/user';\n",
+    'models/user.ts':
+      "import { router } from '../routes/user';\nexport interface User {}\n",
+    'models/post.ts':
+      "import { router } from '../routes/user';\nexport interface Post {}\n",
+  });
   const r = detectImportGraph(t);
   assert.equal(
     r.status,

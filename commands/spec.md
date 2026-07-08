@@ -88,6 +88,7 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 2.  **Functional Requirements (The "What"):**
     - Ask the user to describe what needs to be done from a user's perspective.
     - For every piece of information the user gives you, think like a tester and clarify ambiguities. If the user answers in technical terms, rewrite the information into plain, user-facing language before including it in the spec.
+    - Where applicable, capture the boundary and error behavior the user sees: what error message appears, what limits exist (file size, format, count), and what happens when the action fails.
     - If the user says: "The user needs to be able to upload a profile picture."
     - Probe with clarifying questions like: "Great. Let's break that down. What file formats should be allowed (e.g., JPG, PNG)? Is there a maximum file size? What should happen after the upload is successful? What specific error message should the user see if it fails?" — for any that stay unanswered, leave a `[NEEDS CLARIFICATION: …]` marker rather than stopping.
     - If information is missing, mark every unresolved detail with `[NEEDS CLARIFICATION: your specific question]` directly in the draft. Example: "The user should see an error message. [NEEDS CLARIFICATION: What should the exact text of the error message be?]"
@@ -96,8 +97,9 @@ Your first goal is to determine the **topic** - the single, specific feature or 
     - After clarifying a requirement, turn it into a concrete, testable acceptance criterion.
     - Acceptance criteria must read as manual QA test scripts that a non-developer could execute. Describe only what is visible on screen and what the user does — never reference internal system behavior.
     - Each acceptance criterion follows the same three-part shape as the example below: a precondition (Given), a user action (When), and a visible outcome (Then). Include Given only when the precondition affects the outcome.
-    - If any `[NEEDS CLARIFICATION: …]` markers remain on the parent requirement in §Functional Requirements, ask clarifying questions and resolve the markers before writing acceptance criteria.
-    - If a clarifying answer reveals a constraint or detail that belongs to the parent requirement (not just the acceptance criterion), update the requirement statement in §Functional Requirements before continuing. The requirement and its acceptance criteria must agree on level of detail.
+    - If any `[NEEDS CLARIFICATION: …]` markers remain on the parent requirement in **Functional Requirements**, ask clarifying questions and resolve the markers before writing acceptance criteria.
+    - If a clarifying answer reveals a constraint or detail that belongs to the parent requirement (not just the acceptance criterion), update the requirement statement in **Functional Requirements** before continuing. The requirement and its acceptance criteria must agree on level of detail.
+    - For requirements that capture boundary or error behavior, include at least one acceptance criterion covering the failure path (e.g., "When the user uploads a file larger than 5MB, then they see: 'File too large. Maximum size is 5MB.'").
     - Example Statement: "Okay, I've captured that. So a clear acceptance criterion would be: 'Given the user is on their profile page, when they upload a PNG file smaller than 5MB, then the new picture appears on their profile and a 'Success' message is shown.' Is that correct?"
 
 4.  **Scope and Boundaries:**
@@ -106,9 +108,15 @@ Your first goal is to determine the **topic** - the single, specific feature or 
     - Focus only on clarifying boundaries within the current **topic** itself.
     - Example: "To keep this focused on [your topic], what related aspects should we explicitly not include? For example, should we include [specific feature within this topic]?"
 
-### Step 4: Self-Review (Language Check)
+### Step 4: Self-Review (Language and Ambiguity Check)
 
 - Before presenting to the user, re-read the entire draft end-to-end. For every sentence, ask: "Would this make sense to someone who has never seen the codebase?" Replace any developer-facing language with plain, non-technical wording in the same language the user is using. Remove any references to internal system behavior, code, or architecture that slipped in.
+- Then re-read **Functional Requirements** — both the requirement statements and their acceptance criteria — for vague or unmeasurable wording: words like "fast", "user-friendly", or "as appropriate" that a tester could not verify. Make each one concrete in user-perceivable terms (e.g., "the search feels fast" becomes "search results appear within 2 seconds"), or, if the user has not decided the specific value yet, replace it with a `[NEEDS CLARIFICATION: …]` marker so it is resolved in Step 6, after the spec is saved. Quantify only where the user would notice the difference — do not force a number onto every sentence; narrative sections like **Overview and Rationale** may stay qualitative.
+
+**Definition of Done.** A self-review, not an approval gate — the file is still written at the end of the process. Confirm the draft meets both:
+
+1.  **No vague wording remains in requirements or acceptance criteria.** The check above already resolved each vague term — made it concrete in user-perceivable terms or converted it to a `[NEEDS CLARIFICATION: …]` marker; confirm none slipped through, and if one did, resolve it per the check above. Any term converted to a marker is resolved with the user in Step 6, or left in place in an unattended run.
+2.  **Every requirement has at least one acceptance criterion.** Confirm that each functional requirement in **Functional Requirements** carries at least one acceptance criterion in the When/Then shape (Given optional). If a requirement has none, write one for it before saving.
 
 ### Step 5: File Generation
 
@@ -118,5 +126,5 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 
 ### Step 6: Final Review and Recommend Next Step
 
-1.  Present the saved specification and ask the user to review it for inaccuracies or missing details. Resolve any `[NEEDS CLARIFICATION: …]` markers with them, apply edits, and re-save. If no answer comes (e.g. an unattended `claude -p` run), leave the markers in place; the user — or `/awos:tech` — can resolve them later.
+1.  Present the saved specification and ask the user to review it for inaccuracies or missing details. Resolve each `[NEEDS CLARIFICATION: …]` marker with them via `AskUserQuestion`, offering the assumption you would otherwise make as the recommended first option (with a free-text option for open-ended markers); fold each answer back into the relevant requirement and its acceptance criteria, then re-save. If no answer comes (e.g. an unattended `claude -p` run), leave the markers in place; the user — or `/awos:tech` — can resolve them later.
 2.  Report the saved path and the next command: `/awos:tech`.

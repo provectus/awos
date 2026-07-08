@@ -946,3 +946,76 @@ test('context/<path> references in prompts are internally consistent', () => {
     );
   }
 });
+
+test('commands/spec.md has a pre-write Definition of Done checklist', () => {
+  // The spec command runs a Definition of Done self-review inside Step 4,
+  // before the file is written: confirm no vague wording remains and every
+  // requirement carries an acceptance criterion. It is a self-review, not an
+  // approval gate — the file is still written. Any `[NEEDS CLARIFICATION]`
+  // marker is resolved with the user post-save in Step 6 (offering the
+  // assumption as the recommended first option), or left in place in an
+  // unattended run; the Definition of Done itself never asks the user a
+  // question. The behavioral proof — no raw markers in the produced
+  // functional-spec.md, every requirement carries a criterion — lives in
+  // awos-qa. This lint only pins that the instruction text is present, so
+  // the contract can't be silently dropped from the prompt later.
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    /Definition of Done/i.test(body),
+    'commands/spec.md must declare a "Definition of Done" pre-write checklist'
+  );
+  assert.ok(
+    body.includes('Every requirement has at least one acceptance criterion'),
+    'commands/spec.md Definition of Done must require every functional requirement to carry at least one acceptance criterion before saving'
+  );
+  assert.ok(
+    /No vague wording remains/i.test(body),
+    'commands/spec.md Definition of Done must gate on no vague wording remaining in requirements or acceptance criteria'
+  );
+  assert.ok(
+    body.includes(
+      'offering the assumption you would otherwise make as the recommended first option'
+    ),
+    'commands/spec.md Step 6 must resolve each [NEEDS CLARIFICATION] marker post-save via AskUserQuestion, offering the assumption you would otherwise make as the recommended first option'
+  );
+});
+
+test('commands/spec.md self-review checks for vague, unmeasurable wording', () => {
+  // The Step 4 self-review must hunt weasel words ("fast", "user-friendly",
+  // "as appropriate") in requirements and acceptance criteria, and either
+  // make them concrete in user-perceivable terms or convert them to a
+  // [NEEDS CLARIFICATION] marker that Step 6 resolves with the user
+  // post-save (or leaves in place in an unattended run). The behavioral
+  // proof — no unverifiable wording in the produced functional-spec.md —
+  // lives in awos-qa. This lint only pins that the instruction text is
+  // present, so the contract can't be silently dropped from the prompt later.
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    /vague or unmeasurable wording/i.test(body),
+    'commands/spec.md self-review must scan requirements and acceptance criteria for vague or unmeasurable wording'
+  );
+  assert.ok(
+    /"user-friendly"/.test(body),
+    'commands/spec.md self-review must name concrete weasel-word examples (e.g. "user-friendly") so the model knows what to hunt'
+  );
+  assert.ok(
+    body.includes('Make each one concrete in user-perceivable terms'),
+    'commands/spec.md Step 4 self-review rule must instruct making each vague term concrete in user-perceivable terms (not technical metrics), or converting it to a [NEEDS CLARIFICATION] marker'
+  );
+});
+
+test('spec.md captures boundary/error behavior as rules in items 2 and 3', () => {
+  // both sentences must be present — item 2 tells the model what to
+  // elicit; item 3 closes the loop by requiring failure-path criteria for them.
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    body.includes('boundary and error behavior the user sees'),
+    'spec.md Step 3 item 2 must contain the boundary/error elicitation rule'
+  );
+  assert.ok(
+    body.includes(
+      'at least one acceptance criterion covering the failure path'
+    ),
+    'spec.md Step 3 item 3 must require failure-path criteria for boundary/error requirements'
+  );
+});

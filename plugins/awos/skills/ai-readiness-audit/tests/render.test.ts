@@ -1268,7 +1268,7 @@ test('renderMarkdown: Reach lists Active Contributors → Spec coverage → AI t
   );
 });
 
-test('renderHtml: descriptors dimension page echoes Merges and LOC as non-scored throughput context', () => {
+test('renderHtml: descriptors dimension page echoes Merges and LOC as rows in the checks table', () => {
   const audit: AuditJson = {
     date: '2026-01-15',
     project: 'adoption-repo',
@@ -1310,21 +1310,28 @@ test('renderHtml: descriptors dimension page echoes Merges and LOC as non-scored
   );
   const page = html.slice(pageStart, html.indexOf('</section>', pageStart));
   assert.ok(
-    page.includes('Throughput context (not scored)'),
-    'descriptors page must carry a clearly non-scored throughput-context subsection'
+    !page.includes('Throughput context'),
+    'descriptors page must not carry a separate throughput-context subsection — the rows live in the checks table'
+  );
+  const tableEnd = page.indexOf('</tbody>');
+  assert.ok(tableEnd !== -1, 'descriptors page must render a checks table');
+  const table = page.slice(0, tableEnd);
+  assert.ok(
+    table.includes('3.1 / active') && table.includes('480 / active'),
+    'checks table must echo BOTH the Merges/active and LOC/active headline values as rows'
   );
   assert.ok(
-    page.includes('3.1 / active') && page.includes('480 / active'),
-    'Throughput context must echo BOTH the Merges/active and LOC/active headline values'
+    table.includes('<b>Merges</b>') && table.includes('<b>LOC</b>'),
+    'echoed throughput rows must be labeled Merges and LOC in the Check column'
   );
 });
 
-test('renderHtml: throughput-context subsection is confined to the descriptors page', () => {
-  // singleRepoFixture has no descriptors dimension → no throughput block anywhere.
+test('renderHtml: throughput echo rows are confined to the descriptors page', () => {
+  // singleRepoFixture has no descriptors dimension → no throughput echo rows anywhere.
   const html = renderHtml(singleRepoFixture());
   assert.ok(
-    !html.includes('Throughput context (not scored)'),
-    'Non-descriptors dimension pages must not render the throughput-context subsection'
+    !html.includes('<b>Merges</b>'),
+    'Non-descriptors dimension pages must not render the echoed throughput rows'
   );
 });
 

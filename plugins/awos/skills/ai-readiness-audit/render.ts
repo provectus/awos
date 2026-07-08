@@ -1750,36 +1750,39 @@ function dimensionPage(
   <td class="evidence">${evidence}</td>
 </tr>`);
   }
-  rows.push('</tbody></table>');
-  if (hasMinimal) {
-    rows.push(
-      '<p class="minimal-note">* lower-bound measurement (reliability tag: minimal).</p>'
-    );
-  }
-
-  // Throughput context (unscored descriptor dimension only): the headline
-  // throughput rows (THROUGHPUT_ECHO_LABELS) have no standards.toml category,
-  // so without this they would appear only on the overview and have no
-  // dimension home. They are size/activity descriptors, so they are echoed on
-  // the unscored descriptors page.
+  // Unscored descriptor dimension only: the headline throughput rows
+  // (THROUGHPUT_ECHO_LABELS) have no standards.toml category, so without this
+  // they would appear only on the overview and have no dimension home. They
+  // are size/activity descriptors like every other row on this page, so they
+  // join the same checks table as informational rows.
   if (isInformational(dim)) {
     const baseLabel = (l: string) => l.replace(/\s*\(.*\)\s*$/, '').trim();
     const throughput = (audit.headline?.delivery ?? []).filter((d) =>
       THROUGHPUT_ECHO_LABELS.has(baseLabel(d.label))
     );
-    if (throughput.length > 0) {
-      rows.push('<h3>Throughput context (not scored)</h3>');
-      rows.push(
-        '<p class="dim-head">Delivery-throughput normalizers echoed from the overview — context only, not part of this dimension’s capability score.</p>'
+    for (const d of throughput) {
+      const plain = resolveTip(
+        HEADLINE_TIP[baseLabel(d.label)] ?? d.label,
+        audit
       );
-      const items = throughput
-        .map(
-          (d) =>
-            `<div class="kv"><span class="k">${esc(d.label)}</span><span class="v">${tip(d.display_value ?? '—', resolveTip(HEADLINE_TIP[baseLabel(d.label)] ?? d.label, audit) + verifiedSuffix(audit.standards_meta?.standards_date))}</span></div>`
-        )
-        .join('');
-      rows.push(`<div class="exec-col">${items}</div>`);
+      const meta = verifiedSuffix(audit.standards_meta?.standards_date).trim();
+      const metaSpan = meta ? `<span class="tipmeta">${esc(meta)}</span>` : '';
+      rows.push(`<tr data-status="INFO">
+  <td>${ckn++}</td>
+  <td class="check"><span class="tip" tabindex="0"><b>${esc(d.label)}</b><span class="tipbox"><b>${esc(plain)}</b>${metaSpan}</span></span><span class="plain">${esc(plain)}</span></td>
+  <td>${statusBadge('INFO')}</td>
+  <td>${tip('—', 'Informational descriptor — carries no weight.')}</td>
+  <td>—</td>
+  <td>—</td>
+  <td class="evidence">${esc(d.display_value ?? '—')}</td>
+</tr>`);
     }
+  }
+  rows.push('</tbody></table>');
+  if (hasMinimal) {
+    rows.push(
+      '<p class="minimal-note">* lower-bound measurement (reliability tag: minimal).</p>'
+    );
   }
 
   if (navHtml) rows.push(navHtml);

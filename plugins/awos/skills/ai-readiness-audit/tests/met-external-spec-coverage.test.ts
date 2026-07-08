@@ -227,3 +227,31 @@ test('adp_d1: score=0 and confidence=0 on SKIP (docs.json absent)', () => {
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
 });
+
+// ---------------------------------------------------------------------------
+// Orchestrator-written artifact fallback — connector-shapes.md tells the
+// orchestrator to write only pages[]; the aggregates (page_count,
+// recently_updated_count) are derived by the metric when the CLI-collect path
+// didn't pre-compute them. A caught regression scored ADP-14 as FAIL/0 over
+// exactly this shape.
+// ---------------------------------------------------------------------------
+
+test('adp_i4: derives page counts from pages[] when the aggregates are absent', () => {
+  const tmp = makeTmpDir();
+  const recent = new Date(Date.now() - 5 * 86_400_000).toISOString();
+  const stale = new Date(Date.now() - 5000 * 86_400_000).toISOString();
+  const collectedDir = writeCollected(tmp, 'docs', {
+    // Orchestrator shape: no page_count, no recently_updated_count.
+    pages: [
+      { title: 'Spec A', url: 'https://x/a', updated_at: recent },
+      { title: 'Spec B', url: 'https://x/b', updated_at: stale },
+    ],
+  });
+  const result = compute(collectedDir, standards, { has_docs_connector: true });
+  assert.equal(result.status, 'OK', 'pages-only artifact must score');
+  assert.equal(
+    result.value,
+    0.5,
+    '1 of 2 pages recently updated must yield 0.5 coverage from the derived counts'
+  );
+});

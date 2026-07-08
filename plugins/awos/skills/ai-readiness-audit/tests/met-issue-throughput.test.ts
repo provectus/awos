@@ -223,3 +223,30 @@ test('adp_i2: score=0 and confidence=0 on SKIP (tracker absent)', () => {
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
 });
+
+// ---------------------------------------------------------------------------
+// Orchestrator-written artifact fallback — connector-shapes.md tells the
+// orchestrator to write only tickets[]; the aggregate (resolved_count) is
+// derived by the metric when the CLI-collect path didn't pre-compute it.
+// A caught regression scored ADP-11 as FAIL/0 over exactly this shape.
+// ---------------------------------------------------------------------------
+
+test('adp_i2: derives resolved_count from tickets[] when the aggregate is absent', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'tracker', {
+    // Orchestrator shape: no resolved_count, no type_counts.
+    tickets: [
+      { id: 'T-1', status: 'Done', resolved_at: '2026-06-01T00:00:00Z' },
+      { id: 'T-2', status: 'In Progress', resolved_at: null },
+      { id: 'T-3', status: 'done', resolved_at: null },
+    ],
+    incident_source: null,
+  });
+  const result = compute(collectedDir, standards, { has_tracker: true });
+  assert.equal(result.status, 'OK', 'tickets-only artifact must score');
+  assert.equal(
+    result.value,
+    2,
+    'resolved_count must be derived from tickets (Done status or resolved_at set)'
+  );
+});

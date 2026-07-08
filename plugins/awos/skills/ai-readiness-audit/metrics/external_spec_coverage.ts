@@ -26,6 +26,7 @@ import {
   type MetricResult,
 } from './_base.ts';
 import { clamp01 } from './_score.ts';
+import { countRecentlyUpdated, type DocPage } from '../collectors/docs.ts';
 
 export function compute(
   collectedDir: string,
@@ -41,13 +42,30 @@ export function compute(
   });
   if ('skip' in loaded) return loaded.skip;
 
-  const raw = loaded.raw;
+  const { raw, artifact } = loaded;
+  // Prefer the CLI-collect path's pre-computed aggregates; orchestrator-written
+  // artifacts carry only pages[] (per connector-shapes.md), so derive the same
+  // counts from them — absent aggregates must not read as "no docs".
+  const pages: DocPage[] | null = Array.isArray(raw.pages)
+    ? (raw.pages as DocPage[])
+    : null;
   const pageCount: number =
-    typeof raw.page_count === 'number' ? raw.page_count : 0;
+    typeof raw.page_count === 'number'
+      ? raw.page_count
+      : pages
+        ? pages.length
+        : 0;
+  const lookbackDays: number =
+    typeof artifact?.period?.lookback_days === 'number' &&
+    artifact.period.lookback_days > 0
+      ? artifact.period.lookback_days
+      : 90;
   const recentlyUpdatedCount: number =
     typeof raw.recently_updated_count === 'number'
       ? raw.recently_updated_count
-      : 0;
+      : pages
+        ? countRecentlyUpdated(pages, lookbackDays)
+        : 0;
 
   // Freshness coverage: ratio of recently-updated pages.
   // When page_count is 0, coverage is 0 (no docs is a meaningful finding, not SKIP).

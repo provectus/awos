@@ -37,7 +37,13 @@ export interface DocsRaw {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function countRecentlyUpdated(pages: DocPage[], lookbackDays: number): number {
+/** Exported for the metric-side fallback: orchestrator-written docs artifacts
+ * carry only `pages[]` (per connector-shapes.md), so external_spec_coverage
+ * derives the freshness aggregates itself when the CLI-collect path didn't. */
+export function countRecentlyUpdated(
+  pages: DocPage[],
+  lookbackDays: number
+): number {
   const cutoff = new Date(Date.now() - lookbackDays * 86_400_000);
   return pages.filter((p) => {
     if (!p.updated_at) return false;

@@ -31,6 +31,7 @@ import {
   type MetricResult,
 } from './_base.ts';
 import { scoreFromConfig, scoringFor } from './_score.ts';
+import { countResolved, type TicketRecord } from '../collectors/tracker.ts';
 
 /** Default tracker lookback (days) when the artifact carries no period block. */
 const DEFAULT_LOOKBACK_DAYS = 90;
@@ -48,8 +49,15 @@ export function compute(
   if ('skip' in loaded) return loaded.skip;
 
   const { raw, artifact } = loaded;
+  // Prefer the CLI-collect path's pre-computed aggregate; orchestrator-written
+  // artifacts carry only tickets[] (per connector-shapes.md), so derive the
+  // same count from them — an absent aggregate must not read as 0 resolved.
   const resolvedCount: number =
-    typeof raw.resolved_count === 'number' ? raw.resolved_count : 0;
+    typeof raw.resolved_count === 'number'
+      ? raw.resolved_count
+      : Array.isArray(raw.tickets)
+        ? countResolved(raw.tickets as TicketRecord[])
+        : 0;
 
   const categories = awardCategories(standards, 'issue_throughput', topology);
   // Surface a partial tracker fetch (fetch_meta) — a truncated fetch

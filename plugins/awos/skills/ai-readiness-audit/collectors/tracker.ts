@@ -54,7 +54,12 @@ export interface TrackerRaw {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildTypeCounts(tickets: TicketRecord[]): Record<string, number> {
+/** Exported for the metric-side fallback: orchestrator-written tracker
+ * artifacts carry only `tickets[]` (per connector-shapes.md), so the metrics
+ * derive these aggregates themselves when the CLI-collect path didn't. */
+export function buildTypeCounts(
+  tickets: TicketRecord[]
+): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const t of tickets) {
     const key = (t.type ?? 'unknown').toLowerCase();
@@ -63,7 +68,8 @@ function buildTypeCounts(tickets: TicketRecord[]): Record<string, number> {
   return counts;
 }
 
-function countResolved(tickets: TicketRecord[]): number {
+/** Exported for the metric-side fallback (see buildTypeCounts). */
+export function countResolved(tickets: TicketRecord[]): number {
   return tickets.filter(
     (t) => t.status?.toLowerCase() === 'done' || t.resolved_at != null
   ).length;

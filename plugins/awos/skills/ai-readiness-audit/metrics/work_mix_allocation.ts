@@ -35,6 +35,7 @@ import {
   type MetricResult,
 } from './_base.ts';
 import { scoreFromConfig, scoringFor } from './_score.ts';
+import { buildTypeCounts, type TicketRecord } from '../collectors/tracker.ts';
 
 const GROWTH_TYPES = new Set([
   'feature',
@@ -69,10 +70,15 @@ export function compute(
   const raw = loaded.raw;
   // Surface a partial tracker fetch (fetch_meta) in the reliability note.
   const partialNote = trackerFetchNote(raw);
+  // Prefer the CLI-collect path's pre-computed aggregate; orchestrator-written
+  // artifacts carry only tickets[] (per connector-shapes.md), so derive the
+  // same breakdown from them — an absent aggregate must not read as no data.
   const typeCounts: Record<string, number> =
     typeof raw.type_counts === 'object' && raw.type_counts !== null
       ? (raw.type_counts as Record<string, number>)
-      : {};
+      : Array.isArray(raw.tickets)
+        ? buildTypeCounts(raw.tickets as TicketRecord[])
+        : {};
 
   const total = Object.values(typeCounts).reduce(
     (sum, n) => sum + (n as number),

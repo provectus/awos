@@ -274,3 +274,31 @@ test('adp_i1: score=0 and confidence=0 on SKIP (tracker absent)', () => {
   assert.equal(result.score, 0, 'score must be 0 on SKIP');
   assert.equal(result.confidence, 0, 'confidence must be 0 on SKIP');
 });
+
+// ---------------------------------------------------------------------------
+// Orchestrator-written artifact fallback — connector-shapes.md tells the
+// orchestrator to write only tickets[]; the aggregate (type_counts) is derived
+// by the metric when the CLI-collect path didn't pre-compute it. A caught
+// regression scored ADP-10 as FAIL/0 over exactly this shape.
+// ---------------------------------------------------------------------------
+
+test('adp_i1: derives type_counts from tickets[] when the aggregate is absent', () => {
+  const tmp = makeTmpDir();
+  const collectedDir = writeCollected(tmp, 'tracker', {
+    // Orchestrator shape: no type_counts, no resolved_count.
+    tickets: [
+      { id: 'T-1', type: 'feature' },
+      { id: 'T-2', type: 'feature' },
+      { id: 'T-3', type: 'bug' },
+      { id: 'T-4', type: 'Feature' },
+    ],
+    incident_source: null,
+  });
+  const result = compute(collectedDir, standards, { has_tracker: true });
+  assert.equal(result.status, 'OK', 'tickets-only artifact must score');
+  assert.notEqual(
+    result.value,
+    null,
+    'work-mix must be computed from the derived type breakdown, not treated as an empty tracker'
+  );
+});

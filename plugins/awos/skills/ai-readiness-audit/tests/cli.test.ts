@@ -720,8 +720,9 @@ test('patch-judgment: boolean value is dropped with a warning, numeric value is 
     ]);
     const { json, code } = runCliStdin(patches, 'patch-judgment', base, '-');
     assert.equal(code, 0, 'a boolean value must not fail the patch');
+    const r = json as Record<string, unknown>;
     assert.ok(
-      (json.warnings as string[]).some((w) => /boolean value dropped/.test(w)),
+      (r.warnings as string[]).some((w) => /boolean value dropped/.test(w)),
       'the summary must warn that the boolean value was dropped'
     );
     const dim = JSON.parse(

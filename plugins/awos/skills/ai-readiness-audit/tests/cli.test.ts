@@ -1,7 +1,7 @@
 /**
  * cli.test.ts — hermetic smoke tests for dist/cli.js (the bundled dispatcher).
  *
- * Runs against the BUNDLED file, not the TypeScript sources, so build:engine
+ * Runs against the BUNDLED file, not the TypeScript sources, so build:audit-engine
  * must be run before this test suite executes.
  *
  * Node path: the subprocess is spawned with the same Node binary that runs

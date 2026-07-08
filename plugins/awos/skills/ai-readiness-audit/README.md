@@ -45,7 +45,7 @@ npm run audit:compare -- --target some-repo
 
 Flags worth knowing: `--model` (default `sonnet`), `--dry-run` (preview, touches nothing), `--no-deploy` (test whatever the marketplace currently serves), `--allow-user-mcp` (let the session see your real MCP servers — required for testing live Jira/Confluence connector fetches; the default is strict isolation), `--retries` (engine-compliance retry count), `--quiet` (only the final summary). While in flight the harness streams a `[MmSSs]`-prefixed live log (engine Bash calls, subagent spawns, progress emissions, a 60s heartbeat) and finishes with a summary block: wall time, tokens, cost, compliance/judgment verdicts, and the absolute archived `report.html` path(s). Each run's `run-meta.json` records provenance (worktree SHA, model), token usage, `compliance` (did the model actually call `audit-core`), `partial`, `judgments_patched`, and `report_html` — a run that died mid-flight or skipped the engine exits non-zero instead of looking green.
 
-Deterministic unit/integration tests for the engine itself don't need the harness: `npm run test:engine` (needs `npm ci` once), `npm run typecheck`. After any engine `.ts` edit, `npm run build:engine` and commit the regenerated `dist/` — CI fails on a stale bundle.
+Deterministic unit/integration tests for the engine itself don't need the harness: `npm run test:audit-engine` (needs `npm ci` once), `npm run typecheck`. After any engine `.ts` edit, `npm run build:audit-engine` and commit the regenerated `dist/` — CI fails on a stale bundle.
 
 ## How to update it over time
 

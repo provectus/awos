@@ -7,8 +7,7 @@
  * no LLM calls. The audit JSON is the single source of truth; Markdown/HTML are
  * rendered output. Plain-language narrative (insights, recommendations, per-check
  * `plain`, the headline blocks) is authored UPSTREAM by the orchestrator and stored
- * in the JSON — the renderer only formats it. See
- * docs/design/2026-06-26-audit-fairness-and-report-v2-design.md.
+ * in the JSON — the renderer only formats it.
  *
  * =============================================================================
  * AUDIT JSON SCHEMA (consumed by this renderer)

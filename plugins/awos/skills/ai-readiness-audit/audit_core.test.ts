@@ -1,13 +1,7 @@
 // audit_core.test.ts — unit tests for aggregate() in audit_core.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  mkdtempSync,
-  writeFileSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-} from 'node:fs';
+import { writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { aggregate } from './audit_patch.ts';
 

@@ -859,8 +859,8 @@ async function main(): Promise<void> {
   log('─'.repeat(60));
 
   if (args.build) {
-    log('▶ building engine (npm run build:engine)…');
-    const bp = spawnSync('npm', ['run', 'build:engine'], {
+    log('▶ building engine (npm run build:audit-engine)…');
+    const bp = spawnSync('npm', ['run', 'build:audit-engine'], {
       cwd: worktree,
       stdio: 'inherit',
     });

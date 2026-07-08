@@ -88,7 +88,7 @@ jobs:
         run: npm run typecheck
 
       - name: Build engine bundle
-        run: npm run build:engine
+        run: npm run build:audit-engine
 
       # The bundle is committed (shipped to users — they run dist/cli.js, not a
       # local build). Fail if a rebuild diverges from what was committed, so a

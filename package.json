@@ -8,18 +8,18 @@
   },
   "main": "index.js",
   "scripts": {
-    "test": "node --test 'tests/**/*.test.js' && npm run test:engine && npm run test:harness && npm run test:audit-tools",
+    "test": "node --test 'tests/**/*.test.js' && npm run test:audit-engine && npm run test:audit-harness && npm run test:audit-tools",
     "test:lint": "node --test tests/lint-prompts.test.js",
     "test:installer": "node --test 'tests/installer/*.test.js'",
     "test:fixtures": "node --test tests/fixtures.test.js",
-    "test:engine": "node --import tsx --test \"plugins/awos/skills/ai-readiness-audit/**/*.test.ts\"",
-    "test:harness": "node --import tsx --test \"tools/ai-readiness-audit/qa/*.test.ts\"",
+    "test:audit-engine": "node --import tsx --test \"plugins/awos/skills/ai-readiness-audit/**/*.test.ts\"",
+    "test:audit-harness": "node --import tsx --test \"tools/ai-readiness-audit/qa/*.test.ts\"",
     "test:audit-tools": "node --test tools/ai-readiness-audit/*.test.mjs",
     "audit:test": "node --import tsx tools/ai-readiness-audit/qa/run_audit_test.ts",
     "audit:compare": "node --import tsx tools/ai-readiness-audit/qa/compare_audit_runs.ts",
     "audit:smoke": "node --import tsx tools/ai-readiness-audit/qa/compliance_smoke.ts",
     "typecheck": "tsc --noEmit",
-    "build:engine": "node tools/ai-readiness-audit/build-engine.mjs",
+    "build:audit-engine": "node tools/ai-readiness-audit/build-engine.mjs",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-exclude='tests/**' --test-coverage-exclude='src/index.js' 'tests/**/*.test.js'",
     "test:coverage:gate": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-exclude='tests/**' --test-coverage-exclude='src/index.js' --test-coverage-lines=${COVERAGE_LINES:-85} --test-coverage-functions=${COVERAGE_FUNCTIONS:-95} --test-coverage-branches=${COVERAGE_BRANCHES:-80} 'tests/**/*.test.js'"
   },
@@ -31,12 +31,10 @@
     "@types/node": "^26.0.0",
     "esbuild": "^0.28.1",
     "prettier": "3.8.4",
-    "tsx": "^4.22.4",
-    "typescript": "^6.0.3"
-  },
-  "dependencies": {
     "smol-toml": "^1.7.0",
     "tree-sitter-wasms": "^0.1.13",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
     "web-tree-sitter": "^0.24.0"
   }
 }

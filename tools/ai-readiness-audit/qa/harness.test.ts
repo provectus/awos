@@ -1,7 +1,7 @@
 /**
  * harness.test.ts — unit smoke of the audit QA harness's pure helpers
  * (harness_lib.ts), driven by synthetic stream-json transcripts and archive
- * trees. Run via `npm run test:harness` (part of `npm test`).
+ * trees. Run via `npm run test:audit-harness` (part of `npm test`).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

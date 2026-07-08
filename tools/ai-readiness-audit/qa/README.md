@@ -4,7 +4,7 @@ Repeatable, provenance-tagged test runs of the `/awos:ai-readiness-audit` skill 
 
 - `run_audit_test.ts` — deploy worktree skill → prepare target → run headless (with a live progress log) → guard engine compliance (retry/salvage) → measure tokens → archive → print a final summary.
 - `compare_audit_runs.ts` — diff two archived runs (per-dimension score deltas + tokens/cost).
-- `harness_lib.ts` — the pure helpers both scripts share (compliance counting, token aggregation, report-path collection), unit-tested by `harness.test.ts` (`npm run test:harness`, part of `npm test`).
+- `harness_lib.ts` — the pure helpers both scripts share (compliance counting, token aggregation, report-path collection), unit-tested by `harness.test.ts` (`npm run test:audit-harness`, part of `npm test`).
 
 The harness is TypeScript, run under `node --import tsx`; `tsx` is a devDependency, so run `npm ci` in the awos checkout once before first use.
 

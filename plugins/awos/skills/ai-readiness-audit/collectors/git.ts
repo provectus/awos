@@ -520,11 +520,11 @@ function scanSquashMerges(cwd: string, ref: string): SquashEvent[] {
 }
 
 /**
- * Fold squash events into counts, optionally windowed. `sinceMs` mirrors git
- * `--since` semantics (committer date >= since), so the windowed counts match
- * what a `--since`-bounded scan produced.
+ * Fold squash events into windowed counts. `sinceMs` mirrors git `--since`
+ * semantics (committer date >= since), so the windowed counts match what a
+ * `--since`-bounded scan produced.
  */
-function squashStats(events: SquashEvent[], sinceMs?: number): SquashScan {
+function squashStats(events: SquashEvent[], sinceMs: number): SquashScan {
   const scan: SquashScan = {
     total: 0,
     reverts: 0,
@@ -532,7 +532,7 @@ function squashStats(events: SquashEvent[], sinceMs?: number): SquashScan {
     perAuthor: new Map(),
   };
   for (const e of events) {
-    if (sinceMs !== undefined && e.date < sinceMs) continue;
+    if (e.date < sinceMs) continue;
     scan.total++;
     if (e.isRevert) scan.reverts++;
     if (e.isFix) scan.fixes++;

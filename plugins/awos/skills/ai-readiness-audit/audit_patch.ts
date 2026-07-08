@@ -218,6 +218,12 @@ export interface JudgmentPatch {
    * engine stores whatever it's given and does not enforce this.
    */
   confidence?: number;
+  /**
+   * Optional measurable quantity from the rubric (a count, ratio, or named
+   * artifact) — number or string only. Booleans are dropped on apply: they
+   * just restate `status`, and grading subagents returning `true` in one run
+   * and a fraction in the next made the field flap type run-to-run.
+   */
   value?: unknown;
   evidence?: string[];
 }
@@ -287,7 +293,15 @@ export function patchJudgments(
       c.confidence = conf;
       c.applies = p.status !== 'SKIP';
       c.weight_awarded = round1((c.weight_max || 0) * s);
-      if (p.value !== undefined) c.value = p.value;
+      if (p.value !== undefined) {
+        if (typeof p.value === 'boolean') {
+          warnings.push(
+            `${c.check_id}: boolean value dropped — it restates status; pass a measurable quantity (number/string) or omit value`
+          );
+        } else {
+          c.value = p.value;
+        }
+      }
       if (Array.isArray(p.evidence)) c.evidence = p.evidence;
       changed = true;
       patched.push(c.check_id);

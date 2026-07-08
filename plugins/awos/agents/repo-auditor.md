@@ -33,7 +33,7 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
 
    All of this runs in the foreground: issue connector fetches as parallel tool calls in one message and consume their results directly — never via background tasks, ScheduleWakeup, or polling turns.
 
-3. **Judgment (5) — one `patch-judgment` call.** The judgment evidence is repo reads, independent of the connector I/O — batch those reads into the same messages as the connector fetches (step 2) rather than starting them only after `enrich`. Only the APPLY must wait for `enrich` (it re-emits judgment checks as `PENDING_JUDGMENT`). Decide every pending check, write all verdicts as a single JSON array (`[{check_id, status, score?, value?, evidence?}]`, `score` a 0–1 fraction), and apply them in one engine call — never hand-edit dimension JSONs, and no separate `aggregate` (it re-aggregates itself):
+3. **Judgment (5) — one `patch-judgment` call.** The judgment evidence is repo reads, independent of the connector I/O — batch those reads into the same messages as the connector fetches (step 2) rather than starting them only after `enrich`. Only the APPLY must wait for `enrich` (it re-emits judgment checks as `PENDING_JUDGMENT`). Decide every pending check, write all verdicts as a single JSON array (`[{check_id, status, score?, confidence?, value?, evidence?}]` — `score` and `confidence` 0–1 fractions; `value` only for a measurable quantity the rubric yields, never a boolean or an echo of status/confidence; evidence bullets must name the concrete file paths examined), and apply them in one engine call — never hand-edit dimension JSONs, and no separate `aggregate` (it re-aggregates itself):
 
    ```bash
    node "<ENGINE>" patch-judgment "<outDir>" "<outDir>/judgments.json"

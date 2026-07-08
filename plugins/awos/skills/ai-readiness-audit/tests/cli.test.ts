@@ -705,3 +705,35 @@ test('render: --format both without --out-dir exits non-zero with a usage error'
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+test('patch-judgment: boolean value is dropped with a warning, numeric value is kept', () => {
+  const base = tmpDir('awos-patchj-boolval-');
+  try {
+    writeJudgmentAuditsDir(base);
+    const patches = JSON.stringify([
+      {
+        check_id: 'SDD-03',
+        status: 'PASS',
+        value: true,
+        evidence: ['specs present'],
+      },
+    ]);
+    const { json, code } = runCliStdin(patches, 'patch-judgment', base, '-');
+    assert.equal(code, 0, 'a boolean value must not fail the patch');
+    assert.ok(
+      (json.warnings as string[]).some((w) => /boolean value dropped/.test(w)),
+      'the summary must warn that the boolean value was dropped'
+    );
+    const dim = JSON.parse(
+      readFileSync(join(base, 'spec-driven-development.json'), 'utf8')
+    );
+    assert.equal(
+      dim.checks[0].value,
+      null,
+      'the check value must stay null — a boolean just restates status and flapped type run-to-run'
+    );
+    assert.equal(dim.checks[0].status, 'PASS', 'the status itself must apply');
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});

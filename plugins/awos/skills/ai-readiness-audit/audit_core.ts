@@ -26,7 +26,9 @@ import { join, basename, dirname } from 'node:path';
 import {
   evaluateAppliesWhen,
   loadStandards,
+  malformedEnvelopeNote,
   metaNumber,
+  strandedPayloadCount,
 } from './metrics/_base.ts';
 import { median, round1 } from './metrics/_score.ts';
 import type {
@@ -35,6 +37,7 @@ import type {
   WrittenCheck,
 } from './artifact_types.ts';
 import { COLLECTOR_SOURCES, SOURCE_LABEL_DEFAULTS } from './artifact_types.ts';
+import { readCodeHostPrs } from './metrics/_code_host.ts';
 import { ENGINE_PROVENANCE } from './provenance.ts';
 import {
   computeTopology,
@@ -438,6 +441,13 @@ export interface AuditCoreSummary {
   }>;
   skipped: number;
   /**
+   * Malformed connector artifacts that carry fetched records but are not
+   * marked `available: true` — the engine scored those sources as absent
+   * while real data sits on disk. Non-empty means: fix the artifact envelope
+   * (see references/connector-shapes.md) and re-run enrich.
+   */
+  artifact_warnings: string[];
+  /**
    * The audit measurement window in days ([meta].max_lookback_days) — the
    * orchestrator substitutes this into every connector query recipe instead
    * of hardcoding a day count.
@@ -501,6 +511,65 @@ export async function auditCore(
   const collected = readCollectedArtifacts(collectedDir);
   const sources = deriveSources(collected, false);
   const sourceWindows = deriveSourceWindows(collected);
+
+  // Malformed-envelope guard: a connector artifact carrying fetched records
+  // but not marked `available: true` scores as source-absent while the data
+  // sits on disk. Each per-metric SKIP already carries the loud note (see
+  // loadArtifactOrSkip); the summary lists them so the orchestrator sees the
+  // problem without inspecting artifacts and can fix + re-run enrich.
+  const artifactWarnings: string[] = [];
+  // Evidence provenance for connector-scored checks: the artifact's own
+  // source_label (e.g. "GitLab CI via glab (host, project)") names the channel
+  // the value was measured from, answering "where did this number come from"
+  // in the report's Evidence column.
+  const connectorLabels = new Map<string, string>();
+  for (const src of COLLECTOR_SOURCES) {
+    if (src === 'git') continue; // engine-collected, not connector-fetched
+    const art = collected.get(src)?.art;
+    if (!art) continue;
+    if (art.available === true) {
+      connectorLabels.set(src, sourceWindows[src]?.label ?? src);
+    } else {
+      const stranded = strandedPayloadCount(art);
+      if (stranded > 0) {
+        artifactWarnings.push(malformedEnvelopeNote(src, stranded));
+      }
+    }
+  }
+  // Same guard one level deeper: an available code_host artifact whose PR
+  // records carry unparseable timestamps (even after the tolerant snake_case/
+  // camelCase reader) silently pushes DF-02/DF-03 onto the git proxy — a
+  // measured run drifted exactly this way. Name the field-shape problem.
+  if (collected.get('code_host')?.art?.available === true) {
+    const parsed = readCodeHostPrs(collectedDir);
+    const bad = parsed.prs.filter(
+      (p) => p.createdMs === null || p.mergedMs === null
+    ).length;
+    if (bad > 0) {
+      artifactWarnings.push(
+        `code_host.json: ${bad} of ${parsed.prs.length} pr record(s) lack a parseable created_at/merged_at — ` +
+          `those PRs are invisible to the PR-timing metrics (which then fall back to the git proxy); ` +
+          `fix the field mapping per references/connector-shapes.md and re-run enrich`
+      );
+    }
+    // Thin fetch: records parse but NONE carry first_commit_at/commit_count,
+    // so DF-02/DF-05 quietly use the git proxy while DF-03 uses PR data —
+    // mixed provenance that flips run-to-run with whether the per-PR commit
+    // pass ran. Flag it so the skip is a decision, not an accident.
+    if (
+      parsed.prs.length > 0 &&
+      bad === 0 &&
+      parsed.prs.every(
+        (p) => p.firstCommitMs === null && p.commitCount === null
+      )
+    ) {
+      artifactWarnings.push(
+        `code_host.json: none of the ${parsed.prs.length} pr record(s) carry first_commit_at/commit_count — ` +
+          `DF-02/DF-05 fall back to the git proxy; run the per-PR commit pass ` +
+          `(references/connector-shapes.md) or record why not in fetch_meta.note, then re-run enrich`
+      );
+    }
+  }
 
   // 2. Deterministic topology flags. Connector-dependent flags (has_tracker,
   //    has_docs_connector, has_incident_source) are derived from the collected
@@ -645,6 +714,17 @@ export async function auditCore(
           topology,
           metricMeta
         );
+    // Connector-scored check → say in Evidence which channel the value was
+    // measured from (the artifact's source_label). Dedup keeps enrich re-runs
+    // and reused records from stacking duplicates.
+    if (rec.status !== 'SKIP' && rec.status !== 'PENDING_JUDGMENT') {
+      for (const src of rec.sources ?? []) {
+        const label = connectorLabels.get(src);
+        if (label && !rec.evidence.some((e) => e.includes(label))) {
+          rec.evidence.push(`measured from: ${label}`);
+        }
+      }
+    }
     (byDimension[c.dimension] ??= []).push(rec);
     if (rec.status === 'PENDING_JUDGMENT') {
       judgmentPending++;
@@ -771,6 +851,7 @@ export async function auditCore(
     judgment_pending: judgmentPending,
     pending_judgment_checks: pendingJudgmentChecks,
     skipped,
+    artifact_warnings: artifactWarnings,
     lookback_days: periodFromStandards(standards).lookback_days,
     window_anchor: gitWindowAnchor(collected),
     duration_ms: Date.now() - start,

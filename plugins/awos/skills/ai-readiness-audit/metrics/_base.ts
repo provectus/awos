@@ -410,6 +410,48 @@ export interface SkipIdentity {
   tag: string;
 }
 
+/** Payload keys a connector artifact can carry records under — checked both
+ * at the top level (the malformed-envelope case: a bare `{fetch_meta, period,
+ * runs}` write) and under `raw` (the documented envelope). */
+const PAYLOAD_KEYS = [
+  'runs',
+  'tickets',
+  'prs',
+  'pages',
+  'pipelines',
+  'incidents',
+  'issues',
+];
+
+/**
+ * Count the records stranded in an artifact that is NOT marked available.
+ * A non-zero count means the orchestrator fetched real data but wrote a
+ * malformed envelope (most often: payload at the top level with no
+ * `available: true`), and the engine would otherwise silently score the
+ * source as absent while hundreds of fetched records sit on disk.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function strandedPayloadCount(artifact: any): number {
+  let n = 0;
+  for (const container of [artifact, artifact?.raw]) {
+    if (!container || typeof container !== 'object') continue;
+    for (const key of PAYLOAD_KEYS) {
+      const v = container[key];
+      if (Array.isArray(v)) n += v.length;
+    }
+  }
+  return n;
+}
+
+/** The loud note for a data-rich artifact whose envelope disables it. */
+export function malformedEnvelopeNote(source: string, records: number): string {
+  return (
+    `${source}.json holds ${records} fetched record(s) but lacks ` +
+    `\`available: true\` — malformed envelope, data ignored by the engine; ` +
+    `rewrite as {source, available, period, raw: {…}} per references/connector-shapes.md and re-run enrich`
+  );
+}
+
 /**
  * Load a connector artifact for a metric, short-circuiting to the metric's
  * standard SKIP when the source is unusable. Collapses the four-line dance
@@ -429,6 +471,20 @@ export function loadArtifactOrSkip(
   }
   const artifact = read.artifact;
   if (!artifact?.available) {
+    // Data-rich but mis-enveloped artifact: skip as usual, but say WHY loudly
+    // — a generic "missing sources" note here hid 688 fetched CI runs once.
+    const stranded = strandedPayloadCount(artifact);
+    if (stranded > 0) {
+      return {
+        skip: skipMetric(
+          id.metric,
+          id.kind,
+          id.tag,
+          source,
+          malformedEnvelopeNote(source, stranded)
+        ),
+      };
+    }
     return { skip: skipMetric(id.metric, id.kind, id.tag, source) };
   }
   return { raw: artifact?.raw ?? {}, artifact };

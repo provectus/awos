@@ -303,6 +303,8 @@ Merged-PR records from the code host (GitHub via `gh`, GitLab via `glab`, or a c
 | `first_commit_at` | `string` | no       | Earliest commit authored on the PR — with `merged_at`, the DF-02 lead-time approximation |
 | `commit_count`    | `number` | no       | Commits on the PR at merge time — feeds the DF-05 review-rework proxy                    |
 
+snake_case is canonical; the engine also tolerates the raw API camelCase aliases (`createdAt`, `mergedAt`, `firstCommitAt`, `commitCount`) so an unmapped passthrough still parses. Any other field names are invisible to the PR-timing metrics — the enrich summary flags such records under `artifact_warnings`.
+
 ### CodeHostRaw
 
 Written by the orchestrator directly (no engine collector transforms it):
@@ -357,7 +359,7 @@ gh api graphql -f owner=<owner> -f repo=<repo> -f query='
 # Drop PRs whose mergedAt is older than the cutoff (window_anchor − lookback_days).
 ```
 
-Fallback when GraphQL is unavailable: `gh pr list --state merged --limit 200 --json number,createdAt,mergedAt` (no `commits`) — DF-03 still computes exactly; DF-02/DF-05 fall back to their git proxies. GitLab equivalent: `glab mr list --state merged` (MR `sha`/commit counts via `glab api projects/:id/merge_requests/:iid/commits` when cheap).
+Fallback when GraphQL is unavailable: `gh pr list --state merged --limit 200 --json number,createdAt,mergedAt` (no `commits`) — DF-03 still computes exactly; DF-02/DF-05 fall back to their git proxies. GitLab equivalent: `glab mr list --state merged`, **followed by the per-MR commit pass** — `glab api projects/:id/merge_requests/:iid/commits` for each in-window MR (batch the calls; cap at the ~50 most recent when the window holds more), mapping the oldest commit's `created_at` → `first_commit_at` and the array length → `commit_count`. This pass is part of the fetch, not optional garnish: with it DF-02/DF-05 score from PR data, without it they silently fall back to the git proxy, and a run that does the pass and a run that skips it produce different delivery-flow numbers on identical code. If the pass genuinely cannot run (rate limit, API error), say so in `fetch_meta.note` so the fallback is a recorded decision.
 
 ---
 
@@ -424,6 +426,7 @@ When no MCP server in the session covers a source, CLI tools on PATH are the san
 ### Identity discovery — what to query
 
 - **GitHub / GitLab project**: `git remote get-url origin` → `owner/repo` (works for both hosts; strip `.git`). No further discovery needed — `gh`/`glab` commands below take it from the working directory.
+- **Mirror repos — resolve the real host project before giving up.** When the origin host returns zero merged PRs / zero runs but the tree carries the OTHER host's CI config (e.g. `.gitlab-ci.yml` on a GitHub remote), the repo is a mirror and the real PR/pipeline history lives on the foreign host. Do not accept the origin's empty answer as confirmed-empty. Resolve the real project with a `glab api "projects?search=<term>"` (or `gh` equivalent) over an **enumerated variant list**, trying each in order until one matches: the repo directory name verbatim; its hyphenated/de-hyphenated forms (`sowinsights` ↔ `sow-insights`); each hyphen-split token and progressively shortened prefixes (`sow`); and any project names found inside the repo — helm `Chart.yaml` `name:`, CI config job/project references, package-manifest names. Log every attempted variant and its outcome in the source's `source_probes` entry, so a failed resolution shows what was searched. Declare the source unavailable only after the whole variant list misses. (A measured pair of runs flipped DF-02/03/05 solely because one run searched broadly enough to find `sow-insights-poc` and the other stopped at the literal directory name.)
 - **Jira project key**: scan the repo's own history — `git log --format='%s' -500` plus branch names — for ticket references matching `\b[A-Z][A-Z0-9]{1,9}-[0-9]+\b`; the dominant prefix is the project key (e.g. `IGAL`). Verify it before trusting it: `acli jira project view <KEY>` must succeed. No dominant prefix or verification failure → record "no Jira project key derivable from history" in the probe log and stop; never guess a key.
 
 ### CI runs → `collected/ci.json` (gh / glab)
@@ -433,8 +436,35 @@ When no MCP server in the session covers a source, CLI tools on PATH are the san
 # Fetch a bounded recent run history:
 gh run list --limit 200 --json databaseId,status,conclusion,createdAt,updatedAt,workflowName
 # (GitLab: glab ci list --per-page 100 --output json)
-# Map into the CiConnector shape: runs[] entries pass through opaquely;
-# set period.source_label: "GitHub Actions via gh" (or "GitLab CI via glab").
+```
+
+Write the artifact with the **full envelope** — the same `{source, available, period, raw}` wrapper every connector uses. The `runs[]` array goes under `raw`, and `available: true` is what makes the engine read it at all; a bare `{fetch_meta, period, runs}` write is silently scored as source-absent (a measured run stranded 500 fetched runs this way — the enrich summary flags it under `artifact_warnings`):
+
+```json
+{
+  "source": "ci",
+  "available": true,
+  "reason_if_absent": null,
+  "period": {
+    "bucket_days": 30,
+    "lookback_days": 90,
+    "history_available_days": 90,
+    "source_label": "GitHub Actions via gh"
+  },
+  "raw": {
+    "runs": [
+      {
+        "databaseId": 123456,
+        "status": "completed",
+        "conclusion": "success",
+        "createdAt": "2026-07-01T10:00:00Z",
+        "updatedAt": "2026-07-01T10:09:00Z",
+        "workflowName": "CI"
+      }
+    ],
+    "fetch_meta": { "runs_fetched": 200, "complete": true }
+  }
+}
 ```
 
 This alone upgrades the CI source from "config detected but no run history" to scored pipeline metrics — no MCP required.
@@ -471,3 +501,5 @@ gh issue list --state all --limit 500 --json number,title,state,createdAt,closed
 ```
 
 Prefer richer sources when several are reachable: tracker MCP > acli > code-host issues. One tracker artifact only — never merge channels.
+
+**Viability threshold for the fallback.** Code-host issues are only a tracker when the project actually tracks work there. When the richer tracker (Jira, Linear, …) exists but is unreachable and the code-host fallback yields **fewer than 5 tickets in the audit window**, write the artifact with `available: false` and a `reason_if_absent` naming both facts — e.g. `"Jira (IGAL) unreachable: no Atlassian MCP, acli not on PATH; GitHub Issues fallback has 1 issue in window — not a viable tracker substitute"` — instead of scoring throughput/work-mix off a 0–1-ticket sample. A near-empty fallback produces garbage values, and whether it counts as "available" must not vary run to run.

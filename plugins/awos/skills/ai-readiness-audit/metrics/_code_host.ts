@@ -40,6 +40,18 @@ function toMs(v: unknown): number | null {
   return isNaN(t) ? null : t;
 }
 
+/** First present value among the snake_case documented field name and its
+ * camelCase API-passthrough alias. Orchestrators sometimes write `gh`'s raw
+ * `createdAt`/`mergedAt` field names without mapping; a measured run had
+ * DF-02/DF-03 silently fall back to the git proxy over exactly that, so the
+ * reader accepts both spellings instead of demanding a perfect mapping. */
+function field(r: Record<string, unknown>, ...names: string[]): unknown {
+  for (const n of names) {
+    if (r[n] !== undefined && r[n] !== null) return r[n];
+  }
+  return undefined;
+}
+
 /** Parse collected/code_host.json into date-normalized PR records.
  * Absent/unavailable/malformed artifacts read as `available: false`. */
 export function readCodeHostPrs(collectedDir: string): CodeHostData {
@@ -56,13 +68,14 @@ export function readCodeHostPrs(collectedDir: string): CodeHostData {
   for (const p of rawPrs) {
     if (!p || typeof p !== 'object') continue;
     const r = p as Record<string, unknown>;
+    const commitCount = field(r, 'commit_count', 'commitCount');
     prs.push({
-      createdMs: toMs(r.created_at),
-      mergedMs: toMs(r.merged_at),
-      firstCommitMs: toMs(r.first_commit_at),
+      createdMs: toMs(field(r, 'created_at', 'createdAt')),
+      mergedMs: toMs(field(r, 'merged_at', 'mergedAt')),
+      firstCommitMs: toMs(field(r, 'first_commit_at', 'firstCommitAt')),
       commitCount:
-        typeof r.commit_count === 'number' && r.commit_count >= 0
-          ? r.commit_count
+        typeof commitCount === 'number' && commitCount >= 0
+          ? commitCount
           : null,
     });
   }

@@ -4,9 +4,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   computeReliability,
+  loadArtifactOrSkip,
   makeMetricResult,
   readArtifact,
   skipReliability,
+  strandedPayloadCount,
 } from '../metrics/_base.ts';
 import { tmpDir } from './helpers.ts';
 
@@ -118,5 +120,83 @@ test('skipReliability carries the read error into the note', () => {
     r.note ?? '',
     /missing sources: git \(git\.json not found\)/,
     'note must name the missing source AND the concrete read error'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// loadArtifactOrSkip — malformed-envelope guard: a data-rich artifact that is
+// not marked available must SKIP loudly (naming the stranded records), never
+// with the generic "missing sources" note that hides fetched data.
+// ---------------------------------------------------------------------------
+
+test('loadArtifactOrSkip flags a data-rich artifact missing available:true as a malformed envelope', () => {
+  const dir = tmpDir('awos-malformed-env-');
+  // The observed failure shape: payload at the top level, no envelope at all.
+  writeFileSync(
+    join(dir, 'ci.json'),
+    JSON.stringify({
+      fetch_meta: { runs_fetched: 3, complete: true },
+      period: { lookback_days: 90 },
+      runs: [{ conclusion: 'success' }, { conclusion: 'failure' }, {}],
+    })
+  );
+  const loaded = loadArtifactOrSkip(dir, 'ci', {
+    metric: 'ci_pass_rate',
+    kind: 'banded',
+    tag: 'not-reliable',
+  });
+  assert.ok('skip' in loaded, 'artifact without available:true must SKIP');
+  if ('skip' in loaded) {
+    const note = loaded.skip.reliability.note ?? '';
+    assert.match(
+      note,
+      /malformed envelope/,
+      'the SKIP note must call out the malformed envelope, not a generic missing source'
+    );
+    assert.match(
+      note,
+      /ci\.json holds 3 fetched record/,
+      'the SKIP note must count the stranded records so the loss is visible'
+    );
+  }
+});
+
+test('loadArtifactOrSkip keeps the plain missing-source note for a genuinely empty unavailable artifact', () => {
+  const dir = tmpDir('awos-plain-unavail-');
+  writeFileSync(
+    join(dir, 'ci.json'),
+    JSON.stringify({
+      source: 'ci',
+      available: false,
+      reason_if_absent: 'no CI config detected',
+      raw: {},
+    })
+  );
+  const loaded = loadArtifactOrSkip(dir, 'ci', {
+    metric: 'ci_pass_rate',
+    kind: 'banded',
+    tag: 'not-reliable',
+  });
+  assert.ok('skip' in loaded, 'unavailable artifact must SKIP');
+  if ('skip' in loaded) {
+    const note = loaded.skip.reliability.note ?? '';
+    assert.doesNotMatch(
+      note,
+      /malformed envelope/,
+      'an honestly-empty unavailable artifact is not a malformed envelope'
+    );
+  }
+});
+
+test('strandedPayloadCount counts records at the top level and under raw', () => {
+  assert.equal(
+    strandedPayloadCount({ runs: [1, 2], raw: { tickets: [1] } }),
+    3,
+    'payload arrays at both levels must be counted'
+  );
+  assert.equal(
+    strandedPayloadCount({ available: false, raw: {} }),
+    0,
+    'an artifact with no payload arrays has nothing stranded'
   );
 });

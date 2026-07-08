@@ -15,6 +15,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { auditCore, scoreBadge } from '../audit_core.ts';
+import { METRICS } from '../metrics/index.ts';
 import { aggregate } from '../audit_patch.ts';
 import { makeCheckRecord } from './helpers.ts';
 import { tmpDir } from './helpers.ts';
@@ -753,4 +754,214 @@ test('scoreBadge: weight-0 categories keep raw-score thresholds (INFO replaces t
   assert.equal(scoreBadge(0, 1), 'PASS', 'weight 0, perfect score → PASS');
   assert.equal(scoreBadge(0, 0.5), 'PARTIAL', 'weight 0, mid score → PARTIAL');
   assert.equal(scoreBadge(0, 0), 'FAIL', 'weight 0, zero score → FAIL');
+});
+
+// ---------------------------------------------------------------------------
+// artifact_warnings — a data-rich connector artifact missing available:true is
+// a malformed envelope: the summary must flag it instead of silently scoring
+// the source as absent while fetched records sit on disk.
+// ---------------------------------------------------------------------------
+
+test('summary.artifact_warnings flags a data-rich ci.json missing available:true', async () => {
+  const outDir = tmpDir('audit-core-malformed-out-');
+  const collectedDir = tmpDir('audit-core-malformed-collected-');
+  writeFileSync(
+    join(collectedDir, 'ci.json'),
+    JSON.stringify({
+      fetch_meta: { runs_fetched: 2, complete: true },
+      period: { lookback_days: 90 },
+      runs: [{ conclusion: 'success' }, { conclusion: 'failure' }],
+    })
+  );
+  const summary = await auditCore(
+    SKILL_ROOT,
+    outDir,
+    {},
+    {},
+    STANDARDS_PATH,
+    collectedDir
+  );
+  assert.equal(
+    summary.artifact_warnings.length,
+    1,
+    'exactly the malformed ci artifact must be flagged'
+  );
+  assert.match(
+    summary.artifact_warnings[0],
+    /ci\.json holds 2 fetched record/,
+    'the warning must name the artifact and count the stranded records'
+  );
+  assert.match(
+    summary.artifact_warnings[0],
+    /available: true/,
+    'the warning must say what is missing from the envelope'
+  );
+});
+
+test('summary.artifact_warnings is empty for engine-collected artifacts', async () => {
+  const outDir = tmpDir('audit-core-warnfree-out-');
+  const summary = await auditCore(SKILL_ROOT, outDir, {}, {}, STANDARDS_PATH);
+  assert.deepEqual(
+    summary.artifact_warnings,
+    [],
+    'engine-written collector artifacts are always well-enveloped'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Evidence provenance — a connector-scored check must say in its evidence
+// which channel the value was measured from (the artifact's source_label), so
+// the report answers "where did this number come from".
+// ---------------------------------------------------------------------------
+
+test('connector-scored check evidence names the source_label it was measured from', async () => {
+  const repoDir = tmpDir('audit-core-prov-repo-');
+  mkdirSync(join(repoDir, '.github', 'workflows'), { recursive: true });
+  writeFileSync(
+    join(repoDir, '.github', 'workflows', 'ci.yml'),
+    'name: CI\non: push\n'
+  );
+  const collectedDir = tmpDir('audit-core-prov-collected-');
+  const now = new Date('2026-07-01T10:00:00Z').getTime();
+  const runs = Array.from({ length: 4 }, (_, i) => ({
+    databaseId: i + 1,
+    status: 'completed',
+    conclusion: i === 0 ? 'failure' : 'success',
+    createdAt: new Date(now - i * 3600_000).toISOString(),
+    updatedAt: new Date(now - i * 3600_000 + 300_000).toISOString(),
+    workflowName: 'CI',
+  }));
+  writeFileSync(
+    join(collectedDir, 'ci.json'),
+    JSON.stringify({
+      source: 'ci',
+      available: true,
+      reason_if_absent: null,
+      period: {
+        bucket_days: 30,
+        lookback_days: 90,
+        history_available_days: 90,
+        source_label: 'GitHub Actions via gh',
+      },
+      raw: { runs, fetch_meta: { runs_fetched: 4, complete: true } },
+    })
+  );
+  const outDir = tmpDir('audit-core-prov-out-');
+  await auditCore(repoDir, outDir, {}, METRICS, STANDARDS_PATH, collectedDir);
+  const dim = JSON.parse(
+    readFileSync(join(outDir, 'ai-sdlc-adoption.json'), 'utf8')
+  );
+  const adp08 = dim.checks.find(
+    (c: { check_id: string }) => c.check_id === 'ADP-08'
+  );
+  assert.ok(adp08, 'ADP-08 (ci_pass_rate) must be present');
+  assert.notEqual(
+    adp08.status,
+    'SKIP',
+    'ADP-08 must score from the available ci artifact'
+  );
+  assert.ok(
+    adp08.evidence.some((e: string) =>
+      e.includes('measured from: GitHub Actions via gh')
+    ),
+    `ADP-08 evidence must cite the connector channel (got: ${JSON.stringify(adp08.evidence)})`
+  );
+});
+
+test('summary.artifact_warnings flags code_host pr records with unparseable timestamps', async () => {
+  const outDir = tmpDir('audit-core-chbad-out-');
+  const collectedDir = tmpDir('audit-core-chbad-collected-');
+  writeFileSync(
+    join(collectedDir, 'code_host.json'),
+    JSON.stringify({
+      source: 'code_host',
+      available: true,
+      reason_if_absent: null,
+      period: { lookback_days: 90, source_label: 'GitHub PRs via gh' },
+      raw: {
+        prs: [
+          // Field names the tolerant reader does NOT know — timestamps unparseable.
+          {
+            number: 1,
+            opened: '2026-06-01T00:00:00Z',
+            closed: '2026-06-02T00:00:00Z',
+          },
+          // A well-formed record — must not be counted.
+          {
+            number: 2,
+            created_at: '2026-06-01T00:00:00Z',
+            merged_at: '2026-06-02T00:00:00Z',
+          },
+        ],
+      },
+    })
+  );
+  const summary = await auditCore(
+    SKILL_ROOT,
+    outDir,
+    {},
+    {},
+    STANDARDS_PATH,
+    collectedDir
+  );
+  const warning = summary.artifact_warnings.find((w) =>
+    w.startsWith('code_host.json')
+  );
+  assert.ok(
+    warning,
+    'an available code_host artifact with unparseable pr timestamps must be flagged'
+  );
+  assert.match(
+    warning,
+    /1 of 2 pr record/,
+    'the warning must count only the records the PR-timing metrics cannot use'
+  );
+});
+
+test('summary.artifact_warnings flags a thin code_host fetch (no first_commit_at/commit_count anywhere)', async () => {
+  const outDir = tmpDir('audit-core-chthin-out-');
+  const collectedDir = tmpDir('audit-core-chthin-collected-');
+  writeFileSync(
+    join(collectedDir, 'code_host.json'),
+    JSON.stringify({
+      source: 'code_host',
+      available: true,
+      reason_if_absent: null,
+      period: { lookback_days: 90, source_label: 'GitLab MRs via glab' },
+      raw: {
+        prs: [
+          {
+            number: 1,
+            created_at: '2026-06-01T00:00:00Z',
+            merged_at: '2026-06-02T00:00:00Z',
+          },
+          {
+            number: 2,
+            created_at: '2026-06-03T00:00:00Z',
+            merged_at: '2026-06-04T00:00:00Z',
+          },
+        ],
+      },
+    })
+  );
+  const summary = await auditCore(
+    SKILL_ROOT,
+    outDir,
+    {},
+    {},
+    STANDARDS_PATH,
+    collectedDir
+  );
+  const warning = summary.artifact_warnings.find((w) =>
+    /first_commit_at\/commit_count/.test(w)
+  );
+  assert.ok(
+    warning,
+    'a code_host artifact with only created/merged timestamps must be flagged as a thin fetch'
+  );
+  assert.match(
+    warning,
+    /DF-02\/DF-05 fall back to the git proxy/,
+    'the warning must say which metrics silently degrade'
+  );
 });

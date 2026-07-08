@@ -190,3 +190,58 @@ test('unavailable code_host artifact falls through to the git path on all three 
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// camelCase passthrough tolerance — orchestrators sometimes write gh's raw
+// field names (createdAt/mergedAt) without mapping to the documented
+// snake_case; the reader must accept both so DF-02/03 do not silently fall
+// back to the git proxy over a spelling difference (a measured run drifted
+// exactly this way: sowa DF-02 == DF-03 == git-proxy median).
+// ---------------------------------------------------------------------------
+
+test('readCodeHostPrs accepts camelCase createdAt/mergedAt/commitCount aliases', () => {
+  const tmp = tmpDir('ch-camel-');
+  const collectedDir = writeCollected(tmp, 'git', squashGitRaw());
+  writeCollected(tmp, 'code_host', {
+    prs: [
+      {
+        number: 7,
+        createdAt: new Date(BASE).toISOString(),
+        mergedAt: new Date(BASE + 2 * HOUR).toISOString(),
+        first_commit_at: new Date(BASE - 10 * HOUR).toISOString(),
+        commitCount: 4,
+      },
+      {
+        number: 8,
+        createdAt: new Date(BASE).toISOString(),
+        mergedAt: new Date(BASE + 4 * HOUR).toISOString(),
+        first_commit_at: new Date(BASE - 10 * HOUR).toISOString(),
+        commitCount: 6,
+      },
+    ],
+  });
+
+  const lead = g4(collectedDir, standards, {});
+  assert.deepEqual(
+    lead.sources_used,
+    ['code_host'],
+    'DF-02 must score from camelCase PR records, not fall back to git'
+  );
+  const cycle = g5(collectedDir, standards, {});
+  assert.deepEqual(
+    cycle.sources_used,
+    ['code_host'],
+    'DF-03 must score from camelCase PR records, not fall back to git'
+  );
+  assert.notEqual(
+    lead.value,
+    cycle.value,
+    'lead time (first commit→merge) and cycle time (open→merge) must differ when the fields differ'
+  );
+  const rework = g8(collectedDir, standards, {});
+  assert.deepEqual(
+    rework.sources_used,
+    ['code_host'],
+    'DF-05 must read camelCase commitCount'
+  );
+});

@@ -29,7 +29,9 @@ Your primary task is to create the technical specification for a given feature. 
 # INTERACTION
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
-- **A skipped or unanswered question — as happens in an unattended `claude -p` run — is never a stop signal. Record your best-fit option as an explicit `**Assumption:**` in the draft and continue through the remaining steps, including writing the deliverable.**
+- **A skipped or unanswered question is never a stop signal. Record your best-fit option as an explicit `**Assumption:**` in the draft and continue through the remaining steps, including writing the deliverable.**
+
+<!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
 ---
 

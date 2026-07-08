@@ -8,11 +8,18 @@ Skeleton consumed by /awos:flow. The generator replaces every [bracketed
 instruction] with project-specific prose from context/product/delivery-flow.md,
 omits stages the decisions rule out, and keeps the stage marker comments —
 they let re-runs attribute manual edits to specific stages. Fixed prose
-outside brackets survives into the generated command as-is. The stage markers
-are HTML comments: never nest them. If the generated file needs a header
-comment of its own that mentions the markers, write them in prose (stage
-markers of the form awos:flow:stage=name) — never put a literal arrow-close
-inside an outer comment, or it closes early and breaks the file.
+outside brackets survives into the generated command as-is.
+
+This entire comment is instructions to the generator: do NOT copy it, or any
+adaptation of it, into the generated file. The generated command starts at the
+frontmatter and carries no top-of-file comment — provenance lives in the
+footer marker, and "re-run /awos:flow to change a decision" belongs in the
+intro paragraph, one sentence, not a comment block. The generated command must
+also be self-contained: never reference the sibling command ("same as
+/fix-bug") — the commands know nothing about each other at run time.
+
+The stage markers are HTML comments: never nest one inside another — an inner
+arrow-close ends the outer comment early and breaks the rest of the file.
 -->
 
 # Implement a Feature End-to-End
@@ -36,15 +43,17 @@ A flow this long degrades in one context window — judgment is worst exactly wh
 - Never launch a nested headless session (`claude -p`) from this command — permission modes, PATH, and timeouts differ per machine. Unattended chaining belongs to the trigger setup (§6), outside this command.
 - Tell every dispatched subagent: tools are functional — do not test them or make exploratory calls; every call needs a purpose. Run each delegated stage on the model tier recorded in §8 — the fast tier for mechanical transport work, the strongest for judgment.
 - A subagent's report is a claim, not a fact. Before acting on a report that names files and lines, asserts a root cause, or reports a test outcome, spot-check it — read the named lines, run the named test — rather than relaying it verbatim into the next stage.
+- Every fixed-choice interaction with the user — a per-run choice the decisions left open (e.g. main repo vs. worktree), an approval gate verdict, keep/drop on review findings, the merge confirmation — goes through `AskUserQuestion` with the recorded default marked, never a prose question. Plain prose is only for inherently free-form input (a feature description, a file path).
 - An unanswered `AskUserQuestion` (the harness returns `No response after 60s` — its guard so unattended runs never hang) is handled by run mode. Read the `AWOS_UNATTENDED` environment variable: when it is set (the §6 trigger setup exports it for cron/`/loop`/`claude -p` drivers), a no-answer is expected — take the safe default and continue. When it is unset the run is interactive, and a timeout usually means the user is thinking or briefly away, not that they have no preference — re-ask the question once, then proceed naming the default you took so they can correct it. A timeout never authorizes an irreversible step: the merge confirmation treats an unanswered prompt as a no in either mode.
 
-## Flow Self-Correction
+## Self-Improvement Loop
 
-When a run disproves something this flow believes — a hook fires that this file says doesn't exist, the tracker rejects a recorded transition, a fresh worktree fails on an unrecorded bring-up step — classify the defect and route it. Never work around it silently: a flow carrying a known-wrong instruction between runs is a time bomb for the next engineer.
+This command is maintained through its own runs. When a run exposes a defect in the flow itself — a recorded fact disproven by reality (a "no X" claim, a dead link, a wrong state name), a missing step (an undocumented bootstrap, a transition chain), or a stage instruction that had to be worked around — fix the flow **in the same run**:
 
-- **Fact defect** — a recorded fact in `context/product/delivery-flow.md` (Project Setup, tooling inventory, transition chains, the worktree recipe, probe results) is false. Correct facts, never decisions: fix the fact in the decision record, update the affected stage prose in every generated command that embeds it, and append a Generation Log entry naming the correction and the disproving evidence (the command output or API response that contradicted the record). A correction without reproducible evidence is not applied. Because the fact is fixed in the decision record itself, regeneration re-derives the right prose — this is not a Local Customization. Apply corrections only while the flow can still commit (before the change request opens — the flow-log discipline), so they ship in the same commit and the PR review sees them; discovered later, report the correction as pending in the close-out and let the next run apply it at the workspace stage. Interactive runs show the correction diff for a quick confirm; unattended runs apply fact corrections and announce them via Notifications.
-- **Decision friction** — a delivery-flow.md _choice_ (a gate, the autonomy level, the merge policy, a §1–§9 decision) caused the problem. Never edit a decision: report what happened to the user and record which dimension produced friction, for the flow owner to take into a `/awos:flow` re-run. Decisions belong to whoever owns the team's delivery process, not to a run of this command.
-- **Generator defect** — the flaw is in how `/awos:flow` generated this command, not in this project's facts. Don't edit; report it as feedback to the AWOS maintainers.
+1. Patch the affected file(s) right in this working copy: this command file, `context/product/delivery-flow.md` (correct the fact where it is recorded), or the reused skill.
+2. Stage those edits in the commit-push stage alongside the code change — same branch, same change request. Never park flow fixes for a separate change request; a flow that shipped its work while still carrying a known-wrong instruction has not finished the job. A defect found after the change request is open waits: report it as pending in the close-out, and the next run applies it at the workspace stage.
+3. Record the correction in the flow log — with the observation that disproved the old text — and promote it into the decision record's **Local Customizations** section, so a future `/awos:flow` regeneration preserves it instead of resurrecting the defect.
+4. Two kinds of defect are not yours to fix. A delivery _decision_ (a gate, the merge policy, the autonomy level) belongs to whoever owns the team's process — report the friction and leave the change to a `/awos:flow` re-run. A defect in how `/awos:flow` generated this command cannot be fixed here — tell the user so they can report it to the AWOS repo.
 
 <!-- awos:flow:stage=fetch-ticket -->
 
@@ -66,7 +75,7 @@ Start with a cheap preflight on the fast model tier (per §8): is this feature *
 
 ### Step 3: Prepare the Workspace
 
-[Per §2–§3 of delivery-flow.md: verify `context/` is reachable and current; warn on a dirty working tree; create the branch (or worktree, per the recorded recipe) from the base branch using the team's naming convention; submodule init/update if required. Store the branch name as `BRANCH` and the ticket ID as `TICKET_ID` for later stages.] Uncommitted AWOS artifacts — `context/product/delivery-flow.md` and this command file, left by `/awos:flow` — are an expected dirty-tree cause; surface them as such rather than treating them as a blocker.
+[Per §2–§3 of delivery-flow.md: verify `context/` is reachable and current; warn on a dirty working tree; create the branch from the base branch using the team's naming convention; submodule init/update if required. For a worktree: invoke the project's own worktree command, skill, or init script when §2 records one, otherwise execute the §2 isolation recipe — bring-up steps included — verbatim. Never improvise worktree preparation in-run: real prep is bigger than `git worktree add` (installs, codegen, env files, service/network isolation), and the recorded recipe or project script is the tested path. Store the branch name as `BRANCH` and the ticket ID as `TICKET_ID` for later stages.] Uncommitted AWOS artifacts — `context/product/delivery-flow.md` and this command file, left by `/awos:flow` — are an expected dirty-tree cause; surface them as such rather than treating them as a blocker.
 
 <!-- /awos:flow:stage -->
 
@@ -114,12 +123,13 @@ Running the app to verify is the flow's job, not the user's. [If §2/§3 recorde
 
 ### Step 8: Local Review
 
-The review must stay independent of this conversation's authorship bias:
+The review must stay independent of this conversation's authorship bias — it never happens inline in the orchestrator's own window, which just drove the implementation:
 
-- The reviewer's prompt below is fixed: pass it verbatim. Do not add run-time focus areas drawn from what you implemented or suspect — the author framing the review is the bias.
+- [Per §4 and the §8 context strategy, one of two shapes — decided at generation time by inspecting the review automation, never at run time. The project has a review skill/command that itself dispatches subagents (most do): the orchestrator invokes it from the **main context** via the Skill tool — its own reviewer subagents provide the fresh, unbiased contexts; do not wrap it in a subagent, since agents do not nest and this orchestrator already occupies the coordinator slot. Otherwise: dispatch a dedicated **reviewer subagent** with the fixed verbatim prompt written here at generation time.]
+- The invocation is fixed: pass it verbatim. Do not add run-time focus areas drawn from what you implemented or suspect — the author framing the review is the bias.
 - The reviewer writes its findings to a review file and returns only the verdict, the finding count by severity, and that file's path — never the full review body. The generated reviewer subagent writes to a fixed path, `context/spec/{SPEC_NAME}/review.md`; a reused project review command may write elsewhere — capture whatever path it used.
 - **Lead the review presentation to the user with that path on its own line** — e.g. `Review file: context/spec/{SPEC_NAME}/review.md` — before the verdict and the findings. A fixed opening line is surfaced reliably; a path appended after a long findings list gets dropped (the recurring failure this guards against). Record the same path in this stage's flow-log entry, so it survives outside the chat even if the line is missed.
-- The agent that applies accepted findings reads the review file and the diff fresh — relay the user's keep/drop decisions, not your own summary of the findings.
+- Collect the keep/drop decisions on the findings with `AskUserQuestion`. The agent that applies accepted findings reads the review file and the diff fresh — relay the user's decisions, not your own summary of the findings.
 
 [Per §4 of delivery-flow.md: static checks, then the local AI review — the reviewer subagent's verbatim prompt, derived from §4 at generation time: the diff range, the spec paths, the project's review rules; findings presented to the user, never auto-fixed; accepted findings applied before anything is pushed. If §4 includes the human-edit loop, also diff the user's edits against the original review and suggest CLAUDE.md amendments for generalizable corrections. If §4 records change-request-first timing, move this stage after Step 9 instead and run the review concurrently with the remote gates — faster wall-clock, at the cost of an extra CI run on unreviewed code.]
 
@@ -157,7 +167,7 @@ Wait with the `Monitor` tool, never foreground `sleep` loops: a poll loop that e
 
 [Per §5 merge policy: a human merges — stop here and report the ready-to-merge state — or the flow merges via the chosen transport from §7: the platform's merge capability, or a plain `git merge` + push for a repo without a code host.]
 
-Merging is irreversible. Even when the recorded policy lets the flow merge, ask the user for confirmation in this run, after showing that every gate is green. A skipped or unanswered confirmation means do not merge — report the ready-to-merge state and stop.
+Merging is irreversible. Even when the recorded policy lets the flow merge, ask the user for confirmation in this run (`AskUserQuestion`: merge / don't merge), after showing that every gate is green. A skipped or unanswered confirmation means do not merge — report the ready-to-merge state and stop.
 
 [Per §5 post-merge CI: pipelines triggered by the merge on the base branch — watch them via the chosen transport and, per the recorded policy, fix failures forward or report them. Omit if nothing runs on merge.]
 

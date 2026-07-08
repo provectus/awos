@@ -875,52 +875,114 @@ test('flow.md flags routing policies that route agents around the generated comm
   );
 });
 
-test('generated commands carry a self-correction loop scoped to facts, never decisions', () => {
-  // Road-test #2 item 9, scoped: three fact corrections (pre-commit
-  // hook, transition chain, worktree bootstrap) landed in a separate
-  // project-side PR because the generated flow had no in-run correction
-  // loop — and a flow carrying a known-wrong fact between runs is a
-  // silent time bomb. The governance boundary: a run may correct a
-  // disproven FACT in the decision record (with evidence, in the same
-  // PR, logged), but decision changes route to the flow owner and
-  // generator defects route to AWOS as feedback.
+test('generated commands carry the hops-style Self-Improvement Loop with governed boundaries', () => {
+  // Road-test #2 item 9, reworked to the hops team's field-tested shape
+  // (hops fix-bug.md "Self-Improvement Loop"): a flow defect found
+  // during a run (disproven fact, missing step, workaround-forcing
+  // instruction) is fixed in the same run, shipped in the same change
+  // request, recorded in the flow log, and promoted to Local
+  // Customizations so regeneration preserves it. Boundaries stay
+  // governed: delivery decisions belong to the flow owner, and
+  // generator defects are reported via the user (an in-command "report
+  // to the maintainers" is not actionable — the LLM has no channel).
   for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
     const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
     assert.ok(
-      /## Flow Self-Correction/.test(body),
-      `${tmpl} must carry the fixed Flow Self-Correction section`
+      /## Self-Improvement Loop/.test(body),
+      `${tmpl} must carry the fixed Self-Improvement Loop section`
     );
     assert.ok(
-      /Correct facts, never decisions/i.test(body),
-      `${tmpl} self-correction must be scoped to recorded facts — dimension decisions stay with the flow owner`
+      /same branch, same change request/i.test(body),
+      `${tmpl} loop must ship flow fixes in the same change request as the work, never a separate one`
     );
     assert.ok(
-      /correction without reproducible evidence is not applied/i.test(body),
-      `${tmpl} must require the disproving evidence before applying a fact correction`
+      /promote it into the decision record's \*\*Local Customizations\*\*/i.test(
+        body
+      ),
+      `${tmpl} loop must promote corrections to Local Customizations so regeneration preserves them`
     );
     assert.ok(
-      /report it as feedback to the AWOS maintainers/i.test(body),
-      `${tmpl} must route generator defects to AWOS feedback instead of editing around them`
+      /belongs to whoever owns the team's process/i.test(body),
+      `${tmpl} loop must leave delivery decisions to the flow owner — a run never changes one`
     );
     assert.ok(
-      /Never edit a decision/i.test(body),
-      `${tmpl} must forbid a run from changing a delivery decision on its own`
+      /tell the user so they can report it to the AWOS repo/i.test(body),
+      `${tmpl} loop must route generator defects through the user (actionable), not an abstract "report to maintainers"`
     );
   }
 
   const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
   assert.ok(
-    /Flow Self-Correction/.test(flow) &&
-      /never changes a delivery decision on its own/i.test(flow),
-    'flow.md Step 6 must instruct keeping the Flow Self-Correction section verbatim and restate the facts-only boundary'
+    /Self-Improvement Loop/.test(flow) &&
+      /never changes a delivery _?decision_? on its own/i.test(flow),
+    'flow.md Step 6 must instruct keeping the Self-Improvement Loop verbatim and restate that a run never changes a delivery decision'
   );
 
   const dfTemplate = readUtf8(
     path.join(pluginTemplatesDir, 'delivery-flow-template.md')
   );
   assert.ok(
-    /in-run fact correction/i.test(dfTemplate),
-    'delivery-flow-template.md Generation Log must define the in-run fact-correction entry format (what was corrected + evidence)'
+    /Self-Improvement Loop/.test(dfTemplate),
+    'delivery-flow-template.md §10 must say Self-Improvement Loop corrections land in Local Customizations'
+  );
+});
+
+test('generated commands are clean, self-contained, and interaction-explicit', () => {
+  // Road-test #3 feedback (sde-automation PR #26): the regenerated
+  // commands copied the template's generator-facing header comment into
+  // the output (two paragraphs of noise), fix-bug said "Same resume
+  // logic as implement-feature" (commands know nothing about each other
+  // at run time), and stages that ask the user lost their explicit
+  // AskUserQuestion mentions. Lock the fixes into the templates and
+  // flow.md.
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /do NOT copy it, or any\s+adaptation of it, into the generated file/.test(
+        body
+      ),
+      `${tmpl} header comment must declare itself generator-only — never copied or adapted into the generated command`
+    );
+    assert.ok(
+      /self-contained/i.test(body),
+      `${tmpl} must require the generated command to be self-contained — no references to the sibling command`
+    );
+    assert.ok(
+      /Every fixed-choice interaction with the user/i.test(body),
+      `${tmpl} Context Discipline must route every fixed-choice user interaction through AskUserQuestion`
+    );
+    assert.ok(
+      /Never improvise worktree preparation/i.test(body),
+      `${tmpl} workspace stage must invoke the project's worktree command/script or the recorded §2 recipe — never improvise git-worktree prep in-run`
+    );
+    assert.ok(
+      /agents do not nest/i.test(body),
+      `${tmpl} local-review stage must handle the agent hierarchy: a review skill that spawns subagents runs from the main context, never wrapped in a subagent`
+    );
+  }
+
+  const fixBug = readUtf8(path.join(pluginTemplatesDir, 'fix-bug-template.md'));
+  assert.ok(
+    !/Same resume logic as implement-feature/i.test(fixBug),
+    'fix-bug-template.md must not defer to implement-feature for its resume logic — commands are independent at run time'
+  );
+  assert.ok(
+    /awos:flow:stage=local-review/.test(fixBug),
+    'fix-bug-template.md must have its own local-review stage — review folded into remote-gates loses its independent context'
+  );
+
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /no top-of-file comment/i.test(flow),
+    'flow.md Step 6 must state the generated file carries no top-of-file comment — template headers are generator instructions'
+  );
+  assert.ok(
+    /never improvises worktree preparation/i.test(flow),
+    'flow.md worktree sub-interview must reuse an existing worktree command/script or record an exact recipe the stage executes verbatim'
+  );
+  assert.ok(
+    /inspecting the review automation/i.test(flow),
+    'flow.md Step 6 must pick the review shape at generation time by inspecting whether the reused review skill dispatches subagents'
   );
 });
 
@@ -1198,7 +1260,7 @@ test('flow.md and the template guard the generated header against comment-nestin
     "flow.md Step 6 must instruct the generator not to nest stage-marker HTML comments inside the generated file's own header comment"
   );
   assert.ok(
-    /never nest them/i.test(tplBody),
+    /never nest one inside another/i.test(tplBody),
     'implement-feature-template.md header must warn the generator never to nest the stage-marker comments'
   );
 });

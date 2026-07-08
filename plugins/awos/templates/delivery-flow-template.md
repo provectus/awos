@@ -114,7 +114,7 @@ Whether `/awos:flow` generated the lighter bug-fix command (named in **Generated
 
 ## 10. Local Customizations
 
-Manual edits to the generated command that the user chose to keep during regeneration. `/awos:flow` re-applies these on every regeneration; remove an entry to retire it.
+Manual edits to the generated command that the user chose to keep during regeneration, and in-run corrections promoted by the generated commands' **Self-Improvement Loop** (a flow defect found during a run — a wrong recorded fact, a missing step, a workaround-forcing instruction — fixed in the same run and shipped in the same change request). `/awos:flow` re-applies these on every regeneration; remove an entry to retire it.
 
 - [stage: short description of the customization and why — or "none"]
 

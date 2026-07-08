@@ -270,6 +270,29 @@ test('window_stats: old commit outside the 90-day window is excluded (window anc
   );
 });
 
+test('window_stats: window_anchor equals the ISO timestamp of the newest (trunk-tip) commit', () => {
+  // The anchor is the trunk-tip commit date. In windowRepo() the newest commit is
+  // the "Merge feature-bob" merge on main, authored 2025-03-25T00:00:00 (local).
+  // window_anchor lets a second data source align its fetch window to the same
+  // boundary instead of wall-clock "now".
+  const repoPath = windowRepo();
+  const art = collect(repoPath, WINDOW_PERIOD);
+  const ws = art.raw.window_stats;
+
+  const expected = new Date('2025-03-25T00:00:00').toISOString();
+  assert.equal(
+    ws.window_anchor,
+    expected,
+    `window_anchor must equal the ISO timestamp of the trunk-tip commit (Merge feature-bob, 2025-03-25); got ${ws.window_anchor}`
+  );
+  // Anchor is the newest boundary; window_start is anchor minus lookback_days.
+  assert.ok(
+    ws.window_start !== null &&
+      new Date(ws.window_start) < new Date(ws.window_anchor),
+    'window_start (oldest boundary) must precede window_anchor (newest boundary)'
+  );
+});
+
 test('window_stats: monthly_buckets is not emitted (field removed in task 0.2)', () => {
   const art = collect(repo(), PERIOD);
   assert.ok(
@@ -316,6 +339,16 @@ test('window_stats: merges_per_active and loc_per_active are null when there are
     ws.loc_per_active,
     null,
     'loc_per_active must be null when activeCount is 0 (empty repo has no authors)'
+  );
+  assert.equal(
+    ws.window_anchor,
+    null,
+    'window_anchor must be null on an empty repo (no anchor commit exists)'
+  );
+  assert.equal(
+    ws.window_start,
+    null,
+    'window_start must be null on an empty repo (no anchor commit exists)'
   );
 });
 

@@ -862,6 +862,171 @@ test('patchJudgments clamps a weight passed as score', () => {
   }
 });
 
+test('patchJudgments threads an explicit confidence through onto the check, independent of score/status', () => {
+  const dir = tmpDir('awos-patchj-conf-');
+  try {
+    const dim = {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-01',
+      score: 0,
+      coverage: 0,
+      checks: [
+        makePatchableCheck({
+          check_id: 'AI-01',
+          status: 'PENDING_JUDGMENT',
+          weight_max: 8,
+        }),
+      ],
+    };
+    writeFileSync(
+      join(dir, 'ai-development-tooling.json'),
+      JSON.stringify(dim)
+    );
+    writeStampedAudit(dir);
+    patchJudgments(dir, [
+      { check_id: 'AI-01', status: 'PASS', score: 1, confidence: 0.6 },
+    ]);
+    const updated = JSON.parse(
+      readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
+    );
+    assert.equal(
+      updated.checks[0].confidence,
+      0.6,
+      `an explicit confidence must be stored verbatim, got ${updated.checks[0].confidence}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('patchJudgments defaults confidence to 1 on PASS/WARN/FAIL when the patch omits it (back-compat with older callers)', () => {
+  const dir = tmpDir('awos-patchj-confdefault-');
+  try {
+    const dim = {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-01',
+      score: 0,
+      coverage: 0,
+      checks: [
+        makePatchableCheck({
+          check_id: 'AI-01',
+          status: 'PENDING_JUDGMENT',
+          weight_max: 8,
+        }),
+        makePatchableCheck({
+          check_id: 'AI-06',
+          status: 'PENDING_JUDGMENT',
+          weight_max: 4,
+        }),
+      ],
+    };
+    writeFileSync(
+      join(dir, 'ai-development-tooling.json'),
+      JSON.stringify(dim)
+    );
+    writeStampedAudit(dir);
+    patchJudgments(dir, [
+      { check_id: 'AI-01', status: 'PASS', score: 1 },
+      { check_id: 'AI-06', status: 'WARN', score: 0.5 },
+    ]);
+    const updated = JSON.parse(
+      readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
+    );
+    for (const id of ['AI-01', 'AI-06']) {
+      const c = updated.checks.find(
+        (x: { check_id: string }) => x.check_id === id
+      );
+      assert.equal(
+        c.confidence,
+        1,
+        `${id} with no confidence in its patch must default to 1, got ${c.confidence}`
+      );
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('patchJudgments clamps an out-of-range confidence to [0,1] and warns naming the check', () => {
+  const dir = tmpDir('awos-patchj-confclamp-');
+  try {
+    const dim = {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-01',
+      score: 0,
+      coverage: 0,
+      checks: [
+        makePatchableCheck({
+          check_id: 'AI-01',
+          status: 'PENDING_JUDGMENT',
+          weight_max: 8,
+        }),
+      ],
+    };
+    writeFileSync(
+      join(dir, 'ai-development-tooling.json'),
+      JSON.stringify(dim)
+    );
+    writeStampedAudit(dir);
+    const summary = patchJudgments(dir, [
+      { check_id: 'AI-01', status: 'PASS', score: 1, confidence: 1.4 },
+    ]);
+    assert.ok(
+      summary.warnings.some(
+        (w) => w.includes('AI-01') && w.includes('confidence')
+      ),
+      `an out-of-range confidence must warn naming the check, got ${JSON.stringify(summary.warnings)}`
+    );
+    const updated = JSON.parse(
+      readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
+    );
+    assert.equal(
+      updated.checks[0].confidence,
+      1,
+      `confidence 1.4 must clamp to 1, got ${updated.checks[0].confidence}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('patchJudgments forces confidence to 0 on SKIP, ignoring whatever the patch passed', () => {
+  const dir = tmpDir('awos-patchj-confskip-');
+  try {
+    const dim = {
+      dimension: 'ai-development-tooling',
+      date: '2026-01-01',
+      score: 0,
+      coverage: 0,
+      checks: [
+        makePatchableCheck({
+          check_id: 'AI-01',
+          status: 'PENDING_JUDGMENT',
+          weight_max: 8,
+        }),
+      ],
+    };
+    writeFileSync(
+      join(dir, 'ai-development-tooling.json'),
+      JSON.stringify(dim)
+    );
+    writeStampedAudit(dir);
+    patchJudgments(dir, [
+      { check_id: 'AI-01', status: 'SKIP', confidence: 0.9 },
+    ]);
+    const updated = JSON.parse(
+      readFileSync(join(dir, 'ai-development-tooling.json'), 'utf8')
+    );
+    assert.equal(
+      updated.checks[0].confidence,
+      0,
+      `SKIP must force confidence to 0 regardless of the passed value, got ${updated.checks[0].confidence}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // aggregate: an explicit finite score is the score — a stored 0 stays 0
 // ---------------------------------------------------------------------------

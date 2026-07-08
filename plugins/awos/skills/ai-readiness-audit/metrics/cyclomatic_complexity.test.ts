@@ -59,6 +59,37 @@ test('cyclomatic_complexity: score and confidence for a simple JS file', async (
       (res.confidence ?? 0) > 0,
       `confidence must be > 0 when at least one file is analysed, got ${res.confidence}`
     );
+    // Full confidence → expression carries no skipped-file caveat.
+    assert.doesNotMatch(
+      (res as { expression?: string }).expression ?? '',
+      /skipped/,
+      'expression must not mention skipped files when every file was analysed'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('cyclomatic_complexity: expression names skipped-file count and reason when confidence < 1', async () => {
+  const dir = tmpDir('awos-g10-skip-');
+  try {
+    // One small parseable JS file (analysed) + one oversized JS file (> 512 KB,
+    // skipped by the MAX_FILE_BYTES guard) → filesSkipped = 1, confidence = 0.5.
+    writeFileSync(join(dir, 'a.js'), 'export function f() { return 1; }\n');
+    writeFileSync(join(dir, 'big.js'), `// ${'a'.repeat(600 * 1024)}\n`);
+    const res = await compute(dir, STANDARDS, {}, dir);
+    if (res.status === 'SKIP') return; // grammar wasm unavailable in this env
+    assert.equal(res.status, 'OK');
+    assert.ok(
+      (res.confidence ?? 1) < 1,
+      `confidence must drop below 1 when a file is skipped, got ${res.confidence}`
+    );
+    const expr = (res as { expression?: string }).expression ?? '';
+    assert.match(
+      expr,
+      /1 of 2 files skipped \(unsupported grammar or parse error\)/,
+      `expression must name the skipped-file count and reason, got "${expr}"`
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

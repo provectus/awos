@@ -122,7 +122,10 @@ export async function compute(
   const complexityScore = scoreFromConfig(avgCcn, scoring);
   const complexityConfidence =
     filesTotal > 0 ? cx.filesAnalysed / filesTotal : 0;
-  const complexityExpression = `avg_ccn=${avgCcn.toFixed(1)} (${band}), ${cx.hotspotCount} ${plural(cx.hotspotCount, 'hotspot')} > CCN 10`;
+  let complexityExpression = `avg_ccn=${avgCcn.toFixed(1)} (${band}), ${cx.hotspotCount} ${plural(cx.hotspotCount, 'hotspot')} > CCN 10`;
+  if (cx.filesSkipped > 0) {
+    complexityExpression += `; ${cx.filesSkipped} of ${filesTotal} files skipped (unsupported grammar or parse error)`;
+  }
 
   return makeMetricResult(
     'cyclomatic_complexity',

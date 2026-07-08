@@ -209,6 +209,15 @@ export interface JudgmentPatch {
   status: 'PASS' | 'WARN' | 'FAIL' | 'SKIP';
   /** Fraction of capability present ∈ [0,1]; defaults from status (PASS=1, WARN=0.5, else 0). */
   score?: number;
+  /**
+   * Fraction ∈ [0,1] self-reported by the grading subagent — how confident it
+   * is in this verdict given the evidence it found (distinct from `score`,
+   * which is how much capability is present). Defaults to 1 for PASS/WARN/FAIL
+   * when omitted (back-compat with older callers), 0 for SKIP regardless of
+   * what's passed. When below 1, the caller's `evidence` should say why — the
+   * engine stores whatever it's given and does not enforce this.
+   */
+  confidence?: number;
   value?: unknown;
   evidence?: string[];
 }
@@ -265,9 +274,17 @@ export function patchJudgments(
         s = Math.min(1, Math.max(0, s));
       }
       if (p.status === 'SKIP') s = 0;
+      let conf = typeof p.confidence === 'number' ? p.confidence : 1;
+      if (conf < 0 || conf > 1) {
+        warnings.push(
+          `${c.check_id}: confidence ${conf} out of [0,1] — clamped`
+        );
+        conf = Math.min(1, Math.max(0, conf));
+      }
+      if (p.status === 'SKIP') conf = 0;
       c.status = p.status;
       c.score = s;
-      c.confidence = p.status === 'SKIP' ? 0 : 1;
+      c.confidence = conf;
       c.applies = p.status !== 'SKIP';
       c.weight_awarded = round1((c.weight_max || 0) * s);
       if (p.value !== undefined) c.value = p.value;

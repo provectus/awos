@@ -374,13 +374,13 @@ async function main(): Promise<void> {
     case 'patch-judgment': {
       // Apply ALL judgment verdicts in one call and re-aggregate — replaces
       // per-check JSON surgery. Patches come from a JSON file (or "-" for
-      // stdin): [{check_id, status, score?, value?, evidence?}, ...]
+      // stdin): [{check_id, status, score?, confidence?, value?, evidence?}, ...]
       const dir = arg1;
       const patchArg = arg2;
       if (!dir || !patchArg) {
         fail({
           error:
-            'patch-judgment requires <auditsDir> <patches.json|-> — patches: [{check_id, status, score?, value?, evidence?}]',
+            'patch-judgment requires <auditsDir> <patches.json|-> — patches: [{check_id, status, score?, confidence?, value?, evidence?}]',
         });
       }
       const patches = readJsonArg(patchArg, 'patches');

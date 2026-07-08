@@ -285,6 +285,39 @@ test('doc-coverage carries per-code evidence — the all-defs code (2205) must n
   }
 });
 
+test('doc-coverage evidence names skipped doc-convention files when confidence < 1', async () => {
+  const dir = tmpDir('awos-doc-skip-conf-');
+  try {
+    // One small documented Python file (analysed) + one oversized Python file
+    // (> 512 KB, skipped by MAX_FILE_BYTES) → docFileCount = 2, filesAnalysed = 1.
+    writeFileSync(
+      join(dir, 'a.py'),
+      'def f():\n    """Does f."""\n    return 1\n'
+    );
+    writeFileSync(join(dir, 'big.py'), `# ${'a'.repeat(600 * 1024)}\n`);
+    const res = await compute(dir, {}, {}, dir);
+    if (res.status === 'SKIP') return; // grammar wasm unavailable in this env
+    assert.equal(res.status, 'OK');
+    assert.ok(
+      (res.confidence ?? 1) < 1,
+      `confidence must drop below 1 when a doc file is skipped, got ${res.confidence}`
+    );
+    const perCode = (res as { evidence_per_code?: Record<number, string[]> })
+      .evidence_per_code;
+    assert.ok(perCode, 'result must carry evidence_per_code');
+    for (const code of [2204, 2205] as const) {
+      const line = perCode![code]?.[0] ?? '';
+      assert.match(
+        line,
+        /1 of 2 doc-convention files skipped \(parse error or unsupported format\)/,
+        `${code} evidence must name the skipped doc-file count and reason, got "${line}"`
+      );
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('doc-coverage has no award cliff: sub-threshold coverage still awards with a proportional score', async () => {
   const dir = tmpDir('awos-doc-cliff-');
   try {

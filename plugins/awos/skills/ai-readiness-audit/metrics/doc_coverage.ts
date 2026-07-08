@@ -93,8 +93,13 @@ export async function compute(
   // Each code carries its own evidence line: 2204 scores the public surface,
   // 2205 scores ALL defs — reusing the public line for 2205 would show
   // "= 1.00" next to a sub-1.0 score whenever a private def is undocumented.
-  const publicLine = `${doc.publicDocumented} of ${doc.publicTotal} public defs documented = ${publicCoverage.toFixed(2)}`;
-  const overallLine = `${doc.documented} of ${doc.total} defs documented = ${overallCoverage.toFixed(2)}`;
+  const skipped = doc.docFileCount - doc.filesAnalysed;
+  const skipClause =
+    skipped > 0
+      ? `; ${skipped} of ${doc.docFileCount} doc-convention files skipped (parse error or unsupported format)`
+      : '';
+  const publicLine = `${doc.publicDocumented} of ${doc.publicTotal} public defs documented = ${publicCoverage.toFixed(2)}${skipClause}`;
+  const overallLine = `${doc.documented} of ${doc.total} defs documented = ${overallCoverage.toFixed(2)}${skipClause}`;
   const expression = doc.publicTotal > 0 ? publicLine : overallLine;
 
   const score2204 = clamp01(publicCoverage);

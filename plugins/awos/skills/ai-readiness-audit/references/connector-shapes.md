@@ -2,6 +2,8 @@
 
 **The `<lookback>` placeholder.** Every windowed query below writes `<lookback>` where a day count belongs (e.g. `updated >= -<lookback>d`). Substitute the audit window in days — the `lookback_days` field of the `audit-core`/`enrich` summary, which carries `[meta].max_lookback_days` from `standards.toml` (90 by default). Never hardcode a day count: the recipes must follow the configured window.
 
+**Anchor absolute cutoffs to `window_anchor`, not today.** Any query that needs an absolute start-date cutoff — as opposed to a relative "last N days" filter the target system computes for itself — must compute that cutoff as `window_anchor − <lookback>` days, using the `window_anchor` field of the `audit-core`/`enrich` summary (the trunk-tip commit date the audit's own git window is anchored to), not today's wall-clock date. Anchoring to the audited commit rather than "now" is what makes a re-run against the same commit reproducible.
+
 This document specifies the exact JSON shapes the orchestrator must produce when it maps MCP or integration data into collector artifacts. Shapes are copied verbatim from `collectors/tracker.ts` and `collectors/docs.ts`.
 
 Producing these artifacts is not fabrication — it is straightforward field mapping from a live, reachable data source. The [data-source resolution protocol](#data-source-resolution-protocol) at the bottom of this document describes when and how to attempt each source.
@@ -339,15 +341,20 @@ gh api graphql -f owner=<owner> -f repo=<repo> -f query='
         nodes{number createdAt mergedAt
               commits(first:1){totalCount nodes{commit{authoredDate}}}}}}}'
 
-# Paginate on pageInfo.endCursor until a page's oldest mergedAt predates the
-# audit window (UPDATED_AT ordering is not merge order — expect a small
-# overshoot and filter by mergedAt when mapping). Map each node:
+# The window cutoff is an absolute date: window_anchor − lookback_days (both
+# ISO dates from the audit-core/enrich summary), NOT "the last <lookback> days
+# from today". This is the one recipe that must use the absolute-anchor form —
+# it feeds DF-02/03/05, the metrics shown to drift when the window floated with
+# wall-clock "now".
+# Paginate on pageInfo.endCursor until a page's oldest mergedAt predates that
+# cutoff (UPDATED_AT ordering is not merge order — expect a small overshoot and
+# filter by mergedAt when mapping). Map each node:
 #   number                              → number
 #   createdAt                           → created_at
 #   mergedAt                            → merged_at
 #   commits.nodes[0].commit.authoredDate → first_commit_at
 #   commits.totalCount                  → commit_count
-# Drop PRs whose mergedAt is older than the audit window.
+# Drop PRs whose mergedAt is older than the cutoff (window_anchor − lookback_days).
 ```
 
 Fallback when GraphQL is unavailable: `gh pr list --state merged --limit 200 --json number,createdAt,mergedAt` (no `commits`) — DF-03 still computes exactly; DF-02/DF-05 fall back to their git proxies. GitLab equivalent: `glab mr list --state merged` (MR `sha`/commit counts via `glab api projects/:id/merge_requests/:iid/commits` when cheap).
@@ -357,6 +364,8 @@ Fallback when GraphQL is unavailable: `gh pr list --state merged --limit 200 --j
 ## Turnkey enrichment recipe
 
 When a tracker or docs MCP is reachable, enriching it is a small, bounded operation — not a bulk data migration. Query the audit window (`<lookback>` days); the engine clamps records to it regardless. Mapping reachable data into the shapes above is expected, not fabrication. Reachability is decided by attempting the call, not by any config file.
+
+The tracker and docs recipes below use each system's own relative-date query syntax (`updated >= -<lookback>d`, `lastmodified >= now('-<lookback>d')`), which is inherently relative to whenever the query runs rather than to the audited commit. That is an accepted, lesser source of drift here: these queries measure ticket and page updates, not merge timing, so a boundary shift of an hour rarely changes ticket-count-based metrics materially, and the engine clamps records to the window regardless. The code-host PR fetch is the one that must use the absolute `window_anchor − lookback_days` cutoff (see the [code-host worked example](#worked-example--github--collectedcode_hostjson)), since it feeds DF-02/03/05 — the metrics shown to drift.
 
 Tracker (Jira) → `collected/tracker.json`:
 
@@ -404,7 +413,7 @@ A reachable tracker/docs/incident MCP is enriched by default — fetching and ma
    ```
    node "${CLAUDE_SKILL_DIR}/dist/cli.js" enrich "<repoPath>" "context/audits/YYYY-MM-DD_HH-MM-SS"
    ```
-3. **On failure or unclear mapping** (auth error, unfamiliar schema, broken dependency, empty result, closed port) — do not silently skip. In interactive mode, use `AskUserQuestion` with three options: mark unavailable (record the reason) / retry with guidance / show how to fix (link to this document). In headless `claude -p` runs (no interactive user), default to marking the source unavailable and record the _actual_ failure in the source's `source_probes` entry (authored into `report-blocks.json`) — the real cause (e.g. "atlassian MCP (401 unauthorized)"), never "no connector provided" when a channel was in fact reachable.
+3. **On failure or unclear mapping** (auth error, unfamiliar schema, broken dependency, empty result, closed port) — do not silently skip. Before falling back to unavailable, retry the failed call once — a single retry, not a loop — and only fall back if the retry also fails; this applies to every channel, MCP and CLI alike. In interactive mode, use `AskUserQuestion` with three options: mark unavailable (record the reason) / retry with guidance / show how to fix (link to this document). In headless `claude -p` runs (no interactive user), default to marking the source unavailable and record the _actual_ failure in the source's `source_probes` entry (authored into `report-blocks.json`), noting whether it failed on the first attempt or persisted through the retry — e.g. "atlassian MCP: 401 unauthorized (failed on first attempt and retry)", never "no connector provided" when a channel was in fact reachable.
 
 Never drop a reachable source without a recorded reason.
 

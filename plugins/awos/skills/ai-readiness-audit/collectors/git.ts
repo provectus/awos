@@ -717,6 +717,8 @@ export interface WindowStats {
   /** ISO 8601 timestamp of the window anchor minus lookback_days (the oldest commit included).
    * Used by lead_time_for_change to filter merge_records to the same window. Null on empty repos. */
   window_start: string | null;
+  /** ISO 8601 timestamp of the window anchor itself (trunk-tip commit date, or newest-across-refs fallback) — the newest boundary of the window, unlike window_start which is the oldest. Lets a caller align a second data source's fetch window to the same anchor instead of wall-clock "now". Null on empty repos. */
+  window_anchor: string | null;
 }
 
 /**
@@ -796,6 +798,7 @@ function buildWindowStats(
     merges_per_active_per_week: null,
     loc_per_active_per_week: null,
     window_start: null,
+    window_anchor: null,
   };
 
   // Anchor to the newest commit date — no wall-clock dependency.
@@ -963,6 +966,7 @@ function buildWindowStats(
     merges_per_active_per_week,
     loc_per_active_per_week,
     window_start: since,
+    window_anchor: anchor.toISOString(),
   };
 }
 

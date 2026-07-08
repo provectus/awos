@@ -443,6 +443,14 @@ export interface AuditCoreSummary {
    * of hardcoding a day count.
    */
   lookback_days: number;
+  /**
+   * ISO 8601 timestamp of the trunk-tip commit git's own window is anchored
+   * to (from collected/git.json's window_stats.window_anchor), or null when
+   * git is unavailable/empty. The orchestrator computes any connector's
+   * absolute date cutoff as window_anchor − lookback_days instead of
+   * wall-clock "now", so a re-run against the same commit is reproducible.
+   */
+  window_anchor: string | null;
   duration_ms: number;
 }
 
@@ -764,8 +772,20 @@ export async function auditCore(
     pending_judgment_checks: pendingJudgmentChecks,
     skipped,
     lookback_days: periodFromStandards(standards).lookback_days,
+    window_anchor: gitWindowAnchor(collected),
     duration_ms: Date.now() - start,
   };
+}
+
+/** Read collected/git.json's window_stats.window_anchor, if present — the
+ * trunk-tip commit date git's own window is anchored to. Null when git is
+ * unavailable/empty, missing entirely, or the artifact predates this field. */
+function gitWindowAnchor(collected: CollectedMap): string | null {
+  const art = collected.get('git')?.art;
+  const raw = art?.raw as Record<string, unknown> | undefined;
+  const windowStats = raw?.window_stats as Record<string, unknown> | undefined;
+  const anchor = windowStats?.window_anchor;
+  return typeof anchor === 'string' ? anchor : null;
 }
 
 /**

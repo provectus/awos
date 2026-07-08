@@ -9,6 +9,7 @@ While building an end-to-end test suite for the engine (in the sibling `awos-qa`
 1. **Explicitly broken metrics** — the measurement does not match the metric's own description. A well-formed project is scored wrong. See [`01-explicit-metric-bugs.md`](./01-explicit-metric-bugs.md).
 2. **Implicitly broken metrics** — metrics that _cannot_ reach 0 and/or cannot reach their max, or that **interfere** with each other so that no single project state can be extremal for both at once (one file is a good signal for metric A and simultaneously a bad signal for metric B). See [`02-metric-range-and-interference.md`](./02-metric-range-and-interference.md).
 3. **Data-source blind spots** — metrics derived from git merge commits silently mis-measure on repos that squash-merge / rebase-merge PRs (no merge commits exist) or route all merges through one person or bot (merge authorship concentrates on the merger). A whole family of DORA/throughput metrics reads 0 / SKIP / one-person-only. See [`03-squash-merge-blind-spot.md`](./03-squash-merge-blind-spot.md).
+4. **Run-to-run non-determinism** — found separately, via three real org-mode audit runs (`provectus-barhopping`, 8 repos) against the same target, the last two pinned to the identical engine commit. 46 of 832 checks differed between two runs with zero code change, driven by unreplicated single-shot judgment-check grading (dominant), connector fetch flakiness, and wall-clock-anchored rolling windows. See [`04-judgment-nondeterminism.md`](./04-judgment-nondeterminism.md).
 
 Out of scope: the org/multi-repo mode not auto-triggering from a detected linked repo under `claude -p` is **by design** (linked repos are intentionally not investigated), not a bug.
 
@@ -28,6 +29,7 @@ The richer, composed fixtures (min/max/type/connector matrix) live in `awos-qa` 
 - `data/arch05-evidence.json` — standard test files read as naming violations.
 - `data/doc06-evidence.json` — 100% documentation coverage scored < full.
 - `data/range-analysis.txt` — per-check min/max score across the min→max fixture spectrum.
+- `data/judgment-nondeterminism-samecommit-diff.txt` — full 832-check diff between two org-mode runs pinned to the identical engine commit.
 
 ## The ask
 

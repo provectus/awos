@@ -924,6 +924,41 @@ test('generated commands carry a self-correction loop scoped to facts, never dec
   );
 });
 
+test('a generator update triggers full regeneration even when no decision changed', () => {
+  // Road-test regression (sde-automation PR #25): after the generator
+  // gained the road-test #2 fixes, a regenerate-only re-run (no
+  // dimensions revisited) produced ONLY a version-stamped footer and a
+  // log entry — none of the new template prose landed, because
+  // reconciliation was decision-driven: unchanged decisions read as
+  // "nothing to change", new sections outside stage markers had no
+  // reconciliation slot, and new probes hung off unselected dimensions.
+  // Lock the three fixes: generator update as an independent
+  // regeneration trigger, generator-owned prose outside markers, and
+  // fact-gap probes on any re-run.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /generator-update re-run/i.test(flow),
+    'flow.md Step 1 re-run detection must classify a footer version older than (or missing against) the constant as a generator-update re-run that regenerates every stage'
+  );
+  assert.ok(
+    /independent regeneration triggers/i.test(flow),
+    'flow.md Step 6 must treat a decision change and a generator update as independent regeneration triggers — "no dimensions revisited" never means the old text stays'
+  );
+  assert.ok(
+    /never just a stamp-and-date update/i.test(flow),
+    'flow.md Step 6 must forbid the no-op failure mode: an outdated footer triggers stage regeneration, not just a version stamp'
+  );
+  assert.ok(
+    /generator-owned/i.test(flow) && /outside the stage markers/i.test(flow),
+    'flow.md Step 6 must declare prose outside stage markers generator-owned — rewritten from the current template on every regeneration, since nothing reconciles it stage-by-stage'
+  );
+  assert.ok(
+    /fact gap/i.test(flow) &&
+      /fact upgrade is not a decision change/i.test(flow),
+    'flow.md Step 5 must fill record fields the current template defines but the on-disk record lacks (transition chains, bring-up steps, routing policy) on any re-run, without a dimension being re-opened'
+  );
+});
+
 test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
   // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
   // propose a QA agent by searching the registry, not by always

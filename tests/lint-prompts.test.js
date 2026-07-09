@@ -842,11 +842,24 @@ test('flow.md generator version constant matches plugin.json and stamps the arti
     `flow.md generator-version constant (${constant[1]}) must equal plugins/awos/.claude-plugin/plugin.json version (${manifest.version}) — bump them together or the stale-session check misfires`
   );
 
+  const marketplace = JSON.parse(
+    readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
+  );
+  const awosEntry = marketplace.plugins.find((p) => p.name === 'awos');
+  assert.ok(awosEntry, 'marketplace.json must list the awos plugin');
+  assert.strictEqual(
+    awosEntry.version,
+    manifest.version,
+    `marketplace.json awos entry version (${awosEntry.version}) must equal plugin.json version (${manifest.version}) — CLAUDE.md requires bumping both manifests together`
+  );
+
   for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
     const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
     assert.ok(
-      /awos:flow:generated date=\[YYYY-MM-DD\] version=\[/.test(body),
-      `${tmpl} footer marker must carry a version=[…] stamp so re-runs can tell which generator produced the on-disk artifacts`
+      /awos:flow:generated date=\[YYYY-MM-DD\] version=\[[^\]]+\] source=/.test(
+        body
+      ),
+      `${tmpl} footer marker must carry version=[…] and source= fields so re-runs can tell which generator produced the on-disk artifacts and from which decision record`
     );
   }
 });
@@ -1127,8 +1140,12 @@ test('flow.md wires the delivery-flow generator contract end to end', () => {
     'plugins/awos/commands/flow.md must delegate the read-heavy project scan to the built-in Explore subagent, not read the codebase in its own context'
   );
   assert.ok(
-    /automatic reviewer/i.test(body),
-    'plugins/awos/commands/flow.md must cover automatic reviewers on the code host (CodeRabbit-style bots) — both detection in Step 2 and the wait-and-address gate in the review dimension'
+    /automatic reviewers installed on the code host/i.test(body),
+    'plugins/awos/commands/flow.md Step 2 must detect automatic reviewers installed on the code host (CodeRabbit-style bots)'
+  );
+  assert.ok(
+    /waits for its review after opening the change request/i.test(body),
+    'plugins/awos/commands/flow.md review dimension must carry the wait-and-address gate for a detected automatic reviewer'
   );
   assert.ok(
     /two to four listed options/i.test(body),
@@ -1279,6 +1296,11 @@ test('implement-feature-template.md carries stage markers and the AWOS chain', (
       body.includes('<!-- /awos:flow:stage -->'),
     'implement-feature-template.md must fence every stage with <!-- awos:flow:stage=... --> / <!-- /awos:flow:stage --> markers so /awos:flow re-runs can attribute manual edits per stage'
   );
+  assert.strictEqual(
+    (body.match(/<!-- awos:flow:stage=/g) || []).length,
+    (body.match(/<!-- \/awos:flow:stage -->/g) || []).length,
+    'implement-feature-template.md stage markers must be balanced — every opener needs its closer, or per-stage re-run attribution silently breaks'
+  );
   for (const cmd of [
     '/awos:spec',
     '/awos:tech',
@@ -1390,6 +1412,10 @@ test('delivery-flow-template.md preserves customizations and the tooling invento
     'delivery-flow-template.md must declare a "Notifications" section — where the flow announces transitions so the team stays aware as gates are removed'
   );
   assert.ok(
+    /## Generation Log/.test(body),
+    'delivery-flow-template.md must declare a "Generation Log" section — flow.md Steps 5/6 append re-run and correction entries to it'
+  );
+  assert.ok(
     /Stage automation \(reuse \/ replace \/ compose\)/.test(body),
     'delivery-flow-template.md must record the per-stage reuse/replace/compose decision for overlapping project automation, so re-runs do not regenerate over a reused command'
   );
@@ -1451,6 +1477,7 @@ test('fix-bug-template.md carries the canonical bug-fix stages and the classify 
     'regression-test',
     'verify-criteria',
     'amend-spec',
+    'local-review',
     'commit-push',
     'remote-gates',
     'merge',
@@ -1468,6 +1495,11 @@ test('fix-bug-template.md carries the canonical bug-fix stages and the classify 
   assert.ok(
     body.includes('<!-- /awos:flow:stage -->'),
     'fix-bug-template.md must close every stage with the <!-- /awos:flow:stage --> marker so /awos:flow re-runs can attribute manual edits per stage'
+  );
+  assert.strictEqual(
+    (body.match(/<!-- awos:flow:stage=/g) || []).length,
+    (body.match(/<!-- \/awos:flow:stage -->/g) || []).length,
+    'fix-bug-template.md stage markers must be balanced — every opener needs its closer, or per-stage re-run attribution silently breaks'
   );
   assert.ok(
     /[Cc]onformance/.test(body) && /[Dd]ivergence/.test(body),
@@ -1498,8 +1530,8 @@ test('fix-bug-template.md carries the canonical bug-fix stages and the classify 
   assert.ok(
     /verdict/i.test(closeStage) &&
       /finding count/i.test(closeStage) &&
-      closeStage.includes('review.md'),
-    'fix-bug-template.md close stage must report the local review evidence (verdict, finding count, review file path) — the same hand-off treatment as implement-feature'
+      /review file path/i.test(closeStage),
+    'fix-bug-template.md close stage must report the local review evidence (verdict, finding count, review file path as recorded in the flow log) — the same hand-off treatment as implement-feature'
   );
   for (const section of ['§2', '§4', '§5', '§9']) {
     assert.ok(

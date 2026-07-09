@@ -29,12 +29,13 @@ This sets up the `.awos/` directory (commands, templates, scripts), the `.claude
 
 These commands establish your project's foundation. Run them once at the start, and re-run them as your project evolves — requirements change, architecture decisions get refined, and that's normal.
 
-| Command              | What it does                                                                      | Docs                                     |
-| -------------------- | --------------------------------------------------------------------------------- | ---------------------------------------- |
-| `/awos:product`      | Defines the Product — what, why, and for who.                                     | [Details](docs/commands/product.md)      |
-| `/awos:roadmap`      | Builds the Product Roadmap — features and their order.                            | [Details](docs/commands/roadmap.md)      |
-| `/awos:architecture` | Defines the System Architecture — stack, DBs, infra.                              | [Details](docs/commands/architecture.md) |
-| `/awos:hire`         | Hires specialist agents — finds, installs skills and MCPs, generates agent files. | [Details](docs/commands/hire.md)         |
+| Command              | What it does                                                                                                                                                       | Docs                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| `/awos:product`      | Defines the Product — what, why, and for who.                                                                                                                      | [Details](docs/commands/product.md)             |
+| `/awos:roadmap`      | Builds the Product Roadmap — features and their order.                                                                                                             | [Details](docs/commands/roadmap.md)             |
+| `/awos:architecture` | Defines the System Architecture — stack, DBs, infra.                                                                                                               | [Details](docs/commands/architecture.md)        |
+| `/awos:hire`         | Hires specialist agents — finds, installs skills and MCPs, generates agent files.                                                                                  | [Details](docs/commands/hire.md)                |
+| `/awos:flow`         | Generates the team's delivery flow — project-specific `/implement-feature` and `/fix-bug` commands that drive a ticket end to end. Available from AWOS plugin now. | [Details](plugins/awos/README.md#delivery-flow) |
 
 ### Step 3: Feature Development Cycle
 

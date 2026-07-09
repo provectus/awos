@@ -2097,6 +2097,75 @@ test('product.md invokes configure-external-sources skill for documentation setu
   );
 });
 
+test('product.md degrades gracefully when configure-external-sources skill is unavailable', () => {
+  // The configure-external-sources skill ships with the awos plugin, which
+  // may not be installed. product.md must handle the skill being absent
+  // rather than silently failing.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  assert.ok(
+    /skill is not available|plugin is not installed/i.test(body),
+    'commands/product.md must handle the case where the awos plugin (and its skill) is not installed'
+  );
+});
+
+test('product.md persists Status: none when user declines external docs', () => {
+  // When the user says No (or the question goes unanswered), product.md must
+  // write sources.md with ## Status: none so the decision is durable across
+  // re-runs and downstream commands don't re-ask.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  // The "No" branch must mention writing Status: none
+  const externalDocsBlock = body
+    .split(/external documentation sources/i)
+    .slice(1)
+    .join('');
+  assert.ok(
+    /if no.*status: none|default to.*no/i.test(externalDocsBlock),
+    'commands/product.md must write ## Status: none when user declines external documentation'
+  );
+});
+
+test('configure-external-sources SKILL.md collects file path for manual exports', () => {
+  // Sources with Access: manual need a Path: field in the manifest so
+  // downstream retrieval knows what file to read. The skill must collect
+  // the export file path during Step 4 (tool setup).
+  const skillPath = path.join(
+    repoRoot,
+    'plugins',
+    'awos',
+    'skills',
+    'configure-external-sources',
+    'SKILL.md'
+  );
+  const body = readUtf8(skillPath);
+  assert.ok(
+    /manual.*file path|export.*file path|manual.*path/i.test(body),
+    'SKILL.md must collect the file path for manual export sources'
+  );
+});
+
+test('configure-external-sources SKILL.md has fallback for failed verification', () => {
+  // If tool verification fails and troubleshooting doesn't help, the user
+  // must be able to skip, switch to manual, or remove the source rather
+  // than being stuck in a loop.
+  const skillPath = path.join(
+    repoRoot,
+    'plugins',
+    'awos',
+    'skills',
+    'configure-external-sources',
+    'SKILL.md'
+  );
+  const body = readUtf8(skillPath);
+  const verificationSection = body
+    .split(/tool verification/i)
+    .slice(1)
+    .join('');
+  assert.ok(
+    /switch to manual|remove this source/i.test(verificationSection),
+    'SKILL.md must offer fallback options (manual/remove) when tool verification fails'
+  );
+});
+
 test('downstream commands do not invoke configure-external-sources skill', () => {
   // Roadmap and architecture must not try to create sources from scratch.
   // If sources.md does not exist, that decision was made by purpose during
@@ -2115,22 +2184,30 @@ test('downstream commands do not invoke configure-external-sources skill', () =>
 });
 
 test('roadmap.md reads context/sources/sources.md for documentation retrieval', () => {
-  // /awos:roadmap must check if context/sources/sources.md exists with
-  // configured status and do a domain-specific retrieval from each source.
+  // /awos:roadmap must reference sources.md inside the "External documentation
+  // context" block — not just in INPUTS & OUTPUTS declarations.
   const body = readUtf8(path.join(commandsDir, 'roadmap.md'));
+  const extDocBlock = body
+    .split(/external documentation context/i)
+    .slice(1)
+    .join('');
   assert.ok(
-    body.includes('context/sources/sources.md'),
-    'commands/roadmap.md must reference context/sources/sources.md for documentation retrieval'
+    extDocBlock.includes('context/sources/sources.md'),
+    'commands/roadmap.md must reference context/sources/sources.md inside the External documentation context block'
   );
 });
 
 test('architecture.md reads context/sources/sources.md for documentation retrieval', () => {
-  // /awos:architecture must check if context/sources/sources.md exists
-  // with configured status and do a domain-specific retrieval.
+  // /awos:architecture must reference sources.md inside the "External
+  // documentation context" block — not just in INPUTS & OUTPUTS declarations.
   const body = readUtf8(path.join(commandsDir, 'architecture.md'));
+  const extDocBlock = body
+    .split(/external documentation context/i)
+    .slice(1)
+    .join('');
   assert.ok(
-    body.includes('context/sources/sources.md'),
-    'commands/architecture.md must reference context/sources/sources.md for documentation retrieval'
+    extDocBlock.includes('context/sources/sources.md'),
+    'commands/architecture.md must reference context/sources/sources.md inside the External documentation context block'
   );
 });
 
@@ -2179,14 +2256,19 @@ test('external sources retrieval passes brownfield findings to avoid duplicate t
 });
 
 test('retrieval commands guard on context/sources/sources.md existence', () => {
-  // Roadmap and architecture must check if sources.md exists before
-  // running documentation retrievals. Without this guard, projects
-  // without external sources would attempt retrieval.
+  // Roadmap and architecture must guard retrieval on sources.md existence
+  // with configured status, inside the "External documentation context" block.
   for (const cmd of ['roadmap.md', 'architecture.md']) {
     const body = readUtf8(path.join(commandsDir, cmd));
+    const extDocBlock = body
+      .split(/external documentation context/i)
+      .slice(1)
+      .join('');
     assert.ok(
-      /sources\.md` exists|sources\.md.*configured/i.test(body),
-      `commands/${cmd} must guard documentation retrieval on context/sources/sources.md existence`
+      /sources\.md.*exists.*configured|sources\.md.*configured/i.test(
+        extDocBlock
+      ),
+      `commands/${cmd} must guard documentation retrieval on context/sources/sources.md existence with configured status`
     );
   }
 });

@@ -1,6 +1,6 @@
 # Communication Platform Setup Guides
 
-Reference for setting up access to chat, messaging, and email platforms. Read the section for the user's selected platform and follow the setup instructions in order: MCP server first (recommended), CLI alternative if MCP is not viable, manual export as a last resort.
+Known tools and access methods for chat, messaging, and email platforms. The skill uses this as a knowledge base when presenting tool options to the user.
 
 **Privacy and data safety apply to every platform in this file.** Accessing message history may include sensitive or personal data. Confirm the user has authorization before proceeding. Focus retrieval on public/project channels and relevant threads — not private messages or DMs unless the user explicitly requests it.
 
@@ -8,11 +8,11 @@ Reference for setting up access to chat, messaging, and email platforms. Read th
 
 ## Slack
 
-**MCP Server (Recommended) — Official Remote**
+**MCP Server — Official Remote**
 
 - Type: Remote (cloud-hosted by Slack)
 - URL: `https://mcp.slack.com/mcp`
-- Setup: Clone https://github.com/slackapi/slack-mcp-plugin and run `claude --plugin-dir ./` to register. Connects to Slack's hosted server.
+- Install: `/plugin install slack@claude-plugins-official`
 - Auth: OAuth 2.0 via Slack. Workspace admin approval is required before the integration can be used.
 - Capabilities: Search messages/files/channels, send messages, retrieve channel history, access member info.
 - Verify: Search for a known channel or message.
@@ -40,7 +40,7 @@ Reference for setting up access to chat, messaging, and email platforms. Read th
 
 ## Microsoft Teams
 
-**MCP Server (Recommended) — @floriscornel/teams-mcp**
+**MCP Server — @floriscornel/teams-mcp**
 
 - Type: Local (npm)
 - Install: `npx -y @floriscornel/teams-mcp@latest`
@@ -69,7 +69,7 @@ Reference for setting up access to chat, messaging, and email platforms. Read th
 
 ## Google Chat
 
-**MCP Server (Recommended) — Official Remote**
+**MCP Server — Official Remote**
 
 - Type: Remote (cloud-hosted by Google)
 - URL: `https://chatmcp.googleapis.com/mcp/v1`
@@ -92,7 +92,7 @@ Reference for setting up access to chat, messaging, and email platforms. Read th
 
 ## Discord
 
-**MCP Server (Recommended) — @iqai/mcp-discord**
+**MCP Server — @iqai/mcp-discord**
 
 - Type: Local (npm)
 - Install: `npx -y @iqai/mcp-discord --config YOUR_DISCORD_TOKEN`
@@ -191,9 +191,9 @@ Reference for setting up access to chat, messaging, and email platforms. Read th
 **MCP Server — Community**
 
 - Package: `matrix-mcp-server` — https://github.com/mjknowles/matrix-mcp-server
-- Install: Clone → `npm install` → `npm run build`
-- Auth: Matrix access token + homeserver URL, or OAuth 2.0 (with `ENABLE_OAUTH=true`). Set `matrix_homeserver_url`, `matrix_user_id`, `matrix_access_token` in `.env`.
-- 15 tools covering rooms, messages, users. Multi-homeserver support.
+- Install: `claude mcp add --transport http matrix-server http://localhost:3000/mcp -H "matrix_user_id: @user:matrix.example.com" -H "matrix_homeserver_url: https://matrix.example.com" -H "matrix_access_token: ${MATRIX_ACCESS_TOKEN}" -H "Authorization: Bearer ${MATRIX_MCP_TOKEN}"`
+- Auth: Generate a Matrix access token in Element → Settings → Help & About → Access Token (or via `curl -XPOST -d '{"type":"m.login.password","user":"...","password":"..."}' https://matrix.example.com/_matrix/client/r0/login`). The MCP bearer token is set when starting the server.
+- 15 tools covering rooms, messages, users. Multi-homeserver support. OAuth 2.0 also supported (set `ENABLE_OAUTH=true`).
 - Verify: List joined rooms or retrieve messages from a known room.
 
 **Privacy Notes**
@@ -207,7 +207,7 @@ Reference for setting up access to chat, messaging, and email platforms. Read th
 
 ## Webex
 
-**MCP Server (Recommended) — Official**
+**MCP Server — Official**
 
 - Type: Remote (cloud-hosted by Cisco)
 - URL: `https://mcp.webexapis.com/mcp/webex-meeting` (meetings) + messaging endpoints
@@ -230,7 +230,7 @@ Reference for setting up access to chat, messaging, and email platforms. Read th
 
 ## Twist
 
-**MCP Server (Recommended) — Official**
+**MCP Server — Official**
 
 - Type: Local (npm, by Doist)
 - Package: `@doist/twist-ai`
@@ -252,7 +252,7 @@ Reference for setting up access to chat, messaging, and email platforms. Read th
 
 ## Gmail
 
-**MCP Server (Recommended) — Official Remote**
+**MCP Server — Official Remote**
 
 - Type: Remote (cloud-hosted by Google)
 - URL: `https://gmailmcp.googleapis.com/mcp/v1`
@@ -275,7 +275,7 @@ Reference for setting up access to chat, messaging, and email platforms. Read th
 
 ## Outlook / Exchange
 
-**MCP Server (Recommended) — @softeria/ms-365-mcp-server**
+**MCP Server — @softeria/ms-365-mcp-server**
 
 - Type: Local (npm)
 - Install: `npx -y @softeria/ms-365-mcp-server --preset outlook` (or `--preset mail`)

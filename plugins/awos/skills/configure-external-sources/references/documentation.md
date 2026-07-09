@@ -1,12 +1,12 @@
 # Documentation Platform Setup Guides
 
-Reference for setting up access to wiki and documentation platforms. Read the section for the user's selected platform and follow the setup instructions in order: MCP server first (recommended), CLI alternative if MCP is not viable, manual export as a last resort.
+Known tools and access methods for wiki and documentation platforms. The skill uses this as a knowledge base when presenting tool options to the user.
 
 ---
 
 ## Confluence
 
-**MCP Server (Recommended) — Atlassian Remote MCP**
+**MCP Server — Atlassian Remote MCP**
 
 - Type: Remote (cloud-hosted by Atlassian)
 - Install: `claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp`
@@ -38,7 +38,7 @@ Reference for setting up access to wiki and documentation platforms. Read the se
 
 ## Notion
 
-**MCP Server (Recommended) — Official**
+**MCP Server — Official**
 
 - Type: Local (npm)
 - Package: `@notionhq/notion-mcp-server`
@@ -61,7 +61,7 @@ Reference for setting up access to wiki and documentation platforms. Read the se
 
 ## Google Docs / Drive
 
-**MCP Server (Recommended) — Official Google Drive Remote MCP**
+**MCP Server — Official Google Drive Remote MCP**
 
 - Type: Remote (cloud-hosted by Google)
 - URL: `https://drivemcp.googleapis.com/mcp/v1`
@@ -90,7 +90,7 @@ Reference for setting up access to wiki and documentation platforms. Read the se
 
 ## SharePoint / OneDrive
 
-**MCP Server (Recommended) — @softeria/ms-365-mcp-server**
+**MCP Server — @softeria/ms-365-mcp-server**
 
 - Type: Local (npm)
 - Install: `npx -y @softeria/ms-365-mcp-server --org-mode`
@@ -123,7 +123,7 @@ Reference for setting up access to wiki and documentation platforms. Read the se
 
 ## Coda
 
-**MCP Server (Recommended) — Official Remote**
+**MCP Server — Official Remote**
 
 - Type: Remote (cloud-hosted by Coda)
 - URL: `https://coda.io/apis/mcp`
@@ -167,18 +167,12 @@ Reference for setting up access to wiki and documentation platforms. Read the se
 
 ## Slite
 
-**MCP Server (Recommended) — Official Remote**
+**MCP Server — Official Remote**
 
 - Type: Remote (cloud-hosted by Slite)
 - URL: `https://api.slite.com/mcp`
 - Auth: Slite API key in the Authorization header.
 - Verify: Search for a known document.
-
-**MCP Server — Community**
-
-- Package: `slite-mcp` — https://github.com/fajarmf/slite-mcp
-- Install: Clone → `npm install` → `npm run build`
-- Auth: Set `SLITE_API_KEY` environment variable.
 
 **Manual Export Fallback**
 
@@ -215,7 +209,7 @@ Reference for setting up access to wiki and documentation platforms. Read the se
 
 ## Guru
 
-**MCP Server (Recommended) — Official Remote**
+**MCP Server — Official Remote**
 
 - Type: Remote (cloud-hosted by Guru)
 - Source: https://github.com/guruhq/remote-mcp-server
@@ -237,7 +231,7 @@ Reference for setting up access to wiki and documentation platforms. Read the se
 
 ## Nuclino
 
-**MCP Server (Recommended) — Official Remote**
+**MCP Server — Official Remote**
 
 - Type: Remote (cloud-hosted by Nuclino)
 - URL: `https://api.nuclino.com/mcp`
@@ -258,7 +252,7 @@ Reference for setting up access to wiki and documentation platforms. Read the se
 
 ## Outline
 
-**MCP Server (Recommended) — Official**
+**MCP Server — Official**
 
 - Type: Remote (self-hosted URL)
 - Install: `claude mcp add --transport http outline https://<yoursubdomain>.getoutline.com/mcp`

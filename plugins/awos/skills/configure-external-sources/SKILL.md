@@ -53,10 +53,13 @@ If the user selected any chat or email source, use `AskUserQuestion` to confirm:
 
 For each selected platform:
 
-1. Read `references/{documentation,tickets,communication}.md` (relative to this SKILL.md) and use the section matching the user's chosen platform.
-2. Present setup options in priority order: **MCP server** (recommended) → **CLI alternative** → **manual export fallback**.
-3. Guide the user through installation and authentication using the exact commands and instructions from the reference file.
-4. Track the access method chosen (mcp, cli, or manual) and the tool name for each source.
+1. **Discover available tools.** Check what tools are already available in the environment for this platform (e.g., existing MCP servers, installed CLIs like `gh`). Then read `references/{documentation,tickets,communication}.md` (relative to this SKILL.md) for known MCP servers and CLI tools for the platform.
+
+2. **Present options.** Use `AskUserQuestion` to present the discovered tools. List tools already available in the environment first, then known MCP servers and CLI tools from the reference file — official/vendor-hosted tools as primary options unless they appear outdated or deprecated. Always include **Manual export** as the final option.
+
+3. **Guide installation.** For the user's chosen tool, use the setup details from the reference file to guide installation and authentication. For MCP servers, use `npx`/`bunx` or `claude mcp add` — do not instruct the user to clone repositories. For manual export, guide the user to export content and save it to a file in the project directory (e.g., `context/sources/confluence-export.md`). Use `AskUserQuestion` to confirm the file path once the export is saved.
+
+4. **Track the result.** Record the access method chosen (mcp, cli, or manual) and the tool name for each source. For manual access, also record the file path from substep 3.
 
 ## Step 5 — Restart Check
 
@@ -72,9 +75,9 @@ If no MCP restart is needed (tools were already available, CLI was chosen, or ma
 
 Update the status in `context/sources/sources.md` to `verifying`. If the file already exists (from a restart-pending state), update in place; otherwise write a new file with the current source list.
 
-For each configured MCP or CLI tool, attempt a simple read operation (e.g., search for a known term, list projects, or list channels) to confirm the tool responds. If verification fails, read the matching section from the reference file and help troubleshoot authentication or configuration.
+For each configured MCP or CLI tool, attempt a simple read operation (e.g., search for a known term, list projects, or list channels) to confirm the tool responds. If verification fails, read the matching section from the reference file and help troubleshoot authentication or configuration. If the tool still fails after troubleshooting, use `AskUserQuestion` to ask: "Could not verify {tool name} for {platform}. What would you like to do?" with options **Retry**, **Switch to manual export**, and **Remove this source**. On retry, attempt verification again. On switch, update the source's access method to manual and collect the export file path. On remove, drop the source from the list entirely. If the list becomes empty after removals, write `## Status: none` and stop.
 
-Once all tools are verified, update the status in `context/sources/sources.md` to `verified`.
+Once all remaining tools are verified, update the status in `context/sources/sources.md` to `verified`.
 
 ## Step 7 — Scope Collection
 

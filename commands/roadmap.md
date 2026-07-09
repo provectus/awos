@@ -22,7 +22,7 @@ Your task is to manage the product roadmap file located at `context/product/road
 - **Template File:** `.awos/templates/roadmap-template.md`. This is the required structure for the roadmap.
 - **Prerequisite Input:** `context/product/product-definition.md`. This file MUST exist.
 - **Optional Input/Output:** `context/product/brownfield.md` (produced by `/awos:product` on brownfield projects; this command appends a `## Capabilities` section).
-- **Optional Input:** `context/sources/sources.md` (produced by the `configure-external-sources` skill; this command reads it for targeted retrieval).
+- **Optional Input:** `context/sources/sources.md` (external source configuration for targeted retrieval).
 - **Primary Input/Output:** `context/product/roadmap.md`. This is the file you will create or update.
 
 ---
@@ -83,11 +83,11 @@ Follow this logic precisely.
 
     d. Use the full set of capabilities (from brownfield.md) to anchor the roadmap: existing capabilities are noted as already done, and new phases focus on what comes next. Feed this into the roadmap generation in the next step.
 
-3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured` (produced by the `configure-external-sources` skill during `/awos:product`), read the source manifest and retrieve roadmap-relevant content from each configured source:
+3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured`, read it and launch one Explore agent per configured source. For sources with `Access: mcp` or `Access: cli`, use the tool named in the `Tool:` field. For sources with `Access: manual`, read the exported file at the `Path:` field instead.
 
     ```text
     Agent(subagent_type="Explore", description="Retrieve roadmap-relevant docs", prompt="
-    Use the [Tool name from sources.md] tools to retrieve content from [Scope from sources.md].
+    Use the {tool name} tools to retrieve content from {scope}.
     Focus on roadmap and capability information:
     - Feature backlogs and planned work
     - Sprint/iteration history and velocity

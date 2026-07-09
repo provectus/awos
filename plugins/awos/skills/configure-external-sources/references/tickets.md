@@ -1,12 +1,12 @@
 # Ticket System Setup Guides
 
-Reference for setting up access to ticket and project management platforms. Read the section for the user's selected platform and follow the setup instructions in order: MCP server first (recommended), CLI alternative if MCP is not viable, manual export as a last resort.
+Known tools and access methods for ticket and project management platforms. The skill uses this as a knowledge base when presenting tool options to the user.
 
 ---
 
 ## Jira
 
-**MCP Server (Recommended) — Atlassian Remote MCP**
+**MCP Server — Atlassian Remote MCP**
 
 - Type: Remote (cloud-hosted by Atlassian)
 - Install: `claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp`
@@ -36,7 +36,7 @@ Reference for setting up access to ticket and project management platforms. Read
 
 ## Linear
 
-**MCP Server (Recommended) — Official Remote**
+**MCP Server — Official Remote**
 
 - Type: Remote (cloud-hosted by Linear)
 - URL: `https://mcp.linear.app/sse`
@@ -64,7 +64,7 @@ Reference for setting up access to ticket and project management platforms. Read
 
 ## GitHub Issues
 
-**MCP Server (Recommended) — Official**
+**MCP Server — Official**
 
 - Type: Local (Go binary)
 - Install: Download from https://github.com/github/github-mcp-server/releases
@@ -89,7 +89,7 @@ Reference for setting up access to ticket and project management platforms. Read
 
 ## GitLab Issues
 
-**MCP Server (Recommended) — Official**
+**MCP Server — Official**
 
 - Type: Remote (built into GitLab instances)
 - Auth: OAuth 2.0 Dynamic Client Registration or personal access tokens.
@@ -117,7 +117,7 @@ Reference for setting up access to ticket and project management platforms. Read
 
 ## Asana
 
-**MCP Server (Recommended) — Official Remote**
+**MCP Server — Official Remote**
 
 - Type: Remote (cloud-hosted by Asana)
 - URL: `https://mcp.asana.com/v2/mcp`
@@ -160,7 +160,7 @@ Reference for setting up access to ticket and project management platforms. Read
 
 ## Monday.com
 
-**MCP Server (Recommended) — Official**
+**MCP Server — Official**
 
 - Type: Local (npm)
 - Package: `@mondaydotcomorg/monday-api-mcp`
@@ -200,7 +200,7 @@ Reference for setting up access to ticket and project management platforms. Read
 
 ## Shortcut
 
-**MCP Server (Recommended) — Official**
+**MCP Server — Official**
 
 - Type: Local (npm) + Hosted (OAuth)
 - Package: `@shortcut/mcp` (npm)
@@ -226,7 +226,7 @@ Reference for setting up access to ticket and project management platforms. Read
 
 ## Azure DevOps / Azure Boards
 
-**MCP Server (Recommended) — Official (Preview)**
+**MCP Server — Official (Preview)**
 
 - Source: https://github.com/microsoft/azure-devops-mcp
 - Auth: Azure AD / Personal Access Token.
@@ -253,7 +253,7 @@ Reference for setting up access to ticket and project management platforms. Read
 
 ## YouTrack
 
-**MCP Server (Recommended) — Built-in (YouTrack 2025.3+)**
+**MCP Server — Built-in (YouTrack 2025.3+)**
 
 - Type: Remote (built into YouTrack instances)
 - Auth: Bearer token (user permanent token, generate in YouTrack → Profile → Authentication).
@@ -280,7 +280,7 @@ Reference for setting up access to ticket and project management platforms. Read
 
 ## Plane
 
-**MCP Server (Recommended) — Official**
+**MCP Server — Official**
 
 - Source: https://github.com/makeplane/plane-mcp-server
 - Docs: https://developers.plane.so/dev-tools/mcp-server
@@ -346,7 +346,7 @@ Reference for setting up access to ticket and project management platforms. Read
 
 ## Teamwork
 
-**MCP Server (Recommended) — Official**
+**MCP Server — Official**
 
 - Source: https://github.com/teamwork/mcp
 - Auth: Bearer token or OAuth2.
@@ -363,7 +363,7 @@ Reference for setting up access to ticket and project management platforms. Read
 
 ## Wrike
 
-**MCP Server (Recommended) — Official Remote**
+**MCP Server — Official Remote**
 
 - Type: Remote
 - URL: `https://wrike.com/app/mcp/sse` (US), `https://app-eu.wrike.com/app/mcp/sse` (EU)

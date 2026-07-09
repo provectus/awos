@@ -20,7 +20,7 @@ Your task is to manage the architecture file located at `context/product/archite
 - **Prerequisite Input 1:** `context/product/product-definition.md` (The "what" and "why").
 - **Prerequisite Input 2:** `context/product/roadmap.md` (The implementation phases).
 - **Optional Input:** `context/product/brownfield.md` (produced by `/awos:product`, extended by `/awos:roadmap`; deleted at end of this command).
-- **Optional Input:** `context/sources/sources.md` (produced by the `configure-external-sources` skill; this command reads it for targeted retrieval).
+- **Optional Input:** `context/sources/sources.md` (external source configuration for targeted retrieval).
 - **Primary Input/Output:** `context/product/architecture.md` (The file to create or update).
 
 ---
@@ -82,11 +82,11 @@ Follow this logic precisely.
 
     c. Append the new findings to `context/product/brownfield.md` under a `## Technology` heading (for any you revise, record the revised version, not the original). The findings seed the section defaults below and are triaged with the user later, in **Step 3: Finalization** — after the architecture is saved — so exploration never blocks the write.
 
-3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured` (produced by the `configure-external-sources` skill during `/awos:product`), read the source manifest and retrieve architecture-relevant content from each configured source:
+3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured`, read it and launch one Explore agent per configured source. For sources with `Access: mcp` or `Access: cli`, use the tool named in the `Tool:` field. For sources with `Access: manual`, read the exported file at the `Path:` field instead.
 
     ```text
     Agent(subagent_type="Explore", description="Retrieve architecture docs", prompt="
-    Use the [Tool name from sources.md] tools to retrieve content from [Scope from sources.md].
+    Use the {tool name} tools to retrieve content from {scope}.
     Focus on technical and architectural information:
     - Architecture decision records (ADRs)
     - Infrastructure documentation and runbooks

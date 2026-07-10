@@ -31,6 +31,7 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Warn:** Minor gaps — e.g., one non-critical module lacks context, or conventions section is thin. The fundamentals (project purpose, key commands) are present and an agent can still work effectively with minor blind spots.
 - **Fail:** Fundamental context is missing — no project purpose anywhere in the ecosystem, OR no key commands documented, OR multiple complex modules completely lack context, OR no CLAUDE.md files exist at all. An agent would not understand what the project is or how to work in it.
 - **Severity:** critical
+- **Category:** 2000
 
 ### AI-02: Custom slash commands exist
 
@@ -40,6 +41,7 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Warn:** 1-2 custom commands defined
 - **Fail:** No custom commands found
 - **Severity:** medium
+- **Category:** 2001
 
 ### AI-03: Skills are configured
 
@@ -48,6 +50,7 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Pass:** 1+ skills configured with valid SKILL.md
 - **Fail:** No skills found
 - **Severity:** low
+- **Category:** 2002
 
 ### AI-04: MCP servers configured
 
@@ -59,6 +62,7 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Warn:** No direct MCP configuration found, but `enabledPlugins` in `.claude/settings.json` includes enabled plugins that may provide MCP servers
 - **Fail:** No MCP configuration and no enabled plugins found
 - **Severity:** low
+- **Category:** 2003
 
 ### AI-05: Hooks are configured
 
@@ -67,6 +71,7 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Pass:** Hooks configured (pre-tool, post-tool, or session hooks)
 - **Fail:** No hooks configured
 - **Severity:** low
+- **Category:** 2004
 
 ### AI-06: CLAUDE.md files are meaningful and well-structured
 
@@ -88,6 +93,7 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Fail:** CLAUDE.md files contain extensive discoverable content, are heavily bloated (300+ lines), or consist mostly of vague/useless content
 - **Skip-When:** No CLAUDE.md files exist in the repo (nothing to evaluate quality of)
 - **Severity:** high
+- **Category:** 2005
 
 ### AI-07: Agent can run and observe the application
 
@@ -106,3 +112,4 @@ Uses the topology artifact to know which layers and service directories exist.
 - **Warn:** Agent can run and observe the primary application type, but some secondary parts of the system lack run/observe capability (e.g., main API is verifiable but an infra module can only be dry-run, or a small admin UI has no browser MCP)
 - **Fail:** Agent cannot run or observe the primary application type — the core of the system is unverifiable (e.g., web-only project with no browser MCP, or no way to run the main service at all)
 - **Severity:** critical
+- **Category:** 2006

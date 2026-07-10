@@ -1,0 +1,2130 @@
+# standards.toml — capability-category data for the ai-readiness-audit plugin
+#
+# Single source of truth for every scoring category used by the
+# ai-sdlc-adoption metric set (and, in later tasks, by all 11 existing audit
+# dimensions).  Parsed at runtime via `node dist/cli.js standards` (smol-toml).
+# Weights and bands are data — retune by editing this file (or a project-local
+# copy the engine is pointed at).
+#
+# Schema
+# ------
+# [meta]                  — global cadence / lookback constants
+# [category.<slug>]       — one table per scoring category (ten required keys)
+# [category.<slug>.scoring] — declared score curve for banded metrics
+#                           (scale, anchors, basis, basis_note); the engine
+#                           refuses to score a banded metric without one
+# [band.<slug>]           — one table per banded metric (DORA-style thresholds)
+#
+# Weight-seeding heuristic (deterministic, so Task A.4 is mechanical):
+#   critical → 8   high → 5   medium → 3   low → 1
+# Weights inside category tables are starting values; edit here to retune.
+
+# ---------------------------------------------------------------------------
+# [meta] — global constants
+# ---------------------------------------------------------------------------
+
+[meta]
+max_lookback_days = 90
+active_contributor_threshold = 0.05
+rework_horizon_days = 21
+standards_version = "2026.06"
+# Report row-highlight thresholds, applied to each check's awarded-weight
+# share (weight_awarded / weight_max) — NOT to its status label. A check keeps
+# its status; the row color says how much of the weight it actually earned:
+# green >= yellow threshold, yellow below it, red below the red threshold.
+highlight_yellow_below = 0.95
+highlight_red_below = 0.05
+# Report/dimension presentation order — industry-standard engineering first,
+# AI-frontier dimensions last, unscored descriptors at the very end.
+dimension_order = [
+  "delivery-flow",
+  "software-best-practices",
+  "code-architecture",
+  "quality-assurance",
+  "application-security",
+  "supply-chain-security",
+  "ai-security",
+  "documentation",
+  "ai-development-tooling",
+  "spec-driven-development",
+  "ai-sdlc-adoption",
+  "descriptors",
+]
+
+# --- delivery-flow (7 checks) ---
+
+# merge_frequency: Deployment / merge frequency (DORA banded)
+
+[category.merge_frequency]
+code = 301
+check_id = "DF-01"
+metric = "merge_frequency"
+dimension = "delivery-flow"
+weight = 10
+method = "computed"
+definition = "Merges into the default branch per week (DORA deployment frequency proxy)"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "not-reliable"   # direction depends on team size; banded comparison is the signal
+source = "DORA Accelerate State of DevOps 2023"
+url = "https://dora.dev/research/2023/dora-report/2023-dora-accelerate-state-of-devops-report.pdf"
+date = "2023-12"
+last_verified = "2026-07-06"
+
+# lead_time_for_change: Lead time for change (DORA banded)
+
+[category.merge_frequency.scoring]
+scale = "log"
+anchors = [[0.03, 0.0], [0.25, 0.1], [1.0, 0.5], [7.0, 1.0]]
+anchor_unit = "merges into the default branch per week"
+basis = "derived"
+basis_note = "x boundaries transcribe the DORA deployment-frequency bands (elite ≈ daily+, high = weekly–daily, medium = monthly–weekly, low < monthly) onto merges/week; the score awarded at each boundary is AWOS calibration — DORA publishes band labels, not scores."
+
+[category.lead_time_for_change]
+code = 401
+check_id = "DF-02"
+metric = "lead_time_for_change"
+dimension = "delivery-flow"
+weight = 10
+method = "computed"
+definition = "Median time from first commit on a branch to its merge into the default branch"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "minimal"   # git-approximated branch-first-commit is a lower bound; direction is the signal
+source = "DORA Accelerate State of DevOps 2023"
+url = "https://dora.dev/research/2023/dora-report/2023-dora-accelerate-state-of-devops-report.pdf"
+date = "2023-12"
+last_verified = "2026-07-06"
+
+# pr_cycle_time: PR cycle time (banded)
+
+[category.lead_time_for_change.scoring]
+scale = "log"
+anchors = [[1, 1.0], [24, 0.75], [168, 0.5], [720, 0.25], [2160, 0.0]]
+anchor_unit = "median hours from first branch commit to merge"
+basis = "derived"
+basis_note = "x boundaries transcribe the DORA lead-time bands (elite < 1 day, high < 1 week, medium < 1 month, low ≥ 1 month, expressed in hours); the score at each boundary is AWOS calibration."
+
+[category.pr_cycle_time]
+code = 501
+check_id = "DF-03"
+metric = "pr_cycle_time"
+dimension = "delivery-flow"
+weight = 3
+method = "computed"
+definition = "Time from PR open to merge; low-confidence (git-approximation) when no code-host connector is available"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "not-reliable"
+source = "DORA Accelerate State of DevOps 2023"
+url = "https://dora.dev/research/2023/dora-report/2023-dora-accelerate-state-of-devops-report.pdf"
+date = "2023-12"
+last_verified = "2026-07-06"
+
+# change_failure_rate: Change failure rate proxy (DORA banded)
+
+[category.pr_cycle_time.scoring]
+scale = "log"
+anchors = [[1, 1.0], [24, 0.75], [168, 0.5], [720, 0.25], [2160, 0.0]]
+anchor_unit = "median hours from PR open to merge"
+basis = "heuristic"
+basis_note = "No published numeric bands exist for PR cycle time; the curve mirrors the DORA lead-time bands as an AWOS heuristic."
+
+[category.change_failure_rate]
+code = 701
+check_id = "DF-04"
+metric = "change_failure_rate"
+dimension = "delivery-flow"
+weight = 10
+method = "computed"
+definition = "Share of the window's default-branch merge events that are reverts, hotfixes, or rollbacks (keyword proxy for the DORA change-failure rate)"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "minimal"   # keyword-detected reverts only; lower bound, true rate may be higher
+source = "DORA Accelerate State of DevOps 2023"
+url = "https://dora.dev/research/2023/dora-report/2023-dora-accelerate-state-of-devops-report.pdf"
+date = "2023-12"
+last_verified = "2026-07-06"
+
+# review_rework: Review rework cycle (banded)
+
+[category.change_failure_rate.scoring]
+scale = "linear"
+anchors = [[0.0, 1.0], [0.15, 0.0]]
+anchor_unit = "share of default-branch merges that are reverts/rollbacks (0..1)"
+basis = "derived"
+basis_note = "The 15% zero-score point is the DORA 2023 medium-cluster change-failure rate (cluster values: elite 5%, high 10%, medium 15%, low 64%, report p. 12); reading them as contiguous bands and the straight-line decay from 0% are AWOS calibration."
+
+[category.review_rework]
+code = 801
+check_id = "DF-05"
+metric = "review_rework"
+dimension = "delivery-flow"
+weight = 3
+method = "computed"
+definition = "Review rounds and time-to-resolve-review-threads per PR; proxied from post-open commits when no host data is available"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "not-reliable"
+source = "DX Core 4"
+url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
+date = "2024-12"
+last_verified = "2026-07-06"
+
+# rework_rate: Deployment rework rate (DORA 2024, git keyword proxy)
+
+[category.review_rework.scoring]
+scale = "linear"
+anchors = [[2, 1.0], [4, 0.7], [6, 0.4], [10, 0.0]]
+anchor_unit = "average commits per PR after open (post-review rework proxy)"
+basis = "heuristic"
+basis_note = "DX Core 4 publishes no numeric commits-per-PR thresholds; anchors are AWOS heuristics (~1–2 commits/PR = clean review flow, ≥10 = heavy rework)."
+
+[category.rework_rate]
+code = 1401
+check_id = "DF-06"
+metric = "rework_rate"
+dimension = "delivery-flow"
+weight = 10
+method = "computed"
+summary = "DORA deployment rework rate: share of deploys that are unplanned bug-fix work."
+definition = "DORA deployment rework rate: ratio of deployments that are unplanned work to fix bugs triggered by incidents in production. Proxied from git: first-parent merges in the audit window ([meta].max_lookback_days) whose subject matches fix/bugfix/hotfix/patch/defect/regression keywords (case-insensitive). Distinct from change_failure_rate (DF-04), which counts revert/rollback deployments, and from code_churn (DESC-02), which measures line-level turnover. DORA publishes no numeric thresholds for rework rate; bands (good <15%, watch <30%, concerning >=30%) are AWOS heuristics."
+applies_when = "always"
+sources = ["git"]
+reliability_default = "minimal"
+source = "DORA"
+url = "https://dora.dev/guides/dora-metrics/"
+date = "2026-01"
+last_verified = "2026-07-06"
+
+[category.rework_rate.scoring]
+scale = "linear"
+anchors = [[0.0, 1.0], [0.15, 0.8], [0.3, 0.4], [0.5, 0.0]]
+anchor_unit = "share of window merges whose subject matches fix/hotfix keywords (0..1)"
+basis = "heuristic"
+basis_note = "DORA publishes no numeric rework-rate thresholds; the good <15% / watch <30% / concerning ≥30% shape is an AWOS heuristic (already stated in the definition)."
+
+[category.mttr]
+code = 1103
+check_id = "DF-07"
+metric = "mttr"
+dimension = "delivery-flow"
+weight = 5
+method = "computed"
+definition = "Mean time to recovery from incidents; SKIP unless a real incident source (PagerDuty/OpsGenie/incident.io) is explicitly provided"
+applies_when = "topology.has_incident_source"
+sources = ["tracker", "incident"]
+reliability_default = "not-reliable"
+source = "DORA Accelerate State of DevOps 2023"
+url = "https://dora.dev/research/2023/dora-report/2023-dora-accelerate-state-of-devops-report.pdf"
+date = "2023-12"
+last_verified = "2026-07-06"
+
+[category.mttr.scoring]
+scale = "log"
+anchors = [[0.1, 1.0], [1, 0.75], [24, 0.5], [168, 0.0]]
+anchor_unit = "median hours from incident start to resolution"
+basis = "derived"
+basis_note = "x boundaries transcribe the DORA time-to-restore bands (elite < 1 hour, high < 1 day, medium < 1 week, expressed in hours); the score at each boundary is AWOS calibration."
+
+# --- software-best-practices (9 checks) ---
+
+
+[category.software_best_practices_sbp_01]
+code = 2700
+check_id = "SBP-01"
+metric = "SBP-01"
+dimension = "software-best-practices"
+weight = 5
+method = "detected"
+definition = "Code linters are configured for all major languages in the project with runnable scripts"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-07-06"
+
+[category.software_best_practices_sbp_02]
+code = 2701
+check_id = "SBP-02"
+metric = "SBP-02"
+dimension = "software-best-practices"
+weight = 3
+method = "detected"
+definition = "Code formatting is automated and consistent via formatters with scripts or pre-commit hooks"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-07-06"
+
+[category.software_best_practices_sbp_03]
+code = 2702
+check_id = "SBP-03"
+metric = "SBP-03"
+dimension = "software-best-practices"
+weight = 5
+pass_at = 0.60
+warn_at = 0.25
+method = "detected"
+definition = "The project uses strong typing where the language supports it — e.g. strict-mode type config or a high ratio of type annotations in sampled source. The >=60% PASS / >=25% WARN typed-share thresholds are AWOS heuristics — gradual-typing guidance publishes no percentages."
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-07-06"
+
+[category.software_best_practices_sbp_04]
+code = 2703
+check_id = "SBP-04"
+metric = "SBP-04"
+dimension = "software-best-practices"
+weight = 5
+method = "detected"
+definition = "Automated build, test, and deploy pipeline is configured with build and test stages"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-07-06"
+
+[category.software_best_practices_sbp_05]
+code = 2705
+check_id = "SBP-05"
+metric = "SBP-05"
+dimension = "software-best-practices"
+weight = 3
+method = "detected"
+definition = "Dependencies are locked with lockfiles and dependency update automation is configured"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-07-06"
+
+[category.software_best_practices_sbp_06]
+code = 2704
+check_id = "SBP-06"
+metric = "SBP-06"
+dimension = "software-best-practices"
+weight = 5
+fail_at = 0.50
+warn_at = 0.10
+method = "detected"
+definition = "The codebase follows consistent error handling — errors are logged or propagated, not silently swallowed. The FAIL >=50% / WARN >=10% bad-catch shares are AWOS's own standard — the literature treats silent catches as never acceptable and publishes no tolerated rate."
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-07-06"
+
+[category.sbp_except_clause_syntax]
+code = 2706
+check_id = "SBP-07"
+metric = "SBP-07"
+dimension = "software-best-practices"
+weight = 1
+method = "detected"
+definition = "Python source contains no Python-2 except-clause syntax (except A, B:), which is a SyntaxError under Python 3 (Python repos only)"
+applies_when = "topology.has_python"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Python 3 — What's New (PEP 3110)"
+url = "https://docs.python.org/3/whatsnew/3.0.html"
+date = "2008-12"
+last_verified = "2026-07-06"
+
+[category.sbp_vertical_delivery]
+code = 2300
+metric = "SBP-08"
+check_id = "SBP-08"
+dimension = "software-best-practices"
+weight = 5
+pass_at = 0.50
+warn_at = 0.25
+method = "computed"
+definition = "Feature branches touch multiple layers in a single branch, indicating vertical delivery. The PASS >=50% / WARN >=25% cross-layer branch shares are AWOS heuristics — vertical-slice guidance is qualitative."
+applies_when = "topology.is_monorepo"
+sources = ["git"]
+reliability_default = "maximal"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-07-06"
+
+[category.sbp_no_orphaned_artifacts]
+code = 2303
+metric = "SBP-09"
+check_id = "SBP-09"
+dimension = "software-best-practices"
+weight = 3
+method = "detected"
+definition = "API definitions have corresponding UI consumers and database schemas have corresponding API layers"
+applies_when = "topology.has_multiple_layers"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-07-06"
+
+# --- code-architecture (7 checks) ---
+
+[category.code_architecture_arch_01]
+code = 2100
+check_id = "ARCH-01"
+metric = "ARCH-01"
+dimension = "code-architecture"
+weight = 5
+method = "detected"
+definition = "The project follows a declared or recognizable architectural pattern"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-07-06"
+
+[category.code_architecture_arch_02]
+code = 2101
+check_id = "ARCH-02"
+metric = "ARCH-02"
+dimension = "code-architecture"
+weight = 5
+method = "detected"
+definition = "Code modules have clear boundaries and no tangled cross-imports"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-07-06"
+
+[category.code_architecture_arch_03]
+code = 2102
+check_id = "ARCH-03"
+metric = "ARCH-03"
+dimension = "code-architecture"
+weight = 3
+method = "judgment"
+rubric = "List the top-level module directories (first 2 nesting levels). For each, assess: does the name clearly indicate its purpose, and do the files inside relate to that purpose? Flag 'god modules' (30+ files, or mixing unrelated concerns). PASS if modules have clear names and focused contents with no god modules. WARN if 1-2 broad modules exist but most are well-scoped. FAIL if multiple god modules or catch-all directories (utils/, helpers/, misc/ with 20+ mixed-concern files) dominate."
+evidence_required = ["list of top-level module directories", "file counts for each", "any directories flagged as god modules with justification"]
+definition = "Modules and directories serve a single clear purpose rather than being catch-all dumping grounds"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-07-06"
+
+[category.code_architecture_arch_04]
+code = 2103
+check_id = "ARCH-04"
+metric = "ARCH-04"
+dimension = "code-architecture"
+weight = 5
+method = "detected"
+definition = "Business logic, data access, and presentation are separated — not mixed in the same files"
+applies_when = "topology.is_not_library"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-07-06"
+
+[category.code_architecture_arch_05]
+code = 2104
+check_id = "ARCH-05"
+metric = "ARCH-05"
+dimension = "code-architecture"
+weight = 3
+method = "detected"
+definition = "The project follows consistent naming conventions for files and directories. All-or-nothing (AWOS's own standard — no source publishes an acceptable inconsistency rate): every file must follow the dominant convention."
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-07-06"
+
+[category.code_architecture_arch_06]
+code = 2105
+check_id = "ARCH-06"
+metric = "ARCH-06"
+dimension = "code-architecture"
+weight = 3
+fail_at = 0.30
+warn_at = 0.10
+method = "computed"
+definition = "Source files are reasonably sized, indicating proper decomposition"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "McCabe 1976"
+url = "https://doi.org/10.1109/TSE.1976.233837"
+date = "1976-07"
+last_verified = "2026-07-06"
+
+[category.arch_cross_layer_tooling]
+code = 2304
+metric = "ARCH-07"
+check_id = "ARCH-07"
+dimension = "code-architecture"
+weight = 3
+method = "detected"
+definition = "The project has cross-layer tooling (unified Makefile, docker-compose, shared CI) enabling full-stack development"
+applies_when = "topology.is_monorepo"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-07-06"
+
+# --- quality-assurance (11 checks) ---
+
+[category.quality_assurance_qa_01]
+code = 2500
+check_id = "QA-01"
+metric = "QA-01"
+dimension = "quality-assurance"
+weight = 8
+warn_at = 0.30
+method = "computed"
+summary = "Meaningful tests cover at least 60% of source modules."
+definition = "The project has meaningful tests covering at least 60% of its source modules. The 60% PASS / 30% WARN thresholds are AWOS calibration of a module-has-tests share — Fowler's pyramid publishes no coverage numbers and argues against coverage targets (Google's published 60/75/90 bands apply to line coverage, a different metric)."
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+threshold = 0.60
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.line_coverage]
+code = 2510
+check_id = "QA-02"
+metric = "line_coverage"
+dimension = "quality-assurance"
+weight = 3
+method = "computed"
+summary = "Measured line coverage from a coverage report, scored against Google's published 60/75/90 bands."
+definition = "Measured line/statement coverage parsed from coverage reports on disk (lcov, cobertura, istanbul summary, JaCoCo, clover), scored against Google's published guidance: 60% acceptable, 75% commendable, 90% exemplary. Distinct from QA-01 (module-has-tests proxy) and QA-03 (coverage measurement presence). Per the same source, a coverage percentage must never be a sole quality target. SKIP when no report exists."
+applies_when = "always"
+sources = ["scale"]
+reliability_default = "not-reliable"
+source = "Google Testing Blog — Code Coverage Best Practices"
+url = "https://testing.googleblog.com/2020/08/code-coverage-best-practices.html"
+date = "2020-08-07"
+last_verified = "2026-07-06"
+
+[category.line_coverage.scoring]
+scale = "linear"
+anchors = [[0.0, 0.0], [0.6, 0.5], [0.75, 0.8], [0.9, 1.0]]
+anchor_unit = "measured line coverage (0..1)"
+basis = "derived"
+basis_note = "The 60/75/90 boundaries transcribe Google Testing Blog's published guidance (60% acceptable, 75% commendable, 90% exemplary); the score awarded at each boundary is AWOS calibration."
+
+
+[category.quality_assurance_qa_03]
+code = 2505
+check_id = "QA-03"
+metric = "QA-03"
+dimension = "quality-assurance"
+weight = 1
+method = "detected"
+definition = "The project measures what percentage of source code is exercised by tests, optionally enforcing a minimum threshold"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.quality_assurance_qa_04]
+code = 2501
+check_id = "QA-04"
+metric = "QA-04"
+dimension = "quality-assurance"
+weight = 5
+method = "detected"
+definition = "The project has tests that verify individual units of logic in isolation, without real I/O or external dependencies"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.quality_assurance_qa_05]
+code = 2502
+check_id = "QA-05"
+metric = "QA-05"
+dimension = "quality-assurance"
+weight = 5
+method = "detected"
+definition = "The project has tests that verify interactions between components across real databases, HTTP calls, or message queues"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.quality_assurance_qa_06]
+code = 2503
+check_id = "QA-06"
+metric = "QA-06"
+dimension = "quality-assurance"
+weight = 5
+method = "detected"
+definition = "The project has end-to-end tests exercising complete user flows through a real UI, API surface, or CLI"
+applies_when = "topology.is_not_library"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.quality_assurance_qa_07]
+code = 2504
+check_id = "QA-07"
+metric = "QA-07"
+dimension = "quality-assurance"
+weight = 3
+method = "computed"
+definition = "Test distribution follows a healthy pyramid: most tests unit-level, fewer integration, fewest E2E"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.quality_assurance_qa_08]
+code = 2506
+check_id = "QA-08"
+metric = "QA-08"
+dimension = "quality-assurance"
+weight = 1
+method = "detected"
+definition = "Tests use a structured approach to create and manage test data rather than scattering hardcoded inline values"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.quality_assurance_qa_09]
+code = 2507
+check_id = "QA-09"
+metric = "QA-09"
+dimension = "quality-assurance"
+weight = 3
+method = "detected"
+definition = "Unit and integration tests use mocking/stubbing to isolate the code under test from external dependencies"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.quality_assurance_qa_10]
+code = 2508
+check_id = "QA-10"
+metric = "QA-10"
+dimension = "quality-assurance"
+weight = 5
+method = "detected"
+definition = "Service boundaries are verified through consumer-driven contract tests ensuring producers do not break consumers"
+applies_when = "topology.is_multi_service"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+[category.quality_assurance_qa_11]
+code = 2509
+check_id = "QA-11"
+metric = "QA-11"
+dimension = "quality-assurance"
+weight = 5
+method = "detected"
+definition = "ML models are tested for quality metrics as part of the development cycle, not just functional correctness"
+applies_when = "topology.has_ml_layer"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Martin Fowler — Practical Test Pyramid"
+url = "https://martinfowler.com/articles/practical-test-pyramid.html"
+date = "2018-02"
+last_verified = "2026-07-06"
+
+# --- application-security (14 checks) ---
+
+# ---------------------------------------------------------------------------
+# application-security (OWASP ASVS 5.0.0 Level 1 — curated subset)
+# Code range 3000–3099.  detected = static file/config heuristic detector;
+# judgment = rubric evaluated by the orchestrator's Step 6 judgment patch.
+# ---------------------------------------------------------------------------
+
+# AS-01: TLS enforced — no plain-HTTP fallback
+
+
+[category.appsec_tls_enforced]
+code = 3000
+check_id = "AS-01"
+metric = "AS-01"
+dimension = "application-security"
+weight = 8
+method = "detected"
+definition = "The application enforces TLS — no plain-HTTP service URLs are present in config files per ASVS 5.0.0 L1 (12.2.1)"
+applies_when = "topology.has_http_api"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# AS-02: Security headers present (X-Content-Type-Options, X-Frame-Options, etc.)
+[category.appsec_security_headers]
+code = 3001
+check_id = "AS-02"
+metric = "AS-02"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "HTTP security headers (Strict-Transport-Security, X-Content-Type-Options, CSP frame-ancestors or X-Frame-Options) are configured per ASVS 5.0.0 (3.4.1 L1; 3.4.4, 3.4.6 L2)"
+applies_when = "topology.has_http_api"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# AS-03: CORS not wildcard
+[category.appsec_cors_not_wildcard]
+code = 3002
+check_id = "AS-03"
+metric = "AS-03"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "CORS is not configured with a wildcard origin ('*') per ASVS 5.0.0 L1 (3.4.2)"
+applies_when = "topology.has_http_api"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# AS-04: Parameterized SQL / no string-built queries
+[category.appsec_parameterized_sql]
+code = 3003
+check_id = "AS-04"
+metric = "AS-04"
+dimension = "application-security"
+weight = 8
+method = "detected"
+definition = "Database queries use parameterized statements or an ORM; no string-concatenated SQL is detected per ASVS 5.0.0 L1 (1.2.4)"
+applies_when = "topology.has_db"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# AS-05: Secrets not hardcoded in source
+[category.appsec_no_hardcoded_secrets]
+code = 3004
+check_id = "AS-05"
+metric = "AS-05"
+dimension = "application-security"
+weight = 8
+method = "detected"
+definition = "No hardcoded secrets, API keys, or credentials appear in committed source files per ASVS 5.0.0 (13.3.1, L2)"
+applies_when = "topology.handles_secrets"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# AS-06: Authentication required on state-changing endpoints
+[category.appsec_auth_on_mutations]
+code = 3005
+check_id = "AS-06"
+metric = "AS-06"
+dimension = "application-security"
+weight = 8
+pass_at = 0.70
+warn_at = 0.30
+method = "detected"
+definition = "State-changing HTTP endpoints (POST/PUT/PATCH/DELETE) require authentication; decorator/middleware patterns are present per ASVS 5.0.0 L1 (8.3.1). ASVS requires 100% coverage; the PASS >=70% / WARN >=30% detection steps are AWOS calibration for noisy static detection."
+applies_when = "topology.uses_auth"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# AS-07: Password / session hygiene signals
+[category.appsec_password_session_hygiene]
+code = 3006
+check_id = "AS-07"
+metric = "AS-07"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "Password hashing uses a strong algorithm (bcrypt/argon2/scrypt) per ASVS 5.0.0 11.4.2 (L2), and session tokens are generated with a CSPRNG per the ASVS 5.0.0 V7.2 session-token requirements"
+applies_when = "topology.uses_auth"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# AS-08: Input validation / output encoding present
+[category.appsec_input_validation]
+code = 3007
+check_id = "AS-08"
+metric = "AS-08"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "Request input is validated or sanitized before processing; known validation libraries or decorators are referenced per ASVS 5.0.0 V2.2 (validation and business logic)"
+applies_when = "topology.has_http_api"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# AS-09: Rate limiting / brute-force protection
+[category.appsec_rate_limiting]
+code = 3008
+check_id = "AS-09"
+metric = "AS-09"
+dimension = "application-security"
+weight = 3
+method = "detected"
+definition = "Authentication and public endpoints show evidence of rate limiting or brute-force protection per ASVS 5.0.0 L1 (6.3.1)"
+applies_when = "topology.uses_auth"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# AS-10: Authorization correctness (judgment)
+[category.appsec_authorization_correctness]
+code = 3009
+check_id = "AS-10"
+metric = "AS-10"
+dimension = "application-security"
+weight = 8
+method = "judgment"
+definition = "Authorization checks are applied consistently to all protected resources; no privilege-escalation paths are evident per ASVS 5.0.0 L1 (8.3.1)"
+applies_when = "topology.uses_auth"
+sources = ["audit"]
+reliability_default = "maximal"
+rubric = "Review route/controller handlers: do all state-changing endpoints verify the caller's identity and role before acting? Look for missing auth checks on update/delete paths, IDOR patterns (direct object references without ownership check), and admin actions accessible to unprivileged roles. Score PASS when every state-changing endpoint enforces authenticated, authorized access and no IDOR or privilege-escalation path is evident; WARN when exactly one isolated gap exists on a non-sensitive path; FAIL when two or more state-changing endpoints lack enforcement or any concrete IDOR/privilege-escalation path exists."
+evidence_required = ["list of protected endpoints and their auth middleware/decorator", "any endpoints that bypass the auth layer and the justification", "access-control model (RBAC/ABAC/ownership) — source files where it is enforced"]
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# AS-11: Insecure design review (judgment)
+[category.appsec_insecure_design]
+code = 3010
+check_id = "AS-11"
+metric = "AS-11"
+dimension = "application-security"
+weight = 5
+method = "judgment"
+definition = "The overall HTTP API design does not exhibit systemic insecure-design patterns per OWASP Top 10 2021 (A04: Insecure Design; ASVS 5.0 removed the secure-SDLC chapter)"
+applies_when = "topology.has_http_api"
+sources = ["audit"]
+reliability_default = "maximal"
+rubric = "Examine the API surface for systemic insecure-design patterns: mass assignment vulnerabilities (binding all request fields to model), missing object-level access control, sensitive data exposure in error messages, lack of security context in the design (no mention of threat model, security requirements, or defense in depth). Score PASS if no systemic issues are evident, WARN if one issue is found, FAIL if two or more are present."
+evidence_required = ["API surface overview (routes, methods, input models)", "error-handling approach and what details are returned to clients", "any existing threat model or security design documentation"]
+source = "OWASP Top 10"
+url = "https://owasp.org/Top10/A04_2021-Insecure_Design/"
+date = "2021-09"
+last_verified = "2026-07-06"
+
+[category.appsec_env_gitignored]
+code = 2600
+metric = "AS-12"
+check_id = "AS-12"
+dimension = "application-security"
+weight = 8
+method = "detected"
+definition = "Environment files containing secrets are excluded from version control via .gitignore (nearest ASVS 5.0.0 requirement: 13.3.1 secrets management)"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+[category.appsec_env_template]
+code = 2602
+metric = "AS-13"
+check_id = "AS-13"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "A template environment file exists so developers know which variables to configure (nearest ASVS 5.0.0 requirement: 13.3.1 secrets management)"
+applies_when = "topology.uses_env_vars"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+[category.appsec_sensitive_files_gitignored]
+code = 2604
+metric = "AS-14"
+check_id = "AS-14"
+dimension = "application-security"
+weight = 5
+method = "detected"
+definition = "Sensitive file types present in the stack are excluded from version control AND from container image builds (.gitignore + .dockerignore); inconsistency that would leak a secret into an image is flagged (nearest ASVS 5.0.0 requirement: 13.3.1 secrets management)"
+applies_when = "topology.has_topology"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# --- supply-chain-security (8 checks) ---
+
+[category.supply_chain_security_scs_01]
+code = 2900
+check_id = "SCS-01"
+metric = "SCS-01"
+dimension = "supply-chain-security"
+weight = 8
+method = "detected"
+definition = "Lockfiles exist and are tracked by git, ensuring all developers and CI use identical resolved dependency trees"
+applies_when = "topology.has_package_ecosystem"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-07-06"
+
+[category.supply_chain_security_scs_02]
+code = 2901
+check_id = "SCS-02"
+metric = "SCS-02"
+dimension = "supply-chain-security"
+weight = 5
+method = "detected"
+definition = "Lockfiles include cryptographic integrity hashes verifying downloaded packages match resolved dependencies"
+applies_when = "topology.has_lockfiles"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-07-06"
+
+[category.supply_chain_security_scs_03]
+code = 2902
+check_id = "SCS-03"
+metric = "SCS-03"
+dimension = "supply-chain-security"
+weight = 5
+fail_at = 0.30
+warn_at = 0.10
+method = "detected"
+definition = "Dependency versions use exact pinning — not wildcards, open-ended ranges, or caret/tilde ranges allowing silent re-resolution. The >=30% FAIL / >=10% WARN unpinned-share thresholds are AWOS heuristics — OWASP SCVS publishes no pinning percentage."
+applies_when = "topology.has_package_manifests"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-07-06"
+
+[category.supply_chain_security_scs_04]
+code = 2903
+check_id = "SCS-04"
+metric = "SCS-04"
+dimension = "supply-chain-security"
+weight = 8
+method = "computed"
+definition = "All resolved dependency versions have been published for at least 7 days, reducing supply chain attack exposure. The 7-day window matches pnpm's documented one-week minimumReleaseAge option; pnpm's default is 1 day — the stricter choice is AWOS calibration."
+applies_when = "topology.has_package_ecosystem"
+sources = ["audit"]
+reliability_default = "maximal"
+threshold_days = 7
+source = "pnpm — Supply chain security (minimumReleaseAge)"
+url = "https://pnpm.io/supply-chain-security"
+date = "2025"
+last_verified = "2026-07-06"
+
+[category.supply_chain_security_scs_05]
+code = 2904
+check_id = "SCS-05"
+metric = "SCS-05"
+dimension = "supply-chain-security"
+weight = 5
+method = "detected"
+definition = "Dependency update PRs require human review before merging, preventing automated merging of potentially compromised updates"
+applies_when = "topology.has_dependency_automation"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "NIST SSDF (SP 800-218)"
+url = "https://csrc.nist.gov/pubs/sp/800/218/final"
+date = "2022-02"
+last_verified = "2026-07-06"
+
+[category.supply_chain_security_scs_06]
+code = 2905
+check_id = "SCS-06"
+metric = "SCS-06"
+dimension = "supply-chain-security"
+weight = 8
+method = "detected"
+definition = "The CI/CD pipeline includes automated vulnerability scanning of dependencies catching known CVEs before production"
+applies_when = "topology.has_ci"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "NIST SSDF (SP 800-218)"
+url = "https://csrc.nist.gov/pubs/sp/800/218/final"
+date = "2022-02"
+last_verified = "2026-07-06"
+
+[category.supply_chain_security_scs_07]
+code = 2906
+check_id = "SCS-07"
+metric = "SCS-07"
+dimension = "supply-chain-security"
+weight = 5
+method = "detected"
+definition = "Dependency version overrides are tracked, minimal, and justified — present overrides are surfaced for human review (freshness/CVE status is not verified offline)"
+applies_when = "topology.has_package_manifests"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-07-06"
+
+[category.supply_chain_security_scs_08]
+code = 2907
+check_id = "SCS-08"
+metric = "SCS-08"
+dimension = "supply-chain-security"
+weight = 3
+method = "computed"
+definition = "The dependency tree is not excessively bloated — direct-to-transitive ratio is within healthy range for the ecosystem"
+applies_when = "topology.has_lockfiles"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-07-06"
+
+# --- ai-security (7 checks) ---
+
+[category.ai_security_ais_01]
+code = 2400
+metric = "AIS-01"
+check_id = "AIS-01"
+dimension = "ai-security"
+weight = 8
+method = "detected"
+definition = "AI agent instruction files contain no invisible Unicode characters that could hide malicious instructions"
+applies_when = "topology.has_ai_agent_files"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-07-06"
+
+[category.ai_security_ais_02]
+code = 2401
+metric = "AIS-02"
+check_id = "AIS-02"
+dimension = "ai-security"
+weight = 8
+method = "detected"
+definition = "Agent instruction files contain no prompt injection patterns attempting to override behavior or exfiltrate data"
+applies_when = "topology.has_ai_agent_files"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-07-06"
+
+[category.ai_security_ais_03]
+code = 2402
+metric = "AIS-03"
+check_id = "AIS-03"
+dimension = "ai-security"
+weight = 8
+method = "detected"
+definition = "Hook scripts contain only legitimate automation with no exfiltration, obfuscation, or download-and-execute patterns"
+applies_when = "topology.has_hooks"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-07-06"
+
+[category.ai_security_ais_04]
+code = 2403
+metric = "AIS-04"
+check_id = "AIS-04"
+dimension = "ai-security"
+weight = 8
+method = "detected"
+definition = "MCP server configurations reference trusted, verifiable endpoints with no bare IPs, HTTP remote URLs, or embedded credentials"
+applies_when = "topology.has_mcp_config"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-07-06"
+
+[category.ai_security_ais_05]
+code = 2404
+metric = "AIS-05"
+check_id = "AIS-05"
+dimension = "ai-security"
+weight = 5
+method = "detected"
+definition = "All AI agent instruction and configuration files are tracked in git, providing auditable change history"
+applies_when = "topology.has_ai_agent_files"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-07-06"
+
+[category.ai_security_ais_06]
+code = 2405
+metric = "AIS-06"
+check_id = "AIS-06"
+dimension = "ai-security"
+weight = 8
+method = "detected"
+definition = "Skill and command files contain no instructions to bypass security controls, access secrets, or modify security configuration"
+applies_when = "topology.has_commands_or_skills"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-07-06"
+
+[category.ais_agent_safety_hooks]
+code = 2601
+metric = "AIS-07"
+check_id = "AIS-07"
+dimension = "ai-security"
+weight = 8
+method = "detected"
+definition = "Agentic coding tool hooks are configured to prevent agents from reading sensitive files"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OWASP ASVS"
+url = "https://owasp.org/www-project-application-security-verification-standard/"
+date = "2025-05-30"
+last_verified = "2026-07-06"
+
+# --- documentation (7 checks) ---
+
+[category.documentation_doc_01]
+code = 2200
+check_id = "DOC-01"
+metric = "DOC-01"
+dimension = "documentation"
+weight = 8
+method = "detected"
+definition = "The repository has a top-level README.md with setup instructions a new developer could follow"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
+date = "2024"
+last_verified = "2026-07-06"
+
+[category.documentation_doc_02]
+code = 2201
+check_id = "DOC-02"
+metric = "DOC-02"
+dimension = "documentation"
+weight = 3
+method = "detected"
+definition = "Each major service directory has its own README.md with build and run instructions. All-or-nothing (AWOS's own standard — sources treat per-service READMEs as universally expected, publishing no acceptable share): every service directory needs one."
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
+date = "2024"
+last_verified = "2026-07-06"
+
+[category.documentation_doc_03]
+code = 2202
+check_id = "DOC-03"
+metric = "DOC-03"
+dimension = "documentation"
+weight = 5
+method = "detected"
+definition = "API endpoints are documented via OpenAPI/Swagger specs or equivalent, proportional to API surface"
+applies_when = "topology.has_api"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "OpenAPI Specification"
+url = "https://spec.openapis.org/oas/latest.html"
+date = "2025-09-19"
+last_verified = "2026-07-06"
+
+[category.documentation_doc_04]
+code = 2203
+check_id = "DOC-04"
+metric = "DOC-04"
+dimension = "documentation"
+weight = 3
+method = "detected"
+definition = "Documentation references match current code reality — sampled claims are accurate"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
+date = "2024"
+last_verified = "2026-07-06"
+
+[category.documentation_doc_05]
+code = 2204
+check_id = "DOC-05"
+metric = "doc_coverage"
+dimension = "documentation"
+weight = 3
+method = "computed"
+definition = "Public/exported definitions carry doc-comments (docstring/JSDoc/KDoc/Go doc) — coverage of the documented API surface"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
+date = "2024"
+last_verified = "2026-07-06"
+
+[category.documentation_doc_06]
+code = 2205
+check_id = "DOC-06"
+metric = "doc_coverage"
+dimension = "documentation"
+weight = 3
+method = "computed"
+definition = "Overall definition doc-comment coverage across all source definitions"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
+date = "2024"
+last_verified = "2026-07-06"
+
+[category.doc_spec_traceability]
+code = 2302
+metric = "DOC-07"
+check_id = "DOC-07"
+dimension = "documentation"
+weight = 5
+method = "detected"
+definition = "Specifications link to implementation and implementation references specs bidirectionally"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/blob/main/README.md"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+# --- ai-development-tooling (7 checks) ---
+
+# ---------------------------------------------------------------------------
+# [category.*] — audit dimension check categories (Task A.4)
+# One category per check in each of the 10 scored dimensions.
+# project-topology is UNSCORED — no categories for its checks.
+# Code blocks: 2000–2099 ai-development-tooling, 2100–2199 code-architecture,
+#   2200–2299 documentation, 2300–2399 legacy end-to-end-delivery codes
+#   (now in software-best-practices / documentation / code-architecture),
+#   2400–2499 ai-security (agent integrity), 2500–2599 quality-assurance,
+#   2600–2699 legacy security codes (now application-security / ai-security),
+#   2700–2799 software-best-practices, 2800–2899 spec-driven-development,
+#   2900–2999 supply-chain-security.
+# ---------------------------------------------------------------------------
+
+
+[category.ai_development_tooling_ai_01]
+code = 2000
+check_id = "AI-01"
+metric = "AI-01"
+dimension = "ai-development-tooling"
+weight = 8
+method = "judgment"
+rubric = "Read all agent instruction files (CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, .github/copilot-instructions.md, etc.). PASS if the combined ecosystem covers project-specific non-obvious context (architecture decisions, conventions, gotchas) that an agent cannot discover on its own from the source code. WARN if the files exist but contain only boilerplate, directory trees, or obvious facts. FAIL if no agent instruction files exist or all content is trivially discoverable by reading the code."
+evidence_required = ["list of all agent instruction files found", "sample of 3+ non-obvious facts each provides", "assessment of whether any file contains only boilerplate"]
+definition = "The combined agent instruction file ecosystem gives AI agents sufficient non-obvious context to work effectively in the project"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.ai_development_tooling_ai_02]
+code = 2001
+check_id = "AI-02"
+metric = "AI-02"
+dimension = "ai-development-tooling"
+weight = 3
+method = "detected"
+definition = "The project defines custom slash commands for common workflows"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.ai_development_tooling_ai_03]
+code = 2002
+check_id = "AI-03"
+metric = "AI-03"
+dimension = "ai-development-tooling"
+weight = 1
+method = "detected"
+definition = "The project uses agentic coding tool skills for specialized workflows"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.ai_development_tooling_ai_04]
+code = 2003
+check_id = "AI-04"
+metric = "AI-04"
+dimension = "ai-development-tooling"
+weight = 3
+method = "detected"
+definition = "The project configures MCP servers for extended tool access"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.ai_development_tooling_ai_05]
+code = 2004
+check_id = "AI-05"
+metric = "AI-05"
+dimension = "ai-development-tooling"
+weight = 1
+method = "detected"
+definition = "The project uses agentic coding tool hooks for automated guardrails or workflows"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.ai_development_tooling_ai_06]
+code = 2005
+check_id = "AI-06"
+metric = "AI-06"
+dimension = "ai-development-tooling"
+weight = 5
+method = "judgment"
+rubric = "For each agent instruction file, apply the key test: would removing this line cause an AI agent to make mistakes? PASS if every file has >= 3 non-obvious, project-specific instructions that pass this test. WARN if some files pass but at least one contains only boilerplate (directory trees, obvious naming conventions, copy-pasted framework docs). FAIL if files are uniformly boilerplate or trivially derivable from reading the codebase."
+evidence_required = ["list of agent instruction files evaluated", "for each file: 1-3 sample lines flagged as non-obvious vs. boilerplate", "overall verdict per file (passes key test or not)"]
+definition = "Every agent instruction file contains high-quality, non-obvious content that actually helps AI agents"
+applies_when = "topology.has_agent_instruction_files"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.ai_development_tooling_ai_07]
+code = 2006
+check_id = "AI-07"
+metric = "AI-07"
+dimension = "ai-development-tooling"
+weight = 8
+method = "detected"
+definition = "The agentic coding tool has the means to run the application and observe results without human involvement"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+# --- spec-driven-development (7 checks) ---
+
+[category.spec_driven_development_sdd_01]
+code = 2800
+check_id = "SDD-01"
+metric = "SDD-01"
+dimension = "spec-driven-development"
+weight = 8
+method = "detected"
+definition = "AWOS framework is installed in the project providing the spec-driven development workflow"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/blob/main/README.md"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.spec_driven_development_sdd_02]
+code = 2801
+check_id = "SDD-02"
+metric = "SDD-02"
+dimension = "spec-driven-development"
+weight = 5
+method = "detected"
+definition = "The three foundational AWOS documents exist with substantive content: product definition, roadmap, and architecture"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/blob/main/README.md"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.spec_driven_development_sdd_03]
+code = 2802
+check_id = "SDD-03"
+metric = "SDD-03"
+dimension = "spec-driven-development"
+weight = 5
+method = "detected"
+definition = "Technology choices declared in architecture.md match what is actually used in the codebase"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/blob/main/README.md"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.spec_driven_development_sdd_04]
+code = 2803
+check_id = "SDD-04"
+metric = "SDD-04"
+dimension = "spec-driven-development"
+weight = 8
+warn_at = 0.40
+headline_role = "reach.spec_coverage"
+method = "computed"
+summary = "Significant features are built through a spec-driven workflow, not ad-hoc prompting."
+definition = "Significant features are built through a spec-driven workflow (any framework — AWOS, Kiro, Agent-OS, and similar), not ad-hoc prompting — 70%+ of merged FEATURE PRs/branches touched spec files (fixes, reverts, and chores are excluded: maintenance needs no spec). The 70% PASS / 40% WARN thresholds are AWOS heuristics — Spec Kit publishes no adoption bands."
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+threshold = 0.70
+source = "GitHub — Spec-driven development with AI (Spec Kit)"
+url = "https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/"
+date = "2025-09-02"
+last_verified = "2026-07-06"
+
+[category.spec_driven_development_sdd_05]
+code = 2804
+check_id = "SDD-05"
+metric = "SDD-05"
+dimension = "spec-driven-development"
+weight = 2
+method = "detected"
+definition = "Each spec directory contains the full AWOS spec triad: functional-spec.md, technical-considerations.md, and tasks.md"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWS Kiro — Specs"
+url = "https://kiro.dev/docs/specs/"
+date = "2025"
+last_verified = "2026-07-06"
+
+[category.spec_driven_development_sdd_06]
+code = 2805
+check_id = "SDD-06"
+metric = "SDD-06"
+dimension = "spec-driven-development"
+weight = 3
+method = "detected"
+definition = "Specs that have progressed past Draft are actively being worked on, not abandoned mid-workflow"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/blob/main/README.md"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.spec_driven_development_sdd_07]
+code = 2806
+check_id = "SDD-07"
+metric = "SDD-07"
+dimension = "spec-driven-development"
+weight = 3
+pass_at = 0.70
+warn_at = 0.40
+method = "detected"
+definition = "Tasks in tasks.md files are annotated with meaningful agent assignments using the AWOS format. The 70% PASS / 40% WARN annotation-share thresholds are AWOS heuristics."
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/blob/main/README.md"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+# --- ai-sdlc-adoption (15 checks) ---
+
+# ---------------------------------------------------------------------------
+# [category.*] — ai-sdlc-adoption metric categories
+#
+# Tier G: git-only signals
+# ---------------------------------------------------------------------------
+
+# tooling_depth: AI tooling depth & breadth
+# One category per detectable tooling layer.  The canonical collector for all
+# tooling-presence signals (CLAUDE.md/AGENTS.md/.claude/skills/commands/hooks/MCP)
+# is the git collector — sources = ["git"] for every tooling_depth category.
+
+[category.ai_tooling_claude_md]
+code = 101
+check_id = "ADP-01"
+metric = "tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 10
+method = "detected"
+definition = "Repo has a non-trivial agent instruction file (CLAUDE.md / AGENTS.md / GEMINI.md / .cursorrules / .github/copilot-instructions.md or equivalent) providing AI agent context"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"   # presence != active use → true usage ≤ shown
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.ai_tooling_skills]
+code = 102
+check_id = "ADP-02"
+metric = "tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 6
+method = "detected"
+definition = "Repo defines agent skill files (e.g. .claude/skills/*/SKILL.md or equivalent for other AI coding tools)"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.ai_tooling_commands]
+code = 103
+check_id = "ADP-03"
+metric = "tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 5
+method = "detected"
+definition = "Repo defines custom commands or rule files for an agentic coding tool (e.g. .claude/commands/, .cursor/rules/, .gemini/commands/)"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.ai_tooling_hooks]
+code = 104
+check_id = "ADP-04"
+metric = "tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 5
+method = "detected"
+definition = "Repo defines lifecycle hooks for an agentic coding tool (e.g. .claude/hooks/, .kiro/hooks/)"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.ai_tooling_mcp]
+code = 105
+check_id = "ADP-05"
+metric = "tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 5
+method = "detected"
+definition = "Repo carries an MCP server config (.mcp.json or equivalent)"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.ai_tooling_spec_signals]
+code = 106
+check_id = "ADP-06"
+metric = "tooling_depth"
+dimension = "ai-sdlc-adoption"
+weight = 8
+method = "detected"
+definition = "Repo has spec-driven adoption signals: spec directories, spec-referencing hooks/scripts, or spec docs"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "maximal"
+source = "GitHub — Spec-driven development with AI (Spec Kit)"
+url = "https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/"
+date = "2025-09-02"
+last_verified = "2026-07-06"
+
+# ai_attribution: AI-attributed change share (lower bound)
+
+[category.ai_attribution]
+code = 901
+check_id = "ADP-07"
+metric = "ai_attribution"
+dimension = "ai-sdlc-adoption"
+weight = 2
+method = "computed"
+definition = "Share of commits/PRs in the audit window carrying AI markers (Co-authored-by: trailer, agent label) — current practice, not historical penetration. Always a lower bound — true usage >= shown."
+applies_when = "always"
+sources = ["git"]
+reliability_default = "minimal"   # true usage >= shown: attribution is easily disabled
+source = "GitHub Docs — Co-authored-by"
+url = "https://docs.github.com/en/pull-requests/committing-changes-to-your-project/creating-and-editing-commits/creating-a-commit-with-multiple-authors"
+date = "2025"
+last_verified = "2026-07-06"
+
+# ---------------------------------------------------------------------------
+# Tier C: CI source categories
+# ---------------------------------------------------------------------------
+
+# ci_pass_rate uses reliability_default = "not-reliable" rather than "maximal" because
+# it is a ratio metric (percentage), not a presence signal — true usage is not bounded above by the observed value.
+[category.ci_pass_rate]
+code = 1001
+check_id = "ADP-08"
+metric = "ci_pass_rate"
+dimension = "ai-sdlc-adoption"
+weight = 5
+method = "computed"
+definition = "Default-branch CI pass rate over decided runs; feature-branch failures excluded; treated as supporting evidence, not headline. The score is the pass rate itself; band labels (elite >=99%) are AWOS heuristics — Fowler publishes no numeric targets."
+applies_when = "topology.has_ci"
+sources = ["ci"]
+reliability_default = "not-reliable"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-07-06"
+
+[category.ci_pass_rate.scoring]
+scale = "linear"
+anchors = [[0.0, 0.0], [1.0, 1.0]]
+anchor_unit = "default-branch CI pass rate over decided runs (0..1)"
+basis = "heuristic"
+basis_note = "Fowler's CI article publishes no numeric pass-rate targets; the score is the pass rate itself (identity curve), band labels (elite ≥ 99% …) are AWOS heuristics."
+
+[category.pipeline_duration_trend]
+code = 1002
+check_id = "ADP-09"
+metric = "pipeline_duration"
+dimension = "ai-sdlc-adoption"
+weight = 3
+method = "computed"
+definition = "Feedback-loop speed: average pipeline duration over decided runs in the window. Scored via the declared log curve (full score at Fowler's 10-minute build, zero at 2h); all but the 10-minute anchor are AWOS heuristics."
+applies_when = "topology.has_ci"
+sources = ["ci"]
+reliability_default = "not-reliable"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-07-06"
+
+# ---------------------------------------------------------------------------
+# Tier I: Issue tracker categories
+# ---------------------------------------------------------------------------
+
+[category.pipeline_duration_trend.scoring]
+scale = "log"
+anchors = [[600, 1.0], [1800, 0.7], [3600, 0.4], [7200, 0.0]]
+anchor_unit = "average pipeline duration in seconds over decided runs"
+basis = "heuristic"
+basis_note = "The 10-minute full-score anchor transcribes Fowler's CI ten-minute-build guideline; the decay through 30 min / 1 h to zero at 2 h is an AWOS heuristic — Fowler publishes no such curve."
+
+[category.work_mix_allocation]
+code = 1101
+check_id = "ADP-10"
+metric = "work_mix_allocation"
+dimension = "ai-sdlc-adoption"
+weight = 5
+method = "computed"
+definition = "Team capacity split across Growth (new features/value), KTLO (Keep The Lights On — maintenance, bug fixes, dependency and infra upkeep), and Support (customer-driven) work."
+applies_when = "topology.has_tracker"
+sources = ["tracker"]
+reliability_default = "not-reliable"
+source = "DX Core 4 (whitepaper)"
+url = "https://getdx.com/uploads/dx-core-4.pdf"
+date = "2024-12"
+last_verified = "2026-07-06"
+
+[category.work_mix_allocation.scoring]
+scale = "linear"
+anchors = [[0.0, 0.0], [0.6, 1.0]]
+anchor_unit = "Growth share of ticket work (0..1)"
+basis = "heuristic"
+basis_note = "DX Core 4 frames Growth/KTLO/Support allocation but publishes no numeric target; full score at ≥ 60% Growth is an AWOS heuristic (mirrors [band.work_mix])."
+
+[band.line_coverage]
+metric = "line_coverage"
+source = "Google Testing Blog — Code Coverage Best Practices"
+elite = "exemplary: >= 90% lines covered"
+high = "commendable: >= 75%"
+medium = "acceptable: >= 60%"
+low = "< 60%"
+
+[category.issue_throughput]
+code = 1102
+check_id = "ADP-11"
+metric = "issue_throughput"
+dimension = "ai-sdlc-adoption"
+weight = 3
+method = "computed"
+definition = "Delivered-issue count and backlog burn-down rate per monthly bucket"
+applies_when = "topology.has_tracker"
+sources = ["tracker"]
+reliability_default = "not-reliable"
+source = "DX Core 4 (whitepaper)"
+url = "https://getdx.com/uploads/dx-core-4.pdf"
+date = "2024-12"
+last_verified = "2026-07-06"
+
+[category.issue_throughput.scoring]
+scale = "log"
+anchors = [[0.25, 0.1], [1, 0.4], [3, 0.7], [10, 1.0]]
+anchor_unit = "tickets resolved per week"
+basis = "heuristic"
+basis_note = "DX Core 4 publishes no numeric throughput thresholds; anchors are AWOS heuristics and deliberately team-size-blind (see reliability_default)."
+
+[category.ticket_subtask_split]
+code = 1104
+check_id = "ADP-12"
+metric = "ticket_subtask_split"
+dimension = "ai-sdlc-adoption"
+weight = 3
+method = "computed"
+definition = "Over-splitting tickets into many subtasks fragments work — departs from INVEST right-sizing, adds coordination/context-switching cost; bands are AWOS heuristics, DORA/INVEST publish no numeric threshold"
+applies_when = "topology.has_tracker"
+sources = ["tracker"]
+reliability_default = "minimal"
+source = "Agile Alliance (INVEST)"
+url = "https://agilealliance.org/glossary/invest/"
+date = "2003"
+last_verified = "2026-07-06"
+
+[category.ticket_subtask_split.scoring]
+scale = "linear"
+anchors = [[1, 1.0], [3, 0.8], [6, 0.4], [10, 0.0]]
+anchor_unit = "average direct sub-tasks per parent ticket"
+basis = "heuristic"
+basis_note = "INVEST/DORA publish no numeric sub-task threshold (already stated in the definition); ≤3 good / ≤6 watch / >6 concerning is an AWOS heuristic. The first anchor is a plateau: any average ≤ 1 scores 1.0."
+
+[category.ticket_description_quality]
+code = 1105
+check_id = "ADP-13"
+metric = "ticket_description_quality"
+dimension = "ai-sdlc-adoption"
+weight = 3
+method = "computed"
+summary = "Share of tickets with a non-trivial description and acceptance criteria — thin tickets starve humans and AI agents of context."
+definition = "Share of tickets with a non-trivial description (≥50 chars) AND acceptance criteria; thin tickets starve both humans and AI agents of context. The 50-char threshold is an AWOS heuristic — Agile Alliance's Definition of Ready specifies acceptance criteria but publishes no numeric character-count threshold. Size/structure signals only; no raw description text is stored."
+applies_when = "topology.has_tracker"
+sources = ["tracker"]
+reliability_default = "minimal"
+source = "Agile Alliance (Definition of Ready)"
+url = "https://www.agilealliance.org/glossary/definition-of-ready/"
+date = "2012"
+last_verified = "2026-07-06"
+
+# ---------------------------------------------------------------------------
+# Tier D: Docs / wiki categories
+# ---------------------------------------------------------------------------
+
+[category.ticket_description_quality.scoring]
+scale = "linear"
+anchors = [[0.0, 0.0], [0.4, 0.4], [0.7, 0.8], [1.0, 1.0]]
+anchor_unit = "share of tickets with a ≥50-char description AND acceptance criteria (0..1)"
+basis = "heuristic"
+basis_note = "Agile Alliance's Definition of Ready names acceptance criteria but publishes no numeric thresholds (already stated in the definition); the curve is an AWOS heuristic."
+
+[category.external_spec_coverage]
+code = 1201
+check_id = "ADP-14"
+metric = "external_spec_coverage"
+dimension = "ai-sdlc-adoption"
+weight = 5
+method = "computed"
+definition = "External spec/doc coverage & freshness in Confluence/Coda/Notion; strengthens tooling_depth spec signal"
+applies_when = "topology.has_docs_connector"
+sources = ["docs"]
+reliability_default = "not-reliable"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
+date = "2024"
+last_verified = "2026-07-06"
+
+# onboarding_ease: Onboarding ease — enabler presence proxy (DX Core 4 time-to-10th-PR)
+
+[category.onboarding_ease]
+code = 1501
+check_id = "ADP-15"
+metric = "onboarding_ease"
+dimension = "ai-sdlc-adoption"
+weight = 3
+method = "computed"
+summary = "Onboarding-enabler presence (README setup, agent context, .env example, one-command bootstrap) — a proxy for time-to-productivity."
+definition = "Onboarding enabler presence as a proxy for the DX Core 4 'Time to 10th PR' outcome (average time for a new engineer to merge their 10th pull request). Four boolean signals are checked: (1) README contains a setup/install/getting-started/usage/quickstart heading or a common bootstrap command (npm install, yarn, pnpm install, make, docker compose, pip install, poetry install, ./gradlew, bundle install, go build/run, cargo build, uv sync); (2) agent context file present (CLAUDE.md/AGENTS.md or topology.has_agent_instruction_files); (3) .env example file present (.env.example/.env.sample/.env.template/.env.dist); (4) one-command bootstrap present (Makefile, justfile, Taskfile, docker-compose.yml, setup.sh, or package.json with setup/bootstrap/dev script). value = present_count/4 (0..1). Ramp-time (median first-commit to first-merge) is intentionally not measured — it overlaps lead-time/review-rework metrics and is not always available. Band thresholds are AWOS heuristics (no published DX Core 4 numeric targets): good ≥0.75, watch ≥0.50, concerning <0.50."
+applies_when = "always"
+sources = ["git"]
+reliability_default = "minimal"
+source = "DX Core 4 (GetDX) — Time to 10th PR"
+url = "https://getdx.com/blog/software-development-metrics/"
+date = "2025-09"
+last_verified = "2026-07-06"
+
+[category.onboarding_ease.scoring]
+scale = "linear"
+anchors = [[0.0, 0.0], [0.5, 0.5], [0.75, 0.8], [1.0, 1.0]]
+anchor_unit = "share of the four onboarding enablers present (0..1)"
+basis = "heuristic"
+basis_note = "DX Core 4 publishes no numeric Time-to-10th-PR proxy targets (already stated in the definition); the enabler-count curve is an AWOS heuristic."
+
+# --- descriptors (5 checks) ---
+
+# active_contributors: Active monthly contributors
+
+
+[category.active_contributors]
+code = 201
+check_id = "DESC-01"
+metric = "active_contributors"
+dimension = "descriptors"
+weight = 0
+method = "computed"
+headline_role = "reach.contributors"
+definition = "Active contributor count over the audit window ([meta].max_lookback_days): authors excluded only when both their merge-share and LOC-share fall below the active_contributor_threshold (default 5 %), filtering out drive-by reviewers and non-code participants (aggregate only, no PII)"
+applies_when = "always"
+sources = ["git"]
+reliability_default = "not-reliable"   # raw count; no direction implied without context
+source = "DX Core 4 (whitepaper)"
+url = "https://getdx.com/uploads/dx-core-4.pdf"
+date = "2024-12"
+last_verified = "2026-07-06"
+
+# code_churn: Code churn & rework
+
+[category.code_churn]
+code = 601
+check_id = "DESC-02"
+metric = "code_churn"
+dimension = "descriptors"
+weight = 0
+method = "computed"
+definition = "Windowed code-turnover: share of recently-authored lines (within the rework horizon) that are deleted again inside the audit window — a bounded, directional rework signal (lower is better)."
+applies_when = "always"
+sources = ["git"]
+reliability_default = "minimal"   # windowed turnover metric; directional signal, not raw count
+source = "DX Core 4"
+url = "https://getdx.com/research/measuring-developer-productivity-with-the-dx-core-4/"
+date = "2024-12"
+last_verified = "2026-07-06"
+
+# ---------------------------------------------------------------------------
+# Tier G: code complexity / scale / dependency metrics (cyclomatic_complexity–G12)
+# Code block 1300–1399. method = "computed". All three are ai-sdlc-adoption.
+# ---------------------------------------------------------------------------
+
+# cyclomatic_complexity: Cyclomatic complexity (via web-tree-sitter AST)
+
+[category.code_churn.scoring]
+scale = "linear"
+anchors = [[0.0, 1.0], [0.12, 0.8], [0.18, 0.4], [0.3, 0.0]]
+anchor_unit = "share of recently-authored lines deleted again inside the window (0..1)"
+basis = "heuristic"
+basis_note = "DX Core 4 publishes no numeric code-turnover thresholds; anchors are AWOS heuristics."
+
+[category.cyclomatic_complexity]
+code = 1301
+check_id = "DESC-03"
+metric = "cyclomatic_complexity"
+dimension = "descriptors"
+weight = 0
+method = "computed"
+definition = "Average and maximum cyclomatic complexity (CCN) per function, plus high-complexity hotspot count above threshold. Computed via AST decision-point counting for all bundled languages; files in unbundled languages are skipped."
+applies_when = "always"
+sources = ["scale"]
+reliability_default = "not-reliable"
+source = "McCabe 1976"
+url = "https://doi.org/10.1109/TSE.1976.233837"
+date = "1976-07"
+last_verified = "2026-07-06"
+
+# loc_scale: Lines of code and scale
+
+[category.cyclomatic_complexity.scoring]
+scale = "linear"
+anchors = [[1, 1.0], [5, 1.0], [10, 0.75], [15, 0.5], [30, 0.0]]
+anchor_unit = "average cyclomatic complexity per function"
+basis = "derived"
+basis_note = "The CCN 10 boundary is McCabe's published 'reasonable upper limit'; the plateau below 5 and the decay to 30 are AWOS calibration."
+
+[category.loc_scale]
+code = 1302
+check_id = "DESC-04"
+metric = "loc_scale"
+dimension = "descriptors"
+weight = 0
+method = "computed"
+definition = "Total source-file line count (LOC), per-language breakdown, and file count; a scale signal for contextualising other metrics"
+applies_when = "always"
+sources = ["scale"]
+reliability_default = "not-reliable"
+source = "Wikipedia — Source lines of code (physical SLOC)"
+url = "https://en.wikipedia.org/wiki/Source_lines_of_code"
+date = "2025"
+last_verified = "2026-07-06"
+
+# dependency_count: Direct dependency count (manifest-based)
+
+[category.dependency_count]
+code = 1303
+check_id = "DESC-05"
+metric = "dependency_count"
+dimension = "descriptors"
+weight = 0
+method = "computed"
+definition = "Direct-dependency count from package manifests (package.json / pyproject.toml / go.mod / Cargo.toml / requirements.txt)"
+applies_when = "always"
+sources = ["scale"]
+reliability_default = "not-reliable"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-07-06"
+
+# --- org-portfolio (3 checks) ---
+
+# ---------------------------------------------------------------------------
+# [category.*] — org-level portfolio rollup categories (ORG.2)
+# Computed by org_rollup.ts from per-repo audit JSONs. Code range 9000–9002.
+# method = "computed". Never aggregate full per-repo metric set — ≤3 only.
+# ---------------------------------------------------------------------------
+
+[category.org_ai_tooling_coverage]
+code = 9000
+check_id = "ORG-01"
+metric = "org_ai_tooling_coverage"
+dimension = "org-portfolio"
+weight = 10
+method = "computed"
+definition = "Fraction of portfolio repos with any AI tooling (agent instruction file / skills / commands / hooks / MCP config) present; contributor-weighted"
+applies_when = "always"
+sources = ["org-rollup"]
+reliability_default = "not-reliable"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.org_capability_score]
+code = 9001
+check_id = "ORG-02"
+metric = "org_capability_score"
+dimension = "org-portfolio"
+weight = 10
+method = "computed"
+definition = "Mean of awarded category weights across portfolio repos (Σ awarded weight per repo, contributor-weighted with equal-weight fallback); reflects breadth and depth of AI-SDLC adoption"
+applies_when = "always"
+sources = ["org-rollup"]
+reliability_default = "not-reliable"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/blob/main/README.md"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+[category.org_measurement_coverage]
+code = 9002
+check_id = "ORG-03"
+metric = "org_measurement_coverage"
+dimension = "org-portfolio"
+weight = 10
+method = "computed"
+definition = "Standards coverage: mean of the per-repo coverage ratios (awarded ÷ applicable weight), contributor-weighted with equal-weight fallback"
+applies_when = "always"
+sources = ["org-rollup"]
+reliability_default = "not-reliable"
+source = "AWOS convention"
+url = "https://github.com/provectus/awos/blob/main/README.md"
+date = "2026-06"
+last_verified = "2026-07-06"
+
+# --- bands (DORA-style thresholds) ---
+
+# ---------------------------------------------------------------------------
+# [band.*] — thresholds for banded metrics
+# ---------------------------------------------------------------------------
+
+# cyclomatic_complexity: Cyclomatic complexity bands (McCabe 1976 thresholds)
+
+[band.cyclomatic_complexity]
+metric = "cyclomatic_complexity"
+source = "McCabe 1976"
+elite = "avg_ccn <= 5"
+high = "avg_ccn <= 10"
+medium = "avg_ccn <= 15"
+low = "avg_ccn > 15"
+
+[band.complexity_hotspots]
+metric = "cyclomatic_complexity"
+source = "McCabe 1976"
+elite = "hotspots = 0"
+high = "hotspots <= 5"
+medium = "hotspots <= 20"
+low = "hotspots > 20"
+
+# ---------------------------------------------------------------------------
+# [band.*] — thresholds for banded metrics
+# ---------------------------------------------------------------------------
+
+# merge_frequency / lead_time_for_change: DORA delivery bands
+
+[band.deploy_frequency]
+metric = "merge_frequency"
+source = "DORA State of DevOps"
+elite = "multiple per day"
+high = "once per day to once per week"
+medium = "once per week to once per month"
+low = "< once per month"
+
+[band.lead_time_for_change]
+metric = "lead_time_for_change"
+source = "DORA State of DevOps"
+elite = "< 1 day"
+high = "< 1 week"
+medium = "< 1 month"
+low = ">= 1 month"
+
+[band.change_failure_rate]
+metric = "change_failure_rate"
+source = "DORA State of DevOps"
+elite = "0–5%"
+high = "5–10%"
+medium = "10–15%"
+low = "> 15%"
+
+[band.mttr]
+metric = "mttr"
+source = "DORA State of DevOps"
+elite = "< 1 hour"
+high = "< 1 day"
+medium = "< 1 week"
+low = ">= 1 week"
+
+[band.ci_pass_rate]
+metric = "ci_pass_rate"
+source = "Martin Fowler CI/CD"
+elite = ">= 99%"
+high = ">= 95%"
+medium = ">= 90%"
+low = "< 90%"
+
+[band.work_mix]
+metric = "work_mix_allocation"
+source = "DX Core 4"
+elite = "Growth >= 60%"
+high = "Growth >= 45%"
+medium = "Growth >= 30%"
+low = "Growth < 30%"

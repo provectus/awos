@@ -1,6 +1,7 @@
 # Ignore artifacts:
 node_modules
 media
+plugins/awos/skills/ai-readiness-audit/dist/
 
 package-lock.json
 
@@ -11,3 +12,4 @@ package-lock.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+review/

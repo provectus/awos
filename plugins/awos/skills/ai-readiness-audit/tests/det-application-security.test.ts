@@ -1,0 +1,655 @@
+/**
+ * det-application-security.test.ts
+ *
+ * Hermetic detector tests for the application-security dimension (AS-01 through
+ * AS-09). Each test pins a specific verdict by writing minimal fixture files into
+ * a temp directory and asserting the expected status. The judgment categories
+ * AS-10 (authorization correctness) and AS-11 (insecure design) have no detectors
+ * and are therefore not tested here.
+ */
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  detectTlsEnforced,
+  detectSecurityHeaders,
+  detectCorsNotWildcard,
+  detectParameterizedSql,
+  detectNoHardcodedSecrets,
+  detectAuthOnMutations,
+  detectPasswordSessionHygiene,
+  detectInputValidation,
+  detectRateLimiting,
+  DETECTORS,
+} from '../detectors/application_security.ts';
+import { tmpDir } from './helpers.ts';
+
+function tmp(): string {
+  return tmpDir('as-');
+}
+
+// ---------------------------------------------------------------------------
+// detectTlsEnforced (3000 — AS-01)
+// ---------------------------------------------------------------------------
+
+test('AS-01: no plain-HTTP URLs in config is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'config.yaml'),
+    'database_url: "https://db.example.com"\napi_base: "https://api.example.com"\n'
+  );
+  const r = detectTlsEnforced(t);
+  assert.equal(r.status, 'PASS');
+  assert.equal(r.method, 'detected');
+});
+
+test('AS-01: plain-HTTP URL in config is WARN (1 hit)', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'settings.toml'),
+    '[service]\nbase_url = "http://api.mycompany.com"\n'
+  );
+  const r = detectTlsEnforced(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `expected WARN or FAIL, got ${r.status}`
+  );
+});
+
+test('AS-01: localhost plain-HTTP is PASS (exempted)', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, '.env'),
+    'API_URL=http://localhost:8000\nDB_URL=http://127.0.0.1:5432\n'
+  );
+  const r = detectTlsEnforced(t);
+  assert.equal(r.status, 'PASS');
+});
+
+test('AS-01: json-schema.org $schema identifier URL is exempted (PASS)', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'config.schema.json'),
+    '{\n  "$schema": "http://json-schema.org/draft-07/schema#",\n  "type": "object"\n}\n'
+  );
+  const r = detectTlsEnforced(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `schema identifier URLs are never fetched — must not count as insecure origins; got ${r.status}`
+  );
+});
+
+test('AS-01: w3.org / schemas.* namespace URLs are exempted, real http origin still counts', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'namespaces.yaml'),
+    'xml_ns: "http://www.w3.org/2001/XMLSchema"\nxaml_ns: "http://schemas.microsoft.com/winfx/2006/xaml"\n'
+  );
+  const clean = detectTlsEnforced(t);
+  assert.equal(
+    clean.status,
+    'PASS',
+    `XML namespace URLs must be exempted from the insecure-origin count; got ${clean.status}`
+  );
+  // Fresh temp dir: a real plain-HTTP service origin alongside the exempted
+  // namespace URLs must still be flagged.
+  const t2 = tmp();
+  writeFileSync(
+    join(t2, 'namespaces.yaml'),
+    'xml_ns: "http://www.w3.org/2001/XMLSchema"\nxaml_ns: "http://schemas.microsoft.com/winfx/2006/xaml"\n'
+  );
+  writeFileSync(
+    join(t2, 'settings.toml'),
+    '[service]\nbase_url = "http://api.mycompany.com"\n'
+  );
+  const dirty = detectTlsEnforced(t2);
+  assert.ok(
+    dirty.status === 'WARN' || dirty.status === 'FAIL',
+    `real plain-HTTP service origin must still count despite allowlist; got ${dirty.status}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// detectSecurityHeaders (3001 — AS-02)
+// ---------------------------------------------------------------------------
+
+test('AS-02: X-Content-Type-Options and X-Frame-Options present is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'middleware.py'),
+    `
+response['X-Content-Type-Options'] = 'nosniff'
+response['X-Frame-Options'] = 'DENY'
+`
+  );
+  const r = detectSecurityHeaders(t);
+  assert.equal(r.status, 'PASS');
+  assert.equal(r.method, 'detected');
+});
+
+test('AS-02: only one security header is WARN', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'app.js'),
+    "res.setHeader('X-Frame-Options', 'DENY');\n"
+  );
+  const r = detectSecurityHeaders(t);
+  assert.equal(r.status, 'WARN');
+});
+
+test('AS-02: no security headers is FAIL', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'main.py'), 'print("hello")\n');
+  const r = detectSecurityHeaders(t);
+  assert.equal(r.status, 'FAIL');
+});
+
+test('AS-02: all three headers present is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'nginx.conf'),
+    `
+add_header X-Content-Type-Options nosniff;
+add_header X-Frame-Options DENY;
+add_header Strict-Transport-Security "max-age=31536000";
+`
+  );
+  const r = detectSecurityHeaders(t);
+  assert.equal(r.status, 'PASS');
+  assert.equal(r.value, 3);
+});
+
+// ---------------------------------------------------------------------------
+// detectCorsNotWildcard (3002 — AS-03)
+// ---------------------------------------------------------------------------
+
+test('AS-03: CORS wildcard origin fails', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'app.py'), 'CORS(app, origins="*")\n');
+  const r = detectCorsNotWildcard(t);
+  assert.equal(r.status, 'FAIL');
+  assert.equal(r.method, 'detected');
+});
+
+test('AS-03: CORS scoped origins passes', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'app.py'),
+    'CORS(app, origins=["https://x.com", "https://y.com"])\n'
+  );
+  const r = detectCorsNotWildcard(t);
+  assert.equal(r.status, 'PASS');
+});
+
+test('AS-03: no CORS config is SKIP (N/A)', () => {
+  // Absence of CORS configuration is not "safe" — it's not applicable.
+  // Browsers default to same-origin when no CORS header is set, so there
+  // is nothing to grade. This was previously returning PASS (the bug).
+  const t = tmp();
+  writeFileSync(join(t, 'main.py'), 'print("hello world")\n');
+  const r = detectCorsNotWildcard(t);
+  assert.equal(r.status, 'SKIP');
+});
+
+test('AS-03: allowed_origins wildcard is FAIL', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'settings.py'), 'CORS_ALLOWED_ORIGINS = ["*"]\n');
+  const r = detectCorsNotWildcard(t);
+  assert.equal(r.status, 'FAIL');
+});
+
+// ---------------------------------------------------------------------------
+// detectParameterizedSql (3003 — AS-04)
+// ---------------------------------------------------------------------------
+
+test('AS-04: string-built SQL with + operator is WARN or FAIL', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'db.py'),
+    'cur.execute("SELECT * FROM u WHERE id=" + uid)\n'
+  );
+  const r = detectParameterizedSql(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `expected WARN or FAIL for string-built SQL, got ${r.status}`
+  );
+  assert.equal(r.method, 'detected');
+});
+
+test('AS-04: f-string SQL is WARN or FAIL', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'repo.py'),
+    'cur.execute(f"SELECT * FROM users WHERE id={user_id}")\n'
+  );
+  const r = detectParameterizedSql(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `expected WARN or FAIL for f-string SQL, got ${r.status}`
+  );
+});
+
+test('AS-04: multiple string-built SQL patterns is FAIL', () => {
+  const t = tmp();
+  // Three hits → FAIL (threshold is ≥3)
+  writeFileSync(
+    join(t, 'db.py'),
+    [
+      'cur.execute("SELECT * FROM u WHERE id=" + uid)',
+      'cur.execute("DELETE FROM sessions WHERE token=" + tok)',
+      'cur.execute("UPDATE users SET name=" + name + " WHERE id=" + uid)',
+    ].join('\n') + '\n'
+  );
+  const r = detectParameterizedSql(t);
+  assert.equal(r.status, 'FAIL');
+});
+
+test('AS-04: parameterized query is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'db.py'),
+    'cur.execute("SELECT * FROM u WHERE id = ?", (uid,))\n'
+  );
+  const r = detectParameterizedSql(t);
+  assert.equal(r.status, 'PASS');
+});
+
+test('AS-04: empty repo is PASS (no SQL patterns)', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'app.py'), 'print("no db here")\n');
+  const r = detectParameterizedSql(t);
+  assert.equal(r.status, 'PASS');
+});
+
+// ---------------------------------------------------------------------------
+// detectNoHardcodedSecrets (3004 — AS-05)
+// ---------------------------------------------------------------------------
+
+test('AS-05: hardcoded API key fails', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'config.py'),
+    'API_KEY = "sk-abcdef1234567890abcdef1234567890"\n'
+  );
+  const r = detectNoHardcodedSecrets(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `expected WARN or FAIL, got ${r.status}`
+  );
+  assert.equal(r.method, 'detected');
+});
+
+test('AS-05: placeholder value is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'config.py'),
+    'API_KEY = os.environ.get("API_KEY", "changeme")\n'
+  );
+  const r = detectNoHardcodedSecrets(t);
+  assert.equal(r.status, 'PASS');
+});
+
+test('AS-05: AWS access key in source fails', () => {
+  const t = tmp();
+  // Use a key pattern that does not contain placeholder-filter words
+  writeFileSync(join(t, 'aws.py'), 'AWS_KEY = "AKIAIOSFODNN7REALKEY9"\n');
+  const r = detectNoHardcodedSecrets(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `expected WARN or FAIL for AWS key, got ${r.status}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// detectAuthOnMutations (3005 — AS-06)
+// ---------------------------------------------------------------------------
+
+test('AS-06: mutation route with auth decorator is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'views.py'),
+    `
+@login_required
+@app.post('/api/items')
+def create_item():
+    pass
+`
+  );
+  const r = detectAuthOnMutations(t);
+  assert.ok(
+    r.status === 'PASS' || r.status === 'SKIP',
+    `expected PASS or SKIP, got ${r.status}`
+  );
+  assert.equal(r.method, 'detected');
+});
+
+test('AS-06: mutation route without auth is FAIL or WARN', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'routes.py'),
+    `
+@app.post('/api/items')
+def create_item():
+    pass
+
+@app.delete('/api/items/<id>')
+def delete_item(id):
+    pass
+`
+  );
+  const r = detectAuthOnMutations(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `expected WARN or FAIL, got ${r.status}`
+  );
+});
+
+test('AS-06: no mutation routes is SKIP', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'app.py'),
+    '@app.get("/health")\ndef health():\n    return "ok"\n'
+  );
+  const r = detectAuthOnMutations(t);
+  assert.equal(r.status, 'SKIP');
+});
+
+test('AS-06: cache.delete()/axios.post() calls are not mutation routes (SKIP)', () => {
+  const t = tmp();
+  // Bare `.post(`/`.delete(` on non-router receivers must not register as
+  // HTTP mutation endpoints.
+  writeFileSync(
+    join(t, 'client.ts'),
+    'cache.delete(key);\nawait axios.post(url, body);\nqueue.put(item);\n'
+  );
+  const r = detectAuthOnMutations(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    `non-router .post()/.delete() calls must not count as mutation routes; got ${r.status}`
+  );
+});
+
+test('AS-06: app.post()/router.delete() are mutation routes (WARN/FAIL without auth)', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'server.ts'),
+    "app.post('/x', createX);\nrouter.delete('/x/:id', deleteX);\n"
+  );
+  const r = detectAuthOnMutations(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `router-receiver mutation routes without auth must be evaluated (WARN/FAIL); got ${r.status}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// detectPasswordSessionHygiene (3006 — AS-07)
+// ---------------------------------------------------------------------------
+
+test('AS-07: bcrypt usage is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'auth.py'),
+    'import bcrypt\nhashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())\n'
+  );
+  const r = detectPasswordSessionHygiene(t);
+  assert.equal(r.status, 'PASS');
+  assert.equal(r.method, 'detected');
+});
+
+test('AS-07: md5 for password is FAIL', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'auth.py'),
+    'import hashlib\nhashed_password = hashlib.md5(password.encode()).hexdigest()\n'
+  );
+  const r = detectPasswordSessionHygiene(t);
+  assert.equal(r.status, 'FAIL');
+});
+
+test('AS-07: argon2 usage is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'users.ts'),
+    'import { hash } from "argon2";\nconst hashed = await hash(password);\n'
+  );
+  const r = detectPasswordSessionHygiene(t);
+  assert.equal(r.status, 'PASS');
+});
+
+test('AS-07: no hash patterns is SKIP', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'main.py'), 'print("hello")\n');
+  const r = detectPasswordSessionHygiene(t);
+  assert.equal(r.status, 'SKIP');
+});
+
+test('AS-07: md5 for a cache key is not a password-hashing FAIL', () => {
+  const t = tmp();
+  // Generic "hash" proximity used to trip the insecure-hash check on
+  // non-credential uses of md5.
+  writeFileSync(
+    join(t, 'cache.py'),
+    'import hashlib\nimport bcrypt\n# compute the md5 hash for the cache key\nkey = hashlib.md5(url.encode()).hexdigest()\nhashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())\n'
+  );
+  const r = detectPasswordSessionHygiene(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `md5 cache-key usage next to bcrypt password hashing must not FAIL; got ${r.status}`
+  );
+});
+
+test('AS-07: md5(password) still FAILs after narrowing the proximity group', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'auth.py'),
+    'import hashlib\ndigest = hashlib.md5(password.encode()).hexdigest()\n'
+  );
+  const r = detectPasswordSessionHygiene(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    `md5 applied to a password must remain a FAIL; got ${r.status}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// detectInputValidation (3007 — AS-08)
+// ---------------------------------------------------------------------------
+
+test('AS-08: pydantic model is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'schemas.py'),
+    'from pydantic import BaseModel\nclass ItemCreate(BaseModel):\n    name: str\n    price: float\n'
+  );
+  const r = detectInputValidation(t);
+  assert.equal(r.status, 'PASS');
+  assert.equal(r.method, 'detected');
+});
+
+test('AS-08: zod schema is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'schema.ts'),
+    'import { z } from "zod";\nconst schema = z.object({ name: z.string() });\n'
+  );
+  const r = detectInputValidation(t);
+  assert.equal(r.status, 'PASS');
+});
+
+test('AS-08: no validation patterns is SKIP', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'app.py'), 'print("hello")\n');
+  const r = detectInputValidation(t);
+  assert.equal(r.status, 'SKIP');
+});
+
+test('AS-08: class-validator @IsString decorator is PASS (dead \\b@ regression)', () => {
+  const t = tmp();
+  // The old \b(...|@IsString|...)\b wrapper made every @-decorator
+  // alternative unmatchable (\b before @ never matches).
+  writeFileSync(
+    join(t, 'dto.ts'),
+    'export class CreateUserDto {\n  @IsString()\n  name: string;\n}\n'
+  );
+  const r = detectInputValidation(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `@IsString decorator must be recognised as a validation library; got ${r.status}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// detectRateLimiting (3008 — AS-09)
+// ---------------------------------------------------------------------------
+
+test('AS-09: flask-limiter reference is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'app.py'),
+    'from flask_limiter import Limiter\nlimiter = Limiter(app, key_func=get_remote_address)\n'
+  );
+  const r = detectRateLimiting(t);
+  assert.equal(r.status, 'PASS');
+  assert.equal(r.method, 'detected');
+});
+
+test('AS-09: express-rate-limit reference is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'app.js'),
+    'const rateLimit = require("express-rate-limit");\napp.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));\n'
+  );
+  const r = detectRateLimiting(t);
+  assert.equal(r.status, 'PASS');
+});
+
+test('AS-09: no rate limiting is FAIL', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'app.py'), 'print("no rate limiting here")\n');
+  const r = detectRateLimiting(t);
+  assert.equal(r.status, 'FAIL');
+});
+
+test('AS-09: NestJS @Throttle decorator is PASS', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'controller.ts'),
+    '@Throttle(10, 60)\n@Controller("auth")\nexport class AuthController {}\n'
+  );
+  const r = detectRateLimiting(t);
+  assert.equal(r.status, 'PASS');
+});
+
+test('AS-09: @RateLimit decorator is PASS', () => {
+  const t = tmp();
+  // Covers the decorator alternative moved out of the \b(...)\b wrapper
+  // (\b before @ never matches).
+  writeFileSync(
+    join(t, 'handler.ts'),
+    '@RateLimit({ points: 5, duration: 60 })\nexport class Handler {}\n'
+  );
+  const r = detectRateLimiting(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    `@RateLimit decorator must be recognised as rate limiting; got ${r.status}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// C6 — broadened SQL_GLOBS: .cs, .sql template files
+// ---------------------------------------------------------------------------
+
+test('AS-04: string-built SQL in a *.cs file is WARN or FAIL', () => {
+  // C# file — now in scope via ALL_SOURCE_GLOBS
+  const t = tmp();
+  writeFileSync(
+    join(t, 'Repo.cs'),
+    'var sql = "SELECT * FROM Users WHERE Id=" + userId;\nconn.Execute(sql);\n'
+  );
+  const r = detectParameterizedSql(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `expected WARN or FAIL for string-built SQL in .cs, got ${r.status}`
+  );
+});
+
+test('AS-04: string-built SQL in a *.sql.j2 Jinja template file is WARN or FAIL', () => {
+  // Jinja SQL template with string interpolation — not a parameterized query
+  const t = tmp();
+  // Use a clear pattern: execute("SELECT...WHERE id=" + var)
+  writeFileSync(
+    join(t, 'users.sql.j2'),
+    'cur.execute("SELECT * FROM users WHERE id=" + user_id)\n'
+  );
+  const r = detectParameterizedSql(t);
+  assert.ok(
+    r.status === 'WARN' || r.status === 'FAIL',
+    `expected WARN or FAIL for string-built SQL in .sql.j2, got ${r.status}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// DETECTORS map — structural sanity
+// ---------------------------------------------------------------------------
+
+test('DETECTORS map covers all detected codes 3000-3008', () => {
+  for (const code of [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008]) {
+    assert.ok(
+      code in DETECTORS,
+      `DETECTORS must include code ${code} (AS-0${code - 2999})`
+    );
+  }
+});
+
+test('DETECTORS map does not include judgment codes 3009/3010', () => {
+  assert.ok(
+    !(3009 in DETECTORS),
+    'code 3009 (authorization correctness) is judgment — must not have a detector'
+  );
+  assert.ok(
+    !(3010 in DETECTORS),
+    'code 3010 (insecure design) is judgment — must not have a detector'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Verdict-threshold params (standards.toml pass_at/warn_at/fail_at)
+// ---------------------------------------------------------------------------
+
+test('AS-06: pass_at/warn_at params are honored — 50% coverage flips WARN→PASS and WARN→FAIL', () => {
+  const t = tmp();
+  // One mutation-route file with auth, one without → coverage = 1/2 = 0.5
+  writeFileSync(
+    join(t, 'secured.py'),
+    "@login_required\n@app.post('/api/items')\ndef create_item():\n    pass\n"
+  );
+  writeFileSync(
+    join(t, 'open.py'),
+    "@app.delete('/api/items/<id>')\ndef delete_item(id):\n    pass\n"
+  );
+  // Default steps: 0.5 is >= warn_at (0.3) but < pass_at (0.7) → WARN
+  assert.equal(
+    detectAuthOnMutations(t).status,
+    'WARN',
+    '0.5 coverage must be WARN under default pass_at 0.7 / warn_at 0.3'
+  );
+  assert.equal(
+    detectAuthOnMutations(t, { pass_at: 0.5 }).status,
+    'PASS',
+    'pass_at param must be honored: lowering pass_at to 0.5 must flip to PASS'
+  );
+  assert.equal(
+    detectAuthOnMutations(t, { warn_at: 0.6 }).status,
+    'FAIL',
+    'warn_at param must be honored: raising warn_at to 0.6 must flip to FAIL'
+  );
+});

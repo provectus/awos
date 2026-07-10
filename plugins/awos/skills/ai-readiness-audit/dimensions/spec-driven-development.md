@@ -24,6 +24,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Warn:** AWOS partially installed — some directories or command files missing (e.g., `.awos/` exists but `.claude/commands/awos/` is missing, or fewer than 5 commands found)
 - **Fail:** AWOS not installed — `.awos/commands/` directory does not exist or contains no `.md` files
 - **Severity:** critical
+- **Category:** 2800
 
 ### SDD-02: Product context documents are complete
 
@@ -38,6 +39,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Fail:** One or more of the three foundational documents is missing entirely
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed)
 - **Severity:** high
+- **Category:** 2801
 
 ### SDD-03: Architecture document reflects codebase reality
 
@@ -55,20 +57,18 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Fail:** Major drift — a core technology (primary database, main framework, cloud provider) is listed but not used, OR a core technology in use is entirely absent from the architecture document
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed), or `context/product/architecture.md` does not exist (covered by SDD-02)
 - **Severity:** high
+- **Category:** 2802
 
 ### SDD-04: Features are implemented through specs
 
 - **What:** Significant features are built through the AWOS spec workflow (spec → tech → tasks → implement), not by ad-hoc prompting. Feature branches should show spec activity — tasks checked off, status updates — as evidence that specs drove the work.
-- **How:**
-  1. If zero spec directories exist under `context/spec/`, this is an immediate FAIL (no specs means no spec-driven development)
-  2. Analyze recent git history (last 3 months): use `git log --all --oneline --since="3 months ago"` to find feature branches. Identify branches with `feat/`, `feature/` prefixes — skip `fix/`, `chore/`, `docs/`, `ci/`, `refactor/` prefixes as these represent small work that doesn't require specs.
-  3. For each feature branch, check if it modified any files under `context/spec/` using `git diff --name-only`. Look for changes to `tasks.md` (checked-off items `[x]`) or `functional-spec.md` (status updates).
-  4. Calculate ratio: feature branches with spec activity / total feature branches. Only evaluate the feature branches that exist — do not flag branching strategy or the number of branches.
+- **How:** Computed deterministically over the trunk's audit window (`[meta].max_lookback_days`, 90 by default). The denominator is merged feature work — first-parent merge commits plus squash/rebase-merged PRs (forge PR ref on the subject) — so repos whose CI deletes branches after merge still count all delivered work, not just currently-open branches. An event counts as spec-driven when its first-parent diff touched a recognised spec directory (`context/spec/`, `specs/`, `.kiro/specs/`, `.agent-os/specs/`, `docs/specs/`). Repos with no merge/PR workflow fall back to evaluating live feature branches against the trunk.
 - **Pass:** 70%+ of feature branches touched spec files (tasks checked off, status updated)
 - **Warn:** 30-69% of feature branches touched spec files
 - **Fail:** Fewer than 30% of feature branches touched spec files, OR zero spec directories exist despite active development
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed)
 - **Severity:** critical
+- **Category:** 2803
 
 ### SDD-05: Spec directories are structurally complete
 
@@ -89,6 +89,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Fail:** Fewer than 50% of spec directories are complete, OR most directories are skeletons
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed), or no spec directories exist (covered by SDD-04)
 - **Severity:** high
+- **Category:** 2804
 
 ### SDD-06: No stale or abandoned specs
 
@@ -106,6 +107,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Fail:** 3+ stale specs, OR more than half of non-Draft specs show no task progress
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed), or no spec directories exist, or all specs are Draft (too early to detect staleness)
 - **Severity:** medium
+- **Category:** 2805
 
 ### SDD-07: Tasks have meaningful agent assignments
 
@@ -125,10 +127,11 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 - **Fail:** No agent annotations at all, OR systematic domain mix-ups across multiple specs
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed), or no tasks.md files exist (covered by SDD-05)
 - **Severity:** medium
+- **Category:** 2806
 
 ## SDD Summary
 
-When writing the dimension artifact, include this structured summary for downstream dimensions (especially end-to-end-delivery):
+When writing the dimension artifact, include this structured summary for downstream dimensions:
 
 ```
 - **AWOS installed:** yes | no

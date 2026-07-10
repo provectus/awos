@@ -1,0 +1,1711 @@
+// render.test.ts — unit tests for the deterministic JSON → Markdown renderer.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { renderMarkdown, renderHtml } from './render.ts';
+import type {
+  AuditJson,
+  Check,
+  DeliveryMetric,
+  PerRepoSummary,
+} from './render.ts';
+import { makeCheck, makeDim, makeAudit } from './tests/helpers.ts';
+
+test('renderMarkdown includes Tech Stack section when tech_stack is present', () => {
+  const audit = makeAudit({
+    tech_stack: {
+      languages: [
+        { name: 'Python', evidence: 'src/main.py' },
+        { name: 'TypeScript', evidence: 'src/index.ts' },
+      ],
+      agent_tools: [{ name: 'Claude Code', evidence: '.claude' }],
+      ci: [{ name: 'GitHub Actions', evidence: '.github/workflows/ci.yml' }],
+      frameworks: [{ name: 'FastAPI', evidence: 'pyproject.toml' }],
+    },
+  });
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('## Tech Stack'),
+    'renderMarkdown must include a ## Tech Stack section when tech_stack is populated'
+  );
+  assert.ok(
+    md.includes('FastAPI'),
+    'Tech Stack section must list detected frameworks'
+  );
+  assert.ok(
+    md.includes('Python'),
+    'Tech Stack section must list detected languages'
+  );
+});
+
+test('renderMarkdown omits Tech Stack section when tech_stack is absent', () => {
+  const audit = makeAudit();
+  const md = renderMarkdown(audit);
+  assert.ok(
+    !md.includes('## Tech Stack'),
+    'renderMarkdown must not include Tech Stack when tech_stack is absent'
+  );
+});
+
+test('renderMarkdown includes Linked Repositories section with a detected repo', () => {
+  const audit = makeAudit({
+    linked_repos: [
+      { name: 'other-repo-x', kind: 'symlink', via: '.claude/skills/foo' },
+    ],
+  });
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('## Linked Repositories'),
+    'renderMarkdown must include ## Linked Repositories section'
+  );
+  assert.ok(
+    md.includes('other-repo-x'),
+    'Linked Repositories section must list the detected repo name'
+  );
+});
+
+test('renderMarkdown shows "None detected." for Linked Repositories when empty', () => {
+  const audit = makeAudit({ linked_repos: [] });
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('## Linked Repositories'),
+    'renderMarkdown must always include ## Linked Repositories section'
+  );
+  assert.ok(
+    md.includes('None detected.'),
+    'Linked Repositories section must say "None detected." when list is empty'
+  );
+});
+
+test('renderMarkdown shows "None detected." when linked_repos is absent', () => {
+  const audit = makeAudit();
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('## Linked Repositories'),
+    'renderMarkdown must always render the Linked Repositories section'
+  );
+  assert.ok(
+    md.includes('None detected.'),
+    'Linked Repositories section must say "None detected." when absent from audit JSON'
+  );
+});
+
+test('Dimensions table must green-highlight non-zero PASS counts (issue #4)', () => {
+  const dim = makeDim('ai-tooling', [
+    makeCheck({ check_id: 'T-01', status: 'PASS', applies: true }),
+    makeCheck({ check_id: 'T-02', status: 'FAIL', applies: true }),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  assert.match(
+    html,
+    /class="n-pass">\s*\d+<\/span>/,
+    'Dimensions table must green-highlight non-zero PASS counts (issue #4)'
+  );
+});
+
+test('Overview must show three-value metric count (scored/executed/supported) above Dimensions table (issue #1)', () => {
+  const dim = makeDim('test-dim', [
+    makeCheck({ check_id: 'T-01', status: 'PASS', applies: true }),
+    makeCheck({ check_id: 'T-02', status: 'WARN', applies: true }),
+    makeCheck({ check_id: 'T-03', status: 'FAIL', applies: true }),
+    makeCheck({ check_id: 'T-04', status: 'SKIP', applies: false }),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  assert.match(
+    html,
+    /Metrics:/,
+    'Overview must show three-value metric count above Dimensions table (issue #1)'
+  );
+  // Default weight_awarded=1 for all 4 checks, but SKIP checks are excluded from scored.
+  // T-04 is SKIP so scored=3; executed=3 (non-SKIP); supported=4.
+  assert.match(
+    html,
+    /3 scored/,
+    'Overview must show correct scored count (3 non-SKIP checks with weight_awarded > 0; SKIP checks excluded)'
+  );
+  assert.match(
+    html,
+    /3 executed/,
+    'Overview must show correct executed count (3 non-SKIP checks)'
+  );
+  assert.match(
+    html,
+    /4 supported/,
+    'Overview must show correct supported count (4 total checks in catalog)'
+  );
+});
+
+test('Each dimension page needs prev/next nav to adjacent dimensions (issue #7)', () => {
+  const dims = [
+    makeDim('dim-first'),
+    makeDim('dim-middle'),
+    makeDim('dim-last'),
+  ];
+  const audit = makeAudit({ dimensions: dims });
+  const html = renderHtml(audit);
+  const middleStart = html.indexOf('id="page-dim-middle"');
+  assert.ok(middleStart !== -1, 'Middle dimension page must exist in HTML');
+  const middleEnd = html.indexOf('</section>', middleStart);
+  const middleHtml = html.slice(middleStart, middleEnd + 10);
+  assert.match(
+    middleHtml,
+    /href="#dim\/dim-first"/,
+    'Each dimension page needs prev/next nav to adjacent dimensions (issue #7)'
+  );
+  assert.match(
+    middleHtml,
+    /href="#dim\/dim-last"/,
+    'Each dimension page needs prev/next nav to adjacent dimensions (issue #7)'
+  );
+});
+
+test('Value column removed: dimension check table has no Value column header (issue #10)', () => {
+  const dim = makeDim('test-no-val-col', [
+    makeCheck({ check_id: 'T-A', status: 'PASS', applies: true }),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-no-val-col"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist in HTML');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  assert.ok(
+    !pageHtml.includes('<th>Value</th>'),
+    'Value column removed: dimension check table must have no Value column header (issue #10)'
+  );
+});
+
+test('PARTIAL status badge renders with amber color for a PARTIAL check', () => {
+  const partialCheck = makeCheck({
+    check_id: 'P-01',
+    status: 'PARTIAL' as Check['status'],
+    applies: true,
+    weight_awarded: 0.6,
+    weight_max: 1,
+    confidence: 0.8,
+  });
+  const dim = makeDim('test-partial', [partialCheck]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-partial"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  assert.match(
+    pageHtml,
+    /PARTIAL/,
+    'PARTIAL badge must appear in the dimension page for a PARTIAL check'
+  );
+  assert.match(
+    pageHtml,
+    /<span class="badge" data-s="PARTIAL">PARTIAL<\/span>/,
+    'PARTIAL badge must be data-attribute-driven (data-s="PARTIAL"; colour lives in CSS)'
+  );
+});
+
+test('Confidence column header appears in dimension check table', () => {
+  const dim = makeDim('test-conf-header', [
+    makeCheck({
+      check_id: 'C-01',
+      status: 'PASS',
+      applies: true,
+      confidence: 1.0,
+    } as Check),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-conf-header"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  assert.match(
+    pageHtml,
+    /<th>Confidence<\/th>/,
+    'Confidence column header must appear in the check table'
+  );
+});
+
+test('Confidence cell shows 50% for a check with confidence 0.5', () => {
+  const dim = makeDim('test-conf-50', [
+    makeCheck({
+      check_id: 'C-02',
+      status: 'PASS',
+      applies: true,
+      confidence: 0.5,
+    } as Check),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-conf-50"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  assert.match(
+    pageHtml,
+    /50%/,
+    'Confidence cell must show "50%" for a check with confidence 0.5'
+  );
+});
+
+test('Confidence cell shows dash for a SKIP check', () => {
+  const dim = makeDim('test-conf-skip', [
+    makeCheck({
+      check_id: 'C-03',
+      status: 'SKIP',
+      applies: false,
+      confidence: 0,
+    } as Check),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-conf-skip"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  // The confidence cell for a SKIP check must contain the dash character
+  assert.ok(
+    pageHtml.includes('<td>—</td>') ||
+      pageHtml.includes('<td>&mdash;</td>') ||
+      pageHtml.includes('>—<'),
+    'Confidence cell must show "—" for a SKIP check'
+  );
+});
+
+test('Dimension header shows weight-averaged mean confidence percent', () => {
+  const dim = makeDim('test-mean-conf', [
+    makeCheck({
+      check_id: 'D-01',
+      status: 'PASS',
+      applies: true,
+      weight_max: 2,
+      confidence: 0.8,
+    } as Check),
+    makeCheck({
+      check_id: 'D-02',
+      status: 'PASS',
+      applies: true,
+      weight_max: 2,
+      confidence: 0.6,
+    } as Check),
+  ]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-mean-conf"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  // Mean confidence = (0.8*2 + 0.6*2) / (2+2) = 2.8/4 = 0.70 → 70%
+  assert.match(
+    pageHtml,
+    /70%/,
+    'Dimension header must show weight-averaged mean confidence (70% for 0.8 and 0.6 each weighted by 2)'
+  );
+});
+
+test('tech stack renders names with evidence tooltips and no ~0 days', () => {
+  const audit = {
+    date: '2026-06-26',
+    project: 'x',
+    audit_total: 0,
+    coverage: 0,
+    dimensions: [],
+    sources: [
+      {
+        source: 'git',
+        available: true,
+        reason_if_absent: null,
+        history_available_days: 120,
+      },
+    ],
+    linked_repos: [
+      { name: 'onex-discovery-awos', kind: 'symlink', via: '.claude/skills' },
+    ],
+    tech_stack: {
+      languages: [
+        { name: 'Python', evidence: '149 .py files · pyproject.toml' },
+      ],
+      agent_tools: [{ name: 'Claude Code', evidence: '.claude' }],
+      ci: [{ name: 'Azure DevOps', evidence: 'azure-pipelines.yml' }],
+      frameworks: [
+        { name: 'FastAPI', evidence: 'dependency "fastapi" in a manifest' },
+      ],
+    },
+  };
+  const html = renderHtml(audit as any);
+  assert.ok(html.includes('149 .py files'), 'language evidence shown');
+  assert.ok(
+    html.includes('dependency &quot;fastapi&quot;') ||
+      html.includes('dependency "fastapi"'),
+    'framework evidence shown'
+  );
+  assert.ok(
+    html.includes('onex-discovery-awos'),
+    'linked repo by repo-root name'
+  );
+  assert.ok(!/~0 days/.test(html), 'never render ~0 days');
+});
+
+test('Fix 2: overview Reliability cell must show "not-reliable" (not "maximal") when dimension checks are not-reliable but not minimal', () => {
+  const notReliableCheck = makeCheck({
+    check_id: 'NR-01',
+    status: 'PASS',
+    applies: true,
+    reliability: { tag: 'not-reliable', confidence: 'high', note: null },
+  });
+  const dim = makeDim('test-not-reliable', [notReliableCheck]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  // The overview Dimensions table must NOT show "maximal" for this dimension.
+  // Extract the overview table row to avoid false positives from per-check cells.
+  const overviewEnd = html.indexOf('<section class="dim-page"');
+  const overviewHtml = overviewEnd !== -1 ? html.slice(0, overviewEnd) : html;
+  assert.ok(
+    !overviewHtml.includes('>maximal<') &&
+      !overviewHtml.match(/>\s*maximal\s*</),
+    'overview Reliability cell must not show "maximal" when all applicable checks are not-reliable (Fix 2)'
+  );
+  assert.ok(
+    overviewHtml.includes('not-reliable'),
+    'overview Reliability cell must show "not-reliable" when applicable checks carry that tag (Fix 2)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 6c.3 — Short source labels in Sources cell, verbose in tooltip
+// ---------------------------------------------------------------------------
+
+test('Sources cell shows short label; verbose label goes to tooltip only (6c.3)', () => {
+  const audit = makeAudit({
+    source_windows: {
+      git: { days: 540, label: 'git history' },
+      tracker: { days: 180, label: 'Jira via Atlassian MCP' },
+    },
+    dimensions: [
+      makeDim('dim-a', [makeCheck()], {
+        sources_used: ['git', 'tracker'],
+      } as any),
+    ],
+  });
+  const html = renderHtml(audit);
+  // Short label for tracker (truncated at ' via '): 'Jira'
+  // Cell text rendered as plain text: "git history, Jira".
+  assert.ok(
+    html.includes('git history, Jira'),
+    'Sources cell must show short combined labels: "git history, Jira" (tracker truncated at " via ")'
+  );
+  // Summary-table tooltips live on BOTH the column header and the value cell: the
+  // "Sources" header carries the column explanation, and the value cell keeps its
+  // per-row tooltip (short label in the cell, verbose window in the tipbox).
+  assert.ok(
+    html.includes(
+      `<th><span class="tip" tabindex="0">Sources<span class="tipbox">`
+    ) && html.includes('Data sources feeding this dimension.'),
+    'The "Sources" column header must carry the column-explanation tooltip'
+  );
+  assert.ok(
+    html.includes(
+      '<td><span class="tip" tabindex="0">git history, Jira<span class="tipbox">'
+    ),
+    'The "Sources" value cell must keep its per-row tooltip'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// E5 — Dimensions summary table: tooltips on every column header, plain name cell
+// ---------------------------------------------------------------------------
+
+test('Dimensions summary table carries a tooltip on every column header and a plain (untipped) Dimension name cell (E5)', () => {
+  const dim = makeDim('test-e5-headers', [
+    makeCheck({ check_id: 'E5-01', status: 'PASS', applies: true }),
+  ]);
+  const html = renderHtml(makeAudit({ dimensions: [dim] }));
+  const headerTips: Array<[string, string]> = [
+    ['#', 'Row number — dimensions are listed in a fixed order.'],
+    [
+      'Dimension',
+      'A capability area being audited: a group of related checks scored together. Click a row to open its checks.',
+    ],
+    ['Points', 'Capability points earned in this area.'],
+    ['Sources', 'Data sources feeding this dimension.'],
+    ['Coverage', "Share of this area's expected capability that is in place."],
+    ['Reliability', 'How trustworthy the numbers in this area are'],
+    [
+      'FAIL',
+      'Checks where the capability is absent or below its failing threshold.',
+    ],
+    ['WARN', 'Checks partly in place but below target — worth attention.'],
+    ['PARTIAL', 'Checks partly satisfied: some criteria met, not all.'],
+    ['PASS', 'Checks fully satisfied.'],
+    [
+      'SKIP',
+      'Checks not evaluated because a required data source or precondition was unavailable',
+    ],
+  ];
+  for (const [label, explanation] of headerTips) {
+    assert.ok(
+      html.includes(
+        `<th><span class="tip" tabindex="0">${label}<span class="tipbox">`
+      ),
+      `Dimensions summary "${label}" column header must carry a tooltip span (E5)`
+    );
+    assert.ok(
+      html.includes(explanation),
+      `Dimensions summary "${label}" header tooltip must carry its column explanation (E5)`
+    );
+  }
+  // E5: the Dimension name cell is a plain <a><strong>, NOT wrapped in a tooltip.
+  assert.ok(
+    !/<strong><span class="tip"/.test(html),
+    'The Dimension name cell must not wrap its value in a tooltip span (E5 removed it)'
+  );
+  assert.ok(
+    /<td><a href="[^"]*"><strong>[^<]+<\/strong><\/a><\/td>/.test(html),
+    'The Dimension name cell must be a plain <a><strong> row label (E5)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 6c.4 — Visible per-check source citation link
+// ---------------------------------------------------------------------------
+
+test('Per-check row shows visible source citation link when source_url is set (6c.4)', () => {
+  const check = makeCheck({
+    check_id: 'SRC-01',
+    status: 'PASS',
+    applies: true,
+    source_url: 'https://example.com/standard',
+    source_date: '2024-01',
+  } as any);
+  const dim = makeDim('test-src-link', [check]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-src-link"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist in HTML');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  assert.ok(
+    pageHtml.includes('href="https://example.com/standard"'),
+    'Per-check row must contain a visible anchor link to source_url (6c.4)'
+  );
+  assert.ok(
+    pageHtml.includes('target="_blank"'),
+    'Source citation link must open in a new tab (6c.4)'
+  );
+  assert.ok(
+    pageHtml.includes('rel="noopener"'),
+    'Source citation link must carry rel="noopener" (6c.4)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 6c.5 — Linked repos grouped by kind (symlink / submodule / mcp)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Fix 1 — Markdown per-check source link
+// ---------------------------------------------------------------------------
+
+test('renderMarkdown includes source citation link in check row when source_url is set (Fix 1)', () => {
+  const check = makeCheck({
+    check_id: 'SRC-MD-01',
+    status: 'PASS',
+    applies: true,
+    source_url: 'https://example.com/standard',
+    source_date: '2024-01',
+    source: 'NIST',
+  } as any);
+  const dim = makeDim('test-md-src-link', [check]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('](https://example.com/standard)'),
+    'renderMarkdown check row must include a markdown link to source_url (Fix 1)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Fix 2 — Unit-only numeric value shown in Evidence
+// ---------------------------------------------------------------------------
+
+test('HTML evidence shows fmtValue(value) and unit for a check with value+unit but no expression (Fix 2)', () => {
+  const check = makeCheck({
+    check_id: 'UV-01',
+    status: 'PASS',
+    applies: true,
+    value: 0.62,
+    unit: 'ratio',
+    evidence: [],
+  } as any);
+  const dim = makeDim('test-unit-val', [check]);
+  const audit = makeAudit({ dimensions: [dim] });
+  const html = renderHtml(audit);
+  const pageStart = html.indexOf('id="page-test-unit-val"');
+  assert.ok(pageStart !== -1, 'Dimension page must exist in HTML');
+  const pageEnd = html.indexOf('</section>', pageStart);
+  const pageHtml = html.slice(pageStart, pageEnd + 10);
+  assert.ok(
+    pageHtml.includes('0.62'),
+    'Evidence cell must show fmtValue(value) for a unit-only-no-expression check (Fix 2)'
+  );
+  assert.ok(
+    pageHtml.includes('ratio'),
+    'Evidence cell must show the unit for a unit-only-no-expression check (Fix 2)'
+  );
+});
+
+test('Linked repos are grouped by kind with section headings (6c.5)', () => {
+  const audit = makeAudit({
+    linked_repos: [
+      { name: 'ext-lib', kind: 'symlink', via: 'src/lib' },
+      { name: 'ui-kit', kind: 'submodule', via: '.gitmodules' },
+      { name: 'github-mcp', kind: 'mcp', via: '.mcp.json' },
+    ],
+  });
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('Symlinks'),
+    'Symlinks group heading must appear (6c.5)'
+  );
+  assert.ok(
+    html.includes('Git submodules'),
+    'Git submodules group heading must appear (6c.5)'
+  );
+  assert.ok(
+    html.includes('MCP servers'),
+    'MCP servers group heading must appear (6c.5)'
+  );
+  assert.ok(html.includes('ext-lib'), 'symlink repo name must appear (6c.5)');
+  assert.ok(html.includes('ui-kit'), 'submodule repo name must appear (6c.5)');
+  assert.ok(html.includes('github-mcp'), 'MCP server name must appear (6c.5)');
+});
+
+// ---------------------------------------------------------------------------
+// Task 4.1 — gated delivery-metric headline rows
+// ---------------------------------------------------------------------------
+
+test('HTML headline renders gated-absent delivery metrics as "needs connector" note with no band chip, and present metrics normally (Task 4.1)', () => {
+  // 9-row fixture: mix of non-gated/present, gated/absent (various absent forms),
+  // and gated/present (connector was available, so render normally).
+  const delivery: DeliveryMetric[] = [
+    // Row 1: non-gated, value present, band present → value + colored band chip
+    { label: 'Deploy Frequency', display_value: '12/week', band: 'elite' },
+    // Row 2: non-gated, value present, band present → value + colored band chip
+    { label: 'Lead Time', display_value: '2 days', band: 'high' },
+    // Row 3: non-gated, value present, no band → value, no band chip
+    { label: 'Change Failure Rate', display_value: '1%' },
+    // Row 4: non-gated, value present, band → value + band chip
+    { label: 'MTTR', display_value: '< 1 hour', band: 'elite' },
+    // Row 5: gated tracker, absent via em-dash → "needs ticketing connector", no band chip
+    { label: 'Ticket Cycle Time', display_value: '—', gated: 'tracker' },
+    // Row 6: gated tracker, absent via empty string → "needs ticketing connector"
+    { label: 'Ticket Throughput', display_value: '', gated: 'tracker' },
+    // Row 7: gated incident, absent via hyphen → "needs incident connector", no band chip
+    { label: 'Incident Rate', display_value: '-', gated: 'incident' },
+    // Row 8: gated incident, absent via missing key → "needs incident connector"
+    {
+      label: 'MTTD',
+      gated: 'incident',
+    },
+    // Row 9: gated tracker, but display_value IS present (connector available) → render normally with band chip
+    {
+      label: 'Tracker Velocity',
+      display_value: '42/sprint',
+      band: 'medium',
+      gated: 'tracker',
+    },
+  ];
+
+  const audit = makeAudit({ headline: { delivery } });
+  const html = renderHtml(audit);
+
+  // Contract: present non-gated metrics show their display_value and a colored band chip
+  assert.ok(
+    html.includes('12/week'),
+    'Deploy Frequency display_value must appear in HTML (non-gated present, Task 4.1)'
+  );
+  assert.ok(
+    html.includes('class="band"') && html.includes('elite'),
+    'Elite band chip must appear for Deploy Frequency (non-gated present, Task 4.1)'
+  );
+  assert.ok(
+    html.includes('2 days'),
+    'Lead Time display_value must appear in HTML (non-gated present, Task 4.1)'
+  );
+  assert.ok(
+    html.includes('1%'),
+    'Change Failure Rate display_value must appear in HTML (non-gated, no band, Task 4.1)'
+  );
+  assert.ok(
+    html.includes('&lt; 1 hour'),
+    'MTTR display_value must be escaped and appear in HTML (non-gated present, Task 4.1)'
+  );
+
+  // Contract: gated-absent tracker metrics render the "needs ticketing connector" note and NO band chip in their value cell
+  assert.ok(
+    html.includes('needs ticketing connector'),
+    'Gated-absent tracker metrics must render "needs ticketing connector" note (Task 4.1)'
+  );
+  // Verify the absent gated rows do NOT render a band chip for their label
+  // We check the Ticket Cycle Time kv block does not contain a band chip
+  const ticketCycleIdx = html.indexOf('Ticket Cycle Time');
+  assert.ok(
+    ticketCycleIdx !== -1,
+    'Ticket Cycle Time label must appear (Task 4.1)'
+  );
+  const ticketCycleKv = html.slice(
+    ticketCycleIdx,
+    html.indexOf('</div>', ticketCycleIdx + 1) + 6
+  );
+  assert.ok(
+    !ticketCycleKv.includes('class="band"'),
+    'Gated-absent tracker metric must NOT render a band chip (Task 4.1)'
+  );
+
+  // Contract: gated-absent incident metrics render the "needs incident connector" note and NO band chip
+  assert.ok(
+    html.includes('needs incident connector'),
+    'Gated-absent incident metrics must render "needs incident connector" note (Task 4.1)'
+  );
+  const incidentRateIdx = html.indexOf('Incident Rate');
+  assert.ok(
+    incidentRateIdx !== -1,
+    'Incident Rate label must appear (Task 4.1)'
+  );
+  const incidentRateKv = html.slice(
+    incidentRateIdx,
+    html.indexOf('</div>', incidentRateIdx + 1) + 6
+  );
+  assert.ok(
+    !incidentRateKv.includes('class="band"'),
+    'Gated-absent incident metric must NOT render a band chip (Task 4.1)'
+  );
+
+  // Contract: gated metric WITH a present display_value renders normally (value + band chip)
+  assert.ok(
+    html.includes('42/sprint'),
+    'Gated tracker metric with present display_value must render its value (Task 4.1)'
+  );
+  const trackerVelocityIdx = html.indexOf('Tracker Velocity');
+  assert.ok(
+    trackerVelocityIdx !== -1,
+    'Tracker Velocity label must appear (Task 4.1)'
+  );
+  const trackerVelocityKv = html.slice(
+    trackerVelocityIdx,
+    html.indexOf('</div>', trackerVelocityIdx + 1) + 6
+  );
+  assert.ok(
+    trackerVelocityKv.includes('class="band"'),
+    'Gated metric with present value must render its band chip (Task 4.1)'
+  );
+});
+
+test('Markdown headline renders gated-absent delivery metrics as "needs connector" note with no band column, and present metrics normally (Task 4.1)', () => {
+  const delivery: DeliveryMetric[] = [
+    // Present non-gated → value + band
+    { label: 'Deploy Frequency', display_value: '12/week', band: 'elite' },
+    // Gated tracker absent → note, no band
+    { label: 'Ticket Cycle Time', display_value: '—', gated: 'tracker' },
+    // Gated incident absent → note, no band
+    { label: 'Incident Rate', display_value: '-', gated: 'incident' },
+    // Gated tracker present → render normally
+    {
+      label: 'Tracker Velocity',
+      display_value: '42/sprint',
+      band: 'medium',
+      gated: 'tracker',
+    },
+  ];
+
+  const audit = makeAudit({ headline: { delivery } });
+  const md = renderMarkdown(audit);
+
+  // Contract: present metrics render their value and band
+  assert.ok(
+    md.includes('12/week'),
+    'Present non-gated metric must render its display_value in Markdown (Task 4.1)'
+  );
+  assert.ok(
+    md.includes('elite'),
+    'Present non-gated metric must render its band in Markdown (Task 4.1)'
+  );
+
+  // Contract: gated-absent tracker renders "needs ticketing connector" note, no band cell
+  assert.ok(
+    md.includes('needs ticketing connector'),
+    'Gated-absent tracker metric must render "needs ticketing connector" in Markdown (Task 4.1)'
+  );
+
+  // Contract: gated-absent incident renders "needs incident connector" note
+  assert.ok(
+    md.includes('needs incident connector'),
+    'Gated-absent incident metric must render "needs incident connector" in Markdown (Task 4.1)'
+  );
+
+  // Contract: gated metric with present value renders normally (value + band)
+  assert.ok(
+    md.includes('42/sprint'),
+    'Gated tracker metric with present display_value must render its value in Markdown (Task 4.1)'
+  );
+  assert.ok(
+    md.includes('medium'),
+    'Gated tracker metric with present display_value must render its band in Markdown (Task 4.1)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.3 — Per-repo org table with delivery columns + links to per-repo reports
+// ---------------------------------------------------------------------------
+
+/** Two-repo fixture for the Task 5.3 per-repo table tests. Repo A has all
+ * delivery values populated (incl. the connector-gated cycle_time/mttr
+ * display strings); Repo B has all delivery values null to verify the "—"
+ * fallback path for every column. */
+function makeOrgAuditWithPerRepo(): AuditJson {
+  const repoA: PerRepoSummary = {
+    repo: 'acme/backend',
+    contributors: 5,
+    awarded_weight: 12,
+    sources_reachable: ['git'],
+    has_ai_tooling: true,
+    audit_total: 12,
+    coverage: 0.75,
+    merges_per_active: 3.2,
+    loc_per_active: 450.0,
+    deploy_freq: 2.5,
+    rework_rate: 0.08,
+    lead_time: 24.0,
+    change_fail: 0.05,
+    cycle_time: '3.2 d',
+    mttr: '1.5 h',
+  };
+  const repoB: PerRepoSummary = {
+    repo: 'acme/frontend',
+    contributors: null,
+    awarded_weight: 7,
+    sources_reachable: [],
+    has_ai_tooling: false,
+    audit_total: 7,
+    coverage: 0.4,
+    merges_per_active: null,
+    loc_per_active: null,
+    deploy_freq: null,
+    rework_rate: null,
+    lead_time: null,
+    change_fail: null,
+    cycle_time: null,
+    mttr: null,
+  };
+  return makeAudit({
+    portfolio_metrics: [
+      {
+        metric: 'org_ai_tooling_coverage',
+        value: 0.5,
+        description: 'fraction with AI tooling',
+        repos_counted: 2,
+        contributor_weighted: false,
+      },
+    ],
+    per_repo: [repoA, repoB],
+  });
+}
+
+test('HTML per-repo table (Task 5.3): one row per repo with all new columns in order', () => {
+  const audit = makeOrgAuditWithPerRepo();
+  const html = renderHtml(audit);
+
+  // Contract: both repos appear in the table
+  assert.ok(
+    html.includes('acme/backend'),
+    'HTML per-repo table must include repo A name (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('acme/frontend'),
+    'HTML per-repo table must include repo B name (Task 5.3)'
+  );
+
+  // Contract: Repo cell links to per-repo/<repo>/report.html (relative path)
+  assert.ok(
+    html.includes('href="per-repo/acme/backend/report.html"'),
+    'HTML per-repo table: repo cell must link to per-repo/<repo>/report.html (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('href="per-repo/acme/frontend/report.html"'),
+    'HTML per-repo table: repo B cell must link to per-repo/<repo>/report.html (Task 5.3)'
+  );
+
+  // Contract: column headers present in order
+  const headerOrder = [
+    'Repo',
+    'Coverage',
+    'Points',
+    'Merges/active',
+    'LOC/active',
+    'Deploy freq',
+    'Rework rate',
+    'Lead time',
+    'Change-fail',
+    'Cycle time',
+    'MTTR',
+  ];
+  let lastIdx = -1;
+  for (const col of headerOrder) {
+    const idx = html.indexOf(col, lastIdx + 1);
+    assert.ok(
+      idx !== -1,
+      `HTML per-repo table header must contain column "${col}" (Task 5.3)`
+    );
+    assert.ok(
+      idx > lastIdx,
+      `HTML per-repo table column "${col}" must appear after prior columns (Task 5.3)`
+    );
+    lastIdx = idx;
+  }
+
+  // Contract: delivery values formatted correctly for repo A
+  assert.ok(
+    html.includes('2.5 / wk'),
+    'HTML per-repo table: deploy_freq must render as "<n> / wk" (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('8.0%'),
+    'HTML per-repo table: rework_rate must render as "<pct>%" ×100 1dp (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('24.0 h'),
+    'HTML per-repo table: lead_time must render as "<n> h" (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('5.0%'),
+    'HTML per-repo table: change_fail must render as "<pct>%" ×100 (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('3.2'),
+    'HTML per-repo table: merges_per_active must render rounded to 1dp (Task 5.3)'
+  );
+
+  // Contract: null delivery values render as "—"
+  // repo B has all delivery nulls; verify the em-dash appears (multiple times expected)
+  const dashCount = (html.match(/—/g) ?? []).length;
+  assert.ok(
+    dashCount >= 6,
+    `HTML per-repo table: null delivery values must render as "—"; found ${dashCount} (Task 5.3)`
+  );
+
+  // Contract: Cycle time and MTTR columns are always "—"
+  // Header contains the labels; data cells are always dashes
+  assert.ok(
+    html.includes('Cycle time'),
+    'HTML per-repo table must include Cycle time column header (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('MTTR'),
+    'HTML per-repo table must include MTTR column header (Task 5.3)'
+  );
+
+  // Contract: footnotes present
+  assert.ok(
+    html.includes('Cycle time') && html.includes('ticketing connector'),
+    'HTML per-repo table must include Cycle time footnote about ticketing connector (Task 5.3)'
+  );
+  assert.ok(
+    html.includes('MTTR') && html.includes('incident connector'),
+    'HTML per-repo table must include MTTR footnote about incident connector (Task 5.3)'
+  );
+});
+
+test('Markdown per-repo table (Task 5.3): one row per repo with all new columns in order', () => {
+  const audit = makeOrgAuditWithPerRepo();
+  const md = renderMarkdown(audit);
+
+  // Contract: ## Repositories section present
+  assert.ok(
+    md.includes('## Repositories'),
+    'Markdown must include ## Repositories section (Task 5.3)'
+  );
+
+  // Contract: both repos appear
+  assert.ok(
+    md.includes('acme/backend'),
+    'Markdown per-repo table must include repo A (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('acme/frontend'),
+    'Markdown per-repo table must include repo B (Task 5.3)'
+  );
+
+  // Contract: Repo cell is a Markdown link to per-repo/<repo>/report.html
+  assert.ok(
+    md.includes('[acme/backend](per-repo/acme/backend/report.html)'),
+    'Markdown per-repo table: repo cell must be a link to per-repo/<repo>/report.html (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('[acme/frontend](per-repo/acme/frontend/report.html)'),
+    'Markdown per-repo table: repo B cell must be a link to per-repo/<repo>/report.html (Task 5.3)'
+  );
+
+  // Contract: column headers present in order
+  const headerLine = md
+    .split('\n')
+    .find((l) => l.includes('| Repo |') && l.includes('Points'));
+  assert.ok(
+    headerLine !== undefined,
+    'Markdown per-repo table must have a header row with Repo and Points (Task 5.3)'
+  );
+  const colOrder = [
+    'Repo',
+    'Coverage',
+    'Points',
+    'Merges/active',
+    'LOC/active',
+    'Deploy freq',
+    'Rework rate',
+    'Lead time',
+    'Change-fail',
+    'Cycle time',
+    'MTTR',
+  ];
+  let last = -1;
+  for (const col of colOrder) {
+    const pos = headerLine!.indexOf(col, last + 1);
+    assert.ok(
+      pos !== -1,
+      `Markdown header must contain column "${col}" (Task 5.3)`
+    );
+    assert.ok(
+      pos > last,
+      `Markdown column "${col}" must appear after prior columns (Task 5.3)`
+    );
+    last = pos;
+  }
+
+  // Contract: delivery values formatted correctly for repo A
+  assert.ok(
+    md.includes('2.5 / wk'),
+    'Markdown per-repo table: deploy_freq must render as "<n> / wk" (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('8.0%'),
+    'Markdown per-repo table: rework_rate must render as "<pct>%" ×100 1dp (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('24.0 h'),
+    'Markdown per-repo table: lead_time must render as "<n> h" (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('5.0%'),
+    'Markdown per-repo table: change_fail must render as "<pct>%" ×100 (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('3.2'),
+    'Markdown per-repo table: merges_per_active must render to 1dp (Task 5.3)'
+  );
+
+  // Contract: null delivery values render as "—"
+  const repoBRow = md.split('\n').find((l) => l.includes('acme/frontend'));
+  assert.ok(
+    repoBRow !== undefined,
+    'Markdown per-repo table: repo B row must exist (Task 5.3)'
+  );
+  const dashesInRowB = (repoBRow!.match(/—/g) ?? []).length;
+  assert.ok(
+    dashesInRowB >= 6,
+    `Markdown per-repo table: repo B must have ≥6 "—" for null delivery values; found ${dashesInRowB} (Task 5.3)`
+  );
+
+  // Contract: Cycle time and MTTR are always "—"
+  assert.ok(
+    md.includes('Cycle time'),
+    'Markdown per-repo table must include Cycle time column header (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('MTTR'),
+    'Markdown per-repo table must include MTTR column header (Task 5.3)'
+  );
+
+  // Contract: footnotes appear below the table
+  assert.ok(
+    md.includes('ticketing connector'),
+    'Markdown per-repo table must include Cycle time footnote about ticketing connector (Task 5.3)'
+  );
+  assert.ok(
+    md.includes('incident connector'),
+    'Markdown per-repo table must include MTTR footnote about incident connector (Task 5.3)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.4 — org Connections & Sources aggregated view
+// ---------------------------------------------------------------------------
+
+import type { OrgConnections } from './render.ts';
+
+/**
+ * Org-mode audit fixture with org_connections populated.
+ * Uses source_windows to verify sourceFullLabel is called for source labels.
+ *
+ *   sources: git(8), tracker(5)
+ *   languages: Python(3), TypeScript(1)
+ *   frameworks: FastAPI(2)
+ *   agent_tools: Claude Code(4)
+ *   ci: GitHub Actions(6)
+ *   linked_repos: awos-recruitment(2)
+ */
+function makeOrgAuditWithConnections(): AuditJson {
+  const org_connections: OrgConnections = {
+    sources: [
+      { name: 'git', count: 8 },
+      { name: 'tracker', count: 5 },
+    ],
+    languages: [
+      { name: 'Python', count: 3 },
+      { name: 'TypeScript', count: 1 },
+    ],
+    frameworks: [{ name: 'FastAPI', count: 2 }],
+    agent_tools: [{ name: 'Claude Code', count: 4 }],
+    ci: [{ name: 'GitHub Actions', count: 6 }],
+    linked_repos: [{ name: 'awos-recruitment', count: 2 }],
+  };
+
+  // 8 repos: git reachable in all 8, tracker in 5, ci in 6, docs in none.
+  const per_repo: PerRepoSummary[] = Array.from({ length: 8 }, (_, i) => ({
+    repo: `org/repo-${i}`,
+    contributors: null,
+    awarded_weight: 10,
+    sources_reachable: [
+      'git',
+      ...(i < 5 ? ['tracker'] : []),
+      ...(i < 6 ? ['ci'] : []),
+    ],
+    has_ai_tooling: true,
+    audit_total: 10,
+    coverage: null,
+    merges_per_active: null,
+    loc_per_active: null,
+    deploy_freq: null,
+    rework_rate: null,
+    lead_time: null,
+    change_fail: null,
+    cycle_time: null,
+    mttr: null,
+  }));
+
+  return {
+    ...makeAudit({
+      portfolio_metrics: [
+        {
+          metric: 'org_capability_score',
+          value: 42,
+          description: 'test',
+          contributor_weighted: false,
+          repos_counted: 8,
+        },
+      ],
+      source_windows: {
+        git: { days: 90, label: 'git history' },
+        tracker: { days: 30, label: 'Jira' },
+      },
+      per_repo,
+      org_connections,
+    }),
+  } as AuditJson;
+}
+
+test('renderHtml org mode: Connections uses the per-repo Connected/Missed template with (n/N) counts (Task 5.4)', () => {
+  const audit = makeOrgAuditWithConnections();
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('<h3>Connected</h3>'),
+    'org Connections must use the same Connected/Missed template as a per-repo report'
+  );
+  assert.ok(
+    html.includes('git history (8/8)'),
+    'org Connections must render "git history (8/8)" — n of N repos have the source'
+  );
+  assert.ok(
+    html.includes('Jira (5/8)'),
+    'org Connections must render the tracker as "Jira … (5/8)"'
+  );
+  assert.ok(
+    html.includes('(0/8)'),
+    'a source available in no repo must appear under Missed with (0/8)'
+  );
+});
+
+test('renderHtml org mode: Tech Stack renders org items with (n/N) repo counts (Task 5.4)', () => {
+  const audit = makeOrgAuditWithConnections();
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('Python (3/8)'),
+    'org Tech Stack must render languages with repo count: "Python (3/8)"'
+  );
+  assert.ok(
+    html.includes('TypeScript (1/8)'),
+    'org Tech Stack must render languages with repo count: "TypeScript (1/8)"'
+  );
+  assert.ok(
+    html.includes('FastAPI (2/8)'),
+    'org Tech Stack must render frameworks with repo count: "FastAPI (2/8)"'
+  );
+  assert.ok(
+    html.includes('Claude Code (4/8)'),
+    'org Tech Stack must render agent_tools with repo count: "Claude Code (4/8)"'
+  );
+  assert.ok(
+    html.includes('GitHub Actions (6/8)'),
+    'org Tech Stack must render CI with repo count: "GitHub Actions (6/8)"'
+  );
+  assert.ok(
+    html.includes('awos-recruitment</b> (2/8)'),
+    'org Connections must render linked_repos with repo count: "awos-recruitment (2/8)"'
+  );
+});
+
+test('renderMarkdown org mode: org_connections rendered with repo counts (Task 5.4)', () => {
+  const audit = makeOrgAuditWithConnections();
+  const md = renderMarkdown(audit);
+  // Contract: source labels use sourceFullLabel; counts are (n/N) repos
+  assert.ok(
+    md.includes('git history (8/8)'),
+    'Markdown org Connections must render "git history … (8/8)"'
+  );
+  assert.ok(
+    md.includes('Jira (5/8)'),
+    'Markdown org Connections must render "Jira … (5/8)"'
+  );
+  assert.ok(
+    md.includes('Python (3/8)'),
+    'Markdown org Connections must render languages with count: "Python (3/8)"'
+  );
+  assert.ok(
+    md.includes('awos-recruitment (2/8)'),
+    'Markdown org Connections must render linked_repos with count: "awos-recruitment (2/8)"'
+  );
+});
+
+test('renderHtml org mode: empty org_connections categories are omitted (Task 5.4)', () => {
+  const audit = makeAudit({
+    portfolio_metrics: [
+      {
+        metric: 'org_capability_score',
+        value: 0,
+        description: 'test',
+        contributor_weighted: false,
+        repos_counted: 1,
+      },
+    ],
+    per_repo: [
+      {
+        repo: 'org/solo',
+        contributors: null,
+        awarded_weight: 1,
+        sources_reachable: ['git'],
+        has_ai_tooling: false,
+      },
+    ],
+    org_connections: {
+      sources: [{ name: 'git', count: 1 }],
+      languages: [],
+      frameworks: [],
+      agent_tools: [],
+      ci: [],
+      linked_repos: [],
+    },
+  } as unknown as Partial<AuditJson>);
+  const html = renderHtml(audit);
+  // Only sources should appear; other empty categories omitted
+  assert.ok(
+    html.includes('git history (1/1)'),
+    'HTML org Connections must render the non-empty sources list with (n/N)'
+  );
+  assert.ok(
+    !html.includes('<h3>Languages</h3>') &&
+      !html.includes('Languages</h3>') &&
+      !html.includes('**Languages:**'),
+    'HTML org Connections must omit empty categories'
+  );
+});
+
+test('renderHtml single-repo mode: org_connections field does not affect single-repo connections rendering (Task 5.4 scope guard)', () => {
+  // A single-repo audit with org_connections set (shouldn't happen in practice,
+  // but the renderer must not break or silently show org data in single-repo mode).
+  const audit = makeAudit({
+    sources: [
+      {
+        source: 'git',
+        available: true,
+        reason_if_absent: null,
+        history_available_days: 90,
+      },
+    ],
+    org_connections: {
+      sources: [{ name: 'git', count: 99 }],
+      languages: [],
+      frameworks: [],
+      agent_tools: [],
+      ci: [],
+      linked_repos: [],
+    },
+  } as unknown as Partial<AuditJson>);
+  const html = renderHtml(audit);
+  // Single-repo mode shows Connected/Missed, not the org count view
+  assert.ok(
+    !html.includes('git (99)') && !html.includes('git history (99)'),
+    'Single-repo HTML must not render org_connections count list (99 is a sentinel)'
+  );
+});
+
+// ── R1: measurement window in the header ──────────────────────────────────
+test('renderMarkdown states the measurement window in the header', () => {
+  const audit = makeAudit({
+    source_windows: { git: { days: 90, label: 'git history' } },
+  } as unknown as Partial<AuditJson>);
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('**Measurement window:** last 90 days'),
+    'Markdown header must state the measurement window (last 90 days) so the reader knows the interval'
+  );
+  // The window must be accompanied by the concrete date range, not just "90 days".
+  assert.match(
+    md,
+    /last 90 days \(2025-10-03\.\.2026-01-01\)/,
+    'the measurement window must show the date range (start..end) with the `..` separator, not only the day count'
+  );
+});
+
+test('renderHtml states the measurement window in the meta band', () => {
+  const audit = makeAudit({
+    source_windows: { git: { days: 90, label: 'git history' } },
+  } as unknown as Partial<AuditJson>);
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('Measurement window') && html.includes('last 90 days'),
+    'HTML meta band must state the measurement window (last 90 days)'
+  );
+});
+
+// ── R2: every headline metric label carries a tooltip (not the value) ───────
+test('renderHtml wraps every headline metric label in a tooltip (tooltip on label, value shown plain)', () => {
+  const audit = makeAudit({
+    headline: {
+      delivery: [
+        { label: 'Merges', display_value: '19.0 / active contributor' },
+        {
+          label: 'Deployment frequency',
+          display_value: '2 / day',
+          band: 'high',
+          check_id: 'DF-01',
+        },
+        { label: 'Cycle time (Jira In-Progress→Done)', gated: 'tracker' },
+      ],
+      scale: [{ label: 'LOC', display_value: '12,000' }],
+      reach: { ai_tooling: 'Claude, Copilot', contributors: '4 active (90d)' },
+    },
+  } as unknown as Partial<AuditJson>);
+  const html = renderHtml(audit);
+  const labelTipWrapped = (label: string) =>
+    html.includes(
+      `<span class="tip" tabindex="0">${label}<span class="tipbox">`
+    );
+  const valuePlain = (v: string) =>
+    html.includes(`<span class="v">${v}</span>`);
+  assert.ok(labelTipWrapped('Merges'), 'Merges label must be tooltip-wrapped');
+  assert.ok(
+    valuePlain('19.0 / active contributor'),
+    'Merges delivery value must be plain (no tooltip)'
+  );
+  assert.ok(
+    labelTipWrapped('Deployment frequency'),
+    'Deployment frequency label must be tooltip-wrapped'
+  );
+  assert.ok(
+    html.includes('needs ticketing connector') &&
+      valuePlain('— (needs ticketing connector)'),
+    'gated-absent delivery note must be plain (no tooltip)'
+  );
+  assert.ok(labelTipWrapped('LOC'), 'scale label must be tooltip-wrapped');
+  assert.ok(valuePlain('12,000'), 'scale value must be plain (no tooltip)');
+  assert.ok(
+    labelTipWrapped('AI tooling'),
+    'AI-tooling reach label must be tooltip-wrapped'
+  );
+  assert.ok(
+    valuePlain('Claude, Copilot'),
+    'AI-tooling reach value must be plain (no tooltip)'
+  );
+  assert.ok(
+    labelTipWrapped('Active Contributors'),
+    'Contributors reach label must be tooltip-wrapped'
+  );
+  assert.ok(
+    valuePlain('4 active (90d)'),
+    'Contributors reach value must be plain (no tooltip)'
+  );
+});
+
+// ── R4: SKIP reason renders in the evidence column ────────────────────────
+test('renderHtml shows the skip reason in the evidence column instead of a bare "—"', () => {
+  const skip = makeCheck({
+    check_id: 'ADP-08',
+    status: 'SKIP',
+    applies: false,
+    evidence: [
+      'No ci data available — connect a ci source (connector or config) to score this check.',
+    ],
+  });
+  const audit = makeAudit({
+    dimensions: [makeDim('delivery-automation', [skip])],
+  });
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('No ci data available'),
+    'a SKIP check must render its reason in the evidence column, not a bare "—"'
+  );
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('No ci data available'),
+    'a SKIP check must render its reason in the Markdown check table, not a bare "—"'
+  );
+});
+
+test('object check values render as k=v pairs, never "[object Object]"', () => {
+  const audit = makeAudit({
+    dimensions: [
+      makeDim('ai-sdlc-adoption', [
+        makeCheck({
+          check_id: 'DESC-04',
+          value: {
+            total_loc: 4821,
+            file_count: 37,
+            by_language: { TypeScript: { files: 30, loc: 4500 } },
+          },
+        }),
+      ]),
+    ],
+  });
+  const md = renderMarkdown(audit);
+  const html = renderHtml(audit);
+  for (const [name, out] of [
+    ['markdown', md],
+    ['html', html],
+  ] as const) {
+    assert.ok(
+      !out.includes('[object Object]'),
+      `${name} output must never contain "[object Object]"`
+    );
+  }
+  assert.ok(
+    md.includes('total_loc=4821'),
+    `object values must render their primitive fields as k=v pairs, got: ${md.split('\n').find((l) => l.includes('DESC-04'))}`
+  );
+});
+
+test('dimension description renders as a tooltip on the summary-row name and on the dim page', () => {
+  const audit = makeAudit({
+    dimensions: [
+      makeDim('delivery-flow', [makeCheck({ check_id: 'DF-01' })], {
+        title: 'Delivery Flow',
+        description:
+          'DORA-style delivery-flow metrics computed from git history.',
+      }),
+    ],
+  });
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes(
+      '<strong><span class="tip" tabindex="0">Delivery Flow<span class="tipbox">'
+    ),
+    'summary row must wrap the dimension name in a tooltip carrying its description'
+  );
+  assert.ok(
+    html.includes(
+      'DORA-style delivery-flow metrics computed from git history.'
+    ),
+    'the tooltip content must be the dimension description'
+  );
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes(
+      '> DORA-style delivery-flow metrics computed from git history.'
+    ),
+    'markdown dim section must lead with the description as a blockquote'
+  );
+});
+
+test('an all-weight-0 dimension renders as informational: no points, no coverage, INFO badge allowed', () => {
+  const audit = makeAudit({
+    dimensions: [
+      makeDim(
+        'descriptors',
+        [
+          makeCheck({
+            check_id: 'DESC-01',
+            status: 'INFO' as never,
+            weight_awarded: 0,
+            weight_max: 0,
+          }),
+        ],
+        { title: 'Descriptors' }
+      ),
+    ],
+  });
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('| Descriptors | info |'),
+    `summary row must show "info" instead of points for an unscored dimension, got: ${md.split('\n').find((l) => l.includes('Descriptors'))}`
+  );
+  assert.ok(
+    md.includes('**Informational** — descriptors reported for context'),
+    'dim section must state the dimension is informational instead of a score line'
+  );
+  const html = renderHtml(audit);
+  assert.ok(
+    !html.includes('[object Object]') && html.includes('INFO'),
+    'html must render the INFO badge for descriptor checks'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Per-repo table: connector-gated cycle_time / mttr display values
+// ---------------------------------------------------------------------------
+
+test('per-repo table renders cycle_time and MTTR display strings when present, "—" when null', () => {
+  const audit = makeOrgAuditWithPerRepo();
+
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('<td>3.2 d</td>'),
+    'HTML per-repo table must render repo A cycle_time display value in its own cell'
+  );
+  assert.ok(
+    html.includes('<td>1.5 h</td>'),
+    'HTML per-repo table must render repo A MTTR display value in its own cell'
+  );
+
+  const md = renderMarkdown(audit);
+  const rowA = md.split('\n').find((l) => l.includes('acme/backend'));
+  assert.ok(
+    rowA !== undefined,
+    'Markdown per-repo table: repo A row must exist'
+  );
+  assert.ok(
+    rowA!.includes('| 3.2 d |') && rowA!.includes('| 1.5 h |'),
+    `Markdown repo A row must carry the cycle_time and MTTR display values, got: ${rowA}`
+  );
+  const rowB = md.split('\n').find((l) => l.includes('acme/frontend'));
+  assert.ok(
+    rowB !== undefined,
+    'Markdown per-repo table: repo B row must exist'
+  );
+  assert.ok(
+    rowB!.trimEnd().endsWith('| — | — |'),
+    `Markdown repo B row must render "—" in the cycle_time and MTTR cells when null, got: ${rowB}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// PENDING_JUDGMENT visibility — an unpatched run must look unfinished
+// ---------------------------------------------------------------------------
+
+test('reports surface a pending-judgment indicator when checks are PENDING_JUDGMENT', () => {
+  const audit = makeAudit({
+    dimensions: [
+      makeDim('governance', [
+        makeCheck({
+          check_id: 'GOV-01',
+          status: 'PENDING_JUDGMENT',
+          weight_awarded: 0,
+        }),
+        makeCheck({
+          check_id: 'GOV-02',
+          status: 'PENDING_JUDGMENT',
+          weight_awarded: 0,
+        }),
+        makeCheck({ check_id: 'GOV-03', status: 'PASS' }),
+      ]),
+    ],
+  });
+
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('(2 pending judgment)'),
+    'Markdown Points line must carry a "(N pending judgment)" suffix when judgment checks are unpatched'
+  );
+  assert.ok(
+    md.includes('**Pending judgment:** 2 check(s)'),
+    'Markdown header must state how many checks await the judgment pass'
+  );
+
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('<span class="pending-chip">2 pending judgment</span>'),
+    'HTML executive band must show the amber pending-judgment chip with the count (distinct from SKIP)'
+  );
+});
+
+test('fully-patched audit (no PENDING_JUDGMENT) shows no pending indicator', () => {
+  const audit = makeAudit({
+    dimensions: [
+      makeDim('governance', [
+        makeCheck({ check_id: 'GOV-01', status: 'PASS' }),
+        makeCheck({ check_id: 'GOV-02', status: 'SKIP', weight_awarded: 0 }),
+      ]),
+    ],
+  });
+  assert.ok(
+    !renderMarkdown(audit).includes('pending judgment'),
+    'Markdown must not mention pending judgment once every judgment check is patched'
+  );
+  assert.ok(
+    !renderHtml(audit).includes('pending judgment'),
+    'HTML must not show the pending-judgment chip once every judgment check is patched'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Gated-row precise reasons (DeliveryMetric.note) — a row-specific note beats
+// the generic "needs X connector" default in BOTH renderers.
+// ---------------------------------------------------------------------------
+
+test('gated tracker row with a note renders the short "no tickets data" placeholder — the full note moves to the tooltip and Connections & Sources', () => {
+  const delivery: DeliveryMetric[] = [
+    {
+      label: 'Cycle time (In-Progress→Done)',
+      gated: 'tracker',
+      note: 'Jira connected — tickets lack status-transition history',
+    },
+    // Control row: gated without a note keeps the generic default.
+    { label: 'MTTR', gated: 'incident' },
+  ];
+  const audit = makeAudit({
+    headline: { delivery },
+    sources: [
+      {
+        source: 'tracker',
+        available: true,
+        reason_if_absent: null,
+        history_available_days: 365,
+      },
+    ],
+  });
+
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('— (no tickets data)'),
+    'HTML gated tracker row with a note must render the short "— (no tickets data)" placeholder, not the full explanation'
+  );
+  assert.ok(
+    html.includes('Jira connected — tickets lack status-transition history'),
+    'HTML must still carry the full note (value tooltip + Connections & Sources)'
+  );
+  assert.ok(
+    html.includes('needs incident connector'),
+    'HTML gated row WITHOUT a note must keep the generic incident default'
+  );
+  assert.ok(
+    !html.includes('needs ticketing connector'),
+    'HTML gated row WITH a note must not also render the generic tracker default'
+  );
+
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('— (no tickets data)'),
+    'Markdown gated tracker row with a note must render the short placeholder in the Delivery table'
+  );
+  assert.ok(
+    md.includes('Jira connected — tickets lack status-transition history'),
+    'Markdown must carry the full note on the Connections & Sources tracker line'
+  );
+  assert.ok(
+    md.includes('needs incident connector'),
+    'Markdown gated row WITHOUT a note must keep the generic incident default'
+  );
+  assert.ok(
+    !md.includes('needs ticketing connector'),
+    'Markdown gated row WITH a note must not also render the generic tracker default'
+  );
+});
+
+test('gated delivery note is escaped: angle brackets cannot inject HTML via the value tooltip', () => {
+  const delivery: DeliveryMetric[] = [
+    {
+      label: 'Cycle time (In-Progress→Done)',
+      gated: 'tracker',
+      note: 'a|b <script>x</script>',
+    },
+  ];
+  const audit = makeAudit({ headline: { delivery } });
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('— (no tickets data)'),
+    'Markdown gated tracker note renders as the short placeholder — the raw note (with pipes) never enters the table'
+  );
+  const html = renderHtml(audit);
+  assert.ok(
+    !html.includes('<script>x</script>'),
+    'HTML gated note must be escaped, never injected as markup (it now lives in the value tooltip)'
+  );
+  assert.ok(
+    html.includes('&lt;script&gt;'),
+    'HTML gated note must show the escaped form of injected markup'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Reader-grade tooltips for the connector-gated headline rows (Cycle time /
+// MTTR) and the org Repositories table's matching column headers.
+// ---------------------------------------------------------------------------
+
+test('gated Cycle time / MTTR headline rows carry reader-grade tooltips (HEADLINE_TIP lookup handles the arrow label)', () => {
+  // Gated rows are authored with NO check_id (SKILL.md), so the tooltip must
+  // resolve from HEADLINE_TIP via the label — including the arrow-suffixed
+  // cycle-time label.
+  const delivery: DeliveryMetric[] = [
+    { label: 'Cycle time (In-Progress→Done)', gated: 'tracker' },
+    { label: 'MTTR', gated: 'incident' },
+  ];
+  const audit = makeAudit({ headline: { delivery } });
+  const html = renderHtml(audit);
+
+  assert.ok(
+    html.includes('per-ticket status-transition history (the changelog)'),
+    'Cycle time tooltip must explain the changelog requirement (why it can be gated even with a tracker connected)'
+  );
+  assert.ok(
+    html.includes('Never derived from git.'),
+    'Cycle time tooltip must state the value never comes from git'
+  );
+  assert.ok(
+    html.includes('mean time to restore service'),
+    'MTTR tooltip must define the metric in plain language'
+  );
+  assert.ok(
+    html.includes('The git branch-lifetime proxy scores DF-07 separately'),
+    'MTTR tooltip must distinguish the DF-07 git proxy from this row'
+  );
+});
+
+test('org Repositories table: Cycle time and MTTR column headers carry the same reader-grade tooltips', () => {
+  // Org fixture has NO headline block, so any tooltip text present must come
+  // from the Repositories table column headers.
+  const audit = makeOrgAuditWithPerRepo();
+  const html = renderHtml(audit);
+
+  assert.ok(
+    html.includes('Cycle time¹'),
+    'org Repositories table must render the Cycle time column header'
+  );
+  assert.ok(
+    html.includes('per-ticket status-transition history (the changelog)'),
+    'org Cycle time column header tooltip must explain the changelog requirement'
+  );
+  assert.ok(
+    html.includes('MTTR²'),
+    'org Repositories table must render the MTTR column header'
+  );
+  assert.ok(
+    html.includes('The git branch-lifetime proxy scores DF-07 separately'),
+    'org MTTR column header tooltip must distinguish the DF-07 git proxy'
+  );
+});

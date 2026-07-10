@@ -31,6 +31,7 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Warn:** A pattern is partially recognizable but inconsistently applied (some areas follow it, others don't)
 - **Fail:** No recognizable pattern — flat file structure or random nesting with no clear organization principle
 - **Severity:** high
+- **Category:** 2100
 
 ### ARCH-02: Module boundaries are respected
 
@@ -43,7 +44,9 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Pass:** Imports follow a consistent direction; no layer violations detected in the sample
 - **Warn:** 1-2 import violations found in the sample, but the general direction is consistent
 - **Fail:** Widespread tangled imports — no clear direction, modules import each other freely
+- **Skip-When:** No source files, or no files under recognised layer directories (models/repositories/services/controllers/routes) — nothing to measure
 - **Severity:** high
+- **Category:** 2101
 
 ### ARCH-03: Single Responsibility Principle in modules
 
@@ -57,6 +60,7 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Warn:** 1-2 overly broad modules found, but most are well-scoped
 - **Fail:** Multiple god modules or catch-all directories with mixed concerns
 - **Severity:** medium
+- **Category:** 2102
 
 ### ARCH-04: Separation of concerns across layers
 
@@ -71,6 +75,7 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Fail:** Widespread mixing — most files handle multiple concerns (fetch + render + state + business logic in one file)
 - **Skip-When:** Topology shows the project is a library (libraries may legitimately have simpler structure)
 - **Severity:** high
+- **Category:** 2103
 
 ### ARCH-05: Consistent file and directory naming conventions
 
@@ -80,10 +85,10 @@ Uses the topology artifact to know which layers exist and what technologies they
   2. Test file colocation: are test files colocated with source (`Button.test.tsx` next to `Button.tsx`) or in a separate `__tests__/` directory? Is this consistent?
   3. Component/class naming: do file names match their default export names?
   4. Directory naming: consistent casing and naming pattern
-- **Pass:** Consistent naming conventions across the layer (one pattern, consistently applied)
-- **Warn:** Mostly consistent but with 3-5 deviations
-- **Fail:** No consistent naming convention — mixed patterns with no clear standard
+- **Pass:** Every file follows the dominant convention (all-or-nothing — AWOS's own standard; no source publishes an acceptable inconsistency rate)
+- **Fail:** Any file departs from the dominant convention
 - **Severity:** medium
+- **Category:** 2104
 
 ### ARCH-06: Reasonable file sizes
 
@@ -96,3 +101,15 @@ Uses the topology artifact to know which layers exist and what technologies they
 - **Warn:** 5-15% of source files exceed 500 lines
 - **Fail:** More than 15% of source files exceed 500 lines, or any file exceeds 2000 lines
 - **Severity:** medium
+- **Category:** 2105
+
+### ARCH-07: Shared ownership enablers
+
+- **What:** The project has cross-layer tooling that enables developers to work across the full stack
+- **How:** Check for root-level tooling that spans layers: shared `Makefile` or `Taskfile` with commands for both backend and frontend, root `docker-compose.yml` that starts the full stack, shared CI/CD pipeline that builds and tests all layers, root-level `package.json` scripts or task runner.
+- **Pass:** Root-level cross-layer tooling exists (unified dev start, shared CI, etc.)
+- **Warn:** Some cross-layer tooling but incomplete (e.g., docker-compose but no unified task runner)
+- **Fail:** No shared tooling — each layer is completely independent with no unified entry point
+- **Skip-When:** Topology artifact shows single-service repo
+- **Severity:** medium
+- **Category:** 2304

@@ -1,0 +1,699 @@
+// ---------------------------------------------------------------------------
+// topology.ts — deterministic project-topology flags.
+//
+// Produces the boolean flags that `references/standards.toml` `applies_when`
+// expressions gate on (e.g. `topology.has_http_api`). These were previously
+// authored by the LLM project-topology pass; computing them in the engine keeps
+// the whole audit deterministic and headless-robust.
+//
+// Connector-dependent flags (has_tracker, has_docs_connector, has_incident_source)
+// cannot be derived from the repo alone — they default to false and are patched
+// by the orchestrator when an MCP connector is available.
+// ---------------------------------------------------------------------------
+import { execFileSync } from 'node:child_process';
+import {
+  existsSync,
+  readFileSync,
+  lstatSync,
+  readlinkSync,
+  readdirSync,
+  realpathSync,
+} from 'node:fs';
+import { join, dirname, basename, resolve, sep } from 'node:path';
+import { iterFiles, hasMatch } from './detectors/_base.ts';
+import { findApiSpecFiles } from './detectors/api_specs.ts';
+import { detectCiConfigPath } from './ci_platforms.ts';
+import {
+  ALL_INSTRUCTION_FILES,
+  ALL_TOOL_CONFIG_DIRS,
+  ALL_RULE_COMMAND_DIRS,
+  ALL_SKILL_DIRS,
+  ALL_MCP_CONFIG_PATHS,
+} from './agent_tools.ts';
+import { ALL_SOURCE_GLOBS } from './languages.ts';
+
+export type TopologyFlags = Record<string, boolean>;
+
+/** True if any of the given repo-relative paths exists. */
+function anyPath(repoPath: string, names: string[]): boolean {
+  return names.some((n) => existsSync(join(repoPath, n)));
+}
+
+/** True if any source file matches the pattern — full language registry. */
+const CODE_GLOBS = ALL_SOURCE_GLOBS;
+
+function codeMatches(repoPath: string, pattern: RegExp): boolean {
+  try {
+    // hasMatch early-exits on the first matching line instead of reading the
+    // whole repo to answer a boolean.
+    return hasMatch(repoPath, pattern, CODE_GLOBS);
+  } catch {
+    return false;
+  }
+}
+
+/** True if any file matching the globs exists. */
+function anyGlob(repoPath: string, globs: string[]): boolean {
+  try {
+    return iterFiles(repoPath, globs).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function readIfExists(repoPath: string, rel: string): string {
+  try {
+    return readFileSync(join(repoPath, rel), 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+const PKG_MANIFESTS = [
+  'package.json',
+  'pyproject.toml',
+  'setup.py',
+  'go.mod',
+  'Cargo.toml',
+  'pom.xml',
+  'build.gradle',
+  'build.gradle.kts',
+  'composer.json',
+  'Gemfile',
+];
+
+const LOCKFILES = [
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'Cargo.lock',
+  'poetry.lock',
+  'uv.lock',
+  'Gemfile.lock',
+  'go.sum',
+  'composer.lock',
+  'gradle.lockfile',
+];
+
+export function computeTopology(
+  repoPath: string,
+  connectors?: {
+    has_tracker?: boolean;
+    has_docs_connector?: boolean;
+    has_incident_source?: boolean;
+    has_code_host?: boolean;
+  }
+): TopologyFlags {
+  const settings = readIfExists(repoPath, '.claude/settings.json');
+
+  // Manifests are probed at any depth (walker prunes node_modules/build/etc.
+  // and honors .gitignore): multi-module monorepos often keep every manifest
+  // in subdirectories with nothing at the root. Deduped by directory so
+  // co-located manifests (pyproject.toml + setup.py) count as one build root.
+  const manifestDirCount = (() => {
+    try {
+      return new Set(iterFiles(repoPath, PKG_MANIFESTS).map((p) => dirname(p)))
+        .size;
+    } catch {
+      return 0;
+    }
+  })();
+  const hasPackageEcosystem = manifestDirCount >= 1;
+  const hasHttpApi = codeMatches(
+    repoPath,
+    /\b(fastapi|flask|django|express|@nestjs|gin-gonic|fiber|spring(framework|boot)?|sinatra|rails|actix_web|axum|aiohttp|starlette)\b/i
+  );
+  const hasApi =
+    hasHttpApi ||
+    // Content-sniffed spec discovery (top-level openapi:/swagger:/asyncapi:
+    // version key) — file naming varies by team; see detectors/api_specs.ts.
+    findApiSpecFiles(repoPath).length > 0 ||
+    codeMatches(
+      repoPath,
+      /\b(graphql|grpc|@grpc|protobuf|router\.(get|post|put))\b/i
+    );
+
+  // Two or more independent build roots (manifest-bearing directories) → monorepo.
+  const isMonorepo =
+    anyPath(repoPath, [
+      'pnpm-workspace.yaml',
+      'turbo.json',
+      'lerna.json',
+      'nx.json',
+    ]) || manifestDirCount >= 2;
+
+  // has_ai_agent_files and has_agent_instruction_files are semantically
+  // identical (both used by standards.toml). Both are kept but share the same
+  // registry-driven expression, computed once. Pending future consolidation.
+  const hasAgentFiles =
+    anyPath(repoPath, [...ALL_INSTRUCTION_FILES, ...ALL_TOOL_CONFIG_DIRS]) ||
+    anyGlob(repoPath, ALL_INSTRUCTION_FILES);
+  // Shared by uses_env_vars and handles_secrets.
+  const hasEnvFiles =
+    anyPath(repoPath, ['.env']) || anyGlob(repoPath, ['.env', '.env.*']);
+
+  const flags: TopologyFlags = {
+    has_topology: true,
+    has_ci: detectCiConfigPath(repoPath) !== null,
+    has_ai_agent_files: hasAgentFiles,
+    has_agent_instruction_files: hasAgentFiles,
+    has_commands_or_skills: anyPath(repoPath, [
+      ...ALL_RULE_COMMAND_DIRS,
+      ...ALL_SKILL_DIRS,
+    ]),
+    has_hooks:
+      /"hooks"\s*:/.test(settings) ||
+      anyPath(repoPath, ['.pre-commit-config.yaml', '.husky']),
+    has_mcp_config:
+      anyPath(repoPath, ALL_MCP_CONFIG_PATHS) ||
+      /"mcpServers"\s*:/.test(settings),
+    has_lockfiles: anyGlob(repoPath, LOCKFILES),
+    has_package_ecosystem: hasPackageEcosystem,
+    has_package_manifests: hasPackageEcosystem,
+    has_dependency_automation: anyPath(repoPath, [
+      '.github/dependabot.yml',
+      '.github/dependabot.yaml',
+      'renovate.json',
+      '.renovaterc',
+      '.renovaterc.json',
+    ]),
+    has_db:
+      anyPath(repoPath, [
+        'migrations',
+        'alembic.ini',
+        'alembic',
+        'prisma',
+        'db/migrate',
+      ]) ||
+      codeMatches(
+        repoPath,
+        /\b(sqlalchemy|piccolo|prisma|typeorm|sequelize|mongoose|gorm|psycopg2?|asyncpg|knex|django\.db)\b/i
+      ),
+    has_http_api: hasHttpApi,
+    has_api: hasApi,
+    has_ml_layer:
+      codeMatches(
+        repoPath,
+        /\b(torch|tensorflow|sklearn|scikit-learn|transformers|keras|xgboost|lightgbm|huggingface)\b/i
+      ) || anyGlob(repoPath, ['*.ipynb', '*.pt', '*.h5', '*.onnx', '*.pkl']),
+    uses_auth: codeMatches(
+      repoPath,
+      /\b(jwt|oauth2?|passport|keycloak|auth0|@login_required|authenticate|bearer\s+token|rbac)\b/i
+    ),
+    uses_env_vars:
+      hasEnvFiles ||
+      anyPath(repoPath, ['.env.example']) ||
+      codeMatches(
+        repoPath,
+        /\b(os\.environ|os\.getenv|process\.env|dotenv|godotenv)\b/
+      ),
+    handles_secrets:
+      hasEnvFiles ||
+      codeMatches(
+        repoPath,
+        /\b(keyvault|secretsmanager|secret_?manager|hashicorp.?vault|SECRET_KEY|API_KEY|getSecret)\b/i
+      ),
+    is_monorepo: isMonorepo,
+    is_multi_service: (() => {
+      const composeText =
+        readIfExists(repoPath, 'docker-compose.yml') ||
+        readIfExists(repoPath, 'docker-compose.yaml');
+      if (composeText) {
+        // Count entries under a top-level `services:` block (2+ → multi-service).
+        // Walk lines; stop at next non-indented key so volumes/networks don't inflate count.
+        const m = composeText.match(/^services:[ \t]*\n([\s\S]*)/m);
+        if (m) {
+          let serviceCount = 0;
+          for (const line of m[1].split('\n')) {
+            if (/^\S/.test(line) && line.trim() !== '') break;
+            if (/^\s{2}\w[\w.-]*:[ \t]*$/.test(line)) serviceCount++;
+          }
+          if (serviceCount >= 2) return true;
+        }
+      }
+      // Otherwise multi-service when 2+ Dockerfiles exist anywhere in the repo.
+      try {
+        return iterFiles(repoPath, ['Dockerfile']).length >= 2;
+      } catch {
+        return false;
+      }
+    })(),
+    has_multiple_layers:
+      isMonorepo ||
+      [
+        anyPath(repoPath, ['frontend', 'web', 'ui', 'client']),
+        anyPath(repoPath, ['backend', 'api', 'server', 'src']),
+        anyPath(repoPath, ['infra', 'infrastructure', 'terraform', 'deploy']),
+      ].filter(Boolean).length >= 2,
+    is_not_library:
+      hasApi ||
+      anyPath(repoPath, ['Dockerfile', 'docker-compose.yml']) ||
+      anyGlob(repoPath, [
+        'main.py',
+        'main.go',
+        'app.py',
+        'server.ts',
+        'index.ts',
+        'manage.py',
+      ]),
+    has_python:
+      anyGlob(repoPath, ['*.py']) ||
+      anyPath(repoPath, [
+        'pyproject.toml',
+        'setup.py',
+        'requirements.txt',
+        'Pipfile',
+      ]),
+    // Connector-dependent — repo alone cannot prove these. Default false; the
+    // orchestrator flips them true after a successful MCP connector fetch.
+    has_tracker: Boolean(connectors?.has_tracker),
+    has_docs_connector: Boolean(connectors?.has_docs_connector),
+    has_incident_source: Boolean(connectors?.has_incident_source),
+    has_code_host: Boolean(connectors?.has_code_host),
+  };
+  return flags;
+}
+
+// ---------------------------------------------------------------------------
+// Framework detection
+// ---------------------------------------------------------------------------
+
+export interface DetectedFramework {
+  name: string;
+  evidence: string;
+}
+
+// A framework is detected from dependency manifests (package token present) or
+// an import/usage statement — never a bare word in prose. `deps` are substrings
+// looked for in manifest text; `importRx` is matched against non-ignored source.
+interface FrameworkDef {
+  name: string;
+  deps: string[];
+  importRx?: RegExp;
+}
+
+const MANIFESTS = [
+  'requirements.txt',
+  'pyproject.toml',
+  'Pipfile',
+  'setup.cfg',
+  'setup.py',
+  'package.json',
+  'go.mod',
+  'Cargo.toml',
+  'Gemfile',
+  'build.gradle',
+  'build.gradle.kts',
+  'pom.xml',
+  'composer.json',
+];
+
+const FRAMEWORKS: FrameworkDef[] = [
+  {
+    name: 'FastAPI',
+    deps: ['fastapi'],
+    importRx: /^\s*(?:from|import)\s+fastapi\b/m,
+  },
+  {
+    name: 'Flask',
+    deps: ['flask', 'Flask'],
+    importRx: /^\s*(?:from|import)\s+flask\b/m,
+  },
+  {
+    name: 'Django',
+    deps: ['django', 'Django'],
+    importRx: /^\s*(?:from|import)\s+django\b/m,
+  },
+  {
+    name: 'Starlette',
+    deps: ['starlette'],
+    importRx: /^\s*(?:from|import)\s+starlette\b/m,
+  },
+  {
+    name: 'aiohttp',
+    deps: ['aiohttp'],
+    importRx: /^\s*(?:from|import)\s+aiohttp\b/m,
+  },
+  {
+    name: 'Express',
+    deps: ['express'],
+    importRx: /(?:require\(\s*['"]express['"]\)|from\s+['"]express['"])/,
+  },
+  {
+    name: 'NestJS',
+    deps: ['@nestjs/core', '@nestjs/common'],
+    importRx: /@nestjs\//,
+  },
+  { name: 'Gin', deps: ['gin-gonic/gin'], importRx: /gin-gonic\/gin/ },
+  { name: 'Fiber', deps: ['gofiber/fiber'], importRx: /gofiber\/fiber/ },
+  {
+    name: 'Rails',
+    deps: ['rails'],
+    importRx: /(?:require\s+['"]rails|Rails\.application)/,
+  },
+  { name: 'Sinatra', deps: ['sinatra'], importRx: /require\s+['"]sinatra['"]/ },
+  {
+    name: 'Spring Boot',
+    deps: ['spring-boot'],
+    importRx: /org\.springframework\.boot/,
+  },
+  { name: 'Actix', deps: ['actix-web'], importRx: /\bactix_web\b/ },
+  { name: 'Axum', deps: ['axum'], importRx: /^\s*use\s+axum\b/m },
+  {
+    name: 'GraphQL',
+    deps: ['graphql', 'graphene', 'strawberry-graphql'],
+    importRx:
+      /(?:^\s*(?:from|import)\s+(?:graphql|graphene|strawberry)\b|from\s+['"](?:graphql|graphene|strawberry)['"])/m,
+  },
+  {
+    name: 'gRPC',
+    deps: ['grpcio', 'grpc', '@grpc/grpc-js'],
+    importRx:
+      /(?:\bimport\s+grpc\b|from\s+['"](?:@grpc\/|grpc)[^'"]*['"]|require\s*\(\s*['"](?:@grpc\/|grpc)[^'"]*['"]\))/,
+  },
+];
+
+/** Concatenated text of all present dependency manifests (for substring scan). */
+function manifestText(repoPath: string): string {
+  return MANIFESTS.map((m) => readIfExists(repoPath, m)).join('\n');
+}
+
+/** Escape special regex characters in a literal string. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * True when `dep` appears in `manifests` as a whole package token — i.e. not
+ * flanked by alphanumerics or underscores. Package separators (`-`, `.`, `/`,
+ * `@`, quotes, spaces, version operators) all count as boundaries, so:
+ *   - "rails" inside "guardrails-ai" → NO match (preceded by "d")
+ *   - "express" inside "expression"  → NO match (followed by "i")
+ *   - "spring-boot" inside "spring-boot-starter-web" → MATCH ("-" is a boundary)
+ *   - "express" in `{"express":"^4"}` → MATCH (flanked by quotes)
+ */
+function manifestHasDep(manifests: string, dep: string): boolean {
+  return new RegExp(
+    `(?<![A-Za-z0-9_])${escapeRegex(dep)}(?![A-Za-z0-9_])`
+  ).test(manifests);
+}
+
+/**
+ * Detect frameworks/stack components from dependency manifests and import
+ * statements (never bare prose). Returns name + evidence, deduped, stable order.
+ */
+export function detectFrameworks(repoPath: string): DetectedFramework[] {
+  const manifests = manifestText(repoPath);
+  const out: DetectedFramework[] = [];
+  for (const fw of FRAMEWORKS) {
+    const depHit = fw.deps.find((d) => manifestHasDep(manifests, d));
+    if (depHit) {
+      out.push({
+        name: fw.name,
+        evidence: `dependency "${depHit}" in a manifest`,
+      });
+      continue;
+    }
+    if (fw.importRx && codeMatches(repoPath, fw.importRx)) {
+      out.push({ name: fw.name, evidence: `imported in source` });
+    }
+  }
+  // AWOS: a context/ directory plus .awos or context/spec.
+  if (
+    anyPath(repoPath, ['context']) &&
+    anyPath(repoPath, ['.awos', 'context/spec'])
+  ) {
+    out.push({ name: 'AWOS', evidence: 'context/ + .awos/spec layout' });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Linked repository detection
+// ---------------------------------------------------------------------------
+
+export interface LinkedRepo {
+  name: string;
+  kind: 'symlink' | 'submodule' | 'mcp';
+  via: string;
+}
+
+/**
+ * Name a linked repo from a resolved target path: prefer the nearest ancestor
+ * dir containing a `.git` entry (its basename); else the segment before the
+ * first dotfile/tool-config segment; else the leaf.
+ */
+function linkedRepoName(realTarget: string): string {
+  // 1. nearest ancestor with a .git
+  let dir = realTarget;
+  for (let i = 0; i < 12; i++) {
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    try {
+      if (existsSync(join(dir, '.git'))) return basename(dir);
+    } catch {
+      /* ignore */
+    }
+    dir = parent;
+  }
+  // 2. segment before the first dotfile segment
+  const segs = realTarget.split(/[\\/]/).filter(Boolean);
+  const dotIdx = segs.findIndex((s) => s.startsWith('.'));
+  if (dotIdx > 0) return segs[dotIdx - 1];
+  // 3. leaf
+  return segs[segs.length - 1] ?? realTarget;
+}
+
+// Directories to skip when walking the repo tree for outside symlinks.
+// Includes build artefact dirs, dependency trees, and generated output dirs.
+const SYMLINK_WALK_SKIP = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  '.venv',
+  '__pycache__',
+  'target',
+  'vendor',
+  '.tox',
+  '.next',
+  'htmlcov',
+  '.cargo',
+  'coverage',
+  '.nyc_output',
+  '.parcel-cache',
+  '.cache',
+  '.turbo',
+  'out',
+  '.output',
+]);
+
+/**
+ * Detect linked (externally-referenced) repositories by scanning:
+ *  1. `.gitmodules` — each `url =` entry is a submodule.
+ *  2. Symlinks anywhere in the repo tree (depth ≤ 4, skipping heavy dirs)
+ *     whose resolved target is outside the repo root.
+ *  3. MCP server entries from `.mcp.json` and `.claude/settings.json` /
+ *     `.claude/settings.local.json` `mcpServers` keys.
+ *
+ * Returns an array of unique `LinkedRepo` records keyed by `name`.
+ */
+export function detectLinkedRepos(repoPath: string): LinkedRepo[] {
+  const found = new Map<string, LinkedRepo>();
+
+  // 1. Parse .gitmodules for submodule URLs.
+  const gm = readIfExists(repoPath, '.gitmodules');
+  for (const m of gm.matchAll(/url\s*=\s*(\S+)/g)) {
+    const url = m[1];
+    const name =
+      url
+        .replace(/\.git$/, '')
+        .split(/[\\/]/)
+        .pop() || url;
+    found.set(name, { name, kind: 'submodule', via: '.gitmodules' });
+  }
+
+  // 2. Broad symlink walk: every symlink in the repo tree whose resolved target
+  //    is outside the repo root. Capped at depth 4 to stay fast on large trees.
+  //    Uses lstatSync so we never follow symlink-directories into their trees.
+  const realRepoRoot = (() => {
+    try {
+      return realpathSync(repoPath).replace(/\/+$/, '');
+    } catch {
+      return repoPath.replace(/\/+$/, '');
+    }
+  })();
+
+  function scanDirForOutsideSymlinks(
+    dirPath: string,
+    viaPrefix: string,
+    depth: number
+  ): void {
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(dirPath);
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const p = join(dirPath, e);
+      const via = viaPrefix ? `${viaPrefix}/${e}` : e;
+      try {
+        const stat = lstatSync(p);
+        if (stat.isSymbolicLink()) {
+          // Resolve the target and check whether it lands outside the repo root.
+          let realTarget: string;
+          try {
+            realTarget = realpathSync(p).replace(/\/+$/, '');
+          } catch {
+            // Dangling symlink — target doesn't exist; resolve the raw link
+            // value relative to the symlink's own directory so that relative
+            // targets (e.g. "../sibling") are evaluated correctly before we
+            // decide whether they point outside the repo.  Realpath the
+            // directory (not the dangling target) so the result is in the
+            // same namespace as realRepoRoot (important on macOS where /tmp
+            // is a symlink to /private/tmp).
+            const rawTarget = readlinkSync(p);
+            let linkDir: string;
+            try {
+              linkDir = realpathSync(dirname(p));
+            } catch {
+              linkDir = dirname(p);
+            }
+            const resolved = resolve(linkDir, rawTarget);
+            if (
+              !resolved.startsWith(realRepoRoot + sep) &&
+              resolved !== realRepoRoot
+            ) {
+              const name = linkedRepoName(resolved);
+              // Key symlinks by their own path (`via`), not the target repo
+              // name: several symlinks can point into the same repo (e.g.
+              // .awos, context/product, .claude/skills → onex-discovery-awos)
+              // and every one of them is a distinct link worth reporting.
+              const key = `symlink:${via}`;
+              if (!found.has(key)) {
+                found.set(key, { name, kind: 'symlink', via });
+              }
+            }
+            continue;
+          }
+          // Only record if the resolved target is outside the repo root.
+          if (
+            !realTarget.startsWith(realRepoRoot + '/') &&
+            realTarget !== realRepoRoot
+          ) {
+            const name = linkedRepoName(realTarget);
+            // Key by `via` (the symlink path), not the target repo name, so
+            // multiple links into the same repo are all kept. See the dangling
+            // branch above for the rationale.
+            const key = `symlink:${via}`;
+            if (!found.has(key)) {
+              found.set(key, { name, kind: 'symlink', via });
+            }
+          }
+        } else if (
+          stat.isDirectory() &&
+          depth > 0 &&
+          !SYMLINK_WALK_SKIP.has(e)
+        ) {
+          // Recurse into subdirectories; skip heavy/vendor/build dirs.
+          scanDirForOutsideSymlinks(p, via, depth - 1);
+        }
+      } catch {
+        /* unreadable entry — skip */
+      }
+    }
+  }
+
+  // Walk the full repo tree from root (depth 4).
+  scanDirForOutsideSymlinks(repoPath, '', 4);
+
+  // 3. MCP server enumeration: parse .mcp.json and .claude/settings*.json for
+  //    `mcpServers` keys. Emit one entry per server (kind='mcp', name=server key,
+  //    via=config path). Names/commands only — nothing is executed.
+  const mcpConfigPaths = [
+    '.mcp.json',
+    '.claude/settings.json',
+    '.claude/settings.local.json',
+  ];
+  for (const configRelPath of mcpConfigPaths) {
+    const configPath = join(repoPath, configRelPath);
+    let raw: string;
+    try {
+      raw = readFileSync(configPath, 'utf8');
+    } catch {
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+    const servers =
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      'mcpServers' in (parsed as object)
+        ? (parsed as Record<string, unknown>)['mcpServers']
+        : undefined;
+    if (servers === null || typeof servers !== 'object') continue;
+    for (const serverName of Object.keys(servers as Record<string, unknown>)) {
+      // Use serverName as the unique key; first config file to define it wins.
+      if (!found.has(serverName)) {
+        found.set(serverName, {
+          name: serverName,
+          kind: 'mcp',
+          via: configRelPath,
+        });
+      }
+    }
+  }
+
+  return [...found.values()];
+}
+
+// ---------------------------------------------------------------------------
+// Org-parent detection
+// ---------------------------------------------------------------------------
+
+export interface OrgParentDetection {
+  /** True when the dir is NOT itself in a git work tree but holds ≥2 immediate child dirs that are git repos. */
+  isOrgParent: boolean;
+  /** Immediate child directories containing a `.git` entry (dir or worktree file). */
+  gitRepoChildren: number;
+}
+
+/**
+ * Detect the "org folder" case: a plain directory that is not a git work tree
+ * but contains two or more git repositories as immediate children — e.g. the
+ * parent folder a user keeps their org's clones in. Running a single-repo
+ * audit against such a folder produces a stray, meaningless report (its
+ * judgment checks stay PENDING_JUDGMENT forever); org mode audits each child
+ * repo into per-repo/ instead. cli.ts's `audit-core` verb calls this before
+ * doing any work and skips cleanly when it returns isOrgParent.
+ *
+ * A git repo (or any dir inside one) is never an org parent, and neither is a
+ * plain non-git project dir with fewer than two git-repo children.
+ */
+export function detectOrgParent(dir: string): OrgParentDetection {
+  // Inside a git work tree → definitely a repo, not an org parent.
+  try {
+    execFileSync('git', ['-C', dir, 'rev-parse', '--is-inside-work-tree'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return { isOrgParent: false, gitRepoChildren: 0 };
+  } catch {
+    // Not a work tree (or git unavailable) — fall through to the child scan.
+  }
+  let gitRepoChildren = 0;
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      // `.git` may be a directory (normal clone) or a file (worktree/submodule).
+      if (existsSync(join(dir, entry.name, '.git'))) gitRepoChildren++;
+    }
+  } catch {
+    return { isOrgParent: false, gitRepoChildren: 0 };
+  }
+  return { isOrgParent: gitRepoChildren >= 2, gitRepoChildren };
+}

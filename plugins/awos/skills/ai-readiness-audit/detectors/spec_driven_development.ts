@@ -1,0 +1,1038 @@
+import { makeResult, iterFiles, readTextSafe, detectTrunk } from './_base.ts';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import {
+  isSquashMergeSubject,
+  resolveTrunk,
+  refArgs,
+  FIX_SUBJECT_RX,
+  REVERT_SUBJECT_RX,
+} from '../collectors/git.ts';
+
+// ---------------------------------------------------------------------------
+// detectAwosInstalled — category 2800 (SDD-01, method: detected)
+//
+// PASS if both .awos/ and context/ directories exist.
+// WARN if only one is present.
+// FAIL if neither is present.
+// ---------------------------------------------------------------------------
+
+export function detectAwosInstalled(
+  repoPath: string,
+  _params?: unknown
+): ReturnType<typeof makeResult> {
+  const hasAwos = existsSync(join(repoPath, '.awos'));
+  // A bare context/ directory is NOT evidence of a spec workspace — the audit
+  // itself creates context/audits/ for its output. Only the workspace subdirs
+  // the installer creates (context/product, context/spec) count.
+  const hasContext =
+    existsSync(join(repoPath, 'context', 'product')) ||
+    existsSync(join(repoPath, 'context', 'spec'));
+
+  if (hasAwos && hasContext) {
+    return makeResult('PASS', 2, [
+      '.awos/ directory present — AWOS framework installed',
+      'context/product or context/spec present — spec workspace initialised',
+    ]);
+  }
+
+  if (hasAwos) {
+    return makeResult('WARN', 1, [
+      '.awos/ directory present but context/product and context/spec are missing — AWOS installed but workspace not initialised',
+    ]);
+  }
+
+  if (hasContext) {
+    return makeResult('WARN', 1, [
+      'context/ workspace present but .awos/ is missing — workspace exists but AWOS framework not installed',
+    ]);
+  }
+
+  return makeResult('FAIL', 0, [
+    'neither .awos/ nor a context/ spec workspace found — AWOS framework is not installed',
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// detectProductContextDocs — category 2801 (SDD-02, method: detected)
+//
+// Checks for the three foundational AWOS documents:
+//   context/product/product-definition.md
+//   context/product/roadmap.md
+//   context/architecture/architecture.md  OR  context/product/architecture.md
+//
+// A document is "substantive" if it has more than 5 lines of non-blank content.
+//
+// PASS if 3 substantive docs found.
+// WARN if 2 substantive docs found.
+// FAIL if fewer than 2 found.
+// ---------------------------------------------------------------------------
+
+const MIN_SUBSTANTIVE_LINES = 5;
+
+function isSubstantive(filePath: string): boolean {
+  const content = readTextSafe(filePath);
+  if (content === null) return false;
+  const nonBlankLines = content.split('\n').filter((l) => l.trim().length > 0);
+  return nonBlankLines.length > MIN_SUBSTANTIVE_LINES;
+}
+
+const FOUNDATIONAL_DOC_CANDIDATES = [
+  ['context/product/product-definition.md'],
+  ['context/product/roadmap.md'],
+  ['context/architecture/architecture.md', 'context/product/architecture.md'],
+];
+
+export function detectProductContextDocs(
+  repoPath: string,
+  _params?: unknown
+): ReturnType<typeof makeResult> {
+  const found: string[] = [];
+  const missing: string[] = [];
+
+  for (const candidates of FOUNDATIONAL_DOC_CANDIDATES) {
+    let matched = false;
+    for (const candidate of candidates) {
+      const fullPath = join(repoPath, candidate);
+      if (existsSync(fullPath) && isSubstantive(fullPath)) {
+        found.push(candidate);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      missing.push(candidates[0]);
+    }
+  }
+
+  const count = found.length;
+  const evidence = [
+    ...found.map((f) => `present and substantive: ${f}`),
+    ...missing.map((m) => `missing or trivial: ${m}`),
+  ];
+
+  if (count === 3) {
+    return makeResult('PASS', count, [
+      'all 3 foundational AWOS documents present with substantive content',
+      ...evidence,
+    ]);
+  }
+
+  if (count === 2) {
+    return makeResult('WARN', count, [
+      '2 of 3 foundational AWOS documents present',
+      ...evidence,
+    ]);
+  }
+
+  return makeResult('FAIL', count, [
+    `only ${count} of 3 foundational AWOS documents present`,
+    ...evidence,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// detectArchTechMatch — category 2802 (SDD-03, method: detected)
+//
+// Reads the architecture document and extracts technology mentions, then
+// checks whether each mentioned technology is evidenced in the codebase.
+//
+// Tech → evidence mapping (file extensions / config files):
+//   TypeScript → *.ts, *.tsx, tsconfig.json
+//   Python     → *.py
+//   Django     → *.py in a django-looking project (settings.py, urls.py, manage.py)
+//   React      → *.tsx, *.jsx, package.json containing "react"
+//   PostgreSQL  → *.sql, any file mentioning "psycopg2" or "pg"
+//   Node       → package.json, *.js
+//   Go         → *.go
+//   Java       → *.java
+//   Docker     → Dockerfile, docker-compose.yml
+//   IaC        → Terraform (*.tf), CloudFormation (*.template.* / AWSTemplateFormatVersion),
+//                Bicep (*.bicep), ARM (azuredeploy.json), Pulumi (Pulumi.yaml), CDK (cdk.json),
+//                Ansible (ansible.cfg / playbook.yml), Kustomize (kustomization.yaml),
+//                Serverless (serverless.yml), Helm (Chart.yaml)
+//   Kubernetes → *.yaml in k8s/ or kube/, *.yml containing "apiVersion:"
+//
+// PASS if ≤ 0 unverified mentions OR no architecture document.
+// WARN if 1-2 unverified mentions.
+// FAIL if 3+ unverified mentions.
+// ---------------------------------------------------------------------------
+
+interface TechSignal {
+  name: string;
+  // Returns true if the technology is evidenced in repoPath
+  detect: (repoPath: string) => boolean;
+}
+
+const TECH_SIGNALS: TechSignal[] = [
+  {
+    name: 'typescript',
+    detect: (r) => iterFiles(r, ['*.ts', '*.tsx', 'tsconfig.json']).length > 0,
+  },
+  {
+    name: 'python',
+    detect: (r) => iterFiles(r, ['*.py']).length > 0,
+  },
+  {
+    name: 'django',
+    detect: (r) =>
+      iterFiles(r, ['manage.py', 'settings.py', 'urls.py']).length > 0,
+  },
+  {
+    name: 'react',
+    detect: (r) =>
+      iterFiles(r, ['*.tsx', '*.jsx']).length > 0 ||
+      (() => {
+        const raw = readTextSafe(join(r, 'package.json'));
+        return raw !== null && raw.includes('"react"');
+      })(),
+  },
+  {
+    name: 'node',
+    detect: (r) =>
+      existsSync(join(r, 'package.json')) || iterFiles(r, ['*.js']).length > 0,
+  },
+  {
+    name: 'javascript',
+    detect: (r) => iterFiles(r, ['*.js', '*.jsx']).length > 0,
+  },
+  {
+    name: 'postgresql',
+    detect: (r) =>
+      iterFiles(r, ['*.sql']).length > 0 ||
+      (() => {
+        try {
+          const out = execFileSync(
+            'grep',
+            [
+              '-rl',
+              '--include=*.py',
+              '--include=*.ts',
+              '--include=*.js',
+              'psycopg2',
+              r,
+            ],
+            { encoding: 'utf8' }
+          );
+          return out.trim().length > 0;
+        } catch {
+          return false;
+        }
+      })(),
+  },
+  {
+    name: 'postgres',
+    detect: (r) =>
+      iterFiles(r, ['*.sql']).length > 0 ||
+      (() => {
+        try {
+          const out = execFileSync(
+            'grep',
+            [
+              '-rl',
+              '--include=*.py',
+              '--include=*.ts',
+              '--include=*.js',
+              'psycopg',
+              r,
+            ],
+            { encoding: 'utf8' }
+          );
+          return out.trim().length > 0;
+        } catch {
+          return false;
+        }
+      })(),
+  },
+  {
+    name: 'go',
+    detect: (r) => iterFiles(r, ['*.go', 'go.mod']).length > 0,
+  },
+  {
+    name: 'java',
+    detect: (r) => iterFiles(r, ['*.java']).length > 0,
+  },
+  {
+    name: 'docker',
+    detect: (r) =>
+      iterFiles(r, ['Dockerfile', 'docker-compose.yml', 'docker-compose.yaml'])
+        .length > 0,
+  },
+  {
+    name: 'terraform',
+    detect: (r) => iterFiles(r, ['*.tf']).length > 0,
+  },
+  {
+    name: 'cloudformation',
+    detect: (r) => {
+      if (
+        iterFiles(r, ['*.template.yaml', '*.template.yml', '*.template.json'])
+          .length > 0
+      )
+        return true;
+      try {
+        return (
+          execFileSync(
+            'grep',
+            [
+              '-rl',
+              '--include=*.yaml',
+              '--include=*.yml',
+              '--include=*.json',
+              'AWSTemplateFormatVersion',
+              r,
+            ],
+            { encoding: 'utf8' }
+          ).trim().length > 0
+        );
+      } catch {
+        return false;
+      }
+    },
+  },
+  { name: 'bicep', detect: (r) => iterFiles(r, ['*.bicep']).length > 0 },
+  {
+    name: 'arm',
+    detect: (r) =>
+      iterFiles(r, ['azuredeploy.json', 'azuredeploy.parameters.json']).length >
+      0,
+  },
+  {
+    name: 'pulumi',
+    detect: (r) => iterFiles(r, ['Pulumi.yaml', 'Pulumi.yml']).length > 0,
+  },
+  { name: 'cdk', detect: (r) => iterFiles(r, ['cdk.json']).length > 0 },
+  {
+    name: 'ansible',
+    detect: (r) =>
+      iterFiles(r, ['ansible.cfg', 'playbook.yml', 'playbook.yaml', 'site.yml'])
+        .length > 0,
+  },
+  {
+    name: 'kustomize',
+    detect: (r) =>
+      iterFiles(r, ['kustomization.yaml', 'kustomization.yml']).length > 0,
+  },
+  {
+    name: 'serverless',
+    detect: (r) =>
+      iterFiles(r, ['serverless.yml', 'serverless.yaml']).length > 0,
+  },
+  { name: 'helm', detect: (r) => iterFiles(r, ['Chart.yaml']).length > 0 },
+  {
+    name: 'kubernetes',
+    detect: (r) => {
+      try {
+        const out = execFileSync(
+          'grep',
+          ['-rl', '--include=*.yaml', '--include=*.yml', 'apiVersion:', r],
+          { encoding: 'utf8' }
+        );
+        return out.trim().length > 0;
+      } catch {
+        return false;
+      }
+    },
+  },
+];
+
+// Short tech names that double as ordinary English words — "before we go
+// live", "each node in the cluster", "arm the alarm", "a serverless design".
+// A lowercase prose occurrence of these is NOT a technology mention; they
+// only count with canonical capitalization (Go, Node, ARM, Serverless) or in
+// inline-code (backtick) context.
+const AMBIGUOUS_TECH_NAMES = new Set(['go', 'node', 'arm', 'serverless']);
+
+function mentionsTech(content: string, name: string): boolean {
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!AMBIGUOUS_TECH_NAMES.has(name)) {
+    return new RegExp(`\\b${esc}\\b`, 'i').test(content);
+  }
+  const capitalized = name[0].toUpperCase() + name.slice(1);
+  const allCaps = name.toUpperCase();
+  // Case-sensitive canonical capitalization ("Go", "Node", "ARM", …)
+  if (new RegExp(`\\b(?:${capitalized}|${allCaps})\\b`).test(content)) {
+    return true;
+  }
+  // Backtick/inline-code context (any case): `go build`, `node --version`
+  return new RegExp('`[^`\\n]*\\b' + esc + '\\b[^`\\n]*`', 'i').test(content);
+}
+
+function findArchDoc(repoPath: string): string | null {
+  for (const candidate of [
+    join(repoPath, 'context', 'architecture', 'architecture.md'),
+    join(repoPath, 'context', 'product', 'architecture.md'),
+    join(repoPath, 'ARCHITECTURE.md'),
+  ]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+export function detectArchTechMatch(
+  repoPath: string,
+  _params?: unknown
+): ReturnType<typeof makeResult> {
+  const archDoc = findArchDoc(repoPath);
+  if (!archDoc) {
+    // Absence of the doc is not compliance — there is nothing to match against.
+    return makeResult(
+      'SKIP',
+      null,
+      ['no architecture document found — tech-match check not applicable'],
+      'detected'
+    );
+  }
+
+  // Keep the original casing — ambiguous tech names (Go, Node, …) are only
+  // recognised via their canonical capitalization (see mentionsTech).
+  const content = readTextSafe(archDoc);
+  if (content === null) {
+    return makeResult(
+      'SKIP',
+      null,
+      [
+        'could not read architecture document — tech-match check not applicable',
+      ],
+      'detected'
+    );
+  }
+
+  const unverified: string[] = [];
+  const verified: string[] = [];
+
+  for (const signal of TECH_SIGNALS) {
+    if (!mentionsTech(content, signal.name)) continue;
+    if (signal.detect(repoPath)) {
+      verified.push(signal.name);
+    } else {
+      unverified.push(signal.name);
+    }
+  }
+
+  const evidence = [
+    `architecture document: ${relative(repoPath, archDoc)}`,
+    ...verified.map((t) => `verified in codebase: ${t}`),
+    ...unverified.map((t) => `mentioned but not evidenced in codebase: ${t}`),
+  ];
+
+  if (unverified.length >= 3) {
+    return makeResult('FAIL', unverified.length, [
+      `${unverified.length} technology mention(s) in architecture doc not evidenced in codebase`,
+      ...evidence,
+    ]);
+  }
+
+  if (unverified.length >= 1) {
+    return makeResult('WARN', unverified.length, [
+      `${unverified.length} technology mention(s) in architecture doc not evidenced in codebase`,
+      ...evidence,
+    ]);
+  }
+
+  return makeResult('PASS', 0, [
+    'all technology mentions in architecture doc are evidenced in the codebase',
+    ...evidence,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// detectBranchSpecRatio — category 2803 (SDD-04, method: computed)
+//
+// THE DETERMINISM FIX: computes branch→spec ratio via git log.
+//
+// Algorithm:
+//   1. List all local branches except main/master/develop.
+//   2. Detect the actual trunk (main → master → develop → development).
+//   3. For each branch, run: git log <branch> --not <trunk> --name-only --format=""
+//      and check if any changed path starts with "context/spec/".
+//   4. ratio = branches_touching_spec / total_feature_branches
+//
+// PASS  if ratio >= 0.70
+// WARN  if 0.40 <= ratio < 0.70
+// FAIL  if ratio < 0.40
+// SKIP  if no feature branches found
+// ---------------------------------------------------------------------------
+
+const TRUNK_BRANCHES = new Set(['main', 'master', 'develop', 'development']);
+
+function listLocalBranches(repoPath: string): string[] {
+  try {
+    const out = execFileSync('git', ['branch', '--format=%(refname:short)'], {
+      cwd: repoPath,
+      encoding: 'utf8',
+    });
+    return (
+      out
+        .split('\n')
+        .map((b) => b.trim())
+        // On a detached HEAD `git branch` emits a pseudo-entry like
+        // "(HEAD detached at abc1234)" — not a branch, filter it out.
+        .filter(
+          (b) => b.length > 0 && !b.startsWith('(') && !TRUNK_BRANCHES.has(b)
+        )
+    );
+  } catch {
+    return [];
+  }
+}
+
+// Spec directories recognised across common spec-driven frameworks (not just AWOS).
+// A changed path counts as a spec-touch when it falls under any of these roots.
+const SPEC_DIRS = [
+  'context/spec/', // AWOS
+  'specs/',
+  'spec/',
+  '.kiro/specs/', // Kiro
+  '.agent-os/specs/', // Agent-OS
+  'docs/specs/',
+] as const;
+
+// `spec/` and `specs/` are also where RSpec/Jasmine/Jest keep their TEST
+// suites — those files are tests, not spec-driven-development artifacts.
+// Under these generic roots only documentation-like files earn spec credit;
+// code files (user_spec.rb, foo.spec.ts, spec_helper.rb, …) do not. The
+// framework-specific roots (context/spec/, .kiro/specs/, …) are unambiguous.
+const GENERIC_SPEC_DIRS = new Set<string>(['specs/', 'spec/']);
+const SPEC_DOC_FILE_RX = /\.(?:md|mdx|markdown|rst|txt|adoc)$/i;
+
+/** True if a changed path falls under any recognised spec directory. Robust to a leading "./". */
+function isSpecPath(path: string): boolean {
+  const p = path.replace(/^\.\//, '');
+  return SPEC_DIRS.some((dir) => {
+    // Prefix match ("specs/foo.md") or an interior segment equal to the dir
+    // ("packages/a/specs/foo.md").
+    if (!p.startsWith(dir) && !p.includes('/' + dir)) return false;
+    if (GENERIC_SPEC_DIRS.has(dir) && !SPEC_DOC_FILE_RX.test(p)) return false;
+    return true;
+  });
+}
+
+function branchTouchedSpec(
+  repoPath: string,
+  branch: string,
+  trunk: string
+): boolean {
+  try {
+    // Get all file paths changed in commits on this branch (not on trunk)
+    const out = execFileSync(
+      'git',
+      [
+        'log',
+        branch,
+        '--not',
+        trunk,
+        '--name-only',
+        '--format=',
+        '--diff-filter=ACDMR',
+      ],
+      { cwd: repoPath, encoding: 'utf8' }
+    );
+    return out
+      .split('\n')
+      .map((line) => line.trim())
+      .some((line) => line.length > 0 && isSpecPath(line));
+  } catch {
+    return false;
+  }
+}
+
+// Lookback for merged-event scanning; matches the collectors' default window.
+const MERGED_EVENT_LOOKBACK_DAYS = 90;
+
+// Maintenance work needs no spec — a bug fix, revert, or dependency bump is
+// not expected to flow through a spec workflow. SDD-04 measures whether
+// FEATURE work is spec-driven, so maintenance subjects are excluded from both
+// numerator and denominator. Fix/revert classification reuses the collector's
+// regexes so this partition matches the DORA rework/change-failure proxies;
+// the prefix regex adds the conventional-commit chore family and bot bumps.
+const MAINTENANCE_PREFIX_RX =
+  /^(?:chore|docs|ci|build|test|style|deps|release)\b[(:!]?|\bbump\b|\bdependabot\b|\brenovate\b/i;
+
+/** True when a merged-event subject is feature work (not fix/revert/chore). */
+function isFeatureSubject(subject: string): boolean {
+  return (
+    !FIX_SUBJECT_RX.test(subject) &&
+    !REVERT_SUBJECT_RX.test(subject) &&
+    !MAINTENANCE_PREFIX_RX.test(subject)
+  );
+}
+
+interface MergedEvent {
+  subject: string;
+  touchedSpec: boolean;
+}
+
+/**
+ * Merged feature work landed on the trunk in the lookback window: 2-parent
+ * merge commits AND squash/rebase-merged PRs (forge PR ref on the subject).
+ * Live branches under-count badly on repos where CI deletes branches after
+ * merge — there, the surviving refs are only "currently open" work. Each
+ * event's file list is its first-parent diff (exactly what the PR landed).
+ */
+function listMergedEvents(repoPath: string): MergedEvent[] {
+  let out: string;
+  try {
+    // Walk the SHARED trunk ref, not the local checkout — a diverged local
+    // main's first-parent chain is the developer's own pull merges, which
+    // would both miss every real PR and count the pull merges as feature work.
+    const trunkRef = resolveTrunk(repoPath).ref;
+    // Anchor the window to the trunk's newest commit (no wall-clock dependency).
+    const latest = execFileSync(
+      'git',
+      ['log', '-1', '--format=%cI', ...refArgs(trunkRef)],
+      { cwd: repoPath, encoding: 'utf8' }
+    ).trim();
+    if (!latest) return [];
+    const since = new Date(
+      new Date(latest).getTime() - MERGED_EVENT_LOOKBACK_DAYS * 86_400_000
+    ).toISOString();
+    out = execFileSync(
+      'git',
+      [
+        'log',
+        '--first-parent',
+        `--since=${since}`,
+        '--diff-merges=first-parent',
+        '--name-only',
+        '--format=%x1e%P%x1f%s',
+        ...refArgs(trunkRef),
+      ],
+      { cwd: repoPath, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+    );
+  } catch {
+    return [];
+  }
+  const events: MergedEvent[] = [];
+  for (const record of out.split('\x1e')) {
+    if (!record.trim()) continue;
+    const nl = record.indexOf('\n');
+    const header = nl === -1 ? record : record.slice(0, nl);
+    const files = nl === -1 ? '' : record.slice(nl + 1);
+    const [parents = '', subject = ''] = header.split('\x1f');
+    const isMergeCommit = parents.trim().split(' ').filter(Boolean).length > 1;
+    if (!isMergeCommit && !isSquashMergeSubject(subject)) continue;
+    const touchedSpec = files
+      .split('\n')
+      .some((line) => line.trim().length > 0 && isSpecPath(line.trim()));
+    events.push({ subject: subject.trim(), touchedSpec });
+  }
+  return events;
+}
+
+export function detectBranchSpecRatio(
+  repoPath: string,
+  params?: unknown
+): ReturnType<typeof makeResult> {
+  const p = params as { threshold?: number; warn_at?: number } | undefined;
+  const threshold = p?.threshold ?? 0.7;
+  const warnAt = p?.warn_at ?? 0.4;
+  const thresholdPct = Math.round(threshold * 100);
+
+  // Preferred denominator: FEATURE work actually MERGED in the window (merge
+  // commits + squash-merged PRs, minus fixes/reverts/chores — maintenance
+  // needs no spec). Fallback: live local branches — only for repos with no
+  // PR/merge workflow at all.
+  const allEvents = listMergedEvents(repoPath);
+  const events = allEvents.filter((e) => isFeatureSubject(e.subject));
+  const excluded = allEvents.length - events.length;
+  if (allEvents.length > 0 && events.length === 0) {
+    return makeResult(
+      'SKIP',
+      null,
+      [
+        `all ${allEvents.length} merged PRs in the window are fixes/maintenance — no feature work to measure spec coverage against`,
+      ],
+      'computed'
+    );
+  }
+  if (events.length > 0) {
+    const specEvents = events.filter((e) => e.touchedSpec);
+    const total = events.length;
+    const ratio = Math.round((specEvents.length / total) * 1e10) / 1e10;
+    const evidence = [
+      `${specEvents.length}/${total} merged feature PRs (90d) touched spec files (ratio: ${Math.round(ratio * 100)}%; ${excluded} fix/maintenance PRs excluded — no spec expected)`,
+      ...specEvents.slice(0, 10).map((e) => `spec PR: ${e.subject}`),
+    ];
+    if (ratio >= threshold) {
+      return makeResult(
+        'PASS',
+        ratio,
+        [
+          `${Math.round(ratio * 100)}% of merged feature work used a spec workflow (threshold: ${thresholdPct}%)`,
+          ...evidence,
+        ],
+        'computed'
+      );
+    }
+    if (ratio >= threshold / 2) {
+      return makeResult(
+        'WARN',
+        ratio,
+        [
+          `only ${Math.round(ratio * 100)}% of merged feature work used a spec workflow (threshold: ${thresholdPct}%)`,
+          ...evidence,
+        ],
+        'computed',
+        ratio,
+        1.0
+      );
+    }
+    return makeResult(
+      'FAIL',
+      ratio,
+      [
+        `only ${Math.round(ratio * 100)}% of merged feature work used a spec workflow (threshold: ${thresholdPct}%)`,
+        ...evidence,
+      ],
+      'computed',
+      ratio,
+      1.0
+    );
+  }
+
+  const branches = listLocalBranches(repoPath);
+
+  if (branches.length === 0) {
+    return makeResult(
+      'SKIP',
+      null,
+      [
+        'no merged PRs or feature branches found — branch→spec ratio not computable',
+      ],
+      'computed'
+    );
+  }
+
+  const trunk = detectTrunk(repoPath);
+  const specBranches: string[] = [];
+  const plainBranches: string[] = [];
+
+  for (const branch of branches) {
+    if (branchTouchedSpec(repoPath, branch, trunk)) {
+      specBranches.push(branch);
+    } else {
+      plainBranches.push(branch);
+    }
+  }
+
+  const total = branches.length;
+  // Rounded to 10 decimal places for floating-point stability
+  const ratio = Math.round((specBranches.length / total) * 1e10) / 1e10;
+
+  const evidence = [
+    `${specBranches.length}/${total} feature branches touched spec files (ratio: ${Math.round(ratio * 100)}%)`,
+    ...specBranches.slice(0, 10).map((b) => `spec branch: ${b}`),
+    ...plainBranches.slice(0, 10).map((b) => `plain branch: ${b}`),
+  ];
+
+  if (ratio >= threshold) {
+    return makeResult(
+      'PASS',
+      ratio,
+      [
+        `${Math.round(ratio * 100)}% of feature branches used spec workflow (threshold: ${thresholdPct}%)`,
+        ...evidence,
+      ],
+      'computed'
+    );
+  }
+
+  if (ratio >= warnAt) {
+    return makeResult(
+      'WARN',
+      ratio,
+      [
+        `${Math.round(ratio * 100)}% of feature branches used spec workflow (below ${thresholdPct}% threshold)`,
+        ...evidence,
+      ],
+      'computed'
+    );
+  }
+
+  return makeResult(
+    'FAIL',
+    ratio,
+    [
+      `only ${Math.round(ratio * 100)}% of feature branches used spec workflow (threshold: ${thresholdPct}%)`,
+      ...evidence,
+    ],
+    'computed'
+  );
+}
+
+// ---------------------------------------------------------------------------
+// detectSpecTriadComplete — category 2804 (SDD-05, method: detected)
+//
+// Checks every context/spec/NNN-* directory for the spec triad:
+//   functional-spec.md, technical-considerations.md, tasks.md
+//
+// PASS if all spec dirs have all 3 files (or no spec dirs found).
+// WARN if some dirs have 1-2 of 3 (incomplete but not empty).
+// FAIL if any dir has 0 of the 3 files.
+// ---------------------------------------------------------------------------
+
+const SPEC_TRIAD = [
+  'functional-spec.md',
+  'technical-considerations.md',
+  'tasks.md',
+];
+
+function listSpecDirs(repoPath: string): string[] {
+  const specBase = join(repoPath, 'context', 'spec');
+  if (!existsSync(specBase)) return [];
+  try {
+    return readdirSync(specBase)
+      .filter((name) => /^\d{3}-/.test(name))
+      .sort()
+      .map((name) => join(specBase, name))
+      .filter((p) => {
+        try {
+          return statSync(p).isDirectory();
+        } catch {
+          return false;
+        }
+      });
+  } catch {
+    return [];
+  }
+}
+
+interface SpecDirStatus {
+  dir: string;
+  present: string[];
+  missing: string[];
+}
+
+export function detectSpecTriadComplete(
+  repoPath: string,
+  _params?: unknown
+): ReturnType<typeof makeResult> {
+  const specDirs = listSpecDirs(repoPath);
+
+  if (specDirs.length === 0) {
+    // A repo with zero specs must not score on spec completeness.
+    return makeResult(
+      'SKIP',
+      null,
+      ['no spec directories found — triad check not applicable'],
+      'detected'
+    );
+  }
+
+  const statuses: SpecDirStatus[] = [];
+
+  for (const dir of specDirs) {
+    const present = SPEC_TRIAD.filter((f) => existsSync(join(dir, f)));
+    const missing = SPEC_TRIAD.filter((f) => !existsSync(join(dir, f)));
+    statuses.push({ dir: relative(repoPath, dir), present, missing });
+  }
+
+  const empty = statuses.filter((s) => s.present.length === 0);
+  const incomplete = statuses.filter(
+    (s) => s.present.length > 0 && s.missing.length > 0
+  );
+  const complete = statuses.filter((s) => s.missing.length === 0);
+
+  const evidence = [
+    `${complete.length}/${specDirs.length} spec dirs have all 3 files`,
+    ...incomplete.map(
+      (s) =>
+        `${s.dir} — ${s.present.length}/3 spec-triad artifacts present (missing: ${s.missing.join(', ')})`
+    ),
+    ...empty.map((s) => `${s.dir} — 0/3 spec-triad artifacts present`),
+  ];
+
+  if (empty.length > 0) {
+    return makeResult('FAIL', empty.length, [
+      `${empty.length} spec dir(s) have none of the 3 required files`,
+      ...evidence,
+    ]);
+  }
+
+  if (incomplete.length > 0) {
+    return makeResult('WARN', incomplete.length, [
+      `${incomplete.length} spec dir(s) are incomplete (have some but not all 3 files)`,
+      ...evidence,
+    ]);
+  }
+
+  return makeResult('PASS', specDirs.length, [
+    `all ${specDirs.length} spec dir(s) have the complete triad`,
+    ...evidence,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// detectStaleSpecs — category 2805 (SDD-06, method: detected)
+//
+// A spec is "stale" if its tasks.md exists but contains no task lines
+// (empty stub that was never filled in).
+//
+// A spec is "active" if tasks.md has unchecked tasks ([ ]).
+// A spec is "done" if all tasks in tasks.md are checked ([x]/[X]).
+// Both active and done are PASS states.
+//
+// PASS if no stale specs.
+// WARN if 1 stale spec.
+// FAIL if 2+ stale specs.
+// ---------------------------------------------------------------------------
+
+const TASK_LINE_RX = /^\s*-\s*\[[ xX]\]/m;
+const UNCHECKED_RX = /^\s*-\s*\[ \]/m;
+
+export function detectStaleSpecs(
+  repoPath: string,
+  _params?: unknown
+): ReturnType<typeof makeResult> {
+  const specDirs = listSpecDirs(repoPath);
+
+  if (specDirs.length === 0) {
+    // No specs → nothing can be stale, but nothing can be healthy either.
+    return makeResult(
+      'SKIP',
+      null,
+      ['no spec directories found — stale-spec check not applicable'],
+      'detected'
+    );
+  }
+
+  const stale: string[] = [];
+  const active: string[] = [];
+  const done: string[] = [];
+
+  for (const dir of specDirs) {
+    const tasksPath = join(dir, 'tasks.md');
+    if (!existsSync(tasksPath)) continue;
+
+    const content = readTextSafe(tasksPath);
+    if (content === null) continue;
+
+    const hasTasks = TASK_LINE_RX.test(content);
+    if (!hasTasks) {
+      // tasks.md exists but has no task items → stale
+      stale.push(relative(repoPath, dir));
+    } else if (UNCHECKED_RX.test(content)) {
+      active.push(relative(repoPath, dir));
+    } else {
+      done.push(relative(repoPath, dir));
+    }
+  }
+
+  const evidence = [
+    ...active.map((d) => `active (has open tasks): ${d}`),
+    ...done.map((d) => `done (all tasks complete): ${d}`),
+    ...stale.map((d) => `stale (tasks.md has no task items): ${d}`),
+  ];
+
+  if (stale.length === 0) {
+    return makeResult('PASS', 0, ['no stale specs found', ...evidence]);
+  }
+
+  if (stale.length === 1) {
+    return makeResult('WARN', stale.length, [
+      `1 stale spec detected (tasks.md is an empty stub)`,
+      ...evidence,
+    ]);
+  }
+
+  return makeResult('FAIL', stale.length, [
+    `${stale.length} stale specs detected (tasks.md empty stubs)`,
+    ...evidence,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// detectAgentAnnotations — category 2806 (SDD-07, method: detected)
+//
+// Scans all tasks.md files under context/spec/. Counts task checkbox lines
+// (- [ ] / - [x]) and checks each for an **[Agent: name]** annotation.
+//
+// PASS  if >= 70% of task lines are annotated.
+// WARN  if 40-69% annotated.
+// FAIL  if < 40% annotated.
+// SKIP  if no task lines found.
+// ---------------------------------------------------------------------------
+
+const TASK_CHECKBOX_RX = /^\s*-\s*\[[ xX]\]/;
+const AGENT_ANNOTATION_RX = /\*\*\[Agent:\s*[^\]]+\]\*\*/;
+
+export function detectAgentAnnotations(
+  repoPath: string,
+  params?: unknown
+): ReturnType<typeof makeResult> {
+  const p = params as { pass_at?: number; warn_at?: number } | undefined;
+  const passAt = p?.pass_at ?? 0.7;
+  const warnAt = p?.warn_at ?? 0.4;
+  const passAtPct = Math.round(passAt * 100);
+  const specDirs = listSpecDirs(repoPath);
+
+  let totalTasks = 0;
+  let annotatedTasks = 0;
+
+  for (const dir of specDirs) {
+    const tasksPath = join(dir, 'tasks.md');
+    if (!existsSync(tasksPath)) continue;
+
+    const content = readTextSafe(tasksPath);
+    if (content === null) continue;
+
+    for (const line of content.split('\n')) {
+      if (TASK_CHECKBOX_RX.test(line)) {
+        totalTasks++;
+        if (AGENT_ANNOTATION_RX.test(line)) {
+          annotatedTasks++;
+        }
+      }
+    }
+  }
+
+  if (totalTasks === 0) {
+    return makeResult('SKIP', null, [
+      'no task checkbox lines found in any tasks.md — agent-annotation check skipped',
+    ]);
+  }
+
+  const ratio = Math.round((annotatedTasks / totalTasks) * 1e10) / 1e10;
+  const evidence = [
+    `${annotatedTasks}/${totalTasks} task lines have **[Agent: ...]** annotations (${Math.round(ratio * 100)}%)`,
+  ];
+
+  if (ratio >= passAt) {
+    return makeResult('PASS', ratio, [
+      `${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`,
+      ...evidence,
+    ]);
+  }
+
+  if (ratio >= warnAt) {
+    return makeResult('WARN', ratio, [
+      `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (below ${passAtPct}%)`,
+      ...evidence,
+    ]);
+  }
+
+  return makeResult('FAIL', ratio, [
+    `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`,
+    ...evidence,
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// DETECTORS — maps each spec-driven-development code to its function.
+// All 7 SDD checks are detected/computed — none are judgment.
+// ---------------------------------------------------------------------------
+
+export const DETECTORS: Record<
+  number,
+  (repoPath: string, params?: unknown) => ReturnType<typeof makeResult>
+> = {
+  2800: detectAwosInstalled, // SDD-01 AWOS installed
+  2801: detectProductContextDocs, // SDD-02 foundational product docs
+  2802: detectArchTechMatch, // SDD-03 tech choices match codebase
+  2803: detectBranchSpecRatio, // SDD-04 branch→spec ratio (computed)
+  2804: detectSpecTriadComplete, // SDD-05 spec triad completeness
+  2805: detectStaleSpecs, // SDD-06 no stale specs
+  2806: detectAgentAnnotations, // SDD-07 agent annotations in tasks.md
+};

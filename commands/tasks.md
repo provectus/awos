@@ -29,7 +29,9 @@ A **slice** is the top-level grouping checkbox — a vertical, end-to-end runnab
 # INTERACTION
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
-- **A skipped or unanswered question — as happens in an unattended `claude -p` run — is never a stop signal. Fall back to the documented default for that question and continue through the remaining steps, including writing `tasks.md`.**
+- A skipped or unanswered question is never a stop signal. Fall back to the documented default for that question and continue through the remaining steps, including writing `tasks.md`.
+
+<!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
 ---
 

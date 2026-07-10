@@ -23,7 +23,7 @@ npx prettier --write .     # auto-format before committing
 bunx prettier --write .
 
 # Run the test suite (no npm deps; node --test built-in):
-npm test                   # all three layers
+npm test                   # all four layers (markdown lint, installer, fixtures, engine)
 npm run test:lint          # Layer 1 — static prompt linter
 npm run test:installer     # Layer 2 — installer unit tests
 npm run test:fixtures      # Layer 3 — fixture-project end-to-end
@@ -52,7 +52,7 @@ The repo has a three-layer test suite under `tests/`, all built on Node's `node:
 2. **Installer unit tests** (`tests/installer/*.test.js`) — exercises the installer services against temp directories.
 3. **Fixture projects** (`tests/fixtures.test.js` + `tests/fixtures/<name>/`) — real installer runs against representative pre-install trees, with manifest-based assertions.
 
-All three layers run in CI (`npm test`).
+All three layers run in CI via `npm test`, which also runs the engine test layer (see "Running the engine tests" below).
 
 ### Coverage
 
@@ -118,9 +118,42 @@ Always validate new migrations with `--dry-run` and ensure they are idempotent (
 
 `plugins/awos/` is a Claude Code plugin that adds the `/awos:ai-readiness-audit` command. The marketplace is declared in `.claude-plugin/marketplace.json` at the repo root, and the installer registers it in the user's settings during setup (`src/services/marketplace-configurator.js`).
 
-The plugin uses an **auto-discovery** architecture: each audit dimension is a standalone `.md` file in `plugins/awos/skills/ai-readiness-audit/dimensions/` with YAML frontmatter declaring `name`, `severity`, and `depends-on`. The orchestrator builds a dependency DAG, groups dimensions into phases, and runs each dimension in its own context window via the `dimension-auditor` agent (`plugins/awos/agents/dimension-auditor.md`). Adding a new dimension is a single-file change — no other registration needed.
+Each audit dimension is a standalone `.md` file in `plugins/awos/skills/ai-readiness-audit/dimensions/` defining its checks and their `standards.toml` category codes. Scoring runs deterministically in the engine, not via a per-dimension subagent fan-out: the orchestrator invokes one command — `node dist/cli.js audit-core <repo> <out>` — which evaluates project-topology first (computing the flags that gate other categories' `applies_when`), then every `detected`/`computed` category across all dimensions in a single pass, writing each `<dimension>.json` plus the aggregated `audit.json`. Only the handful of `judgment` categories and the connector-backed metrics are left for the orchestrator's LLM patch step. Adding a dimension touches four places: the dimension `.md` file, its category records in `standards.toml` (each with a required `check_id`, plus `meta.dimension_order`), a `detectors/<slug>.ts` module, and one import + spread in `detectors/index.ts` (metrics likewise register in `metrics/index.ts`).
 
 When bumping plugin behavior, update version numbers in **both** `.claude-plugin/marketplace.json` and `plugins/awos/.claude-plugin/plugin.json`.
+
+### Measurement engine (TypeScript)
+
+Scoring is additive and weighted, not A–F/0–100. Each capability **category** lives in `references/standards.toml` (numeric code, weight, definition, applicability, source bands); a dimension's score is the sum of weights for present-and-applicable categories, the audit total is the sum across dimensions, and nothing is capped. A secondary **coverage ratio** (awarded ÷ currently-defined applicable weight) is shown for intuition, and each metric carries a per-run **reliability** tag (`minimal`/`maximal`/`not-reliable` + confidence) computed from which sources were available.
+
+The deterministic compute is a **TypeScript engine** under `plugins/awos/skills/ai-readiness-audit/`. Layers:
+
+- `collectors/*.ts` — one per source (`git`, `ci`, `tracker`, `docs`); each queries its source once and emits a shared JSON artifact. Git is always available; absent sources SKIP with a reason.
+- `detectors/*.ts` and `metrics/*.ts` — compute purely from collector artifacts and map to `standards.toml` categories. Complexity/scale metrics parse source with bundled tree-sitter `.wasm` grammars.
+- `cli.ts` — the single dispatcher (`progress`/`render`/`rollup`/`audit-core`/`patch-judgment`/`report-context`/`patch-report`/`aggregate`/`enrich`). `render --format both --out-dir <dir>` writes `report.md` + `report.html` in one invocation.
+- `audit_core.ts` — the one-pass deterministic audit: runs every `detected`/`computed` category across all dimensions, emits `judgment` checks as `PENDING_JUDGMENT` and connector metrics as `SKIP`, and writes the per-dimension JSON + `audit.json`. Connector topology flags (`has_tracker`/`has_docs_connector`/`has_incident_source`) are derived from the collected artifacts' availability. `enrich <repo> <outDir>` re-runs `auditCore` against the already-written `collected/` dir (via a `collectedDirOverride`, so it never re-collects/overwrites connector artifacts) — the orchestrator calls it once after fetching connectors to re-score every connector metric in a single pass instead of one `metric <id>` spawn per source; repo-derived checks (detectors, AST metrics) are reused from the per-dimension artifacts on disk rather than recomputed, so enrich costs a fraction of the initial pass. The post-audit patch verbs (`aggregate`, `patch-judgment`, `patch-report`, `report-context`) live in `audit_patch.ts`. `patch-judgment <dir> <verdicts.json>` applies the orchestrator's judgment verdicts to the per-dimension files and re-aggregates `audit.json` itself; `report-context <dir>` dumps the flattened authoring context (check values/hints, git window stats, tracker fetch meta) and `patch-report <dir> <blocks.json>` merges the orchestrator-authored headline/insights/recommendations into `audit.json` and emits `recommendations.md` from the same array, so the orchestrator never reads or edits a scoring artifact directly (the `audit-core`/`enrich` summary also lists `pending_judgment_checks`); the standalone `aggregate <dir>` verb (re-sum `audit.json` from the per-dimension files, preserving report blocks) is a repair tool, not part of the normal flow.
+- `topology.ts` — deterministic project-topology flags (file/grep heuristics) that gate `applies_when`; connector-dependent flags default absent until a connector is fetched.
+- `render.ts` — deterministic JSON → Markdown/HTML renderer (single-repo + hash-routed drill-down report with org and per-repo sections); `report.md`/`report.html` are rendered from the JSON source of truth, never hand-written.
+- `progress.ts` — pure progress/ETA helper (wall-clock, user-wait excluded).
+
+The engine is bundled by `tools/ai-readiness-audit/build-engine.mjs` into `dist/cli.js` (esbuild, all imports inlined) plus `dist/grammars/*.wasm`. **`dist/` is committed and shipped** — users run the prebuilt `dist/cli.js`; they do not build. So after editing any engine `.ts`, run `npm run build:audit-engine` and commit the regenerated `dist/`. CI rebuilds and runs `git diff --exit-code` on `dist/` to flag a stale committed bundle — the job is currently `continue-on-error: true` (non-blocking until it has proven stable), so a stale `dist/` shows as a failed check without blocking the merge. The bundle is minified; `dist/`'s bulk is the ~26 MB of tree-sitter grammar `.wasm` files, which are required for multi-language complexity parsing and are intentionally shipped, not stripped.
+
+At audit runtime `SKILL.md` orchestrates: Step 0 discovers repos (single-repo or org mode) and confirms scope with one `AskUserQuestion` whose **headless default** proceeds on the auto-discovered set (no prompt needed); Step 4 runs the single `node "$ENGINE" audit-core …` pass (no per-dimension subagents); Step 5 fills only the LLM-only slice — it fetches the reachable connector sources concurrently, re-scores them in one `enrich` pass, then patches the 5 `judgment` categories, re-aggregates, authors the report blocks into `audit.json`, and renders both reports in one `render --format both` call. Each run writes to a fresh timestamped `context/audits/YYYY-MM-DD_HH-MM-SS/` directory — audits are independent snapshots; there is no previous-audit or delta logic. In **org mode** the per-repo audits are dispatched as concurrent `awos:repo-auditor` subagents (one per repo, `plugins/awos/agents/repo-auditor.md`), each running the full single-repo flow into its own `per-repo/<repo>/` subdir, before the org `rollup`. The engine runs under any `node` on PATH, so it requires a Node runtime present — `SKILL.md` preflights `command -v node`. **Engine-skip circuit-breaker:** under headless `claude -p`, the orchestrator model has repeatedly tried to skip `audit-core` and hand-compute the audit (the reversion that retired the old `dimension-auditor` fan-out). Three layers prevent it: `SKILL.md` Step 4 is unconditional — the `audit-core` call is the first scoring action, and there is deliberately no load-time injection or other "maybe it already ran" mechanism to cite; the engine enforces provenance — `audit-core` stamps `audit.json` (and each dimension JSON) with `engine.generated_by`, and `patch-judgment`/`render` refuse an unstamped single-repo audit while `rollup` skips unstamped per-repo audits, so a hand-assembled audit cannot become a report; and the QA harness (`tools/ai-readiness-audit/qa/`) guards compliance, retries with a corrective `--append-system-prompt`, and seeds `audit-core` itself to salvage a non-compliant run.
+
+Run headless against a target repo: `claude -p "/awos:ai-readiness-audit" --output-format stream-json --verbose`. Progress is coarse — the deterministic scoring is one `audit-core` pass — and is emitted via `node "$ENGINE" progress <elapsed> <done> <total>` (a `pct`/`eta_seconds` line, also a stream-json line in headless mode); the always-available fallback is counting completed `.json` artifacts in `context/audits/YYYY-MM-DD_HH-MM-SS/` against the total.
+
+### Running the engine tests
+
+The engine has its own test layer (`plugins/awos/skills/ai-readiness-audit/**/*.test.ts`), run with Node's `node:test` + `tsx`. The files split by intent: the skill's `tests/` directory holds the structural suites (one per layer/verb), while `*.test.ts` files co-located with the modules (skill root, `detectors/`, `metrics/`) are issue-fix regression tests pinned to specific bugs. These need dev dependencies, so `npm ci` first (the markdown/installer layers have no deps, the engine layer does):
+
+```sh
+npm ci                 # installs tsx, esbuild, typescript, etc.
+npm run build:audit-engine   # regenerate dist/ (required if any engine .ts changed)
+npm run test:audit-engine    # node --import tsx --test over the engine test files
+npm test               # full suite: markdown/installer layers + test:audit-engine
+```
+
+These commands assume `node`/`npm` resolve to a real Node toolchain (as on CI and a fresh clone), since the engine layer relies on `node:test`.
 
 ## Conventions
 

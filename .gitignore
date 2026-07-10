@@ -2,7 +2,14 @@ node_modules
 .idea
 .DS_Store
 docs/superpowers/
-tmp/
 
-# pr-review skill drafts (local, not committed)
+# local scratch / audit-harness output (never commit)
+tmp/
+scratchpad-handoff-*.md
+
+# Python bytecode (audit test harness)
+__pycache__/
+*.pyc
+
+# Local review drafts/plans (pr-review, pr-comments-address)
 review/

@@ -12,8 +12,8 @@ Audits the project's resilience to supply chain attacks — compromised or malic
 
 This dimension focuses exclusively on dependency supply chain risks. Related but distinct checks live elsewhere:
 
-- **SBP-07** covers lockfile _presence_ and update automation _existence_ (Renovate/Dependabot configured)
-- **SEC-01 through SEC-05** cover secrets exposure (`.env`, API keys, gitignore)
+- **SBP-05** covers lockfile _presence_ and update automation _existence_ (Renovate/Dependabot configured)
+- **AS-12 through AS-14** cover secrets exposure (`.env`, API keys, gitignore)
 
 This dimension goes deeper: lockfiles committed to git with integrity hashes, version pinning discipline, recently published package detection (quarantine), dependency review gates, vulnerability scanning in CI, dependency override auditing, and attack surface from dependency bloat.
 
@@ -45,6 +45,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** No lockfiles found for a detected package ecosystem, OR lockfiles exist but none are tracked in git
 - **Skip-When:** Topology shows no package ecosystem detected (e.g., pure infrastructure-as-code project with no application dependencies)
 - **Severity:** critical
+- **Category:** 2900
 
 ### SCS-02: Lockfiles contain integrity hashes
 
@@ -73,6 +74,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** Any registry-sourced dependency entry lacks an integrity hash, OR the lockfile format does not support hashes (e.g., npm `lockfileVersion: 1`), OR lockfile entries have empty or missing hash fields
 - **Skip-When:** No lockfiles detected (SCS-01 is FAIL or SKIP), or the only detected ecosystem does not support integrity hashes in lockfiles
 - **Severity:** high
+- **Category:** 2901
 
 ### SCS-03: No permissive version ranges in dependency manifests
 
@@ -102,6 +104,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** Any dependency uses `"*"`, `">="` without upper bound, bare name without version, or other unbounded range. Also FAIL if `^`/`~` is used without a committed lockfile (SCS-01 is not PASS).
 - **Skip-When:** Topology shows no package manifests detected
 - **Severity:** high
+- **Category:** 2902
 
 ### SCS-04: No recently published dependency versions (quarantine check)
 
@@ -118,6 +121,7 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** Any sampled dependency version was published within the last 7 days, OR unable to verify publish dates for the majority of sampled dependencies
 - **Skip-When:** No package ecosystem detected, or lockfiles are absent (SCS-01 FAIL — cannot determine exact resolved versions without lockfiles)
 - **Severity:** critical
+- **Category:** 2903
 
 ### SCS-05: Dependency review process enforces approval
 
@@ -133,8 +137,9 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Pass:** Dependency update tool configured with automerge disabled (or restricted to safe types only), AND lockfiles/manifests have CODEOWNERS entries
 - **Warn:** Dependency update tool configured with automerge disabled but no CODEOWNERS on lockfiles/manifests (or vice versa)
 - **Fail:** Automerge enabled globally for dependency updates, OR auto-approve workflow detected for Dependabot PRs
-- **Skip-When:** No dependency update automation detected (no Renovate or Dependabot config found). The absence of a dependency update strategy is already covered by SBP-07 — this check only evaluates the safety of automation that exists.
+- **Skip-When:** No dependency update automation detected (no Renovate or Dependabot config found). The absence of a dependency update strategy is already covered by SBP-05 — this check only evaluates the safety of automation that exists.
 - **Severity:** high
+- **Category:** 2904
 
 ### SCS-06: Vulnerability scanning in CI
 
@@ -159,12 +164,13 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Pass:** Vulnerability scanning runs in CI on PRs and is blocking (fails the pipeline on high/critical vulnerabilities)
 - **Warn:** Vulnerability scanning exists in CI but is advisory only (does not fail the pipeline), OR scanning runs only in a scheduled workflow (not on every PR)
 - **Fail:** No vulnerability scanning detected in any CI configuration
-- **Skip-When:** No CI configuration files found (CI absence is already flagged by SBP-05)
+- **Skip-When:** No CI configuration files found (CI absence is already flagged by SBP-04)
 - **Severity:** critical
+- **Category:** 2905
 
 ### SCS-07: Dependency overrides are reviewed and justified
 
-- **What:** Dependency version overrides (mechanisms that force specific versions of transitive dependencies) are tracked, minimal, and do not pin to recently published or suspicious versions
+- **What:** Dependency version overrides (mechanisms that force specific versions of transitive dependencies) are tracked, minimal, and justified — present overrides are surfaced for human review (freshness/CVE status is not verified offline)
 - **How:**
   1. Check for override mechanisms in each ecosystem:
      - **npm:** `"overrides"` field in `package.json`
@@ -178,16 +184,16 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
   2. If overrides exist:
      - Count the total number of overridden packages
      - Check whether each override pins to a specific version or uses a range
-     - Cross-reference overridden versions against the quarantine check logic (SCS-04): are any overridden versions published less than 7 days ago?
      - Check whether overrides have documented justification for why they exist. Where justification lives depends on the manifest format:
        - **Comment-capable formats** (TOML, Ruby, YAML, Gradle Kotlin/Groovy): inline comments alongside the override (e.g., `# CVE-2024-1234 fix`)
        - **JSON formats** (`package.json`): JSON does not support comments per RFC 8259 — justification should live in adjacent documentation (ADR, security notes, PR description, or a dedicated `overrides.md` / `DEPENDENCY_DECISIONS.md` file)
   3. If no overrides exist, this is a neutral signal — auto-PASS (overrides are not required, just need to be safe when present)
-- **Pass:** No dependency overrides exist, OR overrides exist and all pin to versions older than 7 days with documented justification (inline comments for comment-capable formats, or adjacent documentation for JSON manifests)
+- **Pass:** No dependency overrides exist, OR overrides exist and all have documented justification (inline comments for comment-capable formats, or adjacent documentation for JSON manifests)
 - **Warn:** Overrides exist but lack documented justification, or the number of overrides is high (10+ packages), suggesting possible maintenance debt
-- **Fail:** Overrides pin to versions published within the last 7 days, OR overrides use permissive ranges (`*`, `>=`), OR overrides reference git URLs or arbitrary tarballs without explanation
+- **Fail:** Overrides use permissive ranges (`*`, `>=`), OR overrides reference git URLs or arbitrary tarballs without explanation
 - **Skip-When:** Topology shows no package manifests detected
 - **Severity:** high
+- **Category:** 2906
 
 ### SCS-08: Dependency count and attack surface
 
@@ -203,3 +209,4 @@ Uses the topology artifact to determine which package ecosystems (npm, pip, Go m
 - **Fail:** Dependency ratio exceeds 2x the healthy range, or total transitive dependency count exceeds ecosystem thresholds (1000 JS / 200 Python / 100 Go / 500 Rust)
 - **Skip-When:** Topology shows no package ecosystem detected, or lockfile is absent (cannot count transitive dependencies without a resolved lockfile)
 - **Severity:** medium
+- **Category:** 2907

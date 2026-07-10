@@ -411,6 +411,45 @@ test('every core command declares an INTERACTION section', () => {
   );
 });
 
+test('deliverable commands write their file on an unanswered question', () => {
+  // These document-generating commands ask the user questions and then
+  // write a file. In an unattended `claude -p` run those questions are
+  // silently dismissed; without an explicit fallback the command narrates a
+  // draft and ends the turn, so the deliverable never lands on disk. Each
+  // listed command must carry the INTERACTION rule that treats a skipped or
+  // unanswered question as a signal to fall back to a default and still write
+  // the file — never as a stop. See commands/tasks.md for the canonical rule.
+  //
+  // Every command that generates a document under context/ and asks the
+  // user questions on the way carries this rule. spec.md's default is its
+  // own `[NEEDS CLARIFICATION: …]` marker rather than a documented value,
+  // but the contract is the same: an unanswered question is never a stop —
+  // record the gap and still write the deliverable.
+  const deliverableCommands = [
+    'product.md',
+    'roadmap.md',
+    'architecture.md',
+    'spec.md',
+    'tasks.md',
+    'tech.md',
+  ];
+  const missing = [];
+  for (const command of deliverableCommands) {
+    const body = readUtf8(path.join(commandsDir, command));
+    if (
+      !body.includes('never a stop signal') ||
+      !body.includes('including writing')
+    ) {
+      missing.push(command);
+    }
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    `deliverable commands missing the unattended-write fallback rule ("never a stop signal" + "including writing"): ${missing.join(', ')}`
+  );
+});
+
 test('wrappers do not duplicate the AskUserQuestion rule', () => {
   // Counterpart to the test above: the rule moved from wrappers to
   // core. If a wrapper still mentions AskUserQuestion the contract has
@@ -519,6 +558,67 @@ test('commands/tasks.md emits a Feature Testing & Regression slice', () => {
   assert.ok(
     body.includes('Feature Testing & Regression'),
     'commands/tasks.md must reference the literal "Feature Testing & Regression" slice name so SDD-07 and awos-qa can detect it'
+  );
+});
+
+test('ai-sdlc-adoption dimension exists with correct frontmatter and required body references', () => {
+  const dimFile = path.join(dimensionsDir, 'ai-sdlc-adoption.md');
+  assert.ok(
+    fs.existsSync(dimFile),
+    'dimensions/ai-sdlc-adoption.md must exist'
+  );
+  const body = readUtf8(dimFile);
+  const { data, hasFrontmatter } = parse(body);
+
+  assert.ok(hasFrontmatter, 'ai-sdlc-adoption.md must have frontmatter');
+  assert.equal(
+    data.name,
+    'ai-sdlc-adoption',
+    'frontmatter name must be "ai-sdlc-adoption"'
+  );
+  assert.ok(
+    Array.isArray(data['depends-on']),
+    'frontmatter depends-on must be an array'
+  );
+  for (const dep of [
+    'project-topology',
+    'ai-development-tooling',
+    'spec-driven-development',
+  ]) {
+    assert.ok(
+      data['depends-on'].includes(dep),
+      `frontmatter depends-on must include "${dep}"`
+    );
+  }
+
+  // Body must instruct the orchestrator to collect via the bundled dispatcher.
+  assert.ok(
+    body.includes('node dist/cli.js collect') ||
+      body.includes('cli.js" collect') ||
+      body.includes('cli path>" collect'),
+    'body must reference the collect engine command (per-source collection command)'
+  );
+  // Body must instruct the orchestrator to run metrics via the bundled dispatcher.
+  assert.ok(
+    body.includes('node dist/cli.js metric') ||
+      body.includes('cli.js" metric') ||
+      body.includes('cli path>" metric'),
+    'body must reference the metric engine command (metric invocation command)'
+  );
+  // Body must describe the shared collected/ directory (query-once pattern).
+  assert.ok(
+    body.includes('collected/'),
+    'body must reference "collected/" (the shared query-once artifact directory)'
+  );
+  // Body must reference the standards data file as the source of category metadata.
+  assert.ok(
+    body.includes('standards.toml'),
+    'body must reference standards.toml as the category metadata source'
+  );
+  // Body must describe emission of the per-dimension .json artifact.
+  assert.ok(
+    body.includes('.json'),
+    'body must describe emission of a .json artifact (the per-dimension source-of-truth)'
   );
 });
 
@@ -1909,6 +2009,537 @@ test('product.md creates brownfield.md even when all findings are rejected', () 
   );
 });
 
+const skillRoot = path.join(
+  repoRoot,
+  'plugins',
+  'awos',
+  'skills',
+  'ai-readiness-audit'
+);
+const referencesDir = path.join(skillRoot, 'references');
+
+test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
+  const p = path.join(referencesDir, 'ai-sdlc-metrics-catalog.md');
+  assert.ok(fs.existsSync(p), 'expected references/ai-sdlc-metrics-catalog.md');
+  const src = readUtf8(p);
+  for (const tier of ['Tier G', 'Tier C', 'Tier I', 'Tier D']) {
+    assert.match(src, new RegExp(tier), `catalog must define ${tier}`);
+  }
+  for (const id of [
+    'tooling_depth',
+    'change_failure_rate',
+    'ai_attribution',
+    'work_mix_allocation',
+    'mttr',
+    'external_spec_coverage',
+  ]) {
+    assert.match(src, new RegExp(id), `catalog must define ${id}`);
+  }
+  // AI attribution is framed as a lower bound, not the true adoption level.
+  assert.match(src, /lower bound/i);
+  // No-PII, no-money, and the MTTR-skip rule must be stated.
+  assert.match(
+    src,
+    /no data is attributed to named individuals/i,
+    'catalog must state the actual privacy guarantee (repository granularity, no per-person attribution / no-PII)'
+  );
+  assert.match(src, /never.{0,20}(money|currenc)/i);
+  assert.match(src, /MTTR/);
+  assert.match(src, /SKIP/);
+  // Citations present.
+  assert.match(src, /DORA/);
+  assert.match(src, /DX Core 4/);
+  assert.match(src, /Provectus/);
+  // New design: catalog is an index that references the engine + standards.
+  assert.match(src, /standards\.toml/, 'catalog must reference standards.toml');
+  assert.match(
+    src,
+    /collectors?\//,
+    'catalog must reference the collectors/ layer'
+  );
+  assert.match(src, /metrics?\//, 'catalog must reference the metrics/ layer');
+  // Current-state headline + explicit history (not before/after as the frame).
+  assert.match(
+    src,
+    /current[- ]state/i,
+    'catalog headline must be current-state'
+  );
+  assert.match(
+    src,
+    /history|lookback|monthly/i,
+    'catalog must describe explicit history'
+  );
+  // Reliability is per-metric and computed.
+  assert.match(
+    src,
+    /reliabilit/i,
+    'catalog must describe per-metric reliability'
+  );
+  // Each metric row must name its real metrics/<id>.ts file.
+  for (const id of [
+    'tooling_depth',
+    'active_contributors',
+    'merge_frequency',
+    'lead_time_for_change',
+    'pr_cycle_time',
+    'code_churn',
+    'change_failure_rate',
+    'review_rework',
+    'ai_attribution',
+    'ci_pass_rate',
+    'pipeline_duration',
+    'external_spec_coverage',
+    'work_mix_allocation',
+    'issue_throughput',
+    'mttr',
+  ]) {
+    assert.match(
+      src,
+      new RegExp(`metrics/${id}\\.ts`),
+      `catalog must name metrics/${id}.ts`
+    );
+  }
+  // Each collector must be referenced by its real TS filename.
+  for (const col of [
+    'collectors/git.ts',
+    'collectors/ci.ts',
+    'collectors/tracker.ts',
+    'collectors/docs.ts',
+  ]) {
+    assert.match(
+      src,
+      new RegExp(col.replace('/', '\\/')),
+      `catalog must name ${col}`
+    );
+  }
+  // No stale Python filenames.
+  assert.doesNotMatch(
+    src,
+    /collectors\/[\w.]+\.py\b/,
+    'catalog must not name any .py collector'
+  );
+  assert.doesNotMatch(
+    src,
+    /metrics\/[\w.]+\.py\b/,
+    'catalog must not name any .py metric'
+  );
+  assert.doesNotMatch(
+    src,
+    /\.py\b/,
+    'catalog must not contain any .py references'
+  );
+});
+
+test('data-sources reference covers boundary rule, detection, and history params', () => {
+  const p = path.join(referencesDir, 'data-sources.md');
+  assert.ok(fs.existsSync(p), 'expected references/data-sources.md');
+  const src = readUtf8(p);
+  // The audit boundary is always a folder or a GitHub org — never a manifest file.
+  assert.doesNotMatch(
+    src,
+    /sources\.toml/i,
+    'data-sources must not reference a sources.toml scope manifest — the boundary is the folder or GitHub org'
+  );
+  assert.match(
+    src,
+    /boundary/i,
+    'data-sources must describe the audit boundary rule'
+  );
+  assert.match(
+    src,
+    /gh repo list/,
+    'data-sources must enumerate a GitHub org via `gh repo list <org>`'
+  );
+  assert.match(
+    src,
+    /org mode/i,
+    'data-sources must describe org mode (a non-git folder of git subdirs, or a GitHub org)'
+  );
+  assert.match(src, /monorepo/i); // monorepo = single-repo mode over the whole folder
+  assert.match(src, /current repo/i); // no-arg default
+  assert.match(src, /AskUserQuestion/); // confirm scope once, at start
+  assert.match(src, /discovery/i); // discovery-first flow
+  assert.match(
+    src,
+    /standards\.toml/,
+    'data-sources must point at standards.toml for period/history params'
+  );
+  assert.match(
+    src,
+    /monthly|30[- ]day|bucket/i,
+    'data-sources must describe the monthly bucket cadence'
+  );
+  assert.match(
+    src,
+    /2[- ]year|730|lookback/i,
+    'data-sources must describe the 2-year lookback cap'
+  );
+  assert.match(
+    src,
+    /minimal.{0,30}history|min(imum)?[- ]source[- ]history/i,
+    'data-sources must state the minimal-source-history bound'
+  );
+  assert.match(
+    src,
+    /SKIP/,
+    'data-sources must state the SKIP-when-no-source rule'
+  );
+  // Must name the real TS collector files, not Python ones.
+  for (const col of [
+    'collectors/git.ts',
+    'collectors/ci.ts',
+    'collectors/tracker.ts',
+    'collectors/docs.ts',
+  ]) {
+    assert.match(
+      src,
+      new RegExp(col.replace('/', '\\/')),
+      `data-sources must name ${col}`
+    );
+  }
+  // Must reference the bundled CLI entry point.
+  assert.match(src, /dist\/cli\.js/, 'data-sources must reference dist/cli.js');
+  // Must reference the collected/ artifact directory.
+  assert.match(
+    src,
+    /collected\//,
+    'data-sources must reference the collected/ artifact dir'
+  );
+  // No stale Python filenames.
+  assert.doesNotMatch(
+    src,
+    /collectors\/[\w.]+\.py\b/,
+    'data-sources must not name any .py collector'
+  );
+  assert.doesNotMatch(
+    src,
+    /\.py\b/,
+    'data-sources must not contain any .py references'
+  );
+});
+
+test('standards.toml exists and matches the category/band schema', () => {
+  const p = path.join(referencesDir, 'standards.toml');
+  assert.ok(fs.existsSync(p), 'expected references/standards.toml');
+  const src = readUtf8(p);
+  // [meta] cadence + lookback are data, with the exact locked values.
+  // Metrics v3: a single 90-day window (no 30-day bucketing); the active-
+  // contributor and rework-horizon thresholds are locked meta constants.
+  assert.match(src, /\[meta\]/, 'standards.toml must have a [meta] table');
+  assert.doesNotMatch(
+    src,
+    /monthly_bucket_days/,
+    'meta.monthly_bucket_days must be removed (single 90-day window, no bucketing)'
+  );
+  assert.match(
+    src,
+    /max_lookback_days\s*=\s*90/,
+    'meta.max_lookback_days must be 90 (single recent window)'
+  );
+  assert.match(
+    src,
+    /active_contributor_threshold\s*=\s*0\.05/,
+    'meta.active_contributor_threshold must be 0.05 (active-contributor exclusion threshold)'
+  );
+  assert.match(
+    src,
+    /rework_horizon_days\s*=\s*21/,
+    'meta.rework_horizon_days must be 21 (code-turnover rework window)'
+  );
+  assert.match(
+    src,
+    /standards_version\s*=\s*"/,
+    'meta.standards_version must be set'
+  );
+  // Required keys must appear inside a [category.*] table block, not merely
+  // somewhere in the file — slice each block and assert against it so a key
+  // declared only in (say) a [source.*] table can't satisfy the check.
+  // [category.<slug>] only — [category.<slug>.scoring] sub-tables have their
+  // own schema, asserted separately below.
+  const categoryBlocks = [
+    ...src.matchAll(/\[category\.[^.\]]+\]([\s\S]*?)(?=\n\[|$)/g),
+  ].map((m) => m[1]);
+  assert.ok(
+    categoryBlocks.length > 0,
+    'standards.toml must define [category.*] tables'
+  );
+  for (const key of [
+    'code',
+    'metric',
+    'dimension',
+    'weight',
+    'definition',
+    'applies_when',
+    'sources',
+    'reliability_default',
+    'source',
+  ]) {
+    assert.ok(
+      categoryBlocks.some((b) => new RegExp(`^\\s*${key}\\s*=`, 'm').test(b)),
+      `[category.*] tables must declare ${key}`
+    );
+  }
+  // check_id is required on EVERY category — standards.toml is the single
+  // source of truth for check ids (the engine no longer parses dimension .md
+  // headings at runtime; a heading rename must not change artifact ids).
+  // Anchored to line start so the commented schema sketch in the file header
+  // (`# [category.<slug>]`) is not mistaken for a real block.
+  for (const m of src.matchAll(
+    /\n\[category\.[^.\]]+\]([\s\S]*?)(?=\n\[|$)/g
+  )) {
+    const b = m[1];
+    const code = (b.match(/^\s*code\s*=\s*(\d+)/m) || [])[1];
+    assert.ok(
+      /^\s*check_id\s*=\s*"/m.test(b),
+      `[category.*] block${code ? ` (code ${code})` : ''} must declare check_id — standards.toml is the sole source of check ids`
+    );
+  }
+  // Reliability defaults use the locked vocabulary only.
+  const relTags = src.match(/reliability_default\s*=\s*"([^"]+)"/g) || [];
+  for (const m of relTags) {
+    assert.match(
+      m,
+      /"(minimal|maximal|not-reliable)"/,
+      `reliability_default must be one of minimal|maximal|not-reliable: ${m}`
+    );
+  }
+  // Verdict-step thresholds: detectors read their PASS/WARN/FAIL steps from
+  // pass_at / warn_at / fail_at fields, not from code. Validate every
+  // declared field and require them on the categories whose steps were
+  // lifted out of detector code (2026-07-06 standards refresh follow-up).
+  for (const m of src.matchAll(
+    /\n\[category\.([^.\]]+)\]([\s\S]*?)(?=\n\[|$)/g
+  )) {
+    const [, slug, b] = m;
+    const read = (key) => {
+      const km = b.match(new RegExp(`^${key}\\s*=\\s*([\\d.]+)`, 'm'));
+      return km ? Number(km[1]) : null;
+    };
+    const passAt = read('pass_at');
+    const warnAt = read('warn_at');
+    const failAt = read('fail_at');
+    for (const [k, v] of [
+      ['pass_at', passAt],
+      ['warn_at', warnAt],
+      ['fail_at', failAt],
+    ]) {
+      assert.ok(
+        v === null || (v > 0 && v < 1),
+        `[category.${slug}] ${k} must be a share in (0, 1); got ${v}`
+      );
+    }
+    if (passAt !== null && warnAt !== null) {
+      assert.ok(
+        warnAt < passAt,
+        `[category.${slug}] warn_at (${warnAt}) must be below pass_at (${passAt})`
+      );
+    }
+    if (failAt !== null && warnAt !== null) {
+      assert.ok(
+        warnAt < failAt,
+        `[category.${slug}] warn_at (${warnAt}) must be below fail_at (${failAt}) — bad-share checks WARN before they FAIL`
+      );
+    }
+    if (failAt !== null && passAt !== null) {
+      assert.fail(
+        `[category.${slug}] declares both pass_at and fail_at — a check grades one direction, not both`
+      );
+    }
+  }
+  for (const slug of [
+    'quality_assurance_qa_01',
+    'appsec_auth_on_mutations',
+    'software_best_practices_sbp_03',
+    'software_best_practices_sbp_06',
+    'sbp_vertical_delivery',
+    'spec_driven_development_sdd_04',
+    'spec_driven_development_sdd_07',
+    'supply_chain_security_scs_03',
+    'code_architecture_arch_06',
+  ]) {
+    const block = src.match(
+      new RegExp(`\\n\\[category\\.${slug}\\]([\\s\\S]*?)(?=\\n\\[|$)`)
+    );
+    assert.ok(block, `[category.${slug}] must exist`);
+    assert.match(
+      block[1],
+      /^\s*(pass_at|fail_at|warn_at)\s*=/m,
+      `[category.${slug}] must declare its verdict thresholds (pass_at/warn_at or fail_at/warn_at) — they were lifted out of detector code so the linter can police them`
+    );
+  }
+
+  // Scoring sub-tables: every [category.<slug>.scoring] declares the full
+  // curve schema — scale, anchors, and a basis with the locked vocabulary.
+  const scoringBlocks = [
+    ...src.matchAll(/\n\[category\.[^.\]]+\.scoring\]([\s\S]*?)(?=\n\[|$)/g),
+  ].map((m) => m[1]);
+  assert.ok(
+    scoringBlocks.length > 0,
+    'standards.toml must define [category.*.scoring] curve tables'
+  );
+  for (const b of scoringBlocks) {
+    assert.match(
+      b,
+      /^\s*scale\s*=\s*"(linear|log)"/m,
+      'every scoring table must declare scale = "linear"|"log"'
+    );
+    assert.match(
+      b,
+      /^\s*anchors\s*=\s*\[/m,
+      'every scoring table must declare anchors = [[x, y], …]'
+    );
+    assert.match(
+      b,
+      /^\s*basis\s*=\s*"(published|derived|heuristic)"/m,
+      'every scoring table must declare basis = published|derived|heuristic'
+    );
+  }
+  // At least one band table for banded metrics.
+  assert.match(
+    src,
+    /\[band\./,
+    'standards.toml must define at least one [band.*] table'
+  );
+  // Every category declares a method from the locked vocabulary.
+  const methods = src.match(/\n\s*method\s*=\s*"([^"]+)"/g) || [];
+  const categoryCount = (src.match(/^\[category\.[^.\]]+\]/gm) || []).length;
+  assert.equal(
+    methods.length,
+    categoryCount,
+    'every [category.*] must declare a method= line'
+  );
+  for (const m of methods) {
+    assert.match(
+      m,
+      /"(computed|detected|judgment)"/,
+      `method must be computed|detected|judgment: ${m}`
+    );
+  }
+  // Judgment categories must carry a rubric (evidence_required checked by the engine schema test).
+  assert.match(
+    src,
+    /method\s*=\s*"judgment"/,
+    'at least one judgment category expected'
+  );
+  assert.match(
+    src,
+    /\n\s*rubric\s*=\s*"/,
+    'judgment categories must declare a rubric'
+  );
+});
+
+test('scoring.md uses additive weighted categories, not A-F grades', () => {
+  const p = path.join(skillRoot, 'scoring.md');
+  const src = readUtf8(p);
+  assert.match(src, /additive/i, 'scoring.md must describe additive scoring');
+  assert.match(src, /weight/i, 'scoring.md must describe category weights');
+  assert.match(
+    src,
+    /coverage ratio/i,
+    'scoring.md must define the coverage ratio'
+  );
+  assert.match(
+    src,
+    /standards\.toml/,
+    'scoring.md must reference standards.toml as the weight source'
+  );
+  assert.match(
+    src,
+    /uncapped|no cap|not capped/i,
+    'scoring.md must state the total is uncapped'
+  );
+  // The fixed-ceiling model must be gone.
+  assert.doesNotMatch(
+    src,
+    /Grade Scale/i,
+    'scoring.md must not retain a grade scale'
+  );
+  assert.doesNotMatch(
+    src,
+    /\bA\s*[–-]\s*F\b/i,
+    'scoring.md must not mention A–F grades'
+  );
+  assert.doesNotMatch(
+    src,
+    /clamped to 0\s*[–-]\s*100/i,
+    'scoring.md must not clamp to 0–100'
+  );
+  // Severity demoted to priority only.
+  assert.match(
+    src,
+    /severity[^.\n]*priorit/i,
+    'scoring.md must state severity drives priority only'
+  );
+});
+
+test('SKILL.md scores via a single audit-core pass — no per-dimension fan-out', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  // Deterministic scoring is one engine command (audit-core), not 11 subagents.
+  assert.match(
+    src,
+    /dist\/cli\.js["']?\s+audit-core/,
+    'SKILL.md must invoke the audit-core engine pass via the bundled CLI'
+  );
+  // The per-dimension subagent fan-out and its agent are retired.
+  assert.doesNotMatch(
+    src,
+    /dimension-auditor/,
+    'SKILL.md must not reference the retired dimension-auditor agent'
+  );
+  // The retired agent file must not exist (its presence reintroduces the fan-out).
+  assert.ok(
+    !fs.existsSync(
+      path.join(repoRoot, 'plugins', 'awos', 'agents', 'dimension-auditor.md')
+    ),
+    'the dimension-auditor agent must be retired (agents/dimension-auditor.md removed)'
+  );
+  // The orchestrator must never average dimensions into a grade.
+  assert.doesNotMatch(
+    src,
+    /grade [A-F]\b|letter grade/i,
+    'SKILL.md must not describe letter-grade scoring'
+  );
+});
+
+test('SKILL.md Step 4 is unconditional — no pre-run escape hatch (barley 2026-07-03 regression)', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  // The load-time !`…` injection never executed in plugin skills, but its
+  // narrative gave the model a "scoring may already be done" premise it quoted
+  // to skip audit-core entirely. No line may start with a !` injection.
+  assert.doesNotMatch(
+    src,
+    /^!`/m,
+    'SKILL.md must not carry a load-time !`…` injection — it never executes in plugin skills and its narrative is what the model cites to skip audit-core'
+  );
+  // No wording may suggest the engine pass might already have happened.
+  assert.doesNotMatch(
+    src,
+    /pre-run happened|load-time pre-run|already completed step 4/i,
+    'SKILL.md must not suggest a pre-run may have already executed Step 4'
+  );
+  // Audits are independent timestamped snapshots — no previous-audit/delta
+  // logic may reappear in the skill.
+  assert.doesNotMatch(
+    src,
+    /previous audit|delta comparison/i,
+    'SKILL.md must not read previous audits or compute deltas — each run is an independent timestamped snapshot'
+  );
+  // The circuit-breaker must be stated at the decision point: hand-built
+  // audits are refused by the engine (provenance stamp).
+  assert.match(
+    src,
+    /provenance/,
+    'SKILL.md must state the engine provenance circuit-breaker (patch-judgment/render refuse a hand-built audit.json)'
+  );
+  // Tool-level hard block: Edit (artifact hand-editing) and ScheduleWakeup
+  // (banned polling) are removed from the tool pool while the skill runs.
+  assert.match(
+    src,
+    /^disallowed-tools:.*\bEdit\b.*\bScheduleWakeup\b/m,
+    'SKILL.md frontmatter must disallow Edit and ScheduleWakeup while the skill is active'
+  );
+});
+
 test('context/<path> references in prompts are internally consistent', () => {
   // Build a writer/reader map by scanning all prompts. A path is considered
   // consistent if every reference to it appears in at least one prompt — i.e.
@@ -1935,4 +2566,790 @@ test('context/<path> references in prompts are internally consistent', () => {
       `expected canonical path ${p} to be referenced by at least one prompt`
     );
   }
+});
+
+test('SKILL.md sums weighted categories and emits no grade', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /standards\.toml/,
+    'SKILL.md Step 4 must pass standards.toml to auditors'
+  );
+  assert.match(
+    src,
+    /additive weighted points/i,
+    'SKILL.md must state that scoring is additive weighted points (sum of category weights), not a grade'
+  );
+  assert.match(
+    src,
+    /coverage ratio/i,
+    'SKILL.md must report an audit-level coverage ratio'
+  );
+  assert.doesNotMatch(
+    src,
+    /average of all dimension percentages/i,
+    'SKILL.md must not average percentages'
+  );
+  assert.doesNotMatch(
+    src,
+    /Grade \*\*X\*\*|— Grade/i,
+    'SKILL.md must not present a grade'
+  );
+});
+
+test('SKILL.md emits progress + ETA (interactive + headless, wait-excluded)', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  // Must invoke the bundled progress helper via the CLI dispatcher.
+  assert.ok(
+    src.includes('node dist/cli.js progress') ||
+      src.includes('CLAUDE_SKILL_DIR}/dist/cli.js" progress') ||
+      /dist\/cli\.js["']?\s+progress/.test(src),
+    'SKILL.md must call the progress CLI helper after each dimension/phase completes'
+  );
+  // Must mention ETA as a concept.
+  assert.match(
+    src,
+    /\bETA\b/,
+    'SKILL.md must mention ETA for the progress line'
+  );
+  // Must describe the percent-complete output.
+  assert.match(
+    src,
+    /pct|percent complete|% complete|\bpct\b/i,
+    'SKILL.md must describe the % complete output from the progress helper'
+  );
+  // Must state that the timer pauses across AskUserQuestion calls.
+  assert.match(
+    src,
+    /AskUserQuestion/,
+    'SKILL.md must reference AskUserQuestion in the context of pausing the elapsed timer'
+  );
+  assert.match(
+    src,
+    /pause|subtract|exclud/i,
+    'SKILL.md must state the timer pauses/subtracts user-wait time across AskUserQuestion'
+  );
+  // Must mention headless stream-json support.
+  assert.match(
+    src,
+    /stream-json/,
+    'SKILL.md must mention --output-format stream-json for headless progress emission'
+  );
+  // Must document the artifact-count fallback for headless observability.
+  assert.match(
+    src,
+    /\.json.*wc|wc.*\.json|artifact.*count|count.*artifact/i,
+    'SKILL.md must describe the artifact-count fallback (count *.json files vs total) for headless progress'
+  );
+});
+
+test('SKILL.md preflights a node runtime before running the engine', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  // The engine is a prebuilt Node bundle; the orchestrator must verify node is
+  // on PATH so engine calls fail loudly with guidance, not mid-audit.
+  assert.match(
+    src,
+    /command -v node|preflight/i,
+    'SKILL.md must preflight that a node runtime is on PATH before invoking the engine'
+  );
+});
+
+test('report templates use weighted points + reliability, not grades', () => {
+  for (const f of ['output-format.md', 'report-template.md']) {
+    const src = readUtf8(path.join(skillRoot, f));
+    assert.match(src, /weight/i, `${f} must show category weights`);
+    assert.match(src, /coverage ratio/i, `${f} must show the coverage ratio`);
+    assert.match(src, /reliabilit/i, `${f} must show reliability`);
+    assert.doesNotMatch(
+      src,
+      /Grade \*\*X\*\*|Letter grade|— Grade/i,
+      `${f} must not present a letter grade`
+    );
+  }
+  const html = readUtf8(path.join(skillRoot, 'report-template.md'));
+  assert.match(
+    html,
+    /tooltip/i,
+    'HTML template must describe tooltips carrying the reliability/hint detail'
+  );
+  assert.doesNotMatch(
+    html,
+    /Grade colors:/i,
+    'HTML template must drop the A–F grade color CSS'
+  );
+});
+
+test('plugin.json version matches the awos marketplace entry and equals 2.3.0', () => {
+  const pluginManifest = JSON.parse(
+    readUtf8(
+      path.join(repoRoot, 'plugins', 'awos', '.claude-plugin', 'plugin.json')
+    )
+  );
+  const marketplace = JSON.parse(
+    readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
+  );
+  const awosEntry = marketplace.plugins.find(
+    (p) => p.name === 'awos' || (p.source && p.source.includes('plugins/awos'))
+  );
+  assert.ok(
+    awosEntry,
+    'marketplace.json must contain a plugins entry for awos (matched by name="awos" or source referencing plugins/awos)'
+  );
+  assert.equal(
+    pluginManifest.version,
+    awosEntry.version,
+    `plugins/awos/.claude-plugin/plugin.json version ("${pluginManifest.version}") must match the awos marketplace entry version ("${awosEntry.version}") — bump both together`
+  );
+  assert.equal(
+    pluginManifest.version,
+    '2.3.0',
+    `plugins/awos/.claude-plugin/plugin.json version must be "2.3.0" (release version is managed by release-drafter, not bumped per change), got "${pluginManifest.version}"`
+  );
+});
+
+test('TS engine scaffold present (package.json/tsconfig + collectors/detectors/metrics/tests dirs)', () => {
+  const skill = path.join(
+    repoRoot,
+    'plugins',
+    'awos',
+    'skills',
+    'ai-readiness-audit'
+  );
+  assert.ok(
+    fs.existsSync(path.join(repoRoot, 'tsconfig.json')),
+    'tsconfig.json must exist'
+  );
+  assert.ok(
+    fs.existsSync(path.join(repoRoot, 'package.json')),
+    'package.json must exist'
+  );
+  for (const d of ['collectors', 'detectors', 'metrics', 'tests']) {
+    assert.ok(fs.existsSync(path.join(skill, d)), `${d}/ dir must exist`);
+  }
+});
+
+test('every dimension check maps to a standards.toml category', () => {
+  const standards = readUtf8(path.join(referencesDir, 'standards.toml'));
+  const definedCodes = new Set(
+    (standards.match(/\bcode\s*=\s*(\d+)/g) || []).map(
+      (m) => m.match(/(\d+)/)[1]
+    )
+  );
+  const files = listMarkdown(dimensionsDir);
+  for (const f of files) {
+    const body = readUtf8(path.join(dimensionsDir, f));
+    const isTopology = f === 'project-topology.md';
+    // Split into check blocks by the "### CODE-NN:" headings.
+    const blocks = body.split(/^### /m).slice(1);
+    for (const block of blocks) {
+      const head = block.split('\n', 1)[0];
+      const catLine = (block.match(/\*\*Category:\*\*\s*(.+)/) || [])[1];
+      assert.ok(
+        catLine,
+        `${f}: check "${head}" must declare a **Category:** line`
+      );
+      if (isTopology) {
+        assert.match(
+          catLine,
+          /none/i,
+          `${f}: topology checks must be Category: none (unscored)`
+        );
+      } else {
+        const codes = catLine.match(/\d+/g) || [];
+        assert.ok(
+          codes.length > 0,
+          `${f}: check "${head}" must name at least one numeric category code`
+        );
+        for (const c of codes) {
+          assert.ok(
+            definedCodes.has(c),
+            `${f}: check "${head}" references undefined standards.toml code ${c}`
+          );
+        }
+      }
+    }
+  }
+});
+
+test('dimension check headings agree with standards.toml check_id', () => {
+  // standards.toml owns check ids (the engine reads only the TOML); the
+  // dimension .md headings are documentation and must not silently drift.
+  // Where a code's md heading and its TOML check_id disagree, the TOML wins
+  // at runtime — this lint makes the disagreement a build failure instead.
+  const standards = readUtf8(path.join(referencesDir, 'standards.toml'));
+  const checkIdByCode = new Map();
+  for (const m of standards.matchAll(
+    /\n\[category\.[^\]]+\]([\s\S]*?)(?=\n\[|$)/g
+  )) {
+    const code = (m[1].match(/^\s*code\s*=\s*(\d+)/m) || [])[1];
+    const checkId = (m[1].match(/^\s*check_id\s*=\s*"([^"]+)"/m) || [])[1];
+    if (code && checkId && !checkIdByCode.has(code))
+      checkIdByCode.set(code, checkId);
+  }
+  for (const f of listMarkdown(dimensionsDir)) {
+    if (f === 'project-topology.md') continue;
+    const body = readUtf8(path.join(dimensionsDir, f));
+    for (const block of body.split(/^### /m).slice(1)) {
+      const head = block.split('\n', 1)[0];
+      const headingId = (head.match(/^([A-Z][A-Z0-9]*-\w+)\s*:/) || [])[1];
+      const codes =
+        ((block.match(/\*\*Category:\*\*\s*(.+)/) || [])[1] || '').match(
+          /\d+/g
+        ) || [];
+      if (!headingId || codes.length === 0) continue;
+      const tomlId = checkIdByCode.get(codes[0]);
+      assert.ok(
+        tomlId !== undefined,
+        `${f}: "${head}" — code ${codes[0]} has no check_id in standards.toml`
+      );
+      // A single-code heading must agree exactly. Multi-code headings share
+      // one heading across several categories whose TOML ids may legitimately
+      // differ (e.g. ADP-18 covering ADP-I4/ADP-I5), so only presence is
+      // enforced there.
+      if (codes.length === 1) {
+        assert.equal(
+          tomlId,
+          headingId,
+          `${f}: "${head}" — heading id ${headingId} disagrees with standards.toml check_id ${tomlId} for code ${codes[0]} (TOML wins at runtime; fix whichever is stale)`
+        );
+      }
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// ORG.1: SKILL.md Step 0 multi-repo discover-first + AskUserQuestion
+// ---------------------------------------------------------------------------
+
+const SKILL_MD_PATH = path.join(
+  repoRoot,
+  'plugins',
+  'awos',
+  'skills',
+  'ai-readiness-audit',
+  'SKILL.md'
+);
+
+test('SKILL.md Step 0 references data-sources.md for multi-repo discovery', () => {
+  // Step 0 must follow the discover-first flow from data-sources.md.
+  // The reference is what ties SKILL.md to the canonical source-resolution spec.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    body.includes('data-sources.md'),
+    'SKILL.md Step 0 must reference data-sources.md (the discover-first multi-repo flow spec)'
+  );
+});
+
+test('SKILL.md headline delivery rows put the unit in the value, not a duplicated label', () => {
+  // "Merges / active contributor" = "19.0 / contributor" reads as a duplicate.
+  // The label carries the metric name; the per-contributor unit lives in the value.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    !body.includes('**Merges / active contributor**') &&
+      !body.includes('**LOC / active contributor**'),
+    'delivery rows must not use the duplicated "Merges / active contributor" / "LOC / active contributor" labels'
+  );
+  assert.ok(
+    body.includes('**Merges**') && body.includes('**LOC**'),
+    'SKILL.md must author the delivery rows with bare "Merges" / "LOC" labels'
+  );
+  assert.ok(
+    body.includes('/ week (per active contributor)'),
+    'the per-week per-contributor unit must live in the display_value (e.g. "1.5 / week (per active contributor)")'
+  );
+});
+
+test('SKILL.md Step 0 uses AskUserQuestion to confirm discovered repos', () => {
+  // A single AskUserQuestion at the start of the run is the only prompt
+  // allowed — it confirms the auto-discovered repo set before the audit begins.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    body.includes('AskUserQuestion'),
+    'SKILL.md must use AskUserQuestion to confirm the discovered repo set'
+  );
+});
+
+test('SKILL.md Step 0 describes multi-repo (parallel) discovery', () => {
+  // Org mode fans out per-repo audit agents in parallel. SKILL.md must
+  // document the multi-repo parallel execution so the orchestrator knows
+  // to fan out rather than run sequentially.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /multi.repo|multiple repo|parallel|fan.out/i.test(body),
+    'SKILL.md must describe multi-repo parallel discovery/execution (org mode fan-out)'
+  );
+});
+
+test('SKILL.md Step 0 documents headless default to auto-discovered repos', () => {
+  // In headless / CI mode the audit must run without any prompting,
+  // defaulting to the auto-discovered repos. This must be stated explicitly
+  // so CI operators know the tool is safe to call without user interaction.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /headless default|headless.*auto.discover|auto.discover.*headless/i.test(
+      body
+    ),
+    'SKILL.md must document the headless default behavior (fall back to auto-discovered repos when no interactive input)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// PERF: Step 5 batches connector re-scoring via the `enrich` verb, and org mode
+// fans out per-repo `repo-auditor` subagents (Part 1 wall-time improvements).
+
+test('SKILL.md Step 5 re-scores connectors via one `enrich` pass (not per-metric spawns)', () => {
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /dist\/cli\.js["']?\s+enrich/.test(src),
+    'SKILL.md Step 5 must invoke the `enrich` engine verb to re-score connector metrics in one pass'
+  );
+});
+
+test('SKILL.md Step 5.2 fetches independent connector sources concurrently', () => {
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /concurrent|in a single message|parallel tool calls/i.test(src),
+    'SKILL.md Step 5 must instruct fetching the independent connector sources concurrently'
+  );
+});
+
+test('SKILL.md Step 5 requires fetch_meta and the tracker changelog pass', () => {
+  // A prior org run fetched exactly one 100-ticket page per repo with zero
+  // changelogs — cycle time stayed blank everywhere and ticket counts drifted
+  // run to run. These two requirements are what prevent that regression.
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    src.includes('fetch_meta'),
+    'SKILL.md Step 5 must require a fetch_meta block in paginated tracker artifacts (honest partial-fetch accounting)'
+  );
+  assert.ok(
+    /changelog/i.test(src) && src.includes('in_progress_at'),
+    'SKILL.md Step 5 must require the per-ticket changelog pass that populates in_progress_at (cycle time)'
+  );
+});
+
+test('connector-shapes.md documents the per-ticket changelog fetch and fetch_meta shape', () => {
+  const src = readUtf8(path.join(referencesDir, 'connector-shapes.md'));
+  assert.ok(
+    src.includes('expand: "changelog"'),
+    'connector-shapes.md must document the per-ticket getJiraIssue(expand: "changelog") fetch — Jira search results never include changelogs'
+  );
+  assert.ok(
+    src.includes('fetch_meta'),
+    'connector-shapes.md must document the fetch_meta block (tickets_fetched/tickets_total/complete/pages_fetched/changelog_fetched_for/note)'
+  );
+  assert.ok(
+    /statusCategory|indeterminate/.test(src),
+    'connector-shapes.md must define in_progress_at by status category (statusCategory "indeterminate"), not the literal "In Progress" name'
+  );
+});
+
+test('repo-auditor.md requires tracker pagination to completion and the changelog pass', () => {
+  const src = readUtf8(
+    path.join(repoRoot, 'plugins', 'awos', 'agents', 'repo-auditor.md')
+  );
+  assert.ok(
+    /paginat/i.test(src) && src.includes('fetch_meta'),
+    'repo-auditor.md must require paginating tracker sources to completion and flagging partial fetches in fetch_meta'
+  );
+  assert.ok(
+    /changelog/i.test(src),
+    'repo-auditor.md must require fetching per-ticket status changelogs so cycle time computes'
+  );
+});
+
+test('SKILL.md org branch dispatches the repo-auditor subagent per repo', () => {
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /repo-auditor/.test(src),
+    'SKILL.md org branch must dispatch the `awos:repo-auditor` subagent per repo (concurrent per-repo audits)'
+  );
+});
+
+test('the repo-auditor plugin agent exists with valid frontmatter', () => {
+  const agentPath = path.join(
+    repoRoot,
+    'plugins',
+    'awos',
+    'agents',
+    'repo-auditor.md'
+  );
+  assert.ok(
+    fs.existsSync(agentPath),
+    'plugins/awos/agents/repo-auditor.md must exist'
+  );
+  const { data, hasFrontmatter } = parse(readUtf8(agentPath));
+  assert.ok(hasFrontmatter, 'repo-auditor.md must have YAML frontmatter');
+  assert.equal(data.name, 'repo-auditor', 'agent name must be "repo-auditor"');
+  assert.ok(
+    typeof data.description === 'string' && data.description.length > 0,
+    'repo-auditor.md must declare a description'
+  );
+});
+
+// ORG.2: SKILL.md Step 5 org branch — ≤3 portfolio metrics + org rollup
+// ---------------------------------------------------------------------------
+
+test('SKILL.md Step 5 org branch references the org rollup', () => {
+  // The org rollup is invoked by SKILL.md Step 5 via the CLI. The reference
+  // ties the orchestrator to the rollup implementation.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /org.rollup|rollup/i.test(body),
+    'SKILL.md Step 5 org branch must reference the org rollup'
+  );
+  assert.ok(
+    body.includes('node dist/cli.js rollup') ||
+      body.includes('dist/cli.js rollup') ||
+      /dist\/cli\.js["']?\s+rollup/.test(body),
+    'SKILL.md must show the rollup CLI invocation (node dist/cli.js rollup <dir> or with absolute path)'
+  );
+});
+
+test('SKILL.md Step 5 org branch names the three portfolio metrics', () => {
+  // Exactly three portfolio metrics are computed — no more. All three must
+  // be named so the orchestrator and the user both know what was computed.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    body.includes('org_ai_tooling_coverage'),
+    'SKILL.md must name the "org_ai_tooling_coverage" portfolio metric'
+  );
+  assert.ok(
+    body.includes('org_capability_score'),
+    'SKILL.md must name the "org_capability_score" portfolio metric'
+  );
+  assert.ok(
+    body.includes('org_measurement_coverage'),
+    'SKILL.md must name the "org_measurement_coverage" portfolio metric'
+  );
+});
+
+test('SKILL.md Step 5 states the ≤3 portfolio metrics constraint', () => {
+  // The brief is explicit: "≤3 org metrics" is a hard constraint, not a
+  // style choice. SKILL.md must state it so the orchestrator does not add
+  // more metrics without revisiting the design.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /≤\s*3|<= 3|exactly three|three.*portfolio metric/i.test(body),
+    'SKILL.md must state the ≤3 portfolio metrics constraint (never aggregate the full per-repo set)'
+  );
+});
+
+test('SKILL.md Step 5 org branch emits an org-level JSON artifact', () => {
+  // JSON is the source-of-truth (JSON-source-of-truth rule). SKILL.md must
+  // document that the org rollup result is written to a JSON file before
+  // any MD/HTML rendering.
+  const body = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    body.includes('org-portfolio.json'),
+    'SKILL.md must document the org-level JSON artifact (org-portfolio.json)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// POL.1+2+3: report-template.md and output-format.md describe the renderer
+// ---------------------------------------------------------------------------
+
+test('report-template.md references the render verb (cli.js render)', () => {
+  const src = readUtf8(path.join(skillRoot, 'report-template.md'));
+  assert.ok(
+    src.includes('cli.js render') || src.includes('cli render'),
+    'report-template.md must reference the "render" verb (node dist/cli.js render) — report.md/report.html are produced by the renderer, not hand-written'
+  );
+});
+
+test('report-template.md describes the single-page layout: overview + drill-down sub-pages (no audience tabs)', () => {
+  const src = readUtf8(path.join(skillRoot, 'report-template.md'));
+  assert.ok(
+    /one scrolling page|single self-contained page/i.test(src) &&
+      /no audience tabs|no .*tabs/i.test(src),
+    'report-template.md must describe a single scrolling page, not three audience tabs'
+  );
+  assert.ok(
+    /#dim\/|drill-down sub-page/i.test(src),
+    'report-template.md must describe hash-routed drill-down sub-pages (#dim/<key>)'
+  );
+  assert.ok(
+    /Back\/Forward|browser Back/i.test(src),
+    'report-template.md must state the browser Back button returns from a sub-page to the overview'
+  );
+  assert.ok(
+    /executive band/i.test(src) &&
+      /insights/i.test(src) &&
+      /what to improve|recommendations/i.test(src),
+    'report-template.md must name the executive band, insights, and recommendations sections'
+  );
+});
+
+test('report-template.md specifies instant plain-first tooltips (not native title= delay)', () => {
+  const src = readUtf8(path.join(skillRoot, 'report-template.md'));
+  assert.ok(
+    /\.tip|tipbox/.test(src) && /instant/i.test(src),
+    'report-template.md must specify instant CSS tooltips (.tip/.tipbox), not the delayed native title= attribute'
+  );
+  assert.ok(
+    /plain-language|plain language|lead.*plain/i.test(src),
+    'report-template.md must state tooltips lead with the plain-language explanation'
+  );
+});
+
+test('output-format.md states that reports are produced by cli.js render (not hand-written)', () => {
+  const src = readUtf8(path.join(skillRoot, 'output-format.md'));
+  assert.ok(
+    src.includes('node dist/cli.js render') || src.includes('cli.js render'),
+    'output-format.md must state that report.md / report.html are produced by "node dist/cli.js render" — the auditor never writes markdown/HTML directly'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// POL-B: SKILL.md Step 5 aggregates JSON → audit.json + renders MD;
+//         Step 6 unconditionally renders HTML (incl. headless)
+// ---------------------------------------------------------------------------
+
+test('SKILL.md Step 5 aggregates per-dimension JSON into audit.json', () => {
+  // JSON is the source of truth (global constraint). Step 6 must aggregate
+  // per-dimension artifacts into a single audit.json before producing any
+  // rendered output. The orchestrator must never hand-write report.md.
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    src.includes('audit.json'),
+    'SKILL.md Step 5 must reference audit.json as the aggregated result artifact'
+  );
+  assert.ok(
+    /per.dimension.*json|<dimension>\.json|dimensions?\.json/i.test(src),
+    'SKILL.md Step 5 must describe reading per-dimension JSON artifacts before aggregating'
+  );
+});
+
+test('SKILL.md Step 5 renders report.md via cli.js render (--format md or both)', () => {
+  // The orchestrator must call the renderer for markdown output, not write it
+  // by hand. `--format both` writes report.md + report.html in one invocation.
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    src.includes('node dist/cli.js render') ||
+      src.includes('dist/cli.js render') ||
+      /dist\/cli\.js["']?\s+render/.test(src),
+    'SKILL.md Step 5 must invoke the render CLI command to produce report.md (never hand-write it)'
+  );
+  assert.ok(
+    /--format (md|both)/.test(src),
+    'SKILL.md Step 5 must pass "--format md" or "--format both" to the renderer for the markdown report'
+  );
+  assert.ok(
+    /report\.md/.test(src),
+    'SKILL.md Step 5 must name the output file report.md'
+  );
+});
+
+test('SKILL.md Step 5 states the data-loss guarantee (no hand-written report)', () => {
+  // The explicit "never hand-writes" guarantee is what prevents the orchestrator
+  // from bypassing the renderer and losing structured data.
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /never hand.writ|not hand.writ|source of truth.*json|json.*source of truth/i.test(
+      src
+    ),
+    'SKILL.md must state the data-loss guarantee: orchestrator never hand-writes report.md/report.html (JSON is source of truth)'
+  );
+});
+
+test('SKILL.md Step 5 unconditionally renders report.html via --format html', () => {
+  // HTML is the headline deliverable. Step 6 produces it for every run,
+  // including headless — generated unconditionally, never gated on Step 7 or
+  // on interactivity. (Moving it out of Step 6 is the regression this pins.)
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /unconditional|always produce both|headless runs always produce/i.test(src),
+    'SKILL.md Step 5 must state report.html is generated unconditionally (incl. headless), never gated on interactivity'
+  );
+  assert.ok(
+    /--format (html|both)/.test(src),
+    'SKILL.md Step 5 must show "--format html" or "--format both" as the HTML render flag'
+  );
+  assert.ok(
+    /report\.html/.test(src),
+    'SKILL.md Step 5 must name the output file report.html'
+  );
+});
+
+test('SKILL.md Step 5 HTML always produced (never gated/skipped)', () => {
+  // The "never skip" contract is the key headless guarantee. Lint pins it
+  // so future edits do not accidentally make HTML optional in headless mode.
+  const src = readUtf8(SKILL_MD_PATH);
+  assert.ok(
+    /always produc|never skip|never gated|unconditional/i.test(src),
+    'SKILL.md Step 5 must state that report.html is always produced (never skipped/gated)'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// ENGINE-PATH: no bare "node dist/cli.js" in prompt files
+// ---------------------------------------------------------------------------
+
+test('no prompt file uses a bare "node dist/cli.js" as an engine invocation in code blocks', () => {
+  // All engine calls in code blocks in prompt files must use the absolute path form
+  // so they resolve at audit runtime (cwd = user's repo, not plugin dir).
+  // SKILL.md uses ${CLAUDE_SKILL_DIR}/dist/cli.js (skill context).
+  // dimension-auditor.md and per-dimension files use the engine CLI path
+  // passed by the orchestrator via "<engine cli path>".
+  //
+  // This guard checks fenced code block lines only (lines between ``` fences)
+  // so prose mentions like "never use a bare `node dist/cli.js`" are not flagged.
+  const auditSkillRoot = path.join(
+    repoRoot,
+    'plugins',
+    'awos',
+    'skills',
+    'ai-readiness-audit'
+  );
+  const agentsDir = path.join(repoRoot, 'plugins', 'awos', 'agents');
+  const promptFiles = [];
+  const collectMd = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, entry.name);
+      if (entry.isFile() && entry.name.endsWith('.md')) promptFiles.push(p);
+      else if (entry.isDirectory() && entry.name !== 'dist') collectMd(p);
+    }
+  };
+  collectMd(auditSkillRoot);
+  collectMd(agentsDir);
+
+  const offenders = [];
+  for (const f of promptFiles) {
+    const body = readUtf8(f);
+    const lines = body.split('\n');
+    let inCodeBlock = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^```/.test(line)) {
+        inCodeBlock = !inCodeBlock;
+        continue;
+      }
+      // Only flag bare invocations inside code blocks (actual commands, not prose)
+      if (inCodeBlock && /^\s*node\s+dist\/cli\.js\b/.test(line)) {
+        offenders.push(
+          `${path.relative(repoRoot, f)}:${i + 1}: ${line.trim()}`
+        );
+      }
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `prompt code blocks must not contain bare "node dist/cli.js" — use \${CLAUDE_SKILL_DIR}/dist/cli.js (SKILL.md) or the passed engine CLI path (agents/dimensions):\n${offenders.join('\n')}`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// TOPOLOGY-FLAGS: project-topology.md lists all topology.<flag> predicates
+// ---------------------------------------------------------------------------
+
+test('project-topology.md lists all topology.* flag names used in standards.toml', () => {
+  // The dimension-auditor evaluates applies_when expressions verbatim from
+  // standards.toml. project-topology.md must enumerate every topology.*
+  // predicate so the auditor can read them as booleans rather than inferring
+  // from prose. If a new predicate is added to standards.toml, this test
+  // forces a matching entry in project-topology.md.
+  const standardsSrc = readUtf8(path.join(referencesDir, 'standards.toml'));
+  const topologySrc = readUtf8(path.join(dimensionsDir, 'project-topology.md'));
+
+  // Extract topology.<flag> predicates from standards.toml.
+  const predicates = new Set(
+    (standardsSrc.match(/topology\.[a-z_]+/g) || []).map((m) =>
+      m.replace('topology.', '')
+    )
+  );
+  assert.ok(
+    predicates.size > 0,
+    'standards.toml must define at least one topology.* applies_when predicate'
+  );
+
+  const missing = [];
+  for (const flag of predicates) {
+    if (
+      !topologySrc.includes('`' + flag + '`') &&
+      !topologySrc.includes(flag + ':')
+    ) {
+      missing.push(flag);
+    }
+  }
+  assert.deepEqual(
+    missing,
+    [],
+    `project-topology.md must list every topology.* predicate from standards.toml (missing: ${missing.join(', ')})`
+  );
+});
+
+test('commands/spec.md has a pre-write Definition of Done checklist', () => {
+  // The spec command runs a Definition of Done self-review inside Step 4,
+  // before the file is written: confirm no vague wording remains and every
+  // requirement carries an acceptance criterion. It is a self-review, not an
+  // approval gate — the file is still written. Any `[NEEDS CLARIFICATION]`
+  // marker is resolved with the user post-save in Step 6 (offering the
+  // assumption as the recommended first option), or left in place in an
+  // unattended run; the Definition of Done itself never asks the user a
+  // question. The behavioral proof — no raw markers in the produced
+  // functional-spec.md, every requirement carries a criterion — lives in
+  // awos-qa. This lint only pins that the instruction text is present, so
+  // the contract can't be silently dropped from the prompt later.
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    /Definition of Done/i.test(body),
+    'commands/spec.md must declare a "Definition of Done" pre-write checklist'
+  );
+  assert.ok(
+    body.includes('Every requirement has at least one acceptance criterion'),
+    'commands/spec.md Definition of Done must require every functional requirement to carry at least one acceptance criterion before saving'
+  );
+  assert.ok(
+    /No vague wording remains/i.test(body),
+    'commands/spec.md Definition of Done must gate on no vague wording remaining in requirements or acceptance criteria'
+  );
+  assert.ok(
+    body.includes(
+      'offering the assumption you would otherwise make as the recommended first option'
+    ),
+    'commands/spec.md Step 6 must resolve each [NEEDS CLARIFICATION] marker post-save via AskUserQuestion, offering the assumption you would otherwise make as the recommended first option'
+  );
+});
+
+test('commands/spec.md self-review checks for vague, unmeasurable wording', () => {
+  // The Step 4 self-review must hunt weasel words ("fast", "user-friendly",
+  // "as appropriate") in requirements and acceptance criteria, and either
+  // make them concrete in user-perceivable terms or convert them to a
+  // [NEEDS CLARIFICATION] marker that Step 6 resolves with the user
+  // post-save (or leaves in place in an unattended run). The behavioral
+  // proof — no unverifiable wording in the produced functional-spec.md —
+  // lives in awos-qa. This lint only pins that the instruction text is
+  // present, so the contract can't be silently dropped from the prompt later.
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    /vague or unmeasurable wording/i.test(body),
+    'commands/spec.md self-review must scan requirements and acceptance criteria for vague or unmeasurable wording'
+  );
+  assert.ok(
+    /"user-friendly"/.test(body),
+    'commands/spec.md self-review must name concrete weasel-word examples (e.g. "user-friendly") so the model knows what to hunt'
+  );
+  assert.ok(
+    body.includes('Make each one concrete in user-perceivable terms'),
+    'commands/spec.md Step 4 self-review rule must instruct making each vague term concrete in user-perceivable terms (not technical metrics), or converting it to a [NEEDS CLARIFICATION] marker'
+  );
+});
+
+test('spec.md captures boundary/error behavior as rules in items 2 and 3', () => {
+  // both sentences must be present — item 2 tells the model what to
+  // elicit; item 3 closes the loop by requiring failure-path criteria for them.
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    body.includes('boundary and error behavior the user sees'),
+    'spec.md Step 3 item 2 must contain the boundary/error elicitation rule'
+  );
+  assert.ok(
+    body.includes(
+      'at least one acceptance criterion covering the failure path'
+    ),
+    'spec.md Step 3 item 3 must require failure-path criteria for boundary/error requirements'
+  );
 });

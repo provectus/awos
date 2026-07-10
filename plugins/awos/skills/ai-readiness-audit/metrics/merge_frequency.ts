@@ -1,0 +1,81 @@
+/**
+ * merge_frequency — Deploy / merge frequency (DORA banded).
+ *
+ * kind: "banded"
+ * value: merges per week over the whole audit window
+ * band: one of "elite" | "high" | "medium" | "low" per DORA thresholds
+ * categories_awarded: [301] when data is available
+ * reliability_default: "not-reliable" (direction depends on team size)
+ *
+ * DORA band thresholds (deploy_frequency in standards.toml):
+ *   elite  → multiple per day  (>= 7/week proxy)
+ *   high   → once/day to once/week  (>= 1/week, < 7/week)
+ *   medium → once/week to once/month  (>= 0.25/week, < 1/week)
+ *   low    → < once per month  (< 0.25/week)
+ *
+ * Computation: window_stats.merges / (window_stats.window_days / 7)
+ * Single whole-window aggregate — no bucket averaging.
+ *
+ * Source shape: collectedDir/git.json
+ * Input raw fields: window_stats (WindowStats — merges, window_days)
+ *
+ * SKIP: if git.json is absent or raw.window_stats is absent.
+ */
+import {
+  computeReliability,
+  makeMetricResult,
+  readGitWindow,
+  skipMetric,
+  type MetricResult,
+} from './_base.ts';
+import { scoreFromConfig, scoringFor } from './_score.ts';
+
+/** Map merges-per-week to a DORA band label. */
+export function doraDeployBand(mergesPerWeek: number): string {
+  if (mergesPerWeek >= 7) return 'elite';
+  if (mergesPerWeek >= 1) return 'high';
+  if (mergesPerWeek >= 0.25) return 'medium';
+  return 'low';
+}
+
+export function compute(
+  collectedDir: string,
+  standards: Record<string, unknown>,
+  _topology: Record<string, boolean>
+): MetricResult {
+  const loaded = readGitWindow(collectedDir, {
+    metric: 'merge_frequency',
+    kind: 'banded',
+    tag: 'not-reliable',
+  });
+  if ('skip' in loaded) return loaded.skip;
+
+  const windowStats = loaded.ws;
+  const totalMerges: number = windowStats.merges ?? 0;
+  const windowDays: number = windowStats.window_days ?? 0;
+
+  if (windowDays <= 0) {
+    return skipMetric('merge_frequency', 'banded', 'not-reliable', 'git');
+  }
+
+  const totalWeeks = windowDays / 7;
+  const mergesPerWeek = totalMerges / totalWeeks;
+
+  const band = doraDeployBand(mergesPerWeek);
+  const reliability = computeReliability('not-reliable', ['git'], []);
+
+  // Score curve lives in standards.toml [category.merge_frequency.scoring].
+  const scoring = scoringFor(standards, 'merge_frequency');
+  const score = scoreFromConfig(mergesPerWeek, scoring);
+  const expression = `${totalMerges} merges / ${totalWeeks.toFixed(1)}w = ${mergesPerWeek.toFixed(2)}/week (${band})`;
+  return makeMetricResult(
+    'merge_frequency',
+    mergesPerWeek,
+    'banded',
+    [301],
+    reliability,
+    ['git'],
+    [],
+    { band, expression, score, confidence: 1.0 }
+  );
+}

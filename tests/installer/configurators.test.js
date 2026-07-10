@@ -19,6 +19,7 @@ const { configureMcp } = require('../../src/services/mcp-configurator');
 const {
   configureMarketplace,
 } = require('../../src/services/marketplace-configurator');
+const { configureHooks } = require('../../src/services/hooks-configurator');
 const {
   makeTempDir,
   removeTempDir,
@@ -168,5 +169,225 @@ test('configureMarketplace is a no-op when our entry already exists', async () =
   assert.ok(
     seededBytes.equals(afterBytes),
     'configureMarketplace idempotency must leave settings.json byte-for-byte unchanged — not even a JSON-equivalent rewrite'
+  );
+});
+
+test('configureHooks creates settings.json with the containment PreToolUse hook', async () => {
+  const workingDir = await freshTemp();
+  await fsPromises.mkdir(path.join(workingDir, '.claude'), { recursive: true });
+  const settingsPath = path.join(workingDir, '.claude', 'settings.json');
+
+  const result = await silenced(() => configureHooks({ workingDir }));
+
+  assert.equal(
+    result.hooksConfigured,
+    true,
+    'configureHooks must report it registered the containment hook'
+  );
+  const settings = JSON.parse(await fsPromises.readFile(settingsPath, 'utf8'));
+  const preToolUse = settings.hooks && settings.hooks.PreToolUse;
+  assert.ok(
+    Array.isArray(preToolUse) && preToolUse.length === 1,
+    'settings.json must carry exactly one PreToolUse matcher group after configureHooks'
+  );
+  const command = preToolUse[0].hooks[0].command;
+  assert.ok(
+    command.includes('awos-containment-guard.js'),
+    'the registered hook command must invoke the copied containment guard script (.awos/scripts/awos-containment-guard.js)'
+  );
+  assert.ok(
+    /\bWrite\b/.test(preToolUse[0].matcher) &&
+      /\bBash\b/.test(preToolUse[0].matcher) &&
+      /\bPowerShell\b/.test(preToolUse[0].matcher) &&
+      /\bRead\b/.test(preToolUse[0].matcher),
+    'the PreToolUse matcher must cover Write, Bash, and PowerShell (write/egress/shell channels) and Read (the secret-read deny) — every channel a containment crossing travels through, including the distinct Windows PowerShell shell tool'
+  );
+});
+
+test('configureHooks merges into a pre-existing .claude/settings.json without clobbering', async () => {
+  const workingDir = await freshTemp();
+  await fsPromises.mkdir(path.join(workingDir, '.claude'), { recursive: true });
+  const settingsPath = path.join(workingDir, '.claude', 'settings.json');
+  // Realistic upgrade path: the marketplace step (Step 6) already wrote its
+  // entry, and the user has an unrelated hook of their own. Both must survive.
+  const priorSettings = {
+    extraKnownMarketplaces: {
+      'awos-marketplace': {
+        source: { source: 'github', repo: 'provectus/awos' },
+      },
+    },
+    someUserSetting: 'must-survive',
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash',
+          hooks: [{ type: 'command', command: 'echo user-hook' }],
+        },
+      ],
+    },
+  };
+  await fsPromises.writeFile(
+    settingsPath,
+    JSON.stringify(priorSettings, null, 2) + '\n'
+  );
+
+  const result = await silenced(() => configureHooks({ workingDir }));
+
+  assert.equal(
+    result.hooksConfigured,
+    true,
+    'configureHooks must report it added the hook to existing settings'
+  );
+  const settings = JSON.parse(await fsPromises.readFile(settingsPath, 'utf8'));
+  assert.equal(
+    settings.someUserSetting,
+    'must-survive',
+    'unrelated user settings must survive the hook merge'
+  );
+  assert.ok(
+    settings.extraKnownMarketplaces['awos-marketplace'],
+    'the Step 6 marketplace entry must survive the Step 7 hook merge'
+  );
+  assert.equal(
+    settings.hooks.PreToolUse.length,
+    2,
+    "the user's own PreToolUse hook must be preserved and our guard appended (2 groups total)"
+  );
+  assert.ok(
+    settings.hooks.PreToolUse.some((g) =>
+      g.hooks.some((h) => h.command === 'echo user-hook')
+    ),
+    "the user's pre-existing hook must not be clobbered by the merge"
+  );
+  assert.ok(
+    settings.hooks.PreToolUse.some((g) =>
+      g.hooks.some((h) => h.command.includes('awos-containment-guard.js'))
+    ),
+    'the AWOS containment guard hook must be present after the merge'
+  );
+});
+
+test('configureHooks is a no-op when the guard hook already exists', async () => {
+  const workingDir = await freshTemp();
+  await fsPromises.mkdir(path.join(workingDir, '.claude'), { recursive: true });
+  const settingsPath = path.join(workingDir, '.claude', 'settings.json');
+  const seeded = {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher:
+            'Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell|Read|Glob|Grep',
+          hooks: [
+            {
+              type: 'command',
+              command:
+                'node "${CLAUDE_PROJECT_DIR}/.awos/scripts/awos-containment-guard.js"',
+            },
+          ],
+        },
+      ],
+    },
+  };
+  await fsPromises.writeFile(
+    settingsPath,
+    JSON.stringify(seeded, null, 2) + '\n'
+  );
+  const seededBytes = await fsPromises.readFile(settingsPath);
+
+  const result = await silenced(() => configureHooks({ workingDir }));
+
+  assert.equal(
+    result.hooksConfigured,
+    false,
+    'configureHooks must skip when the guard hook is already registered (idempotency)'
+  );
+  const afterBytes = await fsPromises.readFile(settingsPath);
+  assert.ok(
+    seededBytes.equals(afterBytes),
+    'configureHooks idempotency must leave settings.json byte-for-byte unchanged — a re-run must not duplicate the hook'
+  );
+});
+
+test('configureHooks refreshes a stale guard matcher on upgrade (no duplicate)', async () => {
+  // An earlier version registered the guard with a matcher that predates the
+  // PowerShell shell tool. A re-install must UPDATE the matcher in place so the
+  // new channel (PowerShell commands) actually routes to the guard — not
+  // silently no-op.
+  const workingDir = await freshTemp();
+  await fsPromises.mkdir(path.join(workingDir, '.claude'), { recursive: true });
+  const settingsPath = path.join(workingDir, '.claude', 'settings.json');
+  const staleMatcher = 'Write|Edit|MultiEdit|NotebookEdit|Bash|Read|Glob|Grep';
+  const seeded = {
+    someUserSetting: 'must-survive',
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: 'Bash',
+          hooks: [{ type: 'command', command: 'echo user-hook' }],
+        },
+        {
+          matcher: staleMatcher,
+          hooks: [
+            {
+              type: 'command',
+              command:
+                'node "${CLAUDE_PROJECT_DIR}/.awos/scripts/awos-containment-guard.js"',
+            },
+          ],
+        },
+      ],
+    },
+  };
+  await fsPromises.writeFile(
+    settingsPath,
+    JSON.stringify(seeded, null, 2) + '\n'
+  );
+
+  const result = await silenced(() => configureHooks({ workingDir }));
+
+  assert.equal(
+    result.hooksConfigured,
+    true,
+    'configureHooks must report (re)configuration when it refreshes a stale matcher'
+  );
+  const settings = JSON.parse(await fsPromises.readFile(settingsPath, 'utf8'));
+  const groups = settings.hooks.PreToolUse;
+  const guardGroup = groups.find((g) =>
+    g.hooks.some((h) => h.command.includes('awos-containment-guard.js'))
+  );
+  assert.match(
+    guardGroup.matcher,
+    /\bPowerShell\b/,
+    'the refreshed guard matcher must now include PowerShell so PowerShell-tool egress/secret-read/tamper commands route to the guard on upgrade'
+  );
+  assert.equal(
+    groups.length,
+    2,
+    'refreshing the matcher must not duplicate the guard group — the user hook and the (updated) guard group remain, 2 total'
+  );
+  assert.equal(
+    settings.someUserSetting,
+    'must-survive',
+    'unrelated settings must survive a matcher refresh'
+  );
+});
+
+test('configureHooks writes nothing in dry-run', async () => {
+  const workingDir = await freshTemp();
+  const settingsPath = path.join(workingDir, '.claude', 'settings.json');
+
+  const result = await silenced(() =>
+    configureHooks({ workingDir, dryRun: true })
+  );
+
+  assert.equal(
+    result.hooksConfigured,
+    true,
+    'configureHooks must still report the intended change in dry-run'
+  );
+  assert.equal(
+    fs.existsSync(settingsPath),
+    false,
+    'dry-run must not create .claude/settings.json'
   );
 });

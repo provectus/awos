@@ -51,6 +51,11 @@ const copyOperations = [
     destination: '.awos/scripts',
     patterns: ['*'],
     description: 'AWOS scripts',
+    // The wildcard also carries scripts/awos-containment-guard.js into
+    // .awos/scripts/, which the Step 7 (Configure Containment Hook) step of the
+    // orchestrator — the hooks-configurator — points the PreToolUse containment
+    // hook at. No separate copy op is needed — the guard is a script like any
+    // other under scripts/.
   },
   {
     source: 'claude/commands',

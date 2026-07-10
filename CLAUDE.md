@@ -106,7 +106,7 @@ The first four are run once at project setup; the last five iterate per feature.
 
 ## Architecture: Installer Pipeline
 
-`src/core/setup-orchestrator.js` runs six numbered steps: init → create directories → run migrations → copy files → configure MCP → register plugin marketplace. Each step lives in its own service module under `src/services/`. The orchestrator and `setup-config.js` are the two files to touch when changing setup behavior.
+`src/core/setup-orchestrator.js` runs seven numbered steps: init → create directories → run migrations → copy files → configure MCP → register plugin marketplace → configure the containment hook. Each step lives in its own service module under `src/services/`. The orchestrator and `setup-config.js` are the two files to touch when changing setup behavior.
 
 ## Migrations
 

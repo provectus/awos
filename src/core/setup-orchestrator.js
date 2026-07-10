@@ -19,6 +19,7 @@ const { configureMcp } = require('../services/mcp-configurator');
 const {
   configureMarketplace,
 } = require('../services/marketplace-configurator');
+const { configureHooks } = require('../services/hooks-configurator');
 const { runMigrations } = require('../migrations/runner');
 
 /**
@@ -41,7 +42,7 @@ async function runSetup({
   dryRun = false,
   promptForOverwrite,
 }) {
-  const TOTAL_STEPS = 6;
+  const TOTAL_STEPS = 7;
 
   // Display header
   showHeader(AWOS_ASCII, AWOS_SUBTITLE);
@@ -123,12 +124,23 @@ async function runSetup({
   });
   clearLine();
 
+  // Step 7: Configure containment hook
+  showStep(
+    'Configuring Containment Hook',
+    'Registering the PreToolUse guard (egress, out-of-tree + protected-path writes, secret reads)',
+    7,
+    TOTAL_STEPS
+  );
+  const hooksStatistics = await configureHooks({ workingDir, dryRun });
+  clearLine();
+
   // Display summary with combined statistics
   const statistics = {
     ...directoryStatistics,
     ...fileStatistics,
     ...mcpStatistics,
     ...marketplaceStatistics,
+    ...hooksStatistics,
     migrations: migrationStatistics.applied,
   };
   showSummary(statistics, { dryRun });

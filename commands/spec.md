@@ -64,7 +64,7 @@ Amend the named spec **in place**. This mode never runs `create-spec-directory.s
 4.  **Status:** do not force a transition. A spec amended after an already-verified fix stays `Completed` — the Change Log records the amendment. Only move Status back (e.g. to `In Review`) when the user is amending a spec that was not yet verified.
 5.  Save in the same directory under the same index. Report the amended path, which criteria changed, and the new Change Log entry. The amendment is complete — do not run the directory script or the Creation-Mode steps.
 
-If the prompt referenced a spec that does not exist (no matching `functional-spec.md`), do not fabricate one in Update Mode — tell the user, and offer to create it fresh via Creation Mode instead.
+If the prompt referenced a spec that does not exist (no matching `functional-spec.md`), do not fabricate one in Update Mode — tell the user, and offer to create it fresh via Creation Mode instead. If they accept, carry only the described behavior change into Creation Mode as the proposed topic — strip the amendment phrasing (e.g. `amend spec 999: add export` → topic `add export`) — and confirm the topic with the user before proceeding.
 
 ---
 

@@ -82,7 +82,7 @@ This command is maintained through its own runs. When a run exposes a defect in 
 
 ### Step 2: Detect the Entry Point
 
-Start with a cheap preflight on the fast model tier (per §8): is this bug **already fixed**? Check the status across every source §1 records (bug reports can live in more than one place) before doing any work — if the tracker ticket is in a closed/fixed state, the crash issue is already resolved, or a merged change request exists, report that and stop rather than re-fixing. Then, if this bug's flow log exists (`context/fix-log-{BUG_ID}.md`), read it first — it names the last completed stage and carries the branch, commit, classification verdict, and change-request state, and is the resume signal for the middle stages that produce no scannable artifact.
+Start with a cheap preflight on the fast model tier (per §8): is this bug **already fixed**? Check the status across every source §1 records (bug reports can live in more than one place) before doing any work — if the tracker ticket is in a closed/fixed state, the crash issue is already resolved, or a merged change request exists, report that and stop rather than re-fixing. Then, if this bug's flow log exists (`context/fix-log-{BUG_ID}.md`), read it first — it names the last completed stage and carries the branch, commit, classification verdict, and change-request state, and is the resume signal for the middle stages that produce no scannable artifact. Resume is a dispatch, not a re-run: continue from the stage after the log's last completed entry — completed stages are skipped, not repeated.
 
 <!-- /awos:flow:stage -->
 
@@ -147,6 +147,8 @@ Running the app to verify is the flow's job, not the user's. [If §2/§3 recorde
 
 Scale the evidence to what changed. When the fix touched only the data or payload and the diff contains no render-path edits, the sanctioned evidence is the demonstrated failing→passing regression test plus a unit-level render of the changed data with mocks — standing up the full stack (backend, database, seeded data) to watch an unchanged render branch repeat itself is disproportionate. This tier applies only when the render path is provably untouched by the diff; a fix that edits the render path itself still drives the UI/API for real.
 
+When Step 5 recorded **no owning spec**, there are no acceptance criteria to re-check: the verification evidence is the demonstrated failing→passing regression test plus a real render of the fixed behavior (per the tiers above). Record that evidence in the flow log and skip the spec-criteria re-check — do not fabricate criteria.
+
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=amend-spec -->
@@ -183,7 +185,7 @@ The reviewer writes findings to a review file and returns only the verdict, the 
 
 ### Step 11: Commit & Push
 
-Write this stage's flow-log entry **before** staging so the log rides in this commit — this is the flow-log's last committed state (see Context Discipline). Then stage all changed files, excluding `.env`, credentials, and secrets. [Commit message convention per §2, referencing `BUG_ID`; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
+Write this stage's flow-log entry **before** staging so the log rides in this commit — this is the flow-log's last committed state (see Context Discipline). Then stage only what this flow produced or touched — the delegated fix, the regression test, the flow log, spec/context artifacts, and any Self-Improvement Loop edits. Never a blanket `git add -A`: pre-existing dirty-tree files the workspace stage warned about stay unstaged; surface any unexpected changed file instead of staging it. Never stage `.env`, credentials, or secrets. [Commit message convention per §2, referencing `BUG_ID`; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
 
 <!-- /awos:flow:stage -->
 
@@ -191,7 +193,7 @@ Write this stage's flow-log entry **before** staging so the log rides in this co
 
 ### Step 12: Remote Gates
 
-From here the change request is open — **do not append to the tracked flow-log** (Context Discipline): a commit adding log lines is unwelcome on a change request under review, and impossible once it merges. Report gate progress to the user and via Notifications instead; resume relies on the remote state, not the log.
+This stage opens the change request. The flow log was finalized at commit-push — **do not append to the tracked flow-log from here on** (Context Discipline): a commit adding log lines is unwelcome on a change request under review, and impossible once it merges. Report gate progress to the user and via Notifications instead; once the change request exists, resume relies on the remote state, not the log.
 
 [Per §2 sync policy: before opening the change request, fetch the target branch and verify the branches merge cleanly — a dry-run merge or rebase. On conflicts: delegate resolution to a subagent (per §8), re-run the local gates on the resolved result, and push.]
 
@@ -209,9 +211,9 @@ Wait with the `Monitor` tool, never foreground `sleep` loops: a poll loop that e
 
 [Per §2: the target branch may have moved while the gates ran — re-check mergeability via the chosen transport or a fresh fetch + dry-run merge. If it no longer merges cleanly: sync per the recorded policy (resolution delegated per §8), push, and return to Step 11 — the remote gates run again on the new commit before any merge.]
 
-[Per §5 merge policy: a human merges — stop here and report the ready-to-merge state — or the flow merges via the chosen transport from §7, or a plain `git merge` + push for a repo without a code host.]
+[Per §5 merge policy: a human merges — the flow's delivery work ends at this ready-to-merge hand-off: skip the flow-merge and proceed to the close stage, which reports the ready-to-merge state as the terminal evidence — or the flow merges via the chosen transport from §7, or a plain `git merge` + push for a repo without a code host.]
 
-Merging is irreversible. Even when the recorded policy lets the flow merge, ask the user for confirmation in this run (`AskUserQuestion`: merge / don't merge), after showing that every gate is green. A skipped or unanswered confirmation means do not merge — report the ready-to-merge state and stop.
+Merging is irreversible. Even when the recorded policy lets the flow merge, ask the user for confirmation in this run (`AskUserQuestion`: merge / don't merge), after showing that every gate is green. A skipped or unanswered confirmation means do not merge — proceed to the close stage with the ready-to-merge state as the evidence.
 
 [Per §5 post-merge CI: pipelines triggered by the merge on the base branch — watch them via the chosen transport and, per the recorded policy, fix failures forward or report them. Omit if nothing runs on merge.]
 

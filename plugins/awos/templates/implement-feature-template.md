@@ -67,7 +67,7 @@ This command is maintained through its own runs. When a run exposes a defect in 
 
 ### Step 2: Detect the Entry Point
 
-Start with a cheap preflight on the fast model tier (per §8): is this feature **already done**? Check the status across every source §1 records (tickets can live in more than one place) before doing any work — if the tracker ticket is in a Done/closed state, or the owning AWOS spec is already `Completed` (or all its `tasks.md` items are `[x]`), or a merged change request exists, report that and stop. Don't re-run the chain over work that is already delivered. Then: `SPEC_NAME` is not known yet on a fresh run — glob `context/spec/*/flow-log.md` and match this feature by the ticket ID/title in each log's first entry; if one matches, read it first — it names the last completed stage and carries the branch, commit, and change-request state. The log is a convenience, not ground truth: for the spec-generation stages the on-disk artifacts win when they disagree with the log (a manual or partial rerun can leave it stale) — cross-check `context/spec/` and, if they differ, resume from the first missing artifact and repair the log to match before continuing. Past spec generation there is no such artifact to scan, so the log is the only resume signal. [Per §1: if a spec directory for this feature may already exist under `context/spec/`, inspect it and resume from the first missing artifact — skip `/awos:spec` if `functional-spec.md` exists, skip `/awos:tech` if `technical-considerations.md` exists, and so on. Omit the pre-written-spec handling if specs never arrive pre-written.]
+Start with a cheap preflight on the fast model tier (per §8): is this feature **already done**? Check the status across every source §1 records (tickets can live in more than one place) before doing any work — if the tracker ticket is in a Done/closed state, or the owning AWOS spec is already `Completed` (or all its `tasks.md` items are `[x]`), or a merged change request exists, report that and stop. Don't re-run the chain over work that is already delivered. Then: `SPEC_NAME` is not known yet on a fresh run — glob `context/spec/*/flow-log.md` and match this feature by the ticket ID/title in each log's first entry; if one matches, read it first — it names the last completed stage and carries the branch, commit, and change-request state. The log is a convenience, not ground truth: for the spec-generation stages the on-disk artifacts win when they disagree with the log (a manual or partial rerun can leave it stale) — cross-check `context/spec/` and, if they differ, resume from the first missing artifact and repair the log to match before continuing. Past spec generation there is no such artifact to scan, so the log is the only resume signal. [Per §1: if a spec directory for this feature may already exist under `context/spec/`, inspect it and resume from the first missing artifact — skip `/awos:spec` if `functional-spec.md` exists, skip `/awos:tech` if `technical-considerations.md` exists, and so on. Omit the pre-written-spec handling if specs never arrive pre-written.] Resume is a dispatch, not a re-run: when the log (or an on-disk artifact) names the last completed stage, continue from the stage after it — completed stages are skipped, not repeated.
 
 <!-- /awos:flow:stage -->
 
@@ -83,7 +83,7 @@ Start with a cheap preflight on the fast model tier (per §8): is this feature *
 
 ### Step 4: Generate Specs and Tasks
 
-Run the AWOS commands sequentially, passing the normalized ticket as context. [Per §8: which of the three stay in the main context and which run in a subagent — a command that interviews the user must stay in main; a non-interactive one runs in a subagent returning the artifact path and a one-line verdict.]
+Run the AWOS commands sequentially, passing the normalized ticket as context. [Per §8: which of the three stay in the main context and which run in a subagent — a command that interviews the user must stay in main; a non-interactive one runs in a subagent returning the artifact path and a one-line verdict.] Honor the Step 2 entry point: skip any command whose artifact already exists on disk — and skip its approval gate with it. Resume from the first missing artifact; never regenerate or re-gate a completed stage.
 
 1. `/awos:spec` — [approval gate per §4's gate decision]
 2. `/awos:tech` — [approval gate per §4's gate decision]
@@ -139,7 +139,7 @@ The review must stay independent of this conversation's authorship bias — it n
 
 ### Step 9: Commit & Push
 
-Write this stage's flow-log entry **before** staging so the log rides in this commit — this is the flow-log's last committed state (see Context Discipline). Then stage all changed files, excluding `.env`, credentials, and secrets. [Commit message convention per the team; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
+Write this stage's flow-log entry **before** staging so the log rides in this commit — this is the flow-log's last committed state (see Context Discipline). Then stage only what this flow produced or touched — the delegated code changes, the flow log, spec/context artifacts, and any Self-Improvement Loop edits. Never a blanket `git add -A`: pre-existing dirty-tree files the workspace stage warned about stay unstaged; surface any unexpected changed file instead of staging it. Never stage `.env`, credentials, or secrets. [Commit message convention per the team; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
 
 <!-- /awos:flow:stage -->
 
@@ -147,7 +147,7 @@ Write this stage's flow-log entry **before** staging so the log rides in this co
 
 ### Step 10: Remote Gates
 
-From here the change request is open — **do not append to the tracked flow-log** (Context Discipline): a commit adding log lines is unwelcome on a change request under review, and impossible once it merges. Report gate progress to the user and via Notifications instead; resume relies on the remote state, not the log.
+This stage opens the change request. The flow log was finalized at commit-push — **do not append to the tracked flow-log from here on** (Context Discipline): a commit adding log lines is unwelcome on a change request under review, and impossible once it merges. Report gate progress to the user and via Notifications instead; once the change request exists, resume relies on the remote state, not the log.
 
 [Per §2 sync policy: before opening the change request, fetch the target branch and verify the branches merge cleanly — a dry-run merge or rebase. On conflicts: delegate resolution to a subagent (per §8), re-run the local gates on the resolved result, and push.]
 
@@ -165,9 +165,9 @@ Wait with the `Monitor` tool, never foreground `sleep` loops: a poll loop that e
 
 [Per §2: the target branch may have moved while the gates ran — re-check mergeability via the chosen transport or a fresh fetch + dry-run merge. If the branch no longer merges cleanly: sync per the recorded policy (resolution delegated per §8), push, and return to Step 10 — the remote gates run again on the new commit before any merge.]
 
-[Per §5 merge policy: a human merges — stop here and report the ready-to-merge state — or the flow merges via the chosen transport from §7: the platform's merge capability, or a plain `git merge` + push for a repo without a code host.]
+[Per §5 merge policy: a human merges — the flow's delivery work ends at this ready-to-merge hand-off: skip the flow-merge and proceed to the close stage, which reports the ready-to-merge state as the terminal evidence — or the flow merges via the chosen transport from §7: the platform's merge capability, or a plain `git merge` + push for a repo without a code host.]
 
-Merging is irreversible. Even when the recorded policy lets the flow merge, ask the user for confirmation in this run (`AskUserQuestion`: merge / don't merge), after showing that every gate is green. A skipped or unanswered confirmation means do not merge — report the ready-to-merge state and stop.
+Merging is irreversible. Even when the recorded policy lets the flow merge, ask the user for confirmation in this run (`AskUserQuestion`: merge / don't merge), after showing that every gate is green. A skipped or unanswered confirmation means do not merge — proceed to the close stage with the ready-to-merge state as the evidence.
 
 [Per §5 post-merge CI: pipelines triggered by the merge on the base branch — watch them via the chosen transport and, per the recorded policy, fix failures forward or report them. Omit if nothing runs on merge.]
 

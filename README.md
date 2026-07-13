@@ -19,7 +19,9 @@
 npx @provectusinc/awos
 ```
 
-This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, and the `context/` directory where your project documents will live. It also registers the AWOS plugin marketplace in your project settings.
+This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, and the `context/` directory where your project documents will live. It also registers the AWOS plugin marketplace in your project settings and enables the **awos-containment** guard — a PreToolUse hook that blocks network egress, out-of-tree writes, and secret-file reads during AWOS sessions.
+
+> **About the containment guard.** It is enabled by default (secure-by-default). The installer records the decision in `.claude/settings.json`, which is a shared, committed file — so it applies to everyone who works in the project. Decline it with `npx @provectusinc/awos --no-containment` (an explicit decline is sticky — later installs won't silently re-enable it), or force-enable in scripted runs with `--containment`. To bypass it for a single run without touching settings, set `AWOS_CONTAINMENT_OFF=1` in the environment.
 
 > **Running on an existing codebase?** Start with an AI readiness audit to understand how AI-friendly your project is. Install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit` to get a scored assessment with actionable recommendations for improvement. [Learn more](plugins/awos/README.md)
 >

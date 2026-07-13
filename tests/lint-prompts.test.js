@@ -3283,6 +3283,103 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
   );
 });
 
+test('awos-containment plugin ships a plugin.json, a PreToolUse hook, and a matching marketplace entry', () => {
+  const manifestPath = path.join(
+    repoRoot,
+    'plugins',
+    'awos-containment',
+    '.claude-plugin',
+    'plugin.json'
+  );
+  assert.ok(
+    fs.existsSync(manifestPath),
+    'plugins/awos-containment/.claude-plugin/plugin.json must exist — the containment guard ships as a dedicated plugin, not an installer-written settings hook'
+  );
+  const manifest = JSON.parse(readUtf8(manifestPath));
+  assert.equal(
+    manifest.name,
+    'awos-containment',
+    `awos-containment plugin.json name must be "awos-containment", got "${manifest.name}"`
+  );
+
+  // The guard script must live where the hook command references it.
+  const guardPath = path.join(
+    repoRoot,
+    'plugins',
+    'awos-containment',
+    'hooks',
+    'awos-containment-guard.js'
+  );
+  assert.ok(
+    fs.existsSync(guardPath),
+    'the containment guard must live at plugins/awos-containment/hooks/awos-containment-guard.js — the path the plugin hook command invokes'
+  );
+
+  // hooks/hooks.json must register a PreToolUse hook that runs the guard via
+  // ${CLAUDE_PLUGIN_ROOT} and matches the tool set the guard inspects.
+  const hooksPath = path.join(
+    repoRoot,
+    'plugins',
+    'awos-containment',
+    'hooks',
+    'hooks.json'
+  );
+  assert.ok(
+    fs.existsSync(hooksPath),
+    'plugins/awos-containment/hooks/hooks.json must exist so Claude Code fires the guard as a PreToolUse hook'
+  );
+  const hooks = JSON.parse(readUtf8(hooksPath));
+  const preToolUse = (hooks.hooks && hooks.hooks.PreToolUse) || [];
+  assert.ok(
+    preToolUse.length > 0,
+    'hooks.json must declare at least one PreToolUse hook group'
+  );
+  const group = preToolUse[0];
+  for (const tool of [
+    'Write',
+    'Edit',
+    'MultiEdit',
+    'NotebookEdit',
+    'Bash',
+    'PowerShell',
+    'Read',
+    'Glob',
+    'Grep',
+  ]) {
+    assert.match(
+      group.matcher,
+      new RegExp(`\\b${tool}\\b`),
+      `the PreToolUse matcher must include ${tool} — the guard inspects Write/Edit/Bash/Read families and must be invoked for each`
+    );
+  }
+  const command = group.hooks[0].command;
+  assert.match(
+    command,
+    /\$\{CLAUDE_PLUGIN_ROOT\}/,
+    'the hook command must resolve the guard via ${CLAUDE_PLUGIN_ROOT} so it works from the plugin install directory'
+  );
+  assert.match(
+    command,
+    /awos-containment-guard\.js/,
+    'the hook command must invoke awos-containment-guard.js'
+  );
+
+  // The marketplace must list awos-containment at the same version as plugin.json.
+  const marketplace = JSON.parse(
+    readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
+  );
+  const entry = marketplace.plugins.find((p) => p.name === 'awos-containment');
+  assert.ok(
+    entry,
+    'marketplace.json plugins[] must contain an awos-containment entry so the installer can register and enable it'
+  );
+  assert.equal(
+    entry.version,
+    manifest.version,
+    `the awos-containment marketplace entry version ("${entry.version}") must match its plugin.json version ("${manifest.version}") — bump both together`
+  );
+});
+
 test('TS engine scaffold present (package.json/tsconfig + collectors/detectors/metrics/tests dirs)', () => {
   const skill = path.join(
     repoRoot,

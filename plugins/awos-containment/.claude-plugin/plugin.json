@@ -1,0 +1,10 @@
+{
+  "name": "awos-containment",
+  "version": "0.1.0",
+  "description": "Least-privilege containment hook: a PreToolUse guard that blocks out-of-tree writes, network egress, and secret reads during AWOS runs",
+  "author": {
+    "name": "Provectus"
+  },
+  "license": "MIT",
+  "keywords": ["security", "containment", "least-privilege", "hook"]
+}

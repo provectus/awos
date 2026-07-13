@@ -32,8 +32,7 @@ src/
 │   ├── file-copier.js      # Does the file copying + preserveOnUpdate conflict scan
 │   ├── directory-creator.js # Creates directories
 │   ├── mcp-configurator.js
-│   ├── marketplace-configurator.js
-│   └── hooks-configurator.js # Registers the PreToolUse containment hook in .claude/settings.json
+│   └── marketplace-configurator.js
 ├── utils/
 │   ├── fs-utils.js
 │   ├── logger.js

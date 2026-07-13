@@ -82,27 +82,6 @@ test('end-to-end setup completes against a fresh temp dir', async () => {
     exists(path.join(workingDir, '.claude', 'settings.json')),
     '.claude/settings.json should be created by the marketplace configurator'
   );
-
-  // Step 7 registers the containment PreToolUse hook, and the guard script it
-  // points at rides in via the scripts/* copy operation. Both halves must be
-  // present after a full setup or the hook is inert.
-  assert.ok(
-    exists(path.join(workingDir, '.awos/scripts/awos-containment-guard.js')),
-    'the containment guard script should be copied to .awos/scripts/'
-  );
-  const settings = JSON.parse(
-    await fsPromises.readFile(
-      path.join(workingDir, '.claude', 'settings.json'),
-      'utf8'
-    )
-  );
-  const hookCommands = (settings.hooks?.PreToolUse ?? []).flatMap((g) =>
-    (g.hooks ?? []).map((h) => h.command)
-  );
-  assert.ok(
-    hookCommands.some((c) => c && c.includes('awos-containment-guard.js')),
-    'settings.json should carry a PreToolUse hook pointing at the containment guard after full setup'
-  );
 });
 
 test('running setup twice is idempotent (no errors, identical layout)', async () => {

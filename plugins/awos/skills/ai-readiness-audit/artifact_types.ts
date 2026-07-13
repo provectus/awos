@@ -90,6 +90,20 @@ export interface Check {
   last_verified?: string | null;
   /** Data sources that fed this check (from standards.toml `sources = [...]`). */
   sources?: string[];
+  // Prevention-coverage fields (see PreventionBlock). The first three are
+  // stamped by buildCheck on PRV checks only, making the dimension artifact
+  // self-describing so aggregate() can recompute the prevention block without
+  // standards access. `prevention` is the linkage annotation stamped on
+  // covered source-dimension checks — in audit.json only, never in the
+  // per-dimension files.
+  /** Prevention cluster slug (PRV checks only, from standards.toml `cluster`). */
+  cluster?: string;
+  /** Source-dimension check_ids this cluster guards (PRV enforcement checks only). */
+  covers_checks?: string[];
+  /** Which half of the cluster pair this PRV check is. */
+  prevention_kind?: 'enforcement' | 'instruction';
+  /** Linkage annotation on covered checks: the guarding cluster and its tier. */
+  prevention?: { cluster: string; tier: PreventionTier };
 }
 
 /** The Check exactly as audit_core WRITES it — every enrichment field present. */
@@ -106,6 +120,80 @@ export type WrittenCheck = Check &
       | 'sources'
     >
   >;
+
+// ---------------------------------------------------------------------------
+// Prevention coverage (linkage view over the prevention-coverage dimension)
+// ---------------------------------------------------------------------------
+
+/**
+ * How a cluster prevents recurrence of its covered failure mode:
+ *   enforced   — a mechanical gate runs (pre-commit/CI/hook/bot)
+ *   instructed — the rule is written in agent-visible instruction files
+ *   absent     — neither; covered PASSes hold by convention only
+ *   pending    — instruction judgment verdict not yet patched
+ */
+export type PreventionTier = 'enforced' | 'instructed' | 'absent' | 'pending';
+
+/** A covered source-dimension check that currently fails or warns. */
+export interface PreventionAtRisk {
+  check_id: string;
+  dimension: string;
+  status: CheckStatus;
+}
+
+export interface PreventionCluster {
+  cluster: string;
+  title: string;
+  tier: PreventionTier;
+  /** True when the tier-deciding check was WARN/PARTIAL (e.g. config-not-gated). */
+  partial: boolean;
+  enforcement: {
+    check_id: string;
+    status: CheckStatus;
+    evidence_head?: string;
+  };
+  instruction: {
+    check_id: string;
+    status: CheckStatus;
+    evidence_head?: string;
+  };
+  covers_checks: string[];
+  /** Covered checks currently FAIL/WARN — likely to recur without prevention. */
+  at_risk: PreventionAtRisk[];
+  /** Covered PASSing check_ids in an `absent` cluster — the fragility signal. */
+  unguarded_passes: string[];
+}
+
+/**
+ * The derived prevention view. Recomputed from the PRV check records by both
+ * audit-core and aggregate() — never preserved, patched, or hand-authored.
+ * Absent entirely on audits produced before the prevention-coverage dimension
+ * existed.
+ */
+export interface PreventionBlock {
+  clusters: PreventionCluster[];
+  summary: {
+    enforced: number;
+    instructed: number;
+    absent: number;
+    pending: number;
+    at_risk_count: number;
+    unguarded_pass_count: number;
+  };
+}
+
+/** Cross-repo prevention rollup entry (org mode) — one per cluster. */
+export interface OrgPreventionGap {
+  cluster: string;
+  title: string;
+  absent_repos: number;
+  instructed_repos: number;
+  enforced_repos: number;
+  pending_repos: number;
+  /** Repos reporting this cluster at all (tier known or pending). */
+  total_repos: number;
+  unguarded_passes_total: number;
+}
 
 // ---------------------------------------------------------------------------
 // Dimension artifact
@@ -362,6 +450,10 @@ export interface AuditJson {
   detection_conflicts?: DetectionConflict[];
   /** Engine-computed connector-gated headline rows — see DerivedDelivery. */
   derived_delivery?: DerivedDelivery;
+  /** Engine-derived prevention view — see PreventionBlock. Recomputed, never patched. */
+  prevention?: PreventionBlock;
+  /** Org-mode cross-repo prevention rollup — see OrgPreventionGap. */
+  prevention_gaps?: OrgPreventionGap[];
   /** Orchestrator probe log per unreachable source — see SourceProbe. */
   source_probes?: SourceProbe[];
   /** Provenance stamp written only by audit-core — see EngineProvenance. */

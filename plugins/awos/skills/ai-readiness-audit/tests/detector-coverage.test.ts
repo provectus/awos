@@ -25,6 +25,7 @@ const AUDIT_DIMENSIONS = new Set([
   'application-security',
   'code-architecture',
   'documentation',
+  'prevention-coverage',
   'quality-assurance',
   'software-best-practices',
   'spec-driven-development',

@@ -140,6 +140,50 @@ The renderer is deterministic and contains no LLM. The plain-language narrative 
 
 Authoring integrity: `headline` numbers and `recommendations` are **transcribed verbatim** from real checks (cite the `check_id`); DORA `band` values are read from the check's `hint` ("DORA-banded (high)"). Git-only display values (merges per contributor, LOC per contributor) are read from `collected/git.json` → `raw.window_stats` and carry no `band` or `check_id`. The gated rows (cycle time, MTTR) are engine-derived from `collected/tracker.json` (`audit.derived_delivery`) — value AND honest gated note — never authored. `source_probes[]` records what was searched per unreachable source; the renderer prints it in "Missed / limited". The orchestrator never invents numbers — it selects and phrases. `recommendations[]` here and the long-form `recommendations.md` come from one authoring pass and must stay in sync.
 
+### Prevention block (engine-derived, never authored)
+
+`audit.json` additionally carries a `prevention` top-level key — the derived view over the prevention-coverage dimension. It is **recomputed by the engine** (`audit-core` and every `aggregate`, including the one `patch-judgment` runs) from the PRV check records; `patch-report` cannot write it and the orchestrator never edits it. Shape:
+
+```json
+{
+  "prevention": {
+    "clusters": [
+      {
+        "cluster": "secrets-hygiene",
+        "title": "Secrets hygiene",
+        "tier": "enforced|instructed|absent|pending",
+        "partial": false,
+        "enforcement": {
+          "check_id": "PRV-01",
+          "status": "PASS",
+          "evidence_head": "…"
+        },
+        "instruction": { "check_id": "PRV-11", "status": "PENDING_JUDGMENT" },
+        "covers_checks": ["AS-05", "AS-12", "AS-13", "AS-14"],
+        "at_risk": [
+          {
+            "check_id": "AS-12",
+            "dimension": "application-security",
+            "status": "FAIL"
+          }
+        ],
+        "unguarded_passes": ["AS-05"]
+      }
+    ],
+    "summary": {
+      "enforced": 3,
+      "instructed": 1,
+      "absent": 2,
+      "pending": 2,
+      "at_risk_count": 4,
+      "unguarded_pass_count": 7
+    }
+  }
+}
+```
+
+Tier semantics: `enforced` (a mechanical gate blocks recurrence) > `instructed` (an agent-visible written rule) > `absent` (nothing — covered PASSes are listed as `unguarded_passes`, the fragility signal); `pending` means the instruction judgment verdict is not yet patched, and finalizes automatically when `patch-judgment` re-aggregates. Covered source-dimension checks inside `audit.json` additionally carry `prevention: { cluster, tier }`. Both live in `audit.json` only — the per-dimension `<name>.json` files deliberately carry the raw PRV checks (with their `cluster`/`covers_checks`/`prevention_kind` fields) but no derived annotations, so a re-aggregation can never read back its own output.
+
 ### Org rollup output (`org-portfolio.json`)
 
 In org mode the engine reads each repo's FULL audit — `context/audits/YYYY-MM-DD_HH-MM-SS/per-repo/<repo>/audit.json` plus its `collected/git.json` — via `node dist/cli.js rollup <per-repo-dir>` and emits an `OrgRollupResult`. It carries the three portfolio cards, an org **headline** (the delivery matrix averaged across repos and re-banded), and an enriched **per_repo** row per repo so the org report's per-repo table can render every column.
@@ -230,6 +274,8 @@ In org mode the engine reads each repo's FULL audit — `context/audits/YYYY-MM-
   ]
 }
 ```
+
+The rollup also emits `prevention_gaps` when any repo carries a prevention block — one entry per cluster with `absent_repos + pending_repos > 0`, sorted by `absent_repos` desc: `{ cluster, title, absent_repos, instructed_repos, enforced_repos, pending_repos, total_repos, unguarded_passes_total }`. PRV checks are excluded from `org_gaps` (prevention_gaps is their org-level expression). The renderer shows it as the "Prevention Gaps (Org)" table.
 
 The deterministic org `headline.delivery[]` has **6 rows** — the 2 git per-active rows (merges/active, LOC/active) plus the 4 git-sourced DORA metrics (deployment frequency, rework rate, lead time, change-failure rate). Cycle-time and MTTR are connector-gated (tracker / incident) and never deterministically computed, so the deterministic org headline omits them entirely. Each `display_value` is the per-metric **mean** across repos and each `band` is the mean re-banded through the same TS band functions (`doraDeployBand`, `reworkBand`, `doraLeadTimeBand`, `doraChangeFailBand`). Row 1 (capability Points + Coverage) stays the `org_capability_score` card and is not duplicated here. A metric is averaged over only the repos that supply a value; `repos_counted` notes that coverage; a metric absent in every repo is omitted. Delivery values are pulled from each repo's audit checks by `check_id` (`DF-01`/`DF-06`/`DF-02`/`DF-04`); `merges_per_active`/`loc_per_active` come from each repo's `collected/git.json` → `raw.window_stats`. The legacy `per_repo` fields are derived from the audit itself — `awarded_weight`/`audit_total` from `audit_total`, `has_ai_tooling` from any awarded AI-tooling code (101–106), `sources_reachable` from the available collector sources, `contributors` from the `DESC-01` check value — so no flat `<repo>.json` summary is required.
 

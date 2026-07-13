@@ -91,6 +91,31 @@ One table per banded metric. Band tables define the human-readable DORA-style th
 | `source`                            | Citation for the band thresholds        |
 | `elite` / `high` / `medium` / `low` | Human-readable threshold strings        |
 
+## Prevention coverage
+
+The `prevention-coverage` dimension (codes 3100–3117) is an AWOS-defined standard: no external body publishes numeric bands for it, so its weights and tier model are AWOS calibration. It measures **stability**, not state — whether the good state the other dimensions score is protected against regression under continued AI code generation.
+
+The dimension is organized into eight **clusters**, each grouping source-dimension checks that share a failure mode (declared via the `covers_checks` key on the cluster's enforcement category, joined to its instruction half via the shared `cluster` key):
+
+| Cluster                   | Guards against recurrence of                      |
+| ------------------------- | ------------------------------------------------- |
+| `secrets-hygiene`         | committed credentials (AS-05, AS-12…AS-14)        |
+| `dependency-supply-chain` | dependency risk (SCS-01…SCS-08)                   |
+| `appsec-design`           | insecure code patterns (AS-01…AS-04, AS-06…AS-11) |
+| `code-style`              | style/format drift (SBP-01…SBP-03)                |
+| `architecture-boundaries` | layering violations (ARCH-01, ARCH-02, ARCH-04)   |
+| `testing-discipline`      | untested changes (QA-01…QA-07, SBP-04)            |
+| `ai-file-integrity`       | tampered agent configuration (AIS-01…AIS-07)      |
+| `docs-freshness`          | stale documentation (DOC-01…DOC-04, DOC-07)       |
+
+Each cluster is scored by two categories and classified into a **tier**:
+
+- **Enforced** (weight 3, `detected`) — a mechanism that runs mechanically blocks recurrence: a pre-commit/husky/lefthook gate, a CI check step, a server-side bot (Dependabot/Renovate), or an agent hook. A WARN here means the mechanism exists but is only partially gated (config present, nothing runs it) — the tier shows `enforced (partial)`.
+- **Instructed** (weight 2, `judgment`) — the rule is written where AI agents will see it (CLAUDE.md chain, AGENTS.md, rules files, skills). Weaker than enforcement: instructions can be ignored or crowded out; a gate cannot. Verdicts must cite the file and quoted passage.
+- **Absent** — neither. Covered checks that currently PASS are reported as **unguarded passes**: they hold by convention only, one regeneration away from regressing.
+
+Enforcement weighs more than instruction deliberately (3 vs 2): only a mechanical gate guarantees "never happens again"; a written rule merely makes recurrence less likely. Totals from standards versions before 2026.07 are not comparable — this dimension added 40 points of applicable weight.
+
 ## Overriding the defaults
 
 To use custom thresholds or add project-specific categories, edit the bundled `standards.toml` in place, or keep a project-local copy and point the engine at it. Weights, bands, scoring curves, and category definitions are all data — no code changes are needed to retune them.

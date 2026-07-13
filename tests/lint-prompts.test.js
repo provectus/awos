@@ -1399,6 +1399,55 @@ test('standards.toml exists and matches the category/band schema', () => {
   );
 });
 
+test('standards.toml prevention-coverage categories carry cluster metadata correctly', () => {
+  const p = path.join(referencesDir, 'standards.toml');
+  const src = readUtf8(p);
+  const prevBlocks = [
+    ...src.matchAll(/\n\[category\.(prev_[^.\]]+)\]([\s\S]*?)(?=\n\[|$)/g),
+  ];
+  assert.ok(
+    prevBlocks.length > 0,
+    'standards.toml must define [category.prev_*] prevention-coverage tables'
+  );
+  for (const [, slug, b] of prevBlocks) {
+    assert.match(
+      b,
+      /^\s*dimension\s*=\s*"prevention-coverage"/m,
+      `[category.${slug}] must belong to the prevention-coverage dimension`
+    );
+    assert.match(
+      b,
+      /^\s*cluster\s*=\s*"[a-z-]+"/m,
+      `[category.${slug}] must declare its cluster slug — the linkage pass joins the pair by it`
+    );
+    const isDetected = /^\s*method\s*=\s*"detected"/m.test(b);
+    const hasCovers = /^\s*covers_checks\s*=\s*\[/m.test(b);
+    if (isDetected) {
+      assert.ok(
+        hasCovers,
+        `[category.${slug}] enforcement (detected) category must declare covers_checks — the source checks its cluster guards`
+      );
+    } else {
+      assert.ok(
+        !hasCovers,
+        `[category.${slug}] covers_checks belongs on the enforcement (detected) half only`
+      );
+    }
+  }
+  // The cluster/covers_checks keys are a prevention-coverage contract — they
+  // must not leak onto other dimensions' categories.
+  for (const m of src.matchAll(
+    /\n\[category\.([^.\]]+)\]([\s\S]*?)(?=\n\[|$)/g
+  )) {
+    const [, slug, b] = m;
+    if (slug.startsWith('prev_')) continue;
+    assert.ok(
+      !/^\s*(cluster|covers_checks)\s*=/m.test(b),
+      `[category.${slug}] must not declare cluster/covers_checks — those keys are prevention-coverage-only`
+    );
+  }
+});
+
 test('scoring.md uses additive weighted categories, not A-F grades', () => {
   const p = path.join(skillRoot, 'scoring.md');
   const src = readUtf8(p);

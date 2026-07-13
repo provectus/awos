@@ -27,7 +27,7 @@
 max_lookback_days = 90
 active_contributor_threshold = 0.05
 rework_horizon_days = 21
-standards_version = "2026.06"
+standards_version = "2026.07"
 # Report row-highlight thresholds, applied to each check's awarded-weight
 # share (weight_awarded / weight_max) — NOT to its status label. A check keeps
 # its status; the row color says how much of the weight it actually earned:
@@ -48,6 +48,7 @@ dimension_order = [
   "ai-development-tooling",
   "spec-driven-development",
   "ai-sdlc-adoption",
+  "prevention-coverage",
   "descriptors",
 ]
 
@@ -1994,6 +1995,345 @@ source = "OWASP SCVS"
 url = "https://owasp.org/www-project-software-component-verification-standard/"
 date = "2020"
 last_verified = "2026-07-06"
+
+# --- prevention-coverage (16 checks) ---
+
+# ---------------------------------------------------------------------------
+# [category.*] — prevention-coverage categories (AWOS Prevention Coverage
+# Standard). Code range 3100–3199: enforcement (detected) 3100–3107,
+# instruction (judgment) 3110–3117. Each cluster pairs one enforcement and
+# one instruction category via the shared `cluster` key; `covers_checks` on
+# the enforcement half names the source-dimension checks whose recurrence the
+# cluster guards. Tier semantics: enforced > instructed > absent.
+# ---------------------------------------------------------------------------
+
+# PRV-01: Secrets hygiene — enforcement gate
+
+[category.prev_secrets_hygiene_enforced]
+code = 3100
+check_id = "PRV-01"
+metric = "PRV-01"
+dimension = "prevention-coverage"
+weight = 3
+method = "detected"
+cluster = "secrets-hygiene"
+covers_checks = ["AS-05", "AS-12", "AS-13", "AS-14"]
+definition = "A secret-scanning gate (gitleaks, trufflehog, detect-secrets, git-secrets, ggshield, secretlint) runs in pre-commit or CI, mechanically blocking committed credentials"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-11: Secrets hygiene — written rule (judgment)
+
+[category.prev_secrets_hygiene_instructed]
+code = 3110
+check_id = "PRV-11"
+metric = "PRV-11"
+dimension = "prevention-coverage"
+weight = 2
+method = "judgment"
+cluster = "secrets-hygiene"
+rubric = "Read the agent-visible instruction surface (root and nested CLAUDE.md, AGENTS.md, .cursorrules, .github/copilot-instructions.md, .claude/rules/, skill files). PASS if an explicit, actionable secrets rule is stated (e.g. never commit credentials; secrets live in env vars or a vault; .env files stay gitignored). WARN if secrets are mentioned but the rule is vague, partial, or buried in boilerplate. FAIL if no agent-visible file states a secrets-handling rule, including when no instruction files exist at all."
+evidence_required = ["file path AND quoted passage(s) where the rule is stated", "which instruction layer carries it (root memory / nested memory / rules file / skill)", "if FAIL: the instruction files that were read and lack the rule"]
+definition = "Agent instruction files state an explicit secrets-handling rule, so AI agents know never to hardcode or commit credentials"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-02: Dependency / supply chain — enforcement gate
+
+[category.prev_dependency_supply_chain_enforced]
+code = 3101
+check_id = "PRV-02"
+metric = "PRV-02"
+dimension = "prevention-coverage"
+weight = 3
+method = "detected"
+cluster = "dependency-supply-chain"
+covers_checks = ["SCS-01", "SCS-02", "SCS-03", "SCS-04", "SCS-05", "SCS-06", "SCS-07", "SCS-08"]
+definition = "Dependency risk is mechanically managed — a vulnerability scanner runs in CI (npm/yarn/pnpm audit, pip-audit, safety, snyk, trivy, grype, osv-scanner) or an update bot (Dependabot, Renovate) is configured"
+applies_when = "topology.has_package_ecosystem"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-12: Dependency / supply chain — written rule (judgment)
+
+[category.prev_dependency_supply_chain_instructed]
+code = 3111
+check_id = "PRV-12"
+metric = "PRV-12"
+dimension = "prevention-coverage"
+weight = 2
+method = "judgment"
+cluster = "dependency-supply-chain"
+rubric = "Read the agent-visible instruction surface (root and nested CLAUDE.md, AGENTS.md, .cursorrules, .github/copilot-instructions.md, .claude/rules/, skill files). PASS if an explicit dependency policy is stated (e.g. do not add dependencies without justification; pin versions; commit lockfiles; run the audit before adding a package). WARN if dependencies are mentioned but no actionable rule is given. FAIL if no agent-visible file states a dependency policy, including when no instruction files exist at all."
+evidence_required = ["file path AND quoted passage(s) where the rule is stated", "which instruction layer carries it (root memory / nested memory / rules file / skill)", "if FAIL: the instruction files that were read and lack the rule"]
+definition = "Agent instruction files state an explicit dependency policy, so AI agents know the rules for adding, pinning, and updating packages"
+applies_when = "topology.has_package_ecosystem"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-03: Application-security design — enforcement gate
+
+[category.prev_appsec_design_enforced]
+code = 3102
+check_id = "PRV-03"
+metric = "PRV-03"
+dimension = "prevention-coverage"
+weight = 3
+method = "detected"
+cluster = "appsec-design"
+covers_checks = ["AS-01", "AS-02", "AS-03", "AS-04", "AS-06", "AS-07", "AS-08", "AS-09", "AS-10", "AS-11"]
+definition = "Static application-security testing runs in CI or pre-commit (Semgrep, CodeQL, Bandit, Brakeman, gosec, eslint-plugin-security, Sonar), mechanically catching insecure patterns before merge"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-13: Application-security design — written rule (judgment)
+
+[category.prev_appsec_design_instructed]
+code = 3112
+check_id = "PRV-13"
+metric = "PRV-13"
+dimension = "prevention-coverage"
+weight = 2
+method = "judgment"
+cluster = "appsec-design"
+rubric = "Read the agent-visible instruction surface (root and nested CLAUDE.md, AGENTS.md, .cursorrules, .github/copilot-instructions.md, .claude/rules/, skill files). PASS if explicit security conventions are stated (e.g. all endpoints require auth middleware; validate input at the boundary; use parameterized queries; never disable TLS verification). WARN if security is mentioned but only as a vague aspiration. FAIL if no agent-visible file states application-security conventions, including when no instruction files exist at all."
+evidence_required = ["file path AND quoted passage(s) where the rule is stated", "which instruction layer carries it (root memory / nested memory / rules file / skill)", "if FAIL: the instruction files that were read and lack the rule"]
+definition = "Agent instruction files state the project's application-security conventions, so AI agents apply them instead of rediscovering them through review"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-04: Code style — enforcement gate
+
+[category.prev_code_style_enforced]
+code = 3103
+check_id = "PRV-04"
+metric = "PRV-04"
+dimension = "prevention-coverage"
+weight = 3
+method = "detected"
+cluster = "code-style"
+covers_checks = ["SBP-01", "SBP-02", "SBP-03"]
+definition = "A linter or formatter is gated — invoked from pre-commit/husky/lint-staged or run as a CI check step — not merely configured in the repo"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-14: Code style — written rule (judgment)
+
+[category.prev_code_style_instructed]
+code = 3113
+check_id = "PRV-14"
+metric = "PRV-14"
+dimension = "prevention-coverage"
+weight = 2
+method = "judgment"
+cluster = "code-style"
+rubric = "Read the agent-visible instruction surface (root and nested CLAUDE.md, AGENTS.md, .cursorrules, .github/copilot-instructions.md, .claude/rules/, skill files). PASS if explicit style/formatting rules are stated (e.g. named formatter with its config, lint command to run before committing, naming or import conventions beyond tool defaults). WARN if style is mentioned without an actionable rule or command. FAIL if no agent-visible file states style rules, including when no instruction files exist at all."
+evidence_required = ["file path AND quoted passage(s) where the rule is stated", "which instruction layer carries it (root memory / nested memory / rules file / skill)", "if FAIL: the instruction files that were read and lack the rule"]
+definition = "Agent instruction files state the project's style and formatting rules, so AI-generated code conforms without review churn"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-05: Architecture boundaries — enforcement gate
+
+[category.prev_architecture_boundaries_enforced]
+code = 3104
+check_id = "PRV-05"
+metric = "PRV-05"
+dimension = "prevention-coverage"
+weight = 3
+method = "detected"
+cluster = "architecture-boundaries"
+covers_checks = ["ARCH-01", "ARCH-02", "ARCH-04"]
+definition = "Module-boundary rules are mechanically checked (dependency-cruiser, import-linter, ArchUnit, eslint-plugin-boundaries, Nx enforce-module-boundaries) and invoked from a gate (pre-commit or CI)"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-15: Architecture boundaries — written rule (judgment)
+
+[category.prev_architecture_boundaries_instructed]
+code = 3114
+check_id = "PRV-15"
+metric = "PRV-15"
+dimension = "prevention-coverage"
+weight = 2
+method = "judgment"
+cluster = "architecture-boundaries"
+rubric = "Read the agent-visible instruction surface (root and nested CLAUDE.md, AGENTS.md, .cursorrules, .github/copilot-instructions.md, .claude/rules/, skill files). PASS if explicit architecture rules are stated (e.g. layering direction, which modules may import which, where new code of each kind belongs). WARN if architecture is described but no rule constrains agent changes. FAIL if no agent-visible file states architecture boundaries, including when no instruction files exist at all."
+evidence_required = ["file path AND quoted passage(s) where the rule is stated", "which instruction layer carries it (root memory / nested memory / rules file / skill)", "if FAIL: the instruction files that were read and lack the rule"]
+definition = "Agent instruction files state the project's architecture boundaries, so AI agents place code correctly and respect layering"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-06: Testing discipline — enforcement gate
+
+[category.prev_testing_discipline_enforced]
+code = 3105
+check_id = "PRV-06"
+metric = "PRV-06"
+dimension = "prevention-coverage"
+weight = 3
+method = "detected"
+cluster = "testing-discipline"
+covers_checks = ["QA-01", "QA-02", "QA-03", "QA-04", "QA-05", "QA-06", "QA-07", "SBP-04"]
+definition = "CI runs the test suite on every change and enforces a coverage threshold (e.g. --cov-fail-under, coverageThreshold, JaCoCo verification), so untested code cannot merge silently"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-16: Testing discipline — written rule (judgment)
+
+[category.prev_testing_discipline_instructed]
+code = 3115
+check_id = "PRV-16"
+metric = "PRV-16"
+dimension = "prevention-coverage"
+weight = 2
+method = "judgment"
+cluster = "testing-discipline"
+rubric = "Read the agent-visible instruction surface (root and nested CLAUDE.md, AGENTS.md, .cursorrules, .github/copilot-instructions.md, .claude/rules/, skill files). PASS if explicit testing rules are stated (e.g. tests ship with every change, how to run the suite, what kinds of tests new features need). WARN if testing is mentioned without an actionable rule or command. FAIL if no agent-visible file states testing expectations, including when no instruction files exist at all."
+evidence_required = ["file path AND quoted passage(s) where the rule is stated", "which instruction layer carries it (root memory / nested memory / rules file / skill)", "if FAIL: the instruction files that were read and lack the rule"]
+definition = "Agent instruction files state the project's testing expectations, so AI agents ship tests with changes instead of leaving coverage to reviewers"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-07: AI-file integrity — enforcement gate
+
+[category.prev_ai_file_integrity_enforced]
+code = 3106
+check_id = "PRV-07"
+metric = "PRV-07"
+dimension = "prevention-coverage"
+weight = 3
+method = "detected"
+cluster = "ai-file-integrity"
+covers_checks = ["AIS-01", "AIS-02", "AIS-03", "AIS-04", "AIS-05", "AIS-06", "AIS-07"]
+definition = "Agent configuration files and sensitive paths are mechanically guarded — hooks restrict agent access to secrets/config, or CI checks agent instruction files for integrity"
+applies_when = "topology.has_ai_agent_files"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-17: AI-file integrity — written rule (judgment)
+
+[category.prev_ai_file_integrity_instructed]
+code = 3116
+check_id = "PRV-17"
+metric = "PRV-17"
+dimension = "prevention-coverage"
+weight = 2
+method = "judgment"
+cluster = "ai-file-integrity"
+rubric = "Read the agent-visible instruction surface (root and nested CLAUDE.md, AGENTS.md, .cursorrules, .github/copilot-instructions.md, .claude/rules/, skill files). PASS if explicit rules govern the agent configuration surface itself (e.g. changes to CLAUDE.md/hooks/MCP config need review; never weaken hook guards; treat instruction files as security-sensitive). WARN if agent files are mentioned without a protective rule. FAIL if no agent-visible file states such rules, including when no instruction files exist at all."
+evidence_required = ["file path AND quoted passage(s) where the rule is stated", "which instruction layer carries it (root memory / nested memory / rules file / skill)", "if FAIL: the instruction files that were read and lack the rule"]
+definition = "Agent instruction files state rules protecting the agent configuration surface itself, so AI agents treat prompts, hooks, and MCP config as security-sensitive"
+applies_when = "topology.has_ai_agent_files"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-08: Docs freshness — enforcement gate
+
+[category.prev_docs_freshness_enforced]
+code = 3107
+check_id = "PRV-08"
+metric = "PRV-08"
+dimension = "prevention-coverage"
+weight = 3
+method = "detected"
+cluster = "docs-freshness"
+covers_checks = ["DOC-01", "DOC-02", "DOC-03", "DOC-04", "DOC-07"]
+definition = "Documentation is mechanically checked — a link checker, markdown lint, or strict docs build (lychee, markdown-link-check, linkinator, markdownlint, vale, mkdocs --strict) runs in CI or pre-commit"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
+
+# PRV-18: Docs freshness — written rule (judgment)
+
+[category.prev_docs_freshness_instructed]
+code = 3117
+check_id = "PRV-18"
+metric = "PRV-18"
+dimension = "prevention-coverage"
+weight = 2
+method = "judgment"
+cluster = "docs-freshness"
+rubric = "Read the agent-visible instruction surface (root and nested CLAUDE.md, AGENTS.md, .cursorrules, .github/copilot-instructions.md, .claude/rules/, skill files). PASS if an explicit docs-maintenance rule is stated (e.g. update README/docs alongside code changes; keep referenced commands and paths valid). WARN if documentation is mentioned without an actionable rule. FAIL if no agent-visible file states a docs-maintenance rule, including when no instruction files exist at all."
+evidence_required = ["file path AND quoted passage(s) where the rule is stated", "which instruction layer carries it (root memory / nested memory / rules file / skill)", "if FAIL: the instruction files that were read and lack the rule"]
+definition = "Agent instruction files state a docs-maintenance rule, so AI agents keep documentation aligned with the code they change"
+applies_when = "always"
+sources = ["audit"]
+reliability_default = "maximal"
+source = "AWOS Prevention Coverage Standard"
+url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
+date = "2026-07"
+last_verified = "2026-07-13"
 
 # --- org-portfolio (3 checks) ---
 

@@ -672,6 +672,28 @@ test('commands/tasks.md marks an unreviewed tasks.md and clears it on review', (
   );
 });
 
+test('commands/implement.md gates on the not-user-reviewed marker and verifies subagent claims', () => {
+  // /awos:implement is the marker's consumer: a draft-grade tasks.md
+  // must not execute silently. The literal marker string is the join
+  // key with commands/tasks.md. The same command must also treat a
+  // subagent's success report as a claim to spot-check, not a fact —
+  // the two trust gates that keep an unreviewed or unverified plan
+  // from advancing on autopilot.
+  const body = readUtf8(path.join(commandsDir, 'implement.md'));
+  assert.ok(
+    body.includes('<!-- not-user-reviewed -->'),
+    'commands/implement.md must check the literal "<!-- not-user-reviewed -->" marker before executing a plan, so drafts /awos:tasks saved unreviewed are gated'
+  );
+  assert.ok(
+    /claim, not a fact/i.test(body),
+    "commands/implement.md Step 4 must frame a subagent's report as a claim to verify, not a fact to relay"
+  );
+  assert.ok(
+    !/assume that a success signal/i.test(body),
+    'commands/implement.md must not instruct the orchestrator to assume a subagent success signal means the task completed'
+  );
+});
+
 test('commands/verify.md acknowledges the skip-tests marker', () => {
   // The Slack thread feedback frames /awos:verify as look-and-feel +
   // spec-freshness rather than a test runner. The skip-tests marker

@@ -41,7 +41,8 @@ Follow this process precisely. Steps 2–5 form the per-task loop: repeat them f
 1.  Analyze `<user_prompt>`. If it names a specific task, set scope to that single task in the spec it belongs to. If it names a spec (without a specific task), set the target spec from the prompt and set scope to "every incomplete (`[ ]`) task in that spec".
 2.  Otherwise (no prompt): scan `context/spec/` in order, find the first directory whose `tasks.md` has an incomplete item (`[ ]`), select it as the target spec, and set scope to "every incomplete task in that spec".
 3.  If no target can be determined (ambiguous prompt, or all tasks are done), tell the user and stop.
-4.  Load the static spec context once, in parallel:
+4.  Check the top of the target spec's `tasks.md` for the `<!-- not-user-reviewed -->` marker. `/awos:tasks` writes it when it saves a draft plan and removes it only after the user has reviewed the plan — if it is still present, this plan was never reviewed. Ask via `AskUserQuestion` how to proceed: "Stop and review the plan first" (recommended — re-run `/awos:tasks` to finish the review) or "Proceed with the unreviewed draft". On stop, end the run. On proceed, continue but leave the marker in place — proceeding accepts the risk for this run only; it is not a review.
+5.  Load the static spec context once, in parallel:
     - `[target-spec-directory]/functional-spec.md`
     - `[target-spec-directory]/technical-considerations.md`
 
@@ -78,7 +79,12 @@ You do not write or edit code, configuration, or database schemas yourself. Your
 
 ### Step 4: Await and Verify Completion
 
-- Wait for the subagent to complete its work and report a successful outcome. You should assume that a success signal from the subagent means the task was completed as instructed.
+Wait for the subagent to finish and read its report. A subagent's report is a claim, not a fact — do not mark the task done on the success signal alone:
+
+1.  Spot-check the claim: read one or two of the files the report says it created or modified and confirm the described change is actually there.
+2.  Confirm the verification commands from the task's definition of success (Step 3) were run — the report should state their outcome. If the report is vague about verification, or the spot-check contradicts it, treat the task as failed: do not mark it `[x]`, stop the loop, surface the mismatch between the report and what you found, and wait for user direction.
+
+Keep this proportionate — a spot-check, not a full re-review. And it never turns you into an implementer: if the spot-check finds a gap, that is a failure to surface, not something to fix yourself.
 
 ### Step 5: Update Progress and Loop
 

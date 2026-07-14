@@ -918,13 +918,12 @@ test('fix-bug template reads remote links, sweeps all surfaces, and verifies sub
 });
 
 test('flow.md generator version constant matches plugin.json and stamps the artifacts', () => {
-  // Road-test #2 finding: after `git pull` in the marketplace clone, an
-  // already-running session kept executing the stale cached command text
-  // with no signal. flow.md carries a literal generator-version constant
-  // checked against plugin.json on invocation (a mismatch means the
-  // session must restart), and every generated artifact's footer marker
-  // is stamped with that version. This test keeps the constant in sync
-  // with the manifest so the stale-session check stays truthful.
+  // flow.md carries a literal generator-version constant with two jobs:
+  // every generated artifact's footer marker is stamped with it (Step 6),
+  // and the re-run detector compares each artifact's footer `version=`
+  // against it to decide whether the templates have moved on (Step 1.4).
+  // This test keeps the constant in sync with the manifest so the footer
+  // provenance and re-run detection stay truthful.
   const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
   const manifest = JSON.parse(
     readUtf8(
@@ -934,12 +933,12 @@ test('flow.md generator version constant matches plugin.json and stamps the arti
   const constant = flow.match(/generator version is `([^`]+)`/);
   assert.ok(
     constant,
-    'flow.md Step 1 must declare a literal generator-version constant ("generator version is `X.Y.Z`") for the stale-session check'
+    'flow.md Step 1 must declare a literal generator-version constant ("generator version is `X.Y.Z`") for the footer stamp and re-run detection'
   );
   assert.strictEqual(
     constant[1],
     manifest.version,
-    `flow.md generator-version constant (${constant[1]}) must equal plugins/awos/.claude-plugin/plugin.json version (${manifest.version}) — bump them together or the stale-session check misfires`
+    `flow.md generator-version constant (${constant[1]}) must equal plugins/awos/.claude-plugin/plugin.json version (${manifest.version}) — bump them together or the footer stamp and re-run detection go stale`
   );
 
   const marketplace = JSON.parse(

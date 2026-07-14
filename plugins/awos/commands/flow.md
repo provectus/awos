@@ -51,7 +51,7 @@ Follow this process precisely.
 
 ## Step 1: Prerequisite Checks & Mode Detection
 
-1.  **Stale-session check.** This command's generator version is `2.3.0` (a literal constant, kept in sync with the plugin manifest). Read `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`: if its `version` differs, the session is running a cached older copy of this command — the plugin was updated (e.g. `git pull` in the marketplace clone) after the session loaded it. Tell the user to restart the session so the updated command loads, and stop; generating from a stale prompt silently drops the update's fixes.
+1.  **Generator version.** This command's generator version is `2.3.0` (a literal constant, kept in sync with the plugin manifest — the lint suite enforces the match). It has two jobs: Step 6 stamps it into every generated artifact's footer marker, and the re-run detector (item 4) compares each artifact's footer `version=` against it to decide whether the templates have moved on. It drives no session check of its own — a command loaded from a stale marketplace cache needs no upfront halt, because the next re-run on the updated command sees the older footer version and regenerates every stage.
 2.  If `context/product/architecture.md` does not exist, stop and tell the user to run `/awos:architecture` first.
 3.  If `context/product/hired-agents.md` does not exist, recommend running `/awos:hire` first (the generated flow references the hired specialists), but let the user continue without it.
 4.  Detect the mode:

@@ -1699,7 +1699,14 @@ test('report templates use weighted points + reliability, not grades', () => {
   );
 });
 
-test('plugin.json version matches the awos marketplace entry and equals 2.2.0', () => {
+// The plugin version is independent of the npm installer version (which
+// release-drafter manages via PR labels). It is bumped MANUALLY when plugin
+// behavior changes — always as one deliberate commit moving three files
+// together: plugin.json, marketplace.json, and this pinned literal. The pin
+// exists to force that deliberateness, not to freeze the version.
+const EXPECTED_PLUGIN_VERSION = '2.3.0';
+
+test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
     readUtf8(
       path.join(repoRoot, 'plugins', 'awos', '.claude-plugin', 'plugin.json')
@@ -1722,8 +1729,8 @@ test('plugin.json version matches the awos marketplace entry and equals 2.2.0', 
   );
   assert.equal(
     pluginManifest.version,
-    '2.2.0',
-    `plugins/awos/.claude-plugin/plugin.json version must be "2.2.0" (release version is managed by release-drafter, not bumped per change), got "${pluginManifest.version}"`
+    EXPECTED_PLUGIN_VERSION,
+    `plugins/awos/.claude-plugin/plugin.json version must be "${EXPECTED_PLUGIN_VERSION}" — the plugin version moves as one deliberate commit (plugin.json + marketplace.json + this pin together) when plugin behavior changes; it is independent of the npm release version release-drafter manages. Got "${pluginManifest.version}"`
   );
 });
 

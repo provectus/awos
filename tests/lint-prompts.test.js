@@ -2384,8 +2384,17 @@ test('SKILL.md Step 2 dispatches a combined audit+backlog intent', () => {
   );
   assert.match(
     src,
-    /skipping Generate mode step 1's audit picker entirely/,
-    "SKILL.md Step 2 must state that a combined run skips Generate mode step 1's audit picker entirely"
+    /skip[^.]*audit picker/i,
+    'SKILL.md Step 2 must state that a combined run skips the Generate mode audit picker (contract, not exact wording)'
+  );
+});
+
+test('SKILL.md Step 2 generate-only bullet defers to Combined when a fresh audit is also requested', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /fresh\/full\/new audit, it is Combined, not generate-only/,
+    'SKILL.md Step 2 generate-request bullet must hand off to the Combined bullet when the request also names a fresh/full/new audit, so it does not skip the audit pipeline by mistake'
   );
 });
 
@@ -2395,5 +2404,19 @@ test('SKILL.md Generate mode documents combined-run entry at step 2', () => {
     src,
     /a combined-intent run enters at step 2/,
     'SKILL.md Generate mode section must state that a combined-intent run enters directly at step 2 with the just-written audit dir'
+  );
+});
+
+test('SKILL.md Step 6 carves out combined runs from the audit-only close-out', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /combined run[^.]*Step 6 is not the end/i,
+    'SKILL.md Step 6 must state that a combined run does not end at the report — it continues into Generate mode step 2 in the same session, so a headless combined run cannot stop at Step 6 without generating the backlog'
+  );
+  assert.match(
+    src,
+    /Combined runs skip this hint/,
+    'SKILL.md Step 6 closing hint must be suppressed for combined runs (the backlog is already in flight, so re-teaching the generate command is redundant)'
   );
 });

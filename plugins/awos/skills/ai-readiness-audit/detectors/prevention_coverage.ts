@@ -380,6 +380,11 @@ const ARCH_CONFIG_FILES = [
 const IMPORTLINTER_RX = /^\[(tool\.)?importlinter\]/m;
 const ESLINT_BOUNDARIES_RX =
   /(eslint-plugin-boundaries|import\/no-restricted-paths|enforce-module-boundaries)/;
+// An eslint invocation in a gate surface, including lint-script runs through
+// every package manager LINT_GATE_RX recognizes (pnpm aliases any script as
+// a subcommand, so `pnpm lint` ≡ `pnpm run lint` — the usual Nx gate).
+const ESLINT_GATE_RX =
+  /\beslint\b|\bnpm run lint\b|\bpnpm (run )?lint\b|\byarn lint\b/i;
 const ARCHUNIT_RX = /\barchunit\b/i;
 
 export function detectArchBoundariesGate(
@@ -419,9 +424,7 @@ export function detectArchBoundariesGate(
     return content !== null && ESLINT_BOUNDARIES_RX.test(content);
   });
   if (boundaryConfig) {
-    const eslintGated =
-      gateMatches(surfaces, /\beslint\b|\bnpm run lint\b|\byarn lint\b/i)
-        .length > 0;
+    const eslintGated = gateMatches(surfaces, ESLINT_GATE_RX).length > 0;
     const rel = relative(repoPath, boundaryConfig);
     if (eslintGated) {
       return makeResult('PASS', 1, [

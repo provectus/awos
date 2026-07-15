@@ -263,6 +263,17 @@ test('PRV-05: eslint boundary rules with eslint gated in CI is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
+test('PRV-05: eslint boundary rules gated via `pnpm lint` is PASS — pnpm aliases scripts as subcommands', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, '.eslintrc.json'),
+    JSON.stringify({ plugins: ['eslint-plugin-boundaries'] })
+  );
+  writeCiWorkflow(t, 'jobs:\n  lint:\n    steps:\n      - run: pnpm lint\n');
+  const r = detectArchBoundariesGate(t);
+  assert.equal(r.status, 'PASS');
+});
+
 test('PRV-05: no boundary mechanism is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'main.ts'), 'export {};\n');

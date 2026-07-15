@@ -183,7 +183,7 @@ export function aggregate(outDir: string): void {
  * running audit-core — refuse, with the fix in the message. Returns the
  * parsed audit.json.
  */
-function requireStampedAudit(
+export function requireStampedAudit(
   outDir: string,
   verb: string
 ): Record<string, unknown> {

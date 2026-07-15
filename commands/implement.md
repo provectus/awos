@@ -41,7 +41,7 @@ Follow this process precisely. Steps 2–5 form the per-task loop: repeat them f
 1.  Analyze `<user_prompt>`. If it names a specific task, set scope to that single task in the spec it belongs to. If it names a spec (without a specific task), set the target spec from the prompt and set scope to "every incomplete (`[ ]`) task in that spec".
 2.  Otherwise (no prompt): scan `context/spec/` in order, find the first directory whose `tasks.md` has an incomplete item (`[ ]`), select it as the target spec, and set scope to "every incomplete task in that spec".
 3.  If no target can be determined (ambiguous prompt, or all tasks are done), tell the user and stop.
-4.  Check the top of the target spec's `tasks.md` for the `<!-- not-user-reviewed -->` marker. `/awos:tasks` writes it when it saves a draft plan and removes it only after the user has reviewed the plan — if it is still present, this plan was never reviewed. Ask via `AskUserQuestion` how to proceed: "Stop and review the plan first" (recommended — re-run `/awos:tasks` to finish the review) or "Proceed with the unreviewed draft". On stop, end the run. On proceed, continue but leave the marker in place — proceeding accepts the risk for this run only; it is not a review.
+4.  Check the top of the target spec's `tasks.md` for the `<!-- not-user-reviewed -->` marker. `/awos:tasks` writes it when it saves a draft plan and removes it only after the user has reviewed the plan — if it is still present, this plan was never reviewed. Tell the user the plan is an unreviewed draft, ask them to re-run `/awos:tasks` to finish the review, and stop.
 5.  Load the static spec context once, in parallel:
     - `[target-spec-directory]/functional-spec.md`
     - `[target-spec-directory]/technical-considerations.md`

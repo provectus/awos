@@ -93,7 +93,7 @@ One table per banded metric. Band tables define the human-readable DORA-style th
 
 ## Prevention coverage
 
-The `prevention-coverage` dimension (codes 3100–3117) is an AWOS-defined standard: no external body publishes numeric bands for it, so its weights and tier model are AWOS calibration. It measures **stability**, not state — whether the good state the other dimensions score is protected against regression under continued AI code generation.
+The `prevention-coverage` dimension (codes 3100–3117) measures **stability**, not state — whether the good state the other dimensions score is protected against regression under continued AI code generation. Each category anchors to an external authority inherited from the checks its cluster covers: enforcement halves cite the standard behind the guarded failure mode (NIST SSDF SP 800-218 for secrets/SAST gates, OWASP SCVS for dependency automation, Martin Fowler CI/CD and the Software Architecture Guide for style/boundary gates, Google's Code Coverage Best Practices for the test gate, OWASP Top 10 for LLM Applications for the agent surface, Diátaxis for docs), and instruction halves cite Anthropic's Claude Code best practices — the one area where external literature on agent-visible instruction files exists. The **tier model and the 3/2 weights are AWOS calibration**: no external body publishes numeric bands for prevention coverage itself.
 
 The dimension is organized into eight **clusters**, each grouping source-dimension checks that share a failure mode (declared via the `covers_checks` key on the cluster's enforcement category, joined to its instruction half via the shared `cluster` key):
 

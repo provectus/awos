@@ -2022,10 +2022,10 @@ definition = "A secret-scanning gate (gitleaks, trufflehog, detect-secrets, git-
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "NIST SSDF (SP 800-218)"
+url = "https://csrc.nist.gov/pubs/sp/800/218/final"
+date = "2022-02"
+last_verified = "2026-07-06"
 
 # PRV-11: Secrets hygiene — written rule (judgment)
 
@@ -2043,10 +2043,10 @@ definition = "Agent instruction files state an explicit secrets-handling rule, s
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
 
 # PRV-02: Dependency / supply chain — enforcement gate
 
@@ -2063,10 +2063,10 @@ definition = "Dependency risk is mechanically managed — a vulnerability scanne
 applies_when = "topology.has_package_ecosystem"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "OWASP SCVS"
+url = "https://owasp.org/www-project-software-component-verification-standard/"
+date = "2020"
+last_verified = "2026-07-06"
 
 # PRV-12: Dependency / supply chain — written rule (judgment)
 
@@ -2084,10 +2084,10 @@ definition = "Agent instruction files state an explicit dependency policy, so AI
 applies_when = "topology.has_package_ecosystem"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
 
 # PRV-03: Application-security design — enforcement gate
 
@@ -2104,10 +2104,10 @@ definition = "Static application-security testing runs in CI or pre-commit (Semg
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "NIST SSDF (SP 800-218)"
+url = "https://csrc.nist.gov/pubs/sp/800/218/final"
+date = "2022-02"
+last_verified = "2026-07-06"
 
 # PRV-13: Application-security design — written rule (judgment)
 
@@ -2125,10 +2125,10 @@ definition = "Agent instruction files state the project's application-security c
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
 
 # PRV-04: Code style — enforcement gate
 
@@ -2145,10 +2145,10 @@ definition = "A linter or formatter is gated — invoked from pre-commit/husky/l
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Martin Fowler CI/CD"
+url = "https://martinfowler.com/articles/continuousIntegration.html"
+date = "2024-01-18"
+last_verified = "2026-07-06"
 
 # PRV-14: Code style — written rule (judgment)
 
@@ -2166,10 +2166,10 @@ definition = "Agent instruction files state the project's style and formatting r
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
 
 # PRV-05: Architecture boundaries — enforcement gate
 
@@ -2186,10 +2186,10 @@ definition = "Module-boundary rules are mechanically checked (dependency-cruiser
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Martin Fowler — Software Architecture Guide"
+url = "https://martinfowler.com/architecture/"
+date = "2019"
+last_verified = "2026-07-06"
 
 # PRV-15: Architecture boundaries — written rule (judgment)
 
@@ -2207,10 +2207,10 @@ definition = "Agent instruction files state the project's architecture boundarie
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
 
 # PRV-06: Testing discipline — enforcement gate
 
@@ -2223,14 +2223,15 @@ weight = 3
 method = "detected"
 cluster = "testing-discipline"
 covers_checks = ["QA-01", "QA-02", "QA-03", "QA-04", "QA-05", "QA-06", "QA-07", "SBP-04"]
-definition = "CI runs the test suite on every change and enforces a coverage threshold (e.g. --cov-fail-under, coverageThreshold, JaCoCo verification), so untested code cannot merge silently"
+summary = "CI runs the test suite on every change and enforces a coverage threshold, so untested code cannot merge silently"
+definition = "CI runs the test suite on every change and enforces a coverage threshold (e.g. --cov-fail-under, coverageThreshold, JaCoCo verification), so untested code cannot merge silently. Google's published coverage guidance bands thresholds at 60% acceptable / 75% commendable / 90% exemplary; this check grades the gate's presence only — the threshold value itself is not scored (AWOS heuristic; the detector does not parse the number)"
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Google Testing Blog — Code Coverage Best Practices"
+url = "https://testing.googleblog.com/2020/08/code-coverage-best-practices.html"
+date = "2020-08-07"
+last_verified = "2026-07-06"
 
 # PRV-16: Testing discipline — written rule (judgment)
 
@@ -2248,10 +2249,10 @@ definition = "Agent instruction files state the project's testing expectations, 
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
 
 # PRV-07: AI-file integrity — enforcement gate
 
@@ -2268,10 +2269,10 @@ definition = "Agent configuration files and sensitive paths are mechanically gua
 applies_when = "topology.has_ai_agent_files"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "OWASP Top 10 for LLM Applications"
+url = "https://genai.owasp.org/llm-top-10/"
+date = "2025"
+last_verified = "2026-07-06"
 
 # PRV-17: AI-file integrity — written rule (judgment)
 
@@ -2289,10 +2290,10 @@ definition = "Agent instruction files state rules protecting the agent configura
 applies_when = "topology.has_ai_agent_files"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
 
 # PRV-08: Docs freshness — enforcement gate
 
@@ -2309,10 +2310,10 @@ definition = "Documentation is mechanically checked — a link checker, markdown
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Diátaxis — quality (completeness)"
+url = "https://diataxis.fr/quality/"
+date = "2024"
+last_verified = "2026-07-06"
 
 # PRV-18: Docs freshness — written rule (judgment)
 
@@ -2330,10 +2331,10 @@ definition = "Agent instruction files state a docs-maintenance rule, so AI agent
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS Prevention Coverage Standard"
-url = "https://github.com/provectus/awos/blob/main/plugins/awos/skills/ai-readiness-audit/references/standards.md#prevention-coverage"
-date = "2026-07"
-last_verified = "2026-07-13"
+source = "Anthropic — Claude Code best practices"
+url = "https://code.claude.com/docs/en/best-practices"
+date = "2026-06"
+last_verified = "2026-07-06"
 
 # --- org-portfolio (3 checks) ---
 

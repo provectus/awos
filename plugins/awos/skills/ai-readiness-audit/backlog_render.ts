@@ -211,9 +211,9 @@ const BACKLOG_JS = `
   function fmtDays(x){ return (Math.round(x * 10) / 10).toString(); }
   function recompute(){
     var n = Math.max(1, parseInt(devs.value, 10) || 1);
-    var effort = 0, coverage = 0;
+    var effort = 0, coverage = 0, recovered = 0;
     tickets.forEach(function(t){
-      if(!disabled[t.slug]){ effort += t.effort_dev_days; coverage += t.coverage_delta; }
+      if(!disabled[t.slug]){ effort += t.effort_dev_days; coverage += t.coverage_delta; recovered += t.missing_weight_recovered; }
     });
     var speedup = 1 / ((1 - P) + P / n);
     var duration = effort / speedup;
@@ -224,6 +224,8 @@ const BACKLOG_JS = `
       'Σ effort of enabled tickets = ' + fmtDays(effort) + ' d/dev';
     document.getElementById('rb-duration-tip').textContent =
       'duration = effort ÷ speedup(n); speedup(n) = 1/((1−' + P + ')+' + P + '/n); at n=' + n + ' → ' + duration.toFixed(1) + ' cal-days';
+    document.getElementById('rb-coverage-tip').textContent =
+      'Σ coverage_delta of enabled tickets = ' + recovered.toFixed(1) + ' ÷ ' + data.total_applicable_weight + ' applicable weight = +' + (coverage * 100).toFixed(1) + '%';
   }
   function applyDisabled(){
     tickets.forEach(function(t){
@@ -345,6 +347,10 @@ function renderOrgBacklogHtml(backlog: OrgBacklogJson): string {
   const P = backlog.parallelizable_share;
   const effortAll = backlog.tickets.reduce((s, t) => s + t.effort_dev_days, 0);
   const durationAll = effortAll;
+  const recoveredAll = backlog.tickets.reduce(
+    (s, t) => s + t.missing_weight_recovered,
+    0
+  );
   const coverageAll =
     backlog.tickets.reduce((s, t) => s + t.coverage_delta, 0) * 100;
   const speedupFormula = `1/((1−${P})+${P}/n)`;
@@ -368,10 +374,14 @@ function renderOrgBacklogHtml(backlog: OrgBacklogJson): string {
   }).replaceAll('</', '<\\/');
 
   const repoLinks = backlog.repos
-    .map(
-      (r) =>
-        `<li><a href="${esc(r.backlog_href)}">${esc(r.repo)}</a> <span class="repo-weight">(${r.total_applicable_weight} pts applicable)</span></li>`
-    )
+    .map((r) => {
+      // Audit-only fallback repos have no generated backlog.html — render the
+      // name as plain text instead of a link that would 404.
+      const name = r.backlog_href
+        ? `<a href="${esc(r.backlog_href)}">${esc(r.repo)}</a>`
+        : esc(r.repo);
+      return `<li>${name} <span class="repo-weight">(${r.total_applicable_weight} pts applicable)</span></li>`;
+    })
     .join('');
 
   return `<!DOCTYPE html>
@@ -422,7 +432,7 @@ function renderOrgBacklogHtml(backlog: OrgBacklogJson): string {
   <span class="rb-stat tip">
     <span class="rb-label">Coverage gain</span>
     <span id="rb-coverage" class="rb-val">+${coverageAll.toFixed(1)}%</span>
-    <span class="tipbox" id="rb-coverage-tip">Share of the currently-defined applicable weight across the whole portfolio these tickets would add.</span>
+    <span class="tipbox" id="rb-coverage-tip">Σ coverage_delta of enabled tickets = ${recoveredAll.toFixed(1)} ÷ ${backlog.total_applicable_weight} applicable weight = +${coverageAll.toFixed(1)}%</span>
   </span>
   <button id="enable-all">Enable all nodes</button>
 </div>
@@ -477,6 +487,10 @@ export function renderBacklogHtml(
   const effortAll = backlog.tickets.reduce((s, t) => s + t.effort_dev_days, 0);
   // speedup(1) = 1, so the initial single-developer duration equals total effort.
   const durationAll = effortAll;
+  const recoveredAll = backlog.tickets.reduce(
+    (s, t) => s + t.missing_weight_recovered,
+    0
+  );
   const coverageAll =
     backlog.tickets.reduce((s, t) => s + t.coverage_delta, 0) * 100;
   const speedupFormula = `1/((1−${P})+${P}/n)`;
@@ -537,7 +551,7 @@ export function renderBacklogHtml(
   <span class="rb-stat tip">
     <span class="rb-label">Coverage gain</span>
     <span id="rb-coverage" class="rb-val">+${coverageAll.toFixed(1)}%</span>
-    <span class="tipbox" id="rb-coverage-tip">Share of the currently-defined applicable weight these tickets would add.</span>
+    <span class="tipbox" id="rb-coverage-tip">Σ coverage_delta of enabled tickets = ${recoveredAll.toFixed(1)} ÷ ${backlog.total_applicable_weight} applicable weight = +${coverageAll.toFixed(1)}%</span>
   </span>
   <button id="enable-all">Enable all nodes</button>
 </div>

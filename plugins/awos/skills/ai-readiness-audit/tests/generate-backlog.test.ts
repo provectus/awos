@@ -213,6 +213,16 @@ test('malformed drafts are named violations (dup id, bad effort, empty checks)',
   );
 });
 
+test('an empty tickets array is rejected, not silently written as an empty backlog', () => {
+  assert.throws(
+    () => buildBacklog(fixtureAudit(), draft([])),
+    (err: BacklogValidationError) =>
+      err instanceof BacklogValidationError &&
+      err.violations.some((v) => v === 'draft has no tickets'),
+    'an empty draft must be a named violation, not a silently-accepted empty backlog'
+  );
+});
+
 function writeAuditDir(audit: unknown): string {
   const dir = tmpDir('backlog-e2e-');
   writeFileSync(join(dir, 'audit.json'), JSON.stringify(audit, null, 2));
@@ -381,6 +391,17 @@ test('the same member listed twice within one org ticket is a violation', () => 
         (v) => v.includes('alpha') && v.includes('A001-adopt-ci')
       ),
     'duplicate member within one org ticket must be a named violation'
+  );
+});
+
+test('an empty org_tickets array is rejected, not silently written as an empty org backlog', () => {
+  const org = writeOrgDir();
+  assert.throws(
+    () => generateOrgBacklog(org, { org_tickets: [] }),
+    (err: BacklogValidationError) =>
+      err instanceof BacklogValidationError &&
+      err.violations.some((v) => v === 'draft has no org_tickets'),
+    'an empty org draft must be a named violation, not a silently-accepted empty backlog'
   );
 });
 

@@ -76,7 +76,7 @@ Jira-item view: title header; field table (effort d/dev, coverage delta, depends
 
 ## 3. `backlog.html` (single-repo)
 
-Self-contained (inline CSS/JS, same Provectus styling as `report.html`), rendered by the engine:
+Inline CSS/JS, same Provectus styling as `report.html`, with the same Google Fonts `<link>`s `report.html` uses — everything else is self-contained. Rendered by the engine:
 
 - **Sticky summary ribbon:** numeric "number of developers" input · total effort (dev-days) of enabled tickets · estimated duration · coverage gain of enabled tickets · "enable all nodes" button. The effort and coverage values have **on-hover tooltips showing the formula with the actual numbers substituted** and a plain explanation of what the value means; the coverage explanation reuses the wording from `report.html`.
 - **Sublinear dev scaling:** duration = total effort ÷ speedup(n), with **Amdahl's law** `speedup(n) = 1 / ((1 − p) + p / n)` and a stated parallelizable share `p` (default 0.8, constant in the renderer). A **full-ribbon-width, always-visible warning row** explains why scaling is sublinear: part of the work is inherently sequential (the `1 − p` term) and coordination overhead grows with team size.
@@ -129,7 +129,7 @@ Scoring path (`audit_core.ts`, `detectors/`, `metrics/`, `aggregate`) — untouc
 
 TDD throughout — tests written before the code they pin:
 
-- Engine suite (`tests/generate_backlog.test.ts`): check_id validation; share range and **per-check Σ share ≤ 1.0** (the >100% coverage case); coverage-delta math; topo order and slug stability; cycle rejection; provenance refusal (unstamped audit, unstamped per-repo backlog); org aggregation math (sum/weighted/repos-count); HTML smoke — ribbon, graph, both legends, warning row markers present, file self-contained (no external URLs).
+- Engine suite (`tests/generate_backlog.test.ts`): check_id validation; share range and **per-check Σ share ≤ 1.0** (the >100% coverage case); coverage-delta math; topo order and slug stability; cycle rejection; provenance refusal (unstamped audit, unstamped per-repo backlog); org aggregation math (sum/weighted/repos-count); HTML smoke — ribbon, graph, both legends, warning row markers present, no external URLs other than the same Google Fonts `<link>`s `report.html` uses.
 - Layer-1 prompt lint: new SKILL.md marker checks (dispatch section, generate flow, closing hint present).
 - CI: existing `dist/` rebuild + `git diff --exit-code` job covers bundle staleness.
 - **QA harness scenario** (`tools/ai-readiness-audit/qa/`) for the generate flow — in scope. A real headless session runs `generate …` against a seeded audit and the harness asserts compliance: `generate-backlog` was actually invoked (no hand-computed numbers), `backlog.json` is engine-stamped, tickets and HTML exist, share/cycle validation loop behaves. This is the e2e iteration loop for the feature: run, harvest corrections, fix, run again. Harness rules apply: never launch while another audit run is live (pgrep-check), fail fast on first failure — fix, then one rerun, never repeat a failing run unchanged.

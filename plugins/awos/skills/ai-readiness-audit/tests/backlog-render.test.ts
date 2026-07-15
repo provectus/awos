@@ -121,6 +121,24 @@ test('backlog.html is a self-contained interactive page', () => {
   assert.doesNotMatch(html, /src="http/, 'no external scripts');
 });
 
+test('coverage tooltip updates live inside recompute(), like the effort and duration tooltips', () => {
+  const html = renderBacklogHtml(backlog);
+  const recomputeBody = html.slice(
+    html.indexOf('function recompute(){'),
+    html.indexOf('function applyDisabled(){')
+  );
+  assert.match(
+    recomputeBody,
+    /getElementById\('rb-effort-tip'\)\.textContent/,
+    'sanity: effort tip is wired inside recompute'
+  );
+  assert.match(
+    recomputeBody,
+    /getElementById\('rb-coverage-tip'\)\.textContent/,
+    'rb-coverage-tip must be recomputed alongside rb-effort-tip and rb-duration-tip, not left static'
+  );
+});
+
 test('graph layers follow topological depth', () => {
   // Scope to the graph region: both slugs also appear earlier in the embedded
   // JSON island, so comparing whole-document indices would pass on JSON array
@@ -199,6 +217,33 @@ const orgBacklog: OrgBacklogJson = {
     },
   ],
 };
+
+test('org backlog.html renders an audit-only fallback repo (no backlog_href) as plain text, not a 404 link', () => {
+  const withFallback: OrgBacklogJson = {
+    ...orgBacklog,
+    repos: [
+      ...orgBacklog.repos,
+      { repo: 'gamma', backlog_href: null, total_applicable_weight: 12 },
+    ],
+  };
+  const html = renderBacklogHtml(withFallback);
+  const repos = html.slice(html.indexOf('<section id="repos">'));
+  assert.doesNotMatch(
+    repos,
+    /<a[^>]*>gamma<\/a>/,
+    'audit-only repo (no generated backlog) must not render a link that would 404'
+  );
+  assert.match(
+    repos,
+    /<li>gamma <span class="repo-weight">\(12 pts applicable\)<\/span><\/li>/,
+    'audit-only repo still appears as plain text with its weight'
+  );
+  assert.match(
+    repos,
+    /<a href="per-repo\/alpha\/backlog\/backlog\.html">alpha<\/a>/,
+    'repos with a real backlog keep their link'
+  );
+});
 
 test('org backlog.html shows titles, repo spread, per-repo tables, repo links, wider warning', () => {
   const html = renderBacklogHtml(orgBacklog);

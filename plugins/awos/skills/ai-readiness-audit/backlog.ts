@@ -134,7 +134,8 @@ export interface OrgBacklogJson {
   parallelizable_share: number;
   repos: Array<{
     repo: string;
-    backlog_href: string;
+    /** null for a repo scanned via its audit-only fallback (no generated backlog to link to). */
+    backlog_href: string | null;
     total_applicable_weight: number;
   }>;
   tickets: OrgBacklogTicket[];
@@ -200,6 +201,10 @@ export function buildBacklog(
 
   const violations: string[] = [];
   const tickets = draft.tickets;
+
+  if (tickets.length === 0) {
+    violations.push('draft has no tickets');
+  }
 
   // Duplicate/empty id detection.
   const seenIds = new Set<string>();
@@ -624,6 +629,9 @@ export function buildOrgBacklog(
   }
 
   const orgTickets = draft.org_tickets ?? [];
+  if (orgTickets.length === 0) {
+    violations.push('draft has no org_tickets');
+  }
   const referencedRepos = new Set<string>();
   for (const t of orgTickets) {
     for (const m of t.members ?? []) {
@@ -835,7 +843,8 @@ export function buildOrgBacklog(
 
   const repos = entries.map((e) => ({
     repo: e.repo,
-    backlog_href: `per-repo/${e.repo}/backlog/backlog.html`,
+    // audit-only fallback repos (e.backlog null) have no generated backlog.html to link to.
+    backlog_href: e.backlog ? `per-repo/${e.repo}/backlog/backlog.html` : null,
     total_applicable_weight: repoWeight.get(e.repo) ?? 0,
   }));
 

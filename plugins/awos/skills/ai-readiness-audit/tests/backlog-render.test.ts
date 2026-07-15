@@ -443,8 +443,8 @@ test('graph edges carry endpoint markers and the click handler blurs the node', 
   assert.match(html, /<circle class="/, 'circle endpoint template present');
   assert.match(
     html,
-    /toggle\(btn\.dataset\.slug\); if\(btn\.blur\)\{ btn\.blur\(\); \}/,
-    'clicking a node blurs it so the hover tooltip does not stay pinned'
+    /toggle\(btn\.dataset\.slug\); if\(e\.detail > 0 && btn\.blur\)\{ btn\.blur\(\); \}/,
+    'a pointer click (e.detail > 0) blurs the node so the hover tooltip does not stay pinned, while keyboard activation (Enter/Space, detail 0) keeps focus so keyboard users do not lose their tab position'
   );
 });
 

@@ -294,7 +294,10 @@ const BACKLOG_JS = `
   }
   graph.addEventListener('click', function(e){
     var btn = e.target.closest ? e.target.closest('.gnode') : null;
-    if(btn && btn.dataset.slug){ toggle(btn.dataset.slug); if(btn.blur){ btn.blur(); } }
+    // e.detail > 0 is a pointer click: blur so the hover tooltip does not stay
+    // pinned. Keyboard activation (Enter/Space) fires click with detail 0 —
+    // keep focus there so keyboard users don't lose their place.
+    if(btn && btn.dataset.slug){ toggle(btn.dataset.slug); if(e.detail > 0 && btn.blur){ btn.blur(); } }
   });
   devs.addEventListener('input', recompute);
   document.getElementById('enable-all').addEventListener('click', function(){

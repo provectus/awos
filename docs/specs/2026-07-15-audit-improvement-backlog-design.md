@@ -19,12 +19,12 @@ Two use cases drive it:
 
 `SKILL.md` Step 2 becomes a dispatcher over `$ARGUMENTS`:
 
-| `$ARGUMENTS` | Behavior |
-| --- | --- |
-| empty | Full audit (unchanged) |
-| names a dimension | Single-dimension view (unchanged) |
-| generate intent (freeform) | New Generate flow, no re-scoring |
-| unrecognized | List dimensions + show generate syntax, stop (unchanged shape) |
+| `$ARGUMENTS`               | Behavior                                                       |
+| -------------------------- | -------------------------------------------------------------- |
+| empty                      | Full audit (unchanged)                                         |
+| names a dimension          | Single-dimension view (unchanged)                              |
+| generate intent (freeform) | New Generate flow, no re-scoring                               |
+| unrecognized               | List dimensions + show generate syntax, stop (unchanged shape) |
 
 The generate request is LLM-parsed; no rigid grammar. Recognized facets: dimension filter, effort ceiling ("easy to implement"), impact floor ("big impact"), top-N. Examples that must work:
 
@@ -72,7 +72,7 @@ The orchestrator runs `generate-backlog` immediately after the draft is authored
 
 ### Ticket file layout (`tickets/A00N-<slug>.md`)
 
-Jira-item view: title header; field table (effort d/dev, coverage delta, depends-on with links, covered checks with shares); Goal, Description, Definition of Done sections; footer note: *"To turn this ticket into an AWOS functional spec, run `/awos:spec` pointing at this file."*
+Jira-item view: title header; field table (effort d/dev, coverage delta, depends-on with links, covered checks with shares); Goal, Description, Definition of Done sections; footer note: _"To turn this ticket into an AWOS functional spec, run `/awos:spec` pointing at this file."_
 
 ## 3. `backlog.html` (single-repo)
 
@@ -92,7 +92,7 @@ Runs per-repo generation first (Section 2, into each `per-repo/<repo>/backlog/`)
 - Org `backlog.html` (same template, org variant):
   - nodes show the human-friendly **title** instead of a slug, plus repos coverage, weighted coverage gain, summed effort;
   - node tooltip shows a **per-repo numbers table** (repo, member ticket, effort, coverage delta) justifying the aggregation;
-  - the dev-count warning row is **wider**, adding: *some tasks are applied once for the whole org — effort is not multiplied per repo, so totals are rough*;
+  - the dev-count warning row is **wider**, adding: _some tasks are applied once for the whole org — effort is not multiplied per repo, so totals are rough_;
   - **bottom section lists all repos with links to their per-repo `backlog.html`**;
   - **wider legend** at top explaining the weighted/aggregated math, presented together with the node-anatomy legend.
 
@@ -106,15 +106,15 @@ Same circuit-breaker philosophy as the audit itself, because a headless orchestr
 
 ## 6. Files touched
 
-| File | Change |
-| --- | --- |
-| `SKILL.md` | Step 2 dispatch + Generate flow section + closing hint in Step 6 |
-| `cli.ts` | additive `case 'generate-backlog'` (org variant via flag or second verb) |
-| new `backlog.ts` (engine) | validation, coverage math, topo sort + slugs, org aggregation, provenance stamping |
-| new `backlog_render.ts` (or `render.ts` additions) | ticket `.md` renderer + interactive `backlog.html` renderer, shared Provectus CSS |
-| `tests/generate_backlog.test.ts` | new engine suite |
-| `dist/` | rebuilt + committed (`npm run build:audit-engine`) |
-| `marketplace.json` + `plugins/awos/.claude-plugin/plugin.json` | version bump at ship time |
+| File                                                           | Change                                                                             |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `SKILL.md`                                                     | Step 2 dispatch + Generate flow section + closing hint in Step 6                   |
+| `cli.ts`                                                       | additive `case 'generate-backlog'` (org variant via flag or second verb)           |
+| new `backlog.ts` (engine)                                      | validation, coverage math, topo sort + slugs, org aggregation, provenance stamping |
+| new `backlog_render.ts` (or `render.ts` additions)             | ticket `.md` renderer + interactive `backlog.html` renderer, shared Provectus CSS  |
+| `tests/generate_backlog.test.ts`                               | new engine suite                                                                   |
+| `dist/`                                                        | rebuilt + committed (`npm run build:audit-engine`)                                 |
+| `marketplace.json` + `plugins/awos/.claude-plugin/plugin.json` | version bump at ship time                                                          |
 
 Scoring path (`audit_core.ts`, `detectors/`, `metrics/`, `aggregate`) — untouched. The verb runs after scoring and only reads its artifacts, so breakage risk to existing metrics is effectively zero.
 

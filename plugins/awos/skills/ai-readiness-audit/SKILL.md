@@ -6,7 +6,7 @@ description: >-
   the /awos:ai-readiness-audit command; not auto-triggered. Dimensions are
   discovered automatically from dimensions/ — drop a new .md to extend.
 disable-model-invocation: true
-argument-hint: '[dimension | generate <request>] — omit for a full audit'
+argument-hint: '[dimension | generate <request> | audit + generate <request>] — omit for a full audit'
 disallowed-tools: Edit, NotebookEdit, ScheduleWakeup
 ---
 
@@ -62,11 +62,12 @@ So you do not: enumerate the dimension files, parse `depends-on`, build a depend
 
 ## Step 2 — Argument Dispatch
 
-`$ARGUMENTS` selects one of three paths:
+`$ARGUMENTS` selects one of four paths:
 
 - **Empty** — full audit; continue to Step 3.
 - **Names a single dimension** — still run the full `audit-core` pass (it is fast and topology-gated) and present only that dimension's section. If the argument matches no dimension and is not a generate request, list the available dimensions, show one generate example (`/awos:ai-readiness-audit generate improvement backlog`), and stop.
 - **A generate request** (starts with or clearly means "generate": an improvement backlog, quick wins, tickets for specific dimensions, effort/impact filters) — skip the audit pipeline entirely and follow the "Generate mode" section at the end of this file. Parse the request yourself: which dimensions to include, an effort ceiling ("easy to implement"), an impact floor ("big impact"), and/or a top-N. There is no rigid grammar.
+- **Combined** — the request asks for both a fresh audit AND a backlog in one invocation (e.g. "audit and generate improvement backlog", "full audit with backlog", "fresh audit then quick wins", or any generate request that says fresh/full/new audit). Run the normal full audit pipeline (Steps 3–6) first, then continue directly into Generate mode step 2 against the audit directory just written, skipping Generate mode step 1's audit picker entirely — there is nothing to pick, the audit that was just produced is the source. Every other Generate-mode obligation (Sonnet subagent authoring, engine-only numbers, violations retry, org branch) applies unchanged. This makes headless behavior fall out naturally: no picker, no prompt, fully unattended.
 
 ## Step 3 — Prepare Artifacts Directory
 
@@ -298,6 +299,8 @@ Offer next steps using `AskUserQuestion` with `multiSelect: true`. The HTML repo
 ## Generate mode — improvement backlog
 
 Generate mode turns one existing audit into an effort-profit ticket backlog: `backlog/backlog.json`, one Jira-style `backlog/tickets/<slug>.md` per ticket (the slug already carries the sequence prefix, e.g. `tickets/A001-adopt-ci.md`), and the interactive `backlog/backlog.html` dependency graph. You author prose, effort estimates, dependencies, and per-check coverage shares; the engine computes every number. Do not compute coverage deltas, slugs, ordering, or org aggregates yourself — `generate-backlog` is the only path from a draft to a rendered backlog, and it refuses unstamped inputs.
+
+Note: a combined-intent run enters at step 2 below with the audit directory the full pipeline just wrote — step 1's picker is only for generate-only invocations, where an existing audit has to be selected because none was just produced in this run.
 
 1. **Pick the source audit.** List `context/audits/*/` newest-first and ask with one `AskUserQuestion`: each existing audit (timestamp, mode, score from its `audit.json`) plus "Run a fresh audit first". Headless default = the newest audit. If none exist, say so and offer to run one (that answer routes back to Step 3). This picker must never end the run — the same rule as Phase 0b's scope confirmation. If `AskUserQuestion` is unavailable or returns its default answer (headless, e.g. `--output-format stream-json`), that IS the answer: take the newest audit and continue into step 2 in the same turn, without further ceremony.
 

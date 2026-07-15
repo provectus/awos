@@ -2374,3 +2374,26 @@ test('SKILL.md teaches the generate action in its closing hint', () => {
     'SKILL.md must teach "generate improvement backlog" as a closing hint after a completed audit'
   );
 });
+
+test('SKILL.md Step 2 dispatches a combined audit+backlog intent', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /\*\*Combined\*\*/,
+    'SKILL.md Step 2 must name a fourth "Combined" dispatch path alongside empty/dimension/generate'
+  );
+  assert.match(
+    src,
+    /skipping Generate mode step 1's audit picker entirely/,
+    "SKILL.md Step 2 must state that a combined run skips Generate mode step 1's audit picker entirely"
+  );
+});
+
+test('SKILL.md Generate mode documents combined-run entry at step 2', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /a combined-intent run enters at step 2/,
+    'SKILL.md Generate mode section must state that a combined-intent run enters directly at step 2 with the just-written audit dir'
+  );
+});

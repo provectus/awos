@@ -58,7 +58,7 @@ Compliance is gated the same way as the audit phase — signals from the parsed 
 2. `backlog/backlog.json` exists in the archived output and carries `engine.generated_by === "audit-core"`;
 3. at least one `backlog/tickets/A*.md` and `backlog/backlog.html` exist — for an org audit, at the top level and in every `per-repo/<repo>/` that has a `backlog/` directory.
 
-The verdict is written to `run-meta.json` as `generate_compliance: { model_complied, generate_backlog_calls, backlog_stamped, tickets_written }` (plus `generate_rc`, `generate_partial`, `generate_cost_usd`, `generate_backlog_html`), and printed in the final summary alongside the archived `backlog.html` path(s). There is no retry or salvage for the generate phase (v1) — a non-compliant generate run is a plain FAIL, exiting non-zero, with the transcript archived to iterate on.
+The verdict is written to `run-meta.json` as `generate_compliance: { model_complied, generate_backlog_calls, backlog_stamped, tickets_written }` (plus `generate_rc`, `generate_partial`, `generate_cost_usd`, `generate_backlog_html`), and printed in the final summary alongside the archived `backlog.html` path(s). `generate_cost_usd` is reported separately from `total_cost_usd` — the two `claude -p` sessions bill independently, and the generate phase's spend is never folded into the audit phase's `total_cost_usd`/`attempt_costs_usd`. There is no retry or salvage for the generate phase (v1) — a non-compliant generate run is a plain FAIL, exiting non-zero, with the transcript archived to iterate on.
 
 ## Live log + final summary
 

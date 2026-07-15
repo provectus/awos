@@ -512,7 +512,13 @@ export function gatherGenerateArtifacts(outDir: string): GenerateArtifacts {
   }
 
   const ticketFilePaths: string[] = [...ticketsIn(topBacklogDir)];
-  if (backlogJsonExists || isDir(topBacklogDir)) claimHtml(topBacklogDir);
+  // Claim the top-level backlog.html unconditionally (mirroring
+  // collectReportHtml's unconditional top-level report.html claim): an org
+  // run that generated every per-repo backlog but skipped the org-level
+  // generate-backlog (aggregating org_tickets into the org root's own
+  // backlog.json/backlog.html) must be flagged missing, not silently pass on
+  // per-repo artifacts alone.
+  claimHtml(topBacklogDir);
 
   const perRepo = path.join(outDir, 'per-repo');
   if (isDir(perRepo)) {

@@ -355,8 +355,50 @@ test('gatherGenerateArtifacts scans per-repo backlogs and flags a missing backlo
   );
   assert.deepEqual(
     found.backlogHtmlMissing,
-    [path.join(repoBBacklog, 'backlog.html')],
-    'repo-b has a backlog/ dir but no backlog.html — flagged missing; repo-c has no backlog/ at all and is skipped entirely'
+    [
+      path.join(outDir, 'backlog', 'backlog.html'),
+      path.join(repoBBacklog, 'backlog.html'),
+    ],
+    "the top-level (org-root) backlog.html is claimed unconditionally — no org-level generate-backlog ran in this fixture, so it is flagged missing alongside repo-b's; repo-c has no backlog/ at all and is skipped entirely"
+  );
+});
+
+// Regression pin: the top-level backlog claim used to be conditional on
+// backlogJsonExists/isDir(topBacklogDir), so an org run that generated every
+// per-repo backlog but never ran the org-level generate-backlog (aggregating
+// org_tickets into <outDir>/backlog/backlog.json + backlog.html) silently
+// reported compliant on per-repo artifacts alone. Mirrors collectReportHtml,
+// which unconditionally claims the top-level report.html.
+test('gatherGenerateArtifacts + evaluateGenerateCompliance: an org run with every per-repo backlog but no org-level backlog is non-compliant', () => {
+  const outDir = tmp();
+  const repoBacklog = path.join(outDir, 'per-repo', 'repo-a', 'backlog');
+  fs.mkdirSync(path.join(repoBacklog, 'tickets'), { recursive: true });
+  fs.writeFileSync(path.join(repoBacklog, 'tickets', 'A001-x.md'), '# ticket');
+  fs.writeFileSync(path.join(repoBacklog, 'backlog.html'), '<html></html>');
+  // outDir/backlog/ (the org root's own backlog) was never generated.
+
+  const found = gatherGenerateArtifacts(outDir);
+  assert.equal(
+    found.backlogJsonExists,
+    false,
+    'the org root never ran generate-backlog for its own org_tickets draft'
+  );
+  assert.deepEqual(
+    found.backlogHtmlMissing,
+    [path.join(outDir, 'backlog', 'backlog.html')],
+    'the org-level backlog.html is claimed and flagged missing even though every per-repo backlog is complete'
+  );
+
+  const compliance = evaluateGenerateCompliance([BASH_GENERATE_BACKLOG], found);
+  assert.equal(
+    compliance.tickets_written,
+    false,
+    'a missing org-level backlog.html fails tickets_written even though per-repo tickets/html exist'
+  );
+  assert.equal(
+    compliance.model_complied,
+    false,
+    'per-repo artifacts alone must never pass the gate — the org-level generate-backlog run is required too'
   );
 });
 

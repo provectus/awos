@@ -215,26 +215,64 @@ export function detectSecretScanGate(
 // detectDependencyRiskAutomation — category 3101 (PRV-02, method: detected)
 //
 // A server-side update bot (Dependabot/Renovate) counts as enforcement — it
-// runs without anyone invoking it.
+// runs without anyone invoking it. Exception: a Renovate config whose only
+// update semantics is lockFileMaintenance refreshes lockfiles without
+// touching dependency declarations and does no scanning, so on its own it
+// grades WARN, not PASS (https://docs.renovatebot.com/configuration-options/#lockfilemaintenance).
 // ---------------------------------------------------------------------------
+
+/**
+ * True when a Renovate config drives nothing but lockfile maintenance: it
+ * declares `lockFileMaintenance` and no other update-driving keys. Presets
+ * (`extends`), `packageRules`, or manager blocks all mean real dependency
+ * updates happen. Unparseable configs fall back to a conservative regex:
+ * mentions lockFileMaintenance and neither extends nor packageRules.
+ */
+function isLockfileMaintenanceOnly(content: string): boolean {
+  try {
+    const cfg = JSON.parse(content) as Record<string, unknown>;
+    if (cfg.lockFileMaintenance === undefined) return false;
+    const drivers = Object.keys(cfg).filter(
+      (k) => k !== 'lockFileMaintenance' && k !== '$schema'
+    );
+    return drivers.length === 0;
+  } catch {
+    return (
+      /lockFileMaintenance/.test(content) &&
+      !/extends|packageRules/.test(content)
+    );
+  }
+}
 
 export function detectDependencyRiskAutomation(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
   const ciHits = gateMatches(gateSurfaces(repoPath), VULN_SCANNER_RX, ['ci']);
-  const botConfigs = presentConfigs(repoPath, [
-    ...DEPENDABOT_PATHS,
-    ...RENOVATE_PATHS,
-  ]);
-  const evidence = [
-    ...ciHits.slice(0, 5).map((h) => `ci scanner: ${h}`),
-    ...botConfigs.map((c) => `update bot: ${c}`),
+  const dependabotConfigs = presentConfigs(repoPath, DEPENDABOT_PATHS);
+  const renovateConfigs = presentConfigs(repoPath, RENOVATE_PATHS);
+  const updateBots = [
+    ...dependabotConfigs,
+    ...renovateConfigs.filter((rel) => {
+      const content = readTextSafe(join(repoPath, rel));
+      return content === null || !isLockfileMaintenanceOnly(content);
+    }),
   ];
-  if (ciHits.length > 0 || botConfigs.length > 0) {
-    return makeResult('PASS', ciHits.length + botConfigs.length, [
+  const lockfileOnlyBots = renovateConfigs.filter(
+    (rel) => !updateBots.includes(rel)
+  );
+
+  if (ciHits.length > 0 || updateBots.length > 0) {
+    return makeResult('PASS', ciHits.length + updateBots.length, [
       'dependency risk mechanically managed (CI vulnerability scan and/or update bot)',
-      ...evidence,
+      ...ciHits.slice(0, 5).map((h) => `ci scanner: ${h}`),
+      ...updateBots.map((c) => `update bot: ${c}`),
+    ]);
+  }
+  if (lockfileOnlyBots.length > 0) {
+    return makeResult('WARN', lockfileOnlyBots.length, [
+      'Renovate only maintains lockfiles — no dependency updates and no vulnerability scanning',
+      ...lockfileOnlyBots.map((c) => `lockfile-maintenance-only config: ${c}`),
     ]);
   }
   return makeResult('FAIL', 0, [

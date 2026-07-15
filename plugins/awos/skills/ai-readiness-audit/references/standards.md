@@ -110,7 +110,7 @@ The dimension is organized into eight **clusters**, each grouping source-dimensi
 
 Each cluster is scored by two categories and classified into a **tier**:
 
-- **Enforced** (weight 3, `detected`) — a mechanism that runs mechanically blocks recurrence: a pre-commit/husky/lefthook gate, a CI check step, a server-side bot (Dependabot/Renovate), or an agent hook. A WARN here means the mechanism exists but is only partially gated (config present, nothing runs it) — the tier shows `enforced (partial)`.
+- **Enforced** (weight 3, `detected`) — a mechanism that runs mechanically blocks recurrence: a pre-commit/husky/lefthook gate, a CI check step, a server-side bot (Dependabot/Renovate), or an agent hook. A WARN here means the mechanism exists but only partially prevents recurrence — typically config present with nothing running it, or (PRV-02) a Renovate config that only maintains lockfiles without updating or scanning dependencies — and the tier shows `enforced (partial)`.
 - **Instructed** (weight 2, `judgment`) — the rule is written where AI agents will see it (CLAUDE.md chain, AGENTS.md, rules files, skills). Weaker than enforcement: instructions can be ignored or crowded out; a gate cannot. Verdicts must cite the file and quoted passage.
 - **Absent** — neither. Covered checks that currently PASS are reported as **unguarded passes**: they hold by convention only, one regeneration away from regressing.
 

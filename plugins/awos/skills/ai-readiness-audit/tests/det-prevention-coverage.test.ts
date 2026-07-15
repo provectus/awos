@@ -115,6 +115,30 @@ test('PRV-02: npm audit in CI is PASS', () => {
   assert.equal(r.status, 'PASS');
 });
 
+test('PRV-02: lockfile-maintenance-only renovate.json is WARN — lockfiles refresh but nothing updates or scans deps', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'renovate.json'),
+    JSON.stringify({ lockFileMaintenance: { enabled: true } })
+  );
+  const r = detectDependencyRiskAutomation(t);
+  assert.equal(r.status, 'WARN');
+  assert.ok(r.evidence.some((e) => e.includes('lockfile-maintenance-only')));
+});
+
+test('PRV-02: renovate.json with extends is PASS — presets drive real dependency updates', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'renovate.json'),
+    JSON.stringify({
+      extends: ['config:recommended'],
+      lockFileMaintenance: { enabled: true },
+    })
+  );
+  const r = detectDependencyRiskAutomation(t);
+  assert.equal(r.status, 'PASS');
+});
+
 test('PRV-02: neither scanner nor bot is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'package.json'), '{}');

@@ -49,9 +49,9 @@ The uniform grading rule for enforcement checks: **Pass** = an actively running 
 - **What:** Dependency risk is mechanically managed — vulnerability scanning in CI or an automated update bot
 - **How:**
   1. Search CI workflow files for a vulnerability scanner (`npm|yarn|pnpm audit`, `pip-audit`, `safety`, `snyk`, `trivy`, `grype`, `osv-scanner`, `dependency-check`).
-  2. Check for update-bot config: `.github/dependabot.yml`, `renovate.json` and variants. A bot counts as enforcement — it runs server-side without anyone invoking it.
+  2. Check for update-bot config: `.github/dependabot.yml`, `renovate.json` and variants. A bot counts as enforcement — it runs server-side without anyone invoking it. Exception: a Renovate config whose only update semantics is `lockFileMaintenance` refreshes lockfiles without updating dependency declarations and does no scanning, so it does not count as an update bot.
 - **Pass:** CI scanner step or update-bot config present
-- **Warn:** Only a lockfile-maintenance config with no scanner and no CI audit
+- **Warn:** The only automation is a lockfile-maintenance-only Renovate config — lockfiles stay fresh but dependencies are neither updated nor scanned
 - **Fail:** Neither
 - **Skip-When:** No package manifests detected (`topology.has_package_ecosystem` false)
 - **Severity:** medium

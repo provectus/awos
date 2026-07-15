@@ -695,8 +695,16 @@ export function buildOrgBacklog(
     if (!t.members || t.members.length === 0) {
       violations.push(`org ticket ${label}: members must not be empty`);
     }
+    const seenInTicket = new Set<string>();
     for (const m of t.members ?? []) {
-      const repoBacklog = entryByRepo.get(m.repo)?.backlog;
+      const entry = entryByRepo.get(m.repo);
+      if (!entry) {
+        violations.push(
+          `org ticket ${label}: member repo "${m.repo}" has no per-repo/${m.repo} directory`
+        );
+        continue;
+      }
+      const repoBacklog = entry.backlog;
       if (!repoBacklog) continue; // repo-level violation already recorded above
       const found = repoBacklog.tickets.find((bt) => bt.slug === m.slug);
       if (!found) {
@@ -706,6 +714,13 @@ export function buildOrgBacklog(
         continue;
       }
       const key = `${m.repo}::${m.slug}`;
+      if (seenInTicket.has(key)) {
+        violations.push(
+          `org ticket ${label}: member ${m.repo}/${m.slug} is listed more than once`
+        );
+        continue;
+      }
+      seenInTicket.add(key);
       const owner = memberOwner.get(key);
       if (owner && owner !== t.id) {
         violations.push(

@@ -352,6 +352,38 @@ test('a per-repo ticket may belong to only one org ticket', () => {
   );
 });
 
+test('an org ticket member referencing a repo with no per-repo directory is a violation, not a crash', () => {
+  const org = writeOrgDir();
+  const badDraft = structuredClone(ORG_DRAFT);
+  // Typo'd/unknown repo — no per-repo/ghost directory exists at all, unlike
+  // the "missing backlog" test above which does create the repo dir.
+  badDraft.org_tickets[0].members.push({ repo: 'ghost', slug: 'A001-x' });
+  assert.throws(
+    () => generateOrgBacklog(org, badDraft),
+    (err: BacklogValidationError) =>
+      err instanceof BacklogValidationError &&
+      err.violations.some((v) => v.includes('ghost')),
+    'unknown member repo (no per-repo/<repo> dir) must be a named violation, not a TypeError'
+  );
+});
+
+test('the same member listed twice within one org ticket is a violation', () => {
+  const org = writeOrgDir();
+  const dupMember = structuredClone(ORG_DRAFT);
+  dupMember.org_tickets[0].members.push({
+    repo: 'alpha',
+    slug: 'A001-adopt-ci',
+  });
+  assert.throws(
+    () => generateOrgBacklog(org, dupMember),
+    (err: BacklogValidationError) =>
+      err.violations.some(
+        (v) => v.includes('alpha') && v.includes('A001-adopt-ci')
+      ),
+    'duplicate member within one org ticket must be a named violation'
+  );
+});
+
 test('unlinked per-repo tickets surface as warnings, not violations', () => {
   const org = writeOrgDir();
   // add a second per-repo ticket in alpha that no org ticket references

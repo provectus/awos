@@ -14,8 +14,11 @@ import {
   assessEngineCompliance,
   collectReportHtml,
   complianceFromTranscript,
+  countGenerateBacklogCalls,
   discoverProjectMcp,
+  evaluateGenerateCompliance,
   formatWallTime,
+  gatherGenerateArtifacts,
   locateOutDir,
   planRetry,
   releaseRunLock,
@@ -222,6 +225,206 @@ test('complianceFromTranscript counts execution signals, not prompt text', () =>
   );
 });
 
+// ---------------------------------------------------------------------------
+const BASH_GENERATE_BACKLOG = transcriptLine({
+  type: 'assistant',
+  message: {
+    content: [
+      {
+        type: 'tool_use',
+        name: 'Bash',
+        input: {
+          command:
+            'node "$ENGINE" generate-backlog /repo/context/audits/2026-07-03 /repo/context/audits/2026-07-03/backlog/tickets-draft.json',
+        },
+      },
+    ],
+  },
+});
+const GENERATE_MENTION_TEXT = transcriptLine({
+  type: 'assistant',
+  message: {
+    content: [
+      {
+        type: 'text',
+        text: 'I will now run generate-backlog to build the ticket draft.',
+      },
+    ],
+  },
+});
+const GENERATE_ECHOED_MARKER = transcriptLine({
+  type: 'user',
+  message: {
+    content: [
+      {
+        type: 'text',
+        text: 'ran generate-backlog for context/audits/2026-07-03',
+      },
+    ],
+  },
+});
+
+test('countGenerateBacklogCalls counts execution signals, not prompt text', () => {
+  assert.equal(
+    countGenerateBacklogCalls([
+      'not json at all',
+      '',
+      GENERATE_MENTION_TEXT,
+      BASH_GENERATE_BACKLOG,
+      BASH_GENERATE_BACKLOG,
+    ]),
+    2,
+    'each Bash tool_use running generate-backlog counts; mentions in assistant text do not'
+  );
+  assert.equal(
+    countGenerateBacklogCalls([GENERATE_ECHOED_MARKER]),
+    0,
+    'an echoed marker in a user/tool-result message is not an engine invocation'
+  );
+  assert.equal(
+    countGenerateBacklogCalls([]),
+    0,
+    'an empty transcript counts zero calls'
+  );
+});
+
+// ---------------------------------------------------------------------------
+test('gatherGenerateArtifacts reads single-repo backlog output from disk', () => {
+  const outDir = tmp();
+  const backlogDir = path.join(outDir, 'backlog');
+  const ticketsDir = path.join(backlogDir, 'tickets');
+  fs.mkdirSync(ticketsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(backlogDir, 'backlog.json'),
+    JSON.stringify({ engine: { generated_by: 'audit-core' } })
+  );
+  fs.writeFileSync(path.join(backlogDir, 'backlog.html'), '<html></html>');
+  fs.writeFileSync(path.join(ticketsDir, 'A001-adopt-ci.md'), '# ticket');
+  fs.writeFileSync(path.join(ticketsDir, 'not-a-ticket.txt'), 'ignored');
+
+  const found = gatherGenerateArtifacts(outDir);
+  assert.equal(
+    found.backlogJsonExists,
+    true,
+    'backlog/backlog.json is detected'
+  );
+  assert.equal(
+    found.backlogGeneratedBy,
+    'audit-core',
+    'engine.generated_by is read from backlog.json'
+  );
+  assert.deepEqual(
+    found.backlogHtmlPaths,
+    [path.join(backlogDir, 'backlog.html')],
+    'top-level backlog.html found'
+  );
+  assert.deepEqual(found.backlogHtmlMissing, [], 'nothing missing');
+  assert.deepEqual(
+    found.ticketFilePaths,
+    [path.join(ticketsDir, 'A001-adopt-ci.md')],
+    'only A*.md ticket files are collected — a stray non-ticket file is ignored'
+  );
+});
+
+test('gatherGenerateArtifacts scans per-repo backlogs and flags a missing backlog.html', () => {
+  const outDir = tmp();
+  const repoABacklog = path.join(outDir, 'per-repo', 'repo-a', 'backlog');
+  const repoBBacklog = path.join(outDir, 'per-repo', 'repo-b', 'backlog');
+  fs.mkdirSync(path.join(repoABacklog, 'tickets'), { recursive: true });
+  fs.writeFileSync(path.join(repoABacklog, 'tickets', 'A001-x.md'), '# ticket');
+  fs.writeFileSync(path.join(repoABacklog, 'backlog.html'), '<html></html>');
+  // repo-b has a backlog/ dir (it was generated) but never got its backlog.html.
+  fs.mkdirSync(repoBBacklog, { recursive: true });
+  fs.mkdirSync(path.join(outDir, 'per-repo', 'repo-c'), { recursive: true }); // no backlog/ at all — not part of this run
+
+  const found = gatherGenerateArtifacts(outDir);
+  assert.equal(
+    found.backlogJsonExists,
+    false,
+    'no top-level backlog.json in org mode (only the org root would have one, not set up here)'
+  );
+  assert.deepEqual(
+    found.ticketFilePaths,
+    [path.join(repoABacklog, 'tickets', 'A001-x.md')],
+    'ticket files are collected from every per-repo backlog dir'
+  );
+  assert.deepEqual(
+    found.backlogHtmlPaths,
+    [path.join(repoABacklog, 'backlog.html')],
+    'repo-a backlog.html found'
+  );
+  assert.deepEqual(
+    found.backlogHtmlMissing,
+    [path.join(repoBBacklog, 'backlog.html')],
+    'repo-b has a backlog/ dir but no backlog.html — flagged missing; repo-c has no backlog/ at all and is skipped entirely'
+  );
+});
+
+// ---------------------------------------------------------------------------
+test('evaluateGenerateCompliance requires an engine call, a stamped backlog.json, and written tickets+html', () => {
+  const compliantArtifacts = {
+    backlogJsonExists: true,
+    backlogGeneratedBy: 'audit-core',
+    backlogHtmlPaths: ['/out/backlog/backlog.html'],
+    backlogHtmlMissing: [],
+    ticketFilePaths: ['/out/backlog/tickets/A001-x.md'],
+  };
+
+  const compliant = evaluateGenerateCompliance(
+    [BASH_GENERATE_BACKLOG],
+    compliantArtifacts
+  );
+  assert.deepEqual(
+    compliant,
+    {
+      model_complied: true,
+      generate_backlog_calls: 1,
+      backlog_stamped: true,
+      tickets_written: true,
+    },
+    'an engine call plus a stamped backlog.json plus written tickets/html is fully compliant'
+  );
+
+  const noCall = evaluateGenerateCompliance([], compliantArtifacts);
+  assert.equal(
+    noCall.model_complied,
+    false,
+    'artifacts alone never suffice — the model must have actually invoked generate-backlog'
+  );
+
+  const unstamped = evaluateGenerateCompliance([BASH_GENERATE_BACKLOG], {
+    ...compliantArtifacts,
+    backlogGeneratedBy: null,
+  });
+  assert.equal(
+    unstamped.backlog_stamped,
+    false,
+    'a backlog.json without the audit-core provenance stamp is not compliant'
+  );
+  assert.equal(unstamped.model_complied, false);
+
+  const missingHtml = evaluateGenerateCompliance([BASH_GENERATE_BACKLOG], {
+    ...compliantArtifacts,
+    backlogHtmlMissing: ['/out/per-repo/repo-b/backlog/backlog.html'],
+  });
+  assert.equal(
+    missingHtml.tickets_written,
+    false,
+    'any expected-but-missing backlog.html fails tickets_written even when tickets exist elsewhere'
+  );
+
+  const noTickets = evaluateGenerateCompliance([BASH_GENERATE_BACKLOG], {
+    ...compliantArtifacts,
+    ticketFilePaths: [],
+  });
+  assert.equal(
+    noTickets.tickets_written,
+    false,
+    'zero ticket files means tickets_written is false even with a stamped backlog.json'
+  );
+});
+
+// ---------------------------------------------------------------------------
 test('smokeSignalsFromTranscript flags hand-written artifacts, inline compute, and question stalls', () => {
   const toolUse = (name: string, input: Record<string, unknown>) =>
     transcriptLine({

@@ -39,11 +39,26 @@ npm run audit:compare -- --target onex-discovery-api
 # Preview without launching claude or touching the target or the marketplace:
 npm run audit:test -- --target ~/code/onex-discovery-api --dry-run
 
+# After the audit, also drive the generate flow and gate its compliance:
+npm run audit:test -- --target ~/code/onex-discovery-api --generate "improvement backlog" --build
+
 # Equivalent direct form (any checkout):
 node --import tsx <awos>/tools/ai-readiness-audit/qa/run_audit_test.ts --target ~/code/onex-discovery-api --dry-run
 ```
 
-Other flags: `--worktree <path>` (skill under test; default = the checkout this script lives in), `--no-deploy` (don't repoint the marketplace — use whatever it currently serves), `--claude-flags "<flags>"` (default `--dangerously-skip-permissions`), `--model <name>` (model for the audit session and its subagents, passed to `claude -p --model`; default `sonnet` — the unpinned best-Sonnet alias), `--allow-user-mcp` (skip `--strict-mcp-config`, letting the session see the operator's user-scope MCP servers — real Jira, Slack, …; default is strict isolation so a test audit can never pull live connector data), `--quiet` (suppress the live log and progress output; only the final summary is printed).
+Other flags: `--worktree <path>` (skill under test; default = the checkout this script lives in), `--no-deploy` (don't repoint the marketplace — use whatever it currently serves), `--claude-flags "<flags>"` (default `--dangerously-skip-permissions`), `--model <name>` (model for the audit session and its subagents, passed to `claude -p --model`; default `sonnet` — the unpinned best-Sonnet alias), `--allow-user-mcp` (skip `--strict-mcp-config`, letting the session see the operator's user-scope MCP servers — real Jira, Slack, …; default is strict isolation so a test audit can never pull live connector data), `--quiet` (suppress the live log and progress output; only the final summary is printed), `--generate "<request>"` (see below).
+
+## Generate-flow compliance (`--generate`)
+
+`--generate "<request>"` exercises `/awos:ai-readiness-audit generate <request>` (e.g. `"improvement backlog"`, `"quick wins only"`) as a SECOND headless `claude -p` session, launched right after the audit phase — same target, same deployed worktree, same run lock — but only when the audit phase itself passed the engine-compliance gate and finished without crashing; otherwise the generate phase is skipped and the run-meta records why. The second session's transcript is archived as `run2.jsonl` alongside `run.jsonl`.
+
+Compliance is gated the same way as the audit phase — signals from the parsed transcript plus the artifacts actually written to disk, never prompt text alone:
+
+1. a `Bash` tool call running `generate-backlog` appears in `run2.jsonl` (an echoed mention in assistant text never counts);
+2. `backlog/backlog.json` exists in the archived output and carries `engine.generated_by === "audit-core"`;
+3. at least one `backlog/tickets/A*.md` and `backlog/backlog.html` exist — for an org audit, at the top level and in every `per-repo/<repo>/` that has a `backlog/` directory.
+
+The verdict is written to `run-meta.json` as `generate_compliance: { model_complied, generate_backlog_calls, backlog_stamped, tickets_written }` (plus `generate_rc`, `generate_partial`, `generate_cost_usd`, `generate_backlog_html`), and printed in the final summary alongside the archived `backlog.html` path(s). There is no retry or salvage for the generate phase (v1) — a non-compliant generate run is a plain FAIL, exiting non-zero, with the transcript archived to iterate on.
 
 ## Live log + final summary
 

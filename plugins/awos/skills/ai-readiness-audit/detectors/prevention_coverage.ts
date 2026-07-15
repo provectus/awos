@@ -225,20 +225,46 @@ export function detectSecretScanGate(
 // ---------------------------------------------------------------------------
 
 /**
+ * Renovate keys that configure housekeeping around updates without driving
+ * any: scheduling, PR decoration, rate limits, dashboards. A config carrying
+ * only these plus lockFileMaintenance is still lockfile-only. Keys NOT in
+ * this set (extends, packageRules, manager blocks, enabledManagers, …) are
+ * treated as update drivers — unknown keys deliberately default to "drives
+ * updates" so the WARN can only under-trigger, never falsely demote a real
+ * update bot.
+ */
+const RENOVATE_HOUSEKEEPING_KEYS = new Set([
+  '$schema',
+  'lockFileMaintenance',
+  'timezone',
+  'schedule',
+  'labels',
+  'addLabels',
+  'assignees',
+  'reviewers',
+  'prHourlyLimit',
+  'prConcurrentLimit',
+  'branchConcurrentLimit',
+  'dependencyDashboard',
+  'dependencyDashboardTitle',
+  'semanticCommits',
+  'commitMessagePrefix',
+  'onboarding',
+]);
+
+/**
  * True when a Renovate config drives nothing but lockfile maintenance: it
- * declares `lockFileMaintenance` and no other update-driving keys. Presets
- * (`extends`), `packageRules`, or manager blocks all mean real dependency
- * updates happen. Unparseable configs fall back to a conservative regex:
- * mentions lockFileMaintenance and neither extends nor packageRules.
+ * declares `lockFileMaintenance` and every other key is housekeeping (see
+ * RENOVATE_HOUSEKEEPING_KEYS). Presets (`extends`), `packageRules`, or
+ * manager blocks all mean real dependency updates happen. Unparseable
+ * configs fall back to a conservative regex: mentions lockFileMaintenance
+ * and neither extends nor packageRules.
  */
 function isLockfileMaintenanceOnly(content: string): boolean {
   try {
     const cfg = JSON.parse(content) as Record<string, unknown>;
     if (cfg.lockFileMaintenance === undefined) return false;
-    const drivers = Object.keys(cfg).filter(
-      (k) => k !== 'lockFileMaintenance' && k !== '$schema'
-    );
-    return drivers.length === 0;
+    return Object.keys(cfg).every((k) => RENOVATE_HOUSEKEEPING_KEYS.has(k));
   } catch {
     return (
       /lockFileMaintenance/.test(content) &&

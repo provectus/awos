@@ -126,6 +126,39 @@ test('PRV-02: lockfile-maintenance-only renovate.json is WARN — lockfiles refr
   assert.ok(r.evidence.some((e) => e.includes('lockfile-maintenance-only')));
 });
 
+test('PRV-02: lockfile-maintenance plus housekeeping keys (timezone/schedule/labels) is still WARN', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'renovate.json'),
+    JSON.stringify({
+      $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+      lockFileMaintenance: { enabled: true },
+      timezone: 'Europe/Berlin',
+      schedule: ['before 5am on monday'],
+      labels: ['dependencies'],
+    })
+  );
+  const r = detectDependencyRiskAutomation(t);
+  assert.equal(
+    r.status,
+    'WARN',
+    'housekeeping keys do not drive updates — the config is still lockfile-only'
+  );
+});
+
+test('PRV-02: lockfile-maintenance plus packageRules is PASS — packageRules drives real updates', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'renovate.json'),
+    JSON.stringify({
+      lockFileMaintenance: { enabled: true },
+      packageRules: [{ matchManagers: ['npm'], enabled: true }],
+    })
+  );
+  const r = detectDependencyRiskAutomation(t);
+  assert.equal(r.status, 'PASS');
+});
+
 test('PRV-02: renovate.json with extends is PASS — presets drive real dependency updates', () => {
   const t = tmp();
   writeFileSync(

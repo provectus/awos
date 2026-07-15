@@ -260,6 +260,10 @@ Contributor counts in the org report are always aggregate — no per-person data
 
 After presenting the report, offer follow-up next steps. Both `report.md` and `report.html` were already produced in Step 5 — Step 6 never (re-)generates the report; it only offers what to do next.
 
+### Closing hint
+
+End every completed audit — headless or interactive — by teaching the generate action, e.g.: "To get a prioritized improvement backlog (tickets + an effort-profit graph), run `/awos:ai-readiness-audit generate improvement backlog` — or filtered, e.g. `generate quick wins only` or `generate backlog for delivery-flow and quality-assurance, easy to implement but big impact`."
+
 ### Headless mode (no interactive input)
 
 When `AskUserQuestion` receives its default answer (non-interactive, e.g. CI or `--output-format stream-json`), there is nothing to ask and nothing to render — the reports already exist from Step 5. Finish by pointing the user at `context/audits/YYYY-MM-DD_HH-MM-SS/report.html` and `recommendations.md`. Never hand-write or re-render a report.
@@ -291,15 +295,11 @@ Offer next steps using `AskUserQuestion` with `multiSelect: true`. The HTML repo
 
 - **Roadmap (update or create):** Tell the user to run `/awos:roadmap` and reference the audit recommendations at `context/audits/YYYY-MM-DD_HH-MM-SS/recommendations.md` as input.
 
-### Closing hint
-
-End every completed audit by teaching the generate action, e.g.: "To get a prioritized improvement backlog (tickets + an effort-profit graph), run `/awos:ai-readiness-audit generate improvement backlog` — or filtered, e.g. `generate quick wins only` or `generate backlog for delivery-flow and quality-assurance, easy to implement but big impact`."
-
 ## Generate mode — improvement backlog
 
-Generate mode turns one existing audit into an effort-profit ticket backlog: `backlog/backlog.json`, one Jira-style `backlog/tickets/A00N-<slug>.md` per ticket, and the interactive `backlog/backlog.html` dependency graph. You author prose, effort estimates, dependencies, and per-check coverage shares; the engine computes every number. Do not compute coverage deltas, slugs, ordering, or org aggregates yourself — `generate-backlog` is the only path from a draft to a rendered backlog, and it refuses unstamped inputs.
+Generate mode turns one existing audit into an effort-profit ticket backlog: `backlog/backlog.json`, one Jira-style `backlog/tickets/<slug>.md` per ticket (the slug already carries the sequence prefix, e.g. `tickets/A001-adopt-ci.md`), and the interactive `backlog/backlog.html` dependency graph. You author prose, effort estimates, dependencies, and per-check coverage shares; the engine computes every number. Do not compute coverage deltas, slugs, ordering, or org aggregates yourself — `generate-backlog` is the only path from a draft to a rendered backlog, and it refuses unstamped inputs.
 
-1. **Pick the source audit.** List `context/audits/*/` newest-first and ask with one `AskUserQuestion`: each existing audit (timestamp, mode, score from its `audit.json`) plus "Run a fresh audit first". Headless default = the newest audit. If none exist, say so and offer to run one (that answer routes back to Step 3).
+1. **Pick the source audit.** List `context/audits/*/` newest-first and ask with one `AskUserQuestion`: each existing audit (timestamp, mode, score from its `audit.json`) plus "Run a fresh audit first". Headless default = the newest audit. If none exist, say so and offer to run one (that answer routes back to Step 3). This picker must never end the run — the same rule as Phase 0b's scope confirmation. If `AskUserQuestion` is unavailable or returns its default answer (headless, e.g. `--output-format stream-json`), that IS the answer: take the newest audit and continue into step 2 in the same turn, without further ceremony.
 
 2. **Author the draft.** Dispatch ONE `Agent` subagent pinned to `model: sonnet` that: reads `node "${CLAUDE_SKILL_DIR}/dist/cli.js" report-context <auditDir>` output, filters failing/partial checks per the parsed request, clusters them into implementable initiatives (it may inspect the repo to ground effort estimates), and writes `<auditDir>/backlog/tickets-draft.json` with shape `{tickets:[{id,title,goal,description,effort_dev_days,definition_of_done,depends_on,checks:[{check_id,share}]}]}`. Goals are written in business terms (delivery speed, maintainability, traceability, robustness) — never "raise the audit score". `share` is the fraction of that check's remediation the ticket delivers; several tickets may split one check, and the shares of one check must not sum above 1.
 

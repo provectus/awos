@@ -122,12 +122,16 @@ test('backlog.html is a self-contained interactive page', () => {
 });
 
 test('graph layers follow topological depth', () => {
+  // Scope to the graph region: both slugs also appear earlier in the embedded
+  // JSON island, so comparing whole-document indices would pass on JSON array
+  // order alone and stay green even if the layer computation were broken.
   const html = renderBacklogHtml(backlog);
-  const l1 = html.indexOf('A001-adopt-ci');
-  const l2 = html.indexOf('A002-harden-ci');
+  const graph = html.slice(html.indexOf('<div id="graph">'));
+  const l1 = graph.indexOf('id="node-A001-adopt-ci"');
+  const l2 = graph.indexOf('id="node-A002-harden-ci"');
   assert.ok(
     l1 !== -1 && l2 !== -1 && l1 < l2,
-    'dependency-free ticket renders in an earlier layer'
+    'dependency-free ticket renders in an earlier graph layer than its dependent'
   );
 });
 

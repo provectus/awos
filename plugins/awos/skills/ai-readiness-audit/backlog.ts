@@ -8,8 +8,12 @@
  * the orchestrator never computes these itself, so a hallucinated draft
  * fails loud instead of silently mis-scoring the backlog.
  */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { AuditJson, Check } from './artifact_types.ts';
 import { ENGINE_PROVENANCE } from './provenance.ts';
+import { requireStampedAudit } from './audit_patch.ts';
+import { renderTicketMd, renderBacklogHtml } from './backlog_render.ts';
 
 /** Share of total effort assumed parallelizable across independent tickets. */
 export const PARALLELIZABLE_SHARE = 0.8;
@@ -334,5 +338,76 @@ export function buildBacklog(
     parallelizable_share: PARALLELIZABLE_SHARE,
     tickets: backlogTickets,
     engine: ENGINE_PROVENANCE,
+  };
+}
+
+export interface GenerateSummary {
+  backlog_dir: string; // <outDir>/backlog
+  backlog_json: string; // path
+  backlog_html: string; // path
+  tickets_written: string[]; // relative paths under backlog/
+  warnings: string[];
+}
+
+/**
+ * Shape-check a raw ticket draft before it reaches `buildBacklog`. Org drafts
+ * (`org_tickets`) are not supported yet — reject them by name rather than
+ * silently reading an empty `tickets` array.
+ */
+function shapeCheckDraft(draftRaw: unknown): BacklogDraft {
+  if (draftRaw === null || typeof draftRaw !== 'object') {
+    throw new BacklogValidationError([
+      'draft must be an object with a "tickets" array',
+    ]);
+  }
+  const obj = draftRaw as Record<string, unknown>;
+  if (!Array.isArray(obj.tickets)) {
+    throw new BacklogValidationError([
+      'draft is missing a "tickets" array (org drafts with "org_tickets" ' +
+        'are not supported yet)',
+    ]);
+  }
+  return obj as unknown as BacklogDraft;
+}
+
+/**
+ * Validate the orchestrator's ticket draft against the stamped audit in
+ * `outDir`, then write the rendered backlog to disk: `backlog/backlog.json`,
+ * one `backlog/tickets/<slug>.md` per ticket, and `backlog/backlog.html`.
+ */
+export function generateBacklog(
+  outDir: string,
+  draftRaw: unknown
+): GenerateSummary {
+  const audit = requireStampedAudit(
+    outDir,
+    'generate-backlog'
+  ) as unknown as AuditJson;
+  const draft = shapeCheckDraft(draftRaw);
+  const backlog = buildBacklog(audit, draft);
+
+  const backlogDir = join(outDir, 'backlog');
+  const ticketsDir = join(backlogDir, 'tickets');
+  mkdirSync(ticketsDir, { recursive: true });
+
+  const backlogJsonPath = join(backlogDir, 'backlog.json');
+  writeFileSync(backlogJsonPath, JSON.stringify(backlog, null, 2));
+
+  const ticketsWritten: string[] = [];
+  for (const ticket of backlog.tickets) {
+    const relPath = join('tickets', `${ticket.slug}.md`);
+    writeFileSync(join(backlogDir, relPath), renderTicketMd(backlog, ticket));
+    ticketsWritten.push(relPath);
+  }
+
+  const backlogHtmlPath = join(backlogDir, 'backlog.html');
+  writeFileSync(backlogHtmlPath, renderBacklogHtml(backlog));
+
+  return {
+    backlog_dir: backlogDir,
+    backlog_json: backlogJsonPath,
+    backlog_html: backlogHtmlPath,
+    tickets_written: ticketsWritten,
+    warnings: [],
   };
 }

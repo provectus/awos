@@ -1,13 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   buildBacklog,
+  generateBacklog,
   BacklogValidationError,
   kebab,
   PARALLELIZABLE_SHARE,
   type BacklogDraft,
 } from '../backlog.ts';
-import { makeAudit, makeDim, makeCheck } from './helpers.ts';
+import { makeAudit, makeDim, makeCheck, tmpDir } from './helpers.ts';
 
 // Audit with two dimensions, three applicable checks:
 //   DF-01 missing 8 (max 10, awarded 2), QA-01 missing 5 (max 5, awarded 0),
@@ -207,5 +210,57 @@ test('malformed drafts are named violations (dup id, bad effort, empty checks)',
       err.violations.some((v) => v.includes('dup')) &&
       err.violations.some((v) => v.includes('effort_dev_days')) &&
       err.violations.some((v) => v.includes('checks'))
+  );
+});
+
+function writeAuditDir(audit: unknown): string {
+  const dir = tmpDir('backlog-e2e-');
+  writeFileSync(join(dir, 'audit.json'), JSON.stringify(audit, null, 2));
+  return dir;
+}
+
+test('generate-backlog writes stamped backlog.json, tickets, and html', () => {
+  const dir = writeAuditDir(fixtureAudit());
+  const summary = generateBacklog(dir, draft([T()]));
+  const bl = JSON.parse(
+    readFileSync(join(dir, 'backlog', 'backlog.json'), 'utf8')
+  );
+  assert.equal(
+    bl.engine.generated_by,
+    'audit-core',
+    'backlog.json must be provenance-stamped'
+  );
+  assert.ok(
+    existsSync(join(dir, 'backlog', 'tickets', 'A001-adopt-ci.md')),
+    'ticket file written'
+  );
+  assert.ok(
+    existsSync(join(dir, 'backlog', 'backlog.html')),
+    'backlog.html written'
+  );
+  assert.deepEqual(summary.tickets_written, ['tickets/A001-adopt-ci.md']);
+  assert.ok(
+    !existsSync(join(dir, 'audit.json.bak')) &&
+      readFileSync(join(dir, 'audit.json'), 'utf8').includes('"audit_total"'),
+    'audit.json untouched'
+  );
+});
+
+test('generate-backlog refuses an unstamped audit', () => {
+  const unstamped = fixtureAudit();
+  delete (unstamped as unknown as Record<string, unknown>).engine;
+  const dir = writeAuditDir(unstamped);
+  assert.throws(
+    () => generateBacklog(dir, draft([T()])),
+    /provenance/,
+    'unstamped audit must be refused like patch-judgment does'
+  );
+});
+
+test('generate-backlog rejects a draft without a tickets array', () => {
+  const dir = writeAuditDir(fixtureAudit());
+  assert.throws(
+    () => generateBacklog(dir, { nope: [] }),
+    BacklogValidationError
   );
 });

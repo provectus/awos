@@ -14,6 +14,7 @@
  *   node dist/cli.js patch-judgment <auditsDir>        <patches.json|->
  *   node dist/cli.js report-context <auditsDir>
  *   node dist/cli.js patch-report   <auditsDir>        <blocks.json|->
+ *   node dist/cli.js generate-backlog <auditsDir>      <tickets-draft.json|->
  */
 
 import {
@@ -67,6 +68,7 @@ import {
   type ReportBlocksPatch,
 } from './audit_patch.ts';
 import { detectOrgParent } from './topology.ts';
+import { generateBacklog, BacklogValidationError } from './backlog.ts';
 
 /** Resolve the skill root (where references/ lives) from the bundle location. */
 function resolveSkillRoot(): string {
@@ -123,7 +125,7 @@ async function main(): Promise<void> {
     fail({
       error: 'no command given',
       usage:
-        'progress|render|rollup|audit-core|aggregate|enrich|patch-judgment|report-context|patch-report <arg> [repoPath]',
+        'progress|render|rollup|audit-core|aggregate|enrich|patch-judgment|report-context|patch-report|generate-backlog <arg> [repoPath]',
     });
   }
 
@@ -437,11 +439,38 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'generate-backlog': {
+      // Turn the orchestrator's ticket draft into the validated, rendered
+      // backlog (backlog.json + tickets/*.md + backlog.html). All numbers are
+      // computed here; the draft carries only prose, effort, deps, and shares.
+      const dir = arg1;
+      const draftArg = arg2;
+      if (!dir || !draftArg) {
+        fail({
+          error:
+            'generate-backlog requires <auditsDir> <tickets-draft.json|-> — draft: {tickets:[{id,title,goal,description,effort_dev_days,definition_of_done,depends_on,checks:[{check_id,share}]}]}',
+        });
+      }
+      const draft = readJsonArg(draftArg, 'ticket draft');
+      try {
+        printJson(generateBacklog(dir, draft));
+      } catch (err) {
+        if (err instanceof BacklogValidationError) {
+          fail({
+            error: 'draft failed validation',
+            violations: err.violations,
+          });
+        }
+        throw err;
+      }
+      break;
+    }
+
     default: {
       fail({
         error: `unknown command "${command}"`,
         usage:
-          'progress|render|rollup|audit-core|aggregate|enrich|patch-judgment|report-context|patch-report <arg> [repoPath]',
+          'progress|render|rollup|audit-core|aggregate|enrich|patch-judgment|report-context|patch-report|generate-backlog <arg> [repoPath]',
       });
     }
   }

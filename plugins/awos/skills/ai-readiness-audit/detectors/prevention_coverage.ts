@@ -20,12 +20,15 @@ import { detectAgentSafetyHooks } from './security.ts';
 // (PRV-01…PRV-08). One per cluster; the instruction halves (3110–3117) are
 // judgment categories with no detector entry.
 //
-// Uniform grading rule: PASS = an actively running mechanism (invocation
+// Default grading rule: PASS = an actively running mechanism (invocation
 // found in a gate surface: pre-commit config, husky/lefthook scripts,
 // lint-staged, a CI workflow step, agent hooks, or a server-side bot config);
 // WARN = a relevant tool config exists but no gate invokes it; FAIL =
-// neither. Detection is grep-heuristic over the gate surfaces — same
-// precision tier as SCS-06's VULN_SCANNER_RX.
+// neither. Two detectors deviate — see their own headers: PRV-02 WARNs on a
+// different axis (a bot that runs but only maintains lockfiles), and PRV-06
+// grades on a coverage threshold rather than config existence. Detection is
+// grep-heuristic over the gate surfaces — same precision tier as SCS-06's
+// VULN_SCANNER_RX.
 // ---------------------------------------------------------------------------
 
 interface GateSurface {

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import {
   buildBacklog,
   generateBacklog,
@@ -329,6 +329,75 @@ test('org backlog aggregates member numbers from per-repo files', () => {
     'weighted gain = Σ recovered ÷ Σ applicable'
   );
   assert.equal(bl.engine.generated_by, 'audit-core');
+
+  // repos entries carry the per-repo coverage / ticket-count / effort the org
+  // repositories table renders (engine-computed, not orchestrator-supplied).
+  const alpha = bl.repos.find((r: { repo: string }) => r.repo === 'alpha');
+  assert.equal(
+    alpha.total_applicable_weight,
+    19,
+    'repo row keeps its applicable weight'
+  );
+  assert.equal(
+    alpha.coverage,
+    0.5,
+    'repo row carries current coverage from the per-repo backlog'
+  );
+  assert.equal(alpha.ticket_count, 1, 'repo row carries its ticket count');
+  assert.equal(
+    alpha.effort_dev_days,
+    3,
+    'repo row carries Σ its ticket effort (effort to close identified gaps)'
+  );
+  assert.equal(
+    alpha.backlog_href,
+    'per-repo/alpha/backlog/backlog.html',
+    'backlog_href stays audit-dir-relative in the JSON'
+  );
+});
+
+test('org project name prefers org-portfolio.json over the directory basename', () => {
+  const org = writeOrgDir();
+  writeFileSync(
+    join(org, 'org-portfolio.json'),
+    JSON.stringify({ project: 'acme-portfolio' })
+  );
+  generateOrgBacklog(org, ORG_DRAFT);
+  const bl = JSON.parse(
+    readFileSync(join(org, 'backlog', 'backlog.json'), 'utf8')
+  );
+  assert.equal(
+    bl.project,
+    'acme-portfolio',
+    'an explicit org-portfolio.json project field wins'
+  );
+});
+
+test('org project name resolves a timestamped audits dir to the project root', () => {
+  // Canonical layout: <projectRoot>/context/audits/<timestamp>. basename is the
+  // timestamp, which must NOT become the project name.
+  const root = tmpDir('proj-root-');
+  const org = join(root, 'context', 'audits', '2026-07-15_17-59-50');
+  for (const repo of ['alpha', 'beta']) {
+    const rd = join(org, 'per-repo', repo);
+    mkdirSync(rd, { recursive: true });
+    writeFileSync(join(rd, 'audit.json'), JSON.stringify(fixtureAudit()));
+    generateBacklog(rd, draft([T({ id: 'ci', title: 'Adopt CI' })]));
+  }
+  generateOrgBacklog(org, ORG_DRAFT);
+  const bl = JSON.parse(
+    readFileSync(join(org, 'backlog', 'backlog.json'), 'utf8')
+  );
+  assert.equal(
+    bl.project,
+    basename(root),
+    'timestamped audits dir resolves to the project root basename, not the timestamp'
+  );
+  assert.doesNotMatch(
+    bl.project,
+    /^\d{4}-\d{2}-\d{2}_/,
+    'project name is never the raw run timestamp'
+  );
 });
 
 test('org backlog refuses a repo whose backlog is missing', () => {

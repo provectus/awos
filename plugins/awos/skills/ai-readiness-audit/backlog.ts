@@ -15,7 +15,7 @@ import {
   readFileSync,
   existsSync,
 } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join, basename, dirname } from 'node:path';
 import type { AuditJson, Check } from './artifact_types.ts';
 import { ENGINE_PROVENANCE, hasEngineProvenance } from './provenance.ts';
 import { requireStampedAudit } from './audit_patch.ts';
@@ -137,6 +137,12 @@ export interface OrgBacklogJson {
     /** null for a repo scanned via its audit-only fallback (no generated backlog to link to). */
     backlog_href: string | null;
     total_applicable_weight: number;
+    /** Current standards coverage of the repo (0..1), or null when unknown. */
+    coverage: number | null;
+    /** Tickets in the repo's own backlog (0 for an audit-only fallback repo). */
+    ticket_count: number;
+    /** Σ effort_dev_days of the repo's tickets (0 for an audit-only fallback repo). */
+    effort_dev_days: number;
   }>;
   tickets: OrgBacklogTicket[];
   engine: { generated_by: string; version?: string };
@@ -532,6 +538,8 @@ interface PerRepoScan {
   backlogUnstamped: boolean;
   /** Applicable weight derived from audit.json, used only when no backlog exists. */
   auditWeight: number | null;
+  /** Coverage derived from audit.json, used only when no backlog exists. */
+  auditCoverage: number | null;
   auditUnstamped: boolean;
   auditMissing: boolean;
 }
@@ -570,6 +578,7 @@ function scanPerRepo(orgDir: string): PerRepoScan[] {
     }
 
     let auditWeight: number | null = null;
+    let auditCoverage: number | null = null;
     let auditUnstamped = false;
     let auditMissing = false;
     if (!backlog && !backlogUnstamped) {
@@ -591,6 +600,8 @@ function scanPerRepo(orgDir: string): PerRepoScan[] {
               }
             }
             auditWeight = w;
+            auditCoverage =
+              typeof audit.coverage === 'number' ? audit.coverage : null;
           }
         } catch {
           auditUnstamped = true;
@@ -603,10 +614,45 @@ function scanPerRepo(orgDir: string): PerRepoScan[] {
       backlog,
       backlogUnstamped,
       auditWeight,
+      auditCoverage,
       auditUnstamped,
       auditMissing,
     };
   });
+}
+
+/** ISO audit-run directory name, e.g. `2026-07-15_17-59-50`. */
+const AUDIT_TIMESTAMP = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/;
+
+/**
+ * Human-readable project name for an org backlog. `basename(orgDir)` is wrong
+ * for the canonical layout `<projectRoot>/context/audits/<timestamp>` — it
+ * yields the timestamp. Prefer an explicit `project` from the org-portfolio
+ * artifact; otherwise, when orgDir is a timestamped audits directory, fall back
+ * to the project root's name three levels up; otherwise keep the basename.
+ */
+function resolveOrgProject(orgDir: string): string {
+  const portfolioPath = join(orgDir, 'org-portfolio.json');
+  if (existsSync(portfolioPath)) {
+    try {
+      const portfolio = JSON.parse(readFileSync(portfolioPath, 'utf8'));
+      if (typeof portfolio?.project === 'string' && portfolio.project.trim()) {
+        return portfolio.project.trim();
+      }
+    } catch {
+      // fall through to path-based resolution
+    }
+  }
+
+  const base = basename(orgDir);
+  if (
+    AUDIT_TIMESTAMP.test(base) &&
+    basename(dirname(orgDir)) === 'audits' &&
+    basename(dirname(dirname(orgDir))) === 'context'
+  ) {
+    return basename(dirname(dirname(dirname(orgDir))));
+  }
+  return base;
 }
 
 /**
@@ -841,17 +887,36 @@ export function buildOrgBacklog(
     };
   });
 
-  const repos = entries.map((e) => ({
-    repo: e.repo,
-    // audit-only fallback repos (e.backlog null) have no generated backlog.html to link to.
-    backlog_href: e.backlog ? `per-repo/${e.repo}/backlog/backlog.html` : null,
-    total_applicable_weight: repoWeight.get(e.repo) ?? 0,
-  }));
+  const repos = entries.map((e) => {
+    if (e.backlog) {
+      return {
+        repo: e.repo,
+        backlog_href: `per-repo/${e.repo}/backlog/backlog.html`,
+        total_applicable_weight: e.backlog.total_applicable_weight,
+        coverage: e.backlog.coverage,
+        ticket_count: e.backlog.tickets.length,
+        effort_dev_days: e.backlog.tickets.reduce(
+          (s, t) => s + t.effort_dev_days,
+          0
+        ),
+      };
+    }
+    // audit-only fallback repos (e.backlog null) have no generated backlog.html
+    // to link to, and no tickets — only a coverage/weight headline from audit.json.
+    return {
+      repo: e.repo,
+      backlog_href: null,
+      total_applicable_weight: repoWeight.get(e.repo) ?? 0,
+      coverage: e.auditCoverage,
+      ticket_count: 0,
+      effort_dev_days: 0,
+    };
+  });
 
   return {
     org: true,
     date: new Date().toISOString().slice(0, 10),
-    project: basename(orgDir),
+    project: resolveOrgProject(orgDir),
     total_repos: entries.length,
     total_applicable_weight,
     parallelizable_share: PARALLELIZABLE_SHARE,

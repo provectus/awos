@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderTicketMd } from '../backlog_render.ts';
+import { renderTicketMd, renderBacklogHtml } from '../backlog_render.ts';
+import { REPORT_CSS } from '../render.ts';
 import type { BacklogJson } from '../backlog.ts';
 
 const backlog: BacklogJson = {
@@ -87,4 +88,52 @@ test('ticket md carries all Jira-style fields', () => {
 test('ticket without dependencies renders an em dash', () => {
   const md = renderTicketMd(backlog, backlog.tickets[0]);
   assert.match(md, /Depends on.*—/, 'no-deps row shows —');
+});
+
+test('backlog.html is a self-contained interactive page', () => {
+  const html = renderBacklogHtml(backlog);
+  assert.match(html, /<!DOCTYPE html>/i);
+  assert.match(html, /<title>Improvement Backlog — demo — 2026-07-15<\/title>/);
+  assert.ok(
+    html.includes(REPORT_CSS.slice(0, 200)),
+    'must embed the shared Provectus stylesheet'
+  );
+  assert.match(html, /id="backlog-data"/, 'embeds the backlog JSON');
+  assert.match(html, /id="devs"/, 'ribbon has the developers input');
+  assert.match(html, /id="rb-effort"/, 'ribbon shows effort');
+  assert.match(html, /id="rb-duration"/, 'ribbon shows duration');
+  assert.match(html, /id="rb-coverage"/, 'ribbon shows coverage gain');
+  assert.match(html, /id="enable-all"/, 'ribbon has enable-all');
+  assert.match(
+    html,
+    /class="ribbon-warning"/,
+    'always-visible scaling warning row'
+  );
+  assert.match(html, /Amdahl/, 'warning names the scaling model');
+  assert.match(html, /<details class="legend"/, 'collapsible legend');
+  assert.match(html, /data-slug="A001-adopt-ci"/, 'graph node per ticket');
+  assert.match(html, /data-slug="A002-harden-ci"/);
+  assert.match(
+    html,
+    /1\/\(\(1−0\.8\)\+0\.8\/n\)|1\/\(\(1-P\)\+P\/n\)/,
+    'duration tooltip carries the formula'
+  );
+  assert.doesNotMatch(html, /src="http/, 'no external scripts');
+});
+
+test('graph layers follow topological depth', () => {
+  const html = renderBacklogHtml(backlog);
+  const l1 = html.indexOf('A001-adopt-ci');
+  const l2 = html.indexOf('A002-harden-ci');
+  assert.ok(
+    l1 !== -1 && l2 !== -1 && l1 < l2,
+    'dependency-free ticket renders in an earlier layer'
+  );
+});
+
+test('embedded JSON escapes </script>', () => {
+  const evil = structuredClone(backlog);
+  evil.tickets[0].description = 'x</script><script>alert(1)</script>';
+  const html = renderBacklogHtml(evil);
+  assert.doesNotMatch(html, /x<\/script><script>alert/, 'JSON must escape </');
 });

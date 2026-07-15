@@ -141,3 +141,87 @@ test('embedded JSON escapes </script>', () => {
   const html = renderBacklogHtml(evil);
   assert.doesNotMatch(html, /x<\/script><script>alert/, 'JSON must escape </');
 });
+
+import type { OrgBacklogJson } from '../backlog.ts';
+
+const orgBacklog: OrgBacklogJson = {
+  org: true,
+  date: '2026-07-15',
+  project: 'acme-org',
+  total_repos: 8,
+  total_applicable_weight: 152,
+  parallelizable_share: 0.8,
+  repos: [
+    {
+      repo: 'alpha',
+      backlog_href: 'per-repo/alpha/backlog/backlog.html',
+      total_applicable_weight: 19,
+    },
+    {
+      repo: 'beta',
+      backlog_href: 'per-repo/beta/backlog/backlog.html',
+      total_applicable_weight: 19,
+    },
+  ],
+  engine: { generated_by: 'audit-core' },
+  tickets: [
+    {
+      id: 'org-ci',
+      seq: 1,
+      title: 'Adopt CI everywhere',
+      goal: 'g',
+      description: 'd',
+      depends_on: [],
+      repos_covered: 3,
+      effort_dev_days: 9,
+      missing_weight_recovered: 24,
+      coverage_delta: 24 / 152,
+      members: [
+        {
+          repo: 'alpha',
+          slug: 'A001-adopt-ci',
+          title: 'Adopt CI',
+          effort_dev_days: 3,
+          coverage_delta: 8 / 19,
+          missing_weight_recovered: 8,
+          ticket_href: 'per-repo/alpha/backlog/tickets/A001-adopt-ci.md',
+        },
+        {
+          repo: 'beta',
+          slug: 'A001-adopt-ci',
+          title: 'Adopt CI',
+          effort_dev_days: 3,
+          coverage_delta: 8 / 19,
+          missing_weight_recovered: 8,
+          ticket_href: 'per-repo/beta/backlog/tickets/A001-adopt-ci.md',
+        },
+      ],
+    },
+  ],
+};
+
+test('org backlog.html shows titles, repo spread, per-repo tables, repo links, wider warning', () => {
+  const html = renderBacklogHtml(orgBacklog);
+  assert.match(html, /Adopt CI everywhere/, 'org node shows the human title');
+  assert.match(html, /3\/8 repositories/, 'repos coverage');
+  assert.match(
+    html,
+    /class="member-table"/,
+    'tooltip carries the per-repo numbers table'
+  );
+  assert.match(
+    html,
+    /per-repo\/alpha\/backlog\/backlog\.html/,
+    'bottom links to per-repo graphs'
+  );
+  assert.match(
+    html,
+    /applied once for the whole organization/,
+    'org warning has the extra caveat'
+  );
+  assert.match(
+    html,
+    /Σ member recovered points|recovered ÷/,
+    'legend explains the weighted math'
+  );
+});

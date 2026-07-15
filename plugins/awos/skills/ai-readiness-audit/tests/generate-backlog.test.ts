@@ -264,3 +264,112 @@ test('generate-backlog rejects a draft without a tickets array', () => {
     BacklogValidationError
   );
 });
+
+import { generateOrgBacklog } from '../backlog.ts';
+
+// Build an org dir: two repos, each with a stamped audit + generated backlog.
+function writeOrgDir(): string {
+  const org = tmpDir('backlog-org-');
+  for (const repo of ['alpha', 'beta']) {
+    const rd = join(org, 'per-repo', repo);
+    mkdirSync(rd, { recursive: true });
+    writeFileSync(
+      join(rd, 'audit.json'),
+      JSON.stringify(fixtureAudit(), null, 2)
+    );
+    generateBacklog(rd, draft([T({ id: 'ci', title: 'Adopt CI' })]));
+  }
+  return org;
+}
+
+const ORG_DRAFT = {
+  org_tickets: [
+    {
+      id: 'org-ci',
+      title: 'Adopt CI everywhere',
+      goal: 'Org-wide delivery safety',
+      description: 'Roll out CI across repos',
+      depends_on: [],
+      members: [
+        { repo: 'alpha', slug: 'A001-adopt-ci' },
+        { repo: 'beta', slug: 'A001-adopt-ci' },
+      ],
+    },
+  ],
+};
+
+test('org backlog aggregates member numbers from per-repo files', () => {
+  const org = writeOrgDir();
+  generateOrgBacklog(org, ORG_DRAFT);
+  const bl = JSON.parse(
+    readFileSync(join(org, 'backlog', 'backlog.json'), 'utf8')
+  );
+  assert.equal(bl.org, true);
+  assert.equal(bl.total_repos, 2);
+  assert.equal(
+    bl.total_applicable_weight,
+    38,
+    'org denominator sums per-repo applicable weight (19+19)'
+  );
+  const t = bl.tickets[0];
+  assert.equal(t.effort_dev_days, 6, 'effort = Σ member efforts (3+3)');
+  assert.equal(t.repos_covered, 2);
+  assert.ok(
+    Math.abs(t.coverage_delta - 16 / 38) < 1e-12,
+    'weighted gain = Σ recovered ÷ Σ applicable'
+  );
+  assert.equal(bl.engine.generated_by, 'audit-core');
+});
+
+test('org backlog refuses a repo whose backlog is missing', () => {
+  const org = writeOrgDir();
+  const badDraft = structuredClone(ORG_DRAFT);
+  badDraft.org_tickets[0].members.push({ repo: 'gamma', slug: 'A001-x' });
+  mkdirSync(join(org, 'per-repo', 'gamma'), { recursive: true });
+  assert.throws(
+    () => generateOrgBacklog(org, badDraft),
+    (err: BacklogValidationError) =>
+      err.violations.some((v) => v.includes('gamma') && v.includes('backlog')),
+    'missing per-repo backlog must be named'
+  );
+});
+
+test('a per-repo ticket may belong to only one org ticket', () => {
+  const org = writeOrgDir();
+  const dup = structuredClone(ORG_DRAFT);
+  dup.org_tickets.push({
+    ...ORG_DRAFT.org_tickets[0],
+    id: 'org-ci-2',
+    depends_on: [],
+  });
+  assert.throws(
+    () => generateOrgBacklog(org, dup),
+    (err: BacklogValidationError) =>
+      err.violations.some(
+        (v) => v.includes('alpha') && v.includes('A001-adopt-ci')
+      ),
+    'double-counted member must be a violation'
+  );
+});
+
+test('unlinked per-repo tickets surface as warnings, not violations', () => {
+  const org = writeOrgDir();
+  // add a second per-repo ticket in alpha that no org ticket references
+  const alphaDir = join(org, 'per-repo', 'alpha');
+  generateBacklog(
+    alphaDir,
+    draft([
+      T({ id: 'ci', title: 'Adopt CI' }),
+      T({
+        id: 'tests',
+        title: 'Add tests',
+        checks: [{ check_id: 'QA-01', share: 1 }],
+      }),
+    ])
+  );
+  const summary = generateOrgBacklog(org, ORG_DRAFT);
+  assert.ok(
+    summary.warnings.some((w) => w.includes('A002-add-tests')),
+    'unlinked ticket is warned about'
+  );
+});

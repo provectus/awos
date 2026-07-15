@@ -8,10 +8,16 @@
  * the orchestrator never computes these itself, so a hallucinated draft
  * fails loud instead of silently mis-scoring the backlog.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  mkdirSync,
+  writeFileSync,
+  readdirSync,
+  readFileSync,
+  existsSync,
+} from 'node:fs';
+import { join, basename } from 'node:path';
 import type { AuditJson, Check } from './artifact_types.ts';
-import { ENGINE_PROVENANCE } from './provenance.ts';
+import { ENGINE_PROVENANCE, hasEngineProvenance } from './provenance.ts';
 import { requireStampedAudit } from './audit_patch.ts';
 import { renderTicketMd, renderBacklogHtml } from './backlog_render.ts';
 
@@ -70,6 +76,68 @@ export interface BacklogJson {
   total_missing_weight: number;
   parallelizable_share: number;
   tickets: BacklogTicket[];
+  engine: { generated_by: string; version?: string };
+}
+
+// ---------------------------------------------------------------------------
+// Org mode — aggregate per-repo backlogs into one portfolio backlog.
+// ---------------------------------------------------------------------------
+
+export interface OrgMemberRef {
+  repo: string;
+  slug: string;
+}
+
+export interface OrgTicketDraft {
+  id: string;
+  title: string;
+  goal: string;
+  description: string;
+  depends_on: string[]; // org ticket ids
+  members: OrgMemberRef[]; // ≥1; refs to per-repo ticket slugs
+}
+
+export interface OrgBacklogDraft {
+  org_tickets: OrgTicketDraft[];
+}
+
+export interface OrgTicketMember {
+  repo: string;
+  slug: string;
+  title: string;
+  effort_dev_days: number;
+  coverage_delta: number;
+  missing_weight_recovered: number;
+  ticket_href: string; // "per-repo/<repo>/backlog/tickets/<slug>.md"
+}
+
+export interface OrgBacklogTicket {
+  id: string;
+  seq: number;
+  title: string;
+  goal: string;
+  description: string;
+  depends_on: string[]; // org ticket ids
+  members: OrgTicketMember[];
+  effort_dev_days: number; // Σ member effort
+  missing_weight_recovered: number; // Σ member recovered points
+  coverage_delta: number; // ÷ org total applicable weight
+  repos_covered: number;
+}
+
+export interface OrgBacklogJson {
+  org: true;
+  date: string;
+  project: string;
+  total_repos: number;
+  total_applicable_weight: number; // Σ per-repo totals
+  parallelizable_share: number;
+  repos: Array<{
+    repo: string;
+    backlog_href: string;
+    total_applicable_weight: number;
+  }>;
+  tickets: OrgBacklogTicket[];
   engine: { generated_by: string; version?: string };
 }
 
@@ -350,32 +418,67 @@ export interface GenerateSummary {
 }
 
 /**
- * Shape-check a raw ticket draft before it reaches `buildBacklog`. Org drafts
- * (`org_tickets`) are not supported yet — reject them by name rather than
- * silently reading an empty `tickets` array.
+ * Shape-check a raw single-repo ticket draft before it reaches `buildBacklog`.
+ * Only called once `generateBacklog` has already classified the draft shape
+ * as single-repo, so this is a safety net, not the primary discriminator.
  */
 function shapeCheckDraft(draftRaw: unknown): BacklogDraft {
-  if (draftRaw === null || typeof draftRaw !== 'object') {
+  if (
+    draftRaw === null ||
+    typeof draftRaw !== 'object' ||
+    !Array.isArray((draftRaw as Record<string, unknown>).tickets)
+  ) {
     throw new BacklogValidationError([
       'draft must be an object with a "tickets" array',
     ]);
   }
-  const obj = draftRaw as Record<string, unknown>;
-  if (!Array.isArray(obj.tickets)) {
+  return draftRaw as unknown as BacklogDraft;
+}
+
+/** Same, for an org draft. */
+function shapeCheckOrgDraft(draftRaw: unknown): OrgBacklogDraft {
+  if (
+    draftRaw === null ||
+    typeof draftRaw !== 'object' ||
+    !Array.isArray((draftRaw as Record<string, unknown>).org_tickets)
+  ) {
     throw new BacklogValidationError([
-      'draft is missing a "tickets" array (org drafts with "org_tickets" ' +
-        'are not supported yet)',
+      'org draft must be an object with an "org_tickets" array',
     ]);
   }
-  return obj as unknown as BacklogDraft;
+  return draftRaw as unknown as OrgBacklogDraft;
+}
+
+/** Which draft shape `draftRaw` matches, or null when it matches neither. */
+function classifyDraftShape(draftRaw: unknown): 'org' | 'single' | null {
+  if (draftRaw === null || typeof draftRaw !== 'object') return null;
+  const obj = draftRaw as Record<string, unknown>;
+  if (Array.isArray(obj.org_tickets)) return 'org';
+  if (Array.isArray(obj.tickets)) return 'single';
+  return null;
 }
 
 /**
- * Validate the orchestrator's ticket draft against the stamped audit in
- * `outDir`, then write the rendered backlog to disk: `backlog/backlog.json`,
- * one `backlog/tickets/<slug>.md` per ticket, and `backlog/backlog.html`.
+ * Validate the orchestrator's ticket draft, then write the rendered backlog
+ * to disk. Routes on draft shape: a `tickets` array is a single-repo draft
+ * (validated against the stamped `audit.json` in `outDir`); an `org_tickets`
+ * array is an org draft (validated against the stamped per-repo backlogs
+ * under `outDir/per-repo/*`, see `generateOrgBacklog`).
  */
 export function generateBacklog(
+  outDir: string,
+  draftRaw: unknown
+): GenerateSummary {
+  const shape = classifyDraftShape(draftRaw);
+  if (shape === 'org') return generateOrgBacklog(outDir, draftRaw);
+  if (shape === 'single') return generateSingleRepoBacklog(outDir, draftRaw);
+  throw new BacklogValidationError([
+    'draft must have either a "tickets" array (single-repo backlog) or an ' +
+      '"org_tickets" array (org backlog)',
+  ]);
+}
+
+function generateSingleRepoBacklog(
   outDir: string,
   draftRaw: unknown
 ): GenerateSummary {
@@ -409,5 +512,385 @@ export function generateBacklog(
     backlog_html: backlogHtmlPath,
     tickets_written: ticketsWritten,
     warnings: [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Org mode internals
+// ---------------------------------------------------------------------------
+
+interface PerRepoScan {
+  repo: string;
+  /** Parsed, provenance-stamped per-repo backlog, when one exists. */
+  backlog: BacklogJson | null;
+  /** A backlog.json existed but lacked (or failed to parse for) the stamp. */
+  backlogUnstamped: boolean;
+  /** Applicable weight derived from audit.json, used only when no backlog exists. */
+  auditWeight: number | null;
+  auditUnstamped: boolean;
+  auditMissing: boolean;
+}
+
+/**
+ * Enumerate `<orgDir>/per-repo/*` and, per repo, load whatever tells us its
+ * applicable weight: the generated backlog when one exists (preferred, since
+ * it also carries the ticket data org members reference), else a fallback
+ * sum over the stamped audit's applies-true check weights.
+ */
+function scanPerRepo(orgDir: string): PerRepoScan[] {
+  const perRepoDir = join(orgDir, 'per-repo');
+  let repoNames: string[] = [];
+  try {
+    repoNames = readdirSync(perRepoDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+      .sort();
+  } catch {
+    repoNames = [];
+  }
+
+  return repoNames.map((repo) => {
+    const repoDir = join(perRepoDir, repo);
+    const backlogPath = join(repoDir, 'backlog', 'backlog.json');
+    let backlog: BacklogJson | null = null;
+    let backlogUnstamped = false;
+    if (existsSync(backlogPath)) {
+      try {
+        const parsed = JSON.parse(readFileSync(backlogPath, 'utf8'));
+        if (hasEngineProvenance(parsed)) backlog = parsed as BacklogJson;
+        else backlogUnstamped = true;
+      } catch {
+        backlogUnstamped = true;
+      }
+    }
+
+    let auditWeight: number | null = null;
+    let auditUnstamped = false;
+    let auditMissing = false;
+    if (!backlog && !backlogUnstamped) {
+      const auditPath = join(repoDir, 'audit.json');
+      if (!existsSync(auditPath)) {
+        auditMissing = true;
+      } else {
+        try {
+          const audit = JSON.parse(
+            readFileSync(auditPath, 'utf8')
+          ) as AuditJson;
+          if (!hasEngineProvenance(audit)) {
+            auditUnstamped = true;
+          } else {
+            let w = 0;
+            for (const dim of audit.dimensions ?? []) {
+              for (const check of dim.checks as Check[]) {
+                if (check.applies) w += check.weight_max;
+              }
+            }
+            auditWeight = w;
+          }
+        } catch {
+          auditUnstamped = true;
+        }
+      }
+    }
+
+    return {
+      repo,
+      backlog,
+      backlogUnstamped,
+      auditWeight,
+      auditUnstamped,
+      auditMissing,
+    };
+  });
+}
+
+/**
+ * Aggregate the per-repo backlogs referenced by an org draft's `org_tickets`
+ * into one portfolio backlog. Each org ticket's members must resolve to a
+ * real ticket in the named repo's own (stamped) backlog; the numbers on the
+ * org ticket are pure sums/quotients over its members' already-computed
+ * per-repo numbers — this function never re-derives a per-repo check's math.
+ */
+export function buildOrgBacklog(
+  orgDir: string,
+  draft: OrgBacklogDraft
+): OrgBacklogJson {
+  const violations: string[] = [];
+  const entries = scanPerRepo(orgDir);
+  if (entries.length === 0) {
+    violations.push(
+      `no repo subdirectories found under ${join(orgDir, 'per-repo')}`
+    );
+  }
+
+  const orgTickets = draft.org_tickets ?? [];
+  const referencedRepos = new Set<string>();
+  for (const t of orgTickets) {
+    for (const m of t.members ?? []) {
+      if (m?.repo) referencedRepos.add(m.repo);
+    }
+  }
+
+  const repoWeight = new Map<string, number>();
+  let total_applicable_weight = 0;
+  for (const e of entries) {
+    if (e.backlogUnstamped) {
+      violations.push(
+        `repo "${e.repo}" backlog/backlog.json lacks engine provenance — run generate-backlog for it first`
+      );
+      continue;
+    }
+    if (e.backlog) {
+      repoWeight.set(e.repo, e.backlog.total_applicable_weight);
+      total_applicable_weight += e.backlog.total_applicable_weight;
+      continue;
+    }
+    if (referencedRepos.has(e.repo)) {
+      violations.push(
+        `repo "${e.repo}" has no backlog/backlog.json — run generate-backlog for it first`
+      );
+      continue;
+    }
+    if (e.auditMissing) {
+      violations.push(
+        `repo "${e.repo}" has no backlog/backlog.json and no audit.json — run audit-core for it first`
+      );
+    } else if (e.auditUnstamped) {
+      violations.push(
+        `repo "${e.repo}" audit.json lacks engine provenance — run audit-core for it first`
+      );
+    } else {
+      repoWeight.set(e.repo, e.auditWeight ?? 0);
+      total_applicable_weight += e.auditWeight ?? 0;
+    }
+  }
+
+  const entryByRepo = new Map(entries.map((e) => [e.repo, e]));
+
+  // Duplicate/empty id detection.
+  const seenIds = new Set<string>();
+  const dupIds = new Set<string>();
+  for (const t of orgTickets) {
+    if (!t.id) {
+      violations.push('org ticket has an empty id');
+      continue;
+    }
+    if (seenIds.has(t.id)) dupIds.add(t.id);
+    seenIds.add(t.id);
+  }
+  for (const id of dupIds) {
+    violations.push(`duplicate org ticket id: ${id}`);
+  }
+  const validIds = new Set(orgTickets.map((t) => t.id).filter(Boolean));
+
+  // repo::slug -> owning org ticket id, to catch double-counted members.
+  const memberOwner = new Map<string, string>();
+
+  for (const t of orgTickets) {
+    const label = t.id || '<empty id>';
+    if (!t.title) violations.push(`org ticket ${label}: empty title`);
+    if (!t.goal) violations.push(`org ticket ${label}: empty goal`);
+    if (!t.description)
+      violations.push(`org ticket ${label}: empty description`);
+    if (!t.members || t.members.length === 0) {
+      violations.push(`org ticket ${label}: members must not be empty`);
+    }
+    for (const m of t.members ?? []) {
+      const repoBacklog = entryByRepo.get(m.repo)?.backlog;
+      if (!repoBacklog) continue; // repo-level violation already recorded above
+      const found = repoBacklog.tickets.find((bt) => bt.slug === m.slug);
+      if (!found) {
+        violations.push(
+          `org ticket ${label}: repo "${m.repo}" has no ticket "${m.slug}"`
+        );
+        continue;
+      }
+      const key = `${m.repo}::${m.slug}`;
+      const owner = memberOwner.get(key);
+      if (owner && owner !== t.id) {
+        violations.push(
+          `ticket ${m.repo}/${m.slug} is claimed by both org tickets "${owner}" and "${label}" — a per-repo ticket may belong to only one org ticket`
+        );
+      } else {
+        memberOwner.set(key, t.id);
+      }
+    }
+    for (const dep of t.depends_on ?? []) {
+      if (dep === t.id) {
+        violations.push(
+          `org ticket ${label}: depends_on references itself (${dep})`
+        );
+      } else if (!validIds.has(dep)) {
+        violations.push(
+          `org ticket ${label}: depends_on references unknown org ticket id ${dep}`
+        );
+      }
+    }
+  }
+
+  // Kahn topological sort over org ticket ids (draft order breaks ties).
+  const idOrder = orgTickets.map((t) => t.id);
+  const inDegree = new Map<string, number>();
+  const dependents = new Map<string, string[]>();
+  for (const t of orgTickets) {
+    if (!t.id || dupIds.has(t.id)) continue;
+    if (!inDegree.has(t.id)) inDegree.set(t.id, 0);
+  }
+  for (const t of orgTickets) {
+    if (!t.id || dupIds.has(t.id)) continue;
+    for (const dep of t.depends_on ?? []) {
+      if (dep === t.id || !validIds.has(dep) || dupIds.has(dep)) continue;
+      inDegree.set(t.id, (inDegree.get(t.id) ?? 0) + 1);
+      const arr = dependents.get(dep) ?? [];
+      arr.push(t.id);
+      dependents.set(dep, arr);
+    }
+  }
+  const ready: string[] = [];
+  for (const id of idOrder) {
+    if (dupIds.has(id) || !id) continue;
+    if ((inDegree.get(id) ?? 0) === 0) ready.push(id);
+  }
+  const topoOrder: string[] = [];
+  const remaining = new Set(inDegree.keys());
+  while (ready.length > 0) {
+    ready.sort((a, b) => idOrder.indexOf(a) - idOrder.indexOf(b));
+    const next = ready.shift()!;
+    if (!remaining.has(next)) continue;
+    remaining.delete(next);
+    topoOrder.push(next);
+    for (const dependent of dependents.get(next) ?? []) {
+      const deg = (inDegree.get(dependent) ?? 0) - 1;
+      inDegree.set(dependent, deg);
+      if (deg === 0 && remaining.has(dependent)) ready.push(dependent);
+    }
+  }
+  if (remaining.size > 0) {
+    violations.push(
+      `org ticket dependency cycle among: ${[...remaining].sort().join(', ')}`
+    );
+  }
+
+  if (violations.length > 0) {
+    throw new BacklogValidationError(violations);
+  }
+
+  const ticketById = new Map(orgTickets.map((t) => [t.id, t]));
+  const orgBacklogTickets: OrgBacklogTicket[] = topoOrder.map((id, index) => {
+    const t = ticketById.get(id)!;
+    const seq = index + 1;
+    const members: OrgTicketMember[] = t.members.map((m) => {
+      const repoBacklog = entryByRepo.get(m.repo)!.backlog!;
+      const bt = repoBacklog.tickets.find((x) => x.slug === m.slug)!;
+      return {
+        repo: m.repo,
+        slug: m.slug,
+        title: bt.title,
+        effort_dev_days: bt.effort_dev_days,
+        coverage_delta: bt.coverage_delta,
+        missing_weight_recovered: bt.missing_weight_recovered,
+        ticket_href: `per-repo/${m.repo}/backlog/tickets/${m.slug}.md`,
+      };
+    });
+    const effort_dev_days = members.reduce((s, m) => s + m.effort_dev_days, 0);
+    const missing_weight_recovered = members.reduce(
+      (s, m) => s + m.missing_weight_recovered,
+      0
+    );
+    const coverage_delta =
+      total_applicable_weight > 0
+        ? missing_weight_recovered / total_applicable_weight
+        : 0;
+    const repos_covered = new Set(members.map((m) => m.repo)).size;
+
+    return {
+      id: t.id,
+      seq,
+      title: t.title,
+      goal: t.goal,
+      description: t.description,
+      depends_on: t.depends_on ?? [],
+      members,
+      effort_dev_days,
+      missing_weight_recovered,
+      coverage_delta,
+      repos_covered,
+    };
+  });
+
+  const repos = entries.map((e) => ({
+    repo: e.repo,
+    backlog_href: `per-repo/${e.repo}/backlog/backlog.html`,
+    total_applicable_weight: repoWeight.get(e.repo) ?? 0,
+  }));
+
+  return {
+    org: true,
+    date: new Date().toISOString().slice(0, 10),
+    project: basename(orgDir),
+    total_repos: entries.length,
+    total_applicable_weight,
+    parallelizable_share: PARALLELIZABLE_SHARE,
+    repos,
+    tickets: orgBacklogTickets,
+    engine: ENGINE_PROVENANCE,
+  };
+}
+
+/** Per-repo tickets no org ticket references — reported as warnings, not violations. */
+function collectUnlinkedTicketWarnings(
+  orgDir: string,
+  draft: OrgBacklogDraft
+): string[] {
+  const referenced = new Set<string>();
+  for (const t of draft.org_tickets ?? []) {
+    for (const m of t.members ?? []) {
+      if (m?.repo && m?.slug) referenced.add(`${m.repo}::${m.slug}`);
+    }
+  }
+
+  const warnings: string[] = [];
+  for (const entry of scanPerRepo(orgDir)) {
+    if (!entry.backlog) continue;
+    for (const ticket of entry.backlog.tickets) {
+      if (!referenced.has(`${entry.repo}::${ticket.slug}`)) {
+        warnings.push(
+          `unlinked per-repo ticket ${entry.repo}/${ticket.slug} — not referenced by any org ticket`
+        );
+      }
+    }
+  }
+  return warnings;
+}
+
+/**
+ * Validate an org draft against the stamped per-repo backlogs under
+ * `orgDir/per-repo/*`, then write the aggregated portfolio backlog to disk:
+ * `backlog/backlog.json` and `backlog/backlog.html`. Unlike the single-repo
+ * path, no per-ticket markdown files are written — org tickets link back to
+ * the per-repo ticket files their members already came from.
+ */
+export function generateOrgBacklog(
+  orgDir: string,
+  draftRaw: unknown
+): GenerateSummary {
+  const draft = shapeCheckOrgDraft(draftRaw);
+  const backlog = buildOrgBacklog(orgDir, draft);
+
+  const backlogDir = join(orgDir, 'backlog');
+  mkdirSync(backlogDir, { recursive: true });
+
+  const backlogJsonPath = join(backlogDir, 'backlog.json');
+  writeFileSync(backlogJsonPath, JSON.stringify(backlog, null, 2));
+
+  const backlogHtmlPath = join(backlogDir, 'backlog.html');
+  writeFileSync(backlogHtmlPath, renderBacklogHtml(backlog));
+
+  return {
+    backlog_dir: backlogDir,
+    backlog_json: backlogJsonPath,
+    backlog_html: backlogHtmlPath,
+    tickets_written: [],
+    warnings: collectUnlinkedTicketWarnings(orgDir, draft),
   };
 }

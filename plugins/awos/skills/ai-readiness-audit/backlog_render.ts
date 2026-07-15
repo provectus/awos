@@ -7,7 +7,12 @@
  * lands (one file per ticket, named `<slug>.md`, siblings so dependency
  * links resolve relative to the same directory).
  */
-import type { BacklogJson, BacklogTicket } from './backlog.ts';
+import type {
+  BacklogJson,
+  BacklogTicket,
+  OrgBacklogJson,
+  OrgBacklogTicket,
+} from './backlog.ts';
 import { REPORT_CSS, esc } from './render.ts';
 import { PROVECTUS_LOGO_SVG } from './logo.ts';
 
@@ -157,6 +162,17 @@ const BACKLOG_CSS = `
 .gnode .tipbox em{color:var(--label-band);font-style:normal;font-weight:600}
 .gnode .tip-goal,.gnode .tip-desc,.gnode .tip-dod,.gnode .tip-deps,.gnode .tip-checks{display:block;margin-top:5px}
 @media (max-width:720px){.ribbon,.ribbon-warning{padding-left:20px;padding-right:20px}}
+/* ── backlog: org member table + repos section ──────────────────────────── */
+.gnode>.tipbox{min-width:260px}
+table.member-table{margin-top:8px;border-collapse:collapse;font-size:11.5px}
+table.member-table th,table.member-table td{padding:3px 8px 3px 0;text-align:left;white-space:nowrap}
+table.member-table th{color:var(--label-band);font-weight:600;font-family:var(--font-mono);text-transform:uppercase;font-size:10px;letter-spacing:.05em}
+table.member-table a{color:inherit}
+#repos{margin-top:36px;padding-top:20px;border-top:1px solid var(--divider)}
+#repos h2{font-size:15px;margin:0 0 10px}
+#repos ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:10px 20px}
+#repos li{font-size:13px}
+#repos .repo-weight{color:var(--ink-400);font-size:12px}
 `;
 
 /**
@@ -260,14 +276,203 @@ const BACKLOG_JS = `
 })();
 `;
 
+// ---------------------------------------------------------------------------
+// Interactive backlog.html — org variant
+// ---------------------------------------------------------------------------
+
+/** Topological depth per org ticket, same rule as `layerTickets` but keyed by id. */
+function layerOrgTickets(backlog: OrgBacklogJson): OrgBacklogTicket[][] {
+  const depth = new Map<string, number>();
+  for (const t of backlog.tickets) {
+    const d =
+      t.depends_on.length === 0
+        ? 0
+        : 1 + Math.max(...t.depends_on.map((id) => depth.get(id) ?? 0));
+    depth.set(t.id, d);
+  }
+  const maxDepth = Math.max(0, ...depth.values());
+  const layers: OrgBacklogTicket[][] = [];
+  for (let d = 0; d <= maxDepth; d++) {
+    layers.push(backlog.tickets.filter((t) => (depth.get(t.id) ?? 0) === d));
+  }
+  return layers;
+}
+
+/** One tooltip row per member: repo, linked ticket slug, effort, coverage delta. */
+function orgNodeTip(ticket: OrgBacklogTicket): string {
+  const deps =
+    ticket.depends_on.length > 0
+      ? ticket.depends_on.map((id) => esc(id)).join(', ')
+      : '—';
+  const memberRows = ticket.members
+    .map((m) => {
+      const covPct = (m.coverage_delta * 100).toFixed(1);
+      return `<tr><td>${esc(m.repo)}</td><td><a href="${esc(m.ticket_href)}">${esc(m.slug)}</a></td><td>${fmtDays(m.effort_dev_days)} d/dev</td><td>+${covPct}%</td></tr>`;
+    })
+    .join('');
+  return `<span class="tipbox">\
+<b>${esc(ticket.title)}</b>\
+<span class="tip-goal"><em>Goal:</em> ${esc(ticket.goal)}</span>\
+<span class="tip-desc">${esc(ticket.description)}</span>\
+<span class="tip-deps"><em>Depends on:</em> ${deps}</span>\
+<table class="member-table">\
+<thead><tr><th>Repo</th><th>Ticket</th><th>Effort</th><th>Coverage Δ</th></tr></thead>\
+<tbody>${memberRows}</tbody>\
+</table>\
+</span>`;
+}
+
+/** One clickable graph node — title · N/M repositories · effort · coverage delta. */
+function renderOrgNode(ticket: OrgBacklogTicket, totalRepos: number): string {
+  const covPct = (ticket.coverage_delta * 100).toFixed(1);
+  return `<button class="gnode tip" data-slug="${esc(ticket.id)}" id="node-${esc(ticket.id)}">\
+<span class="gnode-slug">${esc(ticket.title)}</span>\
+<span class="gnode-meta">${ticket.repos_covered}/${totalRepos} repositories · ${fmtDays(ticket.effort_dev_days)} d/dev · +${covPct}%</span>\
+${orgNodeTip(ticket)}\
+</button>`;
+}
+
+/**
+ * Render the org backlog: same ribbon/graph/toggle mechanics as the
+ * single-repo page (the client script keys off a `slug` field, so each
+ * embedded ticket carries `slug: id` purely for that reuse), with nodes
+ * showing the org ticket's human title and repo spread instead of a slug,
+ * a per-member numbers table in the tooltip, an extra ribbon-warning caveat
+ * about non-multiplied org-wide effort, and a bottom repos section linking
+ * to every per-repo graph.
+ */
+function renderOrgBacklogHtml(backlog: OrgBacklogJson): string {
+  const P = backlog.parallelizable_share;
+  const effortAll = backlog.tickets.reduce((s, t) => s + t.effort_dev_days, 0);
+  const durationAll = effortAll;
+  const coverageAll =
+    backlog.tickets.reduce((s, t) => s + t.coverage_delta, 0) * 100;
+  const speedupFormula = `1/((1−${P})+${P}/n)`;
+
+  const layers = layerOrgTickets(backlog);
+  const graphLayers = layers
+    .map(
+      (layer) =>
+        `<div class="glayer">${layer.map((t) => renderOrgNode(t, backlog.total_repos)).join('')}</div>`
+    )
+    .join('\n');
+
+  // The client script (BACKLOG_JS) keys nodes/edges/disable-state off `slug`;
+  // org tickets have no slug, so alias `id` as `slug` in the embedded copy
+  // only — OrgBacklogJson itself (and the object returned to callers) never
+  // gains this field.
+  const embeddedTickets = backlog.tickets.map((t) => ({ ...t, slug: t.id }));
+  const embeddedJson = JSON.stringify({
+    ...backlog,
+    tickets: embeddedTickets,
+  }).replaceAll('</', '<\\/');
+
+  const repoLinks = backlog.repos
+    .map(
+      (r) =>
+        `<li><a href="${esc(r.backlog_href)}">${esc(r.repo)}</a> <span class="repo-weight">(${r.total_applicable_weight} pts applicable)</span></li>`
+    )
+    .join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Improvement Backlog — ${esc(backlog.project)} — ${esc(backlog.date)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>${REPORT_CSS}${BACKLOG_CSS}</style>
+</head>
+<body>
+<script type="application/json" id="backlog-data">${embeddedJson}</script>
+<header class="brand">
+<div class="container brand-inner">
+<span class="brand-logo">${PROVECTUS_LOGO_SVG}</span>
+<div class="brand-title">
+  <h1>Improvement Backlog</h1>
+  <span class="brand-kicker">Agentic SDLC · Org Effort-Profit Plan</span>
+</div>
+<div class="meta">
+  <span><strong>Date:</strong> ${esc(backlog.date)}</span>
+  <span><strong>Project:</strong> ${esc(backlog.project)}</span>
+  <span><strong>Repositories:</strong> ${backlog.total_repos}</span>
+  <span><strong>Tickets:</strong> ${backlog.tickets.length}</span>
+</div>
+</div>
+</header>
+
+<div class="ribbon">
+  <label>Number of developers
+    <input type="number" id="devs" min="1" value="1">
+  </label>
+  <span class="rb-stat tip">
+    <span class="rb-label">Effort</span>
+    <span id="rb-effort" class="rb-val">${fmtDays(effortAll)}</span>
+    <span class="rb-unit">d/dev</span>
+    <span class="tipbox" id="rb-effort-tip">Σ effort of enabled tickets = ${fmtDays(effortAll)} d/dev</span>
+  </span>
+  <span class="rb-stat tip">
+    <span class="rb-label">Duration</span>
+    <span id="rb-duration" class="rb-val">${durationAll.toFixed(1)}</span>
+    <span class="rb-unit">cal-days</span>
+    <span class="tipbox" id="rb-duration-tip">duration = effort ÷ speedup(n); speedup(n) = ${speedupFormula}; at n=1 → ${durationAll.toFixed(1)} cal-days</span>
+  </span>
+  <span class="rb-stat tip">
+    <span class="rb-label">Coverage gain</span>
+    <span id="rb-coverage" class="rb-val">+${coverageAll.toFixed(1)}%</span>
+    <span class="tipbox" id="rb-coverage-tip">Share of the currently-defined applicable weight across the whole portfolio these tickets would add.</span>
+  </span>
+  <button id="enable-all">Enable all nodes</button>
+</div>
+<div class="ribbon-warning">
+  <strong>Adding developers shortens delivery sublinearly.</strong> Communication and coordination overhead grow with team size, and part of this work is inherently sequential (dependencies must land in order). Duration therefore follows Amdahl's law with a parallelizable share of ${P}, not a straight division by head-count. Some tasks are applied once for the whole organization — their effort is not multiplied per repository, so totals are rough.
+</div>
+
+<main class="container">
+<details class="legend">
+<summary>Legend</summary>
+<div class="legend-body">
+Each node is one org ticket, labelled <code>title · N/M repositories · N d/dev · +X.X%</code> — how many of the portfolio's repos it touches, its total effort, and the coverage delta it adds. Hover a node for its full detail (goal, description, dependencies) and a per-repo table of the member tickets that make it up. Nodes are arranged in layers by dependency depth, same as a single-repo backlog; click a node to disable it (and everything that depends on it), and use <strong>Enable all nodes</strong> to reset. The aggregation math: effort = Σ member efforts; coverage gain = Σ member recovered points ÷ Σ all repos' applicable weight; repos coverage = distinct member repos ÷ total repos.
+</div>
+</details>
+
+<div id="graph">
+<svg id="edges" xmlns="http://www.w3.org/2000/svg"></svg>
+${graphLayers}
+</div>
+
+<section id="repos">
+<h2>Repositories</h2>
+<ul>${repoLinks}</ul>
+</section>
+</main>
+<script>${BACKLOG_JS}</script>
+</body>
+</html>`;
+}
+
 /**
  * Render the single-repo backlog as a self-contained interactive HTML page: a
  * sticky ribbon that recomputes team effort/duration/coverage under Amdahl
  * scaling, and an effort-profit dependency graph whose nodes toggle a
  * transitive-dependent disable-cascade. Everything is inlined except the same
- * Google Fonts <link>s report.html uses.
+ * Google Fonts <link>s report.html uses. Org backlogs (`backlog.org === true`)
+ * dispatch to `renderOrgBacklogHtml` instead.
  */
-export function renderBacklogHtml(backlog: BacklogJson): string {
+function isOrgBacklog(
+  backlog: BacklogJson | OrgBacklogJson
+): backlog is OrgBacklogJson {
+  return (backlog as OrgBacklogJson).org === true;
+}
+
+export function renderBacklogHtml(
+  backlog: BacklogJson | OrgBacklogJson
+): string {
+  if (isOrgBacklog(backlog)) {
+    return renderOrgBacklogHtml(backlog);
+  }
   const P = backlog.parallelizable_share;
   const effortAll = backlog.tickets.reduce((s, t) => s + t.effort_dev_days, 0);
   // speedup(1) = 1, so the initial single-developer duration equals total effort.

@@ -2324,3 +2324,53 @@ test('spec.md captures boundary/error behavior as rules in items 2 and 3', () =>
     'spec.md Step 3 item 3 must require failure-path criteria for boundary/error requirements'
   );
 });
+
+test('SKILL.md documents the generate-backlog engine verb', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /generate-backlog/,
+    'SKILL.md must name the generate-backlog engine verb'
+  );
+});
+
+test('SKILL.md has a Generate mode — improvement backlog section', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /Generate mode — improvement backlog/,
+    'SKILL.md must contain a "Generate mode — improvement backlog" section'
+  );
+});
+
+test('SKILL.md Generate mode names both draft contracts', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /tickets-draft\.json/,
+    'SKILL.md must name the single-repo tickets-draft.json contract'
+  );
+  assert.match(
+    src,
+    /org-tickets-draft\.json/,
+    'SKILL.md must name the org org-tickets-draft.json contract'
+  );
+});
+
+test('SKILL.md Generate mode pins draft authoring to Sonnet', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /model: sonnet/,
+    'SKILL.md Generate mode must pin the authoring subagent to model: sonnet'
+  );
+});
+
+test('SKILL.md teaches the generate action in its closing hint', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /generate improvement backlog/,
+    'SKILL.md must teach "generate improvement backlog" as a closing hint after a completed audit'
+  );
+});

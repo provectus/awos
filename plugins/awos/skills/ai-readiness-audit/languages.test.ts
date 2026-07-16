@@ -104,6 +104,30 @@ test('detectLanguages evidence lists every matched extension for a mixed .ts/.ts
   }
 });
 
+test('Java/Kotlin/Scala testFileGlobs recognize Maven/Gradle failsafe IT suffix (issue #149)', () => {
+  const java = LANGUAGES.find((l) => l.id === 'java')!;
+  assert.ok(
+    java.testFileGlobs.includes('*IT.java'),
+    'Java testFileGlobs must include *IT.java'
+  );
+  assert.ok(
+    java.testFileGlobs.includes('*ITCase.java'),
+    'Java testFileGlobs must include *ITCase.java'
+  );
+
+  const kotlin = LANGUAGES.find((l) => l.id === 'kotlin')!;
+  assert.ok(
+    kotlin.testFileGlobs.includes('*IT.kt'),
+    'Kotlin testFileGlobs must include *IT.kt'
+  );
+
+  const scala = LANGUAGES.find((l) => l.id === 'scala')!;
+  assert.ok(
+    scala.testFileGlobs.includes('*IT.scala'),
+    'Scala testFileGlobs must include *IT.scala'
+  );
+});
+
 test('detectLanguages requires real source files (Makefile alone is not C/C++)', () => {
   const repo = tmpDir('awos-lang-');
   try {

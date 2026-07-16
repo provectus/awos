@@ -1840,6 +1840,21 @@ test('delivery-flow-template.md records the generated command set', () => {
   );
 });
 
+test('flow.md reads configured sources from context/sources/sources.md', () => {
+  // flow.md's tooling inventory and team documentation collection must
+  // reuse sources already configured by configure-external-sources rather
+  // than re-probing the same services independently.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    body.includes('context/sources/sources.md'),
+    'flow.md must reference context/sources/sources.md as an input for configured transports'
+  );
+  assert.ok(
+    /sources\.md.*Status: configured/i.test(body),
+    'flow.md must check for ## Status: configured before reading sources.md transports'
+  );
+});
+
 test('commands/tasks.md marks an unreviewed tasks.md and clears it on review', () => {
   // tasks.md is written before review (Step 4), so it starts as a
   // draft carrying a "<!-- not-user-reviewed -->" marker that Step 5

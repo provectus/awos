@@ -1,5 +1,5 @@
 ---
-description: Implements one feature end-to-end — fetches its requirements, runs the AWOS chain, and delivers per the team's flow.
+description: Implements one feature end-to-end — fetches its requirements, runs the AWOS chain, and delivers per the project's delivery flow.
 argument-hint: '[feature — ticket ID, link, or file path]'
 ---
 
@@ -75,7 +75,7 @@ Start with a cheap preflight on the fast model tier (per §8): is this feature *
 
 ### Step 3: Prepare the Workspace
 
-[Per §2–§3 of delivery-flow.md: verify `context/` is reachable and current; warn on a dirty working tree; create the branch from the base branch using the team's naming convention; submodule init/update if required. For a worktree: invoke the project's own worktree command, skill, or init script when §2 records one, otherwise execute the §2 isolation recipe — bring-up steps included — verbatim. Never improvise worktree preparation in-run: real prep is bigger than `git worktree add` (installs, codegen, env files, service/network isolation), and the recorded recipe or project script is the tested path. Store the branch name as `BRANCH` and the ticket ID as `TICKET_ID` for later stages.] Uncommitted AWOS artifacts — `context/product/delivery-flow.md` and this command file, left by `/awos:flow` — are an expected dirty-tree cause; surface them as such rather than treating them as a blocker.
+[Per §2–§3 of delivery-flow.md: verify `context/` is reachable and current; warn on a dirty working tree; create the branch from the base branch using the project's naming convention; submodule init/update if required. For a worktree: invoke the project's own worktree command, skill, or init script when §2 records one, otherwise execute the §2 isolation recipe — bring-up steps included — verbatim. Never improvise worktree preparation in-run: real prep is bigger than `git worktree add` (installs, codegen, env files, service/network isolation), and the recorded recipe or project script is the tested path. Store the branch name as `BRANCH` and the ticket ID as `TICKET_ID` for later stages.] Uncommitted AWOS artifacts — `context/product/delivery-flow.md` and this command file, left by `/awos:flow` — are an expected dirty-tree cause; surface them as such rather than treating them as a blocker.
 
 <!-- /awos:flow:stage -->
 
@@ -97,7 +97,7 @@ Store the spec directory name (e.g. `007-tasks-api`) as `SPEC_NAME`.
 
 ### Step 5: Commit Specs
 
-[Per §3: stage `context/spec/{SPEC_NAME}/` in the repo that owns it and commit using the team's message convention, referencing `TICKET_ID`.]
+[Per §3: stage `context/spec/{SPEC_NAME}/` in the repo that owns it and commit using the project's message convention, referencing `TICKET_ID`.]
 
 <!-- /awos:flow:stage -->
 
@@ -115,7 +115,7 @@ Run `/awos:implement` [per §8: in the main context if it dispatches subagents i
 
 Run `/awos:verify` [per §8: in a subagent if it is non-interactive], returning the verdict and the list of gaps. Address gaps before proceeding.
 
-Running the app to verify is the flow's job, not the user's. [If §2/§3 recorded a shared resource the app binds — a port a running service holds, a single database, a device — the workspace guardrail reserves it for normal work, but verification still needs a real render: reclaim the resource (stop the service, alternate port, throwaway instance) or drive the project's §5 deploy/run step and verify against it, per the sanctioned verification path §2/§3 records. Don't hand the user a `run` command or defer a drivable criterion to a later manual deploy — manual confirmation is only for a criterion the agent genuinely cannot render here.]
+Running the app to verify is the flow's job, not the user's. [If §2/§3 recorded a shared resource the app binds — a port a running service holds, a single database, a device — the workspace guardrail reserves it for normal work, but verification still needs a real render: reclaim the resource (stop and restart the service, alternate port, throwaway instance) or drive the project's §5 deploy/run step and verify against it, per the sanctioned verification path §2/§3 records. Don't hand the user a `run` command or defer a drivable criterion to a later manual deploy — manual confirmation is only for a criterion the agent genuinely cannot render here.]
 
 <!-- /awos:flow:stage -->
 
@@ -139,7 +139,7 @@ The review must stay independent of this conversation's authorship bias — it n
 
 ### Step 9: Commit & Push
 
-Write this stage's flow-log entry **before** staging so the log rides in this commit — this is the flow-log's last committed state (see Context Discipline). Then stage only what this flow produced or touched — the delegated code changes, the flow log, spec/context artifacts, and any Self-Improvement Loop edits. Never a blanket `git add -A`: pre-existing dirty-tree files the workspace stage warned about stay unstaged; surface any unexpected changed file instead of staging it. Never stage `.env`, credentials, or secrets. [Commit message convention per the team; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
+Write this stage's flow-log entry **before** staging so the log rides in this commit — this is the flow-log's last committed state (see Context Discipline). Then stage only what this flow produced or touched — the delegated code changes, the flow log, spec/context artifacts, and any Self-Improvement Loop edits. Never a blanket `git add -A`: pre-existing dirty-tree files the workspace stage warned about stay unstaged; surface any unexpected changed file instead of staging it. Never stage `.env`, credentials, or secrets. [Commit message convention per the project; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
 
 <!-- /awos:flow:stage -->
 

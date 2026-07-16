@@ -89,10 +89,10 @@ context/audits/YYYY-MM-DD_HH-MM-SS/
 
 `/awos:flow` interviews the team and investigates the repo, then writes a decision record (`context/product/delivery-flow.md`) and generates one or two project-specific commands in `.claude/commands/`:
 
-- **`/implement-feature <feature>`** — drives one feature end to end through the AWOS chain (`spec → tech → tasks → implement → verify`) and the team's delivery steps (branch, review, change request, merge, deploy, close).
-- **`/fix-bug <bug>`** — generated only when the team opts in. The lighter sibling: its middle is `diagnose → fix → scoped re-verify → targeted spec amendment` instead of the full feature pipeline. It classifies each bug as a _conformance_ fix (code violated a correct spec → fix + regression test) or a _divergence_ (the spec was wrong or behavior intentionally changed → also amend the owning `functional-spec.md` via `/awos:spec` in update mode), so a behavior-changing fix never silently drifts the spec.
+- **`/implement-feature <feature>`** (default name — the team can rename it, e.g. `/feature`) — drives one feature end to end through the AWOS chain (`spec → tech → tasks → implement → verify`) and the project's delivery steps (branch, review, change request, merge, deploy, close).
+- **`/fix-bug <bug>`** (default name — the team can rename it, e.g. `/fix`) — generated only when the team opts in. The lighter sibling: its middle is `diagnose → fix → scoped re-verify → targeted spec amendment` instead of the full feature pipeline. It classifies each bug as a _conformance_ fix (code violated a correct spec → fix + regression test) or a _divergence_ (the spec was wrong or behavior intentionally changed → also amend the owning `functional-spec.md` via `/awos:spec` in update mode), so a behavior-changing fix never silently drifts the spec.
 
-Both commands are user-owned and generated outside `.claude/commands/awos/`, so framework updates never touch them; re-running `/awos:flow` reconciles each stage and preserves manual edits. The generated commands are derived from the same flow-agnostic decision record, so they share the team's git flow, review gates, merge policy, and notifications.
+Both commands are user-owned and generated outside `.claude/commands/awos/`, so framework updates never touch them; re-running `/awos:flow` reconciles each stage and preserves manual edits. The generated commands are derived from the same flow-agnostic decision record, so they share the project's git flow, review gates, merge policy, and notifications.
 
 ## Plugin Structure
 

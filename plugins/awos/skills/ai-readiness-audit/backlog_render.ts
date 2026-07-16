@@ -236,11 +236,12 @@ const BACKLOG_CSS = `
 .rb-unit{font-size:12px;color:var(--stat-caption)}
 .rb-devs{display:flex;align-items:center;gap:8px;margin-top:4px;font-family:var(--font-mono);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--label-band)}
 .rb-devs input[type=number]{width:58px;padding:5px 8px;border:1px solid var(--ink-700);border-radius:6px;background:var(--ink-900);color:#fff;font-family:var(--font-mono);font-size:13px;text-align:center}
+/* the sublinear-scaling caveat lives in a hover tooltip on the Developers control */
+.rb-devs.tip{border-bottom:none}
+.rb-devs>.tipbox{left:auto;right:0;max-width:min(420px,calc(100vw - 40px))}
 .ribbon .tipbox{background:var(--ink-950);border:1px solid var(--ink-700)}
 .ribbon button#enable-all{font-family:var(--font-sans);padding:7px 16px;border:1px solid var(--indigo);border-radius:8px;background:var(--indigo);color:#fff;cursor:pointer;font-size:13px;font-weight:600}
 .ribbon button#enable-all:hover{filter:brightness(1.08)}
-.ribbon-warning{background:#F3C3B5;color:var(--ink-950);font-size:12.5px;padding:9px 32px;line-height:1.5;border-bottom:1px solid var(--divider)}
-.ribbon-warning strong{font-weight:700}
 /* ── backlog: legend (bullets + field/description/formula table) ──────────── */
 .legend{background:var(--cream);border:1px solid var(--divider);border-radius:12px;padding:12px 18px;margin:22px 0}
 .legend summary{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-400);font-weight:600;cursor:pointer}
@@ -260,13 +261,20 @@ table.legend-table td.formula{font-family:var(--font-mono);color:var(--ink-400)}
 #edges .edge.off{stroke:#D9C3BC;stroke-dasharray:4 4}
 #edges .edot{fill:var(--sage-400)}
 #edges .edot.off{fill:#D9C3BC}
+#edges .ahead{fill:var(--sage-400)}
+#edges .ahead.off{fill:#D9C3BC}
+/* .gcomps and .glayer are sibling stacking contexts in DOM order — a hovered
+   (or focus-pinned) node's tooltip must lift its WHOLE context above later
+   siblings, or the singles grid paints over a tooltip opened from a component
+   box (and vice versa). */
 .gcomps{position:relative;z-index:1;display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:24px;margin-bottom:44px}
+.gcomps:hover,.gcomps:focus-within{z-index:30}
 .gcomp{display:flex;flex-direction:column;gap:44px;border:1px dashed var(--ink-300);border-radius:14px;padding:18px 16px}
 .gcomp .glayer{margin-bottom:0}
 .gsingles-label{font-family:var(--font-mono);font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-300);text-align:center;margin:0 0 16px}
 .glayer{position:relative;z-index:1;display:flex;flex-wrap:wrap;justify-content:center;gap:20px;margin-bottom:52px}
 .glayer:last-child{margin-bottom:0}
-.glayer:hover{z-index:30}
+.glayer:hover,.glayer:focus-within{z-index:30}
 .gnode{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:190px;text-align:left;background:#fff;border:1px solid var(--divider);border-left:4px solid var(--sage-400);border-radius:10px;box-shadow:var(--shadow-sm);padding:12px 14px;cursor:pointer;font-family:var(--font-sans);scroll-margin:160px}
 .gnode.hl{outline:3px solid var(--indigo);outline-offset:2px}
 .gnode:hover{box-shadow:var(--shadow-md);z-index:40}
@@ -302,7 +310,7 @@ table.repos-table td{padding:9px 12px;border-bottom:1px solid var(--divider);col
 table.repos-table td.num{text-align:right;font-family:var(--font-mono)}
 table.repos-table a.repo-link{color:var(--sage-600);font-weight:600}
 table.repos-table .cov-cell{border-bottom:1px dotted var(--ink-300)}
-@media (max-width:720px){.ribbon,.ribbon-warning{padding-left:20px;padding-right:20px}.rb-cards{gap:10px}table.repos-table{font-size:12px}}
+@media (max-width:720px){.ribbon{padding-left:20px;padding-right:20px}.rb-cards{gap:10px}table.repos-table{font-size:12px}}
 `;
 
 /**
@@ -377,7 +385,11 @@ const BACKLOG_JS = `
     svg.setAttribute('width', gb.width);
     svg.setAttribute('height', gb.height);
     svg.setAttribute('viewBox', '0 0 ' + gb.width + ' ' + gb.height);
-    var lines = '';
+    // Edges are directed: dot at the dependency, arrowhead at the dependent.
+    var lines = '<defs>'
+      + '<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ahead"></path></marker>'
+      + '<marker id="arrow-off" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ahead off"></path></marker>'
+      + '</defs>';
     tickets.forEach(function(t){
       var to = document.getElementById('node-' + t.slug);
       if(!to){ return; }
@@ -392,17 +404,19 @@ const BACKLOG_JS = `
         var off = (disabled[t.slug] || disabled[dep]);
         var cls = off ? 'edge off' : 'edge';
         var dot = off ? 'edot off' : 'edot';
-        lines += '<line class="' + cls + '" x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '"></line>';
+        var marker = off ? 'arrow-off' : 'arrow';
+        lines += '<line class="' + cls + '" marker-end="url(#' + marker + ')" x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + (y2 - 2) + '"></line>';
         lines += '<circle class="' + dot + '" cx="' + x1 + '" cy="' + y1 + '" r="3.5"></circle>';
-        lines += '<circle class="' + dot + '" cx="' + x2 + '" cy="' + y2 + '" r="3.5"></circle>';
       });
     });
     svg.innerHTML = lines;
   }
-  // Clamp a node's hover tooltip to the viewport: shift it horizontally when
-  // it would spill past the right/left edge, and flip it above the node when
-  // there is more room there than below. Runs on every hover/focus because
-  // scroll position changes what fits.
+  // Clamp a node's hover tooltip to the visible area: shift it horizontally
+  // when it would spill past the right/left edge, flip it above the node when
+  // there is more room there than below, and cap its height to the chosen
+  // side so it never runs under the sticky ribbon or past the viewport (it
+  // scrolls instead). Runs on every hover/focus because scroll position
+  // changes what fits.
   function placeTip(btn){
     var tip = null;
     for(var i = 0; i < btn.children.length; i++){
@@ -411,6 +425,7 @@ const BACKLOG_JS = `
     if(!tip){ return; }
     tip.classList.remove('above');
     tip.style.left = '0px';
+    tip.style.maxHeight = '';
     tip.style.display = 'block';
     var r = tip.getBoundingClientRect();
     var vw = document.documentElement.clientWidth;
@@ -419,9 +434,18 @@ const BACKLOG_JS = `
     if(r.right > vw - 8){ shift = vw - 8 - r.right; }
     if(r.left + shift < 8){ shift = 8 - r.left; }
     if(shift){ tip.style.left = shift + 'px'; }
-    if(r.bottom > vh - 8){
-      var nb = btn.getBoundingClientRect();
-      if(nb.top > vh - nb.bottom){ tip.classList.add('above'); }
+    var ribbon = document.querySelector('.ribbon');
+    var topBound = (ribbon ? ribbon.getBoundingClientRect().bottom : 0) + 8;
+    var nb = btn.getBoundingClientRect();
+    var spaceBelow = vh - 8 - (nb.bottom + 6);
+    var spaceAbove = nb.top - 6 - topBound;
+    if(r.height > spaceBelow){
+      if(spaceAbove > spaceBelow){
+        tip.classList.add('above');
+        if(r.height > spaceAbove){ tip.style.maxHeight = Math.max(120, spaceAbove) + 'px'; }
+      } else {
+        tip.style.maxHeight = Math.max(120, spaceBelow) + 'px';
+      }
     }
     tip.style.display = '';
   }
@@ -486,17 +510,23 @@ function pageHead(title: string): string {
  * The sticky ribbon: three centered metric cards (Effort, Coverage gain,
  * Duration), the developer-count input nested inside the Duration card because
  * it drives duration, the enable-all reset button, and live hover tooltips
- * whose text `recompute()` keeps in sync.
+ * whose text `recompute()` keeps in sync. The sublinear-scaling caveat lives
+ * in a hover tooltip on the Developers control, next to the number it caveats.
  */
 function renderRibbon(
   effortAll: number,
   coverageAll: number,
   recoveredAll: number,
   totalApplicableWeight: number,
-  P: number
+  P: number,
+  org: boolean
 ): string {
   const durationAll = effortAll; // speedup(1) = 1, so duration at n=1 equals effort
   const speedupFormula = `1/((1−${P})+${P}/n)`;
+  const orgExtra = org
+    ? ' Some tasks are applied once for the whole organization — their effort is not multiplied per repository, so totals are rough.'
+    : '';
+  const devsTip = `<b>Adding developers shortens delivery sublinearly.</b> Communication and coordination overhead grow with team size, and part of this work is inherently sequential (dependencies must land in order). Duration therefore follows Amdahl's law with a parallelizable share of ${P}, not a straight division by head-count.${orgExtra}`;
   return `<div class="ribbon">
   <div class="rb-cards">
     <div class="rb-card">
@@ -519,20 +549,10 @@ function renderRibbon(
         <span class="rb-num"><span id="rb-duration" class="rb-val">${durationAll.toFixed(1)}</span><span class="rb-unit">cal-days</span></span>
         <span class="tipbox" id="rb-duration-tip">duration = effort ÷ speedup(n); speedup(n) = ${speedupFormula}; at n=1 → ${durationAll.toFixed(1)} cal-days</span>
       </span>
-      <label class="rb-devs">Developers<input type="number" id="devs" min="1" value="1"></label>
+      <label class="rb-devs tip">Developers<input type="number" id="devs" min="1" value="1"><span class="tipbox" id="rb-devs-tip">${devsTip}</span></label>
     </div>
   </div>
   <button id="enable-all">Enable all nodes</button>
-</div>`;
-}
-
-/** The always-visible sublinear-scaling caveat under the ribbon. */
-function renderWarning(P: number, org: boolean): string {
-  const orgExtra = org
-    ? ' Some tasks are applied once for the whole organization — their effort is not multiplied per repository, so totals are rough.'
-    : '';
-  return `<div class="ribbon-warning">
-  <strong>Adding developers shortens delivery sublinearly.</strong> Communication and coordination overhead grow with team size, and part of this work is inherently sequential (dependencies must land in order). Duration therefore follows Amdahl's law with a parallelizable share of ${P}, not a straight division by head-count.${orgExtra}
 </div>`;
 }
 
@@ -541,7 +561,7 @@ const LEGEND_SINGLE = `<details class="legend">
 <summary>Legend</summary>
 <div class="legend-body">
 <ul>
-<li><strong>Connected tickets are grouped into dashed boxes.</strong> Within a box, layers run top to bottom by dependency depth: Foundation tickets — the ones others depend on — sit at the top, and each edge drops from a ticket to the ones that depend on it. Tickets listed under "Independent tickets" have no dependencies either way and can be done in any order.</li>
+<li><strong>Connected tickets are grouped into dashed boxes.</strong> Within a box, layers run top to bottom by dependency depth: Foundation tickets — the ones others depend on — sit at the top, and each edge drops from a ticket to the ones that depend on it, with the arrowhead pointing at the dependent. Tickets listed under "Independent tickets" have no dependencies either way and can be done in any order.</li>
 <li><strong>Hover</strong> a node for its full detail: goal, description, definition of done, dependencies, and covered checks.</li>
 <li><strong>Click</strong> a node to disable it; every ticket that transitively depends on it is disabled too. Re-enabling a node leaves its dependents disabled until you re-enable them or press <strong>Enable all nodes</strong>.</li>
 <li>The ribbon totals reflect only the enabled tickets.</li>
@@ -562,7 +582,7 @@ const LEGEND_ORG = `<details class="legend">
 <summary>Legend</summary>
 <div class="legend-body">
 <ul>
-<li><strong>Connected tickets are grouped into dashed boxes.</strong> Within a box, layers run top to bottom by dependency depth: Foundation tickets — the ones others depend on — sit at the top, and each edge drops from a ticket to the ones that depend on it. Tickets listed under "Independent tickets" have no dependencies either way and can be done in any order.</li>
+<li><strong>Connected tickets are grouped into dashed boxes.</strong> Within a box, layers run top to bottom by dependency depth: Foundation tickets — the ones others depend on — sit at the top, and each edge drops from a ticket to the ones that depend on it, with the arrowhead pointing at the dependent. Tickets listed under "Independent tickets" have no dependencies either way and can be done in any order.</li>
 <li><strong>Hover</strong> a node for its per-repo table of member tickets, each linking to that ticket's node in the repo's own backlog graph.</li>
 <li><strong>Click</strong> a node to disable it (and everything that depends on it); use <strong>Enable all nodes</strong> to reset. The ribbon totals reflect only the enabled tickets.</li>
 <li>Some tickets are applied once for the whole organization, so their effort is not multiplied per repository — portfolio totals are approximate.</li>
@@ -634,10 +654,15 @@ function renderReposTable(backlog: OrgBacklogJson): string {
       const name = r.backlog_href
         ? `<a class="repo-link" href="${esc('../' + r.backlog_href)}">${esc(r.repo)}</a>`
         : esc(r.repo);
+      // `??`/`!= null` guards: org backlog.json files written before these
+      // per-repo fields existed must degrade to em dashes, not "undefined"/NaN.
       const covPct =
         r.coverage != null ? `${(r.coverage * 100).toFixed(0)}%` : '—';
       const covCell = `<span class="tip cov-cell">${covPct}<span class="tipbox">${r.total_applicable_weight} pts of standards apply to ${esc(r.repo)}; current coverage is the share already in place.</span></span>`;
-      return `<tr><td>${name}</td><td class="num">${covCell}</td><td class="num">${r.ticket_count}</td><td class="num">${fmtDays(r.effort_dev_days)} d/dev</td></tr>`;
+      const tickets = r.ticket_count ?? '—';
+      const effort =
+        r.effort_dev_days != null ? `${fmtDays(r.effort_dev_days)} d/dev` : '—';
+      return `<tr><td>${name}</td><td class="num">${covCell}</td><td class="num">${tickets}</td><td class="num">${effort}</td></tr>`;
     })
     .join('');
   return `<section id="repos">
@@ -702,8 +727,7 @@ function renderOrgBacklogHtml(backlog: OrgBacklogJson): string {
 </div>
 </header>
 
-${renderRibbon(effortAll, coverageAll, recoveredAll, backlog.total_applicable_weight, P)}
-${renderWarning(P, true)}
+${renderRibbon(effortAll, coverageAll, recoveredAll, backlog.total_applicable_weight, P, true)}
 
 <main class="container">
 ${LEGEND_ORG}
@@ -785,8 +809,7 @@ ${opts.orgHref ? `<div class="backlink"><a href="${esc(opts.orgHref)}">← Back 
 </div>
 </header>
 
-${renderRibbon(effortAll, coverageAll, recoveredAll, backlog.total_applicable_weight, P)}
-${renderWarning(P, false)}
+${renderRibbon(effortAll, coverageAll, recoveredAll, backlog.total_applicable_weight, P, false)}
 
 <main class="container">
 ${LEGEND_SINGLE}

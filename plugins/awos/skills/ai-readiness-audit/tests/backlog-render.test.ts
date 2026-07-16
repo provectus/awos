@@ -106,10 +106,15 @@ test('backlog.html is a self-contained interactive page', () => {
   assert.match(html, /id="enable-all"/, 'ribbon has enable-all');
   assert.match(
     html,
-    /class="ribbon-warning"/,
-    'always-visible scaling warning row'
+    /id="rb-devs-tip"[^>]*>.*Adding developers shortens delivery sublinearly/,
+    'sublinear-scaling caveat lives in a tooltip on the Developers control'
   );
-  assert.match(html, /Amdahl/, 'warning names the scaling model');
+  assert.doesNotMatch(
+    html,
+    /class="ribbon-warning"/,
+    'the always-visible warning band is gone (moved into the Developers tooltip)'
+  );
+  assert.match(html, /Amdahl/, 'the caveat names the scaling model');
   assert.match(html, /<details class="legend"/, 'collapsible legend');
   assert.match(html, /data-slug="A001-adopt-ci"/, 'graph node per ticket');
   assert.match(html, /data-slug="A002-harden-ci"/);
@@ -419,6 +424,88 @@ test('graph groups connected tickets into component boxes and separates independ
   );
 });
 
+test('edges are directed: arrowhead marker at the dependent end, dot at the dependency end', () => {
+  const html = renderBacklogHtml(backlog);
+  assert.match(
+    html,
+    /<marker id="arrow"[^>]*orient="auto-start-reverse"/,
+    'arrowhead marker defined in the edge overlay'
+  );
+  assert.match(
+    html,
+    /<marker id="arrow-off"/,
+    'disabled edges get a matching muted arrowhead'
+  );
+  assert.match(
+    html,
+    /marker-end="url\(#' \+ marker \+ '\)"/,
+    'every edge line carries a marker-end arrowhead'
+  );
+  const dotDraws = (html.match(/<circle class="' \+ dot \+ '"/g) || []).length;
+  assert.equal(
+    dotDraws,
+    1,
+    'only the dependency end keeps a dot (the dependent end shows the arrow instead)'
+  );
+});
+
+test('a hovered or focus-pinned tooltip lifts its stacking context above sibling graph sections', () => {
+  const html = renderBacklogHtml(backlog);
+  assert.match(
+    html,
+    /\.gcomps:hover,\.gcomps:focus-within\{z-index:30\}/,
+    'component-box area raises above the later singles grid while a tooltip is open'
+  );
+  assert.match(
+    html,
+    /\.glayer:hover,\.glayer:focus-within\{z-index:30\}/,
+    'a layer raises on hover AND on focus-within (deep-link pins the tooltip via focus)'
+  );
+});
+
+test('placeTip respects the sticky ribbon: flips/caps against the ribbon bottom, not the viewport top', () => {
+  const html = renderBacklogHtml(backlog);
+  const placeTipBody = html.slice(
+    html.indexOf('function placeTip(btn){'),
+    html.indexOf('function revealFromHash(){')
+  );
+  assert.match(
+    placeTipBody,
+    /querySelector\('\.ribbon'\)/,
+    'available space above is measured from the sticky ribbon bottom edge'
+  );
+  assert.match(
+    placeTipBody,
+    /style\.maxHeight = Math\.max\(120, spaceAbove\)/,
+    'a flipped tooltip is height-capped to the space above so it never hides under the ribbon'
+  );
+  assert.match(
+    placeTipBody,
+    /style\.maxHeight = Math\.max\(120, spaceBelow\)/,
+    'a below tooltip is height-capped to the space below the node'
+  );
+});
+
+test('org repos table degrades to em dashes when per-repo fields are missing (pre-upgrade backlog.json)', () => {
+  const legacy = structuredClone(orgBacklog) as OrgBacklogJson;
+  // Simulate an org backlog.json written before coverage/ticket_count/effort
+  // existed on repo entries.
+  legacy.repos = legacy.repos.map((r) => ({
+    repo: r.repo,
+    backlog_href: r.backlog_href,
+    total_applicable_weight: r.total_applicable_weight,
+  })) as typeof legacy.repos;
+  const html = renderBacklogHtml(legacy);
+  const repos = html.slice(html.indexOf('<section id="repos">'));
+  assert.doesNotMatch(repos, /undefined/, 'no "undefined" cells');
+  assert.doesNotMatch(repos, /NaN/, 'no "NaN" cells');
+  assert.match(
+    repos,
+    /<td class="num">—<\/td><td class="num">—<\/td>/,
+    'missing ticket-count and effort render as em dashes'
+  );
+});
+
 test('edges redraw after web fonts load so they line up with the final layout', () => {
   const html = renderBacklogHtml(backlog);
   assert.match(
@@ -516,7 +603,11 @@ test('ribbon is three metric cards with the developer input inside the Duration 
     iDuration !== -1 && iDevs > iDuration && iDevs < iEnableAll,
     'the Number of developers input is inside the Duration card (after the duration meter, before enable-all)'
   );
-  assert.match(html, /class="ribbon-warning"/, 'full-width warning row kept');
+  assert.match(
+    html,
+    /class="rb-devs tip">Developers<input[^>]*><span class="tipbox" id="rb-devs-tip">/,
+    'the Developers control carries the scaling-caveat tooltip'
+  );
 });
 
 test('legend is structured: interaction bullets + a field/description/formula table', () => {

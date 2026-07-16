@@ -218,16 +218,21 @@ export function detectSecretScanGate(
 // detectDependencyRiskAutomation — category 3101 (PRV-02, method: detected)
 //
 // A server-side update bot (Dependabot/Renovate) counts as enforcement — it
-// runs without anyone invoking it. Exception: a Renovate config whose only
+// runs without anyone invoking it. Exceptions: a Renovate config whose only
 // update semantics is lockFileMaintenance refreshes lockfiles without
 // touching dependency declarations and does no scanning, so on its own it
-// grades WARN, not PASS (https://docs.renovatebot.com/configuration-options/#lockfilemaintenance).
+// grades WARN, not PASS (https://docs.renovatebot.com/configuration-options/#lockfilemaintenance);
+// and a config that drives nothing at all — Renovate with top-level
+// `enabled: false`, or a Dependabot file with no `package-ecosystem` entry —
+// counts as no bot, so file presence alone never grades PASS.
 // ---------------------------------------------------------------------------
 
 /**
  * Renovate keys that configure housekeeping around updates without driving
  * any: scheduling, PR decoration, rate limits, dashboards. A config carrying
- * only these plus lockFileMaintenance is still lockfile-only. Keys NOT in
+ * only these plus lockFileMaintenance is still lockfile-only (`enabled`
+ * qualifies because the false case is classified `disabled` before this set
+ * is consulted). Keys NOT in
  * this set (extends, packageRules, manager blocks, enabledManagers, …) are
  * treated as update drivers — unknown keys deliberately default to "drives
  * updates" so the WARN can only under-trigger, never falsely demote a real
@@ -235,6 +240,7 @@ export function detectSecretScanGate(
  */
 const RENOVATE_HOUSEKEEPING_KEYS = new Set([
   '$schema',
+  'enabled',
   'lockFileMaintenance',
   'timezone',
   'schedule',
@@ -253,55 +259,103 @@ const RENOVATE_HOUSEKEEPING_KEYS = new Set([
 ]);
 
 /**
- * True when a Renovate config drives nothing but lockfile maintenance: it
- * declares `lockFileMaintenance` and every other key is housekeeping (see
- * RENOVATE_HOUSEKEEPING_KEYS). Presets (`extends`), `packageRules`, or
- * manager blocks all mean real dependency updates happen. Unparseable
- * configs fall back to a conservative regex: mentions lockFileMaintenance
- * and neither extends nor packageRules.
+ * Classify one parsed-once Renovate config. `disabled`: top-level
+ * `enabled: false` shuts the whole bot off, so the config drives nothing
+ * regardless of what else it declares. `lockfile-only`: it declares
+ * `lockFileMaintenance` and every other key is housekeeping (see
+ * RENOVATE_HOUSEKEEPING_KEYS). `update-bot`: everything else — presets
+ * (`extends`), `packageRules`, or manager blocks all mean real dependency
+ * updates happen. Unparseable configs fall back to a conservative regex
+ * (mentions lockFileMaintenance and neither extends nor packageRules →
+ * lockfile-only, otherwise update-bot); `disabled` is never inferred from
+ * an unparseable config.
  */
-function isLockfileMaintenanceOnly(content: string): boolean {
+function classifyRenovateConfig(
+  content: string
+): 'disabled' | 'lockfile-only' | 'update-bot' {
   try {
     const cfg = JSON.parse(content) as Record<string, unknown>;
-    if (cfg.lockFileMaintenance === undefined) return false;
-    return Object.keys(cfg).every((k) => RENOVATE_HOUSEKEEPING_KEYS.has(k));
+    if (cfg.enabled === false) return 'disabled';
+    if (cfg.lockFileMaintenance === undefined) return 'update-bot';
+    return Object.keys(cfg).every((k) => RENOVATE_HOUSEKEEPING_KEYS.has(k))
+      ? 'lockfile-only'
+      : 'update-bot';
   } catch {
-    return (
-      /lockFileMaintenance/.test(content) &&
+    return /lockFileMaintenance/.test(content) &&
       !/extends|packageRules/.test(content)
-    );
+      ? 'lockfile-only'
+      : 'update-bot';
   }
 }
+
+/**
+ * A Dependabot config only counts as an update bot when it declares at least
+ * one ecosystem under `updates:`. Grep-heuristic over the raw YAML — same
+ * precision tier as the rest of this module.
+ */
+const DEPENDABOT_UPDATES_RX = /^\s*updates\s*:[\s\S]*?\bpackage-ecosystem\b/m;
 
 export function detectDependencyRiskAutomation(
   repoPath: string,
   _params?: unknown
 ): ReturnType<typeof makeResult> {
   const ciHits = gateMatches(gateSurfaces(repoPath), VULN_SCANNER_RX, ['ci']);
-  const dependabotConfigs = presentConfigs(repoPath, DEPENDABOT_PATHS);
-  const renovateConfigs = presentConfigs(repoPath, RENOVATE_PATHS);
-  const updateBots = [
-    ...dependabotConfigs,
-    ...renovateConfigs.filter((rel) => {
-      const content = readTextSafe(join(repoPath, rel));
-      return content === null || !isLockfileMaintenanceOnly(content);
-    }),
-  ];
-  const lockfileOnlyBots = renovateConfigs.filter(
-    (rel) => !updateBots.includes(rel)
-  );
+
+  const updateBots: string[] = [];
+  const lockfileOnlyBots: string[] = [];
+  // Configs present but driving nothing — kept as ready evidence lines so
+  // the result explains why the file did not count.
+  const inertConfigs: string[] = [];
+
+  for (const rel of presentConfigs(repoPath, DEPENDABOT_PATHS)) {
+    const content = readTextSafe(join(repoPath, rel));
+    if (content === null || DEPENDABOT_UPDATES_RX.test(content)) {
+      updateBots.push(rel);
+    } else {
+      inertConfigs.push(
+        `${rel} declares no updates (no package-ecosystem entry)`
+      );
+    }
+  }
+  for (const rel of presentConfigs(repoPath, RENOVATE_PATHS)) {
+    const content = readTextSafe(join(repoPath, rel));
+    if (content === null) {
+      // unreadable — keep the conservative default: treat as an update bot
+      updateBots.push(rel);
+      continue;
+    }
+    switch (classifyRenovateConfig(content)) {
+      case 'update-bot':
+        updateBots.push(rel);
+        break;
+      case 'lockfile-only':
+        lockfileOnlyBots.push(rel);
+        break;
+      case 'disabled':
+        inertConfigs.push(`${rel} is disabled (enabled: false)`);
+        break;
+    }
+  }
 
   if (ciHits.length > 0 || updateBots.length > 0) {
     return makeResult('PASS', ciHits.length + updateBots.length, [
       'dependency risk mechanically managed (CI vulnerability scan and/or update bot)',
       ...ciHits.slice(0, 5).map((h) => `ci scanner: ${h}`),
       ...updateBots.map((c) => `update bot: ${c}`),
+      ...inertConfigs.map((c) => `inert config: ${c}`),
     ]);
   }
   if (lockfileOnlyBots.length > 0) {
     return makeResult('WARN', lockfileOnlyBots.length, [
       'Renovate only maintains lockfiles — no dependency updates and no vulnerability scanning',
       ...lockfileOnlyBots.map((c) => `lockfile-maintenance-only config: ${c}`),
+      ...inertConfigs.map((c) => `inert config: ${c}`),
+    ]);
+  }
+  if (inertConfigs.length > 0) {
+    return makeResult('FAIL', 0, [
+      'bot config present but drives nothing — no CI vulnerability scan and no active Dependabot/Renovate updates',
+      ...inertConfigs.map((c) => `inert config: ${c}`),
     ]);
   }
   return makeResult('FAIL', 0, [
@@ -356,7 +410,7 @@ export function detectSastGate(
 // ---------------------------------------------------------------------------
 
 const LINT_GATE_RX =
-  /\b(eslint|prettier|ruff|flake8|pylint|black|golangci-lint|rubocop|clippy|biome|npm run lint|pnpm lint|pnpm run lint|yarn lint|pre-commit run)\b/i;
+  /\b(eslint|prettier|ruff|flake8|pylint|black|golangci-lint|rubocop|clippy|biome|npm run lint|pnpm lint|pnpm run lint|yarn lint)\b/i;
 
 export function detectCodeStyleGated(
   repoPath: string,

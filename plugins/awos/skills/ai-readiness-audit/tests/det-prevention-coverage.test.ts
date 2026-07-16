@@ -172,6 +172,51 @@ test('PRV-02: renovate.json with extends is PASS — presets drive real dependen
   assert.equal(r.status, 'PASS');
 });
 
+test('PRV-02: renovate.json with top-level enabled:false is FAIL — a disabled bot enforces nothing', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'renovate.json'), JSON.stringify({ enabled: false }));
+  const r = detectDependencyRiskAutomation(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'a Renovate config whose entire content is "the bot is off" must not count as an update bot'
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('disabled (enabled: false)')),
+    'the result must explain that the config was excluded because it is disabled'
+  );
+});
+
+test('PRV-02: lockFileMaintenance plus enabled:false is FAIL — disabling the bot wins over lockfile maintenance', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, 'renovate.json'),
+    JSON.stringify({ lockFileMaintenance: { enabled: true }, enabled: false })
+  );
+  const r = detectDependencyRiskAutomation(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'top-level enabled:false shuts off the whole bot, so the config is neither an update bot nor lockfile-only'
+  );
+});
+
+test('PRV-02: empty dependabot.yml is FAIL — file presence without a package-ecosystem entry is not an update bot', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.github'), { recursive: true });
+  writeFileSync(join(t, '.github', 'dependabot.yml'), '');
+  const r = detectDependencyRiskAutomation(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'a Dependabot config with no updates declared drives nothing and must not grade PASS'
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('declares no updates')),
+    'the result must explain that the dependabot config was excluded as updates-less'
+  );
+});
+
 test('PRV-02: neither scanner nor bot is FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'package.json'), '{}');
@@ -244,6 +289,24 @@ test('PRV-04: .prettierrc alone is WARN — configured but not gated (the SBP/PR
   writeFileSync(join(t, '.prettierrc'), '{}');
   const r = detectCodeStyleGated(t);
   assert.equal(r.status, 'WARN');
+});
+
+test('PRV-04: generic `pre-commit run` in CI with a secrets-only pre-commit config is FAIL — running pre-commit proves nothing about style hooks', () => {
+  const t = tmp();
+  writeFileSync(
+    join(t, '.pre-commit-config.yaml'),
+    'repos:\n  - repo: https://github.com/gitleaks/gitleaks\n    hooks:\n      - id: gitleaks\n'
+  );
+  writeCiWorkflow(
+    t,
+    'jobs:\n  hooks:\n    steps:\n      - run: pre-commit run --all-files\n'
+  );
+  const r = detectCodeStyleGated(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'a pre-commit config with no lint/format hook plus a generic `pre-commit run` step gates no style tool — the invocation alone must not grade PASS'
+  );
 });
 
 test('PRV-04: no linter or formatter at all is FAIL', () => {

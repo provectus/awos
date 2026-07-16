@@ -356,6 +356,31 @@ test('org backlog aggregates member numbers from per-repo files', () => {
   );
 });
 
+test('org rollup re-renders per-repo backlog.html with a backlink to the org backlog', () => {
+  const org = writeOrgDir();
+  const before = readFileSync(
+    join(org, 'per-repo', 'alpha', 'backlog', 'backlog.html'),
+    'utf8'
+  );
+  assert.doesNotMatch(
+    before,
+    /Back to org backlog/,
+    'sanity: per-repo page has no backlink before the org rollup (the org page does not exist yet)'
+  );
+  generateOrgBacklog(org, ORG_DRAFT);
+  for (const repo of ['alpha', 'beta']) {
+    const after = readFileSync(
+      join(org, 'per-repo', repo, 'backlog', 'backlog.html'),
+      'utf8'
+    );
+    assert.match(
+      after,
+      /<a href="\.\.\/\.\.\/\.\.\/backlog\/backlog\.html">← Back to org backlog<\/a>/,
+      `per-repo ${repo} page gains an org backlink once the org page exists`
+    );
+  }
+});
+
 test('org project name prefers org-portfolio.json over the directory basename', () => {
   const org = writeOrgDir();
   writeFileSync(

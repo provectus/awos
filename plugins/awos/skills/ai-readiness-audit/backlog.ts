@@ -975,6 +975,19 @@ export function generateOrgBacklog(
   const backlogHtmlPath = join(backlogDir, 'backlog.html');
   writeFileSync(backlogHtmlPath, renderBacklogHtml(backlog));
 
+  // The org page exists now — re-render each per-repo backlog.html with a
+  // backlink to it. Per-repo backlogs are generated before the org rollup,
+  // so this is the first moment the link target is known to exist.
+  for (const entry of scanPerRepo(orgDir)) {
+    if (!entry.backlog) continue;
+    writeFileSync(
+      join(orgDir, 'per-repo', entry.repo, 'backlog', 'backlog.html'),
+      renderBacklogHtml(entry.backlog, {
+        orgHref: '../../../backlog/backlog.html',
+      })
+    );
+  }
+
   return {
     backlog_dir: backlogDir,
     backlog_json: backlogJsonPath,

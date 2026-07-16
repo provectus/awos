@@ -71,28 +71,123 @@ function fmtDays(x: number): string {
 }
 
 /**
- * Topological depth per ticket: 0 when it has no dependencies, else one more
- * than the deepest dependency. Tickets arrive topo-sorted (see backlog.ts), so
- * every dependency's depth is already known on a single forward pass.
+ * Group tickets for the graph: connected dependency components (undirected,
+ * via union-find) rendered as their own compact blocks, and "singles" —
+ * tickets with no dependency edges in either direction — collected separately.
+ * This keeps connected tickets adjacent (short, visible edges) instead of
+ * scattering them across the wrap rows of one giant depth-0 layer.
  *
- * Layer 0 (foundation tickets — the ones others depend on) is emitted first, so
- * it renders at the TOP of the graph, with dependents in deeper layers below.
+ * Within a component, layers follow topological depth: 0 when a ticket has no
+ * dependencies, else one more than its deepest dependency. Tickets arrive
+ * topo-sorted (see backlog.ts), so a single forward pass suffices. Layer 0
+ * (foundation tickets — the ones others depend on) is emitted first, so it
+ * renders at the TOP of the block, with dependents in deeper layers below.
  */
-function layerTickets(backlog: BacklogJson): BacklogTicket[][] {
+function groupGraph<T>(
+  tickets: T[],
+  keyOf: (t: T) => string,
+  depsOf: (t: T) => string[]
+): { components: T[][][]; singles: T[] } {
+  const parent = new Map<string, string>();
+  for (const t of tickets) parent.set(keyOf(t), keyOf(t));
+  const find = (k: string): string => {
+    let root = k;
+    while (parent.get(root) !== root) root = parent.get(root)!;
+    let cur = k;
+    while (parent.get(cur) !== cur) {
+      const next = parent.get(cur)!;
+      parent.set(cur, root);
+      cur = next;
+    }
+    return root;
+  };
+  for (const t of tickets) {
+    for (const dep of depsOf(t)) {
+      if (parent.has(dep)) parent.set(find(keyOf(t)), find(dep));
+    }
+  }
+
   const depth = new Map<string, number>();
-  for (const t of backlog.tickets) {
-    const d =
-      t.depends_on.length === 0
+  for (const t of tickets) {
+    const deps = depsOf(t);
+    depth.set(
+      keyOf(t),
+      deps.length === 0
         ? 0
-        : 1 + Math.max(...t.depends_on.map((s) => depth.get(s) ?? 0));
-    depth.set(t.slug, d);
+        : 1 + Math.max(...deps.map((s) => depth.get(s) ?? 0))
+    );
   }
-  const maxDepth = Math.max(0, ...depth.values());
-  const layers: BacklogTicket[][] = [];
-  for (let d = 0; d <= maxDepth; d++) {
-    layers.push(backlog.tickets.filter((t) => (depth.get(t.slug) ?? 0) === d));
+
+  const byRoot = new Map<string, T[]>();
+  for (const t of tickets) {
+    const root = find(keyOf(t));
+    const group = byRoot.get(root);
+    if (group) group.push(t);
+    else byRoot.set(root, [t]);
   }
-  return layers;
+
+  const singles: T[] = [];
+  for (const t of tickets) {
+    if (byRoot.get(find(keyOf(t)))!.length === 1) singles.push(t);
+  }
+  const multi = [...byRoot.values()].filter((g) => g.length > 1);
+  const order = new Map(tickets.map((t, i) => [keyOf(t), i]));
+  multi.sort(
+    (a, b) =>
+      b.length - a.length || order.get(keyOf(a[0]))! - order.get(keyOf(b[0]))!
+  );
+
+  const components = multi.map((group) => {
+    const maxDepth = Math.max(...group.map((t) => depth.get(keyOf(t))!));
+    const layers: T[][] = [];
+    for (let d = 0; d <= maxDepth; d++) {
+      const layer = group.filter((t) => depth.get(keyOf(t)) === d);
+      if (layer.length > 0) layers.push(layer);
+    }
+    return layers;
+  });
+  return { components, singles };
+}
+
+/**
+ * The full `#graph` markup: the SVG edge overlay, one `.gcomp` block per
+ * dependency component, and a trailing labelled grid of independent tickets.
+ */
+function renderGraphSection<T>(
+  tickets: T[],
+  keyOf: (t: T) => string,
+  depsOf: (t: T) => string[],
+  renderOne: (t: T) => string
+): string {
+  const { components, singles } = groupGraph(tickets, keyOf, depsOf);
+  const parts: string[] = [];
+  if (components.length > 0) {
+    const blocks = components
+      .map(
+        (layers) =>
+          `<div class="gcomp">${layers
+            .map(
+              (l) => `<div class="glayer">${l.map(renderOne).join('')}</div>`
+            )
+            .join('\n')}</div>`
+      )
+      .join('\n');
+    parts.push(`<div class="gcomps">${blocks}</div>`);
+  }
+  if (singles.length > 0) {
+    if (components.length > 0) {
+      parts.push(
+        '<div class="gsingles-label">Independent tickets — no dependencies either way</div>'
+      );
+    }
+    parts.push(
+      `<div class="glayer gsingles">${singles.map(renderOne).join('')}</div>`
+    );
+  }
+  return `<div id="graph">
+<svg id="edges" xmlns="http://www.w3.org/2000/svg"></svg>
+${parts.join('\n')}
+</div>`;
 }
 
 /** The hover tooltip body for a graph node: full ticket detail, all escaped. */
@@ -161,28 +256,40 @@ table.legend-table td.formula{font-family:var(--font-mono);color:var(--ink-400)}
 /* ── backlog: graph ──────────────────────────────────────────────────────── */
 #graph{position:relative;padding:16px 0 48px}
 #edges{position:absolute;top:0;left:0;z-index:0;pointer-events:none;overflow:visible}
-#edges .edge{stroke:var(--sage-400);stroke-width:1.6}
+#edges .edge{stroke:var(--sage-400);stroke-width:2}
 #edges .edge.off{stroke:#D9C3BC;stroke-dasharray:4 4}
 #edges .edot{fill:var(--sage-400)}
 #edges .edot.off{fill:#D9C3BC}
+.gcomps{position:relative;z-index:1;display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:24px;margin-bottom:44px}
+.gcomp{display:flex;flex-direction:column;gap:44px;border:1px dashed var(--ink-300);border-radius:14px;padding:18px 16px}
+.gcomp .glayer{margin-bottom:0}
+.gsingles-label{font-family:var(--font-mono);font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-300);text-align:center;margin:0 0 16px}
 .glayer{position:relative;z-index:1;display:flex;flex-wrap:wrap;justify-content:center;gap:20px;margin-bottom:52px}
 .glayer:last-child{margin-bottom:0}
 .glayer:hover{z-index:30}
-.gnode{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:190px;text-align:left;background:#fff;border:1px solid var(--divider);border-left:4px solid var(--sage-400);border-radius:10px;box-shadow:var(--shadow-sm);padding:12px 14px;cursor:pointer;font-family:var(--font-sans)}
+.gnode{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:190px;text-align:left;background:#fff;border:1px solid var(--divider);border-left:4px solid var(--sage-400);border-radius:10px;box-shadow:var(--shadow-sm);padding:12px 14px;cursor:pointer;font-family:var(--font-sans);scroll-margin:160px}
+.gnode.hl{outline:3px solid var(--indigo);outline-offset:2px}
 .gnode:hover{box-shadow:var(--shadow-md);z-index:40}
 .gnode .gnode-slug{font-family:var(--font-mono);font-size:12.5px;font-weight:600;color:var(--ink-900);line-height:1.3;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
 .gnode .gnode-meta{font-size:11.5px;color:var(--ink-400);line-height:1.35}
 .gnode.off{background:#ECEAE6;border-left-color:var(--ink-300);opacity:.78}
 .gnode.off .gnode-slug{text-decoration:line-through;color:var(--ink-400)}
 /* hover-only tooltips for graph nodes: blur-after-click (see BACKLOG_JS) drops
-   focus so a clicked node never pins its tipbox; z-index lifts it over siblings. */
-.gnode>.tipbox{left:0;top:calc(100% + 6px);min-width:280px;max-width:360px;z-index:200}
+   focus so a clicked node never pins its tipbox; z-index lifts it over siblings.
+   placeTip (BACKLOG_JS) clamps the box to the viewport: shifts it horizontally
+   via inline left, and adds .above to flip it over the node when the space
+   below runs out; max-height keeps even a flipped box scrollable on-screen. */
+.gnode>.tipbox{left:0;top:calc(100% + 6px);min-width:280px;max-width:360px;z-index:200;max-height:min(480px,70vh);overflow-y:auto}
+.gnode>.tipbox.above{top:auto;bottom:calc(100% + 6px)}
+.gnode>.tipbox.tipbox-org{min-width:340px;max-width:min(620px,calc(100vw - 40px))}
 .gnode:not(:hover):not(:focus)>.tipbox{display:none}
 .gnode .tipbox em{color:var(--label-band);font-style:normal;font-weight:600}
 .gnode .tip-goal,.gnode .tip-desc,.gnode .tip-dod,.gnode .tip-deps,.gnode .tip-checks,.gnode .tip-meta{display:block;margin-top:5px}
 /* ── backlog: org member table inside the dark tooltip ───────────────────── */
 .gnode .tipbox table.member-table{margin-top:10px;border-collapse:collapse;width:100%;font-size:11.5px}
-.gnode .tipbox table.member-table th,.gnode .tipbox table.member-table td{padding:4px 8px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--ink-700);color:var(--eyebrow-band)}
+.gnode .tipbox table.member-table th,.gnode .tipbox table.member-table td{padding:4px 8px;text-align:left;border-bottom:1px solid var(--ink-700);color:var(--eyebrow-band)}
+/* the ticket-slug column may wrap (slugs are long); the rest stays on one line */
+.gnode .tipbox table.member-table th,.gnode .tipbox table.member-table td:first-child,.gnode .tipbox table.member-table td:nth-child(3),.gnode .tipbox table.member-table td:nth-child(4){white-space:nowrap}
 .gnode .tipbox table.member-table th{color:var(--label-band);font-weight:600;font-family:var(--font-mono);text-transform:uppercase;font-size:9.5px;letter-spacing:.05em}
 .gnode .tipbox table.member-table a{color:var(--sage-200);text-decoration:underline}
 .gnode .tipbox table.member-table tr:last-child td{border-bottom:none}
@@ -292,6 +399,44 @@ const BACKLOG_JS = `
     });
     svg.innerHTML = lines;
   }
+  // Clamp a node's hover tooltip to the viewport: shift it horizontally when
+  // it would spill past the right/left edge, and flip it above the node when
+  // there is more room there than below. Runs on every hover/focus because
+  // scroll position changes what fits.
+  function placeTip(btn){
+    var tip = null;
+    for(var i = 0; i < btn.children.length; i++){
+      if(btn.children[i].classList && btn.children[i].classList.contains('tipbox')){ tip = btn.children[i]; break; }
+    }
+    if(!tip){ return; }
+    tip.classList.remove('above');
+    tip.style.left = '0px';
+    tip.style.display = 'block';
+    var r = tip.getBoundingClientRect();
+    var vw = document.documentElement.clientWidth;
+    var vh = window.innerHeight;
+    var shift = 0;
+    if(r.right > vw - 8){ shift = vw - 8 - r.right; }
+    if(r.left + shift < 8){ shift = 8 - r.left; }
+    if(shift){ tip.style.left = shift + 'px'; }
+    if(r.bottom > vh - 8){
+      var nb = btn.getBoundingClientRect();
+      if(nb.top > vh - nb.bottom){ tip.classList.add('above'); }
+    }
+    tip.style.display = '';
+  }
+  // Deep link from the org page: #node-<slug> scrolls to the node, flashes a
+  // highlight, and focuses it so its tooltip opens pinned until the next click.
+  function revealFromHash(){
+    if(location.hash.indexOf('#node-') !== 0){ return; }
+    var el = document.getElementById(location.hash.slice(1));
+    if(!el){ return; }
+    el.scrollIntoView({block:'center'});
+    el.classList.add('hl');
+    if(el.focus){ el.focus({preventScroll:true}); }
+    placeTip(el);
+    setTimeout(function(){ el.classList.remove('hl'); }, 4000);
+  }
   graph.addEventListener('click', function(e){
     var btn = e.target.closest ? e.target.closest('.gnode') : null;
     // e.detail > 0 is a pointer click: blur so the hover tooltip does not stay
@@ -303,9 +448,19 @@ const BACKLOG_JS = `
   document.getElementById('enable-all').addEventListener('click', function(){
     disabled = {}; applyDisabled(); recompute(); drawEdges();
   });
+  Array.prototype.forEach.call(document.querySelectorAll('.gnode'), function(btn){
+    btn.addEventListener('mouseenter', function(){ placeTip(btn); });
+    btn.addEventListener('focus', function(){ placeTip(btn); });
+  });
   window.addEventListener('resize', drawEdges);
+  window.addEventListener('hashchange', revealFromHash);
   applyDisabled(); recompute();
   if(window.requestAnimationFrame){ requestAnimationFrame(drawEdges); } else { drawEdges(); }
+  // Web fonts land after first paint and reflow the nodes — redraw the edges
+  // once they are ready (and on full load as a belt-and-braces fallback).
+  if(document.fonts && document.fonts.ready && document.fonts.ready.then){ document.fonts.ready.then(function(){ drawEdges(); }); }
+  window.addEventListener('load', function(){ drawEdges(); revealFromHash(); });
+  revealFromHash();
 })();
 `;
 
@@ -386,7 +541,7 @@ const LEGEND_SINGLE = `<details class="legend">
 <summary>Legend</summary>
 <div class="legend-body">
 <ul>
-<li><strong>Layers run top to bottom by dependency depth.</strong> Foundation tickets — the ones others depend on — sit at the top; each edge drops from a ticket to the ones that depend on it.</li>
+<li><strong>Connected tickets are grouped into dashed boxes.</strong> Within a box, layers run top to bottom by dependency depth: Foundation tickets — the ones others depend on — sit at the top, and each edge drops from a ticket to the ones that depend on it. Tickets listed under "Independent tickets" have no dependencies either way and can be done in any order.</li>
 <li><strong>Hover</strong> a node for its full detail: goal, description, definition of done, dependencies, and covered checks.</li>
 <li><strong>Click</strong> a node to disable it; every ticket that transitively depends on it is disabled too. Re-enabling a node leaves its dependents disabled until you re-enable them or press <strong>Enable all nodes</strong>.</li>
 <li>The ribbon totals reflect only the enabled tickets.</li>
@@ -407,8 +562,8 @@ const LEGEND_ORG = `<details class="legend">
 <summary>Legend</summary>
 <div class="legend-body">
 <ul>
-<li><strong>Layers run top to bottom by dependency depth.</strong> Foundation tickets — the ones others depend on — sit at the top; each edge drops from a ticket to the ones that depend on it.</li>
-<li><strong>Hover</strong> a node for its per-repo table of member tickets, each linking to that repo's ticket file.</li>
+<li><strong>Connected tickets are grouped into dashed boxes.</strong> Within a box, layers run top to bottom by dependency depth: Foundation tickets — the ones others depend on — sit at the top, and each edge drops from a ticket to the ones that depend on it. Tickets listed under "Independent tickets" have no dependencies either way and can be done in any order.</li>
+<li><strong>Hover</strong> a node for its per-repo table of member tickets, each linking to that ticket's node in the repo's own backlog graph.</li>
 <li><strong>Click</strong> a node to disable it (and everything that depends on it); use <strong>Enable all nodes</strong> to reset. The ribbon totals reflect only the enabled tickets.</li>
 <li>Some tickets are applied once for the whole organization, so their effort is not multiplied per repository — portfolio totals are approximate.</li>
 </ul>
@@ -427,41 +582,26 @@ const LEGEND_ORG = `<details class="legend">
 // Interactive backlog.html — org variant
 // ---------------------------------------------------------------------------
 
-/** Topological depth per org ticket, same rule as `layerTickets` but keyed by id. */
-function layerOrgTickets(backlog: OrgBacklogJson): OrgBacklogTicket[][] {
-  const depth = new Map<string, number>();
-  for (const t of backlog.tickets) {
-    const d =
-      t.depends_on.length === 0
-        ? 0
-        : 1 + Math.max(...t.depends_on.map((id) => depth.get(id) ?? 0));
-    depth.set(t.id, d);
-  }
-  const maxDepth = Math.max(0, ...depth.values());
-  const layers: OrgBacklogTicket[][] = [];
-  for (let d = 0; d <= maxDepth; d++) {
-    layers.push(backlog.tickets.filter((t) => (depth.get(t.id) ?? 0) === d));
-  }
-  return layers;
-}
-
 /**
  * The org node tooltip: exactly the node-box info (title, repos coverage,
  * effort, coverage gain) plus the per-member table with links. It deliberately
  * omits goal/description, which can differ across a ticket's member repos and
- * confuses at the org level. Member `ticket_href`s are stored relative to the
- * audit-dir root; the org page lives one level deeper (`<auditDir>/backlog/`),
- * so they are prefixed with `../` here.
+ * confuses at the org level. Each member links to its node in the repo's own
+ * backlog graph (`#node-<slug>` deep link, handled by revealFromHash there)
+ * rather than the raw ticket markdown, which browsers render as plain text.
+ * Hrefs are prefixed with `../` because the org page lives one level below
+ * the audit dir (`<auditDir>/backlog/`).
  */
 function orgNodeTip(ticket: OrgBacklogTicket, totalRepos: number): string {
   const covPct = (ticket.coverage_delta * 100).toFixed(1);
   const memberRows = ticket.members
     .map((m) => {
       const mCovPct = (m.coverage_delta * 100).toFixed(1);
-      return `<tr><td>${esc(m.repo)}</td><td><a href="${esc('../' + m.ticket_href)}">${esc(m.slug)}</a></td><td>${fmtDays(m.effort_dev_days)} d/dev</td><td>+${mCovPct}%</td></tr>`;
+      const nodeHref = `../per-repo/${m.repo}/backlog/backlog.html#node-${m.slug}`;
+      return `<tr><td>${esc(m.repo)}</td><td><a href="${esc(nodeHref)}">${esc(m.slug)}</a></td><td>${fmtDays(m.effort_dev_days)} d/dev</td><td>+${mCovPct}%</td></tr>`;
     })
     .join('');
-  return `<span class="tipbox">\
+  return `<span class="tipbox tipbox-org">\
 <b>${esc(ticket.title)}</b>\
 <span class="tip-meta">${ticket.repos_covered}/${totalRepos} repositories · ${fmtDays(ticket.effort_dev_days)} d/dev · +${covPct}%</span>\
 <table class="member-table">\
@@ -526,13 +666,12 @@ function renderOrgBacklogHtml(backlog: OrgBacklogJson): string {
   const coverageAll =
     backlog.tickets.reduce((s, t) => s + t.coverage_delta, 0) * 100;
 
-  const layers = layerOrgTickets(backlog);
-  const graphLayers = layers
-    .map(
-      (layer) =>
-        `<div class="glayer">${layer.map((t) => renderOrgNode(t, backlog.total_repos)).join('')}</div>`
-    )
-    .join('\n');
+  const graphSection = renderGraphSection(
+    backlog.tickets,
+    (t) => t.id,
+    (t) => t.depends_on,
+    (t) => renderOrgNode(t, backlog.total_repos)
+  );
 
   // The client script (BACKLOG_JS) keys nodes/edges/disable-state off `slug`;
   // org tickets have no slug, so alias `id` as `slug` in the embedded copy
@@ -569,10 +708,7 @@ ${renderWarning(P, true)}
 <main class="container">
 ${LEGEND_ORG}
 
-<div id="graph">
-<svg id="edges" xmlns="http://www.w3.org/2000/svg"></svg>
-${graphLayers}
-</div>
+${graphSection}
 
 ${renderReposTable(backlog)}
 </main>
@@ -595,8 +731,19 @@ function isOrgBacklog(
   return (backlog as OrgBacklogJson).org === true;
 }
 
+export interface RenderBacklogHtmlOpts {
+  /**
+   * When the repo belongs to an org audit, the org backlog page's href
+   * relative to this page — rendered as a "← Back to org backlog" backlink.
+   * The org rollup passes it while re-rendering per-repo pages (the org page
+   * does not exist yet when a per-repo backlog is first generated).
+   */
+  orgHref?: string;
+}
+
 export function renderBacklogHtml(
-  backlog: BacklogJson | OrgBacklogJson
+  backlog: BacklogJson | OrgBacklogJson,
+  opts: RenderBacklogHtmlOpts = {}
 ): string {
   if (isOrgBacklog(backlog)) {
     return renderOrgBacklogHtml(backlog);
@@ -610,12 +757,12 @@ export function renderBacklogHtml(
   const coverageAll =
     backlog.tickets.reduce((s, t) => s + t.coverage_delta, 0) * 100;
 
-  const layers = layerTickets(backlog);
-  const graphLayers = layers
-    .map(
-      (layer) => `<div class="glayer">${layer.map(renderNode).join('')}</div>`
-    )
-    .join('\n');
+  const graphSection = renderGraphSection(
+    backlog.tickets,
+    (t) => t.slug,
+    (t) => t.depends_on,
+    renderNode
+  );
 
   const embeddedJson = JSON.stringify(backlog).replaceAll('</', '<\\/');
 
@@ -624,6 +771,7 @@ export function renderBacklogHtml(
 <script type="application/json" id="backlog-data">${embeddedJson}</script>
 <header class="brand">
 <div class="container brand-inner">
+${opts.orgHref ? `<div class="backlink"><a href="${esc(opts.orgHref)}">← Back to org backlog</a></div>` : ''}
 <span class="brand-logo">${PROVECTUS_LOGO_SVG}</span>
 <div class="brand-title">
   <h1>Improvement Backlog</h1>
@@ -643,10 +791,7 @@ ${renderWarning(P, false)}
 <main class="container">
 ${LEGEND_SINGLE}
 
-<div id="graph">
-<svg id="edges" xmlns="http://www.w3.org/2000/svg"></svg>
-${graphLayers}
-</div>
+${graphSection}
 </main>
 <script>${BACKLOG_JS}</script>
 </body>

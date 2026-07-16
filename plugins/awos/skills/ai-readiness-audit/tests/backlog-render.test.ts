@@ -269,13 +269,162 @@ test('org repo links and member ticket links resolve from the org page (../per-r
   );
   assert.match(
     html,
-    /href="\.\.\/per-repo\/alpha\/backlog\/tickets\/A001-adopt-ci\.md"/,
-    'member ticket link is prefixed with ../'
+    /href="\.\.\/per-repo\/alpha\/backlog\/backlog\.html#node-A001-adopt-ci"/,
+    'member ticket links deep-link to the node in the repo backlog graph, not the raw .md (browsers render it as plain text)'
+  );
+  assert.doesNotMatch(
+    html,
+    /href="[^"]*\.md"/,
+    'no org link opens a raw markdown file'
   );
   assert.doesNotMatch(
     html,
     /href="per-repo\//,
     'no href resolves relative to the audit-dir root anymore'
+  );
+});
+
+test('repo backlog page deep-link support: #node-<slug> is revealed, highlighted, and focus-pinned', () => {
+  const html = renderBacklogHtml(backlog);
+  assert.match(
+    html,
+    /function revealFromHash\(\)/,
+    'client script defines the hash-reveal handler'
+  );
+  assert.match(
+    html,
+    /location\.hash\.indexOf\('#node-'\) !== 0/,
+    'handler only fires for #node-<slug> hashes'
+  );
+  assert.match(
+    html,
+    /scrollIntoView\(\{block:'center'\}\)/,
+    'target node scrolls into view'
+  );
+  assert.match(
+    html,
+    /classList\.add\('hl'\)/,
+    'target node gets the highlight class'
+  );
+  assert.match(
+    html,
+    /\.gnode\.hl\{outline/,
+    'highlight class has a visible outline style'
+  );
+});
+
+test('single-repo page renders an org backlink only when orgHref is passed', () => {
+  const withLink = renderBacklogHtml(backlog, {
+    orgHref: '../../../backlog/backlog.html',
+  });
+  assert.match(
+    withLink,
+    /<div class="backlink"><a href="\.\.\/\.\.\/\.\.\/backlog\/backlog\.html">← Back to org backlog<\/a><\/div>/,
+    'org-mode per-repo page links back to the org backlog'
+  );
+  const standalone = renderBacklogHtml(backlog);
+  assert.doesNotMatch(
+    standalone,
+    /Back to org backlog/,
+    'standalone single-repo page has no org backlink'
+  );
+});
+
+test('graph node tooltips are viewport-clamped: flip class, horizontal shift, and capped height', () => {
+  const html = renderBacklogHtml(backlog);
+  assert.match(
+    html,
+    /function placeTip\(btn\)/,
+    'client script defines the tooltip placement helper'
+  );
+  assert.match(
+    html,
+    /classList\.add\('above'\)/,
+    'tooltip flips above the node when space below runs out'
+  );
+  assert.match(
+    html,
+    /tip\.style\.left = shift \+ 'px'/,
+    'tooltip shifts horizontally to stay inside the viewport'
+  );
+  assert.match(
+    html,
+    /\.gnode>\.tipbox\.above\{top:auto;bottom:calc\(100% \+ 6px\)\}/,
+    'the .above flip has matching CSS'
+  );
+  assert.match(
+    html,
+    /\.gnode>\.tipbox\{[^}]*max-height:min\(480px,70vh\);overflow-y:auto/,
+    'tooltip height is capped and scrolls so it can never run off-screen'
+  );
+});
+
+test('org tooltip is wide enough for the member table and lets the slug column wrap', () => {
+  const html = renderBacklogHtml(orgBacklog);
+  assert.match(
+    html,
+    /class="tipbox tipbox-org"/,
+    'org node tooltip carries the wide variant class'
+  );
+  assert.match(
+    html,
+    /\.gnode>\.tipbox\.tipbox-org\{min-width:340px;max-width:min\(620px,calc\(100vw - 40px\)\)\}/,
+    'wide variant widens the box but never past the viewport'
+  );
+  assert.doesNotMatch(
+    html,
+    /member-table th,\.gnode \.tipbox table\.member-table td\{[^}]*white-space:nowrap/,
+    'member table cells are no longer all nowrap (the slug column may wrap instead of overflowing)'
+  );
+});
+
+test('graph groups connected tickets into component boxes and separates independent tickets', () => {
+  const grouped: BacklogJson = structuredClone(backlog);
+  grouped.tickets.push({
+    ...structuredClone(backlog.tickets[0]),
+    slug: 'A003-standalone',
+    seq: 3,
+    temp_id: 'c',
+    title: 'Standalone work',
+    depends_on: [],
+  });
+  const html = renderBacklogHtml(grouped);
+  const graph = html.slice(html.indexOf('<div id="graph">'));
+  const comp = graph.slice(
+    graph.indexOf('<div class="gcomps">'),
+    graph.indexOf('gsingles-label')
+  );
+  assert.match(
+    comp,
+    /class="gcomp"/,
+    'dependency-connected tickets render inside a component box'
+  );
+  assert.match(comp, /id="node-A001-adopt-ci"/, 'foundation node in the box');
+  assert.match(comp, /id="node-A002-harden-ci"/, 'dependent node in the box');
+  assert.doesNotMatch(
+    comp,
+    /id="node-A003-standalone"/,
+    'independent ticket stays out of the component box'
+  );
+  const singles = graph.slice(graph.indexOf('gsingles-label'));
+  assert.match(
+    singles,
+    /Independent tickets — no dependencies either way/,
+    'independent section is labelled'
+  );
+  assert.match(
+    singles,
+    /class="glayer gsingles">.*id="node-A003-standalone"/s,
+    'independent ticket renders in the singles grid'
+  );
+});
+
+test('edges redraw after web fonts load so they line up with the final layout', () => {
+  const html = renderBacklogHtml(backlog);
+  assert.match(
+    html,
+    /document\.fonts\.ready\.then\(function\(\)\{ drawEdges\(\); \}\)/,
+    'font load triggers an edge redraw (fonts reflow the nodes after first paint)'
   );
 });
 

@@ -90,7 +90,7 @@ Start with a cheap preflight on the fast model tier (per §8): is this bug **alr
 
 ### Step 3: Prepare the Workspace
 
-[Per §2–§3 of delivery-flow.md: verify `context/` is reachable and current; warn on a dirty working tree (uncommitted AWOS artifacts left by `/awos:flow` are an expected cause, not a blocker); create the branch from the base branch using the team's naming convention; submodule init/update if required. For a worktree: invoke the project's own worktree command, skill, or init script when §2 records one, otherwise execute the §2 isolation recipe — bring-up steps included — verbatim. Never improvise worktree preparation in-run: real prep is bigger than `git worktree add` (installs, codegen, env files, service/network isolation), and the recorded recipe or project script is the tested path. Store the branch name as `BRANCH`.]
+[Per §2–§3 of delivery-flow.md: verify `context/` is reachable and current; warn on a dirty working tree (uncommitted AWOS artifacts left by `/awos:flow` are an expected cause, not a blocker); create the branch from the base branch using the project's naming convention; submodule init/update if required. For a worktree: invoke the project's own worktree command, skill, or init script when §2 records one, otherwise execute the §2 isolation recipe — bring-up steps included — verbatim. Never improvise worktree preparation in-run: real prep is bigger than `git worktree add` (installs, codegen, env files, service/network isolation), and the recorded recipe or project script is the tested path. Store the branch name as `BRANCH`.]
 
 <!-- /awos:flow:stage -->
 
@@ -143,7 +143,7 @@ Add one test that fails on the old code and passes on the fix, capturing the bug
 
 Re-check **only** the acceptance criteria the bug touched, with `/awos:verify`'s evidence discipline — drive the UI/API for real, screenshot visual criteria to `docs/screenshots/`, and `AskUserQuestion` only when a criterion has no agent-driven render path at all. This is scoped: it does not re-run the whole acceptance set, does not flip the spec's Status, and honors `<!-- skip-tests: true -->` (look-and-feel walk-through only, no test suites). Report the criteria checked and their evidence.
 
-Running the app to verify is the flow's job, not the user's. [If §2/§3 recorded a shared resource the app binds — a port a running service holds, a single database, a device — the workspace guardrail reserves it for normal work, but this stage still verifies against a real render: reclaim the resource (stop the service, use an alternate port, spin a throwaway instance) or drive the project's own §5 deploy/run step and verify against that, per the sanctioned verification path §2/§3 records. Do not hand the user a `run` command to execute, and do not defer a drivable criterion to a later manual deploy — the manual `AskUserQuestion` fallback is only for a criterion the agent genuinely cannot render here.]
+Running the app to verify is the flow's job, not the user's. [If §2/§3 recorded a shared resource the app binds — a port a running service holds, a single database, a device — the workspace guardrail reserves it for normal work, but this stage still verifies against a real render: reclaim the resource (stop and restart the service, use an alternate port, spin a throwaway instance) or drive the project's own §5 deploy/run step and verify against that, per the sanctioned verification path §2/§3 records. Do not hand the user a `run` command to execute, and do not defer a drivable criterion to a later manual deploy — the manual `AskUserQuestion` fallback is only for a criterion the agent genuinely cannot render here.]
 
 Scale the evidence to what changed. When the fix touched only the data or payload and the diff contains no render-path edits, the sanctioned evidence is the demonstrated failing→passing regression test plus a unit-level render of the changed data with mocks — standing up the full stack (backend, database, seeded data) to watch an unchanged render branch repeat itself is disproportionate. This tier applies only when the render path is provably untouched by the diff; a fix that edits the render path itself still drives the UI/API for real.
 
@@ -209,7 +209,7 @@ Wait with the `Monitor` tool, never foreground `sleep` loops: a poll loop that e
 
 ### Step 13: Merge
 
-[Per §2: the target branch may have moved while the gates ran — re-check mergeability via the chosen transport or a fresh fetch + dry-run merge. If it no longer merges cleanly: sync per the recorded policy (resolution delegated per §8), push, and return to Step 11 — the remote gates run again on the new commit before any merge.]
+[Per §2: the target branch may have moved while the gates ran — re-check mergeability via the chosen transport or a fresh fetch + dry-run merge. If it no longer merges cleanly: sync per the recorded policy (resolution delegated per §8), push, and return to Step 12 — the remote gates run again on the new commit before any merge.]
 
 [Per §5 merge policy: a human merges — the flow's delivery work ends at this ready-to-merge hand-off: skip the flow-merge and proceed to the close stage, which reports the ready-to-merge state as the terminal evidence — or the flow merges via the chosen transport from §7, or a plain `git merge` + push for a repo without a code host.]
 
@@ -219,9 +219,17 @@ Merging is irreversible. Even when the recorded policy lets the flow merge, ask 
 
 <!-- /awos:flow:stage -->
 
+<!-- awos:flow:stage=delivery -->
+
+### Step 14: Deliver
+
+[Per §5: deployment mode, post-merge CI policy, version bump, and the deployment step — the command, and when the flow runs it: after the merge, after post-merge CI is green, or never. Omit what the decisions rule out; stop at the recorded hand-off point for manual or scheduled deployment. Omit this stage entirely when §5 rules out a dedicated delivery step for bug fixes — e.g. the fix rides along with the project's regular release train and needs no separate action here.]
+
+<!-- /awos:flow:stage -->
+
 <!-- awos:flow:stage=close-ticket -->
 
-### Step 14: Close the Ticket
+### Step 15: Close the Ticket
 
 [Per §5's definition of Done: gather the recorded evidence and report the final state to the user. When the source has tickets, transition the bug to its closed/fixed state using the chosen transport and attach the evidence; omit the transition for ticketless sources — the report to the user is the close.]
 

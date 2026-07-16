@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "AWOS plugins for AI-native development workflows",
-    "version": "2.4.0"
+    "version": "2.4.1"
   },
   "plugins": [
     {
       "name": "awos",
       "source": "./plugins/awos",
       "description": "Extends AWOS core with AI-powered delivery automation: audits a project's AI-readiness across quality dimensions (/awos:ai-readiness-audit) and sets up an end-to-end delivery flow — feature and optional bug-fix commands — tailored to the team (/awos:flow).",
-      "version": "2.4.0"
+      "version": "2.4.1"
     }
   ]
 }

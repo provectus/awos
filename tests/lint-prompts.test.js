@@ -1993,30 +1993,11 @@ test('configure-external-sources SKILL.md references references/ for platform gu
   );
 });
 
-test('configure-external-sources SKILL.md includes privacy gate for communication sources', () => {
-  // Chat and email sources may contain sensitive or personal data. The
-  // skill must ask the user to confirm authorization before proceeding
-  // with message history retrieval.
-  const body = readUtf8(
-    path.join(
-      repoRoot,
-      'plugins',
-      'awos',
-      'skills',
-      'configure-external-sources',
-      'SKILL.md'
-    )
-  );
-  assert.ok(
-    /authorization/i.test(body),
-    'SKILL.md must include an authorization check for communication source access'
-  );
-});
-
-test('configure-external-sources SKILL.md stops when privacy gate empties source list', () => {
-  // If the user skips communication sources and that removes the last
-  // remaining source, the skill must write ## Status: none and stop —
-  // not fall through to tool setup with an empty list.
+test('configure-external-sources SKILL.md includes privacy gate for all sources', () => {
+  // External sources may contain sensitive or personal data (PII in tickets,
+  // internal discussions in wikis, private messages in chats). The skill must
+  // warn the user that data will be sent to the LLM provider's API before
+  // proceeding with retrieval.
   const body = readUtf8(
     path.join(
       repoRoot,
@@ -2032,8 +2013,31 @@ test('configure-external-sources SKILL.md stops when privacy gate empties source
     .slice(1)
     .join('');
   assert.ok(
-    privacySection.includes('empty') && privacySection.includes('none'),
-    'SKILL.md must stop with ## Status: none when the privacy gate empties the source list'
+    /LLM/i.test(privacySection),
+    'SKILL.md privacy gate must mention LLM provider access'
+  );
+});
+
+test('configure-external-sources SKILL.md stops when user declines at privacy gate', () => {
+  // If the user declines at the privacy gate, the skill must write
+  // ## Status: none and stop — not fall through to tool setup.
+  const body = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins',
+      'awos',
+      'skills',
+      'configure-external-sources',
+      'SKILL.md'
+    )
+  );
+  const privacySection = body
+    .split(/privacy gate/i)
+    .slice(1)
+    .join('');
+  assert.ok(
+    /skip.*Status: none|skip.*stop/i.test(privacySection),
+    'SKILL.md must stop with ## Status: none when the user declines at the privacy gate'
   );
 });
 
@@ -2100,34 +2104,49 @@ test('product.md invokes configure-external-sources skill for documentation setu
 test('product.md degrades gracefully when configure-external-sources skill is unavailable', () => {
   // The configure-external-sources skill ships with the awos plugin, which
   // may not be installed. product.md must handle the skill being absent
-  // rather than silently failing.
+  // rather than silently failing, AND write ## Status: none so downstream
+  // commands know sources were declined.
   const body = readUtf8(path.join(commandsDir, 'product.md'));
   assert.ok(
     /skill is not available|plugin is not installed/i.test(body),
     'commands/product.md must handle the case where the awos plugin (and its skill) is not installed'
   );
-});
-
-test('product.md persists Status: none when user declines external docs', () => {
-  // When the user says No (or the question goes unanswered), product.md must
-  // write sources.md with ## Status: none so the decision is durable across
-  // re-runs and downstream commands don't re-ask.
-  const body = readUtf8(path.join(commandsDir, 'product.md'));
-  // The "No" branch must mention writing Status: none
+  // Pin the fallback action — the fresh-run branch must write Status: none
+  // when the skill is unavailable, not just mention the absence.
   const externalDocsBlock = body
     .split(/external documentation sources/i)
     .slice(1)
     .join('');
   assert.ok(
-    /if no.*status: none|default to.*no/i.test(externalDocsBlock),
-    'commands/product.md must write ## Status: none when user declines external documentation'
+    /skill is not available[^]*?Status: none/i.test(externalDocsBlock),
+    'commands/product.md must write ## Status: none as the fallback when the skill is unavailable'
   );
 });
 
-test('configure-external-sources SKILL.md collects file path for manual exports', () => {
-  // Sources with Access: manual need a Path: field in the manifest so
-  // downstream retrieval knows what file to read. The skill must collect
-  // the export file path during Step 4 (tool setup).
+test('product.md skips to substep 4 when user declines external docs', () => {
+  // When the user says No (or the question goes unanswered), product.md must
+  // skip to substep 4 without creating context/sources/. The question only
+  // appears during Creation Mode on brownfield projects, so re-runs enter
+  // Update Mode and never re-ask.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  const externalDocsBlock = body
+    .split(/external documentation sources/i)
+    .slice(1)
+    .join('');
+  assert.ok(
+    /if no.*skip to substep 4/i.test(externalDocsBlock),
+    'commands/product.md must skip to substep 4 when user declines external docs'
+  );
+  assert.ok(
+    /default to .*No/i.test(externalDocsBlock),
+    'commands/product.md must default to No when the external docs question goes unanswered'
+  );
+});
+
+test('manual sources are handled across skill and commands', () => {
+  // SKILL.md must offer manual as an access method in the manifest, and all
+  // three retrieval commands must branch on manual sources (user pastes
+  // content directly rather than calling a tool).
   const skillPath = path.join(
     repoRoot,
     'plugins',
@@ -2136,17 +2155,30 @@ test('configure-external-sources SKILL.md collects file path for manual exports'
     'configure-external-sources',
     'SKILL.md'
   );
-  const body = readUtf8(skillPath);
+  const skillBody = readUtf8(skillPath);
   assert.ok(
-    /manual.*file path|export.*file path|manual.*path/i.test(body),
-    'SKILL.md must collect the file path for manual export sources'
+    /Access:.*manual/i.test(skillBody),
+    'SKILL.md manifest must include Access: manual as an option'
   );
+
+  for (const cmd of ['product.md', 'roadmap.md', 'architecture.md']) {
+    const body = readUtf8(path.join(commandsDir, cmd));
+    const extDocBlock = body
+      .split(/external documentation/i)
+      .slice(1)
+      .join('');
+    assert.ok(
+      /manual/i.test(extDocBlock),
+      `commands/${cmd} retrieval must handle manual sources`
+    );
+  }
 });
 
 test('configure-external-sources SKILL.md has fallback for failed verification', () => {
   // If tool verification fails and troubleshooting doesn't help, the user
-  // must be able to skip, switch to manual, or remove the source rather
-  // than being stuck in a loop.
+  // must be able to switch to manual or remove the source rather than being
+  // stuck in a loop. Split on Step 6 heading to isolate the verification
+  // section (not Step 1's passing mention of "tool verification").
   const skillPath = path.join(
     repoRoot,
     'plugins',
@@ -2157,12 +2189,37 @@ test('configure-external-sources SKILL.md has fallback for failed verification',
   );
   const body = readUtf8(skillPath);
   const verificationSection = body
-    .split(/tool verification/i)
+    .split(/## Step 6/)
     .slice(1)
     .join('');
   assert.ok(
-    /switch to manual|remove this source/i.test(verificationSection),
-    'SKILL.md must offer fallback options (manual/remove) when tool verification fails'
+    /switch to manual/i.test(verificationSection),
+    'SKILL.md Step 6 must offer switching to manual when verification fails'
+  );
+  assert.ok(
+    /remove this source/i.test(verificationSection),
+    'SKILL.md Step 6 must offer removing the source when verification fails'
+  );
+});
+
+test('product.md re-invokes skill for intermediate source states', () => {
+  // When sources.md exists with restart-pending, verifying, or verified
+  // status, product.md must re-invoke the skill to finish setup — this is
+  // the restart-resume handshake that makes Step 5 of SKILL.md work.
+  const body = readUtf8(path.join(commandsDir, 'product.md'));
+  const externalDocsBlock = body
+    .split(/external documentation sources/i)
+    .slice(1)
+    .join('');
+  assert.ok(
+    /restart-pending/i.test(externalDocsBlock),
+    'commands/product.md must handle restart-pending status in sources.md'
+  );
+  assert.ok(
+    /restart-pending[^]*?re-invoke|restart-pending[^]*?Skill/i.test(
+      externalDocsBlock
+    ),
+    'commands/product.md must re-invoke the skill when sources.md has an intermediate status'
   );
 });
 
@@ -2211,13 +2268,19 @@ test('architecture.md reads context/sources/sources.md for documentation retriev
   );
 });
 
-test('architecture.md deletes context/sources/ after absorption', () => {
-  // architecture.md is the last onboarding command — it must clean up
-  // context/sources/ after all knowledge is absorbed into the core documents.
+test('architecture.md checks absorption before cleaning up sources', () => {
+  // architecture.md is the last onboarding command — it must verify all
+  // source information was absorbed before deciding whether to delete
+  // context/sources/. If useful content remains, sources.md is kept and
+  // cross-referenced from product-definition.md.
   const body = readUtf8(path.join(commandsDir, 'architecture.md'));
   assert.ok(
-    /context\/sources\/.*delete/i.test(body),
-    'commands/architecture.md must delete context/sources/ after absorption'
+    /absorbed/i.test(body),
+    'commands/architecture.md must check whether source information was absorbed'
+  );
+  assert.ok(
+    /context\/sources/i.test(body) && /delete/i.test(body),
+    'commands/architecture.md must handle cleanup of context/sources/'
   );
 });
 

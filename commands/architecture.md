@@ -82,7 +82,9 @@ Follow this logic precisely.
 
     c. Append the new findings to `context/product/brownfield.md` under a `## Technology` heading (for any you revise, record the revised version, not the original). The findings seed the section defaults below and are triaged with the user later, in **Step 3: Finalization** — after the architecture is saved — so exploration never blocks the write.
 
-3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured`, read it and launch one Explore agent per configured source. For sources with `Access: mcp` or `Access: cli`, use the tool named in the `Tool:` field. For sources with `Access: manual`, read the exported file at the `Path:` field instead.
+3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured`, read it and retrieve content from each configured source. For sources with `Access: mcp` or `Access: cli`, launch one Explore agent per source using the tool named in the `Tool:` field. For sources with `Access: manual`, use `AskUserQuestion` to let the user paste relevant content directly.
+
+    For `mcp` or `cli` sources:
 
     ```text
     Agent(subagent_type="Explore", description="Retrieve architecture docs", prompt="
@@ -147,4 +149,4 @@ Give the user a quick read on whether the stack already has specialist agents �
 
 ### Step 5: Brownfield Cleanup
 
-If `context/product/brownfield.md` exists, delete it. If `context/sources/` exists, delete it. By this point all external knowledge has been absorbed into `product-definition.md`, `roadmap.md`, and `architecture.md`.
+If `context/product/brownfield.md` exists, delete it. Then thoroughly check whether all information from `context/sources/` has been absorbed into `product-definition.md`, `roadmap.md`, and `architecture.md`. If useful information remains in `context/sources/sources.md` that hasn't been captured elsewhere (source URLs, user-pasted content, configuration details), keep the file and add a reference to it in `context/product/product-definition.md` so downstream commands are aware of it. If everything has been absorbed, delete `context/sources/`.

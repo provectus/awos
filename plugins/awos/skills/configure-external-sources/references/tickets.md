@@ -36,7 +36,7 @@ Known tools and access methods for ticket and project management platforms. The 
 
 ## Linear
 
-**MCP Server — Official Remote**
+**MCP Server — Vendor-Provided Remote**
 
 - Type: Remote (cloud-hosted by Linear)
 - URL: `https://mcp.linear.app/sse`
@@ -64,7 +64,7 @@ Known tools and access methods for ticket and project management platforms. The 
 
 ## GitHub Issues
 
-**MCP Server — Official**
+**MCP Server — Vendor-Provided**
 
 - Type: Local (Go binary)
 - Install: Download from https://github.com/github/github-mcp-server/releases
@@ -89,7 +89,7 @@ Known tools and access methods for ticket and project management platforms. The 
 
 ## GitLab Issues
 
-**MCP Server — Official**
+**MCP Server — Vendor-Provided**
 
 - Type: Remote (built into GitLab instances)
 - Auth: OAuth 2.0 Dynamic Client Registration or personal access tokens.
@@ -117,7 +117,7 @@ Known tools and access methods for ticket and project management platforms. The 
 
 ## Asana
 
-**MCP Server — Official Remote**
+**MCP Server — Vendor-Provided Remote**
 
 - Type: Remote (cloud-hosted by Asana)
 - URL: `https://mcp.asana.com/v2/mcp`
@@ -160,7 +160,7 @@ Known tools and access methods for ticket and project management platforms. The 
 
 ## Monday.com
 
-**MCP Server — Official**
+**MCP Server — Vendor-Provided**
 
 - Type: Local (npm)
 - Package: `@mondaydotcomorg/monday-api-mcp`
@@ -200,7 +200,7 @@ Known tools and access methods for ticket and project management platforms. The 
 
 ## Shortcut
 
-**MCP Server — Official**
+**MCP Server — Vendor-Provided**
 
 - Type: Local (npm) + Hosted (OAuth)
 - Package: `@shortcut/mcp` (npm)
@@ -226,7 +226,7 @@ Known tools and access methods for ticket and project management platforms. The 
 
 ## Azure DevOps / Azure Boards
 
-**MCP Server — Official (Preview)**
+**MCP Server — Vendor-Provided (Preview)**
 
 - Source: https://github.com/microsoft/azure-devops-mcp
 - Auth: Azure AD / Personal Access Token.
@@ -280,7 +280,7 @@ Known tools and access methods for ticket and project management platforms. The 
 
 ## Plane
 
-**MCP Server — Official**
+**MCP Server — Vendor-Provided**
 
 - Source: https://github.com/makeplane/plane-mcp-server
 - Docs: https://developers.plane.so/dev-tools/mcp-server
@@ -333,7 +333,7 @@ Known tools and access methods for ticket and project management platforms. The 
 
 **CLI Alternative**
 
-- Tool: Official Basecamp CLI
+- Tool: Basecamp CLI (vendor-provided)
 - Install: `curl -fsSL https://basecamp.com/install-cli | bash`
 - Usage: Manage projects, todos, messages from terminal.
 
@@ -346,7 +346,7 @@ Known tools and access methods for ticket and project management platforms. The 
 
 ## Teamwork
 
-**MCP Server — Official**
+**MCP Server — Vendor-Provided**
 
 - Source: https://github.com/teamwork/mcp
 - Auth: Bearer token or OAuth2.
@@ -363,7 +363,7 @@ Known tools and access methods for ticket and project management platforms. The 
 
 ## Wrike
 
-**MCP Server — Official Remote**
+**MCP Server — Vendor-Provided Remote**
 
 - Type: Remote
 - URL: `https://wrike.com/app/mcp/sse` (US), `https://app-eu.wrike.com/app/mcp/sse` (EU)

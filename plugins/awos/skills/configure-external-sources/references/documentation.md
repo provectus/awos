@@ -38,7 +38,7 @@ Known tools and access methods for wiki and documentation platforms. The skill u
 
 ## Notion
 
-**MCP Server — Official**
+**MCP Server — Vendor-Provided**
 
 - Type: Local (npm)
 - Package: `@notionhq/notion-mcp-server`
@@ -61,7 +61,7 @@ Known tools and access methods for wiki and documentation platforms. The skill u
 
 ## Google Docs / Drive
 
-**MCP Server — Official Google Drive Remote MCP**
+**MCP Server — Google Drive Remote MCP (Vendor-Provided)**
 
 - Type: Remote (cloud-hosted by Google)
 - URL: `https://drivemcp.googleapis.com/mcp/v1`
@@ -98,7 +98,7 @@ Known tools and access methods for wiki and documentation platforms. The skill u
 - Covers: SharePoint, OneDrive, Teams, Outlook, Planner, and more.
 - Verify: List files in a known SharePoint site.
 
-**MCP Server — Microsoft Official (Preview)**
+**MCP Server — Microsoft (Vendor-Provided, Preview)**
 
 - Microsoft Agent 365 Work IQ MCP servers (pre-certified). See https://learn.microsoft.com/en-us/microsoft-agent-365/tooling-servers-overview
 
@@ -123,7 +123,7 @@ Known tools and access methods for wiki and documentation platforms. The skill u
 
 ## Coda
 
-**MCP Server — Official Remote**
+**MCP Server — Vendor-Provided Remote**
 
 - Type: Remote (cloud-hosted by Coda)
 - URL: `https://coda.io/apis/mcp`
@@ -167,7 +167,7 @@ Known tools and access methods for wiki and documentation platforms. The skill u
 
 ## Slite
 
-**MCP Server — Official Remote**
+**MCP Server — Vendor-Provided Remote**
 
 - Type: Remote (cloud-hosted by Slite)
 - URL: `https://api.slite.com/mcp`
@@ -209,7 +209,7 @@ Known tools and access methods for wiki and documentation platforms. The skill u
 
 ## Guru
 
-**MCP Server — Official Remote**
+**MCP Server — Vendor-Provided Remote**
 
 - Type: Remote (cloud-hosted by Guru)
 - Source: https://github.com/guruhq/remote-mcp-server
@@ -231,7 +231,7 @@ Known tools and access methods for wiki and documentation platforms. The skill u
 
 ## Nuclino
 
-**MCP Server — Official Remote**
+**MCP Server — Vendor-Provided Remote**
 
 - Type: Remote (cloud-hosted by Nuclino)
 - URL: `https://api.nuclino.com/mcp`
@@ -252,7 +252,7 @@ Known tools and access methods for wiki and documentation platforms. The skill u
 
 ## Outline
 
-**MCP Server — Official**
+**MCP Server — Vendor-Provided**
 
 - Type: Remote (self-hosted URL)
 - Install: `claude mcp add --transport http outline https://<yoursubdomain>.getoutline.com/mcp`

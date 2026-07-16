@@ -47,7 +47,7 @@ If the user selects "Other" for any category, read the full reference file at `r
 
 ## Step 3 — Privacy Gate
 
-If the user selected any chat or email source, use `AskUserQuestion` to confirm: "Accessing message history may include sensitive or personal data. Do you have authorization to access this data for project documentation?" with options **Yes, I have authorization** and **Skip communication sources**. If skipped, remove all chat and email sources from the list. If the filtered list is now empty, write `context/sources/sources.md` with `## Status: none` and stop.
+Use `AskUserQuestion` to confirm: "Retrieving content from these sources will send data to the LLM provider's API. This data may include sensitive or personal information (PII in tickets, internal discussions in wikis, private messages in chats). Do you wish to proceed?" with options **Yes, proceed** and **No, skip external sources**. If skipped, write `context/sources/sources.md` with `## Status: none` and stop.
 
 ## Step 4 — Tool Setup
 
@@ -55,19 +55,19 @@ For each selected platform:
 
 1. **Discover available tools.** Check what tools are already available in the environment for this platform (e.g., existing MCP servers, installed CLIs like `gh`). Then read `references/{documentation,tickets,communication}.md` (relative to this SKILL.md) for known MCP servers and CLI tools for the platform.
 
-2. **Present options.** Use `AskUserQuestion` to present the discovered tools. List tools already available in the environment first, then known MCP servers and CLI tools from the reference file — official/vendor-hosted tools as primary options unless they appear outdated or deprecated. Always include **Manual export** as the final option.
+2. **Present options.** If tools are already available in the environment for this platform, present them via `AskUserQuestion` along with **I have a different tool** and **Manual** (user pastes content) as alternatives. If no tools are already available, default to **Manual** and offer tool installation as an explicit opt-in — "I can help set up an MCP server or CLI tool if you want live retrieval." Always include **I have a different tool** so users can specify their own MCP server or CLI (e.g. a corporate or custom fork). If selected, ask the user for the tool name, type (MCP server or CLI), and setup command, then guide accordingly. Do not label any option as "recommended." For each tool option, write a brief, objective comparison — note whether it is vendor-provided or community-built, check its package stats and recent update activity, and summarize its trade-offs (e.g. a vendor-provided server may be more actively maintained but could have narrower scope; a community server may exist specifically because the official one lacks features or has unwanted capabilities like sending messages). Let the user make a deliberate choice.
 
-3. **Guide installation.** For the user's chosen tool, use the setup details from the reference file to guide installation and authentication. For MCP servers, use `npx`/`bunx` or `claude mcp add` — do not instruct the user to clone repositories. For manual export, guide the user to export content and save it to a file in the project directory (e.g., `context/sources/confluence-export.md`). Use `AskUserQuestion` to confirm the file path once the export is saved.
+3. **Guide installation.** For the user's chosen tool, use the setup details from the reference file to guide installation and authentication. For MCP servers, use `npx`/`bunx` or `claude mcp add` — do not instruct the user to clone repositories. For manual access, no setup is needed — the user will paste content directly during retrieval.
 
-4. **Track the result.** Record the access method chosen (mcp, cli, or manual) and the tool name for each source. For manual access, also record the file path from substep 3.
+4. **Track the result.** Record the access method chosen (mcp, cli, or manual) and the tool name for each source.
 
 ## Step 5 — Restart Check
 
 If any MCP servers were added during Step 4, write `context/sources/sources.md` with `## Status: restart-pending` and a `## Source:` section for each configured source (category, platform, access method, tool name — scope left blank for now). Then tell the user:
 
-> MCP servers have been configured. Resume this conversation (or restart your editor and run `/awos:product` again). Source setup will resume automatically.
+> MCP servers have been configured. To pick them up, exit this session (Ctrl+C twice or `/exit`) and resume it — the exit message prints a `claude --resume <id>` command you can use. If any servers need interactive authentication, run `/mcp` after resuming to authenticate before continuing. Then re-run `/awos:product` and source setup will continue automatically.
 
-Stop here. When the session resumes or `/awos:product` re-invokes this skill, Step 1 will route to Step 6.
+Stop here. When `/awos:product` re-invokes this skill, Step 1 will route to Step 6.
 
 If no MCP restart is needed (tools were already available, CLI was chosen, or manual export selected), continue to Step 6.
 
@@ -75,7 +75,7 @@ If no MCP restart is needed (tools were already available, CLI was chosen, or ma
 
 Update the status in `context/sources/sources.md` to `verifying`. If the file already exists (from a restart-pending state), update in place; otherwise write a new file with the current source list.
 
-For each configured MCP or CLI tool, attempt a simple read operation (e.g., search for a known term, list projects, or list channels) to confirm the tool responds. If verification fails, read the matching section from the reference file and help troubleshoot authentication or configuration. If the tool still fails after troubleshooting, use `AskUserQuestion` to ask: "Could not verify {tool name} for {platform}. What would you like to do?" with options **Retry**, **Switch to manual export**, and **Remove this source**. On retry, attempt verification again. On switch, update the source's access method to manual and collect the export file path. On remove, drop the source from the list entirely. If the list becomes empty after removals, write `## Status: none` and stop.
+For each configured MCP or CLI tool, attempt a simple read operation (e.g., search for a known term, list projects, or list channels) to confirm the tool responds. If verification fails, read the matching section from the reference file and help troubleshoot authentication or configuration. If the tool still fails after troubleshooting, use `AskUserQuestion` to ask: "Could not verify {tool name} for {platform}. What would you like to do?" with options **Switch to manual** and **Remove this source**. On switch, update the source's access method to manual. On remove, drop the source from the manifest — do not include it in `sources.md`. If the list becomes empty after removals, write `## Status: none` and stop.
 
 Once all remaining tools are verified, update the status in `context/sources/sources.md` to `verified`.
 
@@ -103,8 +103,9 @@ Write the final `context/sources/sources.md` with `## Status: configured` and al
 - Platform: {platform name}
 - Access: {mcp|cli|manual}
 - Tool: {MCP server name or CLI tool name, or 'n/a' for manual}
-- Path: {file path to exported content, only for manual access}
 - Scope: {user-provided scope from Step 7}
 ```
 
 One `## Source:` section per configured source. The `{id}` is a kebab-case slug derived from the platform name (e.g., `confluence`, `github-issues`, `slack`). If the same platform appears twice, add a disambiguating suffix.
+
+If any MCP servers or CLI tools were installed during this flow, suggest the user document the setup steps in the project README so other team members can replicate the configuration. Note that installed MCP servers and their credentials persist in the user's Claude config beyond this onboarding flow.

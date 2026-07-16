@@ -92,13 +92,15 @@ First, check if the file `context/product/product-definition.md` exists.
 
 3.  **External documentation sources.** Check `context/sources/sources.md`:
 
-    - If it does not exist and `context/product/brownfield.md` was created in substep 2, use `AskUserQuestion` to ask: "Do you have external documentation (wikis, tickets, chats, email) you'd like to import into the project context?" with options **Yes** and **No**. If the question goes unanswered, default to **No**. If no, write `context/sources/sources.md` with `## Status: none` and continue to substep 4. If yes, try to invoke the skill: `Skill(name="awos:configure-external-sources")`. If the skill is not available (the `awos` plugin is not installed), inform the user they can install it from the marketplace to enable external documentation import, write `context/sources/sources.md` with `## Status: none`, and continue to substep 4. If the skill triggers an editor restart, stop here.
-    - If it exists with `## Status: configured`, skip straight to retrieval below.
-    - If it exists with `## Status: none`, skip to substep 4 — user previously declined.
-    - If it exists with `## Status: restart-pending`, `## Status: verifying`, or `## Status: verified`, re-invoke the skill: `Skill(name="awos:configure-external-sources")`. If the skill is not available, inform the user and write `## Status: none`; otherwise it resumes from the appropriate step. If the skill triggers an editor restart, stop here.
     - If it does not exist and no brownfield.md was created, skip to substep 4.
+    - If it exists with `## Status: none`, skip to substep 4 — user previously declined.
+    - If it exists with `## Status: configured`, skip straight to retrieval below.
+    - If it exists with `## Status: restart-pending`, `## Status: verifying`, or `## Status: verified`, re-invoke the skill: `Skill(name="awos:configure-external-sources")`. If the skill is not available, inform the user that the `awos` plugin is needed to finish source setup and skip to substep 4 — leave `sources.md` untouched so the user's existing configuration is preserved. If the skill triggers an editor restart, stop here.
+    - If it does not exist and `context/product/brownfield.md` was created in substep 2, use `AskUserQuestion` to ask: "Do you have external documentation (wikis, tickets, chats, email) you'd like to import into the project context?" with options **Yes** and **No**. If the question goes unanswered, default to **No**. If no, skip to substep 4. If yes, try to invoke the skill: `Skill(name="awos:configure-external-sources")`. If the skill is not available (the `awos` plugin is not installed), inform the user they can install it from the marketplace to enable external documentation import, write `context/sources/sources.md` with `## Status: none`, and continue to substep 4. If the skill triggers an editor restart, stop here.
 
-    **Retrieval.** Read `context/sources/sources.md` and launch one Explore agent per configured source. For sources with `Access: mcp` or `Access: cli`, use the tool named in the `Tool:` field. For sources with `Access: manual`, read the exported file at the `Path:` field instead.
+    **Retrieval.** If `context/sources/sources.md` exists with `## Status: configured`, read it and retrieve content from each configured source. For sources with `Access: mcp` or `Access: cli`, launch one Explore agent per source using the tool named in the `Tool:` field. For sources with `Access: manual`, use `AskUserQuestion` to let the user paste relevant content directly.
+
+    For `mcp` or `cli` sources:
 
     ```text
     Agent(subagent_type="Explore", description="Retrieve {platform} docs", prompt="

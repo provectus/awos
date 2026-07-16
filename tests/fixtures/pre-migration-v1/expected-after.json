@@ -1,7 +1,7 @@
 {
-  "_comment": "Pre-migration state with python-expert.md at the v0 path. Migration 001 moves it under domain-experts/, then migration 002 deletes domain-experts/ entirely, then migration 003 deletes .awos/commands/sources/ if present. Final state: the old path is empty, the migrated subdirectory is gone, and .awos/.migration-version reads 3. Keep this assertion synced with whatever the latest migration leaves on disk.",
+  "_comment": "Pre-migration state with python-expert.md at the v0 path. Migration 001 moves it under domain-experts/, then migration 002 deletes domain-experts/ entirely. Final state: the old path is empty, the migrated subdirectory is gone, and .awos/.migration-version reads 2. Keep this assertion synced with whatever the latest migration leaves on disk.",
   ".claude/agents/python-expert.md": { "exists": false },
   ".claude/agents/domain-experts/python-expert.md": { "exists": false },
-  ".awos/.migration-version": { "exists": true, "contains": "3" },
+  ".awos/.migration-version": { "exists": true, "contains": "2" },
   ".awos/commands/architecture.md": { "exists": true }
 }

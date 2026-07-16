@@ -111,6 +111,10 @@ export function readPerRepoAudit(
   }> = [];
   for (const dim of audit.dimensions ?? []) {
     const dimSlug = dim.dimension ?? '';
+    // PRV checks are expressed through prevention_gaps (per-cluster tier
+    // counts), not org_gaps — including them here would double-list every
+    // enforcement FAIL.
+    if (dimSlug === 'prevention-coverage') continue;
     for (const c of dim.checks ?? []) {
       if (!c.check_id) continue;
       checksForGaps.push({
@@ -121,6 +125,19 @@ export function readPerRepoAudit(
       });
     }
   }
+
+  // Prevention view: the compact per-cluster slice org_rollup needs for the
+  // cross-repo prevention_gaps aggregate.
+  const prevention = audit.prevention
+    ? {
+        clusters: audit.prevention.clusters.map((cl) => ({
+          cluster: cl.cluster,
+          title: cl.title,
+          tier: cl.tier,
+          unguarded_passes: cl.unguarded_passes.length,
+        })),
+      }
+    : undefined;
 
   // Delivery check values by check_id (null when absent / SKIP / null value).
   const delivery: PerRepoDelivery = {};
@@ -191,5 +208,6 @@ export function readPerRepoAudit(
     tech_stack: audit.tech_stack,
     linked_repos: audit.linked_repos,
     checks: checksForGaps,
+    ...(prevention ? { prevention } : {}),
   };
 }

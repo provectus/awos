@@ -92,7 +92,7 @@ const FORMATTER_CONFIGS = [
 const PYPROJECT_FORMATTER_RX = /^\[tool\.(black|ruff\.format)\]/m;
 
 // pre-commit hooks: formatters invoked as hooks
-const PRECOMMIT_FORMATTER_RX =
+export const PRECOMMIT_FORMATTER_RX =
   /\b(prettier|black|ruff|gofmt|rustfmt|clang-format|autopep8|isort)\b/;
 
 export function detectFormatting(

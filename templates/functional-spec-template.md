@@ -44,3 +44,11 @@ _Clearly define what is and is not included in this work to prevent ambiguity._
 ### Out-of-Scope
 
 - [A list of related items that are explicitly NOT included.]
+
+---
+
+## Change Log
+
+_Dated amendments made after the spec was first written — typically by `/awos:spec` in Update Mode when a bug fix changed documented behavior. Each entry records the date, the source reference (bug id or fix description), and what behavior changed and why. Leave empty until the first amendment._
+
+- [YYYY-MM-DD] — [source reference] — [what behavior changed and why]

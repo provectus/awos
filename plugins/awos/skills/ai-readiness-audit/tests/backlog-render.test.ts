@@ -180,6 +180,7 @@ const orgBacklog: OrgBacklogJson = {
       backlog_href: 'per-repo/alpha/backlog/backlog.html',
       total_applicable_weight: 19,
       coverage: 0.32,
+      audit_total: 6,
       ticket_count: 2,
       effort_dev_days: 5,
     },
@@ -188,6 +189,7 @@ const orgBacklog: OrgBacklogJson = {
       backlog_href: 'per-repo/beta/backlog/backlog.html',
       total_applicable_weight: 19,
       coverage: 0.5,
+      audit_total: 9.5,
       ticket_count: 1,
       effort_dev_days: 3,
     },
@@ -239,6 +241,7 @@ test('org backlog.html renders an audit-only fallback repo (no backlog_href) as 
         backlog_href: null,
         total_applicable_weight: 12,
         coverage: 0.1,
+        audit_total: null,
         ticket_count: 0,
         effort_dev_days: 0,
       },
@@ -504,6 +507,11 @@ test('org repos table degrades to em dashes when per-repo fields are missing (pr
     /<td class="num">—<\/td><td class="num">—<\/td>/,
     'missing ticket-count and effort render as em dashes'
   );
+  assert.match(
+    repos,
+    /<td class="num">—<\/td><td class="num">—<\/td><td class="num">—<\/td>/,
+    'missing score, ticket-count, and effort all render as bare em dashes'
+  );
 });
 
 test('edges redraw after web fonts load so they line up with the final layout', () => {
@@ -584,6 +592,21 @@ test('org repositories section is a table with per-repo coverage, tickets, and e
     /\(19 pts applicable\)/,
     'the bare "(N pts applicable)" text is gone'
   );
+  assert.match(
+    repos,
+    /<th>Current coverage<\/th><th>Current score<\/th><th>Tickets<\/th>/,
+    'Current score column sits between Current coverage and Tickets'
+  );
+  assert.match(
+    repos,
+    /class="tip cov-cell">6 pts<span class="tipbox">Weighted points currently achieved out of 19 applicable for alpha/,
+    'alpha row renders its achieved weighted points with an explanatory tooltip'
+  );
+  assert.match(
+    html,
+    /table\.repos-table td\.num\{text-align:left/,
+    'repos-table numeric cells are left-aligned'
+  );
 });
 
 test('ribbon is three metric cards with the developer input inside the Duration card', () => {
@@ -594,19 +617,66 @@ test('ribbon is three metric cards with the developer input inside the Duration 
     3,
     'exactly three ribbon cards (Effort, Coverage gain, Duration)'
   );
-  // The devs input lives in the last (Duration) card: after the duration meter,
-  // before the enable-all reset button that follows all three cards.
+  // The devs input lives in the last (Duration) card, after the duration meter.
   const iDuration = html.indexOf('id="rb-duration"');
   const iDevs = html.indexOf('id="devs"');
-  const iEnableAll = html.indexOf('id="enable-all"');
   assert.ok(
-    iDuration !== -1 && iDevs > iDuration && iDevs < iEnableAll,
-    'the Number of developers input is inside the Duration card (after the duration meter, before enable-all)'
+    iDuration !== -1 && iDevs > iDuration,
+    'the Number of developers input is inside the Duration card (after the duration meter)'
+  );
+  const ribbon = html.slice(
+    html.indexOf('<div class="ribbon">'),
+    html.indexOf('class="graph-toolbar"')
+  );
+  assert.doesNotMatch(
+    ribbon,
+    /id="enable-all"/,
+    'the ribbon no longer carries the enable-all button (it moved to the graph toolbar)'
   );
   assert.match(
     html,
     /class="rb-devs tip">Developers<input[^>]*><span class="tipbox" id="rb-devs-tip">/,
     'the Developers control carries the scaling-caveat tooltip'
+  );
+});
+
+test('graph toolbar holds the legend and enable/disable-all buttons above the graph', () => {
+  for (const html of [
+    renderBacklogHtml(backlog),
+    renderBacklogHtml(orgBacklog),
+  ]) {
+    const toolbarStart = html.indexOf('class="graph-toolbar"');
+    assert.ok(toolbarStart !== -1, 'a graph-toolbar div exists');
+    const graphStart = html.indexOf('<div id="graph">');
+    assert.ok(
+      toolbarStart < graphStart,
+      'the toolbar appears before the graph'
+    );
+    const toolbar = html.slice(toolbarStart, graphStart);
+    assert.match(
+      toolbar,
+      /<details class="legend"/,
+      'toolbar contains the legend'
+    );
+    assert.match(
+      toolbar,
+      /<details class="legend"[\s\S]*class="graph-actions"/,
+      'legend is followed by the graph-actions block'
+    );
+    assert.match(
+      toolbar,
+      /class="graph-actions"[\s\S]*id="enable-all"[\s\S]*id="disable-all"/,
+      'graph-actions holds both enable-all and disable-all buttons'
+    );
+  }
+});
+
+test('disable-all marks every ticket disabled in the client script', () => {
+  const html = renderBacklogHtml(backlog);
+  assert.match(
+    html,
+    /getElementById\('disable-all'\)\.addEventListener\('click', function\(\)\{\s*tickets\.forEach\(function\(t\)\{ disabled\[t\.slug\] = true; \}\);\s*applyDisabled\(\); recompute\(\); drawEdges\(\);\s*\}\);/,
+    'disable-all wires a listener that force-disables every ticket'
   );
 });
 

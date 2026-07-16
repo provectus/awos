@@ -139,6 +139,8 @@ export interface OrgBacklogJson {
     total_applicable_weight: number;
     /** Current standards coverage of the repo (0..1), or null when unknown. */
     coverage: number | null;
+    /** Weighted points currently achieved (the audit's audit_total), or null when unknown. */
+    audit_total: number | null;
     /** Tickets in the repo's own backlog (0 for an audit-only fallback repo). */
     ticket_count: number;
     /** Σ effort_dev_days of the repo's tickets (0 for an audit-only fallback repo). */
@@ -540,6 +542,8 @@ interface PerRepoScan {
   auditWeight: number | null;
   /** Coverage derived from audit.json, used only when no backlog exists. */
   auditCoverage: number | null;
+  /** audit_total (weighted points achieved) derived from audit.json, used only when no backlog exists. */
+  auditScore: number | null;
   auditUnstamped: boolean;
   auditMissing: boolean;
 }
@@ -579,6 +583,7 @@ function scanPerRepo(orgDir: string): PerRepoScan[] {
 
     let auditWeight: number | null = null;
     let auditCoverage: number | null = null;
+    let auditScore: number | null = null;
     let auditUnstamped = false;
     let auditMissing = false;
     if (!backlog && !backlogUnstamped) {
@@ -602,6 +607,8 @@ function scanPerRepo(orgDir: string): PerRepoScan[] {
             auditWeight = w;
             auditCoverage =
               typeof audit.coverage === 'number' ? audit.coverage : null;
+            auditScore =
+              typeof audit.audit_total === 'number' ? audit.audit_total : null;
           }
         } catch {
           auditUnstamped = true;
@@ -615,6 +622,7 @@ function scanPerRepo(orgDir: string): PerRepoScan[] {
       backlogUnstamped,
       auditWeight,
       auditCoverage,
+      auditScore,
       auditUnstamped,
       auditMissing,
     };
@@ -894,6 +902,7 @@ export function buildOrgBacklog(
         backlog_href: `per-repo/${e.repo}/backlog/backlog.html`,
         total_applicable_weight: e.backlog.total_applicable_weight,
         coverage: e.backlog.coverage,
+        audit_total: e.backlog.audit_total ?? null,
         ticket_count: e.backlog.tickets.length,
         effort_dev_days: e.backlog.tickets.reduce(
           (s, t) => s + t.effort_dev_days,
@@ -902,12 +911,13 @@ export function buildOrgBacklog(
       };
     }
     // audit-only fallback repos (e.backlog null) have no generated backlog.html
-    // to link to, and no tickets — only a coverage/weight headline from audit.json.
+    // to link to, and no tickets — only a coverage/weight/score headline from audit.json.
     return {
       repo: e.repo,
       backlog_href: null,
       total_applicable_weight: repoWeight.get(e.repo) ?? 0,
       coverage: e.auditCoverage,
+      audit_total: e.auditScore,
       ticket_count: 0,
       effort_dev_days: 0,
     };

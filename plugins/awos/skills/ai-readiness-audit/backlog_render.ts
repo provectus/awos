@@ -240,8 +240,15 @@ const BACKLOG_CSS = `
 .rb-devs.tip{border-bottom:none}
 .rb-devs>.tipbox{left:auto;right:0;max-width:min(420px,calc(100vw - 40px))}
 .ribbon .tipbox{background:var(--ink-950);border:1px solid var(--ink-700)}
-.ribbon button#enable-all{font-family:var(--font-sans);padding:7px 16px;border:1px solid var(--indigo);border-radius:8px;background:var(--indigo);color:#fff;cursor:pointer;font-size:13px;font-weight:600}
-.ribbon button#enable-all:hover{filter:brightness(1.08)}
+/* ── backlog: graph toolbar (legend + enable/disable-all actions) ─────────── */
+.graph-toolbar{display:flex;align-items:flex-start;gap:14px;margin:22px 0}
+.graph-toolbar .legend{flex:1;margin:0}
+.graph-actions{display:flex;gap:10px;flex-shrink:0}
+.graph-actions button{font-family:var(--font-sans);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
+#enable-all{border:1px solid var(--indigo);background:var(--indigo);color:#fff}
+#enable-all:hover{filter:brightness(1.08)}
+#disable-all{border:1px solid var(--divider);background:#fff;color:var(--ink-700)}
+#disable-all:hover{border-color:var(--ink-300)}
 /* ── backlog: legend (bullets + field/description/formula table) ──────────── */
 .legend{background:var(--cream);border:1px solid var(--divider);border-radius:12px;padding:12px 18px;margin:22px 0}
 .legend summary{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-400);font-weight:600;cursor:pointer}
@@ -307,7 +314,7 @@ table.legend-table td.formula{font-family:var(--font-mono);color:var(--ink-400)}
 table.repos-table{border-collapse:collapse;width:100%;font-size:13px}
 table.repos-table th{font-family:var(--font-mono);font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-300);text-align:left;padding:9px 12px;border-bottom:1px solid var(--divider)}
 table.repos-table td{padding:9px 12px;border-bottom:1px solid var(--divider);color:var(--charcoal-700)}
-table.repos-table td.num{text-align:right;font-family:var(--font-mono)}
+table.repos-table td.num{text-align:left;font-family:var(--font-mono)}
 table.repos-table a.repo-link{color:var(--sage-600);font-weight:600}
 table.repos-table .cov-cell{border-bottom:1px dotted var(--ink-300)}
 @media (max-width:720px){.ribbon{padding-left:20px;padding-right:20px}.rb-cards{gap:10px}table.repos-table{font-size:12px}}
@@ -472,6 +479,10 @@ const BACKLOG_JS = `
   document.getElementById('enable-all').addEventListener('click', function(){
     disabled = {}; applyDisabled(); recompute(); drawEdges();
   });
+  document.getElementById('disable-all').addEventListener('click', function(){
+    tickets.forEach(function(t){ disabled[t.slug] = true; });
+    applyDisabled(); recompute(); drawEdges();
+  });
   Array.prototype.forEach.call(document.querySelectorAll('.gnode'), function(btn){
     btn.addEventListener('mouseenter', function(){ placeTip(btn); });
     btn.addEventListener('focus', function(){ placeTip(btn); });
@@ -509,9 +520,10 @@ function pageHead(title: string): string {
 /**
  * The sticky ribbon: three centered metric cards (Effort, Coverage gain,
  * Duration), the developer-count input nested inside the Duration card because
- * it drives duration, the enable-all reset button, and live hover tooltips
- * whose text `recompute()` keeps in sync. The sublinear-scaling caveat lives
- * in a hover tooltip on the Developers control, next to the number it caveats.
+ * it drives duration, and live hover tooltips whose text `recompute()` keeps
+ * in sync. The sublinear-scaling caveat lives in a hover tooltip on the
+ * Developers control, next to the number it caveats. The enable/disable-all
+ * reset buttons live in the graph toolbar, above the graph.
  */
 function renderRibbon(
   effortAll: number,
@@ -552,7 +564,6 @@ function renderRibbon(
       <label class="rb-devs tip">Developers<input type="number" id="devs" min="1" value="1"><span class="tipbox" id="rb-devs-tip">${devsTip}</span></label>
     </div>
   </div>
-  <button id="enable-all">Enable all nodes</button>
 </div>`;
 }
 
@@ -659,16 +670,20 @@ function renderReposTable(backlog: OrgBacklogJson): string {
       const covPct =
         r.coverage != null ? `${(r.coverage * 100).toFixed(0)}%` : '—';
       const covCell = `<span class="tip cov-cell">${covPct}<span class="tipbox">${r.total_applicable_weight} pts of standards apply to ${esc(r.repo)}; current coverage is the share already in place.</span></span>`;
+      const scoreCell =
+        r.audit_total != null
+          ? `<span class="tip cov-cell">${fmtDays(r.audit_total)} pts<span class="tipbox">Weighted points currently achieved out of ${r.total_applicable_weight} applicable for ${esc(r.repo)}.</span></span>`
+          : '—';
       const tickets = r.ticket_count ?? '—';
       const effort =
         r.effort_dev_days != null ? `${fmtDays(r.effort_dev_days)} d/dev` : '—';
-      return `<tr><td>${name}</td><td class="num">${covCell}</td><td class="num">${tickets}</td><td class="num">${effort}</td></tr>`;
+      return `<tr><td>${name}</td><td class="num">${covCell}</td><td class="num">${scoreCell}</td><td class="num">${tickets}</td><td class="num">${effort}</td></tr>`;
     })
     .join('');
   return `<section id="repos">
 <h2>Repositories</h2>
 <table class="repos-table">
-<thead><tr><th>Repository</th><th>Current coverage</th><th>Tickets</th><th>Effort to close identified gaps</th></tr></thead>
+<thead><tr><th>Repository</th><th>Current coverage</th><th>Current score</th><th>Tickets</th><th>Effort to close identified gaps</th></tr></thead>
 <tbody>${rows}</tbody>
 </table>
 </section>`;
@@ -730,7 +745,7 @@ function renderOrgBacklogHtml(backlog: OrgBacklogJson): string {
 ${renderRibbon(effortAll, coverageAll, recoveredAll, backlog.total_applicable_weight, P, true)}
 
 <main class="container">
-${LEGEND_ORG}
+<div class="graph-toolbar">${LEGEND_ORG}<div class="graph-actions"><button id="enable-all">Enable all nodes</button><button id="disable-all">Disable all nodes</button></div></div>
 
 ${graphSection}
 
@@ -812,7 +827,7 @@ ${opts.orgHref ? `<div class="backlink"><a href="${esc(opts.orgHref)}">← Back 
 ${renderRibbon(effortAll, coverageAll, recoveredAll, backlog.total_applicable_weight, P, false)}
 
 <main class="container">
-${LEGEND_SINGLE}
+<div class="graph-toolbar">${LEGEND_SINGLE}<div class="graph-actions"><button id="enable-all">Enable all nodes</button><button id="disable-all">Disable all nodes</button></div></div>
 
 ${graphSection}
 </main>

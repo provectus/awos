@@ -350,6 +350,11 @@ test('org backlog aggregates member numbers from per-repo files', () => {
     'repo row carries Σ its ticket effort (effort to close identified gaps)'
   );
   assert.equal(
+    alpha.audit_total,
+    6,
+    'repo row carries the achieved audit_total from the per-repo backlog (fixtureAudit sets audit_total: 6)'
+  );
+  assert.equal(
     alpha.backlog_href,
     'per-repo/alpha/backlog/backlog.html',
     'backlog_href stays audit-dir-relative in the JSON'

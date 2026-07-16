@@ -1463,3 +1463,189 @@ test('renderHtml: honours custom highlight thresholds from standards_meta', () =
     'a 10% share must be red when highlight_red_below is raised to 0.2'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Prevention matrix (single-repo) and prevention gaps (org)
+// ---------------------------------------------------------------------------
+
+import type { PreventionBlock, OrgPreventionGap } from '../artifact_types.ts';
+
+/** Minimal single-repo audit around the local makeCheck fixture. */
+function preventionAudit(overrides: Partial<AuditJson> = {}): AuditJson {
+  return {
+    date: '2026-01-15',
+    project: 'prv-fixture',
+    audit_total: 5,
+    coverage: 0.5,
+    dimensions: [
+      {
+        dimension: 'application-security',
+        date: '2026-01-15',
+        score: 5,
+        coverage: 0.5,
+        checks: [makeCheck({ check_id: 'AS-05' })],
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function preventionFixture(): PreventionBlock {
+  return {
+    clusters: [
+      {
+        cluster: 'secrets-hygiene',
+        title: 'Secrets hygiene',
+        tier: 'enforced',
+        partial: false,
+        enforcement: {
+          check_id: 'PRV-01',
+          status: 'PASS',
+          evidence_head: '.pre-commit-config.yaml (gitleaks)',
+        },
+        instruction: { check_id: 'PRV-11', status: 'PASS' },
+        covers_checks: ['AS-05', 'AS-12'],
+        at_risk: [
+          {
+            check_id: 'AS-12',
+            dimension: 'application-security',
+            status: 'FAIL',
+          },
+        ],
+        unguarded_passes: [],
+      },
+      {
+        cluster: 'code-style',
+        title: 'Code style',
+        tier: 'absent',
+        partial: false,
+        enforcement: { check_id: 'PRV-04', status: 'FAIL' },
+        instruction: { check_id: 'PRV-14', status: 'FAIL' },
+        covers_checks: ['SBP-01', 'SBP-02'],
+        at_risk: [],
+        unguarded_passes: ['SBP-01', 'SBP-02'],
+      },
+    ],
+    summary: {
+      enforced: 1,
+      instructed: 0,
+      absent: 1,
+      pending: 0,
+      at_risk_count: 1,
+      unguarded_pass_count: 2,
+    },
+  };
+}
+
+test('markdown renders the Prevention Matrix with tiers, at-risk ids, and the fragility footer', () => {
+  const audit = preventionAudit({ prevention: preventionFixture() });
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('## Prevention Matrix'),
+    'prevention block must render its own section'
+  );
+  assert.ok(md.includes('ENFORCED'), 'tier labels are uppercased');
+  assert.ok(md.includes('ABSENT'));
+  assert.ok(
+    md.includes('AS-12'),
+    'at-risk covered check ids appear in the table'
+  );
+  assert.ok(
+    md.includes('SBP-01, SBP-02'),
+    'unguarded passes appear in the table'
+  );
+  assert.ok(
+    md.includes('**Fragility:** 2 passing check(s)'),
+    'fragility footer counts unguarded passes'
+  );
+});
+
+test('markdown omits the Prevention Matrix when the block is absent (pre-feature audit)', () => {
+  assert.ok(!renderMarkdown(preventionAudit()).includes('Prevention Matrix'));
+});
+
+test('markdown annotates a failing covered check with its prevention tier in the Hint cell', () => {
+  const failing = makeCheck({
+    check_id: 'AS-12',
+    status: 'FAIL',
+    weight_awarded: 0,
+  });
+  failing.prevention = { cluster: 'secrets-hygiene', tier: 'absent' };
+  const audit = preventionAudit({
+    dimensions: [
+      {
+        dimension: 'application-security',
+        date: '2026-01-15',
+        score: 0,
+        coverage: 0,
+        checks: [failing],
+      },
+    ],
+  });
+  assert.ok(
+    renderMarkdown(audit).includes('prevention: absent (secrets-hygiene)'),
+    'FAIL/WARN covered checks must name their cluster tier inline'
+  );
+});
+
+test('HTML renders the prevention matrix section with tier badges', () => {
+  const audit = preventionAudit({ prevention: preventionFixture() });
+  const html = renderHtml(audit);
+  assert.ok(html.includes('Prevention matrix'));
+  assert.ok(
+    html.includes('data-s="FAIL">ABSENT'),
+    'absent tier reuses the FAIL badge palette'
+  );
+  assert.ok(
+    html.includes('data-s="PASS">ENFORCED'),
+    'enforced tier reuses the PASS badge palette'
+  );
+});
+
+test('HTML escapes markup smuggled into prevention evidence heads', () => {
+  const block = preventionFixture();
+  block.clusters[0].enforcement.evidence_head = '<script>alert(1)</script>';
+  const audit = preventionAudit({ prevention: block });
+  const html = renderHtml(audit);
+  assert.ok(
+    !html.includes('<script>alert(1)</script>'),
+    'evidence_head must be escaped'
+  );
+});
+
+test('org markdown renders the Prevention Gaps table from prevention_gaps', () => {
+  const gaps: OrgPreventionGap[] = [
+    {
+      cluster: 'secrets-hygiene',
+      title: 'Secrets hygiene',
+      absent_repos: 3,
+      instructed_repos: 1,
+      enforced_repos: 1,
+      pending_repos: 0,
+      total_repos: 5,
+      unguarded_passes_total: 7,
+    },
+  ];
+  const audit = preventionAudit({
+    dimensions: [],
+    portfolio_metrics: [
+      {
+        metric: 'org_capability_score',
+        value: 10,
+        description: 'x',
+        contributor_weighted: false,
+        repos_counted: 5,
+      },
+    ],
+    per_repo: [],
+    prevention_gaps: gaps,
+  });
+  const md = renderMarkdown(audit);
+  assert.ok(md.includes('## Prevention Gaps (Org)'));
+  assert.ok(
+    md.includes('| Secrets hygiene | 3 | 1 | 1 | 0 | 5 | 7 |'),
+    'per-cluster tier counts render as a row'
+  );
+  const html = renderHtml(audit);
+  assert.ok(html.includes('Prevention gaps (org)'));
+});

@@ -159,3 +159,142 @@ test('every category inline lead (summary ?? definition) is concise', () => {
     `report inline leads must be concise (add a \`summary\` and keep detail in \`definition\`):\n${offenders.join('\n')}`
   );
 });
+
+// ---------------------------------------------------------------------------
+// Prevention-coverage schema contracts: the cluster pairing and the
+// covers_checks cross-references that the linkage pass (prevention.ts)
+// consumes. A typo here would silently drop a cluster or a covered check.
+// ---------------------------------------------------------------------------
+
+test('cluster/covers_checks keys appear only on prevention-coverage categories', () => {
+  const offenders: string[] = [];
+  for (const [slug, cat] of Object.entries(categories())) {
+    if (cat.dimension === 'prevention-coverage') {
+      if (typeof cat.cluster !== 'string' || cat.cluster.trim() === '') {
+        offenders.push(`${slug}: prevention-coverage category missing cluster`);
+      }
+    } else {
+      if ('cluster' in cat)
+        offenders.push(`${slug}: cluster key outside prevention-coverage`);
+      if ('covers_checks' in cat)
+        offenders.push(
+          `${slug}: covers_checks key outside prevention-coverage`
+        );
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `cluster metadata is a prevention-coverage contract:\n${offenders.join('\n')}`
+  );
+});
+
+test('every prevention cluster pairs exactly one detected and one judgment category', () => {
+  const byCluster = new Map<
+    string,
+    { detected: string[]; judgment: string[] }
+  >();
+  for (const [slug, cat] of Object.entries(categories())) {
+    if (cat.dimension !== 'prevention-coverage') continue;
+    const entry = byCluster.get(cat.cluster) ?? { detected: [], judgment: [] };
+    if (cat.method === 'detected') entry.detected.push(slug);
+    else if (cat.method === 'judgment') entry.judgment.push(slug);
+    byCluster.set(cat.cluster, entry);
+  }
+  assert.ok(byCluster.size > 0, 'prevention-coverage clusters must exist');
+  const offenders: string[] = [];
+  for (const [cluster, { detected, judgment }] of byCluster) {
+    if (detected.length !== 1)
+      offenders.push(
+        `cluster ${cluster}: expected exactly 1 detected (enforcement) category, got ${detected.length}`
+      );
+    if (judgment.length !== 1)
+      offenders.push(
+        `cluster ${cluster}: expected exactly 1 judgment (instruction) category, got ${judgment.length}`
+      );
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `each cluster is one enforcement + one instruction category:\n${offenders.join('\n')}`
+  );
+});
+
+test('covers_checks lives on the enforcement half only and resolves to real non-PRV check_ids', () => {
+  const cats = categories();
+  const allCheckIds = new Set<string>();
+  for (const cat of Object.values(cats)) {
+    if (typeof cat.check_id === 'string') allCheckIds.add(cat.check_id);
+  }
+  const offenders: string[] = [];
+  for (const [slug, cat] of Object.entries(cats)) {
+    if (cat.dimension !== 'prevention-coverage') continue;
+    if (cat.method === 'detected') {
+      if (!Array.isArray(cat.covers_checks) || cat.covers_checks.length === 0) {
+        offenders.push(
+          `${slug}: enforcement category must declare a non-empty covers_checks array`
+        );
+        continue;
+      }
+      for (const id of cat.covers_checks) {
+        if (!allCheckIds.has(id)) {
+          offenders.push(
+            `${slug}: covers_checks entry ${id} matches no check_id in standards.toml`
+          );
+        } else if (
+          Object.values(cats).some(
+            (c) => c.check_id === id && c.dimension === 'prevention-coverage'
+          )
+        ) {
+          offenders.push(
+            `${slug}: covers_checks entry ${id} targets a prevention-coverage category (no self-coverage)`
+          );
+        }
+      }
+    } else if ('covers_checks' in cat) {
+      offenders.push(
+        `${slug}: covers_checks belongs on the enforcement (detected) half only`
+      );
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `covers_checks is the linkage join key — every entry must resolve:\n${offenders.join('\n')}`
+  );
+});
+
+test('prevention pairs share applies_when and lock the 3/2 weight contract', () => {
+  const cats = categories();
+  const byCluster = new Map<string, Record<string, any>[]>();
+  for (const cat of Object.values(cats)) {
+    if (cat.dimension !== 'prevention-coverage') continue;
+    const list = byCluster.get(cat.cluster) ?? [];
+    list.push(cat);
+    byCluster.set(cat.cluster, list);
+  }
+  const offenders: string[] = [];
+  for (const [cluster, pair] of byCluster) {
+    const enforcement = pair.find((c) => c.method === 'detected');
+    const instruction = pair.find((c) => c.method === 'judgment');
+    if (!enforcement || !instruction) continue; // pairing test reports this
+    if (enforcement.applies_when !== instruction.applies_when) {
+      offenders.push(
+        `cluster ${cluster}: halves disagree on applies_when (${enforcement.applies_when} vs ${instruction.applies_when}) — a half-skipped cluster cannot classify`
+      );
+    }
+    if (enforcement.weight !== 3)
+      offenders.push(
+        `cluster ${cluster}: enforcement weight must be 3, got ${enforcement.weight}`
+      );
+    if (instruction.weight !== 2)
+      offenders.push(
+        `cluster ${cluster}: instruction weight must be 2, got ${instruction.weight}`
+      );
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `prevention pair contract (shared applies_when, weights 3/2):\n${offenders.join('\n')}`
+  );
+});

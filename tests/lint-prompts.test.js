@@ -1421,6 +1421,55 @@ test('standards.toml exists and matches the category/band schema', () => {
   );
 });
 
+test('standards.toml prevention-coverage categories carry cluster metadata correctly', () => {
+  const p = path.join(referencesDir, 'standards.toml');
+  const src = readUtf8(p);
+  const prevBlocks = [
+    ...src.matchAll(/\n\[category\.(prev_[^.\]]+)\]([\s\S]*?)(?=\n\[|$)/g),
+  ];
+  assert.ok(
+    prevBlocks.length > 0,
+    'standards.toml must define [category.prev_*] prevention-coverage tables'
+  );
+  for (const [, slug, b] of prevBlocks) {
+    assert.match(
+      b,
+      /^\s*dimension\s*=\s*"prevention-coverage"/m,
+      `[category.${slug}] must belong to the prevention-coverage dimension`
+    );
+    assert.match(
+      b,
+      /^\s*cluster\s*=\s*"[a-z-]+"/m,
+      `[category.${slug}] must declare its cluster slug — the linkage pass joins the pair by it`
+    );
+    const isDetected = /^\s*method\s*=\s*"detected"/m.test(b);
+    const hasCovers = /^\s*covers_checks\s*=\s*\[/m.test(b);
+    if (isDetected) {
+      assert.ok(
+        hasCovers,
+        `[category.${slug}] enforcement (detected) category must declare covers_checks — the source checks its cluster guards`
+      );
+    } else {
+      assert.ok(
+        !hasCovers,
+        `[category.${slug}] covers_checks belongs on the enforcement (detected) half only`
+      );
+    }
+  }
+  // The cluster/covers_checks keys are a prevention-coverage contract — they
+  // must not leak onto other dimensions' categories.
+  for (const m of src.matchAll(
+    /\n\[category\.([^.\]]+)\]([\s\S]*?)(?=\n\[|$)/g
+  )) {
+    const [, slug, b] = m;
+    if (slug.startsWith('prev_')) continue;
+    assert.ok(
+      !/^\s*(cluster|covers_checks)\s*=/m.test(b),
+      `[category.${slug}] must not declare cluster/covers_checks — those keys are prevention-coverage-only`
+    );
+  }
+});
+
 test('scoring.md uses additive weighted categories, not A-F grades', () => {
   const p = path.join(skillRoot, 'scoring.md');
   const src = readUtf8(p);
@@ -1672,7 +1721,14 @@ test('report templates use weighted points + reliability, not grades', () => {
   );
 });
 
-test('plugin.json version matches the awos marketplace entry and equals 2.2.0', () => {
+// The plugin version is independent of the npm installer version (which
+// release-drafter manages via PR labels). It is bumped MANUALLY when plugin
+// behavior changes — always as one deliberate commit moving three files
+// together: plugin.json, marketplace.json, and this pinned literal. The pin
+// exists to force that deliberateness, not to freeze the version.
+const EXPECTED_PLUGIN_VERSION = '2.3.0';
+
+test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
     readUtf8(
       path.join(repoRoot, 'plugins', 'awos', '.claude-plugin', 'plugin.json')
@@ -1695,8 +1751,8 @@ test('plugin.json version matches the awos marketplace entry and equals 2.2.0', 
   );
   assert.equal(
     pluginManifest.version,
-    '2.2.0',
-    `plugins/awos/.claude-plugin/plugin.json version must be "2.2.0" (release version is managed by release-drafter, not bumped per change), got "${pluginManifest.version}"`
+    EXPECTED_PLUGIN_VERSION,
+    `plugins/awos/.claude-plugin/plugin.json version must be "${EXPECTED_PLUGIN_VERSION}" — the plugin version moves as one deliberate commit (plugin.json + marketplace.json + this pin together) when plugin behavior changes; it is independent of the npm release version release-drafter manages. Got "${pluginManifest.version}"`
   );
 });
 

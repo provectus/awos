@@ -610,6 +610,28 @@ export function locateOutDir(
   return dd.length ? path.join(audits, dd[dd.length - 1]) : '';
 }
 
+const DATETIME_DIR_RE = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/;
+
+/**
+ * The lexicographically-last (= chronologically newest, since the name
+ * format sorts that way) `YYYY-MM-DD_HH-MM-SS`-named directory under
+ * `auditsRoot`, or '' when none exist. Used by `--generate-only` to find the
+ * pre-existing audit the generate phase should act on — unlike
+ * `locateOutDir`, this is not excluding a pre-run snapshot; it is DELIBERATELY
+ * looking for an audit the harness did not create. Non-datetime-named
+ * entries (a legacy date-only dir, `backlog/`, stray files) are ignored, not
+ * just deprioritized — a naive string sort would otherwise let a date-only
+ * name like `2026-07-15` outrank a full datetime dir from the same day.
+ */
+export function newestAuditDir(auditsRoot: string): string {
+  if (!isDir(auditsRoot)) return '';
+  const names = fs
+    .readdirSync(auditsRoot)
+    .filter((n) => DATETIME_DIR_RE.test(n) && isDir(path.join(auditsRoot, n)))
+    .sort();
+  return names.length ? path.join(auditsRoot, names[names.length - 1]) : '';
+}
+
 /**
  * Per-repo audits already completed by an org attempt: every
  * per-repo/<repo>/audit.json carrying the engine provenance stamp. Used by

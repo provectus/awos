@@ -20,6 +20,7 @@ import {
   formatWallTime,
   gatherGenerateArtifacts,
   locateOutDir,
+  newestAuditDir,
   planRetry,
   releaseRunLock,
   restoreTarget,
@@ -1054,6 +1055,36 @@ test('restoreTarget keeps generated output in the target when nothing was archiv
   );
 });
 
+test('newestAuditDir picks the lexicographically-last datetime dir and ignores non-datetime entries', () => {
+  const audits = tmp();
+  assert.equal(
+    newestAuditDir(path.join(audits, 'missing')),
+    '',
+    'a nonexistent audits root returns empty, not a crash'
+  );
+  assert.equal(
+    newestAuditDir(audits),
+    '',
+    'an existing-but-empty audits root has no dirs to pick'
+  );
+
+  fs.mkdirSync(path.join(audits, '2026-07-01_09-00-00'), { recursive: true });
+  fs.mkdirSync(path.join(audits, '2026-07-10_23-59-59'), { recursive: true });
+  // Non-datetime entries — a legacy date-only dir and unrelated file/dir —
+  // must never be preferred over a real datetime dir. A naive string sort
+  // would rank '2026-07-15' above '2026-07-10_23-59-59'.
+  fs.mkdirSync(path.join(audits, '2026-07-15'), { recursive: true });
+  fs.mkdirSync(path.join(audits, 'backlog'), { recursive: true });
+  fs.writeFileSync(path.join(audits, 'notes.txt'), 'hi');
+
+  assert.equal(
+    path.basename(newestAuditDir(audits)),
+    '2026-07-10_23-59-59',
+    'the lexicographically-last (= newest) full datetime dir is picked; the date-only dir and non-audit entries are ignored, not just deprioritized'
+  );
+});
+
+// ---------------------------------------------------------------------------
 test('locateOutDir skips pre-existing snapshot dirs and finds only the run-created one', () => {
   const audits = tmp();
   fs.mkdirSync(path.join(audits, '2026-07-07_09-00-00'), { recursive: true });

@@ -46,7 +46,7 @@ npm run audit:test -- --target ~/code/onex-discovery-api --generate "improvement
 node --import tsx <awos>/tools/ai-readiness-audit/qa/run_audit_test.ts --target ~/code/onex-discovery-api --dry-run
 ```
 
-Other flags: `--worktree <path>` (skill under test; default = the checkout this script lives in), `--no-deploy` (don't repoint the marketplace — use whatever it currently serves), `--claude-flags "<flags>"` (default `--dangerously-skip-permissions`), `--model <name>` (model for the audit session and its subagents, passed to `claude -p --model`; default `sonnet` — the unpinned best-Sonnet alias), `--allow-user-mcp` (skip `--strict-mcp-config`, letting the session see the operator's user-scope MCP servers — real Jira, Slack, …; default is strict isolation so a test audit can never pull live connector data), `--quiet` (suppress the live log and progress output; only the final summary is printed), `--generate "<request>"` (see below).
+Other flags: `--worktree <path>` (skill under test; default = the checkout this script lives in), `--no-deploy` (don't repoint the marketplace — use whatever it currently serves), `--claude-flags "<flags>"` (default `--dangerously-skip-permissions`), `--model <name>` (model for the audit session and its subagents, passed to `claude -p --model`; default `sonnet` — the unpinned best-Sonnet alias), `--allow-user-mcp` (skip `--strict-mcp-config`, letting the session see the operator's user-scope MCP servers — real Jira, Slack, …; default is strict isolation so a test audit can never pull live connector data), `--quiet` (suppress the live log and progress output; only the final summary is printed), `--generate "<request>"` (see below), `--generate-only` (skip the audit phase and run only the generate flow against an existing audit; requires `--generate`; see below).
 
 ## Generate-flow compliance (`--generate`)
 
@@ -59,6 +59,18 @@ Compliance is gated the same way as the audit phase — signals from the parsed 
 3. at least one `backlog/tickets/A*.md` and `backlog/backlog.html` exist — for an org audit, at the top level and in every `per-repo/<repo>/` that has a `backlog/` directory.
 
 The verdict is written to `run-meta.json` as `generate_compliance: { model_complied, generate_backlog_calls, backlog_stamped, tickets_written }` (plus `generate_rc`, `generate_partial`, `generate_cost_usd`, `generate_backlog_html`), and printed in the final summary alongside the archived `backlog.html` path(s). `generate_cost_usd` is reported separately from `total_cost_usd` — the two `claude -p` sessions bill independently, and the generate phase's spend is never folded into the audit phase's `total_cost_usd`/`attempt_costs_usd`. There is no retry or salvage for the generate phase (v1) — a non-compliant generate run is a plain FAIL, exiting non-zero, with the transcript archived to iterate on.
+
+### `--generate-only` — replay just the generate phase
+
+`--generate-only` skips the entire audit phase — no headless audit session, no engine-compliance retry loop, no salvage — and instead locates the newest existing `context/audits/YYYY-MM-DD_HH-MM-SS/` dir already under `--target`, then runs only the generate-flow session against it, exactly as the combined path would once the audit phase had passed. It requires `--generate "<request>"`; passing `--generate-only` alone is a usage error. Everything else about the run is unchanged and still happens: the run lock, worktree deploy/marketplace repoint (`--build` still rebuilds the engine first if passed), target snapshot, MCP discovery, and the usual `run-meta.json`/summary/archive. Use it to iterate on the generate flow itself without re-paying for a full audit session each time.
+
+It needs a pre-existing audit already under `<target>/context/audits/` — if none is found, the harness exits with an error naming the expected location. Because that source audit dir predates the run (it's part of the pre-run snapshot), the harness's usual target cleanup leaves it in place — the `backlog/` the generate phase writes into it stays in the target's audit dir after the run finishes, not just in the archive.
+
+`run-meta.json` records `audit_phase: "skipped (--generate-only)"` and an explicit `compliance: { skipped: true }` instead of the usual engine-compliance object, and the final summary prints `audit     : skipped (--generate-only)` in place of the usual compliance line. The exit code is determined solely by the generate phase's own compliance gate (the same criteria as the combined path), never by an audit-phase signal that never existed.
+
+```sh
+npm run audit:test -- --target ~/code/onex-discovery-api --generate "improvement backlog" --generate-only
+```
 
 ## Live log + final summary
 

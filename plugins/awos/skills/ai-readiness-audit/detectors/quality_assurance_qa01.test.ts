@@ -96,6 +96,32 @@ test('QA-01 PASS score ≥ 0.6 when test coverage proxy meets threshold', () => 
   }
 });
 
+test('QA-01 (issue #149): Maven failsafe FooIT.java counts once as a test, not also as a source module', () => {
+  // Before the fix, *IT.java matched no testFileGlobs, so FooIT.java was
+  // counted as a pure source module (double penalty: excluded from the test
+  // count AND inflating the source count). 2 source + 1 IT test → ratio 1/2.
+  const repo = tmpDir('awos-qa01-it-');
+  try {
+    writeRepo(repo, {
+      'src/main/java/com/example/Foo.java': 'public class Foo {}\n',
+      'src/main/java/com/example/Bar.java': 'public class Bar {}\n',
+      'src/test/java/com/example/it/FooIT.java': 'public class FooIT {}\n',
+    });
+    const res = detect(repo);
+    assert.equal(
+      res.status,
+      'WARN',
+      `1 IT test / 2 source modules must be WARN (50% ratio); got ${res.status}`
+    );
+    assert.ok(
+      Math.abs(res.score - 0.5) < 0.01,
+      `score must be ≈0.50 — FooIT.java counted once as a test, not double-counted as source; got ${res.score}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 6b.2 — detector reads threshold from params (not hardcoded)
 // ---------------------------------------------------------------------------

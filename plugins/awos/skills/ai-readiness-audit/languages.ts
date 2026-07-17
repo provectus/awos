@@ -101,7 +101,13 @@ export const LANGUAGES: LanguageDef[] = [
     id: 'java',
     displayName: 'Java',
     sourceGlobs: ['*.java'],
-    testFileGlobs: ['*Test.java', 'Test*.java', '*Tests.java'],
+    testFileGlobs: [
+      '*Test.java',
+      'Test*.java',
+      '*Tests.java',
+      '*IT.java',
+      '*ITCase.java',
+    ],
     testDirNames: ['test', 'tests'],
     depFiles: [
       'pom.xml',
@@ -119,7 +125,7 @@ export const LANGUAGES: LanguageDef[] = [
     id: 'kotlin',
     displayName: 'Kotlin',
     sourceGlobs: ['*.kt', '*.kts'],
-    testFileGlobs: ['*Test.kt', '*Spec.kt', '*Tests.kt'],
+    testFileGlobs: ['*Test.kt', '*Spec.kt', '*Tests.kt', '*IT.kt'],
     testDirNames: ['test', 'tests'],
     depFiles: [
       'build.gradle.kts',
@@ -206,7 +212,7 @@ export const LANGUAGES: LanguageDef[] = [
     id: 'scala',
     displayName: 'Scala',
     sourceGlobs: ['*.scala', '*.sc'],
-    testFileGlobs: ['*Spec.scala', '*Test.scala'],
+    testFileGlobs: ['*Spec.scala', '*Test.scala', '*IT.scala'],
     testDirNames: ['test', 'tests'],
     depFiles: ['build.sbt', 'build.sc'],
     importRx: /import\s+([\w.]+)/,

@@ -4,7 +4,7 @@
 // Runs every `detected`/`computed` category across all dimensions in ONE
 // process and writes the per-dimension JSON artifacts + the aggregated
 // audit.json — the same shapes the orchestrator used to assemble from 11
-// subagents. The LLM is left only the irreducible slice: the 5 `judgment`
+// subagents. The LLM is left only the irreducible slice: the `judgment`
 // categories (emitted here as status PENDING_JUDGMENT) and the tracker/docs
 // connector metrics (which SKIP when no connector artifact is present).
 //
@@ -18,7 +18,7 @@
 // from the coverage denominator), never run. check_id comes from each
 // category's required `check_id` in standards.toml (the single source of
 // check ids). The only LLM-dependent inputs left out here are connectors
-// (tracker/docs default to absent → those metrics SKIP) and the 5 judgments.
+// (tracker/docs default to absent → those metrics SKIP) and the judgments.
 // ---------------------------------------------------------------------------
 import { mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
@@ -38,6 +38,11 @@ import type {
 } from './artifact_types.ts';
 import { COLLECTOR_SOURCES, SOURCE_LABEL_DEFAULTS } from './artifact_types.ts';
 import { readCodeHostPrs } from './metrics/_code_host.ts';
+import {
+  computePrevention,
+  annotateCoveredChecks,
+  type PreventionDimensionInput,
+} from './prevention.ts';
 import { ENGINE_PROVENANCE } from './provenance.ts';
 import {
   computeTopology,
@@ -416,6 +421,10 @@ interface Category {
   fail_at?: number;
   /** Headline slot this check backfills when the authored headline omits it. */
   headline_role?: string;
+  /** Prevention cluster slug (prevention-coverage categories only). */
+  cluster?: string;
+  /** Covered source-dimension check_ids (prevention enforcement categories only). */
+  covers_checks?: string[];
 }
 
 // The check record audit-core writes — the writer-truth shape from
@@ -825,6 +834,18 @@ export async function auditCore(
     ),
   };
 
+  // Prevention linkage: derived AFTER the per-dimension files are written, so
+  // the tier annotations land in audit.json only — the per-dimension
+  // artifacts stay pure detector/judgment output. Instruction halves are
+  // still PENDING_JUDGMENT here; aggregate() (run by patch-judgment)
+  // recomputes the block, which is how `pending` tiers finalize.
+  const prevention = computePrevention(
+    dimensions as PreventionDimensionInput[]
+  );
+  if (prevention) {
+    annotateCoveredChecks(dimensions as PreventionDimensionInput[], prevention);
+  }
+
   const audit: Record<string, unknown> = {
     date,
     project: basename(repoPath),
@@ -832,6 +853,7 @@ export async function auditCore(
     coverage: auditApplicable > 0 ? auditTotal / auditApplicable : null,
     standards_meta: standardsMeta,
     dimensions,
+    ...(prevention ? { prevention } : {}),
     sources,
     linked_repos: linkedRepos,
     tech_stack: techStack,
@@ -1231,5 +1253,14 @@ function buildCheck(
   if (unit !== undefined) rec.unit = unit;
   if (expression !== undefined) rec.expression = expression;
   if (c.headline_role !== undefined) rec.headline_role = c.headline_role;
+  // Prevention-coverage checks carry their cluster metadata in the record
+  // itself, so aggregate() can recompute the prevention block from the
+  // dimension artifacts alone — no standards access needed post-audit.
+  if (c.cluster !== undefined) {
+    rec.cluster = c.cluster;
+    rec.prevention_kind =
+      c.method === 'judgment' ? 'instruction' : 'enforcement';
+    if (c.covers_checks !== undefined) rec.covers_checks = c.covers_checks;
+  }
   return rec;
 }

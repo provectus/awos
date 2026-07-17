@@ -29,6 +29,8 @@ const dimensionsDir = path.join(
   'dimensions'
 );
 const templatesDir = path.join(repoRoot, 'templates');
+const pluginCommandsDir = path.join(repoRoot, 'plugins', 'awos', 'commands');
+const pluginTemplatesDir = path.join(repoRoot, 'plugins', 'awos', 'templates');
 
 function readUtf8(p) {
   return fs.readFileSync(p, 'utf8');
@@ -208,7 +210,12 @@ test('all /awos:<name> cross-references resolve', () => {
   const rootCommands = new Set(
     listMarkdown(commandsDir).map((f) => '/awos:' + f.replace(/\.md$/, ''))
   );
-  // Plugin-provided commands (the audit plugin contributes /awos:ai-readiness-audit).
+  // Plugin-provided commands resolve too: commands under plugins/awos/commands/
+  // (e.g. /awos:flow, kept out of the core installer per review) plus the
+  // audit skill /awos:ai-readiness-audit.
+  for (const f of listMarkdown(pluginCommandsDir)) {
+    rootCommands.add('/awos:' + f.replace(/\.md$/, ''));
+  }
   rootCommands.add('/awos:ai-readiness-audit');
   for (const ref of references) {
     assert.ok(
@@ -672,6 +679,28 @@ test('commands/tasks.md marks an unreviewed tasks.md and clears it on review', (
   );
 });
 
+test('commands/implement.md gates on the not-user-reviewed marker and verifies subagent claims', () => {
+  // /awos:implement is the marker's consumer: a draft-grade tasks.md
+  // must not execute silently. The literal marker string is the join
+  // key with commands/tasks.md. The same command must also treat a
+  // subagent's success report as a claim to spot-check, not a fact —
+  // the two trust gates that keep an unreviewed or unverified plan
+  // from advancing on autopilot.
+  const body = readUtf8(path.join(commandsDir, 'implement.md'));
+  assert.ok(
+    body.includes('<!-- not-user-reviewed -->'),
+    'commands/implement.md must check the literal "<!-- not-user-reviewed -->" marker before executing a plan, so drafts /awos:tasks saved unreviewed are gated'
+  );
+  assert.ok(
+    /claim, not a fact/i.test(body),
+    "commands/implement.md Step 4 must frame a subagent's report as a claim to verify, not a fact to relay"
+  );
+  assert.ok(
+    !/assume that a success signal/i.test(body),
+    'commands/implement.md must not instruct the orchestrator to assume a subagent success signal means the task completed'
+  );
+});
+
 test('commands/verify.md acknowledges the skip-tests marker', () => {
   // The Slack thread feedback frames /awos:verify as look-and-feel +
   // spec-freshness rather than a test runner. The skip-tests marker
@@ -701,6 +730,446 @@ test('verify.md does not hardcode a verification-tool priority order', () => {
   assert.ok(
     !/fallback order:\s*browser MCP/i.test(body),
     'commands/verify.md must not name a fixed verification-tool fallback order'
+  );
+});
+
+test('verify.md and the flow templates never punt a drivable render to the user', () => {
+  // Road-test regression (session 928eba0a): the generated /fix-bug
+  // paused and told the user to run `! make run` for the live check,
+  // even though the agent could reclaim the port or drive the deploy
+  // itself. It punted because a shared-resource guardrail made
+  // "can't auto-verify" artificially true. The fix: running the app is
+  // the flow's job, and the manual AskUserQuestion fallback is only for
+  // a criterion with no agent-driven render path at all. Lock the
+  // guidance into verify.md and both flow templates so a regenerated
+  // command carries it.
+  const verify = readUtf8(path.join(commandsDir, 'verify.md'));
+  assert.ok(
+    /Running the app is your job, not the user's/i.test(verify) ||
+      /Running the app to verify is/i.test(verify),
+    "commands/verify.md must state that running the app to verify is the agent's job — a reserved shared resource is not grounds to hand the user a `run` command"
+  );
+  assert.ok(
+    /last resort/i.test(verify) && /alternate port/i.test(verify),
+    'commands/verify.md must frame the manual AskUserQuestion fallback as a last resort and name agent-driven paths (alternate port / reclaim / deploy) to try first'
+  );
+
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /Running the app to verify is the flow's job, not the user's/i.test(body),
+      `${tmpl} verify stage must state that running the app to verify is the flow's job, not the user's — the shared-resource guardrail must not become a reason to punt`
+    );
+    assert.ok(
+      /sanctioned verification path/i.test(body),
+      `${tmpl} verify stage must point at the §2/§3 sanctioned verification path (reclaim the resource / alternate port / drive the deploy) so a drivable criterion is never deferred to a manual run`
+    );
+  }
+
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /sanctioned verification path/i.test(flow),
+    'flow.md worktree/shared-resource investigation must record a sanctioned verification path so the generated verify stage self-verifies instead of handing the user a `run` command'
+  );
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /Sanctioned verification path/i.test(dfTemplate),
+    'delivery-flow-template.md §2 must carry a "Sanctioned verification path" field so the decision record captures how verify drives the app when a shared resource is reserved'
+  );
+});
+
+test('the flow templates finalize the flow-log at commit-push and never leave it as a leftover', () => {
+  // Road-test regression (session 928eba0a): the generated flow left
+  // context/spec/006-settings-page/flow-log.md dirty — the close stage
+  // appended after the last commit, so the entry could never reach the
+  // merged PR. The flow-log is committed with the work but must stop
+  // being written once the change request is opened or merged, and the
+  // close stage must leave a clean tree. Lock the discipline into both
+  // templates, flow.md, and the decision record.
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /once the change request is opened — or the change is merged — stop writing to the tracked log/i.test(
+        body
+      ),
+      `${tmpl} must stop writing to the tracked flow-log once the change request is opened or merged — a late append strands a change that can never reach the PR`
+    );
+    assert.ok(
+      /flow-log's last committed state/i.test(body),
+      `${tmpl} commit-push stage must finalize the flow-log in that commit (write the entry before staging)`
+    );
+    assert.ok(
+      /Leave a clean working tree/i.test(body) &&
+        /leftover after a merged or in-review change request is a bug/i.test(
+          body
+        ),
+      `${tmpl} close stage must guarantee a clean working tree — an uncommitted flow-created artifact after merge/review is a bug, not a record`
+    );
+  }
+
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /stops writing to it once the change request is opened or merged/i.test(
+      flow
+    ),
+    'flow.md context-strategy must bake in the flow-log commit discipline so generated commands never leave an uncommittable leftover'
+  );
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /never becomes an uncommittable leftover/i.test(dfTemplate),
+    'delivery-flow-template.md §8 flow-log field must record that the log is finalized at commit-push and never left as a leftover'
+  );
+});
+
+test('the flow distinguishes interactive vs unattended AskUserQuestion timeouts', () => {
+  // A road-test found the 60s AskUserQuestion no-answer fallback firing
+  // in an interactive session, silently defaulting while the user was
+  // still deciding. The 60s timer is a harness guard (the skill can't
+  // change it), but the reaction is ours: unattended runs (driven with
+  // AWOS_UNATTENDED=1) take the safe default; interactive runs re-ask
+  // once and announce the default. An irreversible step never proceeds
+  // on a timeout. Lock the env-var contract into flow.md, both
+  // templates, and the decision record.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /AWOS_UNATTENDED/.test(flow),
+    'flow.md must key the unanswered-question handling off the AWOS_UNATTENDED env var — interactive and headless runs treat a 60s timeout differently'
+  );
+  assert.ok(
+    /re-ask the question once/i.test(flow),
+    'flow.md must re-ask once in an interactive run rather than silently defaulting on the 60s timeout'
+  );
+
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /AWOS_UNATTENDED/.test(body) && /No response after 60s/i.test(body),
+      `${tmpl} must carry the AWOS_UNATTENDED run-mode rule for the harness's "No response after 60s" fallback`
+    );
+    assert.ok(
+      /timeout never authorizes an irreversible step/i.test(body),
+      `${tmpl} must keep the guard that a timeout never authorizes an irreversible step (merge / spec-amendment confirmations stay a no)`
+    );
+  }
+
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /AWOS_UNATTENDED=1/.test(dfTemplate),
+    'delivery-flow-template.md §6 must record AWOS_UNATTENDED=1 as an operator prerequisite for unattended runs'
+  );
+});
+
+test('flow.md investigation probes before claiming absence and validates ticket transitions', () => {
+  // Road-test #2 regressions (HOP-3749): (1) the investigation missed a
+  // versioned pre-commit hook installed via core.hooksPath and the
+  // generated command confidently asserted "there are no pre-commit
+  // hooks"; (2) the decision record said "PR opened → In Review" but the
+  // tracker had no direct Open → In Review transition, so an unattended
+  // run would fail its first transition; (3) the worktree recipe skipped
+  // git-ignored build prerequisites, costing the fix agent an
+  // undocumented install + codegen. Lock the probe list, the
+  // no-absence-claims rule, transition-chain validation, and the
+  // bring-up steps into flow.md and the decision-record template.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /core\.hooksPath/.test(flow) && /\.pre-commit-config\.yaml/.test(flow),
+    'flow.md Step 2 must carry an explicit pre-commit-hook probe list (core.hooksPath, .husky/, .pre-commit-config.yaml, …) — a hook found only in the conventional place is how the road-test missed a versioned one'
+  );
+  assert.ok(
+    /No absence claims without a probe/i.test(flow),
+    'flow.md Step 2 must forbid the decision record and generated commands from asserting "no X" unless X was explicitly probed — an unprobed signal is unknown, not absent'
+  );
+  assert.ok(
+    /validate it at generation time/i.test(flow) &&
+      /transition.*chain/i.test(flow),
+    'flow.md §5 ticket-state map must be validated at generation time against a sample issue and record full transition chains (intermediate hops), not just target state names'
+  );
+  assert.ok(
+    /bring-up steps/i.test(flow) && /\.gitignore/.test(flow),
+    'flow.md worktree sub-interview must probe .gitignore for build-required artifacts and put the bring-up steps (install, codegen, env files) into the isolation recipe'
+  );
+
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /transition chain/i.test(dfTemplate),
+    'delivery-flow-template.md §5 must record validated transition chains (with IDs where exposed), not just target states'
+  );
+  assert.ok(
+    /bring-up steps/i.test(dfTemplate),
+    'delivery-flow-template.md §2 Worktrees field must include the bring-up steps for git-ignored prerequisites'
+  );
+
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /recorded transition chain/i.test(body),
+      `${tmpl} remote-gates stage must follow the recorded transition chain (intermediate hops), not just the target state name`
+    );
+  }
+});
+
+test('fix-bug template reads remote links, sweeps all surfaces, and verifies subagent claims', () => {
+  // Road-test #2 regressions (HOP-3749): the bug's real context (a
+  // screenshot naming the broken surface) lived in a Jira remote link;
+  // diagnosis stopped at the first of three affected surfaces; an
+  // Explore report proposed a 3-file fix where one line sufficed; and a
+  // subagent returned a green-but-vacuous regression test asserting an
+  // already-correct path. Lock the fetch-remote-links step, the
+  // all-surfaces sweep, verified-vs-hypothesis labels, the demonstrated
+  // fail-on-old-code check, and the verify-evidence proportionality
+  // tier into the fix-bug template.
+  const body = readUtf8(path.join(pluginTemplatesDir, 'fix-bug-template.md'));
+  assert.ok(
+    /remote links, attachments/i.test(body),
+    "fix-bug fetch stage must pull the ticket's remote links and attachments — the real repro context often lives there, not in the description"
+  );
+  assert.ok(
+    /every surface that renders or consumes the symptom data/i.test(body),
+    'fix-bug diagnose stage must enumerate every renderer/consumer of the symptom data (sibling composers), not stop at the first root cause'
+  );
+  assert.ok(
+    /\*\*verified\*\*/.test(body) && /\*\*hypothesis\*\*/.test(body),
+    'fix-bug diagnose reports must label each claim verified vs hypothesis, and the orchestrator re-reads the named lines before accepting the fix shape'
+  );
+  assert.ok(
+    /demonstrated, not asserted/i.test(body) && /green-but-vacuous/i.test(body),
+    'fix-bug regression-test stage must demonstrate fail-on-old-code on a changed path (revert → fail → restore → pass) and reject a test that is green pre-fix'
+  );
+  assert.ok(
+    /Scale the evidence to what changed/i.test(body),
+    'fix-bug verify stage must carry the proportionality tier: for a payload-only fix with an untouched render path, regression test + unit-level render with mocks is sanctioned evidence'
+  );
+
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const t = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /report is a claim, not a fact/i.test(t),
+      `${tmpl} Context Discipline must state that subagent reports are claims to spot-check, not facts to relay`
+    );
+  }
+});
+
+test('flow.md generator version constant matches plugin.json and stamps the artifacts', () => {
+  // flow.md carries a literal generator-version constant with two jobs:
+  // every generated artifact's footer marker is stamped with it (Step 6),
+  // and the re-run detector compares each artifact's footer `version=`
+  // against it to decide whether the templates have moved on (Step 1.4).
+  // This test keeps the constant in sync with the manifest so the footer
+  // provenance and re-run detection stay truthful.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const manifest = JSON.parse(
+    readUtf8(
+      path.join(repoRoot, 'plugins', 'awos', '.claude-plugin', 'plugin.json')
+    )
+  );
+  const constant = flow.match(/generator version is `([^`]+)`/);
+  assert.ok(
+    constant,
+    'flow.md Step 1 must declare a literal generator-version constant ("generator version is `X.Y.Z`") for the footer stamp and re-run detection'
+  );
+  assert.strictEqual(
+    constant[1],
+    manifest.version,
+    `flow.md generator-version constant (${constant[1]}) must equal plugins/awos/.claude-plugin/plugin.json version (${manifest.version}) — bump them together or the footer stamp and re-run detection go stale`
+  );
+
+  const marketplace = JSON.parse(
+    readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
+  );
+  const awosEntry = marketplace.plugins.find((p) => p.name === 'awos');
+  assert.ok(awosEntry, 'marketplace.json must list the awos plugin');
+  assert.strictEqual(
+    awosEntry.version,
+    manifest.version,
+    `marketplace.json awos entry version (${awosEntry.version}) must equal plugin.json version (${manifest.version}) — CLAUDE.md requires bumping both manifests together`
+  );
+
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /awos:flow:generated date=\[YYYY-MM-DD\] version=\[[^\]]+\] source=/.test(
+        body
+      ),
+      `${tmpl} footer marker must carry version=[…] and source= fields so re-runs can tell which generator produced the on-disk artifacts and from which decision record`
+    );
+  }
+});
+
+test('flow.md flags routing policies that route agents around the generated commands', () => {
+  // Road-test #2 item 8 (narrowed): the generated commands are
+  // auto-discovered by autocomplete, but an agent follows the loaded
+  // routing policy — hops' CLAUDE.md "AWOS Workflow (Required)" section
+  // prescribed the manual /awos:* chain, so agents routed around
+  // /implement-feature and /fix-bug by instruction, and nothing
+  // auto-loads delivery-flow.md. flow.md must check always-loaded docs
+  // for such a policy at investigation time and advise the wording fix
+  // in the Step 8 project-side setup fixes (flag, never auto-edit).
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /Routing policy in always-loaded docs/i.test(flow),
+    'flow.md Step 2 must inspect CLAUDE.md/AGENTS.md-style always-loaded docs for a prescribed-workflow section that routes agents through the manual /awos:* chain'
+  );
+  assert.ok(
+    /routes around/i.test(flow),
+    'flow.md must state why the policy matters: an agent following a manual-chain-only policy routes around the generated commands by instruction'
+  );
+  assert.ok(
+    /advise updating it and offer the concrete wording/i.test(flow),
+    'flow.md Step 8 must advise the routing-policy update with concrete wording as a project-side fix the user applies — the flow flags it, it does not edit CLAUDE.md'
+  );
+});
+
+test('generated commands carry the hops-style Self-Improvement Loop with governed boundaries', () => {
+  // Road-test #2 item 9, reworked to the hops team's field-tested shape
+  // (hops fix-bug.md "Self-Improvement Loop"): a flow defect found
+  // during a run (disproven fact, missing step, workaround-forcing
+  // instruction) is fixed in the same run, shipped in the same change
+  // request, recorded in the flow log, and promoted to Local
+  // Customizations so regeneration preserves it. Boundaries stay
+  // governed: delivery decisions belong to the flow owner, and
+  // generator defects are reported via the user (an in-command "report
+  // to the maintainers" is not actionable — the LLM has no channel).
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /## Self-Improvement Loop/.test(body),
+      `${tmpl} must carry the fixed Self-Improvement Loop section`
+    );
+    assert.ok(
+      /same branch, same change request/i.test(body),
+      `${tmpl} loop must ship flow fixes in the same change request as the work, never a separate one`
+    );
+    assert.ok(
+      /promote it into the decision record's \*\*Local Customizations\*\*/i.test(
+        body
+      ),
+      `${tmpl} loop must promote corrections to Local Customizations so regeneration preserves them`
+    );
+    assert.ok(
+      /belongs to whoever owns the team's process/i.test(body),
+      `${tmpl} loop must leave delivery decisions to the flow owner — a run never changes one`
+    );
+    assert.ok(
+      /tell the user so they can report it to the AWOS repo/i.test(body),
+      `${tmpl} loop must route generator defects through the user (actionable), not an abstract "report to maintainers"`
+    );
+  }
+
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /Self-Improvement Loop/.test(flow) &&
+      /never changes a delivery _?decision_? on its own/i.test(flow),
+    'flow.md Step 6 must instruct keeping the Self-Improvement Loop verbatim and restate that a run never changes a delivery decision'
+  );
+
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /Self-Improvement Loop/.test(dfTemplate),
+    'delivery-flow-template.md §10 must say Self-Improvement Loop corrections land in Local Customizations'
+  );
+});
+
+test('generated commands are clean, self-contained, and interaction-explicit', () => {
+  // Road-test #3 feedback (sde-automation PR #26): the regenerated
+  // commands copied the template's generator-facing header comment into
+  // the output (two paragraphs of noise), fix-bug said "Same resume
+  // logic as implement-feature" (commands know nothing about each other
+  // at run time), and stages that ask the user lost their explicit
+  // AskUserQuestion mentions. Lock the fixes into the templates and
+  // flow.md.
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /do NOT copy it, or any\s+adaptation of it, into the generated file/.test(
+        body
+      ),
+      `${tmpl} header comment must declare itself generator-only — never copied or adapted into the generated command`
+    );
+    assert.ok(
+      /self-contained/i.test(body),
+      `${tmpl} must require the generated command to be self-contained — no references to the sibling command`
+    );
+    assert.ok(
+      /Every fixed-choice interaction with the user/i.test(body),
+      `${tmpl} Context Discipline must route every fixed-choice user interaction through AskUserQuestion`
+    );
+    assert.ok(
+      /Never improvise worktree preparation/i.test(body),
+      `${tmpl} workspace stage must invoke the project's worktree command/script or the recorded §2 recipe — never improvise git-worktree prep in-run`
+    );
+    assert.ok(
+      /agents do not nest/i.test(body),
+      `${tmpl} local-review stage must handle the agent hierarchy: a review skill that spawns subagents runs from the main context, never wrapped in a subagent`
+    );
+  }
+
+  const fixBug = readUtf8(path.join(pluginTemplatesDir, 'fix-bug-template.md'));
+  assert.ok(
+    !/Same resume logic as implement-feature/i.test(fixBug),
+    'fix-bug-template.md must not defer to implement-feature for its resume logic — commands are independent at run time'
+  );
+  assert.ok(
+    /awos:flow:stage=local-review/.test(fixBug),
+    'fix-bug-template.md must have its own local-review stage — review folded into remote-gates loses its independent context'
+  );
+
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /no top-of-file comment/i.test(flow),
+    'flow.md Step 6 must state the generated file carries no top-of-file comment — template headers are generator instructions'
+  );
+  assert.ok(
+    /never improvises worktree preparation/i.test(flow),
+    'flow.md worktree sub-interview must reuse an existing worktree command/script or record an exact recipe the stage executes verbatim'
+  );
+  assert.ok(
+    /inspecting the review automation/i.test(flow),
+    'flow.md Step 6 must pick the review shape at generation time by inspecting whether the reused review skill dispatches subagents'
+  );
+});
+
+test('a generator update triggers full regeneration even when no decision changed', () => {
+  // Road-test regression (sde-automation PR #25): after the generator
+  // gained the road-test #2 fixes, a regenerate-only re-run (no
+  // dimensions revisited) produced ONLY a version-stamped footer and a
+  // log entry — none of the new template prose landed, because
+  // reconciliation was decision-driven: unchanged decisions read as
+  // "nothing to change", new sections outside stage markers had no
+  // reconciliation slot, and new probes hung off unselected dimensions.
+  // Lock the three fixes: generator update as an independent
+  // regeneration trigger, generator-owned prose outside markers, and
+  // fact-gap probes on any re-run.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /generator-update re-run/i.test(flow),
+    'flow.md Step 1 re-run detection must classify a footer version older than (or missing against) the constant as a generator-update re-run that regenerates every stage'
+  );
+  assert.ok(
+    /independent regeneration triggers/i.test(flow),
+    'flow.md Step 6 must treat a decision change and a generator update as independent regeneration triggers — "no dimensions revisited" never means the old text stays'
+  );
+  assert.ok(
+    /never just a stamp-and-date update/i.test(flow),
+    'flow.md Step 6 must forbid the no-op failure mode: an outdated footer triggers stage regeneration, not just a version stamp'
+  );
+  assert.ok(
+    /generator-owned/i.test(flow) && /outside the stage markers/i.test(flow),
+    'flow.md Step 6 must declare prose outside stage markers generator-owned — rewritten from the current template on every regeneration, since nothing reconciles it stage-by-stage'
+  );
+  assert.ok(
+    /fact gap/i.test(flow) &&
+      /fact upgrade is not a decision change/i.test(flow),
+    'flow.md Step 5 must fill record fields the current template defines but the on-disk record lacks (transition chains, bring-up steps, routing policy) on any re-run, without a dimension being re-opened'
   );
 });
 
@@ -775,9 +1244,608 @@ test('SDD-07 recognizes the dual-model QA coverage', () => {
   );
 });
 
-// ---------------------------------------------------------------------------
-// Brownfield awareness contracts
-// ---------------------------------------------------------------------------
+test('flow.md wires the delivery-flow generator contract end to end', () => {
+  // /awos:flow generates the project's /implement-feature command from two
+  // templates and a decision record. The four path references below are the
+  // joints of that contract — if any drifts, generation reads or writes the
+  // wrong file. The command ships as a plugin command (plugins/awos/commands/),
+  // not via the core installer — workshur asked to keep it out of the main flow.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const requiredRefs = [
+    // Templates ship bundled in the plugin (self-contained), not via the
+    // installer's .awos/templates/ — a plugin user need not re-run the
+    // installer to get the scaffolds.
+    '${CLAUDE_PLUGIN_ROOT}/templates/delivery-flow-template.md',
+    '${CLAUDE_PLUGIN_ROOT}/templates/implement-feature-template.md',
+    'context/product/delivery-flow.md',
+    '.claude/commands/implement-feature.md',
+    // Context-strategy introspection must target the full prompts, not the
+    // one-line wrappers in .claude/commands/awos/ (observed live: grepping
+    // the wrappers returned all zeros and confused the interview).
+    '.awos/commands/*.md',
+  ];
+  const missing = requiredRefs.filter((ref) => !body.includes(ref));
+  assert.deepEqual(
+    missing,
+    [],
+    `plugins/awos/commands/flow.md must reference its templates and both generated artifacts; missing: ${missing.join(', ')}`
+  );
+  assert.ok(
+    /prefer the CLI/i.test(body),
+    'plugins/awos/commands/flow.md must record the CLI-over-MCP transport preference (CLI is usually faster and cheaper in tokens)'
+  );
+  assert.ok(
+    body.includes('`Explore`'),
+    'plugins/awos/commands/flow.md must delegate the read-heavy project scan to the built-in Explore subagent, not read the codebase in its own context'
+  );
+  assert.ok(
+    /automatic reviewers installed on the code host/i.test(body),
+    'plugins/awos/commands/flow.md Step 2 must detect automatic reviewers installed on the code host (CodeRabbit-style bots)'
+  );
+  assert.ok(
+    /waits for its review after opening the change request/i.test(body),
+    'plugins/awos/commands/flow.md review dimension must carry the wait-and-address gate for a detected automatic reviewer'
+  );
+  assert.ok(
+    /two to four listed options/i.test(body),
+    'plugins/awos/commands/flow.md must state the AskUserQuestion 2–4 option bound — a single-option question is rejected at the schema level (observed live: the Step 3 docs question crashed with InputValidationError)'
+  );
+  assert.ok(
+    !/One listed option suffices/i.test(body),
+    'plugins/awos/commands/flow.md must not instruct a single-option AskUserQuestion call — the tool schema requires at least two options'
+  );
+  assert.ok(
+    body.includes('`multiSelect`'),
+    'plugins/awos/commands/flow.md must direct combinable answers (review gates, entry points) to multiSelect questions instead of yes/no series or forced single picks'
+  );
+  assert.ok(
+    /Reuse, Replace, or Compose/i.test(body) && /Step 4\.5/.test(body),
+    'plugins/awos/commands/flow.md must evaluate existing project automation in Step 4.5 (reuse/replace/compose) rather than adopting or ignoring it unconditionally — discovered automation is compared, and close calls are asked with the evidence'
+  );
+  assert.ok(
+    /drives a large span of the flow autonomously/i.test(body),
+    'flow.md must detect an existing command that overlaps the whole flow and surface the collision instead of generating a competing /implement-feature'
+  );
+  assert.ok(
+    /\*\*Notifications\.\*\*/.test(body),
+    'plugins/awos/commands/flow.md must interview the Notifications dimension — the flow announces transitions so the team stays aware as gates are removed'
+  );
+});
+
+test('flow.md re-run interviews only the dimensions the user chose', () => {
+  // A road-test re-run re-reviewed all seven dimensions with "(текущее)"
+  // defaults instead of only the ones the user wanted to change. The re-run
+  // path must collect a granular per-dimension selection in Step 1.3 and
+  // interview only those, bulk-confirming the rest unchanged.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /granular/i.test(body),
+    'flow.md re-run path must collect a granular per-dimension selection (the individual dimensions), not coarse buckets that re-ask everything inside them'
+  );
+  assert.ok(
+    /bulk-confirm/i.test(body),
+    'flow.md re-run path must bulk-confirm the unselected dimensions as unchanged in one summary line — never re-ask a dimension the user did not choose to revisit'
+  );
+  assert.ok(
+    /only those/i.test(body),
+    'flow.md Step 4 must interview only the dimensions selected on a re-run, not fall back to the fresh-run all-dimensions interview'
+  );
+});
+
+test('flow.md keeps autonomy holistic and un-steered', () => {
+  // The approval-gates question mis-steered the road-test user toward the
+  // most-gated option, and autonomy was gates-only — reused interactive
+  // skills and chain interviews impose pauses the gate choice never sees.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /do \*\*not\*\* pre-mark the most-gated option/i.test(body),
+    'flow.md approval-gates question must not pre-mark the most-gated option "(Recommended)" — the amount of gating is the user\'s autonomy call, and flow.md forbids decorative recommendations'
+  );
+  assert.ok(
+    /no gates: unattended/i.test(body),
+    'flow.md approval-gates options must read as an autonomy spectrum labeled by the pauses each imposes (two gates / one combined gate / no gates: unattended)'
+  );
+  assert.ok(
+    /Reused interactivity is part of the autonomy decision/i.test(body),
+    "flow.md Step 4.5 must treat a reused skill's per-run confirmations as part of the autonomy decision (reuse-with-prompt vs. compose a non-interactive path that keeps validation) — not a silent import"
+  );
+  assert.ok(
+    /Interaction budget/i.test(body),
+    'flow.md Step 8 must report an Interaction budget enumerating every human-pause — gate-controlled, reuse-imposed, and chain-imposed — so "how autonomous is it really" is visible at generation time'
+  );
+});
+
+test('flow.md tells the user to commit the generated artifacts', () => {
+  // /awos:flow leaves delivery-flow.md + the generated command uncommitted;
+  // the first run then warns on the dirty tree. Step 8 must close the gap.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /commit the generated artifacts/i.test(body),
+    'flow.md Step 8 must tell the user to commit the generated artifacts (delivery-flow.md, implement-feature.md, fix-bug.md when present) so the first run starts from a clean tree'
+  );
+});
+
+test('flow.md captures canonical project config and reconciles reused-skill constants', () => {
+  // A reused skill hardcoded the wrong Jira instance host; the dead link
+  // surfaced at runtime and was mis-blamed on the generated command. Step 2
+  // must capture the canonical config and Step 4.5 must reconcile a reused
+  // skill's hardcoded constants against it at generation time.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /Canonical project config/i.test(body) && /base URL/i.test(body),
+    'flow.md Step 2 must capture canonical project config (Jira base URL, Slack channel/handles, code-host org/repo) as project-config facts'
+  );
+  assert.ok(
+    /hardcoded constants/i.test(body) && /Project Setup/i.test(body),
+    'flow.md Step 4.5 must scan a reused skill for hardcoded constants and reconcile them against the captured Project Setup config, asking on a mismatch'
+  );
+  assert.ok(
+    /Format\/lint gate scope/i.test(body) &&
+      /Do not add a format pass inside the generated flow/i.test(body),
+    'flow.md Step 2 must detect a repo-wide format/lint gate and Step 8 must advise the project-side ignore fix — without adding a format pass inside the flow'
+  );
+});
+
+test('delivery-flow-template.md carries a flow-agnostic Project Setup section', () => {
+  // The canonical config the reconcile step checks against lives in the
+  // decision record so re-runs and the sibling fix-bug flow reuse it.
+  const body = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /## .*Project Setup/.test(body),
+    'delivery-flow-template.md must declare a "Project Setup" section recording the canonical config (Jira base URL, Slack channel, team handles) — reconciled against reused-skill constants at generation time'
+  );
+  assert.ok(
+    /base URL/i.test(body) && /code-host org\/repo/i.test(body),
+    'delivery-flow-template.md Project Setup must record the Jira base URL and code-host org/repo so reused skills can be checked against them'
+  );
+});
+
+test('flow.md and the template guard the generated header against comment-nesting', () => {
+  // A generated file embedded a literal awos:flow:stage marker inside its
+  // outer <!-- … --> header comment; the inner --> closed the comment early
+  // (CodeRabbit-flagged). The generator must be told to describe markers in
+  // prose, never nest one HTML comment inside another.
+  const flowBody = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const tplBody = readUtf8(
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+  );
+  assert.ok(
+    /never nest one inside another/i.test(flowBody),
+    "flow.md Step 6 must instruct the generator not to nest stage-marker HTML comments inside the generated file's own header comment"
+  );
+  assert.ok(
+    /never nest one inside another/i.test(tplBody),
+    'implement-feature-template.md header must warn the generator never to nest the stage-marker comments'
+  );
+});
+
+test('implement-feature-template.md carries stage markers and the AWOS chain', () => {
+  // The generated /implement-feature command is user-owned; /awos:flow re-runs
+  // reconcile manual edits per stage. The HTML-comment stage markers are the
+  // attribution mechanism — without them, regeneration degrades to whole-file
+  // clobbering. The template must also route coding through the AWOS chain
+  // rather than implementing in the main context.
+  const body = readUtf8(
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+  );
+  assert.ok(
+    body.includes('<!-- awos:flow:stage=') &&
+      body.includes('<!-- /awos:flow:stage -->'),
+    'implement-feature-template.md must fence every stage with <!-- awos:flow:stage=... --> / <!-- /awos:flow:stage --> markers so /awos:flow re-runs can attribute manual edits per stage'
+  );
+  assert.strictEqual(
+    (body.match(/<!-- awos:flow:stage=/g) || []).length,
+    (body.match(/<!-- \/awos:flow:stage -->/g) || []).length,
+    'implement-feature-template.md stage markers must be balanced — every opener needs its closer, or per-stage re-run attribution silently breaks'
+  );
+  for (const cmd of [
+    '/awos:spec',
+    '/awos:tech',
+    '/awos:tasks',
+    '/awos:implement',
+    '/awos:verify',
+  ]) {
+    assert.ok(
+      body.includes(cmd),
+      `implement-feature-template.md must run ${cmd} as part of the generated flow`
+    );
+  }
+  assert.ok(
+    /do not implement tasks in the main context/i.test(body),
+    'implement-feature-template.md must preserve the orchestrator-only guard — coding goes through /awos:implement subagents'
+  );
+  for (const stage of ['local-review', 'remote-gates', 'merge']) {
+    assert.ok(
+      body.includes(`<!-- awos:flow:stage=${stage} -->`),
+      `implement-feature-template.md must carry the ${stage} stage — the flow reviews locally before spending CI minutes, waits on remote gates, and covers the merge step, not just PR creation`
+    );
+  }
+  assert.ok(
+    /skipped or unanswered confirmation means do not merge/i.test(body),
+    'implement-feature-template.md merge stage must keep the per-run confirmation guard as fixed prose — merging is irreversible, so a skipped confirmation is a no (inverse of the #132 skip-default)'
+  );
+  assert.ok(
+    body.includes('flow-log.md'),
+    'implement-feature-template.md must keep the flow-log contract — each stage appends a summary so fresh sessions resume from disk state'
+  );
+  assert.ok(
+    /never launch a nested headless session/i.test(body),
+    'implement-feature-template.md must forbid nested `claude -p` calls — permission modes, PATH, and timeouts vary per machine; headless chaining lives at the trigger layer'
+  );
+  assert.ok(
+    /`Monitor` tool, never foreground `sleep` loops/.test(body),
+    'implement-feature-template.md must wait on remote gates with the Monitor tool, not blind sleep loops — and its filter must cover failure states, not just success'
+  );
+  assert.ok(
+    /merge cleanly/.test(body) && /re-check mergeability/.test(body),
+    'implement-feature-template.md must check target-branch conflicts twice: before opening the change request and again before merging (the target moves while gates run)'
+  );
+  assert.ok(
+    /do not add run-time focus areas/i.test(body),
+    'implement-feature-template.md review stage must keep the independence rule: the reviewer prompt is fixed at generation time — an orchestrator that just implemented the change must not frame its own review'
+  );
+  // The close stage must surface the local review (verdict + finding count +
+  // review file path) — the review is a real gate but otherwise buried in
+  // the logs. The Close-the-Loop stage is the hand-off report.
+  const closeStage = body.slice(body.indexOf('awos:flow:stage=close-ticket'));
+  assert.ok(
+    /verdict/i.test(closeStage) &&
+      /finding count/i.test(closeStage) &&
+      closeStage.includes('review.md'),
+    'implement-feature-template.md close stage must report the local review evidence — verdict, finding count, and the review file path (context/spec/{SPEC_NAME}/review.md)'
+  );
+  const stageOrder = [
+    'fetch-ticket',
+    'resume-detection',
+    'workspace',
+    'specs',
+    'commit-specs',
+    'implement',
+    'verify',
+    'local-review',
+    'commit-push',
+    'remote-gates',
+    'merge',
+    'delivery',
+    'close-ticket',
+  ];
+  const positions = stageOrder.map((s) =>
+    body.indexOf(`<!-- awos:flow:stage=${s} -->`)
+  );
+  for (let i = 0; i < stageOrder.length; i++) {
+    assert.ok(
+      positions[i] !== -1 && (i === 0 || positions[i] > positions[i - 1]),
+      `implement-feature-template.md stages must appear in canonical order (${stageOrder.join(' → ')}); '${stageOrder[i]}' is missing or out of place — in particular, verify and local-review precede commit-push (CI minutes are spent on reviewed code only) and merge comes after remote-gates`
+    );
+  }
+});
+
+test('delivery-flow-template.md preserves customizations and the tooling inventory', () => {
+  // Local Customizations is where /awos:flow promotes manual edits the user
+  // chose to keep — losing the section silently re-clobbers them on the next
+  // regeneration. The tooling inventory records the chosen transport
+  // (CLI vs MCP) per external service.
+  const body = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /## .*Local Customizations/.test(body),
+    'delivery-flow-template.md must declare a "Local Customizations" section — the regeneration contract depends on it'
+  );
+  assert.ok(
+    /## .*Tooling Inventory/.test(body),
+    'delivery-flow-template.md must declare a "Tooling Inventory" section recording the chosen transport per service'
+  );
+  assert.ok(
+    /\*\*Merge policy:\*\*/.test(body) && /\*\*Post-merge CI:\*\*/.test(body),
+    'delivery-flow-template.md §5 must record the merge policy and post-merge CI fields — the generated merge/ci-monitor stages derive from them'
+  );
+  assert.ok(
+    /## .*Context Strategy/.test(body),
+    'delivery-flow-template.md must declare a "Context Strategy" section — subagent-isolated stages and the flow log are recorded decisions, not ad-hoc behavior'
+  );
+  assert.ok(
+    /## .*Notifications/.test(body),
+    'delivery-flow-template.md must declare a "Notifications" section — where the flow announces transitions so the team stays aware as gates are removed'
+  );
+  assert.ok(
+    /## Generation Log/.test(body),
+    'delivery-flow-template.md must declare a "Generation Log" section — flow.md Steps 5/6 append re-run and correction entries to it'
+  );
+  assert.ok(
+    /Stage automation \(reuse \/ replace \/ compose\)/.test(body),
+    'delivery-flow-template.md must record the per-stage reuse/replace/compose decision for overlapping project automation, so re-runs do not regenerate over a reused command'
+  );
+  assert.ok(
+    /## .*Bug-fix Flow/.test(body),
+    'delivery-flow-template.md must declare a "Bug-fix Flow" section — whether fix-bug was generated, the classification/amendment policy, and the regression-test expectation; the sibling command consumes it'
+  );
+});
+
+test('commands/spec.md carries an Update Mode that amends in place', () => {
+  // spec.md was creation-only; a behavior-changing fix had no way to keep the
+  // spec in sync. Update Mode mirrors the Step 2A pattern in
+  // product/roadmap/architecture: detect an existing spec, edit it in place,
+  // and never allocate a new index.
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    /Mode Detection/i.test(body) && /Update Mode/i.test(body),
+    'commands/spec.md must add a Mode Detection step that routes an existing-spec reference to an Update Mode (mirroring product/roadmap/architecture)'
+  );
+  assert.ok(
+    /never allocates a new index/i.test(body) &&
+      /never runs `create-spec-directory\.sh`/i.test(body),
+    'commands/spec.md Update Mode must edit in place — it must never run create-spec-directory.sh and never allocate a new index'
+  );
+  assert.ok(
+    /## Change Log/.test(body),
+    'commands/spec.md Update Mode must append a dated entry under a ## Change Log heading'
+  );
+  assert.ok(
+    /stays `Completed`/i.test(body),
+    'commands/spec.md Update Mode must not force a Status transition — a spec amended after a verified fix stays Completed'
+  );
+});
+
+test('functional-spec-template.md declares a Change Log section', () => {
+  // The amendment target for spec.md Update Mode must be a well-defined,
+  // canonical section so the edit knows where to write.
+  const body = readUtf8(path.join(templatesDir, 'functional-spec-template.md'));
+  assert.ok(
+    /## Change Log/.test(body),
+    'functional-spec-template.md must carry a canonical "## Change Log" section — the target for Update-Mode amendments'
+  );
+});
+
+test('fix-bug-template.md carries the canonical bug-fix stages and the classify gate', () => {
+  // The generated /fix-bug command is the lighter sibling of
+  // /implement-feature: diagnose → fix → scoped re-verify → targeted spec
+  // amendment. Its classify gate is what makes spec-amendment correct, and
+  // its amend-spec stage must invoke core /awos:spec rather than duplicating
+  // amendment prose.
+  const body = readUtf8(path.join(pluginTemplatesDir, 'fix-bug-template.md'));
+  const stageOrder = [
+    'fetch-bug',
+    'resume-detection',
+    'workspace',
+    'diagnose',
+    'classify',
+    'fix',
+    'regression-test',
+    'verify-criteria',
+    'amend-spec',
+    'local-review',
+    'commit-push',
+    'remote-gates',
+    'merge',
+    'close-ticket',
+  ];
+  const positions = stageOrder.map((s) =>
+    body.indexOf(`<!-- awos:flow:stage=${s} -->`)
+  );
+  for (let i = 0; i < stageOrder.length; i++) {
+    assert.ok(
+      positions[i] !== -1 && (i === 0 || positions[i] > positions[i - 1]),
+      `fix-bug-template.md stages must appear in canonical order (${stageOrder.join(' → ')}); '${stageOrder[i]}' is missing or out of place`
+    );
+  }
+  assert.ok(
+    body.includes('<!-- /awos:flow:stage -->'),
+    'fix-bug-template.md must close every stage with the <!-- /awos:flow:stage --> marker so /awos:flow re-runs can attribute manual edits per stage'
+  );
+  assert.strictEqual(
+    (body.match(/<!-- awos:flow:stage=/g) || []).length,
+    (body.match(/<!-- \/awos:flow:stage -->/g) || []).length,
+    'fix-bug-template.md stage markers must be balanced — every opener needs its closer, or per-stage re-run attribution silently breaks'
+  );
+  assert.ok(
+    /[Cc]onformance/.test(body) && /[Dd]ivergence/.test(body),
+    'fix-bug-template.md classify stage must distinguish conformance bugs (do not amend the spec) from divergence (amend the spec) — the gate that makes amendment correct'
+  );
+  assert.ok(
+    /amend-spec/.test(body) && /invoke[s]? `\/awos:spec`/i.test(body),
+    'fix-bug-template.md amend-spec stage must invoke core /awos:spec in update mode on a divergence, not duplicate amendment prose'
+  );
+  assert.ok(
+    body.includes('**[Agent:') &&
+      /do not edit code in the main context/i.test(body),
+    'fix-bug-template.md must be orchestrator-only — the fix is delegated via **[Agent: name]** and the orchestrator never edits code itself'
+  );
+  assert.ok(
+    body.includes('<!-- skip-tests: true -->'),
+    'fix-bug-template.md regression-test/verify-criteria stages must honor the <!-- skip-tests: true --> opt-out'
+  );
+  assert.ok(
+    /`Monitor` tool, never foreground `sleep` loops/.test(body),
+    'fix-bug-template.md remote-gates stage must wait with the Monitor tool, not blind sleep loops, with a filter covering failure states'
+  );
+  assert.ok(
+    /skipped or unanswered confirmation means do not merge/i.test(body),
+    'fix-bug-template.md merge stage must keep the per-run confirmation guard — a skipped confirmation is a no'
+  );
+  const closeStage = body.slice(body.indexOf('awos:flow:stage=close-ticket'));
+  assert.ok(
+    /verdict/i.test(closeStage) &&
+      /finding count/i.test(closeStage) &&
+      /review file path/i.test(closeStage),
+    'fix-bug-template.md close stage must report the local review evidence (verdict, finding count, review file path as recorded in the flow log) — the same hand-off treatment as implement-feature'
+  );
+  for (const section of ['§2', '§4', '§5', '§9']) {
+    assert.ok(
+      body.includes(section),
+      `fix-bug-template.md must reuse the shared delivery-flow decisions (${section}) rather than re-deriving them`
+    );
+  }
+});
+
+test('flow.md wires fix-bug generation alongside implement-feature', () => {
+  // /awos:flow must generate the optional second command from its own
+  // template, gated on the Command-set decision, with the same
+  // reconcile-on-rerun behavior as implement-feature.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    body.includes('${CLAUDE_PLUGIN_ROOT}/templates/fix-bug-template.md'),
+    'flow.md must reference the bundled fix-bug-template.md so generation is self-contained in the plugin'
+  );
+  assert.ok(
+    body.includes('.claude/commands/fix-bug.md'),
+    'flow.md must keep the default bug-fix command path .claude/commands/fix-bug.md'
+  );
+  assert.ok(
+    /classification gate/i.test(body),
+    'flow.md bug-fix policy must settle the classification gate (conformance vs. divergence)'
+  );
+});
+
+test('flow.md inventory covers platform build/verify toolchains', () => {
+  // Step 2 probed only web browser automation; mobile/native flows verify
+  // with a platform toolchain (Eugene uses XcodeBuildMCP build_sim).
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /Build & verify toolchain/i.test(body),
+    "flow.md Step 2 inventory must record the project's build/verify toolchain as a transport"
+  );
+  assert.ok(
+    /XcodeBuildMCP|Gradle|emulator|simulator/i.test(body),
+    'flow.md must recognize non-web build/verify toolchains (iOS/Android), not just browser automation'
+  );
+});
+
+test('generated commands resume from the roadmap and skip already-done work', () => {
+  // /everclear:workflow with no arg picks the next roadmap item; and a ticket
+  // already Done / spec already Completed must not be re-implemented.
+  const feat = readUtf8(
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+  );
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /next incomplete item in `context\/product\/roadmap\.md`/i.test(feat),
+    'implement-feature-template.md must resume from the next incomplete roadmap item when invoked with no input'
+  );
+  for (const f of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, f));
+    assert.ok(
+      /every source §1 records/i.test(body),
+      `${f} resume-detection must check status across every source §1 records, not a single place`
+    );
+  }
+  assert.ok(
+    /already `Completed`/i.test(feat),
+    'implement-feature-template.md must stop when the owning spec is already Completed (or its tasks are all done) instead of re-running the chain'
+  );
+  assert.ok(
+    /"done"\/closed state names/i.test(flow),
+    "flow.md §1 must capture the tracker's done/closed state names so resume-detection can skip delivered work"
+  );
+});
+
+test('flow.md and the template record a ticket-state lifecycle and CI escalation', () => {
+  // Eugene automates the whole status cycle off flow/CI events — including
+  // the failure path (review fails → back to To Do) — driven by a project
+  // -built CI AI reviewer. And remote-gate waits need a max-wait/escalation
+  // policy, not an unbounded poll.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const tpl = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /Ticket state transitions/i.test(flow) &&
+      /Ticket state transitions/i.test(tpl),
+    'flow.md §5 and delivery-flow-template.md must record a ticket-state transition map (events → tracker states), not just the closing transition'
+  );
+  assert.ok(
+    /back to .*needs-work|→ back to/i.test(flow),
+    'the ticket-state map must cover the failure path — a failed gate/review sends the ticket back to a needs-work state'
+  );
+  assert.ok(
+    /project-built AI reviewer/i.test(flow),
+    'flow.md §4 must recognize a project-built CI AI reviewer (a GitHub Action calling Claude), not only third-party bots'
+  );
+  assert.ok(
+    /max-wait/i.test(flow) && /max-wait/i.test(tpl),
+    'flow.md §4 and delivery-flow-template.md must record a max-wait & escalation policy for remote-gate waits'
+  );
+  for (const f of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, f));
+    assert.ok(
+      /max-wait & escalation policy/i.test(body),
+      `${f} remote-gates stage must apply the §4 max-wait & escalation policy instead of waiting forever`
+    );
+  }
+});
+
+test('fix-bug-template.md supports a crash-report source', () => {
+  // Eugene's /everclear:fix starts from a Crashlytics issue: pull events,
+  // map the stack to real file:line, and refuse to invent lines when the
+  // build is unsymbolicated. The generated fix-bug command must support
+  // crash reporters as a bug source, generically.
+  const tpl = readUtf8(path.join(pluginTemplatesDir, 'fix-bug-template.md'));
+  assert.ok(
+    /unsymbolicated/i.test(tpl) && /do not invent line numbers/i.test(tpl),
+    'fix-bug-template.md fetch-bug stage must map a crash stack to local file:line and refuse to invent line numbers on an unsymbolicated build'
+  );
+  assert.ok(
+    /never auto-close/i.test(tpl),
+    'fix-bug-template.md must allow writing an investigation note back to the crash issue without auto-closing it'
+  );
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /bug source/i.test(flow) && /crash report/i.test(flow),
+    'flow.md bug-fix policy must ask the bug source, including a crash report from a crash-reporting tool'
+  );
+});
+
+test('flow.md interviews the command set and names', () => {
+  // Eugene's road-test named his commands to taste (/everclear:workflow,
+  // /everclear:fix); the generator must let the team pick which commands to
+  // build and what to call them, and record the names so re-runs reconcile
+  // the right files. This decision absorbs the old bug-fix opt-in.
+  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /Command set & names/i.test(body),
+    'flow.md must interview a "Command set & names" decision — which commands to generate (feature, bug-fix, or both) and the slash-name for each'
+  );
+  assert.ok(
+    /Generated Commands/.test(body),
+    "flow.md must record the chosen command names/filenames in the decision record's Generated Commands field so re-runs reconcile the right files"
+  );
+  assert.ok(
+    /`\/feature`|`\/fix`/.test(body),
+    'flow.md must show that the generated commands can be renamed from the defaults (e.g. /feature, /fix)'
+  );
+});
+
+test('delivery-flow-template.md records the generated command set', () => {
+  // Re-runs read this field to find the exact files to reconcile — it can no
+  // longer assume implement-feature.md / fix-bug.md once names are renameable.
+  const body = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /## .*Generated Commands/.test(body),
+    'delivery-flow-template.md must declare a "Generated Commands" section recording each command\'s slash name and file'
+  );
+});
+
+test('commands/tasks.md marks an unreviewed tasks.md and clears it on review', () => {
+  // tasks.md is written before review (Step 4), so it starts as a
+  // draft carrying a "<!-- not-user-reviewed -->" marker that Step 5
+  // removes once the user reviews it. The marker shape is the contract
+  // — awos-qa greps the saved file to tell a draft from a reviewed
+  // plan, so a reword here would silently break that detection. Lock
+  // the shape, plus the removal-on-review instruction.
+  const body = readUtf8(path.join(commandsDir, 'tasks.md'));
+  assert.ok(
+    body.includes('<!-- not-user-reviewed -->'),
+    'commands/tasks.md must record the literal "<!-- not-user-reviewed -->" marker so awos-qa can detect a draft-grade tasks.md'
+  );
+  assert.ok(
+    /remove the `<!-- not-user-reviewed -->` marker/i.test(body),
+    'commands/tasks.md Step 5 must remove the not-user-reviewed marker once the plan has been reviewed'
+  );
+});
 
 test('product.md creates context/product/brownfield.md on brownfield detection', () => {
   // /awos:product is the entry point for brownfield detection. When it finds
@@ -1399,6 +2467,55 @@ test('standards.toml exists and matches the category/band schema', () => {
   );
 });
 
+test('standards.toml prevention-coverage categories carry cluster metadata correctly', () => {
+  const p = path.join(referencesDir, 'standards.toml');
+  const src = readUtf8(p);
+  const prevBlocks = [
+    ...src.matchAll(/\n\[category\.(prev_[^.\]]+)\]([\s\S]*?)(?=\n\[|$)/g),
+  ];
+  assert.ok(
+    prevBlocks.length > 0,
+    'standards.toml must define [category.prev_*] prevention-coverage tables'
+  );
+  for (const [, slug, b] of prevBlocks) {
+    assert.match(
+      b,
+      /^\s*dimension\s*=\s*"prevention-coverage"/m,
+      `[category.${slug}] must belong to the prevention-coverage dimension`
+    );
+    assert.match(
+      b,
+      /^\s*cluster\s*=\s*"[a-z-]+"/m,
+      `[category.${slug}] must declare its cluster slug — the linkage pass joins the pair by it`
+    );
+    const isDetected = /^\s*method\s*=\s*"detected"/m.test(b);
+    const hasCovers = /^\s*covers_checks\s*=\s*\[/m.test(b);
+    if (isDetected) {
+      assert.ok(
+        hasCovers,
+        `[category.${slug}] enforcement (detected) category must declare covers_checks — the source checks its cluster guards`
+      );
+    } else {
+      assert.ok(
+        !hasCovers,
+        `[category.${slug}] covers_checks belongs on the enforcement (detected) half only`
+      );
+    }
+  }
+  // The cluster/covers_checks keys are a prevention-coverage contract — they
+  // must not leak onto other dimensions' categories.
+  for (const m of src.matchAll(
+    /\n\[category\.([^.\]]+)\]([\s\S]*?)(?=\n\[|$)/g
+  )) {
+    const [, slug, b] = m;
+    if (slug.startsWith('prev_')) continue;
+    assert.ok(
+      !/^\s*(cluster|covers_checks)\s*=/m.test(b),
+      `[category.${slug}] must not declare cluster/covers_checks — those keys are prevention-coverage-only`
+    );
+  }
+});
+
 test('scoring.md uses additive weighted categories, not A-F grades', () => {
   const p = path.join(skillRoot, 'scoring.md');
   const src = readUtf8(p);
@@ -1650,7 +2767,14 @@ test('report templates use weighted points + reliability, not grades', () => {
   );
 });
 
-test('plugin.json version matches the awos marketplace entry and equals 2.2.0', () => {
+// The plugin version is independent of the npm installer version (which
+// release-drafter manages via PR labels). It is bumped MANUALLY when plugin
+// behavior changes — always as one deliberate commit moving three files
+// together: plugin.json, marketplace.json, and this pinned literal. The pin
+// exists to force that deliberateness, not to freeze the version.
+const EXPECTED_PLUGIN_VERSION = '2.4.1';
+
+test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
     readUtf8(
       path.join(repoRoot, 'plugins', 'awos', '.claude-plugin', 'plugin.json')
@@ -1673,8 +2797,8 @@ test('plugin.json version matches the awos marketplace entry and equals 2.2.0', 
   );
   assert.equal(
     pluginManifest.version,
-    '2.2.0',
-    `plugins/awos/.claude-plugin/plugin.json version must be "2.2.0" (release version is managed by release-drafter, not bumped per change), got "${pluginManifest.version}"`
+    EXPECTED_PLUGIN_VERSION,
+    `plugins/awos/.claude-plugin/plugin.json version must be "${EXPECTED_PLUGIN_VERSION}" — the plugin version moves as one deliberate commit (plugin.json + marketplace.json + this pin together) when plugin behavior changes; it is independent of the npm release version release-drafter manages. Got "${pluginManifest.version}"`
   );
 });
 

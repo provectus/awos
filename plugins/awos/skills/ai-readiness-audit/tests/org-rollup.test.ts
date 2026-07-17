@@ -686,3 +686,104 @@ test('org_rollup: org_connections is present and non-empty for repos without tec
     'git must appear in sources (both repos have it)'
   );
 });
+
+// ---------------------------------------------------------------------------
+// prevention_gaps — cross-repo prevention tier rollup
+// ---------------------------------------------------------------------------
+
+function repoWithPrevention(
+  name: string,
+  tier: 'enforced' | 'instructed' | 'absent' | 'pending',
+  unguarded = 0
+): PerRepoInput {
+  return {
+    repo: name,
+    awarded_weight: 10,
+    prevention: {
+      clusters: [
+        {
+          cluster: 'secrets-hygiene',
+          title: 'Secrets hygiene',
+          tier,
+          unguarded_passes: unguarded,
+        },
+      ],
+    },
+  };
+}
+
+test('prevention_gaps counts tiers per cluster and sums unguarded passes', () => {
+  const result = rollup([
+    repoWithPrevention('a', 'absent', 2),
+    repoWithPrevention('b', 'absent', 1),
+    repoWithPrevention('c', 'enforced'),
+    repoWithPrevention('d', 'instructed'),
+    repoWithPrevention('e', 'pending'),
+  ]);
+  assert.ok(
+    result.prevention_gaps,
+    'gaps must be emitted when repos report clusters'
+  );
+  const gap = result.prevention_gaps![0];
+  assert.equal(gap.cluster, 'secrets-hygiene');
+  assert.equal(gap.absent_repos, 2, 'two repos have no guard');
+  assert.equal(gap.enforced_repos, 1);
+  assert.equal(gap.instructed_repos, 1);
+  assert.equal(gap.pending_repos, 1);
+  assert.equal(gap.total_repos, 5, 'every repo reporting the cluster counts');
+  assert.equal(gap.unguarded_passes_total, 3);
+});
+
+test('prevention_gaps omits clusters that are enforced or instructed everywhere', () => {
+  const result = rollup([
+    repoWithPrevention('a', 'enforced'),
+    repoWithPrevention('b', 'instructed'),
+  ]);
+  assert.equal(
+    result.prevention_gaps,
+    undefined,
+    'a fully-guarded cluster is not a gap'
+  );
+});
+
+test('prevention_gaps is absent when no repo carries a prevention block (pre-feature audits)', () => {
+  const result = rollup([
+    { repo: 'a', awarded_weight: 1 },
+    { repo: 'b', awarded_weight: 2 },
+  ]);
+  assert.equal(result.prevention_gaps, undefined);
+});
+
+test('PRV checks never appear in org_gaps — prevention_gaps is their org expression', () => {
+  const result = rollup([
+    {
+      repo: 'a',
+      awarded_weight: 1,
+      checks: [
+        {
+          check_id: 'AS-12',
+          dimension: 'application-security',
+          definition: 'env gitignored',
+          status: 'FAIL',
+        },
+      ],
+      prevention: {
+        clusters: [
+          {
+            cluster: 'secrets-hygiene',
+            title: 'Secrets hygiene',
+            tier: 'absent',
+            unguarded_passes: 0,
+          },
+        ],
+      },
+    },
+  ]);
+  // rollup_input filters PRV checks before they reach rollup(); this guards
+  // the rollup-side contract that org_gaps only carries what it was given.
+  assert.ok(result.org_gaps!.every((g) => !g.check_id.startsWith('PRV-')));
+  assert.ok(
+    result.prevention_gaps,
+    'the PRV signal arrives via prevention_gaps'
+  );
+});

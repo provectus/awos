@@ -52,11 +52,19 @@ import { reworkBand } from './rework_rate.ts';
 import type {
   OrgConnItem,
   OrgConnections,
+  OrgPreventionGap,
   PerRepoSummary,
   PortfolioMetric,
+  PreventionTier,
 } from '../artifact_types.ts';
 
-export type { OrgConnItem, OrgConnections, PerRepoSummary, PortfolioMetric };
+export type {
+  OrgConnItem,
+  OrgConnections,
+  OrgPreventionGap,
+  PerRepoSummary,
+  PortfolioMetric,
+};
 
 /**
  * Per-repo delivery numbers, transcribed from the repo's audit + git artifact.
@@ -145,6 +153,19 @@ export interface PerRepoInput {
     definition: string;
     status: string;
   }>;
+  /**
+   * Compact per-cluster prevention slice from this repo's audit.prevention
+   * (rollup_input derives it). Absent for repos audited before the
+   * prevention-coverage dimension existed.
+   */
+  prevention?: {
+    clusters: Array<{
+      cluster: string;
+      title: string;
+      tier: PreventionTier;
+      unguarded_passes: number;
+    }>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,6 +234,14 @@ export interface OrgRollupResult {
    * and recommendations; it never invents the counts.
    */
   org_gaps?: OrgGap[];
+  /**
+   * Cross-repo prevention rollup: per-cluster tier counts across repos,
+   * sorted by absent_repos desc then cluster asc. Only clusters with
+   * absent_repos + pending_repos > 0 are listed (a fully-enforced cluster is
+   * not a gap). Absent when no repo carries a prevention block. PRV checks
+   * are excluded from org_gaps — this is their org-level expression.
+   */
+  prevention_gaps?: OrgPreventionGap[];
 }
 
 // ---------------------------------------------------------------------------
@@ -468,6 +497,57 @@ function computeOrgGaps(perRepoResults: PerRepoInput[]): OrgGap[] {
 }
 
 // ---------------------------------------------------------------------------
+// Prevention gap computation
+// ---------------------------------------------------------------------------
+
+/**
+ * Aggregate the per-repo prevention slices into per-cluster tier counts.
+ *
+ * Rules:
+ * - total_repos counts every repo reporting the cluster (any tier, incl. pending).
+ * - Only clusters with absent_repos + pending_repos > 0 are included — a
+ *   cluster enforced or instructed everywhere is not a gap.
+ * - Sorted by absent_repos desc, then cluster asc, for deterministic output.
+ * - No cap: the cluster catalog is small (8) by construction.
+ * - title comes from the first repo that carries the cluster.
+ */
+function computePreventionGaps(
+  perRepoResults: PerRepoInput[]
+): OrgPreventionGap[] {
+  const gapMap = new Map<string, OrgPreventionGap>();
+  for (const repo of perRepoResults) {
+    for (const cl of repo.prevention?.clusters ?? []) {
+      let entry = gapMap.get(cl.cluster);
+      if (!entry) {
+        entry = {
+          cluster: cl.cluster,
+          title: cl.title,
+          absent_repos: 0,
+          instructed_repos: 0,
+          enforced_repos: 0,
+          pending_repos: 0,
+          total_repos: 0,
+          unguarded_passes_total: 0,
+        };
+        gapMap.set(cl.cluster, entry);
+      }
+      entry.total_repos++;
+      entry.unguarded_passes_total += cl.unguarded_passes;
+      if (cl.tier === 'enforced') entry.enforced_repos++;
+      else if (cl.tier === 'instructed') entry.instructed_repos++;
+      else if (cl.tier === 'pending') entry.pending_repos++;
+      else entry.absent_repos++;
+    }
+  }
+  return Array.from(gapMap.values())
+    .filter((g) => g.absent_repos + g.pending_repos > 0)
+    .sort(
+      (a, b) =>
+        b.absent_repos - a.absent_repos || a.cluster.localeCompare(b.cluster)
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Rollup implementation
 // ---------------------------------------------------------------------------
 
@@ -606,6 +686,7 @@ export function rollup(
   const headline = buildHeadline(repos);
   const org_connections = aggregateConnections(perRepoResults);
   const org_gaps = computeOrgGaps(perRepoResults);
+  const prevention_gaps = computePreventionGaps(perRepoResults);
 
   // Merge per-repo source windows: max days per source, first label seen.
   const sourceWindows: Record<string, { days: number | null; label: string }> =
@@ -629,6 +710,7 @@ export function rollup(
     org_gaps,
   };
   if (headline) result.headline = headline;
+  if (prevention_gaps.length > 0) result.prevention_gaps = prevention_gaps;
   if (Object.keys(sourceWindows).length > 0)
     result.source_windows = sourceWindows;
   if (standardsMeta) result.standards_meta = standardsMeta;

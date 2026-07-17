@@ -23,9 +23,12 @@ const SOURCE_FILE_GLOBS = ALL_SOURCE_GLOBS;
 const SOURCE_IGNORE = [...BASE_SOURCE_IGNORE, 'vendor', '.tox'];
 
 // Test directories that imply integration-level tests.
-// Also matches plain "integration/" (without the "test(s)" suffix).
+// Also matches plain "integration/" (without the "test(s)" suffix), and a
+// Maven/Gradle failsafe "it/" directory — but only when nested under a test
+// root (…/test/…/it/ or …/tests/…/it/), so an unrelated "it/" dir elsewhere
+// in the tree (e.g. an Italian locale bundle) doesn't false-positive.
 const INTEGRATION_DIR_RX =
-  /\/(integration(?:[_-]?tests?)?|e2e[_-]?tests?|system[_-]?tests?|functional[_-]?tests?)\//i;
+  /\/(integration(?:[_-]?tests?)?|e2e[_-]?tests?|system[_-]?tests?|functional[_-]?tests?)\/|\/tests?\/(?:[^/]+\/)*it\//i;
 
 // Integration test file naming patterns.
 const INTEGRATION_FILE_RX =
@@ -247,6 +250,12 @@ const INTEGRATION_CONTENT_RX =
 
 const INTEGRATION_FILE_NAME_RX = /integration|contract|system[_-]test/i;
 
+// Maven/Gradle failsafe integration test suffix (FooIT.java, FooITCase.java,
+// same convention for Kotlin/Scala). Case-sensitive on purpose — a
+// case-insensitive check would false-positive on files like unit.java or
+// visit.java, whose basenames happen to end in "it" before the extension.
+const INTEGRATION_FILE_IT_SUFFIX_RX = /IT(?:Case)?\.(?:java|kt|scala)$/;
+
 const TEST_DOCKER_GLOBS = ['docker-compose*.yml', 'docker-compose*.yaml'];
 
 export function detectIntegrationTests(
@@ -263,7 +272,10 @@ export function detectIntegrationTests(
     if (INTEGRATION_DIR_RX.test('/' + rel)) {
       signals.push(`integration dir: ${rel}`);
     }
-    if (INTEGRATION_FILE_NAME_RX.test(basename(f))) {
+    if (
+      INTEGRATION_FILE_NAME_RX.test(basename(f)) ||
+      INTEGRATION_FILE_IT_SUFFIX_RX.test(basename(f))
+    ) {
       signals.push(`integration file name: ${rel}`);
     }
     if (signals.length >= 5) break;

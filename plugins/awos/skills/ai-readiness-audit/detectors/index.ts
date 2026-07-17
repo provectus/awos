@@ -17,6 +17,7 @@ import { DETECTORS as PAI_DETECTORS } from './prompt_agent_integrity.ts';
 import { DETECTORS as QA_DETECTORS } from './quality_assurance.ts';
 import { DETECTORS as DOC_DETECTORS } from './documentation.ts';
 import { DETECTORS as AS_DETECTORS } from './application_security.ts';
+import { DETECTORS as PRV_DETECTORS } from './prevention_coverage.ts';
 
 export const DETECTORS: Record<
   number,
@@ -33,4 +34,5 @@ export const DETECTORS: Record<
   ...QA_DETECTORS,
   ...DOC_DETECTORS,
   ...AS_DETECTORS,
+  ...PRV_DETECTORS,
 };

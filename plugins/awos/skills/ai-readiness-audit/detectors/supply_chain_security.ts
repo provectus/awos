@@ -537,9 +537,12 @@ export function detectScsQuarantineAge(
 // FAIL if no dependency automation is configured.
 // ---------------------------------------------------------------------------
 
-const DEPENDABOT_PATHS = ['.github/dependabot.yml', '.github/dependabot.yaml'];
+export const DEPENDABOT_PATHS = [
+  '.github/dependabot.yml',
+  '.github/dependabot.yaml',
+];
 
-const RENOVATE_PATHS = [
+export const RENOVATE_PATHS = [
   'renovate.json',
   'renovate.json5',
   '.renovaterc',
@@ -602,7 +605,7 @@ export function detectDependencyAutomationReview(
 
 const CI_WORKFLOW_GLOBS = ['*.yml', '*.yaml'];
 
-const VULN_SCANNER_RX =
+export const VULN_SCANNER_RX =
   /\b(pip-audit|safety\s|snyk|trivy|grype|osv-scanner|dependency-check|dependabot|audit\s+--json|npm\s+audit|yarn\s+audit|pnpm\s+audit)\b/i;
 
 export function detectVulnerabilityScanning(

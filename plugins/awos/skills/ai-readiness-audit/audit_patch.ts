@@ -11,6 +11,11 @@ import { writeFileSync, readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 
 import { round1 } from './metrics/_score.ts';
+import {
+  computePrevention,
+  annotateCoveredChecks,
+  type PreventionDimensionInput,
+} from './prevention.ts';
 import { ENGINE_PROVENANCE, hasEngineProvenance } from './provenance.ts';
 import {
   aggregateChecks,
@@ -94,6 +99,24 @@ export function aggregate(outDir: string): void {
     const bo = typeof b.order === 'number' ? (b.order as number) : 999;
     return ao - bo || String(a.dimension).localeCompare(String(b.dimension));
   });
+
+  // Prevention linkage: recomputed from the self-describing PRV check records
+  // on every aggregate — never preserved from the prior audit.json — so the
+  // `pending` tiers stamped by audit-core finalize automatically once
+  // patch-judgment (which calls this function) has patched the instruction
+  // verdicts. Annotations land on the in-memory dimension objects AFTER the
+  // per-dimension files were written above, mirroring audit-core: the
+  // annotation exists in audit.json only. Null on pre-feature audits — the
+  // key is simply absent.
+  const prevention = computePrevention(
+    dimensions as unknown as PreventionDimensionInput[]
+  );
+  if (prevention) {
+    annotateCoveredChecks(
+      dimensions as unknown as PreventionDimensionInput[],
+      prevention
+    );
+  }
   let existing: Record<string, unknown> = {};
   try {
     existing = JSON.parse(readFileSync(join(outDir, 'audit.json'), 'utf8'));
@@ -123,6 +146,7 @@ export function aggregate(outDir: string): void {
     audit_total: round1(total),
     coverage: applicable > 0 ? total / applicable : null,
     dimensions,
+    ...(prevention ? { prevention } : {}),
   };
   for (const block of [
     'headline',
@@ -446,6 +470,10 @@ export function reportContext(outDir: string): Record<string, unknown> {
         weight_awarded: c.weight_awarded,
         weight_max: c.weight_max,
         evidence: c.evidence,
+        // Linkage annotation (covered checks only) — lets the orchestrator
+        // author two-part recommendations (fix + guardrail) without opening
+        // audit.json.
+        ...(c.prevention !== undefined ? { prevention: c.prevention } : {}),
       });
     }
   }
@@ -454,6 +482,7 @@ export function reportContext(outDir: string): Record<string, unknown> {
     project: audit.project,
     audit_total: audit.audit_total,
     coverage: audit.coverage,
+    prevention: audit.prevention ?? null,
     window_stats:
       (git?.raw as Record<string, unknown> | undefined)?.window_stats ?? null,
     tracker_fetch_meta:

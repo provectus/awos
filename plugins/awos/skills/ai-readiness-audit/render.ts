@@ -101,6 +101,31 @@
  *   "detail":    string,   // plain-language paragraph
  * }
  *
+ * PreventionBlock (single-repo; engine-derived, recomputed on every
+ * aggregate — never authored or patched):
+ * {
+ *   "clusters": [{
+ *     "cluster":          string,   // slug, e.g. "secrets-hygiene"
+ *     "title":            string,
+ *     "tier":             "enforced|instructed|absent|pending",
+ *     "partial":          boolean,  // tier-deciding check was WARN/PARTIAL
+ *     "enforcement":      { "check_id": string, "status": string, "evidence_head": string? },
+ *     "instruction":      { "check_id": string, "status": string, "evidence_head": string? },
+ *     "covers_checks":    string[], // source-dimension check_ids guarded
+ *     "at_risk":          [{ "check_id": string, "dimension": string, "status": string }],
+ *     "unguarded_passes": string[], // PASSes in an `absent` cluster
+ *   }],
+ *   "summary": { "enforced": n, "instructed": n, "absent": n, "pending": n,
+ *                "at_risk_count": n, "unguarded_pass_count": n },
+ * }
+ * Covered checks inside audit.json dimensions additionally carry
+ * `prevention: { cluster, tier }` (audit.json only — per-dimension files
+ * stay pure detector/judgment output).
+ *
+ * OrgPreventionGap (org mode, `prevention_gaps[]`): per-cluster tier counts
+ * across repos — { cluster, title, absent_repos, instructed_repos,
+ * enforced_repos, pending_repos, total_repos, unguarded_passes_total }.
+ *
  * PortfolioMetric (org mode):
  * {
  *   "metric":               string,
@@ -151,8 +176,11 @@ import type {
   LinkedRepo,
   OrgConnItem,
   OrgConnections,
+  OrgPreventionGap,
   PerRepoSummary,
   PortfolioMetric,
+  PreventionBlock,
+  PreventionCluster,
   Recommendation,
   ScaleMetric,
   SourceSummary,
@@ -175,8 +203,11 @@ export type {
   LinkedRepo,
   OrgConnItem,
   OrgConnections,
+  OrgPreventionGap,
   PerRepoSummary,
   PortfolioMetric,
+  PreventionBlock,
+  PreventionCluster,
   Recommendation,
   ScaleMetric,
   SourceSummary,
@@ -561,6 +592,22 @@ function derivedRecommendations(audit: AuditJson): Recommendation[] {
 }
 
 // ---------------------------------------------------------------------------
+// Prevention matrix helpers (shared by the Markdown and HTML renderers)
+// ---------------------------------------------------------------------------
+
+/** "ENFORCED" / "ENFORCED (partial)" / "INSTRUCTED" / "ABSENT" / "PENDING". */
+function preventionTierLabel(cl: PreventionCluster): string {
+  return `${cl.tier.toUpperCase()}${cl.partial ? ' (partial)' : ''}`;
+}
+
+/** Check-id list capped at 6 entries; "—" when empty. */
+function capList(ids: string[], cap = 6): string {
+  if (ids.length === 0) return '—';
+  const head = ids.slice(0, cap).join(', ');
+  return ids.length > cap ? `${head} +${ids.length - cap} more` : head;
+}
+
+// ---------------------------------------------------------------------------
 // Markdown renderer
 // ---------------------------------------------------------------------------
 
@@ -678,6 +725,28 @@ export function renderMarkdown(
     lines.push('');
   }
 
+  // Prevention gaps (org mode) — cross-repo tier counts per cluster.
+  if (isOrg && audit.prevention_gaps && audit.prevention_gaps.length > 0) {
+    lines.push('## Prevention Gaps (Org)');
+    lines.push('');
+    lines.push(
+      'Clusters where repos lack a guard against regression — enforced (mechanical gate) > instructed (written rule) > absent (nothing).'
+    );
+    lines.push('');
+    lines.push(
+      '| Cluster | Absent | Instructed | Enforced | Pending | Repos | Unguarded passes |'
+    );
+    lines.push(
+      '| ------- | ------ | ---------- | -------- | ------- | ----- | ---------------- |'
+    );
+    for (const g of audit.prevention_gaps) {
+      lines.push(
+        `| ${mdCell(g.title)} | ${g.absent_repos} | ${g.instructed_repos} | ${g.enforced_repos} | ${g.pending_repos} | ${g.total_repos} | ${g.unguarded_passes_total} |`
+      );
+    }
+    lines.push('');
+  }
+
   // Insights — the narrative "READ"
   if (audit.insights && audit.insights.length > 0) {
     lines.push('## Top Insights');
@@ -762,6 +831,42 @@ export function renderMarkdown(
     }
   }
 
+  // Prevention Matrix — single-repo only; absent block (pre-feature audit or
+  // fully skipped dimension) renders nothing.
+  if (!isOrg && audit.prevention) {
+    const prev = audit.prevention;
+    lines.push('## Prevention Matrix');
+    lines.push('');
+    lines.push(
+      'Whether today’s state is protected against regression: each failure-mode cluster is **enforced** (a mechanical gate blocks recurrence), **instructed** (an agent-visible written rule), or **absent** (nothing prevents recurrence).'
+    );
+    lines.push('');
+    if (prev.summary.pending > 0) {
+      lines.push(
+        `_${prev.summary.pending} cluster(s) pending — instruction-coverage judgment not yet applied._`
+      );
+      lines.push('');
+    }
+    lines.push(
+      '| Cluster | Tier | Enforcement | Instruction | At risk | Unguarded passes |'
+    );
+    lines.push(
+      '| ------- | ---- | ----------- | ----------- | ------- | ---------------- |'
+    );
+    for (const cl of prev.clusters) {
+      lines.push(
+        `| ${mdCell(cl.title)} | ${preventionTierLabel(cl)} | ${cl.enforcement.check_id} (${cl.enforcement.status}) | ${cl.instruction.check_id} (${cl.instruction.status}) | ${capList(cl.at_risk.map((r) => r.check_id))} | ${capList(cl.unguarded_passes)} |`
+      );
+    }
+    lines.push('');
+    if (prev.summary.unguarded_pass_count > 0) {
+      lines.push(
+        `**Fragility:** ${prev.summary.unguarded_pass_count} passing check(s) across ${prev.summary.absent} unguarded cluster(s) have no mechanical or written guard — they hold by convention only.`
+      );
+      lines.push('');
+    }
+  }
+
   // Per-dimension details — single-repo only (see the Summary-table note).
   for (const dim of isOrg ? [] : (audit.dimensions ?? [])) {
     lines.push(`## Dimension: ${titleLabel(dim)}`);
@@ -800,7 +905,14 @@ export function renderMarkdown(
             ? `${fmtValue(c.value)} ${c.unit}`
             : fmtValue(c.value)
       );
-      const hint = mdCell(c.hint ?? '—');
+      // Linkage annotation: a failing/warning covered check names the cluster
+      // whose prevention tier says whether it is likely to recur.
+      const preventionNote =
+        c.prevention &&
+        (c.status === 'FAIL' || c.status === 'WARN' || c.status === 'PARTIAL')
+          ? ` · prevention: ${c.prevention.tier} (${c.prevention.cluster})`
+          : '';
+      const hint = mdCell(`${c.hint ?? '—'}${preventionNote}`);
       const sourceCiteMd =
         c.source_url && c.source_date
           ? ` — [${mdCell(c.source)} ${mdCell(c.source_date)}](${c.source_url})`
@@ -1454,6 +1566,89 @@ function recommendationsSection(audit: AuditJson): string {
   return rows.join('\n');
 }
 
+// ─── Prevention matrix (single-repo) / prevention gaps (org) ────────────────
+
+/** Tier badge reusing the status palette: enforced→PASS green, instructed→WARN amber, absent→FAIL red, pending→pending amber. */
+function preventionTierBadge(cl: PreventionCluster): string {
+  const paletteKey: Record<PreventionCluster['tier'], string> = {
+    enforced: 'PASS',
+    instructed: 'WARN',
+    absent: 'FAIL',
+    pending: 'PENDING_JUDGMENT',
+  };
+  return `<span class="badge" data-s="${paletteKey[cl.tier]}">${esc(preventionTierLabel(cl))}</span>`;
+}
+
+function preventionSection(audit: AuditJson): string {
+  const prev = audit.prevention;
+  if (!prev) return '';
+  const rows: string[] = [
+    `<h2>${tip('Prevention matrix', 'Whether today’s state is protected against regression', 'enforced = a mechanical gate blocks recurrence · instructed = an agent-visible written rule · absent = nothing prevents recurrence')}</h2>`,
+  ];
+  if (prev.summary.pending > 0) {
+    rows.push(
+      `<p class="prevention-pending">${esc(String(prev.summary.pending))} cluster(s) pending — instruction-coverage judgment not yet applied.</p>`
+    );
+  }
+  rows.push('<div class="dim-card">');
+  rows.push(
+    '<table><thead><tr>' +
+      `<th>${tip('Cluster', 'A failure mode shared by a group of source-dimension checks.')}</th>` +
+      `<th>${tip('Tier', 'How recurrence is prevented: enforced (mechanical gate) > instructed (written rule) > absent (nothing).')}</th>` +
+      `<th>${tip('Enforcement', 'The gate check (pre-commit / CI / hook / bot) and its status.')}</th>` +
+      `<th>${tip('Instruction', 'The written-rule check (agent instruction files) and its status.')}</th>` +
+      `<th>${tip('At risk', 'Covered checks currently failing or warning — likely to recur without prevention.')}</th>` +
+      `<th>${tip('Unguarded passes', 'Covered checks passing today with nothing preventing regression — they hold by convention only.')}</th>` +
+      '</tr></thead><tbody>'
+  );
+  for (const cl of prev.clusters) {
+    const enfEvidence = cl.enforcement.evidence_head
+      ? tip(
+          `${cl.enforcement.check_id} (${cl.enforcement.status})`,
+          cl.enforcement.evidence_head
+        )
+      : esc(`${cl.enforcement.check_id} (${cl.enforcement.status})`);
+    const insEvidence = cl.instruction.evidence_head
+      ? tip(
+          `${cl.instruction.check_id} (${cl.instruction.status})`,
+          cl.instruction.evidence_head
+        )
+      : esc(`${cl.instruction.check_id} (${cl.instruction.status})`);
+    rows.push(`<tr>
+  <td><strong>${esc(cl.title)}</strong></td>
+  <td>${preventionTierBadge(cl)}</td>
+  <td>${enfEvidence}</td>
+  <td>${insEvidence}</td>
+  <td>${esc(capList(cl.at_risk.map((r) => r.check_id)))}</td>
+  <td>${esc(capList(cl.unguarded_passes))}</td>
+</tr>`);
+  }
+  rows.push('</tbody></table></div>');
+  if (prev.summary.unguarded_pass_count > 0) {
+    rows.push(
+      `<p class="prevention-fragility"><strong>Fragility:</strong> ${esc(String(prev.summary.unguarded_pass_count))} passing check(s) across ${esc(String(prev.summary.absent))} unguarded cluster(s) have no mechanical or written guard — they hold by convention only.</p>`
+    );
+  }
+  return rows.join('\n');
+}
+
+function orgPreventionSection(audit: AuditJson): string {
+  const gaps = audit.prevention_gaps;
+  if (!gaps || gaps.length === 0) return '';
+  const rows: string[] = [
+    `<h2>${tip('Prevention gaps (org)', 'Clusters where repos lack a guard against regression', 'enforced = mechanical gate · instructed = written rule · absent = nothing')}</h2>`,
+    '<div class="dim-card">',
+    '<table><thead><tr><th>Cluster</th><th>Absent</th><th>Instructed</th><th>Enforced</th><th>Pending</th><th>Repos</th><th>Unguarded passes</th></tr></thead><tbody>',
+  ];
+  for (const g of gaps) {
+    rows.push(
+      `<tr><td><strong>${esc(g.title)}</strong></td><td>${g.absent_repos}</td><td>${g.instructed_repos}</td><td>${g.enforced_repos}</td><td>${g.pending_repos}</td><td>${g.total_repos}</td><td>${g.unguarded_passes_total}</td></tr>`
+    );
+  }
+  rows.push('</tbody></table></div>');
+  return rows.join('\n');
+}
+
 // ─── Dimension summary table (overview; rows link to sub-pages) ─────────────
 function dimensionSummary(audit: AuditJson): string {
   const rows: string[] = ['<h2>Dimensions</h2>'];
@@ -1680,6 +1875,16 @@ function dimensionPage(
       if (!evidenceItems.some((item) => item.includes(escaped))) {
         evidenceItems.push(esc(numStr));
       }
+    }
+    // Linkage annotation: a failing/warning covered check names the cluster
+    // whose prevention tier says whether it is likely to recur.
+    if (
+      c.prevention &&
+      (c.status === 'FAIL' || c.status === 'WARN' || c.status === 'PARTIAL')
+    ) {
+      evidenceItems.push(
+        esc(`prevention: ${c.prevention.tier} (${c.prevention.cluster})`)
+      );
     }
     const evidence =
       evidenceItems.length > 0 ? evidenceItems.join('<br>') : '—';
@@ -2333,6 +2538,7 @@ ${execBand(audit, isOrg)}
 ${insightsSection(audit)}
 ${recommendationsSection(audit)}
 ${isOrg ? '' : dimensionSummary(audit)}
+${isOrg ? orgPreventionSection(audit) : preventionSection(audit)}
 <section class="tier-detail">
 <div class="tier-eyebrow">Detail</div>
 ${reposSection(audit, isOrg)}

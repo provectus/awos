@@ -48,6 +48,31 @@ Your primary task is to create a new functional specification file. You will det
 
 Follow this process precisely.
 
+### Mode Detection (do this first)
+
+Before determining a topic, decide whether this run **creates** a new spec or **amends** an existing one. Parse `<user_prompt>` for a reference to an existing spec — a spec number (`002`), a spec directory name (`002-task-scheduling`), or an explicit "amend/update spec NNN: \<what changed\>" phrasing (how the generated `fix-bug` command's `amend-spec` stage invokes this command after a behavior-changing fix).
+
+- If the prompt names a spec whose `context/spec/[index]-[short-name]/functional-spec.md` exists, go to **Update Mode** below.
+- Otherwise, fall through to **Creation Mode** (Step 1 onward) — today's flow.
+
+Only an explicit reference to an existing spec routes to Update Mode; a fresh topic — even one adjacent to an existing feature — is Creation Mode. When the reference is ambiguous, confirm with the user via `AskUserQuestion` rather than guessing.
+
+### Update Mode
+
+Amend the named spec **in place**. This mode never runs `create-spec-directory.sh` and never allocates a new index — it edits the existing directory.
+
+1.  Read the named spec's `functional-spec.md`.
+2.  Identify the acceptance criteria (and any parent requirement statements) the change affects. Edit them to match the corrected behavior, holding to the same non-technical, user-facing Language Rules above. Leave untouched criteria as they are.
+3.  Append a dated entry under a `## Change Log` heading (add the heading if the spec predates it): the date, the source reference (e.g. the bug id or the fix description passed in), and what behavior changed and why.
+4.  **Status:** do not force a transition. A spec amended after an already-verified fix stays `Completed` — the Change Log records the amendment. Only move Status back (e.g. to `In Review`) when the user is amending a spec that was not yet verified.
+5.  Save in the same directory under the same index. Report the amended path, which criteria changed, and the new Change Log entry. The amendment is complete — do not run the directory script or the Creation-Mode steps.
+
+If the prompt referenced a spec that does not exist (no matching `functional-spec.md`), do not fabricate one in Update Mode — tell the user, and offer to create it fresh via Creation Mode instead. If they accept, carry only the described behavior change into Creation Mode as the proposed topic — strip the amendment phrasing (e.g. `amend spec 999: add export` → topic `add export`) — and confirm the topic with the user before proceeding.
+
+---
+
+The steps below are **Creation Mode** — reached when Mode Detection finds no existing spec to amend.
+
 ### Step 1: Determine the Specification Topic
 
 Your first goal is to determine the **topic** - the single, specific feature or capability that this specification will define. To determine the topic, follow these steps:

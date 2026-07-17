@@ -9,6 +9,7 @@ import {
   kebab,
   PARALLELIZABLE_SHARE,
   type BacklogDraft,
+  type TicketDraft,
 } from '../backlog.ts';
 import { makeAudit, makeDim, makeCheck, tmpDir } from './helpers.ts';
 
@@ -220,6 +221,32 @@ test('an empty tickets array is rejected, not silently written as an empty backl
       err instanceof BacklogValidationError &&
       err.violations.some((v) => v === 'draft has no tickets'),
     'an empty draft must be a named violation, not a silently-accepted empty backlog'
+  );
+});
+
+test('a truthy non-array checks value is a named violation, not a TypeError', () => {
+  const bad = draft([
+    T({ id: 'x', checks: {} as unknown as TicketDraft['checks'] }),
+  ]);
+  assert.throws(
+    () => buildBacklog(fixtureAudit(), bad),
+    (err: BacklogValidationError) =>
+      err instanceof BacklogValidationError &&
+      err.violations.some((v) => /checks must/.test(v)),
+    'checks: {} must be a named violation, not a TypeError from iterating a non-array'
+  );
+});
+
+test('a truthy non-array depends_on value is a named violation, not a TypeError', () => {
+  const bad = draft([
+    T({ id: 'x', depends_on: {} as unknown as TicketDraft['depends_on'] }),
+  ]);
+  assert.throws(
+    () => buildBacklog(fixtureAudit(), bad),
+    (err: BacklogValidationError) =>
+      err instanceof BacklogValidationError &&
+      err.violations.some((v) => /depends_on must be an array/.test(v)),
+    'depends_on: {} must be a named violation, not a TypeError from iterating a non-array'
   );
 });
 
@@ -473,6 +500,33 @@ test('an org ticket member referencing a repo with no per-repo directory is a vi
       err instanceof BacklogValidationError &&
       err.violations.some((v) => v.includes('ghost')),
     'unknown member repo (no per-repo/<repo> dir) must be a named violation, not a TypeError'
+  );
+});
+
+test('a truthy non-array org ticket members value is a named violation, not a TypeError', () => {
+  const org = writeOrgDir();
+  const badDraft = structuredClone(ORG_DRAFT);
+  (badDraft.org_tickets[0] as unknown as Record<string, unknown>).members = 7;
+  assert.throws(
+    () => generateOrgBacklog(org, badDraft),
+    (err: BacklogValidationError) =>
+      err instanceof BacklogValidationError &&
+      err.violations.some((v) => /members must not be empty/.test(v)),
+    'members: 7 must be a named violation, not a TypeError from iterating a non-array'
+  );
+});
+
+test('a truthy non-array org ticket depends_on value is a named violation, not a TypeError', () => {
+  const org = writeOrgDir();
+  const badDraft = structuredClone(ORG_DRAFT);
+  (badDraft.org_tickets[0] as unknown as Record<string, unknown>).depends_on =
+    {};
+  assert.throws(
+    () => generateOrgBacklog(org, badDraft),
+    (err: BacklogValidationError) =>
+      err instanceof BacklogValidationError &&
+      err.violations.some((v) => /depends_on must be an array/.test(v)),
+    'org ticket depends_on: {} must be a named violation, not a TypeError from iterating a non-array'
   );
 });
 

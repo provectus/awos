@@ -24,6 +24,11 @@ import { renderTicketMd, renderBacklogHtml } from './backlog_render.ts';
 /** Share of total effort assumed parallelizable across independent tickets. */
 export const PARALLELIZABLE_SHARE = 0.8;
 
+/** A truthy-but-non-array draft field (e.g. `{}`) must never reach a `for...of` — coerce to []. */
+function asArray<T>(v: T[] | undefined): T[] {
+  return Array.isArray(v) ? v : [];
+}
+
 export interface TicketCheckDraft {
   check_id: string;
   share: number;
@@ -245,10 +250,13 @@ export function buildBacklog(
         `ticket ${label}: effort_dev_days must be a finite number > 0, got ${JSON.stringify(t.effort_dev_days)}`
       );
     }
-    if (!t.checks || t.checks.length === 0) {
+    if (!Array.isArray(t.checks) || t.checks.length === 0) {
       violations.push(`ticket ${label}: checks must not be empty`);
     }
-    for (const c of t.checks ?? []) {
+    if (t.depends_on !== undefined && !Array.isArray(t.depends_on)) {
+      violations.push(`ticket ${label}: depends_on must be an array`);
+    }
+    for (const c of asArray(t.checks)) {
       if (
         typeof c.share !== 'number' ||
         !Number.isFinite(c.share) ||
@@ -277,7 +285,7 @@ export function buildBacklog(
         );
       }
     }
-    for (const dep of t.depends_on ?? []) {
+    for (const dep of asArray(t.depends_on)) {
       if (dep === t.id) {
         violations.push(
           `ticket ${label}: depends_on references itself (${dep})`
@@ -293,7 +301,7 @@ export function buildBacklog(
   // Per-check total share across all tickets.
   const shareByCheck = new Map<string, number>();
   for (const t of tickets) {
-    for (const c of t.checks ?? []) {
+    for (const c of asArray(t.checks)) {
       if (!checkInfo.has(c.check_id)) continue;
       if (typeof c.share !== 'number' || !Number.isFinite(c.share)) continue;
       shareByCheck.set(
@@ -320,7 +328,7 @@ export function buildBacklog(
   }
   for (const t of tickets) {
     if (!t.id || dupIds.has(t.id)) continue;
-    for (const dep of t.depends_on ?? []) {
+    for (const dep of asArray(t.depends_on)) {
       if (dep === t.id || !validIds.has(dep) || dupIds.has(dep)) continue;
       inDegree.set(t.id, (inDegree.get(t.id) ?? 0) + 1);
       const arr = dependents.get(dep) ?? [];
@@ -688,7 +696,7 @@ export function buildOrgBacklog(
   }
   const referencedRepos = new Set<string>();
   for (const t of orgTickets) {
-    for (const m of t.members ?? []) {
+    for (const m of asArray(t.members)) {
       if (m?.repo) referencedRepos.add(m.repo);
     }
   }
@@ -754,11 +762,14 @@ export function buildOrgBacklog(
     if (!t.goal) violations.push(`org ticket ${label}: empty goal`);
     if (!t.description)
       violations.push(`org ticket ${label}: empty description`);
-    if (!t.members || t.members.length === 0) {
+    if (!Array.isArray(t.members) || t.members.length === 0) {
       violations.push(`org ticket ${label}: members must not be empty`);
     }
+    if (t.depends_on !== undefined && !Array.isArray(t.depends_on)) {
+      violations.push(`org ticket ${label}: depends_on must be an array`);
+    }
     const seenInTicket = new Set<string>();
-    for (const m of t.members ?? []) {
+    for (const m of asArray(t.members)) {
       const entry = entryByRepo.get(m.repo);
       if (!entry) {
         violations.push(
@@ -792,7 +803,7 @@ export function buildOrgBacklog(
         memberOwner.set(key, t.id);
       }
     }
-    for (const dep of t.depends_on ?? []) {
+    for (const dep of asArray(t.depends_on)) {
       if (dep === t.id) {
         violations.push(
           `org ticket ${label}: depends_on references itself (${dep})`
@@ -815,7 +826,7 @@ export function buildOrgBacklog(
   }
   for (const t of orgTickets) {
     if (!t.id || dupIds.has(t.id)) continue;
-    for (const dep of t.depends_on ?? []) {
+    for (const dep of asArray(t.depends_on)) {
       if (dep === t.id || !validIds.has(dep) || dupIds.has(dep)) continue;
       inDegree.set(t.id, (inDegree.get(t.id) ?? 0) + 1);
       const arr = dependents.get(dep) ?? [];
@@ -943,7 +954,7 @@ function collectUnlinkedTicketWarnings(
 ): string[] {
   const referenced = new Set<string>();
   for (const t of draft.org_tickets ?? []) {
-    for (const m of t.members ?? []) {
+    for (const m of asArray(t.members)) {
       if (m?.repo && m?.slug) referenced.add(`${m.repo}::${m.slug}`);
     }
   }

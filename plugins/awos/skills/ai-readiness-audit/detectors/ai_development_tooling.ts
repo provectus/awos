@@ -227,8 +227,13 @@ export function detectClaudeHooks(
 //   - package.json with a "start" or "dev" script
 //   - run.sh, start.sh, or justfile at repo root
 //   - Taskfile.yml or Taskfile.yaml at repo root
+//   - mvnw or gradlew wrapper script at repo root (JVM)
+//   - manage.py at repo root (Django)
+//   - Procfile at repo root
 //
-// FAIL if none are found.
+// FAIL if none are found. A build manifest alone (pom.xml, build.gradle)
+// does not count — it proves the project builds, not that an agent can run
+// it; the wrapper script is the run mechanism.
 // ---------------------------------------------------------------------------
 
 const ROOT_RUN_FILES = [
@@ -241,6 +246,10 @@ const ROOT_RUN_FILES = [
   'Justfile',
   'Taskfile.yml',
   'Taskfile.yaml',
+  'mvnw',
+  'gradlew',
+  'manage.py',
+  'Procfile',
 ];
 
 function hasPackageJsonRunScript(repoPath: string): boolean {
@@ -286,7 +295,8 @@ export function detectCanRunApp(
   }
 
   return makeResult('FAIL', 0, [
-    'no run mechanism found — no Makefile, docker-compose, or package.json start script; ' +
+    'no run mechanism found — no Makefile, docker-compose, package.json start script, ' +
+      'build-tool wrapper (mvnw/gradlew), manage.py, or Procfile; ' +
       'Claude Code cannot run the application without human involvement',
   ]);
 }

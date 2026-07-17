@@ -241,6 +241,54 @@ test('detectCanRunApp: no run mechanism → FAIL', () => {
   assert.equal(r.status, 'FAIL');
 });
 
+// Issue #151: JVM and other language-standard run mechanisms were invisible —
+// a Spring Boot repo with only mvnw/gradlew wrappers failed AI-07.
+
+test('detectCanRunApp (issue #151): Maven wrapper mvnw at root → PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'mvnw'), '#!/bin/sh\nexec java ...\n');
+  writeFileSync(join(t, 'pom.xml'), '<project></project>\n');
+  const r = detectCanRunApp(t);
+  assert.equal(r.status, 'PASS', 'expected PASS when mvnw wrapper present');
+  assert.ok(r.evidence.some((e) => e.includes('mvnw')));
+});
+
+test('detectCanRunApp (issue #151): Gradle wrapper gradlew at root → PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'gradlew'), '#!/bin/sh\nexec java ...\n');
+  writeFileSync(join(t, 'build.gradle.kts'), 'plugins { java }\n');
+  const r = detectCanRunApp(t);
+  assert.equal(r.status, 'PASS', 'expected PASS when gradlew wrapper present');
+  assert.ok(r.evidence.some((e) => e.includes('gradlew')));
+});
+
+test('detectCanRunApp (issue #151): Django manage.py at root → PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'manage.py'), '#!/usr/bin/env python\n');
+  const r = detectCanRunApp(t);
+  assert.equal(r.status, 'PASS', 'expected PASS when manage.py present');
+  assert.ok(r.evidence.some((e) => e.includes('manage.py')));
+});
+
+test('detectCanRunApp (issue #151): Procfile at root → PASS', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'Procfile'), 'web: gunicorn app:app\n');
+  const r = detectCanRunApp(t);
+  assert.equal(r.status, 'PASS', 'expected PASS when Procfile present');
+  assert.ok(r.evidence.some((e) => e.includes('Procfile')));
+});
+
+test('detectCanRunApp (issue #151): bare pom.xml without wrapper still FAIL', () => {
+  const t = tmp();
+  writeFileSync(join(t, 'pom.xml'), '<project></project>\n');
+  const r = detectCanRunApp(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'a build manifest alone is not a run mechanism — only the wrapper script is'
+  );
+});
+
 // ---------------------------------------------------------------------------
 // DETECTORS map
 // ---------------------------------------------------------------------------

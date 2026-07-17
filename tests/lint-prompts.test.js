@@ -2123,18 +2123,25 @@ test('product.md degrades gracefully when configure-external-sources skill is un
   // commands know sources were declined.
   const body = readUtf8(path.join(commandsDir, 'product.md'));
   assert.ok(
-    /skill is not available|plugin is not installed/i.test(body),
+    /plugin absent|plugin is needed|skill is not found/i.test(body),
     'commands/product.md must handle the case where the awos plugin (and its skill) is not installed'
   );
-  // Pin the fallback action — the fresh-run branch must write Status: none
-  // when the skill is unavailable, not just mention the absence.
+  // Pin the fallback action — the fresh-run branch (the one that creates
+  // sources.md from scratch) must write Status: none when the Skill call
+  // fails. Split on the fresh-run clause to avoid matching the
+  // intermediate-status branch, whose contract is to leave sources.md
+  // untouched.
   const externalDocsBlock = body
     .split(/external documentation sources/i)
     .slice(1)
     .join('');
+  const freshRunBranch = externalDocsBlock
+    .split(/install it from the marketplace/i)
+    .slice(1)
+    .join('');
   assert.ok(
-    /skill is not available[^]*?Status: none/i.test(externalDocsBlock),
-    'commands/product.md must write ## Status: none as the fallback when the skill is unavailable'
+    /Status: none/i.test(freshRunBranch),
+    'commands/product.md fresh-run branch must write ## Status: none as the fallback when the Skill call fails'
   );
 });
 
@@ -2179,7 +2186,7 @@ test('manual sources are handled across skill and commands', () => {
   for (const cmd of ['product.md', 'roadmap.md', 'architecture.md']) {
     const body = readUtf8(path.join(commandsDir, cmd));
     const extDocBlock = body
-      .split(/external documentation/i)
+      .split(/external documentation (sources|context)/i)
       .slice(1)
       .join('');
     assert.ok(
@@ -2322,7 +2329,7 @@ test('external sources retrieval passes brownfield findings to avoid duplicate t
     const body = readUtf8(path.join(commandsDir, cmd));
     // Find the sources retrieval section and check it contains brownfield.md
     const sourcesSection = body
-      .split(/external documentation/i)
+      .split(/external documentation (sources|context)/i)
       .slice(1)
       .join('');
     assert.ok(
@@ -2348,22 +2355,6 @@ test('retrieval commands guard on context/sources/sources.md existence', () => {
       ),
       `commands/${cmd} must guard documentation retrieval on context/sources/sources.md existence with configured status`
     );
-  }
-});
-
-test('context/<path> references in prompts are internally consistent', () => {
-  // Build a writer/reader map by scanning all prompts. A path is considered
-  // consistent if every reference to it appears in at least one prompt — i.e.
-  // we never have a path referenced only by one file that no other prompt
-  // touches. The cheap version asserted here: every context/...md path
-  // mentioned by ANY prompt is mentioned by at least one root command.
-  const files = listMarkdown(commandsDir).map((f) => path.join(commandsDir, f));
-  const refs = new Set();
-  for (const f of files) {
-    const body = readUtf8(f);
-    const matches =
-      body.match(/context\/[a-z][a-zA-Z0-9/_.\-\[\]]*\.md/g) || [];
-    for (const m of matches) refs.add(m);
   }
 });
 

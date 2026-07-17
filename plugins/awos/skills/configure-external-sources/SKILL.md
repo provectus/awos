@@ -5,7 +5,6 @@ description: >-
   chats, email). Guides MCP/CLI tool setup, handles editor restart-resume,
   and writes structured source configuration to context/sources/sources.md.
   Called by onboarding commands when a brownfield project has external docs.
-disable-model-invocation: true
 argument-hint: ''
 ---
 

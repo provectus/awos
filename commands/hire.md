@@ -1,5 +1,5 @@
 ---
-description: Hires specialist agents — finds, installs skills, MCPs, and agents from registry, generates agent files.
+description: Hires specialist agents — finds, installs skills, MCPs, agents, and hooks from registry, generates agent files.
 ---
 
 # ROLE
@@ -10,7 +10,7 @@ You are an expert Agent Configuration Specialist. Your primary function is to an
 
 # TASK
 
-Your task is to ensure the project has sufficient specialist agents, skills, and MCPs to fully cover its AI-driven technology stack. You will read the architecture and technical specifications, identify required agent roles, review what already exists, assess coverage and gaps, search the `awos-recruitment` MCP server for skills/MCPs/pre-built agents, install what’s missing by generating or updating files in `.claude/`
+Your task is to ensure the project has sufficient specialist agents, skills, and MCPs to fully cover its AI-driven technology stack. You will read the architecture and technical specifications, identify required agent roles, review what already exists, assess coverage and gaps, search the `awos-recruitment` MCP server for skills/MCPs/pre-built agents/hooks, install what’s missing by generating or updating files in `.claude/`
 
 ---
 
@@ -67,6 +67,7 @@ Follow this process precisely.
 1.  Discover existing agents and skills. The discovery covers **both** sources below — finding agents in one does not satisfy the other:
     - **Project-local agents** — use `Glob` for `.claude/agents/*.md`, then call the `Read` tool on each matched file (one `Read` per file — do not substitute `Bash` with `head`/`cat`/`find -exec`, even though it would be fewer calls). For each file, extract `name`, `description`, and `skills` from its YAML frontmatter. Filenames alone are not enough — the coverage table needs each agent's description and skill list.
     - **Plugin-provided agents** — inspect the `Agent` tool's description block in your own system prompt and collect every agent whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`). This is an introspection step — no tool call is required, but the step is mandatory.
+    - **Installed hooks** — if `.claude/settings.json` or `.claude/settings.local.json` exists in the project, `Read` it and collect the configured hooks (event, matcher, command). A missing or unparseable file means no existing hooks — not an error. This set filters duplicates out of the Step 4 hook proposal and populates the Step 8 roster. User-level settings (`~/.claude/settings.json`) are out of scope.
     - Search for available skills across the project (`.claude/skills/`, plugin-provided skills, any other skill locations).
     - Report each registered specialist subagent's name and description (project-local and plugin-provided alike) so the orchestrator can match domains against them.
 2.  Compare against the proposed roles from Step 2 and classify coverage:
@@ -87,14 +88,27 @@ Follow this process precisely.
     - `"React TypeScript frontend development"`
     - `"Python FastAPI backend API"`
     - `"AWS Terraform infrastructure deployment"`
-2.  If the `awos-recruitment` MCP server is not available or returns errors, tell the user it is unavailable and that you will proceed with generating agent files using general configuration. Note that they can prepare custom skills and agents in `.claude/skills/` and `.claude/agents/`. Skip to **Step 6**.
-3.  Gather all found skills, MCPs, and agents from the search results.
-4.  Show the user what was found and confirm installation before proceeding.
+2.  In the same parallel batch, issue hook searches with the registry's `type="hook"` filter. Hooks are project-wide guardrails and side-effects (format-on-edit, lint/test gates, commit checks, docs freshness, dangerous-command blocking) — their relevance is orthogonal to agent coverage, so these searches run even when every role is Covered. The registry matches a query against each hook's name + description embedding, so phrase each query as a short natural-language problem statement — the way a hook's description would read — and keep **one intent per query**; concatenating intents or toolchain keywords into one query dilutes the match below the score threshold. Derive the intents from the project's toolchain and conventions. Examples:
+    - `"format code automatically after edits"`
+    - `"run lint and tests before completing work"`
+    - `"keep documentation updated before committing"`
+
+    Filter the results against the hooks already configured (Step 3). If the searches return no hooks, skip the hooks phase silently — no warning needed.
+
+3.  If the `awos-recruitment` MCP server is not available or returns errors, tell the user it is unavailable and that you will proceed with generating agent files using general configuration. Note that they can prepare custom skills and agents in `.claude/skills/` and `.claude/agents/`. Skip to **Step 6**.
+4.  Gather all found skills, MCPs, agents, and hooks from the search results.
+5.  Show the user what was found and confirm installation before proceeding.
 
     | Role             | Found Skills                  | Found MCPs | Found Agents       |
     | ---------------- | ----------------------------- | ---------- | ------------------ |
     | `python-backend` | `fastapi-expert`              | —          | —                  |
     | `aws-infra`      | `terraform-pro`, `aws-deploy` | `aws-mcp`  | `aws-infra-expert` |
+
+    Found hooks get their own table with behavior-level detail — the user consents to what each hook does, not just its name:
+
+    | Hook               | Event       | What it runs                          | Why relevant                   |
+    | ------------------ | ----------- | ------------------------------------- | ------------------------------ |
+    | `prettier-on-edit` | PostToolUse | `prettier --write` on the edited file | Prettier is the repo formatter |
 
 **QA Complement Rule:**
 
@@ -127,7 +141,13 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
     npx @provectusinc/awos-recruitment agent <space-separated agent names>
     bunx @provectusinc/awos-recruitment agent <space-separated agent names>
     ```
-4.  Report successes and failures for each installation.
+4.  Install hooks:
+    ```
+    npx @provectusinc/awos-recruitment hook <space-separated hook names>
+    bunx @provectusinc/awos-recruitment hook <space-separated hook names>
+    ```
+    The CLI writes hook entries into the project's `.claude/settings.json` (script payloads into `.claude/hooks/`) and is idempotent on re-run. Hooks come from the registry only — never author hook entries or commands yourself, and never generate hooks from a template. If the registry has none, none are installed.
+5.  Report successes and failures for each installation.
 
 ## Step 6: Generate or Update Agent Files
 
@@ -178,6 +198,11 @@ Generated by `/awos:hire` on YYYY-MM-DD. Re-run `/awos:hire` to refresh — this
 | Name | Description | Skills |
 | ---- | ----------- | ------ |
 
+## Installed Hooks
+
+| Name | Event | Description |
+| ---- | ----- | ----------- |
+
 ## Gaps
 
 (one bullet per missing or partial coverage row, with the impact)
@@ -194,6 +219,11 @@ Rules for the **Registered Specialist Subagents** table:
 - One row per subagent currently in `.claude/agents/*.md` after this run completes (including ones installed in Step 5 and ones generated in Step 6).
 - Pull `name`, `description`, and `skills` directly from each agent file's YAML frontmatter.
 
+Rules for the **Installed Hooks** table:
+
+- One row per hook configured in the project's `.claude/settings.json` / `.claude/settings.local.json` after this run completes — pre-existing and just-installed alike.
+- If no hooks are configured, replace the table with the single line `None installed.`
+
 The **Gaps** section may be empty. If non-empty, each bullet is one line: `- <Technology>: <what's missing> → <suggested action>`.
 
 ## Step 9: Final Summary
@@ -205,6 +235,7 @@ Report:
 - **Agents Updated:** each updated agent and what was added
 - **Skills Installed:** all successfully installed skills
 - **MCPs Installed:** all successfully installed MCPs
+- **Hooks Installed:** all successfully installed hooks
 - **Coverage Report:** path to `context/product/hired-agents.md`
 - **Gaps Remaining:** any technologies without specific skill coverage
 

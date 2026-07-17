@@ -1194,6 +1194,31 @@ test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => 
   );
 });
 
+test('hire.md installs hooks from the registry and never authors them', () => {
+  // Hooks are the fourth recruitment component type, but unlike agents
+  // they are executable shell behavior — hire may only install what the
+  // registry ships, never fabricate hook commands, and must roster the
+  // post-install state. See docs: design spec 2026-07-17-hire-hooks.
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    body.includes('npx @provectusinc/awos-recruitment hook ') &&
+      body.includes('bunx @provectusinc/awos-recruitment hook '),
+    'commands/hire.md must install hooks via the awos-recruitment `hook` verb in both npx and bunx forms'
+  );
+  assert.ok(
+    body.includes('.claude/settings.json'),
+    'commands/hire.md must discover existing hooks from the project .claude/settings.json in Step 3'
+  );
+  assert.ok(
+    body.includes('## Installed Hooks'),
+    'commands/hire.md Step 8 coverage-report structure must contain the "## Installed Hooks" section'
+  );
+  assert.ok(
+    /never author hook/i.test(body),
+    'commands/hire.md must state that hooks come from the registry only — hire never authors hook entries or commands'
+  );
+});
+
 test('setup-config does not auto-populate .claude/agents/', () => {
   // .claude/agents/ is the user's customization area. The earlier draft
   // of this PR shipped a `plugins/awos/agents` → `.claude/agents` copy

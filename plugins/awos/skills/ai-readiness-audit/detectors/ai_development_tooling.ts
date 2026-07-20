@@ -295,7 +295,7 @@ export function detectCanRunApp(
   }
 
   return makeResult('FAIL', 0, [
-    'no run mechanism found — no Makefile, docker-compose, package.json start script, ' +
+    'no run mechanism found — no Makefile, docker-compose, package.json start/dev script, ' +
       'build-tool wrapper (mvnw/gradlew), manage.py, or Procfile; ' +
       'Claude Code cannot run the application without human involvement',
   ]);

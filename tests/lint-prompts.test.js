@@ -367,20 +367,19 @@ test('claude/commands operation is marked preserveOnUpdate', () => {
   );
 });
 
-test('implement.md uses XML scope, investigate, and skills snippets', () => {
-  // The formulated subagent prompt in implement.md must contain three
+test('implement.md uses XML scope, investigate, skills, and completion-evidence snippets', () => {
+  // The formulated subagent prompt in implement.md must contain four
   // XML blocks that have outsized impact on subagent behavior:
   //   <scope_discipline>             — keep the change minimal, don't over-engineer
   //   <investigate_before_answering> — read the relevant files, don't hallucinate
   //   <use_available_skills>         — apply matching project/user/plugin skills
-  // A verification-commands block is intentionally NOT asserted here.
-  // Teams that want mandatory verification can add it via wrapper
-  // customization in .claude/commands/awos/implement.md.
+  //   <completion_evidence>          — cite fresh command output, no belief-based "done"
   const body = readUtf8(path.join(commandsDir, 'implement.md'));
   const needed = [
     '<scope_discipline>',
     '<investigate_before_answering>',
     '<use_available_skills>',
+    '<completion_evidence>',
   ];
   const missing = needed.filter((tag) => !body.includes(tag));
   assert.deepEqual(
@@ -955,6 +954,75 @@ test('fix-bug template reads remote links, sweeps all surfaces, and verifies sub
       `${tmpl} Context Discipline must state that subagent reports are claims to spot-check, not facts to relay`
     );
   }
+});
+
+test('completion claims require fresh evidence — the verification reflex is baked into agent prompts', () => {
+  // The verification-before-completion discipline: an agent may not
+  // report its own work as done on belief ("should work", "Done!") —
+  // the claim cites command output produced in the same run, and a
+  // test written for a change is proven by failing without that
+  // change. "RED validation" is the canonical name — coined by the
+  // testing slice commands/tasks.md emits — so the other prompts
+  // reference it rather than coining parallel terms. agent-template.md
+  // is the ancestor of every hired specialist; /awos:implement's
+  // <completion_evidence> block makes each subagent prove the tests it
+  // writes; the implement-feature flow adds the orchestrator's
+  // independent spot-check of one test, honoring skip-tests.
+  const tasks = readUtf8(path.join(commandsDir, 'tasks.md'));
+  assert.ok(
+    /RED validation/.test(tasks),
+    'commands/tasks.md testing slice must carry the literal "RED validation" wording — the other prompts reference it as the canonical term'
+  );
+
+  const agentTemplate = readUtf8(path.join(templatesDir, 'agent-template.md'));
+  assert.ok(
+    /completion claim cites its evidence/i.test(agentTemplate),
+    'templates/agent-template.md must require completion claims to cite fresh evidence — every hired agent inherits this template'
+  );
+  assert.ok(
+    /browser-automation/i.test(agentTemplate) &&
+      /docs\/screenshots\//.test(agentTemplate) &&
+      /curl/.test(agentTemplate),
+    "templates/agent-template.md must name the sanctioned evidence forms, mirroring commands/verify.md — browser-automation + screenshot to docs/screenshots/ for UI; curl/shell/log/database/MCP for the rest — so evidence isn't read as test-only"
+  );
+  assert.ok(
+    /RED validation/.test(agentTemplate) &&
+      /revert|stash/i.test(agentTemplate) &&
+      /fail/i.test(agentTemplate),
+    'templates/agent-template.md must require RED validation of new tests — revert the covered change, see the test fail, restore, see it pass'
+  );
+  assert.ok(
+    /opted out of tests/i.test(agentTemplate),
+    'templates/agent-template.md must make the tests opt-out explicit — evidence stays required in another form, and RED validation goes inert rather than prompting an unwanted test'
+  );
+
+  const implement = readUtf8(path.join(commandsDir, 'implement.md'));
+  assert.ok(
+    /RED validation/.test(implement) && /watch it fail/i.test(implement),
+    'commands/implement.md <completion_evidence> block must carry the RED-validation fail-first proof for tests a subagent writes as part of a task'
+  );
+  assert.ok(
+    /tailored to the task/i.test(implement) &&
+      /exact test command/i.test(implement),
+    'commands/implement.md <completion_evidence> block must be tailored per task — the evidence requirement in every delegation, RED validation instantiated concretely (what to revert, the exact test command) only when the task writes a test'
+  );
+  assert.ok(
+    implement.includes('<!-- skip-tests: true -->'),
+    'commands/implement.md <completion_evidence> block must honor the <!-- skip-tests: true --> marker — drop the RED-validation clause under an opt-out while keeping the evidence requirement'
+  );
+
+  const featureTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+  );
+  assert.ok(
+    /RED validation/.test(featureTemplate) &&
+      /revert|stash/i.test(featureTemplate),
+    'implement-feature-template.md implement stage must spot-check the testing slice via RED validation — the writing subagent proves its tests; the orchestrator independently re-proves one'
+  );
+  assert.ok(
+    featureTemplate.includes('<!-- skip-tests: true -->'),
+    'implement-feature-template.md spot-check must honor the <!-- skip-tests: true --> opt-out — with the marker set no testing slice exists to check'
+  );
 });
 
 test('flow.md generator version constant matches plugin.json and stamps the artifacts', () => {

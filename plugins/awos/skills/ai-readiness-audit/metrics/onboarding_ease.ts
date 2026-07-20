@@ -16,7 +16,8 @@
  *   1. README setup steps — README.md / README / readme.md contains a recognizable
  *      setup/install/getting-started/usage/quickstart heading OR a common bootstrap command
  *      (npm install, yarn, pnpm install, make, docker compose/docker-compose, pip install,
- *      poetry install, ./gradlew, bundle install, go build/go run, cargo build, uv sync).
+ *      poetry install, ./gradlew, mvn/./mvnw, bundle install, go build/go run, cargo build,
+ *      uv sync).
  *
  *   2. Agent context file — topology['has_agent_instruction_files'] is truthy; or CLAUDE.md
  *      or AGENTS.md is present at the repo root. Reflects AI-agent-first onboarding support.
@@ -72,7 +73,7 @@ const SETUP_HEADING_RE =
 
 /** Bootstrap command patterns (case-insensitive). */
 const BOOTSTRAP_CMD_RE =
-  /npm install|yarn(?:\s|$)|pnpm install|(?<!\w)make(?!\w)|docker[\s-]compose|pip install|poetry install|\.\/gradlew|bundle install|go build|go run|cargo build|uv sync/i;
+  /npm install|yarn(?:\s|$)|pnpm install|(?<!\w)make(?!\w)|docker[\s-]compose|pip install|poetry install|\.\/gradlew|(?<!\w)mvnw?(?!\w)|bundle install|go build|go run|cargo build|uv sync/i;
 
 /** Max README bytes to read (guard against oversized files). */
 const MAX_README_BYTES = 64 * 1024; // 64 KiB

@@ -3185,7 +3185,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // behavior changes — always as one deliberate commit moving three files
 // together: plugin.json, marketplace.json, and this pinned literal. The pin
 // exists to force that deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.1';
+const EXPECTED_PLUGIN_VERSION = '2.4.2';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(

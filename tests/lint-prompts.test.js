@@ -980,16 +980,30 @@ test('completion claims require fresh evidence — the verification reflex is ba
     'templates/agent-template.md must require completion claims to cite fresh evidence — every hired agent inherits this template'
   );
   assert.ok(
+    /browser-automation/i.test(agentTemplate) &&
+      /docs\/screenshots\//.test(agentTemplate) &&
+      /curl/.test(agentTemplate),
+    "templates/agent-template.md must name the sanctioned evidence forms, mirroring commands/verify.md — browser-automation + screenshot to docs/screenshots/ for UI; curl/shell/log/database/MCP for the rest — so evidence isn't read as test-only"
+  );
+  assert.ok(
     /RED validation/.test(agentTemplate) &&
       /revert|stash/i.test(agentTemplate) &&
       /fail/i.test(agentTemplate),
     'templates/agent-template.md must require RED validation of new tests — revert the covered change, see the test fail, restore, see it pass'
+  );
+  assert.ok(
+    /opted out of tests/i.test(agentTemplate),
+    'templates/agent-template.md must make the tests opt-out explicit — evidence stays required in another form, and RED validation goes inert rather than prompting an unwanted test'
   );
 
   const implement = readUtf8(path.join(commandsDir, 'implement.md'));
   assert.ok(
     /RED validation/.test(implement) && /watch it fail/i.test(implement),
     'commands/implement.md <completion_evidence> block must carry the RED-validation fail-first proof for tests a subagent writes as part of a task'
+  );
+  assert.ok(
+    implement.includes('<!-- skip-tests: true -->'),
+    'commands/implement.md <completion_evidence> block must honor the <!-- skip-tests: true --> marker — drop the RED-validation clause under an opt-out while keeping the evidence requirement'
   );
 
   const featureTemplate = readUtf8(

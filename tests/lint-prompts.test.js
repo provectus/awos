@@ -1002,6 +1002,11 @@ test('completion claims require fresh evidence — the verification reflex is ba
     'commands/implement.md <completion_evidence> block must carry the RED-validation fail-first proof for tests a subagent writes as part of a task'
   );
   assert.ok(
+    /tailored to the task/i.test(implement) &&
+      /exact test command/i.test(implement),
+    'commands/implement.md <completion_evidence> block must be tailored per task — the evidence requirement in every delegation, RED validation instantiated concretely (what to revert, the exact test command) only when the task writes a test'
+  );
+  assert.ok(
     implement.includes('<!-- skip-tests: true -->'),
     'commands/implement.md <completion_evidence> block must honor the <!-- skip-tests: true --> marker — drop the RED-validation clause under an opt-out while keeping the evidence requirement'
   );

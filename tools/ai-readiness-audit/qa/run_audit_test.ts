@@ -45,12 +45,15 @@ import {
   awosMainCheckout,
   collectReportHtml,
   discoverProjectMcp,
+  evaluateGenerateCompliance,
   formatWallTime,
+  gatherGenerateArtifacts,
   gitRepoSubdirs,
   isDir,
   isFile,
   isMainModule,
   locateOutDir,
+  newestAuditDir,
   planRetry,
   releaseRunLock,
   repointMarketplace,
@@ -62,7 +65,12 @@ import {
   summarizeOutput,
   tokenCostSummary,
 } from './harness_lib.ts';
-import type { Compliance, MarketPaths, ReportHtml } from './harness_lib.ts';
+import type {
+  Compliance,
+  GenerateCompliance,
+  MarketPaths,
+  ReportHtml,
+} from './harness_lib.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -164,9 +172,20 @@ function snapshotAudits(target: string): string[] {
 async function streamRun(
   target: string,
   claudeFlags: string[],
-  runLog: string
+  runLog: string,
+  promptOverride?: string
 ): Promise<[any, number]> {
-  log(`▶ ${[...CLAUDE_AUDIT_CMD, ...claudeFlags].join(' ')}  (cwd=${target})`);
+  const cmdForLog = promptOverride
+    ? [
+        'claude',
+        '-p',
+        promptOverride,
+        '--output-format',
+        'stream-json',
+        '--verbose',
+      ]
+    : CLAUDE_AUDIT_CMD;
+  log(`▶ ${[...cmdForLog, ...claudeFlags].join(' ')}  (cwd=${target})`);
   log('─'.repeat(60));
   let result: any = {};
   const segments: any[] = [];
@@ -235,6 +254,7 @@ async function streamRun(
       tick: (elapsedMs) =>
         live('… still running (no stream events for 60s)', elapsedMs),
     },
+    prompt: promptOverride,
   });
 
   if (segments.length) {
@@ -280,6 +300,83 @@ function seedAuditCore(
 }
 
 // ---------------------------------------------------------------------------
+/** Outcome of the (optional) second `generate` session — always present in the meta/summary, even when skipped. */
+interface GenerateRunResult {
+  requested: boolean;
+  compliance: GenerateCompliance | null;
+  backlogHtmlPaths: string[];
+  rc: number | null;
+  partial: boolean;
+  costUsd: number | null;
+  /** Set when the generate phase was requested but not attempted (audit phase non-compliant/incomplete). */
+  skippedReason: string | null;
+}
+
+const GENERATE_SKIPPED: GenerateRunResult = {
+  requested: false,
+  compliance: null,
+  backlogHtmlPaths: [],
+  rc: null,
+  partial: false,
+  costUsd: null,
+  skippedReason: null,
+};
+
+/**
+ * Second headless session: `/awos:ai-readiness-audit generate <request>`,
+ * launched against the SAME target/deploy/lock context right after the audit
+ * phase, while the audit it should act on is still live under the target's
+ * context/audits/<stamp>/ (restoreTarget hasn't run yet — that happens in
+ * main()'s finally, after both phases). `outDir`/`archived` are the audit
+ * phase's live and archived output dirs; the generate phase re-copies
+ * `outDir` into `archived` afterward so the archived copy gains `backlog/`
+ * too, then evaluates compliance from the ARCHIVED copy (the artifact that
+ * is actually kept and reported).
+ */
+async function runGeneratePhase(
+  request: string,
+  target: string,
+  runDir: string,
+  claudeFlags: string[],
+  outDir: string,
+  archived: string
+): Promise<GenerateRunResult> {
+  const prompt = `/awos:ai-readiness-audit generate ${request}`;
+  log(`\n▶ generate phase: ${prompt}`);
+  const runLog = path.join(runDir, 'run2.jsonl');
+  const [result, rc] = await streamRun(target, claudeFlags, runLog, prompt);
+  const partial = Boolean(rc !== 0 || result.is_error);
+
+  if (outDir && isDir(outDir)) {
+    fs.cpSync(outDir, archived, { recursive: true });
+    log('▶ archived generate-phase output (backlog/) -> ' + archived);
+  }
+
+  const lines = fs.readFileSync(runLog, 'utf8').split('\n');
+  const artifacts = gatherGenerateArtifacts(archived);
+  const compliance = evaluateGenerateCompliance(lines, artifacts);
+  if (!compliance.model_complied) {
+    warn(
+      `⚠ NON-COMPLIANT generate run — generate_backlog_calls=${compliance.generate_backlog_calls} ` +
+        `backlog_stamped=${compliance.backlog_stamped} tickets_written=${compliance.tickets_written}`
+    );
+  } else {
+    log('  ✓ generate phase compliant — backlog generated and stamped');
+  }
+
+  return {
+    requested: true,
+    compliance,
+    backlogHtmlPaths: artifacts.backlogHtmlPaths,
+    rc,
+    partial,
+    costUsd:
+      typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null,
+    skippedReason: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 interface HarnessArgs {
   target: string;
   worktree: string;
@@ -293,6 +390,10 @@ interface HarnessArgs {
   noDeploy: boolean;
   dryRun: boolean;
   quiet: boolean;
+  /** Generate-flow request text ("improvement backlog", "quick wins only", …). Unset skips the generate phase entirely. */
+  generate?: string;
+  /** Skip the audit phase entirely and run only the generate flow against the newest existing audit under the target. Requires `generate`. */
+  generateOnly: boolean;
 }
 
 function parseCli(argv: string[]): HarnessArgs {
@@ -316,6 +417,8 @@ function parseCli(argv: string[]): HarnessArgs {
         'no-deploy': { type: 'boolean', default: false },
         'dry-run': { type: 'boolean', default: false },
         quiet: { type: 'boolean', default: false },
+        generate: { type: 'string' },
+        'generate-only': { type: 'boolean', default: false },
       },
       allowPositionals: false,
     });
@@ -331,6 +434,12 @@ function parseCli(argv: string[]): HarnessArgs {
   ) {
     die(`--retries must be an integer (got '${v.retries}')`);
   }
+  if (v['generate-only'] && !v.generate) {
+    die(
+      '--generate-only requires --generate "<request>" — there is nothing ' +
+        'to run without a generate request'
+    );
+  }
   return {
     target: v.target,
     worktree: v.worktree,
@@ -344,6 +453,8 @@ function parseCli(argv: string[]): HarnessArgs {
     noDeploy: v['no-deploy'],
     dryRun: v['dry-run'],
     quiet: v.quiet,
+    generate: v.generate,
+    generateOnly: v['generate-only'],
   };
 }
 
@@ -360,6 +471,9 @@ function printFinalSummary(opts: {
   runDir: string;
   targetName: string;
   attemptCosts?: number[];
+  generate: GenerateRunResult;
+  /** True when the audit phase was skipped entirely (--generate-only). */
+  auditPhaseSkipped: boolean;
 }): void {
   const {
     result,
@@ -372,6 +486,8 @@ function printFinalSummary(opts: {
     runDir,
     targetName,
     attemptCosts = [],
+    generate,
+    auditPhaseSkipped,
   } = opts;
   const t = tokenCostSummary(result);
   const out = (m = '') => console.log(m);
@@ -396,20 +512,24 @@ function printFinalSummary(opts: {
     ` turns     : ${t.num_turns} (api time ${t.duration_ms} ms across ` +
       `${t.result_segments ?? 1} result segment(s))`
   );
-  out(
-    ` compliance: ${
-      comp.model_complied
-        ? '✓ model ran the engine'
-        : '✗ MODEL SKIPPED THE ENGINE' +
-          (comp.engine_seeded_by_harness
-            ? ' (harness salvaged audit-core)'
-            : '')
-    } — audit_core_calls=${comp.audit_core_calls}` +
-      (comp.carried_audit_core_calls
-        ? ` (+${comp.carried_audit_core_calls} carried from earlier attempts)`
-        : '') +
-      ` fanout_spawns=${comp.fanout_agent_spawns}`
-  );
+  if (auditPhaseSkipped) {
+    out(' audit     : skipped (--generate-only)');
+  } else {
+    out(
+      ` compliance: ${
+        comp.model_complied
+          ? '✓ model ran the engine'
+          : '✗ MODEL SKIPPED THE ENGINE' +
+            (comp.engine_seeded_by_harness
+              ? ' (harness salvaged audit-core)'
+              : '')
+      } — audit_core_calls=${comp.audit_core_calls}` +
+        (comp.carried_audit_core_calls
+          ? ` (+${comp.carried_audit_core_calls} carried from earlier attempts)`
+          : '') +
+        ` fanout_spawns=${comp.fanout_agent_spawns}`
+    );
+  }
   out(
     ` judgments : ${
       judgmentsPatched === null
@@ -435,6 +555,36 @@ function printFinalSummary(opts: {
     out(' report    : MISSING — no report.html in the archived output');
   }
   for (const p of reports.missing) out(`   missing : ${p} (not rendered)`);
+  if (generate.requested) {
+    if (generate.skippedReason) {
+      out(` generate  : skipped — ${generate.skippedReason}`);
+    } else {
+      const gc = generate.compliance;
+      out(
+        ` generate  : ${
+          gc?.model_complied
+            ? '✓ backlog generated'
+            : '✗ GENERATE NON-COMPLIANT'
+        } — generate_backlog_calls=${gc?.generate_backlog_calls} ` +
+          `backlog_stamped=${gc?.backlog_stamped} tickets_written=${gc?.tickets_written}` +
+          (generate.costUsd != null
+            ? ` cost=$${generate.costUsd.toFixed(4)}`
+            : '')
+      );
+      if (generate.backlogHtmlPaths.length) {
+        out(` backlog   : ${generate.backlogHtmlPaths[0]}`);
+        for (const p of generate.backlogHtmlPaths.slice(1))
+          out(`             ${p}`);
+      } else {
+        out(' backlog   : MISSING — no backlog.html in the archived output');
+      }
+      if (generate.partial) {
+        out(
+          ` generate  : ✗ generate session INCOMPLETE (claude rc=${generate.rc})`
+        );
+      }
+    }
+  }
   if (partial) {
     out(
       ` status    : ✗ run INCOMPLETE (claude rc=${rc}, is_error=${result.is_error})`
@@ -485,6 +635,10 @@ interface RunOutcome {
   attempts: number;
   /** Per-attempt costs (each attempt bills separately). */
   attemptCosts: number[];
+  /** The (optional) generate-flow phase's outcome — always present, `requested: false` when --generate wasn't passed. */
+  generate: GenerateRunResult;
+  /** True when the audit phase was skipped entirely (--generate-only) — comp/result carry no meaningful signal. */
+  auditPhaseSkipped: boolean;
 }
 
 /**
@@ -561,7 +715,6 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
   // relaunch up to --retries times, and finally salvage by running the
   // engine ourselves. `model_complied` records whether the MODEL used the
   // engine, independent of any salvage.
-  const attempts = args.noEngineGuard ? 1 : Math.max(1, 1 + args.retries);
   let result: any = {};
   let comp: Compliance = {} as Compliance;
   let rc = 0;
@@ -575,98 +728,124 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
   // audits until retry exhaustion (barhopping 2026-07-06).
   let carriedCalls = 0;
   const attemptCosts: number[] = [];
-  for (let attempt = 1; attempt <= attempts; attempt++) {
-    let retryPrompt = RETRY_CORRECTIVE_PROMPT;
-    if (attempt > 1) {
-      log(
-        `\n▶ engine-skip retry ${attempt - 1}/${attempts - 1} — relaunching claude`
+  let attempts = 0;
+  // --generate-only: the audit phase never runs. There is no session to
+  // relaunch, no compliance to assess, and no salvage to attempt — the
+  // generate phase acts on an audit that already exists in the target.
+  const auditPhaseSkipped = args.generateOnly;
+
+  if (auditPhaseSkipped) {
+    outDir = newestAuditDir(audits);
+    if (!outDir) {
+      die(
+        `--generate-only needs an existing audit under ${audits}/ — none found`
       );
-      const plan = planRetry(locateOutDir(audits, today, ctx.preRunAudits));
-      if (plan.kind === 'rollup') {
-        // Rollup-only failure: the org fan-out finished (stamped per-repo
-        // audit.json files exist) but the org root artifact was never
-        // written. Those audits are real engine output — keep them, carry
-        // their engine calls into the retry's compliance ledger, and steer
-        // the retry to the rollup instead of re-running the whole portfolio.
-        retryPrompt = RETRY_ROLLUP_PROMPT;
-        carriedCalls += comp.audit_core_calls ?? 0;
-        log(
-          `  ✓ keeping ${plan.repos.length} completed per-repo audit(s) — ` +
-            `retry only needs rollup + render ` +
-            `(carrying ${carriedCalls} engine call(s) toward compliance)`
-        );
-      } else {
-        // Nothing preserved → nothing to carry. Calls whose artifacts were
-        // cleared must not vouch for whatever the next attempt produces.
-        carriedCalls = 0;
-        if (plan.kind === 'clear') {
-          fs.rmSync(plan.dir, { recursive: true, force: true });
-          log(`  ✓ cleared non-compliant output ${plan.dir}`);
-        }
-      }
     }
-    // Retries get a corrective system prompt: the barley regression showed
-    // a bare relaunch re-confabulates the same engine skip (three attempts,
-    // ~45 min), so a retry must actually change the model's premises.
-    const attemptFlags =
-      attempt === 1
-        ? claudeFlags
-        : [...claudeFlags, '--append-system-prompt', retryPrompt];
-    finalLog = path.join(runDir, `run.attempt${attempt}.jsonl`);
-    [result, rc] = await streamRun(target, attemptFlags, finalLog);
-    attemptCosts.push(
-      typeof result.total_cost_usd === 'number' ? result.total_cost_usd : 0
+    log(
+      `▶ --generate-only: skipping the audit phase, using existing audit ${outDir}`
     );
-    outDir = locateOutDir(audits, today, ctx.preRunAudits);
-    comp = assessEngineCompliance(outDir, finalLog, carriedCalls);
-    if (args.noEngineGuard) {
-      log(
-        `  engine guard disabled — compliance signals: ${JSON.stringify(comp)}`
-      );
-      break;
-    }
-    if (comp.engine_compliant) {
+  } else {
+    attempts = args.noEngineGuard ? 1 : Math.max(1, 1 + args.retries);
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      let retryPrompt = RETRY_CORRECTIVE_PROMPT;
       if (attempt > 1) {
         log(
-          comp.audit_core_calls > 0
-            ? `  ✓ retry ${attempt - 1} complied (audit-core called, audit.json present)`
-            : `  ✓ retry ${attempt - 1} complied (rollup finished; engine calls carried from earlier attempts)`
+          `\n▶ engine-skip retry ${attempt - 1}/${attempts - 1} — relaunching claude`
         );
+        const plan = planRetry(locateOutDir(audits, today, ctx.preRunAudits));
+        if (plan.kind === 'rollup') {
+          // Rollup-only failure: the org fan-out finished (stamped per-repo
+          // audit.json files exist) but the org root artifact was never
+          // written. Those audits are real engine output — keep them, carry
+          // their engine calls into the retry's compliance ledger, and steer
+          // the retry to the rollup instead of re-running the whole portfolio.
+          retryPrompt = RETRY_ROLLUP_PROMPT;
+          carriedCalls += comp.audit_core_calls ?? 0;
+          log(
+            `  ✓ keeping ${plan.repos.length} completed per-repo audit(s) — ` +
+              `retry only needs rollup + render ` +
+              `(carrying ${carriedCalls} engine call(s) toward compliance)`
+          );
+        } else {
+          // Nothing preserved → nothing to carry. Calls whose artifacts were
+          // cleared must not vouch for whatever the next attempt produces.
+          carriedCalls = 0;
+          if (plan.kind === 'clear') {
+            fs.rmSync(plan.dir, { recursive: true, force: true });
+            log(`  ✓ cleared non-compliant output ${plan.dir}`);
+          }
+        }
       }
-      break;
+      // Retries get a corrective system prompt: the barley regression showed
+      // a bare relaunch re-confabulates the same engine skip (three attempts,
+      // ~45 min), so a retry must actually change the model's premises.
+      const attemptFlags =
+        attempt === 1
+          ? claudeFlags
+          : [...claudeFlags, '--append-system-prompt', retryPrompt];
+      finalLog = path.join(runDir, `run.attempt${attempt}.jsonl`);
+      [result, rc] = await streamRun(target, attemptFlags, finalLog);
+      attemptCosts.push(
+        typeof result.total_cost_usd === 'number' ? result.total_cost_usd : 0
+      );
+      outDir = locateOutDir(audits, today, ctx.preRunAudits);
+      comp = assessEngineCompliance(outDir, finalLog, carriedCalls);
+      if (args.noEngineGuard) {
+        log(
+          `  engine guard disabled — compliance signals: ${JSON.stringify(comp)}`
+        );
+        break;
+      }
+      if (comp.engine_compliant) {
+        if (attempt > 1) {
+          log(
+            comp.audit_core_calls > 0
+              ? `  ✓ retry ${attempt - 1} complied (audit-core called, audit.json present)`
+              : `  ✓ retry ${attempt - 1} complied (rollup finished; engine calls carried from earlier attempts)`
+          );
+        }
+        break;
+      }
+      warn(
+        `⚠ NON-COMPLIANT run — the model skipped the deterministic engine ` +
+          `(audit_core_calls=${comp.audit_core_calls}, ` +
+          `has_audit_json=${comp.has_audit_json}, ` +
+          `dimension-auditor_spawns=${comp.fanout_agent_spawns}).`
+      );
     }
-    warn(
-      `⚠ NON-COMPLIANT run — the model skipped the deterministic engine ` +
-        `(audit_core_calls=${comp.audit_core_calls}, ` +
-        `has_audit_json=${comp.has_audit_json}, ` +
-        `dimension-auditor_spawns=${comp.fanout_agent_spawns}).`
-    );
   }
 
   const modelComplied = Boolean(comp.engine_compliant);
-  // Expose the final attempt's transcript under the canonical name for
-  // compare scripts (per-attempt transcripts are kept as run.attemptN.jsonl).
-  try {
-    fs.copyFileSync(finalLog, path.join(runDir, 'run.jsonl'));
-  } catch {
-    // best-effort copy
+  if (!auditPhaseSkipped) {
+    // Expose the final attempt's transcript under the canonical name for
+    // compare scripts (per-attempt transcripts are kept as run.attemptN.jsonl).
+    try {
+      fs.copyFileSync(finalLog, path.join(runDir, 'run.jsonl'));
+    } catch {
+      // best-effort copy
+    }
   }
 
   // Salvage: if every attempt skipped the engine, run audit-core ourselves
   // so the archive still holds a correct audit.json (right scoring universe),
   // not just the model's hand-graded .md. The run stays flagged as a
-  // product regression via model_complied=False.
+  // product regression via model_complied=False. None of this applies when
+  // the audit phase itself was skipped (--generate-only) — there is no
+  // engine-skip to salvage, and re-running audit-core over the pre-existing
+  // audit dir would be an expensive, unrequested side effect.
   let engineSeeded = false;
-  if (!args.noEngineGuard && !modelComplied) {
-    warn(
-      '⚠ all attempts skipped the engine — harness seeding audit-core to salvage the artifact'
-    );
-    if (!outDir) outDir = path.join(audits, today);
-    engineSeeded = seedAuditCore(engine, target, outDir);
-    comp = assessEngineCompliance(outDir, finalLog, carriedCalls);
+  if (!auditPhaseSkipped) {
+    if (!args.noEngineGuard && !modelComplied) {
+      warn(
+        '⚠ all attempts skipped the engine — harness seeding audit-core to salvage the artifact'
+      );
+      if (!outDir) outDir = path.join(audits, today);
+      engineSeeded = seedAuditCore(engine, target, outDir);
+      comp = assessEngineCompliance(outDir, finalLog, carriedCalls);
+    }
+    comp.model_complied = modelComplied;
+    comp.engine_seeded_by_harness = engineSeeded;
   }
-  comp.model_complied = modelComplied;
-  comp.engine_seeded_by_harness = engineSeeded;
 
   // Fallback render: a transport failure (e.g. "API Error: Connection
   // closed mid-response") can kill claude after audit.json is complete but
@@ -729,13 +908,48 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
     ? collectReportHtml(archived)
     : { paths: [], missing: [] };
 
+  // Generate phase: only when requested AND the audit phase itself was both
+  // engine-compliant (modelComplied — the true signal, not a harness salvage)
+  // and finished without crashing. Spending a second billed session against
+  // a non-compliant or partial audit would just fail compliance again for a
+  // reason the generate gate didn't cause. --generate-only bypasses this
+  // gate entirely — there is no audit-phase signal to gate on, only a
+  // pre-existing audit the caller has already vouched for by pointing us at it.
+  let generate: GenerateRunResult = GENERATE_SKIPPED;
+  if (args.generate) {
+    if (auditPhaseSkipped || (modelComplied && !partial)) {
+      generate = await runGeneratePhase(
+        args.generate,
+        target,
+        runDir,
+        claudeFlags,
+        outDir,
+        archived
+      );
+    } else {
+      generate = {
+        ...GENERATE_SKIPPED,
+        requested: true,
+        skippedReason: !modelComplied
+          ? 'audit phase was non-compliant (model skipped the engine)'
+          : 'audit session ended partial/incomplete',
+      };
+      warn(`⚠ skipping generate phase — ${generate.skippedReason}`);
+    }
+  }
+
   const meta = {
     timestamp_utc: ts,
     label: args.label,
     model: args.model || 'claude-default',
     claude_version: claudeVer,
     claude_rc: rc,
-    compliance: comp,
+    // Normal runs record the usual engine-compliance object; --generate-only
+    // never ran an audit phase, so recording `comp` as-is would fabricate an
+    // engine_compliant verdict for a session that never happened — record an
+    // explicit skip marker instead.
+    audit_phase: auditPhaseSkipped ? 'skipped (--generate-only)' : 'ran',
+    compliance: auditPhaseSkipped ? { skipped: true } : comp,
     skill_under_test: {
       repo: 'awos',
       worktree,
@@ -772,6 +986,13 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
     judgments_patched: judgmentsPatched,
     report_html: reports.paths,
     summary,
+    generate_requested: generate.requested,
+    generate_compliance: generate.compliance,
+    generate_rc: generate.rc,
+    generate_partial: generate.partial,
+    generate_cost_usd: generate.costUsd,
+    generate_backlog_html: generate.backlogHtmlPaths,
+    generate_skipped_reason: generate.skippedReason,
   };
   fs.writeFileSync(
     path.join(runDir, 'run-meta.json'),
@@ -788,6 +1009,8 @@ async function performRun(ctx: RunContext): Promise<RunOutcome> {
     partial,
     attempts,
     attemptCosts,
+    generate,
+    auditPhaseSkipped,
   };
 }
 
@@ -875,10 +1098,26 @@ async function main(): Promise<void> {
   if (args.dryRun) {
     log('▶ --dry-run: target + marketplace left untouched');
     log(`  would repoint ${MARKET_NAME} -> ${worktree} (+ restore after)`);
-    log(
-      `  would run     : claude -p /awos:ai-readiness-audit` +
-        `${args.model ? ' --model ' + args.model : ''} (cwd=${target})`
-    );
+    if (args.generateOnly) {
+      const audits = path.join(target, 'context/audits');
+      const found = newestAuditDir(audits);
+      log('  would skip audit phase entirely (--generate-only)');
+      log(
+        found
+          ? `  would use existing audit: ${found}`
+          : `  ⚠ no existing audit found under ${audits}/ — a real run would exit non-zero here`
+      );
+    } else {
+      log(
+        `  would run     : claude -p /awos:ai-readiness-audit` +
+          `${args.model ? ' --model ' + args.model : ''} (cwd=${target})`
+      );
+    }
+    if (args.generate) {
+      log(
+        `  would run     : claude -p "/awos:ai-readiness-audit generate ${args.generate}" (2nd session, same cwd)`
+      );
+    }
     log(`  would archive : ${runDir}`);
     return;
   }
@@ -956,12 +1195,19 @@ async function main(): Promise<void> {
     runDir,
     targetName: tgtName,
     attemptCosts: outcome.attemptCosts,
+    generate: outcome.generate,
+    auditPhaseSkipped: outcome.auditPhaseSkipped,
   });
 
   // Loud, non-zero exit when the MODEL skipped the engine, even if the harness
   // salvaged a correct audit.json. This is the QA hole the guard closes: such a
-  // run must never quietly report success.
-  if (!args.noEngineGuard && outcome.comp.model_complied === false) {
+  // run must never quietly report success. Never applies to --generate-only —
+  // there is no audit-phase session whose engine use could be assessed.
+  if (
+    !outcome.auditPhaseSkipped &&
+    !args.noEngineGuard &&
+    outcome.comp.model_complied === false
+  ) {
     const salvaged = outcome.comp.engine_seeded_by_harness;
     warn(
       `\n✗ ENGINE-SKIP REGRESSION: the model never ran audit-core across ` +
@@ -976,6 +1222,22 @@ async function main(): Promise<void> {
   // A crashed / errored session must never exit 0, even when the archive was
   // salvaged (fallback render etc.) — the run is partial, not successful.
   if (outcome.partial) process.exit(1);
+
+  // Generate-flow gate: a requested generate phase that skipped the engine,
+  // left an unstamped/missing backlog.json, or wrote no tickets/html must
+  // never quietly report success either. No retry/salvage here (v1) — a
+  // plain FAIL with run2.jsonl archived is enough to iterate on.
+  if (outcome.generate.requested && !outcome.generate.skippedReason) {
+    const gc = outcome.generate.compliance;
+    if (outcome.generate.partial || !gc?.model_complied) {
+      warn(
+        `\n✗ GENERATE-PHASE NON-COMPLIANT: generate_backlog_calls=${gc?.generate_backlog_calls} ` +
+          `backlog_stamped=${gc?.backlog_stamped} tickets_written=${gc?.tickets_written} ` +
+          `partial=${outcome.generate.partial}. See run2.jsonl in ${runDir}. Exiting non-zero.`
+      );
+      process.exit(4);
+    }
+  }
 }
 
 if (isMainModule(import.meta.url)) {

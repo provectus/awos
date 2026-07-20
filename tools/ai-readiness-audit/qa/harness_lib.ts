@@ -431,6 +431,150 @@ export function assessEngineCompliance(
 }
 
 // ---------------------------------------------------------------------------
+// Generate-flow compliance signals
+// ---------------------------------------------------------------------------
+// Mirrors the engine-compliance signals above: the skill prompt text for
+// generate mode itself contains "generate-backlog", so counting is done on
+// parsed tool_use blocks, never on raw substrings — an echoed marker or a
+// mention in assistant prose must not count as an invocation.
+
+/**
+ * Count Bash tool_use invocations whose command runs the `generate-backlog`
+ * engine verb. Same event-walking pattern as complianceFromTranscript's
+ * audit_core_calls: only an actual tool_use counts.
+ */
+export function countGenerateBacklogCalls(lines: string[]): number {
+  let calls = 0;
+  forEachAssistantBlock(lines, (b) => {
+    if (!b || typeof b !== 'object' || b.type !== 'tool_use') return;
+    if (
+      b.name === 'Bash' &&
+      String(b.input?.command ?? '').includes('generate-backlog')
+    ) {
+      calls += 1;
+    }
+  });
+  return calls;
+}
+
+export interface GenerateArtifacts {
+  backlogJsonExists: boolean;
+  /** `engine.generated_by` from backlog/backlog.json, or null if missing/unreadable. */
+  backlogGeneratedBy: string | null;
+  /** Existing backlog.html paths — top-level, plus (org mode) each per-repo/<repo>/backlog/backlog.html. */
+  backlogHtmlPaths: string[];
+  /** backlog.html paths expected (a per-repo dir that has a backlog/) but not found. */
+  backlogHtmlMissing: string[];
+  /** Existing backlog/tickets/A*.md paths — top-level, plus (org mode) each per-repo/<repo>/backlog/tickets/A*.md. */
+  ticketFilePaths: string[];
+}
+
+/**
+ * Read the generate-flow artifacts a finished run should have left under
+ * `outDir` (the archived audit-output copy): `backlog/backlog.json` (+
+ * provenance stamp), `backlog/tickets/A*.md`, `backlog/backlog.html` — and
+ * in org mode, the same three under every `per-repo/<repo>/` that has a
+ * `backlog/` directory. A thin fs reader, mirroring collectReportHtml /
+ * stampedPerRepoAudits: the pure verdict logic lives in
+ * evaluateGenerateCompliance below.
+ */
+export function gatherGenerateArtifacts(outDir: string): GenerateArtifacts {
+  const ticketsIn = (backlogDir: string): string[] => {
+    const ticketsDir = path.join(backlogDir, 'tickets');
+    if (!isDir(ticketsDir)) return [];
+    return fs
+      .readdirSync(ticketsDir)
+      .filter((n) => /^A.*\.md$/.test(n))
+      .sort()
+      .map((n) => path.join(ticketsDir, n));
+  };
+
+  const backlogHtmlPaths: string[] = [];
+  const backlogHtmlMissing: string[] = [];
+  const claimHtml = (backlogDir: string) => {
+    const p = path.join(backlogDir, 'backlog.html');
+    (isFile(p) ? backlogHtmlPaths : backlogHtmlMissing).push(p);
+  };
+
+  const topBacklogDir = path.join(outDir, 'backlog');
+  const backlogJsonPath = path.join(topBacklogDir, 'backlog.json');
+  const backlogJsonExists = isFile(backlogJsonPath);
+  let backlogGeneratedBy: string | null = null;
+  if (backlogJsonExists) {
+    try {
+      const doc = readJson(backlogJsonPath) as {
+        engine?: { generated_by?: string };
+      };
+      backlogGeneratedBy = doc.engine?.generated_by ?? null;
+    } catch {
+      backlogGeneratedBy = null;
+    }
+  }
+
+  const ticketFilePaths: string[] = [...ticketsIn(topBacklogDir)];
+  // Claim the top-level backlog.html unconditionally (mirroring
+  // collectReportHtml's unconditional top-level report.html claim): an org
+  // run that generated every per-repo backlog but skipped the org-level
+  // generate-backlog (aggregating org_tickets into the org root's own
+  // backlog.json/backlog.html) must be flagged missing, not silently pass on
+  // per-repo artifacts alone.
+  claimHtml(topBacklogDir);
+
+  const perRepo = path.join(outDir, 'per-repo');
+  if (isDir(perRepo)) {
+    for (const n of fs.readdirSync(perRepo).sort()) {
+      const repoBacklogDir = path.join(perRepo, n, 'backlog');
+      if (!isDir(repoBacklogDir)) continue; // repo has no backlog — not part of this generate run
+      ticketFilePaths.push(...ticketsIn(repoBacklogDir));
+      claimHtml(repoBacklogDir);
+    }
+  }
+
+  return {
+    backlogJsonExists,
+    backlogGeneratedBy,
+    backlogHtmlPaths,
+    backlogHtmlMissing,
+    ticketFilePaths,
+  };
+}
+
+export interface GenerateCompliance {
+  model_complied: boolean;
+  generate_backlog_calls: number;
+  backlog_stamped: boolean;
+  tickets_written: boolean;
+}
+
+/**
+ * Verdict for the generate-flow compliance gate, combining the transcript
+ * signal (an actual generate-backlog invocation) with the on-disk artifacts
+ * (gathered separately by gatherGenerateArtifacts so this stays pure and
+ * unit-testable without touching fs — same split as
+ * complianceFromTranscript/assessEngineCompliance).
+ */
+export function evaluateGenerateCompliance(
+  lines: string[],
+  artifacts: GenerateArtifacts
+): GenerateCompliance {
+  const generateBacklogCalls = countGenerateBacklogCalls(lines);
+  const backlogStamped =
+    artifacts.backlogJsonExists &&
+    artifacts.backlogGeneratedBy === 'audit-core';
+  const ticketsWritten =
+    artifacts.ticketFilePaths.length > 0 &&
+    artifacts.backlogHtmlPaths.length > 0 &&
+    artifacts.backlogHtmlMissing.length === 0;
+  return {
+    model_complied:
+      generateBacklogCalls > 0 && backlogStamped && ticketsWritten,
+    generate_backlog_calls: generateBacklogCalls,
+    backlog_stamped: backlogStamped,
+    tickets_written: ticketsWritten,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Output-dir helpers
 // ---------------------------------------------------------------------------
 
@@ -464,6 +608,28 @@ export function locateOutDir(
   if (!skip.has(today) && isDir(outDir)) return outDir;
   const dd = dateDirs(audits).filter((n) => !skip.has(n));
   return dd.length ? path.join(audits, dd[dd.length - 1]) : '';
+}
+
+const DATETIME_DIR_RE = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/;
+
+/**
+ * The lexicographically-last (= chronologically newest, since the name
+ * format sorts that way) `YYYY-MM-DD_HH-MM-SS`-named directory under
+ * `auditsRoot`, or '' when none exist. Used by `--generate-only` to find the
+ * pre-existing audit the generate phase should act on — unlike
+ * `locateOutDir`, this is not excluding a pre-run snapshot; it is DELIBERATELY
+ * looking for an audit the harness did not create. Non-datetime-named
+ * entries (a legacy date-only dir, `backlog/`, stray files) are ignored, not
+ * just deprioritized — a naive string sort would otherwise let a date-only
+ * name like `2026-07-15` outrank a full datetime dir from the same day.
+ */
+export function newestAuditDir(auditsRoot: string): string {
+  if (!isDir(auditsRoot)) return '';
+  const names = fs
+    .readdirSync(auditsRoot)
+    .filter((n) => DATETIME_DIR_RE.test(n) && isDir(path.join(auditsRoot, n)))
+    .sort();
+  return names.length ? path.join(auditsRoot, names[names.length - 1]) : '';
 }
 
 /**
@@ -743,6 +909,12 @@ export interface ClaudeAuditOpts {
    * stream event (full harness); 'wall' fires every 60s regardless (smoke).
    */
   heartbeat?: { mode: 'silence' | 'wall'; tick: (elapsedMs: number) => void };
+  /**
+   * Override the `-p` prompt argument (default: CLAUDE_AUDIT_CMD's audit
+   * invocation). Used by the harness's generate-flow phase to launch
+   * `/awos:ai-readiness-audit generate <request>` instead.
+   */
+  prompt?: string;
 }
 
 /**
@@ -753,8 +925,26 @@ export interface ClaudeAuditOpts {
 export async function runClaudeAudit(
   opts: ClaudeAuditOpts
 ): Promise<{ rc: number; wallMs: number }> {
-  const { cwd, flags, runLog, stdin = 'inherit', onEvent, heartbeat } = opts;
-  const cmd = [...CLAUDE_AUDIT_CMD, ...flags];
+  const {
+    cwd,
+    flags,
+    runLog,
+    stdin = 'inherit',
+    onEvent,
+    heartbeat,
+    prompt,
+  } = opts;
+  const cmd = prompt
+    ? [
+        'claude',
+        '-p',
+        prompt,
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        ...flags,
+      ]
+    : [...CLAUDE_AUDIT_CMD, ...flags];
   const wallStart = Date.now();
   let lastEvent = Date.now();
   const hb = heartbeat

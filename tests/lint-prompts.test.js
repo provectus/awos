@@ -3929,3 +3929,99 @@ test('spec.md captures boundary/error behavior as rules in items 2 and 3', () =>
     'spec.md Step 3 item 3 must require failure-path criteria for boundary/error requirements'
   );
 });
+
+test('SKILL.md documents the generate-backlog engine verb', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /generate-backlog/,
+    'SKILL.md must name the generate-backlog engine verb'
+  );
+});
+
+test('SKILL.md has a Generate mode — improvement backlog section', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /Generate mode — improvement backlog/,
+    'SKILL.md must contain a "Generate mode — improvement backlog" section'
+  );
+});
+
+test('SKILL.md Generate mode names both draft contracts', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /tickets-draft\.json/,
+    'SKILL.md must name the single-repo tickets-draft.json contract'
+  );
+  assert.match(
+    src,
+    /org-tickets-draft\.json/,
+    'SKILL.md must name the org org-tickets-draft.json contract'
+  );
+});
+
+test('SKILL.md Generate mode pins draft authoring to Sonnet', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /model: sonnet/,
+    'SKILL.md Generate mode must pin the authoring subagent to model: sonnet'
+  );
+});
+
+test('SKILL.md teaches the generate action in its closing hint', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /generate improvement backlog/,
+    'SKILL.md must teach "generate improvement backlog" as a closing hint after a completed audit'
+  );
+});
+
+test('SKILL.md Step 2 dispatches a combined audit+backlog intent', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /\*\*Combined\*\*/,
+    'SKILL.md Step 2 must name a fourth "Combined" dispatch path alongside empty/dimension/generate'
+  );
+  assert.match(
+    src,
+    /skip[^.]*audit picker/i,
+    'SKILL.md Step 2 must state that a combined run skips the Generate mode audit picker (contract, not exact wording)'
+  );
+});
+
+test('SKILL.md Step 2 generate-only bullet defers to Combined when a fresh audit is also requested', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /fresh\/full\/new audit, it is Combined, not generate-only/,
+    'SKILL.md Step 2 generate-request bullet must hand off to the Combined bullet when the request also names a fresh/full/new audit, so it does not skip the audit pipeline by mistake'
+  );
+});
+
+test('SKILL.md Generate mode documents combined-run entry at step 2', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /a combined-intent run enters at step 2/,
+    'SKILL.md Generate mode section must state that a combined-intent run enters directly at step 2 with the just-written audit dir'
+  );
+});
+
+test('SKILL.md Step 6 carves out combined runs from the audit-only close-out', () => {
+  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
+  assert.match(
+    src,
+    /combined run[^.]*Step 6 is not the end/i,
+    'SKILL.md Step 6 must state that a combined run does not end at the report — it continues into Generate mode step 2 in the same session, so a headless combined run cannot stop at Step 6 without generating the backlog'
+  );
+  assert.match(
+    src,
+    /Combined runs skip this hint/,
+    'SKILL.md Step 6 closing hint must be suppressed for combined runs (the backlog is already in flight, so re-teaching the generate command is redundant)'
+  );
+});

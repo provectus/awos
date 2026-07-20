@@ -6,7 +6,7 @@ description: >-
   the /awos:ai-readiness-audit command; not auto-triggered. Dimensions are
   discovered automatically from dimensions/ — drop a new .md to extend.
 disable-model-invocation: true
-argument-hint: '[dimension] — omit for a full audit'
+argument-hint: '[dimension | generate <request> | audit + generate <request>] — omit for a full audit'
 disallowed-tools: Edit, NotebookEdit, ScheduleWakeup
 ---
 
@@ -60,9 +60,14 @@ The set of dimensions, every category in them, the topology flags that gate them
 
 So you do not: enumerate the dimension files, parse `depends-on`, build a dependency DAG, group work into "Phase 1 / Phase 2", or spawn a subagent per dimension. There is no per-dimension auditor. Auditing a codebase here means running one command (Step 4) and then filling a small gap (Step 5) — it does not mean reading the repo and writing findings by hand.
 
-## Step 2 — Single-Dimension Argument
+## Step 2 — Argument Dispatch
 
-If `$ARGUMENTS` names a single dimension, still run the full `audit-core` pass (it is fast and topology-gated) and present only that dimension's section. If `$ARGUMENTS` matches no dimension, list the available dimensions and stop.
+`$ARGUMENTS` selects one of four paths:
+
+- **Empty** — full audit; continue to Step 3.
+- **Names a single dimension** — still run the full `audit-core` pass (it is fast and topology-gated) and present only that dimension's section. If the argument matches no dimension and is not a generate request, list the available dimensions, show one generate example (`/awos:ai-readiness-audit generate improvement backlog`), and stop.
+- **A generate request** (starts with or clearly means "generate": an improvement backlog, quick wins, tickets for specific dimensions, effort/impact filters) — skip the audit pipeline entirely and follow the "Generate mode" section at the end of this file. Parse the request yourself: which dimensions to include, an effort ceiling ("easy to implement"), an impact floor ("big impact"), and/or a top-N. There is no rigid grammar. If the request also names a fresh/full/new audit, it is Combined, not generate-only — do not skip the audit pipeline; use the next bullet instead.
+- **Combined** — the request asks for both a fresh audit AND a backlog in one invocation (e.g. "audit and generate improvement backlog", "full audit with backlog", "fresh audit then quick wins", or any generate request that says fresh/full/new audit). Run the normal full audit pipeline (Steps 3–6) first, then continue directly into Generate mode step 2 against the audit directory just written, skipping Generate mode step 1's audit picker entirely — there is nothing to pick, the audit that was just produced is the source. Every other Generate-mode obligation (Sonnet subagent authoring, engine-only numbers, violations retry, org branch) applies unchanged. This makes headless behavior fall out naturally: no picker, no prompt, fully unattended.
 
 ## Step 3 — Prepare Artifacts Directory
 
@@ -258,9 +263,17 @@ Contributor counts in the org report are always aggregate — no per-person data
 
 After presenting the report, offer follow-up next steps. Both `report.md` and `report.html` were already produced in Step 5 — Step 6 never (re-)generates the report; it only offers what to do next.
 
+### Closing hint
+
+End every completed audit-only run — headless or interactive — by teaching the generate action, e.g.: "To get a prioritized improvement backlog (tickets + an effort-profit graph), run `/awos:ai-readiness-audit generate improvement backlog` — or filtered, e.g. `generate quick wins only` or `generate backlog for delivery-flow and quality-assurance, easy to implement but big impact`." **Combined runs skip this hint** — the backlog is already in flight, so teaching someone to ask for what is already being produced is redundant; see the carve-out below.
+
+### Combined-run carve-out
+
+For a combined run (Step 2), Step 6 is not the end. After presenting the report, do not stop, do not emit the closing hint above, and do not run the rest of Step 6's next-steps flow — continue directly into Generate mode step 2 with this run's audit dir, in the same session. The backlog's own close-out (Generate mode step 5) is the actual end of a combined run. This is the same natural-stop hazard as Phase 0b and the org rollup: a headless combined run that treats the audit report as the finish line never generates the backlog it was asked for.
+
 ### Headless mode (no interactive input)
 
-When `AskUserQuestion` receives its default answer (non-interactive, e.g. CI or `--output-format stream-json`), there is nothing to ask and nothing to render — the reports already exist from Step 5. Finish by pointing the user at `context/audits/YYYY-MM-DD_HH-MM-SS/report.html` and `recommendations.md`. Never hand-write or re-render a report.
+When `AskUserQuestion` receives its default answer (non-interactive, e.g. CI or `--output-format stream-json`), there is nothing to ask and nothing to render — the reports already exist from Step 5. For an audit-only run, finish by pointing the user at `context/audits/YYYY-MM-DD_HH-MM-SS/report.html` and `recommendations.md`. Never hand-write or re-render a report. For a combined run, apply the carve-out above instead of finishing here.
 
 ### Interactive mode
 
@@ -288,6 +301,28 @@ Offer next steps using `AskUserQuestion` with `multiSelect: true`. The HTML repo
 ### Execute selected options
 
 - **Roadmap (update or create):** Tell the user to run `/awos:roadmap` and reference the audit recommendations at `context/audits/YYYY-MM-DD_HH-MM-SS/recommendations.md` as input.
+
+## Generate mode — improvement backlog
+
+Generate mode turns one existing audit into an effort-profit ticket backlog: `backlog/backlog.json`, one Jira-style `backlog/tickets/<slug>.md` per ticket (the slug already carries the sequence prefix, e.g. `tickets/A001-adopt-ci.md`), and the interactive `backlog/backlog.html` dependency graph. You author prose, effort estimates, dependencies, and per-check coverage shares; the engine computes every number. Do not compute coverage deltas, slugs, ordering, or org aggregates yourself — `generate-backlog` is the only path from a draft to a rendered backlog, and it refuses unstamped inputs.
+
+Note: a combined-intent run enters at step 2 below with the audit directory the full pipeline just wrote — step 1's picker is only for generate-only invocations, where an existing audit has to be selected because none was just produced in this run.
+
+1. **Pick the source audit.** List `context/audits/*/` newest-first and ask with one `AskUserQuestion`: each existing audit (timestamp, mode, score from its `audit.json`) plus "Run a fresh audit first". Headless default = the newest audit. If none exist, say so and offer to run one (that answer routes back to Step 3). This picker must never end the run — the same rule as Phase 0b's scope confirmation. If `AskUserQuestion` is unavailable or returns its default answer (headless, e.g. `--output-format stream-json`), that IS the answer: take the newest audit and continue into step 2 in the same turn, without further ceremony.
+
+2. **Author the draft.** Dispatch ONE `Agent` subagent pinned to `model: sonnet` that: reads `node "${CLAUDE_SKILL_DIR}/dist/cli.js" report-context <auditDir>` output, filters failing/partial checks per the parsed request, clusters them into implementable initiatives (it may inspect the repo to ground effort estimates), and writes `<auditDir>/backlog/tickets-draft.json` with shape `{tickets:[{id,title,goal,description,effort_dev_days,definition_of_done,depends_on,checks:[{check_id,share}]}]}`. Goals are written in business terms (delivery speed, maintainability, traceability, robustness) — never "raise the audit score". `share` is the fraction of that check's remediation the ticket delivers; several tickets may split one check, and the shares of one check must not sum above 1.
+
+3. **Run the engine.**
+
+   ```bash
+   node "${CLAUDE_SKILL_DIR}/dist/cli.js" generate-backlog <auditDir> <auditDir>/backlog/tickets-draft.json
+   ```
+
+   On a validation failure the engine prints `{"error":"draft failed validation","violations":[...]}`; re-dispatch the authoring subagent once with those violations as corrections, then re-run. If it fails again, stop and surface the violations verbatim.
+
+4. **Org audits.** When the chosen audit has `per-repo/` subdirectories: first run steps 2–3 for every repo (concurrent Sonnet subagents, one per repo, each writing into `per-repo/<repo>/`), then dispatch one more Sonnet subagent to author `<auditDir>/backlog/org-tickets-draft.json` with shape `{org_tickets:[{id,title,goal,description,depends_on,members:[{repo,slug}]}]}` — linking per-repo tickets that are the same organizational initiative (per-repo work may differ; the org ticket is the umbrella) — and run `node "${CLAUDE_SKILL_DIR}/dist/cli.js" generate-backlog <auditDir> <auditDir>/backlog/org-tickets-draft.json`. Every number on the org graph comes from the per-repo backlog files; the draft carries only prose, links, and dependencies.
+
+5. **Close out.** Report the written paths and note that any ticket file can be turned into an AWOS functional spec by pointing `/awos:spec` at it.
 
 ## Adding New Dimensions
 

@@ -1125,7 +1125,7 @@ function generatorLine(audit: AuditJson): string | null {
 // ---------------------------------------------------------------------------
 
 /** HTML-escape a string for safe output in attributes and text nodes. */
-function esc(s: string): string {
+export function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -2254,19 +2254,15 @@ function techStackSection(audit: AuditJson, isOrg: boolean): string {
  *   - @media print (expand all, hide toggles)
  *   - All plain-language blocks optional; degrades to the capability headline
  */
-export function renderHtml(audit: AuditJson, opts: RenderOptions = {}): string {
-  const isOrg =
-    Array.isArray(audit.portfolio_metrics) &&
-    audit.portfolio_metrics.length > 0;
-
-  // ─── CSS ────────────────────────────────────────────────────────────────
-  // Provectus "Foundry White v2" design system. One inline stylesheet, driven
-  // by CSS custom properties (tokens) and data-attribute selectors so the
-  // renderer never emits inline colour. Light-only (matches the report's
-  // print-first, single-look brief). Organised: tokens → base → brand header →
-  // exec band (+ dark overrides) → tier-2 cards → tables/tier-3 → badges/pills
-  // → tooltips → toolbar/focus → print → responsive.
-  const css = `
+// ─── CSS ────────────────────────────────────────────────────────────────
+// Provectus "Foundry White v2" design system. One inline stylesheet, driven
+// by CSS custom properties (tokens) and data-attribute selectors so the
+// renderer never emits inline colour. Light-only (matches the report's
+// print-first, single-look brief). Organised: tokens → base → brand header →
+// exec band (+ dark overrides) → tier-2 cards → tables/tier-3 → badges/pills
+// → tooltips → toolbar/focus → print → responsive. Shared with the backlog
+// renderer (backlog_render.ts), which layers its own graph CSS on top.
+export const REPORT_CSS = `
 /* ── tokens ─────────────────────────────────────────────────────────────── */
 :root{
   --font-sans:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
@@ -2467,6 +2463,12 @@ table.checks td.check .plain{display:block;font-size:11.5px;color:var(--ink-400)
   .dim-card{padding:4px 14px 8px}
 }
 `;
+
+export function renderHtml(audit: AuditJson, opts: RenderOptions = {}): string {
+  const isOrg =
+    Array.isArray(audit.portfolio_metrics) &&
+    audit.portfolio_metrics.length > 0;
+  const css = REPORT_CSS;
 
   // ─── Inline JS — hash routing + issues filter ──────────────────────────────
   const inlineJs = `

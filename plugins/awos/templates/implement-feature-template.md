@@ -107,6 +107,8 @@ Store the spec directory name (e.g. `007-tasks-api`) as `SPEC_NAME`.
 
 Run `/awos:implement` [per §8: in the main context if it dispatches subagents itself — a command that dispatches subagents cannot run inside one]. It delegates all coding and tracks progress — do not implement tasks in the main context. Wait for all tasks to complete.
 
+After `/awos:implement` reports all tasks complete, spot-check the plan's testing slice the way any subagent claim is checked. Each testing subagent proves the tests it writes with RED validation (the plan's own wording: must fail before implementation is confirmed done); this stage is the orchestrator's independent spot-check of one test, not a re-proof of the suite: pick a test guarding the new behavior, set the change it covers aside (revert or stash the implicated hunks), run the test and watch it fail, then restore the tree exactly and watch it pass. A test that stays green with the feature removed asserts behavior the codebase already had — send it back to the testing specialist to retarget rather than counting it as coverage. Honor the `<!-- skip-tests: true -->` marker: if the spec's `tasks.md` carries it, no testing slice was generated and there is nothing to spot-check.
+
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=verify -->

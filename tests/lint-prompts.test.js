@@ -1215,6 +1215,10 @@ test('hire.md installs hooks from the registry and never authors them', () => {
     'commands/hire.md Step 8 coverage-report structure must contain the "## Installed Hooks" section'
   );
   assert.ok(
+    body.includes('| Name | Event | Command | Description |'),
+    'commands/hire.md Step 8 Installed Hooks table must use the exact header Name/Event/Command/Description — Event and Command are the only cells derivable from bare settings entries; Name and Description must fall back to "—" rather than be invented'
+  );
+  assert.ok(
     /never author hook/i.test(body),
     'commands/hire.md must state that hooks come from the registry only — hire never authors hook entries or commands'
   );

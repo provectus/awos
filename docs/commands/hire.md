@@ -24,7 +24,7 @@ Optionally reads the latest `technical-considerations.md` for additional technol
 3. **Maps to agent roles** — proposes a specialist agent for each domain (e.g., `react-frontend`, `python-backend`).
 4. **Checks what exists** — scans your current agents and skills to classify coverage as Covered, Partially Covered, or Missing.
 5. **Searches the registry** — queries the `awos-recruitment` MCP server for skills, MCPs, and pre-built agents matching your gaps, plus hook searches phrased as short problem statements (e.g. "keep documentation updated before committing"), one guardrail intent per query — searched regardless of agent coverage.
-6. **Installs components** — runs installation commands for confirmed skills, MCPs, agents, and hooks. Hooks are shown with their trigger event and the command they run before you confirm — and they only ever come from the registry; the command never authors hook commands itself.
+6. **Installs components** — runs installation commands for confirmed skills, MCPs, agents, and hooks. Hooks get their own confirmation, separate from the passive components, because they install shell scripts that run automatically on lifecycle events: you see each hook's trigger event and what it runs before consenting, and right after install the actual script is read back and summarized — with a keep-or-roll-back prompt if it does more than advertised. Hooks only ever come from the registry; the command never authors hook commands itself.
 7. **Generates agent files** — for any remaining gaps, creates agent files from the template with proper configuration.
 8. **Reports gaps** — warns about technologies that couldn't be covered by [registry](https://github.com/provectus/awos-recruitment) components and suggests creating custom skills.
 

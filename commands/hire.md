@@ -95,20 +95,24 @@ Follow this process precisely.
 
     Filter the results against the hooks already configured (Step 3). If the searches return no hooks, skip the hooks phase silently — no warning needed.
 
-3.  If the `awos-recruitment` MCP server is not available or returns errors, tell the user it is unavailable and that you will proceed with generating agent files using general configuration. Note that they can prepare custom skills and agents in `.claude/skills/` and `.claude/agents/`. Skip to **Step 6**.
+3.  If the `awos-recruitment` MCP server is not available or returns errors, tell the user it is unavailable and that you will proceed with generating agent files using general configuration. Note that they can prepare custom skills and agents in `.claude/skills/` and `.claude/agents/`, and wire their own hooks in `.claude/settings.json`. Skip to **Step 6**.
 4.  Gather all found skills, MCPs, agents, and hooks from the search results.
-5.  Show the user what was found and confirm installation before proceeding.
+5.  Show the user what was found and collect consent in **two separate gates** — never one blanket confirmation covering both:
 
     | Role             | Found Skills                  | Found MCPs | Found Agents       |
     | ---------------- | ----------------------------- | ---------- | ------------------ |
     | `python-backend` | `fastapi-expert`              | —          | —                  |
     | `aws-infra`      | `terraform-pro`, `aws-deploy` | `aws-mcp`  | `aws-infra-expert` |
 
-    Found hooks get their own table with behavior-level detail — the user consents to what each hook does, not just its name:
+    **Gate 1 — passive components.** Confirm installation of the skills, MCPs, and agents above. These are prompt text and configuration that only act when invoked.
+
+    **Gate 2 — hooks.** Hooks are different in kind: each one installs a shell script that runs automatically on the listed lifecycle event, with no invocation by the user. Show them in their own table with behavior-level detail, then ask a dedicated `AskUserQuestion` that names the executable nature — e.g. "These hooks install shell scripts that run automatically on the listed events — install them?" — so approving the passive batch can never silently approve executable behavior:
 
     | Hook               | Event       | What it runs                          | Why relevant                   |
     | ------------------ | ----------- | ------------------------------------- | ------------------------------ |
     | `prettier-on-edit` | PostToolUse | `prettier --write` on the edited file | Prettier is the repo formatter |
+
+    Tell the user that the "What it runs" column comes from registry metadata (the hook's `HOOK.md`), which the registry does not vet against the script itself, and that the actual installed script will be shown for review immediately after install (Step 5.4) — the registry CLI has no preview mode, so the on-disk copy is the first chance to inspect the real behavior.
 
 **QA Complement Rule:**
 
@@ -142,11 +146,16 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
     bunx @provectusinc/awos-recruitment agent <space-separated agent names>
     ```
 4.  Install hooks:
+
     ```
     npx @provectusinc/awos-recruitment hook <space-separated hook names>
     bunx @provectusinc/awos-recruitment hook <space-separated hook names>
     ```
+
     The CLI writes hook entries into the project's `.claude/settings.json` (script payloads into `.claude/hooks/`) and is idempotent on re-run. Hooks come from the registry only — never author hook entries or commands yourself, and never generate hooks from a template. If the registry has none, none are installed.
+
+    After the CLI reports success, complete the second half of the hook consent: for each hook just installed, `Read` the installed `.claude/hooks/<name>/HOOK.md` and the entrypoint script it references, and summarize to the user what the script actually does — the commands it runs, the files it touches, what it can block. If the script's real behavior exceeds or contradicts the metadata the user approved in Step 4, ask the user with `AskUserQuestion` whether to keep it or roll it back; on rollback, delete `.claude/hooks/<name>/` and remove the settings entry the CLI just added (undoing the CLI's own write is rollback, not authoring).
+
 5.  Report successes and failures for each installation.
 
 ## Step 6: Generate or Update Agent Files

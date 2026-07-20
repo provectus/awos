@@ -155,7 +155,7 @@ test('migration 001 in isolation: source-only state moves to migrated state', as
   assert.equal(
     versionContent.trim(),
     '2',
-    'expected migrations 001 then 002 to both run, leaving version=2'
+    'expected migrations 001 through 002 to all run, leaving version=2'
   );
 });
 

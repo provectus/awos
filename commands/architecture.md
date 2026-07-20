@@ -20,6 +20,7 @@ Your task is to manage the architecture file located at `context/product/archite
 - **Prerequisite Input 1:** `context/product/product-definition.md` (The "what" and "why").
 - **Prerequisite Input 2:** `context/product/roadmap.md` (The implementation phases).
 - **Optional Input:** `context/product/brownfield.md` (produced by `/awos:product`, extended by `/awos:roadmap`; deleted at end of this command).
+- **Optional Input:** `context/sources/sources.md` (external source configuration for targeted retrieval).
 - **Primary Input/Output:** `context/product/architecture.md` (The file to create or update).
 
 ---
@@ -81,11 +82,38 @@ Follow this logic precisely.
 
     c. Append the new findings to `context/product/brownfield.md` under a `## Technology` heading (for any you revise, record the revised version, not the original). The findings seed the section defaults below and are triaged with the user later, in **Step 3: Finalization** — after the architecture is saved — so exploration never blocks the write.
 
-3.  Draft every architectural area up front so a complete architecture exists before any back-and-forth — never blocking on a question before the write.
+3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured`, read it and retrieve content from each configured source. For sources with `Access: mcp` or `Access: cli`, launch one Explore agent per source using the tool named in the `Tool:` field. For sources with `Access: manual`, use `AskUserQuestion` to let the user paste relevant content directly.
+
+    For `mcp` or `cli` sources:
+
+    ```text
+    Agent(subagent_type="Explore", description="Retrieve architecture docs", prompt="
+    Use the {tool name} tools to retrieve content from {scope}.
+    Focus on technical and architectural information:
+    - Architecture decision records (ADRs)
+    - Infrastructure documentation and runbooks
+    - Technical debt discussions
+    - Performance requirements and SLAs
+    - Security requirements and compliance notes
+    - Deployment and operations documentation
+
+    The following findings were already confirmed by the user — do not repeat them:
+
+    <existing_findings>
+    {paste full contents of context/product/brownfield.md here, or 'none'}
+    </existing_findings>
+
+    Report only NEW architecture-relevant findings not covered above. For each finding, note the source. Be concise — bullet points.
+    ")
+    ```
+
+    Record retrieved findings for the draft in substep 4. The findings seed section defaults alongside brownfield findings and are triaged with the user in **Step 3: Finalization**, after the architecture is saved.
+
+4.  Draft every architectural area up front so a complete architecture exists before any back-and-forth — never blocking on a question before the write.
     - For each architectural area, propose a concrete title from the template placeholder.
-    - For each component, propose a specific technology with one or more alternatives, justified by the project context. When brownfield findings provided a known technology, use it as the default; otherwise pick a sensible best-practice default and label it as an assumption.
+    - For each component, propose a specific technology with one or more alternatives, justified by the project context. When brownfield or documentation findings provided a known technology, use it as the default; otherwise pick a sensible best-practice default and label it as an assumption.
     - Cover every architectural area (Data, Infrastructure, etc.).
-4.  Proceed to **Step 3: Finalization**.
+5.  Proceed to **Step 3: Finalization**.
 
 ---
 
@@ -121,4 +149,4 @@ Give the user a quick read on whether the stack already has specialist agents �
 
 ### Step 5: Brownfield Cleanup
 
-If `context/product/brownfield.md` exists, delete it. By this point all brownfield knowledge has been absorbed into `product-definition.md`, `roadmap.md`, and `architecture.md` — the brownfield file is no longer needed.
+If `context/product/brownfield.md` exists, delete it. Then thoroughly check whether all information from `context/sources/` has been absorbed into `product-definition.md`, `roadmap.md`, and `architecture.md`. If useful information remains in `context/sources/sources.md` that hasn't been captured elsewhere (source URLs, user-pasted content, configuration details), keep the file and add a reference to it in `context/product/product-definition.md` so downstream commands are aware of it. If everything has been absorbed, delete `context/sources/`.

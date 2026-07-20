@@ -1,6 +1,6 @@
 {
   "name": "awos",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "Extends AWOS core with AI-powered delivery automation: audits a project's AI-readiness across quality dimensions (/awos:ai-readiness-audit) and sets up an end-to-end delivery flow — feature and optional bug-fix commands — tailored to the team (/awos:flow).",
   "author": {
     "name": "Provectus"

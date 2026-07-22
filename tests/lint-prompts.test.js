@@ -956,6 +956,74 @@ test('fix-bug template reads remote links, sweeps all surfaces, and verifies sub
   }
 });
 
+test('the spec interview is pre-seeded by the flow fetch stage, adding no new /awos:spec question', () => {
+  // Roadmap "Pre-seed the spec interview via the flow's fetch stage":
+  // cut /awos:spec's cold interview from 5-10 questions to 2-4 by
+  // pre-seeding context, WITHOUT adding an "any source material?" ask to
+  // spec.md (net-negative when there are no docs). Three coupled edits:
+  // flow.md §1 captures where the surrounding context lives (once, at
+  // generation time); implement-feature's fetch stage pulls that bundle
+  // per run (mirroring fix-bug's remote-links pull); and spec.md silently
+  // consumes any references already in its prompt. Lock all three so a
+  // future edit can't quietly drop the pre-seed and reintroduce the cold
+  // interview, or "fix" it by adding the forbidden question.
+
+  // flow.md §1 must ask, once at generation time, where the ticket's
+  // surrounding context lives and which §7 transport reaches each.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /where the ticket's surrounding context lives/i.test(flow),
+    "flow.md §1 (Feature description source) must capture where the ticket's surrounding context lives (epic/parent, remote links, docs connector, meeting notes) so the fetch stage can pre-seed the spec interview"
+  );
+  assert.ok(
+    /Ask this once, here at generation time, not per run inside `\/awos:spec`/i.test(
+      flow
+    ),
+    'flow.md must ask the surrounding-context question once at generation time, not per run inside /awos:spec — a per-run "any source material?" ask is net-negative when there is none'
+  );
+
+  // The decision record must carry the field so the generated fetch stage
+  // has a recorded source list to pull from.
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /Surrounding context to pre-seed the spec/i.test(dfTemplate),
+    'delivery-flow-template.md §1 must record the surrounding-context sources (each with its §7 transport) the fetch stage pulls to pre-seed the spec interview'
+  );
+
+  // implement-feature's fetch stage must pull the ticket's surrounding
+  // context (epic/parent description, remote links, attachments) and list
+  // unreachable links — the sibling of fix-bug-template's remote-links
+  // pull, but feeding the spec interview rather than a bug diagnosis.
+  const feat = readUtf8(
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+  );
+  assert.ok(
+    /surrounding context/i.test(feat) &&
+      /remote links, attachments/i.test(feat) &&
+      /epic\/parent/i.test(feat),
+    "implement-feature-template fetch stage must pull the ticket's surrounding context — epic/parent description, remote links, attachments — to pre-seed /awos:spec (mirrors fix-bug-template's remote-links pull)"
+  );
+  assert.ok(
+    /list anything linked but unreachable/i.test(feat),
+    'implement-feature-template fetch stage must list linked-but-unreachable context instead of silently skipping it, so the specs stage knows context is missing'
+  );
+
+  // spec.md must silently consume references already in its prompt and
+  // must NOT add a new source-material question (the net-negative ask).
+  const spec = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    /Consume source material already in the prompt/i.test(spec) &&
+      /ticket IDs, URLs, or file paths/i.test(spec),
+    'commands/spec.md Step 2 must consume ticket IDs / URLs / file paths already in <user_prompt> before the interview, folding them into the known-info extraction'
+  );
+  assert.ok(
+    /without a new question/i.test(spec) && /net-negative/i.test(spec),
+    'commands/spec.md must pre-seed WITHOUT adding an "any source material?" question — the ask is net-negative when the prompt carries no references'
+  );
+});
+
 test('completion claims require fresh evidence — the verification reflex is baked into agent prompts', () => {
   // The verification-before-completion discipline: an agent may not
   // report its own work as done on belief ("should work", "Done!") —
@@ -3253,7 +3321,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // behavior changes — always as one deliberate commit moving three files
 // together: plugin.json, marketplace.json, and this pinned literal. The pin
 // exists to force that deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.2';
+const EXPECTED_PLUGIN_VERSION = '2.4.3';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(

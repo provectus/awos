@@ -17,9 +17,10 @@ When a user runs `npx @provectusinc/awos`, this script:
 
 1. Creates directories in their project (`.awos/`, `.claude/`, `context/`)
 2. Copies framework files from this package into those directories
-3. Shows progress messages and statistics
+3. Registers the AWOS plugin marketplace and — subject to consent — enables the `awos-containment` plugin in `.claude/settings.json` (`services/marketplace-configurator.js`), so its PreToolUse containment hook is active after install. Enablement is consent-based (TTY prompt default-yes, non-TTY default-enable, `--containment`/`--no-containment` to short-circuit) and sticky (an explicit decline is never silently re-enabled). The marketplace registration itself is unconditional.
+4. Shows progress messages and statistics
 
-That's it. Simple file copying with a nice UI.
+That's it. Simple file copying plus a small settings merge, with a nice UI.
 
 ## File Structure
 
@@ -70,6 +71,10 @@ Operations marked `preserveOnUpdate: true` run a conflict scan in `file-copier.j
 **`--overwrite`** — Forces overwrite of `.claude/commands/awos/*` even when those wrappers already exist. Use in CI or scripted reinstalls when you intentionally want a fresh sync.
 
 **`--no-overwrite`** — Explicit opt-out from overwriting `.claude/commands/awos/*`. Same effect as the safe default for non-TTY runs.
+
+**`--containment`** — Force-enable the `awos-containment` guard without prompting. Use in CI or scripted installs that want the containment hook armed.
+
+**`--no-containment`** — Decline the `awos-containment` guard. The decline is recorded (sticky), so a later default-enable run does not re-arm it. In a TTY without either flag the installer asks (`[Y/n]`, default-yes); a non-TTY run without either flag enables (secure-by-default — the opposite non-TTY direction from the overwrite prompt, because the risk here is a silently-disabled security guard rather than silent data loss).
 
 Files under `.awos/` are updated unconditionally — these are framework internals. Files under `.claude/commands/awos/` are the user's customization layer; the installer prompts before overwriting them when they already exist. In non-interactive runs (no TTY), the default is **preserve** to avoid silently clobbering user edits — pass `--overwrite` to override.
 

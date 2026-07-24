@@ -972,8 +972,10 @@ test('the spec interview is pre-seeded by the flow fetch stage, adding no new /a
   // surrounding context lives and which §7 transport reaches each.
   const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
   assert.ok(
-    /where the ticket's surrounding context lives/i.test(flow),
-    "flow.md §1 (Feature description source) must capture where the ticket's surrounding context lives (epic/parent, remote links, docs connector, meeting notes) so the fetch stage can pre-seed the spec interview"
+    /where the ticket's surrounding context lives/i.test(flow) &&
+      /documentation connector|Confluence\/Notion/i.test(flow) &&
+      /meeting-notes/i.test(flow),
+    "flow.md §1 (Feature description source) must capture where the ticket's surrounding context lives — enumerating the docs connector and meeting-notes sources, not just the header — so the fetch stage can pre-seed the spec interview (epic/parent and remote links are re-checked by the implement-feature anchor below)"
   );
   assert.ok(
     /Ask this once, here at generation time, not per run inside `\/awos:spec`/i.test(
@@ -988,8 +990,9 @@ test('the spec interview is pre-seeded by the flow fetch stage, adding no new /a
     path.join(pluginTemplatesDir, 'delivery-flow-template.md')
   );
   assert.ok(
-    /Surrounding context to pre-seed the spec/i.test(dfTemplate),
-    'delivery-flow-template.md §1 must record the surrounding-context sources (each with its §7 transport) the fetch stage pulls to pre-seed the spec interview'
+    /Surrounding context to pre-seed the spec/i.test(dfTemplate) &&
+      /each with its §7 transport/i.test(dfTemplate),
+    'delivery-flow-template.md §1 must record the surrounding-context sources AND that each carries its §7 transport, the fetch stage pulls to pre-seed the spec interview'
   );
 
   // implement-feature's fetch stage must pull the ticket's surrounding
@@ -1021,6 +1024,24 @@ test('the spec interview is pre-seeded by the flow fetch stage, adding no new /a
   assert.ok(
     /without a new question/i.test(spec) && /net-negative/i.test(spec),
     'commands/spec.md must pre-seed WITHOUT adding an "any source material?" question — the ask is net-negative when the prompt carries no references'
+  );
+  // The presence check above proves the prohibition prose survives, not
+  // that no forbidden ask was added — a reintroduced "any source
+  // material?" question stays green as long as the prohibition prose also
+  // survives. Pin the phrase to a single occurrence and require that one
+  // to be the prohibition itself: a second mention (the reintroduced ask)
+  // trips the count, while the current file — which quotes the phrase once
+  // in the prohibition — passes. A substring linter can only catch a
+  // literal reintroduced ask, not prove no runtime question is asked; this
+  // tightens that gap rather than closing it.
+  assert.strictEqual(
+    (spec.match(/any source material/gi) || []).length,
+    1,
+    'commands/spec.md must name "any source material" exactly once — only in the prohibition, never as an added ask'
+  );
+  assert.ok(
+    /Do \*\*not\*\* add an "any source material\?" question/.test(spec),
+    'the single "any source material" mention in commands/spec.md must be the prohibition sentence, not a reintroduced source-material question'
   );
 });
 

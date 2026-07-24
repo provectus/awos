@@ -144,6 +144,80 @@ test('ARCH-05 classifies dotted role qualifiers (.d.ts, .stories.tsx) by their s
   }
 });
 
+test('ARCH-05 treats a leading numeric ordering prefix as sort order, not a naming style (numbered files PASS)', () => {
+  const repo = tmpDir('awos-arch05-ordering-prefix-');
+  try {
+    // A fully consistent snake_case service plus numbered migration files that
+    // use the near-universal `NNN_description` ordering convention. The digits
+    // encode apply order, not a naming style: `001` is a valid digit-led
+    // snake_case token, so the whole name classifies as snake_case and the
+    // repo must PASS.
+    writeRepo(repo, {
+      'app/user_service.py': 'x = 1\n',
+      'app/auth_handler.py': 'x = 1\n',
+      'app/data_model.py': 'x = 1\n',
+      'migrations/versions/001_create_users.py': 'x = 1\n',
+      'migrations/versions/002_add_index.py': 'x = 1\n',
+    });
+    const res = detect(repo);
+    assert.equal(
+      res.status,
+      'PASS',
+      `numbered files pass because a digit-led token is valid snake_case; got ${res.status}: ${JSON.stringify(res.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('ARCH-05 accepts snake_case tokens containing digits — digit-led (2fa_auth) and letter-led (s3_bucket, oauth2_client)', () => {
+  const repo = tmpDir('awos-arch05-digit-tokens-');
+  try {
+    // `2fa_auth` is genuinely digit-led — it exercises the digit-led token
+    // support. `s3_bucket` and `oauth2_client` are letter-led (digits in
+    // non-leading positions) and were valid snake_case even before digit-led
+    // tokens were accepted; they stay as regression guards. All are textbook
+    // snake_case (lowercase tokens joined by underscores), so the repo must
+    // PASS.
+    writeRepo(repo, {
+      'app/user_service.py': 'x = 1\n',
+      'app/2fa_auth.py': 'x = 1\n',
+      'app/s3_bucket.py': 'x = 1\n',
+      'app/oauth2_client.py': 'x = 1\n',
+    });
+    const res = detect(repo);
+    assert.equal(
+      res.status,
+      'PASS',
+      `snake_case tokens containing digits are not naming violations; got ${res.status}: ${JSON.stringify(res.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('ARCH-05 still FAILs a genuinely mixed repo that also contains numbered files', () => {
+  const repo = tmpDir('awos-arch05-mixed-numbered-');
+  try {
+    // Accepting digit-led tokens must not mask a real convention clash: the
+    // camelCase file is a genuine deviation and must still FAIL even though a
+    // numbered file is present.
+    writeRepo(repo, {
+      'app/user_service.py': 'x = 1\n',
+      'migrations/versions/001_create_users.py': 'x = 1\n',
+      'app/myController.py': 'x = 1\n',
+    });
+    const res = detect(repo);
+    assert.equal(
+      res.status,
+      'FAIL',
+      `a real camelCase deviation must still FAIL alongside numbered files; got ${res.status}: ${JSON.stringify(res.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 test('ARCH-05 emits SKIP, not PASS, when there are no source files to evaluate', () => {
   const repo = tmpDir('awos-arch05-empty-');
   try {

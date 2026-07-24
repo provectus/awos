@@ -427,9 +427,10 @@ export function detectSeparationOfConcerns(
 //
 // Check file-naming convention adherence across source files. Test files are
 // excluded (they follow the test-naming convention, a separate axis). Tokens
-// are lowercase-alphanumeric and may start with a digit (`2fa_auth`,
-// `s3_bucket`, `oauth2_client`, `001_create_users`); the separator and casing
-// shape determine the convention.
+// are lowercase-alphanumeric: digits may appear anywhere in a token, whether
+// non-leading (`s3_bucket`, `oauth2_client`) or leading (`2fa_auth`,
+// `001_create_users`); the separator and casing shape determine the
+// convention.
 // Maps each source filename's stem (first dot-segment) to the conventions
 // it is COMPATIBLE with:
 //   - snake_case: lowercase-alphanumeric tokens joined by underscores
@@ -456,7 +457,7 @@ type NamingConvention =
 
 /**
  * Conventions a filename stem is compatible with. Tokens are lowercase-
- * alphanumeric and may start with a digit (`2fa`, `s3`, `oauth2`, `001`).
+ * alphanumeric and may start with a digit (`2fa`, `001`).
  * snake_case and kebab-case join such tokens with `_` and `-`; camelCase and
  * PascalCase are letter-led. A single lowercase-alphanumeric token (`utils`,
  * `api`, `s3`) carries no separator evidence and is compatible with EVERY

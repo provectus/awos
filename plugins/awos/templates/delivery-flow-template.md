@@ -29,6 +29,7 @@ Which commands `/awos:flow` generated and their names — re-runs reconcile exac
 - **Source:** [Jira | Azure DevOps | Linear | Notion | GitHub/GitLab issue | local file | prompt text | pre-generated spec]
 - **Fetch transport:** [CLI command / MCP tool / plugin — from §7; name the fallback if the primary is unavailable]
 - **Normalization:** [what the flow extracts: ID, title, description, acceptance hints, link]
+- **Surrounding context to pre-seed the spec:** [where the ticket's framing context lives, each with its §7 transport — epic/parent ticket description, tracker remote/linked issues and attachments (design links, screenshots), a docs connector (Confluence/Notion pages the ticket references), a meeting-notes/chat source; the fetch stage pulls this alongside the ticket and lists any unreachable source instead of skipping it. "none" for a plain-prompt or local-file source with no tracker]
 - **Pre-generated specs:** [whether `context/spec/` directories may arrive pre-written, and the entry-point detection rule — resume from the first missing artifact]
 
 ## 2. Git Flow

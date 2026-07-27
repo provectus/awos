@@ -53,6 +53,16 @@ Once your foundation is set, iterate through this cycle for each feature on your
 
 > **When to skip the cycle**: Not every change needs a spec. Hotfixes, simple bugfixes, and small edits don't require the full spec workflow — Claude Code's built-in plan mode handles those just fine.
 
+### Quick Tasks
+
+For contained, one-off work that needs a plan and a specialist but not a full spec — a focused bugfix, a small refactor, a config or dependency change — use the shorter path:
+
+| Command       | What it does                                                            | Docs                              |
+| ------------- | ----------------------------------------------------------------------- | --------------------------------- |
+| `/awos:quick` | Executes a small ad-hoc task end-to-end — plans, delegates, summarizes. | [Details](docs/commands/quick.md) |
+
+`/awos:quick` plans the task, delegates the coding to a specialist subagent (the same specialists `/awos:implement` uses), and records a `PLAN.md` and `SUMMARY.md` under `context/quick/` — separate from the roadmap. It asks how thorough to be (plan-only, discuss, research, or full) and asks before committing. Use `/awos:quick list`, `status <slug>`, and `resume <slug>` to manage accumulated tasks.
+
 ### Step 4: You're Awesome
 
 That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product.

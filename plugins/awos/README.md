@@ -18,6 +18,8 @@ To register the marketplace manually:
 /plugin marketplace add provectus/awos
 ```
 
+> **Adopting AWOS on an existing codebase?** The audit is the recommended first step of the brownfield path — run it before the foundation commands to get a baseline score and a punch list, then re-run it after adoption to see the delta. Its scoring is self-contained (it does not depend on the specialist agents `/awos:hire` installs), so it works the same on an untouched repo. See the [Brownfield Adoption Guide](../../docs/brownfield-adoption.md).
+
 ## Usage
 
 Full audit across all dimensions:

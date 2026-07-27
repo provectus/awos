@@ -22,6 +22,10 @@ Run `/awos:product` and `/awos:roadmap` first.
 
 After saving, the agent reviews your tech stack against available specialist agents and presents a coverage table showing what's covered and what's missing. If gaps exist, it recommends running `/awos:hire`.
 
+## Brownfield mode
+
+If `/awos:product` detected an existing codebase (leaving a `context/product/brownfield.md`), this command first discovers the **existing tech stack** — languages, frameworks and versions, databases, infrastructure, external services, and testing/build/CI tooling — via a focused `Explore` pass, and uses those findings as the **defaults** for each architecture decision (you still confirm or change each one). It then cleans up the brownfield scaffolding: `brownfield.md` is deleted once absorbed, and `context/sources/` is removed unless durable source configuration is worth keeping (in which case `sources.md` is retained and referenced from `product-definition.md`). See the [Brownfield Adoption Guide](../brownfield-adoption.md).
+
 ## Common misconceptions
 
 - **"I should describe features here."** No. Architecture is about technology decisions — frameworks, databases, cloud services, infrastructure. Features belong in `/awos:spec`.

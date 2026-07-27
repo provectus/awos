@@ -24,6 +24,10 @@ This command creates (or updates) your product roadmap — an ordered list of fe
 - **Each item = one spec.** Roadmap items should be scoped so that each one can be described in a single functional specification.
 - **Template adherence.** The agent preserves the markdown structure and formatting from the original template across all updates.
 
+## Brownfield mode
+
+If `/awos:product` detected an existing codebase (leaving a `context/product/brownfield.md`), this command first inventories what's **already built** — fully implemented features, partial scaffolding, and planned work (TODOs/FIXMEs) — via a focused `Explore` pass, and appends them under a `## Capabilities` heading. The roadmap is then anchored in reality: existing capabilities are treated as done, and new phases describe what comes next. See the [Brownfield Adoption Guide](../brownfield-adoption.md).
+
 ## Common misconceptions
 
 - **"I should list technical tasks."** No. Roadmap items are features like "User profile management" or "Payment processing", not "Set up PostgreSQL" or "Configure CI/CD pipeline".

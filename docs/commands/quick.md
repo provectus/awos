@@ -25,12 +25,12 @@ Nothing in `context/spec/` or the roadmap is touched.
 2.  **Asks how thorough to be** — instead of flags, the command asks up front: _Plan and execute_ (default), _Discuss first_, _Research first_, or _Full_ (discuss + research + validate).
 3.  **Optionally discusses** the approach and surfaces assumptions (if you chose Discuss or Full).
 4.  **Optionally researches** approaches and pitfalls via a read-only agent (if you chose Research or Full).
-5.  **Writes a short PLAN.md** — goal, approach, steps, definition of done, and the chosen specialist agent.
-6.  **Picks a specialist subagent** — reusing the same specialists as `/awos:implement`, matched by technology and intent (falls back to `general-purpose`).
+5.  **Picks a specialist subagent** — reusing the same specialists as `/awos:implement`, matched by technology and intent (falls back to `general-purpose` for config, docs, scripts, and other generic work).
+6.  **Writes a short PLAN.md** — goal, approach, steps, definition of done, and the chosen specialist agent.
 7.  **Delegates execution** with full plan context and clear verification criteria.
 8.  **Optionally validates** the result against the definition of done (if you chose Full).
 9.  **Writes SUMMARY.md** — outcome, files changed, verification result, and status.
-10. **Offers to commit** — asks before committing; never commits without your explicit choice.
+10. **Offers to commit** — in a git repo, asks before committing and never commits without your explicit choice; in a non-repo project, skips the commit step and leaves the changes on disk.
 
 ## Subcommands
 

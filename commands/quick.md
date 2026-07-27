@@ -94,7 +94,16 @@ If depth is "Research first" or "Full":
 - The research prompt should ask: what is the best approach for this task in _this_ codebase, which existing files/patterns to follow, and what pitfalls to avoid.
 - Fold the findings into `PLAN.md`.
 
-### Step 5: Write the Plan
+### Step 5: Choose the Specialist Subagent
+
+Determine which subagent should do the coding, reusing the same specialists as `/awos:implement`:
+
+- Enumerate the available subagents by inspecting the `Agent` tool's description block in your own system prompt (introspection — no tool call needed). Both project-local agents (declared as files under `.claude/agents/*.md`) and plugin-provided agents (recognized by the `plugin-name:` prefix on `subagent_type`) are listed there.
+- Match the task to a subagent by technology and intent (e.g. FastAPI/Python → a Python specialist, React/UI → a frontend specialist, DB → a database specialist, infra/CI → an infrastructure specialist).
+- If no specialist clearly matches — plain config edits, documentation, shell scripts, and other generic one-off work — use `general-purpose`. Don't force a stack specialist onto a task outside its domain just because the verification happens to use its language.
+- You'll record the choice in `PLAN.md` in the next step as `**[Agent: agent-name]**`.
+
+### Step 6: Write the Plan
 
 Write `context/quick/[YYYYMMDD]-[slug]/PLAN.md` with:
 
@@ -102,18 +111,9 @@ Write `context/quick/[YYYYMMDD]-[slug]/PLAN.md` with:
 - **Approach** — how it will be done (incorporating any discussion/research findings).
 - **Steps** — the concrete edits/actions, in order.
 - **Definition of Done** — how success is verified (tests, lint, typecheck, curl, manual check).
-- **Agent** — the specialist chosen in Step 6, recorded as `**[Agent: agent-name]**`.
+- **Agent** — the specialist chosen in Step 5, recorded as `**[Agent: agent-name]**`.
 
 Keep it short — a quick task's plan is a checklist, not a document.
-
-### Step 6: Choose the Specialist Subagent
-
-Determine which subagent should do the coding, reusing the same specialists as `/awos:implement`:
-
-- Enumerate the available subagents by inspecting the `Agent` tool's description block in your own system prompt (introspection — no tool call needed). Both project-local agents (declared as files under `.claude/agents/*.md`) and plugin-provided agents (recognized by the `plugin-name:` prefix on `subagent_type`) are listed there.
-- Match the task to a subagent by technology and intent (e.g. FastAPI/Python → a Python specialist, React/UI → a frontend specialist, DB → a database specialist, infra/CI → an infrastructure specialist).
-- If no specialist matches, use `general-purpose`.
-- Record the choice in `PLAN.md` as `**[Agent: agent-name]**`.
 
 ### Step 7: Delegate Execution
 
@@ -158,7 +158,9 @@ Set `status: incomplete` if the task could not be fully finished, and explain wh
 
 ### Step 10: Offer to Commit
 
-Ask the user with `AskUserQuestion` (header `Commit`, single-select) whether to commit the changes:
+First check whether the project is a git repository (e.g. `git rev-parse --is-inside-work-tree`). If it is **not** a repo, skip the commit question entirely — tell the user the changes are on disk and uncommitted because the project isn't under version control, and go to Step 11. Do not run `git init` on the user's behalf.
+
+If it is a repo, ask the user with `AskUserQuestion` (header `Commit`, single-select) whether to commit the changes:
 
 - **Commit now** — stage the changed files and create a single atomic commit with a concise message describing the task. If on the default branch, branch first per repo conventions.
 - **Don't commit** — leave the changes for the user to review.
@@ -167,7 +169,7 @@ Never commit without an explicit "Commit now" choice.
 
 ### Step 11: Report
 
-Report in a few lines: the task slug, what was done, files changed, verification result, and whether it was committed. Point the user to `context/quick/[YYYYMMDD]-[slug]/` for the plan and summary.
+Report in a few lines: the task slug, what was done, files changed, verification result, and whether it was committed (or that the project isn't a git repo, so nothing was committed). Point the user to `context/quick/[YYYYMMDD]-[slug]/` for the plan and summary.
 
 ---
 

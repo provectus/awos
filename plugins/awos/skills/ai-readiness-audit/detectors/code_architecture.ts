@@ -426,21 +426,26 @@ export function detectSeparationOfConcerns(
 // detectNamingConventions — category 2104 (ARCH-05, method: detected)
 //
 // Check file-naming convention adherence across source files. Test files are
-// excluded (they follow the test-naming convention, a separate axis).
+// excluded (they follow the test-naming convention, a separate axis). Tokens
+// are lowercase-alphanumeric: digits may appear anywhere in a token, whether
+// non-leading (`s3_bucket`, `oauth2_client`) or leading (`2fa_auth`,
+// `001_create_users`); the separator and casing shape determine the
+// convention.
 // Maps each source filename's stem (first dot-segment) to the conventions
 // it is COMPATIBLE with:
-//   - snake_case: all lowercase with underscores
-//   - kebab-case: all lowercase with hyphens
-//   - camelCase: starts with lowercase, has uppercase letters
-//   - PascalCase: starts with uppercase
-//   - single-token lowercase (`utils`, `api`): compatible with all lowercase
-//     conventions — no separator evidence to pin it to one
+//   - snake_case: lowercase-alphanumeric tokens joined by underscores
+//   - kebab-case: lowercase-alphanumeric tokens joined by hyphens
+//   - camelCase: starts with a lowercase letter, has uppercase letters
+//   - PascalCase: starts with an uppercase letter
+//   - single lowercase-alphanumeric token (`utils`, `api`, `s3`): compatible
+//     with all lowercase conventions — no separator evidence to pin it to one
 //   - mixed/other
 //
-// The "dominant" convention is the one compatible with the most files.
-// PASS if >= 90% of files are compatible with the dominant convention.
-// WARN if 70–89%.
-// FAIL if < 70%.
+// The "dominant" convention is the one compatible with the most files; `value`
+// is the share of files compatible with it (0..1, i.e. the compatible %).
+// All-or-nothing (AWOS's own standard): PASS at 100% — every file compatible
+// with the dominant convention; FAIL below 100% — any departure fails and names
+// the stragglers. No graded WARN band.
 // ---------------------------------------------------------------------------
 
 type NamingConvention =
@@ -451,19 +456,20 @@ type NamingConvention =
   | 'other';
 
 /**
- * Conventions a filename stem is compatible with. Single-token lowercase
- * names (`utils`, `api`) carry no separator evidence, so they are compatible
- * with EVERY lowercase convention (snake, kebab, camel) rather than being
- * pinned to one — otherwise they would skew dominance away from the
- * convention the multi-word names actually follow. Returns an empty array
- * for names that fit no recognised convention ('other').
+ * Conventions a filename stem is compatible with. Tokens are lowercase-
+ * alphanumeric and may start with a digit (`2fa`, `001`).
+ * snake_case and kebab-case join such tokens with `_` and `-`; camelCase and
+ * PascalCase are letter-led. A single lowercase-alphanumeric token (`utils`,
+ * `api`, `s3`) carries no separator evidence and is compatible with EVERY
+ * lowercase convention. Returns an empty array for names that fit no
+ * recognised convention ('other').
  */
 function compatibleConventions(name: string): NamingConvention[] {
-  if (/^[a-z][a-z0-9]*$/.test(name)) {
+  if (/^[a-z0-9]+$/.test(name)) {
     return ['snake_case', 'kebab-case', 'camelCase'];
   }
-  if (/^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(name)) return ['snake_case'];
-  if (/^[a-z][a-z0-9]*(-[a-z0-9]+)+$/.test(name)) return ['kebab-case'];
+  if (/^[a-z0-9]+(_[a-z0-9]+)+$/.test(name)) return ['snake_case'];
+  if (/^[a-z0-9]+(-[a-z0-9]+)+$/.test(name)) return ['kebab-case'];
   if (/^[A-Z][A-Za-z0-9]*$/.test(name)) return ['PascalCase'];
   if (/^[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$/.test(name)) return ['camelCase'];
   return [];

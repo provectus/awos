@@ -1262,6 +1262,46 @@ test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => 
   );
 });
 
+test('hire.md installs hooks from the registry and never authors them', () => {
+  // Hooks are the fourth recruitment component type, but unlike agents
+  // they are executable shell behavior — hire may only install what the
+  // registry ships, never fabricate hook commands, and must roster the
+  // post-install state. See docs: design spec 2026-07-17-hire-hooks.
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    body.includes('npx @provectusinc/awos-recruitment hook ') &&
+      body.includes('bunx @provectusinc/awos-recruitment hook '),
+    'commands/hire.md must install hooks via the awos-recruitment `hook` verb in both npx and bunx forms'
+  );
+  assert.ok(
+    body.includes('.claude/settings.local.json') &&
+      body.includes('A missing or unparseable file means no existing hooks'),
+    'commands/hire.md Step 3 must discover existing hooks from the project settings files (.claude/settings.json / .claude/settings.local.json), treating a missing or unparseable file as no existing hooks'
+  );
+  assert.ok(
+    body.includes('## Installed Hooks'),
+    'commands/hire.md Step 8 coverage-report structure must contain the "## Installed Hooks" section'
+  );
+  assert.ok(
+    body.includes('| Name | Event | Command | Description |'),
+    'commands/hire.md Step 8 Installed Hooks table must use the exact header Name/Event/Command/Description — Event and Command are the only cells derivable from bare settings entries; Name and Description must fall back to "—" rather than be invented'
+  );
+  assert.ok(
+    /never author hook/i.test(body),
+    'commands/hire.md must state that hooks come from the registry only — hire never authors hook entries or commands'
+  );
+  assert.ok(
+    body.includes('two separate gates') &&
+      body.includes('shell script that runs automatically'),
+    'commands/hire.md Step 4 must gate hook consent separately from the passive skills/MCPs/agents confirmation, naming that hooks install auto-running shell scripts'
+  );
+  assert.ok(
+    body.includes('second half of the hook consent') &&
+      body.includes('.claude/hooks/<name>/HOOK.md'),
+    'commands/hire.md Step 5 must read back the installed HOOK.md and entrypoint script after install and offer rollback on mismatch — registry metadata is not vetted against the script'
+  );
+});
+
 test('setup-config does not auto-populate .claude/agents/', () => {
   // .claude/agents/ is the user's customization area. The earlier draft
   // of this PR shipped a `plugins/awos/agents` → `.claude/agents` copy

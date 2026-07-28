@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-07-28T14:11:36.017Z",
+  "nodeVersion": "22.16.0",
+  "sourceHash": "sha256:db13629217f2787eba602d4dec3b34eff37444ee08b7aabc0baa47cd35696361",
+  "providers": {
+    "kiro": {
+      "fileCount": 13,
+      "totalLines": 1408,
+      "generatedAt": "2026-07-28T14:11:36.017Z"
+    },
+    "cursor": {
+      "fileCount": 18,
+      "totalLines": 1284,
+      "generatedAt": "2026-07-28T14:11:36.017Z"
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+    "providers": [
+        {
+            "name": "kiro",
+            "enabled": true,
+            "markers": [
+                ".kiro/"
+            ],
+            "emitter": "./lib/emitters/kiro.js"
+        },
+        {
+            "name": "cursor",
+            "enabled": true,
+            "markers": [
+                ".cursor/"
+            ],
+            "emitter": "./lib/emitters/cursor.js"
+        },
+        {
+            "name": "codex",
+            "enabled": false,
+            "markers": [
+                "codex.json",
+                ".codex/"
+            ],
+            "emitter": "./lib/emitters/codex.js"
+        },
+        {
+            "name": "cline",
+            "enabled": false,
+            "markers": [
+                ".clinerules",
+                ".cline/"
+            ],
+            "emitter": "./lib/emitters/cline.js"
+        },
+        {
+            "name": "continue",
+            "enabled": false,
+            "markers": [
+                ".continue/"
+            ],
+            "emitter": "./lib/emitters/continue.js"
+        }
+    ]
+}

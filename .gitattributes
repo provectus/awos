@@ -1,0 +1,4 @@
+# Mark .awos-adapters/ as fork-owned generated content
+# Excluded from upstream diffs during rebase
+.awos-adapters/** linguist-generated=true
+.awos-adapters/** -diff

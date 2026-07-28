@@ -1553,6 +1553,94 @@ test('status.md is a read-only status board wired to the real state sources', ()
     /\[Agent:/.test(body) && /double-count/i.test(body),
     "plugins/awos/commands/status.md must count only atomic [Agent:]-tagged tasks and exclude composite slice headers, matching /awos:implement's counting rule — otherwise progress percentages are inflated"
   );
+
+  // Card contract: ticket on top, then spec number + title, author, and a
+  // size/days footer — the fields a reviewer scans to place and triage a card.
+  const cardBits = [/ticket/i, /spec number/i, /title/i, /author/i];
+  const missingBits = cardBits.filter((re) => !re.test(body));
+  assert.equal(
+    missingBits.length,
+    0,
+    'plugins/awos/commands/status.md card must carry ticket, spec number, title, and author'
+  );
+
+  // Ticket detection must cover the tracker fields specs actually use — Jira
+  // (and its Ticket/Task variants) and Linear — not a single hardcoded field.
+  assert.ok(
+    /Jira/.test(body) && /Linear/.test(body),
+    'plugins/awos/commands/status.md must read the ticket from the Jira/Linear fields specs record'
+  );
+
+  // Kanban grid: cards are sized so ~3 columns fit an 80-col terminal, wrapping
+  // three-per-row (Draft·In Review·Approved, then Completed·Other) rather than
+  // one long vertical stack.
+  assert.ok(
+    /grid/i.test(body) &&
+      /three columns|three per row/i.test(body) &&
+      /80/.test(body),
+    'plugins/awos/commands/status.md must lay the lifecycle columns out as a kanban grid sized to ~80 columns (≥3 columns per row), not a single vertical stack'
+  );
+
+  // Relative size tiers, each with a distinct casing (caps/title/lower) and a
+  // distinct emoji, computed relative to the project's other specs.
+  assert.ok(
+    /HUGE/.test(body) && /Medium/.test(body) && /\bsmall\b/.test(body),
+    'plugins/awos/commands/status.md must define the three relative size tiers HUGE / Medium / small'
+  );
+  assert.ok(
+    /relative/i.test(body) && /task/i.test(body),
+    'plugins/awos/commands/status.md size must be relative to the project (by task count), not an absolute threshold'
+  );
+  // Size square + days circle emoji are the primary color mechanism — ANSI does
+  // not render in the Markdown chat surface, so emoji must carry the color and
+  // ANSI is only a secondary enhancement. Distinct shapes keep them apart.
+  assert.ok(
+    /🟥/.test(body) && /🟨/.test(body) && /🟩/.test(body),
+    'plugins/awos/commands/status.md must mark size with the 🟥/🟨/🟩 squares (HUGE/MEDIUM/small)'
+  );
+  assert.ok(
+    ['⚪', '🟡', '🔴', '🟤'].every((e) => body.includes(e)),
+    'plugins/awos/commands/status.md must mark days-in-status with the ⚪/🟡/🔴/🟤 circles'
+  );
+  assert.ok(
+    /emoji/i.test(body) &&
+      /ANSI/.test(body) &&
+      /(secondary|fallback|do(?:es)? not render)/i.test(body),
+    'plugins/awos/commands/status.md must make emoji the primary color mechanism and demote ANSI to a secondary enhancement (ANSI does not render in the Markdown chat surface)'
+  );
+
+  // Cards must hold one consistent width — a ragged right edge is the failure
+  // mode the board is most prone to once titles/tickets vary in length.
+  assert.ok(
+    /same width/i.test(body) && /(truncat|ellipsis|…)/i.test(body),
+    'plugins/awos/commands/status.md must require a consistent card width (pad short lines, truncate long titles/tickets) so box borders line up'
+  );
+
+  // The command ships a worked reference renderer and points at it, so the
+  // board can be produced deterministically instead of hand-drawn every time.
+  assert.ok(
+    body.includes('scripts/status-board.py'),
+    'plugins/awos/commands/status.md must reference the bundled reference renderer at ${CLAUDE_PLUGIN_ROOT}/scripts/status-board.py'
+  );
+  assert.ok(
+    fs.existsSync(
+      path.join(pluginCommandsDir, '..', 'scripts', 'status-board.py')
+    ),
+    'the reference renderer plugins/awos/scripts/status-board.py must exist (shipped alongside the command)'
+  );
+
+  // Days-in-status with an age color gradient (yellow ≥3, red ≥5, brown ≥7).
+  assert.ok(
+    /days in (?:the )?current status/i.test(body),
+    'plugins/awos/commands/status.md must show days in the current status on each card'
+  );
+  assert.ok(
+    /🟤/.test(body) &&
+      /\b7\b/.test(body) &&
+      /\b5\b/.test(body) &&
+      /\b3\b/.test(body),
+    'plugins/awos/commands/status.md must grade day-count staleness by age (⚪ <3 days, 🟡 ≥3, 🔴 ≥5, 🟤 ≥7)'
+  );
 });
 
 test('flow.md re-run interviews only the dimensions the user chose', () => {

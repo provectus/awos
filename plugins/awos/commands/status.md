@@ -51,8 +51,12 @@ If `<user_prompt>` names a spec, narrow the set to that one directory (match on 
 
 For each spec directory, read:
 
-1. **`functional-spec.md`** — extract the `Status:` field (`Draft` | `In Review` | `Approved` | `Completed`) and the `Roadmap Item:` field. A spec with no readable `Status` is treated as **Draft** and flagged as such on its card.
-2. **`tasks.md`** — count task progress. Count only atomic tasks — nested lines carrying a `**[Agent: name]**` marker (or otherwise nested under a slice header). Slice headers (`- [ ] **Slice N: …**`) are composite and would double-count, so exclude them. Progress is `done / total` where `done` is the atomic tasks marked `[x]`. A spec with no `tasks.md` yet shows progress as `—` (tasks not broken down).
+1. **`functional-spec.md`** — extract, from the metadata block at the top: the spec **title** (the `# Functional Specification: …` heading), the **`Status:`** field (`Draft` | `In Review` | `Approved` | `Completed`), the **Author**, and a **ticket** reference when one is recorded (a `Jira`, `Jira Ticket`, `Jira Task`, or `Linear` field — capture its identifier, e.g. `OAPBCRNA-122`). Anchor on the metadata lines, not on prose lower in the file (acceptance criteria often mention the word "status" in passing). A spec with no readable `Status` is treated as **Draft** and flagged as such on its card; fall back to the directory's short name when no title heading is present, and omit the ticket when no ticket field exists.
+2. **`tasks.md`** — count atomic tasks: nested lines carrying a `**[Agent: name]**` marker (or otherwise nested under a slice header). Slice headers (`- [ ] **Slice N: …**`) are composite and would double-count, so exclude them. This atomic-task total feeds the spec's **size** (next); the `[x]` share feeds the Step 6 next-step recommendation. A spec with no `tasks.md` yet counts as zero tasks.
+
+3. **Size** — bucket each spec by its atomic-task count **relative to the other specs in this project**, into three tiers: **small**, **MEDIUM**, **HUGE**. Split the project's specs into roughly equal thirds by task count — the largest third is HUGE, the middle MEDIUM, the smallest small. Size is relative, so the same task count can be HUGE in a small project and small in a large one.
+
+4. **Days in current status** — how long the spec has sat in its present `Status`. Derive it from git: the age in whole days of the most recent commit that changed the `Status:` line of `functional-spec.md` (blame that line). Fall back to the spec directory's last commit, then to the file's modification time, when history is unavailable.
 
 ### Step 3: Read the roadmap
 
@@ -60,13 +64,47 @@ Read `context/product/roadmap.md`. Record each phase heading and, under it, the 
 
 ### Step 4: Render the board
 
-Present a Kanban board with one column per lifecycle state, in order — **Draft | In Review | Approved | Completed** — placing each feature as a card under its status column. Keep it readable in a terminal (a Markdown table or aligned column lists both work; prefer whichever renders the cards clearly for the number of specs). Each card shows:
+Lay the five lifecycle columns out as a **kanban grid sized to an ~80-column terminal**: make each card about **25 columns wide so at least three columns sit side by side in one row**. Render the columns in order, **three per row — Draft · In Review · Approved on the first row, then Completed · Other below** — each column a vertical stack of its cards under a centered `══ Name (count) ══` header. Within a row the columns share one width and their cards align top-down; a column with fewer cards just leaves blank space beneath it. Show every column including empty ones (an empty column shows its header and `(none)`); the **Other** column appears only when at least one spec has a non-canonical status (see Step 6-caveat below).
 
-- the spec index and short name (e.g. `003-photo-upload`),
-- its task progress (`4/7, 57%`, or `—` when there is no task breakdown),
-- the roadmap item it delivers (trimmed if long).
+Draw each feature as a **card** with box-drawing borders and **two color emoji on its bottom line** that carry its triage signals: a **size square** immediately before the size word, and a **days circle** immediately after the day count. Emoji are the primary color mechanism because they render wherever Markdown does — the board is shown in a Markdown chat surface, where ANSI escape codes do not render (they print as literal `\e[..m` gibberish or are stripped). A square for size and a circle for days keep the two signals distinct at a glance.
 
-Mark any card whose `Status` had to be defaulted (no field found) so the user knows the placement is inferred. Include empty columns so the flow is visible even when a stage has no features.
+- **Size — 🟥 / 🟨 / 🟩 just before the size word** (the word's casing carries the same signal without color):
+  - 🟥 HUGE — all caps
+  - 🟨 Medium — title case
+  - 🟩 small — lowercase
+- **Days in current status — ⚪ / 🟡 / 🔴 / 🟤 just after the day count** (staleness rises with age):
+  - ⚪ under 3 days
+  - 🟡 3 days or more
+  - 🔴 5 days or more
+  - 🟤 7 days or more
+
+The four content lines, in order: **ticket** (top; blank when the spec records none), the **spec number** and **title** (`012 · Checkout redesign`), **author**, then the **size** (`🟥 HUGE`, left) and the **day count** (`1d ⚪`, right). Collapse duplicate ticket ids before showing them — a Markdown-link ticket repeats its id in both the link text and the URL — and when a spec lists several, show the first with a `+N` suffix.
+
+```
+┌───────────────────────┐
+│ PROJ-101              │
+│ 012 · Checkout redes… │
+│ Dusty                 │
+│ 🟥 HUGE         1d ⚪ │
+└───────────────────────┘
+```
+
+(🟥 = HUGE, the largest tier; ⚪ = under 3 days in status. A big, stale feature reads `🟥 … 🟤`.)
+
+ANSI color is a **secondary enhancement** only — when the board is written to a real ANSI-capable terminal or file rather than the chat, you may additionally color the glyphs with escape codes, but the emoji are the source of truth and are always present.
+
+**Keep every card the exact same width.** Fix one inner width for the whole board (~21 characters of text inside a 25-wide box); left-align the ticket, `number · title`, and author lines and pad them with spaces to that width; justify the size/days line so the day-count emoji sits at the right border. Each of the two emoji occupies **two display columns**, so account for that when padding the size/days line — otherwise its right border drifts out of line with the others. Truncate an over-long title or ticket with an ellipsis (`…`) rather than letting one card grow wider than its siblings — a ragged right edge, or cards of differing widths within a row, is the failure this rule prevents.
+
+A worked reference implementation of this whole board — the card, the size terciles, the git-derived days, and the three-per-row grid — ships alongside this command at `${CLAUDE_PLUGIN_ROOT}/scripts/status-board.py`. It is dependency-free (Python 3 standard library plus `git`) and read-only. When a Python 3 runtime is available, the most reliable way to render is to run it and print its output verbatim:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/status-board.py" .            # whole-project board
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/status-board.py" . 003        # focus one feature
+```
+
+Otherwise, treat the script as the canonical spec and render the same layout by hand.
+
+Flag any card whose `Status` was defaulted (no field found) so the user knows the placement is inferred.
 
 ### Step 5: Roadmap roll-up
 

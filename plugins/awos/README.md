@@ -98,7 +98,18 @@ Both commands are user-owned and generated outside `.claude/commands/awos/`, so 
 
 `/awos:status` renders a Kanban board of where every feature stands, read from the project's own documents. It is **read-only** — it scans `context/` and prints a board; it never modifies a file.
 
-Columns are the four functional-spec lifecycle states — **Draft → In Review → Approved → Completed** — and each feature (one `context/spec/NNN-*/` directory) is a card in the column matching its `functional-spec.md` `Status:` field. Each card shows the spec's index and name, its task progress from `tasks.md` (atomic `[x]` tasks over total, e.g. `4/7, 57%`), and the roadmap item it delivers. A per-phase roll-up from `context/product/roadmap.md` follows the board.
+The board is a **kanban grid** sized to an ~80-column terminal — lifecycle columns run three-per-row (**Draft · In Review · Approved**, then **Completed · Other** below), each a vertical stack of cards. Each feature (one `context/spec/NNN-*/` directory) is a **card** in the column matching its `functional-spec.md` `Status:` field:
+
+```
+┌───────────────────────┐
+│ OAPBCRNA-122          │   ticket
+│ 005 · Task Cards Fee… │   spec number · title
+│ Claude (with Dusty)   │   author
+│ 🟥 HUGE         5d 🟤 │   size · days in current status
+└───────────────────────┘
+```
+
+Two triage signals are color-coded with **emoji** (they render in the Markdown chat surface, where ANSI does not). A **size square** before the size word marks the spec's **relative size** (by task count vs. the project's other specs): 🟥 HUGE, 🟨 Medium, 🟩 small — with matching caps/Title/lower casing. A **days circle** after the day count marks how long the spec has sat in its current status (from git): ⚪ under 3 days, 🟡 3+, 🔴 5+, 🟤 7+. A `Other` column collects specs with a non-canonical status, and a per-phase roll-up from `context/product/roadmap.md` follows the board.
 
 ```
 /awos:status              # whole-project board
@@ -116,6 +127,8 @@ plugins/awos/
 ├── commands/
 │   ├── flow.md                  # /awos:flow — delivery-flow generator
 │   └── status.md                # /awos:status — read-only Kanban status board
+├── scripts/
+│   └── status-board.py          # reference renderer for /awos:status (stdlib + git)
 ├── templates/
 │   ├── delivery-flow-template.md      # decision-record scaffold
 │   ├── implement-feature-template.md  # generated feature command

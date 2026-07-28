@@ -1509,6 +1509,52 @@ test('flow.md wires the delivery-flow generator contract end to end', () => {
   );
 });
 
+test('status.md is a read-only status board wired to the real state sources', () => {
+  // /awos:status renders a Kanban board from the project's own documents. Two
+  // properties keep it trustworthy: it never writes (a status view that mutates
+  // state is a footgun), and it reads the same lifecycle/progress markers that
+  // /awos:spec, /awos:implement, and /awos:verify maintain — so the board can
+  // never drift from the documents it reports on.
+  const body = readUtf8(path.join(pluginCommandsDir, 'status.md'));
+
+  // Read-only is the load-bearing guarantee.
+  assert.ok(
+    /read-only/i.test(body) &&
+      /never creates, edits, deletes, or reorders/i.test(body),
+    'plugins/awos/commands/status.md must state it is read-only and never modifies any file — a status view that mutates project state is the bug this contract prevents'
+  );
+
+  // The state sources it reads — the joints between the board and the documents.
+  const requiredRefs = [
+    'context/spec/',
+    'functional-spec.md',
+    'tasks.md',
+    'context/product/roadmap.md',
+  ];
+  const missing = requiredRefs.filter((ref) => !body.includes(ref));
+  assert.deepEqual(
+    missing,
+    [],
+    `plugins/awos/commands/status.md must read the spec dirs, functional-spec.md, tasks.md, and the roadmap; missing: ${missing.join(', ')}`
+  );
+
+  // Columns are the four functional-spec lifecycle states, in order — the
+  // Kanban axis chosen for this command.
+  assert.ok(
+    /Draft\s*(?:→|\|)\s*In Review\s*(?:→|\|)\s*Approved\s*(?:→|\|)\s*Completed/.test(
+      body
+    ),
+    'plugins/awos/commands/status.md board columns must be the four lifecycle states in order (Draft → In Review → Approved → Completed)'
+  );
+
+  // Progress counts atomic [Agent:]-tagged tasks only; composite slice headers
+  // would double-count — the same rule /awos:implement uses.
+  assert.ok(
+    /\[Agent:/.test(body) && /double-count/i.test(body),
+    "plugins/awos/commands/status.md must count only atomic [Agent:]-tagged tasks and exclude composite slice headers, matching /awos:implement's counting rule — otherwise progress percentages are inflated"
+  );
+});
+
 test('flow.md re-run interviews only the dimensions the user chose', () => {
   // A road-test re-run re-reviewed all seven dimensions with "(текущее)"
   // defaults instead of only the ones the user wanted to change. The re-run
@@ -3382,7 +3428,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // behavior changes — always as one deliberate commit moving three files
 // together: plugin.json, marketplace.json, and this pinned literal. The pin
 // exists to force that deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.3';
+const EXPECTED_PLUGIN_VERSION = '2.5.0';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(

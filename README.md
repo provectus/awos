@@ -53,6 +53,8 @@ Once your foundation is set, iterate through this cycle for each feature on your
 
 > **When to skip the cycle**: Not every change needs a spec. Hotfixes, simple bugfixes, and small edits don't require the full spec workflow — Claude Code's built-in plan mode handles those just fine.
 
+> **Where do things stand?** Run `/awos:status` (from the AWOS plugin) for a read-only Kanban board of every feature — grouped by lifecycle state (Draft → In Review → Approved → Completed), with task progress and roadmap roll-up. [Learn more](plugins/awos/README.md#status-board)
+
 ### Step 4: You're Awesome
 
 That's it! By following these steps, you can systematically turn your vision into a well-defined and fully implemented product.

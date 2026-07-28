@@ -1,6 +1,6 @@
 # AWOS Plugin
 
-Two AI-powered capabilities for AWOS projects: an extensible AI-readiness audit (`/awos:ai-readiness-audit`) and a delivery-flow generator (`/awos:flow`). The audit is documented below; the delivery flow has its own section near the end.
+Three capabilities for AWOS projects: an extensible AI-readiness audit (`/awos:ai-readiness-audit`), a delivery-flow generator (`/awos:flow`), and a status board (`/awos:status`). The audit is documented below; the delivery flow and the status board each have their own section near the end.
 
 Extensible, dimension-based code quality audit for Claude Code. A deterministic TypeScript engine scores every dimension in a single pass; the model fills only a small judgment slice and authors the plain-language narrative. Run `/awos:ai-readiness-audit` and get a scored report with actionable recommendations.
 
@@ -94,6 +94,19 @@ context/audits/YYYY-MM-DD_HH-MM-SS/
 
 Both commands are user-owned and generated outside `.claude/commands/awos/`, so framework updates never touch them; re-running `/awos:flow` reconciles each stage and preserves manual edits. The generated commands are derived from the same flow-agnostic decision record, so they share the project's git flow, review gates, merge policy, and notifications.
 
+## Status Board
+
+`/awos:status` renders a Kanban board of where every feature stands, read from the project's own documents. It is **read-only** — it scans `context/` and prints a board; it never modifies a file.
+
+Columns are the four functional-spec lifecycle states — **Draft → In Review → Approved → Completed** — and each feature (one `context/spec/NNN-*/` directory) is a card in the column matching its `functional-spec.md` `Status:` field. Each card shows the spec's index and name, its task progress from `tasks.md` (atomic `[x]` tasks over total, e.g. `4/7, 57%`), and the roadmap item it delivers. A per-phase roll-up from `context/product/roadmap.md` follows the board.
+
+```
+/awos:status              # whole-project board
+/awos:status 003          # focus one feature by index (or short name)
+```
+
+Because it reads the same checkbox and status state that `/awos:implement` and `/awos:verify` write, the board always reflects the current documents without any separate bookkeeping. After rendering, it surfaces the single most useful next command for an actionable feature (e.g. `/awos:verify` for an Approved feature whose tasks are all done) but never runs it for you.
+
 ## Plugin Structure
 
 ```
@@ -101,7 +114,8 @@ plugins/awos/
 ├── .claude-plugin/
 │   └── plugin.json              # plugin manifest
 ├── commands/
-│   └── flow.md                  # /awos:flow — delivery-flow generator
+│   ├── flow.md                  # /awos:flow — delivery-flow generator
+│   └── status.md                # /awos:status — read-only Kanban status board
 ├── templates/
 │   ├── delivery-flow-template.md      # decision-record scaffold
 │   ├── implement-feature-template.md  # generated feature command

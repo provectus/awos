@@ -123,6 +123,11 @@ test('configureMarketplace merges into a pre-existing .claude/settings.json', as
     true,
     'configureMarketplace must report it added our entry to existing settings'
   );
+  assert.equal(
+    result.containmentPluginEnabled,
+    true,
+    'configureMarketplace must report it enabled the awos-containment plugin'
+  );
   const final = JSON.parse(await fsPromises.readFile(settingsPath, 'utf8'));
   assert.equal(
     final.someOtherUserSetting,
@@ -137,9 +142,58 @@ test('configureMarketplace merges into a pre-existing .claude/settings.json', as
     final.extraKnownMarketplaces['awos-marketplace'],
     'awos-marketplace entry must be merged into existing settings'
   );
+  assert.equal(
+    final.enabledPlugins['awos-containment@awos-marketplace'],
+    true,
+    'the awos-containment plugin must be enabled so its PreToolUse hook is active after install'
+  );
 });
 
-test('configureMarketplace is a no-op when our entry already exists', async () => {
+test('configureMarketplace is a no-op when marketplace registered AND plugin enabled', async () => {
+  const workingDir = await freshTemp();
+  const settingsDir = path.join(workingDir, '.claude');
+  await fsPromises.mkdir(settingsDir, { recursive: true });
+  const settingsPath = path.join(settingsDir, 'settings.json');
+  const seeded = {
+    extraKnownMarketplaces: {
+      'awos-marketplace': {
+        source: { source: 'github', repo: 'provectus/awos' },
+      },
+    },
+    enabledPlugins: {
+      'awos-containment@awos-marketplace': true,
+    },
+  };
+  await fsPromises.writeFile(
+    settingsPath,
+    JSON.stringify(seeded, null, 2) + '\n'
+  );
+  const seededBytes = await fsPromises.readFile(settingsPath);
+
+  const result = await silenced(() => configureMarketplace({ workingDir }));
+
+  assert.equal(
+    result.marketplaceConfigured,
+    false,
+    'configureMarketplace must skip the marketplace entry when already registered'
+  );
+  assert.equal(
+    result.containmentPluginEnabled,
+    false,
+    'configureMarketplace must skip the plugin entry when already enabled'
+  );
+  const afterBytes = await fsPromises.readFile(settingsPath);
+  assert.ok(
+    seededBytes.equals(afterBytes),
+    'configureMarketplace idempotency must leave settings.json byte-for-byte unchanged — not even a JSON-equivalent rewrite'
+  );
+});
+
+test('configureMarketplace enables the plugin on an upgrade where only the marketplace was registered', async () => {
+  // Upgrade path: a prior AWOS version registered the marketplace but predates
+  // the awos-containment plugin, so enabledPlugins has no entry for it. The
+  // early-return on an already-registered marketplace must NOT skip enabling the
+  // plugin, or the containment hook would never arm on an upgraded project.
   const workingDir = await freshTemp();
   const settingsDir = path.join(workingDir, '.claude');
   await fsPromises.mkdir(settingsDir, { recursive: true });
@@ -155,18 +209,103 @@ test('configureMarketplace is a no-op when our entry already exists', async () =
     settingsPath,
     JSON.stringify(seeded, null, 2) + '\n'
   );
-  const seededBytes = await fsPromises.readFile(settingsPath);
 
   const result = await silenced(() => configureMarketplace({ workingDir }));
 
   assert.equal(
     result.marketplaceConfigured,
     false,
-    'configureMarketplace must skip when our entry is already registered'
+    'the marketplace was already registered, so it must not be reported as newly configured'
   );
-  const afterBytes = await fsPromises.readFile(settingsPath);
+  assert.equal(
+    result.containmentPluginEnabled,
+    true,
+    'the awos-containment plugin must be enabled even when the marketplace already existed'
+  );
+  const final = JSON.parse(await fsPromises.readFile(settingsPath, 'utf8'));
+  assert.equal(
+    final.enabledPlugins['awos-containment@awos-marketplace'],
+    true,
+    'the containment plugin must end up enabled after an upgrade that only had the marketplace'
+  );
   assert.ok(
-    seededBytes.equals(afterBytes),
-    'configureMarketplace idempotency must leave settings.json byte-for-byte unchanged — not even a JSON-equivalent rewrite'
+    final.extraKnownMarketplaces['awos-marketplace'],
+    'the pre-existing marketplace registration must survive'
+  );
+});
+
+test('configureMarketplace with consent=false registers the marketplace but does NOT enable the plugin', async () => {
+  // Consent gate: when the operator declines, the marketplace is still
+  // registered (harmless — it only makes the plugin available), but the
+  // containment plugin is left disabled and the decline is recorded so a later
+  // default-on run cannot silently re-enable it.
+  const workingDir = await freshTemp();
+  const settingsDir = path.join(workingDir, '.claude');
+  await fsPromises.mkdir(settingsDir, { recursive: true });
+  const settingsPath = path.join(settingsDir, 'settings.json');
+
+  const result = await silenced(() =>
+    configureMarketplace({ workingDir, containmentConsent: false })
+  );
+
+  assert.equal(
+    result.marketplaceConfigured,
+    true,
+    'the marketplace must be registered regardless of containment consent'
+  );
+  assert.equal(
+    result.containmentPluginEnabled,
+    false,
+    'declined consent must NOT enable the containment plugin'
+  );
+  const final = JSON.parse(await fsPromises.readFile(settingsPath, 'utf8'));
+  assert.ok(
+    final.extraKnownMarketplaces['awos-marketplace'],
+    'the marketplace entry must be written even when consent is declined'
+  );
+  assert.equal(
+    final.enabledPlugins['awos-containment@awos-marketplace'],
+    false,
+    'a declined consent must be recorded as a sticky false, not left absent'
+  );
+});
+
+test('configureMarketplace consent is STICKY — an explicit false is not re-enabled on a consent=true run', async () => {
+  // The `!== true` footgun: a deliberate opt-out (enabledPlugins[key] === false)
+  // must survive a later install even when that install would default to
+  // enabling. The key must be left byte-untouched (still false), while an
+  // unrelated missing marketplace is still registered.
+  const workingDir = await freshTemp();
+  const settingsDir = path.join(workingDir, '.claude');
+  await fsPromises.mkdir(settingsDir, { recursive: true });
+  const settingsPath = path.join(settingsDir, 'settings.json');
+  const seeded = {
+    enabledPlugins: {
+      'awos-containment@awos-marketplace': false,
+    },
+  };
+  await fsPromises.writeFile(
+    settingsPath,
+    JSON.stringify(seeded, null, 2) + '\n'
+  );
+
+  const result = await silenced(() =>
+    configureMarketplace({ workingDir, containmentConsent: true })
+  );
+
+  assert.equal(
+    result.containmentPluginEnabled,
+    false,
+    'a sticky false must not be flipped to enabled even on a consent=true run'
+  );
+  const final = JSON.parse(await fsPromises.readFile(settingsPath, 'utf8'));
+  assert.equal(
+    final.enabledPlugins['awos-containment@awos-marketplace'],
+    false,
+    'the operator-set false must remain false — never silently re-enabled'
+  );
+  assert.ok(
+    final.extraKnownMarketplaces['awos-marketplace'],
+    'the marketplace must still be registered on this run (only the plugin key is sticky)'
   );
 });

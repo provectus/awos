@@ -13,7 +13,10 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Readable, Writable } = require('node:stream');
 
-const { createDefaultOverwritePrompt } = require('../../src/utils/prompt');
+const {
+  createDefaultOverwritePrompt,
+  createContainmentConsentPrompt,
+} = require('../../src/utils/prompt');
 
 function captureStream() {
   const chunks = [];
@@ -155,4 +158,71 @@ test('forceOverwrite wins over forcePreserve when both are set', async () => {
     true,
     'forceOverwrite must take precedence over forcePreserve'
   );
+});
+
+// ── createContainmentConsentPrompt — the four shapes of the consent decision ──
+// Mirrors the overwrite prompt's four forms, but the safe default flips: this is
+// a security lever, so a non-TTY run ENABLES (secure-by-default), the opposite
+// of the overwrite prompt's non-TTY PRESERVE.
+
+test('--containment forces enable without touching stdin', async () => {
+  const prompt = createContainmentConsentPrompt({ forceEnable: true });
+  assert.equal(await prompt(), true, '--containment must resolve to enable');
+});
+
+test('--no-containment forces decline without touching stdin', async () => {
+  const prompt = createContainmentConsentPrompt({ forceDisable: true });
+  assert.equal(
+    await prompt(),
+    false,
+    '--no-containment must resolve to decline'
+  );
+});
+
+test('non-TTY defaults to ENABLE (secure-by-default, opposite of overwrite)', async () => {
+  const prompt = createContainmentConsentPrompt({ isTTY: false });
+  assert.equal(
+    await prompt(),
+    true,
+    'non-TTY containment default must be ENABLE — a silently-disabled guard is the risk this prevents'
+  );
+});
+
+test('TTY consent prompt treats empty Enter as ENABLE (capital-Y default)', async () => {
+  const { stream: out, text } = captureStream();
+  const prompt = createContainmentConsentPrompt({
+    isTTY: true,
+    input: inputFrom('\n'),
+    output: out,
+  });
+  assert.equal(
+    await prompt(),
+    true,
+    'pressing Enter on the [Y/n] consent prompt must default to enable'
+  );
+  assert.match(
+    text(),
+    /Enable the awos-containment guard\?/,
+    'the consent prompt must disclose what it is asking'
+  );
+});
+
+test('TTY consent prompt accepts "y" as enable', async () => {
+  const { stream: out } = captureStream();
+  const prompt = createContainmentConsentPrompt({
+    isTTY: true,
+    input: inputFrom('y\n'),
+    output: out,
+  });
+  assert.equal(await prompt(), true, '"y" must mean enable');
+});
+
+test('TTY consent prompt treats "n" as decline', async () => {
+  const { stream: out } = captureStream();
+  const prompt = createContainmentConsentPrompt({
+    isTTY: true,
+    input: inputFrom('n\n'),
+    output: out,
+  });
+  assert.equal(await prompt(), false, '"n" must mean decline');
 });

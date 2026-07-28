@@ -193,6 +193,73 @@ test('setup overwrites wrappers when promptForOverwrite returns true', async () 
   );
 });
 
+test('setup arms the containment plugin when promptForContainmentConsent returns true', async () => {
+  // Wiring check for the consent callback: runSetup must consult
+  // promptForContainmentConsent and thread its result to configureMarketplace,
+  // so a "yes" arms the awos-containment plugin in the resulting settings.json.
+  const workingDir = await freshTemp();
+
+  let consentCalls = 0;
+  await silenced(() =>
+    runSetup({
+      workingDir,
+      packageRoot: repoRoot,
+      promptForContainmentConsent: async () => {
+        consentCalls++;
+        return true;
+      },
+    })
+  );
+
+  assert.equal(
+    consentCalls,
+    1,
+    'promptForContainmentConsent must be consulted exactly once during setup'
+  );
+  const settings = JSON.parse(
+    await fsPromises.readFile(
+      path.join(workingDir, '.claude', 'settings.json'),
+      'utf8'
+    )
+  );
+  assert.equal(
+    settings.enabledPlugins['awos-containment@awos-marketplace'],
+    true,
+    'consent=true must arm the awos-containment plugin (enabledPlugins entry === true)'
+  );
+});
+
+test('setup records a sticky decline (never arms) when promptForContainmentConsent returns false', async () => {
+  // The declined path: a "no" must record enabledPlugins[...] === false (a
+  // sticky decision the next install will not re-flip), while the marketplace
+  // itself is still registered — declining the hook must not block availability.
+  const workingDir = await freshTemp();
+
+  await silenced(() =>
+    runSetup({
+      workingDir,
+      packageRoot: repoRoot,
+      promptForContainmentConsent: async () => false,
+    })
+  );
+
+  const settings = JSON.parse(
+    await fsPromises.readFile(
+      path.join(workingDir, '.claude', 'settings.json'),
+      'utf8'
+    )
+  );
+  assert.equal(
+    settings.enabledPlugins['awos-containment@awos-marketplace'],
+    false,
+    'consent=false must record a sticky decline (enabledPlugins entry === false), not arm the hook'
+  );
+  assert.ok(
+    settings.extraKnownMarketplaces['awos-marketplace'],
+    'declining containment must still register the awos marketplace'
+  );
+});
+
 test('setup dry-run produces zero on-disk files', async () => {
   const workingDir = await freshTemp();
 

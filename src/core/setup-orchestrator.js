@@ -33,6 +33,10 @@ const { runMigrations } = require('../migrations/runner');
  *   `async ({operation, files}) => boolean`. Defaults to a no-op that returns
  *   `false`, which is the safe default for non-interactive callers (CI,
  *   tests, piped runs); the CLI entry point wires a TTY-aware default.
+ * @param {Function} [config.promptForContainmentConsent] - Async callback that
+ *   resolves whether to arm the awos-containment plugin. Signature:
+ *   `async () => boolean`. Defaults to enabling (secure-by-default) when not
+ *   provided, matching the CLI's non-TTY behavior.
  * @returns {Promise<void>}
  */
 async function runSetup({
@@ -40,6 +44,7 @@ async function runSetup({
   packageRoot,
   dryRun = false,
   promptForOverwrite,
+  promptForContainmentConsent,
 }) {
   const TOTAL_STEPS = 6;
 
@@ -117,9 +122,13 @@ async function runSetup({
     6,
     TOTAL_STEPS
   );
+  const containmentConsent = promptForContainmentConsent
+    ? await promptForContainmentConsent()
+    : true;
   const marketplaceStatistics = await configureMarketplace({
     workingDir,
     dryRun,
+    containmentConsent,
   });
   clearLine();
 

@@ -41,28 +41,28 @@ Build a Kanban board from the project's `context/` documents and present it to t
 
 # PROCESS
 
-### Step 1: Discover features
+## Step 1: Discover features
 
 List the immediate subdirectories of `context/spec/` matching the `NNN-short-name` pattern (three-digit index + name). If `context/spec/` is absent or empty, report that no specs exist yet and point the user at `/awos:spec` to create the first one, then stop.
 
 If `<user_prompt>` names a spec, narrow the set to that one directory (match on the numeric index or the short name).
 
-### Step 2: Read each feature's state
+## Step 2: Read each feature's state
 
 For each spec directory, read:
 
 1. **`functional-spec.md`** — extract, from the metadata block at the top: the spec **title** (the `# Functional Specification: …` heading), the **`Status:`** field (`Draft` | `In Review` | `Approved` | `Completed`), the **Author**, and a **ticket** reference when one is recorded (a `Jira`, `Jira Ticket`, `Jira Task`, or `Linear` field — capture its identifier, e.g. `OAPBCRNA-122`). Anchor on the metadata lines, not on prose lower in the file (acceptance criteria often mention the word "status" in passing). A spec with no readable `Status` is treated as **Draft** and flagged as such on its card; fall back to the directory's short name when no title heading is present, and omit the ticket when no ticket field exists.
 2. **`tasks.md`** — count atomic tasks: nested lines carrying a `**[Agent: name]**` marker (or otherwise nested under a slice header). Slice headers (`- [ ] **Slice N: …**`) are composite and would double-count, so exclude them. This atomic-task total feeds the spec's **size** (next); the `[x]` share feeds the Step 6 next-step recommendation. A spec with no `tasks.md` yet counts as zero tasks.
 
-3. **Size** — bucket each spec by its atomic-task count **relative to the other specs in this project**, into three tiers: **small**, **MEDIUM**, **HUGE**. Split the project's specs into roughly equal thirds by task count — the largest third is HUGE, the middle MEDIUM, the smallest small. Size is relative, so the same task count can be HUGE in a small project and small in a large one.
+3. **Size** — bucket each spec by its atomic-task count **relative to the other specs in this project**, into three tiers: **small**, **Medium**, **HUGE**. Split the project's specs into roughly equal thirds by task count — the largest third is HUGE, the middle Medium, the smallest small. Size is relative, so the same task count can be HUGE in a small project and small in a large one. Compute the tiers over **all** the project's specs, even when the board is focused on one feature.
 
 4. **Days in current status** — how long the spec has sat in its present `Status`. Derive it from git: the age in whole days of the most recent commit that changed the `Status:` line of `functional-spec.md` (blame that line). Fall back to the spec directory's last commit, then to the file's modification time, when history is unavailable.
 
-### Step 3: Read the roadmap
+## Step 3: Read the roadmap
 
 Read `context/product/roadmap.md`. Record each phase heading and, under it, the feature checkboxes (`[ ]`/`[x]`) so you can report per-phase completion. If the file is absent, note that the roadmap has not been created and skip the roll-up.
 
-### Step 4: Render the board
+## Step 4: Render the board
 
 Lay the five lifecycle columns out as a **kanban grid sized to an ~80-column terminal**: make each card about **25 columns wide so at least three columns sit side by side in one row**. Render the columns in order, **three per row — Draft · In Review · Approved on the first row, then Completed · Other below** — each column a vertical stack of its cards under a centered `══ Name (count) ══` header. Within a row the columns share one width and their cards align top-down; a column with fewer cards just leaves blank space beneath it. Show every column including empty ones (an empty column shows its header and `(none)`); the **Other** column appears only when at least one spec has a non-canonical status (see Step 6-caveat below).
 
@@ -106,10 +106,10 @@ Otherwise, treat the script as the canonical spec and render the same layout by 
 
 Flag any card whose `Status` was defaulted (no field found) so the user knows the placement is inferred.
 
-### Step 5: Roadmap roll-up
+## Step 5: Roadmap roll-up
 
 Below the board, show a one-line-per-phase summary from Step 3 — each phase with its completed-feature count (e.g. `Phase 1 — 3/4 features done`). Omit this section if no roadmap exists.
 
-### Step 6: Offer a next step
+## Step 6: Offer a next step
 
 Read the board for the single most useful next action and offer it. For example, if a feature sits in **Approved** with all tasks `[x]`, its natural next step is `/awos:verify`; a feature in **Approved** with tasks remaining wants `/awos:implement`; a feature still in **Draft** with no tasks wants `/awos:tech` then `/awos:tasks`. When one or more features have an obvious next command, use `AskUserQuestion` to offer them (each option naming the feature and the command to run). This command does not run those commands itself — it only surfaces the recommendation. If nothing is actionable (e.g. everything is Completed, or no specs exist), say so plainly and stop without a question.

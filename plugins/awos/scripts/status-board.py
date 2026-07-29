@@ -68,6 +68,56 @@ def field(pat, text):
     return m.group(1).strip() if m else None
 
 
+def count_atomic_tasks(path):
+    """Atomic tasks only: a checkbox is counted when it carries an [Agent:] tag
+    or sits under a slice header. Composite slice headers themselves, and stray
+    top-level checklist items outside any slice, are excluded."""
+    total, in_slice = 0, False
+    for ln in open(path, encoding="utf-8", errors="replace"):
+        # slice boundary: a "## Slice" heading or a composite "- [ ] **Slice**"
+        if re.match(r"\s*#{1,6}\s+Slice\b", ln) or re.match(
+            r"\s*- \[[ xX]\]\s*\*\*Slice", ln
+        ):
+            in_slice = True
+            continue
+        if re.match(r"\s*- \[[ xX]\]", ln) and ("[Agent:" in ln or in_slice):
+            total += 1
+    return total
+
+
+def _git_epoch(args):
+    """First epoch-looking timestamp from `git log -1 --format=%ct <args>`, or None."""
+    try:
+        out = subprocess.run(
+            ["git", "log", "-1", "--format=%ct", *args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout
+    except OSError:
+        return None
+    for tok in out.split():
+        if tok.isdigit() and len(tok) >= 9:  # a plausible unix timestamp
+            return int(tok)
+    return None
+
+
+def status_age_days(fs, spec_dir, txt, now):
+    """Days the spec has sat in its current Status. Prefer the commit that last
+    touched the `Status:` line; fall back to the spec dir's last commit, then to
+    the file's mtime, then to 0 when nothing is available."""
+    ts = None
+    for i, ln in enumerate(txt.splitlines(), 1):
+        if re.match(r"\s*-\s*\*\*status", ln, re.I):
+            ts = _git_epoch([f"-L{i},{i}:{fs}"])  # history of just that line
+            break
+    if ts is None:
+        ts = _git_epoch(["--", spec_dir])
+    if ts is None and os.path.exists(fs):
+        ts = os.path.getmtime(fs)
+    return max(int((now - ts) // 86400), 0) if ts else 0
+
+
 def read_specs(root):
     specs = []
     now = time.time()
@@ -88,23 +138,12 @@ def read_specs(root):
         ids = list(dict.fromkeys(re.findall(r"[A-Z]{3,}-\d+", tline)))
         ticket = ids[0] + (f" +{len(ids) - 1}" if len(ids) > 1 else "") if ids else ""
         tm = os.path.join(d, "tasks.md")
-        tasks = 0
-        if os.path.exists(tm):
-            for ln in open(tm, encoding="utf-8", errors="replace"):
-                # atomic tasks only; composite "- [ ] **Slice N**" headers would double-count
-                if re.match(r"\s*- \[[ xX]\]", ln) and not re.match(
-                    r"\s*- \[[ xX]\]\s*\*\*Slice", ln
-                ):
-                    tasks += 1
-        ct = subprocess.run(
-            ["git", "log", "-1", "--format=%ct", "--", fs],
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-        days = int((now - int(ct)) // 86400) if ct else 0
+        tasks = count_atomic_tasks(tm) if os.path.exists(tm) else 0
+        days = status_age_days(fs, d, txt, now)
         specs.append(
             dict(
                 num=num,
+                short=short,
                 title=title,
                 status=status,
                 author=author,
@@ -174,13 +213,19 @@ def main():
         sys.exit("usage: status-board.py <project-dir> [spec-number-or-name]")
     os.chdir(sys.argv[1])
     specs = read_specs(".")
-    if len(sys.argv) > 2:
-        key = sys.argv[2].lower()
-        specs = [s for s in specs if key in (s["num"] + " " + s["title"]).lower()]
     if not specs:
         print("No specs found — run /awos:spec to create the first one.")
         return
+    # Size tiers are relative to the whole project, so compute them before any
+    # focus filter — otherwise a one-spec view always renders as HUGE.
     size = sizer(specs)
+    if len(sys.argv) > 2:
+        key = sys.argv[2].lower()
+        # focus by directory index or short name (not the free-text title)
+        specs = [s for s in specs if key in f"{s['num']} {s['short']}".lower()]
+        if not specs:
+            print(f"No spec matches '{sys.argv[2]}'.")
+            return
     name = os.path.basename(os.path.abspath("."))
     print(
         f"{name} — {len(specs)} features   "

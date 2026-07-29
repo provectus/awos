@@ -1,7 +1,7 @@
 'use strict';
 /**
  * CLI entry point for the multi-IDE adapter generation pipeline.
- * Orchestrates: parse → IR → emit → validate → write → manifest.
+ * Orchestrates: parse → IR → emit → validate → write → install → manifest.
  * Zero npm dependencies — Node.js 22+ built-in modules only.
  * @module generate
  */
@@ -16,25 +16,77 @@ const { loadProviders, detectProviders } = require('./lib/registry.js');
 const { splitIfNeeded } = require('./lib/splitter.js');
 const { validate } = require('./lib/validator.js');
 
+// --- Provider Installers ---
+// Each provider that needs IDE-native installation has an installer module.
+// Installers transform generated adapter files into the IDE's native format.
+const installers = {
+    kiro: require('./lib/installers/kiro.js'),
+};
+
 const MIN_NODE_VERSION = 22;
 const WARN_LINE_THRESHOLD = 400;
 const SPLIT_LINE_THRESHOLD = 500;
 const UPSTREAM_DIRS = ['commands', 'templates', 'scripts', 'src'];
+
+// --- Overlay Directory Scaffolding ---
+
+const OVERLAY_DIR = '.awos-company';
+const OVERLAY_SUBDIRS = ['skills', 'agents', 'mcps'];
+const EMPTY_MANIFEST = JSON.stringify({ resources: [] }, null, 2) + '\n';
+
+/**
+ * Scaffold the .awos-company/ overlay directory in the target project
+ * if it does not already exist. Creates subdirectories and an empty
+ * manifest.json so the project is ready for company resources.
+ *
+ * @param {string} projectRoot - Target project root
+ * @param {Object} [options]
+ * @param {boolean} [options.dryRun=false]
+ */
+async function scaffoldOverlayDirectory(projectRoot, options = {}) {
+    const { dryRun = false } = options;
+    const overlayDir = path.join(projectRoot, OVERLAY_DIR);
+    const manifestPath = path.join(overlayDir, 'manifest.json');
+
+    // If overlay already exists with a manifest, leave it alone
+    if (fs.existsSync(manifestPath)) {
+        return;
+    }
+
+    if (dryRun) {
+        console.log(`  Would create ${OVERLAY_DIR}/ with empty manifest in target project`);
+        return;
+    }
+
+    // Create subdirectories
+    for (const sub of OVERLAY_SUBDIRS) {
+        await fsp.mkdir(path.join(overlayDir, sub), { recursive: true });
+    }
+
+    // Write empty manifest if it doesn't exist
+    await fsp.writeFile(manifestPath, EMPTY_MANIFEST, 'utf8');
+
+    console.log(`  Created ${OVERLAY_DIR}/ with empty manifest in target project`);
+}
 
 // --- CLI Argument Parsing ---
 
 function parseArgs(argv) {
     const flags = {
         provider: null,
+        root: null,
         dryRun: false,
         dumpIr: false,
         detect: false,
         validate: false,
+        skipInstall: false,
     };
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i];
         if (arg === '--provider' && i + 1 < argv.length) {
             flags.provider = argv[++i];
+        } else if (arg === '--root' && i + 1 < argv.length) {
+            flags.root = argv[++i];
         } else if (arg === '--dry-run') {
             flags.dryRun = true;
         } else if (arg === '--dump-ir') {
@@ -43,6 +95,8 @@ function parseArgs(argv) {
             flags.detect = true;
         } else if (arg === '--validate') {
             flags.validate = true;
+        } else if (arg === '--skip-install') {
+            flags.skipInstall = true;
         }
     }
     return flags;
@@ -179,6 +233,62 @@ async function writeFiles(provider, files, adaptersRoot) {
     return { written, errors };
 }
 
+// --- Provider Installation ---
+
+async function runInstallers(activeProviders, projectRoot, options = {}) {
+    const { dryRun = false } = options;
+    const results = {};
+
+    for (const provider of activeProviders) {
+        const installer = installers[provider.name];
+        if (!installer) continue;
+
+        try {
+            const result = await installer.install(projectRoot, { dryRun });
+            results[provider.name] = result;
+        } catch (err) {
+            results[provider.name] = {
+                steering: { installed: [], skipped: [], errors: [err.message] },
+                hooks: { installed: [], errors: [err.message] },
+            };
+        }
+    }
+
+    return results;
+}
+
+function printInstallSummary(installResults) {
+    const providers = Object.keys(installResults);
+    if (providers.length === 0) return;
+
+    console.log('=== Installation Summary ===\n');
+    for (const name of providers) {
+        const result = installResults[name];
+        const steeringCount = result.steering.installed.length;
+        const hookCount = result.hooks.installed.length;
+        const errorCount =
+            result.steering.errors.length + result.hooks.errors.length;
+
+        console.log(
+            `  ${name}: ${steeringCount} steering files, ` +
+            `${hookCount} hooks installed` +
+            (errorCount > 0 ? ` (${errorCount} errors)` : '')
+        );
+
+        if (result.steering.errors.length > 0) {
+            for (const e of result.steering.errors) {
+                console.log(`    ⚠ ${e}`);
+            }
+        }
+        if (result.hooks.errors.length > 0) {
+            for (const e of result.hooks.errors) {
+                console.log(`    ⚠ ${e}`);
+            }
+        }
+    }
+    console.log('');
+}
+
 // --- Manifest Generation ---
 
 async function generateManifest(providerStats, sourceHash, adaptersRoot) {
@@ -249,8 +359,15 @@ async function collectExistingFiles(dir) {
  */
 async function main(argv) {
     const flags = parseArgs(argv);
-    const projectRoot = path.resolve(__dirname, '..');
-    const adaptersRoot = path.join(projectRoot, '.awos-adapters');
+    const projectRoot = flags.root
+        ? path.resolve(flags.root)
+        : path.resolve(__dirname, '..');
+    // Pipeline modules (emitters, providers.json) live alongside this script.
+    // Output goes into the target project's .awos-adapters/ directory.
+    const pipelineRoot = path.resolve(__dirname);
+    const adaptersRoot = flags.root
+        ? path.join(projectRoot, '.awos-adapters')
+        : path.join(projectRoot, '.awos-adapters');
     const allWarnings = [];
     const allErrors = [];
 
@@ -285,7 +402,7 @@ async function main(argv) {
     }
 
     // 4. Load providers
-    const providersPath = path.join(adaptersRoot, 'providers.json');
+    const providersPath = path.join(pipelineRoot, 'providers.json');
     let providers;
     try {
         providers = loadProviders(providersPath);
@@ -399,7 +516,7 @@ async function main(argv) {
     const allFiles = {};
     for (const provider of activeProviders) {
         const { files, warnings } = dispatchEmitter(
-            provider, commands, adaptersRoot
+            provider, commands, pipelineRoot
         );
         allWarnings.push(...warnings);
         for (const w of warnings) process.stderr.write(w + '\n');
@@ -428,7 +545,7 @@ async function main(argv) {
         allFiles[provider.name] = processedFiles;
     }
 
-    // 11. --dry-run
+    // 11. --dry-run (show what would be written AND installed)
     if (flags.dryRun) {
         console.log('Dry run — files that would be written:\n');
         for (const [name, files] of Object.entries(allFiles)) {
@@ -438,6 +555,16 @@ async function main(argv) {
             }
         }
         printSummary(providerStats);
+
+        if (!flags.skipInstall) {
+            console.log('Dry run — files that would be installed:\n');
+            const installResults = await runInstallers(
+                activeProviders, projectRoot, { dryRun: true }
+            );
+            printInstallSummary(installResults);
+            await scaffoldOverlayDirectory(projectRoot, { dryRun: true });
+        }
+
         return {
             exitCode: 0,
             summary: {
@@ -473,11 +600,33 @@ async function main(argv) {
         }
     }
 
-    // 14. Generate manifest.json
+    // 14. Install into IDE-native directories
+    if (!flags.skipInstall) {
+        const installResults = await runInstallers(
+            activeProviders, projectRoot, { dryRun: false }
+        );
+
+        // Collect install errors
+        for (const [providerName, result] of Object.entries(installResults)) {
+            for (const e of result.steering.errors) {
+                allWarnings.push(`[${providerName}] install: ${e}`);
+            }
+            for (const e of result.hooks.errors) {
+                allWarnings.push(`[${providerName}] install: ${e}`);
+            }
+        }
+
+        printInstallSummary(installResults);
+    }
+
+    // 15. Scaffold overlay directory in target project if missing
+    await scaffoldOverlayDirectory(projectRoot, { dryRun: false });
+
+    // 16. Generate manifest.json
     const sourceHash = await computeSourceHash(commandsDir);
     await generateManifest(providerStats, sourceHash, adaptersRoot);
 
-    // 15. Print summary
+    // 16. Print summary
     printSummary(providerStats);
 
     return {

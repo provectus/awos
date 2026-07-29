@@ -21,7 +21,7 @@ npx @provectusinc/awos
 
 This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, and the `context/` directory where your project documents will live. It also registers the AWOS plugin marketplace in your project settings.
 
-> **Running on an existing codebase?** AWOS integrates seamlessly with brownfield projects — the foundation commands below auto-detect your code and use it as context, so you won't start from a blank slate. The recommended first step is an AI-readiness audit: install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit` for a scored assessment with actionable recommendations. See the **[Brownfield Adoption Guide](docs/brownfield-adoption.md)** for the full path — how detection works, what it produces, and how to steer it.
+> **Running on an existing codebase?** AWOS integrates seamlessly with brownfield projects — `/awos:product` auto-detects your code and stages what it finds, and the later foundation commands build on that so you won't start from a blank slate. The recommended first step is an AI-readiness audit: install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit` for a scored assessment with actionable recommendations. See the **[Brownfield Adoption Guide](docs/brownfield-adoption.md)** for the full path — how detection works, what it produces, and how to steer it.
 
 ### Step 2: Foundation Setup
 

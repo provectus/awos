@@ -21,7 +21,7 @@ Steps 1–4 are the same foundation commands every project runs. The only brownf
 
 Before you describe the product, it is worth knowing how ready the existing codebase is for agent-driven development. The AWOS plugin ships an **AI-readiness audit** that scores a repository across a dozen dimensions — code architecture, quality assurance, security, documentation, spec-driven-development health, AI tooling — and produces a report with prioritized, actionable recommendations.
 
-```
+```text
 /plugin install awos@awos-marketplace
 /awos:ai-readiness-audit
 ```
@@ -32,7 +32,7 @@ The audit writes a self-contained report to `context/audits/<timestamp>/` (both 
 - **A punch list.** `recommendations.md` surfaces the highest-leverage gaps (missing `CLAUDE.md`, thin tests, no agent configs) that make the rest of the AWOS flow more effective.
 - **A shared vocabulary.** The scores give the team a concrete, agreed-upon picture of the starting point.
 
-**The audit is a fixed measuring stick, so run it first without hesitation.** It scores the same whether the repo is untouched or fully set up — its analysis comes from a self-contained engine, not from the specialist agents `/awos:hire` later installs. That independence is the point: a first run on an untouched brownfield repo will score the AI-tooling and spec-driven-development dimensions low, and that low score _is_ the honest baseline. Adopt AWOS (foundation, `/awos:hire`, specs), re-run the same audit, and watch those dimensions climb. The audit is read-only and each run is an independent snapshot, so re-running costs nothing.
+**The audit is a fixed measuring stick, so run it first without hesitation.** Its _methodology_ is self-contained — the score is computed by an engine, not by the specialist agents `/awos:hire` later installs — so it measures the repository the same way before and after adoption. The _score itself_ reflects the state of the repo and is expected to change as you improve it: a first run on an untouched brownfield repo will score the AI-tooling and spec-driven-development dimensions low, and that low score _is_ the honest baseline. Adopt AWOS (foundation, `/awos:hire`, specs), re-run the same audit, and those dimensions climb — the measuring stick didn't move, the codebase did. The audit is read-only and each run is an independent snapshot, so re-running costs nothing.
 
 See the [plugin README](../plugins/awos/README.md) for the full dimension list and scoring model.
 
@@ -76,7 +76,7 @@ If the plugin is not installed, the command tells you so and continues without e
 
 When `context/product/brownfield.md` is present, `/awos:roadmap` runs a focused `Explore` pass to inventory **existing capabilities** — features that are fully implemented (routes, UI, tests), partially built or scaffolded, and planned (TODOs, FIXMEs). It appends these under a `## Capabilities` heading in `brownfield.md`.
 
-The roadmap is then anchored in reality: already-built capabilities are treated as done, and new phases describe what comes next rather than re-planning work the codebase already contains. As with product, the capability findings are triaged with you before the roadmap is finalized.
+The roadmap is then anchored in reality: only **fully-implemented** capabilities are treated as done, while **partially-built or scaffolded** work and **planned** items (TODOs, FIXMEs) stay visible as upcoming roadmap items rather than being marked complete. New phases describe what comes next instead of re-planning work the codebase has already finished. As with product, the capability findings are triaged with you before the roadmap is finalized.
 
 ## Step 3 — `/awos:architecture`: adopt the existing stack, then clean up
 
@@ -85,7 +85,7 @@ With `brownfield.md` present, `/awos:architecture` runs an `Explore` pass to dis
 This step also **cleans up the temporary brownfield artifacts**:
 
 - `context/product/brownfield.md` is **deleted** — its findings have been absorbed into the product definition, roadmap, and architecture documents by now.
-- `context/sources/` is **removed once its contents are fully absorbed**. If durable configuration remains useful (source URLs, tool names, credentials to reach a wiki again later), `context/sources/sources.md` is **kept** and referenced from `product-definition.md` so downstream commands can find it.
+- `context/sources/` is **removed once its contents are fully absorbed**. If durable **non-secret** configuration remains useful (source URLs, tool names, scopes to reach a wiki again later), `context/sources/sources.md` is **kept** and referenced from `product-definition.md` so downstream commands can find it. Credentials and tokens never belong under `context/` — supply those through environment variables or a secret manager, and keep only the pointers to them here.
 
 After this step, your `context/` looks the same as a greenfield project's — a clean set of permanent documents (`product-definition.md`, `roadmap.md`, `architecture.md`) with no brownfield scaffolding left behind.
 

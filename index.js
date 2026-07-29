@@ -5,6 +5,12 @@
  * Entry point that delegates to the refactored src structure
  */
 
-const { main } = require('./src/index');
+const args = process.argv.slice(2);
 
-main();
+// Subcommand routing
+if (args[0] === 'overlay' && args[1] === 'validate') {
+    require('./.awos-adapters/lib/cli/overlay-validate.js');
+} else {
+    const { main } = require('./src/index');
+    main();
+}

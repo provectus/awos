@@ -13,10 +13,14 @@
     "test:installer": "node --test 'tests/installer/*.test.js'",
     "test:fixtures": "node --test tests/fixtures.test.js",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-exclude='tests/**' --test-coverage-exclude='src/index.js' 'tests/**/*.test.js'",
-    "test:coverage:gate": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-exclude='tests/**' --test-coverage-exclude='src/index.js' --test-coverage-lines=${COVERAGE_LINES:-85} --test-coverage-functions=${COVERAGE_FUNCTIONS:-95} --test-coverage-branches=${COVERAGE_BRANCHES:-80} 'tests/**/*.test.js'"
+    "test:coverage:gate": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-exclude='tests/**' --test-coverage-exclude='src/index.js' --test-coverage-lines=${COVERAGE_LINES:-85} --test-coverage-functions=${COVERAGE_FUNCTIONS:-95} --test-coverage-branches=${COVERAGE_BRANCHES:-80} 'tests/**/*.test.js'",
+    "overlay:validate": "node .awos-adapters/lib/cli/overlay-validate.js"
   },
   "keywords": [],
   "author": "Provectus Inc.",
   "license": "MIT",
-  "bin": "./index.js"
+  "bin": "./index.js",
+  "devDependencies": {
+    "fast-check": "^4.9.0"
+  }
 }

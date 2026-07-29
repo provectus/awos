@@ -1,0 +1,38 @@
+{
+    "resources": [
+        {
+            "name": "valid-skill",
+            "type": "skill",
+            "path": "skills/valid-skill.md",
+            "description": "A valid skill that exists on disk",
+            "tags": [
+                "testing",
+                "valid"
+            ]
+        },
+        {
+            "name": "missing-path-skill",
+            "type": "skill",
+            "path": "skills/nonexistent.md",
+            "description": "This skill file does not exist on disk"
+        },
+        {
+            "name": "duplicate-name",
+            "type": "agent",
+            "path": "agents/first-duplicate.md",
+            "description": "First occurrence of duplicate name"
+        },
+        {
+            "name": "duplicate-name",
+            "type": "agent",
+            "path": "agents/second-duplicate.md",
+            "description": "Second occurrence — should be skipped as duplicate"
+        },
+        {
+            "name": "another-missing",
+            "type": "mcp",
+            "path": "mcps/does-not-exist.json",
+            "description": "MCP config that does not exist on disk"
+        }
+    ]
+}

@@ -1,0 +1,23 @@
+{
+    "resources": [
+        {
+            "type": "skill",
+            "path": "skills/missing-name.md"
+        },
+        {
+            "name": "valid-entry-bad-type",
+            "type": "unknown",
+            "path": "skills/some-file.md"
+        },
+        {
+            "name": "traversal-attempt",
+            "type": "skill",
+            "path": "../../../etc/passwd"
+        },
+        {
+            "name": "INVALID NAME!",
+            "type": "agent",
+            "path": "agents/bad-name.md"
+        }
+    ]
+}

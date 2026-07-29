@@ -1,0 +1,13 @@
+{
+    "winged-analytics-mcp": {
+        "command": "npx",
+        "args": [
+            "-y",
+            "@wingedcommerce/analytics-mcp"
+        ],
+        "env": {
+            "ANALYTICS_API_KEY": "${ANALYTICS_API_KEY}",
+            "ANALYTICS_ENDPOINT": "https://analytics.wingedcommerce.internal"
+        }
+    }
+}

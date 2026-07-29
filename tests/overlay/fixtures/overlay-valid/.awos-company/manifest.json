@@ -1,0 +1,36 @@
+{
+    "resources": [
+        {
+            "name": "winged-commerce-api",
+            "type": "skill",
+            "path": "skills/winged-commerce-api.md",
+            "description": "WingedCommerce internal API patterns and authentication",
+            "tags": [
+                "api",
+                "commerce",
+                "internal"
+            ]
+        },
+        {
+            "name": "winged-backend-agent",
+            "type": "agent",
+            "path": "agents/winged-backend-agent.md",
+            "description": "Backend specialist with WingedCommerce domain knowledge",
+            "tags": [
+                "backend",
+                "node",
+                "commerce"
+            ]
+        },
+        {
+            "name": "winged-analytics-mcp",
+            "type": "mcp",
+            "path": "mcps/winged-analytics.json",
+            "description": "WingedCommerce analytics MCP server configuration",
+            "tags": [
+                "analytics",
+                "mcp"
+            ]
+        }
+    ]
+}

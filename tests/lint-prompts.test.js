@@ -992,7 +992,7 @@ test('the spec interview is pre-seeded by the flow fetch stage, adding no new /a
   assert.ok(
     /Surrounding context to pre-seed the spec/i.test(dfTemplate) &&
       /each with its §7 transport/i.test(dfTemplate),
-    'delivery-flow-template.md §1 must record the surrounding-context sources AND that each carries its §7 transport, the fetch stage pulls to pre-seed the spec interview'
+    'delivery-flow-template.md §1 must record the surrounding-context sources the fetch stage pulls to pre-seed the spec interview, each with its §7 transport'
   );
 
   // implement-feature's fetch stage must pull the ticket's surrounding

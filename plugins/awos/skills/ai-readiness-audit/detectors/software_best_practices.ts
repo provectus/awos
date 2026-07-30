@@ -243,16 +243,16 @@ export function detectTypeSafety(
     const warnAtPct = Math.round(warnAt * 100);
     if (ratio >= passAt) {
       return makeResult('PASS', pct, [
-        `${pctDisplay}% of Python function signatures carry return-type annotations — at or above the ${passAtPct}% pass threshold (no mypy/pyright config found)`,
+        `${pctDisplay}% of Python function signatures carry return-type annotations in a sample of up to 20 .py files (single-line signatures) — at or above the ${passAtPct}% pass threshold (no mypy/pyright config found)`,
       ]);
     }
     if (ratio >= warnAt) {
       return makeResult('WARN', pct, [
-        `${pctDisplay}% of Python function signatures carry return-type annotations — below the ${passAtPct}% pass threshold, at or above the ${warnAtPct}% warn threshold (no mypy/pyright config found)`,
+        `${pctDisplay}% of Python function signatures carry return-type annotations in a sample of up to 20 .py files (single-line signatures) — below the ${passAtPct}% pass threshold, at or above the ${warnAtPct}% warn threshold (no mypy/pyright config found)`,
       ]);
     }
     return makeResult('FAIL', pct, [
-      `${pctDisplay}% of Python function signatures carry return-type annotations — below the ${warnAtPct}% warn threshold (no mypy/pyright config found)`,
+      `${pctDisplay}% of Python function signatures carry return-type annotations in a sample of up to 20 .py files (single-line signatures) — below the ${warnAtPct}% warn threshold (no mypy/pyright config found)`,
     ]);
   }
   return makeResult('FAIL', 0, ['no type-safety configuration found']);

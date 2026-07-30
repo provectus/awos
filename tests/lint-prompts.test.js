@@ -3409,7 +3409,7 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
   assert.equal(
     pluginManifest.version,
     EXPECTED_PLUGIN_VERSION,
-    `plugins/awos/.claude-plugin/plugin.json version must be "${EXPECTED_PLUGIN_VERSION}" — the plugin version moves as one deliberate commit (plugin.json + marketplace.json + this pin together) when plugin behavior changes; it is independent of the npm release version release-drafter manages. Got "${pluginManifest.version}"`
+    `plugins/awos/.claude-plugin/plugin.json version must be "${EXPECTED_PLUGIN_VERSION}" — the plugin version moves as one deliberate commit (plugin.json + marketplace.json + this pin + the flow.md generator-version constant, together) when plugin behavior changes; it is independent of the npm release version release-drafter manages. Got "${pluginManifest.version}"`
   );
 });
 

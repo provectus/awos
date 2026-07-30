@@ -48,9 +48,11 @@ function isInvisibleCodePoint(cp: number): boolean {
   );
 }
 
-// Human-readable form of the ranges checked in isInvisibleCodePoint, shared
-// by the per-file evidence line and the FAIL headline so they can't drift
-// apart.
+// Human-readable form of the ranges checked in isInvisibleCodePoint. The
+// per-file evidence line and the FAIL headline both interpolate this one
+// constant, so those two strings can't drift from each other; that the list
+// itself still matches isInvisibleCodePoint's ranges is pinned by
+// prompt_agent_integrity_ais01.test.ts, not by this sharing alone.
 const INVISIBLE_CODEPOINT_RANGES =
   'U+200B–U+200F, U+2028–U+202E, U+2060–U+206F, U+00AD, U+FEFF, U+E0000–U+E007F';
 

@@ -84,7 +84,7 @@ This dimension is distinct from the `ai-security` dimension (which audits agent-
 - **What:** Passwords are hashed using a strong algorithm (bcrypt, argon2, scrypt); session tokens are generated with a CSPRNG
 - **How:** Grep source files for known password-hashing library references (`bcrypt`, `argon2`, `scrypt`, `passlib`) and CSPRNG session-token patterns (`secrets.token`, `os.urandom`, `crypto.randomBytes`, `SecureRandom`). Also flag insecure patterns (`md5`/`sha1` paired with "password" within 40 chars).
 - **Pass:** Strong password hashing algorithm (bcrypt/argon2/scrypt) found
-- **Warn:** Weaker algorithm (pbkdf2/sha256/sha512) found near password hashing with no strong algorithm present, or only a CSPRNG session-token pattern found with no password-hashing algorithm pattern found
+- **Warn:** Weaker algorithm (pbkdf2/sha256/sha512) found near a password/hash term with no strong algorithm present, or only a CSPRNG session-token pattern found with no password-hashing algorithm pattern found
 - **Fail:** MD5 or SHA1 pattern found near password hashing
 - **Skip-When:** No password-hashing or session-token patterns found anywhere — not applicable to this project
 - **Severity:** high

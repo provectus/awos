@@ -592,7 +592,7 @@ export function detectTestCoverageGate(
     ]);
   }
   return makeResult('WARN', testHits.length, [
-    'CI runs the test suite but no coverage threshold is enforced',
+    'CI runs the test suite, and no coverage-threshold pattern found (in the CI workflow or a coverage config file)',
     ...testHits.slice(0, 5).map((h) => `test gate: ${h}`),
   ]);
 }

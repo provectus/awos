@@ -21,6 +21,11 @@ import { ALL_HOOK_PATHS } from '../agent_tools.ts';
 const ENV_GITIGNORE_RX =
   /^\s*(\.env(\.\*|\*(\.local)?)?|\*\.env|\*\*\/\.env|\/\.env)\s*(?:#.*)?$/m;
 
+// Human-readable form of the patterns checked in ENV_GITIGNORE_RX, shared by
+// the PASS and FAIL evidence lines so they can't drift apart.
+const ENV_GITIGNORE_PATTERNS =
+  '.env, .env.*, .env*, .env*.local, *.env, **/.env, or /.env';
+
 export function detectEnvGitignored(
   repoPath: string,
   _params?: unknown
@@ -39,12 +44,12 @@ export function detectEnvGitignored(
 
   if (ENV_GITIGNORE_RX.test(content)) {
     return makeResult('PASS', 1, [
-      '.gitignore has a line matching .env, .env.*, .env*, .env*.local, *.env, **/.env, or /.env',
+      `.gitignore has a line matching ${ENV_GITIGNORE_PATTERNS}`,
     ]);
   }
 
   return makeResult('FAIL', 0, [
-    '.gitignore exists but no line matches .env, .env.*, .env*, .env*.local, *.env, **/.env, or /.env',
+    `.gitignore exists but no line matches ${ENV_GITIGNORE_PATTERNS}`,
   ]);
 }
 
@@ -170,7 +175,7 @@ export function detectEnvExample(
   }
 
   return makeResult('FAIL', 0, [
-    'no .env.example/.env.template/.env.sample/.env.dist/env.example/env.template file found',
+    `no ${ENV_EXAMPLE_GLOBS.join(', ')} file found`,
   ]);
 }
 

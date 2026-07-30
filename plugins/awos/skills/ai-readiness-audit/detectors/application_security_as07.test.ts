@@ -83,6 +83,10 @@ test('AS-07 weak-hash signal: WARN evidence names the weaker-algorithm observati
       /weaker hashing algorithm/i.test(text),
       `evidence must name the weaker-algorithm observation that was actually made; got ${JSON.stringify(res.evidence)}`
     );
+    assert.ok(
+      !text.includes('no password-hashing algorithm pattern found'),
+      `evidence must not claim no hashing algorithm was found — this fixture has one (the mirror-image false claim: the CSPRNG-only WARN string must not leak into the weak-hash case); got ${JSON.stringify(res.evidence)}`
+    );
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }

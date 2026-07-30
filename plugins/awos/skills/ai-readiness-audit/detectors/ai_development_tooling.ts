@@ -142,7 +142,7 @@ export function detectMcpConfig(
     ]);
   }
   return makeResult('FAIL', 0, [
-    'no MCP configuration file found — none of the known MCP config paths across agentic tools exist in this repo',
+    `no MCP configuration file found — checked for ${ALL_MCP_CONFIG_PATHS.join(', ')}; none present`,
     'note: only repo-committed MCP config is visible here; org/MGM-pushed MCP servers configured outside the repo are not detectable and may still be in use',
   ]);
 }
@@ -236,7 +236,7 @@ export function detectClaudeHooks(
 // it; the wrapper script is the run mechanism.
 // ---------------------------------------------------------------------------
 
-const ROOT_RUN_FILES = [
+export const ROOT_RUN_FILES = [
   'Makefile',
   'docker-compose.yml',
   'docker-compose.yaml',

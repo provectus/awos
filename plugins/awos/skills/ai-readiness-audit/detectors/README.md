@@ -64,7 +64,7 @@ Allowed:
 
 A string must be verifiable by a reader in seconds against the repo it describes. Where it enumerates what was searched, template it off the constant the code actually uses rather than hand-typing a parallel list — `detectCanRunApp` in `ai_development_tooling.ts` interpolates `ROOT_RUN_FILES` for exactly this reason.
 
-Enforced by `tests/evidence-phrasing.test.ts`.
+Enforced by `tests/evidence-phrasing.test.ts`, which scans every non-test `.ts` source under `detectors/`, `metrics/`, and `audit_core.ts` (the orchestrator's own SKIP-reason text, via `buildSkipReason`, lands in a check's `evidence` array the same way a detector's own output does).
 
 ## One module per dimension
 

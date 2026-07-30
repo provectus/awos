@@ -108,17 +108,19 @@ export function detectTestInfrastructure(
   }
 
   const ratio = testCount / sourceCount;
-  const pct = Math.round(ratio * 100);
-  // One decimal for the measured value in threshold comparisons: at integer
-  // precision a measured ratio can round to the same display value as the
-  // (also rounded) threshold it's being compared against, producing a
-  // self-contradictory sentence like "70% — below the 70% pass threshold".
+  // One decimal for the measured value everywhere it's rendered in this
+  // check: at integer precision a measured ratio can round to the same
+  // display value as the (also rounded) threshold it's being compared
+  // against, producing a self-contradictory sentence like "70% — below the
+  // 70% pass threshold". Using one decimal consistently, rather than only
+  // in the threshold-comparison lines, keeps every evidence line for the
+  // same ratio agreeing with the others.
   const pctDisplay = (ratio * 100).toFixed(1);
   // score: continuous coverage proxy clamped to [0,1]
   const score = Math.min(1, Math.max(0, ratio));
 
   const evidence = [
-    `${testCount} test file(s) found for ${sourceCount} source module(s) (${pct}% ratio)`,
+    `${testCount} test file(s) found for ${sourceCount} source module(s) (${pctDisplay}% ratio)`,
     ...testFiles.slice(0, 5).map((f) => `test file: ${relative(repoPath, f)}`),
   ];
 

@@ -35,7 +35,10 @@ const WEB_SOURCE_GLOBS = [
 // SKIP if no HTTP-API indicators are found.
 // ---------------------------------------------------------------------------
 
-const TLS_CONFIG_GLOBS = [
+// Exported so the PASS-evidence regression test can assert every glob it
+// claims to have scanned is actually this list, rather than a hand-typed
+// copy that can drift from it.
+export const TLS_CONFIG_GLOBS = [
   '*.env',
   '*.env.*',
   '*.yaml',
@@ -416,7 +419,7 @@ export function detectParameterizedSql(
   }
 
   return makeResult('FAIL', hits.length, [
-    `${hits.length} string-concatenated SQL query pattern(s) found`,
+    `${hits.length} possible string-built SQL pattern(s) found`,
     ...evidence,
   ]);
 }
@@ -516,7 +519,7 @@ export function detectNoHardcodedSecrets(
   }
 
   return makeResult('FAIL', hits.length, [
-    `${hits.length} possible hardcoded secret(s) found in committed files`,
+    `${hits.length} possible hardcoded secret(s) found in source files`,
     ...evidence,
   ]);
 }
@@ -714,7 +717,7 @@ export function detectPasswordSessionHygiene(
 
   if (weakHashFound) {
     return makeResult('WARN', 0, [
-      'weaker hashing algorithm (pbkdf2/sha256/sha512) found near password hashing; no strong algorithm (bcrypt/argon2/scrypt) found',
+      'weaker hashing algorithm (pbkdf2/sha256/sha512) found near a password/hash term; no strong algorithm (bcrypt/argon2/scrypt) found',
       ...evidence.slice(0, 5),
     ]);
   }

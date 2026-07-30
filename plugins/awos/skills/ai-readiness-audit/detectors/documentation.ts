@@ -19,7 +19,7 @@ import { join, relative, dirname } from 'node:path';
 // FAIL  if no README found.
 // ---------------------------------------------------------------------------
 
-const README_NAMES = [
+export const README_NAMES = [
   'README.md',
   'README.rst',
   'README.txt',

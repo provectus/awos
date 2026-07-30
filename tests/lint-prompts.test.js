@@ -4120,3 +4120,28 @@ test('every artifact-producing command writes before review, never gating the wr
     }
   }
 });
+
+test('commands/spec.md mandates the when/then pair per acceptance criterion', () => {
+  // Step 3.3 described the three-part shape only abstractly ("a precondition
+  // (Given), a user action (When), a visible outcome (Then)"), which reads as
+  // guidance about content rather than a required sentence form — so a lone
+  // bullet would come out declarative ("The user submits X. They see Y.") and
+  // still look compliant. The behavioral proof is awos-qa's
+  // spec-uses-gwt-acceptance-criteria, which greps every AC bullet for
+  // `when … then` in one sentence; this lint pins the instruction that makes
+  // it hold, including the per-bullet re-read in the Definition of Done
+  // (checking the set as a whole is how a single offender survives).
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    /must both appear, in that order, within a \*\*single sentence\*\*/.test(body),
+    'commands/spec.md Step 3.3 must require the words when and then to appear in that order within a single sentence — the abstract three-part description alone lets declarative bullets through'
+  );
+  assert.ok(
+    /applies to every criterion individually/.test(body),
+    'commands/spec.md Step 3.3 must state the when/then shape applies to every criterion individually, not just to the set'
+  );
+  assert.ok(
+    /re-read the acceptance criteria one bullet at a time/.test(body),
+    'commands/spec.md Definition of Done must re-read acceptance criteria one bullet at a time to catch a single non-conforming bullet'
+  );
+});

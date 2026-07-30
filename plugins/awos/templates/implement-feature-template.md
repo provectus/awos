@@ -61,6 +61,8 @@ This command is maintained through its own runs. When a run exposes a defect in 
 
 [Connector-specific fetch using the chosen transport from §7 of delivery-flow.md, with its recorded fallback. Extract and keep: ticket ID, title, description, acceptance hints, link. For local-file or prompt-text sources this stage just reads/normalizes the input.]
 
+[Ticket sources: also fetch the **surrounding context** §1 recorded — the **epic/parent ticket's description, remote links, attachments, and linked conversations** (tracker remote links, attached design docs or screenshots, a referenced Confluence/Notion page, a linked chat thread) via the §7 transports — and read the reachable ones. This is what pre-seeds `/awos:spec` so its interview opens warm instead of cold: the epic frames the "why", a design link or screenshot pins the "what". Fold the reachable material into the normalized bundle, and **list anything linked but unreachable** in it instead of silently skipping — the specs stage then knows context is missing rather than assuming the description is complete. Step 4 passes this normalized bundle to `/awos:spec` as context, so the richer material flows through without a second fetch. Omit this paragraph for local-file or prompt-text sources, and skip any surrounding-context source §1 records as "none".]
+
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=resume-detection -->

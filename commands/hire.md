@@ -53,7 +53,7 @@ Follow this process precisely.
     - **Documentation** (doc generators, API docs, knowledge bases)
     - **Solution Ownership** (product management, project tracking, analytics)
 4.  For each domain that has technologies, define an ideal agent role name in kebab-case (e.g., `react-frontend`, `python-backend`, `aws-infra`).
-5.  Show the user a table of identified domains, technologies, and proposed agent roles, and confirm before proceeding.
+5.  Show the user a table of identified domains, technologies, and proposed agent roles, then **continue without waiting for a reply**. Nothing has been installed or written at this point, so there is nothing here to consent to — the table is a preview of what was inferred, and the consent that matters is collected at the two install gates in Step 4 before anything reaches the project. Pausing here would strand an unattended run before it produces any coverage report at all.
 
     | Domain         | Technologies                | Proposed Agent Role |
     | -------------- | --------------------------- | ------------------- |
@@ -170,9 +170,9 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
       - `[domain]` → the domain name (e.g., "frontend", "backend", "infrastructure")
       - `[technology list]` → comma-separated list of technologies for this domain
       - `[Responsibility aligned with the agent's domain]` → specific responsibilities derived from the architecture
-        Add any installed skills to the `skills` list. Show the generated file to the user for approval before saving.
-4.  For **Partially Covered** roles: read the existing agent file, append newly installed skills to its `skills` list, and show the updated file to the user for approval before saving.
-5.  Write all approved agent files.
+        Add any installed skills to the `skills` list.
+4.  For **Partially Covered** roles: read the existing agent file and append newly installed skills to its `skills` list.
+5.  **Write every agent file without waiting for approval** — an agent file is reversible (re-run `/awos:hire` to revise it, or delete it), so the deliverable must never be gated behind a confirmation an unattended run cannot answer. After writing, show each generated or updated file to the user for review and apply any adjustments they ask for.
 
 ## Step 7: Warn About Missing Skills
 

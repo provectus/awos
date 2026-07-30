@@ -114,6 +114,8 @@ Follow this process precisely.
 
     Tell the user that the "What it runs" column comes from registry metadata (the hook's `HOOK.md`), which the registry does not vet against the script itself, and that the actual installed script will be shown for review immediately after install (Step 5.4) — the registry CLI has no preview mode, so the on-disk copy is the first chance to inspect the real behavior.
 
+6.  **If a consent gate cannot be answered, install nothing and continue to Step 6.** In an unattended run the `AskUserQuestion` tool may be unavailable entirely, and no one is there to reply. Treat that as withheld consent — the safe reading of "no answer" is "no", so skip the installs it covered. Do **not** end the turn waiting for a reply, and do **not** fall back to asking the same question as plain text: prose cannot be answered either, and stopping here destroys the run's only durable output. The coverage report is not a side effect of installing. Step 6 through Step 8 still run, and Step 8 records the real post-install state — which in this case is that nothing was installed, alongside the agents that already existed. List the components you would have installed under **Gaps**, so the user can re-run `/awos:hire` interactively and approve them.
+
 **QA Complement Rule:**
 
 For each primary tech role identified above, search the registry for a complementary QA/testing agent in the same pass — query with the primary technology plus terms like "testing", "QA", or "acceptance" (e.g. `"React TypeScript testing acceptance"`). The intent is to surface any specialist that can write or run tests for that stack.

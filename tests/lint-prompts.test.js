@@ -4145,3 +4145,31 @@ test('commands/spec.md mandates the when/then pair per acceptance criterion', ()
     'commands/spec.md Definition of Done must re-read acceptance criteria one bullet at a time to catch a single non-conforming bullet'
   );
 });
+
+test('hire.md degrades an unanswerable consent gate without losing the report', () => {
+  // Step 4 gates installation behind AskUserQuestion — correctly, since Gate 2
+  // installs auto-running shell scripts. But under `claude -p` that tool may
+  // not exist at all: observed live, the model probed for it, announced it
+  // would "ask directly in text", printed the table and ended the turn, so
+  // context/product/hired-agents.md was never written. Restating a gate as
+  // prose is the same dead end as the Step 2 gate that used to stop the run.
+  //
+  // The contract is a split: consent still gates *installing* (no answer means
+  // no consent, so install nothing), but it must not gate the *report*, which
+  // is not a side effect of installing.
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    /consent gate cannot be answered, install nothing and continue to Step 6/i.test(
+      body
+    ),
+    'commands/hire.md Step 4 must state that an unanswerable consent gate means install nothing and continue to Step 6 — not end the turn'
+  );
+  assert.ok(
+    /do \*\*not\*\* fall back to asking the same question as plain text/i.test(body),
+    'commands/hire.md Step 4 must forbid restating the consent gate as plain text — prose cannot be answered in an unattended run either'
+  );
+  assert.ok(
+    /coverage report is not a side effect of installing/i.test(body),
+    'commands/hire.md Step 4 must state the coverage report is not a side effect of installing, so Step 8 still runs when nothing was installed'
+  );
+});

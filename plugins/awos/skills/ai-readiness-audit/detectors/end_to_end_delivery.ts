@@ -284,9 +284,7 @@ export function detectBidirectionalLinks(
 ): ReturnType<typeof makeResult> {
   const specBase = join(repoPath, 'context', 'spec');
   if (!existsSync(specBase)) {
-    return makeResult('FAIL', 0, [
-      'no context/spec/ directory found — spec↔impl bidirectional links not possible',
-    ]);
+    return makeResult('FAIL', 0, ['no context/spec/ directory found']);
   }
 
   // Collect spec markdown files
@@ -423,14 +421,14 @@ export function detectLayerCoverage(
 
   if (layerCount === 3) {
     return makeResult('PASS', layerCount, [
-      'API, UI, and DB layers all detected — full vertical coverage',
+      'API, UI, and DB layer signals all detected',
       ...evidence,
     ]);
   }
 
   // 2 of 3 layers
   return makeResult('WARN', layerCount, [
-    `only ${layerCount} of 3 layers detected — partial vertical coverage`,
+    `${layerCount} of 3 layer signals detected`,
     ...evidence,
   ]);
 }

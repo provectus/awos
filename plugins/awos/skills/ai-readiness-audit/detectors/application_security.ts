@@ -110,7 +110,7 @@ export function detectTlsEnforced(
 
   if (plainHttpHits.length === 0) {
     return makeResult('PASS', 1, [
-      'no plain-HTTP (http://) service URLs found in config files — TLS appears enforced',
+      `no plain-HTTP (http://) service URLs found across scanned config files (${TLS_CONFIG_GLOBS.join(', ')})`,
     ]);
   }
 
@@ -120,13 +120,13 @@ export function detectTlsEnforced(
 
   if (plainHttpHits.length <= 2) {
     return makeResult('WARN', plainHttpHits.length, [
-      `${plainHttpHits.length} plain-HTTP URL(s) found — review whether they are production service URLs`,
+      `${plainHttpHits.length} plain-HTTP URL(s) found in config files`,
       ...evidence,
     ]);
   }
 
   return makeResult('FAIL', plainHttpHits.length, [
-    `${plainHttpHits.length} plain-HTTP service URL(s) found — enforce HTTPS for all non-local origins`,
+    `${plainHttpHits.length} plain-HTTP service URL(s) found in config files`,
     ...evidence,
   ]);
 }
@@ -203,7 +203,7 @@ export function detectSecurityHeaders(
       'WARN',
       found.length,
       [
-        `only ${found.length} security header found (${found[0]}) — add ${missing.join(', ')}`,
+        `${found.length} of ${SECURITY_HEADERS.length} security headers found (${found[0]}); missing: ${missing.join(', ')}`,
         ...missing.map((h) => `missing header: ${h}`),
       ],
       'detected',
@@ -216,7 +216,7 @@ export function detectSecurityHeaders(
     'FAIL',
     0,
     [
-      `no HTTP security headers (${SECURITY_HEADERS.map((h) => h.name).join(', ')}) found in source — configure them in your framework middleware or reverse proxy`,
+      `no HTTP security headers (${SECURITY_HEADERS.map((h) => h.name).join(', ')}) found in scanned source/config files`,
     ],
     'detected',
     score,
@@ -298,7 +298,7 @@ export function detectCorsNotWildcard(
 
   if (wildcardHits.length > 0) {
     return makeResult('FAIL', wildcardHits.length, [
-      `${wildcardHits.length} wildcard CORS origin ('*') found — restrict to specific allowed origins`,
+      `${wildcardHits.length} wildcard CORS origin ('*') pattern(s) found`,
       ...wildcardHits.slice(0, 5).map((h) => `${h.file}:${h.line} ${h.text}`),
     ]);
   }
@@ -312,13 +312,13 @@ export function detectCorsNotWildcard(
 
   if (!corsFound) {
     return makeResult('SKIP', null, [
-      'no CORS configuration found — browsers default to same-origin; check is not applicable',
+      'no CORS configuration keyword found — browsers default to same-origin; check skipped',
     ]);
   }
 
   // CORS keyword detected but origin format not matched by wildcard or scoped patterns.
   return makeResult('PASS', 0, [
-    'CORS configuration detected but origin constraints not recognized — review manually',
+    'CORS configuration keyword found but origin value not recognized by wildcard/scoped patterns',
   ]);
 }
 
@@ -400,7 +400,7 @@ export function detectParameterizedSql(
 
   if (hits.length === 0) {
     return makeResult('PASS', 0, [
-      'no string-concatenated SQL query patterns found — parameterized queries appear to be used',
+      'no string-concatenated/interpolated SQL query patterns found across scanned source files',
     ]);
   }
 
@@ -410,13 +410,13 @@ export function detectParameterizedSql(
 
   if (hits.length <= 2) {
     return makeResult('WARN', hits.length, [
-      `${hits.length} possible string-built SQL pattern(s) found — review for injection risk`,
+      `${hits.length} possible string-built SQL pattern(s) found`,
       ...evidence,
     ]);
   }
 
   return makeResult('FAIL', hits.length, [
-    `${hits.length} string-concatenated SQL query pattern(s) found — use parameterized queries or an ORM`,
+    `${hits.length} string-concatenated SQL query pattern(s) found`,
     ...evidence,
   ]);
 }
@@ -510,7 +510,7 @@ export function detectNoHardcodedSecrets(
 
   if (hits.length <= 2) {
     return makeResult('WARN', hits.length, [
-      `${hits.length} possible hardcoded secret(s) found — review manually`,
+      `${hits.length} possible hardcoded secret pattern(s) found in source files`,
       ...evidence,
     ]);
   }
@@ -583,6 +583,9 @@ export function detectAuthOnMutations(
   const coverage = filesWithAuth.length / filesWithMutations.length;
   // score: continuous auth-coverage ratio clamped to [0,1]
   const score = Math.min(1, Math.max(0, coverage));
+  const coveragePct = (coverage * 100).toFixed(1);
+  const passAtPct = Math.round(passAt * 100);
+  const warnAtPct = Math.round(warnAt * 100);
 
   if (coverage >= passAt) {
     return makeResult(
@@ -603,7 +606,7 @@ export function detectAuthOnMutations(
       'WARN',
       filesWithAuth.length,
       [
-        `auth found in only ${filesWithAuth.length}/${filesWithMutations.length} mutation route files — some endpoints may be unprotected`,
+        `auth decorators/middleware found in ${filesWithAuth.length}/${filesWithMutations.length} files with mutation routes (${coveragePct}% — below the ${passAtPct}% pass threshold, at or above the ${warnAtPct}% warn threshold)`,
         ...filesWithMutations
           .filter((f) => !filesWithAuth.includes(f))
           .slice(0, 5)
@@ -678,7 +681,7 @@ export function detectPasswordSessionHygiene(
     }
     if (INSECURE_HASH_RX.test(content)) {
       insecureHashFound = true;
-      evidence.push(`insecure hash for password: ${rel}`);
+      evidence.push(`MD5/SHA1 pattern near password: ${rel}`);
     }
     if (SESSION_CSPRNG_RX.test(content)) {
       csprngFound = true;
@@ -691,14 +694,14 @@ export function detectPasswordSessionHygiene(
 
   if (!hasAnySignal) {
     return makeResult('SKIP', 0, [
-      'no password-hashing or session-token patterns found — hygiene check skipped (may not apply to this project)',
+      'no password-hashing or session-token patterns found — hygiene check skipped',
     ]);
   }
 
   if (insecureHashFound) {
     return makeResult('FAIL', 0, [
-      'MD5 or SHA1 used for password hashing — use bcrypt, argon2, or scrypt',
-      ...evidence.filter((e) => e.startsWith('insecure')),
+      'MD5 or SHA1 pattern found near password-hashing usage',
+      ...evidence.filter((e) => e.startsWith('MD5/SHA1')),
     ]);
   }
 
@@ -709,8 +712,15 @@ export function detectPasswordSessionHygiene(
     ]);
   }
 
+  if (weakHashFound) {
+    return makeResult('WARN', 0, [
+      'weaker hashing algorithm (pbkdf2/sha256/sha512) found near password hashing; no strong algorithm (bcrypt/argon2/scrypt) found',
+      ...evidence.slice(0, 5),
+    ]);
+  }
+
   return makeResult('WARN', 0, [
-    'only weaker hashing algorithms found — prefer bcrypt, argon2, or scrypt over pbkdf2/sha256 for passwords',
+    'CSPRNG session-token pattern found; no password-hashing algorithm pattern found',
     ...evidence.slice(0, 5),
   ]);
 }
@@ -759,7 +769,7 @@ export function detectInputValidation(
 
   if (!libraryFound && !manualFound) {
     return makeResult('SKIP', 0, [
-      'no input-validation patterns found — check skipped (may be handled at infrastructure level)',
+      'no input-validation patterns found — check skipped',
     ]);
   }
 
@@ -771,7 +781,7 @@ export function detectInputValidation(
   }
 
   return makeResult('WARN', 0, [
-    'only manual input validation signals found — consider using a validation library (Pydantic, Zod, class-validator, etc.)',
+    'only manual input-validation signals found (type checks, request-parameter accessors, or sanitize/escape calls); no validation library reference found',
   ]);
 }
 
@@ -814,7 +824,7 @@ export function detectRateLimiting(
   }
 
   return makeResult('FAIL', 0, [
-    'no rate-limiting library or configuration found — add rate limiting to authentication and public endpoints',
+    'no rate-limiting library or configuration keyword found in scanned files',
   ]);
 }
 

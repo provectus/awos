@@ -523,17 +523,16 @@ export function detectScsQuarantineAge(
 // ---------------------------------------------------------------------------
 // detectDependencyAutomationReview — category 2904 (SCS-05, method: detected)
 //
-// Checks that dependency update PRs require human review before merging.
+// Checks whether dependency update automation is configured and whether
+// automerge is enabled on it.
 // Signals:
 //   1. dependabot.yml / renovate.json / renovate.json5 / .renovaterc exist
 //      (dependency automation is configured).
-//   2. CODEOWNERS or branch protection config (.github/CODEOWNERS,
-//      docs/CODEOWNERS) exists — review is enforced.
-//   3. Renovate/Dependabot config contains "automerge: false" or lacks
-//      "automerge: true" (safe default).
+//   2. Renovate/Dependabot config contains "automerge: true" (absence is
+//      treated as automerge disabled).
 //
 // PASS if automation is configured and automerge is not enabled.
-// WARN if automation is configured but automerge may be active.
+// WARN if automation is configured and automerge is enabled.
 // FAIL if no dependency automation is configured.
 // ---------------------------------------------------------------------------
 
@@ -578,13 +577,13 @@ export function detectDependencyAutomationReview(
 
   if (automergeEnabled) {
     return makeResult('WARN', foundFiles.length, [
-      'dependency automation configured but automerge is enabled — updates may merge without human review',
+      'dependency automation config found with automerge enabled',
       ...foundFiles.map((f) => `config: ${f}`),
     ]);
   }
 
   return makeResult('PASS', foundFiles.length, [
-    `dependency automation configured with review required: ${foundFiles.join(', ')}`,
+    `dependency automation configured without automerge enabled: ${foundFiles.join(', ')}`,
     ...foundFiles.map((f) => `config: ${f}`),
   ]);
 }
@@ -649,7 +648,7 @@ export function detectVulnerabilityScanning(
   }
 
   return makeResult('FAIL', 0, [
-    'no vulnerability scanning found in CI workflows — add pip-audit, Snyk, Trivy, or Grype to your CI pipeline',
+    'no vulnerability-scanner invocation found in CI workflow files, and no Dependabot security-updates config found',
   ]);
 }
 
@@ -701,12 +700,12 @@ export function detectDependencyOverrides(
 
   if (foundOverrides.length === 0) {
     return makeResult('PASS', 0, [
-      'no dependency overrides/resolutions/patches found — clean dependency tree',
+      'no dependency override/resolution/patch section found',
     ]);
   }
 
   return makeResult('WARN', foundOverrides.length, [
-    `${foundOverrides.length} override(s) present — review that each is tracked, minimal, and justified (this check does not verify version freshness or CVEs)`,
+    `${foundOverrides.length} dependency override/resolution/patch section(s) found (this check does not verify version freshness or CVEs)`,
     ...foundOverrides,
   ]);
 }
@@ -817,10 +816,7 @@ export function detectDependencyAttackSurface(
     return makeResult(
       'PASS',
       totalDeps,
-      [
-        `${totalDeps} total direct dependencies — within healthy range (≤ 100)`,
-        ...sources,
-      ],
+      [`${totalDeps} total direct dependencies (≤ 100 band)`, ...sources],
       'computed'
     );
   }
@@ -829,10 +825,7 @@ export function detectDependencyAttackSurface(
     return makeResult(
       'WARN',
       totalDeps,
-      [
-        `${totalDeps} total direct dependencies — large attack surface (101–200); review for unused deps`,
-        ...sources,
-      ],
+      [`${totalDeps} total direct dependencies (101–200 band)`, ...sources],
       'computed'
     );
   }
@@ -840,10 +833,7 @@ export function detectDependencyAttackSurface(
   return makeResult(
     'FAIL',
     totalDeps,
-    [
-      `${totalDeps} total direct dependencies — excessive attack surface (> 200); audit and prune`,
-      ...sources,
-    ],
+    [`${totalDeps} total direct dependencies (> 200 band)`, ...sources],
     'computed'
   );
 }

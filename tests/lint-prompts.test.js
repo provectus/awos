@@ -3379,10 +3379,11 @@ test('report templates use weighted points + reliability, not grades', () => {
 
 // The plugin version is independent of the npm installer version (which
 // release-drafter manages via PR labels). It is bumped MANUALLY when plugin
-// behavior changes — always as one deliberate commit moving three files
-// together: plugin.json, marketplace.json, and this pinned literal. The pin
+// behavior changes — always as one deliberate commit moving four files
+// together: plugin.json, marketplace.json, this pinned literal, and the
+// generator-version constant in plugins/awos/commands/flow.md. The pin
 // exists to force that deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.3';
+const EXPECTED_PLUGIN_VERSION = '2.4.4';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(

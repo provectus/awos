@@ -44,6 +44,28 @@ Judgment categories have no detector: `audit-core` emits them as `PENDING_JUDGME
 
 The engine uses the `status` field verbatim when aggregating the per-dimension report. It never re-interprets or overrides a verdict; computed vs. detected distinctions are resolved here, inside the detector, not upstream.
 
+### Evidence phrasing
+
+`evidence` states what was checked and what was found — the globs/patterns searched, the paths matched, counts and denominators. It never states what the finding implies.
+
+The capability-level claim belongs in `references/standards.toml`'s `definition` field (and the dimension doc's **What** field), which the report surfaces as the hint/tooltip next to the evidence. Repeating or asserting that claim in `evidence` duplicates it, and — when the detector's proxy diverges from the definition — ships a confident falsehood in a client-facing report.
+
+Banned in `evidence`:
+
+- Capability/consequence claims — "cannot", "without human", "nothing prevents", "bypass code review".
+- Advice — "— add X", "— review manually".
+- Risk/quality verdicts — "risk", "attack surface", "insecure", "healthy", "properly".
+- Inference verbs — "appears", "seems".
+
+Allowed:
+
+- Heuristic hedges that describe match confidence — "possible", "pattern(s)".
+- Statements about the engine's own measurement — incomputability ("cannot compute X"), applicability/SKIP-gate reasons, scoring-rule notes ("all-or-nothing"), threshold citations ("threshold: 70%").
+
+A string must be verifiable by a reader in seconds against the repo it describes. Where it enumerates what was searched, template it off the constant the code actually uses rather than hand-typing a parallel list — `detectCanRunApp` in `ai_development_tooling.ts` interpolates `ROOT_RUN_FILES` for exactly this reason.
+
+Enforced by `tests/evidence-phrasing.test.ts`.
+
 ## One module per dimension
 
 Each dimension listed in `dimensions/` that requires automated checking has a corresponding detector file named after the dimension slug (underscored), for example:

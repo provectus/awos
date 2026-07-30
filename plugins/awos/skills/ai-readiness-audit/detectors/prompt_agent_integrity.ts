@@ -48,6 +48,12 @@ function isInvisibleCodePoint(cp: number): boolean {
   );
 }
 
+// Human-readable form of the ranges checked in isInvisibleCodePoint, shared
+// by the per-file evidence line and the FAIL headline so they can't drift
+// apart.
+const INVISIBLE_CODEPOINT_RANGES =
+  'U+200B–U+200F, U+2028–U+202E, U+2060–U+206F, U+00AD, U+FEFF, U+E0000–U+E007F';
+
 function countInvisible(content: string): number {
   let count = 0;
   for (const ch of content) {
@@ -129,18 +135,18 @@ export function detectInvisibleUnicode(
   const maxCount = Math.max(...hitFiles.map((h) => h.count));
   const evidence = hitFiles.map(
     (h) =>
-      `${h.file}: ${h.count} invisible Unicode code point(s) (U+200B/U+200D/U+FEFF/tag range)`
+      `${h.file}: ${h.count} invisible Unicode code point(s) (${INVISIBLE_CODEPOINT_RANGES})`
   );
 
   if (hitFiles.length >= 3 || maxCount >= 5) {
     return makeResult('FAIL', hitFiles.length, [
-      `${hitFiles.length} agent file(s) contain invisible Unicode characters — potential hidden-instruction attack`,
+      `${hitFiles.length} agent file(s) contain invisible/zero-width Unicode code points (${INVISIBLE_CODEPOINT_RANGES})`,
       ...evidence,
     ]);
   }
 
   return makeResult('WARN', hitFiles.length, [
-    `${hitFiles.length} agent file(s) contain invisible Unicode characters — review for hidden content`,
+    `${hitFiles.length} agent file(s) contain invisible/zero-width Unicode code point(s)`,
     ...evidence,
   ]);
 }
@@ -248,7 +254,7 @@ export function detectPromptInjection(
   }
 
   return makeResult('WARN', hits.length, [
-    `${hits.length} possible prompt injection pattern(s) found — review manually`,
+    `${hits.length} possible prompt-injection pattern match(es) found in agent instruction files`,
     ...evidence,
   ]);
 }
@@ -342,7 +348,7 @@ export function detectHookScriptSafety(
   }
 
   const evidence = flaggedFiles.map(
-    (f) => `${f.file}: suspicious patterns [${f.flags.join(', ')}]`
+    (f) => `${f.file}: red-flag pattern(s) [${f.flags.join(', ')}]`
   );
 
   if (flaggedFiles.length >= 3) {
@@ -352,8 +358,9 @@ export function detectHookScriptSafety(
     ]);
   }
 
+  const matchedFlags = [...new Set(flaggedFiles.flatMap((f) => f.flags))];
   return makeResult('WARN', flaggedFiles.length, [
-    `${flaggedFiles.length} hook script(s) contain suspicious patterns — review manually`,
+    `${flaggedFiles.length} hook script(s) match red-flag pattern(s) (${matchedFlags.join('/')})`,
     ...evidence,
   ]);
 }
@@ -403,29 +410,27 @@ export function detectMcpEndpointSafety(
   const issues: string[] = [];
 
   if (BARE_IP_RX.test(content)) {
-    issues.push(
-      'bare IP address found in MCP endpoint URL — use hostname instead'
-    );
+    issues.push('bare IP address pattern found in .mcp.json endpoint URL');
   }
   if (HTTP_REMOTE_RX.test(content)) {
     issues.push(
-      'HTTP (non-HTTPS) remote endpoint found in .mcp.json — use HTTPS for remote servers'
+      'HTTP (non-HTTPS, non-localhost) remote endpoint URL found in .mcp.json'
     );
   }
   if (EMBEDDED_CRED_RX.test(content)) {
     issues.push(
-      'embedded credentials (user:pass@host) found in MCP URL — use environment variables instead'
+      'embedded credentials pattern (user:pass@) found in .mcp.json URL'
     );
   }
   if (API_KEY_IN_URL_RX.test(content)) {
     issues.push(
-      'API key or token embedded in MCP URL query string — use environment variables instead'
+      'API-key/token-like query-string parameter found in .mcp.json URL'
     );
   }
 
   if (issues.length === 0) {
     return makeResult('PASS', 1, [
-      '.mcp.json uses safe endpoints (HTTPS or localhost only, no embedded credentials)',
+      '.mcp.json checked for bare-IP endpoints, non-HTTPS (non-localhost) remotes, embedded credentials, and API-key/token query parameters — none found',
     ]);
   }
 
@@ -508,7 +513,7 @@ export function detectAgentFilesTracked(
 
   if (untracked.length === 0) {
     return makeResult('PASS', tracked.length, [
-      `all ${tracked.length} AI agent file(s) are tracked in git — auditable change history`,
+      `all ${tracked.length} AI agent file(s) are tracked in git`,
     ]);
   }
 
@@ -516,13 +521,13 @@ export function detectAgentFilesTracked(
 
   if (untracked.length >= 3) {
     return makeResult('FAIL', untracked.length, [
-      `${untracked.length} AI agent file(s) are not tracked in git — changes bypass code review`,
+      `${untracked.length} AI agent file(s) are not tracked in git`,
       ...evidence,
     ]);
   }
 
   return makeResult('WARN', untracked.length, [
-    `${untracked.length} AI agent file(s) are not tracked in git — add to git for auditability`,
+    `${untracked.length} AI agent file(s) are not tracked in git`,
     ...evidence,
   ]);
 }
@@ -649,7 +654,7 @@ export function detectNoSecurityBypass(
   }
 
   return makeResult('WARN', hits.length, [
-    `${hits.length} possible security bypass pattern(s) found — review manually`,
+    `${hits.length} possible security-bypass pattern(s) found in command/skill files`,
     ...evidence,
   ]);
 }

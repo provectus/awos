@@ -781,7 +781,7 @@ test('QA-01: warn_at param is honored — 40% ratio is WARN by default but FAIL 
     'warn_at param must be honored: 0.4 ratio with warn_at 0.5 must FAIL'
   );
   assert.ok(
-    r.evidence.some((e) => e.includes('below 50% threshold')),
+    r.evidence.some((e) => e.includes('below the 50% warn threshold')),
     `FAIL evidence must cite the resolved warn_at (50%), got: ${r.evidence[0]}`
   );
 });

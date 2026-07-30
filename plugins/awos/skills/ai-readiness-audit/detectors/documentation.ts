@@ -48,7 +48,7 @@ export function detectRootReadme(
 
   if (!readmePath) {
     return makeResult('FAIL', 0, [
-      'no README file found at repository root — a new developer has no entry point',
+      `no README file found at repository root (checked: ${README_NAMES.join(', ')})`,
     ]);
   }
 
@@ -63,7 +63,7 @@ export function detectRootReadme(
 
   if (content.length <= 200) {
     return makeResult('WARN', content.length, [
-      `${relPath} is too short (${content.length} bytes) — missing setup instructions`,
+      `${relPath} is ${content.length} characters (<= 200 character threshold)`,
     ]);
   }
 
@@ -75,12 +75,12 @@ export function detectRootReadme(
 
   if (!HEADING_RX.test(content)) {
     return makeResult('WARN', content.length, [
-      `${relPath} lacks a Markdown heading structure — may not be well-organised`,
+      `${relPath} has no Markdown heading (# …) or RST underline heading`,
     ]);
   }
 
   return makeResult('PASS', content.length, [
-    `${relPath} present with headings and setup instructions (${content.length} bytes)`,
+    `${relPath} present with headings and setup instructions (${content.length} characters)`,
   ]);
 }
 
@@ -160,7 +160,7 @@ export function detectServiceReadmes(
 
   if (topDirs.length === 0) {
     return makeResult('SKIP', null, [
-      'no top-level service directories found — single-service project, DOC-02 not applicable',
+      'no top-level service directories found; DOC-02 applies only to multi-service repos',
     ]);
   }
 
@@ -312,7 +312,7 @@ export function detectApiDocs(
   }
 
   return makeResult('FAIL', 0, [
-    'API source detected but no API documentation found — add OpenAPI/Swagger spec or use FastAPI auto-docs',
+    'API source patterns found but no OpenAPI/Swagger/AsyncAPI spec file or auto-docs framework marker found',
   ]);
 }
 
@@ -482,13 +482,13 @@ export function detectDocsAccuracy(
 
   if (missing.length <= 2) {
     return makeResult('WARN', missing.length, [
-      `${missing.length} README reference(s) point to non-existent items — docs may be stale`,
+      `${missing.length} README reference(s) not found (missing files/directories or Makefile targets)`,
       ...evidence,
     ]);
   }
 
   return makeResult('FAIL', missing.length, [
-    `${missing.length} README reference(s) point to non-existent items — documentation is out of date`,
+    `${missing.length} README reference(s) not found (missing files/directories or Makefile targets)`,
     ...evidence,
   ]);
 }

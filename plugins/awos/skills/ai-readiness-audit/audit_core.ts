@@ -66,6 +66,7 @@ import {
 import { collect as collectCi } from './collectors/ci.ts';
 import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
+import { collect as collectIncidents } from './collectors/incidents.ts';
 
 /**
  * Compute the connector-gated headline rows (Cycle time, MTTR) from the
@@ -510,6 +511,10 @@ export async function auditCore(
       collectCi(repoPath, period),
       collectTracker(repoPath, period),
       collectDocs(repoPath, period),
+      // Connector-passed: no connector in the base pass → available:false. The
+      // orchestrator overwrites collected/incidents.json with real data and
+      // `enrich` re-scores. Present so the SKIP artifact exists every run.
+      collectIncidents(repoPath, period),
     ]) {
       writeArtifact(art as { source: string }, collectedDir);
     }
@@ -597,11 +602,22 @@ export async function auditCore(
   const trackerArt = readCollected('tracker');
   const docsArt = readCollected('docs');
   const codeHostArt = readCollected('code_host');
+  const incidentsArt = readCollected('incidents');
+  const incidentsRaw = incidentsArt?.raw as
+    | { resolved_count?: number }
+    | undefined;
+  const trackerRaw = trackerArt?.raw as
+    | { incident_source?: unknown }
+    | undefined;
   const topology: TopologyFlags = computeTopology(repoPath, {
     has_tracker: Boolean(trackerArt?.available),
     has_docs_connector: Boolean(docsArt?.available),
+    // A real, measurable incident source: the connector-passed incidents
+    // artifact with at least one resolved incident, or a tracker that names an
+    // incident source. Gates DF-07 (category 1103); the git proxy stays SKIP.
     has_incident_source: Boolean(
-      trackerArt?.available && trackerArt?.incident_source
+      (incidentsArt?.available && (incidentsRaw?.resolved_count ?? 0) > 0) ||
+      (trackerArt?.available && trackerRaw?.incident_source)
     ),
     has_code_host: Boolean(codeHostArt?.available),
   });

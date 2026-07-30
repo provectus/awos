@@ -66,6 +66,49 @@ export function compute(
   standards: Record<string, unknown>,
   topology: Record<string, boolean>
 ): MetricResult {
+  // --- Real incident source (connector-passed) takes precedence over the git
+  //     proxy. When the orchestrator has fetched a real incident source and at
+  //     least one incident has a measurable started→resolved span, MTTR is the
+  //     median of those spans — a first-class measurement, reliability maximal.
+  const incidentsRead = readArtifact(collectedDir, 'incidents');
+  if (!('error' in incidentsRead) && incidentsRead.artifact?.available) {
+    const iraw = (incidentsRead.artifact.raw ?? {}) as {
+      resolved_count?: number;
+      median_duration_hours?: number | null;
+      source_label?: string | null;
+    };
+    const resolved = iraw.resolved_count ?? 0;
+    if (typeof iraw.median_duration_hours === 'number' && resolved > 0) {
+      const medianHours = iraw.median_duration_hours;
+      const band = mttrBand(medianHours);
+      const categories = awardCategories(standards, 'mttr', topology);
+      const reliability: Reliability = {
+        tag: 'maximal',
+        confidence: 'HIGH',
+        note: `measured from ${resolved} resolved incident${resolved === 1 ? '' : 's'}${iraw.source_label ? ` (${iraw.source_label})` : ''}`,
+      };
+      const score = scoreFromConfig(medianHours, scoringFor(standards, 'mttr'));
+      return makeMetricResult(
+        'mttr',
+        medianHours,
+        'banded',
+        categories,
+        reliability,
+        ['incidents'],
+        [],
+        {
+          band,
+          expression: `median ${medianHours.toFixed(1)}h MTTR over ${resolved} incident${resolved === 1 ? '' : 's'} (${band})`,
+          score,
+          confidence: 0.9,
+        }
+      );
+    }
+  }
+
+  // --- Fallback: git branch-lifetime proxy (unchanged; git is already covered
+  //     by change_failure_rate and this proxy — the incident source above is
+  //     the upgrade). ---
   // --- Load tracker (optional — only used for incident_source) ---
   let incidentSource: string | null = null;
   // Partial-fetch note for the tracker path (null when fetch_meta absent/complete).

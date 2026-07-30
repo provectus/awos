@@ -503,3 +503,40 @@ gh issue list --state all --limit 500 --json number,title,state,createdAt,closed
 Prefer richer sources when several are reachable: tracker MCP > acli > code-host issues. One tracker artifact only — never merge channels.
 
 **Viability threshold for the fallback.** Code-host issues are only a tracker when the project actually tracks work there. When the richer tracker (Jira, Linear, …) exists but is unreachable and the code-host fallback yields **fewer than 5 tickets in the audit window**, write the artifact with `available: false` and a `reason_if_absent` naming both facts — e.g. `"Jira (IGAL) unreachable: no Atlassian MCP, acli not on PATH; GitHub Issues fallback has 1 issue in window — not a viable tracker substitute"` — instead of scoring throughput/work-mix off a 0–1-ticket sample. A near-empty fallback produces garbage values, and whether it counts as "available" must not vary run to run.
+
+## Incidents (`collected/incidents.json`)
+
+Feeds MTTR (DF-07). Source-agnostic: normalise incidents from whatever the project uses — a dedicated tool (PagerDuty / OpsGenie / incident.io), a status page (Statuspage, Atlassian incident issue types), or code-host issues labelled as incidents (GitHub/GitLab `incident`/`sevN` labels) — into `IncidentRecord`s and pass them as an `IncidentsConnector`. Without this artifact the MTTR metric falls back to its git proxy and category 1103 stays SKIP.
+
+### IncidentRecord
+
+```jsonc
+{
+  "id": "INC-1024", // stable id from the source
+  "started_at": "2026-07-01T09:12:00Z", // ISO 8601 — opened/detected
+  "resolved_at": "2026-07-01T11:42:00Z", // ISO 8601 — service restored; omit/null if still open
+  "severity": "SEV1", // optional, verbatim
+  "source": "pagerduty", // optional provenance, e.g. "github-label:incident"
+}
+```
+
+### IncidentsConnector
+
+The object the orchestrator assembles and writes to `collected/incidents.json`:
+
+```jsonc
+{
+  "incidents": [
+    /* IncidentRecord[] */
+  ],
+  "source_label": "PagerDuty", // human label for the report, e.g. "GitHub incident labels"
+}
+```
+
+Only incidents with a valid `started_at → resolved_at` span are measured; the engine reports the **median** recovery time in hours and upgrades reliability to `maximal`. Query the same window as the other connectors (`window_anchor − lookback_days`). Per-source mapping:
+
+- **PagerDuty / OpsGenie / incident.io** — list incidents in the window; map `created_at`/`opened_at` → `started_at`, `resolved_at`/`closed_at` → `resolved_at`, priority/urgency → `severity`.
+- **Statuspage / Atlassian** — map incident `created_at` → `started_at`, `resolved_at` → `resolved_at`.
+- **GitHub/GitLab incident labels** — issues labelled `incident`/`sev1`… ; `created_at` → `started_at`, `closed_at` → `resolved_at`, `source: "github-label:<label>"`.
+
+Write `collected/incidents.json` once after accumulating all pages, with a `period` block recording the actual window queried, then re-run `enrich` to re-score DF-07.

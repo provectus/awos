@@ -481,6 +481,7 @@ export const COLLECTOR_SOURCES = [
   'tracker',
   'docs',
   'code_host',
+  'incidents',
 ] as const;
 
 export const SOURCE_LABEL_DEFAULTS: Record<string, string> = {
@@ -492,5 +493,6 @@ export const SOURCE_LABEL_DEFAULTS: Record<string, string> = {
   scale: 'source code (AST)',
   audit: 'source code',
   incident: 'incident source',
+  incidents: 'incident source',
   'org-rollup': 'portfolio',
 };

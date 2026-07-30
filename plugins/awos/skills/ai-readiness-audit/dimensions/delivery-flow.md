@@ -73,7 +73,7 @@ Measures how fast and how safely change flows from commit to the default branch,
 
 ### DF-07: Mean time to recovery
 
-- **What:** Mean time to recovery from incidents; computed from git as a proxy by default (merge/revert/hotfix cadence), upgraded when a real incident source is present in the tracker artifact. Always included — never omitted from the artifact. SKIP only if even git is unavailable.
+- **What:** Median time to recovery from incidents. Measured from a real incident source — the incidents collector (`collectors/incidents.ts`), fed by the orchestrator from PagerDuty/OpsGenie/incident.io, Statuspage, or code-host incident labels (see `references/connector-shapes.md`). Category 1103 is awarded when at least one incident has a resolved recovery span. Without a source it falls back to a git proxy (merge branch-lifetime) and stays SKIP. Always included — never omitted from the artifact.
 - **How:** `node "<engine cli path>" metric mttr <repoPath> context/audits/<date>/collected`
 - **Pass (OK):** metric returns `status: "OK"` — MTTR computed (git-proxy or real source)
 - **Skip:** metric returns `status: "SKIP"` — git source unavailable (the only valid SKIP condition)

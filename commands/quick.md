@@ -41,6 +41,7 @@ Unlike the full cycle, quick mode skips research, discussion, and verification *
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
 - An unanswered or skipped question is never a stop signal — in an unattended run, fall back to the documented default and continue, including writing the task's `PLAN.md` and `SUMMARY.md`. The default depth is "Plan and execute"; the default commit choice is "Don't commit".
+- **Exception:** the task description itself has no meaningful default. If the prompt is empty and the user does not provide a description (skipped in unattended mode), stop with a message: "No task description provided — nothing to plan." This is the one legitimate stop condition.
 
 ---
 
@@ -76,8 +77,8 @@ Inspect `<user_prompt>` and route:
 
 1.  Generate a slug from the task description (per Slug rules).
 2.  Compute today's date: `date +%Y%m%d`.
-3.  Create the directory: `mkdir -p context/quick/[YYYYMMDD]-[slug]`.
-4.  If a directory with the same slug already exists (check via `ls -d context/quick/*-[slug]/ 2>/dev/null`), ask the user whether to resume it (go to **RESUME**) or append a numeric disambiguator (`-2`, `-3`, etc.) to the slug until unique.
+3.  Check for collisions: `ls -d context/quick/*-[slug]/ 2>/dev/null`. If a match exists, ask the user whether to resume it (go to **RESUME**) or append a numeric disambiguator (`-2`, `-3`, etc.) to the slug until unique.
+4.  Create the directory: `mkdir -p context/quick/[YYYYMMDD]-[slug]`.
 
 ### Step 3: Discussion (only if chosen)
 
@@ -160,7 +161,9 @@ You do not write or edit code yourself. Construct a delegation prompt that inclu
 
 Delegate via the `Agent` tool: `Agent(subagent_type="<agent-name>", description="<3-5 word summary>", prompt="<delegation prompt>")`. If no specialist was matched, set `subagent_type="general-purpose"`.
 
-Wait for the subagent to report completion. If it reports failure, stop, surface what went wrong, and do not proceed to commit without user direction.
+Wait for the subagent to report completion. On return, inspect the specialist's verification output: confirm the reported files exist and the cited evidence is present. If the evidence is missing or inconsistent, ask the subagent to re-run verification before accepting success.
+
+If the subagent reports failure, write `SUMMARY.md` with `status: incomplete` and the failure details in Notes, surface what went wrong to the user, and do not proceed to commit without user direction.
 
 ### Step 8: Validation (only if chosen)
 

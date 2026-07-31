@@ -63,7 +63,7 @@ Nothing in `context/spec/` or the roadmap is touched.
 
 ## Example usage
 
-```bash
+```text
 # Good — plan and execute a contained task:
 > /awos:quick Fix the Docker rate-limit failure by using the Artifactory proxy
 

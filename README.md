@@ -62,7 +62,7 @@ For contained, one-off work that needs a plan and a specialist but not a full sp
 | `/awos:quick` | Executes a small ad-hoc task end-to-end — plans, delegates, summarizes. | [Details](docs/commands/quick.md) |
 | `/awos:q`     | Shortcut — identical to `/awos:quick`.                                  | [Details](docs/commands/quick.md) |
 
-`/awos:quick` plans the task, delegates the coding to a specialist subagent (the same specialists `/awos:implement` uses), and records a `PLAN.md` and `SUMMARY.md` under `context/quick/` — separate from the roadmap. When AWOS context files exist (product definition, architecture, roadmap), the subagent reads them before starting — so even quick tasks stay aligned with the project's design. It asks how thorough to be (plan-only, discuss, research, or full) and asks before committing. Use `/awos:quick list`, `status <slug>`, and `resume <slug>` to manage accumulated tasks.
+`/awos:quick` plans the task, delegates the coding to a specialist subagent (the same specialists `/awos:implement` uses), and records a `PLAN.md` and `SUMMARY.md` under `context/quick/` — separate from the roadmap. When AWOS context files exist (product definition, architecture, roadmap), the subagent reads them before starting — so even quick tasks stay aligned with the project's design. It asks how thorough to be (Plan and execute, Discuss first, Research first, or Full) and asks before committing. Use `/awos:quick list`, `status <slug>`, and `resume <slug>` to manage accumulated tasks.
 
 ### Step 4: You're Awesome
 

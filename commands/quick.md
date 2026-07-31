@@ -103,12 +103,30 @@ Determine which subagent should do the coding, reusing the same specialists as `
 - If no specialist clearly matches — plain config edits, documentation, shell scripts, and other generic one-off work — use `general-purpose`. Don't force a stack specialist onto a task outside its domain just because the verification happens to use its language.
 - You'll record the choice in `PLAN.md` in the next step as `**[Agent: agent-name]**`.
 
+### Step 5.5: DRY Validation
+
+Before writing the plan, check whether the task creates something that **parallels an existing structure** — a new environment, a second instance, a variant of existing code, a config for another target. If it does:
+
+1. **Default to reuse.** Extract shared logic into a module, template, base class, shared function, or parameterized config. The new instance should be a thin wrapper that passes different values — not a copy.
+2. **Parameterize the differences.** Use variables, tfvars files, env-specific overrides, CLI flags, factory arguments — whatever the stack's idiomatic mechanism is.
+3. **Only duplicate if reuse is genuinely impractical** (e.g. the "original" is a one-off script with no stable interface, or the overlap is < 30%). If you do duplicate, record **why** in the plan.
+
+**Red flag:** if a plan step says "copy X and change values" — stop and redesign. The correct step is "extract X into a reusable unit, then instantiate it twice with different parameters."
+
+This applies universally:
+- **Terraform/Infra:** modules + env var files, not copied directories.
+- **CI/CD:** shared templates / extends / anchors / reusable workflows, not duplicated jobs.
+- **Python/backend:** shared base classes / utilities / parameterized factories, not copied modules.
+- **React/frontend:** configurable components via props, not copied component files.
+- **Config:** overlays / env-specific overrides, not duplicated config files.
+
 ### Step 6: Write the Plan
 
 Write `context/quick/[YYYYMMDD]-[slug]/PLAN.md` with:
 
 - **Goal** — the one-line task description.
 - **Approach** — how it will be done (incorporating any discussion/research findings).
+- **DRY check** — if the task parallels something existing, explain the reuse strategy.
 - **Steps** — the concrete edits/actions, in order.
 - **Definition of Done** — how success is verified (tests, lint, typecheck, curl, manual check).
 - **Agent** — the specialist chosen in Step 5, recorded as `**[Agent: agent-name]**`.

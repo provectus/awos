@@ -114,6 +114,7 @@ Before writing the plan, check whether the task creates something that **paralle
 **Red flag:** if a plan step says "copy X and change values" — stop and redesign. The correct step is "extract X into a reusable unit, then instantiate it twice with different parameters."
 
 This applies universally:
+
 - **Terraform/Infra:** modules + env var files, not copied directories.
 - **CI/CD:** shared templates / extends / anchors / reusable workflows, not duplicated jobs.
 - **Python/backend:** shared base classes / utilities / parameterized factories, not copied modules.
@@ -136,6 +137,7 @@ Keep it short — a quick task's plan is a checklist, not a document.
 ### Step 6.5: Gather Project Context
 
 Check which AWOS context files exist in the project:
+
 - `context/product/product-definition.md`
 - `context/architecture/architecture.md`
 - `context/product/roadmap.md`

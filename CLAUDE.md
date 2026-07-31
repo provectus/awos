@@ -172,6 +172,7 @@ Files under `commands/`, `claude/commands/`, `plugins/awos/`, and `templates/age
 - <https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices>
 - <https://code.claude.com/docs/en/slash-commands>
 - <https://code.claude.com/docs/en/sub-agents>
+- <https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/mitigate-jailbreaks>
 
 Non-obvious rules for this repo:
 

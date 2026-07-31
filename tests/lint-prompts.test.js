@@ -4096,7 +4096,9 @@ test('every artifact-producing command writes before review, never gating the wr
   for (const name of producers) {
     const body = readUtf8(path.join(commandsDir, name));
     assert.ok(
-      /without waiting for approval|writing before the review is safe/i.test(body),
+      /without waiting for approval|writing before the review is safe/i.test(
+        body
+      ),
       `commands/${name} must state that it writes its artifact before the review, not after an approval`
     );
   }
@@ -4110,7 +4112,9 @@ test('every artifact-producing command writes before review, never gating the wr
     /confirm before proceeding/i,
     /wait for (the user's )?(approval|confirmation) before (saving|writing)/i,
   ];
-  for (const name of fs.readdirSync(commandsDir).filter((f) => f.endsWith('.md'))) {
+  for (const name of fs
+    .readdirSync(commandsDir)
+    .filter((f) => f.endsWith('.md'))) {
     const body = readUtf8(path.join(commandsDir, name));
     for (const rx of writeGates) {
       assert.ok(

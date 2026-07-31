@@ -18,16 +18,16 @@ project's `context/` directory:
 Card (25 columns wide, ~21 of text):
 
     ┌───────────────────────┐
-    │ PROJ-101              │  ticket (blank when none)
-    │ 012 · Checkout redes… │  spec number · title
+    │ PROJ-101          012 │  ticket (left) · spec number (right; left when no ticket)
+    │ Checkout redesign fo… │  title (full width)
     │ Dusty                 │  author
     │ 🟥 HUGE         1d ⚪ │  size (emoji+word) · days in current status (n+emoji)
     └───────────────────────┘
 
 Size is relative to the project (task-count terciles): 🟥 HUGE / 🟨 Medium /
-🟩 small. Days-in-status colour: ⚪ <3, 🟡 ≥3, 🔴 ≥5, 🟤 ≥7. Columns are laid
-out three-per-row (Draft · In Review · Approved, then Completed · Other) to fit
-an ~80-column terminal.
+🟩 small. Days-in-status colour: ⚪ <3, 🟡 ≥3, 🔴 ≥5, 🟤 ≥7. The lifecycle
+columns (Draft · In Review · Approved · Completed, then Other) are laid out
+side by side in a single row — a wide terminal shows the whole flow at once.
 """
 
 import glob
@@ -59,6 +59,17 @@ def pad(s):
     return s + " " * (F - wide(s))
 
 
+def justify(left, right):
+    """left-aligned + right-aligned within the inner field. Right is kept whole
+    (clipped only if it alone overflows); left is clipped to make room."""
+    if wide(right) > F:
+        right = clip(right)
+    while left and wide(left) + 1 + wide(right) > F:
+        left = left[:-2] + "…" if wide(left) > 1 else ""
+    gap = F - wide(left) - wide(right)
+    return left + " " * max(gap, 1 if left else 0) + right
+
+
 def days_circle(d):
     return "🟤" if d >= 7 else ("🔴" if d >= 5 else ("🟡" if d >= 3 else "⚪"))
 
@@ -71,16 +82,38 @@ def field(pat, text):
 def count_atomic_tasks(path):
     """Atomic tasks only: a checkbox is counted when it carries an [Agent:] tag
     or sits under a slice header. Composite slice headers themselves, and stray
-    top-level checklist items outside any slice, are excluded."""
-    total, in_slice = 0, False
+    top-level checklist items outside any slice, are excluded.
+
+    A slice's scope ends at its structural boundary, so tasks under a later peer
+    section (e.g. a `## Notes` heading, or a checklist that dedents back to the
+    slice item's level) are not misattributed to it: a heading-form slice closes
+    on the next heading at its level or shallower, and a list-form slice closes
+    on the next heading or on a list item at or above the slice item's indent."""
+    total = 0
+    slice_head = None  # heading level of an active "## Slice …" heading
+    slice_indent = None  # indent of an active "- [ ] **Slice …**" composite item
     for ln in open(path, encoding="utf-8", errors="replace"):
-        # slice boundary: a "## Slice" heading or a composite "- [ ] **Slice**"
-        if re.match(r"\s*#{1,6}\s+Slice\b", ln) or re.match(
-            r"\s*- \[[ xX]\]\s*\*\*Slice", ln
-        ):
-            in_slice = True
+        head = re.match(r"\s*(#{1,6})\s+(.*)", ln)
+        if head:
+            # any heading closes a list-form slice; a peer/ancestor heading also
+            # closes a heading-form slice
+            slice_indent = None
+            level = len(head.group(1))
+            if slice_head is not None and level <= slice_head:
+                slice_head = None
+            if re.match(r"Slice\b", head.group(2)):
+                slice_head = level
             continue
-        if re.match(r"\s*- \[[ xX]\]", ln) and ("[Agent:" in ln or in_slice):
+        item = re.match(r"(\s*)- \[[ xX]\]\s*(.*)", ln)
+        if not item:
+            continue
+        indent = len(item.group(1))
+        if re.match(r"\*\*Slice", item.group(2)):  # composite slice item
+            slice_indent = indent
+            continue
+        if slice_indent is not None and indent <= slice_indent:
+            slice_indent = None  # dedented back to the slice's level → out of it
+        if "[Agent:" in ln or slice_head is not None or slice_indent is not None:
             total += 1
     return total
 
@@ -94,7 +127,7 @@ def _git_epoch(args):
             text=True,
             timeout=10,
         ).stdout
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return None
     for tok in out.split():
         if tok.isdigit() and len(tok) >= 9:  # a plausible unix timestamp
@@ -170,16 +203,20 @@ def column_of(s):
 def card(s, size):
     st = s["status"]
     flag = " *" if st == "(none)" else (f" [{st}]" if st not in CANON else "")
+    num = f"{s['num']}{flag}"
+    # Spec number leads the top line: right of the ticket when one exists, else
+    # alone on the left. Freeing the number off the title line lets the title
+    # itself use the card's full inner width.
+    top = justify(s["ticket"], num) if s["ticket"] else pad(num)
     sz = size(s["tasks"])
     left = SIZE_SQUARE[sz] + " " + sz
     right = f"{s['days']}d " + days_circle(s["days"])
-    gap = F - wide(left) - wide(right)
     return [
         "┌" + "─" * (BOX - 2) + "┐",
-        "│ " + pad(s["ticket"]) + " │",
-        "│ " + pad(f"{s['num']}{flag} · {s['title']}") + " │",
+        "│ " + top + " │",
+        "│ " + pad(s["title"]) + " │",
         "│ " + pad(s["author"]) + " │",
-        "│ " + left + " " * max(gap, 1) + right + " │",
+        "│ " + justify(left, right) + " │",
         "└" + "─" * (BOX - 2) + "┘",
     ]
 
@@ -231,10 +268,10 @@ def main():
         f"{name} — {len(specs)} features   "
         f"[🟥 HUGE · 🟨 Medium · 🟩 small │ ⚪<3 🟡≥3 🔴≥5 🟤≥7 days]\n"
     )
-    print(band(["Draft", "In Review", "Approved"], specs, size))
-    print()
-    tail = ["Completed", "Other"] if any(column_of(s) == "Other" for s in specs) else ["Completed"]
-    print(band(tail, specs, size))
+    cols = ["Draft", "In Review", "Approved", "Completed"]
+    if any(column_of(s) == "Other" for s in specs):
+        cols.append("Other")
+    print(band(cols, specs, size))
 
 
 if __name__ == "__main__":

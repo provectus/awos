@@ -64,7 +64,7 @@ Read `context/product/roadmap.md`. Record each phase heading and, under it, the 
 
 ## Step 4: Render the board
 
-Lay the five lifecycle columns out as a **kanban grid sized to an ~80-column terminal**: make each card about **25 columns wide so at least three columns sit side by side in one row**. Render the columns in order, **three per row — Draft · In Review · Approved on the first row, then Completed · Other below** — each column a vertical stack of its cards under a centered `══ Name (count) ══` header. Within a row the columns share one width and their cards align top-down; a column with fewer cards just leaves blank space beneath it. Show every column including empty ones (an empty column shows its header and `(none)`); the **Other** column appears only when at least one spec has a non-canonical status (see Step 6-caveat below).
+Lay the lifecycle columns out **side by side in a single row** so the whole flow reads left to right at once — **Draft · In Review · Approved · Completed**, then **Other** at the far right when present. Make each card about **25 columns wide**; the full row is therefore ~100–130 columns, so this board is meant for a wide terminal. Render each column as a vertical stack of its cards under a centered `══ Name (count) ══` header; the columns share one width and their cards align top-down, so a column with fewer cards just leaves blank space beneath it. Show every column including empty ones (an empty column shows its header and `(none)`); the **Other** column appears only when at least one spec has a non-canonical status (see Step 6-caveat below).
 
 Draw each feature as a **card** with box-drawing borders and **two color emoji on its bottom line** that carry its triage signals: a **size square** immediately before the size word, and a **days circle** immediately after the day count. Emoji are the primary color mechanism because they render wherever Markdown does — the board is shown in a Markdown chat surface, where ANSI escape codes do not render (they print as literal `\e[..m` gibberish or are stripped). A square for size and a circle for days keep the two signals distinct at a glance.
 
@@ -78,14 +78,21 @@ Draw each feature as a **card** with box-drawing borders and **two color emoji o
   - 🔴 5 days or more
   - 🟤 7 days or more
 
-The four content lines, in order: **ticket** (top; blank when the spec records none), the **spec number** and **title** (`012 · Checkout redesign`), **author**, then the **size** (`🟥 HUGE`, left) and the **day count** (`1d ⚪`, right). Collapse duplicate ticket ids before showing them — a Markdown-link ticket repeats its id in both the link text and the URL — and when a spec lists several, show the first with a `+N` suffix.
+The four content lines, in order: the top line pairs the **ticket** (left) with the **spec number** (right); when the spec records no ticket, the spec number sits alone on the **left**. The second line is the **title** on its own, using the card's full inner width (moving the number off this line is what buys the title that width). Then **author**, then the **size** (`🟥 HUGE`, left) and the **day count** (`1d ⚪`, right). Collapse duplicate ticket ids before showing them — a Markdown-link ticket repeats its id in both the link text and the URL — and when a spec lists several, show the first with a `+N` suffix.
 
 ```
 ┌───────────────────────┐
-│ PROJ-101              │
-│ 012 · Checkout redes… │
+│ PROJ-101          012 │   ← ticket left, spec number right
+│ Checkout redesign fo… │   ← title, full width
 │ Dusty                 │
 │ 🟥 HUGE         1d ⚪ │
+└───────────────────────┘
+
+┌───────────────────────┐
+│ 013                   │   ← no ticket: spec number on the left
+│ Search relevance tun… │
+│ Dusty                 │
+│ 🟩 small        4d 🟡 │
 └───────────────────────┘
 ```
 
@@ -95,7 +102,7 @@ ANSI color is a **secondary enhancement** only — when the board is written to 
 
 **Keep every card the exact same width.** Fix one inner width for the whole board (~21 characters of text inside a 25-wide box); left-align the ticket, `number · title`, and author lines and pad them with spaces to that width; justify the size/days line so the day-count emoji sits at the right border. Each of the two emoji occupies **two display columns**, so account for that when padding the size/days line — otherwise its right border drifts out of line with the others. Truncate an over-long title or ticket with an ellipsis (`…`) rather than letting one card grow wider than its siblings — a ragged right edge, or cards of differing widths within a row, is the failure this rule prevents.
 
-A worked reference implementation of this whole board — the card, the size terciles, the git-derived days, and the three-per-row grid — ships alongside this command at `${CLAUDE_PLUGIN_ROOT}/scripts/status-board.py`. It is dependency-free (Python 3 standard library plus `git`) and read-only. When a Python 3 runtime is available, the most reliable way to render is to run it and print its output verbatim:
+A worked reference implementation of this whole board — the card, the size terciles, the git-derived days, and the single-row column layout — ships alongside this command at `${CLAUDE_PLUGIN_ROOT}/scripts/status-board.py`. It is dependency-free (Python 3 standard library plus `git`) and read-only. When a Python 3 runtime is available, the most reliable way to render is to run it and print its output verbatim:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/status-board.py" .            # whole-project board

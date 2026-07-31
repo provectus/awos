@@ -98,16 +98,20 @@ Both commands are user-owned and generated outside `.claude/commands/awos/`, so 
 
 `/awos:status` renders a Kanban board of where every feature stands, read from the project's own documents. It is **read-only** — it scans `context/` and prints a board; it never modifies a file.
 
-The board is a **kanban grid** sized to an ~80-column terminal — lifecycle columns run three-per-row (**Draft · In Review · Approved**, then **Completed · Other** below), each a vertical stack of cards. Each feature (one `context/spec/NNN-*/` directory) is a **card** in the column matching its `functional-spec.md` `Status:` field:
+![The /awos:status Kanban board — lifecycle columns of feature cards, each tagged with a size square and a days-in-status circle.](assets/kanban.png)
+
+The board lays the lifecycle columns **side by side in a single row** — **Draft · In Review · Approved · Completed**, then **Other** at the far right when present — so the whole flow reads left to right at once (each card is ~25 columns wide, so the board wants a wide terminal). Each column is a vertical stack of cards, and each feature (one `context/spec/NNN-*/` directory) is a **card** in the column matching its `functional-spec.md` `Status:` field:
 
 ```
 ┌───────────────────────┐
-│ OAPBCRNA-122          │   ticket
-│ 005 · Task Cards Fee… │   spec number · title
+│ OAPBCRNA-122      005 │   ticket (left) · spec number (right)
+│ Task Cards Feed for … │   title, full width
 │ Claude (with Dusty)   │   author
 │ 🟥 HUGE         5d 🟤 │   size · days in current status
 └───────────────────────┘
 ```
+
+When a spec has no ticket, the spec number sits alone on the **left** of the top line instead. Moving the number off the title line lets the title use the card's full width.
 
 Two triage signals are color-coded with **emoji** (they render in the Markdown chat surface, where ANSI does not). A **size square** before the size word marks the spec's **relative size** (by task count vs. the project's other specs): 🟥 HUGE, 🟨 Medium, 🟩 small — with matching caps/Title/lower casing. A **days circle** after the day count marks how long the spec has sat in its current status (from git): ⚪ under 3 days, 🟡 3+, 🔴 5+, 🟤 7+. A `Other` column collects specs with a non-canonical status, and a per-phase roll-up from `context/product/roadmap.md` follows the board.
 

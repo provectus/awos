@@ -1571,14 +1571,12 @@ test('status.md is a read-only status board wired to the real state sources', ()
     'plugins/awos/commands/status.md must read the ticket from the Jira/Linear fields specs record'
   );
 
-  // Kanban grid: cards are sized so ~3 columns fit an 80-col terminal, wrapping
-  // three-per-row (Draft·In Review·Approved, then Completed·Other) rather than
-  // one long vertical stack.
+  // Single-row layout: all lifecycle columns sit side by side in one row
+  // (Draft · In Review · Approved · Completed, then Other) so the whole flow
+  // reads left to right, rather than one long vertical stack or a wrapped grid.
   assert.ok(
-    /grid/i.test(body) &&
-      /three columns|three per row/i.test(body) &&
-      /80/.test(body),
-    'plugins/awos/commands/status.md must lay the lifecycle columns out as a kanban grid sized to ~80 columns (≥3 columns per row), not a single vertical stack'
+    /side by side/i.test(body) && /single row|one row/i.test(body),
+    'plugins/awos/commands/status.md must lay the lifecycle columns out side by side in a single row, not a vertical stack or a wrapped grid'
   );
 
   // Relative size tiers, each with a distinct casing (caps/title/lower) and a

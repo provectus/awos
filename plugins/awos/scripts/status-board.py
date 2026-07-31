@@ -104,15 +104,19 @@ def count_atomic_tasks(path):
             if re.match(r"Slice\b", head.group(2)):
                 slice_head = level
             continue
+        # Any list item — checkbox or plain bullet — that dedents back to the
+        # slice item's level closes a list-form slice. Handling plain bullets
+        # too means a peer line like `- Notes` ends the slice, so a checkbox
+        # nested under that peer is not miscounted as a slice task.
+        bullet = re.match(r"(\s*)[-+*] ", ln)
+        if bullet and slice_indent is not None and len(bullet.group(1)) <= slice_indent:
+            slice_indent = None
         item = re.match(r"(\s*)- \[[ xX]\]\s*(.*)", ln)
         if not item:
             continue
-        indent = len(item.group(1))
         if re.match(r"\*\*Slice", item.group(2)):  # composite slice item
-            slice_indent = indent
+            slice_indent = len(item.group(1))
             continue
-        if slice_indent is not None and indent <= slice_indent:
-            slice_indent = None  # dedented back to the slice's level → out of it
         if "[Agent:" in ln or slice_head is not None or slice_indent is not None:
             total += 1
     return total

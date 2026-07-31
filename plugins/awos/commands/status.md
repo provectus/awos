@@ -80,7 +80,7 @@ Draw each feature as a **card** with box-drawing borders and **two color emoji o
 
 The four content lines, in order: the top line pairs the **ticket** (left) with the **spec number** (right); when the spec records no ticket, the spec number sits alone on the **left**. The second line is the **title** on its own, using the card's full inner width (moving the number off this line is what buys the title that width). Then **author**, then the **size** (`🟥 HUGE`, left) and the **day count** (`1d ⚪`, right). Collapse duplicate ticket ids before showing them — a Markdown-link ticket repeats its id in both the link text and the URL — and when a spec lists several, show the first with a `+N` suffix.
 
-```
+```text
 ┌───────────────────────┐
 │ PROJ-101          012 │   ← ticket left, spec number right
 │ Checkout redesign fo… │   ← title, full width
@@ -100,7 +100,7 @@ The four content lines, in order: the top line pairs the **ticket** (left) with 
 
 ANSI color is a **secondary enhancement** only — when the board is written to a real ANSI-capable terminal or file rather than the chat, you may additionally color the glyphs with escape codes, but the emoji are the source of truth and are always present.
 
-**Keep every card the exact same width.** Fix one inner width for the whole board (~21 characters of text inside a 25-wide box); left-align the ticket, `number · title`, and author lines and pad them with spaces to that width; justify the size/days line so the day-count emoji sits at the right border. Each of the two emoji occupies **two display columns**, so account for that when padding the size/days line — otherwise its right border drifts out of line with the others. Truncate an over-long title or ticket with an ellipsis (`…`) rather than letting one card grow wider than its siblings — a ragged right edge, or cards of differing widths within a row, is the failure this rule prevents.
+**Keep every card the exact same width.** Fix one inner width for the whole board (~21 characters of text inside a 25-wide box); left-align the title and author lines and pad them with spaces to that width; justify the top line (ticket left, spec number right) and the size/days line so their right-edge fields sit flush at the border. Each of the two emoji occupies **two display columns**, so account for that when padding the size/days line — otherwise its right border drifts out of line with the others. Truncate an over-long title or ticket with an ellipsis (`…`) rather than letting one card grow wider than its siblings — a ragged right edge, or cards of differing widths within a row, is the failure this rule prevents.
 
 A worked reference implementation of this whole board — the card, the size terciles, the git-derived days, and the single-row column layout — ships alongside this command at `${CLAUDE_PLUGIN_ROOT}/scripts/status-board.py`. It is dependency-free (Python 3 standard library plus `git`) and read-only. When a Python 3 runtime is available, the most reliable way to render is to run it and print its output verbatim:
 

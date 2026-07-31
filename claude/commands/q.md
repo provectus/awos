@@ -3,4 +3,4 @@ description: Shortcut for /awos:quick — executes a small ad-hoc task end-to-en
 argument-hint: '[list | status <slug> | resume <slug> | task description]'
 ---
 
-@.awos/commands/quick.md
+@.awos/commands/q.md

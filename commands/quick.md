@@ -77,7 +77,7 @@ Inspect `<user_prompt>` and route:
 1.  Generate a slug from the task description (per Slug rules).
 2.  Compute today's date: `date +%Y%m%d`.
 3.  Create the directory: `mkdir -p context/quick/[YYYYMMDD]-[slug]`.
-4.  If a directory with the same slug already exists, ask the user whether to resume it (go to **RESUME**) or append a short disambiguator to the slug.
+4.  If a directory with the same slug already exists (check via `ls -d context/quick/*-[slug]/ 2>/dev/null`), ask the user whether to resume it (go to **RESUME**) or append a numeric disambiguator (`-2`, `-3`, etc.) to the slug until unique.
 
 ### Step 3: Discussion (only if chosen)
 
@@ -99,7 +99,7 @@ If depth is "Research first" or "Full":
 Determine which subagent should do the coding, reusing the same specialists as `/awos:implement`:
 
 - Enumerate the available subagents by inspecting the `Agent` tool's description block in your own system prompt (introspection — no tool call needed). Both project-local agents (declared as files under `.claude/agents/*.md`) and plugin-provided agents (recognized by the `plugin-name:` prefix on `subagent_type`) are listed there.
-- Match the task to a subagent by technology and intent (e.g. FastAPI/Python → a Python specialist, React/UI → a frontend specialist, DB → a database specialist, infra/CI → an infrastructure specialist).
+- Match the task to a subagent by technology and intent (e.g. FastAPI/Python → a Python specialist, React/UI → a frontend specialist, DB → a database specialist, infra/CI → an infrastructure specialist). If multiple specialists match, prefer the narrower specialist over the generalist (e.g. a database agent over a backend agent for a SQL migration).
 - If no specialist clearly matches — plain config edits, documentation, shell scripts, and other generic one-off work — use `general-purpose`. Don't force a stack specialist onto a task outside its domain just because the verification happens to use its language.
 - You'll record the choice in `PLAN.md` in the next step as `**[Agent: agent-name]**`.
 
@@ -133,12 +133,24 @@ Write `context/quick/[YYYYMMDD]-[slug]/PLAN.md` with:
 
 Keep it short — a quick task's plan is a checklist, not a document.
 
+### Step 6.5: Gather Project Context
+
+Check which AWOS context files exist in the project:
+- `context/product/product-definition.md`
+- `context/architecture/architecture.md`
+- `context/product/roadmap.md`
+
+If any exist, include a `<project_context>` block in the delegation prompt (Step 7) listing the paths with the instruction: "Read these files before starting — they define the product, its architecture, and current roadmap. Align your changes with them."
+
+If none exist, skip this — the project may not have AWOS context yet, and the subagent can still work from the codebase alone.
+
 ### Step 7: Delegate Execution
 
 You do not write or edit code yourself. Construct a delegation prompt that includes:
 
 - The full `PLAN.md` content (goal, approach, steps, definition of done).
 - Any discussion decisions and research findings.
+- A `<project_context>` block (from Step 6.5): the list of existing context files with the instruction to read them before starting and align changes with the product definition and architecture.
 - A `<scope_discipline>` block: "Only make changes the task requires. Don't add features, refactor unrelated code, or add validation for scenarios outside the task. If something is unclear, ask rather than guessing."
 - An `<investigate_before_answering>` block: "Don't speculate about code you haven't opened. Read relevant files before editing. Issue independent reads in parallel."
 - A `<use_available_skills>` block: "Apply any skills declared in your frontmatter `skills:` list, and any project, user, or plugin skills whose description matches this work."
@@ -197,11 +209,11 @@ Report in a few lines: the task slug, what was done, files changed, verification
 2.  For each directory, derive:
     - **slug** — the directory name with the `YYYYMMDD-` prefix stripped. Before displaying, sanitize: strip non-printable characters and path separators. Never interpolate a raw directory name into a shell command.
     - **date** — from the `YYYYMMDD-` prefix in the directory name.
-    - **status:**
+    - **status** (determined by comparing the `YYYYMMDD` prefix to today's date):
       - `SUMMARY.md` exists with frontmatter `status: complete` → `complete ✓`
       - `SUMMARY.md` exists otherwise → `incomplete`
-      - `SUMMARY.md` missing, directory created < 7 days ago → `in-progress`
-      - `SUMMARY.md` missing, directory created ≥ 7 days ago → `abandoned? (>7 days, no summary)`
+      - `SUMMARY.md` missing, date prefix < 7 days ago → `in-progress`
+      - `SUMMARY.md` missing, date prefix ≥ 7 days ago → `abandoned? (>7 days, no summary)`
 3.  Display a table (slug, date, status) and a one-line count summary. Stop — do not run any task.
 
 ---
@@ -210,8 +222,8 @@ Report in a few lines: the task slug, what was done, files changed, verification
 
 Given a sanitized slug:
 
-1.  Find the directory: `ls -d context/quick/*-[slug]/ 2>/dev/null | head -1`. If none, print `No quick task found with slug: [slug]` and stop.
-2.  Read `PLAN.md` and `SUMMARY.md` (if present). Display: plan file path, status (from `SUMMARY.md` frontmatter or "no summary yet"), the task goal (from `PLAN.md`), and the last meaningful line of `SUMMARY.md` (or "none").
+1.  Find the directory: `ls -d context/quick/*-[slug]/ 2>/dev/null | tail -1`. If none, print `No quick task found with slug: [slug]` and stop. (`tail -1` picks the most recent match when the same slug exists on multiple dates, since the `YYYYMMDD-` prefix sorts chronologically.)
+2.  Read `PLAN.md` (if present) and `SUMMARY.md` (if present). Display: plan file path (or "no plan yet"), status (from `SUMMARY.md` frontmatter or "no summary yet"), the task goal (from `PLAN.md`'s Goal field), and the last non-empty, non-header line of `SUMMARY.md` (or "none").
 3.  Print `Resume with: /awos:quick resume [slug]`. No subagent spawn. Stop.
 
 ---
@@ -220,7 +232,10 @@ Given a sanitized slug:
 
 Given a sanitized slug:
 
-1.  Find the directory: `ls -d context/quick/*-[slug]/ 2>/dev/null | head -1`. If none, print `No quick task found with slug: [slug]` and stop.
-2.  Read `PLAN.md` (goal, approach, steps, agent) and `SUMMARY.md` (if present, for what's done).
-3.  Announce what you're resuming and the current status.
-4.  Continue from where the task left off: re-enter the RUN flow at Step 7 (Delegate Execution) using the existing `PLAN.md`, passing the subagent the plan plus a note of what remains. Then finish with Steps 8–11.
+1.  Find the directory: `ls -d context/quick/*-[slug]/ 2>/dev/null | tail -1`. If none, print `No quick task found with slug: [slug]` and stop. (`tail -1` picks the most recent match.)
+2.  Read `PLAN.md` (goal, approach, steps, agent) and `SUMMARY.md` (if present, for what's done). If `PLAN.md` is missing, inform the user that this task has no plan to resume and suggest starting fresh with `/awos:quick [task description]`. Stop.
+3.  If `SUMMARY.md` exists with `status: complete`, warn the user the task is already done and ask (via `AskUserQuestion`) whether to re-run it or stop.
+4.  Announce what you're resuming and the current status.
+5.  Run Step 6.5 (Gather Project Context) to check for AWOS context files — resumed tasks still need project alignment.
+6.  Extract the agent name from `PLAN.md`'s `**[Agent: agent-name]**` field. If the field is missing, fall back to Step 5 (Choose the Specialist Subagent) before delegating.
+7.  Continue from where the task left off: re-enter the RUN flow at Step 7 (Delegate Execution) using the existing `PLAN.md`, passing the subagent the plan plus a note of what remains. Then finish with Steps 8–11.

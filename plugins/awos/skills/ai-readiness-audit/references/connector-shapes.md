@@ -533,10 +533,12 @@ The object the orchestrator assembles and writes to `collected/incidents.json`:
 }
 ```
 
-Only incidents with a valid `started_at → resolved_at` span are measured; the engine reports the **median** recovery time in hours and upgrades reliability to `maximal`. Query the same window as the other connectors (`window_anchor − lookback_days`). Per-source mapping:
+Only incidents with a valid `started_at → resolved_at` span are measured; the engine reports the **median** recovery time in hours and upgrades reliability to `maximal`. Query the same window as the other connectors (`window_anchor − lookback_days`).
 
-- **PagerDuty / OpsGenie / incident.io** — list incidents in the window; map `created_at`/`opened_at` → `started_at`, `resolved_at`/`closed_at` → `resolved_at`, priority/urgency → `severity`.
-- **Statuspage / Atlassian** — map incident `created_at` → `started_at`, `resolved_at` → `resolved_at`.
-- **GitHub/GitLab incident labels** — issues labelled `incident`/`sev1`… ; `created_at` → `started_at`, `closed_at` → `resolved_at`, `source: "github-label:<label>"`.
+**Map semantically from the live tool response, not from a fixed field list.** Call the source's MCP/CLI, read the shape it actually returns, and map by meaning: whatever field marks **when the incident began** → `started_at`, **when service was restored** → `resolved_at`, and the severity/priority label → `severity` (leave `resolved_at` null for still-open incidents). The names below are only the _typical_ ones as of writing — if the live response differs, trust it over this list:
+
+- **PagerDuty / OpsGenie / incident.io** — open time is typically `created_at`/`opened_at`; restore time `resolved_at`/`closed_at`; severity `priority`/`urgency`.
+- **Statuspage / Atlassian** — typically `created_at` and `resolved_at`.
+- **GitHub/GitLab incident labels** — issues labelled `incident`/`sevN`; open = issue `created_at`, restore = `closed_at`; set `source: "github-label:<label>"`.
 
 Write `collected/incidents.json` once after accumulating all pages, with a `period` block recording the actual window queried, then re-run `enrich` to re-score DF-07.

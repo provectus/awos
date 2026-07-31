@@ -4058,3 +4058,39 @@ test('spec.md captures boundary/error behavior as rules in items 2 and 3', () =>
     'spec.md Step 3 item 3 must require failure-path criteria for boundary/error requirements'
   );
 });
+
+test('connector-shapes.md documents every IncidentRecord field the collector defines', () => {
+  // The incidents recipe must not drift from the collector's actual contract:
+  // every field on the IncidentRecord / IncidentsConnector interfaces in
+  // collectors/incidents.ts has to appear in references/connector-shapes.md,
+  // so a renamed/added field can't silently leave the recipe stale.
+  const ts = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins/awos/skills/ai-readiness-audit/collectors/incidents.ts'
+    )
+  );
+  const doc = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins/awos/skills/ai-readiness-audit/references/connector-shapes.md'
+    )
+  );
+  const fieldsOf = (iface) => {
+    const body = ts.match(
+      new RegExp(`export interface ${iface} \\{([\\s\\S]*?)\\n\\}`)
+    );
+    assert.ok(body, `collectors/incidents.ts must define interface ${iface}`);
+    return [...body[1].matchAll(/^\s*(\w+)\??:/gm)].map((m) => m[1]);
+  };
+  const fields = [
+    ...fieldsOf('IncidentRecord'),
+    ...fieldsOf('IncidentsConnector'),
+  ];
+  const missing = fields.filter((f) => !doc.includes(f));
+  assert.deepEqual(
+    missing,
+    [],
+    `connector-shapes.md must document these incidents fields (drifted from incidents.ts): ${missing.join(', ')}`
+  );
+});

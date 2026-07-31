@@ -122,7 +122,7 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 3.  **Acceptance Criteria:**
     - After clarifying a requirement, turn it into a concrete, testable acceptance criterion.
     - Acceptance criteria must read as manual QA test scripts that a non-developer could execute. Describe only what is visible on screen and what the user does — never reference internal system behavior.
-    - Each acceptance criterion follows the same three-part shape as the example below: a precondition (Given), a user action (When), and a visible outcome (Then). Include Given only when the precondition affects the outcome. The words **when** and **then** must both appear, in that order, within a **single sentence** — that pairing is the shape itself, not a stylistic preference, and it applies to every criterion individually, including short or seemingly obvious ones. The two ways it slips are splitting the pair across two sentences and dropping it for a declarative retelling:
+    - Each acceptance criterion follows the same three-part shape as the example below: a precondition (Given), a user action (When), and a visible outcome (Then). Include Given only when the precondition affects the outcome. The words **when** and **then** must both appear, in that order, within a **single sentence**, in every criterion — including short or seemingly obvious ones. Two ways it slips: splitting the pair across two sentences, and replacing it with a declarative retelling.
       - ✅ "When the user submits the form with an empty name, then they see: 'Name is required.'"
       - ❌ "The user submits the form with an empty name. They see: 'Name is required.'" — no `when`/`then` pair.
       - ❌ "Given the user is signed out, the sign-in dialog appears." — a Given with no `when`/`then` pair.
@@ -145,7 +145,7 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 **Definition of Done.** A self-review, not an approval gate — the file is still written at the end of the process. Confirm the draft meets both:
 
 1.  **No vague wording remains in requirements or acceptance criteria.** The check above already resolved each vague term — made it concrete in user-perceivable terms or converted it to a `[NEEDS CLARIFICATION: …]` marker; confirm none slipped through, and if one did, resolve it per the check above. Any term converted to a marker is resolved with the user in Step 6, or left in place in an unattended run.
-2.  **Every requirement has at least one acceptance criterion.** Confirm that each functional requirement in **Functional Requirements** carries at least one acceptance criterion in the When/Then shape (Given optional). If a requirement has none, write one for it before saving. Then re-read the acceptance criteria one bullet at a time and confirm each one contains both `when` and `then` in a single sentence per Step 3.3 — checking the set as a whole is how a lone declarative bullet survives. Rewrite any bullet that does not.
+2.  **Every requirement has at least one acceptance criterion.** Confirm that each functional requirement in **Functional Requirements** carries at least one acceptance criterion in the When/Then shape (Given optional). If a requirement has none, write one for it before saving. Then re-read the acceptance criteria one bullet at a time — not the set as a whole — and rewrite any bullet that does not carry both `when` and `then` in a single sentence, per Step 3.3.
 
 ### Step 5: File Generation
 

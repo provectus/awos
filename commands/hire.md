@@ -53,7 +53,7 @@ Follow this process precisely.
     - **Documentation** (doc generators, API docs, knowledge bases)
     - **Solution Ownership** (product management, project tracking, analytics)
 4.  For each domain that has technologies, define an ideal agent role name in kebab-case (e.g., `react-frontend`, `python-backend`, `aws-infra`).
-5.  Show the user a table of identified domains, technologies, and proposed agent roles, then **continue without waiting for a reply**. Nothing has been installed or written at this point, so there is nothing here to consent to — the table is a preview of what was inferred, and the consent that matters is collected at the two install gates in Step 4 before anything reaches the project. Pausing here would strand an unattended run before it produces any coverage report at all.
+5.  Record the identified domains, technologies, and proposed agent roles, and show them as a table. These are proposals to be checked against what the project already has, so continue to Step 3 rather than treating the table as a decision — Step 3 re-shows each role with its coverage status, Step 4 asks before anything is installed, and Step 8 writes the final roster to `context/product/hired-agents.md`.
 
     | Domain         | Technologies                | Proposed Agent Role |
     | -------------- | --------------------------- | ------------------- |
@@ -114,7 +114,7 @@ Follow this process precisely.
 
     Tell the user that the "What it runs" column comes from registry metadata (the hook's `HOOK.md`), which the registry does not vet against the script itself, and that the actual installed script will be shown for review immediately after install (Step 5.4) — the registry CLI has no preview mode, so the on-disk copy is the first chance to inspect the real behavior.
 
-6.  **If a consent gate cannot be answered, install nothing and continue to Step 6.** In an unattended run the `AskUserQuestion` tool may be unavailable entirely, and no one is there to reply. Treat that as withheld consent — the safe reading of "no answer" is "no", so skip the installs it covered. Do **not** end the turn waiting for a reply, and do **not** fall back to asking the same question as plain text: prose cannot be answered either, and stopping here destroys the run's only durable output. The coverage report is not a side effect of installing. Step 6 through Step 8 still run, and Step 8 records the real post-install state — which in this case is that nothing was installed, alongside the agents that already existed. List the components you would have installed under **Gaps**, so the user can re-run `/awos:hire` interactively and approve them.
+6.  **If a gate gets no answer — the `AskUserQuestion` tool is unavailable, or the question comes back unanswered — treat consent as withheld.** Install nothing that gate covered and continue to Step 6. Do not re-ask the same question as plain text, and do not end the turn. Installing is what needed permission; the coverage report does not, so Step 8 still runs and records what is actually on disk. List the components you did not install under **Gaps** so the user can approve them on a later run.
 
 **QA Complement Rule:**
 
@@ -174,7 +174,7 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
       - `[Responsibility aligned with the agent's domain]` → specific responsibilities derived from the architecture
         Add any installed skills to the `skills` list.
 4.  For **Partially Covered** roles: read the existing agent file and append newly installed skills to its `skills` list.
-5.  **Write every agent file without waiting for approval** — an agent file is reversible (re-run `/awos:hire` to revise it, or delete it), so the deliverable must never be gated behind a confirmation an unattended run cannot answer. After writing, show each generated or updated file to the user for review and apply any adjustments they ask for.
+5.  **Write the agent files, then show each generated or updated file to the user for review** and apply any adjustments they ask for. Writing before the review is safe here: an agent file is reversible — re-run `/awos:hire` to revise it, or delete it.
 
 ## Step 7: Warn About Missing Skills
 

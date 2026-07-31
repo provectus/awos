@@ -4096,8 +4096,8 @@ test('every artifact-producing command writes before review, never gating the wr
   for (const name of producers) {
     const body = readUtf8(path.join(commandsDir, name));
     assert.ok(
-      /without waiting for (approval|a reply)/i.test(body),
-      `commands/${name} must declare that it writes its artifact without waiting for approval — otherwise an unattended run produces nothing`
+      /without waiting for approval|writing before the review is safe/i.test(body),
+      `commands/${name} must state that it writes its artifact before the review, not after an approval`
     );
   }
 
@@ -4133,43 +4133,35 @@ test('commands/spec.md mandates the when/then pair per acceptance criterion', ()
   // (checking the set as a whole is how a single offender survives).
   const body = readUtf8(path.join(commandsDir, 'spec.md'));
   assert.ok(
-    /must both appear, in that order, within a \*\*single sentence\*\*/.test(body),
-    'commands/spec.md Step 3.3 must require the words when and then to appear in that order within a single sentence — the abstract three-part description alone lets declarative bullets through'
+    /in that order, within a \*\*single sentence\*\*/.test(body),
+    'commands/spec.md Step 3.3 must require when and then in that order within a single sentence'
   );
   assert.ok(
-    /applies to every criterion individually/.test(body),
-    'commands/spec.md Step 3.3 must state the when/then shape applies to every criterion individually, not just to the set'
+    /in every criterion/.test(body),
+    'commands/spec.md Step 3.3 must apply the when/then shape to every criterion, not just to the set'
   );
   assert.ok(
-    /re-read the acceptance criteria one bullet at a time/.test(body),
-    'commands/spec.md Definition of Done must re-read acceptance criteria one bullet at a time to catch a single non-conforming bullet'
+    /one bullet at a time/.test(body),
+    'commands/spec.md Definition of Done must re-check acceptance criteria one bullet at a time'
   );
 });
 
-test('hire.md degrades an unanswerable consent gate without losing the report', () => {
-  // Step 4 gates installation behind AskUserQuestion — correctly, since Gate 2
-  // installs auto-running shell scripts. But under `claude -p` that tool may
-  // not exist at all: observed live, the model probed for it, announced it
-  // would "ask directly in text", printed the table and ended the turn, so
-  // context/product/hired-agents.md was never written. Restating a gate as
-  // prose is the same dead end as the Step 2 gate that used to stop the run.
-  //
-  // The contract is a split: consent still gates *installing* (no answer means
-  // no consent, so install nothing), but it must not gate the *report*, which
-  // is not a side effect of installing.
+test('hire.md treats an unanswered consent gate as withheld consent', () => {
+  // Installing needs permission; the coverage report does not. If the gate
+  // gets no answer the command must skip the install and keep going, rather
+  // than re-asking in prose or ending the turn — otherwise a run that could
+  // not answer produces no context/product/hired-agents.md at all.
   const body = readUtf8(path.join(commandsDir, 'hire.md'));
   assert.ok(
-    /consent gate cannot be answered, install nothing and continue to Step 6/i.test(
-      body
-    ),
-    'commands/hire.md Step 4 must state that an unanswerable consent gate means install nothing and continue to Step 6 — not end the turn'
+    /gets no answer[\s\S]{0,200}treat consent as withheld/i.test(body),
+    'commands/hire.md Step 4 must treat an unanswered consent gate as withheld consent'
   );
   assert.ok(
-    /do \*\*not\*\* fall back to asking the same question as plain text/i.test(body),
-    'commands/hire.md Step 4 must forbid restating the consent gate as plain text — prose cannot be answered in an unattended run either'
+    /install nothing that gate covered and continue/i.test(body),
+    'commands/hire.md Step 4 must continue to Step 6 after an unanswered gate instead of stopping'
   );
   assert.ok(
-    /coverage report is not a side effect of installing/i.test(body),
-    'commands/hire.md Step 4 must state the coverage report is not a side effect of installing, so Step 8 still runs when nothing was installed'
+    /do not re-ask the same question as plain text/i.test(body),
+    'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
   );
 });

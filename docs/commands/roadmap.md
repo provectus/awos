@@ -26,7 +26,7 @@ This command creates (or updates) your product roadmap — an ordered list of fe
 
 ## Brownfield mode
 
-If `/awos:product` detected an existing codebase (leaving a `context/product/brownfield.md`), this command first inventories what's **already built** — fully implemented features, partial scaffolding, and planned work (TODOs/FIXMEs) — via a focused `Explore` pass, and appends them under a `## Capabilities` heading. The roadmap is then anchored in reality: only fully-implemented capabilities are treated as done, while partial and planned work stays visible as upcoming items, and new phases describe what comes next. See the [Brownfield Adoption Guide](../brownfield-adoption.md).
+If `/awos:product` detected an existing codebase (leaving a `context/product/brownfield.md`), this command first inventories what's **already built** via a focused `Explore` pass, then anchors the roadmap in that reality: implemented capabilities are marked done, while partial and planned work becomes upcoming phases. See the [Brownfield Adoption Guide](../brownfield-adoption.md).
 
 ## Common misconceptions
 

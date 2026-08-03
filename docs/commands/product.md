@@ -27,11 +27,9 @@ The command operates in two modes:
 
 ## Brownfield mode
 
-On an existing codebase, Creation Mode does more than interview you. It decides whether to use your source as context — honoring explicit intent in your prompt ("explore the existing codebase" vs. "start from scratch"), and otherwise scanning for source indicators (`src/`, `package.json`, `go.mod`, `pom.xml`, …) and asking you to confirm. When it explores, it drafts the definition from what an `Explore` agent finds in the code, records those findings in a temporary `context/product/brownfield.md`, and triages each one with you (Accept / Reject) after the definition is saved.
+On an existing codebase, Creation Mode can draft the product definition from your source instead of a blank interview: it detects existing code (honoring explicit "explore" / "start from scratch" intent, otherwise scanning for source indicators and confirming with you), explores it with an `Explore` agent, and triages each finding with you (Accept / Reject) after the definition is saved. It can also import **external documentation** — wikis, tickets, chats — via the `awos:configure-external-sources` skill.
 
-It also offers to import **external documentation** — wikis, tickets, chats, email — via the `awos:configure-external-sources` skill (part of the AWOS plugin), retrieving product-relevant content and folding it into the same triage flow.
-
-For the full brownfield path — including how `brownfield.md` flows through `/awos:roadmap` and `/awos:architecture` and is cleaned up — see the [Brownfield Adoption Guide](../brownfield-adoption.md).
+See the [Brownfield Adoption Guide](../brownfield-adoption.md) for the full path — detection, external sources, and how `brownfield.md` flows through `/awos:roadmap` and `/awos:architecture`.
 
 ## Common misconceptions
 

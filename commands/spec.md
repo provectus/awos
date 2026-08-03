@@ -122,7 +122,10 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 3.  **Acceptance Criteria:**
     - After clarifying a requirement, turn it into a concrete, testable acceptance criterion.
     - Acceptance criteria must read as manual QA test scripts that a non-developer could execute. Describe only what is visible on screen and what the user does — never reference internal system behavior.
-    - Each acceptance criterion follows the same three-part shape as the example below: a precondition (Given), a user action (When), and a visible outcome (Then). Include Given only when the precondition affects the outcome.
+    - Each acceptance criterion follows the same three-part shape as the example below: a precondition (Given), a user action (When), and a visible outcome (Then). Include Given only when the precondition affects the outcome. The words **when** and **then** must both appear, in that order, within a **single sentence**, in every criterion — including short or seemingly obvious ones. Two ways it slips: splitting the pair across two sentences, and replacing it with a declarative retelling.
+      - ✅ "When the user submits the form with an empty name, then they see: 'Name is required.'" — one sentence carrying both `when` and `then`.
+      - ❌ "The user submits the form with an empty name. They see: 'Name is required.'" — the same content split into two declarative sentences, with neither keyword.
+      - ❌ "Given the user is signed out, the sign-in dialog appears." — a Given with no `when`/`then` pair.
     - If any `[NEEDS CLARIFICATION: …]` markers remain on the parent requirement in **Functional Requirements**, ask clarifying questions and resolve the markers before writing acceptance criteria.
     - If a clarifying answer reveals a constraint or detail that belongs to the parent requirement (not just the acceptance criterion), update the requirement statement in **Functional Requirements** before continuing. The requirement and its acceptance criteria must agree on level of detail.
     - For requirements that capture boundary or error behavior, include at least one acceptance criterion covering the failure path (e.g., "When the user uploads a file larger than 5MB, then they see: 'File too large. Maximum size is 5MB.'").
@@ -142,7 +145,7 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 **Definition of Done.** A self-review, not an approval gate — the file is still written at the end of the process. Confirm the draft meets both:
 
 1.  **No vague wording remains in requirements or acceptance criteria.** The check above already resolved each vague term — made it concrete in user-perceivable terms or converted it to a `[NEEDS CLARIFICATION: …]` marker; confirm none slipped through, and if one did, resolve it per the check above. Any term converted to a marker is resolved with the user in Step 6, or left in place in an unattended run.
-2.  **Every requirement has at least one acceptance criterion.** Confirm that each functional requirement in **Functional Requirements** carries at least one acceptance criterion in the When/Then shape (Given optional). If a requirement has none, write one for it before saving.
+2.  **Every requirement has at least one acceptance criterion.** Confirm that each functional requirement in **Functional Requirements** carries at least one acceptance criterion in the When/Then shape (Given optional). If a requirement has none, write one for it before saving. Then re-read the acceptance criteria one bullet at a time — not the set as a whole — and rewrite any bullet that does not carry both `when` and `then` in a single sentence, per Step 3.3.
 
 ### Step 5: File Generation
 

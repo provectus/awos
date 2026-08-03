@@ -2353,12 +2353,29 @@ test('product.md skips to substep 4 when user declines external docs', () => {
     .slice(1)
     .join('');
   assert.ok(
-    /if no.*skip to substep 4/i.test(externalDocsBlock),
+    /(if no|\*\*No\*\*)[^\n]*skip to substep 4/i.test(externalDocsBlock),
     'commands/product.md must skip to substep 4 when user declines external docs'
   );
   assert.ok(
     /default to .*No/i.test(externalDocsBlock),
     'commands/product.md must default to No when the external docs question goes unanswered'
+  );
+  // PR #138 changed the decline branch from writing `## Status: none` to
+  // writing nothing: the second bullet of substep 3 reads an existing
+  // `## Status: none` back as "user previously declined" and skips the
+  // question, so a file written on a decline turns "not this run" into "never
+  // ask again". The regression shape is both branches collapsing into one
+  // run-on sentence, letting the trailing write apply to the decline too —
+  // hence the write must be explicitly scoped to the Yes-but-skill-failed case.
+  assert.ok(
+    /\*\*No\*\*[^\n]*write nothing at all/i.test(externalDocsBlock),
+    'commands/product.md substep 3 must state that the No branch writes nothing at all — otherwise declining still leaves a context/sources/ artifact'
+  );
+  assert.ok(
+    /\*\*Only in this failure case\*\*, write `context\/sources\/sources\.md` with `## Status: none`/.test(
+      externalDocsBlock
+    ),
+    'commands/product.md substep 3 must scope the `## Status: none` write to the Yes-but-skill-unavailable failure case only'
   );
 });
 
@@ -4056,5 +4073,99 @@ test('spec.md captures boundary/error behavior as rules in items 2 and 3', () =>
       'at least one acceptance criterion covering the failure path'
     ),
     'spec.md Step 3 item 3 must require failure-path criteria for boundary/error requirements'
+  );
+});
+
+test('every artifact-producing command writes before review, never gating the write on a reply', () => {
+  // The deliverable must never sit behind a confirmation an unattended
+  // `claude -p` run cannot answer. /awos:hire regressed exactly this way: a
+  // prose "confirm before proceeding" after its Step 2 inference table ended
+  // the turn, so context/product/hired-agents.md was never written at all.
+  // Every command that produces a durable artifact declares the contract, and
+  // no command may reintroduce a write-gating phrase. A genuine decision is
+  // fine — it just has to be an AskUserQuestion (which an answer-map can
+  // answer) placed before anything is written, not prose the run stalls on.
+  const producers = [
+    'product.md',
+    'roadmap.md',
+    'architecture.md',
+    'spec.md',
+    'tasks.md',
+    'hire.md',
+  ];
+  for (const name of producers) {
+    const body = readUtf8(path.join(commandsDir, name));
+    assert.ok(
+      /without waiting for approval|writing before the review is safe/i.test(
+        body
+      ),
+      `commands/${name} must state that it writes its artifact before the review, not after an approval`
+    );
+  }
+
+  // Phrases that gate a write on a user reply. "before saving" alone is
+  // allowed: architecture.md and spec.md use it for content checks the model
+  // performs itself, which block nothing.
+  const writeGates = [
+    /for approval before saving/i,
+    /approval before (saving|writing)/i,
+    /confirm before proceeding/i,
+    /wait for (the user's )?(approval|confirmation) before (saving|writing)/i,
+  ];
+  for (const name of fs
+    .readdirSync(commandsDir)
+    .filter((f) => f.endsWith('.md'))) {
+    const body = readUtf8(path.join(commandsDir, name));
+    for (const rx of writeGates) {
+      assert.ok(
+        !rx.test(body),
+        `commands/${name} gates a write on a user reply (${rx}) — write the artifact, then present it for review`
+      );
+    }
+  }
+});
+
+test('commands/spec.md mandates the when/then pair per acceptance criterion', () => {
+  // Step 3.3 described the three-part shape only abstractly ("a precondition
+  // (Given), a user action (When), a visible outcome (Then)"), which reads as
+  // guidance about content rather than a required sentence form — so a lone
+  // bullet would come out declarative ("The user submits X. They see Y.") and
+  // still look compliant. The behavioral proof is awos-qa's
+  // spec-uses-gwt-acceptance-criteria, which greps every AC bullet for
+  // `when … then` in one sentence; this lint pins the instruction that makes
+  // it hold, including the per-bullet re-read in the Definition of Done
+  // (checking the set as a whole is how a single offender survives).
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    /in that order, within a \*\*single sentence\*\*/.test(body),
+    'commands/spec.md Step 3.3 must require when and then in that order within a single sentence'
+  );
+  assert.ok(
+    /in every criterion/.test(body),
+    'commands/spec.md Step 3.3 must apply the when/then shape to every criterion, not just to the set'
+  );
+  assert.ok(
+    /one bullet at a time/.test(body),
+    'commands/spec.md Definition of Done must re-check acceptance criteria one bullet at a time'
+  );
+});
+
+test('hire.md treats an unanswered consent gate as withheld consent', () => {
+  // Installing needs permission; the coverage report does not. If the gate
+  // gets no answer the command must skip the install and keep going, rather
+  // than re-asking in prose or ending the turn — otherwise a run that could
+  // not answer produces no context/product/hired-agents.md at all.
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    /gets no answer[\s\S]{0,200}treat consent as withheld/i.test(body),
+    'commands/hire.md Step 4 must treat an unanswered consent gate as withheld consent'
+  );
+  assert.ok(
+    /install nothing that gate covered and continue/i.test(body),
+    'commands/hire.md Step 4 must continue to Step 6 after an unanswered gate instead of stopping'
+  );
+  assert.ok(
+    /do not re-ask the same question as plain text/i.test(body),
+    'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
   );
 });

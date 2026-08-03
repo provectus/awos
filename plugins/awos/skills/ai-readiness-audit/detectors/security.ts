@@ -21,10 +21,24 @@ import { ALL_HOOK_PATHS } from '../agent_tools.ts';
 const ENV_GITIGNORE_RX =
   /^\s*(\.env(\.\*|\*(\.local)?)?|\*\.env|\*\*\/\.env|\/\.env)\s*(?:#.*)?$/m;
 
-// Human-readable form of the patterns checked in ENV_GITIGNORE_RX, shared by
-// the PASS and FAIL evidence lines so they can't drift apart.
-const ENV_GITIGNORE_PATTERNS =
-  '.env, .env.*, .env*, .env*.local, *.env, **/.env, or /.env';
+// The patterns ENV_GITIGNORE_RX accepts, as the literal `.gitignore` lines a
+// reader would write. This list is the source of the evidence wording, and
+// det-security.test.ts asserts every entry is matched by the regex. A prose
+// twin retyped next to the regex is what let `.env*.local` stay unlisted
+// while the regex already accepted it — keeping the two in one place is what
+// stops the sentence lying about what was checked.
+export const ENV_GITIGNORE_PATTERNS = [
+  '.env',
+  '.env.*',
+  '.env*',
+  '.env*.local',
+  '*.env',
+  '**/.env',
+  '/.env',
+] as const;
+
+/** `a, b, or c` — the pattern list as it reads inside an evidence sentence. */
+const ENV_GITIGNORE_PATTERNS_LABEL = `${ENV_GITIGNORE_PATTERNS.slice(0, -1).join(', ')}, or ${ENV_GITIGNORE_PATTERNS.at(-1)}`;
 
 export function detectEnvGitignored(
   repoPath: string,
@@ -44,12 +58,12 @@ export function detectEnvGitignored(
 
   if (ENV_GITIGNORE_RX.test(content)) {
     return makeResult('PASS', 1, [
-      `.gitignore has a line matching ${ENV_GITIGNORE_PATTERNS}`,
+      `.gitignore has a line matching ${ENV_GITIGNORE_PATTERNS_LABEL}`,
     ]);
   }
 
   return makeResult('FAIL', 0, [
-    `.gitignore exists but no line matches ${ENV_GITIGNORE_PATTERNS}`,
+    `.gitignore exists but no line matches ${ENV_GITIGNORE_PATTERNS_LABEL}`,
   ]);
 }
 

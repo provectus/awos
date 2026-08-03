@@ -123,8 +123,8 @@ Your first goal is to determine the **topic** - the single, specific feature or 
     - After clarifying a requirement, turn it into a concrete, testable acceptance criterion.
     - Acceptance criteria must read as manual QA test scripts that a non-developer could execute. Describe only what is visible on screen and what the user does — never reference internal system behavior.
     - Each acceptance criterion follows the same three-part shape as the example below: a precondition (Given), a user action (When), and a visible outcome (Then). Include Given only when the precondition affects the outcome. The words **when** and **then** must both appear, in that order, within a **single sentence**, in every criterion — including short or seemingly obvious ones. Two ways it slips: splitting the pair across two sentences, and replacing it with a declarative retelling.
-      - ✅ "When the user submits the form with an empty name, then they see: 'Name is required.'"
-      - ❌ "The user submits the form with an empty name. They see: 'Name is required.'" — no `when`/`then` pair.
+      - ✅ "When the user submits the form with an empty name, then they see: 'Name is required.'" — one sentence carrying both `when` and `then`.
+      - ❌ "The user submits the form with an empty name. They see: 'Name is required.'" — the same content split into two declarative sentences, with neither keyword.
       - ❌ "Given the user is signed out, the sign-in dialog appears." — a Given with no `when`/`then` pair.
     - If any `[NEEDS CLARIFICATION: …]` markers remain on the parent requirement in **Functional Requirements**, ask clarifying questions and resolve the markers before writing acceptance criteria.
     - If a clarifying answer reveals a constraint or detail that belongs to the parent requirement (not just the acceptance criterion), update the requirement statement in **Functional Requirements** before continuing. The requirement and its acceptance criteria must agree on level of detail.

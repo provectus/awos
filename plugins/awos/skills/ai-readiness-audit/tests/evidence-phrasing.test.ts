@@ -32,7 +32,7 @@
  * fragments at each `${...}`.
  *
  * The positive-control corpus below is derived mechanically from
- * `git diff f7293e3 4f619bb` — every evidence string issue #156 actually
+ * this PR's base..head diff (issue #156) — every evidence string it actually
  * removed from detectors/*.ts — not hand-picked, so this test guards the
  * real diff rather than a curated sample of it (a straight revert of the
  * fix is provably caught, not just twenty sentences someone remembered to
@@ -543,7 +543,7 @@ function scanTargets(): Array<{ rel: string; abs: string }> {
 
 test('positive controls: every known pre-fix conclusion-style string is caught', () => {
   // The bulk of this corpus is mechanically derived — every evidence string
-  // `git diff f7293e3 4f619bb` removed from detectors/*.ts (extracted with
+  // this PR's base..head diff (issue #156) removed from detectors/*.ts (extracted with
   // this same scanner run over the old and new file contents, so the corpus
   // reflects what a reader of the diff actually saw, concatenation/
   // interpolation seams included). A handful of reviewer-constructed strings
@@ -571,7 +571,7 @@ test('positive controls: every known pre-fix conclusion-style string is caught',
     'contain invisible Unicode characters — potential hidden-instruction attack',
     'bot config present but drives nothing (no package-ecosystem entries)',
     'hook script(s) contain suspicious patterns',
-    // --- Round 3: mechanically derived from `git diff f7293e3 4f619bb` ----
+    // --- Round 3: mechanically derived from this PR's base..head diff -----
     // (detectors/application_security.ts)
     'no string-concatenated SQL query patterns found — parameterized queries appear to be used',
     'auth found in only 2 of 5 mutation route files — some endpoints may be unprotected',

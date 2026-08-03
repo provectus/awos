@@ -27,6 +27,14 @@ export const README_NAMES = [
   'readme.md',
 ];
 
+// The keywords SETUP_CONTENT_RX looks for, named so the evidence can cite
+// what was actually searched. Matching one of these is not proof that setup
+// instructions exist — a README reading "Bootstrapping: ./bootstrap.sh" has
+// them and matches nothing — so the evidence reports the keyword match, not
+// the conclusion.
+const SETUP_KEYWORDS = ['setup', 'install', 'usage', 'run', 'build'] as const;
+const SETUP_KEYWORDS_LABEL = SETUP_KEYWORDS.join('/');
+
 const SETUP_CONTENT_RX =
   /\b(install|setup|usage|getting[_\s-]started|quick[_\s-]start|run|build|deploy|prerequisite|requirement)\b/i;
 
@@ -69,7 +77,7 @@ export function detectRootReadme(
 
   if (!SETUP_CONTENT_RX.test(content)) {
     return makeResult('WARN', content.length, [
-      `${relPath} exists but contains no setup/install/usage instructions`,
+      `${relPath} has no ${SETUP_KEYWORDS_LABEL} keyword`,
     ]);
   }
 
@@ -80,7 +88,7 @@ export function detectRootReadme(
   }
 
   return makeResult('PASS', content.length, [
-    `${relPath} present with headings and setup instructions (${content.length} characters)`,
+    `${relPath} present with heading(s) and ${SETUP_KEYWORDS_LABEL} keyword match (${content.length} characters)`,
   ]);
 }
 

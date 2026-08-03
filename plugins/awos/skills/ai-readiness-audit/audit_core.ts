@@ -66,7 +66,11 @@ import {
 import { collect as collectCi } from './collectors/ci.ts';
 import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
-import { collect as collectIncidents } from './collectors/incidents.ts';
+import {
+  collect as collectIncidents,
+  deriveIncidentAggregates,
+  hasMeasurableIncidents,
+} from './collectors/incidents.ts';
 
 /**
  * Compute the connector-gated headline rows (Cycle time, MTTR) from the
@@ -95,6 +99,40 @@ export function computeDerivedDelivery(
     }
   }
   const out: DerivedDelivery = { cycle_time: {}, mttr: {} };
+
+  // MTTR headline — derived from the incidents artifact, mirroring the metric,
+  // so the headline can never contradict the DF-07 detail below it. A tracker
+  // that merely names an incident system is not incident data and plays no part.
+  // Computed independently of the tracker, so it fills even with no tracker.
+  try {
+    const inc = JSON.parse(
+      readFileSync(join(collectedDir, 'incidents.json'), 'utf8')
+    );
+    if (inc?.available) {
+      const incRaw = (inc.raw ?? {}) as {
+        incidents?: Parameters<typeof deriveIncidentAggregates>[0];
+        source_label?: string | null;
+      };
+      const agg = deriveIncidentAggregates(
+        incRaw.incidents,
+        inc.period?.lookback_days
+      );
+      const incLabel = incRaw.source_label ?? 'incident source';
+      if (agg.resolved_count > 0 && agg.median_duration_hours !== null) {
+        out.mttr.median_hours = round1(agg.median_duration_hours);
+        out.mttr.incidents_used = agg.resolved_count;
+        out.mttr.display_value = `${out.mttr.median_hours} h`;
+      } else if (agg.count > 0) {
+        out.mttr.note = `${incLabel} connected — no incident with a resolved recovery span`;
+      } else {
+        out.mttr.note = `${incLabel} connected — no incidents in window`;
+      }
+    }
+  } catch {
+    // No incidents artifact — leave out.mttr empty; the renderer shows the
+    // "needs incident connector" gated fallback.
+  }
+
   if (!tracker?.available) return out;
 
   const raw = (tracker.raw ?? {}) as Record<string, unknown>;
@@ -132,10 +170,6 @@ export function computeDerivedDelivery(
     out.cycle_time.note = `${label} connected — no tickets resolved in window`;
   }
 
-  const incident = raw.incident_source;
-  if (typeof incident === 'string' && incident) {
-    out.mttr.note = `incident source "${incident}" declared — no incident data mapped`;
-  }
   return out;
 }
 
@@ -604,20 +638,23 @@ export async function auditCore(
   const codeHostArt = readCollected('code_host');
   const incidentsArt = readCollected('incidents');
   const incidentsRaw = incidentsArt?.raw as
-    | { resolved_count?: number }
-    | undefined;
-  const trackerRaw = trackerArt?.raw as
-    | { incident_source?: unknown }
+    | { incidents?: Parameters<typeof deriveIncidentAggregates>[0] }
     | undefined;
   const topology: TopologyFlags = computeTopology(repoPath, {
     has_tracker: Boolean(trackerArt?.available),
     has_docs_connector: Boolean(docsArt?.available),
     // A real, measurable incident source: the connector-passed incidents
-    // artifact with at least one resolved incident, or a tracker that names an
-    // incident source. Gates DF-07 (category 1103); the git proxy stays SKIP.
+    // artifact with at least one resolved recovery span in the window (derived
+    // from raw.incidents[], same as the metric). Merely naming an incident
+    // system in the tracker does NOT award the category — that would grant
+    // DF-07 (category 1103) full weight on a git proxy with zero incident data.
+    // Without a measurable span category 1103 stays SKIP.
     has_incident_source: Boolean(
-      (incidentsArt?.available && (incidentsRaw?.resolved_count ?? 0) > 0) ||
-      (trackerArt?.available && trackerRaw?.incident_source)
+      incidentsArt?.available &&
+      hasMeasurableIncidents(
+        incidentsRaw?.incidents,
+        incidentsArt?.period?.lookback_days
+      )
     ),
     has_code_host: Boolean(codeHostArt?.available),
   });
@@ -1050,7 +1087,7 @@ const CONNECTABLE_SOURCES = new Set([
   'tracker',
   'docs',
   'ci',
-  'incident',
+  'incidents',
   'code_host',
 ]);
 
@@ -1061,7 +1098,7 @@ const COLLECTED_ARTIFACT_SOURCES = new Set([
   'ci',
   'tracker',
   'docs',
-  'incident',
+  'incidents',
   'code_host',
 ]);
 

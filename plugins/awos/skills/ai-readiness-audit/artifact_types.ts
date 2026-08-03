@@ -246,6 +246,11 @@ export interface DerivedDelivery {
     note?: string;
   };
   mttr: {
+    /** Median recovery time, e.g. "2 h". Absent when not measurable. */
+    display_value?: string;
+    median_hours?: number;
+    incidents_used?: number;
+    /** Honest state when the row stays empty (e.g. "PagerDuty connected — no incident with a resolved recovery span"). */
     note?: string;
   };
 }

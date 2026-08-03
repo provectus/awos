@@ -11,7 +11,12 @@
  * proxy and category 1103 stays SKIP.
  *
  * The measured signal is real recovery time: for each resolved incident,
- * resolved_at − started_at. The MTTR metric reports the median of those.
+ * resolved_at − started_at. The engine — not the orchestrator — derives the
+ * median: `deriveIncidentAggregates` is the one place that computes it, shared
+ * by this collector, the MTTR metric, and the topology gate. That mirrors the
+ * tracker collector, whose metrics derive their aggregates from `raw.tickets[]`
+ * rather than trusting a hand-written count, so an orchestrator arithmetic slip
+ * can never become a "measured" DORA number.
  */
 import { makeArtifact, type Period } from './_base.ts';
 
@@ -39,25 +44,117 @@ export interface IncidentsRaw {
   count: number;
   /** Incidents with a valid started→resolved span (the only ones MTTR can measure). */
   resolved_count: number;
+  /** Resolved incidents whose span could not be parsed (bad/zero/reversed timestamps). */
+  invalid_count: number;
   /** Median recovery time in hours over resolved incidents; null when none. */
   median_duration_hours: number | null;
   source_label: string | null;
 }
 
-function median(nums: number[]): number | null {
+export function median(nums: number[]): number | null {
   if (nums.length === 0) return null;
   const s = [...nums].sort((a, b) => a - b);
   const mid = Math.floor(s.length / 2);
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-/** Recovery time in hours for a resolved incident, or null when unmeasurable. */
-function durationHours(inc: IncidentRecord): number | null {
-  if (!inc.resolved_at) return null;
-  const start = Date.parse(inc.started_at);
+/**
+ * Recovery time in hours for a resolved incident, or null when unmeasurable.
+ * A record with no `resolved_at` is still open (not invalid). A record WITH a
+ * `resolved_at` but an unparseable, reversed, or zero-length span is invalid —
+ * `end <= start` is rejected so an auto-resolved alert flap (a 0h span) cannot
+ * band "elite".
+ */
+export function durationHours(inc: IncidentRecord): number | null {
+  if (inc.resolved_at == null || inc.resolved_at === '') return null;
+  const start = Date.parse(inc.started_at ?? '');
   const end = Date.parse(inc.resolved_at);
-  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return null;
   return (end - start) / 3_600_000;
+}
+
+/**
+ * Clamp incidents to the audit window, anchored to the NEWEST `started_at` —
+ * mirroring `clampToWindow` for CI runs and tracker tickets. Connectors
+ * routinely over-fetch (all-time incident history); without this clamp that
+ * history would shift the "audit-window" median and make it non-reproducible
+ * across differently-scoped fetches. Records with no parseable `started_at` are
+ * kept (they cannot be judged against the window). No lookback → no clamp.
+ */
+export function clampIncidentsToWindow(
+  incidents: IncidentRecord[],
+  lookbackDays?: number | null
+): { kept: IncidentRecord[]; dropped: number } {
+  if (!lookbackDays || lookbackDays <= 0)
+    return { kept: incidents, dropped: 0 };
+  let anchor = -Infinity;
+  const stamps = incidents.map((inc) => {
+    const t = Date.parse(inc.started_at ?? '');
+    if (Number.isFinite(t) && t > anchor) anchor = t;
+    return t;
+  });
+  if (!Number.isFinite(anchor)) return { kept: incidents, dropped: 0 };
+  const since = anchor - lookbackDays * 86_400_000;
+  const kept: IncidentRecord[] = [];
+  let dropped = 0;
+  incidents.forEach((inc, i) => {
+    if (Number.isFinite(stamps[i]) && stamps[i] < since) dropped++;
+    else kept.push(inc);
+  });
+  return { kept, dropped };
+}
+
+export interface IncidentAggregates extends IncidentsRaw {
+  /** In-window incidents kept after the window clamp. */
+  incidents: IncidentRecord[];
+  /** Incidents dropped for falling outside the audit window. */
+  dropped_out_of_window: number;
+}
+
+/**
+ * The single deterministic derivation of the MTTR aggregates from raw incident
+ * records. Clamps to the window, then over the in-window incidents: counts
+ * resolved-with-a-measurable-span, counts resolved-but-unmeasurable
+ * (`invalid_count`), and takes the median span. Shared by the collector, the
+ * MTTR metric, and the topology gate so the awarded category and the reported
+ * value can never diverge.
+ */
+export function deriveIncidentAggregates(
+  incidents: IncidentRecord[] | undefined | null,
+  lookbackDays?: number | null
+): IncidentAggregates {
+  const all = Array.isArray(incidents) ? incidents : [];
+  const { kept, dropped } = clampIncidentsToWindow(all, lookbackDays);
+  const durations: number[] = [];
+  let invalid = 0;
+  for (const inc of kept) {
+    if (inc.resolved_at == null || inc.resolved_at === '') continue; // still open
+    const d = durationHours(inc);
+    if (d === null) invalid++;
+    else durations.push(d);
+  }
+  return {
+    incidents: kept,
+    count: kept.length,
+    resolved_count: durations.length,
+    invalid_count: invalid,
+    median_duration_hours: median(durations),
+    source_label: null,
+    dropped_out_of_window: dropped,
+  };
+}
+
+/**
+ * Whether an incidents artifact carries at least one measurable recovery span
+ * within the window — the predicate that gates category 1103. Shared by the
+ * topology gate and the MTTR metric so "awarded" and "measured" stay in lock
+ * step.
+ */
+export function hasMeasurableIncidents(
+  incidents: IncidentRecord[] | undefined | null,
+  lookbackDays?: number | null
+): boolean {
+  return deriveIncidentAggregates(incidents, lookbackDays).resolved_count > 0;
 }
 
 export function collect(
@@ -75,16 +172,16 @@ export function collect(
     );
   }
 
-  const incidents = connector.incidents ?? [];
-  const durations = incidents
-    .map(durationHours)
-    .filter((d): d is number => d !== null);
-
+  const agg = deriveIncidentAggregates(
+    connector.incidents,
+    period.lookback_days
+  );
   const raw: IncidentsRaw = {
-    incidents,
-    count: incidents.length,
-    resolved_count: durations.length,
-    median_duration_hours: median(durations),
+    incidents: agg.incidents,
+    count: agg.count,
+    resolved_count: agg.resolved_count,
+    invalid_count: agg.invalid_count,
+    median_duration_hours: agg.median_duration_hours,
     source_label: connector.source_label ?? null,
   };
   return makeArtifact('incidents', true, null, period, raw);

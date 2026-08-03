@@ -1313,6 +1313,7 @@ function normalizedDelivery(audit: AuditJson): DeliveryMetric[] {
   rows.push({
     label: 'MTTR',
     gated: 'incident',
+    ...(dd.mttr.display_value ? { display_value: dd.mttr.display_value } : {}),
     ...(dd.mttr.note ? { note: dd.mttr.note } : {}),
   });
   return rows;

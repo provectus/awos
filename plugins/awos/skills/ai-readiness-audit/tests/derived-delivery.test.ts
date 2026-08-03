@@ -26,6 +26,16 @@ function writeTracker(dir: string, artifact: Record<string, unknown>): string {
   return collected;
 }
 
+function writeIncidents(
+  dir: string,
+  artifact: Record<string, unknown>
+): string {
+  const collected = join(dir, 'collected');
+  mkdirSync(collected, { recursive: true });
+  writeFileSync(join(collected, 'incidents.json'), JSON.stringify(artifact));
+  return collected;
+}
+
 const DAY = 86_400_000;
 const t0 = Date.parse('2026-06-01T00:00:00Z');
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -80,9 +90,47 @@ test('computeDerivedDelivery: connected tracker without changelogs yields the ho
       'Jira via Atlassian MCP connected — per-ticket status history not fetched',
       'the note must name the connected system, never "needs ticketing connector"'
     );
-    assert.ok(
-      dd.mttr.note?.includes('pagerduty'),
-      'declared incident_source must surface in the MTTR note'
+    assert.equal(
+      dd.mttr.note,
+      undefined,
+      'a tracker that merely names an incident_source is not incident data — the MTTR headline stays at the renderer default; only a real incidents artifact fills it'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('computeDerivedDelivery: a real incidents artifact fills the MTTR headline value', () => {
+  const dir = tmpDir('awos-dd-mttr-');
+  try {
+    const collected = writeIncidents(dir, {
+      source: 'incidents',
+      available: true,
+      period: { lookback_days: 90 },
+      raw: {
+        // Records only — the engine derives the median (spans 1h, 3h → 2h).
+        incidents: [
+          { id: 'A', started_at: iso(t0), resolved_at: iso(t0 + 3_600_000) },
+          {
+            id: 'B',
+            started_at: iso(t0 + DAY),
+            resolved_at: iso(t0 + DAY + 3 * 3_600_000),
+          },
+        ],
+        source_label: 'PagerDuty',
+      },
+    });
+    const dd = computeDerivedDelivery(collected);
+    assert.equal(
+      dd.mttr.display_value,
+      '2 h',
+      'the headline shows the engine-derived median recovery time'
+    );
+    assert.equal(dd.mttr.incidents_used, 2);
+    assert.equal(
+      dd.mttr.note,
+      undefined,
+      'a measured value carries no gated note'
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

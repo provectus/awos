@@ -520,20 +520,37 @@ Feeds MTTR (DF-07). Source-agnostic: normalise incidents from whatever the proje
 }
 ```
 
-### IncidentsConnector
+### Writing `collected/incidents.json`
 
-The object the orchestrator assembles and writes to `collected/incidents.json`:
+Wrap the incidents in the standard collector envelope and write it to `collected/incidents.json`. You author only `incidents[]` and `source_label`:
 
 ```jsonc
 {
-  "incidents": [
-    /* IncidentRecord[] */
-  ],
-  "source_label": "PagerDuty", // human label for the report, e.g. "GitHub incident labels"
+  "source": "incidents",
+  "available": true,
+  "reason_if_absent": null,
+  "period": {
+    "bucket_days": 30,
+    "lookback_days": 90,
+    "history_available_days": 90,
+  },
+  "raw": {
+    "incidents": [
+      /* IncidentRecord[] */
+    ],
+    "source_label": "PagerDuty", // human label for the report, e.g. "GitHub incident labels"
+  },
 }
 ```
 
-Only incidents with a valid `started_at → resolved_at` span are measured; the engine reports the **median** recovery time in hours and upgrades reliability to `maximal`. Query the same window as the other connectors (`window_anchor − lookback_days`).
+**The engine derives the median — you do not.** Like the tracker collector (whose metrics derive their counts from `raw.tickets[]`), the MTTR metric computes the recovery aggregates itself from `raw.incidents[]`. Do not hand-write the fields below — the engine ignores any it finds and recomputes them, so a transcription slip cannot become a "measured" DORA number:
+
+- `count` — incidents in the audit window
+- `resolved_count` — incidents with a measurable `started_at → resolved_at` span
+- `invalid_count` — resolved incidents whose span could not be parsed (missing, reversed, or zero-length timestamps)
+- `median_duration_hours` — median recovery time in hours (the MTTR value)
+
+Only incidents with a valid `started_at → resolved_at` span are measured; the engine clamps them to the audit window (`started_at` within `window_anchor − lookback_days`), reports the **median** recovery time in hours, and upgrades reliability to `maximal`. Query the same window as the other connectors.
 
 **Map semantically from the live tool response, not from a fixed field list.** Call the source's MCP/CLI, read the shape it actually returns, and map by meaning: whatever field marks **when the incident began** → `started_at`, **when service was restored** → `resolved_at`, and the severity/priority label → `severity` (leave `resolved_at` null for still-open incidents). The names below are only the _typical_ ones as of writing — if the live response differs, trust it over this list:
 

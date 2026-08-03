@@ -73,9 +73,9 @@ Measures how fast and how safely change flows from commit to the default branch,
 
 ### DF-07: Mean time to recovery
 
-- **What:** Median time to recovery from incidents. Measured from a real incident source — the incidents collector (`collectors/incidents.ts`), fed by the orchestrator from PagerDuty/OpsGenie/incident.io, Statuspage, or code-host incident labels (see `references/connector-shapes.md`). Category 1103 is awarded when at least one incident has a resolved recovery span. Without a source it falls back to a git proxy (merge branch-lifetime) and stays SKIP. Always included — never omitted from the artifact.
+- **What:** Median time to recovery from incidents. Measured from a real incident source — the incidents collector (`collectors/incidents.ts`), fed by the orchestrator from PagerDuty/OpsGenie/incident.io, Statuspage, or code-host incident labels (see `references/connector-shapes.md`). Category 1103 is awarded when at least one incident has a resolved recovery span. Without a measurable source, MTTR falls back to a git proxy (merge branch-lifetime) for context and category 1103 stays SKIP. Always included — never omitted from the artifact.
 - **How:** `node "<engine cli path>" metric mttr <repoPath> context/audits/<date>/collected`
-- **Pass (OK):** metric returns `status: "OK"` — MTTR computed (git-proxy or real source)
-- **Skip:** metric returns `status: "SKIP"` — git source unavailable (the only valid SKIP condition)
+- **Pass (OK):** `has_incident_source` is true — a real incident source with at least one resolved recovery span — so category 1103 is awarded and MTTR is the median span (maximal reliability).
+- **Skip:** `has_incident_source` is false — no incident source with a measurable span. Category 1103 is SKIP. The `mttr` metric itself never returns `SKIP`; it still reports the git-proxy value for context, but the category is not awarded without real incident data.
 - **Severity:** high
 - **Category:** 1103

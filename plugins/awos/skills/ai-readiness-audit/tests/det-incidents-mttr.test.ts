@@ -1,9 +1,11 @@
 /**
  * End-to-end: the incidents connector drives DF-07 (MTTR) through audit-core +
  * enrich. Builds a git repo, runs the real bundled engine with no incident
- * source (DF-07 SKIP), then writes a connector-shaped collected/incidents.json
- * (as the orchestrator would after fetching PagerDuty/etc.) and re-runs enrich —
- * DF-07 must become a measured, awarded, maximal-reliability result.
+ * source (DF-07 SKIP), then writes the records-only collected/incidents.json the
+ * recipe documents (raw.incidents[] + source_label, no pre-derived aggregates —
+ * as the orchestrator would after fetching PagerDuty/etc.) and re-runs enrich.
+ * The engine must derive the median itself and DF-07 must become a measured,
+ * awarded, maximal-reliability result.
  *
  * Shells to dist/cli.js so it exercises the shipped binary; run
  * `npm run build:audit-engine` first (the suite's standard prerequisite).
@@ -60,8 +62,9 @@ test('incidents connector drives DF-07 from SKIP to a measured MTTR via enrich',
   assert.ok(base, 'DF-07 must be present in the baseline audit');
   assert.equal(base!.status, 'SKIP', 'no incident source → DF-07 SKIP');
 
-  // Orchestrator writes the normalized incidents artifact (as if from PagerDuty),
-  // then enrich re-scores. Resolved spans: 0.5h, 2h, 6h → median 2h.
+  // Orchestrator writes the records-only incidents artifact (as if from
+  // PagerDuty) — no pre-derived aggregates. Resolved spans: 0.5h, 2h, 6h; the
+  // engine must derive the median (2h) itself. Then enrich re-scores.
   writeFileSync(
     join(out, 'collected', 'incidents.json'),
     JSON.stringify({
@@ -96,9 +99,6 @@ test('incidents connector drives DF-07 from SKIP to a measured MTTR via enrich',
             resolved_at: null,
           },
         ],
-        count: 4,
-        resolved_count: 3,
-        median_duration_hours: 2,
         source_label: 'PagerDuty',
       },
     })
@@ -125,5 +125,54 @@ test('incidents connector drives DF-07 from SKIP to a measured MTTR via enrich',
   assert.ok(
     (after!.weight_awarded as number) > 0,
     'DF-07 must award weight once a real incident source is present'
+  );
+});
+
+test('a tracker that merely names an incident source does NOT award DF-07', () => {
+  // Pins the dropped tracker disjunct: category 1103 is granted only on a
+  // measured recovery span, never because a tracker declares incident_source —
+  // otherwise DF-07 would score full weight on the git proxy with zero data.
+  const repo = tmpDir('inc-tracker-');
+  gitAs(repo, ['init', '-q', '-b', 'main'], '2026-07-01T00:00:00', ...WHO);
+  for (let i = 1; i <= 4; i++) {
+    writeFileSync(join(repo, `f${i}.txt`), `v${i}`);
+    gitAs(repo, ['add', '.'], `2026-07-0${i}T00:00:00`, ...WHO);
+    gitAs(
+      repo,
+      ['commit', '-qm', `feat: change ${i}`],
+      `2026-07-0${i}T00:00:00`,
+      ...WHO
+    );
+  }
+  const out = join(repo, 'out');
+  execFileSync('node', [ENGINE, 'audit-core', repo, out], { stdio: 'ignore' });
+
+  // A tracker naming an incident system — but no incidents artifact at all.
+  writeFileSync(
+    join(out, 'collected', 'tracker.json'),
+    JSON.stringify({
+      source: 'tracker',
+      available: true,
+      reason_if_absent: null,
+      period: {
+        bucket_days: 30,
+        lookback_days: 90,
+        history_available_days: 90,
+      },
+      raw: { tickets: [], incident_source: 'pagerduty' },
+    })
+  );
+  execFileSync('node', [ENGINE, 'enrich', repo, out], { stdio: 'ignore' });
+
+  const after = df07(out);
+  assert.ok(after, 'DF-07 must be present after enrich');
+  assert.equal(
+    after!.status,
+    'SKIP',
+    'a tracker-declared incident source with no incident data leaves DF-07 SKIP'
+  );
+  assert.ok(
+    !((after!.weight_awarded as number) > 0),
+    'no weight is awarded without a measured recovery span'
   );
 });

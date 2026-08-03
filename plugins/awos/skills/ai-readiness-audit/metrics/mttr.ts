@@ -7,16 +7,24 @@
  * categories_awarded: [1103] when topology.has_incident_source is true
  * reliability_default: "not-reliable"
  *
- * This metric NEVER SKIPS. It always falls back to a git-proxy when no
- * incident data source is available. The proxy computes intervals between
- * consecutive revert/hotfix/rollback merge commits on the default branch.
+ * This metric NEVER SKIPS. It reports one of two values, in precedence order:
  *
- * Reliability: the VALUE is always the git branch-lifetime proxy — no MTTR is
- * ever computed from incident data here — so reliability/confidence stay at
- * the proxy's minimal level ("not-reliable", low confidence, git-proxy note)
- * even when tracker.raw.incident_source is present. Declaring an incident
- * source gates category awarding (topology.has_incident_source), but it does
- * not make the proxy number any more trustworthy.
+ *   1. Real incident source (maximal reliability). When a connector-passed
+ *      incidents artifact is present with at least one incident that has a
+ *      measurable started→resolved span, MTTR is the median of those spans.
+ *      The median is derived HERE from raw.incidents[] (via the collector's
+ *      deriveIncidentAggregates) — any resolved_count / median_duration_hours
+ *      the orchestrator may have written is advisory and ignored, so a
+ *      transcription slip cannot masquerade as a measured DORA number. The
+ *      spans are clamped to the audit window.
+ *
+ *   2. Git branch-lifetime proxy (not-reliable) — the fallback when no incident
+ *      source is measurable. Individual merge records carry no type labels, so
+ *      recovery-style merges cannot be isolated; the proxy is a uniform measure
+ *      over ALL first-parent merges — each record's (merged_at −
+ *      branch_first_commit_at), i.e. how long the branch lived before merging —
+ *      and its median. Declaring an incident source without resolvable data
+ *      does not upgrade this number; category 1103 simply stays unawarded.
  *
  * DORA band thresholds (band.mttr in standards.toml):
  *   elite  → < 1 hour    (median_hours < 1)
@@ -25,16 +33,10 @@
  *   low    → >= 1 week   (median_hours >= 168)
  *
  * Source shapes:
- *   collectedDir/git.json     — always read (provides git-proxy via revert merge timestamps)
- *   collectedDir/tracker.json — read when present (incident_source field upgrades reliability)
- *
- * Git-proxy computation:
- *   1. The git collector stores merge_records as { merged_at, branch_first_commit_at }.
- *      Individual merge records do not carry type labels, so recovery-style merges
- *      cannot be isolated; we use a uniform proxy across all first-parent merges:
- *      the interval for each record (merged_at − branch_first_commit_at), which
- *      approximates "how long did this branch live before merging".
- *   2. Compute median of those intervals in hours.
+ *   collectedDir/incidents.json — primary; raw.incidents[] drives the measured value
+ *   collectedDir/git.json       — always read (provides the git-proxy fallback)
+ *   collectedDir/tracker.json   — read when present (an incident_source label adds
+ *                                 an informational note on the proxy path only)
  *
  * SKIP: never. Returns OK with null value when no merge records exist (minimal git history).
  */
@@ -52,6 +54,7 @@ import {
   type MergeRecord,
 } from './_merge_records.ts';
 import { median, scoreFromConfig, scoringFor } from './_score.ts';
+import { deriveIncidentAggregates } from '../collectors/incidents.ts';
 
 /** Map median hours to a DORA MTTR band label. */
 function mttrBand(medianHours: number): string {
@@ -67,25 +70,34 @@ export function compute(
   topology: Record<string, boolean>
 ): MetricResult {
   // --- Real incident source (connector-passed) takes precedence over the git
-  //     proxy. When the orchestrator has fetched a real incident source and at
-  //     least one incident has a measurable started→resolved span, MTTR is the
-  //     median of those spans — a first-class measurement, reliability maximal.
+  //     proxy. The median is derived HERE from raw.incidents[] (any aggregates
+  //     the orchestrator wrote are advisory and ignored), clamped to the audit
+  //     window, so the reported value is always the engine's own arithmetic. ---
+  let incidentsNoSpanNote: string | null = null;
   const incidentsRead = readArtifact(collectedDir, 'incidents');
   if (!('error' in incidentsRead) && incidentsRead.artifact?.available) {
     const iraw = (incidentsRead.artifact.raw ?? {}) as {
-      resolved_count?: number;
-      median_duration_hours?: number | null;
+      incidents?: Parameters<typeof deriveIncidentAggregates>[0];
       source_label?: string | null;
     };
-    const resolved = iraw.resolved_count ?? 0;
-    if (typeof iraw.median_duration_hours === 'number' && resolved > 0) {
-      const medianHours = iraw.median_duration_hours;
+    const lookbackDays = incidentsRead.artifact.period?.lookback_days as
+      | number
+      | undefined;
+    const agg = deriveIncidentAggregates(iraw.incidents, lookbackDays);
+    if (agg.resolved_count > 0 && agg.median_duration_hours !== null) {
+      const medianHours = agg.median_duration_hours;
       const band = mttrBand(medianHours);
       const categories = awardCategories(standards, 'mttr', topology);
+      const measured = agg.resolved_count;
+      const total = measured + agg.invalid_count;
+      const ofNote =
+        agg.invalid_count > 0
+          ? ` (of ${total} resolved; ${agg.invalid_count} lacked a parseable span)`
+          : '';
       const reliability: Reliability = {
         tag: 'maximal',
         confidence: 'HIGH',
-        note: `measured from ${resolved} resolved incident${resolved === 1 ? '' : 's'}${iraw.source_label ? ` (${iraw.source_label})` : ''}`,
+        note: `measured from ${measured} resolved incident${measured === 1 ? '' : 's'}${iraw.source_label ? ` (${iraw.source_label})` : ''}${ofNote}`,
       };
       const score = scoreFromConfig(medianHours, scoringFor(standards, 'mttr'));
       return makeMetricResult(
@@ -98,11 +110,19 @@ export function compute(
         [],
         {
           band,
-          expression: `median ${medianHours.toFixed(1)}h MTTR over ${resolved} incident${resolved === 1 ? '' : 's'} (${band})`,
+          expression: `median ${medianHours.toFixed(1)}h MTTR over ${measured} incident${measured === 1 ? '' : 's'} (${band})`,
           score,
           confidence: 0.9,
         }
       );
+    }
+    // Incidents artifact present but nothing measurable — surface WHY on the
+    // git-proxy fallback below rather than silently reading "no incident data".
+    if (agg.count > 0) {
+      incidentsNoSpanNote =
+        agg.invalid_count > 0
+          ? `incident source connected — ${agg.count} incident${agg.count === 1 ? '' : 's'} but none had a parseable recovery span (${agg.invalid_count} unparseable)`
+          : `incident source connected — no incident with a resolved recovery span in the window`;
     }
   }
 
@@ -216,6 +236,9 @@ export function compute(
   if (incidentSource) {
     reliability = appendReliabilityNote(reliability, trackerPartialNote);
   }
+  // An incidents artifact that carried records but no measurable span is worth
+  // saying out loud — otherwise a whole-batch mapping mistake reads as "no data".
+  reliability = appendReliabilityNote(reliability, incidentsNoSpanNote);
 
   // Score curve lives in standards.toml [category.mttr.scoring].
   const score =

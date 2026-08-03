@@ -3382,7 +3382,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // behavior changes — always as one deliberate commit moving three files
 // together: plugin.json, marketplace.json, and this pinned literal. The pin
 // exists to force that deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.3';
+const EXPECTED_PLUGIN_VERSION = '2.4.4';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -4059,11 +4059,14 @@ test('spec.md captures boundary/error behavior as rules in items 2 and 3', () =>
   );
 });
 
-test('connector-shapes.md documents every IncidentRecord field the collector defines', () => {
+test('connector-shapes.md documents every incidents field the collector defines', () => {
   // The incidents recipe must not drift from the collector's actual contract:
-  // every field on the IncidentRecord / IncidentsConnector interfaces in
-  // collectors/incidents.ts has to appear in references/connector-shapes.md,
-  // so a renamed/added field can't silently leave the recipe stale.
+  // every field on the IncidentRecord / IncidentsConnector / IncidentsRaw
+  // interfaces in collectors/incidents.ts has to appear in
+  // references/connector-shapes.md, so a renamed/added field can't silently
+  // leave the recipe stale. IncidentsRaw carries the DERIVED fields the engine
+  // reports (resolved_count, median_duration_hours, …) — the very contract the
+  // recipe must explain — so it is guarded alongside the input shapes.
   const ts = readUtf8(
     path.join(
       repoRoot,
@@ -4086,8 +4089,14 @@ test('connector-shapes.md documents every IncidentRecord field the collector def
   const fields = [
     ...fieldsOf('IncidentRecord'),
     ...fieldsOf('IncidentsConnector'),
+    ...fieldsOf('IncidentsRaw'),
   ];
-  const missing = fields.filter((f) => !doc.includes(f));
+  // Match each field as a standalone identifier, not a raw substring: 'id' must
+  // not be satisfied by the word "incident", nor 'count' by "resolved_count" or
+  // 'source' by ordinary prose — the fields most likely to drift unnoticed.
+  const documented = (f) =>
+    new RegExp(`(?<![A-Za-z0-9_])${f}(?![A-Za-z0-9_])`).test(doc);
+  const missing = [...new Set(fields)].filter((f) => !documented(f));
   assert.deepEqual(
     missing,
     [],

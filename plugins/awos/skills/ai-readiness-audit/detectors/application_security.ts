@@ -5,6 +5,7 @@ import {
   hasMatch,
   readTextSafe,
   SOURCE_IGNORE,
+  formatMeasuredPct,
 } from './_base.ts';
 import { relative } from 'node:path';
 import { ALL_SOURCE_GLOBS } from '../languages.ts';
@@ -586,9 +587,11 @@ export function detectAuthOnMutations(
   const coverage = filesWithAuth.length / filesWithMutations.length;
   // score: continuous auth-coverage ratio clamped to [0,1]
   const score = Math.min(1, Math.max(0, coverage));
-  const coveragePct = (coverage * 100).toFixed(1);
   const passAtPct = Math.round(passAt * 100);
   const warnAtPct = Math.round(warnAt * 100);
+  // Rendered so it can never read as equal to a threshold the same sentence
+  // calls it "below" — see formatMeasuredPct.
+  const coveragePct = formatMeasuredPct(coverage, passAtPct, warnAtPct);
 
   if (coverage >= passAt) {
     return makeResult(

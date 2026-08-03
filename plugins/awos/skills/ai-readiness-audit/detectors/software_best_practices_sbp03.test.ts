@@ -45,11 +45,20 @@ test('SBP-03 (issue #156): measured annotation ratio renders at one decimal, nev
 
     // The measured value and the threshold it is compared against must
     // never render as the same number — that is an unverifiable sentence.
-    assert.doesNotMatch(
-      text,
-      /(\d+)% — below the \1%/,
-      'the measured value and the threshold it is compared against must never render as the same number'
-    );
+    //
+    // Compared numerically, not by textual backreference: `/(\d+)% — below
+    // the \1%/` cannot see "30.0% — below the 30% warn threshold", because
+    // "30.0" and "30" differ as text while naming the same number. That blind
+    // spot let the residual collision survive one-decimal rendering.
+    for (const [, measured, threshold] of text.matchAll(
+      /(\d+(?:\.\d+)?)% — below the (\d+(?:\.\d+)?)%/g
+    )) {
+      assert.notEqual(
+        Number(measured),
+        Number(threshold),
+        `the measured value and the threshold it is called "below" must never render as the same number; got "${measured}% — below the ${threshold}%"`
+      );
+    }
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }

@@ -4,6 +4,7 @@ import {
   iterFiles,
   readTextSafe,
   presencePass,
+  formatMeasuredPct,
 } from './_base.ts';
 import { basename, relative } from 'node:path';
 import { CI_FILES, isCiWorkflowPath } from '../ci_platforms.ts';
@@ -238,9 +239,11 @@ export function detectTypeSafety(
   const ratio = samplePythonAnnotationRatio(repoPath);
   if (ratio !== null) {
     const pct = Math.round(ratio * 100);
-    const pctDisplay = (ratio * 100).toFixed(1);
     const passAtPct = Math.round(passAt * 100);
     const warnAtPct = Math.round(warnAt * 100);
+    // Rendered so it can never read as equal to a threshold the same
+    // sentence calls it "below" — see formatMeasuredPct.
+    const pctDisplay = formatMeasuredPct(ratio, passAtPct, warnAtPct);
     if (ratio >= passAt) {
       return makeResult('PASS', pct, [
         `${pctDisplay}% of Python function signatures carry return-type annotations in a sample of up to 20 .py files (single-line signatures) — at or above the ${passAtPct}% pass threshold (no mypy/pyright config found)`,

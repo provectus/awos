@@ -25,6 +25,44 @@ function tmp(): string {
 // detectTestInfrastructure (2500 — QA-01, computed)
 // ---------------------------------------------------------------------------
 
+// One-decimal rendering shrank the measured-vs-threshold collision without
+// closing it: 149 test files over 497 source modules is 29.9799%, which used
+// to render "30.0% — below the 30% warn threshold". Both numbers name 30, so
+// the sentence contradicted itself while a textual backreference guard saw
+// two different strings. Pinned with the exact ratio from the review.
+test('QA-01: a ratio just under a threshold never renders as that threshold', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'src'), { recursive: true });
+  mkdirSync(join(t, 'tests'), { recursive: true });
+  for (let i = 0; i < 497; i++) {
+    writeFileSync(join(t, 'src', `mod${i}.py`), 'def f():\n    return 1\n');
+  }
+  for (let i = 0; i < 149; i++) {
+    writeFileSync(
+      join(t, 'tests', `test_mod${i}.py`),
+      'def test_f():\n    pass\n'
+    );
+  }
+
+  const r = detectTestInfrastructure(t);
+  const text = (r.evidence ?? []).join(' | ');
+
+  for (const [, measured, threshold] of text.matchAll(
+    /(\d+(?:\.\d+)?)% — below the (\d+(?:\.\d+)?)%/g
+  )) {
+    assert.notEqual(
+      Number(measured),
+      Number(threshold),
+      `149/497 is 29.98%, which must not render as the 30% threshold it is called "below"; got "${measured}% — below the ${threshold}%"`
+    );
+  }
+  assert.match(
+    text,
+    /29\.98%/,
+    `expected the measured ratio to gain a decimal to clear the threshold; got ${JSON.stringify(r.evidence)}`
+  );
+});
+
 test('QA-01: no source files returns SKIP', () => {
   const t = tmp();
   writeFileSync(join(t, 'README.md'), '# project\n');

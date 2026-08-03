@@ -4,6 +4,7 @@ import {
   readTextSafe,
   scanForSignal,
   SOURCE_IGNORE as BASE_SOURCE_IGNORE,
+  formatMeasuredPct,
 } from './_base.ts';
 import { existsSync } from 'node:fs';
 import { join, relative, basename } from 'node:path';
@@ -108,14 +109,12 @@ export function detectTestInfrastructure(
   }
 
   const ratio = testCount / sourceCount;
-  // One decimal for the measured value everywhere it's rendered in this
-  // check: at integer precision a measured ratio can round to the same
-  // display value as the (also rounded) threshold it's being compared
-  // against, producing a self-contradictory sentence like "70% — below the
-  // 70% pass threshold". Using one decimal consistently, rather than only
-  // in the threshold-comparison lines, keeps every evidence line for the
-  // same ratio agreeing with the others.
-  const pctDisplay = (ratio * 100).toFixed(1);
+  // One rendering of the measured value, reused by every evidence line in
+  // this check so they agree with each other, and guaranteed not to read as
+  // equal to either threshold a line can call it "below" — one decimal alone
+  // shrank that collision without closing it (29.98% renders "30.0%" against
+  // a 30% threshold). See formatMeasuredPct.
+  const pctDisplay = formatMeasuredPct(ratio, thresholdPct, warnAtPct);
   // score: continuous coverage proxy clamped to [0,1]
   const score = Math.min(1, Math.max(0, ratio));
 

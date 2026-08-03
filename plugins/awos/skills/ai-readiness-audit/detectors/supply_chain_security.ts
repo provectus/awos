@@ -556,6 +556,11 @@ export function detectDependencyAutomationReview(
   _params?: unknown
 ): ReturnType<typeof makeResult> {
   const foundFiles: string[] = [];
+  // A config that exists but cannot be read says nothing about automerge
+  // either way. Tracking it separately keeps it out of any claim that
+  // automerge is disabled — the evidence reports only what was inspected.
+  const readFiles: string[] = [];
+  const unreadableFiles: string[] = [];
   let automergeEnabled = false;
 
   for (const relPath of [...DEPENDABOT_PATHS, ...RENOVATE_PATHS]) {
@@ -563,7 +568,11 @@ export function detectDependencyAutomationReview(
     if (!existsSync(full)) continue;
     foundFiles.push(relPath);
     const content = readTextSafe(full);
-    if (content === null) continue;
+    if (content === null) {
+      unreadableFiles.push(relPath);
+      continue;
+    }
+    readFiles.push(relPath);
     if (AUTOMERGE_ENABLED_RX.test(content)) {
       automergeEnabled = true;
     }
@@ -582,9 +591,18 @@ export function detectDependencyAutomationReview(
     ]);
   }
 
-  return makeResult('PASS', foundFiles.length, [
-    `dependency automation configured without automerge enabled: ${foundFiles.join(', ')}`,
-    ...foundFiles.map((f) => `config: ${f}`),
+  // Every config found was unreadable: automerge is unknown, not absent.
+  if (readFiles.length === 0) {
+    return makeResult('WARN', foundFiles.length, [
+      'dependency automation config found, but none of the config files could be read — automerge state unknown',
+      ...unreadableFiles.map((f) => `unreadable config: ${f}`),
+    ]);
+  }
+
+  return makeResult('PASS', readFiles.length, [
+    `dependency automation configured; no \`automerge: true\` pattern was found in the config file(s) read: ${readFiles.join(', ')}`,
+    ...readFiles.map((f) => `config: ${f}`),
+    ...unreadableFiles.map((f) => `unreadable config (not inspected): ${f}`),
   ]);
 }
 

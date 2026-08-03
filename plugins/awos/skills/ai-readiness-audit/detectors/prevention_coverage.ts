@@ -586,13 +586,13 @@ export function detectTestCoverageGate(
 
   if (coverageHits.length > 0) {
     return makeResult('PASS', testHits.length + coverageHits.length, [
-      'CI runs the test suite, and a coverage-threshold pattern found (in the CI workflow or a coverage config file)',
+      'CI runs the test suite, and a coverage-threshold pattern was found (in the CI workflow or a coverage config file)',
       ...testHits.slice(0, 3).map((h) => `test gate: ${h}`),
       ...coverageHits.slice(0, 3).map((h) => `coverage gate: ${h}`),
     ]);
   }
   return makeResult('WARN', testHits.length, [
-    'CI runs the test suite, and no coverage-threshold pattern found (in the CI workflow or a coverage config file)',
+    'CI runs the test suite, and no coverage-threshold pattern was found (in the CI workflow or a coverage config file)',
     ...testHits.slice(0, 5).map((h) => `test gate: ${h}`),
   ]);
 }

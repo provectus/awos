@@ -30,6 +30,8 @@ Every metric function returns a `MetricResult` (the interface in `_base.ts`, sna
 }
 ```
 
+`evidence_per_code` and `expression` follow the same phrasing contract as detector `evidence` — see [Evidence phrasing](../detectors/README.md#evidence-phrasing).
+
 ## Rules
 
 ### Read-only from artifacts

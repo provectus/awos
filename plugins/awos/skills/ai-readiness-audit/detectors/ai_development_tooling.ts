@@ -41,7 +41,7 @@ export function detectCustomCommands(
     ]);
   }
   return makeResult('FAIL', 0, [
-    'no custom command or rule files found in any agentic tool directory — define workflows for common tasks',
+    'no *.md files found under any agentic tool command/rule directory',
   ]);
 }
 
@@ -142,7 +142,7 @@ export function detectMcpConfig(
     ]);
   }
   return makeResult('FAIL', 0, [
-    'no MCP configuration found — no MCP servers configured for any agentic coding tool',
+    `no MCP configuration file found — checked for ${ALL_MCP_CONFIG_PATHS.join(', ')}; none present`,
     'note: only repo-committed MCP config is visible here; org/MGM-pushed MCP servers configured outside the repo are not detectable and may still be in use',
   ]);
 }
@@ -236,7 +236,7 @@ export function detectClaudeHooks(
 // it; the wrapper script is the run mechanism.
 // ---------------------------------------------------------------------------
 
-const ROOT_RUN_FILES = [
+export const ROOT_RUN_FILES = [
   'Makefile',
   'docker-compose.yml',
   'docker-compose.yaml',
@@ -295,9 +295,7 @@ export function detectCanRunApp(
   }
 
   return makeResult('FAIL', 0, [
-    'no run mechanism found — no Makefile, docker-compose, package.json start/dev script, ' +
-      'build-tool wrapper (mvnw/gradlew), manage.py, or Procfile; ' +
-      'Claude Code cannot run the application without human involvement',
+    `no run mechanism found at repo root — checked for ${ROOT_RUN_FILES.join(', ')}, and package.json start/dev script; none present`,
   ]);
 }
 

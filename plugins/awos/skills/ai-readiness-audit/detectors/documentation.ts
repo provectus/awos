@@ -19,13 +19,21 @@ import { join, relative, dirname } from 'node:path';
 // FAIL  if no README found.
 // ---------------------------------------------------------------------------
 
-const README_NAMES = [
+export const README_NAMES = [
   'README.md',
   'README.rst',
   'README.txt',
   'Readme.md',
   'readme.md',
 ];
+
+// The keywords SETUP_CONTENT_RX looks for, named so the evidence can cite
+// what was actually searched. Matching one of these is not proof that setup
+// instructions exist — a README reading "Bootstrapping: ./bootstrap.sh" has
+// them and matches nothing — so the evidence reports the keyword match, not
+// the conclusion.
+const SETUP_KEYWORDS = ['setup', 'install', 'usage', 'run', 'build'] as const;
+const SETUP_KEYWORDS_LABEL = SETUP_KEYWORDS.join('/');
 
 const SETUP_CONTENT_RX =
   /\b(install|setup|usage|getting[_\s-]started|quick[_\s-]start|run|build|deploy|prerequisite|requirement)\b/i;
@@ -48,7 +56,7 @@ export function detectRootReadme(
 
   if (!readmePath) {
     return makeResult('FAIL', 0, [
-      'no README file found at repository root — a new developer has no entry point',
+      `no README file found at repository root (checked: ${README_NAMES.join(', ')})`,
     ]);
   }
 
@@ -63,24 +71,24 @@ export function detectRootReadme(
 
   if (content.length <= 200) {
     return makeResult('WARN', content.length, [
-      `${relPath} is too short (${content.length} bytes) — missing setup instructions`,
+      `${relPath} is ${content.length} characters (<= 200 character threshold)`,
     ]);
   }
 
   if (!SETUP_CONTENT_RX.test(content)) {
     return makeResult('WARN', content.length, [
-      `${relPath} exists but contains no setup/install/usage instructions`,
+      `${relPath} has no ${SETUP_KEYWORDS_LABEL} keyword`,
     ]);
   }
 
   if (!HEADING_RX.test(content)) {
     return makeResult('WARN', content.length, [
-      `${relPath} lacks a Markdown heading structure — may not be well-organised`,
+      `${relPath} has no Markdown heading (# …) or RST underline heading`,
     ]);
   }
 
   return makeResult('PASS', content.length, [
-    `${relPath} present with headings and setup instructions (${content.length} bytes)`,
+    `${relPath} present with heading(s) and ${SETUP_KEYWORDS_LABEL} keyword match (${content.length} characters)`,
   ]);
 }
 
@@ -160,7 +168,7 @@ export function detectServiceReadmes(
 
   if (topDirs.length === 0) {
     return makeResult('SKIP', null, [
-      'no top-level service directories found — single-service project, DOC-02 not applicable',
+      'no top-level service directories found; DOC-02 applies only to multi-service repos',
     ]);
   }
 
@@ -312,7 +320,7 @@ export function detectApiDocs(
   }
 
   return makeResult('FAIL', 0, [
-    'API source detected but no API documentation found — add OpenAPI/Swagger spec or use FastAPI auto-docs',
+    'API source patterns found but no OpenAPI/Swagger/AsyncAPI spec file or auto-docs framework marker found',
   ]);
 }
 
@@ -482,13 +490,13 @@ export function detectDocsAccuracy(
 
   if (missing.length <= 2) {
     return makeResult('WARN', missing.length, [
-      `${missing.length} README reference(s) point to non-existent items — docs may be stale`,
+      `${missing.length} README reference(s) not found (missing files/directories or Makefile targets)`,
       ...evidence,
     ]);
   }
 
   return makeResult('FAIL', missing.length, [
-    `${missing.length} README reference(s) point to non-existent items — documentation is out of date`,
+    `${missing.length} README reference(s) not found (missing files/directories or Makefile targets)`,
     ...evidence,
   ]);
 }

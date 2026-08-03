@@ -198,19 +198,19 @@ export function detectSecretScanGate(
   const hits = gateMatches(gateSurfaces(repoPath), SECRET_SCANNER_RX);
   if (hits.length > 0) {
     return makeResult('PASS', hits.length, [
-      'secret scanner gated in pre-commit/CI — committed credentials are mechanically blocked',
+      'secret scanner (gitleaks/trufflehog/detect-secrets/git-secrets/ggshield/secretlint) invocation found in a gate surface (pre-commit/CI/hooks)',
       ...hits.slice(0, 5).map((h) => `gate: ${h}`),
     ]);
   }
   const configs = presentConfigs(repoPath, SECRET_SCANNER_CONFIGS);
   if (configs.length > 0) {
     return makeResult('WARN', configs.length, [
-      'secret-scanner config present but no gate invokes it — scanning depends on someone running it',
+      'secret-scanner config file present but no invocation found in any gate surface (pre-commit/CI/hooks)',
       ...configs.map((c) => `config: ${c}`),
     ]);
   }
   return makeResult('FAIL', 0, [
-    'no secret-scanning gate found — nothing mechanically blocks committed credentials (add gitleaks/trufflehog to pre-commit or CI)',
+    'no secret-scanner invocation found in any gate surface, and no secret-scanner config file at repo root',
   ]);
 }
 
@@ -339,7 +339,7 @@ export function detectDependencyRiskAutomation(
 
   if (ciHits.length > 0 || updateBots.length > 0) {
     return makeResult('PASS', ciHits.length + updateBots.length, [
-      'dependency risk mechanically managed (CI vulnerability scan and/or update bot)',
+      'CI vulnerability-scan invocation and/or update-bot config found',
       ...ciHits.slice(0, 5).map((h) => `ci scanner: ${h}`),
       ...updateBots.map((c) => `update bot: ${c}`),
       ...inertConfigs.map((c) => `inert config: ${c}`),
@@ -354,12 +354,12 @@ export function detectDependencyRiskAutomation(
   }
   if (inertConfigs.length > 0) {
     return makeResult('FAIL', 0, [
-      'bot config present but drives nothing — no CI vulnerability scan and no active Dependabot/Renovate updates',
+      'bot config found but inactive — no CI vulnerability-scan invocation and no active Dependabot/Renovate updates found',
       ...inertConfigs.map((c) => `inert config: ${c}`),
     ]);
   }
   return makeResult('FAIL', 0, [
-    'no dependency-risk automation — no CI vulnerability scan and no Dependabot/Renovate config',
+    'no CI vulnerability-scan invocation and no Dependabot/Renovate config found',
   ]);
 }
 
@@ -386,7 +386,7 @@ export function detectSastGate(
   const hits = gateMatches(gateSurfaces(repoPath), SAST_RX);
   if (hits.length > 0) {
     return makeResult('PASS', hits.length, [
-      'static application-security testing gated in pre-commit/CI',
+      'static application-security testing invocation found in a gate surface (pre-commit/CI/hooks)',
       ...hits.slice(0, 5).map((h) => `gate: ${h}`),
     ]);
   }
@@ -398,7 +398,7 @@ export function detectSastGate(
     ]);
   }
   return makeResult('FAIL', 0, [
-    'no SAST gate found — insecure patterns are not mechanically caught before merge (add Semgrep/CodeQL/Bandit to CI)',
+    'no SAST tool invocation found in any gate surface, and no SAST config file at repo root',
   ]);
 }
 
@@ -423,7 +423,7 @@ export function detectCodeStyleGated(
   ];
   if (hits.length > 0) {
     return makeResult('PASS', hits.length, [
-      'linter/formatter gated in pre-commit/CI — style drift is mechanically blocked',
+      'linter/formatter invocation found in pre-commit/CI gate surface',
       ...[...new Set(hits)].slice(0, 5).map((h) => `gate: ${h}`),
     ]);
   }
@@ -432,7 +432,7 @@ export function detectCodeStyleGated(
     detectFormatting(repoPath).status === 'PASS';
   if (configured) {
     return makeResult('WARN', 0, [
-      'linter/formatter configured but not gated — nothing runs it in pre-commit or CI',
+      'linter/formatter configured but no invocation found in pre-commit or CI gate surface',
     ]);
   }
   return makeResult('FAIL', 0, [
@@ -475,7 +475,7 @@ export function detectArchBoundariesGate(
   const invoked = gateMatches(surfaces, ARCH_TOOL_RX);
   if (invoked.length > 0) {
     return makeResult('PASS', invoked.length, [
-      'module-boundary tool gated in pre-commit/CI',
+      'module-boundary tool invocation found in a gate surface (pre-commit/CI/hooks)',
       ...invoked.slice(0, 5).map((h) => `gate: ${h}`),
     ]);
   }
@@ -487,7 +487,7 @@ export function detectArchBoundariesGate(
       const content = readTextSafe(f);
       if (content !== null && ARCHUNIT_RX.test(content)) {
         return makeResult('PASS', 1, [
-          `ArchUnit dependency found in ${relative(repoPath, f)} — boundary rules run with the test suite`,
+          `ArchUnit dependency reference found in ${relative(repoPath, f)}`,
         ]);
       }
     }
@@ -529,7 +529,7 @@ export function detectArchBoundariesGate(
     ]);
   }
   return makeResult('FAIL', 0, [
-    'no module-boundary checking mechanism found — layering violations are not mechanically caught',
+    'no module-boundary tool (dependency-cruiser/import-linter/ArchUnit/eslint-boundaries) invocation or config found',
   ]);
 }
 
@@ -566,7 +566,7 @@ export function detectTestCoverageGate(
   const testHits = gateMatches(surfaces, TEST_GATE_RX, ['ci']);
   if (testHits.length === 0) {
     return makeResult('FAIL', 0, [
-      'no CI test gate found — untested changes can merge silently (this includes having no CI at all)',
+      'no CI test-runner invocation found in any CI workflow file (this includes having no CI at all)',
     ]);
   }
 
@@ -586,13 +586,13 @@ export function detectTestCoverageGate(
 
   if (coverageHits.length > 0) {
     return makeResult('PASS', testHits.length + coverageHits.length, [
-      'CI runs the test suite and a coverage threshold is enforced',
+      'CI runs the test suite, and a coverage-threshold pattern was found (in the CI workflow or a coverage config file)',
       ...testHits.slice(0, 3).map((h) => `test gate: ${h}`),
       ...coverageHits.slice(0, 3).map((h) => `coverage gate: ${h}`),
     ]);
   }
   return makeResult('WARN', testHits.length, [
-    'CI runs the test suite but no coverage threshold is enforced',
+    'CI runs the test suite, and no coverage-threshold pattern was found (in the CI workflow or a coverage config file)',
     ...testHits.slice(0, 5).map((h) => `test gate: ${h}`),
   ]);
 }
@@ -665,7 +665,7 @@ export function detectDocsFreshnessGate(
     ]);
   }
   return makeResult('FAIL', 0, [
-    'no documentation-checking mechanism found — stale docs are not mechanically caught',
+    'no docs-checker (lychee/markdownlint/markdown-link-check/vale/remark-lint/etc.) invocation found in any pre-commit or CI gate surface, and no docs-checker config file at repo root',
   ]);
 }
 

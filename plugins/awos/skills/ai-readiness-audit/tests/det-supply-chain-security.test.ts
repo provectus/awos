@@ -251,6 +251,51 @@ test('SCS-05: dependabot with automerge: true is WARN', () => {
   assert.equal(r.status, 'WARN');
 });
 
+// An automation config that exists but cannot be read tells us nothing about
+// automerge. It used to be counted into the PASS and folded into the claim
+// "configured without automerge enabled" — a conclusion about a file that was
+// never opened. A directory at the config path is the portable way to make
+// readTextSafe return null (readFileSync throws EISDIR, which it swallows).
+
+test('SCS-05: a config that cannot be read is not reported as automerge-disabled', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.github'), { recursive: true });
+  // Readable config, no automerge...
+  writeFileSync(
+    join(t, '.github', 'dependabot.yml'),
+    'version: 2\nupdates:\n  - package-ecosystem: "npm"\n'
+  );
+  // ...alongside one that cannot be opened.
+  mkdirSync(join(t, 'renovate.json'), { recursive: true });
+
+  const r = detectDependencyAutomationReview(t);
+  assert.equal(r.status, 'PASS');
+  const evidence = r.evidence.join('\n');
+  assert.match(
+    evidence,
+    /no `automerge: true` pattern was found in the config file\(s\) read/,
+    `PASS evidence must scope the finding to the files actually read; got ${JSON.stringify(r.evidence)}`
+  );
+  assert.match(
+    evidence,
+    /unreadable config \(not inspected\): renovate\.json/,
+    `the unreadable config must be surfaced, not silently dropped; got ${JSON.stringify(r.evidence)}`
+  );
+});
+
+test('SCS-05: when no config can be read at all, automerge is unknown (WARN)', () => {
+  const t = tmp();
+  mkdirSync(join(t, '.github', 'dependabot.yml'), { recursive: true });
+
+  const r = detectDependencyAutomationReview(t);
+  assert.equal(
+    r.status,
+    'WARN',
+    'a config present but wholly unreadable leaves automerge unknown — it must not pass as disabled'
+  );
+  assert.match(r.evidence.join('\n'), /automerge state unknown/);
+});
+
 // ---------------------------------------------------------------------------
 // detectVulnerabilityScanning (2905 — SCS-06)
 // ---------------------------------------------------------------------------

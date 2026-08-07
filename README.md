@@ -19,7 +19,7 @@
 npx @provectusinc/awos
 ```
 
-This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, and the `context/` directory where your project documents will live. It also registers the AWOS plugin marketplace in your project settings.
+This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, the `.claude/skills/` shared reference, and the `context/` directory where your project documents will live. It also registers the AWOS plugin marketplace in your project settings.
 
 > **Running on an existing codebase?** Start with an AI readiness audit to understand how AI-friendly your project is. Install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit` to get a scored assessment with actionable recommendations for improvement. [Learn more](plugins/awos/README.md)
 >
@@ -94,6 +94,11 @@ All framework service data lives in the `.awos/` directory:
 This is where you customize **`awos`** to fit your needs:
 
 - **`.claude/commands/awos/{command}.md`** - Lightweight wrapper files that link to `.awos/commands/{command}.md`
+- **`.claude/skills/{skill}/SKILL.md`** - Reference material the commands share, such as the rules for what belongs in `context/learnings.md`
+
+Both are preserved when you update **`awos`**, so your edits survive.
+
+> On the first update that adds `.claude/skills/`, restart your editor once. Claude Code only watches skill directories that existed when the session started, so a freshly created one is not picked up until then.
 
 ### How to Customize
 

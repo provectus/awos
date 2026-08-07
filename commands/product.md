@@ -147,7 +147,7 @@ First, check if the file `context/product/product-definition.md` exists.
 
 The product definition is a distillation — the user has just supplied far more than it can hold, and this is the richest input the project will ever receive. Keep what the template dropped.
 
-1.  Invoke the skill: `Skill(name="writing-learnings")`. It defines what qualifies, the entry format, and where entries go. If the Skill call fails because the skill is not found, tell the user their AWOS install predates it and to re-run the installer, then continue to Step 5 — a missing skill costs the learnings, not the definition.
+1.  Invoke the skill: `Skill(name="writing-learnings")`. It defines what qualifies, the entry format, and where entries go. If the Skill call fails because the skill is not found, check whether `.claude/skills/writing-learnings/SKILL.md` exists on disk: if it does, the installer added the skills directory after this session started, so tell the user to restart the editor to pick it up; if it does not, their AWOS install predates the skill and needs an installer run. Either way continue to Step 5 — a missing skill costs the learnings, not the definition.
 2.  Apply it to everything gathered so far: the `<user_prompt>`, the answers given during drafting, and any brownfield or external-source findings. This is a project's first run, so the skill's generous-first-run rule applies.
 3.  Write `context/learnings.md`. **Write it before the questions in Step 5** — the same reason the definition is saved before refinement: an unattended run that never gets an answer must still keep what it was told.
 

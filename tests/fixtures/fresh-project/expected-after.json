@@ -11,13 +11,13 @@
     "exists": true,
     "contains": ".awos/commands/implement.md"
   },
-  ".awos/skills/writing-learnings/SKILL.md": {
+  ".awos/skills/awos-writing-learnings/SKILL.md": {
     "exists": true,
     "contains": "context/learnings.md"
   },
-  ".claude/skills/writing-learnings/SKILL.md": {
+  ".claude/skills/awos-writing-learnings/SKILL.md": {
     "exists": true,
-    "contains": "@.awos/skills/writing-learnings/SKILL.md"
+    "contains": "@.awos/skills/awos-writing-learnings/SKILL.md"
   },
   ".claude/settings.json": { "exists": true, "contains": "awos-marketplace" },
   ".mcp.json": { "exists": true, "contains": "awos-recruitment" },

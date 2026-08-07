@@ -1,5 +1,5 @@
 ---
-name: writing-learnings
+name: awos-writing-learnings
 description: >-
   Record learnings in context/learnings.md — the admission gate that decides
   what qualifies, the entry format, and where entries land. Use when a command

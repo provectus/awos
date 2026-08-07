@@ -405,6 +405,21 @@ test('claude/skills operation is marked preserveOnUpdate', () => {
   );
 });
 
+test('every shipped skill name is namespaced with the awos- prefix', () => {
+  // Skill wrappers land un-namespaced in the user's own `.claude/skills/`,
+  // alongside skills they wrote themselves — there is no `awos/`
+  // subdirectory to file them under the way command wrappers get one. The
+  // prefix is the only thing marking a skill as ours, and a name collision
+  // silently replaces one skill with the other. Plugin skills are exempt:
+  // they already carry the `awos:` namespace.
+  for (const dir of listSkillDirs(skillBodiesDir)) {
+    assert.ok(
+      dir.startsWith('awos-'),
+      `skills/${dir} must be named awos-${dir} — shipped skills share .claude/skills/ with the user's own, and only the prefix keeps them apart`
+    );
+  }
+});
+
 test('skill wrappers and skill bodies are symmetric', () => {
   // Skills follow the same two-folder split as commands: the body lives in
   // `skills/` (framework-internal, overwritten on update) and the wrapper in
@@ -459,7 +474,7 @@ test('every skill wrapper @-imports its body and mirrors its description', () =>
   }
 });
 
-test('commands that capture learnings invoke the writing-learnings skill', () => {
+test('commands that capture learnings invoke the awos-writing-learnings skill', () => {
   // The admission gate and the entry format live in the skill, so every
   // capture site must go through it. A command that writes
   // context/learnings.md without invoking the skill is writing ungated
@@ -475,8 +490,8 @@ test('commands that capture learnings invoke the writing-learnings skill', () =>
     );
     assert.match(
       body,
-      /Skill\(name="writing-learnings"\)/,
-      `commands/${file} must invoke Skill(name="writing-learnings") rather than restating the gate inline`
+      /Skill\(name="awos-writing-learnings"\)/,
+      `commands/${file} must invoke Skill(name="awos-writing-learnings") rather than restating the gate inline`
     );
   }
 });

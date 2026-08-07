@@ -53,13 +53,20 @@ const copyOperations = [
     description: 'AWOS scripts',
   },
   {
+    source: 'skills',
+    destination: '.awos/skills',
+    patterns: ['*'],
+    description: 'AWOS skill bodies',
+  },
+  {
     source: 'claude/skills',
     destination: '.claude/skills',
     patterns: ['*'],
-    description: 'AWOS skills',
-    // Same customization semantics as the command wrappers below: skills land
-    // in the user's `.claude/` area, so an update must not silently clobber a
-    // project that has tuned one (e.g. loosened the learnings gate).
+    description: 'Claude Code skills',
+    // Thin wrappers that @-import the body from `.awos/skills/`, exactly like
+    // the command wrappers below. The body is framework-internal and updated
+    // freely; this file is the user's to edit, so an update must not clobber
+    // a project that has tuned it.
     preserveOnUpdate: true,
     manualUpdateUrl:
       'https://github.com/provectus/awos/tree/main/claude/skills',

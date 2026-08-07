@@ -84,6 +84,7 @@ The **`awos`** framework is designed to be both powerful out-of-the-box and high
 All framework service data lives in the `.awos/` directory:
 
 - `.awos/commands` - Full command prompt instructions
+- `.awos/skills` - Full skill instructions shared across commands
 - `.awos/templates` - Document templates
 - `.awos/scripts` - Utility scripts
 
@@ -94,7 +95,7 @@ All framework service data lives in the `.awos/` directory:
 This is where you customize **`awos`** to fit your needs:
 
 - **`.claude/commands/awos/{command}.md`** - Lightweight wrapper files that link to `.awos/commands/{command}.md`
-- **`.claude/skills/{skill}/SKILL.md`** - Reference material the commands share, such as the rules for what belongs in `context/learnings.md`
+- **`.claude/skills/{skill}/SKILL.md`** - Wrapper files that link to `.awos/skills/{skill}/SKILL.md`, the reference the commands share — such as the rules for what belongs in `context/learnings.md`
 
 Both are preserved when you update **`awos`**, so your edits survive.
 

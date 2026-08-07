@@ -52,10 +52,11 @@ From `config/setup-config.js`:
 | `commands/`        | `.awos/commands/`        | no               |
 | `templates/`       | `.awos/templates/`       | no               |
 | `scripts/`         | `.awos/scripts/`         | no               |
+| `skills/`          | `.awos/skills/`          | no               |
 | `claude/skills/`   | `.claude/skills/`        | **yes**          |
 | `claude/commands/` | `.claude/commands/awos/` | **yes**          |
 
-Skills copy into `.claude/skills/<name>/SKILL.md` un-namespaced, because that is where the host discovers project skills — there is no `awos/` subdirectory to hide behind, so shipped skill names have to be distinctive enough not to collide with the user's own.
+Skills split the same way commands do: the body ships to `.awos/skills/<name>/SKILL.md` and is overwritten on every update, while `.claude/skills/<name>/SKILL.md` is a thin wrapper carrying the frontmatter and a single `@.awos/skills/<name>/SKILL.md` import. The wrapper has to live there un-namespaced because that is where the host discovers project skills — there is no `awos/` subdirectory to hide behind, so shipped skill names have to be distinctive enough not to collide with the user's own.
 
 `.claude/agents/` is intentionally **not** a copy destination — it is the user's customization area for project-local subagents. AWOS-shipped agents (e.g. `testing-expert`) ride in via `awos-recruitment` on demand, so the installer never auto-populates this directory.
 

@@ -29,6 +29,8 @@ const dimensionsDir = path.join(
   'dimensions'
 );
 const templatesDir = path.join(repoRoot, 'templates');
+const skillBodiesDir = path.join(repoRoot, 'skills');
+const skillWrappersDir = path.join(repoRoot, 'claude', 'skills');
 const pluginCommandsDir = path.join(repoRoot, 'plugins', 'awos', 'commands');
 const pluginTemplatesDir = path.join(repoRoot, 'plugins', 'awos', 'templates');
 
@@ -41,6 +43,15 @@ function listMarkdown(dir) {
   return fs
     .readdirSync(dir)
     .filter((f) => f.endsWith('.md'))
+    .sort();
+}
+
+function listSkillDirs(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
     .sort();
 }
 
@@ -342,6 +353,7 @@ test('every top-level framework directory is referenced by setup-config', () => 
     'commands',
     'templates',
     'scripts',
+    'skills',
     'claude/commands',
     'claude/skills',
   ];
@@ -393,37 +405,56 @@ test('claude/skills operation is marked preserveOnUpdate', () => {
   );
 });
 
-test('every shipped skill has name and description frontmatter', () => {
-  // A skill with no `name` cannot be invoked by `Skill(name=...)`, and one
-  // with no `description` cannot be discovered by the model. Both are silent
-  // failures at runtime — the command simply skips the capture.
-  const skillsDir = path.join(repoRoot, 'claude', 'skills');
-  const skillDirs = fs
-    .readdirSync(skillsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name);
-
+test('skill wrappers and skill bodies are symmetric', () => {
+  // Skills follow the same two-folder split as commands: the body lives in
+  // `skills/` (framework-internal, overwritten on update) and the wrapper in
+  // `claude/skills/` (user-editable, preserved). A body with no wrapper is
+  // never discovered; a wrapper with no body @-imports a missing file.
   assert.ok(
-    skillDirs.length > 0,
-    'claude/skills must ship at least one skill, or the copy operation is dead weight'
+    listSkillDirs(skillBodiesDir).length > 0,
+    'skills/ must ship at least one skill body, or the copy operation is dead weight'
   );
+  assert.deepEqual(
+    listSkillDirs(skillWrappersDir),
+    listSkillDirs(skillBodiesDir),
+    'every skills/<name>/SKILL.md needs a matching claude/skills/<name>/SKILL.md and vice versa'
+  );
+});
 
-  for (const dir of skillDirs) {
-    const skillPath = path.join(skillsDir, dir, 'SKILL.md');
-    assert.ok(
-      fs.existsSync(skillPath),
-      `claude/skills/${dir} must contain a SKILL.md — the host discovers skills by that filename`
+test('every skill wrapper @-imports its body and mirrors its description', () => {
+  // The wrapper is what the host discovers, so its `name` is what
+  // Skill(name=...) resolves and its `description` is the pointer that decides
+  // whether the skill is ever reached. Both fail silently at runtime.
+  for (const dir of listSkillDirs(skillWrappersDir)) {
+    const wrapperSource = readUtf8(
+      path.join(skillWrappersDir, dir, 'SKILL.md')
     );
-    const { data } = parse(fs.readFileSync(skillPath, 'utf8'));
+    const wrapper = parse(wrapperSource);
+
+    assert.ok(
+      wrapper.hasFrontmatter,
+      `claude/skills/${dir}/SKILL.md is missing frontmatter`
+    );
     assert.equal(
-      data.name,
+      wrapper.data.name,
       dir,
       `claude/skills/${dir}/SKILL.md frontmatter name must equal its directory name, or Skill(name="${dir}") will not resolve`
     );
     assert.ok(
-      typeof data.description === 'string' &&
-        data.description.trim().length > 0,
-      `claude/skills/${dir}/SKILL.md must carry a non-empty description`
+      typeof wrapper.data.description === 'string' &&
+        wrapper.data.description.trim().length > 0,
+      `claude/skills/${dir}/SKILL.md must carry a non-empty description — without one the model cannot discover the skill`
+    );
+    assert.ok(
+      wrapperSource.includes(`@.awos/skills/${dir}/SKILL.md`),
+      `claude/skills/${dir}/SKILL.md must @-import @.awos/skills/${dir}/SKILL.md, so the body stays framework-updatable`
+    );
+
+    const body = parse(readUtf8(path.join(skillBodiesDir, dir, 'SKILL.md')));
+    assert.equal(
+      wrapper.data.description,
+      body.data.description,
+      `claude/skills/${dir} description must match skills/${dir} — the wrapper is what the host reads, so a drifted copy changes when the skill fires`
     );
   }
 });

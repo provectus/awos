@@ -53,6 +53,18 @@ const copyOperations = [
     description: 'AWOS scripts',
   },
   {
+    source: 'claude/skills',
+    destination: '.claude/skills',
+    patterns: ['*'],
+    description: 'AWOS skills',
+    // Same customization semantics as the command wrappers below: skills land
+    // in the user's `.claude/` area, so an update must not silently clobber a
+    // project that has tuned one (e.g. loosened the learnings gate).
+    preserveOnUpdate: true,
+    manualUpdateUrl:
+      'https://github.com/provectus/awos/tree/main/claude/skills',
+  },
+  {
     source: 'claude/commands',
     destination: '.claude/commands/awos',
     patterns: ['*'],

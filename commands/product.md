@@ -30,7 +30,8 @@ Your primary task is to **fill in** a product definition template using a guided
 # OUTPUTS
 
 1.  **`context/product/product-definition.md`:** The complete, non-technical product definition, created by filling in the template.
-2.  **Optional Output:** `context/product/brownfield.md`. Created on brownfield projects only. Downstream commands (`/awos:roadmap`, `/awos:architecture`) extend and eventually delete this file.
+2.  **`context/learnings.md`:** What the conversation revealed about the product that the definition cannot carry. Created or appended to in Step 4; the `writing-learnings` skill owns the format and the bar.
+3.  **Optional Output:** `context/product/brownfield.md`. Created on brownfield projects only. Downstream commands (`/awos:roadmap`, `/awos:architecture`) extend and eventually delete this file.
 
 ---
 
@@ -88,7 +89,7 @@ First, check if the file `context/product/product-definition.md` exists.
     ")
     ```
 
-    b. Create `context/product/brownfield.md` with a `## Product` heading and record the findings under it. If the exploration surfaced nothing, still create the file with an empty `## Product` section; downstream commands (`/awos:roadmap`, `/awos:architecture`) key on the file's existence to run their own explorations. The findings are triaged with the user later, in **Step 4** — after the definition is saved — so exploration never blocks the write.
+    b. Create `context/product/brownfield.md` with a `## Product` heading and record the findings under it. If the exploration surfaced nothing, still create the file with an empty `## Product` section; downstream commands (`/awos:roadmap`, `/awos:architecture`) key on the file's existence to run their own explorations. The findings are triaged with the user later, in **Step 5** — after the definition is saved — so exploration never blocks the write.
 
 3.  **External documentation sources.** Check `context/sources/sources.md`:
 
@@ -123,7 +124,7 @@ First, check if the file `context/product/product-definition.md` exists.
     ")
     ```
 
-    Record retrieved findings for the draft in substep 4. The findings are triaged with the user in **Step 4**, after the definition is saved.
+    Record retrieved findings for the draft in substep 4. The findings are triaged with the user in **Step 5**, after the definition is saved.
 
 4.  Draft every section of the template up front so a complete definition exists before any further back-and-forth — use `<user_prompt>` (when non-empty) as the starting point, fold in any brownfield findings from substep 2 and documentation findings from substep 3, and fill the rest from reasonable best-practice assumptions. Never block on a question before the write:
     - **Project Name & Vision:** the project's name and its core purpose.
@@ -131,7 +132,7 @@ First, check if the file `context/product/product-definition.md` exists.
     - **Success Metrics:** how the product's impact on the user is measured.
     - **Core Features & User Journey:** the 3-5 most important high-level features and a simple user workflow.
     - **Project Boundaries:** what is essential for the first version (In-Scope) and what can wait (Out-of-Scope).
-5.  Proceed to **Step 3: File Generation**. The draft is saved there and refined with the user in **Step 4**, so it lands on disk even when no one is available to answer questions.
+5.  Proceed to **Step 3: File Generation**. The draft is saved there and refined with the user in **Step 5**, so it lands on disk even when no one is available to answer questions.
 
 ---
 
@@ -142,7 +143,15 @@ First, check if the file `context/product/product-definition.md` exists.
 
 ---
 
-### Step 4: Refine and Recommend Next Step
+### Step 4: Record Learnings
+
+The product definition is a distillation — the user has just supplied far more than it can hold, and this is the richest input the project will ever receive. Keep what the template dropped.
+
+1.  Invoke the skill: `Skill(name="writing-learnings")`. It defines what qualifies, the entry format, and where entries go. If the Skill call fails because the skill is not found, tell the user their AWOS install predates it and to re-run the installer, then continue to Step 5 — a missing skill costs the learnings, not the definition.
+2.  Apply it to everything gathered so far: the `<user_prompt>`, the answers given during drafting, and any brownfield or external-source findings. This is a project's first run, so the skill's generous-first-run rule applies.
+3.  Write `context/learnings.md`. **Write it before the questions in Step 5** — the same reason the definition is saved before refinement: an unattended run that never gets an answer must still keep what it was told.
+
+### Step 5: Refine and Recommend Next Step
 
 1.  Present the saved definition and offer to refine it — ask which sections to adjust, then apply changes and re-save.
 2.  **If `context/product/brownfield.md` was created in Step 2,** triage its findings with the user now. Group related findings by category and use `AskUserQuestion` to batch up to four per call, offering **Accept** and **Reject** for each (the user can also select "Other" for free-text feedback — treat it according to intent). Remove rejected findings from `context/product/brownfield.md` and from the saved definition, and re-save both; for corrected findings, record the corrected version.

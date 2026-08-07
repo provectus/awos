@@ -336,8 +336,15 @@ test('every top-level framework directory is referenced by setup-config', () => 
     path.join(repoRoot, 'src', 'config', 'setup-config.js')
   );
   const referenced = new Set(copyOperations.map((op) => op.source));
-  // Top-level framework dirs we expect: commands, templates, scripts, claude/commands.
-  const expected = ['commands', 'templates', 'scripts', 'claude/commands'];
+  // Top-level framework dirs we expect: commands, templates, scripts,
+  // claude/commands, claude/skills.
+  const expected = [
+    'commands',
+    'templates',
+    'scripts',
+    'claude/commands',
+    'claude/skills',
+  ];
   for (const dir of expected) {
     assert.ok(
       referenced.has(dir),
@@ -365,6 +372,82 @@ test('claude/commands operation is marked preserveOnUpdate', () => {
     true,
     'claude/commands operation must set preserveOnUpdate: true so the file-copier prompts before overwriting user wrappers'
   );
+});
+
+test('claude/skills operation is marked preserveOnUpdate', () => {
+  // Skills land in the user's own `.claude/skills/` area, the same
+  // customization zone as the command wrappers. A project that has tuned the
+  // learnings gate must not have that edit silently reverted by an update.
+  const { copyOperations } = require(
+    path.join(repoRoot, 'src', 'config', 'setup-config.js')
+  );
+  const skillsOp = copyOperations.find((op) => op.source === 'claude/skills');
+  assert.ok(
+    skillsOp,
+    'setup-config must declare the claude/skills copy operation'
+  );
+  assert.equal(
+    skillsOp.preserveOnUpdate,
+    true,
+    'claude/skills operation must set preserveOnUpdate: true so the file-copier prompts before overwriting a user-tuned skill'
+  );
+});
+
+test('every shipped skill has name and description frontmatter', () => {
+  // A skill with no `name` cannot be invoked by `Skill(name=...)`, and one
+  // with no `description` cannot be discovered by the model. Both are silent
+  // failures at runtime — the command simply skips the capture.
+  const skillsDir = path.join(repoRoot, 'claude', 'skills');
+  const skillDirs = fs
+    .readdirSync(skillsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+
+  assert.ok(
+    skillDirs.length > 0,
+    'claude/skills must ship at least one skill, or the copy operation is dead weight'
+  );
+
+  for (const dir of skillDirs) {
+    const skillPath = path.join(skillsDir, dir, 'SKILL.md');
+    assert.ok(
+      fs.existsSync(skillPath),
+      `claude/skills/${dir} must contain a SKILL.md — the host discovers skills by that filename`
+    );
+    const { data } = parse(fs.readFileSync(skillPath, 'utf8'));
+    assert.equal(
+      data.name,
+      dir,
+      `claude/skills/${dir}/SKILL.md frontmatter name must equal its directory name, or Skill(name="${dir}") will not resolve`
+    );
+    assert.ok(
+      typeof data.description === 'string' &&
+        data.description.trim().length > 0,
+      `claude/skills/${dir}/SKILL.md must carry a non-empty description`
+    );
+  }
+});
+
+test('commands that capture learnings invoke the writing-learnings skill', () => {
+  // The admission gate and the entry format live in the skill, so every
+  // capture site must go through it. A command that writes
+  // context/learnings.md without invoking the skill is writing ungated
+  // entries — the quote-dump failure the gate exists to prevent.
+  const capturingCommands = ['product.md'];
+
+  for (const file of capturingCommands) {
+    const body = fs.readFileSync(path.join(commandsDir, file), 'utf8');
+    assert.match(
+      body,
+      /context\/learnings\.md/,
+      `commands/${file} must name context/learnings.md as the store it writes`
+    );
+    assert.match(
+      body,
+      /Skill\(name="writing-learnings"\)/,
+      `commands/${file} must invoke Skill(name="writing-learnings") rather than restating the gate inline`
+    );
+  }
 });
 
 test('implement.md uses XML scope, investigate, skills, and completion-evidence snippets', () => {

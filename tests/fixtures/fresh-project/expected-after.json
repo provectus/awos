@@ -11,6 +11,10 @@
     "exists": true,
     "contains": ".awos/commands/implement.md"
   },
+  ".claude/skills/writing-learnings/SKILL.md": {
+    "exists": true,
+    "contains": "context/learnings.md"
+  },
   ".claude/settings.json": { "exists": true, "contains": "awos-marketplace" },
   ".mcp.json": { "exists": true, "contains": "awos-recruitment" },
   "context/product": { "exists": true },

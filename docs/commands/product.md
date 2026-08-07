@@ -7,6 +7,7 @@
 This command creates (or updates) your high-level product definition — the single source of truth for your entire project. It produces:
 
 - `context/product/product-definition.md` — the full definition covering vision, audience, personas, success metrics, core features, and boundaries.
+- `context/learnings.md` — what you told it that the definition itself cannot hold.
 
 ## Prerequisites
 
@@ -22,7 +23,7 @@ The command operates in two modes:
 ## Key behaviors
 
 - **Non-technical language only.** This document describes business goals, user needs, and value — not implementation details. The agent will steer you away from technical language.
-- **Single output.** The full product definition file is created or updated in place.
+- **Nothing you say is thrown away.** The definition is a summary, so most of what you explain does not fit in it. What does not fit is kept in `context/learnings.md` instead of being dropped — the reasoning behind a choice, a constraint you mentioned once, the word your business uses for a thing. Later commands read it, which is why `/awos:spec` stops asking you to explain the product from scratch.
 - **Idempotent.** You can re-run this command at any time to refine your product definition as your understanding evolves.
 
 ## Common misconceptions

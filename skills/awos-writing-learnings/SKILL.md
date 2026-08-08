@@ -21,7 +21,19 @@ Both conditions have to hold. The first is about where the information already l
 
 **2. It changes something.** Name what it constrains — the decision that would go differently, the question it stops someone re-asking, the mistake it prevents. Information nobody would act on differently is trivia, even when nobody wrote it down.
 
+**Discussed is not decided.** A topic that came up, was explored, and remains open produced no learning — coverage is not knowledge. What qualifies is the resolved claim, not the fact that the ground was walked over.
+
 **Zero learnings is a normal outcome.** A conversation that revealed nothing durable produces no entries. Manufacturing one to have written something is the failure this gate exists to prevent.
+
+## Where to look
+
+The gate decides what passes; these are the moments worth checking, because a learning rarely announces itself:
+
+1. **A why was given.** The user explained a reason, a constraint, or a piece of history behind something. Reasons are the highest-value class here — nothing else records them.
+2. **An alternative was rejected.** "We tried that" and "we deliberately don't" both leave the codebase looking like an accident later.
+3. **A correction landed.** The user corrected an assumption of yours, or a finding you presented. What they replaced it with is a learning, and so is the fact that the obvious reading was wrong.
+4. **A word was pinned down.** The business uses a term in a specific way, or two terms that sound alike mean different things.
+5. **A boundary was named.** A limit, a rule, or a "never" — regulatory, contractual, or learned the hard way.
 
 ## The format
 
@@ -58,6 +70,24 @@ Each pair is the same material, failing and passing.
 - ❌ `- **The export feature produces CSV with one row per transaction.**` — that is the spec, and a second copy competes with it for authority.
 - ✅ `- **CSV was chosen over XLSX because the customer's accountant imports into a legacy tool that rejects XLSX.** Revisit only if that tool changes; do not "upgrade" the format as an improvement.` — the reason the spec does not carry.
 
+## Vocabulary
+
+A term the business uses in its own way is its own kind of entry, and it earns a `## Vocabulary` section rather than a bullet with a consequence. Be opinionated: when several words circulate for one concept, pick the one this product uses and list the rest as words to avoid. That choice is what stops the vocabulary drifting apart again.
+
+```markdown
+**Workspace**:
+A billing group — the unit a subscription and its invoices attach to.
+_Avoid_: account, org, tenant
+
+**Team**:
+The people inside a workspace. Never a billing concept.
+_Avoid_: group, members
+```
+
+Define what a term **is**, in a sentence or two — not what it does. Use the vocabulary's own terms inside other definitions. Where the wider industry uses a word loosely, say how it resolves here: "an invoice is always the issued document; the draft is a _statement_."
+
+Vocabulary is **revised in place**, unlike everything else in this file. A definition that turns out to be wrong is corrected, not superseded — nobody needs the history of a word, they need its current meaning.
+
 ## Where entries go
 
 `context/learnings.md`, under a `##` heading naming the subject — the area of the product the learning is about, not the command that produced it or the spec that will consume it. Specs are superseded; the subject outlives them.
@@ -66,9 +96,11 @@ Read the existing headings before writing. **Reuse a heading that already fits**
 
 Create the file with a short title line if it does not exist.
 
-## Two more rules
+## Three more rules
 
 **Supersede rather than overwrite.** When a new learning contradicts one already there, keep both: mark the old one superseded with the date. "We used to think X, then we learned Y" is itself worth knowing, and silently swapping the text destroys the reason the current answer is the current answer.
+
+**Write nothing that should not be committed.** This file goes into the repository — reviewed, cloned, and in many cases public. Credentials, access details, customer names, personal data and unannounced commercial terms do not go in. The learning almost always survives the redaction: "the anchor customer requires SSO before renewal" carries the same consequence as naming them, and can be read by anyone.
 
 **The first run of a project is allowed to be generous.** When `context/learnings.md` is being created, nobody can yet tell which detail will matter; the cost of keeping too much is one oversized file that gardening will trim, and the cost of dropping the user's original brief is permanent. Once there is a store to compare against, the gate above applies in full.
 

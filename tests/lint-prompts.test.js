@@ -477,7 +477,7 @@ test('every skill wrapper @-imports its body and mirrors its description', () =>
 test('commands that capture learnings invoke the awos-writing-learnings skill', () => {
   // The admission gate and the entry format live in the skill, so every
   // capture site must go through it. A command that writes
-  // context/learnings.md without invoking the skill is writing ungated
+  // context/product/learnings.md without invoking the skill is writing ungated
   // entries — the quote-dump failure the gate exists to prevent.
   const capturingCommands = ['product.md'];
 
@@ -485,8 +485,8 @@ test('commands that capture learnings invoke the awos-writing-learnings skill', 
     const body = fs.readFileSync(path.join(commandsDir, file), 'utf8');
     assert.match(
       body,
-      /context\/learnings\.md/,
-      `commands/${file} must name context/learnings.md as the store it writes`
+      /context\/product\/learnings\.md/,
+      `commands/${file} must name context/product/learnings.md as the store it writes`
     );
     assert.match(
       body,

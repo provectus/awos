@@ -13,7 +13,7 @@
   },
   ".awos/skills/awos-writing-learnings/SKILL.md": {
     "exists": true,
-    "contains": "context/learnings.md"
+    "contains": "context/product/learnings.md"
   },
   ".claude/skills/awos-writing-learnings/SKILL.md": {
     "exists": true,

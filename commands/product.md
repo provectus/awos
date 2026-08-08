@@ -30,7 +30,7 @@ Your primary task is to **fill in** a product definition template using a guided
 # OUTPUTS
 
 1.  **`context/product/product-definition.md`:** The complete, non-technical product definition, created by filling in the template.
-2.  **`context/learnings.md`:** What the conversation revealed about the product that the definition cannot carry. Created or appended to in Step 4; the `awos-writing-learnings` skill owns the format and the bar.
+2.  **`context/product/learnings.md`** and **`context/product/glossary.md`:** What the conversation revealed about the product that the definition cannot carry, and the words the business uses for it. Written in Step 4; the `awos-writing-learnings` skill owns the format and the bar.
 3.  **Optional Output:** `context/product/brownfield.md`. Created on brownfield projects only. Downstream commands (`/awos:roadmap`, `/awos:architecture`) extend and eventually delete this file.
 
 ---
@@ -149,7 +149,7 @@ The product definition is a distillation — the user has just supplied far more
 
 1.  Invoke the skill: `Skill(name="awos-writing-learnings")`. It defines what qualifies, the entry format, and where entries go. If the Skill call fails because the skill is not found, check whether `.claude/skills/awos-writing-learnings/SKILL.md` exists on disk: if it does, the installer added the skills directory after this session started, so tell the user to restart the editor to pick it up; if it does not, their AWOS install predates the skill and needs an installer run. Either way continue to Step 5 — a missing skill costs the learnings, not the definition.
 2.  Apply it to everything gathered so far: the `<user_prompt>`, the answers given during drafting, and any brownfield or external-source findings. This is a project's first run, so the skill's generous-first-run rule applies.
-3.  Write `context/learnings.md`. **Write it before the questions in Step 5** — the same reason the definition is saved before refinement: an unattended run that never gets an answer must still keep what it was told.
+3.  Write the files the skill names. **Write them before the questions in Step 5** — the same reason the definition is saved before refinement: an unattended run that never gets an answer must still keep what it was told.
 
 ### Step 5: Refine and Recommend Next Step
 

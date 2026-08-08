@@ -1,78 +1,49 @@
 ---
 name: awos-writing-learnings
 description: >-
-  Record learnings in context/learnings.md — the admission gate that decides
-  what qualifies, the entry format, and where entries land. Use when a command
-  has finished an interview or a triage and needs to keep what the conversation
-  revealed about the product, or when the user asks to remember something.
+  Record what a conversation revealed about the product, in context/product/learnings.md
+  and context/product/glossary.md. Use after an interview or a triage, or when the user
+  asks to remember something.
 ---
 
 # Writing learnings
 
-A **learning** is something now known about this product that was not known before, and that changes what someone would build. `context/learnings.md` holds them so the next command starts warm instead of asking the user to explain the product again.
+A **learning** is a fact about this product that changes what someone builds. Later commands read these files before they interview the user.
 
-Learnings live alongside the artifacts, not inside them. Artifacts specify; learnings explain. Where the two disagree, the artifact is right and the learning is stale.
+Artifacts specify; learnings explain. When the two disagree, the artifact is correct and the learning is stale.
+
+## Two files
+
+| File                           | Holds                              | Lifecycle                                              |
+| ------------------------------ | ---------------------------------- | ------------------------------------------------------ |
+| `context/product/glossary.md`  | What each business word means here | Corrected in place — only the current meaning matters  |
+| `context/product/learnings.md` | Everything else worth keeping      | Appended; an outdated entry is superseded, not deleted |
+
+The glossary is the project's shared language. Every artifact — specs, roadmap, product definition — uses its terms. Learnings inform what gets built; the glossary fixes the words used to describe it.
 
 ## The gate
 
-Both conditions have to hold. The first is about where the information already lives, the second about whether it does any work.
+Both conditions must hold, for both files.
 
-**1. It has no lookup.** The code is a lookup. The specs, the roadmap, the product definition and the architecture doc are lookups. Git history is a lookup. What has no lookup anywhere: the reason behind a choice, the alternative that was rejected, the constraint that came out of a customer conversation, the word the business uses for a thing.
+**1. It has no lookup.** The code, the specs, the roadmap, the product definition, the architecture document and the git history are lookups — an agent reads them when it needs them. Reasons, rejected alternatives, constraints from a customer conversation and business vocabulary have no lookup.
 
-**2. It changes something.** Name what it constrains — the decision that would go differently, the question it stops someone re-asking, the mistake it prevents. Information nobody would act on differently is trivia, even when nobody wrote it down.
+**2. It changes a decision.** Name what it constrains: the decision that goes differently, the question it stops, the mistake it prevents. Unfindable trivia is still trivia.
 
-**Discussed is not decided.** A topic that came up, was explored, and remains open produced no learning — coverage is not knowledge. What qualifies is the resolved claim, not the fact that the ground was walked over.
+**An open topic is not a learning.** Record the resolved claim, not the fact that you discussed the subject.
 
-**Zero learnings is a normal outcome.** A conversation that revealed nothing durable produces no entries. Manufacturing one to have written something is the failure this gate exists to prevent.
+**Zero learnings is a normal result.** Do not invent an entry to fill a file.
 
 ## Where to look
 
-The gate decides what passes; these are the moments worth checking, because a learning rarely announces itself:
+A learning rarely announces itself. Check these five moments:
 
-1. **A why was given.** The user explained a reason, a constraint, or a piece of history behind something. Reasons are the highest-value class here — nothing else records them.
-2. **An alternative was rejected.** "We tried that" and "we deliberately don't" both leave the codebase looking like an accident later.
-3. **A correction landed.** The user corrected an assumption of yours, or a finding you presented. What they replaced it with is a learning, and so is the fact that the obvious reading was wrong.
-4. **A word was pinned down.** The business uses a term in a specific way, or two terms that sound alike mean different things.
-5. **A boundary was named.** A limit, a rule, or a "never" — regulatory, contractual, or learned the hard way.
+1. **A reason was given.** Nothing else in the project records reasons.
+2. **An alternative was rejected.** "We tried that" and "we do not do that on purpose" both make the code look accidental later.
+3. **A correction landed.** The user corrected an assumption of yours or a finding you presented.
+4. **A word was pinned down.** A term has a specific meaning here, or two similar terms differ. → glossary.
+5. **A boundary was named.** A limit, a rule, or a never.
 
-## The format
-
-Claim, then what it changes, then where it came from:
-
-```markdown
-- **Invoices go out on the 1st; the date is not user-configurable.** Rules out per-customer billing dates in any scheduling feature — the provider batches on calendar months.
-  _/awos:product interview · 2026-08-07_
-```
-
-The second half is the gate made mechanical: an entry whose consequence cannot be stated does not qualify, and you find that out while trying to write it. It pays again later — when the named consequence stops applying, the learning is visibly dead and can go without anyone re-deriving why it was ever there.
-
-## Worked contrasts
-
-Each pair is the same material, failing and passing.
-
-**Findable elsewhere.**
-
-- ❌ `- **The app uses PostgreSQL with a customers table keyed by UUID.**` — the schema answers this, and this copy will go stale while the schema does not.
-- ✅ `- **Customer IDs are never reused after deletion.** Reporting can safely join historical rows to current customers; a "restore deleted account" feature would have to mint a new ID.` — a rule the schema permits but does not state.
-
-**Unfindable but inconsequential.**
-
-- ❌ `- **The founder prefers the word "workspace" over "team", mentioned in passing.**` — nothing is built differently.
-- ✅ `- **Users call a billing group a "workspace"; "team" means something else — the people inside one.** UI copy and every user-facing label distinguish the two; using them interchangeably reads as a bug to customers.` — the same word, now with a consequence.
-
-**Quote instead of claim.**
-
-- ❌ `- **User said they'd probably want invoices monthly, maybe configurable later.**` — the reader still has to interpret, and cannot tell what was decided from what was mused.
-- ✅ Resolve it first, then write the claim. If it genuinely was not decided, that is the learning: `- **Whether invoice dates become configurable is open — deferred, not rejected.** Anything built on a fixed date should keep the date in one place rather than assuming it everywhere.`
-
-**Restating an artifact.**
-
-- ❌ `- **The export feature produces CSV with one row per transaction.**` — that is the spec, and a second copy competes with it for authority.
-- ✅ `- **CSV was chosen over XLSX because the customer's accountant imports into a legacy tool that rejects XLSX.** Revisit only if that tool changes; do not "upgrade" the format as an improvement.` — the reason the spec does not carry.
-
-## Vocabulary
-
-A term the business uses in its own way is its own kind of entry, and it earns a `## Vocabulary` section rather than a bullet with a consequence. Be opinionated: when several words circulate for one concept, pick the one this product uses and list the rest as words to avoid. That choice is what stops the vocabulary drifting apart again.
+## The glossary
 
 ```markdown
 **Workspace**:
@@ -84,26 +55,55 @@ The people inside a workspace. Never a billing concept.
 _Avoid_: group, members
 ```
 
-Define what a term **is**, in a sentence or two — not what it does. Use the vocabulary's own terms inside other definitions. Where the wider industry uses a word loosely, say how it resolves here: "an invoice is always the issued document; the draft is a _statement_."
+Be opinionated. When several words circulate for one concept, pick the word this product uses and list the rest under `_Avoid_`. That list is what stops the vocabulary drifting apart again.
 
-Vocabulary is **revised in place**, unlike everything else in this file. A definition that turns out to be wrong is corrected, not superseded — nobody needs the history of a word, they need its current meaning.
+Define what a term **is**, not what it does. Where the industry uses a word loosely, give the local meaning. Group terms under `##` headings once a cluster forms.
 
-## Where entries go
+## Learnings
 
-`context/learnings.md`, under a `##` heading naming the subject — the area of the product the learning is about, not the command that produced it or the spec that will consume it. Specs are superseded; the subject outlives them.
+A claim, what it changes, and the source:
 
-Read the existing headings before writing. **Reuse a heading that already fits** rather than coining a near-synonym — three headings about the same area under three names is how the file stops being readable. Coin a new one when the material genuinely has no home.
+```markdown
+- **Invoices go out on the 1st; the date is not user-configurable.** Rules out per-customer billing dates in any scheduling feature — the provider batches on calendar months.
+  _/awos:product interview · 2026-08-07_
+```
 
-Create the file with a short title line if it does not exist.
+If you cannot write the middle part, the entry does not qualify. Later, when that consequence stops applying, the entry is visibly dead and can be removed.
 
-## Three more rules
+Entries sit under a `##` heading that names the subject — the part of the product, not the command that wrote it or the spec that reads it. Three headings for one subject make the file unreadable, so prefer an existing heading over a near-synonym.
 
-**Supersede rather than overwrite.** When a new learning contradicts one already there, keep both: mark the old one superseded with the date. "We used to think X, then we learned Y" is itself worth knowing, and silently swapping the text destroys the reason the current answer is the current answer.
+### Entries that fail
 
-**Write nothing that should not be committed.** This file goes into the repository — reviewed, cloned, and in many cases public. Credentials, access details, customer names, personal data and unannounced commercial terms do not go in. The learning almost always survives the redaction: "the anchor customer requires SSO before renewal" carries the same consequence as naming them, and can be read by anyone.
+Each pair is the same material, rejected and accepted.
 
-**The first run of a project is allowed to be generous.** When `context/learnings.md` is being created, nobody can yet tell which detail will matter; the cost of keeping too much is one oversized file that gardening will trim, and the cost of dropping the user's original brief is permanent. Once there is a store to compare against, the gate above applies in full.
+**Findable in the code.**
+
+- ❌ `- **The app uses PostgreSQL with a customers table keyed by UUID.**` — the schema says this, and this copy goes stale.
+- ✅ `- **Customer IDs are never reused after deletion.** Reporting can join historical rows to current customers; a "restore deleted account" feature must mint a new ID.` — a rule the schema permits but does not state.
+
+**Findable in an artifact.**
+
+- ❌ `- **The export feature produces CSV with one row per transaction.**` — that is the spec, and a second copy competes with it.
+- ✅ `- **CSV was chosen over XLSX because the customer's accountant uses a legacy tool that rejects XLSX.** Do not "upgrade" the format.` — the reason the spec does not carry.
+
+**No consequence.**
+
+- ❌ `- **The founder prefers the word "workspace" over "team".**` — nothing is built differently.
+- ✅ A definition in the glossary, where the distinction constrains every label the user sees.
+
+**A quote, not a claim.**
+
+- ❌ `- **User said they'd probably want invoices monthly, maybe configurable later.**` — the reader must still interpret this.
+- ✅ Resolve it first. If it stays open, that is the learning: `- **Whether invoice dates become configurable is deferred, not rejected.** Keep the date in one place.`
+
+## Rules
+
+**Supersede, do not overwrite.** When a new learning contradicts an old one, keep both and mark the old one superseded with the date. "We used to think X, then we learned Y" explains why the current answer is current. Glossary definitions are the exception: correct them in place, because nobody needs the history of a word.
+
+**Write nothing that must not be committed.** These files go into the repository, often a public one. Keep out credentials, customer names, personal data and unannounced commercial terms. The learning usually survives: "the anchor customer requires SSO before renewal" carries the same consequence as the name.
+
+**Be generous on the first run.** While the files are new, nobody can tell which detail matters. Too much costs one large file; too little loses the user's brief permanently. Apply the gate in full once there is something to compare against.
 
 ## Done when
 
-Every claim the conversation established that passes both conditions is either written down or already carried by an artifact — and every entry written carries a stated consequence and a source.
+Every resolved claim from the conversation that passes both conditions is written down or already carried by an artifact, every learning has a consequence and a source, and every business term the conversation pinned down is in the glossary.

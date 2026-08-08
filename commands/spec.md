@@ -30,6 +30,7 @@ Your primary task is to create a new functional specification file. You will det
 - **Template File:** `.awos/templates/functional-spec-template.md`.
 - **Context File 1:** `context/product/product-definition.md`.
 - **Context File 2:** `context/product/roadmap.md`.
+- **Context Files 3:** `context/product/learnings.md`, `context/product/glossary.md`, and `context/product/learnings/*.md` if present — read before interviewing, appended to after.
 - **External Command:** `.awos/scripts/create-spec-directory.sh [short-name]`.
 - **Output File:** `context/spec/[index]-[short-name]/functional-spec.md`.
 
@@ -88,6 +89,7 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 
 - **Consume source material already in the prompt — before interviewing, and without a new question.** Scan `<user_prompt>` for ticket IDs, URLs, or file paths (a Jira/Linear/GitHub issue reference, a Confluence/Notion link, an attached design doc, a local path). When any are present, fetch or read them first and fold what they say into the known-information extraction below — this is what turns a cold interview into a warm one, cutting the questions in Step 3 to the few genuinely open details. Use whatever transport is available for each reference, in this order of preference: a matching MCP tool already in context, a CLI already on PATH (`gh`, `glab`, a tracker CLI), `WebFetch` for a plain URL, or a direct file read for a path; when `context/sources/sources.md` exists with `## Status: configured`, use the transport it records for that service. Do **not** add an "any source material?" question — the ask is net-negative when the prompt carries no references. Read only what the prompt already points at; list anything referenced but unreachable in your Step 3 summary so the user knows that context is missing, rather than silently skipping it. (When this command is invoked by the generated `/implement-feature` flow, the fetch stage has already pulled the ticket and its surrounding context and passes them in — read that bundle rather than re-fetching.)
 - Read `context/product/product-definition.md` and `context/product/roadmap.md` to understand goals, target audience, and priorities.
+- **Read what the project already knows, before writing a single question.** `context/product/learnings.md` holds what earlier conversations established but no artifact could carry — reasons, constraints, rejected alternatives. `context/product/glossary.md` holds the words this business uses; adopt them in the spec rather than inventing labels. If `context/product/learnings/` exists, each file's frontmatter `description` says when it is worth reading — read the ones that match this topic. Every fact you find here is a question you must not ask. **Finding facts is your job, not the user's; their time is for decisions only.** A question whose answer is already recorded is the failure this step exists to prevent, and it is the reason users abandon the workflow.
 - Focus on your topic only. Extract all information already documented about it:
   - The purpose and rationale (why it exists)
   - Expected user capabilities (what users will be able to do)
@@ -97,8 +99,8 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 
 ### Step 3: Interactive Drafting and Clarification
 
-- **Before asking questions:** Present a summary to the user: "Based on the roadmap and product definition, here's what I understand: [summarize known purpose, user capabilities, and context]. Let me clarify the remaining details."
-- Only ask questions whose answers are NOT already documented in the roadmap or product definition.
+- **Before asking questions:** Present a summary to the user: "Based on the roadmap and product definition, here's what I understand: [summarize known purpose, user capabilities, and context]. Let me clarify the remaining details." When learnings supplied part of that understanding, say so — it shows the user their earlier explanations were kept, and lets them correct one that has gone stale.
+- Only ask questions whose answers are NOT already documented in the roadmap, the product definition, or the learnings.
 - Your questions should emphasize the 'why' - the problem or user pain point this feature is meant to address, and the specific user value it delivers.
 - **Scope Rule:** All questions and discussions must relate ONLY to your **topic**. Do not ask about or discuss functionality from other roadmap items.
 - **Non-Technical Questions Only:** Your questions must be answerable by a product manager or designer — never ask about data models, API design, storage, architecture, state management, caching, or any implementation detail. Frame every question in terms of what the user sees, does, or experiences. If you need to understand a behavior, ask "What should the user see when…?" not "How should the system handle…?"
@@ -157,3 +159,13 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 
 1.  Present the saved specification and ask the user to review it for inaccuracies or missing details. Resolve each `[NEEDS CLARIFICATION: …]` marker with them via `AskUserQuestion`, offering the assumption you would otherwise make as the recommended first option (with a free-text option for open-ended markers); fold each answer back into the relevant requirement and its acceptance criteria, then re-save. If no answer comes (e.g. an unattended `claude -p` run), leave the markers in place; the user — or `/awos:tech` — can resolve them later.
 2.  Report the saved path and the next command: `/awos:tech`.
+
+### Step 7: Record Learnings
+
+The interview surfaced more than the spec can hold. The spec keeps what the feature does; the reasons, the constraints and the rejected alternatives have nowhere else to go, and this is the conversation where the user explains the most.
+
+1.  Invoke the skill: `Skill(name="awos-writing-learnings")`. If it is not found, say so and stop this step — a missing skill costs the learnings, not the spec.
+2.  Apply it to the whole interview: the answers behind each requirement, anything the user corrected, any boundary they named, and the answers to the `[NEEDS CLARIFICATION: …]` markers resolved in Step 6.
+3.  Write the files the skill names.
+
+Nothing about the feature's behaviour belongs here — that is the spec, and a second copy competes with it. What belongs here is the part of the conversation the spec had to leave out.

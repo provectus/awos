@@ -9,6 +9,7 @@ This command validates that the implemented feature meets all acceptance criteri
 - `context/spec/[index]-[name]/functional-spec.md` — marks criteria `[x]`, sets Status to `Completed`.
 - `context/spec/[index]-[name]/technical-considerations.md` — sets Status to `Completed`.
 - `context/product/roadmap.md` — marks the corresponding roadmap item `[x]`.
+- `context/product/learnings.md` and `context/product/glossary.md` — records what building the feature taught, then tends the store.
 
 ## Prerequisites
 

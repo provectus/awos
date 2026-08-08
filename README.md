@@ -50,6 +50,7 @@ Once your foundation is set, iterate through this cycle for each feature on your
 | `/awos:tasks`     | Breaks the Tech Spec into a task list for engineers.                              | [Details](docs/commands/tasks.md)     |
 | `/awos:implement` | Runs tasks — delegates coding to sub-agents, tracks progress.                     | [Details](docs/commands/implement.md) |
 | `/awos:verify`    | Verifies spec completion — checks acceptance criteria, marks Status as Completed. | [Details](docs/commands/verify.md)    |
+| `/awos:remember`  | Records something worth keeping about the product into the project's learnings.   | [Details](docs/commands/remember.md)  |
 
 > **When to skip the cycle**: Not every change needs a spec. Hotfixes, simple bugfixes, and small edits don't require the full spec workflow — Claude Code's built-in plan mode handles those just fine.
 

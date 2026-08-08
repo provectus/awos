@@ -474,26 +474,103 @@ test('every skill wrapper @-imports its body and mirrors its description', () =>
   }
 });
 
-test('commands that capture learnings invoke the awos-writing-learnings skill', () => {
-  // The admission gate and the entry format live in the skill, so every
-  // capture site must go through it. A command that writes
-  // context/product/learnings.md without invoking the skill is writing ungated
-  // entries — the quote-dump failure the gate exists to prevent.
-  const capturingCommands = ['product.md'];
+test('every command that captures learnings goes through the skill', () => {
+  // The admission gate and the entry format live in the skill. A command that
+  // writes the learnings files without invoking it is writing ungated entries
+  // — the quote-dump failure the gate exists to prevent — and five inline
+  // copies of the rules would drift apart.
+  const capturingCommands = [
+    'product.md',
+    'roadmap.md',
+    'architecture.md',
+    'spec.md',
+    'verify.md',
+    'remember.md',
+  ];
 
   for (const file of capturingCommands) {
-    const body = fs.readFileSync(path.join(commandsDir, file), 'utf8');
-    assert.match(
-      body,
-      /context\/product\/learnings\.md/,
-      `commands/${file} must name context/product/learnings.md as the store it writes`
-    );
+    const body = readUtf8(path.join(commandsDir, file));
     assert.match(
       body,
       /Skill\(name="awos-writing-learnings"\)/,
-      `commands/${file} must invoke Skill(name="awos-writing-learnings") rather than restating the gate inline`
+      `commands/${file} records learnings, so it must invoke Skill(name="awos-writing-learnings") rather than restate the gate inline`
     );
   }
+});
+
+test('every command that reads learnings names the store', () => {
+  // Recall is what makes capture worth doing: the interview starts warm
+  // instead of re-asking what the user already explained. The failure is
+  // silent — the command just runs the cold interview it always ran — so the
+  // reference is pinned here.
+  const recallCommands = [
+    'spec.md',
+    'tech.md',
+    'roadmap.md',
+    'architecture.md',
+  ];
+
+  for (const file of recallCommands) {
+    const body = readUtf8(path.join(commandsDir, file));
+    assert.match(
+      body,
+      /context\/product\/learnings\.md/,
+      `commands/${file} must read context/product/learnings.md before interviewing, or it re-asks what the project already knows`
+    );
+    assert.match(
+      body,
+      /context\/product\/glossary\.md/,
+      `commands/${file} must read context/product/glossary.md so it uses the project's own vocabulary`
+    );
+  }
+});
+
+test('spec.md refuses to ask what the learnings already answer', () => {
+  // The whole point of recall. Without this rule the command reads the file
+  // and interviews the user anyway, which is the demotivating behaviour the
+  // learnings store exists to end.
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.match(
+    body,
+    /already documented in the roadmap, the product definition, or the learnings/i,
+    'commands/spec.md Step 3 must exclude learnings-answered questions from the interview'
+  );
+});
+
+test('verify.md tends the store after recording', () => {
+  // Capture appends and nothing removes, so the store silts up unless one
+  // step owns pruning. /awos:verify is that step — the feature is done and
+  // nothing downstream is waiting. Pruning that belongs to no step never
+  // happens.
+  const body = readUtf8(path.join(commandsDir, 'verify.md'));
+  assert.match(
+    body,
+    /Skill\(name="awos-tending-learnings"\)/,
+    'commands/verify.md must invoke Skill(name="awos-tending-learnings") — it is the only step that removes anything'
+  );
+  assert.ok(
+    body.indexOf('awos-writing-learnings') <
+      body.indexOf('awos-tending-learnings'),
+    'commands/verify.md must record before it tends, or the pass runs without the entries it should be consolidating'
+  );
+});
+
+test('architecture.md records learnings before deleting brownfield.md', () => {
+  // Step order is load-bearing: brownfield findings and the triage outcomes
+  // are deleted at the end of this command, so anything the three artifacts
+  // could not absorb is lost unless it is captured first.
+  const body = readUtf8(path.join(commandsDir, 'architecture.md'));
+  const capture = body.indexOf('Skill(name="awos-writing-learnings")');
+  const cleanup = body.indexOf('brownfield.md` exists, delete it');
+  assert.ok(capture > -1, 'commands/architecture.md must record learnings');
+  assert.ok(
+    cleanup > -1,
+    'commands/architecture.md must still clean up brownfield.md'
+  );
+  assert.ok(
+    capture < cleanup,
+    'commands/architecture.md must record learnings BEFORE the brownfield cleanup deletes the findings'
+  );
 });
 
 test('implement.md uses XML scope, investigate, skills, and completion-evidence snippets', () => {

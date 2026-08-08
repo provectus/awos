@@ -8,6 +8,8 @@ This command creates (or updates) your product roadmap — an ordered list of fe
 
 - `context/product/roadmap.md`
 
+It also appends to `context/product/learnings.md` and `context/product/glossary.md` — what you explained about a feature that a one-line roadmap entry cannot hold, and why the order is what it is.
+
 ## Prerequisites
 
 - `context/product/product-definition.md` must exist. Run `/awos:product` first.

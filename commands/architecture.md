@@ -22,6 +22,7 @@ Your task is to manage the architecture file located at `context/product/archite
 - **Optional Input:** `context/product/brownfield.md` (produced by `/awos:product`, extended by `/awos:roadmap`; deleted at end of this command).
 - **Optional Input:** `context/sources/sources.md` (external source configuration for targeted retrieval).
 - **Primary Input/Output:** `context/product/architecture.md` (The file to create or update).
+- **Input/Output:** `context/product/learnings.md` and `context/product/glossary.md` — read before drafting, appended to before cleanup.
 
 ---
 
@@ -53,7 +54,7 @@ Follow this logic precisely.
 
 ## Scenario 1: Creation Mode
 
-1.  Read and synthesize the product definition and roadmap, paying close attention to features planned for Phase 1.
+1.  Read and synthesize the product definition and roadmap, paying close attention to features planned for Phase 1. Read `context/product/learnings.md` and `context/product/glossary.md` too if they exist — a constraint recorded earlier (a mandated provider, a data-residency rule, a technology already ruled out) decides architectural choices, and asking again about one wastes the user's time.
 2.  **Brownfield context.** Check if `context/product/brownfield.md` exists (produced by `/awos:product` when it detects an existing codebase). If it does:
 
     a. Read `context/product/brownfield.md`.
@@ -144,9 +145,18 @@ Give the user a quick read on whether the stack already has specialist agents �
 3.  Report the saved path and the next commands:
     - `/awos:hire` (always — it owns the canonical coverage report and installs missing specialists).
     - `/awos:spec` after `/awos:hire`.
+4.  Proceed to **Step 5: Record Learnings**.
 
 ---
 
-### Step 5: Brownfield Cleanup
+### Step 5: Record Learnings
+
+Everything gathered during onboarding is about to be deleted. Whatever the three artifacts could not absorb is lost at that point unless it is kept now.
+
+1.  Invoke `Skill(name="awos-writing-learnings")`. If it is not found, say so and continue to Step 6 — but tell the user the brownfield findings will be lost, so they can copy anything they want first.
+2.  Apply it to the triaged findings in `context/product/brownfield.md`, to anything retrieved from `context/sources/`, and to this conversation: why a technology was chosen over its alternatives, a constraint the user named, and every finding they **rejected** — "the codebase looks like it does X, but it does not" is exactly the wrong assumption a future agent would otherwise make again.
+3.  Write the files the skill names.
+
+### Step 6: Brownfield Cleanup
 
 If `context/product/brownfield.md` exists, delete it. Then thoroughly check whether all information from `context/sources/` has been absorbed into `product-definition.md`, `roadmap.md`, and `architecture.md`. If useful information remains in `context/sources/sources.md` that hasn't been captured elsewhere (source URLs, user-pasted content, configuration details), keep the file and add a reference to it in `context/product/product-definition.md` so downstream commands are aware of it. If everything has been absorbed, delete `context/sources/`.

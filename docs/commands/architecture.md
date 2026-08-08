@@ -8,6 +8,8 @@ This command creates (or updates) your system architecture document — the tech
 
 - `context/product/architecture.md`
 
+It also appends to `context/product/learnings.md` and `context/product/glossary.md` — why each technology was chosen over its alternatives, and the brownfield findings you accepted or rejected, which are otherwise deleted with `brownfield.md` at the end of this command.
+
 ## Prerequisites
 
 - `context/product/product-definition.md` must exist.

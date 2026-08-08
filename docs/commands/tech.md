@@ -22,6 +22,8 @@ This command creates the technical specification — the engineering plan that t
 
 ## Key behaviors
 
+- **Reads what the project already learned.** `context/product/learnings.md` carries constraints and rejected alternatives the functional spec could not hold — a technology already ruled out, a limit a customer imposed — so the plan does not propose something the team has already decided against.
+
 - **Structures and contracts, not full implementations.** Describes table schemas (key columns and relationships), API endpoints (methods and payload shapes), and file responsibilities — not complete code.
 - **"Assume but verify."** The agent proposes specific technical decisions as assumptions and asks for your approval before proceeding. Nothing is silently assumed.
 - **Delegates codebase analysis.** If specialist agents exist for your tech stack, the command uses them to analyze existing patterns and conventions.

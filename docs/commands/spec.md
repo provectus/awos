@@ -8,6 +8,8 @@ This command creates a detailed functional specification for a single feature. I
 
 - `context/spec/[index]-[name]/functional-spec.md`
 
+It also appends to `context/product/learnings.md` and `context/product/glossary.md` — the reasons and constraints behind the feature, which the spec itself deliberately cannot carry.
+
 A new numbered directory is created for each spec (e.g., `001-user-auth`, `002-file-upload`).
 
 ## Prerequisites
@@ -18,7 +20,7 @@ A new numbered directory is created for each spec (e.g., `001-user-auth`, `002-f
 ## How it works
 
 1. **Picks the topic**: Either uses your prompt as the feature topic, or automatically selects the next incomplete item from the roadmap.
-2. **Gathers context**: Reads the product definition and roadmap to understand what's already documented about this feature.
+2. **Gathers context**: Reads the product definition, the roadmap, and everything the project has already learned (`context/product/learnings.md`, `context/product/glossary.md`) so the interview starts from what you have already explained rather than from zero.
 3. **Interactive drafting**: Presents what it already knows, then asks targeted questions to fill in the gaps — focusing on the "why" (user pain points) and the "what" (functional requirements). For every requirement, it probes for edge cases like a QA tester would.
 4. **Marks ambiguities**: Anything that can't be resolved gets tagged with `[NEEDS CLARIFICATION: question]` directly in the document.
 5. **Creates the spec**: Runs a script to create the directory and saves the approved spec.

@@ -26,13 +26,13 @@
     "exists": true,
     "contains": ".awos/commands/implement.md"
   },
-  ".awos/skills/awos-writing-learnings/SKILL.md": {
+  ".awos/skills/awos-writing-domain/SKILL.md": {
     "exists": true,
-    "contains": "context/product/learnings.md"
+    "contains": "context/product/domain.md"
   },
-  ".claude/skills/awos-writing-learnings/SKILL.md": {
+  ".claude/skills/awos-writing-domain/SKILL.md": {
     "exists": true,
-    "contains": "@.awos/skills/awos-writing-learnings/SKILL.md"
+    "contains": "@.awos/skills/awos-writing-domain/SKILL.md"
   },
   ".claude/settings.json": {
     "exists": true,
@@ -47,14 +47,6 @@
   },
   "context/spec": {
     "exists": true
-  },
-  ".awos/skills/awos-tending-learnings/SKILL.md": {
-    "exists": true,
-    "contains": "context/product/learnings.md"
-  },
-  ".claude/skills/awos-tending-learnings/SKILL.md": {
-    "exists": true,
-    "contains": "@.awos/skills/awos-tending-learnings/SKILL.md"
   },
   ".awos/commands/remember.md": {
     "exists": true

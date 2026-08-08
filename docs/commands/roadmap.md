@@ -8,7 +8,7 @@ This command creates (or updates) your product roadmap — an ordered list of fe
 
 - `context/product/roadmap.md`
 
-It also appends to `context/product/learnings.md` and `context/product/glossary.md` — what you explained about a feature that a one-line roadmap entry cannot hold, and why the order is what it is.
+It also updates `context/product/domain.md` and `context/product/glossary.md` — how a feature works beyond what a one-line roadmap entry can hold, and the constraint behind the ordering.
 
 ## Prerequisites
 

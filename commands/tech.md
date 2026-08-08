@@ -21,7 +21,7 @@ Your primary task is to create the technical specification for a given feature. 
 - **Primary Context 1:** The `functional-spec.md` from the chosen spec directory.
 - **Primary Context 2:** `context/product/architecture.md`.
 - **Additional Context:** The project's source code.
-- **Additional Context:** `context/product/learnings.md`, `context/product/glossary.md`, and `context/product/learnings/*.md` if present.
+- **Additional Context:** `context/product/domain.md`, `context/product/glossary.md`, and `context/product/domain/*.md` if present.
 - **Spec Directories:** Located under `context/spec/`.
 - **Output File:** The `technical-considerations.md` file inside the chosen spec directory.
 
@@ -49,7 +49,7 @@ Follow this process precisely.
 
 1.  Read the `functional-spec.md` from the chosen directory and the main `context/product/architecture.md`. These two inputs are independent — issue both `Read` calls in a single tool-use block (parallel tool calls). Sequence reads only when one's output feeds the next.
 
-    Read `context/product/learnings.md` and `context/product/glossary.md` in the same block. They carry the constraints and rejected alternatives the functional spec had to leave out — a technology ruled out for a reason, a limit imposed by a customer — and proposing something already rejected is the mistake they exist to prevent. If `context/product/learnings/` exists, read the files whose frontmatter `description` matches this feature.
+    Read `context/product/domain.md` and `context/product/glossary.md` in the same block. They carry the constraints and rejected alternatives the functional spec had to leave out — a technology ruled out for a reason, a limit imposed by a customer — and proposing something already rejected is the mistake they exist to prevent. If `context/product/domain/` exists, read the files whose frontmatter `description` matches this feature.
 
 2.  Identify candidate specialist subagents: determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Enumerate the universe of registered specialists by inspecting the `Agent` tool's description block in your own system prompt. This is an introspection step — no tool call is required, but it is mandatory. Both kinds of agents are listed there: project-local ones (declared as files under `.claude/agents/*.md`) and plugin-provided ones. Tell them apart by the `plugin-name:` prefix on `subagent_type` — plugin-provided agents carry it (e.g. `python-development:python-pro`, `backend-development:backend-architect`); project-local agents do not. Match each stack against this list, plus always-available built-ins (`general-purpose`, `Explore`, `Plan`).
 

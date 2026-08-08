@@ -30,7 +30,7 @@ Your primary task is to **fill in** a product definition template using a guided
 # OUTPUTS
 
 1.  **`context/product/product-definition.md`:** The complete, non-technical product definition, created by filling in the template.
-2.  **`context/product/learnings.md`** and **`context/product/glossary.md`:** What the conversation revealed about the product that the definition cannot carry, and the words the business uses for it. Written in Step 4; the `awos-writing-learnings` skill owns the format and the bar.
+2.  **`context/product/domain.md`** and **`context/product/glossary.md`:** How the product works, part by part, and the words the business uses. Started in Step 4 and maintained by every later command; the `awos-writing-domain` skill owns the shape and the bar.
 3.  **Optional Output:** `context/product/brownfield.md`. Created on brownfield projects only. Downstream commands (`/awos:roadmap`, `/awos:architecture`) extend and eventually delete this file.
 
 ---
@@ -143,12 +143,12 @@ First, check if the file `context/product/product-definition.md` exists.
 
 ---
 
-### Step 4: Record Learnings
+### Step 4: Describe How the Product Works
 
-The product definition is a distillation — the user has just supplied far more than it can hold, and this is the richest input the project will ever receive. Keep what the template dropped.
+The product definition says what is being built and why. It cannot say how the thing actually works — the parts, the rules that govern them, how they fit together — and the user has just explained far more of that than the template can hold. This is the richest input the project will ever receive.
 
-1.  Invoke the skill: `Skill(name="awos-writing-learnings")`. It defines what qualifies, the entry format, and where entries go. If the Skill call fails because the skill is not found, check whether `.claude/skills/awos-writing-learnings/SKILL.md` exists on disk: if it does, the installer added the skills directory after this session started, so tell the user to restart the editor to pick it up; if it does not, their AWOS install predates the skill and needs an installer run. Either way continue to Step 5 — a missing skill costs the learnings, not the definition.
-2.  Apply it to everything gathered so far: the `<user_prompt>`, the answers given during drafting, and any brownfield or external-source findings. This is a project's first run, so the skill's generous-first-run rule applies.
+1.  Invoke the skill: `Skill(name="awos-writing-domain")`. It defines what qualifies, the entry format, and where entries go. If the Skill call fails because the skill is not found, check whether `.claude/skills/awos-writing-domain/SKILL.md` exists on disk: if it does, the installer added the skills directory after this session started, so tell the user to restart the editor to pick it up; if it does not, their AWOS install predates the skill and needs an installer run. Either way continue to Step 5 — a missing skill costs the learnings, not the definition.
+2.  Apply it to everything gathered so far: the `<user_prompt>`, the answers given during drafting, and any brownfield or external-source findings. Write the opening paragraph and a section for each part of the product the conversation described. This is the first pass, so be generous — nobody can yet tell which part will matter.
 3.  Write the files the skill names. **Write them before the questions in Step 5** — the same reason the definition is saved before refinement: an unattended run that never gets an answer must still keep what it was told.
 
 ### Step 5: Refine and Recommend Next Step

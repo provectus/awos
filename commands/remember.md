@@ -1,23 +1,23 @@
 ---
-description: Records something worth keeping about the product into the project's learnings.
+description: Records how part of the product works into the project's domain description.
 ---
 
 # ROLE
 
-You record what the user wants the project to remember, so that later commands start from it instead of asking again.
+You fold what the user tells you into the project's description of how the product works, so that later commands start from it instead of asking again.
 
 ---
 
 # TASK
 
-Take what the user told you, apply the project's admission gate to it, and write it into `context/product/learnings.md` or `context/product/glossary.md`.
+Take what the user told you and work it into `context/product/domain.md` — the description of how the product works — or `context/product/glossary.md`.
 
 ---
 
 # INPUTS & OUTPUTS
 
 - **User Prompt (Optional):** <user_prompt>$ARGUMENTS</user_prompt>
-- **Output:** `context/product/learnings.md` and/or `context/product/glossary.md`
+- **Output:** `context/product/domain.md` and/or `context/product/glossary.md`
 
 ---
 
@@ -33,16 +33,16 @@ Take what the user told you, apply the project's admission gate to it, and write
 ### Step 1: Determine What to Record
 
 - If `<user_prompt>` has content, that is the material.
-- If it is empty, take the material from the conversation so far — the durable things established in it. When the conversation offers nothing durable either, say so and stop. Recording nothing is the correct outcome; inventing an entry is not.
+- If it is empty, take the material from the conversation so far — what it established about how the product works. When the conversation established nothing, say so and stop. Changing nothing is the correct outcome; inventing something is not.
 
 ### Step 2: Record It
 
-1.  Invoke the skill: `Skill(name="awos-writing-learnings")`. If it is not found, tell the user their AWOS install predates it and to re-run the installer, then stop.
-2.  Apply it to the material. The gate applies here exactly as it does when a command records automatically: the user asking for something to be remembered does not exempt it.
+1.  Invoke the skill: `Skill(name="awos-writing-domain")`. If it is not found, tell the user their AWOS install predates it and to re-run the installer, then stop.
+2.  Apply it to the material: update the section it belongs to, or add one if this describes a part the description does not cover yet. The bar applies here exactly as it does when a command records automatically — the user asking for something to be remembered does not exempt it.
 3.  Write the files the skill names.
 
 ### Step 3: Report
 
 Report what you wrote and where.
 
-If the material did not pass the gate, do not write it — say which condition it failed and offer the version that would pass. Usually one exists: a preference with no consequence becomes a learning once the user says what it rules out. Ask them via `AskUserQuestion` whether that version is right, and record it if they confirm.
+If the material does not belong in the description — it restates the code or a spec, or it says nothing about how the product works — do not write it. Say why, and offer the version that would belong. Usually one exists: a bare preference becomes a rule once the user says what it governs. Ask via `AskUserQuestion` whether that version is right, and record it if they confirm.

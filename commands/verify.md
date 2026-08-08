@@ -23,7 +23,7 @@ Verify a specification's implementation against its acceptance criteria. For eac
   - `tasks.md`
 - **Output:** Updated spec files with verified criteria marked and Status set to `Completed`
 - **Output (Optional):** Suggested `/awos:*` commands to run if product context documents need updates
-- **Output:** `context/product/learnings.md` and `context/product/glossary.md` — what implementation taught, and a tended store
+- **Output:** `context/product/domain.md` and `context/product/glossary.md` — updated for this feature, then reviewed as a whole
 
 ---
 
@@ -94,28 +94,21 @@ Check if `context/product/` documents need updates based on what was learned dur
 
 **Skip this step** if no significant implementation learnings or deviations occurred.
 
-### Step 6: Record What Implementation Taught
+### Step 6: Update and Review the Domain Description
 
-Building a feature reveals things planning could not. Where the result differs from the spec, the difference and its reason are worth more than either document alone — without the reason, the divergence reads as a mistake later.
+The feature is verified, so the product now works differently than it did — and building it revealed things planning could not. This is also the one point in the cycle where reviewing the whole description is safe: nothing downstream is waiting on it.
 
-1. Invoke `Skill(name="awos-writing-learnings")`. If it is not found, say so and continue to Step 7.
-2. Apply it to this cycle: where the implementation diverged from the spec or the technical considerations and why, a constraint discovered only by building (an API limit, a library that could not do what was assumed), and anything the user explained while resolving a verification failure.
-3. Write the files the skill names.
+1. Invoke `Skill(name="awos-writing-domain")`. If it is not found, say so and continue to the report.
+2. **Update.** Bring the sections this feature touched up to date, including where the implementation diverged from the spec and why, and any constraint discovered only by building (an API limit, a library that could not do what was assumed).
+3. **Review.** Follow the skill's review pass over the whole description: correct what has drifted, cut back what an artifact now states, fill a part that has no section, and hold the size budget. Surface a contradiction to the user rather than resolving it silently.
+4. Report what changed.
 
-Do not restate what was built — the code and the spec both carry that. Record only what neither of them explains.
+Do not restate what was built — the code and the spec both carry that. Describe how the product now works, and why.
 
-### Step 7: Tend the Store
-
-The feature is finished, nothing downstream is waiting, and the store has just grown. This is the one point in the cycle where removing is safe, and pruning that belongs to no step never happens.
-
-1. Invoke `Skill(name="awos-tending-learnings")`. If it is not found, say so and continue to the report.
-2. Follow it: retire what the artifacts have absorbed, merge duplicates, bring both files inside their budget, and put any contradiction to the user rather than resolving it silently.
-3. Report what changed, as the skill describes.
-
-### Step 8: Report
+### Step 7: Report
 
 - Success: spec verified and marked complete; report the verified criteria count.
 - Failure: list the unmet criteria with the command output that demonstrated the failure.
 - Verification disabled: list criteria marked `[?]` so the user knows what still needs manual confirmation.
 - **Visual evidence:** for any UI criteria verified, list the retained screenshot paths under `docs/screenshots/` so the user can review the look-and-feel without re-running.
-- **Knowledge:** what was recorded in Step 6 and what tending changed in Step 7 — the git diff on `context/product/` is how the user reviews it.
+- **Domain description:** which sections Step 6 changed — the git diff on `context/product/` is how the user reviews it.

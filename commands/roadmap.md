@@ -23,7 +23,7 @@ Your task is to manage the product roadmap file located at `context/product/road
 - **Prerequisite Input:** `context/product/product-definition.md`. This file MUST exist.
 - **Optional Input/Output:** `context/product/brownfield.md` (produced by `/awos:product` on brownfield projects; this command appends a `## Capabilities` section).
 - **Optional Input:** `context/sources/sources.md` (external source configuration for targeted retrieval).
-- **Input/Output:** `context/product/learnings.md` and `context/product/glossary.md` — read before asking, appended to at the end.
+- **Input/Output:** `context/product/domain.md` and `context/product/glossary.md` — read before asking, updated at the end.
 - **Primary Input/Output:** `context/product/roadmap.md`. This is the file you will create or update.
 
 ---
@@ -56,7 +56,7 @@ Follow this logic precisely.
 
 ## Scenario 1: Creation Mode
 
-1.  Read `context/product/product-definition.md` and the template at `.awos/templates/roadmap-template.md`. Also read `context/product/learnings.md` and `context/product/glossary.md` if they exist — they carry what the user already explained about these features, and its words. Use their terms for roadmap item names, and do not re-ask anything they answer.
+1.  Read `context/product/product-definition.md` and the template at `.awos/templates/roadmap-template.md`. Also read `context/product/domain.md` and `context/product/glossary.md` if they exist — they describe how the product already works, and in which words. Use their terms for roadmap item names, and do not re-ask anything they answer.
 2.  **Brownfield context.** Check if `context/product/brownfield.md` exists (produced by `/awos:product` when it detects an existing codebase). If it does:
 
     a. Read `context/product/brownfield.md`.
@@ -117,7 +117,7 @@ Follow this logic precisely.
 
 ## Scenario 2: Update Mode
 
-1.  Read the existing `context/product/roadmap.md`, plus `context/product/learnings.md` and `context/product/glossary.md` if they exist.
+1.  Read the existing `context/product/roadmap.md`, plus `context/product/domain.md` and `context/product/glossary.md` if they exist.
 2.  Ask the user what to adjust. Do not ask about anything the learnings already settle.
 3.  Process requests to mark items complete (`[ ]` to `[x]`), move, add, edit, or remove items.
 4.  Maintain template structure and logical dependency order. If a request appears to break a dependency (e.g., placing reporting before data entry), surface the concern before applying.
@@ -129,5 +129,5 @@ Follow this logic precisely.
 
 1.  Write the roadmap content to `context/product/roadmap.md`. **Write the file without waiting for approval** — a roadmap is reversible (re-run `/awos:roadmap` to revise), so the deliverable is never gated behind a confirmation an unattended run cannot answer.
 2.  Report the saved path, then present the roadmap for review. If brownfield capabilities were appended in Creation Mode, triage them with the user now: use `AskUserQuestion` to offer **Accept** and **Reject** for each (the user can also select "Other" for free-text feedback — treat it according to intent). Remove rejected findings from `context/product/brownfield.md`, re-anchor the roadmap if needed, and re-save. If the user requests other changes, apply them and re-save; otherwise they can revise later by re-running `/awos:roadmap`.
-3.  **Record learnings.** Invoke `Skill(name="awos-writing-learnings")` and apply it to this conversation: what the user explained about a feature that the one-line roadmap entry cannot hold, why the order is what it is, and anything they rejected. Include the triage outcomes from substep 2 — a rejected finding is knowledge too, since "we looked and it does not work that way" prevents the same wrong assumption next time. Write the files the skill names. If the skill is not found, say so and continue.
+3.  **Update the domain description.** Invoke `Skill(name="awos-writing-domain")` and apply it to this conversation: what the user explained about how a feature works that the one-line roadmap entry cannot hold, the constraint behind the ordering, and anything they rejected. Include the triage outcomes from substep 2 — a rejected finding belongs in the description too, since "the product looks like it does X, but it does not" prevents the same wrong assumption next time. Write the files the skill names. If the skill is not found, say so and continue.
 4.  Report the next command: `/awos:architecture`.

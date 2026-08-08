@@ -1,5 +1,5 @@
 ---
-description: Records something worth keeping about the product into the project's learnings.
+description: Records how part of the product works into the project's domain description.
 argument-hint: '[what to remember, optional]'
 ---
 

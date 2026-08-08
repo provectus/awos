@@ -50,7 +50,7 @@ Once your foundation is set, iterate through this cycle for each feature on your
 | `/awos:tasks`     | Breaks the Tech Spec into a task list for engineers.                              | [Details](docs/commands/tasks.md)     |
 | `/awos:implement` | Runs tasks — delegates coding to sub-agents, tracks progress.                     | [Details](docs/commands/implement.md) |
 | `/awos:verify`    | Verifies spec completion — checks acceptance criteria, marks Status as Completed. | [Details](docs/commands/verify.md)    |
-| `/awos:remember`  | Records something worth keeping about the product into the project's learnings.   | [Details](docs/commands/remember.md)  |
+| `/awos:remember`  | Records how part of the product works into the project's domain description.      | [Details](docs/commands/remember.md)  |
 
 > **When to skip the cycle**: Not every change needs a spec. Hotfixes, simple bugfixes, and small edits don't require the full spec workflow — Claude Code's built-in plan mode handles those just fine.
 
@@ -96,7 +96,7 @@ All framework service data lives in the `.awos/` directory:
 This is where you customize **`awos`** to fit your needs:
 
 - **`.claude/commands/awos/{command}.md`** - Lightweight wrapper files that link to `.awos/commands/{command}.md`
-- **`.claude/skills/{skill}/SKILL.md`** - Wrapper files that link to `.awos/skills/{skill}/SKILL.md`, the reference the commands share — such as the rules for what belongs in `context/product/learnings.md`
+- **`.claude/skills/{skill}/SKILL.md`** - Wrapper files that link to `.awos/skills/{skill}/SKILL.md`, the reference the commands share — such as the rules for what belongs in `context/product/domain.md`
 
 Both are preserved when you update **`awos`**, so your edits survive.
 

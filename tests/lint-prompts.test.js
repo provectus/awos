@@ -389,7 +389,7 @@ test('claude/commands operation is marked preserveOnUpdate', () => {
 test('claude/skills operation is marked preserveOnUpdate', () => {
   // Skills land in the user's own `.claude/skills/` area, the same
   // customization zone as the command wrappers. A project that has tuned the
-  // learnings gate must not have that edit silently reverted by an update.
+  // domain-description rules must not have that edit silently reverted by an update.
   const { copyOperations } = require(
     path.join(repoRoot, 'src', 'config', 'setup-config.js')
   );
@@ -474,9 +474,9 @@ test('every skill wrapper @-imports its body and mirrors its description', () =>
   }
 });
 
-test('every command that captures learnings goes through the skill', () => {
+test('every command that writes the domain description goes through the skill', () => {
   // The admission gate and the entry format live in the skill. A command that
-  // writes the learnings files without invoking it is writing ungated entries
+  // writes the domain description without invoking it is writing unshaped prose
   // — the quote-dump failure the gate exists to prevent — and five inline
   // copies of the rules would drift apart.
   const capturingCommands = [
@@ -492,13 +492,13 @@ test('every command that captures learnings goes through the skill', () => {
     const body = readUtf8(path.join(commandsDir, file));
     assert.match(
       body,
-      /Skill\(name="awos-writing-learnings"\)/,
-      `commands/${file} records learnings, so it must invoke Skill(name="awos-writing-learnings") rather than restate the gate inline`
+      /Skill\(name="awos-writing-domain"\)/,
+      `commands/${file} writes the domain description, so it must invoke Skill(name="awos-writing-domain") rather than restate the rules inline`
     );
   }
 });
 
-test('every command that reads learnings names the store', () => {
+test('every command that interviews the user reads the domain description first', () => {
   // Recall is what makes capture worth doing: the interview starts warm
   // instead of re-asking what the user already explained. The failure is
   // silent — the command just runs the cold interview it always ran — so the
@@ -514,8 +514,8 @@ test('every command that reads learnings names the store', () => {
     const body = readUtf8(path.join(commandsDir, file));
     assert.match(
       body,
-      /context\/product\/learnings\.md/,
-      `commands/${file} must read context/product/learnings.md before interviewing, or it re-asks what the project already knows`
+      /context\/product\/domain\.md/,
+      `commands/${file} must read context/product/domain.md before interviewing, or it re-asks what the project already knows`
     );
     assert.match(
       body,
@@ -525,51 +525,54 @@ test('every command that reads learnings names the store', () => {
   }
 });
 
-test('spec.md refuses to ask what the learnings already answer', () => {
+test('spec.md refuses to ask what the domain description already answers', () => {
   // The whole point of recall. Without this rule the command reads the file
   // and interviews the user anyway, which is the demotivating behaviour the
-  // learnings store exists to end.
+  // domain description exists to end.
   const body = readUtf8(path.join(commandsDir, 'spec.md'));
   assert.match(
     body,
-    /already documented in the roadmap, the product definition, or the learnings/i,
-    'commands/spec.md Step 3 must exclude learnings-answered questions from the interview'
+    /already documented in the roadmap, the product definition, or the domain description/i,
+    'commands/spec.md Step 3 must exclude questions the domain description already answers'
   );
 });
 
-test('verify.md tends the store after recording', () => {
-  // Capture appends and nothing removes, so the store silts up unless one
-  // step owns pruning. /awos:verify is that step — the feature is done and
-  // nothing downstream is waiting. Pruning that belongs to no step never
-  // happens.
+test('verify.md both updates and reviews the domain description', () => {
+  // The description drifts from the product unless one step owns the
+  // whole-document review, and /awos:verify is the only point in the cycle
+  // where nothing downstream is waiting on it. A review that belongs to no
+  // step never happens.
   const body = readUtf8(path.join(commandsDir, 'verify.md'));
   assert.match(
     body,
-    /Skill\(name="awos-tending-learnings"\)/,
-    'commands/verify.md must invoke Skill(name="awos-tending-learnings") — it is the only step that removes anything'
+    /\*\*Update\.\*\*/,
+    'commands/verify.md must update the sections this feature touched'
   );
-  assert.ok(
-    body.indexOf('awos-writing-learnings') <
-      body.indexOf('awos-tending-learnings'),
-    'commands/verify.md must record before it tends, or the pass runs without the entries it should be consolidating'
+  assert.match(
+    body,
+    /\*\*Review\.\*\*/,
+    "commands/verify.md must run the skill's review pass over the whole description, or drift accumulates unchecked"
   );
 });
 
-test('architecture.md records learnings before deleting brownfield.md', () => {
+test('architecture.md updates the domain description before deleting brownfield.md', () => {
   // Step order is load-bearing: brownfield findings and the triage outcomes
   // are deleted at the end of this command, so anything the three artifacts
   // could not absorb is lost unless it is captured first.
   const body = readUtf8(path.join(commandsDir, 'architecture.md'));
-  const capture = body.indexOf('Skill(name="awos-writing-learnings")');
+  const capture = body.indexOf('Skill(name="awos-writing-domain")');
   const cleanup = body.indexOf('brownfield.md` exists, delete it');
-  assert.ok(capture > -1, 'commands/architecture.md must record learnings');
+  assert.ok(
+    capture > -1,
+    'commands/architecture.md must update the domain description'
+  );
   assert.ok(
     cleanup > -1,
     'commands/architecture.md must still clean up brownfield.md'
   );
   assert.ok(
     capture < cleanup,
-    'commands/architecture.md must record learnings BEFORE the brownfield cleanup deletes the findings'
+    'commands/architecture.md must update the domain description BEFORE the brownfield cleanup deletes the findings'
   );
 });
 

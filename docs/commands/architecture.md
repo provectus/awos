@@ -24,7 +24,7 @@ After saving, the agent reviews your tech stack against available specialist age
 
 ## Brownfield mode
 
-If `/awos:product` detected an existing codebase (leaving a `context/product/brownfield.md`), this command discovers the **existing tech stack** via a focused `Explore` pass and uses those findings as the **defaults** for the architecture decisions they cover (you confirm or change each one; where no finding exists, it falls back to a best-practice default labeled as an assumption). It then cleans up the brownfield scaffolding — deleting `brownfield.md` and removing `context/sources/` unless durable source config is worth keeping. See the [Brownfield Adoption Guide](../brownfield-adoption.md) for the artifact lifecycle and secret-handling guidance.
+If `/awos:product` detected an existing codebase (leaving a `context/product/brownfield.md`), this command discovers the **existing tech stack** via a focused `Explore` pass and uses those findings as the **defaults** for the architecture decisions they cover (brownfield-seeded defaults are triaged with you after the document is saved; where no finding exists, it falls back to a best-practice default labeled as an assumption). It then cleans up the brownfield scaffolding — deleting `brownfield.md` and removing `context/sources/` unless durable source config is worth keeping. See the [Brownfield Adoption Guide](../brownfield-adoption.md) for the artifact lifecycle and secret-handling guidance.
 
 ## Common misconceptions
 

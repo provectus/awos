@@ -75,7 +75,7 @@ The **`awos`** framework is flexible and non-prescriptive when it comes to testi
 
 ## Brownfield Adoption
 
-Adopting **`awos`** on an existing codebase runs the same commands as greenfield, with extra awareness of code that already exists — plus a recommended AI-readiness audit up front. The foundation commands detect your source, inventory what's already built, and adopt your current stack as the architecture defaults.
+Adopting **`awos`** on an existing codebase runs the same commands as greenfield, with extra awareness of code that already exists — plus a recommended AI-readiness audit up front. `/awos:product` detects your source; the later foundation commands inventory what's already built and adopt your current stack as the architecture defaults.
 
 [Read the Brownfield Adoption Guide](docs/brownfield-adoption.md)
 

@@ -2,7 +2,7 @@
 
 Most AWOS documentation assumes a **greenfield** project — you start from a blank slate and describe what you want to build. But AWOS works just as well on a **brownfield** project: an existing codebase with real source, history, and often external documentation (wikis, tickets, chat). This guide is the brownfield counterpart to the [Quick Start](../README.md#quick-start) — same commands, same document-centric workflow, with the extra awareness AWOS brings to code that already exists.
 
-You do not run a different set of commands for brownfield. `/awos:product` **auto-detects** your existing code and stages what it finds, and the later foundation commands (`/awos:roadmap`, `/awos:architecture`) build on that staged context rather than scanning the codebase themselves. This guide explains what that detection does, what it produces, and how to steer it.
+You do not run a different set of commands for brownfield. `/awos:product` **auto-detects** your existing code and stages what it finds, and the later foundation commands (`/awos:roadmap`, `/awos:architecture`) build on that staged context — they don't re-detect, but each runs its own focused `Explore` pass (capabilities, tech stack) seeded with the staged findings. This guide explains what that detection does, what it produces, and how to steer it.
 
 ## The brownfield path at a glance
 
@@ -15,7 +15,7 @@ You do not run a different set of commands for brownfield. `/awos:product` **aut
 | **4** | `/awos:hire`, `/awos:flow`    | Set up specialist agents and the delivery flow. `/awos:flow` ships in the AWOS plugin, and on brownfield it reuses a retained `sources.md` to skip re-probing already-connected services. |
 | **→** | `/awos:spec` … `/awos:verify` | The per-feature cycle is identical to greenfield.                                                                                                                                         |
 
-Steps 1–4 are the same foundation commands every project runs. The only brownfield-specific addition is **Step 0**, the audit — and the fact that Steps 1–3 read your code instead of starting from a blank page.
+Steps 1–4 are the same foundation commands every project runs. The only brownfield-specific addition is **Step 0**, the audit — and the fact that Steps 1–3 read your code instead of starting from a blank page, plus `/awos:flow` reusing any retained source config.
 
 ## Step 0 — Measure AI-readiness first (the audit)
 
@@ -64,13 +64,13 @@ Brownfield projects usually have knowledge that lives outside the code — a Con
 If you opt in, the command invokes the `awos:configure-external-sources` skill (part of the AWOS plugin), which:
 
 - identifies each source and its category (documentation, tickets, communication),
-- guides you through connecting the right tool — an MCP server, a CLI like `gh`, or manual paste,
-- confirms the **data-egress tradeoff** before anything is fetched — retrieving from these sources sends their content (which may include PII in tickets, internal wiki pages, or private chat) to the LLM provider's API. Decline and setup stops with a `## Status: none` marker, and
+- confirms the **data-egress tradeoff** before anything is fetched — retrieving from these sources sends their content (which may include PII in tickets, internal wiki pages, or private chat) to the LLM provider's API. Decline and setup stops with a `## Status: none` marker,
+- guides you through connecting the right tool — an MCP server, a CLI like `gh`, or manual paste, and
 - records the configuration in `context/sources/sources.md`.
 
 Once sources are configured, `/awos:product` itself performs the retrieval — one pass per source — pulling product-relevant content (requirements, goals, audience, pain points) and folding it into the same triage flow as the code findings. (The skill only writes the configuration; it never fetches content.)
 
-**Editor-restart handling.** Some MCP servers only become available after the editor restarts. If setup adds **any** MCP server, the skill saves a partial config and stops. Restart your editor and re-run `/awos:product` — the skill detects the saved state and resumes automatically from wherever it left off (a pending restart, or mid-verification). No progress is lost.
+**Picking up new MCP servers.** Some MCP servers only become available after the session reloads. If setup adds **any** MCP server, the skill saves a partial config and stops with instructions: exit the session (Ctrl+C twice or `/exit`) and resume it with the `claude --resume <id>` command the exit message prints, run `/mcp` if any server needs interactive authentication, then re-run `/awos:product`. The skill detects the saved state and resumes automatically from wherever it left off — a pending restart or mid-verification both pick back up at tool verification, and a verified-but-unscoped state resumes at scope collection. No progress is lost.
 
 If the plugin is not installed, the command tells you so and continues without external sources — the code-based product definition is still produced.
 
@@ -93,18 +93,18 @@ After this step, your `context/` holds the same permanent documents as a greenfi
 
 ## Artifact lifecycle
 
-| Artifact                        | Created by                  | Consumed by                           | Fate                                                                              |
-| ------------------------------- | --------------------------- | ------------------------------------- | --------------------------------------------------------------------------------- |
-| `context/product/brownfield.md` | `/awos:product`             | `/awos:roadmap`, `/awos:architecture` | Deleted by `/awos:architecture` after absorption.                                 |
-| `context/sources/sources.md`    | `/awos:product` (via skill) | `/awos:product`, retrieval pass       | Removed by `/awos:architecture` once absorbed; kept + referenced if still useful. |
-| `context/audits/<timestamp>/`   | `/awos:ai-readiness-audit`  | You (review + recommendations)        | Permanent history; each run is an independent snapshot.                           |
+| Artifact                        | Created by                  | Consumed by                                                                                             | Fate                                                                              |
+| ------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `context/product/brownfield.md` | `/awos:product`             | `/awos:roadmap`, `/awos:architecture`                                                                   | Deleted by `/awos:architecture` after absorption.                                 |
+| `context/sources/sources.md`    | `/awos:product` (via skill) | `/awos:product`, `/awos:roadmap`, `/awos:architecture`, `/awos:flow` — each runs its own retrieval pass | Removed by `/awos:architecture` once absorbed; kept + referenced if still useful. |
+| `context/audits/<timestamp>/`   | `/awos:ai-readiness-audit`  | You (review + recommendations)                                                                          | Permanent history; each run is an independent snapshot.                           |
 
 ## Opting in and opting out
 
 - **Force brownfield:** include intent in your prompt — `/awos:product explore the existing codebase`.
 - **Force greenfield on a repo with code:** `/awos:product start from scratch, ignore existing code`. Because only `/awos:product` detects, opting out here means no `brownfield.md` is created — so `/awos:roadmap` and `/awos:architecture` skip their brownfield passes too. The opt-out is global, not per-step.
-- **Skip external sources:** answer **No** when the import question appears — that skips the flow for this run. A `## Status: none` marker (which suppresses the question on future runs) is written only if you enter the skill and choose _None_, decline the data-egress confirmation, or every source drops out at verification. One footgun: if you answer **Yes** while the plugin isn't installed, the command records that same `## Status: none` marker and won't ask again even after you install the plugin — delete `context/sources/sources.md` to be asked afresh.
-- **Unattended runs** (`claude -p …`): each brownfield question has a safe default, but the guarantee is narrower than "never blocks." An _unanswered_ question falls back to its default (explore; no external sources) and the run continues; a _dismissed or denied_ one ends the turn; and external-source setup that adds an MCP server stops for an editor restart before the definition is written. Re-run to finish in those last two cases — worth knowing before wiring the foundation commands into CI.
+- **Skip external sources:** answer **No** when the import question appears — that skips the flow for this run. A `## Status: none` marker (which suppresses the question on future runs) is written only if you enter the skill and choose _None_, decline the data-egress confirmation, or every source drops out at verification. One footgun: if you answer **Yes** and the skill call fails for any reason (plugin missing, call denied), the command records that same `## Status: none` marker and won't ask again — delete `context/sources/sources.md` to be asked afresh.
+- **Unattended runs** (`claude -p …`): each brownfield question has a safe default, but the guarantee is narrower than "never blocks." An _unanswered_ question falls back to its default (explore; no external sources) and the run continues; a _dismissed or denied_ one ends the turn; and external-source setup that adds an MCP server stops for a session reload (exit and `claude --resume`) before the definition is written. Re-run to finish in those last two cases — worth knowing before wiring the foundation commands into CI.
 
 ## Greenfield vs. brownfield, side by side
 

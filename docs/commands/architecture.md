@@ -17,7 +17,7 @@ Run `/awos:product` and `/awos:roadmap` first.
 
 ## How it works
 
-- **Creation Mode**: The agent works through the architecture template section by section, proposing concrete technologies with justifications and alternatives for each area (application stack, data layer, infrastructure, etc.). You confirm or change each decision before moving on.
+- **Creation Mode**: The agent drafts every architectural area in one pass — proposing concrete technologies with justifications and alternatives for each area (application stack, data layer, infrastructure, etc.) — and saves `architecture.md` without waiting for approval. You then review the saved document and adjust anything you'd change.
 - **Update Mode**: The agent presents the current architecture, asks what you'd like to change, and proposes specific modifications. It checks for consistency — flagging conflicts with existing decisions or potential impacts.
 
 After saving, the agent reviews your tech stack against available specialist agents and presents a coverage table showing what's covered and what's missing. If gaps exist, it recommends running `/awos:hire`.

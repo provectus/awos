@@ -1,0 +1,14 @@
+{
+  "name": "awos-example-todo-cli",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Golden-path AWOS example: a zero-dependency terminal todo list built end-to-end through the AWOS SDD cycle.",
+  "type": "module",
+  "bin": {
+    "todo": "bin/todo.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT"
+}

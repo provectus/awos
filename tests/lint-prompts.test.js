@@ -389,6 +389,49 @@ test('implement.md uses XML scope, investigate, skills, and completion-evidence 
   );
 });
 
+test('implement.md hands the subagent document paths instead of pasting contents', () => {
+  // Delegation hygiene, and an instance of the repo-wide rule that an
+  // orchestrator should not pull read-heavy material into its own context.
+  // The subagent is the one that needs the two spec bodies
+  // (functional-spec.md, technical-considerations.md) in full, and
+  // it has its own context window to read them into — so implement.md hands
+  // over the PATHS and lets the subagent read them, instead of the
+  // orchestrator loading every body and re-pasting it into the delegation
+  // prompt once per task. These two phrasings are the load-bearing wording;
+  // anchoring them stops a future edit from quietly reintroducing the
+  // paste-the-whole-triad-every-iteration shape.
+  const body = readUtf8(path.join(commandsDir, 'implement.md'));
+  assert.ok(
+    body.includes('read them directly'),
+    'implement.md must instruct the subagent to read the spec documents directly from their paths, rather than receiving their bodies inside the delegation prompt'
+  );
+  assert.ok(
+    body.includes('Do not paste the documents'),
+    "implement.md must forbid pasting the spec documents' contents into the delegation prompt — the orchestrator has no use for those bodies in its own context"
+  );
+});
+
+test('implement.md keeps the task description verbatim and unparaphrased', () => {
+  // The companion half of the paths-not-contents rule. Handing over paths
+  // achieves nothing if the orchestrator instead reads a document and
+  // re-authors its content into the delegation prompt: the same bulk comes
+  // back, now as a paraphrase that can drift from the file the subagent is
+  // about to read. So the prompt must (a) require the task description to be
+  // copied verbatim from the selected tasks.md line, keeping tasks.md the
+  // single source of truth for what the task says, and (b) forbid
+  // re-authoring/summarizing/copying functional-spec.md or
+  // technical-considerations.md content into the delegation prompt.
+  const body = readUtf8(path.join(commandsDir, 'implement.md'));
+  assert.ok(
+    /verbatim from the selected task line in `tasks\.md`/.test(body),
+    'implement.md must require the task description to be copied verbatim from the selected task line in tasks.md, so the delegated task cannot drift from the plan on disk'
+  );
+  assert.ok(
+    body.includes('Do not re-author, summarize, or copy'),
+    'implement.md must forbid the orchestrator re-authoring, summarizing, or copying functional-spec.md / technical-considerations.md content into the delegation prompt — a paraphrase reintroduces the bulk it just avoided and can drift from the document'
+  );
+});
+
 test('every core command declares an INTERACTION section', () => {
   // The "use AskUserQuestion for multiple-choice" rule lives in core
   // commands/*.md (not the wrappers), because AWOS targets Claude Code

@@ -81,7 +81,7 @@ Follow this logic precisely.
 
     c. Append the new findings to `context/product/brownfield.md` under a `## Capabilities` heading (for any you revise, record the revised version, not the original). The findings are triaged with the user later, in **Step 3: Finalization** — after the roadmap is saved — so exploration never blocks the write.
 
-    d. Use the full set of capabilities (from brownfield.md) to anchor the roadmap: existing capabilities are noted as already done, and new phases focus on what comes next. Feed this into the roadmap generation in the next step.
+    d. Use the full set of capabilities (from brownfield.md) to anchor the roadmap: only capabilities reported as **fully implemented** are noted as already done; partially built or scaffolded features and planned TODO/FIXME items become upcoming roadmap items rather than completed ones. New phases focus on what comes next. Feed this into the roadmap generation in the next step.
 
 3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured`, read it and retrieve content from each configured source. For sources with `Access: mcp` or `Access: cli`, launch one Explore agent per source using the tool named in the `Tool:` field. For sources with `Access: manual`, use `AskUserQuestion` to let the user paste relevant content directly.
 

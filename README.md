@@ -21,9 +21,7 @@ npx @provectusinc/awos
 
 This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, and the `context/` directory where your project documents will live. It also registers the AWOS plugin marketplace in your project settings.
 
-> **Running on an existing codebase?** Start with an AI readiness audit to understand how AI-friendly your project is. Install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit` to get a scored assessment with actionable recommendations for improvement. [Learn more](plugins/awos/README.md)
->
-> AWOS integrates seamlessly with existing projects — the setup commands auto-detect your codebase and use it as context, so you won't start from a blank slate.
+> **Running on an existing codebase?** The recommended first step is an AI-readiness audit: install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit` for a scored assessment with actionable recommendations. From there AWOS integrates seamlessly with brownfield projects — `/awos:product` auto-detects your code and the later foundation commands build on that, so you won't start from a blank slate. See the **[Brownfield Adoption Guide](docs/brownfield-adoption.md)** for the full path.
 
 ### Step 2: Foundation Setup
 
@@ -74,6 +72,12 @@ Each command has detailed documentation covering how it works, key behaviors, co
 The **`awos`** framework is flexible and non-prescriptive when it comes to testing. Teams can adopt the testing approach that best fits their project — whether that's TDD, BDD, integration testing, or a combination of strategies.
 
 [Explore testing strategies and customization options](docs/testing-strategies.md)
+
+## Brownfield Adoption
+
+Adopting **`awos`** on an existing codebase runs the same commands as greenfield, with extra awareness of code that already exists — plus a recommended AI-readiness audit up front. `/awos:product` detects your source; the later foundation commands inventory what's already built and adopt your current stack as the architecture defaults.
+
+[Read the Brownfield Adoption Guide](docs/brownfield-adoption.md)
 
 ## Customizing `awos`
 

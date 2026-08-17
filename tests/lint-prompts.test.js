@@ -3430,6 +3430,115 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
   );
 });
 
+// The better-spec plugin has its own independent version line. Its discipline
+// is three files moving together: its plugin.json, its marketplace.json entry,
+// and this pinned literal (it has no generator-version constant).
+const EXPECTED_BETTER_SPEC_VERSION = '0.1.0';
+
+test(`better-spec plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_SPEC_VERSION}`, () => {
+  const pluginManifest = JSON.parse(
+    readUtf8(
+      path.join(
+        repoRoot,
+        'plugins',
+        'better-spec',
+        '.claude-plugin',
+        'plugin.json'
+      )
+    )
+  );
+  const marketplace = JSON.parse(
+    readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
+  );
+  const entry = marketplace.plugins.find(
+    (p) =>
+      p.name === 'better-spec' ||
+      (p.source && p.source.includes('plugins/better-spec'))
+  );
+  assert.ok(
+    entry,
+    'marketplace.json must contain a plugins entry for better-spec (matched by name="better-spec" or source referencing plugins/better-spec)'
+  );
+  assert.equal(
+    pluginManifest.version,
+    entry.version,
+    `plugins/better-spec/.claude-plugin/plugin.json version ("${pluginManifest.version}") must match the better-spec marketplace entry version ("${entry.version}") — bump both together`
+  );
+  assert.equal(
+    pluginManifest.version,
+    EXPECTED_BETTER_SPEC_VERSION,
+    `plugins/better-spec/.claude-plugin/plugin.json version must be "${EXPECTED_BETTER_SPEC_VERSION}" — the better-spec version moves as one deliberate commit (its plugin.json + its marketplace.json entry + this pin, together) when plugin behavior changes. Got "${pluginManifest.version}"`
+  );
+});
+
+test('better-spec command keeps its structural contracts (fan-out, unattended handling, core-contract references)', () => {
+  const cmd = readUtf8(
+    path.join(repoRoot, 'plugins', 'better-spec', 'commands', 'spec.md')
+  );
+  const requiredSubstrings = [
+    [
+      'single message, as parallel `Agent` calls',
+      'the research fan-out must be dispatched as parallel Agent calls in a single message — sequential or discretionary dispatch is the failure mode this contract prevents',
+    ],
+    [
+      'AWOS_UNATTENDED',
+      'the command must read AWOS_UNATTENDED to branch interactive vs unattended question handling',
+    ],
+    [
+      '[NEEDS CLARIFICATION',
+      'unresolved details must be captured as [NEEDS CLARIFICATION: …] markers, never as stop signals',
+    ],
+    [
+      '## Language Rules',
+      'the non-technical Language Rules section carried from core spec.md must be present',
+    ],
+    [
+      '.awos/templates/functional-spec-template.md',
+      'the command must fill the installed core template (same deliverable contract as /awos:spec)',
+    ],
+    [
+      'create-spec-directory.sh',
+      'the command must allocate the spec directory via the core script (same numbering as /awos:spec)',
+    ],
+    [
+      'research-notes.md',
+      'the command must write the research-notes.md side artifact alongside the spec',
+    ],
+    [
+      '`## Status: configured`',
+      'the internal-KB lane must gate on the exact sources.md status idiom used across AWOS commands',
+    ],
+    [
+      'The verifier runs exactly once',
+      'the blind-verification cycle must be bounded to a single verifier dispatch',
+    ],
+    [
+      '**only** the absolute path',
+      'the verifier dispatch must pass only the spec file path — session context would contaminate the blind read',
+    ],
+  ];
+  for (const [needle, contract] of requiredSubstrings) {
+    assert.ok(
+      cmd.includes(needle),
+      `plugins/better-spec/commands/spec.md must contain "${needle}" — ${contract}`
+    );
+  }
+});
+
+test('better-spec spec-verifier agent stays blind (tools restricted to Read, no other file reads)', () => {
+  const agent = readUtf8(
+    path.join(repoRoot, 'plugins', 'better-spec', 'agents', 'spec-verifier.md')
+  );
+  assert.ok(
+    /^tools: Read$/m.test(agent),
+    'spec-verifier.md frontmatter must restrict the agent to `tools: Read` — the blind read depends on the agent being unable to explore the repo'
+  );
+  assert.ok(
+    agent.includes('Do not read any other file'),
+    'spec-verifier.md body must prohibit reading any file other than the dispatched spec path'
+  );
+});
+
 test('TS engine scaffold present (package.json/tsconfig + collectors/detectors/metrics/tests dirs)', () => {
   const skill = path.join(
     repoRoot,

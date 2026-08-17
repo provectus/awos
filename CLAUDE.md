@@ -122,6 +122,10 @@ Each audit dimension is a standalone `.md` file in `plugins/awos/skills/ai-readi
 
 The repo has **two independent version lines**. The npm installer version is managed by release-drafter via PR labels — never bump it manually. The **plugin version** is manual: when plugin behavior changes, bump it as one deliberate commit moving four files together — `.claude-plugin/marketplace.json`, `plugins/awos/.claude-plugin/plugin.json`, the `EXPECTED_PLUGIN_VERSION` pin in `tests/lint-prompts.test.js`, and the generator-version constant in `plugins/awos/commands/flow.md` (the lint exists to force exactly this four-file discipline). `flow.md` carries its own copy of the version because it stamps the generator version into every generated artifact's footer and uses it to detect stale re-runs. The engine stamps the plugin version into `audit.json` provenance and the report footer, so a behavior change shipped without a bump mislabels its audits.
 
+## The Better-Spec Plugin (experimental)
+
+`plugins/better-spec/` is a second, experimental plugin: `/better-spec:spec` forks the core `/awos:spec` flow and adds a parallel research fan-out before drafting (codebase via `Explore`, web via `WebSearch`/`WebFetch`, internal KB gated on `context/sources/sources.md` being `## Status: configured`) and a post-write blind verification by the bundled `spec-verifier` agent (`tools: Read`, dispatched with only the spec file path). The deliverable contract is deliberately identical to `/awos:spec` — same template, same `context/spec/NNN-name/functional-spec.md` — plus an additive `research-notes.md` side artifact nothing downstream depends on. Core commands are untouched by design; if the experiment proves out, the flow merges into core `spec.md`. Its version line is independent of the awos plugin's and moves as **three** files together — its marketplace entry, `plugins/better-spec/.claude-plugin/plugin.json`, and the `EXPECTED_BETTER_SPEC_VERSION` pin in `tests/lint-prompts.test.js` (no generator constant).
+
 ### Measurement engine (TypeScript)
 
 Scoring is additive and weighted, not A–F/0–100. Each capability **category** lives in `references/standards.toml` (numeric code, weight, definition, applicability, source bands); a dimension's score is the sum of weights for present-and-applicable categories, the audit total is the sum across dimensions, and nothing is capped. A secondary **coverage ratio** (awarded ÷ currently-defined applicable weight) is shown for intuition, and each metric carries a per-run **reliability** tag (`minimal`/`maximal`/`not-reliable` + confidence) computed from which sources were available.
@@ -166,7 +170,7 @@ These commands assume `node`/`npm` resolve to a real Node toolchain (as on CI an
 
 ## Editing Prompts
 
-Files under `commands/`, `claude/commands/`, `plugins/awos/`, and `templates/agent-template.md` are prompts. Re-read Anthropic's guidance before any large rewrite — it changes:
+Files under `commands/`, `claude/commands/`, `plugins/`, and `templates/agent-template.md` are prompts. Re-read Anthropic's guidance before any large rewrite — it changes:
 
 - <https://code.claude.com/docs/en/best-practices>
 - <https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices>

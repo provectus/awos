@@ -31,15 +31,17 @@ Amendments to existing specs are out of scope by design — use `/awos:spec`, wh
    - **Internal KB** (when configured) — runs only when `context/sources/sources.md` exists with `## Status: configured` and lists a documentation source (set up via `/awos:product` or the `configure-external-sources` skill). Reports `SKIPPED` when a recorded transport is unreachable.
 2. **Synthesis round.** Findings become sharper interview questions (conflicts and discovered decisions) or flow directly into requirements and acceptance criteria (uncontroversial edge cases). Technical findings are translated to user-facing language before entering the spec.
 3. **Blind verification.** After the spec is written, the bundled `spec-verifier` agent reads it cold — only the file, no session context, `Read` as its only tool — and reports ambiguities, unstated assumptions, and acceptance criteria it could not execute as a manual test. Fixes are folded in once.
+4. **A human-friendly review page.** As its final step, the command renders `functional-spec.html` — an at-a-glance summary, a table of the decisions a reviewer might challenge, the research findings with what each one changed, and every requirement with named, collapsible acceptance criteria and provenance badges (Interview / Codebase / Web / KB). The command authors the human layer in-session (where it knows what came from where) and hands it to the bundled deterministic renderer (`scripts/render-spec.mjs`), which extracts all contract text verbatim from the markdown — the page can reshape the spec but never rewrite it. Rendering requires `node` on PATH and is never fatal: if it fails, the markdown deliverables stand alone.
 
 ## Outputs
 
-Both files land in the standard spec directory (`context/spec/NNN-short-name/`):
+All three files land in the standard spec directory (`context/spec/NNN-short-name/`):
 
-| File                 | Contract                                                                                                                                                                                                                   |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `functional-spec.md` | Identical to `/awos:spec` — same template, same location. `/awos:tech` and everything downstream work unchanged.                                                                                                           |
-| `research-notes.md`  | Additive side artifact: raw technical findings (`## Codebase findings`, `## Web research findings`, `## Internal KB findings`, `## Unresolved conflicts`). Nothing depends on it; the technical spec phase can draw on it. |
+| File                   | Contract                                                                                                                                                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `functional-spec.md`   | Identical to `/awos:spec` — same template, same location. `/awos:tech` and everything downstream work unchanged.                                                                                                           |
+| `research-notes.md`    | Additive side artifact: raw technical findings (`## Codebase findings`, `## Web research findings`, `## Internal KB findings`, `## Unresolved conflicts`). Nothing depends on it; the technical spec phase can draw on it. |
+| `functional-spec.html` | The human-facing review page — a derived, point-in-time snapshot stamped with its generation date and source hash. Approvals bind to the markdown; this page is the lens people review it through. Nothing depends on it.  |
 
 ## Plugin structure
 
@@ -48,6 +50,7 @@ better/
 ├── .claude-plugin/plugin.json   # manifest (independent version line)
 ├── commands/spec.md             # /better:spec
 ├── agents/spec-verifier.md      # blind spec reader (tools: Read)
+├── scripts/render-spec.mjs      # deterministic review-page renderer (node, no deps)
 └── README.md
 ```
 

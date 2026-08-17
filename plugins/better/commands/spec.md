@@ -23,7 +23,7 @@ The spec must be readable by anyone — a designer, a project manager, a stakeho
 
 # TASK
 
-Create a new functional specification file, enriched by parallel research. You will determine the topic from the user's prompt or the product roadmap, interview the user, dispatch research agents against the current understanding, fold their findings into a second interview round, populate the template at `.awos/templates/functional-spec-template.md`, save the spec plus a `research-notes.md` side artifact into a dedicated spec directory, and blind-verify the saved spec with the `better:spec-verifier` agent.
+Create a new functional specification file, enriched by parallel research. You will determine the topic from the user's prompt or the product roadmap, interview the user, dispatch research agents against the current understanding, fold their findings into a second interview round, populate the template at `.awos/templates/functional-spec-template.md`, save the spec plus a `research-notes.md` side artifact into a dedicated spec directory, blind-verify the saved spec with the `better:spec-verifier` agent, and finally render `functional-spec.html` — a human-friendly review page — via the bundled deterministic renderer.
 
 ---
 
@@ -36,8 +36,10 @@ Create a new functional specification file, enriched by parallel research. You w
 - **Optional Input:** `context/sources/sources.md` (external source configuration — when present with `## Status: configured`, provides already-configured transports for the internal-KB research lane).
 - **External Command:** `.awos/scripts/create-spec-directory.sh [short-name]` (installed by AWOS core).
 - **Verification Agent:** `better:spec-verifier` (bundled with this plugin).
-- **Output File 1:** `context/spec/[index]-[short-name]/functional-spec.md` — identical contract to `/awos:spec`.
+- **Renderer Script:** `${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs` (bundled with this plugin; requires `node` on PATH).
+- **Output File 1:** `context/spec/[index]-[short-name]/functional-spec.md` — identical contract to `/awos:spec`. The canonical, model-facing document.
 - **Output File 2:** `context/spec/[index]-[short-name]/research-notes.md` — raw research findings, additive; nothing downstream depends on it.
+- **Output File 3:** `context/spec/[index]-[short-name]/functional-spec.html` — the human-facing review page, a derived point-in-time snapshot; nothing downstream depends on it.
 
 ---
 
@@ -47,7 +49,7 @@ Create a new functional specification file, enriched by parallel research. You w
 - The tool accepts two to four listed options per question — pair the natural answer with the genuinely different behavior, never with a "Yes — I'll type it" filler (free text already covers that). One question per axis; combinable answers use `multiSelect`.
 - A skipped or unanswered question is never a stop signal. Mark the unresolved detail with a `[NEEDS CLARIFICATION: …]` marker and continue through the remaining steps, including writing both output files.
 - Interactive and unattended runs handle a no-answer differently. Read whether this run is unattended from the `AWOS_UNATTENDED` environment variable. **Unattended (set):** take the marker path immediately and continue. **Interactive (unset):** a 60-second timeout usually means the user is thinking — re-ask the question once; if it times out again, proceed with the marker and name the assumption you would otherwise make.
-- **Both output files are written before any question that could end the run unanswered.** Questions asked after Step 7 refine files that already exist; questions before Step 7 must never gate the writes.
+- **Both markdown deliverables are written before any question that could end the run unanswered.** Questions asked after Step 7 refine files that already exist; questions before Step 7 must never gate the writes. The HTML render (Step 10) runs last so the page reflects the final content.
 
 ---
 
@@ -146,7 +148,29 @@ Then self-review the full draft end to end: replace any developer-facing languag
    - Judgment calls — a genuine ambiguity only the user can resolve — ask via `AskUserQuestion` (the files are already written, so an unanswered question just leaves a `[NEEDS CLARIFICATION: …]` marker).
 3. Re-save the spec once. The verifier runs exactly once — do not re-dispatch it after folding fixes; findings that remain open become markers or reported residuals.
 
-### Step 9: Final Review and Recommend Next Step
+### Step 9: Final Review
 
-1. Present the saved specification. Resolve each remaining `[NEEDS CLARIFICATION: …]` marker with the user via `AskUserQuestion`, offering the assumption you would otherwise make as the recommended first option; fold each answer back into the relevant requirement and its acceptance criteria, then re-save. If no answer comes (an unattended run), leave the markers in place; the user — or `/awos:tech` — can resolve them later.
-2. Report: both saved paths, any research lane that was `SKIPPED` or `NOT CONFIGURED`, any verifier findings left unresolved, and the next command: `/awos:tech`.
+Present the saved specification. Resolve each remaining `[NEEDS CLARIFICATION: …]` marker with the user via `AskUserQuestion`, offering the assumption you would otherwise make as the recommended first option; fold each answer back into the relevant requirement and its acceptance criteria, then re-save. If no answer comes (an unattended run), leave the markers in place; the user — or `/awos:tech` — can resolve them later.
+
+### Step 10: Render the Review Page and Report
+
+The spec content is now final for this run, so render the human-facing review page. This step is unconditional — every run produces the page — but its failure is never fatal: if `node` is missing (`command -v node`) or the script errors, report that the render was skipped and why, and continue to the report; the markdown remains canonical.
+
+1. Author the **view-model** — the re-shaped, human-friendly representation of what this session learned. Write it as JSON to a temporary file outside the project (e.g. `${TMPDIR:-/tmp}/spec-view-[index].json`), following the schema documented at the top of the renderer script. Its content, all in the spec's non-technical register:
+   - `at_a_glance` — the feature in about five plain sentences.
+   - `decisions` — every judgment call made in this spec (the things a reviewer might challenge): the decision, the choice, why, and its sources (`interview` / `code` / `web` / `kb`).
+   - `findings` — per research lane, what was discovered and what it changed in the spec (`impact`, with an `anchor` like `#r21` pointing at the requirement it shaped). A lane that did not run gets an explanatory note, not silence.
+   - `requirements` — per requirement (matched by its number, e.g. `"2.1"`): a one-line plain-language statement, source badges, and a short scannable name for each acceptance criterion, in order.
+   - `diagram` (optional) — when the behavior is stateful or flow-heavy, an inline SVG overview with user-language labels, plus a note that the criteria remain the contract.
+
+   Before rendering, self-check the view-model against the saved spec: it must claim nothing the spec does not support — this page is a review lens, and a lens that embellishes misleads the person approving.
+
+2. Run the renderer and clean up:
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs" "context/spec/[index]-[short-name]" "$TMPDIR/spec-view-[index].json" && rm "$TMPDIR/spec-view-[index].json"
+   ```
+
+   The script extracts all requirement prose and acceptance criteria verbatim from `functional-spec.md` — the view-model only adds the human layer on top, never replacement text.
+
+3. Report: all three saved paths, any research lane that was `SKIPPED` or `NOT CONFIGURED`, any verifier findings left unresolved, and the next command: `/awos:tech`. Note that the HTML is a point-in-time snapshot stamped with its generation date — it does not update when the spec is later edited or verified.

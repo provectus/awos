@@ -3506,6 +3506,18 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       'the blind-verification cycle must be bounded to a single verifier dispatch',
     ],
     [
+      'render-spec.mjs',
+      'the command must render the human review page via the bundled deterministic renderer',
+    ],
+    [
+      'functional-spec.html',
+      'the command must name the rendered review page as a derived output',
+    ],
+    [
+      'never fatal',
+      'the render step must be non-fatal — the markdown deliverables stand alone if the render fails',
+    ],
+    [
       '**only** the absolute path',
       'the verifier dispatch must pass only the spec file path — session context would contaminate the blind read',
     ],

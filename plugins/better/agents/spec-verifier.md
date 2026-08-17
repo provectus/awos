@@ -1,6 +1,6 @@
 ---
 name: spec-verifier
-description: Blind-verifies a freshly written functional spec for /better-spec:spec — restates the feature, lists ambiguities and unstated assumptions, and flags acceptance criteria that cannot be executed as a manual test from the text alone. Dispatched with only the spec file path; reads nothing but the one file it is given.
+description: Blind-verifies a freshly written functional spec for /better:spec — restates the feature, lists ambiguities and unstated assumptions, and flags acceptance criteria that cannot be executed as a manual test from the text alone. Dispatched with only the spec file path; reads nothing but the one file it is given.
 tools: Read
 ---
 

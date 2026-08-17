@@ -3430,21 +3430,15 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
   );
 });
 
-// The better-spec plugin has its own independent version line. Its discipline
+// The better plugin has its own independent version line. Its discipline
 // is three files moving together: its plugin.json, its marketplace.json entry,
 // and this pinned literal (it has no generator-version constant).
-const EXPECTED_BETTER_SPEC_VERSION = '0.1.0';
+const EXPECTED_BETTER_PLUGIN_VERSION = '0.1.0';
 
-test(`better-spec plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_SPEC_VERSION}`, () => {
+test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
     readUtf8(
-      path.join(
-        repoRoot,
-        'plugins',
-        'better-spec',
-        '.claude-plugin',
-        'plugin.json'
-      )
+      path.join(repoRoot, 'plugins', 'better', '.claude-plugin', 'plugin.json')
     )
   );
   const marketplace = JSON.parse(
@@ -3452,28 +3446,27 @@ test(`better-spec plugin.json version matches its marketplace entry and equals $
   );
   const entry = marketplace.plugins.find(
     (p) =>
-      p.name === 'better-spec' ||
-      (p.source && p.source.includes('plugins/better-spec'))
+      p.name === 'better' || (p.source && p.source.includes('plugins/better'))
   );
   assert.ok(
     entry,
-    'marketplace.json must contain a plugins entry for better-spec (matched by name="better-spec" or source referencing plugins/better-spec)'
+    'marketplace.json must contain a plugins entry for better (matched by name="better" or source referencing plugins/better)'
   );
   assert.equal(
     pluginManifest.version,
     entry.version,
-    `plugins/better-spec/.claude-plugin/plugin.json version ("${pluginManifest.version}") must match the better-spec marketplace entry version ("${entry.version}") — bump both together`
+    `plugins/better/.claude-plugin/plugin.json version ("${pluginManifest.version}") must match the better marketplace entry version ("${entry.version}") — bump both together`
   );
   assert.equal(
     pluginManifest.version,
-    EXPECTED_BETTER_SPEC_VERSION,
-    `plugins/better-spec/.claude-plugin/plugin.json version must be "${EXPECTED_BETTER_SPEC_VERSION}" — the better-spec version moves as one deliberate commit (its plugin.json + its marketplace.json entry + this pin, together) when plugin behavior changes. Got "${pluginManifest.version}"`
+    EXPECTED_BETTER_PLUGIN_VERSION,
+    `plugins/better/.claude-plugin/plugin.json version must be "${EXPECTED_BETTER_PLUGIN_VERSION}" — the better version moves as one deliberate commit (its plugin.json + its marketplace.json entry + this pin, together) when plugin behavior changes. Got "${pluginManifest.version}"`
   );
 });
 
-test('better-spec command keeps its structural contracts (fan-out, unattended handling, core-contract references)', () => {
+test('better command keeps its structural contracts (fan-out, unattended handling, core-contract references)', () => {
   const cmd = readUtf8(
-    path.join(repoRoot, 'plugins', 'better-spec', 'commands', 'spec.md')
+    path.join(repoRoot, 'plugins', 'better', 'commands', 'spec.md')
   );
   const requiredSubstrings = [
     [
@@ -3520,14 +3513,14 @@ test('better-spec command keeps its structural contracts (fan-out, unattended ha
   for (const [needle, contract] of requiredSubstrings) {
     assert.ok(
       cmd.includes(needle),
-      `plugins/better-spec/commands/spec.md must contain "${needle}" — ${contract}`
+      `plugins/better/commands/spec.md must contain "${needle}" — ${contract}`
     );
   }
 });
 
-test('better-spec spec-verifier agent stays blind (tools restricted to Read, no other file reads)', () => {
+test('better spec-verifier agent stays blind (tools restricted to Read, no other file reads)', () => {
   const agent = readUtf8(
-    path.join(repoRoot, 'plugins', 'better-spec', 'agents', 'spec-verifier.md')
+    path.join(repoRoot, 'plugins', 'better', 'agents', 'spec-verifier.md')
   );
   assert.ok(
     /^tools: Read$/m.test(agent),

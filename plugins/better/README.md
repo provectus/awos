@@ -1,6 +1,6 @@
-# Better-Spec Plugin (experimental)
+# Better Plugin (experimental)
 
-An experimental, research-backed alternative to `/awos:spec`. Same deliverable, higher rigor: before drafting the functional spec, the command fans out parallel research agents; after writing it, a context-free agent verifies the spec is understandable on its own.
+The `better` namespace hosts experimental, higher-rigor forks of core AWOS commands. The first is `/better:spec`, a research-backed alternative to `/awos:spec`: same deliverable, higher rigor — before drafting the functional spec, the command fans out parallel research agents; after writing it, a context-free agent verifies the spec is understandable on its own.
 
 Core `/awos:spec` derives a spec from a one-line prompt or roadmap item plus an interview — details that live in the codebase, in domain conventions, or in the organization's knowledge base never make it in. This plugin closes that gap.
 
@@ -9,7 +9,7 @@ Core `/awos:spec` derives a spec from a one-line prompt or roadmap item plus an 
 Requires an AWOS core installation in the project (`npx @provectusinc/awos`) — the command uses the installed template and spec-directory script. Then:
 
 ```
-/plugin install better-spec@awos-marketplace
+/plugin install better@awos-marketplace
 ```
 
 If the marketplace is not registered yet: `/plugin marketplace add provectus/awos`.
@@ -17,8 +17,8 @@ If the marketplace is not registered yet: `/plugin marketplace add provectus/awo
 ## Usage
 
 ```
-/better-spec:spec                          # next incomplete roadmap item
-/better-spec:spec Add CSV export to reports   # explicit topic
+/better:spec                          # next incomplete roadmap item
+/better:spec Add CSV export to reports   # explicit topic
 ```
 
 Amendments to existing specs are out of scope by design — use `/awos:spec`, which handles in-place updates.
@@ -44,9 +44,9 @@ Both files land in the standard spec directory (`context/spec/NNN-short-name/`):
 ## Plugin structure
 
 ```
-better-spec/
+better/
 ├── .claude-plugin/plugin.json   # manifest (independent version line)
-├── commands/spec.md             # /better-spec:spec
+├── commands/spec.md             # /better:spec
 ├── agents/spec-verifier.md      # blind spec reader (tools: Read)
 └── README.md
 ```

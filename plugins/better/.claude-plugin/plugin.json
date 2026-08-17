@@ -1,0 +1,10 @@
+{
+  "name": "better",
+  "version": "0.1.0",
+  "description": "Experimental research-backed functional specs: /better:spec forks the core spec flow, fans out codebase, web, and internal-KB research agents before drafting, and blind-verifies the written spec with a context-free reader.",
+  "author": {
+    "name": "Provectus"
+  },
+  "license": "MIT",
+  "keywords": ["spec", "functional-spec", "research", "verification"]
+}

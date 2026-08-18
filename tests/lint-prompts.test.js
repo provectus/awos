@@ -3518,6 +3518,14 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       'the render step must be non-fatal — the markdown deliverables stand alone if the render fails',
     ],
     [
+      '--artifact',
+      'the artifact publish path must use the renderer fragment mode, not upload the standalone document',
+    ],
+    [
+      'withheld consent',
+      'publishing to an external service is a consent gate — an unanswered question means no, inverting the usual proceed-with-default rule',
+    ],
+    [
       '**only** the absolute path',
       'the verifier dispatch must pass only the spec file path — session context would contaminate the blind read',
     ],

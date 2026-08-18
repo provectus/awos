@@ -349,21 +349,31 @@ function renderDiagram(vm) {
 ${d.note ? `<div class="diagram-note">${inline(d.note)}</div>` : ''}`;
 }
 
-const CSS = `
-  :root {
+const LIGHT_VARS = `
     --bg: #ffffff; --panel: #f6f7f9; --ink: #1c2430; --muted: #5b6572;
     --line: #e3e7ec; --accent: #2563eb;
     --src-interview: #2563eb; --src-code: #7c3aed; --src-web: #0f766e; --src-kb: #b45309;
     --ok: #15803d; --pending: #9aa3ad; --warn: #b45309; --chip-ink: #ffffff;
-  }
+`;
+
+const DARK_VARS = `
+    --bg: #10151c; --panel: #171e27; --ink: #e8edf3; --muted: #9aa7b5;
+    --line: #26303c; --accent: #60a5fa;
+    --src-interview: #60a5fa; --src-code: #bda6f5; --src-web: #4fd1c0; --src-kb: #f0b26b;
+    --ok: #4ade80; --pending: #64748b; --warn: #f0b26b; --chip-ink: #10151c;
+`;
+
+// The data-theme overrides let a hosting page's explicit theme toggle (e.g.
+// the claude.ai artifact viewer stamping data-theme on the root element) win
+// over the OS preference; standalone file:// viewing falls back to the media
+// query alone.
+const CSS = `
+  :root {${LIGHT_VARS}}
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #10151c; --panel: #171e27; --ink: #e8edf3; --muted: #9aa7b5;
-      --line: #26303c; --accent: #60a5fa;
-      --src-interview: #60a5fa; --src-code: #bda6f5; --src-web: #4fd1c0; --src-kb: #f0b26b;
-      --ok: #4ade80; --pending: #64748b; --warn: #f0b26b; --chip-ink: #10151c;
-    }
+    :root {${DARK_VARS}}
   }
+  :root[data-theme='dark'] {${DARK_VARS}}
+  :root[data-theme='light'] {${LIGHT_VARS}}
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   main { max-width: 860px; margin: 0 auto; padding: 36px 28px 80px; }
@@ -493,16 +503,7 @@ function render(md, vm, pluginVersion) {
     .slice(0, 12);
   const today = new Date().toISOString().slice(0, 10);
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(spec.title)}</title>
-<style>${CSS}</style>
-</head>
-<body>
-<main>
+  const inner = `<main>
 <h1>${inline(spec.title)}</h1>
 ${metaBits ? `<div class="meta">${metaBits}</div>` : ''}
 <div class="statusbar">
@@ -522,10 +523,31 @@ ${genericSections.map((s) => renderGenericSection(s)).join('\n')}
   Generated ${today} from functional-spec.md (${esc(hash)})${status ? `, status <em>${inline(status)}</em>` : ''}${total ? ` — ${total} criteria, ${done} verified` : ''}. Rendered by the better plugin${pluginVersion ? ` v${esc(pluginVersion)}` : ''}.
 </footer>
 </main>
-<script>${TAB_JS}</script>
+<script>${TAB_JS}</script>`;
+
+  return {
+    title: spec.title,
+    page: `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(spec.title)}</title>
+<style>${CSS}</style>
+</head>
+<body>
+${inner}
 </body>
 </html>
-`;
+`,
+    // Page content without the document skeleton, for hosts that wrap it in
+    // their own (e.g. publishing as a claude.ai artifact). The <title> is
+    // kept — the artifact pipeline reads it for the page name.
+    fragment: `<title>${esc(spec.title)}</title>
+<style>${CSS}</style>
+${inner}
+`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -533,9 +555,22 @@ ${genericSections.map((s) => renderGenericSection(s)).join('\n')}
 // ---------------------------------------------------------------------------
 
 function main() {
-  const [specDir, vmPath] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  let artifactPath = null;
+  const flagIdx = args.indexOf('--artifact');
+  if (flagIdx !== -1) {
+    artifactPath = args[flagIdx + 1];
+    args.splice(flagIdx, 2);
+    if (!artifactPath) {
+      console.error('--artifact requires an output path');
+      process.exit(2);
+    }
+  }
+  const [specDir, vmPath] = args;
   if (!specDir) {
-    console.error('Usage: node render-spec.mjs <spec-dir> [view-model.json]');
+    console.error(
+      'Usage: node render-spec.mjs <spec-dir> [view-model.json] [--artifact <fragment-out>]'
+    );
     process.exit(2);
   }
   const mdPath = path.join(specDir, 'functional-spec.md');
@@ -567,9 +602,14 @@ function main() {
     // Version is cosmetic; render without it.
   }
 
+  const out = render(md, vm, pluginVersion);
   const outPath = path.join(specDir, 'functional-spec.html');
-  fs.writeFileSync(outPath, render(md, vm, pluginVersion));
+  fs.writeFileSync(outPath, out.page);
   console.log(outPath);
+  if (artifactPath) {
+    fs.writeFileSync(artifactPath, out.fragment);
+    console.log(artifactPath);
+  }
 }
 
 main();

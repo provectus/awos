@@ -168,9 +168,17 @@ The spec content is now final for this run, so render the human-facing review pa
 2. Run the renderer and clean up:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs" "context/spec/[index]-[short-name]" "$TMPDIR/spec-view-[index].json" && rm "$TMPDIR/spec-view-[index].json"
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs" "context/spec/[index]-[short-name]" "$TMPDIR/spec-view-[index].json"
    ```
 
-   The script extracts all requirement prose and acceptance criteria verbatim from `functional-spec.md` — the view-model only adds the human layer on top, never replacement text.
+   The script extracts all requirement prose and acceptance criteria verbatim from `functional-spec.md` — the view-model only adds the human layer on top, never replacement text. Keep the temp view-model file until the publish offer below is resolved, then delete it — it never lands in the project.
 
-3. Report: all three saved paths, any research lane that was `SKIPPED` or `NOT CONFIGURED`, any verifier findings left unresolved, and the next command: `/awos:tech`. Note that the HTML is a point-in-time snapshot stamped with its generation date — it does not update when the spec is later edited or verified.
+3. Offer to publish the review page as a Claude artifact — a link is easier to share with reviewers than a file. Make the offer only when both hold: the render succeeded, and the `Artifact` tool is available in your toolset (introspection — when it is absent, skip this step silently rather than mentioning an option that cannot work). Ask via `AskUserQuestion`: publish as a private artifact, or skip. Publishing sends the spec's content to an external service, so this is a consent gate, not a preference: an unanswered or dismissed question means **no** — never publish by default, and never publish in an unattended run. This deliberately inverts this command's usual unanswered-question rule; outward-facing actions default to withheld consent. If the user opts in:
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs" "context/spec/[index]-[short-name]" "$TMPDIR/spec-view-[index].json" --artifact "$TMPDIR/spec-artifact-[index].html"
+   ```
+
+   Publish the fragment file with the `Artifact` tool (favicon `📋`), then delete both temp files. Report the artifact URL: it starts private, and the user shares it from claude.ai when ready.
+
+4. Report: all three saved paths, the artifact URL if one was published, any research lane that was `SKIPPED` or `NOT CONFIGURED`, any verifier findings left unresolved, and the next command: `/awos:tech`. Note that the HTML is a point-in-time snapshot stamped with its generation date — it does not update when the spec is later edited or verified.

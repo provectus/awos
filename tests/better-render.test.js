@@ -90,7 +90,7 @@ const SAMPLE_VM = {
   ],
 };
 
-function renderInTemp(vm) {
+function renderInTemp(vm, { artifact = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-render-'));
   fs.writeFileSync(path.join(dir, 'functional-spec.md'), SAMPLE_MD);
   const args = [script, dir];
@@ -99,6 +99,8 @@ function renderInTemp(vm) {
     fs.writeFileSync(vmPath, JSON.stringify(vm));
     args.push(vmPath);
   }
+  const fragmentPath = path.join(dir, 'fragment.html');
+  if (artifact) args.push('--artifact', fragmentPath);
   const run = spawnSync(process.execPath, args, { encoding: 'utf8' });
   assert.strictEqual(
     run.status,
@@ -106,12 +108,13 @@ function renderInTemp(vm) {
     `renderer must exit 0 for a well-formed spec; stderr: ${run.stderr}`
   );
   const html = fs.readFileSync(path.join(dir, 'functional-spec.html'), 'utf8');
+  const fragment = artifact ? fs.readFileSync(fragmentPath, 'utf8') : null;
   fs.rmSync(dir, { recursive: true, force: true });
-  return html;
+  return { html, fragment };
 }
 
 test('renderer extracts criteria verbatim from the markdown and computes verification counts', () => {
-  const html = renderInTemp(SAMPLE_VM);
+  const { html } = renderInTemp(SAMPLE_VM);
   assert.ok(
     html.includes('Export failed. Try again.'),
     'criterion text must be carried into the page verbatim — the renderer composes, it never rewrites contract text'
@@ -127,7 +130,7 @@ test('renderer extracts criteria verbatim from the markdown and computes verific
 });
 
 test('renderer layers the view-model on top: one-liners, decisions, findings with anchors, criteria names', () => {
-  const html = renderInTemp(SAMPLE_VM);
+  const { html } = renderInTemp(SAMPLE_VM);
   assert.ok(
     html.includes('Every report can be exported with one tap.'),
     'the requirement one-liner from the view-model must appear on the requirement card'
@@ -150,8 +153,31 @@ test('renderer layers the view-model on top: one-liners, decisions, findings wit
   );
 });
 
+test('renderer --artifact emits a skeleton-free fragment for hosts that wrap content (e.g. claude.ai artifacts)', () => {
+  const { html, fragment } = renderInTemp(SAMPLE_VM, { artifact: true });
+  assert.ok(
+    !fragment.includes('<!doctype') &&
+      !fragment.includes('<html') &&
+      !fragment.includes('<body'),
+    'the fragment must carry no document skeleton — the publishing host wraps it in its own doctype/head/body'
+  );
+  assert.ok(
+    fragment.includes('<title>') && fragment.includes('<main>'),
+    'the fragment must keep the <title> (the host reads it for the page name) and the page content'
+  );
+  assert.ok(
+    fragment.includes('Export failed. Try again.'),
+    'the fragment must carry the same verbatim criteria as the standalone page'
+  );
+  assert.ok(
+    html.includes("[data-theme='dark']") &&
+      html.includes("[data-theme='light']"),
+    'the stylesheet must honor an explicit data-theme stamp (host theme toggles) in both directions, not only prefers-color-scheme'
+  );
+});
+
 test('renderer degrades to a generic render when no view-model is given — it never fails the page', () => {
-  const html = renderInTemp(undefined);
+  const { html } = renderInTemp(undefined);
   assert.ok(
     html.includes('Export failed. Try again.'),
     'without a view-model, criteria must still render from the markdown alone'

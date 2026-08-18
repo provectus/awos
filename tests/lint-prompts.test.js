@@ -915,6 +915,88 @@ test('flow.md investigation probes before claiming absence and validates ticket 
   }
 });
 
+test('the flow separates repo-provisioned transports from machine-personal ones', () => {
+  // Road-test regression (issue #177, Citation AI Audit orchestrator):
+  // Step 2 inventoried whatever answered in the generating engineer's
+  // session, so a personal knowledge-base MCP, a personal Google
+  // Workspace CLI, and two user-level review plugins were recorded as
+  // team transports, and the record carried the machine-scoped claim
+  // "no Jira CLI exists on this machine". The generating session is
+  // always the richest one on the team, so availability is not
+  // provenance. Lock the classification, the qualification rule, the
+  // forced resolution, the operator prerequisites, the team-wide
+  // phrasing, and the best-effort degradation into flow.md, the
+  // decision-record template, and both command templates.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /repo-provisioned/i.test(flow) && /machine-personal/i.test(flow),
+    "flow.md Step 2 must classify every inventoried transport as repo-provisioned or machine-personal — an inventory of what answers in the generating session records one engineer's laptop as team infrastructure"
+  );
+  assert.ok(
+    /\.mcp\.json/.test(flow) && /enabledPlugins/.test(flow),
+    'flow.md Step 2 must name where a repo-provisioned transport is declared (`.mcp.json`, `.claude/settings.json` enabledPlugins, committed skills) — classification by declaration site, not by whether the tool answers'
+  );
+  assert.ok(
+    /qualifies as a stage's \*\*chosen\*\* transport only when it is repo-provisioned/i.test(
+      flow
+    ),
+    'flow.md transport preference must gate the chosen transport on repo-provisioning — team availability outranks the CLI-over-MCP cost preference, or a personal CLI beats a repo-provisioned MCP'
+  );
+  assert.ok(
+    /Resolve every machine-personal transport before it becomes team infrastructure/i.test(
+      flow
+    ) && /optional accelerator/i.test(flow),
+    'flow.md Step 4.5 must force a machine-personal transport into provision-repo-side / optional-accelerator / drop — never silently baked into a generated command'
+  );
+  assert.ok(
+    /Operator prerequisites per transport/i.test(flow) &&
+      /lead time/i.test(flow),
+    'flow.md Step 2 must capture operator prerequisites per transport (auth, access scope) and flag long-lead ones — write access to a customer org takes days and must surface at generation time, not mid-flow'
+  );
+  assert.ok(
+    /no machine-scoped claims at all/i.test(flow) &&
+      /on this machine/i.test(flow),
+    'flow.md must forbid machine-scoped capability claims ("no Jira CLI on this machine") in the decision record and generated commands — claims are team-wide or they mislead the next teammate'
+  );
+  assert.ok(
+    /probe record[\s\S]{0,200}Generation Log/i.test(flow),
+    "flow.md must route probe records into the decision record's Generation Log — a dated probe is provenance, and provenance parked in a living decision section rots into a claim nobody re-checks"
+  );
+
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /\| Provenance/.test(dfTemplate) &&
+      /Operator prerequisites/i.test(dfTemplate),
+    'delivery-flow-template.md §7 tooling-inventory table must carry Provenance and Operator prerequisites columns — without them the record cannot distinguish team infrastructure from one workstation'
+  );
+  assert.ok(
+    /\*\*Machine-personal transports:\*\*/.test(dfTemplate),
+    'delivery-flow-template.md §7 must carry a Machine-personal transports field recording each such transport and its resolution (provisioned repo-side / optional accelerator / dropped)'
+  );
+  assert.ok(
+    /\*\*Long-lead operator prerequisites:\*\*/.test(dfTemplate),
+    'delivery-flow-template.md §7 must carry a Long-lead operator prerequisites field so access requests measured in days start before the first run'
+  );
+  assert.ok(
+    /\*\*Probe records\*\*/.test(dfTemplate),
+    "delivery-flow-template.md Generation Log must carry the Probe records entry — that is where Step 2's dated probes land instead of the decision sections"
+  );
+
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /optional accelerator/i.test(body) && /best-effort/i.test(body),
+      `${tmpl} fetch stage must degrade to best-effort when an optional-accelerator transport is missing — a personal doc connector must never block the fetch`
+    );
+    assert.ok(
+      /operator prerequisites/i.test(body) && /access scope/i.test(body),
+      `${tmpl} resume-detection preflight must check the operator prerequisites §7 records (auth and access scope, not just the binary) so a missing grant stops the run at second zero, not at the merge stage`
+    );
+  }
+});
+
 test('fix-bug template reads remote links, sweeps all surfaces, and verifies subagent claims', () => {
   // Road-test #2 regressions (HOP-3749): the bug's real context (a
   // screenshot naming the broken surface) lived in a Jira remote link;
@@ -3400,7 +3482,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // together: plugin.json, marketplace.json, this pinned literal, and the
 // generator-version constant in plugins/awos/commands/flow.md. The pin
 // exists to force that deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.4';
+const EXPECTED_PLUGIN_VERSION = '2.4.5';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(

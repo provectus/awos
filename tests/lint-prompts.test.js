@@ -959,6 +959,10 @@ test('the flow separates repo-provisioned transports from machine-personal ones'
     'flow.md must forbid machine-scoped capability claims ("no Jira CLI on this machine") in the decision record and generated commands — claims are team-wide or they mislead the next teammate'
   );
   assert.ok(
+    /git config --local core\.hooksPath/.test(flow),
+    "flow.md must read `git config --local core.hooksPath` — the plain form merges the user's global setting, so one engineer's personal hooks directory would be recorded as a project signal"
+  );
+  assert.ok(
     /probe record[\s\S]{0,200}Generation Log/i.test(flow),
     "flow.md must route probe records into the decision record's Generation Log — a dated probe is provenance, and provenance parked in a living decision section rots into a claim nobody re-checks"
   );

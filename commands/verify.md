@@ -10,7 +10,7 @@ You are a Verification Agent responsible for validating that implemented feature
 
 # TASK
 
-Verify a specification's implementation against its acceptance criteria. For each criterion, check if the implementation satisfies it. Mark verified criteria as `[x]` and update Status to `Completed` when all pass.
+Verify a specification's implementation against its acceptance criteria. Check every criterion, mark verified ones as `[x]`, and update Status to `Completed` when all pass. When criteria fail, record them as fix tasks in the spec's `tasks.md` so `/awos:implement` can execute the fixes.
 
 ---
 
@@ -22,6 +22,7 @@ Verify a specification's implementation against its acceptance criteria. For eac
   - `technical-considerations.md`
   - `tasks.md`
 - **Output:** Updated spec files with verified criteria marked and Status set to `Completed`
+- **Output (On failure):** A `Fix verification failures` slice appended to the spec's `tasks.md`, one fix task per failed criterion, for `/awos:implement` to pick up
 - **Output (Optional):** Suggested `/awos:*` commands to run if product context documents need updates
 
 ---
@@ -58,18 +59,36 @@ Verify a specification's implementation against its acceptance criteria. For eac
 
 ### Step 3: Verify and Mark Acceptance Criteria
 
-For each acceptance criterion in `functional-spec.md`:
+Evaluate **every** acceptance criterion in `functional-spec.md` — do not stop at the first failure. A single pass over the full list lets Step 3a collect all the fix work at once instead of surfacing one gap per run. For each criterion:
 
 1. **Verify:** confirm the implementation satisfies the criterion.
    - **Non-visual criterion** (API, data, CLI, logic): use whatever check fits best — `curl`, a shell command, log/database inspection.
    - **Visual / UI criterion** (anything a user sees or does in a browser): start the app if needed (per `technical-considerations.md`), drive the running UI through the project's browser-automation tool, observe the actual rendered behavior, and save a screenshot of the verified state to `docs/screenshots/<spec-directory>-<short-state>.png` (the shared screenshot folder; see CONSTRAINTS). A passing component/test-client test does not satisfy a visual criterion — render it for real.
 2. **If met:** mark it `[x]` and record the evidence — the command output for non-visual criteria, or the screenshot path for visual ones (e.g. "verified via curl /api/health", "see docs/screenshots/011-scheduled-tasks-amber-pill.png").
-3. **If NOT met:** report which criterion failed and what's missing, then stop.
-4. **If no tool can verify the criterion in this environment:** ask the user via `AskUserQuestion` — "I can't verify [criterion] automatically because [reason]. Verify manually and confirm, or stop here?" Options: "I verified manually — mark as done" / "Stop — I'll fix the tooling first". This is a last resort: it means no agent-driven render path exists (no browser tooling, the app genuinely cannot be started here) — not that the normal run path is temporarily reserved. Starting the app on an alternate port, reclaiming a shared resource, or driving the project's deploy step are all agent-driven paths; try them before deferring. Never hand the user a `run` command to execute for you, and never mark criteria `[x]` without evidence from one of the paths above.
+3. **If NOT met:** leave it `[ ]` and note what is missing together with the observed evidence (the failing command output, the screenshot of the wrong state). Continue with the remaining criteria — Step 3a turns these notes into fix tasks.
+4. **If no tool can verify the criterion in this environment:** ask the user via `AskUserQuestion` — "I can't verify [criterion] automatically because [reason]. Verify manually and confirm, or stop here?" Options: "I verified manually — mark as done" / "Stop — I'll fix the tooling first". If they confirm, mark it `[x]` with the user's confirmation recorded as the evidence. If they choose to stop — or the question goes unanswered — mark the criterion `[?]` in `functional-spec.md`, so the pending manual confirmation is visible in the file itself; a later run re-asks. This is a last resort: it means no agent-driven render path exists (no browser tooling, the app genuinely cannot be started here) — not that the normal run path is temporarily reserved. Starting the app on an alternate port, reclaiming a shared resource, or driving the project's deploy step are all agent-driven paths; try them before deferring. Never hand the user a `run` command to execute for you, and never mark criteria `[x]` without evidence from one of the paths above.
+
+### Step 3a: Append Fix Tasks for Failed Criteria
+
+Skip this step when Step 3 found no failed criteria.
+
+1. Append one fix slice to the spec's `tasks.md`, using this exact shape. The slice title `Fix verification failures` is a contract: `/awos:tasks` preserves such slices on regeneration, and `/awos:implement` picks the tasks up like any other unchecked work — no special handling on its side.
+
+   ```md
+   - [ ] **Slice N: Fix verification failures**
+
+     > Appended by /awos:verify — criteria that failed verification. Re-run /awos:implement to execute, then /awos:verify.
+     - [ ] Fix: <criterion> — <what is missing, with the observed evidence>. **[Agent: <agent-name>]**
+   ```
+
+   `N` is the next slice number after the last slice in the file. Emit one `Fix:` task per failed criterion. Assign the agent the way `/awos:tasks` does: inspect the `Agent` tool's description block in your own system prompt for a specialist matching the criterion's technology or domain (project-local or plugin-provided), falling back to `general-purpose` when none matches.
+
+2. If either spec file's Status is already `Completed` — stale from an earlier verify run — revert it to its previous in-progress value in both `functional-spec.md` and `technical-considerations.md`, and un-tick the spec's roadmap item in `context/product/roadmap.md` if it was ticked.
+3. Skip Step 4 — a failed criterion blocks Completed. Continue with Step 5 and report per Step 6.
 
 ### Step 4: Mark as Completed
 
-If all criteria verified:
+Only when every acceptance criterion is `[x]` — no `[ ]` and no `[?]` remain:
 
 1. Change `functional-spec.md` Status to `Completed`
 2. Change `technical-considerations.md` Status to `Completed`
@@ -96,6 +115,6 @@ Check if `context/product/` documents need updates based on what was learned dur
 ### Step 6: Report
 
 - Success: spec verified and marked complete; report the verified criteria count.
-- Failure: list the unmet criteria with the command output that demonstrated the failure.
+- Failure: list the unmet criteria with the evidence that demonstrated each failure, name the `Fix verification failures` slice appended to `tasks.md`, and report the next commands: `/awos:implement` (executes the fix tasks), then `/awos:verify` again.
 - Verification disabled: list criteria marked `[?]` so the user knows what still needs manual confirmation.
 - **Visual evidence:** for any UI criteria verified, list the retained screenshot paths under `docs/screenshots/` so the user can review the look-and-feel without re-running.

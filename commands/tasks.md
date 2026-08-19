@@ -73,7 +73,7 @@ Follow this process precisely.
       - Match the task to a subagent based on technology keywords, task intent, and the tech stack identified in `technical-considerations.md`.
       - Append the assignment as `**[Agent: agent-name]**` at the end of the task description.
       - Use `general-purpose` only when no specialist matches — track these for the Recommendations table.
-  5.  Within the same slice, after the implementation tasks, add a Verify task that exercises the slice end-to-end and deletes its own verification artifacts before completing. Skip the Verify task if `SKIP_TESTS = true`.
+  5.  Within the same slice, after the implementation tasks, add a Verify task that exercises the slice end-to-end and deletes its own verification artifacts before completing. Keep the Verify task when `SKIP_TESTS = true` — skip-tests suppresses generated test suites (the Feature Testing & Regression slice), not the per-slice look-and-feel verification; this matches `/awos:verify`'s constraint that skip-tests never waives look-and-feel checks.
   6.  Repeat steps 1-5 for each subsequent slice until all spec requirements are covered.
   7.  Append the **Feature Testing & Regression** slice as the final slice (skip this step entirely if `SKIP_TESTS = true`). See **Step 3a** below for how to select the QA agent and emit the slice — do not invent your own wording.
   8.  For each slice's Verify task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing for the Recommendations table in Step 4.
@@ -97,7 +97,7 @@ Skip this step if `SKIP_TESTS = true`.
     - [ ] **Slice N: Feature Testing & Regression**
 
       > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
-      - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: [spec-directory]` and `@regression` if suitable for long-term regression. **[Agent: {qa-agent}]**
+      - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (prove each test by temporarily reverting the change it covers: it must fail on the reverted code, then pass once the change is restored). Annotate each test with `@spec: [spec-directory]` and `@regression` if suitable for long-term regression. **[Agent: {qa-agent}]**
       - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: {qa-agent}]**
     ```
 
@@ -118,18 +118,19 @@ Skip this step if `SKIP_TESTS = true`.
       - `[ ] Verify: Run the application, drive the profile page through the available browser-automation tool (whichever the project ships — playwright-cli, cypress, the chrome MCP, etc.), confirm the correct avatar or placeholder is shown, and delete any screenshots or recordings produced during the check. **[Agent: manual-qa-expert]**`
     - `[ ] **Slice 3: Feature Testing & Regression**`
       > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
-      - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with @spec: [spec-directory] and @regression if suitable for long-term regression. **[Agent: testing-expert]**`
+      - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (prove each test by temporarily reverting the change it covers: it must fail on the reverted code, then pass once the change is restored). Annotate each test with @spec: [spec-directory] and @regression if suitable for long-term regression. **[Agent: testing-expert]**`
       - `[ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**`
 
 ## Step 4: Write the Task List
 
-1.  Write the complete slice/task list to `tasks.md` in the chosen spec directory. **Write the file without waiting for approval** — generating a task list is reversible (re-run `/awos:tasks` to revise), so the deliverable must never be gated behind a confirmation that an unattended run cannot answer.
-2.  Record a one-line marker at the very top of the generated `tasks.md`: `<!-- not-user-reviewed -->`. The file is written before review (Step 5), so it starts as a draft; Step 5 removes this marker once the user has reviewed it. Keep the marker shape exactly — downstream automations grep for it to tell a draft from a reviewed plan.
-3.  If `SKIP_TESTS = true`, record a one-line note at the top of the generated `tasks.md` so that downstream commands (e.g. `/awos:verify`) can detect the choice: `<!-- skip-tests: true -->`.
+1.  If `tasks.md` already exists in the spec directory, read it before writing. Carry over any `Fix verification failures` slices (appended by `/awos:verify`) that still contain unchecked tasks: append them after the last generated slice, renumbered to continue the sequence, content unchanged. They are recorded verification debt — never silently discard them on regeneration.
+2.  Write the complete slice/task list to `tasks.md` in the chosen spec directory. **Write the file without waiting for approval** — generating a task list is reversible (re-run `/awos:tasks` to revise), so the deliverable must never be gated behind a confirmation that an unattended run cannot answer.
+3.  Record a one-line marker at the very top of the generated `tasks.md`: `<!-- not-user-reviewed -->`. The file is written before review (Step 5), so it starts as a draft; Step 5 removes this marker once the user has reviewed it. Keep the marker shape exactly — downstream automations grep for it to tell a draft from a reviewed plan.
+4.  If `SKIP_TESTS = true`, record a one-line note at the top of the generated `tasks.md` so that downstream commands (e.g. `/awos:verify`) can detect the choice: `<!-- skip-tests: true -->`.
 
 ## Step 5: Surface for Review and Recommend Next Step
 
-1.  Report the saved path and present the slice/task plan for review.
+1.  Report the saved path and present the slice/task plan for review, naming any `Fix verification failures` slices carried over from the previous `tasks.md` so the user knows that verification debt is still open.
 2.  Ask for review feedback strictly via the `AskUserQuestion` tool (e.g. options "Looks good — keep it as saved" / "I want changes") — never in plain text, which would end a non-interactive turn before the review outcome can be reported.
 3.  **When the user responds** (either "looks good" or after you apply their requested changes and re-save): remove the `<!-- not-user-reviewed -->` marker from the top of `tasks.md`, since the plan has now been reviewed. If they requested changes, apply them — adjust, split, merge slices or tasks, or reassign subagents — and re-save before removing the marker.
 4.  **If the review question goes unanswered** (dismissed, or the run is non-interactive): leave the file exactly as saved, marker included. Its presence is the signal that the plan was written but not reviewed; do not remove it.

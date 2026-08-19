@@ -751,6 +751,99 @@ test('verify.md does not hardcode a verification-tool priority order', () => {
   );
 });
 
+test('verify.md appends fix tasks that tasks.md preserves and the flow template loops on', () => {
+  // The verify→implement loop closure: on failed criteria /awos:verify
+  // appends a "Fix verification failures" slice to tasks.md, so
+  // "re-run /awos:implement" stops being a no-op (implement picks up
+  // unchecked tasks natively). /awos:tasks regeneration carries the
+  // slice over instead of clobbering it, and the implement-feature flow
+  // template re-enters implement→verify on it. The literal slice title
+  // is the join key across all three prompts.
+  const verify = readUtf8(path.join(commandsDir, 'verify.md'));
+  const tasks = readUtf8(path.join(commandsDir, 'tasks.md'));
+  const featureTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+  );
+  assert.ok(
+    verify.includes('Fix verification failures'),
+    'commands/verify.md must append the literal "Fix verification failures" slice on failed criteria — the slice title is the cross-file contract'
+  );
+  assert.ok(
+    /\*\*\[Agent: /.test(verify),
+    'commands/verify.md fix tasks must carry the **[Agent: name]** marker so /awos:implement can delegate them without special handling'
+  );
+  assert.ok(
+    tasks.includes('Fix verification failures'),
+    'commands/tasks.md Step 4 must carry over unchecked "Fix verification failures" slices on regeneration — same literal title /awos:verify appends'
+  );
+  assert.ok(
+    featureTemplate.includes('Fix verification failures'),
+    'implement-feature-template.md verify stage must close the loop on the appended "Fix verification failures" slice — re-run /awos:implement, then /awos:verify'
+  );
+});
+
+test('tasks.md scopes SKIP_TESTS to generated test suites, never per-slice verification', () => {
+  // SKIP_TESTS previously dropped the per-slice Verify task, which
+  // contradicted verify.md's constraint that "skip-tests suppresses
+  // test suites, not look-and-feel". The per-slice Verify task is a
+  // look-and-feel check, so it survives the opt-out; only the Feature
+  // Testing & Regression slice (a generated test suite) is skipped.
+  const tasks = readUtf8(path.join(commandsDir, 'tasks.md'));
+  assert.ok(
+    !tasks.includes('Skip the Verify task if'),
+    'commands/tasks.md must not skip the per-slice Verify task under SKIP_TESTS — skip-tests suppresses generated test suites, never look-and-feel verification (see commands/verify.md CONSTRAINTS)'
+  );
+  assert.ok(
+    /Keep the Verify task when `SKIP_TESTS = true`/.test(tasks),
+    'commands/tasks.md must state explicitly that the per-slice Verify task is kept under SKIP_TESTS, so the scope of the opt-out is unambiguous'
+  );
+});
+
+test('the RED-validation gloss uses reverted-baseline semantics, synced with the flow template', () => {
+  // The Feature Testing & Regression slice runs after all
+  // implementation, so a chronological "must fail before implementation
+  // is confirmed done" instruction is unobservable there. The canonical
+  // gloss is reverted-baseline — revert the covered change, watch the
+  // test fail, restore, watch it pass — and the implement-feature flow
+  // template quotes it as "the plan's own wording", so the two literals
+  // must not drift apart.
+  const syncPhrase =
+    'fail on the reverted code, then pass once the change is restored';
+  const tasks = readUtf8(path.join(commandsDir, 'tasks.md'));
+  const featureTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+  );
+  assert.ok(
+    tasks.includes(syncPhrase),
+    `commands/tasks.md testing slice must gloss RED validation with the reverted-baseline phrase ("${syncPhrase}") — observable after implementation, unlike fail-first chronology`
+  );
+  assert.ok(
+    featureTemplate.includes(syncPhrase),
+    `implement-feature-template.md spot-check cites "the plan's own wording" — it must quote the same reverted-baseline phrase ("${syncPhrase}") as commands/tasks.md`
+  );
+  assert.ok(
+    !tasks.includes('must fail before implementation is confirmed done'),
+    'commands/tasks.md must not keep the chronological fail-first gloss — it is unobservable in a slice that runs after all implementation'
+  );
+});
+
+test('verify.md gives the [?] marker a write path and gates Completed on it', () => {
+  // Step 6 reported criteria marked [?], but nothing ever wrote that
+  // marker and Completed did not check it. The manual-confirmation
+  // fallback now writes [?] into functional-spec.md when confirmation
+  // is declined or unanswered, and Completed requires every criterion
+  // [x] — an open [?] blocks it.
+  const verify = readUtf8(path.join(commandsDir, 'verify.md'));
+  assert.ok(
+    verify.includes('mark the criterion `[?]`'),
+    'commands/verify.md manual fallback must write the [?] marker into functional-spec.md when the user declines or the question goes unanswered'
+  );
+  assert.ok(
+    verify.includes('no `[ ]` and no `[?]`'),
+    'commands/verify.md Step 4 must gate Completed on every criterion being [x] — no [ ] and no [?] remaining'
+  );
+});
+
 test('verify.md and the flow templates never punt a drivable render to the user', () => {
   // Road-test regression (session 928eba0a): the generated /fix-bug
   // paused and told the user to run `! make run` for the live check,
@@ -3794,7 +3887,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // together: plugin.json, marketplace.json, this pinned literal, and the
 // generator-version constant in plugins/awos/commands/flow.md. The pin
 // exists to force that deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.5';
+const EXPECTED_PLUGIN_VERSION = '2.4.6';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(

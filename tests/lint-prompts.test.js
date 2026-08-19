@@ -959,6 +959,10 @@ test('the flow separates repo-provisioned transports from machine-personal ones'
     'flow.md must forbid machine-scoped capability claims ("no Jira CLI on this machine") in the decision record and generated commands — claims are team-wide or they mislead the next teammate'
   );
   assert.ok(
+    /best-effort/i.test(flow),
+    'flow.md Step 6 must instruct the generator to wire best-effort degradation into any stage whose transport is an optional accelerator — without it a missing accelerator reads to the generator as a hard stop'
+  );
+  assert.ok(
     /git config --local core\.hooksPath/.test(flow),
     "flow.md must read `git config --local core.hooksPath` — the plain form merges the user's global setting, so one engineer's personal hooks directory would be recorded as a project signal"
   );
@@ -984,6 +988,10 @@ test('the flow separates repo-provisioned transports from machine-personal ones'
     'delivery-flow-template.md §7 must carry a Long-lead operator prerequisites field so access requests measured in days start before the first run'
   );
   assert.ok(
+    /best-effort/i.test(dfTemplate),
+    'delivery-flow-template.md §1 must state that an optional-accelerator source makes its part of the fetch best-effort — the record is what the generated stage gets written from'
+  );
+  assert.ok(
     /\*\*Probe records\*\*/.test(dfTemplate),
     "delivery-flow-template.md Generation Log must carry the Probe records entry — that is where Step 2's dated probes land instead of the decision sections"
   );
@@ -996,7 +1004,14 @@ test('the flow separates repo-provisioned transports from machine-personal ones'
     );
     assert.ok(
       /operator prerequisites/i.test(body) && /access scope/i.test(body),
-      `${tmpl} resume-detection preflight must check the operator prerequisites §7 records (auth and access scope, not just the binary) so a missing grant stops the run at second zero, not at the merge stage`
+      `${tmpl} must pre-flight the operator prerequisites §7 records (auth and access scope, not just the binary) so a missing grant stops the run at second zero, not at the merge stage`
+    );
+    const preflightAt = body.indexOf(
+      'pre-flight the transports this run depends on'
+    );
+    assert.ok(
+      preflightAt !== -1 && preflightAt < body.indexOf('### Step 2:'),
+      `${tmpl} must place the transport pre-flight inside the first stage, ahead of Step 2 — a pre-flight that runs after the ticket fetch cannot stop a missing tracker grant from failing the fetch raw`
     );
   }
 });
@@ -1995,7 +2010,10 @@ test('flow.md wires fix-bug generation alongside implement-feature', () => {
 
 test('flow.md inventory covers platform build/verify toolchains', () => {
   // Step 2 probed only web browser automation; mobile/native flows verify
-  // with a platform toolchain (Eugene uses XcodeBuildMCP build_sim).
+  // with a platform toolchain (Eugene uses XcodeBuildMCP build_sim). The
+  // rule is derive-from-the-stack, not enumerate-the-platforms — and where
+  // the project wraps its toolchain behind one entry point, that wrapper is
+  // the transport, not the tool underneath.
   const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
   assert.ok(
     /Build & verify toolchain/i.test(body),
@@ -2004,6 +2022,14 @@ test('flow.md inventory covers platform build/verify toolchains', () => {
   assert.ok(
     /XcodeBuildMCP|Gradle|emulator|simulator/i.test(body),
     'flow.md must recognize non-web build/verify toolchains (iOS/Android), not just browser automation'
+  );
+  assert.ok(
+    /not from a fixed list of languages/i.test(body),
+    "flow.md Step 2 must derive the build/verify toolchain from the recorded stack and the repo's build manifests rather than a fixed platform list — a fixed list silently omits every ecosystem it forgot"
+  );
+  assert.ok(
+    /that wrapper is the transport/i.test(body),
+    'flow.md Step 2 must record a `make`/`Taskfile`/`just`/`scripts/` wrapper as the build/verify transport instead of the tool underneath — the generated command has to drive the entry point the project actually maintains'
   );
 });
 

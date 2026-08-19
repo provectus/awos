@@ -780,22 +780,34 @@ test('verify.md appends fix tasks that tasks.md preserves and the flow template 
     featureTemplate.includes('Fix verification failures'),
     'implement-feature-template.md verify stage must close the loop on the appended "Fix verification failures" slice — re-run /awos:implement, then /awos:verify'
   );
+  assert.ok(
+    /capping at three rounds/.test(featureTemplate),
+    'implement-feature-template.md verify stage must cap the implement→verify retry loop at three rounds — without the cap a non-converging fix loops unbounded'
+  );
 });
 
-test('tasks.md scopes SKIP_TESTS to generated test suites, never per-slice verification', () => {
+test('tasks.md scopes SKIP_TESTS to test-suite generation, never per-slice verification', () => {
   // SKIP_TESTS previously dropped the per-slice Verify task, which
-  // contradicted verify.md's constraint that "skip-tests suppresses
-  // test suites, not look-and-feel". The per-slice Verify task is a
-  // look-and-feel check, so it survives the opt-out; only the Feature
-  // Testing & Regression slice (a generated test suite) is skipped.
+  // contradicted verify.md's constraint that skip-tests suppresses test
+  // suites, not verification. The Verify task survives the opt-out, but
+  // per-slice verification is tool-agnostic (Step 3's rule allows a
+  // unit/integration test runner), so keeping it needs the matching
+  // constraint: under SKIP_TESTS the Verify task must prove the slice
+  // without a test runner — otherwise it regenerates the very test
+  // suites the flag suppresses (see commands/implement.md's "rules out
+  // test-writing for the whole spec").
   const tasks = readUtf8(path.join(commandsDir, 'tasks.md'));
   assert.ok(
     !tasks.includes('Skip the Verify task if'),
-    'commands/tasks.md must not skip the per-slice Verify task under SKIP_TESTS — skip-tests suppresses generated test suites, never look-and-feel verification (see commands/verify.md CONSTRAINTS)'
+    'commands/tasks.md must not skip the per-slice Verify task under SKIP_TESTS — skip-tests suppresses test-suite generation, never slice verification'
   );
   assert.ok(
     /Keep the Verify task when `SKIP_TESTS = true`/.test(tasks),
     'commands/tasks.md must state explicitly that the per-slice Verify task is kept under SKIP_TESTS, so the scope of the opt-out is unambiguous'
+  );
+  assert.ok(
+    /without reaching for a unit\/integration test runner/.test(tasks),
+    'commands/tasks.md must constrain the SKIP_TESTS Verify task to non-test-runner verification (curl/shell, browser automation, log/database inspection) — otherwise the tool-agnostic Step 3 rule lets it emit the test suites the flag suppresses'
   );
 });
 

@@ -81,18 +81,17 @@ Skip this step when Step 3 found no failed criteria.
      - [ ] Fix: <criterion> — <what is missing, with the observed evidence>. **[Agent: <agent-name>]**
    ```
 
-   `N` is the next slice number after the last slice in the file. Emit one `Fix:` task per failed criterion. Assign the agent the way `/awos:tasks` does: inspect the `Agent` tool's description block in your own system prompt for a specialist matching the criterion's technology or domain (project-local or plugin-provided), falling back to `general-purpose` when none matches.
+   `N` is the next slice number after the last slice in the file. If the file already ends with a `Fix verification failures` slice that still has unchecked tasks, append the new `Fix:` tasks to that slice — skipping any criterion that already has an unchecked fix task — instead of opening another slice; otherwise start a new slice numbered after the last. Emit one `Fix:` task per failed criterion. Assign the agent the way `/awos:tasks` does: inspect the `Agent` tool's description block in your own system prompt for a specialist matching the criterion's technology or domain (project-local or plugin-provided), falling back to `general-purpose` when none matches.
 
-2. If either spec file's Status is already `Completed` — stale from an earlier verify run — revert it to its previous in-progress value in both `functional-spec.md` and `technical-considerations.md`, and un-tick the spec's roadmap item in `context/product/roadmap.md` if it was ticked.
-3. Skip Step 4 — a failed criterion blocks Completed. Continue with Step 5 and report per Step 6.
+2. Continue with Step 4 — completion is blocked, but its stale-status revert still applies — then Step 5, and report per Step 6.
 
-### Step 4: Mark as Completed
+### Step 4: Update Status
 
-Only when every acceptance criterion is `[x]` — no `[ ]` and no `[?]` remain:
-
-1. Change `functional-spec.md` Status to `Completed`
-2. Change `technical-considerations.md` Status to `Completed`
-3. Mark roadmap item as `[x]` in `context/product/roadmap.md`
+1. **If any criterion is not `[x]`** — failed `[ ]` and pending `[?]` alike — `Completed` is blocked. If either spec file's Status is already `Completed` — stale from an earlier verify run — revert it to `In Review` (the same move-back value `/awos:spec`'s update mode uses) in both `functional-spec.md` and `technical-considerations.md`, and un-tick the spec's roadmap item in `context/product/roadmap.md` if it was ticked.
+2. **Only when every acceptance criterion is `[x]`** — no `[ ]` and no `[?]` remain:
+   1. Change `functional-spec.md` Status to `Completed`
+   2. Change `technical-considerations.md` Status to `Completed`
+   3. Mark roadmap item as `[x]` in `context/product/roadmap.md`
 
 ### Step 5: Review Product Context
 

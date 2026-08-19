@@ -73,7 +73,7 @@ Follow this process precisely.
       - Match the task to a subagent based on technology keywords, task intent, and the tech stack identified in `technical-considerations.md`.
       - Append the assignment as `**[Agent: agent-name]**` at the end of the task description.
       - Use `general-purpose` only when no specialist matches — track these for the Recommendations table.
-  5.  Within the same slice, after the implementation tasks, add a Verify task that exercises the slice end-to-end and deletes its own verification artifacts before completing. Keep the Verify task when `SKIP_TESTS = true` — skip-tests suppresses generated test suites (the Feature Testing & Regression slice), not the per-slice look-and-feel verification; this matches `/awos:verify`'s constraint that skip-tests never waives look-and-feel checks.
+  5.  Within the same slice, after the implementation tasks, add a Verify task that exercises the slice end-to-end and deletes its own verification artifacts before completing. Keep the Verify task when `SKIP_TESTS = true` — skip-tests suppresses test-suite generation (the Feature Testing & Regression slice, and test-writing generally, per `/awos:implement`), not slice verification. Under the opt-out the Verify task must prove the slice without reaching for a unit/integration test runner — use curl/shell, browser automation, or log/database inspection instead.
   6.  Repeat steps 1-5 for each subsequent slice until all spec requirements are covered.
   7.  Append the **Feature Testing & Regression** slice as the final slice (skip this step entirely if `SKIP_TESTS = true`). See **Step 3a** below for how to select the QA agent and emit the slice — do not invent your own wording.
   8.  For each slice's Verify task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing for the Recommendations table in Step 4.
@@ -124,9 +124,9 @@ Skip this step if `SKIP_TESTS = true`.
 ## Step 4: Write the Task List
 
 1.  If `tasks.md` already exists in the spec directory, read it before writing. Carry over any `Fix verification failures` slices (appended by `/awos:verify`) that still contain unchecked tasks: append them after the last generated slice, renumbered to continue the sequence, content unchanged. They are recorded verification debt — never silently discard them on regeneration.
-2.  Write the complete slice/task list to `tasks.md` in the chosen spec directory. **Write the file without waiting for approval** — generating a task list is reversible (re-run `/awos:tasks` to revise), so the deliverable must never be gated behind a confirmation that an unattended run cannot answer.
-3.  Record a one-line marker at the very top of the generated `tasks.md`: `<!-- not-user-reviewed -->`. The file is written before review (Step 5), so it starts as a draft; Step 5 removes this marker once the user has reviewed it. Keep the marker shape exactly — downstream automations grep for it to tell a draft from a reviewed plan.
-4.  If `SKIP_TESTS = true`, record a one-line note at the top of the generated `tasks.md` so that downstream commands (e.g. `/awos:verify`) can detect the choice: `<!-- skip-tests: true -->`.
+2.  Write the complete slice/task list — the generated slices plus any carried-over `Fix verification failures` slices from item 1 — to `tasks.md` in the chosen spec directory in a single write. **Write the file without waiting for approval** — generating a task list is reversible (re-run `/awos:tasks` to revise), so the deliverable must never be gated behind a confirmation that an unattended run cannot answer.
+3.  Record a one-line marker as the first line of the generated `tasks.md`: `<!-- not-user-reviewed -->`. The file is written before review (Step 5), so it starts as a draft; Step 5 removes this marker once the user has reviewed it. Keep the marker shape exactly — downstream automations grep for it to tell a draft from a reviewed plan.
+4.  If `SKIP_TESTS = true`, record `<!-- skip-tests: true -->` on the line immediately after it (the second line of the file), so that downstream commands (e.g. `/awos:verify`) can detect the choice.
 
 ## Step 5: Surface for Review and Recommend Next Step
 

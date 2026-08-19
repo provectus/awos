@@ -36,6 +36,16 @@ function readUtf8(p) {
   return fs.readFileSync(p, 'utf8');
 }
 
+// Return the single line matching `re`, or '' when absent. Prompt markdown in
+// this repo is never hard-wrapped, so one bullet or one bold-led paragraph is
+// exactly one line — which is what lets an assertion be scoped to the clause it
+// protects instead of grepping the whole document. A document-wide grep for a
+// common phrase ("best-effort") stays green after the rule that phrase belongs
+// to is deleted, as long as any other sentence still uses the word.
+function lineWith(body, re) {
+  return body.split('\n').find((l) => re.test(l)) || '';
+}
+
 function listMarkdown(dir) {
   if (!fs.existsSync(dir)) return [];
   return fs
@@ -959,7 +969,12 @@ test('the flow separates repo-provisioned transports from machine-personal ones'
     'flow.md must forbid machine-scoped capability claims ("no Jira CLI on this machine") in the decision record and generated commands — claims are team-wide or they mislead the next teammate'
   );
   assert.ok(
-    /best-effort/i.test(flow),
+    /best-effort/i.test(
+      lineWith(
+        flow,
+        /Wire transport degradation and the prerequisite pre-flight/
+      )
+    ),
     'flow.md Step 6 must instruct the generator to wire best-effort degradation into any stage whose transport is an optional accelerator — without it a missing accelerator reads to the generator as a hard stop'
   );
   assert.ok(
@@ -988,7 +1003,9 @@ test('the flow separates repo-provisioned transports from machine-personal ones'
     'delivery-flow-template.md §7 must carry a Long-lead operator prerequisites field so access requests measured in days start before the first run'
   );
   assert.ok(
-    /best-effort/i.test(dfTemplate),
+    /best-effort/i.test(
+      lineWith(dfTemplate, /Surrounding context to pre-seed the spec/)
+    ),
     'delivery-flow-template.md §1 must state that an optional-accelerator source makes its part of the fetch best-effort — the record is what the generated stage gets written from'
   );
   assert.ok(
@@ -2023,13 +2040,14 @@ test('flow.md inventory covers platform build/verify toolchains', () => {
     /XcodeBuildMCP|Gradle|emulator|simulator/i.test(body),
     'flow.md must recognize non-web build/verify toolchains (iOS/Android), not just browser automation'
   );
+  const toolchainBullet = lineWith(body, /\*\*Build & verify toolchain\*\*/);
   assert.ok(
-    /not from a fixed list of languages/i.test(body),
-    "flow.md Step 2 must derive the build/verify toolchain from the recorded stack and the repo's build manifests rather than a fixed platform list — a fixed list silently omits every ecosystem it forgot"
+    /not from a fixed list of languages/i.test(toolchainBullet),
+    "flow.md Step 2's build/verify toolchain bullet must derive the transport from the recorded stack and the repo's build manifests rather than a fixed platform list — a fixed list silently omits every ecosystem it forgot"
   );
   assert.ok(
-    /that wrapper is the transport/i.test(body),
-    'flow.md Step 2 must record a `make`/`Taskfile`/`just`/`scripts/` wrapper as the build/verify transport instead of the tool underneath — the generated command has to drive the entry point the project actually maintains'
+    /that wrapper is the transport/i.test(toolchainBullet),
+    "flow.md Step 2's build/verify toolchain bullet must record a `make`/`Taskfile`/`just`/`scripts/` wrapper as the transport instead of the tool underneath — the generated command has to drive the entry point the project actually maintains"
   );
 });
 

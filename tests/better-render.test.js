@@ -90,9 +90,46 @@ const SAMPLE_VM = {
   ],
 };
 
-function renderInTemp(vm, { artifact = false } = {}) {
+// The shape templates/functional-spec-template.md actually produces:
+// requirements as flat bullets with a nested **Acceptance Criteria:** checklist,
+// no ### subsections. (SAMPLE_MD above uses per-requirement subsections — both
+// shapes are real, and the renderer must not lose either.)
+const TEMPLATE_SHAPED_MD = `# Functional Specification: Password Reset
+
+- **Roadmap Item:** Let users reset passwords
+- **Status:** Draft
+
+---
+
+## 1. Overview and Rationale (The "Why")
+
+Locked-out users need a self-service way back in.
+
+---
+
+## 2. Functional Requirements (The "What")
+
+- **As a** user, **I want to** reset my password, **so that** I can regain access.
+  - **Acceptance Criteria:**
+    - [x] When I click "Forgot Password", then I am taken to a page to enter my email.
+    - [ ] When I submit my email, then I receive a reset link.
+
+---
+
+## 3. Scope and Boundaries
+
+### In-Scope
+
+- Email-based reset
+
+### Out-of-Scope
+
+- SMS reset
+`;
+
+function renderInTemp(vm, { artifact = false, md = SAMPLE_MD } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-render-'));
-  fs.writeFileSync(path.join(dir, 'functional-spec.md'), SAMPLE_MD);
+  fs.writeFileSync(path.join(dir, 'functional-spec.md'), md);
   const args = [script, dir];
   if (vm !== undefined) {
     const vmPath = path.join(dir, 'vm.json');
@@ -112,6 +149,28 @@ function renderInTemp(vm, { artifact = false } = {}) {
   fs.rmSync(dir, { recursive: true, force: true });
   return { html, fragment };
 }
+
+test("renderer keeps requirements written in the template's flat-bullet shape (no ### subsections)", () => {
+  const { html } = renderInTemp(SAMPLE_VM, { md: TEMPLATE_SHAPED_MD });
+  assert.ok(
+    html.includes('Functional Requirements'),
+    'a requirements section without subsections must still render its heading — dropping the section is the bug this test pins'
+  );
+  assert.ok(
+    html.includes('reset my password'),
+    'the flat-bullet requirement statement must appear in the page'
+  );
+  assert.ok(
+    html.includes('I am taken to a page to enter my email') &&
+      html.includes('I receive a reset link'),
+    'both acceptance criteria of a flat-bullet requirement must appear in the page'
+  );
+  assert.ok(
+    html.includes('1 of 2 criteria verified') &&
+      html.includes('Acceptance criteria — 2 (1 verified)'),
+    'the status-bar count and the rendered criteria list must describe the same criteria — the page must never count criteria it does not show'
+  );
+});
 
 test('renderer extracts criteria verbatim from the markdown and computes verification counts', () => {
   const { html } = renderInTemp(SAMPLE_VM);

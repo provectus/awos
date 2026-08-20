@@ -457,7 +457,11 @@ function render(md, vm, pluginVersion) {
   for (const section of spec.sections) {
     if (/scope/i.test(section.title) && section.subs.length) {
       scopeSection = section;
-    } else if (isRequirementSection(section)) {
+    } else if (isRequirementSection(section) && section.subs.length) {
+      // Requirement cards need per-requirement ### subsections. A requirements
+      // section written in the template's flat-bullet shape (no subsections)
+      // must fall through to the generic renderer below, which shows its
+      // prose and criteria instead of silently dropping them.
       requirementSubs.push(...section.subs);
     } else if (
       /overview/i.test(section.title) &&

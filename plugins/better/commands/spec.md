@@ -161,7 +161,7 @@ The spec content is now final for this run, so render the human-facing review pa
    - `decisions` — every judgment call made in this spec (the things a reviewer might challenge): the decision, the choice, why, and its sources (`interview` / `code` / `web` / `kb`).
    - `findings` — per research lane, what was discovered and what it changed in the spec (`impact`, with an `anchor` like `#r21` pointing at the requirement it shaped). A lane that did not run gets an explanatory note, not silence.
    - `requirements` — per requirement (matched by its number, e.g. `"2.1"`): a one-line plain-language statement, source badges, and a short scannable name for each acceptance criterion, in order.
-   - `diagram` (optional) — when the behavior is stateful or flow-heavy, an inline SVG overview with user-language labels, plus a note that the criteria remain the contract.
+   - `diagram` (optional) — when the behavior is stateful or flow-heavy, a small declarative diagram: box/arrow/text items with user-language labels, following the schema in the renderer header. The renderer draws the SVG itself — it never accepts raw markup. Include a note that the criteria remain the contract.
 
    Before rendering, self-check the view-model against the saved spec: it must claim nothing the spec does not support — this page is a review lens, and a lens that embellishes misleads the person approving.
 

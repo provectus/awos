@@ -212,6 +212,73 @@ test('renderer layers the view-model on top: one-liners, decisions, findings wit
   );
 });
 
+test('renderer never interpolates markup from the view-model — hostile payloads are escaped or dropped', () => {
+  const hostile = {
+    at_a_glance: ['<script>alert(1)</script> bullet'],
+    decisions: [
+      { decision: '<img src=x>', choice: 'ok', why: '', sources: ['web'] },
+    ],
+    findings: {
+      web: [
+        {
+          text: 'finding',
+          impact: 'impact',
+          anchor: '"><script>alert(4)</script>',
+        },
+      ],
+      kb: [],
+      kb_note: '',
+    },
+    diagram: {
+      title: '<script>alert(5)</script>',
+      // Legacy raw-SVG field: must be ignored entirely, not sanitized.
+      svg: '<svg onload="alert(6)"><script>alert(7)</script></svg>',
+      items: [
+        {
+          type: 'box',
+          x: 10,
+          y: 10,
+          w: 120,
+          h: 40,
+          label: '</text><script>alert(8)</script>',
+        },
+        { type: 'arrow', x1: 'javascript:alert(9)', y1: 0, x2: 50, y2: 50 },
+        { type: 'arrow', x1: 10, y1: 30, x2: 130, y2: 30, label: 'ok arrow' },
+      ],
+    },
+  };
+  const { html, fragment } = renderInTemp(hostile, { artifact: true });
+  for (const [name, out] of [
+    ['page', html],
+    ['fragment', fragment],
+  ]) {
+    assert.ok(
+      !out.includes('<script>alert(') && !out.includes('<img'),
+      `${name}: view-model text must be escaped before it reaches the HTML — raw tags from any field are an injection`
+    );
+    assert.ok(
+      !out.includes('alert(6)') && !out.includes('alert(7)'),
+      `${name}: the legacy raw-svg view-model field must be ignored entirely, never interpolated`
+    );
+    assert.ok(
+      !out.includes('javascript:alert'),
+      `${name}: diagram geometry must be numeric-coerced — an item with non-numeric coordinates is dropped`
+    );
+    assert.ok(
+      out.includes('&lt;script&gt;'),
+      `${name}: hostile text must appear escaped, proving it was escaped rather than filtered by luck`
+    );
+  }
+  assert.ok(
+    html.includes('class="d-box"') && html.includes('viewBox="0 0 860 320"'),
+    'the declarative diagram must still render from well-formed items (renderer-drawn SVG, default canvas size)'
+  );
+  assert.ok(
+    html.includes('ok arrow'),
+    'well-formed diagram items must survive alongside dropped hostile ones'
+  );
+});
+
 test('renderer --artifact emits a skeleton-free fragment for hosts that wrap content (e.g. claude.ai artifacts)', () => {
   const { html, fragment } = renderInTemp(SAMPLE_VM, { artifact: true });
   assert.ok(

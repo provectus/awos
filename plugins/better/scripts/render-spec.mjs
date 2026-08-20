@@ -17,11 +17,25 @@
  * section. A missing or empty view-model degrades to a generic render; it
  * never fails the page.
  *
+ * The diagram is declarative: the renderer draws the SVG itself from
+ * box/arrow/text items — geometry is numeric-coerced and every label is
+ * escaped. Raw SVG/HTML from the view-model is never interpolated (the
+ * view-model is authored after web research and is untrusted as markup);
+ * a legacy "svg" field is ignored.
+ *
  * View-model schema (all fields optional):
  * {
  *   "at_a_glance": ["plain-language bullet", ...],
  *   "decisions": [{ "decision", "choice", "why", "sources": ["interview"|"code"|"web"|"kb"] }],
- *   "diagram": { "svg": "<svg …>", "note": "caption" },
+ *   "diagram": {
+ *     "title": "Session lifecycle", "note": "caption",
+ *     "width": 880, "height": 320,
+ *     "items": [
+ *       { "type": "box", "x", "y", "w", "h", "label", "sublabel" },
+ *       { "type": "arrow", "x1", "y1", "x2", "y2", "label", "dashed": true, "bend": 40 },
+ *       { "type": "text", "x", "y", "text" }
+ *     ]
+ *   },
  *   "findings": {
  *     "code": [{ "text", "impact", "anchor": "#r21" }], "web": [...], "kb": [...],
  *     "kb_note": "shown when the kb list is empty"
@@ -341,11 +355,84 @@ ${panels}
 </div>`;
 }
 
+function num(v, fallback = null) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function renderDiagramItem(item) {
+  if (!item || typeof item !== 'object') return '';
+  if (item.type === 'box') {
+    const x = num(item.x);
+    const y = num(item.y);
+    const w = num(item.w);
+    const h = num(item.h);
+    if (
+      x === null ||
+      y === null ||
+      w === null ||
+      h === null ||
+      w <= 0 ||
+      h <= 0
+    )
+      return '';
+    const cx = x + w / 2;
+    const label = item.label
+      ? `<text class="d-label" x="${cx}" y="${y + h / 2 + (item.sublabel ? -3 : 5)}" text-anchor="middle">${esc(item.label)}</text>`
+      : '';
+    const sublabel = item.sublabel
+      ? `<text class="d-sublabel" x="${cx}" y="${y + h / 2 + 14}" text-anchor="middle">${esc(item.sublabel)}</text>`
+      : '';
+    return `<rect class="d-box" x="${x}" y="${y}" width="${w}" height="${h}" rx="8"/>${label}${sublabel}`;
+  }
+  if (item.type === 'arrow') {
+    const x1 = num(item.x1);
+    const y1 = num(item.y1);
+    const x2 = num(item.x2);
+    const y2 = num(item.y2);
+    if (x1 === null || y1 === null || x2 === null || y2 === null) return '';
+    const bend = num(item.bend, 0);
+    const mx = (x1 + x2) / 2;
+    const my = (y1 + y2) / 2;
+    // Control point offset perpendicular to the line (curved arrows, loops).
+    const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+    const cx = mx + (bend * (y2 - y1)) / len;
+    const cy = my - (bend * (x2 - x1)) / len;
+    const d = bend
+      ? `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`
+      : `M ${x1} ${y1} L ${x2} ${y2}`;
+    const path = `<path class="d-arrow${item.dashed ? ' dashed' : ''}" d="${d}" marker-end="url(#d-head)"/>`;
+    // Label at the curve midpoint, nudged off the line.
+    const lx = bend ? mx / 2 + cx / 2 : mx;
+    const ly = (bend ? my / 2 + cy / 2 : my) - 6;
+    const label = item.label
+      ? `<text class="d-sublabel" x="${lx}" y="${ly}" text-anchor="middle">${esc(item.label)}</text>`
+      : '';
+    return path + label;
+  }
+  if (item.type === 'text') {
+    const x = num(item.x);
+    const y = num(item.y);
+    if (x === null || y === null || !item.text) return '';
+    return `<text class="d-label" x="${x}" y="${y}">${esc(item.text)}</text>`;
+  }
+  return '';
+}
+
 function renderDiagram(vm) {
+  // Declarative items only — the view-model never supplies markup (see the
+  // header note); anything but well-formed box/arrow/text items is skipped.
   const d = vm && vm.diagram;
-  if (!d || !d.svg || !/^\s*<svg[\s>]/i.test(d.svg)) return '';
+  if (!d || !Array.isArray(d.items)) return '';
+  const body = d.items.map(renderDiagramItem).filter(Boolean).join('\n');
+  if (!body) return '';
+  const w = num(d.width, 860);
+  const h = num(d.height, 320);
   return `<h2 id="lifecycle">${inline(d.title || 'Overview diagram')}</h2>
-<div class="diagram-wrap">${d.svg}</div>
+<div class="diagram-wrap"><svg viewBox="0 0 ${w} ${h}" role="img" xmlns="http://www.w3.org/2000/svg">
+<defs><marker id="d-head" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z" class="d-head"/></marker></defs>
+${body}
+</svg></div>
 ${d.note ? `<div class="diagram-note">${inline(d.note)}</div>` : ''}`;
 }
 
@@ -402,6 +489,13 @@ const CSS = `
   .why { color: var(--muted); font-size: 13px; display: block; margin-top: 2px; }
   .diagram-wrap { overflow-x: auto; margin-top: 12px; }
   .diagram-note { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .diagram-wrap svg { max-width: 100%; height: auto; display: block; }
+  .d-box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+  .d-label { fill: var(--ink); font-size: 13px; font-weight: 600; }
+  .d-sublabel { fill: var(--muted); font-size: 11.5px; }
+  .d-arrow { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  .d-arrow.dashed { stroke-dasharray: 5 4; }
+  .d-head { fill: var(--muted); }
   .tabs { margin-top: 12px; }
   .tabbar { display: flex; gap: 4px; border-bottom: 2px solid var(--line); }
   .tabbar button { appearance: none; border: none; background: none; color: var(--muted); font: 600 14px/1.4 inherit; padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }

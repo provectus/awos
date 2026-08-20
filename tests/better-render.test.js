@@ -368,8 +368,14 @@ test('renderer survives a malformed-but-valid view-model instead of crashing the
     { requirements: {} },
     { at_a_glance: 'not an array' },
     { findings: { code: 'oops' } },
+    // Entries inside an otherwise well-formed collection, not just the
+    // collection itself — these are dereferenced by the renderers.
+    { findings: { code: [null] } },
+    { findings: { web: ['plain string'], kb: [null, { text: 'ok' }] } },
     { decisions: [null, 'nope'] },
+    { requirements: [null] },
     { requirements: [{ match: '2.1', criteria_names: 'not-an-array' }] },
+    { requirements: [{ match: '2.1', sources: 'not-an-array' }] },
   ];
   for (const vm of shapes) {
     const { html } = renderInTemp(vm);
@@ -378,6 +384,35 @@ test('renderer survives a malformed-but-valid view-model instead of crashing the
       `a view-model with a wrong-typed collection (${JSON.stringify(vm).slice(0, 40)}…) must degrade that block, not fail the page — the markdown content must still render`
     );
   }
+});
+
+test('renderer falls back to a default canvas for non-positive diagram dimensions', () => {
+  const items = [
+    { type: 'box', x: 10, y: 10, w: 100, h: 40, label: 'Only box' },
+  ];
+  for (const dims of [
+    { width: 0, height: -5 },
+    { width: -10, height: 0 },
+    { width: null, height: 'wide' },
+    {},
+  ]) {
+    const { html } = renderInTemp({ diagram: { ...dims, items } });
+    assert.ok(
+      html.includes('viewBox="0 0 860 320"'),
+      `diagram dimensions ${JSON.stringify(dims)} must fall back to the default canvas — a zero or negative viewBox is invalid SVG and the diagram silently would not draw`
+    );
+    assert.ok(
+      html.includes('Only box'),
+      'the diagram items must still render once the canvas falls back'
+    );
+  }
+  const { html } = renderInTemp({
+    diagram: { width: 600, height: 200, items },
+  });
+  assert.ok(
+    html.includes('viewBox="0 0 600 200"'),
+    'valid positive dimensions must be honored, not overridden by the fallback'
+  );
 });
 
 test('renderer refuses an --artifact target that would overwrite a canonical file', () => {

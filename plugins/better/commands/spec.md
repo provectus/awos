@@ -187,6 +187,14 @@ The spec content is now final for this run, so render the human-facing review pa
    node "${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs" "context/spec/[index]-[short-name]" "$view_model_path" --artifact "$artifact_path"
    ```
 
-   Publish only a fragment this run produced: if that command fails or writes no file, report that the artifact render failed, publish nothing, and clean up. Otherwise publish the fragment file with the `Artifact` tool (favicon `📋`). Either way, delete both temp files afterwards (`rm -f "$view_model_path" "$artifact_path"`). Report the artifact URL: it starts private, and the user shares it from claude.ai when ready.
+   Publish only a fragment this run produced: if that command fails or writes no file, report that the artifact render failed and publish nothing. Otherwise publish the fragment file with the `Artifact` tool (favicon `📋`) and report the artifact URL — it starts private, and the user shares it from claude.ai when ready.
 
-4. Report: all three saved paths, the artifact URL if one was published, any research lane that was `SKIPPED` or `NOT CONFIGURED`, any verifier findings left unresolved, and the next command: `/awos:tech`. Note that the HTML is a point-in-time snapshot stamped with its generation date — it does not update when the spec is later edited or verified.
+4. Delete the temp files, whatever the publish decision was:
+
+   ```bash
+   rm -f "$view_model_path" "$artifact_path"
+   ```
+
+   This runs on every path — offer declined, `Artifact` tool absent, unattended run, render failed, or published. The view-model holds the spec's content; it does not belong in shared temporary storage once the run is done.
+
+5. Report: all three saved paths, the artifact URL if one was published, any research lane that was `SKIPPED` or `NOT CONFIGURED`, any verifier findings left unresolved, and the next command: `/awos:tech`. Note that the HTML is a point-in-time snapshot stamped with its generation date — it does not update when the spec is later edited or verified.

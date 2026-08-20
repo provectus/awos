@@ -442,8 +442,14 @@ function renderDiagram(vm) {
   if (!d || !Array.isArray(d.items)) return '';
   const body = d.items.map(renderDiagramItem).filter(Boolean).join('\n');
   if (!body) return '';
-  const w = num(d.width, 860);
-  const h = num(d.height, 320);
+  // A zero or negative dimension yields an invalid viewBox and the diagram
+  // silently does not draw — fall back to the default canvas instead.
+  const positive = (v, fallback) => {
+    const n = num(v, null);
+    return n !== null && n > 0 ? n : fallback;
+  };
+  const w = positive(d.width, 860);
+  const h = positive(d.height, 320);
   return `<h2 id="lifecycle">${inline(d.title || 'Overview diagram')}</h2>
 <div class="diagram-wrap"><svg viewBox="0 0 ${w} ${h}" role="img" xmlns="http://www.w3.org/2000/svg">
 <defs><marker id="d-head" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z" class="d-head"/></marker></defs>
@@ -560,18 +566,19 @@ const TAB_JS = `
 function normalizeViewModel(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const arr = (v) => (Array.isArray(v) ? v : []);
+  const items = (v) => arr(v).filter((e) => e && typeof e === 'object');
   const f =
     raw.findings && typeof raw.findings === 'object' ? raw.findings : {};
   return {
     at_a_glance: arr(raw.at_a_glance),
-    decisions: arr(raw.decisions).filter((d) => d && typeof d === 'object'),
-    requirements: arr(raw.requirements).filter(
-      (r) => r && typeof r === 'object'
-    ),
+    decisions: items(raw.decisions),
+    requirements: items(raw.requirements),
     findings: {
-      code: arr(f.code),
-      web: arr(f.web),
-      kb: arr(f.kb),
+      // Entries, not just the collection: a null in any lane would reach
+      // renderFindings and throw on f.anchor, costing the whole page.
+      code: items(f.code),
+      web: items(f.web),
+      kb: items(f.kb),
       kb_note: typeof f.kb_note === 'string' ? f.kb_note : '',
     },
     diagram:

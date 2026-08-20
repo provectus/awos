@@ -3444,14 +3444,15 @@ test(`better plugin.json version matches its marketplace entry and equals ${EXPE
   const marketplace = JSON.parse(
     readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
   );
-  const entry = marketplace.plugins.find(
-    (p) =>
-      p.name === 'better' || (p.source && p.source.includes('plugins/better'))
+  const entries = marketplace.plugins.filter(
+    (p) => p.name === 'better' && p.source === './plugins/better'
   );
-  assert.ok(
-    entry,
-    'marketplace.json must contain a plugins entry for better (matched by name="better" or source referencing plugins/better)'
+  assert.equal(
+    entries.length,
+    1,
+    'marketplace.json must contain exactly one plugins entry with name="better" and source="./plugins/better" — a near-miss name or source would register a different plugin than the one this pin guards'
   );
+  const [entry] = entries;
   assert.equal(
     pluginManifest.version,
     entry.version,
@@ -3506,8 +3507,20 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       'the blind-verification cycle must be bounded to a single verifier dispatch',
     ],
     [
-      'render-spec.mjs',
-      'the command must render the human review page via the bundled deterministic renderer',
+      '${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs',
+      'the renderer must be invoked through ${CLAUDE_PLUGIN_ROOT} — a relative path breaks across install locations',
+    ],
+    [
+      'Agent(subagent_type="better:spec-verifier")',
+      'the blind verifier must be dispatched by its plugin-prefixed subagent_type — without the better: prefix the agent does not resolve and the verification pass silently never runs',
+    ],
+    [
+      'one bullet at a time',
+      'the self-review must re-read acceptance criteria one bullet at a time (carried from core spec.md) — checking the set as a whole lets a single non-compliant bullet survive',
+    ],
+    [
+      'free-text option for open-ended markers',
+      'marker resolution must offer free text (carried from core spec.md) — not every [NEEDS CLARIFICATION] reduces to an option set',
     ],
     [
       'functional-spec.html',

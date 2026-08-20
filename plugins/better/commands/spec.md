@@ -92,7 +92,7 @@ Then dispatch the research agents — all applicable lanes in a **single message
 
 1. **Codebase lane (always dispatched).** `Agent(subagent_type="Explore")` with the brief and this charge: find the features and behavior adjacent to this topic; how the product currently behaves in the areas the topic touches; any in-repo documentation about it; and anything that contradicts or complicates the brief. Return a terse findings list, each item labeled `[code]`.
 2. **Web lane (always dispatched).** `Agent(subagent_type="general-purpose")` with the brief and this charge: using `WebSearch`/`WebFetch`, find how comparable products solve this problem, the domain's conventions and expectations, and common UX patterns and pitfalls for this kind of feature. Return a terse findings list, each item labeled `[web]` with the source. If web tools are unavailable or every fetch fails, return `SKIPPED: <reason>` instead of failing.
-3. **Internal-KB lane (dispatched when configured).** Dispatch iff `context/sources/sources.md` exists with `## Status: configured` and lists at least one source with `Category: documentation`. Copy each such source's `Platform:`, `Access:`, `Tool:`, and `Scope:` lines into the prompt of one `Agent(subagent_type="general-purpose")` call, charged with: retrieve what the organization's knowledge base says about this topic — prior decisions, related designs, naming, constraints. Return a terse findings list, each item labeled `[kb]` with the source. If a recorded transport is unreachable at runtime, return `SKIPPED: <source> unreachable` for that source rather than failing. Sources with `Access: manual` are excluded from the agent — handle them in Step 5 via an `AskUserQuestion` invitation to paste relevant content (skip that invitation when `AWOS_UNATTENDED` is set). When `sources.md` is absent or not `configured`, note the lane as `NOT CONFIGURED` in the final summary and move on — never treat it as an error.
+3. **Internal-KB lane (dispatched when configured).** Dispatch iff `context/sources/sources.md` exists with `## Status: configured` and lists at least one source with `Category: documentation` whose `Access:` is not `manual`. When every documentation source is `Access: manual` there is nothing for an agent to retrieve — skip the dispatch and handle those sources through the Step 5 invitation below. Copy each such source's `Platform:`, `Access:`, `Tool:`, and `Scope:` lines into the prompt of one `Agent(subagent_type="general-purpose")` call, charged with: retrieve what the organization's knowledge base says about this topic — prior decisions, related designs, naming, constraints. Return a terse findings list, each item labeled `[kb]` with the source. If a recorded transport is unreachable at runtime, return `SKIPPED: <source> unreachable` for that source rather than failing. Sources with `Access: manual` are excluded from the agent — handle them in Step 5 via an `AskUserQuestion` invitation to paste relevant content (skip that invitation when `AWOS_UNATTENDED` is set). When `sources.md` is absent or not `configured`, note the lane as `NOT CONFIGURED` in the final summary and move on — never treat it as an error.
 
 ### Step 5: Synthesis — Interview Round Two
 
@@ -113,7 +113,7 @@ Draft the specification section by section from the template, exactly as the cor
 3. **Acceptance Criteria:** every requirement gets at least one criterion in the When/Then shape — the words **when** and **then** both appear, in that order, within a single sentence (Given optional, only when the precondition affects the outcome). Requirements with boundary or error behavior get at least one failure-path criterion.
 4. **Scope and Boundaries:** ask the user what to exclude within the topic; add all other roadmap items to Out-of-Scope automatically and say you did so.
 
-Then self-review the full draft end to end: replace any developer-facing language that slipped in; make vague or unmeasurable wording concrete in user-perceivable terms or convert it to a `[NEEDS CLARIFICATION: …]` marker; confirm every requirement carries at least one criterion with `when` and `then` in a single sentence.
+Then self-review the full draft end to end: replace any developer-facing language that slipped in; make vague or unmeasurable wording concrete in user-perceivable terms or convert it to a `[NEEDS CLARIFICATION: …]` marker; confirm every requirement carries at least one acceptance criterion. Then re-read the acceptance criteria one bullet at a time — not the set as a whole — and rewrite any bullet that does not carry both `when` and `then` in a single sentence. Checking the set as a whole is how a single non-compliant bullet survives.
 
 ### Step 7: File Generation
 
@@ -150,13 +150,20 @@ Then self-review the full draft end to end: replace any developer-facing languag
 
 ### Step 9: Final Review
 
-Present the saved specification. Resolve each remaining `[NEEDS CLARIFICATION: …]` marker with the user via `AskUserQuestion`, offering the assumption you would otherwise make as the recommended first option; fold each answer back into the relevant requirement and its acceptance criteria, then re-save. If no answer comes (an unattended run), leave the markers in place; the user — or `/awos:tech` — can resolve them later.
+Present the saved specification. Resolve each remaining `[NEEDS CLARIFICATION: …]` marker with the user via `AskUserQuestion`, offering the assumption you would otherwise make as the recommended first option (with a free-text option for open-ended markers — not every marker reduces to an option set, and inventing filler options is its own failure); fold each answer back into the relevant requirement and its acceptance criteria, then re-save. If no answer comes (an unattended run), leave the markers in place; the user — or `/awos:tech` — can resolve them later.
 
 ### Step 10: Render the Review Page and Report
 
 The spec content is now final for this run, so render the human-facing review page. This step is unconditional — every run produces the page — but its failure is never fatal: if `node` is missing (`command -v node`) or the script errors, report that the render was skipped and why, and continue to the report; the markdown remains canonical.
 
-1. Author the **view-model** — the re-shaped, human-friendly representation of what this session learned. Write it as JSON to a temporary file outside the project (e.g. `${TMPDIR:-/tmp}/spec-view-[index].json`), following the schema documented at the top of the renderer script. Its content, all in the spec's non-technical register:
+1. Author the **view-model** — the re-shaped, human-friendly representation of what this session learned. Write it as JSON to a temporary file outside the project, following the schema documented at the top of the renderer script. Resolve the temp paths once, with a fallback for an unset `TMPDIR`, and reuse those exact paths for every write, render, and cleanup below:
+
+   ```bash
+   view_model_path="${TMPDIR:-/tmp}/spec-view-[index].json"
+   artifact_path="${TMPDIR:-/tmp}/spec-artifact-[index].html"
+   ```
+
+   Its content, all in the spec's non-technical register:
    - `at_a_glance` — the feature in about five plain sentences.
    - `decisions` — every judgment call made in this spec (the things a reviewer might challenge): the decision, the choice, why, and its sources (`interview` / `code` / `web` / `kb`).
    - `findings` — per research lane, what was discovered and what it changed in the spec (`impact`, with an `anchor` like `#r21` pointing at the requirement it shaped). A lane that did not run gets an explanatory note, not silence.
@@ -168,7 +175,7 @@ The spec content is now final for this run, so render the human-facing review pa
 2. Run the renderer and clean up:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs" "context/spec/[index]-[short-name]" "$TMPDIR/spec-view-[index].json"
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs" "context/spec/[index]-[short-name]" "$view_model_path"
    ```
 
    The script extracts all requirement prose and acceptance criteria verbatim from `functional-spec.md` — the view-model only adds the human layer on top, never replacement text. Keep the temp view-model file until the publish offer below is resolved, then delete it — it never lands in the project.
@@ -176,9 +183,10 @@ The spec content is now final for this run, so render the human-facing review pa
 3. Offer to publish the review page as a Claude artifact — a link is easier to share with reviewers than a file. Make the offer only when both hold: the render succeeded, and the `Artifact` tool is available in your toolset (introspection — when it is absent, skip this step silently rather than mentioning an option that cannot work). Ask via `AskUserQuestion`: publish as a private artifact, or skip. Publishing sends the spec's content to an external service, so this is a consent gate, not a preference: an unanswered or dismissed question means **no** — never publish by default, and never publish in an unattended run. This deliberately inverts this command's usual unanswered-question rule; outward-facing actions default to withheld consent. If the user opts in:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs" "context/spec/[index]-[short-name]" "$TMPDIR/spec-view-[index].json" --artifact "$TMPDIR/spec-artifact-[index].html"
+   rm -f "$artifact_path"
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs" "context/spec/[index]-[short-name]" "$view_model_path" --artifact "$artifact_path"
    ```
 
-   Publish the fragment file with the `Artifact` tool (favicon `📋`), then delete both temp files. Report the artifact URL: it starts private, and the user shares it from claude.ai when ready.
+   Publish only a fragment this run produced: if that command fails or writes no file, report that the artifact render failed, publish nothing, and clean up. Otherwise publish the fragment file with the `Artifact` tool (favicon `📋`). Either way, delete both temp files afterwards (`rm -f "$view_model_path" "$artifact_path"`). Report the artifact URL: it starts private, and the user shares it from claude.ai when ready.
 
 4. Report: all three saved paths, the artifact URL if one was published, any research lane that was `SKIPPED` or `NOT CONFIGURED`, any verifier findings left unresolved, and the next command: `/awos:tech`. Note that the HTML is a point-in-time snapshot stamped with its generation date — it does not update when the spec is later edited or verified.

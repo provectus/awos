@@ -36,7 +36,7 @@ Amendments to existing specs are out of scope by design — use `/awos:spec`, wh
 
 ## Outputs
 
-All three files land in the standard spec directory (`context/spec/NNN-short-name/`):
+The two markdown files always land in the standard spec directory (`context/spec/NNN-short-name/`); the review page is written whenever rendering succeeds (it needs `node` on PATH and is never fatal):
 
 | File                   | Contract                                                                                                                                                                                                                   |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

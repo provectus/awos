@@ -127,7 +127,15 @@ Locked-out users need a self-service way back in.
 - SMS reset
 `;
 
-function renderInTemp(vm, { artifact = false, md = SAMPLE_MD } = {}) {
+function renderInTemp(
+  vm,
+  {
+    artifact = false,
+    md = SAMPLE_MD,
+    artifactPath = null,
+    expectFailure = false,
+  } = {}
+) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-render-'));
   fs.writeFileSync(path.join(dir, 'functional-spec.md'), md);
   const args = [script, dir];
@@ -136,9 +144,15 @@ function renderInTemp(vm, { artifact = false, md = SAMPLE_MD } = {}) {
     fs.writeFileSync(vmPath, JSON.stringify(vm));
     args.push(vmPath);
   }
-  const fragmentPath = path.join(dir, 'fragment.html');
+  const fragmentPath = artifactPath
+    ? path.join(dir, artifactPath)
+    : path.join(dir, 'fragment.html');
   if (artifact) args.push('--artifact', fragmentPath);
   const run = spawnSync(process.execPath, args, { encoding: 'utf8' });
+  if (expectFailure) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    return { status: run.status, stderr: run.stderr };
+  }
   assert.strictEqual(
     run.status,
     0,
@@ -203,8 +217,14 @@ test('renderer layers the view-model on top: one-liners, decisions, findings wit
     'a finding whose anchor matches a rendered requirement must link to it'
   );
   assert.ok(
-    html.includes('Happy path downloads a file'),
-    'criteria micro-names from the view-model must label the criteria in order'
+    html.includes('Happy path downloads a file') &&
+      html.includes('Failure names itself'),
+    'every criteria micro-name from the view-model must label a criterion'
+  );
+  assert.ok(
+    html.indexOf('Happy path downloads a file') <
+      html.indexOf('Failure names itself'),
+    'criteria micro-names must appear in view-model order — a reversal or off-by-one would mislabel every criterion'
   );
   assert.ok(
     html.includes('No knowledge base configured.'),
@@ -300,6 +320,83 @@ test('renderer --artifact emits a skeleton-free fragment for hosts that wrap con
       html.includes("[data-theme='light']"),
     'the stylesheet must honor an explicit data-theme stamp (host theme toggles) in both directions, not only prefers-color-scheme'
   );
+});
+
+test("renderer matches requirements by exact number — 2.1 must not claim 2.10's card", () => {
+  const md = SAMPLE_MD.replace(
+    '## 3. Scope and Boundaries',
+    `### 2.10. Bulk export of archived reports
+
+- Archived reports can be exported together.
+  - **Acceptance Criteria:**
+    - [ ] When the user exports an archive, then one file contains every report.
+
+---
+
+## 3. Scope and Boundaries`
+  );
+  const vm = {
+    requirements: [
+      {
+        match: '2.1',
+        one_liner: 'ONE-LINER FOR TWO-POINT-ONE',
+        sources: ['interview'],
+      },
+      {
+        match: '2.10',
+        one_liner: 'ONE-LINER FOR TWO-POINT-TEN',
+        sources: ['kb'],
+      },
+    ],
+  };
+  const { html } = renderInTemp(vm, { md });
+  const cardTwoTen = html.slice(html.indexOf('id="r210"'));
+  assert.ok(
+    cardTwoTen.includes('ONE-LINER FOR TWO-POINT-TEN') &&
+      !cardTwoTen.startsWith('ONE-LINER FOR TWO-POINT-ONE'),
+    "requirement 2.10 must get its own one-liner — prefix matching would hand it 2.1's"
+  );
+  const badgeOfTwoTen = cardTwoTen.slice(0, cardTwoTen.indexOf('</h3>'));
+  assert.ok(
+    badgeOfTwoTen.includes('>KB<') && !badgeOfTwoTen.includes('>Interview<'),
+    'requirement 2.10 must carry its own provenance badge — a mis-attributed badge misleads the reviewer about the evidence behind the requirement'
+  );
+});
+
+test('renderer survives a malformed-but-valid view-model instead of crashing the page', () => {
+  const shapes = [
+    { requirements: {} },
+    { at_a_glance: 'not an array' },
+    { findings: { code: 'oops' } },
+    { decisions: [null, 'nope'] },
+    { requirements: [{ match: '2.1', criteria_names: 'not-an-array' }] },
+  ];
+  for (const vm of shapes) {
+    const { html } = renderInTemp(vm);
+    assert.ok(
+      html.includes('Export failed. Try again.'),
+      `a view-model with a wrong-typed collection (${JSON.stringify(vm).slice(0, 40)}…) must degrade that block, not fail the page — the markdown content must still render`
+    );
+  }
+});
+
+test('renderer refuses an --artifact target that would overwrite a canonical file', () => {
+  for (const target of ['functional-spec.md', 'functional-spec.html']) {
+    const { status, stderr } = renderInTemp(SAMPLE_VM, {
+      artifact: true,
+      artifactPath: target,
+      expectFailure: true,
+    });
+    assert.notStrictEqual(
+      status,
+      0,
+      `--artifact ${target} must be rejected — writing the fragment there would destroy the canonical spec or its standalone page`
+    );
+    assert.ok(
+      /must not target/.test(stderr),
+      `--artifact ${target} must be refused with an explanatory message naming the collision`
+    );
+  }
 });
 
 test('renderer degrades to a generic render when no view-model is given — it never fails the page', () => {

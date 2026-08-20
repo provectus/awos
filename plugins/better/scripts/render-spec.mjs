@@ -3,7 +3,11 @@
  * render-spec.mjs — deterministic review-page renderer for /better:spec.
  *
  * Usage:
- *   node render-spec.mjs <spec-dir> <view-model.json>
+ *   node render-spec.mjs <spec-dir> [view-model.json] [--artifact <fragment-out>]
+ *
+ * The view-model is optional (a missing one renders generically). With
+ * --artifact the same page is also written to <fragment-out> without its
+ * document skeleton, for hosts that supply their own (claude.ai artifacts).
  *
  * Reads <spec-dir>/functional-spec.md (the canonical, model-facing contract)
  * plus an LLM-authored view-model JSON (an ephemeral file — authored in-session,
@@ -209,12 +213,22 @@ function listItems(body) {
 // ---------------------------------------------------------------------------
 
 function findVmRequirement(vm, heading) {
-  const reqs = (vm && vm.requirements) || [];
-  return reqs.find((r) => r.match && heading.includes(r.match)) || null;
+  // Exact leading-number match: a substring test would attach 2.1's one-liner
+  // and provenance badges to a 2.10 heading.
+  const numbered = heading.match(/^(\d+(?:\.\d+)*)/);
+  const number = numbered ? numbered[1] : null;
+  const reqs = Array.isArray(vm && vm.requirements) ? vm.requirements : [];
+  return (
+    reqs.find(
+      (r) => r && r.match && String(r.match).replace(/\.$/, '') === number
+    ) || null
+  );
 }
 
 function renderCriteria(parsed, vmReq) {
-  const names = (vmReq && vmReq.criteria_names) || [];
+  const names = Array.isArray(vmReq && vmReq.criteria_names)
+    ? vmReq.criteria_names
+    : [];
   const done = parsed.criteria.filter((c) => c.checked).length;
   const items = parsed.criteria
     .map((c, idx) => {
@@ -231,7 +245,9 @@ function renderRequirement(sub, vm) {
   const parsed = parseBody(sub.body);
   const vmReq = findVmRequirement(vm, sub.title);
   const id = anchorFor(sub.title);
-  const badges = ((vmReq && vmReq.sources) || []).map(badge).join(' ');
+  const badges = (Array.isArray(vmReq && vmReq.sources) ? vmReq.sources : [])
+    .map(badge)
+    .join(' ');
   const oneLiner =
     vmReq && vmReq.one_liner
       ? `<p class="oneliner">${inline(vmReq.one_liner)}</p>`
@@ -288,7 +304,7 @@ function renderDecisions(vm) {
       (d) => `<tr>
     <td>${inline(d.decision || '')}</td>
     <td>${inline(d.choice || '')}${d.why ? `<span class="why">${inline(d.why)}</span>` : ''}</td>
-    <td>${((d.sources || []).map(badge) || []).join(' ')}</td>
+    <td>${(Array.isArray(d.sources) ? d.sources : []).map(badge).join(' ')}</td>
   </tr>`
     )
     .join('\n');
@@ -538,7 +554,33 @@ const TAB_JS = `
   }
 `;
 
-function render(md, vm, pluginVersion) {
+// The view-model is model-authored, so its shape can slip. Coerce every
+// optional collection to the type the renderers expect — a wrong type must
+// degrade that block, never crash the page.
+function normalizeViewModel(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  const f =
+    raw.findings && typeof raw.findings === 'object' ? raw.findings : {};
+  return {
+    at_a_glance: arr(raw.at_a_glance),
+    decisions: arr(raw.decisions).filter((d) => d && typeof d === 'object'),
+    requirements: arr(raw.requirements).filter(
+      (r) => r && typeof r === 'object'
+    ),
+    findings: {
+      code: arr(f.code),
+      web: arr(f.web),
+      kb: arr(f.kb),
+      kb_note: typeof f.kb_note === 'string' ? f.kb_note : '',
+    },
+    diagram:
+      raw.diagram && typeof raw.diagram === 'object' ? raw.diagram : null,
+  };
+}
+
+function render(md, rawVm, pluginVersion) {
+  const vm = normalizeViewModel(rawVm);
   const spec = parseSpec(md);
 
   const isRequirementSection = (section) =>
@@ -702,6 +744,17 @@ function main() {
 
   const out = render(md, vm, pluginVersion);
   const outPath = path.join(specDir, 'functional-spec.html');
+  if (
+    artifactPath &&
+    [path.resolve(mdPath), path.resolve(outPath)].includes(
+      path.resolve(artifactPath)
+    )
+  ) {
+    console.error(
+      '--artifact must not target functional-spec.md or functional-spec.html — the fragment would overwrite a canonical file'
+    );
+    process.exit(2);
+  }
   fs.writeFileSync(outPath, out.page);
   console.log(outPath);
   if (artifactPath) {

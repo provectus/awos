@@ -36,7 +36,9 @@
  *   collectedDir/incidents.json — primary; raw.incidents[] drives the measured value
  *   collectedDir/git.json       — always read (provides the git-proxy fallback)
  *   collectedDir/tracker.json   — read when present (an incident_source label adds
- *                                 an informational note on the proxy path only)
+ *                                 an informational note on the proxy path only;
+ *                                 it never enters sources_used, because it
+ *                                 contributes nothing to the value)
  *
  * SKIP: never. Returns OK with null value when no merge records exist (minimal git history).
  */
@@ -186,8 +188,10 @@ export function compute(
         'banded',
         categories,
         reliability,
-        ['tracker'],
+        // git, not tracker: the tracker contributed no value here either, and
+        // listing it made it the SOLE source behind an absent MTTR.
         ['git'],
+        [],
         { score: 0, confidence: 0.0 }
       );
     }
@@ -251,8 +255,12 @@ export function compute(
   // Categories awarded only when topology has incident source flag.
   const categories = awardCategories(standards, 'mttr', topology);
 
-  // Sources: git is always used. Tracker is also used when incident_source is present.
-  const sourcesUsed = incidentSource ? ['git', 'tracker'] : ['git'];
+  // Sources: git only. The tracker's incident_source label changes nothing
+  // about this value — it adds an informational note and no more — so
+  // crediting the tracker here would have DF-07's Sources column name a source
+  // that did not contribute to the number. standards.toml declares
+  // sources = ["incidents"] for 1103 for the same reason.
+  const sourcesUsed = ['git'];
   const sourcesMissing: string[] = [];
 
   // Tracker path: surface a partial tracker fetch in the reliability note.

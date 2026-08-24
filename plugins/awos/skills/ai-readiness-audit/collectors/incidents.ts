@@ -18,7 +18,7 @@
  * rather than trusting a hand-written count, so an orchestrator arithmetic slip
  * can never become a "measured" DORA number.
  */
-import { makeArtifact, type Period } from './_base.ts';
+import { clampToWindow, makeArtifact, median, type Period } from './_base.ts';
 
 /** One incident, normalised from whatever source the orchestrator fetched. */
 export interface IncidentRecord {
@@ -53,13 +53,6 @@ export interface IncidentsRaw {
   source_label: string | null;
 }
 
-export function median(nums: number[]): number | null {
-  if (nums.length === 0) return null;
-  const s = [...nums].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-}
-
 /**
  * Recovery time in hours for a resolved incident, or null when unmeasurable.
  * A record with no `resolved_at` is still open (not invalid). A record WITH a
@@ -76,34 +69,16 @@ export function durationHours(inc: IncidentRecord): number | null {
 }
 
 /**
- * Clamp incidents to the audit window, anchored to the NEWEST `started_at` —
- * mirroring `clampToWindow` for CI runs and tracker tickets. Connectors
- * routinely over-fetch (all-time incident history); without this clamp that
- * history would shift the "audit-window" median and make it non-reproducible
- * across differently-scoped fetches. Records with no parseable `started_at` are
- * kept (they cannot be judged against the window). No lookback → no clamp.
+ * Clamp incidents to the audit window. Thin wrapper over the shared generic
+ * `clampToWindow` — it inherits the newest-record anchor, the keep-unparseable
+ * contract, and the no-window-no-clamp short-circuit, along with the tests
+ * that pin all three.
  */
 export function clampIncidentsToWindow(
   incidents: IncidentRecord[],
   lookbackDays?: number | null
 ): { kept: IncidentRecord[]; dropped: number } {
-  if (!lookbackDays || lookbackDays <= 0)
-    return { kept: incidents, dropped: 0 };
-  let anchor = -Infinity;
-  const stamps = incidents.map((inc) => {
-    const t = Date.parse(inc.started_at ?? '');
-    if (Number.isFinite(t) && t > anchor) anchor = t;
-    return t;
-  });
-  if (!Number.isFinite(anchor)) return { kept: incidents, dropped: 0 };
-  const since = anchor - lookbackDays * 86_400_000;
-  const kept: IncidentRecord[] = [];
-  let dropped = 0;
-  incidents.forEach((inc, i) => {
-    if (Number.isFinite(stamps[i]) && stamps[i] < since) dropped++;
-    else kept.push(inc);
-  });
-  return { kept, dropped };
+  return clampToWindow(incidents, lookbackDays, (inc) => inc.started_at);
 }
 
 export interface IncidentAggregates extends IncidentsRaw {

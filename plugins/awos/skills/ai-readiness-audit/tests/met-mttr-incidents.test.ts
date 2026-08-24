@@ -8,15 +8,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { compute } from '../metrics/mttr.ts';
 import { tmpDir, writeCollected, loadStandards, gitRaw } from './helpers.ts';
+// The expected value comes from the same median the engine uses — a third
+// hand-rolled copy in the test could agree with a bug rather than catch it.
+import { median } from '../collectors/_base.ts';
 
 const standards = loadStandards();
-
-function median(nums: number[]): number | null {
-  if (nums.length === 0) return null;
-  const s = [...nums].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-}
 
 /** incidents.json raw payload with the given resolved durations (hours). */
 function incidentsRaw(durations: number[]) {

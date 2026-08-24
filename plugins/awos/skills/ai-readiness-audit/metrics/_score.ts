@@ -181,14 +181,12 @@ export function doraDurationBand(hours: number): string {
   return 'low';
 }
 
-/** Median of a numeric array (sorts a copy). Returns null for empty input. */
-export function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[mid];
-  return (sorted[mid - 1] + sorted[mid]) / 2;
-}
+/**
+ * Median of a numeric array. Re-exported from collectors/_base.ts, which owns
+ * the single implementation — collectors cannot import from metrics/ without
+ * inverting the layering, so the shared helper lives on the collector side.
+ */
+export { median } from '../collectors/_base.ts';
 
 /** Arithmetic mean of a non-empty numeric array. */
 export function mean(values: number[]): number {

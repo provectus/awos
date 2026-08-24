@@ -3507,6 +3507,18 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       'the blind-verification cycle must be bounded to a single verifier dispatch',
     ],
     [
+      'This step asks the user nothing',
+      'synthesis must not interview — under claude -p a dismissed question ends the turn, so every question the research raises has to wait until after Step 7 writes the deliverables',
+    ],
+    [
+      'When `AWOS_UNATTENDED` is set, skip this round entirely',
+      'the opening interview must be skipped outright in unattended runs — it is the only ask that precedes the writes, so it is the only one that can still cost both deliverables',
+    ],
+    [
+      'Do not ask here: this step precedes the write',
+      'the scope boundary must be drafted and marked rather than asked — Step 6 runs before the files exist',
+    ],
+    [
       '${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs',
       'the renderer must be invoked through ${CLAUDE_PLUGIN_ROOT} — a relative path breaks across install locations',
     ],

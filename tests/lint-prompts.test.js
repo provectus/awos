@@ -471,6 +471,28 @@ test('spec.md and tech.md carry the scope-hint contract', () => {
     techBody.includes('**Scope:**'),
     'commands/tech.md must contain the literal "**Scope:**" marker text — without it the command cannot read or revise the scope declaration from functional-spec.md'
   );
+
+  // The scope marker is a four-state contract shared between the two
+  // commands, and its literal forms must match exactly or the two
+  // prompts will drift apart (one writes a marker the other can't
+  // recognize).
+  for (const [body, label] of [
+    [specBody, 'commands/spec.md'],
+    [techBody, 'commands/tech.md'],
+  ]) {
+    assert.ok(
+      body.includes('**Scope:** Small (declared by user)'),
+      `${label} must contain the literal "**Scope:** Small (declared by user)" marker form`
+    );
+    assert.ok(
+      body.includes('Small (declared) — revised to Standard:'),
+      `${label} must contain the literal "Small (declared) — revised to Standard:" marker form (em dash, exact)`
+    );
+  }
+  assert.ok(
+    techBody.includes('mismatch reviewed, kept Small:'),
+    'commands/tech.md must contain the literal "mismatch reviewed, kept Small:" marker form — /awos:tech is the only command that writes it'
+  );
 });
 
 test('wrappers do not duplicate the AskUserQuestion rule', () => {

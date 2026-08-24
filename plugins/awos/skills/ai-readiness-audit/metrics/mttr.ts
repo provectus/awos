@@ -168,11 +168,16 @@ export function compute(
     if (incidentSource) {
       const categories = awardCategories(standards, 'mttr', topology);
       const reliability: Reliability = appendReliabilityNote(
-        {
-          tag: 'not-reliable',
-          confidence: 'LOW',
-          note: `incident source declared but MTTR is not computed from incident data; ${gitRead.error}`,
-        },
+        appendReliabilityNote(
+          {
+            tag: 'not-reliable',
+            confidence: 'LOW',
+            note: `incident source declared but MTTR is not computed from incident data; ${gitRead.error}`,
+          },
+          // A present-but-unusable incidents connector must be named here too:
+          // this is the one path with no other information to fall back on.
+          incidentsNoSpanNote
+        ),
         trackerPartialNote
       );
       return makeMetricResult(
@@ -188,11 +193,16 @@ export function compute(
     }
     // Neither source present — but we must not SKIP. Return with git listed as
     // used to prevent SKIP status, but note data is unavailable.
-    const reliability: Reliability = {
-      tag: 'not-reliable',
-      confidence: 'LOW',
-      note: `git-proxy, true value may differ; ${gitRead.error}`,
-    };
+    const reliability: Reliability = appendReliabilityNote(
+      {
+        tag: 'not-reliable',
+        confidence: 'LOW',
+        note: `git-proxy, true value may differ; ${gitRead.error}`,
+      },
+      // Same here: without git there is nothing else in the report to explain
+      // why MTTR is empty, so an unusable connector cannot go unmentioned.
+      incidentsNoSpanNote
+    );
     return makeMetricResult(
       'mttr',
       null,

@@ -166,18 +166,26 @@ export function aggregate(
     if (existing[block] !== undefined) audit[block] = existing[block];
   }
   // Connector-gated headline rows: re-derive from the collected artifacts
-  // (same source of truth as `sources` below); keep the stored block when the
-  // artifacts are gone.
+  // (same source of truth as `sources` below); keep the stored block only when
+  // the artifacts are gone, i.e. the fresh derivation produced nothing at all.
+  //
+  // This used to enumerate the fields that count as "produced something", and
+  // the enumeration went stale the moment the MTTR row gained a measured path:
+  // a measured MTTR sets display_value/band/check_id INSTEAD of note, so on a
+  // repo with an incidents connector and no tracker every listed field was
+  // absent and the fresh measurement was thrown away for the stored one. Ask
+  // whether either row is empty instead — a question that cannot go stale as
+  // fields are added.
   const derivedDelivery = computeDerivedDelivery(
     collectedDirAgg,
     collectedAgg.get('tracker')!.art,
     standards
   );
+  const derivedIsEmpty =
+    Object.keys(derivedDelivery.cycle_time).length === 0 &&
+    Object.keys(derivedDelivery.mttr).length === 0;
   audit.derived_delivery =
-    derivedDelivery.cycle_time.display_value !== undefined ||
-    derivedDelivery.cycle_time.note !== undefined ||
-    derivedDelivery.mttr.note !== undefined ||
-    existing.derived_delivery === undefined
+    !derivedIsEmpty || existing.derived_delivery === undefined
       ? derivedDelivery
       : existing.derived_delivery;
   // Prefer re-derived sources when collected/ artifacts are present; fall back

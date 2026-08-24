@@ -1017,3 +1017,79 @@ test('summary.artifact_warnings flags an incidents batch where every record is s
     'the warning must name the likely field-mapping cause'
   );
 });
+
+test('aggregate keeps a freshly measured MTTR instead of a stale stored block', () => {
+  // The stored-block guard used to enumerate the fields that count as "the
+  // fresh derivation produced something", and the enumeration never learned
+  // about the measured MTTR path: a measured MTTR sets display_value/band/
+  // check_id INSTEAD of note, so on a repo with an incidents connector and no
+  // tracker every enumerated field was absent and the measurement was dropped
+  // for whatever audit.json already held. That is the standalone `aggregate`
+  // repair verb's normal case — `existing` is by definition the pre-fix audit.
+  const outDir = tmpDir('aggregate-mttr-fresh-');
+  writeFileSync(
+    join(outDir, 'delivery-flow.json'),
+    JSON.stringify({
+      dimension: 'delivery-flow',
+      date: '2026-07-03',
+      score: 0,
+      coverage: 0,
+      checks: [],
+    })
+  );
+  // Prior audit.json carrying the base pass's empty MTTR row.
+  writeFileSync(
+    join(outDir, 'audit.json'),
+    JSON.stringify({
+      date: '2026-07-03',
+      project: 'x',
+      audit_total: 0,
+      coverage: 0,
+      dimensions: [],
+      derived_delivery: { cycle_time: {}, mttr: {} },
+      engine: { generated_by: 'audit-core' },
+    })
+  );
+  // A measurable incidents artifact, and deliberately NO tracker artifact —
+  // the combination that made every enumerated field false.
+  const collected = join(outDir, 'collected');
+  mkdirSync(collected, { recursive: true });
+  writeFileSync(
+    join(collected, 'incidents.json'),
+    JSON.stringify({
+      source: 'incidents',
+      available: true,
+      reason_if_absent: null,
+      period: { lookback_days: 90 },
+      raw: {
+        incidents: [
+          {
+            id: 'A',
+            started_at: '2026-07-01T00:00:00Z',
+            resolved_at: '2026-07-01T01:00:00Z',
+          },
+          {
+            id: 'B',
+            started_at: '2026-07-02T00:00:00Z',
+            resolved_at: '2026-07-02T03:00:00Z',
+          },
+        ],
+        source_label: 'PagerDuty',
+      },
+    })
+  );
+
+  aggregate(outDir);
+
+  const out = JSON.parse(readFileSync(join(outDir, 'audit.json'), 'utf8'));
+  assert.equal(
+    out.derived_delivery.mttr.display_value,
+    '2 h',
+    'aggregate must keep the freshly measured MTTR, not the stale stored empty row'
+  );
+  assert.equal(
+    out.derived_delivery.mttr.band,
+    'high',
+    'the fresh band must survive too'
+  );
+});

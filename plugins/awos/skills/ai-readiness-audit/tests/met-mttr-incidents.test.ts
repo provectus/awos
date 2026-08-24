@@ -144,6 +144,11 @@ test('mttr: incidents artifact with no resolved incidents falls back to the git 
     'proxy fallback stays not-reliable'
   );
   assert.deepEqual(res.sources_used, ['git'], 'git proxy used, not incidents');
+  assert.match(
+    res.reliability.note ?? '',
+    /PagerDuty connected — no incidents in window/,
+    'a wired-up source with an empty window must say so on the proxy note — a bare git-proxy note hides that an incident source exists at all'
+  );
 });
 
 test('mttr: no incidents artifact at all → unchanged git-proxy behavior', () => {

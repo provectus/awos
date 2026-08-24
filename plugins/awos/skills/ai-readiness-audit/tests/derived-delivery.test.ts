@@ -456,8 +456,8 @@ test('computeDerivedDelivery: all-open incidents get the no-resolved-span note',
     const dd = computeDerivedDelivery(collected);
     assert.equal(
       dd.mttr.note,
-      'PagerDuty connected — no incident with a resolved recovery span',
-      'a connected source with nothing measurable must say so, naming the source'
+      'PagerDuty connected — all 2 in-window incidents are still open (no resolved recovery span); if unexpected, resolved_at is likely mapped from the wrong field',
+      'an all-open batch is a likely resolved_at mapping miss and must say so — "no incident with a resolved recovery span" asserted every incident is open without naming why'
     );
     assert.equal(
       dd.mttr.measured,
@@ -483,6 +483,58 @@ test('computeDerivedDelivery: an empty incidents batch gets the no-incidents not
       dd.mttr.note,
       'PagerDuty connected — no incidents in window',
       'a connected source with no incidents at all is a different state from one with unmeasurable incidents'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('computeDerivedDelivery: resolved-but-unparseable spans get the unparseable note', () => {
+  // Third arm of the shared note builder: every record HAS a resolved_at but
+  // no span parses (end <= start is rejected). Distinct diagnosis from the
+  // all-open batch — here the mapping is right and the timestamps are wrong.
+  const dir = tmpDir('awos-dd-mttr-invalid-');
+  try {
+    const collected = writeIncidents(dir, {
+      source: 'incidents',
+      available: true,
+      period: { lookback_days: 90 },
+      raw: {
+        incidents: [
+          { id: 'A', started_at: iso(t0), resolved_at: iso(t0) },
+          { id: 'B', started_at: iso(t0 + DAY), resolved_at: iso(t0) },
+        ],
+        source_label: 'PagerDuty',
+      },
+    });
+    const dd = computeDerivedDelivery(collected);
+    assert.equal(
+      dd.mttr.note,
+      'PagerDuty connected — 2 incidents but none had a parseable recovery span (2 unparseable)',
+      'a batch of resolved-but-unmeasurable incidents must be reported as unparseable spans, not as still-open incidents'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('computeDerivedDelivery: period.source_label alone names the source in the MTTR note', () => {
+  // The recipe's one canonical write site is period.source_label, like every
+  // sibling connector; the dual raw.source_label write is back-compat only.
+  // An artifact written per the recipe must not degrade to "incident source".
+  const dir = tmpDir('awos-dd-mttr-label-');
+  try {
+    const collected = writeIncidents(dir, {
+      source: 'incidents',
+      available: true,
+      period: { lookback_days: 90, source_label: 'PagerDuty' },
+      raw: { incidents: [] },
+    });
+    const dd = computeDerivedDelivery(collected);
+    assert.equal(
+      dd.mttr.note,
+      'PagerDuty connected — no incidents in window',
+      'period.source_label must reach the MTTR note without a duplicate raw.source_label write'
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

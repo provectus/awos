@@ -62,7 +62,10 @@ import {
   type MergeRecord,
 } from './_merge_records.ts';
 import { median, scoreFromConfig, scoringFor } from './_score.ts';
-import { deriveIncidentAggregates } from '../collectors/incidents.ts';
+import {
+  deriveIncidentAggregates,
+  incidentSpanNote,
+} from '../collectors/incidents.ts';
 
 /** Map median hours to a DORA MTTR band label. */
 export function mttrBand(medianHours: number): string {
@@ -96,6 +99,12 @@ export function compute(
       incidents?: Parameters<typeof deriveIncidentAggregates>[0];
       source_label?: string | null;
     };
+    // Label: raw.source_label wins for back-compat, but period.source_label
+    // (the one canonical write site, like every sibling connector) is enough.
+    const incPeriod = (
+      incidentsRead.artifact as { period?: { source_label?: string } }
+    ).period;
+    const incLabel = iraw.source_label ?? incPeriod?.source_label ?? null;
     // Window from standards ([meta].max_lookback_days), not the artifact's
     // orchestrator-authored `period` — an envelope written without one would
     // otherwise skip the clamp entirely and let an all-time export become the
@@ -124,7 +133,7 @@ export function compute(
       const reliability: Reliability = {
         tag: 'maximal',
         confidence: 'HIGH',
-        note: `measured from ${measured} resolved incident${measured === 1 ? '' : 's'}${iraw.source_label ? ` (${iraw.source_label})` : ''}${ofNote}${dropNote}`,
+        note: `measured from ${measured} resolved incident${measured === 1 ? '' : 's'}${incLabel ? ` (${incLabel})` : ''}${ofNote}${dropNote}`,
       };
       const score = scoreFromConfig(medianHours, scoringFor(standards, 'mttr'));
       return makeMetricResult(
@@ -145,28 +154,27 @@ export function compute(
     }
     // Incidents artifact present but nothing measurable — surface WHY on the
     // git-proxy fallback below rather than silently reading "no incident data".
-    // Reaching here means resolved_count is 0, so every in-window incident is
-    // either still open or resolved-but-unmeasurable. Distinguish the two: a
-    // whole-batch resolved_at mapping miss fails a step EARLIER than invalidity
-    // is measured (no resolved_at → still-open, not invalid), so without the
-    // split below it reads as "no incident with a resolved recovery span" —
-    // coherent, alarming, and false, since it asserts every incident is open.
-    if (agg.count > 0) {
-      // The clamp drop count belongs here too, not only on the measured path:
-      // a mostly-historical export whose one newest incident is still open
-      // clamps to count 1 with 300 dropped, and the note would otherwise read
-      // "all 1 in-window incident is still open" with no hint the rest existed.
-      const dropped = windowDropNote(
-        agg.dropped_out_of_window,
-        lookbackDays(standards),
-        'incident'
-      );
-      incidentsNoSpanNote =
-        (agg.invalid_count > 0
-          ? `incident source connected — ${agg.count} incident${agg.count === 1 ? '' : 's'} but none had a parseable recovery span (${agg.invalid_count} unparseable)`
-          : `incident source connected — all ${agg.count} in-window incident${agg.count === 1 ? ' is' : 's are'} still open (no resolved recovery span); if unexpected, resolved_at is likely mapped from the wrong field`) +
-        dropped;
-    }
+    // Assigned for EVERY available artifact, empty batch included: a wired-up
+    // source with a genuinely quiet quarter must still say "no incidents in
+    // window" here, or the DF-07 row carries only the bare git-proxy text
+    // while the headline row two sections up names the connected source. The
+    // shared note builder (incidentSpanNote) distinguishes the three states —
+    // empty window, all spans unparseable, every record still open — with the
+    // same strings the headline row uses, so the two accounts cannot drift.
+    // The clamp drop count belongs here too, not only on the measured path:
+    // a mostly-historical export whose one newest incident is still open
+    // clamps to count 1 with 300 dropped, and the note would otherwise read
+    // "all 1 in-window incident is still open" with no hint the rest existed.
+    const dropped = windowDropNote(
+      agg.dropped_out_of_window,
+      lookbackDays(standards),
+      'incident'
+    );
+    incidentsNoSpanNote = incidentSpanNote(
+      agg,
+      incLabel ?? 'incident source',
+      dropped
+    );
   }
 
   // --- Fallback: git branch-lifetime proxy (unchanged; git is already covered

@@ -120,6 +120,30 @@ export function deriveIncidentAggregates(
 }
 
 /**
+ * The honest-state note for a connected incident source with nothing
+ * measurable, built from the SAME aggregates the metric reads. Three states,
+ * three diagnoses: an empty window, a batch whose spans all failed to parse,
+ * and a batch where every record is still open — the last is a whole-batch
+ * resolved_at mapping miss until proven otherwise, and it fails a step EARLIER
+ * than invalidity is measured (no resolved_at → still-open, not invalid).
+ * Shared by the audit-core headline row and the DF-07 metric note so one
+ * degraded connector can never produce two different accounts of the same
+ * failure. `dropped` is the caller's window-clamp suffix (it needs the
+ * standards window, which this module does not read).
+ */
+export function incidentSpanNote(
+  agg: IncidentAggregates,
+  label: string,
+  dropped = ''
+): string {
+  if (agg.count === 0)
+    return `${label} connected — no incidents in window${dropped}`;
+  if (agg.invalid_count > 0)
+    return `${label} connected — ${agg.count} incident${agg.count === 1 ? '' : 's'} but none had a parseable recovery span (${agg.invalid_count} unparseable)${dropped}`;
+  return `${label} connected — all ${agg.count} in-window incident${agg.count === 1 ? ' is' : 's are'} still open (no resolved recovery span); if unexpected, resolved_at is likely mapped from the wrong field${dropped}`;
+}
+
+/**
  * Whether an incidents artifact carries at least one measurable recovery span
  * within the window — the predicate that gates category 1103. Shared by the
  * topology gate and the MTTR metric so "awarded" and "measured" stay in lock

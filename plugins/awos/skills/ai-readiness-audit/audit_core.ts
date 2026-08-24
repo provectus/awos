@@ -80,6 +80,7 @@ import {
   collect as collectIncidents,
   deriveIncidentAggregates,
   hasMeasurableIncidents,
+  incidentSpanNote,
   type IncidentRecord,
 } from './collectors/incidents.ts';
 
@@ -104,9 +105,10 @@ export function computeDerivedDelivery(
   // [meta].max_lookback_days — never from the orchestrator-authored artifact
   // `period`, which may be absent (no clamp at all) or arbitrarily wide.
   standards?: Record<string, unknown>,
-  // Pre-read incidents artifact, same contract as preReadTracker: pass it when
-  // the caller already parsed collected/incidents.json. `null` means the
-  // caller looked and found nothing readable.
+  // Pre-read incidents artifact — pass it when the caller already parsed
+  // collected/incidents.json. Unlike preReadTracker, a passed `null` (the
+  // caller looked and found nothing readable) falls through to a re-read, so
+  // the note can carry the precise unreadable-reason; see the read below.
   preReadIncidents?: Record<string, unknown> | null
 ): DerivedDelivery {
   let tracker: Record<string, unknown> | null;
@@ -153,7 +155,7 @@ export function computeDerivedDelivery(
       | {
           available?: boolean;
           raw?: unknown;
-          period?: { lookback_days?: number };
+          period?: { lookback_days?: number; source_label?: string };
         }
       | undefined;
     if (inc?.available) {
@@ -165,7 +167,11 @@ export function computeDerivedDelivery(
         incRaw.incidents,
         standards ? lookbackDays(standards) : inc.period?.lookback_days
       );
-      const incLabel = incRaw.source_label ?? 'incident source';
+      // Label: raw.source_label wins for back-compat, but period.source_label
+      // (the one canonical write site, like every sibling connector) is enough
+      // — the recipe no longer mandates the dual write.
+      const incLabel =
+        incRaw.source_label ?? inc.period?.source_label ?? 'incident source';
       if (agg.resolved_count > 0 && agg.median_duration_hours !== null) {
         const medianHours = round1(agg.median_duration_hours);
         // Fold the sample size in when part of the sample was unusable: both
@@ -184,7 +190,9 @@ export function computeDerivedDelivery(
               : `${medianHours} h`,
         };
       } else {
-        // Mirror the metric: say what the window clamp removed, or a heavily
+        // Mirror the metric — same shared note builder, so the headline row
+        // and the DF-07 detail can never give two accounts of one degraded
+        // connector — and say what the window clamp removed, or a heavily
         // clamped stream reads like a source that only ever had what survived.
         const dropped = standards
           ? windowDropNote(
@@ -193,10 +201,7 @@ export function computeDerivedDelivery(
               'incident'
             )
           : '';
-        out.mttr.note =
-          agg.count > 0
-            ? `${incLabel} connected — no incident with a resolved recovery span${dropped}`
-            : `${incLabel} connected — no incidents in window${dropped}`;
+        out.mttr.note = incidentSpanNote(agg, incLabel, dropped);
       }
     }
   }
@@ -695,6 +700,23 @@ export async function auditCore(
   // closed_at / resolution.timestamp is exactly how this happens.
   const incArtWarn = collected.get('incidents')?.art;
   if (incArtWarn?.available === true) {
+    const incRawWarn = incArtWarn.raw as { incidents?: unknown } | undefined;
+    // A mis-shaped container slips every count-gated guard: an id-keyed object
+    // or a {items: […]} page wrapper read one level too high coerces to [] in
+    // deriveIncidentAggregates, so count is 0, the all-open warning below
+    // skips, the metric note reads "no incidents in window", and the
+    // stranded-payload guard never looks at available:true artifacts. Name the
+    // shape here — the one place that still sees it.
+    if (
+      incRawWarn?.incidents !== undefined &&
+      !Array.isArray(incRawWarn.incidents)
+    ) {
+      artifactWarnings.push(
+        `incidents.json: raw.incidents is ${incRawWarn.incidents === null ? 'null' : typeof incRawWarn.incidents === 'object' ? 'an object' : `a ${typeof incRawWarn.incidents}`}, not an array — ` +
+          `the records are unreadable and DF-07 stays SKIP; fix the envelope shape ` +
+          `(references/connector-shapes.md) and re-run enrich`
+      );
+    }
     const incAgg = deriveIncidentAggregates(
       (incArtWarn.raw as { incidents?: IncidentRecord[] } | undefined)
         ?.incidents,
@@ -1004,7 +1026,9 @@ export async function auditCore(
       collectedDir,
       trackerArt,
       standards,
-      // Already parsed above for the topology gate — don't read it twice.
+      // Already parsed above for the topology gate. A `null` (nothing
+      // readable) deliberately re-reads inside — only on the corrupt path,
+      // where the second read buys the precise unreadable-reason for the note.
       incidentsArt
     ),
     engine: ENGINE_PROVENANCE,

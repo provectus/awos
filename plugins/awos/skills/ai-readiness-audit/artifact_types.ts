@@ -254,7 +254,7 @@ export interface DerivedDelivery {
      * an em-dash band if they ever came apart.
      */
     measured?: MeasuredMttr;
-    /** Honest state when the row stays empty (e.g. "PagerDuty connected — no incident with a resolved recovery span"). */
+    /** Honest state when the row stays empty (e.g. "PagerDuty connected — no incidents in window"). */
     note?: string;
   };
 }

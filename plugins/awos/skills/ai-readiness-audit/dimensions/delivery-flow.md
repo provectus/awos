@@ -13,7 +13,7 @@ depends-on: [project-topology]
 
 Measures how fast and how safely change flows from commit to the default branch, using the DORA metric family plus review-rework signals. Everything here is computed by the measurement engine from the git collector artifact (upgraded by code-host/tracker connectors when present); nothing is judged by an LLM.
 
-**SKIP-not-fabricate:** a check SKIPs when none of its required data sources exist. A check never fabricates a value from prose or assumptions. MTTR runs from git as a proxy (merge/revert/hotfix cadence) with `reliability_default = "not-reliable"`; its reliability upgrades automatically when a real incident source artifact is present.
+**SKIP-not-fabricate:** a check SKIPs when none of its required data sources exist. A check never fabricates a value from prose or assumptions. MTTR falls back to a git branch-lifetime proxy over all first-parent merges with `reliability_default = "not-reliable"`; its reliability upgrades to `maximal` only when the incidents artifact carries at least one measurable resolved recovery span — the mere presence of the artifact is not enough, and without such a span category 1103 stays SKIP.
 
 ## Checks
 

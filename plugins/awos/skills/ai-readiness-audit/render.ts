@@ -1171,11 +1171,11 @@ const CYCLE_TIME_TIP =
 
 /**
  * Reader-grade tooltip for the connector-gated MTTR headline row and the org
- * Repositories "MTTR" column. The git branch-lifetime proxy scores DF-07
- * separately and never feeds this row.
+ * Repositories "MTTR" column. The git branch-lifetime proxy never feeds this
+ * row and never awards DF-07's category.
  */
 const MTTR_TIP =
-  'Median time from incident start to resolution (mean time to restore service). Comes only from an incident source (PagerDuty, Opsgenie, incident-labeled tickets, …). The git branch-lifetime proxy scores DF-07 separately, but it is a rough stand-in and does not feed this row.';
+  'Median time from incident start to resolution (mean time to restore service). Comes only from an incident source (PagerDuty, Opsgenie, incident-labeled tickets, …) carrying at least one resolved recovery span. Without one, MTTR falls back to a rough git branch-lifetime proxy that does not feed this row and does not score DF-07 — that category stays SKIP.';
 
 /**
  * Tooltip text for headline-band metrics that have no `check_id` to resolve a

@@ -74,7 +74,7 @@ Any dimension-specific summary data consumed by downstream dimensions (e.g. the 
 
 ### Report blocks (authored into `audit.json`)
 
-The renderer is deterministic and contains no LLM. The plain-language narrative a CEO reads is authored by the **orchestrator** (SKILL.md Step 6.4, applied via `patch-report`) and stored as optional top-level keys in `audit.json` (and `org-portfolio.json`). All are optional — the renderer degrades to the capability headline + a mechanical FAIL/WARN recommendation list when they are absent. The two connector-gated delivery rows (Cycle time, MTTR) are NOT authored: the engine computes them into `audit.derived_delivery` — Cycle time from `collected/tracker.json`, MTTR from `collected/incidents.json` — and the renderer appends them (any authored gated row is ignored), so the headline can never contradict the Connections & Sources section.
+The renderer is deterministic and contains no LLM. The plain-language narrative a CEO reads is authored by the **orchestrator** (SKILL.md Step 5.4, applied via `patch-report`) and stored as optional top-level keys in `audit.json` (and `org-portfolio.json`). All are optional — the renderer degrades to the capability headline + a mechanical FAIL/WARN recommendation list when they are absent. The two connector-gated delivery rows (Cycle time, MTTR) are NOT authored: the engine computes them into `audit.derived_delivery` — Cycle time from `collected/tracker.json`, MTTR from `collected/incidents.json` — and the renderer appends them (any authored gated row is ignored), so the headline can never contradict the Connections & Sources section.
 
 ```json
 {

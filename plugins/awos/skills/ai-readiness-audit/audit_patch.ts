@@ -496,7 +496,10 @@ export function reportContext(outDir: string): Record<string, unknown> {
       (git?.raw as Record<string, unknown> | undefined)?.window_stats ?? null,
     tracker_fetch_meta:
       (tracker?.raw as Record<string, unknown> | undefined)?.fetch_meta ?? null,
-    incident_source:
+    // Provenance label only — names the incident system the tracker declares.
+    // It does not produce the MTTR value (derived_delivery.mttr does, from the
+    // incidents artifact) and does not award category 1103.
+    incident_source_label:
       (tracker?.raw as Record<string, unknown> | undefined)?.incident_source ??
       null,
     sources: audit.sources ?? [],

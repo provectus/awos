@@ -10,7 +10,7 @@ depends-on: [project-topology, ai-development-tooling, spec-driven-development]
 
 Orchestrates the full ADP measurement engine against the audited repository. Unlike other dimensions — which run deterministic detectors over source files — this dimension drives the collector and metric pipeline declared in `references/standards.toml` and emits a standard per-dimension JSON artifact carrying every ADP metric result.
 
-**SKIP-not-fabricate:** a check SKIPs when none of its required data sources exist. A check never fabricates a value from prose or assumptions. MTTR is a normal tiered metric: it runs from git as a proxy (merge/revert/hotfix cadence) with `reliability_default = "not-reliable"` and note "git-proxy, true value may differ"; its reliability upgrades automatically when a real incident source artifact is present. No special-casing or manual skipping for MTTR.
+**SKIP-not-fabricate:** a check SKIPs when none of its required data sources exist. A check never fabricates a value from prose or assumptions. MTTR is a normal tiered metric: it falls back to a git branch-lifetime proxy over all first-parent merges with `reliability_default = "not-reliable"` and note "git-proxy, true value may differ"; its reliability upgrades to `maximal` only when the incidents artifact carries at least one measurable resolved recovery span. No special-casing or manual skipping for MTTR.
 
 ## Before running checks — query-once setup
 

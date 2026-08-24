@@ -67,11 +67,11 @@ The connector object the orchestrator assembles and passes to the collector. Wri
 }
 ```
 
-| Field             | Type             | Required | Meaning                                                                                                                                                                                                                                |
-| ----------------- | ---------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tickets`         | `TicketRecord[]` | no       | Work items within the audit period; omit or use `[]` if none                                                                                                                                                                           |
-| `incident_source` | `string \| null` | no       | Identifier for the incident-management system feeding MTTR (e.g. `"pagerduty"`, `"opsgenie"`). When present, MTTR reliability upgrades from `"git-proxy"` to first-class. Omit or set `null` when no dedicated incident source exists. |
-| `fetch_meta`      | `FetchMeta`      | yes\*    | Honest accounting of how much of the source was actually fetched (see [FetchMeta](#fetchmeta) below). \*Required whenever the source paginates — never write a paginated tracker artifact without it.                                  |
+| Field             | Type             | Required | Meaning                                                                                                                                                                                                                                                                                                                         |
+| ----------------- | ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tickets`         | `TicketRecord[]` | no       | Work items within the audit period; omit or use `[]` if none                                                                                                                                                                                                                                                                    |
+| `incident_source` | `string \| null` | no       | Provenance label naming the incident-management system (e.g. `"pagerduty"`, `"opsgenie"`). Informational only: it does **not** upgrade MTTR reliability and does **not** award category 1103 — only a measurable recovery span in `collected/incidents.json` does. Omit or set `null` when no dedicated incident source exists. |
+| `fetch_meta`      | `FetchMeta`      | yes\*    | Honest accounting of how much of the source was actually fetched (see [FetchMeta](#fetchmeta) below). \*Required whenever the source paginates — never write a paginated tracker artifact without it.                                                                                                                           |
 
 ### FetchMeta
 
@@ -533,25 +533,30 @@ Wrap the incidents in the standard collector envelope and write it to `collected
     "bucket_days": 30,
     "lookback_days": 90,
     "history_available_days": 90,
+    "source_label": "PagerDuty", // names the source in Connections & Sources
   },
   "raw": {
     "incidents": [
       /* IncidentRecord[] */
     ],
-    "source_label": "PagerDuty", // human label for the report, e.g. "GitHub incident labels"
+    "source_label": "PagerDuty", // human label for the MTTR note, e.g. "GitHub incident labels"
   },
 }
 ```
+
+Set `source_label` in **both** places, as the tracker, docs, code-host and CI recipes do. `period.source_label` is what the Connections & Sources column reads; `raw.source_label` is what the MTTR reliability note quotes. Set only the latter and the report says "incident source" in one section and "PagerDuty" in the other.
 
 **The engine derives the median — you do not.** Like the tracker collector (whose metrics derive their counts from `raw.tickets[]`), the MTTR metric computes the recovery aggregates itself from `raw.incidents[]`. Do not hand-write the fields below — the engine ignores any it finds and recomputes them, so a transcription slip cannot become a "measured" DORA number:
 
 - `count` — incidents in the audit window
 - `resolved_count` — incidents with a measurable `started_at → resolved_at` span
-- `invalid_count` — resolved incidents whose span could not be parsed (missing, reversed, or zero-length timestamps)
+- `invalid_count` — resolved incidents whose span could not be parsed (unparseable, reversed, or zero-length timestamps). A record with no `resolved_at` is **still open**, not invalid — it is never counted here
 - `median_duration_hours` — median recovery time in hours (the MTTR value)
 - `dropped_out_of_window` — incidents dropped for starting before the audit window
 
-Only incidents with a valid `started_at → resolved_at` span are measured; the engine clamps them to the audit window (`started_at` within `window_anchor − lookback_days`), reports the **median** recovery time in hours, and upgrades reliability to `maximal`. Query the same window as the other connectors.
+Only incidents with a valid `started_at → resolved_at` span are measured; the engine clamps them to the audit window, reports the **median** recovery time in hours, and upgrades reliability to `maximal`. Query the same window as the other connectors.
+
+The clamp is anchored to the **newest incident's own `started_at`**, mirroring `clampToWindow` for CI runs and tracker tickets — not to a fixed calendar anchor. So an entirely historical export is kept in full and measured against its own newest record, rather than being excluded; the window length itself comes from `[meta].max_lookback_days`, not from the `period` you write.
 
 **Map semantically from the live tool response, not from a fixed field list.** Call the source's MCP/CLI, read the shape it actually returns, and map by meaning: whatever field marks **when the incident began** → `started_at`, **when service was restored** → `resolved_at`, and the severity/priority label → `severity` (leave `resolved_at` null for still-open incidents). The names below are only the _typical_ ones as of writing — if the live response differs, trust it over this list:
 

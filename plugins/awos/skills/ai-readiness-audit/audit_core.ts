@@ -34,6 +34,7 @@ import {
   loadStandards,
   lookbackDays,
   readArtifact,
+  windowDropNote,
   malformedEnvelopeNote,
   metaNumber,
   strandedPayloadCount,
@@ -182,10 +183,20 @@ export function computeDerivedDelivery(
               ? `${medianHours} h (${agg.resolved_count} of ${resolvedSeen})`
               : `${medianHours} h`,
         };
-      } else if (agg.count > 0) {
-        out.mttr.note = `${incLabel} connected — no incident with a resolved recovery span`;
       } else {
-        out.mttr.note = `${incLabel} connected — no incidents in window`;
+        // Mirror the metric: say what the window clamp removed, or a heavily
+        // clamped stream reads like a source that only ever had what survived.
+        const dropped = standards
+          ? windowDropNote(
+              agg.dropped_out_of_window,
+              lookbackDays(standards),
+              'incident'
+            )
+          : '';
+        out.mttr.note =
+          agg.count > 0
+            ? `${incLabel} connected — no incident with a resolved recovery span${dropped}`
+            : `${incLabel} connected — no incidents in window${dropped}`;
       }
     }
   }

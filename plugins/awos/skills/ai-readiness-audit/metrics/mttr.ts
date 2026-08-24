@@ -150,10 +150,20 @@ export function compute(
     // read as "no incident with a resolved recovery span" — coherent, alarming,
     // and false, since it asserts every incident is open.
     if (agg.count > 0) {
+      // The clamp drop count belongs here too, not only on the measured path:
+      // a mostly-historical export whose one newest incident is still open
+      // clamps to count 1 with 300 dropped, and the note would otherwise read
+      // "all 1 in-window incident is still open" with no hint the rest existed.
+      const dropped = windowDropNote(
+        agg.dropped_out_of_window,
+        lookbackDays(standards),
+        'incident'
+      );
       incidentsNoSpanNote =
-        agg.invalid_count > 0
+        (agg.invalid_count > 0
           ? `incident source connected — ${agg.count} incident${agg.count === 1 ? '' : 's'} but none had a parseable recovery span (${agg.invalid_count} unparseable)`
-          : `incident source connected — all ${agg.count} in-window incident${agg.count === 1 ? ' is' : 's are'} still open (no resolved recovery span); if unexpected, resolved_at is likely mapped from the wrong field`;
+          : `incident source connected — all ${agg.count} in-window incident${agg.count === 1 ? ' is' : 's are'} still open (no resolved recovery span); if unexpected, resolved_at is likely mapped from the wrong field`) +
+        dropped;
     }
   }
 

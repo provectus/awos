@@ -199,3 +199,30 @@ test('the MTTR reliability note reports incidents dropped by the clamp', () => {
     'the reliability note must report how many incidents the window clamp removed, named as incidents'
   );
 });
+
+test('the drop count reaches the note when nothing is measurable', () => {
+  const tmp = tmpDir('win-i8-');
+  // The scenario the success-path-only note missed entirely: a mostly
+  // historical export whose single newest incident is still open. The clamp
+  // anchors to that record, so count is 1 and dropped_out_of_window is 3 —
+  // and without this the note read "all 1 in-window incident is still open"
+  // with no hint the other three existed.
+  const incidents = [
+    { id: 'INC-OPEN', started_at: iso(3) },
+    { id: 'INC-O1', started_at: iso(300), resolved_at: iso(300 - 5 / 24) },
+    { id: 'INC-O2', started_at: iso(320), resolved_at: iso(320 - 5 / 24) },
+    { id: 'INC-O3', started_at: iso(340), resolved_at: iso(340 - 5 / 24) },
+  ];
+  const collectedDir = writeCollected(tmp, 'incidents', { incidents });
+  const result = mttr(collectedDir, standards, { has_incident_source: true });
+  assert.match(
+    result.reliability.note,
+    /still open/,
+    'the nothing-measurable note must still explain the incidents are open'
+  );
+  assert.match(
+    result.reliability.note,
+    /3 incidents older than the 90-day window dropped/,
+    'the nothing-measurable note must also report what the window clamp removed'
+  );
+});

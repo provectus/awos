@@ -1314,9 +1314,15 @@ function normalizedDelivery(audit: AuditJson): DeliveryMetric[] {
   rows.push({
     label: 'MTTR',
     gated: 'incident',
-    ...(dd.mttr.display_value ? { display_value: dd.mttr.display_value } : {}),
-    ...(dd.mttr.band ? { band: dd.mttr.band } : {}),
-    ...(dd.mttr.check_id ? { check_id: dd.mttr.check_id } : {}),
+    // Spread as one block: value, band and check_id are produced together, so
+    // the row can never print a value beside an em-dash band.
+    ...(dd.mttr.measured
+      ? {
+          display_value: dd.mttr.measured.display_value,
+          band: dd.mttr.measured.band,
+          check_id: dd.mttr.measured.check_id,
+        }
+      : {}),
     ...(dd.mttr.note ? { note: dd.mttr.note } : {}),
   });
   return rows;

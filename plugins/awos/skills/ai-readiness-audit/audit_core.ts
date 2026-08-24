@@ -166,21 +166,22 @@ export function computeDerivedDelivery(
       );
       const incLabel = incRaw.source_label ?? 'incident source';
       if (agg.resolved_count > 0 && agg.median_duration_hours !== null) {
-        out.mttr.median_hours = round1(agg.median_duration_hours);
-        out.mttr.incidents_used = agg.resolved_count;
-        // Band and check_id so the row reads like every sibling DORA row —
-        // the engine computed the band already, and dropping it left the one
-        // measured row blank in a block headed "vs DORA bands".
-        out.mttr.band = mttrBand(agg.median_duration_hours);
-        out.mttr.check_id = 'DF-07';
+        const medianHours = round1(agg.median_duration_hours);
         // Fold the sample size in when part of the sample was unusable: both
         // renderers print `note` only when the VALUE is absent, so a median
         // over 3 of 60 resolved incidents would otherwise print a bare "0.5 h".
         const resolvedSeen = agg.resolved_count + agg.invalid_count;
-        out.mttr.display_value =
-          agg.invalid_count > 0
-            ? `${out.mttr.median_hours} h (${agg.resolved_count} of ${resolvedSeen})`
-            : `${out.mttr.median_hours} h`;
+        // One block, assigned once — band and value cannot come apart.
+        out.mttr.measured = {
+          median_hours: medianHours,
+          incidents_used: agg.resolved_count,
+          band: mttrBand(agg.median_duration_hours),
+          check_id: 'DF-07',
+          display_value:
+            agg.invalid_count > 0
+              ? `${medianHours} h (${agg.resolved_count} of ${resolvedSeen})`
+              : `${medianHours} h`,
+        };
       } else if (agg.count > 0) {
         out.mttr.note = `${incLabel} connected — no incident with a resolved recovery span`;
       } else {

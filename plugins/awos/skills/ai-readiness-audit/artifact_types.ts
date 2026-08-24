@@ -231,10 +231,11 @@ export interface EngineProvenance {
 }
 
 /**
- * Connector-gated headline rows (Cycle time, MTTR) computed by the ENGINE
- * from the tracker artifact — never authored by the orchestrator. Derived at
- * audit-core/enrich/aggregate time so the headline row and the Connections &
- * Sources section can never disagree (both read the same artifact).
+ * Connector-gated headline rows computed by the ENGINE — never authored by the
+ * orchestrator. Cycle time comes from the tracker artifact, MTTR from the
+ * incidents artifact; each row is derived from the SAME artifact its metric
+ * reads, so a row can never contradict the Connections & Sources section or
+ * the check detail below it. Derived at audit-core/enrich/aggregate time.
  */
 export interface DerivedDelivery {
   cycle_time: {
@@ -246,17 +247,28 @@ export interface DerivedDelivery {
     note?: string;
   };
   mttr: {
-    /** Median recovery time with its sample size, e.g. "2 h (3 of 60)". Absent when not measurable. */
-    display_value?: string;
-    median_hours?: number;
-    incidents_used?: number;
-    /** DORA band for median_hours — every sibling delivery row carries one. */
-    band?: string;
-    /** DF-07, so the rendered row resolves a definition tooltip like its siblings. */
-    check_id?: string;
+    /**
+     * The measured row, or absent. One indivisible block: value and band are
+     * produced together by the same derivation and must render together —
+     * spreading them from independent checks let the row print a value beside
+     * an em-dash band if they ever came apart.
+     */
+    measured?: MeasuredMttr;
     /** Honest state when the row stays empty (e.g. "PagerDuty connected — no incident with a resolved recovery span"). */
     note?: string;
   };
+}
+
+/** The measured MTTR row — every field present or the whole block is absent. */
+export interface MeasuredMttr {
+  /** Median recovery time with its sample size, e.g. "2 h (3 of 60)". */
+  display_value: string;
+  median_hours: number;
+  incidents_used: number;
+  /** DORA band for median_hours — every sibling delivery row carries one. */
+  band: string;
+  /** DF-07, so the rendered row resolves a definition tooltip like its siblings. */
+  check_id: string;
 }
 
 /**

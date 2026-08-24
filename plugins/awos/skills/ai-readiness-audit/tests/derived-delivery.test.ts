@@ -122,18 +122,18 @@ test('computeDerivedDelivery: a real incidents artifact fills the MTTR headline 
     });
     const dd = computeDerivedDelivery(collected);
     assert.equal(
-      dd.mttr.display_value,
+      dd.mttr.measured?.display_value,
       '2 h',
       'the headline shows the engine-derived median recovery time'
     );
-    assert.equal(dd.mttr.incidents_used, 2);
+    assert.equal(dd.mttr.measured?.incidents_used, 2);
     assert.equal(
-      dd.mttr.band,
+      dd.mttr.measured?.band,
       'high',
       'the measured MTTR carries its DORA band like every sibling delivery row'
     );
     assert.equal(
-      dd.mttr.check_id,
+      dd.mttr.measured?.check_id,
       'DF-07',
       'the measured MTTR carries its check_id so the rendered row resolves a definition tooltip'
     );
@@ -286,7 +286,7 @@ test('computeDerivedDelivery: an unusable part of the sample shows in the MTTR v
     });
     const dd = computeDerivedDelivery(collected);
     assert.equal(
-      dd.mttr.display_value,
+      dd.mttr.measured?.display_value,
       '1 h (1 of 3)',
       'the headline value must carry the sample size when part of the sample was unusable'
     );
@@ -311,11 +311,13 @@ test('renderMarkdown: the measured MTTR row renders with its band', () => {
     derived_delivery: {
       cycle_time: {},
       mttr: {
-        display_value: '2 h',
-        median_hours: 2,
-        incidents_used: 2,
-        band: 'high',
-        check_id: 'DF-07',
+        measured: {
+          display_value: '2 h',
+          median_hours: 2,
+          incidents_used: 2,
+          band: 'high',
+          check_id: 'DF-07',
+        },
       },
     },
     engine: { generated_by: 'audit-core' },
@@ -358,7 +360,7 @@ test('computeDerivedDelivery: a corrupt incidents artifact is reported as unread
       'a present-but-unparseable incidents artifact must be named as unreadable'
     );
     assert.equal(
-      dd.mttr.display_value,
+      dd.mttr.measured?.display_value,
       undefined,
       'no value can be derived from an unreadable artifact'
     );

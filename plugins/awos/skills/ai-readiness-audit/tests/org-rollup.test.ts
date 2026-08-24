@@ -818,7 +818,15 @@ test('readPerRepoAudit: the engine-derived MTTR wins over the authored gated row
         },
         derived_delivery: {
           cycle_time: { display_value: '3.4 d' },
-          mttr: { display_value: '2 h', median_hours: 2, band: 'high' },
+          mttr: {
+            measured: {
+              display_value: '2 h',
+              median_hours: 2,
+              incidents_used: 2,
+              band: 'high',
+              check_id: 'DF-07',
+            },
+          },
         },
         engine: { generated_by: 'audit-core' },
       })

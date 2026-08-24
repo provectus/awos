@@ -1083,12 +1083,12 @@ test('aggregate keeps a freshly measured MTTR instead of a stale stored block', 
 
   const out = JSON.parse(readFileSync(join(outDir, 'audit.json'), 'utf8'));
   assert.equal(
-    out.derived_delivery.mttr.display_value,
+    out.derived_delivery.mttr.measured?.display_value,
     '2 h',
     'aggregate must keep the freshly measured MTTR, not the stale stored empty row'
   );
   assert.equal(
-    out.derived_delivery.mttr.band,
+    out.derived_delivery.mttr.measured?.band,
     'high',
     'the fresh band must survive too'
   );

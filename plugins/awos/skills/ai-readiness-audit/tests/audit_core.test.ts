@@ -18,7 +18,7 @@ import { auditCore, scoreBadge } from '../audit_core.ts';
 import { METRICS } from '../metrics/index.ts';
 import { aggregate } from '../audit_patch.ts';
 import { makeCheckRecord } from './helpers.ts';
-import { tmpDir } from './helpers.ts';
+import { tmpDir, loadStandards } from './helpers.ts';
 
 const SKILL_ROOT = new URL('..', import.meta.url).pathname;
 const STANDARDS_PATH = join(SKILL_ROOT, 'references', 'standards.toml');
@@ -1015,6 +1015,122 @@ test('summary.artifact_warnings flags an incidents batch where every record is s
     warning!,
     /resolved_at is \s*probably mapped from the wrong field|resolved_at is probably mapped from the wrong field/,
     'the warning must name the likely field-mapping cause'
+  );
+});
+
+test('summary.artifact_warnings flags a raw.incidents that is not an array', async () => {
+  // A mis-shaped container — an id-keyed object, or a {items: […]} page
+  // wrapper read one level too high — coerces to [] in
+  // deriveIncidentAggregates, so every count-gated guard skips and the metric
+  // note reads "no incidents in window": wrong-but-quiet. The shape warning is
+  // the only signal left, so it must fire.
+  const outDir = tmpDir('audit-core-inc-shape-out-');
+  const collectedDir = tmpDir('audit-core-inc-shape-collected-');
+  writeFileSync(
+    join(collectedDir, 'incidents.json'),
+    JSON.stringify({
+      source: 'incidents',
+      available: true,
+      reason_if_absent: null,
+      period: { lookback_days: 90, source_label: 'PagerDuty' },
+      raw: {
+        incidents: {
+          'INC-1': { started_at: '2026-07-01T00:00:00Z' },
+        },
+      },
+    })
+  );
+  const summary = await auditCore(
+    SKILL_ROOT,
+    outDir,
+    {},
+    {},
+    STANDARDS_PATH,
+    collectedDir
+  );
+  const warning = summary.artifact_warnings.find((w) =>
+    /raw\.incidents is/.test(w)
+  );
+  assert.ok(
+    warning,
+    'an available incidents artifact whose raw.incidents is not an array must produce a shape warning — the count-gated guards all skip on the coerced empty array'
+  );
+  assert.match(
+    warning!,
+    /an object, not an array/,
+    'the warning must name the shape it received'
+  );
+  assert.match(
+    warning!,
+    /connector-shapes\.md/,
+    'the warning must point at the envelope recipe to fix'
+  );
+});
+
+test('aggregate applies the standards window to the re-derived MTTR headline', () => {
+  // cli.ts passes `standards` to aggregate() so the re-derived headline uses
+  // the audit window, not the artifact's authored period — but every other
+  // call site in the suite calls aggregate(outDir) bare, so dropping the
+  // argument from cli.ts kept the suite green and silently re-opened the
+  // regression 6ee9f9f fixed one layer down. Same fixture recipe as the
+  // metric-layer window test: two recent 2h incidents, three ancient 200h
+  // ones kept alive by a 730-day artifact period ([2,2,200,200,200] → 200
+  // blended, [2,2] → 2 clamped).
+  const outDir = tmpDir('aggregate-mttr-window-');
+  writeFileSync(
+    join(outDir, 'delivery-flow.json'),
+    JSON.stringify({
+      dimension: 'delivery-flow',
+      date: '2026-07-03',
+      score: 0,
+      coverage: 0,
+      checks: [],
+    })
+  );
+  writeFileSync(
+    join(outDir, 'audit.json'),
+    JSON.stringify({
+      date: '2026-07-03',
+      project: 'x',
+      audit_total: 0,
+      coverage: 0,
+      dimensions: [],
+      derived_delivery: { cycle_time: {}, mttr: {} },
+      engine: { generated_by: 'audit-core' },
+    })
+  );
+  const collected = join(outDir, 'collected');
+  mkdirSync(collected, { recursive: true });
+  const day = 86_400_000;
+  const newest = Date.parse('2026-07-01T00:00:00Z');
+  const at = (daysAgo: number, hoursLater = 0) =>
+    new Date(newest - daysAgo * day + hoursLater * 3_600_000).toISOString();
+  writeFileSync(
+    join(collected, 'incidents.json'),
+    JSON.stringify({
+      source: 'incidents',
+      available: true,
+      reason_if_absent: null,
+      period: { lookback_days: 730, source_label: 'PagerDuty' },
+      raw: {
+        incidents: [
+          { id: 'R1', started_at: at(3), resolved_at: at(3, 2) },
+          { id: 'R2', started_at: at(5), resolved_at: at(5, 2) },
+          { id: 'O1', started_at: at(300), resolved_at: at(300, 200) },
+          { id: 'O2', started_at: at(320), resolved_at: at(320, 200) },
+          { id: 'O3', started_at: at(340), resolved_at: at(340, 200) },
+        ],
+      },
+    })
+  );
+
+  aggregate(outDir, loadStandards());
+
+  const out = JSON.parse(readFileSync(join(outDir, 'audit.json'), 'utf8'));
+  assert.equal(
+    out.derived_delivery.mttr.measured?.median_hours,
+    2,
+    'the aggregate-layer MTTR headline must be measured over the standards window, not the artifact period — the 300-day-old incidents must not reach the median'
   );
 });
 

@@ -549,6 +549,7 @@ Wrap the incidents in the standard collector envelope and write it to `collected
 - `resolved_count` — incidents with a measurable `started_at → resolved_at` span
 - `invalid_count` — resolved incidents whose span could not be parsed (missing, reversed, or zero-length timestamps)
 - `median_duration_hours` — median recovery time in hours (the MTTR value)
+- `dropped_out_of_window` — incidents dropped for starting before the audit window
 
 Only incidents with a valid `started_at → resolved_at` span are measured; the engine clamps them to the audit window (`started_at` within `window_anchor − lookback_days`), reports the **median** recovery time in hours, and upgrades reliability to `maximal`. Query the same window as the other connectors.
 

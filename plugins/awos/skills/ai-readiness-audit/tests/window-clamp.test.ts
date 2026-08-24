@@ -179,3 +179,23 @@ test('an incidents envelope with no period still gets the standards window', () 
     'a period-less incidents envelope must still be clamped to the standards window'
   );
 });
+
+test('the MTTR reliability note reports incidents dropped by the clamp', () => {
+  const tmp = tmpDir('win-i7-');
+  // dropped_out_of_window had exactly one write and no reads before this: a
+  // stream clamping from 4 incidents to 2 read like a source that only ever
+  // had 2. The note must say so, in incidents — not "runs".
+  const incidents = [
+    { id: 'INC-1', started_at: iso(3), resolved_at: iso(3 - 2 / 24) },
+    { id: 'INC-2', started_at: iso(5), resolved_at: iso(5 - 2 / 24) },
+    { id: 'INC-O1', started_at: iso(300), resolved_at: iso(300 - 5 / 24) },
+    { id: 'INC-O2', started_at: iso(320), resolved_at: iso(320 - 5 / 24) },
+  ];
+  const collectedDir = writeCollected(tmp, 'incidents', { incidents });
+  const result = mttr(collectedDir, standards, { has_incident_source: true });
+  assert.match(
+    result.reliability.note,
+    /2 incidents older than the 90-day window dropped/,
+    'the reliability note must report how many incidents the window clamp removed, named as incidents'
+  );
+});

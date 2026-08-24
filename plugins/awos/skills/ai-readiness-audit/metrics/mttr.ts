@@ -47,6 +47,7 @@ import {
   makeMetricResult,
   readArtifact,
   trackerFetchNote,
+  windowDropNote,
   type MetricResult,
   type Reliability,
 } from './_base.ts';
@@ -99,10 +100,17 @@ export function compute(
         agg.invalid_count > 0
           ? ` (of ${total} resolved; ${agg.invalid_count} lacked a parseable span)`
           : '';
+      // Say what the window clamp removed — 480 incidents clamping to 11
+      // otherwise reads exactly like a source that only ever had 11.
+      const dropNote = windowDropNote(
+        agg.dropped_out_of_window,
+        lookbackDays(standards),
+        'incident'
+      );
       const reliability: Reliability = {
         tag: 'maximal',
         confidence: 'HIGH',
-        note: `measured from ${measured} resolved incident${measured === 1 ? '' : 's'}${iraw.source_label ? ` (${iraw.source_label})` : ''}${ofNote}`,
+        note: `measured from ${measured} resolved incident${measured === 1 ? '' : 's'}${iraw.source_label ? ` (${iraw.source_label})` : ''}${ofNote}${dropNote}`,
       };
       const score = scoreFromConfig(medianHours, scoringFor(standards, 'mttr'));
       return makeMetricResult(

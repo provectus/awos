@@ -48,6 +48,8 @@ export interface IncidentsRaw {
   invalid_count: number;
   /** Median recovery time in hours over resolved incidents; null when none. */
   median_duration_hours: number | null;
+  /** Incidents dropped for starting before the audit window (see the clamp). */
+  dropped_out_of_window: number;
   source_label: string | null;
 }
 
@@ -107,8 +109,6 @@ export function clampIncidentsToWindow(
 export interface IncidentAggregates extends IncidentsRaw {
   /** In-window incidents kept after the window clamp. */
   incidents: IncidentRecord[];
-  /** Incidents dropped for falling outside the audit window. */
-  dropped_out_of_window: number;
 }
 
 /**
@@ -182,6 +182,7 @@ export function collect(
     resolved_count: agg.resolved_count,
     invalid_count: agg.invalid_count,
     median_duration_hours: agg.median_duration_hours,
+    dropped_out_of_window: agg.dropped_out_of_window,
     source_label: connector.source_label ?? null,
   };
   return makeArtifact('incidents', true, null, period, raw);

@@ -84,11 +84,16 @@ export function plural(n: number, word: string): string {
 /**
  * Trailing note for connector records dropped for falling outside the audit
  * window (see clampToWindow). Empty string when none were dropped, so callers
- * append it unconditionally.
+ * append it unconditionally. `noun` names the record kind — without it a
+ * clamped incident stream would report "runs".
  */
-export function windowDropNote(dropped: number, days: number): string {
+export function windowDropNote(
+  dropped: number,
+  days: number,
+  noun = 'run'
+): string {
   return dropped > 0
-    ? `; ${dropped} ${plural(dropped, 'run')} older than the ${days}-day window dropped`
+    ? `; ${dropped} ${plural(dropped, noun)} older than the ${days}-day window dropped`
     : '';
 }
 

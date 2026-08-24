@@ -77,12 +77,13 @@ The steps below are **Creation Mode** — reached when Mode Detection finds no e
 
 Your first goal is to determine the **topic** - the single, specific feature or capability that this specification will define. To determine the topic, follow these steps:
 
-1.  **Check User Prompt:** Analyze the content of the `<user_prompt>` tag.
-2.  **Determine Topic:**
-    - If the `<user_prompt>` tag is **not empty**, this is your **topic**. Announce it: "Okay, let's create a functional specification for: '`<user_prompt>`'."
+1.  **Check for a scope hint:** Before reading the topic itself, look for a user-declared scope. A leading `small:` prefix (e.g. `small: add a --version flag`) or an inline phrase like "small change" / "minor tweak" / "quick fix" marks the feature as **declared Small**. Strip the prefix or phrase from `<user_prompt>` before using the remainder as the topic, and record that the scope was declared. No prefix or phrase means no declaration — proceed exactly as today.
+2.  **Check User Prompt:** Analyze the content of the `<user_prompt>` tag (after stripping any scope hint).
+3.  **Determine Topic:**
+    - If the `<user_prompt>` tag is **not empty**, this is your **topic**. Announce it: "Okay, let's create a functional specification for: '`<user_prompt>`'." When a scope was declared, add: "Working this as a small change — I'll keep the interview and the draft proportionate, but anything that changes what the feature does still gets asked."
     - If the `<user_prompt>` tag is **empty**, read `context/product/roadmap.md`, find the **first incomplete checklist item** (`- [ ] ...`), and use it as your **topic**. Announce: "Since no topic was provided, I'll start with the next incomplete item from the roadmap: **'[Name of Roadmap Item]'**."
     - If all roadmap items are complete, stop and inform the user.
-3.  Scope boundary: you are working on this single **topic** only. All other roadmap items are out-of-scope and will be addressed in separate specifications.
+4.  Scope boundary: you are working on this single **topic** only. All other roadmap items are out-of-scope and will be addressed in separate specifications.
 
 ### Step 2: Gather Context and Extract Known Information
 
@@ -104,6 +105,7 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 - **Non-Technical Questions Only:** Your questions must be answerable by a product manager or designer — never ask about data models, API design, storage, architecture, state management, caching, or any implementation detail. Frame every question in terms of what the user sees, does, or experiences. If you need to understand a behavior, ask "What should the user see when…?" not "How should the system handle…?"
 - **Never Surface Technical Names:** When you encounter technical identifiers (field names, API response keys, database columns, type names, etc.) in context files, silently map them to plain-language labels. Do not ask the user to confirm whether a user-facing label corresponds to a technical field name. If you are unsure what a technical term means in user-facing language, ask "What does the user call [plain description of the concept]?" — never expose the raw identifier.
 - **Self-Check Before Every Question:** Re-read your question. If it contains a code identifier (camelCase, snake_case, PascalCase, or a name that only appears in source code / API schemas), rewrite the question without it. If the question cannot be asked without referencing the identifier, it is a technical question — drop it.
+- **When scope was declared Small:** the declaration compresses ceremony, not rigor. Still ask anything whose answer changes what the feature does — a question count that follows from the topic, not from the declared size. Skip only the elaboration prompts meant to enrich a large feature: persona walkthroughs, exhaustive edge-case sweeps, and probing beyond the one or two paths a small change actually has. A detail that would not change user-visible behavior becomes an explicit `**Assumption:**` entry in the draft instead of a question. Fill each template section briefly — document volume proportional to the change, not padded to match a larger spec's shape. If, while drafting, the answers reveal the feature is not actually small — multiple user flows, new screens, cross-feature interactions — say so plainly, continue at standard depth for the rest of the interview, and note the revision for Step 5 (the scope marker will read "revised" rather than "declared").
 - You will now draft the specification, section by section, from the context in Step 2. Probe for the details each section needs, but do not block on questions: where an answer is not already documented, capture the question inline as a `[NEEDS CLARIFICATION: …]` marker and keep drafting. You resolve these markers with the user in **Step 6**, after the spec is saved — so an unattended run still produces a complete draft. The examples below show the depth of probing to aim for.
 
 1.  **Overview and Rationale (The "Why"):**
@@ -151,7 +153,8 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 
 1.  **Create Short Name:** Generate a short, kebab-case name from the specification's title (e.g., "User Profile Picture Upload" becomes `user-profile-picture-upload`).
 2.  **Execute Directory Script:** Execute the shell script with the short name as a parameter: `.awos/scripts/create-spec-directory.sh [short-name]`. This will create a new directory (e.g., `context/spec/001-user-profile-picture-upload`).
-3.  **Save the File:** Write the specification content into the `functional-spec.md` file within the newly created directory. **Write the file without waiting for approval** — a spec is reversible (re-run `/awos:spec` to revise) and any open questions are already captured as `[NEEDS CLARIFICATION: …]` markers in the draft, so the deliverable is never gated behind a confirmation an unattended run cannot answer.
+3.  **Add the scope marker:** When scope was declared Small in Step 1, add one line directly under the document title: `**Scope:** Small (declared by user)`. If drafting revealed the feature was not actually small (per Step 3), write it as `**Scope:** Small (declared) — revised to Standard: [one-line reason]` instead. When no scope was declared, omit the line entirely — the document looks exactly as it does today.
+4.  **Save the File:** Write the specification content into the `functional-spec.md` file within the newly created directory. **Write the file without waiting for approval** — a spec is reversible (re-run `/awos:spec` to revise) and any open questions are already captured as `[NEEDS CLARIFICATION: …]` markers in the draft, so the deliverable is never gated behind a confirmation an unattended run cannot answer.
 
 ### Step 6: Final Review and Recommend Next Step
 

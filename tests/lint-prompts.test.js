@@ -449,6 +449,30 @@ test('deliverable commands write their file on an unanswered question', () => {
   );
 });
 
+test('spec.md and tech.md carry the scope-hint contract', () => {
+  // /awos:spec lets the user declare scope at invocation (a leading
+  // `small:` prefix or small-change phrasing) and stamps a `**Scope:**`
+  // marker under the title of functional-spec.md. /awos:tech is the real
+  // scope gate: it reads that marker and can revise it. Both halves of
+  // the contract must be present in their respective command bodies, or
+  // the feature silently breaks on one side.
+  const specBody = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    specBody.includes('**Scope:**'),
+    'commands/spec.md must contain the literal "**Scope:**" marker text — it is what /awos:tech reads to gate exploration depth'
+  );
+  assert.ok(
+    specBody.includes('small:'),
+    'commands/spec.md must document the "small:" prefix users type to declare scope at invocation'
+  );
+
+  const techBody = readUtf8(path.join(commandsDir, 'tech.md'));
+  assert.ok(
+    techBody.includes('**Scope:**'),
+    'commands/tech.md must contain the literal "**Scope:**" marker text — without it the command cannot read or revise the scope declaration from functional-spec.md'
+  );
+});
+
 test('wrappers do not duplicate the AskUserQuestion rule', () => {
   // Counterpart to the test above: the rule moved from wrappers to
   // core. If a wrapper still mentions AskUserQuestion the contract has

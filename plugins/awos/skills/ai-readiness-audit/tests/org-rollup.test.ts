@@ -15,7 +15,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { rollup } from '../metrics/org_rollup.ts';
+import { readPerRepoAudit } from '../metrics/rollup_input.ts';
+import { tmpDir } from './helpers.ts';
 import type { PerRepoInput, OrgRollupResult } from '../metrics/org_rollup.ts';
 
 // ---------------------------------------------------------------------------
@@ -786,4 +790,52 @@ test('PRV checks never appear in org_gaps — prevention_gaps is their org expre
     result.prevention_gaps,
     'the PRV signal arrives via prevention_gaps'
   );
+});
+
+test('readPerRepoAudit: the engine-derived MTTR wins over the authored gated row', () => {
+  // rollup_input read delivery.mttr from the AUTHORED headline row — the one
+  // the orchestrator is told never to author and the renderer drops — while
+  // cycle_time directly above it already preferred derived_delivery. So a repo
+  // with a real incident connector showed an em-dash in the org Repositories
+  // table while its own per-repo report showed the measured value.
+  const dir = tmpDir('awos-rollup-mttr-');
+  try {
+    writeFileSync(
+      join(dir, 'audit.json'),
+      JSON.stringify({
+        date: '2026-07-03',
+        project: 'org/measured',
+        audit_total: 10,
+        coverage: 0.5,
+        dimensions: [],
+        headline: {
+          // Authored gated rows come back empty on a real run — exactly the
+          // shape that produced null before.
+          delivery: [
+            { label: 'Cycle time (In-Progress→Done)', gated: 'tracker' },
+            { label: 'MTTR', gated: 'incident' },
+          ],
+        },
+        derived_delivery: {
+          cycle_time: { display_value: '3.4 d' },
+          mttr: { display_value: '2 h', median_hours: 2, band: 'high' },
+        },
+        engine: { generated_by: 'audit-core' },
+      })
+    );
+    const row = readPerRepoAudit(dir, 'org/measured', new Set<number>())!;
+    assert.ok(row, 'a stamped audit.json must produce a per-repo row');
+    assert.equal(
+      row.delivery!.cycle_time,
+      '3.4 d',
+      'cycle_time must come from derived_delivery (unchanged behaviour)'
+    );
+    assert.equal(
+      row.delivery!.mttr,
+      '2 h',
+      'mttr must come from derived_delivery too — same precedence as the renderer, or the org table contradicts the per-repo report'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

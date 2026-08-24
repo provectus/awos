@@ -163,7 +163,8 @@ export function readPerRepoAudit(
   delivery.cycle_time =
     audit.derived_delivery?.cycle_time?.display_value ??
     gatedDisplay('tracker');
-  delivery.mttr = gatedDisplay('incident');
+  delivery.mttr =
+    audit.derived_delivery?.mttr?.display_value ?? gatedDisplay('incident');
 
   // Merges/LOC per active contributor from the git artifact (best-effort).
   const gitPath = join(repoDir, 'collected', 'git.json');

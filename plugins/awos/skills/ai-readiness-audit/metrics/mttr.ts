@@ -43,6 +43,7 @@
 import {
   appendReliabilityNote,
   awardCategories,
+  lookbackDays,
   makeMetricResult,
   readArtifact,
   trackerFetchNote,
@@ -80,10 +81,14 @@ export function compute(
       incidents?: Parameters<typeof deriveIncidentAggregates>[0];
       source_label?: string | null;
     };
-    const lookbackDays = incidentsRead.artifact.period?.lookback_days as
-      | number
-      | undefined;
-    const agg = deriveIncidentAggregates(iraw.incidents, lookbackDays);
+    // Window from standards ([meta].max_lookback_days), not the artifact's
+    // orchestrator-authored `period` — an envelope written without one would
+    // otherwise skip the clamp entirely and let an all-time export become the
+    // "audit-window" median. Same source as ci_pass_rate/pipeline_duration.
+    const agg = deriveIncidentAggregates(
+      iraw.incidents,
+      lookbackDays(standards)
+    );
     if (agg.resolved_count > 0 && agg.median_duration_hours !== null) {
       const medianHours = agg.median_duration_hours;
       const band = mttrBand(medianHours);

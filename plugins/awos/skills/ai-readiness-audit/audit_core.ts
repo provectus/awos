@@ -26,6 +26,7 @@ import { join, basename, dirname } from 'node:path';
 import {
   evaluateAppliesWhen,
   loadStandards,
+  lookbackDays,
   malformedEnvelopeNote,
   metaNumber,
   strandedPayloadCount,
@@ -84,7 +85,11 @@ export function computeDerivedDelivery(
   collectedDir: string,
   // Pre-read tracker artifact — pass it when the caller already parsed
   // collected/tracker.json so the (potentially MB-sized) file isn't re-read.
-  preReadTracker?: Record<string, unknown> | null
+  preReadTracker?: Record<string, unknown> | null,
+  // Scoring standards, for the audit window. The MTTR window comes from
+  // [meta].max_lookback_days — never from the orchestrator-authored artifact
+  // `period`, which may be absent (no clamp at all) or arbitrarily wide.
+  standards?: Record<string, unknown>
 ): DerivedDelivery {
   let tracker: Record<string, unknown> | null;
   if (preReadTracker !== undefined) {
@@ -115,7 +120,7 @@ export function computeDerivedDelivery(
       };
       const agg = deriveIncidentAggregates(
         incRaw.incidents,
-        inc.period?.lookback_days
+        standards ? lookbackDays(standards) : inc.period?.lookback_days
       );
       const incLabel = incRaw.source_label ?? 'incident source';
       if (agg.resolved_count > 0 && agg.median_duration_hours !== null) {
@@ -651,10 +656,7 @@ export async function auditCore(
     // Without a measurable span category 1103 stays SKIP.
     has_incident_source: Boolean(
       incidentsArt?.available &&
-      hasMeasurableIncidents(
-        incidentsRaw?.incidents,
-        incidentsArt?.period?.lookback_days
-      )
+      hasMeasurableIncidents(incidentsRaw?.incidents, lookbackDays(standards))
     ),
     has_code_host: Boolean(codeHostArt?.available),
   });
@@ -911,7 +913,11 @@ export async function auditCore(
     linked_repos: linkedRepos,
     tech_stack: techStack,
     detection_conflicts: detectionConflicts,
-    derived_delivery: computeDerivedDelivery(collectedDir, trackerArt),
+    derived_delivery: computeDerivedDelivery(
+      collectedDir,
+      trackerArt,
+      standards
+    ),
     engine: ENGINE_PROVENANCE,
   };
   if (Object.keys(sourceWindows).length > 0)

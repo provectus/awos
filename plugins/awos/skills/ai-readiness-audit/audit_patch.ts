@@ -33,7 +33,12 @@ import {
  * blocks (headline/insights/recommendations) already on audit.json. Run after
  * the orchestrator patches judgment or connector checks, before rendering.
  */
-export function aggregate(outDir: string): void {
+export function aggregate(
+  outDir: string,
+  // Scoring standards, so the re-derived MTTR headline uses the same audit
+  // window as audit-core rather than the artifact's authored `period`.
+  standards?: Record<string, unknown>
+): void {
   let total = 0;
   let applicable = 0;
   const dimensions: Record<string, unknown>[] = [];
@@ -165,7 +170,8 @@ export function aggregate(outDir: string): void {
   // artifacts are gone.
   const derivedDelivery = computeDerivedDelivery(
     collectedDirAgg,
-    collectedAgg.get('tracker')!.art
+    collectedAgg.get('tracker')!.art,
+    standards
   );
   audit.derived_delivery =
     derivedDelivery.cycle_time.display_value !== undefined ||
@@ -261,7 +267,10 @@ export interface JudgmentPatch {
  */
 export function patchJudgments(
   outDir: string,
-  patches: JudgmentPatch[]
+  patches: JudgmentPatch[],
+  // Passed straight to the re-aggregate below, so the re-derived MTTR headline
+  // uses the standards audit window rather than the artifact's authored period.
+  standards?: Record<string, unknown>
 ): { patched: string[]; warnings: string[] } {
   requireStampedAudit(outDir, 'patch-judgment');
   const patched: string[] = [];
@@ -338,7 +347,7 @@ export function patchJudgments(
     warnings.push(`${id}: no such check in any dimension artifact — ignored`);
   }
 
-  aggregate(outDir);
+  aggregate(outDir, standards);
   return { patched, warnings };
 }
 

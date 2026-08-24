@@ -53,6 +53,8 @@ import {
   type MetricResult,
   type Reliability,
 } from './_base.ts';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   mergeRecordDurationsHours,
   type MergeRecord,
@@ -79,7 +81,15 @@ export function compute(
   //     window, so the reported value is always the engine's own arithmetic. ---
   let incidentsNoSpanNote: string | null = null;
   const incidentsRead = readArtifact(collectedDir, 'incidents');
-  if (!('error' in incidentsRead) && incidentsRead.artifact?.available) {
+  if ('error' in incidentsRead) {
+    // Absent is normal — no connector, fall through to the git proxy silently.
+    // Present but unparseable is not: without this the reader sees plain
+    // git-proxy text and no hint that a fetched artifact is sitting on disk
+    // unreadable, and goes off to re-run connector setup instead of fixing it.
+    if (existsSync(join(collectedDir, 'incidents.json'))) {
+      incidentsNoSpanNote = `incident source connected — artifact unreadable (${incidentsRead.error}); fix collected/incidents.json and re-run enrich`;
+    }
+  } else if (incidentsRead.artifact?.available) {
     const iraw = (incidentsRead.artifact.raw ?? {}) as {
       incidents?: Parameters<typeof deriveIncidentAggregates>[0];
       source_label?: string | null;

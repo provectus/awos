@@ -20,13 +20,20 @@
 // check ids). The only LLM-dependent inputs left out here are connectors
 // (tracker/docs default to absent → those metrics SKIP) and the judgments.
 // ---------------------------------------------------------------------------
-import { mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  existsSync,
+} from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 
 import {
   evaluateAppliesWhen,
   loadStandards,
   lookbackDays,
+  readArtifact,
   malformedEnvelopeNote,
   metaNumber,
   strandedPayloadCount,
@@ -95,7 +102,11 @@ export function computeDerivedDelivery(
   // Scoring standards, for the audit window. The MTTR window comes from
   // [meta].max_lookback_days — never from the orchestrator-authored artifact
   // `period`, which may be absent (no clamp at all) or arbitrarily wide.
-  standards?: Record<string, unknown>
+  standards?: Record<string, unknown>,
+  // Pre-read incidents artifact, same contract as preReadTracker: pass it when
+  // the caller already parsed collected/incidents.json. `null` means the
+  // caller looked and found nothing readable.
+  preReadIncidents?: Record<string, unknown> | null
 ): DerivedDelivery {
   let tracker: Record<string, unknown> | null;
   if (preReadTracker !== undefined) {
@@ -115,10 +126,35 @@ export function computeDerivedDelivery(
   // so the headline can never contradict the DF-07 detail below it. A tracker
   // that merely names an incident system is not incident data and plays no part.
   // Computed independently of the tracker, so it fills even with no tracker.
-  try {
-    const inc = JSON.parse(
-      readFileSync(join(collectedDir, 'incidents.json'), 'utf8')
-    );
+  // Absent vs present-but-unreadable are different diagnoses and must not
+  // share a branch. A truncated or malformed artifact used to land in the same
+  // catch as a missing one and render "— (needs incident connector)", sending
+  // the reader off to re-run connector setup while `audit.sources` in the very
+  // same audit.json already said "collector artifact unreadable: SyntaxError…".
+  // That is the headline-contradicts-Connections-and-Sources shape this
+  // function exists to prevent.
+  // A pre-read of `null` only tells us the caller got nothing — it does not say
+  // whether the file is missing or corrupt (readCollected collapses both). Fall
+  // through to readArtifact for the precise reason; it costs a read only on the
+  // path that is already going to report a problem.
+  const incRead =
+    preReadIncidents != null
+      ? { artifact: preReadIncidents }
+      : readArtifact(collectedDir, 'incidents');
+  if ('error' in incRead) {
+    // Present but unparseable — say so. Genuinely absent leaves the row empty
+    // for the renderer's gated fallback, which is the honest state there.
+    if (existsSync(join(collectedDir, 'incidents.json'))) {
+      out.mttr.note = `incident source connected — artifact unreadable (${incRead.error}); fix collected/incidents.json and re-run enrich`;
+    }
+  } else {
+    const inc = incRead.artifact as
+      | {
+          available?: boolean;
+          raw?: unknown;
+          period?: { lookback_days?: number };
+        }
+      | undefined;
     if (inc?.available) {
       const incRaw = (inc.raw ?? {}) as {
         incidents?: Parameters<typeof deriveIncidentAggregates>[0];
@@ -151,9 +187,6 @@ export function computeDerivedDelivery(
         out.mttr.note = `${incLabel} connected — no incidents in window`;
       }
     }
-  } catch {
-    // No incidents artifact — leave out.mttr empty; the renderer shows the
-    // "needs incident connector" gated fallback.
   }
 
   if (!tracker?.available) return out;
@@ -958,7 +991,9 @@ export async function auditCore(
     derived_delivery: computeDerivedDelivery(
       collectedDir,
       trackerArt,
-      standards
+      standards,
+      // Already parsed above for the topology gate — don't read it twice.
+      incidentsArt
     ),
     engine: ENGINE_PROVENANCE,
   };

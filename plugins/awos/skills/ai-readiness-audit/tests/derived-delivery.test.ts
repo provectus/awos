@@ -336,3 +336,50 @@ test('renderMarkdown: the measured MTTR row renders with its band', () => {
     'the measured MTTR row must carry its DORA band, like every sibling row'
   );
 });
+
+test('computeDerivedDelivery: a corrupt incidents artifact is reported as unreadable, not absent', () => {
+  // A truncated write used to land in the same catch as a missing file and
+  // render "— (needs incident connector)", sending the reader to re-run
+  // connector setup — while audit.sources in the same audit.json already said
+  // the artifact was unreadable. enrich never rewrites the file, so the wrong
+  // diagnosis persists across re-runs.
+  const dir = tmpDir('awos-dd-mttr-corrupt-');
+  try {
+    const collected = join(dir, 'collected');
+    mkdirSync(collected, { recursive: true });
+    writeFileSync(
+      join(collected, 'incidents.json'),
+      '{"source":"incidents","available":true,"raw":{"incidents":[{"id"'
+    );
+    const dd = computeDerivedDelivery(collected);
+    assert.match(
+      dd.mttr.note ?? '',
+      /unreadable/,
+      'a present-but-unparseable incidents artifact must be named as unreadable'
+    );
+    assert.equal(
+      dd.mttr.display_value,
+      undefined,
+      'no value can be derived from an unreadable artifact'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('computeDerivedDelivery: a genuinely absent incidents artifact leaves the row empty', () => {
+  // The gated fallback is the honest state here — no connector, no note.
+  const dir = tmpDir('awos-dd-mttr-absent-');
+  try {
+    const collected = join(dir, 'collected');
+    mkdirSync(collected, { recursive: true });
+    const dd = computeDerivedDelivery(collected);
+    assert.deepEqual(
+      dd.mttr,
+      {},
+      'an absent artifact must leave the MTTR row empty for the renderer gated fallback'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

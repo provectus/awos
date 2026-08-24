@@ -1171,11 +1171,11 @@ const CYCLE_TIME_TIP =
 
 /**
  * Reader-grade tooltip for the connector-gated MTTR headline row and the org
- * Repositories "MTTR" column. The git branch-lifetime proxy scores DF-07
- * separately and never feeds this row.
+ * Repositories "MTTR" column. The git branch-lifetime proxy never feeds this
+ * row and never awards DF-07's category.
  */
 const MTTR_TIP =
-  'Median time from incident start to resolution (mean time to restore service). Comes only from an incident source (PagerDuty, Opsgenie, incident-labeled tickets, …). The git branch-lifetime proxy scores DF-07 separately, but it is a rough stand-in and does not feed this row.';
+  'Median time from incident start to resolution (mean time to restore service). Comes only from an incident source (PagerDuty, Opsgenie, incident-labeled tickets, …) carrying at least one resolved recovery span. Without one, MTTR falls back to a rough git branch-lifetime proxy that does not feed this row and does not score DF-07 — that category stays SKIP.';
 
 /**
  * Tooltip text for headline-band metrics that have no `check_id` to resolve a
@@ -1292,8 +1292,9 @@ const NO_TICKETS_NOTE = '— (no tickets data)';
 /**
  * Delivery rows with the connector-gated ones (Cycle time, MTTR) replaced by
  * the ENGINE-derived versions when `audit.derived_delivery` is present. The
- * value and the honest gated note both come from the tracker artifact, so the
- * headline row can never contradict the Connections & Sources section.
+ * value and the honest gated note come from the SAME artifact the metric reads
+ * — Cycle time from the tracker artifact, MTTR from the incidents artifact —
+ * so a headline row can never contradict the Connections & Sources section.
  * Authored gated rows are dropped (the orchestrator no longer authors them);
  * audits without `derived_delivery` (older runs) render as authored.
  */
@@ -1313,6 +1314,15 @@ function normalizedDelivery(audit: AuditJson): DeliveryMetric[] {
   rows.push({
     label: 'MTTR',
     gated: 'incident',
+    // Spread as one block: value, band and check_id are produced together, so
+    // the row can never print a value beside an em-dash band.
+    ...(dd.mttr.measured
+      ? {
+          display_value: dd.mttr.measured.display_value,
+          band: dd.mttr.measured.band,
+          check_id: dd.mttr.measured.check_id,
+        }
+      : {}),
     ...(dd.mttr.note ? { note: dd.mttr.note } : {}),
   });
   return rows;

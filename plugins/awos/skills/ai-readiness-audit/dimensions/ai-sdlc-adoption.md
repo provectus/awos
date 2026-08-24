@@ -10,28 +10,7 @@ depends-on: [project-topology, ai-development-tooling, spec-driven-development]
 
 Orchestrates the full ADP measurement engine against the audited repository. Unlike other dimensions — which run deterministic detectors over source files — this dimension drives the collector and metric pipeline declared in `references/standards.toml` and emits a standard per-dimension JSON artifact carrying every ADP metric result.
 
-**SKIP-not-fabricate:** a check SKIPs when none of its required data sources exist. A check never fabricates a value from prose or assumptions. MTTR is a normal tiered metric: it runs from git as a proxy (merge/revert/hotfix cadence) with `reliability_default = "not-reliable"` and note "git-proxy, true value may differ"; its reliability upgrades automatically when a real incident source artifact is present. No special-casing or manual skipping for MTTR.
-
-## Before running checks — query-once setup
-
-Run this setup once before executing any check below. All checks in this dimension read from the same shared collected directory.
-
-1. Read the `project-topology` dimension artifact to determine which sources apply. Extract: `has_ci`, `has_tracker`, `has_incident_source`, `has_docs_connector`, `repo_path` (fall back to current working directory). Set `auditDate` to today's YYYY-MM-DD.
-
-2. Create directory `context/audits/<date>/collected/`.
-
-3. Run each applicable collector **once**, writing to that directory. Use the engine CLI path passed by the orchestrator (`<engine cli path>`):
-
-```
-node "<engine cli path>" collect git     <repoPath>  → context/audits/<date>/collected/git.json      # always
-node "<engine cli path>" collect ci      <repoPath>  → context/audits/<date>/collected/ci.json       # if has_ci
-node "<engine cli path>" collect tracker <repoPath>  → context/audits/<date>/collected/tracker.json  # if has_tracker
-node "<engine cli path>" collect docs    <repoPath>  → context/audits/<date>/collected/docs.json     # if has_docs_connector
-```
-
-4. For each check below, run `node "<engine cli path>" metric <id> <repoPath> context/audits/<date>/collected` — the third argument is the pre-populated `collected/` directory (query-once path: no collector re-runs inside the metric command).
-
-5. After all checks complete, compute dimension totals and emit `context/audits/<date>/ai-sdlc-adoption.json` following the schema in `output-format.md`. The `hint` field concatenates: `<definition> · <value-derivation> · <reliability tag (confidence)> · <source (year)> · <method>`.
+**SKIP-not-fabricate:** a check SKIPs when none of its required data sources exist. A check never fabricates a value from prose or assumptions. MTTR is a normal tiered metric: it falls back to a git branch-lifetime proxy over all first-parent merges with `reliability_default = "not-reliable"` and note "git-proxy, true value may differ"; its reliability upgrades to `maximal` only when the incidents artifact carries at least one measurable resolved recovery span. No special-casing or manual skipping for MTTR.
 
 ## Checks
 

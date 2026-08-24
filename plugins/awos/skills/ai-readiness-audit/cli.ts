@@ -366,7 +366,7 @@ async function main(): Promise<void> {
       if (!dir) {
         fail({ error: 'aggregate requires <auditsDir>' });
       }
-      aggregate(dir);
+      aggregate(dir, loadStandards(standardsTomlPath()));
       printJson({ aggregated: dir });
       break;
     }
@@ -389,7 +389,8 @@ async function main(): Promise<void> {
       }
       const summary = patchJudgments(
         dir,
-        patches as Parameters<typeof patchJudgments>[1]
+        patches as Parameters<typeof patchJudgments>[1],
+        loadStandards(standardsTomlPath())
       );
       printJson({ ...summary, aggregated: dir });
       break;

@@ -3390,7 +3390,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // together: plugin.json, marketplace.json, this pinned literal, and the
 // generator-version constant in plugins/awos/commands/flow.md. The pin
 // exists to force that deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.4';
+const EXPECTED_PLUGIN_VERSION = '2.4.5';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(

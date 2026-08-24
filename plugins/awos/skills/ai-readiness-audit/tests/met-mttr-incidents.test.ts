@@ -165,3 +165,46 @@ test('mttr: no incidents artifact at all → unchanged git-proxy behavior', () =
   assert.equal(res.status, 'OK', 'never SKIP');
   assert.deepEqual(res.sources_used, ['git'], 'git proxy path');
 });
+
+test('mttr: a batch resolved with unparseable spans names the unparseable count', () => {
+  // The invalid_count > 0 arm had no test at all: every case reaching that
+  // block used incidents with no resolved_at, so only the still-open arm ever
+  // ran. This is the arm that speaks to a WORKING connector whose resolved_at
+  // is mapped from the wrong field — spans present, none of them usable.
+  const tmp = tmpDir('mttr-inc-invalid-');
+  writeCollected(tmp, 'incidents', {
+    incidents: [
+      // Reversed spans: resolved before started.
+      {
+        id: 'r1',
+        started_at: '2026-07-02T00:00:00Z',
+        resolved_at: '2026-07-01T00:00:00Z',
+      },
+      {
+        id: 'r2',
+        started_at: '2026-07-04T00:00:00Z',
+        resolved_at: '2026-07-03T00:00:00Z',
+      },
+    ],
+    source_label: 'PagerDuty',
+  });
+  const dir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [
+        {
+          branch_first_commit_at: '2026-07-01T00:00:00Z',
+          merged_at: '2026-07-01T02:00:00Z',
+        },
+      ],
+      total_merges: 1,
+    })
+  );
+  const res = compute(dir, standards, {});
+  assert.match(
+    res.reliability.note ?? '',
+    /none had a parseable recovery span \(2 unparseable\)/,
+    'the invalid arm must report how many resolved incidents had unusable spans'
+  );
+});

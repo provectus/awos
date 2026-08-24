@@ -274,3 +274,37 @@ test('deriveIncidentAggregates: advisory aggregates are irrelevant — only inci
   assert.equal(agg.resolved_count, 2);
   assert.equal(agg.median_duration_hours, 3, 'median of [2h, 4h] is 3h');
 });
+
+test('incidents: the clamp keeps a record whose started_at will not parse', () => {
+  // clampIncidentsToWindow now delegates to the shared generic, which pins
+  // this contract directly — but nothing pinned the DELEGATION, and the
+  // existing unparseable case runs under a window where nothing is clamped,
+  // so it cannot tell "kept because unparseable" from "kept because nothing
+  // was dropped". Force a real drop alongside the unparseable record.
+  const anchor = Date.parse('2026-07-01T00:00:00Z');
+  const day = 86_400_000;
+  const iso = (daysBefore: number) =>
+    new Date(anchor - daysBefore * day).toISOString();
+  const art = collect(
+    '.',
+    { bucket_days: 30, lookback_days: 90, history_available_days: 90 },
+    {
+      incidents: [
+        { id: 'recent', started_at: iso(3), resolved_at: iso(3 - 2 / 24) },
+        { id: 'ancient', started_at: iso(300), resolved_at: iso(300 - 2 / 24) },
+        { id: 'unparseable', started_at: 'not-a-date' },
+      ],
+    }
+  );
+  const raw = art.raw as { count: number; dropped_out_of_window: number };
+  assert.equal(
+    raw.count,
+    2,
+    'the ancient record is dropped and the unparseable one is kept — it cannot be judged against the window'
+  );
+  assert.equal(
+    raw.dropped_out_of_window,
+    1,
+    'exactly the out-of-window record is counted as dropped'
+  );
+});

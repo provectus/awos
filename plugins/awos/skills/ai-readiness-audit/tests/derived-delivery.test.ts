@@ -434,3 +434,57 @@ test('reportContext: the incident label comes from the incidents artifact, not t
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('computeDerivedDelivery: all-open incidents get the no-resolved-span note', () => {
+  // Neither MTTR honest-state string was asserted anywhere: both could be
+  // swapped or emptied with the suite green, while the cycle_time twin a few
+  // lines up has had a named regression test since the mechanism was built.
+  const dir = tmpDir('awos-dd-mttr-open-');
+  try {
+    const collected = writeIncidents(dir, {
+      source: 'incidents',
+      available: true,
+      period: { lookback_days: 90 },
+      raw: {
+        incidents: [
+          { id: 'A', started_at: iso(t0) },
+          { id: 'B', started_at: iso(t0 + DAY) },
+        ],
+        source_label: 'PagerDuty',
+      },
+    });
+    const dd = computeDerivedDelivery(collected);
+    assert.equal(
+      dd.mttr.note,
+      'PagerDuty connected — no incident with a resolved recovery span',
+      'a connected source with nothing measurable must say so, naming the source'
+    );
+    assert.equal(
+      dd.mttr.measured,
+      undefined,
+      'no measured block when nothing is measurable'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('computeDerivedDelivery: an empty incidents batch gets the no-incidents note', () => {
+  const dir = tmpDir('awos-dd-mttr-empty-');
+  try {
+    const collected = writeIncidents(dir, {
+      source: 'incidents',
+      available: true,
+      period: { lookback_days: 90 },
+      raw: { incidents: [], source_label: 'PagerDuty' },
+    });
+    const dd = computeDerivedDelivery(collected);
+    assert.equal(
+      dd.mttr.note,
+      'PagerDuty connected — no incidents in window',
+      'a connected source with no incidents at all is a different state from one with unmeasurable incidents'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

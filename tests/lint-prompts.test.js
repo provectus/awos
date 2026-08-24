@@ -4109,11 +4109,21 @@ test('connector-shapes.md documents every incidents field the collector defines'
     ...fieldsOf('IncidentsConnector'),
     ...fieldsOf('IncidentsRaw'),
   ];
+  // Match only within the incidents recipe. Six of the guarded fields ('id',
+  // 'resolved_at', 'source', 'source_label', 'count', 'resolved_count') appear
+  // as standalone identifiers in the tracker/CI/code-host recipes, so matching
+  // the whole file let the incidents bullets be deleted with this test green.
+  const start = doc.indexOf('## Incidents');
+  assert.ok(
+    start !== -1,
+    'connector-shapes.md must carry an "## Incidents" section for the field guard to scope to'
+  );
+  const section = doc.slice(start);
   // Match each field as a standalone identifier, not a raw substring: 'id' must
   // not be satisfied by the word "incident", nor 'count' by "resolved_count" or
   // 'source' by ordinary prose — the fields most likely to drift unnoticed.
   const documented = (f) =>
-    new RegExp(`(?<![A-Za-z0-9_])${f}(?![A-Za-z0-9_])`).test(doc);
+    new RegExp(`(?<![A-Za-z0-9_])${f}(?![A-Za-z0-9_])`).test(section);
   const missing = [...new Set(fields)].filter((f) => !documented(f));
   assert.deepEqual(
     missing,

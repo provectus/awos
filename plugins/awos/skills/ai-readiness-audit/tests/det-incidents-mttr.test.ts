@@ -171,8 +171,9 @@ test('a tracker that merely names an incident source does NOT award DF-07', () =
     'SKIP',
     'a tracker-declared incident source with no incident data leaves DF-07 SKIP'
   );
-  assert.ok(
-    !((after!.weight_awarded as number) > 0),
+  assert.equal(
+    after!.weight_awarded,
+    0,
     'no weight is awarded without a measured recovery span'
   );
 });

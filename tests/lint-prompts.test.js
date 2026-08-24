@@ -590,24 +590,14 @@ test('ai-sdlc-adoption dimension exists with correct frontmatter and required bo
     );
   }
 
-  // Body must instruct the orchestrator to collect via the bundled dispatcher.
+  // The dimension must not resurrect the retired per-dimension collect/metric
+  // fan-out. Neither verb exists in cli.ts — the dispatcher is
+  // progress/render/rollup/audit-core/enrich/aggregate/patch-*/report-context
+  // — and this lint used to REQUIRE the reference, so the file documented
+  // commands the CLI has never implemented and the suite enforced it.
   assert.ok(
-    body.includes('node dist/cli.js collect') ||
-      body.includes('cli.js" collect') ||
-      body.includes('cli path>" collect'),
-    'body must reference the collect engine command (per-source collection command)'
-  );
-  // Body must instruct the orchestrator to run metrics via the bundled dispatcher.
-  assert.ok(
-    body.includes('node dist/cli.js metric') ||
-      body.includes('cli.js" metric') ||
-      body.includes('cli path>" metric'),
-    'body must reference the metric engine command (metric invocation command)'
-  );
-  // Body must describe the shared collected/ directory (query-once pattern).
-  assert.ok(
-    body.includes('collected/'),
-    'body must reference "collected/" (the shared query-once artifact directory)'
+    !/cli[^"\n]*"?\s+collect\b/.test(body),
+    'body must not document a "collect" engine command — no such verb exists in cli.ts, and the per-source collect block it belonged to could not produce collected/incidents.json, the artifact has_incident_source now reads'
   );
   // Body must reference the standards data file as the source of category metadata.
   assert.ok(

@@ -29,8 +29,9 @@ export interface TicketRecord {
  *  artifact does that (see collectors/incidents.ts). */
 export interface TrackerConnector {
   tickets?: TicketRecord[];
-  /** Identifier for the incident data source that feeds MTTR (e.g. "pagerduty",
-   *  "opsgenie"). When absent, MTTR is computed from git merges as a proxy. */
+  /** Provenance label naming the incident-management system (e.g. "pagerduty",
+   *  "opsgenie"). It does not feed the MTTR value — that comes from
+   *  collected/incidents.json — and its absence changes nothing. */
   incident_source?: string | null;
   [key: string]: unknown;
 }
@@ -47,8 +48,10 @@ export interface TrackerRaw {
   type_counts: Record<string, number>;
   /** Total tickets resolved during the period (throughput, issue_throughput). */
   resolved_count: number;
-  /** Incident-data source for MTTR reliability upgrade (mttr). null means
-   *  the git-proxy fallback will be used — the metric never SKIPs for this. */
+  /** Provenance label for the incident-management system, echoed from the
+   *  connector. Reported, never scored: it upgrades no reliability and awards
+   *  no category. 1103 gates on topology.has_incident_source, which reads the
+   *  incidents artifact. */
   incident_source: string | null;
 }
 

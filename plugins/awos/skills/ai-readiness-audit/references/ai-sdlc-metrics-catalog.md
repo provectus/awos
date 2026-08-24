@@ -51,11 +51,20 @@ Tier C activates only when a CI connector or accessible CI logs can be resolved 
 
 Tier I activates when a Jira, Linear, or equivalent issue-tracker connector is resolvable. Work-mix data here follows the DX Core 4 model: effort is expressed in team-FTE share, never in money.
 
-| ID                  | Metric                                         | What it proves                                                                                                                                                               | Implementation                   | Collector(s)              | Category/Band               | Kind   |
-| ------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ------------------------- | --------------------------- | ------ |
-| work_mix_allocation | Work-mix allocation                            | Freed capacity shifts toward Growth, away from KTLO/Support — in **team-FTE share, never money** (DX Core 4 FTE-allocation model)                                            | `metrics/work_mix_allocation.ts` | `collectors/tracker.ts`   | `work-mix` (standards.toml) | banded |
-| issue_throughput    | Delivered-issue throughput & backlog burn-down | Output and debt-clearing                                                                                                                                                     | `metrics/issue_throughput.ts`    | `collectors/tracker.ts`   | `delivery-flow`             | raw    |
-| mttr                | MTTR                                           | Recovery speed — the metric never SKIPs (git proxy fallback); **category 1103 is awarded only on a measured recovery span**; do not infer from re-fixes of the same issue ID | `metrics/mttr.ts`                | `collectors/incidents.ts` | `delivery-flow`             | banded |
+| ID                  | Metric                                         | What it proves                                                                                                                    | Implementation                   | Collector(s)            | Category/Band               | Kind   |
+| ------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ----------------------- | --------------------------- | ------ |
+| work_mix_allocation | Work-mix allocation                            | Freed capacity shifts toward Growth, away from KTLO/Support — in **team-FTE share, never money** (DX Core 4 FTE-allocation model) | `metrics/work_mix_allocation.ts` | `collectors/tracker.ts` | `work-mix` (standards.toml) | banded |
+| issue_throughput    | Delivered-issue throughput & backlog burn-down | Output and debt-clearing                                                                                                          | `metrics/issue_throughput.ts`    | `collectors/tracker.ts` | `delivery-flow`             | raw    |
+
+---
+
+## Tier N — incident source (PagerDuty/OpsGenie/incident.io, Statuspage, or code-host incident labels)
+
+Tier N activates when an incident source is reachable and yields at least one incident with a resolved recovery span. It is independent of Tier I: a team on PagerDuty with no issue tracker measures MTTR, and a tracker-only team does not — naming an incident system in the tracker is a provenance label, not incident data.
+
+| ID   | Metric | What it proves                                                                                                                                                               | Implementation    | Collector(s)              | Category/Band   | Kind   |
+| ---- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ------------------------- | --------------- | ------ |
+| mttr | MTTR   | Recovery speed — the metric never SKIPs (git proxy fallback); **category 1103 is awarded only on a measured recovery span**; do not infer from re-fixes of the same issue ID | `metrics/mttr.ts` | `collectors/incidents.ts` | `delivery-flow` | banded |
 
 ---
 

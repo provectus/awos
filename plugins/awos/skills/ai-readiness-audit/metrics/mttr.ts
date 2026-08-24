@@ -34,7 +34,9 @@
  *
  * Source shapes:
  *   collectedDir/incidents.json — primary; raw.incidents[] drives the measured value
- *   collectedDir/git.json       — always read (provides the git-proxy fallback)
+ *   collectedDir/git.json       — read only on the fallback path (when no
+ *                                 incident source is measurable); the measured
+ *                                 branch returns before git is opened
  *   collectedDir/tracker.json   — read when present (an incident_source label adds
  *                                 an informational note on the proxy path only;
  *                                 it never enters sources_used, because it
@@ -146,9 +148,9 @@ export function compute(
     // Reaching here means resolved_count is 0, so every in-window incident is
     // either still open or resolved-but-unmeasurable. Distinguish the two: a
     // whole-batch resolved_at mapping miss fails a step EARLIER than invalidity
-    // is measured (no resolved_at → still-open, not invalid), so it used to
-    // read as "no incident with a resolved recovery span" — coherent, alarming,
-    // and false, since it asserts every incident is open.
+    // is measured (no resolved_at → still-open, not invalid), so without the
+    // split below it reads as "no incident with a resolved recovery span" —
+    // coherent, alarming, and false, since it asserts every incident is open.
     if (agg.count > 0) {
       // The clamp drop count belongs here too, not only on the measured path:
       // a mostly-historical export whose one newest incident is still open

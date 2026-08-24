@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { computeDerivedDelivery } from '../audit_core.ts';
-import { patchReportBlocks } from '../audit_patch.ts';
+import { patchReportBlocks, reportContext } from '../audit_patch.ts';
 import { renderMarkdown } from '../render.ts';
 import type { AuditJson } from '../render.ts';
 import { tmpDir } from './helpers.ts';
@@ -380,6 +380,55 @@ test('computeDerivedDelivery: a genuinely absent incidents artifact leaves the r
       dd.mttr,
       {},
       'an absent artifact must leave the MTTR row empty for the renderer gated fallback'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('reportContext: the incident label comes from the incidents artifact, not the tracker', () => {
+  // reportContext only ever opened git and tracker, so it read the label off
+  // tracker.raw.incident_source. Post-DF-07 that inverts the signal: a real
+  // connector with no tracker declaration handed the narrative author null
+  // while MTTR scored maximal, and a tracker merely naming a system handed
+  // over that name while 1103 stayed SKIP.
+  const dir = tmpDir('awos-report-ctx-label-');
+  try {
+    const collected = join(dir, 'collected');
+    mkdirSync(collected, { recursive: true });
+    writeFileSync(
+      join(collected, 'incidents.json'),
+      JSON.stringify({
+        source: 'incidents',
+        available: true,
+        raw: { incidents: [], source_label: 'PagerDuty' },
+      })
+    );
+    // Tracker declares a DIFFERENT system, and no incident data behind it.
+    writeFileSync(
+      join(collected, 'tracker.json'),
+      JSON.stringify({
+        source: 'tracker',
+        available: true,
+        raw: { tickets: [], incident_source: 'opsgenie' },
+      })
+    );
+    writeFileSync(
+      join(dir, 'audit.json'),
+      JSON.stringify({
+        date: '2026-07-03',
+        project: 'x',
+        audit_total: 0,
+        coverage: 0,
+        dimensions: [],
+        engine: { generated_by: 'audit-core' },
+      })
+    );
+    const ctx = reportContext(dir) as Record<string, unknown>;
+    assert.equal(
+      ctx.incident_source_label,
+      'PagerDuty',
+      'the label must come from the incidents artifact, which is what actually produces the MTTR value'
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

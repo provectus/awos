@@ -473,6 +473,7 @@ export function reportContext(outDir: string): Record<string, unknown> {
   };
   const git = readCollected('git');
   const tracker = readCollected('tracker');
+  const incidents = readCollected('incidents');
   const checks: Array<Record<string, unknown>> = [];
   for (const dim of (audit.dimensions ?? []) as Array<
     Record<string, unknown>
@@ -504,10 +505,18 @@ export function reportContext(outDir: string): Record<string, unknown> {
       (git?.raw as Record<string, unknown> | undefined)?.window_stats ?? null,
     tracker_fetch_meta:
       (tracker?.raw as Record<string, unknown> | undefined)?.fetch_meta ?? null,
-    // Provenance label only — names the incident system the tracker declares.
-    // It does not produce the MTTR value (derived_delivery.mttr does, from the
-    // incidents artifact) and does not award category 1103.
+    // Provenance label only — names the incident system. It does not produce
+    // the MTTR value (derived_delivery.mttr does) and does not award category
+    // 1103. Sourced from the incidents artifact FIRST: reading it off the
+    // tracker inverts the signal post-DF-07 — a real PagerDuty connector with
+    // no tracker declaration would hand over null while MTTR scores maximal,
+    // and a tracker merely naming "opsgenie" with no incident data would hand
+    // over "opsgenie" while 1103 stays SKIP. The label the report actually
+    // shows is the incidents artifact's own source_label.
     incident_source_label:
+      ((incidents?.raw as Record<string, unknown> | undefined)?.source_label as
+        | string
+        | null) ??
       (tracker?.raw as Record<string, unknown> | undefined)?.incident_source ??
       null,
     sources: audit.sources ?? [],

@@ -152,7 +152,7 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" patch-judgment "context/audits/YYYY-MM-DD
 
 `score` is a 0–1 fraction (never a weight), and `confidence` is a 0–1 fraction too; `patch-judgment` clamps both into [0,1], derives `weight_awarded`, and re-aggregates `audit.json` itself — do not run a separate `aggregate` after it.
 
-4. Author the plain-language report blocks — one `report-context` read, one `patch-report` write, never a direct read or edit of `audit.json`. The renderer is deterministic and contains no LLM — the narrative a CEO reads is authored _here_, by you. First fetch everything the blocks transcribe (every check's value/hint/evidence, the git `window_stats` for the Merges/LOC rows, tracker `fetch_meta`, and `incident_source` as a provenance label only — the two connector-gated rows are engine-computed and never authored by you) in one read-only call:
+4. Author the plain-language report blocks — one `report-context` read, one `patch-report` write, never a direct read or edit of `audit.json`. The renderer is deterministic and contains no LLM — the narrative a CEO reads is authored _here_, by you. First fetch everything the blocks transcribe (every check's value/hint/evidence, the git `window_stats` for the Merges/LOC rows, tracker `fetch_meta`, and `incident_source_label` as a provenance label only — the two connector-gated rows are engine-computed and never authored by you) in one read-only call:
 
    ```bash
    node "${CLAUDE_SKILL_DIR}/dist/cli.js" report-context "context/audits/YYYY-MM-DD_HH-MM-SS"

@@ -53,7 +53,7 @@ Follow this process precisely.
     - **Documentation** (doc generators, API docs, knowledge bases)
     - **Solution Ownership** (product management, project tracking, analytics)
 4.  For each domain that has technologies, define an ideal agent role name in kebab-case (e.g., `react-frontend`, `python-backend`, `aws-infra`).
-5.  Show the user a table of identified domains, technologies, and proposed agent roles, and confirm before proceeding.
+5.  Record the identified domains, technologies, and proposed agent roles, and show them as a table. These are proposals to be checked against what the project already has, so continue to Step 3 rather than treating the table as a decision — Step 3 re-shows each role with its coverage status, Step 4 asks before anything is installed, and Step 8 writes the final roster to `context/product/hired-agents.md`.
 
     | Domain         | Technologies                | Proposed Agent Role |
     | -------------- | --------------------------- | ------------------- |
@@ -114,6 +114,8 @@ Follow this process precisely.
 
     Tell the user that the "What it runs" column comes from registry metadata (the hook's `HOOK.md`), which the registry does not vet against the script itself, and that the actual installed script will be shown for review immediately after install (Step 5.4) — the registry CLI has no preview mode, so the on-disk copy is the first chance to inspect the real behavior.
 
+6.  **If a gate gets no answer — the `AskUserQuestion` tool is unavailable, or the question comes back unanswered — treat consent as withheld.** Install nothing that gate covered and continue to Step 6. Do not re-ask the same question as plain text, and do not end the turn. Installing is what needed permission; the coverage report does not, so Step 8 still runs and records what is actually on disk. List the components you did not install under **Gaps** so the user can approve them on a later run.
+
 **QA Complement Rule:**
 
 For each primary tech role identified above, search the registry for a complementary QA/testing agent in the same pass — query with the primary technology plus terms like "testing", "QA", or "acceptance" (e.g. `"React TypeScript testing acceptance"`). The intent is to surface any specialist that can write or run tests for that stack.
@@ -170,9 +172,9 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
       - `[domain]` → the domain name (e.g., "frontend", "backend", "infrastructure")
       - `[technology list]` → comma-separated list of technologies for this domain
       - `[Responsibility aligned with the agent's domain]` → specific responsibilities derived from the architecture
-        Add any installed skills to the `skills` list. Show the generated file to the user for approval before saving.
-4.  For **Partially Covered** roles: read the existing agent file, append newly installed skills to its `skills` list, and show the updated file to the user for approval before saving.
-5.  Write all approved agent files.
+        Add any installed skills to the `skills` list.
+4.  For **Partially Covered** roles: read the existing agent file and append newly installed skills to its `skills` list.
+5.  **Write the agent files, then show each generated or updated file to the user for review** and apply any adjustments they ask for. Writing before the review is safe here: an agent file is reversible — re-run `/awos:hire` to revise it, or delete it.
 
 ## Step 7: Warn About Missing Skills
 

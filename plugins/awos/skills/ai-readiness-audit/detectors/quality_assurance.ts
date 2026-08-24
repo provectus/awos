@@ -4,6 +4,7 @@ import {
   readTextSafe,
   scanForSignal,
   SOURCE_IGNORE as BASE_SOURCE_IGNORE,
+  formatMeasuredPct,
 } from './_base.ts';
 import { existsSync } from 'node:fs';
 import { join, relative, basename } from 'node:path';
@@ -108,12 +109,17 @@ export function detectTestInfrastructure(
   }
 
   const ratio = testCount / sourceCount;
-  const pct = Math.round(ratio * 100);
+  // One rendering of the measured value, reused by every evidence line in
+  // this check so they agree with each other, and guaranteed not to read as
+  // equal to either threshold a line can call it "below" — one decimal alone
+  // shrank that collision without closing it (29.98% renders "30.0%" against
+  // a 30% threshold). See formatMeasuredPct.
+  const pctDisplay = formatMeasuredPct(ratio, thresholdPct, warnAtPct);
   // score: continuous coverage proxy clamped to [0,1]
   const score = Math.min(1, Math.max(0, ratio));
 
   const evidence = [
-    `${testCount} test file(s) found for ${sourceCount} source module(s) (${pct}% ratio)`,
+    `${testCount} test file(s) found for ${sourceCount} source module(s) (${pctDisplay}% ratio)`,
     ...testFiles.slice(0, 5).map((f) => `test file: ${relative(repoPath, f)}`),
   ];
 
@@ -122,7 +128,7 @@ export function detectTestInfrastructure(
       'PASS',
       ratio,
       [
-        `test coverage proxy: ${pct}% — meaningful tests covering ≥ ${thresholdPct}% of source modules`,
+        `test coverage proxy: ${pctDisplay}% — at or above the ${thresholdPct}% pass threshold`,
         ...evidence,
       ],
       'computed',
@@ -136,7 +142,7 @@ export function detectTestInfrastructure(
       'WARN',
       ratio,
       [
-        `test coverage proxy: ${pct}% — partial test coverage (below ${thresholdPct}% threshold)`,
+        `test coverage proxy: ${pctDisplay}% — below the ${thresholdPct}% pass threshold, at or above the ${warnAtPct}% warn threshold`,
         ...evidence,
       ],
       'computed',
@@ -149,7 +155,7 @@ export function detectTestInfrastructure(
     'FAIL',
     ratio,
     [
-      `test coverage proxy: ${pct}% — insufficient test coverage (below ${warnAtPct}% threshold)`,
+      `test coverage proxy: ${pctDisplay}% — below the ${warnAtPct}% warn threshold`,
       ...evidence,
     ],
     'computed',
@@ -321,7 +327,7 @@ export function detectIntegrationTests(
 
   if (signals.length === 0) {
     return makeResult('FAIL', 0, [
-      'no integration test signals found — add tests that exercise real databases, HTTP calls, or message queues',
+      'no integration-test signals found (no integration/e2e/system/functional-named test directory or file name, no real-I/O content pattern in test files or conftest.py, no docker-compose in tests/ or test/)',
     ]);
   }
 
@@ -389,7 +395,7 @@ export function detectE2ETests(
 
   if (signals.length === 0) {
     return makeResult('FAIL', 0, [
-      'no end-to-end test signals found — add E2E tests with Playwright, Cypress, or similar',
+      'no E2E test signals found (no Playwright/Cypress/etc. config file, no e2e/acceptance/ui-named test directory, no E2E framework reference in test files)',
     ]);
   }
 
@@ -474,7 +480,10 @@ export function detectTestPyramid(
     return makeResult(
       'PASS',
       unitCount,
-      [`test pyramid shape is healthy`, ...evidence],
+      [
+        `unit (${unitCount}) exceeds integration (${integrationCount}); e2e (${e2eCount}) does not exceed integration`,
+        ...evidence,
+      ],
       'computed'
     );
   }
@@ -484,21 +493,21 @@ export function detectTestPyramid(
       'WARN',
       integrationCount,
       [
-        `test pyramid may be inverted — integration (${integrationCount}) meets or exceeds unit (${unitCount})`,
+        `integration (${integrationCount}) meets or exceeds unit (${unitCount})`,
         ...evidence,
       ],
       'computed'
     );
   }
 
-  // Unit is still the largest tier, but e2e exceeds integration — top-heavy
+  // unit exceeds integration, but e2e exceeds integration too — top-heavy
   // (missing-middle) shape rather than a true inversion.
   if (unitDominates && !e2eSmallest) {
     return makeResult(
       'WARN',
       unitCount,
       [
-        `test pyramid top-heavy — e2e (${e2eCount}) exceeds integration (${integrationCount})`,
+        `e2e (${e2eCount}) exceeds integration (${integrationCount}); unit (${unitCount}) exceeds integration`,
         ...evidence,
       ],
       'computed'
@@ -508,10 +517,7 @@ export function detectTestPyramid(
   return makeResult(
     'FAIL',
     0,
-    [
-      `test pyramid is inverted — unit (${unitCount}) is not the largest tier`,
-      ...evidence,
-    ],
+    [`unit (${unitCount}) is not the largest tier`, ...evidence],
     'computed'
   );
 }
@@ -602,7 +608,7 @@ export function detectCoverageConfig(
   }
 
   return makeResult('FAIL', 0, [
-    'no test coverage configuration found — add jest/vitest coverage, .coveragerc, or codecov',
+    'no coverage configuration file or content pattern found (checked known config files and coverage keywords in build/test config files)',
   ]);
 }
 
@@ -687,7 +693,7 @@ export function detectTestDataManagement(
   }
 
   return makeResult('FAIL', 0, [
-    'no structured test data management found — add fixtures/ directory, factory patterns, or conftest.py',
+    'no fixture/testdata directory, factory/faker pattern, or conftest.py/test-helpers file found',
   ]);
 }
 
@@ -735,7 +741,7 @@ export function detectMockingIsolation(
   }
 
   return makeResult('FAIL', 0, [
-    'no mocking/stubbing patterns found in test files — tests may have real I/O dependencies',
+    'no mock import or usage pattern found in test files',
   ]);
 }
 
@@ -811,7 +817,7 @@ export function detectContractTests(
   }
 
   return makeResult('FAIL', 0, [
-    'no consumer-driven contract test signals found — add Pact or Spring Cloud Contract for multi-service verification',
+    'no Pact/contract config file, contracts directory, or Pact content pattern found in test files',
   ]);
 }
 
@@ -903,7 +909,7 @@ export function detectMlIterationTests(
   }
 
   return makeResult('FAIL', 0, [
-    'ML framework detected but no quality metric testing found — add evidently, deepchecks, or assert metric thresholds',
+    'ML framework reference found in source but no ML-quality-metric test pattern or ML-named test file found',
   ]);
 }
 

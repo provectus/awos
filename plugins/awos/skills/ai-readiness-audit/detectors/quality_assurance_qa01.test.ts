@@ -168,3 +168,60 @@ test('QA-01: detector uses threshold from params — custom threshold=0.4 makes 
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// issue #156 residual — measured value vs. threshold must never render as
+// the same number. 25 test files / 42 source modules = ratio 0.595238…,
+// which rounds to 60% at integer precision — the same as the default 0.60
+// pass threshold's 60% — but rounds to 59.5% at one decimal. Picked
+// specifically so a regression to integer-rounded display collides with the
+// threshold while the one-decimal display does not.
+// ---------------------------------------------------------------------------
+
+test('QA-01 (issue #156): measured value renders at one decimal, never colliding with the threshold it is compared against', () => {
+  const repo = tmpDir('awos-qa01-collision-');
+  try {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 42; i++) {
+      files[`app/mod${i}.py`] = `x = ${i}\n`;
+    }
+    for (let i = 0; i < 25; i++) {
+      files[`app/test_mod${i}.py`] = `def test_mod${i}(): pass\n`;
+    }
+    writeRepo(repo, files);
+
+    const res = detect(repo);
+    assert.equal(
+      res.status,
+      'WARN',
+      `25/42 ratio (59.5%) must be WARN under the default 60% pass threshold; got ${res.status}`
+    );
+
+    const headline = res.evidence[0];
+    assert.ok(
+      headline.includes('59.5%'),
+      `headline must render the measured ratio at one decimal (59.5%), not the integer-rounded 60%; got "${headline}"`
+    );
+
+    // The ratio line (evidence[1]: "N test file(s) found for M source
+    // module(s) (Z% ratio)") reports the same measured ratio as the
+    // headline and must render the identical number — this is the :121
+    // bug, where the ratio line lagged behind the headline's fix.
+    const ratioLine = res.evidence[1];
+    assert.ok(
+      ratioLine.includes('59.5%'),
+      `ratio line must agree with the headline's 59.5%, not diverge to the integer-rounded 60%; got "${ratioLine}"`
+    );
+
+    // The measured value and the threshold it is compared against must
+    // never render as the same number — that is an unverifiable sentence.
+    const joined = res.evidence.join(' | ');
+    assert.doesNotMatch(
+      joined,
+      /(\d+)% — below the \1%/,
+      'the measured value and the threshold it is compared against must never render as the same number'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});

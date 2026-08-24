@@ -8,6 +8,7 @@ import {
   detectEnvExample,
   detectSensitiveFilesGitignored,
   DETECTORS,
+  ENV_GITIGNORE_PATTERNS,
 } from '../detectors/security.ts';
 import { tmpDir } from './helpers.ts';
 
@@ -18,6 +19,37 @@ function tmp(): string {
 // ---------------------------------------------------------------------------
 // detectEnvGitignored (2600 — AS-12)
 // ---------------------------------------------------------------------------
+
+// The evidence sentence names ENV_GITIGNORE_PATTERNS, but the detector
+// decides with ENV_GITIGNORE_RX. Nothing but this test keeps the two aligned:
+// before the list became the source of the wording, `.env*.local` was accepted
+// by the regex and missing from the sentence. Each entry is exercised as the
+// literal .gitignore line a reader would write.
+test('AS-12: every pattern the evidence advertises is one the detector accepts', () => {
+  for (const pattern of ENV_GITIGNORE_PATTERNS) {
+    const t = tmp();
+    writeFileSync(join(t, '.gitignore'), `${pattern}\n`);
+    const r = detectEnvGitignored(t);
+    assert.equal(
+      r.status,
+      'PASS',
+      `.gitignore line "${pattern}" is advertised in the AS-12 evidence but the detector does not accept it`
+    );
+  }
+});
+
+test('AS-12: a near-miss the evidence does not advertise stays FAIL', () => {
+  // Guards the other direction — the assertion above passes trivially if the
+  // regex matched everything.
+  const t = tmp();
+  writeFileSync(join(t, '.gitignore'), '.envrc\n');
+  const r = detectEnvGitignored(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    '.envrc is not an .env-coverage pattern and must not satisfy AS-12'
+  );
+});
 
 test('AS-12: .gitignore with .env entry is PASS', () => {
   const t = tmp();

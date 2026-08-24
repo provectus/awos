@@ -32,25 +32,25 @@ export function detectAwosInstalled(
 
   if (hasAwos && hasContext) {
     return makeResult('PASS', 2, [
-      '.awos/ directory present — AWOS framework installed',
-      'context/product or context/spec present — spec workspace initialised',
+      '.awos/ directory found',
+      'context/product or context/spec directory found',
     ]);
   }
 
   if (hasAwos) {
     return makeResult('WARN', 1, [
-      '.awos/ directory present but context/product and context/spec are missing — AWOS installed but workspace not initialised',
+      '.awos/ directory found; context/product and context/spec directories not found',
     ]);
   }
 
   if (hasContext) {
     return makeResult('WARN', 1, [
-      'context/ workspace present but .awos/ is missing — workspace exists but AWOS framework not installed',
+      'context/product or context/spec directory found; .awos/ directory not found',
     ]);
   }
 
   return makeResult('FAIL', 0, [
-    'neither .awos/ nor a context/ spec workspace found — AWOS framework is not installed',
+    'neither .awos/ nor context/product nor context/spec directory found',
   ]);
 }
 

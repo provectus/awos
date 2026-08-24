@@ -25,6 +25,12 @@ The command operates in two modes:
 - **Single output.** The full product definition file is created or updated in place.
 - **Idempotent.** You can re-run this command at any time to refine your product definition as your understanding evolves.
 
+## Brownfield mode
+
+On an existing codebase, Creation Mode can draft the product definition from your source instead of a blank interview: it detects existing code (honoring explicit "explore" / "start from scratch" intent, otherwise scanning for source indicators and confirming with you), explores it with an `Explore` agent, and triages each finding with you (Accept / Reject) after the definition is saved. It can also import **external documentation** — wikis, tickets, chats — via the `awos:configure-external-sources` skill.
+
+See the [Brownfield Adoption Guide](../brownfield-adoption.md) for the full path — detection, external sources, and how `brownfield.md` flows through `/awos:roadmap` and `/awos:architecture`.
+
 ## Common misconceptions
 
 - **"I should describe the tech stack here."** No. Product definition is strictly non-technical. Technology decisions belong in `/awos:architecture`.

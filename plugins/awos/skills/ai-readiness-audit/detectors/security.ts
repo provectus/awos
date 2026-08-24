@@ -21,6 +21,25 @@ import { ALL_HOOK_PATHS } from '../agent_tools.ts';
 const ENV_GITIGNORE_RX =
   /^\s*(\.env(\.\*|\*(\.local)?)?|\*\.env|\*\*\/\.env|\/\.env)\s*(?:#.*)?$/m;
 
+// The patterns ENV_GITIGNORE_RX accepts, as the literal `.gitignore` lines a
+// reader would write. This list is the source of the evidence wording, and
+// det-security.test.ts asserts every entry is matched by the regex. A prose
+// twin retyped next to the regex is what let `.env*.local` stay unlisted
+// while the regex already accepted it — keeping the two in one place is what
+// stops the sentence lying about what was checked.
+export const ENV_GITIGNORE_PATTERNS = [
+  '.env',
+  '.env.*',
+  '.env*',
+  '.env*.local',
+  '*.env',
+  '**/.env',
+  '/.env',
+] as const;
+
+/** `a, b, or c` — the pattern list as it reads inside an evidence sentence. */
+const ENV_GITIGNORE_PATTERNS_LABEL = `${ENV_GITIGNORE_PATTERNS.slice(0, -1).join(', ')}, or ${ENV_GITIGNORE_PATTERNS.at(-1)}`;
+
 export function detectEnvGitignored(
   repoPath: string,
   _params?: unknown
@@ -28,7 +47,7 @@ export function detectEnvGitignored(
   const gitignorePath = join(repoPath, '.gitignore');
   if (!existsSync(gitignorePath)) {
     return makeResult('FAIL', 0, [
-      'no .gitignore file found — .env files are not excluded from version control',
+      'no .gitignore file found at repository root',
     ]);
   }
 
@@ -39,12 +58,12 @@ export function detectEnvGitignored(
 
   if (ENV_GITIGNORE_RX.test(content)) {
     return makeResult('PASS', 1, [
-      '.gitignore covers .env files — environment secrets excluded from version control',
+      `.gitignore has a line matching ${ENV_GITIGNORE_PATTERNS_LABEL}`,
     ]);
   }
 
   return makeResult('FAIL', 0, [
-    '.gitignore exists but does not cover .env files — add .env or .env.* to .gitignore',
+    `.gitignore exists but no line matches ${ENV_GITIGNORE_PATTERNS_LABEL}`,
   ]);
 }
 
@@ -89,7 +108,7 @@ export function detectAgentSafetyHooks(
     } catch {
       if (/"hooks"\s*:/.test(content)) {
         return makeResult('PASS', 1, [
-          `hooks key found in ${relative(repoPath, sp)} — agent reads guarded by pre-tool hooks`,
+          `"hooks" key pattern found in ${relative(repoPath, sp)} (file could not be parsed as JSON)`,
         ]);
       }
       continue;
@@ -100,7 +119,7 @@ export function detectAgentSafetyHooks(
       'hooks' in (parsed as Record<string, unknown>)
     ) {
       return makeResult('PASS', 1, [
-        `hooks configured in ${relative(repoPath, sp)} — agent file-read actions can be controlled`,
+        `"hooks" key configured in ${relative(repoPath, sp)}`,
       ]);
     }
   }
@@ -122,14 +141,14 @@ export function detectAgentSafetyHooks(
     if (hookFiles.length > 0) {
       // Hooks exist but none clearly guard sensitive files — still better than nothing
       return makeResult('WARN', hookFiles.length, [
-        `${hookFiles.length} hook file(s) found in ${relHooksDir} but none explicitly reference .env/secret patterns`,
+        `${hookFiles.length} hook file(s) found in ${relHooksDir}, none matching .env/secret/credential/.pem/.key patterns`,
         ...hookFiles.slice(0, 5).map((f) => `hook: ${relative(repoPath, f)}`),
       ]);
     }
   }
 
   return makeResult('FAIL', 0, [
-    'no agentic coding tool hooks configured — agents are not blocked from reading sensitive files',
+    'no "hooks" key found in .claude/settings.json or .claude/settings.local.json, and no hook script files found in any configured agentic tool hooks directory',
   ]);
 }
 
@@ -170,7 +189,7 @@ export function detectEnvExample(
   }
 
   return makeResult('FAIL', 0, [
-    'no .env.example or .env.template file found — developers have no reference for required environment variables',
+    `no ${ENV_EXAMPLE_GLOBS.join(', ')} file found`,
   ]);
 }
 
@@ -317,11 +336,11 @@ export function detectSensitiveFilesGitignored(
 
     if (!inGit) {
       failEvidence.push(
-        `${pattern.name} not excluded by .gitignore — add it to prevent accidental commits`
+        `${pattern.name} present in repo but not excluded by .gitignore`
       );
     } else if (hasDockerfile && !inDocker) {
       warnEvidence.push(
-        `${pattern.name} ignored by .gitignore but not .dockerignore — COPY . in Dockerfile would leak it into the image`
+        `${pattern.name} covered by .gitignore but not .dockerignore, and a Dockerfile is present at repo root`
       );
     } else {
       const coveredBy = [
@@ -344,14 +363,14 @@ export function detectSensitiveFilesGitignored(
 
   if (warnEvidence.length > 0) {
     return makeResult('WARN', relevantTypes.length - warnEvidence.length, [
-      `${warnEvidence.length} sensitive file type(s) exposed to Docker builds — add to .dockerignore`,
+      `${warnEvidence.length} sensitive file type(s) covered by .gitignore but not .dockerignore, with a Dockerfile present at repo root`,
       ...warnEvidence,
       ...passEvidence,
     ]);
   }
 
   return makeResult('PASS', relevantTypes.length, [
-    `all ${relevantTypes.length} relevant sensitive file type(s) properly excluded`,
+    `all ${relevantTypes.length} relevant sensitive file type(s) covered by .gitignore`,
     ...passEvidence,
   ]);
 }

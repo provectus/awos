@@ -965,3 +965,55 @@ test('summary.artifact_warnings flags a thin code_host fetch (no first_commit_at
     'the warning must say which metrics silently degrade'
   );
 });
+
+test('summary.artifact_warnings flags an incidents batch where every record is still open', async () => {
+  // A whole-batch resolved_at mapping miss fails a step earlier than
+  // invalidity is measured — no resolved_at means still-open, not invalid — so
+  // count 3 / resolved 0 / invalid 0 used to read as "no incident with a
+  // resolved recovery span": coherent, alarming, and false. Same guard shape
+  // as the code_host thin-fetch warning above.
+  const outDir = tmpDir('audit-core-inc-open-out-');
+  const collectedDir = tmpDir('audit-core-inc-open-collected-');
+  writeFileSync(
+    join(collectedDir, 'incidents.json'),
+    JSON.stringify({
+      source: 'incidents',
+      available: true,
+      reason_if_absent: null,
+      period: { lookback_days: 90 },
+      raw: {
+        incidents: [
+          { id: 'INC-1', started_at: '2026-07-01T00:00:00Z' },
+          { id: 'INC-2', started_at: '2026-07-02T00:00:00Z' },
+          { id: 'INC-3', started_at: '2026-07-03T00:00:00Z' },
+        ],
+        source_label: 'PagerDuty',
+      },
+    })
+  );
+  const summary = await auditCore(
+    SKILL_ROOT,
+    outDir,
+    {},
+    {},
+    STANDARDS_PATH,
+    collectedDir
+  );
+  const warning = summary.artifact_warnings.find((w) =>
+    w.startsWith('incidents.json:')
+  );
+  assert.ok(
+    warning,
+    'an all-still-open incidents batch must produce an artifact warning'
+  );
+  assert.match(
+    warning!,
+    /all 3 in-window incident\(s\) are still open/,
+    'the warning must count the in-window incidents it found open'
+  );
+  assert.match(
+    warning!,
+    /resolved_at is \s*probably mapped from the wrong field|resolved_at is probably mapped from the wrong field/,
+    'the warning must name the likely field-mapping cause'
+  );
+});

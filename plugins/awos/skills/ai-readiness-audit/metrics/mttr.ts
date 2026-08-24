@@ -133,11 +133,17 @@ export function compute(
     }
     // Incidents artifact present but nothing measurable — surface WHY on the
     // git-proxy fallback below rather than silently reading "no incident data".
+    // Reaching here means resolved_count is 0, so every in-window incident is
+    // either still open or resolved-but-unmeasurable. Distinguish the two: a
+    // whole-batch resolved_at mapping miss fails a step EARLIER than invalidity
+    // is measured (no resolved_at → still-open, not invalid), so it used to
+    // read as "no incident with a resolved recovery span" — coherent, alarming,
+    // and false, since it asserts every incident is open.
     if (agg.count > 0) {
       incidentsNoSpanNote =
         agg.invalid_count > 0
           ? `incident source connected — ${agg.count} incident${agg.count === 1 ? '' : 's'} but none had a parseable recovery span (${agg.invalid_count} unparseable)`
-          : `incident source connected — no incident with a resolved recovery span in the window`;
+          : `incident source connected — all ${agg.count} in-window incident${agg.count === 1 ? ' is' : 's are'} still open (no resolved recovery span); if unexpected, resolved_at is likely mapped from the wrong field`;
     }
   }
 

@@ -102,8 +102,8 @@ test('mttr: incidents present but none measurable → git proxy note says why', 
   assert.deepEqual(res.sources_used, ['git'], 'falls back to the git proxy');
   assert.match(
     res.reliability.note ?? '',
-    /resolved recovery span/,
-    'the reliability note explains the incident source had no measurable span'
+    /still open \(no resolved recovery span\); if unexpected, resolved_at is likely mapped from the wrong field/,
+    'a batch where every incident is still open must name the likely resolved_at mapping miss, not just assert the incidents are open'
   );
 });
 

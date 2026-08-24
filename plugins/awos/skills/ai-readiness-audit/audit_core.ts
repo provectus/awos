@@ -72,6 +72,7 @@ import {
   collect as collectIncidents,
   deriveIncidentAggregates,
   hasMeasurableIncidents,
+  type IncidentRecord,
 } from './collectors/incidents.ts';
 
 /**
@@ -637,6 +638,30 @@ export async function auditCore(
         `code_host.json: none of the ${parsed.prs.length} pr record(s) carry first_commit_at/commit_count — ` +
           `DF-02/DF-05 fall back to the git proxy; run the per-PR commit pass ` +
           `(references/connector-shapes.md) or record why not in fetch_meta.note, then re-run enrich`
+      );
+    }
+  }
+  // Same shape again for incidents: a whole-batch resolved_at mapping miss
+  // fails a step EARLIER than invalidity is measured — a record with no
+  // resolved_at is classified still-open, not invalid — so it reads as
+  // "no incident with a resolved recovery span": coherent, alarming, and false,
+  // since it asserts every incident is open. The recipe deliberately tells the
+  // orchestrator to map semantically, so a source returning resolvedAt /
+  // closed_at / resolution.timestamp is exactly how this happens.
+  const incArtWarn = collected.get('incidents')?.art;
+  if (incArtWarn?.available === true) {
+    const incAgg = deriveIncidentAggregates(
+      (incArtWarn.raw as { incidents?: IncidentRecord[] } | undefined)
+        ?.incidents,
+      lookbackDays(standards)
+    );
+    const openCount =
+      incAgg.count - incAgg.resolved_count - incAgg.invalid_count;
+    if (incAgg.count > 0 && openCount === incAgg.count) {
+      artifactWarnings.push(
+        `incidents.json: all ${incAgg.count} in-window incident(s) are still open (none carries a resolved_at) — ` +
+          `MTTR has nothing to measure and category 1103 stays SKIP; if that is unexpected, resolved_at is ` +
+          `probably mapped from the wrong field (references/connector-shapes.md), then re-run enrich`
       );
     }
   }

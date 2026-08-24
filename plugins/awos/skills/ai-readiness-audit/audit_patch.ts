@@ -512,11 +512,14 @@ export function reportContext(outDir: string): Record<string, unknown> {
     // no tracker declaration would hand over null while MTTR scores maximal,
     // and a tracker merely naming "opsgenie" with no incident data would hand
     // over "opsgenie" while 1103 stays SKIP. The label the report actually
-    // shows is the incidents artifact's own source_label.
+    // shows is the incidents artifact's own source_label — raw first for
+    // back-compat, then period.source_label (the one canonical write site).
     incident_source_label:
       ((incidents?.raw as Record<string, unknown> | undefined)?.source_label as
         | string
         | null) ??
+      ((incidents?.period as Record<string, unknown> | undefined)
+        ?.source_label as string | null | undefined) ??
       (tracker?.raw as Record<string, unknown> | undefined)?.incident_source ??
       null,
     sources: audit.sources ?? [],

@@ -522,7 +522,7 @@ Feeds MTTR (DF-07). Source-agnostic: normalise incidents from whatever the proje
 
 ### Writing `collected/incidents.json`
 
-Wrap the incidents in the standard collector envelope and write it to `collected/incidents.json`. You author only `incidents[]` and `source_label`:
+Wrap the incidents in the standard collector envelope and write it to `collected/incidents.json`. You author only `incidents[]` and `period.source_label`:
 
 ```jsonc
 {
@@ -533,18 +533,17 @@ Wrap the incidents in the standard collector envelope and write it to `collected
     "bucket_days": 30,
     "lookback_days": 90,
     "history_available_days": 90,
-    "source_label": "PagerDuty", // names the source in Connections & Sources
+    "source_label": "PagerDuty", // names the source everywhere, e.g. "GitHub incident labels"
   },
   "raw": {
     "incidents": [
       /* IncidentRecord[] */
     ],
-    "source_label": "PagerDuty", // human label for the MTTR note, e.g. "GitHub incident labels"
   },
 }
 ```
 
-Set `source_label` in **both** places, as the tracker, docs, code-host and CI recipes do. `period.source_label` is what the Connections & Sources column reads; `raw.source_label` is what the MTTR reliability note quotes. Set only the latter and the report says "incident source" in one section and "PagerDuty" in the other.
+`period.source_label` is the one write site, like every sibling connector recipe: the Connections & Sources column, the MTTR reliability note, and the headline delivery row all read it (a `raw.source_label`, if present from an older artifact, still takes precedence — you do not need to write it).
 
 **The engine derives the median — you do not.** Like the tracker collector (whose metrics derive their counts from `raw.tickets[]`), the MTTR metric computes the recovery aggregates itself from `raw.incidents[]`. Do not hand-write the fields below — the engine ignores any it finds and recomputes them, so a transcription slip cannot become a "measured" DORA number:
 

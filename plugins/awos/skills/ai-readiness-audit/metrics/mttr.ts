@@ -59,7 +59,7 @@ import { median, scoreFromConfig, scoringFor } from './_score.ts';
 import { deriveIncidentAggregates } from '../collectors/incidents.ts';
 
 /** Map median hours to a DORA MTTR band label. */
-function mttrBand(medianHours: number): string {
+export function mttrBand(medianHours: number): string {
   if (medianHours < 1) return 'elite';
   if (medianHours < 24) return 'high';
   if (medianHours < 168) return 'medium';

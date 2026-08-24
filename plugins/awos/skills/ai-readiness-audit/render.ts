@@ -1292,8 +1292,9 @@ const NO_TICKETS_NOTE = '— (no tickets data)';
 /**
  * Delivery rows with the connector-gated ones (Cycle time, MTTR) replaced by
  * the ENGINE-derived versions when `audit.derived_delivery` is present. The
- * value and the honest gated note both come from the tracker artifact, so the
- * headline row can never contradict the Connections & Sources section.
+ * value and the honest gated note come from the SAME artifact the metric reads
+ * — Cycle time from the tracker artifact, MTTR from the incidents artifact —
+ * so a headline row can never contradict the Connections & Sources section.
  * Authored gated rows are dropped (the orchestrator no longer authors them);
  * audits without `derived_delivery` (older runs) render as authored.
  */
@@ -1314,6 +1315,8 @@ function normalizedDelivery(audit: AuditJson): DeliveryMetric[] {
     label: 'MTTR',
     gated: 'incident',
     ...(dd.mttr.display_value ? { display_value: dd.mttr.display_value } : {}),
+    ...(dd.mttr.band ? { band: dd.mttr.band } : {}),
+    ...(dd.mttr.check_id ? { check_id: dd.mttr.check_id } : {}),
     ...(dd.mttr.note ? { note: dd.mttr.note } : {}),
   });
   return rows;

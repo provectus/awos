@@ -128,6 +128,16 @@ test('computeDerivedDelivery: a real incidents artifact fills the MTTR headline 
     );
     assert.equal(dd.mttr.incidents_used, 2);
     assert.equal(
+      dd.mttr.band,
+      'high',
+      'the measured MTTR carries its DORA band like every sibling delivery row'
+    );
+    assert.equal(
+      dd.mttr.check_id,
+      'DF-07',
+      'the measured MTTR carries its check_id so the rendered row resolves a definition tooltip'
+    );
+    assert.equal(
       dd.mttr.note,
       undefined,
       'a measured value carries no gated note'
@@ -251,4 +261,78 @@ test('patchReportBlocks: accepts the source_probes block', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('computeDerivedDelivery: an unusable part of the sample shows in the MTTR value', () => {
+  const dir = tmpDir('awos-dd-mttr-partial-');
+  try {
+    // Both renderers print `note` only when the VALUE is absent, so a median
+    // over a partly-unusable sample would otherwise print a bare "1 h" with
+    // the "(of N resolved; M lacked a parseable span)" caveat unreachable.
+    const collected = writeIncidents(dir, {
+      source: 'incidents',
+      available: true,
+      period: { lookback_days: 90 },
+      raw: {
+        incidents: [
+          { id: 'A', started_at: iso(t0), resolved_at: iso(t0 + 3_600_000) },
+          // Reversed span — resolved, but not measurable.
+          { id: 'B', started_at: iso(t0 + DAY), resolved_at: iso(t0) },
+          // Zero-length span — an auto-resolved flap.
+          { id: 'C', started_at: iso(t0 + DAY), resolved_at: iso(t0 + DAY) },
+        ],
+        source_label: 'PagerDuty',
+      },
+    });
+    const dd = computeDerivedDelivery(collected);
+    assert.equal(
+      dd.mttr.display_value,
+      '1 h (1 of 3)',
+      'the headline value must carry the sample size when part of the sample was unusable'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('renderMarkdown: the measured MTTR row renders with its band', () => {
+  // The only derived_delivery fixture in the tree had `mttr: {}`, so deleting
+  // the display_value spread left every suite green. This pins the row end to
+  // end — value AND band, the cell that was blank in a "vs DORA bands" block.
+  const audit: AuditJson = {
+    date: '2026-07-03',
+    project: 'x',
+    audit_total: 0,
+    coverage: 0,
+    dimensions: [],
+    headline: {
+      delivery: [{ label: 'Merges', display_value: '1.5 / week' }],
+    },
+    derived_delivery: {
+      cycle_time: {},
+      mttr: {
+        display_value: '2 h',
+        median_hours: 2,
+        incidents_used: 2,
+        band: 'high',
+        check_id: 'DF-07',
+      },
+    },
+    engine: { generated_by: 'audit-core' },
+  };
+  const md = renderMarkdown(audit);
+  const row = md
+    .split('\n')
+    .find((l) => l.includes('| MTTR') || l.startsWith('| MTTR'));
+  assert.ok(row, 'the delivery table must carry an MTTR row');
+  assert.match(
+    row!,
+    /2 h/,
+    'the measured MTTR value must reach the rendered row'
+  );
+  assert.match(
+    row!,
+    /high/,
+    'the measured MTTR row must carry its DORA band, like every sibling row'
+  );
 });

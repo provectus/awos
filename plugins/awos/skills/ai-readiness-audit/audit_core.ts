@@ -32,6 +32,7 @@ import {
   strandedPayloadCount,
 } from './metrics/_base.ts';
 import { median, round1 } from './metrics/_score.ts';
+import { mttrBand } from './metrics/mttr.ts';
 import type {
   CheckStatus,
   DerivedDelivery,
@@ -74,12 +75,16 @@ import {
 } from './collectors/incidents.ts';
 
 /**
- * Compute the connector-gated headline rows (Cycle time, MTTR) from the
- * tracker artifact — deterministically, in the engine. A model-authored row
- * once said "needs ticketing connector" while "Connected: Jira via Atlassian
- * MCP" sat two sections up (barley 2026-07-02, 994 tickets fetched, zero
- * changelogs); deriving both the value and the honest gated note from the
- * SAME artifact makes that contradiction impossible.
+ * Compute the connector-gated headline rows deterministically, in the engine:
+ * Cycle time from the tracker artifact, MTTR from the incidents artifact. The
+ * two read different artifacts and are computed independently, so MTTR fills
+ * even with no tracker connected — a tracker that merely names an incident
+ * system is not incident data and plays no part.
+ *
+ * A model-authored row once said "needs ticketing connector" while "Connected:
+ * Jira via Atlassian MCP" sat two sections up (barley 2026-07-02, 994 tickets
+ * fetched, zero changelogs); deriving both the value and the honest gated note
+ * from the SAME artifact the metric reads makes that contradiction impossible.
  */
 export function computeDerivedDelivery(
   collectedDir: string,
@@ -126,7 +131,19 @@ export function computeDerivedDelivery(
       if (agg.resolved_count > 0 && agg.median_duration_hours !== null) {
         out.mttr.median_hours = round1(agg.median_duration_hours);
         out.mttr.incidents_used = agg.resolved_count;
-        out.mttr.display_value = `${out.mttr.median_hours} h`;
+        // Band and check_id so the row reads like every sibling DORA row —
+        // the engine computed the band already, and dropping it left the one
+        // measured row blank in a block headed "vs DORA bands".
+        out.mttr.band = mttrBand(agg.median_duration_hours);
+        out.mttr.check_id = 'DF-07';
+        // Fold the sample size in when part of the sample was unusable: both
+        // renderers print `note` only when the VALUE is absent, so a median
+        // over 3 of 60 resolved incidents would otherwise print a bare "0.5 h".
+        const resolvedSeen = agg.resolved_count + agg.invalid_count;
+        out.mttr.display_value =
+          agg.invalid_count > 0
+            ? `${out.mttr.median_hours} h (${agg.resolved_count} of ${resolvedSeen})`
+            : `${out.mttr.median_hours} h`;
       } else if (agg.count > 0) {
         out.mttr.note = `${incLabel} connected — no incident with a resolved recovery span`;
       } else {

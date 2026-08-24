@@ -246,10 +246,14 @@ export interface DerivedDelivery {
     note?: string;
   };
   mttr: {
-    /** Median recovery time, e.g. "2 h". Absent when not measurable. */
+    /** Median recovery time with its sample size, e.g. "2 h (3 of 60)". Absent when not measurable. */
     display_value?: string;
     median_hours?: number;
     incidents_used?: number;
+    /** DORA band for median_hours — every sibling delivery row carries one. */
+    band?: string;
+    /** DF-07, so the rendered row resolves a definition tooltip like its siblings. */
+    check_id?: string;
     /** Honest state when the row stays empty (e.g. "PagerDuty connected — no incident with a resolved recovery span"). */
     note?: string;
   };

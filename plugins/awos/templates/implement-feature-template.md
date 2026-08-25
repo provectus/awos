@@ -12,12 +12,11 @@ outside brackets survives into the generated command as-is.
 
 This entire comment is instructions to the generator: do NOT copy it, or any
 adaptation of it, into the generated file. The generated command starts at the
-frontmatter and carries no top-of-file comment — provenance lives in the
-footer marker, and the intro's "change this command by re-running" paragraph
-is fixed prose: keep it, never restate it as a comment block. The generated
-command must
-also be self-contained: never reference the sibling command ("same as
-/fix-bug") — the commands know nothing about each other at run time.
+frontmatter, carries no top-of-file comment (provenance lives in the footer
+marker; the intro's "change this command by re-running" paragraph is fixed
+prose — keep it, never restate it as a comment block), and is self-contained —
+it never references the sibling command, which it knows nothing about at run
+time.
 
 The stage markers are HTML comments: never nest one inside another — an inner
 arrow-close ends the outer comment early and breaks the rest of the file.
@@ -25,13 +24,13 @@ arrow-close ends the outer comment early and breaks the rest of the file.
 
 # Implement a Feature End-to-End
 
-Takes one feature — its requirements from [source per §1 of delivery-flow.md], wherever they come from — and drives it through spec, implementation, verification, review, and delivery until it is Done.
+Takes one feature — its requirements from [source per §1 of delivery-flow.md] — and drives it through spec, implementation, verification, review, and delivery until it is Done.
 
 Change this command by re-running `/awos:flow`. It is generated from `context/product/delivery-flow.md`, which is the source of truth for every decision below, and a regeneration rewrites this file from that record — so an edit made here lasts only once it is recorded, either in the record's **Local Customizations** section or as a decision of its own.
 
 ## Notifications
 
-[Per §9 of delivery-flow.md: on each recorded transition (e.g. spec ready, change request opened, gates passed, merged, deployed, blocked-and-waiting), post a short status to the team channel via its §7 transport — so the team stays aware as the flow runs unattended. Omit this section entirely if §9 records "none".]
+[Per §9 of delivery-flow.md: on each recorded transition (e.g. spec ready, change request opened, gates passed, merged, deployed, blocked-and-waiting), post a short status to the team channel via its §7 transport. Omit this section entirely if §9 records "none".]
 
 ## Arguments
 
@@ -42,21 +41,23 @@ Change this command by re-running `/awos:flow`. It is generated from `context/pr
 A flow this long degrades in one context window — judgment is worst exactly where it matters most, at review time. Per §8 of delivery-flow.md:
 
 - Run every isolatable stage in a subagent (a subagent can invoke `/awos:*` commands via the Skill tool; its context is discarded on completion). Subagent reports must be terse — paths, verdicts, counts — never full document or review content.
-- After each completed stage, append an entry to `context/spec/{SPEC_NAME}/flow-log.md`: the stage name, what was produced and where (paths, branch, commit), any decisions taken along the way, and which stage comes next. `SPEC_NAME` exists once the specs stage creates the spec directory — the stages before it (fetch, resume-detection, workspace) are cheap and re-runnable, so they log nothing; logging starts with the specs stage, and the log's first entry records the ticket ID/title so resume can match a log to its feature. That stage is entered on every run for this reason alone, even when it skips all three commands: it is the first stage with a log path, and the fetch stage's findings have nowhere else to land. The log is the flow's memory outside the context window — a fresh session (after a restart, a crash, or an unattended hand-off between sessions) resumes by reading this one small file instead of re-deriving state from the whole repo. That is what keeps the window small across a long flow: nothing needs to stay in context once it is in the log. The log is committed with the work (Step 9 stages it alongside the code), so it must never become an uncommittable leftover: **once the change request is opened — or the change is merged — stop writing to the tracked log**, since a commit adding log lines is unwelcome on a change request under review and impossible once it merges, so a late append would strand a change that can never reach it. From that point report late-stage progress to the user and via §9 notifications, and resume the remote stages from remote state (the open/merged change request and the ticket status), which the resume-detection stage already inspects. The close stage leaves a clean working tree and never writes a final entry it cannot commit.
+- After each completed stage, append an entry to `context/spec/{SPEC_NAME}/flow-log.md`: the stage name, what was produced and where (paths, branch, commit), any decisions taken along the way, and which stage comes next. The log is the flow's memory outside the context window — a fresh session, after a restart or an unattended hand-off, resumes from this one small file instead of re-deriving state from the whole repo, which is what keeps the window small across a long flow.
+- `SPEC_NAME` exists once the specs stage creates the spec directory — the stages before it (fetch, resume-detection, workspace) are cheap and re-runnable, so they log nothing; logging starts with the specs stage, and that stage is entered on every run even when it skips all three commands, because it is the first stage with a log path and the fetch stage's findings have nowhere else to land. The log's first entry records the ticket ID/title so resume can match a log to its feature.
+- The log ships with the work — Step 9 stages it alongside the code — so **once the change request is opened — or the change is merged — stop writing to the tracked log**: a late append strands lines that can never reach it. From that point report progress to the user and via §9 notifications, and resume the remote stages from remote state (the open/merged change request and the ticket status), which the resume-detection stage already inspects.
 - Never launch a nested headless session (`claude -p`) from this command — permission modes, PATH, and timeouts differ per machine. Unattended chaining belongs to the trigger setup (§6), outside this command.
 - Tell every dispatched subagent: tools are functional — do not test them or make exploratory calls; every call needs a purpose. Run each delegated stage on the model tier recorded in §8 — the fast tier for mechanical transport work, the strongest for judgment.
 - A subagent's report is a claim, not a fact. Before acting on a report that names files and lines, asserts a root cause, or reports a test outcome, spot-check it — read the named lines, run the named test — rather than relaying it verbatim into the next stage.
-- Every fixed-choice interaction with the user — a per-run choice the decisions left open (e.g. main repo vs. worktree), an approval gate verdict, keep/drop on review findings, the merge confirmation — goes through `AskUserQuestion` with the recorded default marked, never a prose question. Plain prose is only for inherently free-form input (a feature description, a file path).
-- An unanswered `AskUserQuestion` (the harness returns `No response after 60s` — its guard so unattended runs never hang) is handled by run mode. Read the `AWOS_UNATTENDED` environment variable: when it is set (the §6 trigger setup exports it for cron/`/loop`/`claude -p` drivers), a no-answer is expected — take the safe default and continue. When it is unset the run is interactive, and a timeout usually means the user is thinking or briefly away, not that they have no preference — re-ask the question once, then proceed naming the default you took so they can correct it. A timeout never authorizes an irreversible step: the merge confirmation treats an unanswered prompt as a no in either mode.
+- Every fixed-choice interaction with the user — a per-run choice the decisions left open, an approval gate verdict, keep/drop on review findings, the merge confirmation — goes through `AskUserQuestion` with the recorded default marked. Plain prose is only for inherently free-form input (a feature description, a file path).
+- An unanswered `AskUserQuestion` (the harness returns `No response after 60s`) is handled by run mode. When `AWOS_UNATTENDED` is set — the §6 trigger setup exports it for cron/`/loop`/`claude -p` drivers — a no-answer is expected: take the safe default and continue. When it is unset the run is interactive and a timeout usually means the user is thinking, so re-ask the question once, then proceed naming the default you took. A timeout never authorizes an irreversible step: the merge confirmation treats an unanswered prompt as a no in either mode.
 
 ## Self-Improvement Loop
 
-This command is maintained through its own runs. When a run exposes a defect in the flow itself — a recorded fact disproven by reality (a "no X" claim, a dead link, a wrong state name), a missing step (an undocumented bootstrap, a transition chain), or a stage instruction that had to be worked around — fix the flow **in the same run**:
+This command is maintained through its own runs. When a run exposes a defect in the flow itself — a recorded fact disproven by reality (a "no X" claim, a dead link, a wrong state name), a missing step (an undocumented bootstrap, a transition chain), or an instruction that had to be worked around — fix the flow **in the same run**:
 
-1. Patch the affected file(s) right in this working copy: this command file, `context/product/delivery-flow.md` (correct the fact where it is recorded), or the reused skill.
-2. Stage those edits in the commit-push stage alongside the code change — same branch, same change request. Never park flow fixes for a separate change request; a flow that shipped its work while still carrying a known-wrong instruction has not finished the job. A defect found after the change request is open waits: report it as pending in the close-out, and the next run applies it at the workspace stage.
+1. Patch the affected file(s) in this working copy: this command file, `context/product/delivery-flow.md` (where the wrong fact is recorded), or the reused skill.
+2. Stage those edits in the commit-push stage alongside the code change — same branch, same change request; a flow that shipped its work while still carrying a known-wrong instruction has not finished the job. A defect found after the change request is open waits: report it as pending in the close-out, and the next run applies it at the workspace stage.
 3. Record the correction in the flow log — with the observation that disproved the old text — and promote it into the decision record's **Local Customizations** section, so a future `/awos:flow` regeneration preserves it instead of resurrecting the defect.
-4. Two kinds of defect are not yours to fix. A delivery _decision_ (a gate, the merge policy, the autonomy level) belongs to whoever owns the team's process — report the friction and leave the change to a `/awos:flow` re-run. A defect in how `/awos:flow` generated this command cannot be fixed here — tell the user so they can report it to the AWOS repo.
+4. Two kinds of defect are not yours to fix. A delivery _decision_ (a gate, the merge policy, the autonomy level) belongs to whoever owns the team's process — report the friction and leave it to a `/awos:flow` re-run. A defect in how `/awos:flow` generated this command cannot be fixed here — tell the user so they can report it to the AWOS repo.
 
 <!-- awos:flow:stage=fetch-ticket -->
 

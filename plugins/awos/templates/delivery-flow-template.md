@@ -46,7 +46,7 @@ Which commands `/awos:flow` generated and their names — re-runs reconcile exac
 - **Layout:** [monorepo | submodules | sibling repos at relative paths | symlinked | containerized]
 - **`context/` location & sharing:** [where the AWOS context folder lives and how this repo reaches it]
 - **Spec commits go to:** [which repo/branch holds `context/spec/` changes]
-- **Pre-flight check:** [how the flow verifies `context/` is reachable and current]
+- **`context/` reachability check:** [how the workspace stage verifies `context/` is reachable and current]
 
 ## 4. Review
 

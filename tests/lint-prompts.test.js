@@ -969,6 +969,19 @@ test('the flow separates repo-provisioned transports from machine-personal ones'
     'flow.md must forbid machine-scoped capability claims ("no Jira CLI on this machine") in the decision record and generated commands — claims are team-wide or they mislead the next teammate'
   );
   assert.ok(
+    /A skipped question defaults to \*\*keep it as an optional accelerator\*\*/.test(
+      flow
+    ) &&
+      /never default to \*\*drop\*\*/.test(flow) &&
+      /A skipped question defaults to neither: leave the skill untouched/.test(
+        flow
+      ) &&
+      /A skipped question defaults to continuing without that source's content/.test(
+        flow
+      ),
+    'every AskUserQuestion in flow.md that falls outside the two categories the INTERACTION blanket enumerates must name its own unanswered-question default — Step 3 manual paste, Step 4.5 reused-skill constants, and Step 4.5 machine-personal transports each pick among options that produce materially different output, so an unattended run would otherwise choose blind'
+  );
+  assert.ok(
     /best-effort/i.test(
       lineWith(
         flow,
@@ -1029,6 +1042,19 @@ test('the flow separates repo-provisioned transports from machine-personal ones'
     assert.ok(
       preflightAt !== -1 && preflightAt < body.indexOf('### Step 2:'),
       `${tmpl} must place the transport pre-flight inside the first stage, ahead of Step 2 — a pre-flight that runs after the ticket fetch cannot stop a missing tracker grant from failing the fetch raw`
+    );
+    // The resume gate may *point at* the transport pre-flight to say it is a
+    // different question — that contrast is the naming-apart this pins. What it
+    // must not do is label itself one, which is the collision that let the
+    // prerequisite check land in the wrong stage.
+    const resumeStage = lineWith(
+      body,
+      /Settle the entry point before any work/
+    );
+    const resumeSelfLabel = resumeStage.replace(/transport pre-flight/gi, '');
+    assert.ok(
+      resumeStage !== '' && !/pre-?flight/i.test(resumeSelfLabel),
+      `${tmpl} resume-detection must open with "Settle the entry point before any work" and must never call that check a pre-flight — "pre-flight" names the Step 1 transport/prerequisite gate alone, and one word for two unrelated gates is how the prerequisite check ended up in the wrong stage before`
     );
   }
 });

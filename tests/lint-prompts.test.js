@@ -990,6 +990,28 @@ test('the flow separates repo-provisioned transports from machine-personal ones'
     ),
     'flow.md Step 6 must instruct the generator to wire best-effort degradation into any stage whose transport is an optional accelerator — without it a missing accelerator reads to the generator as a hard stop'
   );
+  const featTmpl = readUtf8(
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+  );
+  // Scoped to both places the contract lives, not the document: the phrase
+  // appears in Context Discipline *and* in the specs stage, so a whole-file
+  // grep stays green when either one is deleted.
+  assert.ok(
+    /entered on every run/i.test(
+      lineWith(featTmpl, /logging starts with the specs stage/)
+    ) &&
+      /entered on every run/i.test(
+        lineWith(featTmpl, /Store the spec directory name/)
+      ) &&
+      /skipped all three commands/i.test(
+        lineWith(featTmpl, /Store the spec directory name/)
+      ),
+    "implement-feature-template.md specs stage must be entered even when the entry point skips all three /awos:* commands — it is the first stage with a flow-log path, so dispatching past it drops the fetch stage's ungathered-context record with no stage left to carry it"
+  );
+  assert.ok(
+    /skipping the commands must never skip the write/i.test(flow),
+    'flow.md Step 6 must generate the fetch-to-log handoff as unconditional — a resumed run and a pre-written spec both skip the specs stage commands, and a conditional handoff drops the degradation record there'
+  );
   assert.ok(
     /git config --local core\.hooksPath/.test(flow),
     "flow.md must read `git config --local core.hooksPath` — the plain form merges the user's global setting, so one engineer's personal hooks directory would be recorded as a project signal"
@@ -2096,8 +2118,19 @@ test('generated commands resume from the roadmap and skip already-done work', ()
     );
   }
   assert.ok(
-    /already `Completed`/i.test(feat),
-    'implement-feature-template.md must stop when the owning spec is already Completed (or its tasks are all done) instead of re-running the chain'
+    /A \*\*delivered\*\* signal/.test(feat) &&
+      /A \*\*progress\*\* signal/.test(feat),
+    'implement-feature-template.md resume-detection must split what it finds into delivered vs progress signals — a flat "looks done, stop" list ends the run on mid-flow evidence'
+  );
+  // Scoped to the progress-signal sentence: what matters is that a
+  // mid-flow marker lands there and routes to a resume, not which adverb
+  // the sentence happens to use.
+  const progressLine = lineWith(feat, /A \*\*progress\*\* signal/);
+  assert.ok(
+    /`Completed`/.test(progressLine) &&
+      /`\[x\]`/.test(progressLine) &&
+      /resume at the stage after the one the signal names/i.test(progressLine),
+    'implement-feature-template.md must treat a `Completed` spec or an all-`[x]` tasks.md as a resume point, not a stop — /awos:verify sets Completed and /awos:implement checks off the last task while verification, local review, commit-push, the remote gates, merge, delivery, and close are all still owed'
   );
   assert.ok(
     /"done"\/closed state names/i.test(flow),

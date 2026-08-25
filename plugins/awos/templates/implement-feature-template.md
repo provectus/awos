@@ -39,7 +39,7 @@ Takes one feature — its requirements from [source per §1 of delivery-flow.md]
 A flow this long degrades in one context window — judgment is worst exactly where it matters most, at review time. Per §8 of delivery-flow.md:
 
 - Run every isolatable stage in a subagent (a subagent can invoke `/awos:*` commands via the Skill tool; its context is discarded on completion). Subagent reports must be terse — paths, verdicts, counts — never full document or review content.
-- After each completed stage, append an entry to `context/spec/{SPEC_NAME}/flow-log.md`: the stage name, what was produced and where (paths, branch, commit), any decisions taken along the way, and which stage comes next. `SPEC_NAME` exists once the specs stage creates the spec directory — the stages before it (fetch, resume-detection, workspace) are cheap and re-runnable, so they log nothing; logging starts with the specs stage, and the log's first entry records the ticket ID/title so resume can match a log to its feature. The log is the flow's memory outside the context window — a fresh session (after a restart, a crash, or an unattended hand-off between sessions) resumes by reading this one small file instead of re-deriving state from the whole repo. That is what keeps the window small across a long flow: nothing needs to stay in context once it is in the log. The log is committed with the work (Step 9 stages it alongside the code), so it must never become an uncommittable leftover: **once the change request is opened — or the change is merged — stop writing to the tracked log**, since a commit adding log lines is unwelcome on a change request under review and impossible once it merges, so a late append would strand a change that can never reach it. From that point report late-stage progress to the user and via §9 notifications, and resume the remote stages from remote state (the open/merged change request and the ticket status), which the resume-detection stage already inspects. The close stage leaves a clean working tree and never writes a final entry it cannot commit.
+- After each completed stage, append an entry to `context/spec/{SPEC_NAME}/flow-log.md`: the stage name, what was produced and where (paths, branch, commit), any decisions taken along the way, and which stage comes next. `SPEC_NAME` exists once the specs stage creates the spec directory — the stages before it (fetch, resume-detection, size triage, workspace) are cheap and re-runnable, so they log nothing; logging starts with the specs stage, and the log's first entry records the ticket ID/title so resume can match a log to its feature. The log is the flow's memory outside the context window — a fresh session (after a restart, a crash, or an unattended hand-off between sessions) resumes by reading this one small file instead of re-deriving state from the whole repo. That is what keeps the window small across a long flow: nothing needs to stay in context once it is in the log. The log is committed with the work (Step 10 stages it alongside the code), so it must never become an uncommittable leftover: **once the change request is opened — or the change is merged — stop writing to the tracked log**, since a commit adding log lines is unwelcome on a change request under review and impossible once it merges, so a late append would strand a change that can never reach it. From that point report late-stage progress to the user and via §9 notifications, and resume the remote stages from remote state (the open/merged change request and the ticket status), which the resume-detection stage already inspects. The close stage leaves a clean working tree and never writes a final entry it cannot commit.
 - Never launch a nested headless session (`claude -p`) from this command — permission modes, PATH, and timeouts differ per machine. Unattended chaining belongs to the trigger setup (§6), outside this command.
 - Tell every dispatched subagent: tools are functional — do not test them or make exploratory calls; every call needs a purpose. Run each delegated stage on the model tier recorded in §8 — the fast tier for mechanical transport work, the strongest for judgment.
 - A subagent's report is a claim, not a fact. Before acting on a report that names files and lines, asserts a root cause, or reports a test outcome, spot-check it — read the named lines, run the named test — rather than relaying it verbatim into the next stage.
@@ -61,7 +61,7 @@ This command is maintained through its own runs. When a run exposes a defect in 
 
 [Connector-specific fetch using the chosen transport from §7 of delivery-flow.md, with its recorded fallback. Extract and keep: ticket ID, title, description, acceptance hints, link. For local-file or prompt-text sources this stage just reads/normalizes the input.]
 
-[Ticket sources: also fetch the **surrounding context** §1 recorded — the **epic/parent ticket's description, remote links, attachments, and linked conversations** (tracker remote links, attached design docs or screenshots, a referenced Confluence/Notion page, a linked chat thread) via the §7 transports — and read the reachable ones. This is what pre-seeds `/awos:spec` so its interview opens warm instead of cold: the epic frames the "why", a design link or screenshot pins the "what". Fold the reachable material into the normalized bundle, and **list anything linked but unreachable** in it instead of silently skipping — the specs stage then knows context is missing rather than assuming the description is complete. Step 4 passes this normalized bundle to `/awos:spec` as context, so the richer material flows through without a second fetch. Omit this paragraph for local-file or prompt-text sources, and skip any surrounding-context source §1 records as "none".]
+[Ticket sources: also fetch the **surrounding context** §1 recorded — the **epic/parent ticket's description, remote links, attachments, and linked conversations** (tracker remote links, attached design docs or screenshots, a referenced Confluence/Notion page, a linked chat thread) via the §7 transports — and read the reachable ones. This is what pre-seeds `/awos:spec` so its interview opens warm instead of cold: the epic frames the "why", a design link or screenshot pins the "what". Fold the reachable material into the normalized bundle, and **list anything linked but unreachable** in it instead of silently skipping — the specs stage then knows context is missing rather than assuming the description is complete. Step 5 passes this normalized bundle to `/awos:spec` as context, so the richer material flows through without a second fetch. Omit this paragraph for local-file or prompt-text sources, and skip any surrounding-context source §1 records as "none".]
 
 <!-- /awos:flow:stage -->
 
@@ -73,9 +73,25 @@ Start with a cheap preflight on the fast model tier (per §8): is this feature *
 
 <!-- /awos:flow:stage -->
 
+<!-- awos:flow:stage=small-triage -->
+
+### Step 3: Size Triage
+
+Most changes take the full spec chain below — that is the default, and with no small-signal this stage is a no-op: proceed to Step 4 without asking anything. A **small-signal** is the requester's phrasing (the ticket or prompt reads as a tweak — a wording, color, or position change to one element) or a normalized ticket that plainly describes a change with no new behavior. The signal only triggers a check; it never routes by itself — the requester often cannot size a change (a wording tweak can hide a theme token used by many components; a "small" backend edit can hit a rate limit or a field-size cap downstream), so the verdict comes from evidence:
+
+- Dispatch the built-in `Explore` subagent (fast tier per §8), scoped to the request: which files and components the change touches, and whether anything there is shared — imports, theme tokens, contracts, migrations, cross-cutting concerns.
+- Confirm with `AskUserQuestion`, citing the evidence inside the options (e.g. "Small — the text appears in 1 template, nothing else references it" vs. "Standard — that color is a theme token used by 14 components").
+- The safe default is **standard**: a skipped or unanswered question, and every unattended run (`AWOS_UNATTENDED` set), takes the full chain — the short path is never entered silently.
+
+**Small confirmed** → deliver without spec artifacts: skip Steps 5–6 entirely (no `context/spec/` directory, no spec documents — git history and the change request are the record), use the small-path variants marked in Steps 7–10, and continue through the remaining stages unchanged — a small change keeps the same branch, review, CI, merge, and close flow. With no spec directory there is no flow log either: a small run completes in one session, and a resume relies on remote state — the branch and change request named by the ticket. Record the verdict and its citing evidence in the change-request description.
+
+[Omit this stage entirely when the Small-Change Path section of delivery-flow.md records "disabled".]
+
+<!-- /awos:flow:stage -->
+
 <!-- awos:flow:stage=workspace -->
 
-### Step 3: Prepare the Workspace
+### Step 4: Prepare the Workspace
 
 [Per §2–§3 of delivery-flow.md: verify `context/` is reachable and current; warn on a dirty working tree; create the branch from the base branch using the project's naming convention; submodule init/update if required. For a worktree: invoke the project's own worktree command, skill, or init script when §2 records one, otherwise execute the §2 isolation recipe — bring-up steps included — verbatim. Never improvise worktree preparation in-run: real prep is bigger than `git worktree add` (installs, codegen, env files, service/network isolation), and the recorded recipe or project script is the tested path. Store the branch name as `BRANCH` and the ticket ID as `TICKET_ID` for later stages.] Uncommitted AWOS artifacts — `context/product/delivery-flow.md` and this command file, left by `/awos:flow` — are an expected dirty-tree cause; surface them as such rather than treating them as a blocker.
 
@@ -83,7 +99,9 @@ Start with a cheap preflight on the fast model tier (per §8): is this feature *
 
 <!-- awos:flow:stage=specs -->
 
-### Step 4: Generate Specs and Tasks
+### Step 5: Generate Specs and Tasks
+
+**Small path:** this stage is skipped on a Small verdict (Step 3) — no `context/spec/` directory is created.
 
 Run the AWOS commands sequentially, passing the normalized ticket as context. [Per §8: which of the three stay in the main context and which run in a subagent — a command that interviews the user must stay in main; a non-interactive one runs in a subagent returning the artifact path and a one-line verdict.] Honor the Step 2 entry point: skip any command whose artifact already exists on disk — and skip its approval gate with it. Resume from the first missing artifact; never regenerate or re-gate a completed stage.
 
@@ -97,7 +115,9 @@ Store the spec directory name (e.g. `007-tasks-api`) as `SPEC_NAME`.
 
 <!-- awos:flow:stage=commit-specs -->
 
-### Step 5: Commit Specs
+### Step 6: Commit Specs
+
+**Small path:** skipped on a Small verdict — there are no spec artifacts to commit.
 
 [Per §3: stage `context/spec/{SPEC_NAME}/` in the repo that owns it and commit using the project's message convention, referencing `TICKET_ID`.]
 
@@ -105,7 +125,9 @@ Store the spec directory name (e.g. `007-tasks-api`) as `SPEC_NAME`.
 
 <!-- awos:flow:stage=implement -->
 
-### Step 6: Implement via Subagents
+### Step 7: Implement via Subagents
+
+**Small path:** instead of `/awos:implement`, delegate the change directly to the matching specialist from `context/product/hired-agents.md` as one scoped subagent task — the orchestrator still never edits code in the main context — and honor the project's test expectation for the change.
 
 Run `/awos:implement` [per §8: in the main context if it dispatches subagents itself — a command that dispatches subagents cannot run inside one]. It delegates all coding and tracks progress — do not implement tasks in the main context. Wait for all tasks to complete.
 
@@ -115,7 +137,9 @@ After `/awos:implement` reports all tasks complete, spot-check the plan's testin
 
 <!-- awos:flow:stage=verify -->
 
-### Step 7: Verify
+### Step 8: Verify
+
+**Small path:** there is no functional spec to check against — run the project's build/test/lint suite and drive the changed behavior against a real render via the same sanctioned verification path, with evidence proportional to the change.
 
 Run `/awos:verify` [per §8: in a subagent if it is non-interactive], returning the verdict and the list of gaps. Address gaps before proceeding.
 
@@ -125,7 +149,9 @@ Running the app to verify is the flow's job, not the user's. [If §2/§3 recorde
 
 <!-- awos:flow:stage=local-review -->
 
-### Step 8: Local Review
+### Step 9: Local Review
+
+**Small path:** with no spec directory, the reviewer writes to a temporary path outside the repo (never committed); the verdict, finding count, and file path still lead the hand-off.
 
 The review must stay independent of this conversation's authorship bias — it never happens inline in the orchestrator's own window, which just drove the implementation:
 
@@ -135,13 +161,15 @@ The review must stay independent of this conversation's authorship bias — it n
 - **Lead the review presentation to the user with that path on its own line** — e.g. `Review file: context/spec/{SPEC_NAME}/review.md` — before the verdict and the findings. A fixed opening line is surfaced reliably; a path appended after a long findings list gets dropped (the recurring failure this guards against). Record the same path in this stage's flow-log entry, so it survives outside the chat even if the line is missed.
 - Collect the keep/drop decisions on the findings with `AskUserQuestion`. The agent that applies accepted findings reads the review file and the diff fresh — relay the user's decisions, not your own summary of the findings.
 
-[Per §4 of delivery-flow.md: static checks, then the local AI review — the reviewer subagent's verbatim prompt, derived from §4 at generation time: the diff range, the spec paths, the project's review rules; findings presented to the user, never auto-fixed; accepted findings applied before anything is pushed. If §4 includes the human-edit loop, also diff the user's edits against the original review and suggest CLAUDE.md amendments for generalizable corrections. If §4 records change-request-first timing, move this stage after Step 9 instead and run the review concurrently with the remote gates — faster wall-clock, at the cost of an extra CI run on unreviewed code.]
+[Per §4 of delivery-flow.md: static checks, then the local AI review — the reviewer subagent's verbatim prompt, derived from §4 at generation time: the diff range, the spec paths, the project's review rules; findings presented to the user, never auto-fixed; accepted findings applied before anything is pushed. If §4 includes the human-edit loop, also diff the user's edits against the original review and suggest CLAUDE.md amendments for generalizable corrections. If §4 records change-request-first timing, move this stage after Step 10 instead and run the review concurrently with the remote gates — faster wall-clock, at the cost of an extra CI run on unreviewed code.]
 
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=commit-push -->
 
-### Step 9: Commit & Push
+### Step 10: Commit & Push
+
+**Small path:** there is no flow log to finalize — stage only the delegated changes.
 
 Write this stage's flow-log entry **before** staging so the log rides in this commit — this is the flow-log's last committed state (see Context Discipline). Then stage only what this flow produced or touched — the delegated code changes, the flow log, spec/context artifacts, and any Self-Improvement Loop edits. Never a blanket `git add -A`: pre-existing dirty-tree files the workspace stage warned about stay unstaged; surface any unexpected changed file instead of staging it. Never stage `.env`, credentials, or secrets. [Commit message convention per the project; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
 
@@ -149,7 +177,7 @@ Write this stage's flow-log entry **before** staging so the log rides in this co
 
 <!-- awos:flow:stage=remote-gates -->
 
-### Step 10: Remote Gates
+### Step 11: Remote Gates
 
 This stage opens the change request. The flow log was finalized at commit-push — **do not append to the tracked flow-log from here on** (Context Discipline): a commit adding log lines is unwelcome on a change request under review, and impossible once it merges. Report gate progress to the user and via Notifications instead; once the change request exists, resume relies on the remote state, not the log.
 
@@ -165,9 +193,9 @@ Wait with the `Monitor` tool, never foreground `sleep` loops: a poll loop that e
 
 <!-- awos:flow:stage=merge -->
 
-### Step 11: Merge
+### Step 12: Merge
 
-[Per §2: the target branch may have moved while the gates ran — re-check mergeability via the chosen transport or a fresh fetch + dry-run merge. If the branch no longer merges cleanly: sync per the recorded policy (resolution delegated per §8), push, and return to Step 10 — the remote gates run again on the new commit before any merge.]
+[Per §2: the target branch may have moved while the gates ran — re-check mergeability via the chosen transport or a fresh fetch + dry-run merge. If the branch no longer merges cleanly: sync per the recorded policy (resolution delegated per §8), push, and return to Step 11 — the remote gates run again on the new commit before any merge.]
 
 [Per §5 merge policy: a human merges — the flow's delivery work ends at this ready-to-merge hand-off: skip the flow-merge and proceed to the close stage, which reports the ready-to-merge state as the terminal evidence — or the flow merges via the chosen transport from §7: the platform's merge capability, or a plain `git merge` + push for a repo without a code host.]
 
@@ -179,7 +207,7 @@ Merging is irreversible. Even when the recorded policy lets the flow merge, ask 
 
 <!-- awos:flow:stage=delivery -->
 
-### Step 12: Deliver
+### Step 13: Deliver
 
 [Per §5: deployment mode, batching/feature flags, approvals, version bumps. Omit what the decisions rule out; stop at the recorded hand-off point for manual or scheduled deployment.]
 
@@ -187,7 +215,7 @@ Merging is irreversible. Even when the recorded policy lets the flow merge, ask 
 
 <!-- awos:flow:stage=close-ticket -->
 
-### Step 13: Close the Loop
+### Step 14: Close the Loop
 
 [Per §5's definition of Done: gather the recorded evidence (change-request link, merge commit, deploy confirmation) and report the final state to the user. When the source has tickets, also transition the ticket using the chosen transport and attach the evidence; omit the transition entirely for ticketless sources — the report to the user is the close.]
 

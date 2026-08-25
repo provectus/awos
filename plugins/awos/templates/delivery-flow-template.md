@@ -113,6 +113,15 @@ Whether `/awos:flow` generated the lighter bug-fix command (named in **Generated
 - **Classification & amendment policy:** [every fix is classified conformance (code violated a correct spec → fix + regression test, no spec change) vs. divergence (spec was wrong or behavior intentionally changed → fix + regression test + amend the owning `functional-spec.md` via `/awos:spec` update mode); a bug mapping to no spec proceeds without amendment]
 - **Regression-test expectation:** [a fix adds one failing→passing test capturing the bug, honoring the project's `<!-- skip-tests: true -->` opt-out — or "n/a (not generated)"]
 
+## Small-Change Path
+
+Whether the feature command triages plainly-small changes past the spec chain. The triage is evidence-based — never on the requester's word alone — and lives only in the feature command's size-triage stage; the bug-fix command has its own lighter shape and does not use it.
+
+- **Enabled:** [yes (default) | disabled — why]
+- **What counts as small:** [default: a change with no new behavior and no architecture impact — one component, nothing shared (modules, theme tokens, contracts, migrations, cross-cutting concerns); the team may tighten or loosen this]
+- **On a Small verdict:** skip `/awos:spec` / `/awos:tech` / `/awos:tasks` — no `context/spec/` artifacts; the implementation is delegated directly to the matching specialist; verification is scoped (project suite + a real render); the review, CI, merge, and close stages run unchanged; the verdict and its citing evidence are recorded in the change-request description
+- **Safe default:** standard — a skipped or unanswered triage question, and every unattended run (`AWOS_UNATTENDED` set), takes the full chain
+
 ## 10. Local Customizations
 
 Manual edits to the generated command that the user chose to keep during regeneration, and in-run corrections promoted by the generated commands' **Self-Improvement Loop** (a flow defect found during a run — a wrong recorded fact, a missing step, a workaround-forcing instruction — fixed in the same run and shipped in the same change request). `/awos:flow` re-applies these on every regeneration; remove an entry to retire it.

@@ -104,7 +104,7 @@ export function detectSpecWorkflowAdopted(
       withRecords.map((f) =>
         inheritedNote(
           f.origin,
-          `${f.framework.label} practice in use (${f.roots.map((r) => r.rel).join(', ')})`
+          `${f.framework.label} in use (${f.roots.map((r) => r.rel).join(', ')})`
         )
       )
     );
@@ -151,10 +151,41 @@ function isSubstantive(filePath: string): boolean {
   return nonBlankLines.length > MIN_SUBSTANTIVE_LINES;
 }
 
+// Each inner array is one required slot; the first path present and
+// substantive satisfies it. AWOS filenames come first because they are the
+// most specific, but a project that documents the same three things under
+// conventional names has the same capability.
 const FOUNDATIONAL_DOC_CANDIDATES = [
-  ['context/product/product-definition.md'],
-  ['context/product/roadmap.md'],
-  ['context/architecture/architecture.md', 'context/product/architecture.md'],
+  [
+    'context/product/product-definition.md',
+    'context/product/product.md',
+    'docs/product.md',
+    'docs/product-definition.md',
+    'PRODUCT.md',
+    'docs/vision.md',
+  ],
+  [
+    'context/product/roadmap.md',
+    'docs/roadmap.md',
+    'ROADMAP.md',
+    'docs/milestones.md',
+  ],
+  [
+    'context/architecture/architecture.md',
+    'context/product/architecture.md',
+    'docs/architecture.md',
+    'ARCHITECTURE.md',
+    'docs/adr/README.md',
+    'docs/adr/index.md',
+    'docs/decisions/README.md',
+  ],
+];
+
+// One label per slot in FOUNDATIONAL_DOC_CANDIDATES, in the same order.
+const FOUNDATIONAL_DOC_SLOT_LABELS = [
+  'product definition',
+  'roadmap',
+  'architecture record',
 ];
 
 export function detectProductContextDocs(
@@ -164,7 +195,7 @@ export function detectProductContextDocs(
   const found: string[] = [];
   const missing: string[] = [];
 
-  for (const candidates of FOUNDATIONAL_DOC_CANDIDATES) {
+  for (const [slot, candidates] of FOUNDATIONAL_DOC_CANDIDATES.entries()) {
     let matched = false;
     for (const candidate of candidates) {
       const probe = probeRepoPath(repoPath, params, candidate);
@@ -179,7 +210,9 @@ export function detectProductContextDocs(
       }
     }
     if (!matched) {
-      missing.push(candidates[0]);
+      missing.push(
+        `${FOUNDATIONAL_DOC_SLOT_LABELS[slot]} (looked for ${candidates.join(', ')})`
+      );
     }
   }
 

@@ -205,6 +205,54 @@ test('SDD-02: FAIL when no context/ directory', () => {
   assert.equal(r.status, 'FAIL', 'no context dir → FAIL');
 });
 
+test('SDD-02 accepts non-AWOS foundational documents', () => {
+  const repo = tmpDir('awos-sdd02-generic-');
+  try {
+    mkdirSync(join(repo, 'docs'), { recursive: true });
+    writeFileSync(join(repo, 'docs', 'product.md'), SDD_CONTENT);
+    writeFileSync(join(repo, 'ROADMAP.md'), SDD_CONTENT);
+    writeFileSync(join(repo, 'docs', 'architecture.md'), SDD_CONTENT);
+    assert.equal(
+      detectProductContextDocs(repo).status,
+      'PASS',
+      'a project that documents its product, roadmap and architecture outside AWOS filenames has the capability this check measures'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('SDD-02 accepts an ADR index in place of an architecture document', () => {
+  const repo = tmpDir('awos-sdd02-adrindex-');
+  try {
+    mkdirSync(join(repo, 'docs', 'adr'), { recursive: true });
+    writeFileSync(join(repo, 'docs', 'adr', 'README.md'), SDD_CONTENT);
+    writeFileSync(join(repo, 'docs', 'product.md'), SDD_CONTENT);
+    writeFileSync(join(repo, 'ROADMAP.md'), SDD_CONTENT);
+    assert.equal(
+      detectProductContextDocs(repo).status,
+      'PASS',
+      'an ADR index records architecture decisions and satisfies the architecture slot'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('SDD-02 still fails when two of the three are missing', () => {
+  const repo = tmpDir('awos-sdd02-thin-');
+  try {
+    writeFileSync(join(repo, 'ROADMAP.md'), SDD_CONTENT);
+    assert.equal(
+      detectProductContextDocs(repo).status,
+      'FAIL',
+      'genericizing widens what counts, it must not lower the bar for how much is required'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // detectArchTechMatch — code 2802 (SDD-03, detected)
 //
@@ -1064,6 +1112,12 @@ test('SDD-01 credits an ADR practice, not only AWOS', () => {
     assert.ok(
       res.evidence.some((e) => /ADR/i.test(e)),
       `the evidence must name which practice was recognized, got ${JSON.stringify(res.evidence)}`
+    );
+    assert.ok(
+      res.evidence.some(
+        (e) => e === 'ADR / design-doc practice in use (docs/adr)'
+      ),
+      `the ADR label already contains "practice" — the template must not double it, got ${JSON.stringify(res.evidence)}`
     );
     assert.ok(
       res.evidence.some((e) => e.includes('docs/adr')),

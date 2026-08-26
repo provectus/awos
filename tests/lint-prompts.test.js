@@ -4215,3 +4215,113 @@ test('hire.md treats an unanswered consent gate as withheld consent', () => {
     'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
   );
 });
+
+test('spec.md runs the self-check as Step 0 and degrades silently', () => {
+  // /awos:spec opens with an advisory health check of the AWOS install.
+  // The invocation string is the join key with the shipped script, so a
+  // reword here silently turns Step 0 into a no-op. The degrade-silently
+  // rule is the other half of the contract: an inconclusive check (script
+  // absent, non-JSON output, everything ok/skipped/unknown) must produce
+  // no output at all, or every spec run starts with a false nag. And the
+  // command reports remedies — it never runs an installer itself.
+  const body = readUtf8(path.join(commandsDir, 'spec.md'));
+  assert.ok(
+    body.includes('node .awos/scripts/self-check.mjs'),
+    'commands/spec.md must invoke the literal "node .awos/scripts/self-check.mjs" — the join key with scripts/self-check.mjs, which ships to .awos/scripts/'
+  );
+  assert.ok(
+    /^### Step 0:/m.test(body),
+    'commands/spec.md must carry the self-check as a "### Step 0:" heading, at the same level as its other steps and ahead of Step 1'
+  );
+  assert.ok(
+    /stay silent and continue/i.test(body),
+    'commands/spec.md Step 0 must instruct the model to stay silent and continue when the check is inconclusive — an unusable result is not a finding to report'
+  );
+  assert.ok(
+    /do not run an installer/i.test(body),
+    'commands/spec.md Step 0 must forbid running an installer, installing the plugin, editing .mcp.json, or invoking /awos:hire itself — it reports remedies, the user runs them'
+  );
+  assert.ok(
+    body.includes('`AWOS health`'),
+    'commands/spec.md Step 0 must pin the literal AskUserQuestion header "AWOS health" — unattended runs match the question by header, so a reworded or model-invented header makes Step 0 unanswerable'
+  );
+});
+
+test('scripts/self-check.mjs emits what spec.md Step 0 branches on', () => {
+  // spec.md Step 0 reads four named check objects and branches on a
+  // closed set of status strings. Those names and literals live in the
+  // script; renaming one there without updating the prompt makes Step 0
+  // silently blind to that finding.
+  const body = readUtf8(path.join(repoRoot, 'scripts', 'self-check.mjs'));
+  for (const key of [
+    'hired_agents',
+    'plugin',
+    'mcp',
+    'version',
+    'checked_at',
+  ]) {
+    assert.ok(
+      body.includes(key),
+      `scripts/self-check.mjs must emit the "${key}" field — commands/spec.md Step 0 reads it by that exact name`
+    );
+  }
+  for (const status of [
+    'ok',
+    'stale',
+    'missing',
+    'disabled',
+    'outdated',
+    'skipped',
+    'unknown',
+  ]) {
+    assert.ok(
+      body.includes(`'${status}'`),
+      `scripts/self-check.mjs must keep the "${status}" status literal — commands/spec.md Step 0 branches on that exact string`
+    );
+  }
+});
+
+test('the self-check script ships to the path spec.md Step 0 invokes', () => {
+  // Step 0 runs `.awos/scripts/self-check.mjs`, which exists only because
+  // setup-config copies scripts/ to .awos/scripts/. Renaming either the
+  // source file or the copy destination breaks Step 0 in every installed
+  // project at once, and nothing in the prompt layer would notice.
+  const { copyOperations } = require(
+    path.join(repoRoot, 'src', 'config', 'setup-config.js')
+  );
+  const scriptsOp = copyOperations.find((op) => op.source === 'scripts');
+  assert.ok(
+    scriptsOp,
+    'setup-config.copyOperations must keep an entry with source "scripts" — without it the self-check script never reaches a user project and commands/spec.md Step 0 is dead on arrival'
+  );
+  assert.equal(
+    scriptsOp.destination,
+    '.awos/scripts',
+    'setup-config must copy scripts/ to ".awos/scripts" — commands/spec.md Step 0 hardcodes "node .awos/scripts/self-check.mjs", so any other destination silently breaks it for every user'
+  );
+  assert.ok(
+    fs.existsSync(path.join(repoRoot, 'scripts', 'self-check.mjs')),
+    'scripts/self-check.mjs must exist — it is the file commands/spec.md Step 0 invokes once the installer has copied it to .awos/scripts/'
+  );
+});
+
+test('hire.md keeps the hired-agents.md contract the self-check parses', () => {
+  // self-check.mjs decides whether hired-agents.md has gone stale by
+  // parsing the roster out of the report and comparing it with the
+  // agents on disk. It joins on the literal section heading and table
+  // header below, and on the footer that `--record` stamps at the end of
+  // Step 8. Reword any of the three and staleness detection goes quiet.
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    body.includes('## Registered Specialist Subagents'),
+    'commands/hire.md must keep the literal "## Registered Specialist Subagents" heading — scripts/self-check.mjs locates the roster by that exact heading'
+  );
+  assert.ok(
+    body.includes('| Name | Description | Skills |'),
+    'commands/hire.md must keep the literal "| Name | Description | Skills |" header row — scripts/self-check.mjs parses the roster table by those exact columns'
+  );
+  assert.ok(
+    body.includes('node .awos/scripts/self-check.mjs --record'),
+    'commands/hire.md Step 8 must run "node .awos/scripts/self-check.mjs --record" after writing hired-agents.md — the footer it stamps is what later commands use to detect the report has gone stale'
+  );
+});

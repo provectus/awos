@@ -30,6 +30,7 @@ Your primary task is to create a new functional specification file. You will det
 - **Template File:** `.awos/templates/functional-spec-template.md`.
 - **Context File 1:** `context/product/product-definition.md`.
 - **Context File 2:** `context/product/roadmap.md`.
+- **Self-Check Command (optional):** `node .awos/scripts/self-check.mjs` — reports AWOS installation health as JSON for Step 0. Absent in projects installed before this script shipped.
 - **External Command:** `.awos/scripts/create-spec-directory.sh [short-name]`.
 - **Output File:** `context/spec/[index]-[short-name]/functional-spec.md`.
 
@@ -48,7 +49,31 @@ Your primary task is to create a new functional specification file. You will det
 
 Follow this process precisely.
 
-### Mode Detection (do this first)
+### Step 0: Check the AWOS Installation
+
+Run `node .awos/scripts/self-check.mjs` before anything else — ahead of the Mode Detection below, and in both modes. It prints one JSON object describing the health of this project's AWOS installation. The check is advisory: it never installs, updates, or changes anything, and it never blocks this command.
+
+Stay silent and continue to the Mode Detection below when any of these holds — an inconclusive check is not a finding, and reporting one is noise:
+
+- The script is missing, exits non-zero, or prints something that is not JSON. Projects installed from an earlier AWOS release do not ship it.
+- The top-level `status` is not `"checked"` — it already ran today, or it is switched off.
+- Every one of `hired_agents`, `plugin`, `mcp`, and `version` has a `status` of `"ok"`, `"skipped"`, or `"unknown"`.
+
+Otherwise report one line per finding, using that check's own `reason` as the wording, and then ask a single `AskUserQuestion` — one question, `multiSelect: true`, carrying the options below in the order they are listed. Never one question per finding. Give the question the header `AWOS health`, exactly that string: the header is the stable handle an unattended run matches on, so inventing a fresh one per run makes the question unanswerable.
+
+- **Continue with the spec** — always present, and always the first option. Anything that picks a default lands on carrying on rather than on remediating.
+- `hired_agents` is `stale` or `missing` → option **Refresh hired agents**, reporting `/awos:hire`.
+- `plugin` is `missing` or `disabled` → option **Install the AWOS plugin**, reporting the commands in `plugin.remedy`.
+- `mcp` is `missing` → option **Restore the recruitment MCP server**, reporting the commands in `mcp.remedy`.
+- `version` is `outdated` → option **Update AWOS**, reporting the commands in `version.remedy` along with `version.installed` and `version.latest`.
+
+One thing the script cannot see: whether the recruitment MCP server is connected in this session. If the `mcp__awos-recruitment__*` tools are absent from your available tools, note that alongside any `mcp` finding — the server can be configured on disk yet not connected here.
+
+**You report the commands; the user runs them.** Do not run an installer, install a plugin, edit `.mcp.json`, or invoke `/awos:hire` yourself.
+
+Whatever the user picks — including no answer at all — continue to the Mode Detection below in the same turn, and on into whichever mode it selects. This question is advisory and never a stop signal.
+
+### Mode Detection (before any of the steps below)
 
 Before determining a topic, decide whether this run **creates** a new spec or **amends** an existing one. Parse `<user_prompt>` for a reference to an existing spec — a spec number (`002`), a spec directory name (`002-task-scheduling`), or an explicit "amend/update spec NNN: \<what changed\>" phrasing (how the generated `fix-bug` command's `amend-spec` stage invokes this command after a behavior-changing fix).
 

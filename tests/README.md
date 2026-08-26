@@ -1,6 +1,6 @@
 # AWOS test suite
 
-A three-layer safety net that catches structural regressions in AWOS prompts and installer behavior at PR time. Built on Node's `node:test` built-in — **zero npm dependencies**. Runs identically under `node --test` (CI primary) and `bun test` (local cross-runtime sanity).
+A four-layer safety net that catches structural regressions in AWOS prompts and installer behavior at PR time. Built on Node's `node:test` built-in — **zero npm dependencies**. Runs identically under `node --test` (CI primary) and `bun test` (local cross-runtime sanity).
 
 ## Why this exists
 
@@ -18,6 +18,7 @@ npm test
 npm run test:lint        # Layer 1
 npm run test:installer   # Layer 2
 npm run test:fixtures    # Layer 3
+npm run test:scripts     # Layer 4
 
 # Local cross-runtime sanity check
 bun test tests/
@@ -44,6 +45,7 @@ tests/
 │   ├── customized-wrapper/
 │   ├── mid-workflow/
 │   └── pre-migration-v1/
+├── scripts/                        # Layer 4: contract + unit tests for scripts/self-check.mjs
 └── helpers/
     ├── frontmatter.js              # minimal YAML-frontmatter parser, no deps
     ├── manifest.js                 # load + assert fixture manifests
@@ -82,7 +84,7 @@ Cost: ~30 ms. Catches roughly 80 % of structural regressions on its own.
 - **`file-copier.test.js`**
   - Fresh install lands every source file at its declared destination.
   - Synthetic `commands/synth-test.md` is auto-discovered (validates "no `setup-config.js` edit needed when adding files inside an existing tree").
-  - Wrapper overwrite behavior pinned to current code (`.claude/commands/awos/*.md` _is_ overwritten on update). Comments in the test point at the open §11 docs-vs-code question; flip the assertion when that's resolved intentionally.
+  - Wrapper preserve-on-update behavior pinned to current code: an existing `.claude/commands/awos/*.md` survives byte-for-byte when `promptForOverwrite` returns `false`, while wrappers the user doesn't yet have are still installed in the same run.
   - Dry-run honesty: `dryRun: true` produces zero filesystem changes.
 - **`migration-runner.test.js`**
   - Migration 001 is idempotent (run twice, second run is a no-op).
@@ -108,17 +110,21 @@ Each `expected-after.json` lists files with one or more of: `{ exists, sha256, c
 
 Currently shipped fixtures:
 
-| Fixture               | Scenario                                                    | What it pins down                                                                                        |
-| --------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `fresh-project/`      | Empty project                                               | Full install layout: `.awos/commands/`, `.claude/commands/awos/`, `context/`, `.awos/.migration-version` |
-| `existing-awos-v0/`   | Stale `.awos/commands/architecture.md` from a prior install | Framework internals always get the latest content (overwritten)                                          |
-| `customized-wrapper/` | User-customized `.claude/commands/awos/architecture.md`     | Pins the current always-overwrite behavior; see the §11 open question in the plan                        |
-| `mid-workflow/`       | Populated `context/spec/001-test-feature/*.md`              | Installer never touches user spec work                                                                   |
-| `pre-migration-v1/`   | `.claude/agents/python-expert.md` at the pre-v1 path        | Migrations 001 + 002 land cleanly and the version file reads `2`                                         |
+| Fixture               | Scenario                                                    | What it pins down                                                                                                                                                  |
+| --------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `fresh-project/`      | Empty project                                               | Full install layout: `.awos/commands/`, `.claude/commands/awos/`, `context/`, `.awos/.migration-version`, `.awos/scripts/self-check.mjs`, `.awos/.awos-version`    |
+| `existing-awos-v0/`   | Stale `.awos/commands/architecture.md` from a prior install | Framework internals always get the latest content (overwritten)                                                                                                    |
+| `customized-wrapper/` | User-customized `.claude/commands/awos/architecture.md`     | Existing wrappers are preserved (`architecture.md` survives byte-for-byte) while wrappers the user doesn't yet have are still installed (`product.md` lands fresh) |
+| `mid-workflow/`       | Populated `context/spec/001-test-feature/*.md`              | Installer never touches user spec work                                                                                                                             |
+| `pre-migration-v1/`   | `.claude/agents/python-expert.md` at the pre-v1 path        | Migrations 001 + 002 land cleanly and the version file reads `2`                                                                                                   |
 
 Adding a new fixture: create `tests/fixtures/<name>/`, optionally with a `before/` subtree, plus an `expected-after.json` manifest. The harness picks it up automatically.
 
 Cost: ~65 ms for all five.
+
+## Layer 4 — `scripts/self-check.mjs`
+
+`tests/scripts/` holds contract and unit tests for the AWOS self-management check (`scripts/self-check.mjs`, copied to `.awos/scripts/self-check.mjs` on install). Run via `npm run test:scripts`; picked up by `npm test`'s `tests/**/*.test.js` glob like every other layer. Covers the three checks the script runs — hired-agent staleness, plugin/MCP presence, and version drift — plus the once-per-day gate in `.awos/cache/self-check.json` and the `AWOS_SELF_CHECK=off` opt-out. The script always prints one JSON blob and exits 0, so these tests assert on that JSON rather than on exit codes.
 
 ## Behavioral end-to-end tests live in the `awos-qa` repo
 

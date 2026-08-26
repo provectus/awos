@@ -46,13 +46,14 @@ The installer runs on **Node 22+ or any recent Bun**. It uses only standard JS b
 
 ## Testing
 
-The repo has a three-layer test suite under `tests/`, all built on Node's `node:test` built-in — no npm dependencies. See `tests/README.md` for the detailed reference.
+The repo has a four-layer test suite under `tests/`, all built on Node's `node:test` built-in — no npm dependencies. See `tests/README.md` for the detailed reference.
 
 1. **Static prompt linter** (`tests/lint-prompts.test.js`) — symmetry, frontmatter, marker presence, cross-references, dimension DAG, copy-table consistency, and grep-style checks for required substrings inside prompt bodies.
 2. **Installer unit tests** (`tests/installer/*.test.js`) — exercises the installer services against temp directories.
 3. **Fixture projects** (`tests/fixtures.test.js` + `tests/fixtures/<name>/`) — real installer runs against representative pre-install trees, with manifest-based assertions.
+4. **Self-check script tests** (`tests/scripts/`) — contract and unit tests for `scripts/self-check.mjs`.
 
-All three layers run in CI via `npm test`, which also runs the engine test layer (see "Running the engine tests" below).
+All four layers run in CI via `npm test`, which also runs the engine test layer (see "Running the engine tests" below).
 
 ### Coverage
 
@@ -106,7 +107,7 @@ The first four are run once at project setup; the last five iterate per feature.
 
 ## Architecture: Installer Pipeline
 
-`src/core/setup-orchestrator.js` runs six numbered steps: init → create directories → run migrations → copy files → configure MCP → register plugin marketplace. Each step lives in its own service module under `src/services/`. The orchestrator and `setup-config.js` are the two files to touch when changing setup behavior.
+`src/core/setup-orchestrator.js` runs seven numbered steps: init → create directories → run migrations → copy files → configure MCP → register plugin marketplace → stamp the installed version. Each step lives in its own service module under `src/services/`. The orchestrator and `setup-config.js` are the two files to touch when changing setup behavior.
 
 ## Migrations
 
@@ -163,6 +164,7 @@ These commands assume `node`/`npm` resolve to a real Node toolchain (as on CI an
 - Spec directories are numbered (`001-feature-name/`) to enforce ordering.
 - Prettier config: single quotes, semicolons, 80-col, 2-space, LF endings, `es5` trailing commas. CI fails on format drift.
 - PR labels (`major` / `minor` / `patch`) drive automated release version bumps via release-drafter; defaulting to `patch` when unlabeled.
+- Anything added to `scripts/` is copied verbatim into a user's project, whose `package.json` `"type"` field AWOS doesn't control — a bare `.js` file would be parsed as CommonJS or ESM depending on that setting. Pin the module dialect in the extension instead: `.mjs` for ESM, `.cjs` for CommonJS, never a bare `.js`.
 
 ## Editing Prompts
 

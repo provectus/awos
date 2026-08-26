@@ -83,6 +83,7 @@ function showSummary(statistics, options) {
 
   const mcpConfigured = statistics.mcpConfigured || false;
   const marketplaceConfigured = statistics.marketplaceConfigured || false;
+  const versionStamped = statistics.versionStamped || false;
 
   const summaryItems = [
     ['Directories created', directoriesCreated],
@@ -107,6 +108,12 @@ function showSummary(statistics, options) {
       ? 'Marketplace registered'
       : 'Marketplace already registered',
     marketplaceConfigured ? 1 : 0,
+  ]);
+
+  // Add version-stamp status
+  summaryItems.push([
+    versionStamped ? 'Version recorded' : 'Version already recorded',
+    versionStamped ? 1 : 0,
   ]);
 
   showLine();
@@ -145,6 +152,10 @@ function showSummary(statistics, options) {
         labelText = 'Would register marketplace';
       } else if (label === 'Marketplace already registered') {
         labelText = 'Marketplace already registered';
+      } else if (label === 'Version recorded') {
+        labelText = 'Would record version';
+      } else if (label === 'Version already recorded') {
+        labelText = 'Version already recorded';
       } else {
         labelText = `Would ${label.toLowerCase()}`;
       }

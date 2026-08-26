@@ -19,6 +19,7 @@ const { configureMcp } = require('../services/mcp-configurator');
 const {
   configureMarketplace,
 } = require('../services/marketplace-configurator');
+const { stampVersion } = require('../services/version-stamper');
 const { runMigrations } = require('../migrations/runner');
 
 /**
@@ -41,7 +42,7 @@ async function runSetup({
   dryRun = false,
   promptForOverwrite,
 }) {
-  const TOTAL_STEPS = 6;
+  const TOTAL_STEPS = 7;
 
   // Display header
   showHeader(AWOS_ASCII, AWOS_SUBTITLE);
@@ -123,12 +124,30 @@ async function runSetup({
   });
   clearLine();
 
+  // Step 7: Stamp the installed version
+  // Runs last, after migrations, copies, and both configurators: a crash
+  // mid-install must never leave behind a stamp claiming a version that
+  // was not fully installed.
+  showStep(
+    'Recording Version',
+    'Stamping the installed AWOS version',
+    7,
+    TOTAL_STEPS
+  );
+  const versionStatistics = await stampVersion({
+    workingDir,
+    packageRoot,
+    dryRun,
+  });
+  clearLine();
+
   // Display summary with combined statistics
   const statistics = {
     ...directoryStatistics,
     ...fileStatistics,
     ...mcpStatistics,
     ...marketplaceStatistics,
+    ...versionStatistics,
     migrations: migrationStatistics.applied,
   };
   showSummary(statistics, { dryRun });

@@ -1,11 +1,13 @@
 {
-  "_comment": "Fresh install — no before/ tree. Asserts the canonical post-install layout.",
+  "_comment": "Fresh install — no before/ tree. Asserts the canonical post-install layout. .awos/.awos-version is asserted for existence only: packageRoot here is the repo itself, whose package.json version is the publish-time placeholder 0.0.0-develop, so pinning a value would pin the placeholder rather than a real release.",
   ".awos/commands/architecture.md": { "exists": true },
   ".awos/commands/implement.md": { "exists": true },
   ".awos/commands/tasks.md": { "exists": true, "contains": "**[Agent: " },
   ".awos/commands/verify.md": { "exists": true },
   ".awos/templates/agent-template.md": { "exists": true },
   ".awos/scripts/create-spec-directory.sh": { "exists": true },
+  ".awos/scripts/self-check.mjs": { "exists": true },
+  ".awos/.awos-version": { "exists": true },
   ".claude/commands/awos/architecture.md": { "exists": true },
   ".claude/commands/awos/implement.md": {
     "exists": true,

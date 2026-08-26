@@ -91,7 +91,12 @@ All framework service data lives in the `.awos/` directory:
 - `.awos/templates` - Document templates
 - `.awos/scripts` - Utility scripts
 
-**Warning:** Do NOT manually edit files in the `.awos/` folder. These files are always overwritten during updates.
+**Warning:** Do NOT manually edit these framework files. They are always overwritten during updates.
+
+The `.awos/` directory also holds generated state — not shipped framework content, so the warning above doesn't apply, but still nothing you hand-edit:
+
+- `.awos/.awos-version` - the installed AWOS version, written by the installer.
+- `.awos/cache/` - runtime state for the daily self-check; git-ignored, per-developer.
 
 ### The `.claude` Folder: Your Customization Layer
 
@@ -124,6 +129,8 @@ To update **`awos`** to the latest version, run the installer again:
 npx @provectusinc/awos
 ```
 
+**Staying current:** `/awos:spec` checks once a day whether AWOS, the `awos` plugin, and the hired-agent report are current. It only tells you — it never installs or updates anything itself. Disable it with `AWOS_SELF_CHECK=off`.
+
 **What gets updated:**
 
 - Commands in `.awos/commands`
@@ -131,7 +138,7 @@ npx @provectusinc/awos
 - Scripts in `.awos/scripts`
 - Commands in `.claude/commands/awos`
 
-**Important:** The installer will overwrite existing files in `.claude/commands/awos`. If you've customized these files, back them up first.
+**Wrapper conflicts:** The installer treats your wrapper files as customization, not framework content — a re-run that would overwrite a wrapper you already have lists it and asks before touching it. Non-interactive runs (CI, piped input, tests) default to preserving your customizations — silently overwriting them is exactly the failure this policy exists to prevent. Pass `--overwrite` to force a fresh sync, or `--no-overwrite` to make the safe default explicit without prompting. Wrappers you've never had before (e.g. commands added in a newer release) are installed either way. If you decline the overwrite, the installer points you to <https://github.com/provectus/awos/tree/main/claude/commands> so you can diff and update manually.
 
 ---
 

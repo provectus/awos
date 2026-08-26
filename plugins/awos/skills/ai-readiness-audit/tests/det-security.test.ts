@@ -338,6 +338,71 @@ test('AIS-07 inherited evidence path (hook-directory branch) is readable, not a 
   }
 });
 
+// The malformed-JSON-but-regex-matched PASS branch (settings.json isn't
+// valid JSON, but still contains a literal `"hooks":` token) had zero
+// coverage before this — only the parsed-JSON branch was exercised.
+function writeGuardHooksMalformed(dir: string): void {
+  mkdirSync(join(dir, '.claude'), { recursive: true });
+  writeFileSync(
+    join(dir, '.claude', 'settings.json'),
+    '{\n  // guard config (malformed on purpose)\n  "hooks": {\n    "PreToolUse": [\n      { "matcher": "Read", "hooks": [] },\n    ]\n  }\n}\n'
+  );
+}
+
+test('AIS-07: settings.json with "hooks" key but invalid JSON is PASS (own repo)', () => {
+  const t = tmp();
+  writeGuardHooksMalformed(t);
+  const r = detectAgentSafetyHooks(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'a "hooks" key pattern in an unparseable settings file must still count as a guard'
+  );
+  assert.ok(
+    r.evidence.some(
+      (e) =>
+        e.includes('.claude/settings.json') &&
+        e.includes('could not be parsed as JSON')
+    ),
+    `evidence must name the file and say it could not be parsed; got ${JSON.stringify(r.evidence)}`
+  );
+});
+
+test('AIS-07 inherits the malformed-JSON "hooks" pattern from the orchestration root', () => {
+  const { root, member } = orchestrationFixture(
+    'awos-inherit-AIS-07-malformed-',
+    writeGuardHooksMalformed,
+    'root'
+  );
+  try {
+    assert.equal(
+      detectAgentSafetyHooks(member).status,
+      'FAIL',
+      'AIS-07 must FAIL for a member with no root in scope — otherwise the inheritance test proves nothing'
+    );
+    const r = detectAgentSafetyHooks(member, inheritParams(root));
+    assert.equal(
+      r.status,
+      'PASS',
+      'the malformed-JSON "hooks" pattern must be credited from the orchestration root too'
+    );
+    assert.ok(
+      r.evidence.some((e) => /inherited from orchestration root/.test(e)),
+      `evidence must say the credit was inherited; got ${JSON.stringify(r.evidence)}`
+    );
+    assert.ok(
+      r.evidence.some((e) => e.includes('.claude/settings.json')),
+      `inherited evidence must reconstruct the logical registry-relative location, not the raw resolved path; got ${JSON.stringify(r.evidence)}`
+    );
+    assert.ok(
+      r.evidence.every((e) => !e.includes('../')),
+      `inherited evidence must not render as an unreadable ../.. trail; got ${JSON.stringify(r.evidence)}`
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // detectEnvExample (2602 — AS-13)
 // ---------------------------------------------------------------------------

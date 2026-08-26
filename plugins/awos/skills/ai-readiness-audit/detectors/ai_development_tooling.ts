@@ -4,38 +4,16 @@ import {
   readTextSafe,
   probeRepoPath,
   inheritedNote,
-  PathOrigin,
 } from './_base.ts';
 import { existsSync, lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { displayPath } from '../fs_probe.ts';
 import {
   ALL_RULE_COMMAND_DIRS,
   ALL_SKILL_DIRS,
   ALL_MCP_CONFIG_PATHS,
   ALL_HOOK_PATHS,
 } from '../agent_tools.ts';
-
-/**
- * Render an artifact's evidence path. Own repo: relative(repoPath, absPath) —
- * byte-identical to every detector's pre-inheritance rendering, since a
- * repository with no orchestration root in scope must be completely
- * unaffected by this feature. Inherited: the logical registry-relative
- * location within whichever workspace supplied it (relRegistryPath, plus
- * however far absPath sits beneath resolvedBase) rather than a `../../…`
- * trail out of the member — resolvedBase === absPath for a single-file probe
- * collapses to relRegistryPath itself.
- */
-function displayPath(
-  origin: PathOrigin,
-  repoPath: string,
-  resolvedBase: string,
-  relRegistryPath: string,
-  absPath: string
-): string {
-  return origin === 'inherited'
-    ? join(relRegistryPath, relative(resolvedBase, absPath))
-    : relative(repoPath, absPath);
-}
 
 // ---------------------------------------------------------------------------
 // detectCustomCommands — category 2001 (AI-02, method: detected)

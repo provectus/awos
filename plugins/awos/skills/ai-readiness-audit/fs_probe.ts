@@ -4,7 +4,7 @@
 // beneath both collectors/git.ts and topology.ts without creating a cycle.
 // See detectors/_base.ts and collectors/git.ts for the callers.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 /** Non-blank line count above which a file counts as real content, not boilerplate. */
 export const MIN_SUBSTANTIVE_LINES = 5;
@@ -41,4 +41,26 @@ export function isSubstantiveOrchestrationPath(target: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Render an artifact's evidence path. Own repo: relative(repoPath, absPath) —
+ * byte-identical to every detector's pre-inheritance rendering, since a
+ * repository with no orchestration root in scope must be completely
+ * unaffected by this feature. Inherited: the logical registry-relative
+ * location within whichever workspace supplied it (relRegistryPath, plus
+ * however far absPath sits beneath resolvedBase) rather than a `../../…`
+ * trail out of the member — resolvedBase === absPath for a single-file probe
+ * collapses to relRegistryPath itself.
+ */
+export function displayPath(
+  origin: 'own' | 'inherited',
+  repoPath: string,
+  resolvedBase: string,
+  relRegistryPath: string,
+  absPath: string
+): string {
+  return origin === 'inherited'
+    ? join(relRegistryPath, relative(resolvedBase, absPath))
+    : relative(repoPath, absPath);
 }

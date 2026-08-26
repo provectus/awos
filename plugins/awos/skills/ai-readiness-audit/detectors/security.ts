@@ -5,10 +5,10 @@ import {
   readTextSafe,
   probeRepoPath,
   inheritedNote,
-  type PathOrigin,
 } from './_base.ts';
 import { existsSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
+import { displayPath } from '../fs_probe.ts';
 import { ALL_HOOK_PATHS } from '../agent_tools.ts';
 
 // ---------------------------------------------------------------------------
@@ -90,22 +90,6 @@ const HOOK_FILES_GLOBS = ['*.sh', '*.js', '*.ts', '*.py', '*.bash'];
 // hook script — would count as a sensitive-file reference.
 const HOOK_SENSITIVE_RX =
   /(?:^|[\s"'/])\.env\b|secret|credential|\.pem|\.key/im;
-
-// Own-repo evidence stays byte-identical to pre-inheritance behavior
-// (relative to repoPath); an inherited artifact reconstructs its logical
-// location within the orchestration root instead of exposing a ../.. trail
-// out of the member. Mirrors ai_development_tooling.ts's displayPath.
-function displayPath(
-  origin: PathOrigin,
-  repoPath: string,
-  resolvedBase: string,
-  relRegistryPath: string,
-  absPath: string
-): string {
-  return origin === 'inherited'
-    ? join(relRegistryPath, relative(resolvedBase, absPath))
-    : relative(repoPath, absPath);
-}
 
 export function detectAgentSafetyHooks(
   repoPath: string,

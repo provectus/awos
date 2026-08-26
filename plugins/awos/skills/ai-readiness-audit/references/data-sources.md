@@ -29,11 +29,12 @@ This table is derived from `agent_tools.ts` — the single registry that drives 
 
 ## The audit boundary
 
-The audit scope is always **either a folder or a GitHub org — never a manifest file**. The target the skill is pointed at decides the mode:
+The audit scope is always **either a folder or a GitHub org — never a manifest file**. The target the skill is pointed at decides the mode. Case 4 below is a stricter version of case 1 (both need `.git`), so check it before settling on case 1:
 
-1. **A git repo** (the target folder contains `.git`) → **single-repo mode** over that repo. A monorepo is just this case: one repo, audited as a whole.
+1. **A git repo** (the target folder contains `.git`) that does not itself hold independent git repos in subdirectories → **single-repo mode** over that repo. A monorepo is just this case: one repo, audited as a whole.
 2. **A non-git folder** → **org mode**. Enumerate every immediate top-level subdirectory that is itself a git repo, and audit each one. List any top-level subdirectories that were skipped because they are not git repos, so the audited scope is transparent to the user.
 3. **A GitHub org name** → **org mode** over the org's repos, enumerated with `gh repo list <org>` (gh CLI on PATH) or the GitHub MCP if present.
+4. **An orchestration root** (a git repo whose subdirectories hold independent git repos of their own — usually gitignored) → **org mode** over the root plus its members. The root is audited too, as member #1, since it carries the agent tooling the audit is measuring; `SKILL.md` Step 0 covers the flags that record this relationship.
 
 No scope manifest is read; there is no configuration file to author. Point the skill at the folder or org and it resolves the boundary itself.
 

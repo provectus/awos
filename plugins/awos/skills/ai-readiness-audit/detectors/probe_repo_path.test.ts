@@ -128,6 +128,62 @@ test('absent params behave exactly as before orchestration roots existed', () =>
   }
 });
 
+test('params with no inheritance key degrades to a plain own-repo probe', () => {
+  const base = tmpDir('awos-probe-nokey-');
+  try {
+    const root = join(base, 'root');
+    const member = join(base, 'root', 'services', 'api');
+    mkdirSync(member, { recursive: true });
+    writeFileSync(join(root, 'CLAUDE.md'), SUBSTANTIVE);
+
+    const res = probeRepoPath(
+      member,
+      { threshold: 3, pass_at: 0.7 },
+      'CLAUDE.md'
+    );
+    assert.equal(
+      res.path,
+      null,
+      'a params bag with no inheritance key — the shape every pre-existing detector call uses — must never see the root'
+    );
+    assert.equal(
+      res.origin,
+      'own',
+      'a params bag with no inheritance key must degrade to a plain own-repo probe'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('a null orchestration root never gets joined — this is how a root audits itself', () => {
+  const base = tmpDir('awos-probe-nullroot-');
+  try {
+    const root = join(base, 'root');
+    const member = join(base, 'root', 'services', 'api');
+    mkdirSync(member, { recursive: true });
+    writeFileSync(join(root, 'CLAUDE.md'), SUBSTANTIVE);
+
+    const res = probeRepoPath(
+      member,
+      { inheritance: { orchestrationRoot: null, inherits: true } },
+      'CLAUDE.md'
+    );
+    assert.equal(
+      res.path,
+      null,
+      '--no-orchestration-root passes orchestrationRoot: null so a root can audit itself; probeRepoPath must not attempt a path join against it'
+    );
+    assert.equal(
+      res.origin,
+      'own',
+      'a null root degrades to a plain own-repo probe'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test('inheritedNote annotates only inherited evidence', () => {
   assert.equal(
     inheritedNote('own', '.claude/skills found'),

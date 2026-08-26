@@ -4256,22 +4256,29 @@ test('repo-auditor accepts an orchestration root', () => {
 
 test('SKILL.md Phase 0a routes an orchestration root to case 4, not case 1', () => {
   // Case 4's trigger ("has .git" + "holds independent git repos in
-  // subdirectories") is a strict superset of case 1's ("has .git"). Reading
-  // top-to-bottom, an orchestrator must be told case 1 does not match a
-  // target that also satisfies case 4 — otherwise it stops at case 1 and
-  // never reaches the orchestration-root case at all. This pins the
-  // disambiguating clause's presence and its ordering ahead of case 4; it
-  // cannot verify that a model actually applies the exclusion correctly —
-  // that's a behavioral contract for the awos-qa harness, not a grep.
+  // subdirectories" + "carries the tooling governing them") is a strict
+  // superset of case 1's ("has .git"). Reading top-to-bottom, an
+  // orchestrator must be told case 1 does not match a target that also
+  // satisfies case 4 — otherwise it stops at case 1 and never reaches the
+  // orchestration-root case at all. This pins the disambiguating clause's
+  // presence, its ordering ahead of case 4, and case 4's tooling gate (which
+  // stops a plain nested checkout — an examples app, a vendored library —
+  // from being mistaken for an orchestration root). It cannot verify that a
+  // model actually applies these rules correctly when reasoning
+  // top-to-bottom — that's a behavioral contract for the awos-qa harness,
+  // not a grep.
   const skill = readUtf8(auditSkillFile);
   assert.match(
     skill,
-    /does \*\*not\*\* itself hold independent git repos in subdirectories/,
-    'case 1 must explicitly exclude a target that itself holds independent git repos, or an orchestrator reading top-to-bottom matches case 1 before ever reaching case 4'
+    /is not itself an orchestration root/,
+    'case 1 must explicitly exclude a target that is itself an orchestration root, or an orchestrator reading top-to-bottom matches case 1 before ever reaching case 4'
   );
-  const case1Index = skill.indexOf(
-    'does **not** itself hold independent git repos'
+  assert.match(
+    skill,
+    /carries the agent tooling that governs them/,
+    "case 4 must require governing tooling, not just containment, or an ordinary project with a nested checkout (vendored library, examples app) is misdetected as an orchestration root's portfolio"
   );
+  const case1Index = skill.indexOf('is not itself an orchestration root');
   const case4Index = skill.indexOf('**An orchestration root**');
   assert.ok(
     case1Index !== -1 && case4Index !== -1 && case1Index < case4Index,

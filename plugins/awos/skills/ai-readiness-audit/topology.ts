@@ -39,6 +39,21 @@ import { ALL_SOURCE_GLOBS } from './languages.ts';
 
 export type TopologyFlags = Record<string, boolean>;
 
+/**
+ * Flags that widen to the orchestration root when one is in scope.
+ *
+ * `applies_when` is evaluated before a detector runs, so a category gated on a
+ * flag that is false never reaches the detector that would have inherited its
+ * capability. Every flag gating an inheriting category must therefore appear
+ * here. Everything else — has_ci, has_http_api, is_monorepo — describes the
+ * member's own code and deployment and must stay member-local.
+ */
+export const ORCHESTRATION_WIDENED_FLAGS = [
+  'has_ai_agent_files',
+  'has_agent_instruction_files',
+  'has_commands_or_skills',
+] as const;
+
 /** True if any of the given repo-relative paths exists. */
 function anyPath(repoPath: string, names: string[]): boolean {
   return names.some((n) => existsSync(join(repoPath, n)));
@@ -107,7 +122,8 @@ export function computeTopology(
     has_docs_connector?: boolean;
     has_incident_source?: boolean;
     has_code_host?: boolean;
-  }
+  },
+  orchestrationRoot?: string | null
 ): TopologyFlags {
   const settings = readIfExists(repoPath, '.claude/settings.json');
 
@@ -157,15 +173,27 @@ export function computeTopology(
   const hasEnvFiles =
     anyPath(repoPath, ['.env']) || anyGlob(repoPath, ['.env', '.env.*']);
 
+  // Widen only the flags that gate an inheriting category. See
+  // ORCHESTRATION_WIDENED_FLAGS for why this set and no other.
+  const rootHasAgentFiles =
+    orchestrationRoot != null &&
+    (anyPath(orchestrationRoot, [
+      ...ALL_INSTRUCTION_FILES,
+      ...ALL_TOOL_CONFIG_DIRS,
+    ]) ||
+      anyGlob(orchestrationRoot, ALL_INSTRUCTION_FILES));
+  const rootHasCommandsOrSkills =
+    orchestrationRoot != null &&
+    anyPath(orchestrationRoot, [...ALL_RULE_COMMAND_DIRS, ...ALL_SKILL_DIRS]);
+
   const flags: TopologyFlags = {
     has_topology: true,
     has_ci: detectCiConfigPath(repoPath) !== null,
-    has_ai_agent_files: hasAgentFiles,
-    has_agent_instruction_files: hasAgentFiles,
-    has_commands_or_skills: anyPath(repoPath, [
-      ...ALL_RULE_COMMAND_DIRS,
-      ...ALL_SKILL_DIRS,
-    ]),
+    has_ai_agent_files: hasAgentFiles || rootHasAgentFiles,
+    has_agent_instruction_files: hasAgentFiles || rootHasAgentFiles,
+    has_commands_or_skills:
+      anyPath(repoPath, [...ALL_RULE_COMMAND_DIRS, ...ALL_SKILL_DIRS]) ||
+      rootHasCommandsOrSkills,
     has_hooks:
       /"hooks"\s*:/.test(settings) ||
       anyPath(repoPath, ['.pre-commit-config.yaml', '.husky']),

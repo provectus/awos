@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import {
   detectOrchestrationRelation,
   detectOrchestrationMembers,
+  computeTopology,
+  ORCHESTRATION_WIDENED_FLAGS,
 } from './topology.ts';
 import { tmpDir } from './tests/helpers.ts';
 
@@ -201,4 +203,72 @@ test('detectOrchestrationMembers returns [] for a repo with no nested repos', ()
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('computeTopology widens agent-file flags to the orchestration root', () => {
+  const root = tmpDir('awos-orch-topo-');
+  try {
+    initRepo(root);
+    writeTooling(root);
+    const member = join(root, 'services', 'api');
+    initRepo(member);
+
+    const bare = computeTopology(member);
+    assert.equal(
+      bare.has_ai_agent_files,
+      false,
+      'without an orchestration root the member has no agent files of its own'
+    );
+
+    const widened = computeTopology(member, undefined, root);
+    assert.equal(
+      widened.has_ai_agent_files,
+      true,
+      'has_ai_agent_files must widen to the orchestration root, otherwise PRV-07/PRV-17 SKIP before inheritance can apply'
+    );
+    assert.equal(
+      widened.has_commands_or_skills,
+      true,
+      'has_commands_or_skills must widen to the orchestration root, otherwise AIS-07 SKIPs before inheritance can apply'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('computeTopology keeps member-local flags member-local', () => {
+  const root = tmpDir('awos-orch-topo-local-');
+  try {
+    initRepo(root);
+    writeTooling(root);
+    writeFileSync(join(root, 'package.json'), '{"name":"root"}\n');
+    mkdirSync(join(root, '.github', 'workflows'), { recursive: true });
+    writeFileSync(
+      join(root, '.github', 'workflows', 'ci.yml'),
+      'name: ci\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n'
+    );
+    const member = join(root, 'services', 'api');
+    initRepo(member);
+
+    const widened = computeTopology(member, undefined, root);
+    assert.equal(
+      widened.has_ci,
+      false,
+      "has_ci describes the member's own pipeline and must never absorb the root's — a member with no CI must not be reported as having CI"
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('ORCHESTRATION_WIDENED_FLAGS is the declared widening set', () => {
+  assert.deepEqual(
+    [...ORCHESTRATION_WIDENED_FLAGS].sort(),
+    [
+      'has_agent_instruction_files',
+      'has_ai_agent_files',
+      'has_commands_or_skills',
+    ],
+    'the widened-flag set is a contract other tests assert against; changing it must be deliberate'
+  );
 });

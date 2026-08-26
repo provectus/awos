@@ -1065,6 +1065,14 @@ test('SDD-01 credits an ADR practice, not only AWOS', () => {
       res.evidence.some((e) => /ADR/i.test(e)),
       `the evidence must name which practice was recognized, got ${JSON.stringify(res.evidence)}`
     );
+    assert.ok(
+      res.evidence.some((e) => e.includes('docs/adr')),
+      `the evidence must name the root that actually exists (docs/adr), got ${JSON.stringify(res.evidence)}`
+    );
+    assert.ok(
+      res.evidence.every((e) => !e.includes('docs/rfcs')),
+      `the evidence must not name a declared-but-absent root (docs/rfcs) as "in use", got ${JSON.stringify(res.evidence)}`
+    );
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }

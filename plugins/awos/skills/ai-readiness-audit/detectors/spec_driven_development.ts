@@ -88,9 +88,15 @@ export function detectSpecWorkflowAdopted(
   const others = detectSpecFrameworks(repoPath, params).filter(
     (f) => f.framework.id !== 'awos'
   );
-  const withRecords = others.filter(
-    (f) => specRootsFor(repoPath, f.framework, params).length > 0
-  );
+  // Evidence must name the roots that actually exist, not every root the
+  // framework could possibly use — an ADR-only repo's evidence naming
+  // docs/rfcs, doc/adr, etc. as "in use" would send a reader looking for
+  // paths that were never there. specRootsFor already tells us which
+  // markers matched; thread that through instead of falling back to
+  // framework.specRoots (the full declared list).
+  const withRecords = others
+    .map((f) => ({ ...f, roots: specRootsFor(repoPath, f.framework, params) }))
+    .filter((f) => f.roots.length > 0);
   if (withRecords.length > 0) {
     return makeResult(
       'PASS',
@@ -98,7 +104,7 @@ export function detectSpecWorkflowAdopted(
       withRecords.map((f) =>
         inheritedNote(
           f.origin,
-          `${f.framework.label} practice in use (${f.framework.specRoots.join(', ')})`
+          `${f.framework.label} practice in use (${f.roots.map((r) => r.rel).join(', ')})`
         )
       )
     );

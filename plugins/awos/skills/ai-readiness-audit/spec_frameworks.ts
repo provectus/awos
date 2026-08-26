@@ -157,17 +157,23 @@ export function detectSpecFrameworks(
   return out;
 }
 
-/** Absolute spec-record roots for a framework, resolved through inheritance. */
+/**
+ * Absolute spec-record roots for a framework, resolved through inheritance.
+ * `rel` is the declared marker that actually matched (e.g. "docs/adr"), so a
+ * caller can report which of a framework's several possible roots is really
+ * present without re-deriving that from `fw.specRoots` (which would list
+ * every possible root, found or not).
+ */
 export function specRootsFor(
   repoPath: string,
   fw: SpecFramework,
   params?: unknown
-): Array<{ path: string; origin: PathOrigin }> {
-  const roots: Array<{ path: string; origin: PathOrigin }> = [];
+): Array<{ path: string; origin: PathOrigin; rel: string }> {
+  const roots: Array<{ path: string; origin: PathOrigin; rel: string }> = [];
   for (const rel of fw.specRoots) {
     const probe = probeRepoPath(repoPath, params, rel);
     if (probe.path !== null)
-      roots.push({ path: probe.path, origin: probe.origin });
+      roots.push({ path: probe.path, origin: probe.origin, rel });
   }
   return roots;
 }

@@ -62,6 +62,30 @@ test('an own tooling layer keeps its plain evidence wording', () => {
   }
 });
 
+test('a layer with mixed-origin paths (one own, one inherited) keeps plain wording', () => {
+  // Code 103 (rule/command dirs) has multiple registry paths — '.claude/commands'
+  // (Claude Code) and '.cursor/rules' (Cursor) both map to it (agent_tools.ts).
+  // A repo can carry both: its own '.claude/commands' plus a '.cursor/rules'
+  // inherited from the orchestration root. The member repo genuinely owns part
+  // of this layer's capability, so labelling it "inherited" would misinform a
+  // reader into thinking the repo has no native tooling here — it does.
+  const dir = tmpDir('awos-tooling-depth-mixed-');
+  try {
+    writeGitArtifact(dir, ['.claude/commands', '.cursor/rules'], {
+      '.claude/commands': 'own',
+      '.cursor/rules': 'inherited',
+    });
+    const result = compute(join(dir, 'collected'), {}, {});
+    const evidence = result.evidence_per_code?.[103] ?? [];
+    assert.ok(
+      evidence.every((e) => !/inherited/.test(e)),
+      `a layer where the repository holds any of its own capability must never be reported as inherited, because that would tell a reader the member has no native tooling for that layer when it does; got ${JSON.stringify(evidence)}`
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a git.json without origins still scores (backward compatibility)', () => {
   const dir = tmpDir('awos-tooling-depth-legacy-');
   try {

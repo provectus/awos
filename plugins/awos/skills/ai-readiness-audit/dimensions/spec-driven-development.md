@@ -91,7 +91,7 @@ Audits whether the project practises spec-driven development by any recognized c
 
 ### SDD-06: No stale or abandoned specs
 
-- **What:** Records that have progressed past their convention's initial statuses are still actively being worked on, not abandoned mid-workflow. Staleness is judged against each convention's own status vocabulary, not AWOS's.
+- **What:** An active record is only flagged when its convention's task artifact also shows zero progress — abandoned mid-workflow, not merely in flight. Staleness is judged against each convention's own status vocabulary and task artifact, not AWOS's.
 - **How:**
   1. Read each record's declared status from its status-bearing file — the first triad file for a multi-file convention (`functional-spec.md` for AWOS), or the record itself for a single-file ADR
   2. Classify the status against the owning convention's own vocabulary:

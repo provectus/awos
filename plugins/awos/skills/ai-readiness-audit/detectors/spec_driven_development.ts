@@ -17,60 +17,107 @@ import {
   FIX_SUBJECT_RX,
   REVERT_SUBJECT_RX,
 } from '../collectors/git.ts';
+import {
+  detectSpecFrameworks,
+  specRootsFor,
+  SPEC_FRAMEWORKS,
+} from '../spec_frameworks.ts';
 
 // ---------------------------------------------------------------------------
-// detectAwosInstalled — category 2800 (SDD-01, method: detected)
+// detectSpecWorkflowAdopted — category 2800 (SDD-01, method: detected)
 //
-// PASS if both .awos/ and context/ directories exist.
-// WARN if only one is present.
-// FAIL if neither is present.
+// Whether the project practises spec-driven development at all, by any
+// recognized convention. AWOS is one of them, not the definition of the check:
+// a project with a disciplined ADR or design-doc practice is doing the thing
+// this dimension measures and earns the credit.
+//
+// PASS when a recognized practice is adopted.
+// WARN when a practice's marker exists but carries no records yet.
+// FAIL when no design record of any kind is present.
 // ---------------------------------------------------------------------------
 
-export function detectAwosInstalled(
+export function detectSpecWorkflowAdopted(
   repoPath: string,
   params?: unknown
 ): ReturnType<typeof makeResult> {
+  // AWOS keeps its original three-way semantics EXACTLY. Genericizing this
+  // dimension is about no longer penalizing projects that never adopted AWOS
+  // (issue #160); it must not silently move the score of a project that did.
+  // The pinned regression test detectors/spec_driven_development_sdd01.test.ts
+  // encodes those semantics — including the self-pollution guard (a bare
+  // context/ holding only the audit's own context/audits/ output must FAIL) —
+  // and it must stay green WITHOUT being edited.
   const awos = probeRepoPath(repoPath, params, '.awos');
-  // A bare context/ directory is NOT evidence of a spec workspace — the audit
-  // itself creates context/audits/ for its output. Only the workspace subdirs
-  // the installer creates (context/product, context/spec) count.
   const product = probeRepoPath(repoPath, params, 'context/product');
   const spec = probeRepoPath(repoPath, params, 'context/spec');
-  const hasAwos = awos.path !== null;
-  const contextProbe = product.path !== null ? product : spec;
-  const hasContext = contextProbe.path !== null;
-  const origin =
-    awos.origin === 'inherited' || contextProbe.origin === 'inherited'
+  const workspace = product.path !== null ? product : spec;
+  const awosOrigin =
+    awos.origin === 'inherited' || workspace.origin === 'inherited'
       ? 'inherited'
       : 'own';
 
-  if (hasAwos && hasContext) {
+  if (awos.path !== null && workspace.path !== null) {
     return makeResult('PASS', 2, [
-      inheritedNote(origin, '.awos/ directory found'),
-      inheritedNote(origin, 'context/product or context/spec directory found'),
+      inheritedNote(awosOrigin, '.awos/ directory found'),
+      inheritedNote(
+        awosOrigin,
+        'context/product or context/spec directory found'
+      ),
     ]);
   }
-
-  if (hasAwos) {
+  if (awos.path !== null) {
     return makeResult('WARN', 1, [
       inheritedNote(
-        origin,
+        awosOrigin,
         '.awos/ directory found; context/product and context/spec directories not found'
       ),
     ]);
   }
-
-  if (hasContext) {
+  if (workspace.path !== null) {
     return makeResult('WARN', 1, [
       inheritedNote(
-        origin,
+        awosOrigin,
         'context/product or context/spec directory found; .awos/ directory not found'
       ),
     ]);
   }
 
+  // No AWOS. This is the half issue #160 is about: credit any other
+  // recognized practice instead of hard-failing the project for not being an
+  // AWOS project.
+  const others = detectSpecFrameworks(repoPath, params).filter(
+    (f) => f.framework.id !== 'awos'
+  );
+  const withRecords = others.filter(
+    (f) => specRootsFor(repoPath, f.framework, params).length > 0
+  );
+  if (withRecords.length > 0) {
+    return makeResult(
+      'PASS',
+      withRecords.length,
+      withRecords.map((f) =>
+        inheritedNote(
+          f.origin,
+          `${f.framework.label} practice in use (${f.framework.specRoots.join(', ')})`
+        )
+      )
+    );
+  }
+  if (others.length > 0) {
+    return makeResult(
+      'WARN',
+      others.length,
+      others.map((f) =>
+        inheritedNote(
+          f.origin,
+          `${f.framework.label} is installed but holds no spec records yet`
+        )
+      )
+    );
+  }
+
   return makeResult('FAIL', 0, [
-    'neither .awos/ nor context/product nor context/spec directory found',
+    `no spec-driven practice found — checked for ${SPEC_FRAMEWORKS.map((f) => f.label).join(', ')}`,
   ]);
 }
 
@@ -1125,7 +1172,7 @@ export const DETECTORS: Record<
   number,
   (repoPath: string, params?: unknown) => ReturnType<typeof makeResult>
 > = {
-  2800: detectAwosInstalled, // SDD-01 AWOS installed
+  2800: detectSpecWorkflowAdopted, // SDD-01 spec-driven practice adopted
   2801: detectProductContextDocs, // SDD-02 foundational product docs
   2802: detectArchTechMatch, // SDD-03 tech choices match codebase
   2803: detectBranchSpecRatio, // SDD-04 branch→spec ratio (computed)

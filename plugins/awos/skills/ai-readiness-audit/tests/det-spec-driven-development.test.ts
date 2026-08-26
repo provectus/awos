@@ -4,7 +4,7 @@ import { writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
-  detectAwosInstalled,
+  detectSpecWorkflowAdopted,
   detectProductContextDocs,
   detectArchTechMatch,
   detectBranchSpecRatio,
@@ -66,7 +66,7 @@ function addBranch(
 }
 
 // ---------------------------------------------------------------------------
-// detectAwosInstalled — code 2800 (SDD-01, detected)
+// detectSpecWorkflowAdopted — code 2800 (SDD-01, detected)
 //
 // PASS if .awos/ and a real spec workspace (context/product or context/spec)
 // exist. WARN if only one side exists. FAIL if neither. A bare context/ does
@@ -77,7 +77,7 @@ test('SDD-01: PASS when both .awos/ and a spec workspace are present', () => {
   const t = tmp();
   mkdirSync(join(t, '.awos'));
   mkdirSync(join(t, 'context', 'product'), { recursive: true });
-  const r = detectAwosInstalled(t);
+  const r = detectSpecWorkflowAdopted(t);
   assert.equal(r.status, 'PASS', '.awos + context/product → PASS');
   assert.equal(r.method, 'detected');
 });
@@ -85,28 +85,28 @@ test('SDD-01: PASS when both .awos/ and a spec workspace are present', () => {
 test('SDD-01: WARN when only .awos/ is present (no spec workspace)', () => {
   const t = tmp();
   mkdirSync(join(t, '.awos'));
-  const r = detectAwosInstalled(t);
+  const r = detectSpecWorkflowAdopted(t);
   assert.equal(r.status, 'WARN', 'only .awos → WARN');
 });
 
 test('SDD-01: WARN when only the spec workspace is present (no .awos/)', () => {
   const t = tmp();
   mkdirSync(join(t, 'context', 'spec'), { recursive: true });
-  const r = detectAwosInstalled(t);
+  const r = detectSpecWorkflowAdopted(t);
   assert.equal(r.status, 'WARN', 'only context/spec → WARN');
 });
 
 test('SDD-01: FAIL when neither .awos/ nor a spec workspace is present', () => {
   const t = tmp();
   writeFileSync(join(t, 'README.md'), '# project\n');
-  const r = detectAwosInstalled(t);
+  const r = detectSpecWorkflowAdopted(t);
   assert.equal(r.status, 'FAIL', 'no dirs → FAIL');
 });
 
 test('SDD-01: FAIL when context/ holds no workspace subdirs (e.g. only audit output)', () => {
   const t = tmp();
   mkdirSync(join(t, 'context', 'audits'), { recursive: true });
-  const r = detectAwosInstalled(t);
+  const r = detectSpecWorkflowAdopted(t);
   assert.equal(
     r.status,
     'FAIL',
@@ -763,7 +763,7 @@ test('SDD-07: PASS when no task checkboxes found in tasks.md files (SKIP)', () =
 test('DETECTORS map contains all spec-driven-development computed/detected codes', () => {
   assert.ok(
     2800 in DETECTORS,
-    'DETECTORS must include 2800 (detectAwosInstalled)'
+    'DETECTORS must include 2800 (detectSpecWorkflowAdopted)'
   );
   assert.ok(
     2801 in DETECTORS,
@@ -966,7 +966,7 @@ function inheritParams(root: string) {
 }
 
 const SDD_INHERIT_CASES = [
-  { id: 'SDD-01', fn: detectAwosInstalled, bareStatus: 'FAIL' },
+  { id: 'SDD-01', fn: detectSpecWorkflowAdopted, bareStatus: 'FAIL' },
   { id: 'SDD-02', fn: detectProductContextDocs, bareStatus: 'FAIL' },
   { id: 'SDD-05', fn: detectSpecTriadComplete, bareStatus: 'SKIP' },
   { id: 'SDD-06', fn: detectStaleSpecs, bareStatus: 'SKIP' },
@@ -1040,3 +1040,82 @@ for (const c of SDD_INHERIT_CASES) {
     }
   });
 }
+
+// ---------------------------------------------------------------------------
+// SDD-01 genericized — any recognized spec-driven practice, not only AWOS
+// ---------------------------------------------------------------------------
+
+test('SDD-01 credits an ADR practice, not only AWOS', () => {
+  const repo = tmpDir('awos-sdd01-adr-');
+  try {
+    mkdirSync(join(repo, 'docs', 'adr'), { recursive: true });
+    for (const n of ['0001-a.md', '0002-b.md', '0003-c.md']) {
+      writeFileSync(
+        join(repo, 'docs', 'adr', n),
+        `# ${n}\n\n## Status\n\nAccepted\n\n## Context\n\nWhy.\n\n## Decision\n\nWhat.\n\n## Consequences\n\nSo what.\n`
+      );
+    }
+    const res = detectSpecWorkflowAdopted(repo);
+    assert.equal(
+      res.status,
+      'PASS',
+      'a repo with a real ADR practice must not be told it lacks spec-driven development because it never installed AWOS — that is the substance of issue #160'
+    );
+    assert.ok(
+      res.evidence.some((e) => /ADR/i.test(e)),
+      `the evidence must name which practice was recognized, got ${JSON.stringify(res.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('SDD-01 still credits AWOS', () => {
+  const repo = tmpDir('awos-sdd01-awos-');
+  try {
+    mkdirSync(join(repo, '.awos', 'commands'), { recursive: true });
+    writeFileSync(join(repo, '.awos', 'commands', 'spec.md'), SDD_CONTENT);
+    mkdirSync(join(repo, 'context', 'product'), { recursive: true });
+    writeFileSync(join(repo, 'context', 'product', 'roadmap.md'), SDD_CONTENT);
+    assert.equal(
+      detectSpecWorkflowAdopted(repo).status,
+      'PASS',
+      'genericizing must not cost AWOS projects the credit they already earned'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('SDD-01 fails a repo with no spec practice at all', () => {
+  const repo = tmpDir('awos-sdd01-none-');
+  try {
+    mkdirSync(join(repo, 'src'), { recursive: true });
+    const res = detectSpecWorkflowAdopted(repo);
+    assert.equal(
+      res.status,
+      'FAIL',
+      'a repo with no design record of any kind genuinely lacks the capability and must be told so'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('a single stray ADR is not a practice', () => {
+  const repo = tmpDir('awos-sdd01-stray-');
+  try {
+    mkdirSync(join(repo, 'docs', 'adr'), { recursive: true });
+    writeFileSync(
+      join(repo, 'docs', 'adr', '0001-a.md'),
+      '# One\n\n## Status\n\nAccepted\n'
+    );
+    assert.equal(
+      detectSpecWorkflowAdopted(repo).status,
+      'FAIL',
+      'one decision record is not a discipline; awarding it would make the check meaningless'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});

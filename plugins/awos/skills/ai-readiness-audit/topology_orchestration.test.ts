@@ -268,6 +268,8 @@ test('ORCHESTRATION_WIDENED_FLAGS is the declared widening set', () => {
       'has_agent_instruction_files',
       'has_ai_agent_files',
       'has_commands_or_skills',
+      'has_spec_workflow',
+      'uses_awos',
     ],
     'the widened-flag set is a contract other tests assert against; changing it must be deliberate'
   );

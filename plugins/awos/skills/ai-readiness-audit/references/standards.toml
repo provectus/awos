@@ -1521,14 +1521,14 @@ metric = "SDD-01"
 dimension = "spec-driven-development"
 weight = 8
 method = "detected"
-definition = "AWOS framework is installed in the project providing the spec-driven development workflow"
+definition = "The project practises spec-driven development by a recognized convention — AWOS, Kiro, Agent-OS, GitHub Spec Kit, or a disciplined ADR/design-doc practice — so significant work is designed before it is built and the design is recorded where the next reader will find it"
 applies_when = "always"
 sources = ["audit"]
 reliability_default = "maximal"
-source = "AWOS convention"
-url = "https://github.com/provectus/awos/blob/main/README.md"
-date = "2026-06"
-last_verified = "2026-07-06"
+source = "Michael Nygard — Documenting Architecture Decisions"
+url = "https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions"
+date = "2011-11"
+last_verified = "2026-08-26"
 
 [category.spec_driven_development_sdd_02]
 code = 2801

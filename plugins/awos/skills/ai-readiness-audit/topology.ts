@@ -33,6 +33,7 @@ import {
   ALL_MCP_CONFIG_PATHS,
 } from './agent_tools.ts';
 import { ALL_SOURCE_GLOBS } from './languages.ts';
+import { detectSpecFrameworks } from './spec_frameworks.ts';
 
 export type TopologyFlags = Record<string, boolean>;
 
@@ -49,6 +50,8 @@ export const ORCHESTRATION_WIDENED_FLAGS = [
   'has_ai_agent_files',
   'has_agent_instruction_files',
   'has_commands_or_skills',
+  'has_spec_workflow',
+  'uses_awos',
 ] as const;
 
 /** True if any of the given repo-relative paths exists. */
@@ -294,6 +297,13 @@ export function computeTopology(
         'requirements.txt',
         'Pipfile',
       ]),
+    has_spec_workflow:
+      detectSpecFrameworks(repoPath).length > 0 ||
+      (orchestrationRoot != null &&
+        detectSpecFrameworks(orchestrationRoot).length > 0),
+    uses_awos:
+      anyPath(repoPath, ['.awos']) ||
+      (orchestrationRoot != null && anyPath(orchestrationRoot, ['.awos'])),
     // Connector-dependent — repo alone cannot prove these. Default false; the
     // orchestrator flips them true after a successful MCP connector fetch.
     has_tracker: Boolean(connectors?.has_tracker),

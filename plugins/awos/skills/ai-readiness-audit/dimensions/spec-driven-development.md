@@ -99,7 +99,8 @@ Audits whether the project practises spec-driven development by any recognized c
      - Kiro / Agent-OS / GitHub Spec Kit: active = Draft, In Progress; terminal = Done, Completed
      - ADR: active = Proposed, Draft; terminal = Accepted, Superseded, Deprecated, Rejected
   3. A record whose declared status matches neither list by exact equality — including an unedited status placeholder, such as AWOS's shipped template menu `Draft | In Review | Approved | Completed` — declares no recognized status and is excluded from the ratio rather than counted either way
-  4. Count how many of the records with a recognized status are still active
+  4. A terminal record is settled and is never stale. An active record alone is not abandonment — a spec opened five minutes ago is also "active" — so it only counts as stale when the convention's task-bearing record file (the `recordTriad` member whose name looks like a task list, e.g. `tasks.md`) both exists and shows zero task items (no `- [ ]` / `- [x]` lines at all). A record whose task file hasn't been authored yet is not counted stale — there is no progress artifact yet to call "no progress" against. A convention with no task-bearing file at all (a single-file ADR has none) can never contribute a stale record; that PASS is the honest outcome for a practice this check has no progress signal for, not a gap in the check
+  5. Count how many judged records are both active and stuck at zero task progress
 - **Pass:** None of the judged records are still active
 - **Warn:** A minority of judged records are active (at most 2, and at most half of the judged records)
 - **Fail:** Otherwise — active records are not a minority

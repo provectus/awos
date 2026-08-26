@@ -680,12 +680,20 @@ test('SDD-05: WARN exactly at the 0.5 ratio boundary (inclusive)', () => {
 // Classifies every spec/decision record by its own convention's status
 // vocabulary, read from the record's status-bearing file (functional-spec.md
 // for AWOS, the record itself for a single-file ADR). A record whose status
-// is one of its convention's "active" values (e.g. AWOS Draft/In Review/
-// Approved) is still in flight; one whose status is "terminal" (AWOS
-// Completed) is settled, not stale. A record that declares no status this
-// check recognizes is excluded from the ratio rather than penalized.
+// is one of its convention's "terminal" values (AWOS Completed) is settled,
+// not stale. A record that declares no status this check recognizes is
+// excluded from the ratio rather than penalized.
 //
-// PASS if none of the judged records are still active.
+// Active status alone is not abandonment — a spec opened five minutes ago is
+// also "active". A record only counts as stale when it is BOTH active AND
+// its convention's task-bearing file (e.g. tasks.md, found via
+// framework.recordTriad) exists and shows zero task items — the actual
+// empty-stub signal. A convention with no task-bearing file (a single-file
+// ADR) has no progress artifact to observe and can never contribute a stale
+// record.
+//
+// PASS if none of the judged records are both active and stuck at zero
+// task progress.
 // WARN if a minority (<=2 and <=half of judged records) are active.
 // FAIL otherwise.
 // SKIP if no record exists, or none declares a recognized status.
@@ -731,35 +739,108 @@ test('SDD-06: PASS when the record has reached a terminal status', () => {
   );
 });
 
-test('SDD-06: WARN when 1 of 2 records is still in an active status', () => {
+test('SDD-06: WARN when 1 of 2 active records is also stuck with no task progress', () => {
   const t = tmp();
   writeRepo(t, {
     'context/spec/001-done/functional-spec.md':
       '# Spec\n\n- **Status:** Completed\n',
+    // Active AND its tasks.md is an empty stub — the actual abandonment signal.
     'context/spec/002-active/functional-spec.md':
       '# Spec\n\n- **Status:** Draft\n',
+    'context/spec/002-active/tasks.md': '# Tasks\n\nTBD.\n',
   });
   const r = detectStaleSpecs(t);
   assert.equal(
     r.status,
     'WARN',
-    '1 of 2 judged records still active (a minority, <=half) → WARN'
+    '1 of 2 judged records both active and stuck at zero task progress (a minority, <=half) → WARN'
   );
 });
 
-test('SDD-06: FAIL when active records are not a minority', () => {
+test('SDD-06: FAIL when active-and-stuck records are not a minority', () => {
   const t = tmp();
   writeRepo(t, {
     'context/spec/001-active/functional-spec.md':
       '# Spec\n\n- **Status:** Draft\n',
+    'context/spec/001-active/tasks.md': '# Tasks\n\nTBD.\n',
     'context/spec/002-active/functional-spec.md':
       '# Spec\n\n- **Status:** In Review\n',
+    'context/spec/002-active/tasks.md': '# Tasks\n\nTBD.\n',
   });
   const r = detectStaleSpecs(t);
   assert.equal(
     r.status,
     'FAIL',
-    '2 of 2 judged records active — not a minority → FAIL'
+    '2 of 2 judged records active and stuck at zero task progress — not a minority → FAIL'
+  );
+});
+
+test('SDD-06: PASS for a brand-new spec still in Draft with no tasks.md yet', () => {
+  // A spec that has just been written (functional-spec.md only, tasks.md not
+  // authored yet) is not abandoned — it is five minutes old. Status alone
+  // must not be enough to flag it: there is no progress artifact yet to
+  // call "no progress" against.
+  const t = tmp();
+  const specDir = join(t, 'context', 'spec', '001-brand-new');
+  mkdirSync(specDir, { recursive: true });
+  writeFileSync(
+    join(specDir, 'functional-spec.md'),
+    '# Spec\n\n- **Status:** Draft\n'
+  );
+  const r = detectStaleSpecs(t);
+  assert.notEqual(
+    r.status,
+    'FAIL',
+    'a brand-new Draft spec with no tasks.md yet must not read as abandoned'
+  );
+});
+
+test('SDD-06: PASS for a normal pipeline of active-plus-completed specs that all show real task progress', () => {
+  const t = tmp();
+  const active = (n: string) => ({
+    [`context/spec/${n}/functional-spec.md`]: '# Spec\n\n- **Status:** Draft\n',
+    [`context/spec/${n}/tasks.md`]:
+      '# Tasks\n\n- [ ] Build it\n- [x] Design it\n',
+  });
+  const done = (n: string) => ({
+    [`context/spec/${n}/functional-spec.md`]:
+      '# Spec\n\n- **Status:** Completed\n',
+    [`context/spec/${n}/tasks.md`]:
+      '# Tasks\n\n- [x] Build it\n- [x] Ship it\n',
+  });
+  writeRepo(t, {
+    ...active('001-a'),
+    ...active('002-b'),
+    ...active('003-c'),
+    ...done('004-d'),
+    ...done('005-e'),
+  });
+  const r = detectStaleSpecs(t);
+  assert.notEqual(
+    r.status,
+    'FAIL',
+    'active specs with real (even partially unchecked) task lists are in-flight work, not abandonment'
+  );
+});
+
+test('SDD-06: an active record with an empty tasks.md stub is counted stale — the actual abandonment case', () => {
+  const t = tmp();
+  const specDir = join(t, 'context', 'spec', '001-stuck');
+  mkdirSync(specDir, { recursive: true });
+  writeFileSync(
+    join(specDir, 'functional-spec.md'),
+    '# Spec\n\n- **Status:** In Review\n'
+  );
+  writeFileSync(join(specDir, 'tasks.md'), '# Tasks\n\nComing soon.\n');
+  const r = detectStaleSpecs(t);
+  assert.ok(
+    r.evidence.some((e) => /in flight/i.test(e) && e.includes('001-stuck')),
+    `an active record with a task file showing zero task items must be reported as in flight, got: ${JSON.stringify(r.evidence)}`
+  );
+  assert.notEqual(
+    r.status,
+    'PASS',
+    'the only record is active and has made zero task progress — this is exactly the abandonment case, must not PASS'
   );
 });
 
@@ -1325,8 +1406,15 @@ test('SDD-06 reads the ADR status vocabulary', () => {
   }
 });
 
-test('SDD-06 flags records stuck in an active status', () => {
-  const repo = tmpDir('awos-sdd06-stale-');
+test('SDD-06 does not flag an ADR-practice repo, even with active-status records — no task artifact to observe', () => {
+  // ADR is a single-file practice: its recordTriad is empty, so there is no
+  // task-bearing file this check can read progress from. Status alone (three
+  // records left Proposed) is no longer enough to call a record stale — a
+  // record is only stale when it is BOTH active AND its convention's task
+  // file exists and shows zero task items. ADR has no such file, so it can
+  // never contribute a stale record; PASS here is the honest outcome for a
+  // practice this check has no progress signal for, not a gap in the check.
+  const repo = tmpDir('awos-sdd06-adr-active-');
   try {
     mkdirSync(join(repo, 'docs', 'adr'), { recursive: true });
     for (const n of ['0001-a.md', '0002-b.md', '0003-c.md']) {
@@ -1335,10 +1423,10 @@ test('SDD-06 flags records stuck in an active status', () => {
         `# ${n}\n\n## Status\n\nProposed\n\n## Context\n\nWhy.\n\n## Decision\n\nWhat.\n\n## Consequences\n\nSo what.\n`
       );
     }
-    assert.notEqual(
+    assert.equal(
       detectStaleSpecs(repo).status,
       'PASS',
-      'three records left Proposed is exactly the abandoned-mid-workflow signal this check exists to surface'
+      'ADR has no task-bearing record file, so three Proposed records must not be flagged stale'
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });
@@ -1356,6 +1444,10 @@ test('SDD-06 recognizes AWOS status even in the real bullet/bold template format
       join(spec, 'functional-spec.md'),
       '# Functional Specification: Real feature\n\n- **Status:** Draft\n- **Author:** Someone\n'
     );
+    // An empty tasks.md stub, so this record also clears the no-progress
+    // condition and shows up as "in flight" — proving the bullet-format
+    // status is actually being read, not just failing to SKIP by accident.
+    writeFileSync(join(spec, 'tasks.md'), '# Tasks\n\nTBD.\n');
     const r = detectStaleSpecs(repo);
     assert.notEqual(
       r.status,
@@ -1364,7 +1456,7 @@ test('SDD-06 recognizes AWOS status even in the real bullet/bold template format
     );
     assert.ok(
       r.evidence.some((e) => /in flight/i.test(e)),
-      `Draft is an active AWOS status and must show up as in flight, got: ${JSON.stringify(r.evidence)}`
+      `Draft is an active AWOS status with zero task progress and must show up as in flight, got: ${JSON.stringify(r.evidence)}`
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });

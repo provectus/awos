@@ -1108,14 +1108,46 @@ export function detectSpecTriadComplete(
 // Classifies every spec/decision record by its own convention's status
 // vocabulary (e.g. AWOS: Draft/In Review/Approved are active, Completed is
 // terminal; ADR: Proposed/Draft are active, Accepted/Superseded/Deprecated/
-// Rejected are terminal). A record left in an active status is still in
-// flight; an Accepted ADR is a settled decision, not abandoned work.
+// Rejected are terminal). A record whose status is terminal is settled, not
+// stale.
 //
-// PASS if no judged records are still active.
-// WARN if a minority (<=2 and <=half of judged records) are active.
+// Active status alone is not abandonment: a spec opened five minutes ago is
+// also "active". A record counts as stale only when it is BOTH active AND
+// its convention's task-bearing record file — the recordTriad member whose
+// name looks like a task list — exists and shows zero task items (an empty
+// stub nobody has filled in yet). A convention with no task-bearing file
+// (e.g. a single-file ADR) has no progress artifact to observe and can never
+// contribute a stale record.
+//
+// PASS if no judged records are both active and stuck at zero task progress.
+// WARN if a minority (<=2 and <=half of judged records) are.
 // FAIL otherwise.
 // SKIP if no record declares a status this check recognizes.
 // ---------------------------------------------------------------------------
+
+/** Any checkbox line, checked or not — evidence that a task list has been started. */
+const TASK_ITEM_RX = /^\s*-\s*\[[ xX]\]/m;
+
+/** The record-triad member that holds task items, or null for a framework with none. */
+function taskBearingFile(framework: SpecFramework): string | null {
+  return framework.recordTriad.find((f) => /task/i.test(f)) ?? null;
+}
+
+/**
+ * Whether an active record has made zero task progress — its convention's
+ * task file exists but contains no task items at all. A record whose task
+ * file doesn't exist yet (freshly created, not authored to that point) is
+ * NOT stale by this check: there is no progress artifact yet to call "no
+ * progress" against. A convention with no task-bearing file at all (e.g. a
+ * single-file ADR) never counts as stuck, for the same reason.
+ */
+function isStuckWithNoProgress(r: SpecRecord): boolean {
+  const taskFile = taskBearingFile(r.framework);
+  if (taskFile === null) return false;
+  const content = readTextSafe(join(r.path, taskFile));
+  if (content === null) return false;
+  return !TASK_ITEM_RX.test(content);
+}
 
 export function detectStaleSpecs(
   repoPath: string,
@@ -1155,7 +1187,9 @@ export function detectStaleSpecs(
       continue;
     }
     judged += 1;
-    if (active) stale.push(`${r.framework.label}: ${r.name} (${status})`);
+    if (active && isStuckWithNoProgress(r)) {
+      stale.push(`${r.framework.label}: ${r.name} (${status})`);
+    }
   }
 
   const evidence = [

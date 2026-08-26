@@ -1,4 +1,12 @@
-import { makeResult, iterFiles, readTextSafe, detectTrunk } from './_base.ts';
+import {
+  makeResult,
+  iterFiles,
+  readTextSafe,
+  detectTrunk,
+  probeRepoPath,
+  inheritedNote,
+  PathOrigin,
+} from './_base.ts';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -20,32 +28,44 @@ import {
 
 export function detectAwosInstalled(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const hasAwos = existsSync(join(repoPath, '.awos'));
+  const awos = probeRepoPath(repoPath, params, '.awos');
   // A bare context/ directory is NOT evidence of a spec workspace — the audit
   // itself creates context/audits/ for its output. Only the workspace subdirs
   // the installer creates (context/product, context/spec) count.
-  const hasContext =
-    existsSync(join(repoPath, 'context', 'product')) ||
-    existsSync(join(repoPath, 'context', 'spec'));
+  const product = probeRepoPath(repoPath, params, 'context/product');
+  const spec = probeRepoPath(repoPath, params, 'context/spec');
+  const hasAwos = awos.path !== null;
+  const contextProbe = product.path !== null ? product : spec;
+  const hasContext = contextProbe.path !== null;
+  const origin =
+    awos.origin === 'inherited' || contextProbe.origin === 'inherited'
+      ? 'inherited'
+      : 'own';
 
   if (hasAwos && hasContext) {
     return makeResult('PASS', 2, [
-      '.awos/ directory found',
-      'context/product or context/spec directory found',
+      inheritedNote(origin, '.awos/ directory found'),
+      inheritedNote(origin, 'context/product or context/spec directory found'),
     ]);
   }
 
   if (hasAwos) {
     return makeResult('WARN', 1, [
-      '.awos/ directory found; context/product and context/spec directories not found',
+      inheritedNote(
+        origin,
+        '.awos/ directory found; context/product and context/spec directories not found'
+      ),
     ]);
   }
 
   if (hasContext) {
     return makeResult('WARN', 1, [
-      'context/product or context/spec directory found; .awos/ directory not found',
+      inheritedNote(
+        origin,
+        'context/product or context/spec directory found; .awos/ directory not found'
+      ),
     ]);
   }
 
@@ -86,7 +106,7 @@ const FOUNDATIONAL_DOC_CANDIDATES = [
 
 export function detectProductContextDocs(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
   const found: string[] = [];
   const missing: string[] = [];
@@ -94,9 +114,13 @@ export function detectProductContextDocs(
   for (const candidates of FOUNDATIONAL_DOC_CANDIDATES) {
     let matched = false;
     for (const candidate of candidates) {
-      const fullPath = join(repoPath, candidate);
-      if (existsSync(fullPath) && isSubstantive(fullPath)) {
-        found.push(candidate);
+      const probe = probeRepoPath(repoPath, params, candidate);
+      if (probe.path !== null && isSubstantive(probe.path)) {
+        found.push(
+          probe.origin === 'inherited'
+            ? `${candidate} (inherited from orchestration root)`
+            : candidate
+        );
         matched = true;
         break;
       }
@@ -779,24 +803,46 @@ const SPEC_TRIAD = [
   'tasks.md',
 ];
 
-function listSpecDirs(repoPath: string): string[] {
-  const specBase = join(repoPath, 'context', 'spec');
-  if (!existsSync(specBase)) return [];
+/** One spec-record directory, with the provenance of the workspace it came from. */
+export interface SpecDirRef {
+  /** Absolute path to the spec directory. */
+  path: string;
+  /** Display name for evidence — the directory's own name, never a ../.. path. */
+  name: string;
+  origin: PathOrigin;
+}
+
+/**
+ * Spec-record directories for this repo, resolved through the orchestration
+ * root when the repo has none of its own. Shared by SDD-05, SDD-06 and SDD-07,
+ * so inheritance is wired here once rather than three times.
+ */
+function listSpecDirs(repoPath: string, params?: unknown): SpecDirRef[] {
+  const probe = probeRepoPath(repoPath, params, 'context/spec');
+  if (probe.path === null) return [];
+  let entries: string[];
   try {
-    return readdirSync(specBase)
-      .filter((name) => /^\d{3}-/.test(name))
-      .sort()
-      .map((name) => join(specBase, name))
-      .filter((p) => {
-        try {
-          return statSync(p).isDirectory();
-        } catch {
-          return false;
-        }
-      });
+    entries = readdirSync(probe.path);
   } catch {
     return [];
   }
+  const out: SpecDirRef[] = [];
+  for (const e of entries) {
+    // AWOS spec directories are numbered (001-feature-name) — the numeric
+    // prefix is what enforces ordering. This filter is load-bearing: without
+    // it every stray subdirectory under context/spec counts as a spec and
+    // SDD-05/06/07 silently change verdicts. It is preserved verbatim from
+    // the original implementation.
+    if (!/^\d{3}-/.test(e)) continue;
+    const full = join(probe.path, e);
+    try {
+      if (!statSync(full).isDirectory()) continue;
+    } catch {
+      continue;
+    }
+    out.push({ path: full, name: e, origin: probe.origin });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 interface SpecDirStatus {
@@ -807,9 +853,9 @@ interface SpecDirStatus {
 
 export function detectSpecTriadComplete(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const specDirs = listSpecDirs(repoPath);
+  const specDirs = listSpecDirs(repoPath, params);
 
   if (specDirs.length === 0) {
     // A repo with zero specs must not score on spec completeness.
@@ -821,12 +867,17 @@ export function detectSpecTriadComplete(
     );
   }
 
+  // A single listSpecDirs() call resolves entirely from one location (own or
+  // inherited), so every ref shares the same origin — safe to read off the
+  // first entry rather than tracking it per-dir.
+  const origin: PathOrigin = specDirs[0].origin;
+
   const statuses: SpecDirStatus[] = [];
 
-  for (const dir of specDirs) {
-    const present = SPEC_TRIAD.filter((f) => existsSync(join(dir, f)));
-    const missing = SPEC_TRIAD.filter((f) => !existsSync(join(dir, f)));
-    statuses.push({ dir: relative(repoPath, dir), present, missing });
+  for (const ref of specDirs) {
+    const present = SPEC_TRIAD.filter((f) => existsSync(join(ref.path, f)));
+    const missing = SPEC_TRIAD.filter((f) => !existsSync(join(ref.path, f)));
+    statuses.push({ dir: ref.name, present, missing });
   }
 
   const empty = statuses.filter((s) => s.present.length === 0);
@@ -836,12 +887,19 @@ export function detectSpecTriadComplete(
   const complete = statuses.filter((s) => s.missing.length === 0);
 
   const evidence = [
-    `${complete.length}/${specDirs.length} spec dirs have all 3 files`,
-    ...incomplete.map(
-      (s) =>
-        `${s.dir} — ${s.present.length}/3 spec-triad artifacts present (missing: ${s.missing.join(', ')})`
+    inheritedNote(
+      origin,
+      `${complete.length}/${specDirs.length} spec dirs have all 3 files`
     ),
-    ...empty.map((s) => `${s.dir} — 0/3 spec-triad artifacts present`),
+    ...incomplete.map((s) =>
+      inheritedNote(
+        origin,
+        `${s.dir} — ${s.present.length}/3 spec-triad artifacts present (missing: ${s.missing.join(', ')})`
+      )
+    ),
+    ...empty.map((s) =>
+      inheritedNote(origin, `${s.dir} — 0/3 spec-triad artifacts present`)
+    ),
   ];
 
   if (empty.length > 0) {
@@ -859,7 +917,10 @@ export function detectSpecTriadComplete(
   }
 
   return makeResult('PASS', specDirs.length, [
-    `all ${specDirs.length} spec dir(s) have the complete triad`,
+    inheritedNote(
+      origin,
+      `all ${specDirs.length} spec dir(s) have the complete triad`
+    ),
     ...evidence,
   ]);
 }
@@ -884,9 +945,9 @@ const UNCHECKED_RX = /^\s*-\s*\[ \]/m;
 
 export function detectStaleSpecs(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const specDirs = listSpecDirs(repoPath);
+  const specDirs = listSpecDirs(repoPath, params);
 
   if (specDirs.length === 0) {
     // No specs → nothing can be stale, but nothing can be healthy either.
@@ -898,12 +959,16 @@ export function detectStaleSpecs(
     );
   }
 
+  // A single listSpecDirs() call resolves entirely from one location (own or
+  // inherited), so every ref shares the same origin.
+  const origin: PathOrigin = specDirs[0].origin;
+
   const stale: string[] = [];
   const active: string[] = [];
   const done: string[] = [];
 
-  for (const dir of specDirs) {
-    const tasksPath = join(dir, 'tasks.md');
+  for (const ref of specDirs) {
+    const tasksPath = join(ref.path, 'tasks.md');
     if (!existsSync(tasksPath)) continue;
 
     const content = readTextSafe(tasksPath);
@@ -912,33 +977,48 @@ export function detectStaleSpecs(
     const hasTasks = TASK_LINE_RX.test(content);
     if (!hasTasks) {
       // tasks.md exists but has no task items → stale
-      stale.push(relative(repoPath, dir));
+      stale.push(ref.name);
     } else if (UNCHECKED_RX.test(content)) {
-      active.push(relative(repoPath, dir));
+      active.push(ref.name);
     } else {
-      done.push(relative(repoPath, dir));
+      done.push(ref.name);
     }
   }
 
   const evidence = [
-    ...active.map((d) => `active (has open tasks): ${d}`),
-    ...done.map((d) => `done (all tasks complete): ${d}`),
-    ...stale.map((d) => `stale (tasks.md has no task items): ${d}`),
+    ...active.map((d) =>
+      inheritedNote(origin, `active (has open tasks): ${d}`)
+    ),
+    ...done.map((d) =>
+      inheritedNote(origin, `done (all tasks complete): ${d}`)
+    ),
+    ...stale.map((d) =>
+      inheritedNote(origin, `stale (tasks.md has no task items): ${d}`)
+    ),
   ];
 
   if (stale.length === 0) {
-    return makeResult('PASS', 0, ['no stale specs found', ...evidence]);
+    return makeResult('PASS', 0, [
+      inheritedNote(origin, 'no stale specs found'),
+      ...evidence,
+    ]);
   }
 
   if (stale.length === 1) {
     return makeResult('WARN', stale.length, [
-      `1 stale spec detected (tasks.md is an empty stub)`,
+      inheritedNote(
+        origin,
+        '1 stale spec detected (tasks.md is an empty stub)'
+      ),
       ...evidence,
     ]);
   }
 
   return makeResult('FAIL', stale.length, [
-    `${stale.length} stale specs detected (tasks.md empty stubs)`,
+    inheritedNote(
+      origin,
+      `${stale.length} stale specs detected (tasks.md empty stubs)`
+    ),
     ...evidence,
   ]);
 }
@@ -966,13 +1046,13 @@ export function detectAgentAnnotations(
   const passAt = p?.pass_at ?? 0.7;
   const warnAt = p?.warn_at ?? 0.4;
   const passAtPct = Math.round(passAt * 100);
-  const specDirs = listSpecDirs(repoPath);
+  const specDirs = listSpecDirs(repoPath, params);
 
   let totalTasks = 0;
   let annotatedTasks = 0;
 
-  for (const dir of specDirs) {
-    const tasksPath = join(dir, 'tasks.md');
+  for (const ref of specDirs) {
+    const tasksPath = join(ref.path, 'tasks.md');
     if (!existsSync(tasksPath)) continue;
 
     const content = readTextSafe(tasksPath);
@@ -994,27 +1074,44 @@ export function detectAgentAnnotations(
     ]);
   }
 
+  // A single listSpecDirs() call resolves entirely from one location (own or
+  // inherited), so every ref shares the same origin; specDirs is non-empty
+  // here (totalTasks > 0 requires at least one).
+  const origin: PathOrigin = specDirs[0].origin;
+
   const ratio = Math.round((annotatedTasks / totalTasks) * 1e10) / 1e10;
   const evidence = [
-    `${annotatedTasks}/${totalTasks} task lines have **[Agent: ...]** annotations (${Math.round(ratio * 100)}%)`,
+    inheritedNote(
+      origin,
+      `${annotatedTasks}/${totalTasks} task lines have **[Agent: ...]** annotations (${Math.round(ratio * 100)}%)`
+    ),
   ];
 
   if (ratio >= passAt) {
     return makeResult('PASS', ratio, [
-      `${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`,
+      inheritedNote(
+        origin,
+        `${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`
+      ),
       ...evidence,
     ]);
   }
 
   if (ratio >= warnAt) {
     return makeResult('WARN', ratio, [
-      `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (below ${passAtPct}%)`,
+      inheritedNote(
+        origin,
+        `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (below ${passAtPct}%)`
+      ),
       ...evidence,
     ]);
   }
 
   return makeResult('FAIL', ratio, [
-    `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`,
+    inheritedNote(
+      origin,
+      `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`
+    ),
     ...evidence,
   ]);
 }

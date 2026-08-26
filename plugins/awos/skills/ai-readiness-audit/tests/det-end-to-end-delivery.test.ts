@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import {
@@ -381,4 +381,100 @@ test('detectVerticalDelivery: pass_at param is honored — 0.5 ratio is PASS by 
     r.evidence.some((e) => e.includes('below 60%')),
     `WARN evidence must cite the resolved pass_at (60%); got: ${r.evidence[0]}`
   );
+});
+
+// ---------------------------------------------------------------------------
+// Orchestration-root inheritance — DOC-07
+//
+// The member always supplies the implementation half of the link (the code
+// has to live where the code is); the root may supply the spec half, since
+// in this layout the spec workspace lives at the root by design.
+// ---------------------------------------------------------------------------
+
+function writeImplRef(dir: string): void {
+  mkdirSync(join(dir, 'src'), { recursive: true });
+  writeFileSync(
+    join(dir, 'src', 'handler.ts'),
+    '// Implements context/spec/001-demo\nexport const handler = () => null;\n'
+  );
+}
+
+function writeSpecWithImplRef(dir: string): void {
+  const specDir = join(dir, 'context', 'spec', '001-demo');
+  mkdirSync(specDir, { recursive: true });
+  writeFileSync(
+    join(specDir, 'functional-spec.md'),
+    '# Functional Spec\n\nImplemented in src/handler.ts.\n\nLine four.\nLine five.\nLine six.\nLine seven.\n'
+  );
+}
+
+function inheritParams(root: string) {
+  return { inheritance: { orchestrationRoot: root, inherits: true } };
+}
+
+/** Root carries the spec half; member always carries the implementation half. */
+function docInheritFixture(prefix: string): { root: string; member: string } {
+  const root = tmpDir(prefix);
+  const member = join(root, 'services', 'api');
+  mkdirSync(member, { recursive: true });
+  writeSpecWithImplRef(root);
+  writeImplRef(member);
+  return { root, member };
+}
+
+test('DOC-07 inherits the spec half of the link from the orchestration root', () => {
+  const { root, member } = docInheritFixture('e2e-doc07-inherit-');
+  try {
+    assert.equal(
+      detectBidirectionalLinks(member).status,
+      'FAIL',
+      'DOC-07 must FAIL for a member with no context/spec/ and no root in scope — otherwise the inheritance test proves nothing'
+    );
+    const res = detectBidirectionalLinks(member, inheritParams(root));
+    assert.equal(
+      res.status,
+      'PASS',
+      'DOC-07 must be credited once the spec half is visible via the orchestration root and the impl half is visible in the member'
+    );
+    assert.ok(
+      res.evidence.some((e) => /inherited from orchestration root/.test(e)),
+      `DOC-07's evidence must say the spec-side credit was inherited; got ${JSON.stringify(res.evidence)}`
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('DOC-07 is unchanged for a member carrying both halves itself', () => {
+  const root = tmpDir('e2e-doc07-own-root-');
+  const member = tmpDir('e2e-doc07-own-member-');
+  writeSpecWithImplRef(member);
+  writeImplRef(member);
+  try {
+    const bare = detectBidirectionalLinks(member);
+    const withRoot = detectBidirectionalLinks(member, inheritParams(root));
+    assert.deepEqual(
+      withRoot,
+      bare,
+      'DOC-07 must produce byte-identical results for a self-sufficient member whether or not a root is in scope — this is the no-regression guarantee for repos that already pass'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('DOC-07 does not inherit the spec half when the category policy is false', () => {
+  const { root, member } = docInheritFixture('e2e-doc07-nopolicy-');
+  try {
+    const res = detectBidirectionalLinks(member, {
+      inheritance: { orchestrationRoot: root, inherits: false },
+    });
+    assert.equal(
+      res.status,
+      'FAIL',
+      'DOC-07 must respect its standards.toml policy — a root in scope is not by itself permission to inherit'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

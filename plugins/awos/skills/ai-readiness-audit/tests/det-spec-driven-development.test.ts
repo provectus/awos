@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
@@ -919,3 +919,124 @@ test('SDD-07: pass_at/warn_at params are honored — 2/3 annotated flips WARN→
     `evidence must cite the resolved pass_at threshold; got: ${r.evidence[0]}`
   );
 });
+
+// ---------------------------------------------------------------------------
+// Orchestration-root inheritance — SDD-01, SDD-02, SDD-05, SDD-06, SDD-07
+// ---------------------------------------------------------------------------
+
+const SDD_CONTENT =
+  '# Doc\n\nStatus: Approved\n\nLine four.\nLine five.\nLine six.\nLine seven.\nLine eight.\n';
+
+function writeAwosWorkspace(dir: string): void {
+  mkdirSync(join(dir, '.awos', 'commands'), { recursive: true });
+  writeFileSync(join(dir, '.awos', 'commands', 'spec.md'), SDD_CONTENT);
+  mkdirSync(join(dir, 'context', 'product'), { recursive: true });
+  for (const f of ['product-definition.md', 'roadmap.md', 'architecture.md']) {
+    writeFileSync(join(dir, 'context', 'product', f), SDD_CONTENT);
+  }
+  const spec = join(dir, 'context', 'spec', '001-demo');
+  mkdirSync(spec, { recursive: true });
+  writeFileSync(join(spec, 'functional-spec.md'), SDD_CONTENT);
+  writeFileSync(join(spec, 'technical-considerations.md'), SDD_CONTENT);
+  writeFileSync(
+    join(spec, 'tasks.md'),
+    '# Tasks\n\n## Slice one\n\n  - [x] Build it **[Agent: backend-dev]**\n  - [x] Verify it **[Agent: testing-expert]**\n  - [x] Ship it **[Agent: backend-dev]**\n'
+  );
+  writeFileSync(
+    join(spec, 'impl-notes.md'),
+    '# Notes\n\nSee src/api/handler.ts for the implementation.\nLine four.\nLine five.\nLine six.\nLine seven.\n'
+  );
+}
+
+/** Build a root-with-member tree; `writeInto` populates whichever dir it is given. */
+function orchestrationFixture(
+  prefix: string,
+  writeInto: (dir: string) => void,
+  target: 'root' | 'member'
+): { root: string; member: string } {
+  const root = tmpDir(prefix);
+  const member = join(root, 'services', 'api');
+  mkdirSync(member, { recursive: true });
+  writeInto(target === 'root' ? root : member);
+  return { root, member };
+}
+
+function inheritParams(root: string) {
+  return { inheritance: { orchestrationRoot: root, inherits: true } };
+}
+
+const SDD_INHERIT_CASES = [
+  { id: 'SDD-01', fn: detectAwosInstalled, bareStatus: 'FAIL' },
+  { id: 'SDD-02', fn: detectProductContextDocs, bareStatus: 'FAIL' },
+  { id: 'SDD-05', fn: detectSpecTriadComplete, bareStatus: 'SKIP' },
+  { id: 'SDD-06', fn: detectStaleSpecs, bareStatus: 'SKIP' },
+  { id: 'SDD-07', fn: detectAgentAnnotations, bareStatus: 'SKIP' },
+] as const;
+
+for (const c of SDD_INHERIT_CASES) {
+  test(`${c.id} inherits capability from the orchestration root`, () => {
+    const { root, member } = orchestrationFixture(
+      `sdd-inherit-${c.id}-`,
+      writeAwosWorkspace,
+      'root'
+    );
+    try {
+      assert.equal(
+        c.fn(member).status,
+        c.bareStatus,
+        `${c.id} must ${c.bareStatus} for a member with no root in scope — otherwise the inheritance test proves nothing`
+      );
+      const res = c.fn(member, inheritParams(root));
+      assert.equal(
+        res.status,
+        'PASS',
+        `${c.id} must be credited from the orchestration root, which is where the spec workspace actually lives`
+      );
+      assert.ok(
+        res.evidence.some((e) => /inherited from orchestration root/.test(e)),
+        `${c.id}'s evidence must say the credit was inherited, so a reader can trace it; got ${JSON.stringify(res.evidence)}`
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test(`${c.id} is unchanged for a member carrying its own capability`, () => {
+    const { root, member } = orchestrationFixture(
+      `sdd-own-${c.id}-`,
+      writeAwosWorkspace,
+      'member'
+    );
+    try {
+      const bare = c.fn(member);
+      const withRoot = c.fn(member, inheritParams(root));
+      assert.deepEqual(
+        withRoot,
+        bare,
+        `${c.id} must produce byte-identical results for a self-sufficient member whether or not a root is in scope — this is the no-regression guarantee for repos that already pass`
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test(`${c.id} does not inherit when the category policy is false`, () => {
+    const { root, member } = orchestrationFixture(
+      `sdd-nopolicy-${c.id}-`,
+      writeAwosWorkspace,
+      'root'
+    );
+    try {
+      const res = c.fn(member, {
+        inheritance: { orchestrationRoot: root, inherits: false },
+      });
+      assert.equal(
+        res.status,
+        c.bareStatus,
+        `${c.id} must respect its standards.toml policy — a root in scope is not by itself permission to inherit`
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}

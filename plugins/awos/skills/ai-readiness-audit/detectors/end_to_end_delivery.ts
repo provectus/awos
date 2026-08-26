@@ -1,4 +1,11 @@
-import { makeResult, iterFiles, readTextSafe, detectTrunk } from './_base.ts';
+import {
+  makeResult,
+  iterFiles,
+  readTextSafe,
+  detectTrunk,
+  probeRepoPath,
+  inheritedNote,
+} from './_base.ts';
 import { existsSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -280,12 +287,13 @@ const SPEC_REF_RX =
 
 export function detectBidirectionalLinks(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const specBase = join(repoPath, 'context', 'spec');
-  if (!existsSync(specBase)) {
+  const specProbe = probeRepoPath(repoPath, params, 'context/spec');
+  if (specProbe.path === null) {
     return makeResult('FAIL', 0, ['no context/spec/ directory found']);
   }
+  const specBase = specProbe.path;
 
   // Collect spec markdown files
   const specFiles = iterFiles(specBase, ['*.md']);
@@ -304,7 +312,15 @@ export function detectBidirectionalLinks(
     if (content === null) continue;
     if (IMPL_PATH_RX.test(content)) {
       specRefsImpl = true;
-      specImplEvidence.push(`spec→impl reference in: ${relative(repoPath, f)}`);
+      // Relative to specBase, not repoPath — specBase may be an inherited
+      // orchestration-root path outside repoPath, which relative(repoPath, f)
+      // would render as an unreadable ../../… trail.
+      specImplEvidence.push(
+        inheritedNote(
+          specProbe.origin,
+          `spec→impl reference in: ${relative(specBase, f)}`
+        )
+      );
       if (specImplEvidence.length >= 3) break;
     }
   }
@@ -338,9 +354,12 @@ export function detectBidirectionalLinks(
   if (specRefsImpl || implRefsSpec) {
     return makeResult('WARN', 1, [
       'only one direction of spec↔impl cross-references found',
-      specRefsImpl
-        ? 'spec files reference implementation paths'
-        : 'no spec files reference implementation paths',
+      inheritedNote(
+        specProbe.origin,
+        specRefsImpl
+          ? 'spec files reference implementation paths'
+          : 'no spec files reference implementation paths'
+      ),
       implRefsSpec
         ? 'implementation files reference spec directories'
         : 'no implementation files reference spec directories',

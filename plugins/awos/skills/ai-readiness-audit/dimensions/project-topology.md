@@ -104,7 +104,7 @@ The engine computes these topology flags deterministically (`topology.ts`) from 
 - `has_docs_connector`: true|false (e.g. Confluence/Coda CLI on PATH or MCP server in session)
 - `has_hooks`: true|false (e.g. .claude/settings.json hooks or pre-commit hooks detected)
 - `has_http_api`: true|false (e.g. FastAPI, Express, Django REST, Spring MVC, or similar found)
-- `has_incident_source`: true|false (e.g. PagerDuty/OpsGenie reference or incident tracker detected)
+- `has_incident_source`: true|false (NOT repo-detected — true only when `collected/incidents.json` is available and carries at least one measurable resolved recovery span in the window)
 - `has_lockfiles`: true|false (e.g. package-lock.json, yarn.lock, pnpm-lock.yaml, Cargo.lock found)
 - `has_mcp_config`: true|false (e.g. any MCP config path present — .mcp.json, .cursor/mcp.json, .kiro/settings/mcp.json, .gemini/settings.json, .cline/mcp.json, etc. — or mcpServers block in settings)
 - `has_ml_layer`: true|false (e.g. torch, tensorflow, scikit-learn, huggingface, or model files found)

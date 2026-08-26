@@ -1,0 +1,215 @@
+/**
+ * Tests for the mttr metric's real incident-source branch (DF-07).
+ * The git-proxy fallback is covered by met-mttr.test.ts and metrics/mttr.test.ts;
+ * here we verify that a connected incidents artifact takes precedence and is
+ * measured, awarded, and reliability-upgraded.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { compute } from '../metrics/mttr.ts';
+import { tmpDir, writeCollected, loadStandards, gitRaw } from './helpers.ts';
+// The expected value comes from the same median the engine uses — a third
+// hand-rolled copy in the test could agree with a bug rather than catch it.
+import { median } from '../collectors/_base.ts';
+
+const standards = loadStandards();
+
+/** incidents.json raw payload with the given resolved durations (hours). */
+function incidentsRaw(durations: number[]) {
+  const base = Date.parse('2026-07-01T00:00:00Z');
+  return {
+    incidents: durations.map((h, i) => ({
+      id: `INC-${i}`,
+      started_at: new Date(base).toISOString(),
+      resolved_at: new Date(base + h * 3_600_000).toISOString(),
+    })),
+    count: durations.length,
+    resolved_count: durations.length,
+    median_duration_hours: median(durations),
+    source_label: 'PagerDuty',
+  };
+}
+
+/** Raw with ONLY the records + label — the shape the recipe documents, no
+ *  pre-derived aggregates. The engine must derive the median from incidents[]. */
+function incidentsRecordsOnly(durations: number[]) {
+  const base = Date.parse('2026-07-01T00:00:00Z');
+  return {
+    incidents: durations.map((h, i) => ({
+      id: `INC-${i}`,
+      started_at: new Date(base + i * 86_400_000).toISOString(),
+      resolved_at: new Date(
+        base + i * 86_400_000 + h * 3_600_000
+      ).toISOString(),
+    })),
+    source_label: 'PagerDuty',
+  };
+}
+
+test('mttr: records-only envelope (no pre-derived aggregates) is still measured', () => {
+  const tmp = tmpDir('mttr-inc-');
+  const dir = writeCollected(tmp, 'incidents', incidentsRecordsOnly([1, 3])); // median 2h
+  const res = compute(dir, standards, { has_incident_source: true });
+
+  assert.equal(
+    res.value,
+    2,
+    'engine derives the median from incidents[] alone'
+  );
+  assert.equal(res.reliability.tag, 'maximal');
+  assert.deepEqual(res.sources_used, ['incidents']);
+  assert.ok(res.categories_awarded.includes(1103));
+});
+
+test('mttr: a wrong hand-written median is ignored — the engine recomputes from records', () => {
+  const tmp = tmpDir('mttr-inc-');
+  const raw = incidentsRaw([1, 3]); // real median 2h
+  raw.median_duration_hours = 999; // orchestrator transcription slip
+  raw.resolved_count = 999;
+  const dir = writeCollected(tmp, 'incidents', raw);
+  const res = compute(dir, standards, { has_incident_source: true });
+  assert.equal(
+    res.value,
+    2,
+    'advisory aggregate is ignored; derived value wins'
+  );
+});
+
+test('mttr: incidents present but none measurable → git proxy note says why', () => {
+  const tmp = tmpDir('mttr-inc-');
+  writeCollected(tmp, 'incidents', {
+    incidents: [{ id: 'open', started_at: '2026-07-01T00:00:00Z' }],
+    source_label: 'PagerDuty',
+  });
+  const dir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [
+        {
+          branch_first_commit_at: '2026-07-01T00:00:00Z',
+          merged_at: '2026-07-01T02:00:00Z',
+        },
+      ],
+      total_merges: 1,
+    })
+  );
+  const res = compute(dir, standards, {});
+  assert.deepEqual(res.sources_used, ['git'], 'falls back to the git proxy');
+  assert.match(
+    res.reliability.note ?? '',
+    /still open \(no resolved recovery span\); if unexpected, resolved_at is likely mapped from the wrong field/,
+    'a batch where every incident is still open must name the likely resolved_at mapping miss, not just assert the incidents are open'
+  );
+});
+
+test('mttr: connected incident source is measured (maximal reliability, awarded)', () => {
+  const tmp = tmpDir('mttr-inc-');
+  const dir = writeCollected(tmp, 'incidents', incidentsRaw([1, 3])); // median 2h
+  const res = compute(dir, standards, { has_incident_source: true });
+
+  assert.equal(res.status, 'OK');
+  assert.equal(res.value, 2, 'value is the median recovery time in hours');
+  assert.equal(res.band, 'high', '2h → high band');
+  assert.equal(res.reliability.tag, 'maximal', 'real incident data → maximal');
+  assert.deepEqual(res.sources_used, ['incidents']);
+  assert.ok(
+    res.categories_awarded.includes(1103),
+    '1103 awarded when a real incident source is present'
+  );
+});
+
+test('mttr: incidents artifact with no resolved incidents falls back to the git proxy', () => {
+  const tmp = tmpDir('mttr-inc-');
+  // Incidents present but nothing resolved → fall through to git proxy.
+  writeCollected(tmp, 'incidents', incidentsRaw([]));
+  const dir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [
+        {
+          branch_first_commit_at: '2026-07-01T00:00:00Z',
+          merged_at: '2026-07-01T02:00:00Z', // 2h branch lifetime
+        },
+      ],
+      total_merges: 1,
+    })
+  );
+  const res = compute(dir, standards, {});
+  // Git-proxy tier: not-reliable, and the incidents source is not used.
+  assert.equal(
+    res.reliability.tag,
+    'not-reliable',
+    'proxy fallback stays not-reliable'
+  );
+  assert.deepEqual(res.sources_used, ['git'], 'git proxy used, not incidents');
+  assert.match(
+    res.reliability.note ?? '',
+    /PagerDuty connected — no incidents in window/,
+    'a wired-up source with an empty window must say so on the proxy note — a bare git-proxy note hides that an incident source exists at all'
+  );
+});
+
+test('mttr: no incidents artifact at all → unchanged git-proxy behavior', () => {
+  const tmp = tmpDir('mttr-inc-');
+  const dir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [
+        {
+          branch_first_commit_at: '2026-07-01T00:00:00Z',
+          merged_at: '2026-07-01T01:00:00Z',
+        },
+      ],
+      total_merges: 1,
+    })
+  );
+  const res = compute(dir, standards, {});
+  assert.equal(res.status, 'OK', 'never SKIP');
+  assert.deepEqual(res.sources_used, ['git'], 'git proxy path');
+});
+
+test('mttr: a batch resolved with unparseable spans names the unparseable count', () => {
+  // The invalid_count > 0 arm had no test at all: every case reaching that
+  // block used incidents with no resolved_at, so only the still-open arm ever
+  // ran. This is the arm that speaks to a WORKING connector whose resolved_at
+  // is mapped from the wrong field — spans present, none of them usable.
+  const tmp = tmpDir('mttr-inc-invalid-');
+  writeCollected(tmp, 'incidents', {
+    incidents: [
+      // Reversed spans: resolved before started.
+      {
+        id: 'r1',
+        started_at: '2026-07-02T00:00:00Z',
+        resolved_at: '2026-07-01T00:00:00Z',
+      },
+      {
+        id: 'r2',
+        started_at: '2026-07-04T00:00:00Z',
+        resolved_at: '2026-07-03T00:00:00Z',
+      },
+    ],
+    source_label: 'PagerDuty',
+  });
+  const dir = writeCollected(
+    tmp,
+    'git',
+    gitRaw({
+      merge_records: [
+        {
+          branch_first_commit_at: '2026-07-01T00:00:00Z',
+          merged_at: '2026-07-01T02:00:00Z',
+        },
+      ],
+      total_merges: 1,
+    })
+  );
+  const res = compute(dir, standards, {});
+  assert.match(
+    res.reliability.note ?? '',
+    /none had a parseable recovery span \(2 unparseable\)/,
+    'the invalid arm must report how many resolved incidents had unusable spans'
+  );
+});

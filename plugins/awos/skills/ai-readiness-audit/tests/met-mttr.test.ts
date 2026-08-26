@@ -235,9 +235,12 @@ test('adp_i3: tracker with incident_source → reliability stays at the git-prox
     result.confidence < 1,
     `numeric confidence must stay below 1 for a proxy value, got ${result.confidence}`
   );
+  // The tracker contributes nothing to a git-proxy value — an incident_source
+  // label adds a note and no more — so crediting it in sources_used made
+  // DF-07's Sources column name a source that did not produce the number.
   assert.ok(
-    result.sources_used.includes('tracker'),
-    'sources_used must include tracker when incident_source declared'
+    !result.sources_used.includes('tracker'),
+    'sources_used must NOT credit the tracker for a pure git-proxy value'
   );
   assert.ok(
     result.sources_used.includes('git'),

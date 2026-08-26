@@ -10,13 +10,14 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {} from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { clampToWindow } from '../metrics/_base.ts';
 import { compute as ciPassRate } from '../metrics/ci_pass_rate.ts';
 import { compute as pipelineDuration } from '../metrics/pipeline_duration.ts';
 import { compute as subtaskSplit } from '../metrics/ticket_subtask_split.ts';
+import { compute as mttr } from '../metrics/mttr.ts';
 import { writeCollected, loadStandards } from './helpers.ts';
 import { tmpDir } from './helpers.ts';
 
@@ -124,5 +125,104 @@ test('ticket_subtask_split ignores tickets resolved before the window', () => {
     result.value,
     2,
     'average sub-task split must be computed over in-window tickets only'
+  );
+});
+
+test('mttr measures incidents inside the standards window, not the artifact period', () => {
+  const tmp = tmpDir('win-i5-');
+  // Two recent 2h incidents, plus three ancient 200h ones that take over the
+  // median if the whole fetched history leaks in ([2,2,200,200,200] → 200,
+  // against [2,2] → 2). The envelope helpers.ts writes carries
+  // lookback_days: 730 — wide enough to keep the ancient records — so this
+  // passes only when the window comes from standards
+  // ([meta].max_lookback_days = 90) rather than the artifact's period.
+  const incidents = [
+    { id: 'INC-1', started_at: iso(3), resolved_at: iso(3 - 2 / 24) },
+    { id: 'INC-2', started_at: iso(5), resolved_at: iso(5 - 2 / 24) },
+    { id: 'INC-O1', started_at: iso(300), resolved_at: iso(300 - 200 / 24) },
+    { id: 'INC-O2', started_at: iso(320), resolved_at: iso(320 - 200 / 24) },
+    { id: 'INC-O3', started_at: iso(340), resolved_at: iso(340 - 200 / 24) },
+  ];
+  const collectedDir = writeCollected(tmp, 'incidents', { incidents });
+  const result = mttr(collectedDir, standards, { has_incident_source: true });
+  assert.equal(
+    result.value,
+    2,
+    'MTTR median must be computed over in-window incidents only — the 300-day-old incident must not reach it'
+  );
+});
+
+test('an incidents envelope with no period still gets the standards window', () => {
+  const tmp = tmpDir('win-i6-');
+  // The clamp short-circuits on a falsy lookback, so reading the window off the
+  // artifact meant a period-less envelope got NO clamp at all and an all-time
+  // export became the "audit-window" median. Standards must supply the window.
+  const incidents = [
+    { id: 'INC-1', started_at: iso(3), resolved_at: iso(3 - 2 / 24) },
+    { id: 'INC-OLD', started_at: iso(300), resolved_at: iso(300 - 200 / 24) },
+  ];
+  const d = join(tmp, 'collected');
+  mkdirSync(d, { recursive: true });
+  writeFileSync(
+    join(d, 'incidents.json'),
+    JSON.stringify({
+      source: 'incidents',
+      available: true,
+      reason_if_absent: null,
+      raw: { incidents },
+    })
+  );
+  const result = mttr(d, standards, { has_incident_source: true });
+  assert.equal(
+    result.value,
+    2,
+    'a period-less incidents envelope must still be clamped to the standards window'
+  );
+});
+
+test('the MTTR reliability note reports incidents dropped by the clamp', () => {
+  const tmp = tmpDir('win-i7-');
+  // dropped_out_of_window had exactly one write and no reads before this: a
+  // stream clamping from 4 incidents to 2 read like a source that only ever
+  // had 2. The note must say so, in incidents — not "runs".
+  const incidents = [
+    { id: 'INC-1', started_at: iso(3), resolved_at: iso(3 - 2 / 24) },
+    { id: 'INC-2', started_at: iso(5), resolved_at: iso(5 - 2 / 24) },
+    { id: 'INC-O1', started_at: iso(300), resolved_at: iso(300 - 5 / 24) },
+    { id: 'INC-O2', started_at: iso(320), resolved_at: iso(320 - 5 / 24) },
+  ];
+  const collectedDir = writeCollected(tmp, 'incidents', { incidents });
+  const result = mttr(collectedDir, standards, { has_incident_source: true });
+  assert.match(
+    result.reliability.note,
+    /2 incidents older than the 90-day window dropped/,
+    'the reliability note must report how many incidents the window clamp removed, named as incidents'
+  );
+});
+
+test('the drop count reaches the note when nothing is measurable', () => {
+  const tmp = tmpDir('win-i8-');
+  // The scenario the success-path-only note missed entirely: a mostly
+  // historical export whose single newest incident is still open. The clamp
+  // anchors to that record, so count is 1 and dropped_out_of_window is 3 —
+  // and without this the note read "all 1 in-window incident is still open"
+  // with no hint the other three existed.
+  const incidents = [
+    { id: 'INC-OPEN', started_at: iso(3) },
+    { id: 'INC-O1', started_at: iso(300), resolved_at: iso(300 - 5 / 24) },
+    { id: 'INC-O2', started_at: iso(320), resolved_at: iso(320 - 5 / 24) },
+    { id: 'INC-O3', started_at: iso(340), resolved_at: iso(340 - 5 / 24) },
+  ];
+  const collectedDir = writeCollected(tmp, 'incidents', { incidents });
+  const result = mttr(collectedDir, standards, { has_incident_source: true });
+  assert.match(
+    result.reliability.note,
+    /still open/,
+    'the nothing-measurable note must still explain the incidents are open'
+  );
+  assert.match(
+    result.reliability.note,
+    /3 incidents older than the 90-day window dropped/,
+    'the nothing-measurable note must also report what the window clamp removed'
   );
 });

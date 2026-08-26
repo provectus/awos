@@ -33,7 +33,12 @@ import {
  * blocks (headline/insights/recommendations) already on audit.json. Run after
  * the orchestrator patches judgment or connector checks, before rendering.
  */
-export function aggregate(outDir: string): void {
+export function aggregate(
+  outDir: string,
+  // Scoring standards, so the re-derived MTTR headline uses the same audit
+  // window as audit-core rather than the artifact's authored `period`.
+  standards?: Record<string, unknown>
+): void {
   let total = 0;
   let applicable = 0;
   const dimensions: Record<string, unknown>[] = [];
@@ -161,17 +166,26 @@ export function aggregate(outDir: string): void {
     if (existing[block] !== undefined) audit[block] = existing[block];
   }
   // Connector-gated headline rows: re-derive from the collected artifacts
-  // (same source of truth as `sources` below); keep the stored block when the
-  // artifacts are gone.
+  // (same source of truth as `sources` below); keep the stored block only when
+  // the artifacts are gone, i.e. the fresh derivation produced nothing at all.
+  //
+  // This used to enumerate the fields that count as "produced something", and
+  // the enumeration went stale the moment the MTTR row gained a measured path:
+  // a measured MTTR sets display_value/band/check_id INSTEAD of note, so on a
+  // repo with an incidents connector and no tracker every listed field was
+  // absent and the fresh measurement was thrown away for the stored one. Ask
+  // whether either row is empty instead — a question that cannot go stale as
+  // fields are added.
   const derivedDelivery = computeDerivedDelivery(
     collectedDirAgg,
-    collectedAgg.get('tracker')!.art
+    collectedAgg.get('tracker')!.art,
+    standards
   );
+  const derivedIsEmpty =
+    Object.keys(derivedDelivery.cycle_time).length === 0 &&
+    Object.keys(derivedDelivery.mttr).length === 0;
   audit.derived_delivery =
-    derivedDelivery.cycle_time.display_value !== undefined ||
-    derivedDelivery.cycle_time.note !== undefined ||
-    derivedDelivery.mttr.note !== undefined ||
-    existing.derived_delivery === undefined
+    !derivedIsEmpty || existing.derived_delivery === undefined
       ? derivedDelivery
       : existing.derived_delivery;
   // Prefer re-derived sources when collected/ artifacts are present; fall back
@@ -261,7 +275,10 @@ export interface JudgmentPatch {
  */
 export function patchJudgments(
   outDir: string,
-  patches: JudgmentPatch[]
+  patches: JudgmentPatch[],
+  // Passed straight to the re-aggregate below, so the re-derived MTTR headline
+  // uses the standards audit window rather than the artifact's authored period.
+  standards?: Record<string, unknown>
 ): { patched: string[]; warnings: string[] } {
   requireStampedAudit(outDir, 'patch-judgment');
   const patched: string[] = [];
@@ -338,7 +355,7 @@ export function patchJudgments(
     warnings.push(`${id}: no such check in any dimension artifact — ignored`);
   }
 
-  aggregate(outDir);
+  aggregate(outDir, standards);
   return { patched, warnings };
 }
 
@@ -456,6 +473,7 @@ export function reportContext(outDir: string): Record<string, unknown> {
   };
   const git = readCollected('git');
   const tracker = readCollected('tracker');
+  const incidents = readCollected('incidents');
   const checks: Array<Record<string, unknown>> = [];
   for (const dim of (audit.dimensions ?? []) as Array<
     Record<string, unknown>
@@ -487,7 +505,21 @@ export function reportContext(outDir: string): Record<string, unknown> {
       (git?.raw as Record<string, unknown> | undefined)?.window_stats ?? null,
     tracker_fetch_meta:
       (tracker?.raw as Record<string, unknown> | undefined)?.fetch_meta ?? null,
-    incident_source:
+    // Provenance label only — names the incident system. It does not produce
+    // the MTTR value (derived_delivery.mttr does) and does not award category
+    // 1103. Sourced from the incidents artifact FIRST: reading it off the
+    // tracker inverts the signal post-DF-07 — a real PagerDuty connector with
+    // no tracker declaration would hand over null while MTTR scores maximal,
+    // and a tracker merely naming "opsgenie" with no incident data would hand
+    // over "opsgenie" while 1103 stays SKIP. The label the report actually
+    // shows is the incidents artifact's own source_label — raw first for
+    // back-compat, then period.source_label (the one canonical write site).
+    incident_source_label:
+      ((incidents?.raw as Record<string, unknown> | undefined)?.source_label as
+        | string
+        | null) ??
+      ((incidents?.period as Record<string, unknown> | undefined)
+        ?.source_label as string | null | undefined) ??
       (tracker?.raw as Record<string, unknown> | undefined)?.incident_source ??
       null,
     sources: audit.sources ?? [],

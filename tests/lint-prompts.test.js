@@ -590,24 +590,14 @@ test('ai-sdlc-adoption dimension exists with correct frontmatter and required bo
     );
   }
 
-  // Body must instruct the orchestrator to collect via the bundled dispatcher.
+  // The dimension must not resurrect the retired per-dimension collect/metric
+  // fan-out. Neither verb exists in cli.ts — the dispatcher is
+  // progress/render/rollup/audit-core/enrich/aggregate/patch-*/report-context
+  // — and this lint used to REQUIRE the reference, so the file documented
+  // commands the CLI has never implemented and the suite enforced it.
   assert.ok(
-    body.includes('node dist/cli.js collect') ||
-      body.includes('cli.js" collect') ||
-      body.includes('cli path>" collect'),
-    'body must reference the collect engine command (per-source collection command)'
-  );
-  // Body must instruct the orchestrator to run metrics via the bundled dispatcher.
-  assert.ok(
-    body.includes('node dist/cli.js metric') ||
-      body.includes('cli.js" metric') ||
-      body.includes('cli path>" metric'),
-    'body must reference the metric engine command (metric invocation command)'
-  );
-  // Body must describe the shared collected/ directory (query-once pattern).
-  assert.ok(
-    body.includes('collected/'),
-    'body must reference "collected/" (the shared query-once artifact directory)'
+    !/cli[^"\n]*"?\s+collect\b/.test(body),
+    'body must not document a "collect" engine command — no such verb exists in cli.ts, and the per-source collect block it belonged to could not produce collected/incidents.json, the artifact has_incident_source now reads'
   );
   // Body must reference the standards data file as the source of category metadata.
   assert.ok(
@@ -3400,7 +3390,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // together: plugin.json, marketplace.json, this pinned literal, and the
 // generator-version constant in plugins/awos/commands/flow.md. The pin
 // exists to force that deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.4';
+const EXPECTED_PLUGIN_VERSION = '2.4.5';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -4229,6 +4219,61 @@ test('spec.md captures boundary/error behavior as rules in items 2 and 3', () =>
       'at least one acceptance criterion covering the failure path'
     ),
     'spec.md Step 3 item 3 must require failure-path criteria for boundary/error requirements'
+  );
+});
+
+test('connector-shapes.md documents every incidents field the collector defines', () => {
+  // The incidents recipe must not drift from the collector's actual contract:
+  // every field on the IncidentRecord / IncidentsConnector / IncidentsRaw
+  // interfaces in collectors/incidents.ts has to appear in
+  // references/connector-shapes.md, so a renamed/added field can't silently
+  // leave the recipe stale. IncidentsRaw carries the DERIVED fields the engine
+  // reports (resolved_count, median_duration_hours, …) — the very contract the
+  // recipe must explain — so it is guarded alongside the input shapes.
+  const ts = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins/awos/skills/ai-readiness-audit/collectors/incidents.ts'
+    )
+  );
+  const doc = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins/awos/skills/ai-readiness-audit/references/connector-shapes.md'
+    )
+  );
+  const fieldsOf = (iface) => {
+    const body = ts.match(
+      new RegExp(`export interface ${iface} \\{([\\s\\S]*?)\\n\\}`)
+    );
+    assert.ok(body, `collectors/incidents.ts must define interface ${iface}`);
+    return [...body[1].matchAll(/^\s*(\w+)\??:/gm)].map((m) => m[1]);
+  };
+  const fields = [
+    ...fieldsOf('IncidentRecord'),
+    ...fieldsOf('IncidentsConnector'),
+    ...fieldsOf('IncidentsRaw'),
+  ];
+  // Match only within the incidents recipe. Six of the guarded fields ('id',
+  // 'resolved_at', 'source', 'source_label', 'count', 'resolved_count') appear
+  // as standalone identifiers in the tracker/CI/code-host recipes, so matching
+  // the whole file let the incidents bullets be deleted with this test green.
+  const start = doc.indexOf('## Incidents');
+  assert.ok(
+    start !== -1,
+    'connector-shapes.md must carry an "## Incidents" section for the field guard to scope to'
+  );
+  const section = doc.slice(start);
+  // Match each field as a standalone identifier, not a raw substring: 'id' must
+  // not be satisfied by the word "incident", nor 'count' by "resolved_count" or
+  // 'source' by ordinary prose — the fields most likely to drift unnoticed.
+  const documented = (f) =>
+    new RegExp(`(?<![A-Za-z0-9_])${f}(?![A-Za-z0-9_])`).test(section);
+  const missing = [...new Set(fields)].filter((f) => !documented(f));
+  assert.deepEqual(
+    missing,
+    [],
+    `connector-shapes.md must document these incidents fields (drifted from incidents.ts): ${missing.join(', ')}`
   );
 });
 

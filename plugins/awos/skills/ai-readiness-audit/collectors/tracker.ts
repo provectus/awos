@@ -23,12 +23,15 @@ export interface TicketRecord {
 }
 
 /** Connector passed in by the caller when a project tracker integration is
- *  available. `incident_source` is optional — when present it upgrades MTTR
- *  reliability from a git-proxy estimate to a first-class measurement. */
+ *  available. `incident_source` is optional and purely a provenance label: it
+ *  names the incident system, but does not upgrade MTTR reliability and does
+ *  not award category 1103. Only a measurable recovery span in the incidents
+ *  artifact does that (see collectors/incidents.ts). */
 export interface TrackerConnector {
   tickets?: TicketRecord[];
-  /** Identifier for the incident data source that feeds MTTR (e.g. "pagerduty",
-   *  "opsgenie"). When absent, MTTR is computed from git merges as a proxy. */
+  /** Provenance label naming the incident-management system (e.g. "pagerduty",
+   *  "opsgenie"). It does not feed the MTTR value — that comes from
+   *  collected/incidents.json — and its absence changes nothing. */
   incident_source?: string | null;
   [key: string]: unknown;
 }
@@ -45,8 +48,10 @@ export interface TrackerRaw {
   type_counts: Record<string, number>;
   /** Total tickets resolved during the period (throughput, issue_throughput). */
   resolved_count: number;
-  /** Incident-data source for MTTR reliability upgrade (mttr). null means
-   *  the git-proxy fallback will be used — the metric never SKIPs for this. */
+  /** Provenance label for the incident-management system, echoed from the
+   *  connector. Reported, never scored: it upgrades no reliability and awards
+   *  no category. 1103 gates on topology.has_incident_source, which reads the
+   *  incidents artifact. */
   incident_source: string | null;
 }
 
@@ -88,9 +93,11 @@ export function countResolved(tickets: TicketRecord[]): number {
  * - `available=true` when a connector object is passed (even if empty).
  *
  * MTTR note: the `incident_source` field in `raw` is always populated from
- * the connector (or set to null). The MTTR metric computes from git merges
- * as a proxy regardless; `incident_source` being set only upgrades
- * reliability — it never gates the metric.
+ * the connector (or set to null). It is a provenance label and nothing more —
+ * it neither upgrades MTTR reliability nor awards category 1103, and it never
+ * gates the metric. A measured MTTR comes only from collected/incidents.json
+ * carrying at least one resolved recovery span; otherwise the metric reports
+ * its git branch-lifetime proxy and 1103 stays SKIP.
  */
 export function collect(
   _repoPath: string,

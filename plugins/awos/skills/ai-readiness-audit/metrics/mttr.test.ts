@@ -133,3 +133,87 @@ test('mttr: incident_source does NOT upgrade confidence while the value is the g
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('mttr: an unusable incidents connector is named even when git.json is absent', () => {
+  // The note append sat AFTER both early returns in the git-missing branch, so
+  // on the one path with no other information to fall back on the report said
+  // only "git-proxy, true value may differ; git.json not found" while a
+  // present-and-unusable connector went unmentioned.
+  const dir = tmpDir('awos-i3-nogit-inc-');
+  try {
+    writeFileSync(
+      join(dir, 'incidents.json'),
+      JSON.stringify({
+        source: 'incidents',
+        available: true,
+        raw: {
+          // Records present, none with a measurable span.
+          incidents: [{ id: 'INC-1', started_at: '2026-06-01T00:00:00Z' }],
+        },
+      })
+    );
+    const res = compute(dir, STANDARDS, {});
+    assert.match(
+      res.reliability.note,
+      /incident source connected/,
+      'a present-but-unusable incidents connector must be named when git.json is missing'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('mttr: an unusable incidents connector is named on the tracker+no-git path', () => {
+  const dir = tmpDir('awos-i3-nogit-inc-tracker-');
+  try {
+    writeFileSync(join(dir, 'tracker.json'), makeTrackerArtifact('jira'));
+    writeFileSync(
+      join(dir, 'incidents.json'),
+      JSON.stringify({
+        source: 'incidents',
+        available: true,
+        raw: {
+          incidents: [{ id: 'INC-1', started_at: '2026-06-01T00:00:00Z' }],
+        },
+      })
+    );
+    const res = compute(dir, STANDARDS, {});
+    assert.match(
+      res.reliability.note,
+      /incident source connected/,
+      'the tracker-declared git-missing branch must name the unusable connector too'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('mttr: a corrupt incidents artifact is named on the git-proxy note', () => {
+  // readArtifact returned {error} and there was no else branch, so a fetched
+  // but unreadable artifact left the note as plain git-proxy text with no hint
+  // the file existed at all.
+  const dir = tmpDir('awos-i3-corrupt-inc-');
+  try {
+    writeFileSync(
+      join(dir, 'incidents.json'),
+      '{"source":"incidents","available":true,"raw":{"incidents":[{"id"'
+    );
+    writeFileSync(
+      join(dir, 'git.json'),
+      makeGitArtifact([
+        mergeRecord(
+          new Date('2026-01-01T02:00:00Z'),
+          new Date('2026-01-01T01:00:00Z')
+        ),
+      ])
+    );
+    const res = compute(dir, STANDARDS, {});
+    assert.match(
+      res.reliability.note ?? '',
+      /unreadable/,
+      'an unreadable incidents artifact must be named rather than silently falling back to the git proxy'
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

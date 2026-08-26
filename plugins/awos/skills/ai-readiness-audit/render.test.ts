@@ -1681,7 +1681,7 @@ test('gated Cycle time / MTTR headline rows carry reader-grade tooltips (HEADLIN
     'MTTR tooltip must define the metric in plain language'
   );
   assert.ok(
-    html.includes('The git branch-lifetime proxy scores DF-07 separately'),
+    html.includes('does not feed this row and does not score DF-07'),
     'MTTR tooltip must distinguish the DF-07 git proxy from this row'
   );
 });
@@ -1705,7 +1705,7 @@ test('org Repositories table: Cycle time and MTTR column headers carry the same 
     'org Repositories table must render the MTTR column header'
   );
   assert.ok(
-    html.includes('The git branch-lifetime proxy scores DF-07 separately'),
+    html.includes('does not feed this row and does not score DF-07'),
     'org MTTR column header tooltip must distinguish the DF-07 git proxy'
   );
 });

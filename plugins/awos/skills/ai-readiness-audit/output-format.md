@@ -74,7 +74,7 @@ Any dimension-specific summary data consumed by downstream dimensions (e.g. the 
 
 ### Report blocks (authored into `audit.json`)
 
-The renderer is deterministic and contains no LLM. The plain-language narrative a CEO reads is authored by the **orchestrator** (SKILL.md Step 6.4, applied via `patch-report`) and stored as optional top-level keys in `audit.json` (and `org-portfolio.json`). All are optional — the renderer degrades to the capability headline + a mechanical FAIL/WARN recommendation list when they are absent. The two connector-gated delivery rows (Cycle time, MTTR) are NOT authored: the engine computes them from `collected/tracker.json` into `audit.derived_delivery` and the renderer appends them (any authored gated row is ignored), so the headline can never contradict the Connections & Sources section.
+The renderer is deterministic and contains no LLM. The plain-language narrative a CEO reads is authored by the **orchestrator** (SKILL.md Step 5.4, applied via `patch-report`) and stored as optional top-level keys in `audit.json` (and `org-portfolio.json`). All are optional — the renderer degrades to the capability headline + a mechanical FAIL/WARN recommendation list when they are absent. The two connector-gated delivery rows (Cycle time, MTTR) are NOT authored: the engine computes them into `audit.derived_delivery` — Cycle time from `collected/tracker.json`, MTTR from `collected/incidents.json` — and the renderer appends them (any authored gated row is ignored), so the headline can never contradict the Connections & Sources section.
 
 ```json
 {
@@ -138,7 +138,7 @@ The renderer is deterministic and contains no LLM. The plain-language narrative 
 }
 ```
 
-Authoring integrity: `headline` numbers and `recommendations` are **transcribed verbatim** from real checks (cite the `check_id`); DORA `band` values are read from the check's `hint` ("DORA-banded (high)"). Git-only display values (merges per contributor, LOC per contributor) are read from `collected/git.json` → `raw.window_stats` and carry no `band` or `check_id`. The gated rows (cycle time, MTTR) are engine-derived from `collected/tracker.json` (`audit.derived_delivery`) — value AND honest gated note — never authored. `source_probes[]` records what was searched per unreachable source; the renderer prints it in "Missed / limited". The orchestrator never invents numbers — it selects and phrases. `recommendations[]` here and the long-form `recommendations.md` come from one authoring pass and must stay in sync.
+Authoring integrity: `headline` numbers and `recommendations` are **transcribed verbatim** from real checks (cite the `check_id`); DORA `band` values are read from the check's `hint` ("DORA-banded (high)"). Git-only display values (merges per contributor, LOC per contributor) are read from `collected/git.json` → `raw.window_stats` and carry no `band` or `check_id`. The gated rows (cycle time, MTTR) are engine-derived into `audit.derived_delivery` — cycle time from `collected/tracker.json`, MTTR from `collected/incidents.json` — value AND honest gated note, never authored. `source_probes[]` records what was searched per unreachable source; the renderer prints it in "Missed / limited". The orchestrator never invents numbers — it selects and phrases. `recommendations[]` here and the long-form `recommendations.md` come from one authoring pass and must stay in sync.
 
 ### Prevention block (engine-derived, never authored)
 

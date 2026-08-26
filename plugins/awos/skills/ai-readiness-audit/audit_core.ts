@@ -20,17 +20,27 @@
 // check ids). The only LLM-dependent inputs left out here are connectors
 // (tracker/docs default to absent → those metrics SKIP) and the judgments.
 // ---------------------------------------------------------------------------
-import { mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  existsSync,
+} from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 
 import {
   evaluateAppliesWhen,
   loadStandards,
+  lookbackDays,
+  readArtifact,
+  windowDropNote,
   malformedEnvelopeNote,
   metaNumber,
   strandedPayloadCount,
 } from './metrics/_base.ts';
 import { median, round1 } from './metrics/_score.ts';
+import { mttrBand } from './metrics/mttr.ts';
 import type {
   CheckStatus,
   DerivedDelivery,
@@ -66,20 +76,40 @@ import {
 import { collect as collectCi } from './collectors/ci.ts';
 import { collect as collectTracker } from './collectors/tracker.ts';
 import { collect as collectDocs } from './collectors/docs.ts';
+import {
+  collect as collectIncidents,
+  deriveIncidentAggregates,
+  hasMeasurableIncidents,
+  incidentSpanNote,
+  type IncidentRecord,
+} from './collectors/incidents.ts';
 
 /**
- * Compute the connector-gated headline rows (Cycle time, MTTR) from the
- * tracker artifact — deterministically, in the engine. A model-authored row
- * once said "needs ticketing connector" while "Connected: Jira via Atlassian
- * MCP" sat two sections up (barley 2026-07-02, 994 tickets fetched, zero
- * changelogs); deriving both the value and the honest gated note from the
- * SAME artifact makes that contradiction impossible.
+ * Compute the connector-gated headline rows deterministically, in the engine:
+ * Cycle time from the tracker artifact, MTTR from the incidents artifact. The
+ * two read different artifacts and are computed independently, so MTTR fills
+ * even with no tracker connected — a tracker that merely names an incident
+ * system is not incident data and plays no part.
+ *
+ * A model-authored row once said "needs ticketing connector" while "Connected:
+ * Jira via Atlassian MCP" sat two sections up (barley 2026-07-02, 994 tickets
+ * fetched, zero changelogs); deriving both the value and the honest gated note
+ * from the SAME artifact the metric reads makes that contradiction impossible.
  */
 export function computeDerivedDelivery(
   collectedDir: string,
   // Pre-read tracker artifact — pass it when the caller already parsed
   // collected/tracker.json so the (potentially MB-sized) file isn't re-read.
-  preReadTracker?: Record<string, unknown> | null
+  preReadTracker?: Record<string, unknown> | null,
+  // Scoring standards, for the audit window. The MTTR window comes from
+  // [meta].max_lookback_days — never from the orchestrator-authored artifact
+  // `period`, which may be absent (no clamp at all) or arbitrarily wide.
+  standards?: Record<string, unknown>,
+  // Pre-read incidents artifact — pass it when the caller already parsed
+  // collected/incidents.json. Unlike preReadTracker, a passed `null` (the
+  // caller looked and found nothing readable) falls through to a re-read, so
+  // the note can carry the precise unreadable-reason; see the read below.
+  preReadIncidents?: Record<string, unknown> | null
 ): DerivedDelivery {
   let tracker: Record<string, unknown> | null;
   if (preReadTracker !== undefined) {
@@ -94,6 +124,88 @@ export function computeDerivedDelivery(
     }
   }
   const out: DerivedDelivery = { cycle_time: {}, mttr: {} };
+
+  // MTTR headline — derived from the incidents artifact, mirroring the metric,
+  // so the headline can never contradict the DF-07 detail below it. A tracker
+  // that merely names an incident system is not incident data and plays no part.
+  // Computed independently of the tracker, so it fills even with no tracker.
+  // Absent vs present-but-unreadable are different diagnoses and must not
+  // share a branch. A truncated or malformed artifact used to land in the same
+  // catch as a missing one and render "— (needs incident connector)", sending
+  // the reader off to re-run connector setup while `audit.sources` in the very
+  // same audit.json already said "collector artifact unreadable: SyntaxError…".
+  // That is the headline-contradicts-Connections-and-Sources shape this
+  // function exists to prevent.
+  // A pre-read of `null` only tells us the caller got nothing — it does not say
+  // whether the file is missing or corrupt (readCollected collapses both). Fall
+  // through to readArtifact for the precise reason; it costs a read only on the
+  // path that is already going to report a problem.
+  const incRead =
+    preReadIncidents != null
+      ? { artifact: preReadIncidents }
+      : readArtifact(collectedDir, 'incidents');
+  if ('error' in incRead) {
+    // Present but unparseable — say so. Genuinely absent leaves the row empty
+    // for the renderer's gated fallback, which is the honest state there.
+    if (existsSync(join(collectedDir, 'incidents.json'))) {
+      out.mttr.note = `incident source connected — artifact unreadable (${incRead.error}); fix collected/incidents.json and re-run enrich`;
+    }
+  } else {
+    const inc = incRead.artifact as
+      | {
+          available?: boolean;
+          raw?: unknown;
+          period?: { lookback_days?: number; source_label?: string };
+        }
+      | undefined;
+    if (inc?.available) {
+      const incRaw = (inc.raw ?? {}) as {
+        incidents?: Parameters<typeof deriveIncidentAggregates>[0];
+        source_label?: string | null;
+      };
+      const agg = deriveIncidentAggregates(
+        incRaw.incidents,
+        standards ? lookbackDays(standards) : inc.period?.lookback_days
+      );
+      // Label: raw.source_label wins for back-compat, but period.source_label
+      // (the one canonical write site, like every sibling connector) is enough
+      // — the recipe no longer mandates the dual write.
+      const incLabel =
+        incRaw.source_label ?? inc.period?.source_label ?? 'incident source';
+      if (agg.resolved_count > 0 && agg.median_duration_hours !== null) {
+        const medianHours = round1(agg.median_duration_hours);
+        // Fold the sample size in when part of the sample was unusable: both
+        // renderers print `note` only when the VALUE is absent, so a median
+        // over 3 of 60 resolved incidents would otherwise print a bare "0.5 h".
+        const resolvedSeen = agg.resolved_count + agg.invalid_count;
+        // One block, assigned once — band and value cannot come apart.
+        out.mttr.measured = {
+          median_hours: medianHours,
+          incidents_used: agg.resolved_count,
+          band: mttrBand(agg.median_duration_hours),
+          check_id: 'DF-07',
+          display_value:
+            agg.invalid_count > 0
+              ? `${medianHours} h (${agg.resolved_count} of ${resolvedSeen})`
+              : `${medianHours} h`,
+        };
+      } else {
+        // Mirror the metric — same shared note builder, so the headline row
+        // and the DF-07 detail can never give two accounts of one degraded
+        // connector — and say what the window clamp removed, or a heavily
+        // clamped stream reads like a source that only ever had what survived.
+        const dropped = standards
+          ? windowDropNote(
+              agg.dropped_out_of_window,
+              lookbackDays(standards),
+              'incident'
+            )
+          : '';
+        out.mttr.note = incidentSpanNote(agg, incLabel, dropped);
+      }
+    }
+  }
+
   if (!tracker?.available) return out;
 
   const raw = (tracker.raw ?? {}) as Record<string, unknown>;
@@ -131,10 +243,6 @@ export function computeDerivedDelivery(
     out.cycle_time.note = `${label} connected — no tickets resolved in window`;
   }
 
-  const incident = raw.incident_source;
-  if (typeof incident === 'string' && incident) {
-    out.mttr.note = `incident source "${incident}" declared — no incident data mapped`;
-  }
   return out;
 }
 
@@ -510,6 +618,10 @@ export async function auditCore(
       collectCi(repoPath, period),
       collectTracker(repoPath, period),
       collectDocs(repoPath, period),
+      // Connector-passed: no connector in the base pass → available:false. The
+      // orchestrator overwrites collected/incidents.json with real data and
+      // `enrich` re-scores. Present so the SKIP artifact exists every run.
+      collectIncidents(repoPath, period),
     ]) {
       writeArtifact(art as { source: string }, collectedDir);
     }
@@ -579,6 +691,47 @@ export async function auditCore(
       );
     }
   }
+  // Same shape again for incidents: a whole-batch resolved_at mapping miss
+  // fails a step EARLIER than invalidity is measured — a record with no
+  // resolved_at is classified still-open, not invalid — so it reads as
+  // "no incident with a resolved recovery span": coherent, alarming, and false,
+  // since it asserts every incident is open. The recipe deliberately tells the
+  // orchestrator to map semantically, so a source returning resolvedAt /
+  // closed_at / resolution.timestamp is exactly how this happens.
+  const incArtWarn = collected.get('incidents')?.art;
+  if (incArtWarn?.available === true) {
+    const incRawWarn = incArtWarn.raw as { incidents?: unknown } | undefined;
+    // A mis-shaped container slips every count-gated guard: an id-keyed object
+    // or a {items: […]} page wrapper read one level too high coerces to [] in
+    // deriveIncidentAggregates, so count is 0, the all-open warning below
+    // skips, the metric note reads "no incidents in window", and the
+    // stranded-payload guard never looks at available:true artifacts. Name the
+    // shape here — the one place that still sees it.
+    if (
+      incRawWarn?.incidents !== undefined &&
+      !Array.isArray(incRawWarn.incidents)
+    ) {
+      artifactWarnings.push(
+        `incidents.json: raw.incidents is ${incRawWarn.incidents === null ? 'null' : typeof incRawWarn.incidents === 'object' ? 'an object' : `a ${typeof incRawWarn.incidents}`}, not an array — ` +
+          `the records are unreadable and DF-07 stays SKIP; fix the envelope shape ` +
+          `(references/connector-shapes.md) and re-run enrich`
+      );
+    }
+    const incAgg = deriveIncidentAggregates(
+      (incArtWarn.raw as { incidents?: IncidentRecord[] } | undefined)
+        ?.incidents,
+      lookbackDays(standards)
+    );
+    const openCount =
+      incAgg.count - incAgg.resolved_count - incAgg.invalid_count;
+    if (incAgg.count > 0 && openCount === incAgg.count) {
+      artifactWarnings.push(
+        `incidents.json: all ${incAgg.count} in-window incident(s) are still open (none carries a resolved_at) — ` +
+          `MTTR has nothing to measure and category 1103 stays SKIP; if that is unexpected, resolved_at is ` +
+          `probably mapped from the wrong field (references/connector-shapes.md), then re-run enrich`
+      );
+    }
+  }
 
   // 2. Deterministic topology flags. Connector-dependent flags (has_tracker,
   //    has_docs_connector, has_incident_source) are derived from the collected
@@ -597,11 +750,22 @@ export async function auditCore(
   const trackerArt = readCollected('tracker');
   const docsArt = readCollected('docs');
   const codeHostArt = readCollected('code_host');
+  const incidentsArt = readCollected('incidents');
+  const incidentsRaw = incidentsArt?.raw as
+    | { incidents?: Parameters<typeof deriveIncidentAggregates>[0] }
+    | undefined;
   const topology: TopologyFlags = computeTopology(repoPath, {
     has_tracker: Boolean(trackerArt?.available),
     has_docs_connector: Boolean(docsArt?.available),
+    // A real, measurable incident source: the connector-passed incidents
+    // artifact with at least one resolved recovery span in the window (derived
+    // from raw.incidents[], same as the metric). Merely naming an incident
+    // system in the tracker does NOT award the category — that would grant
+    // DF-07 (category 1103) full weight on a git proxy with zero incident data.
+    // Without a measurable span category 1103 stays SKIP.
     has_incident_source: Boolean(
-      trackerArt?.available && trackerArt?.incident_source
+      incidentsArt?.available &&
+      hasMeasurableIncidents(incidentsRaw?.incidents, lookbackDays(standards))
     ),
     has_code_host: Boolean(codeHostArt?.available),
   });
@@ -858,7 +1022,15 @@ export async function auditCore(
     linked_repos: linkedRepos,
     tech_stack: techStack,
     detection_conflicts: detectionConflicts,
-    derived_delivery: computeDerivedDelivery(collectedDir, trackerArt),
+    derived_delivery: computeDerivedDelivery(
+      collectedDir,
+      trackerArt,
+      standards,
+      // Already parsed above for the topology gate. A `null` (nothing
+      // readable) deliberately re-reads inside — only on the corrupt path,
+      // where the second read buys the precise unreadable-reason for the note.
+      incidentsArt
+    ),
     engine: ENGINE_PROVENANCE,
   };
   if (Object.keys(sourceWindows).length > 0)
@@ -1034,7 +1206,7 @@ const CONNECTABLE_SOURCES = new Set([
   'tracker',
   'docs',
   'ci',
-  'incident',
+  'incidents',
   'code_host',
 ]);
 
@@ -1045,7 +1217,7 @@ const COLLECTED_ARTIFACT_SOURCES = new Set([
   'ci',
   'tracker',
   'docs',
-  'incident',
+  'incidents',
   'code_host',
 ]);
 

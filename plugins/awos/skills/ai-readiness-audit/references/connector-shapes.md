@@ -67,11 +67,11 @@ The connector object the orchestrator assembles and passes to the collector. Wri
 }
 ```
 
-| Field             | Type             | Required | Meaning                                                                                                                                                                                                                                |
-| ----------------- | ---------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tickets`         | `TicketRecord[]` | no       | Work items within the audit period; omit or use `[]` if none                                                                                                                                                                           |
-| `incident_source` | `string \| null` | no       | Identifier for the incident-management system feeding MTTR (e.g. `"pagerduty"`, `"opsgenie"`). When present, MTTR reliability upgrades from `"git-proxy"` to first-class. Omit or set `null` when no dedicated incident source exists. |
-| `fetch_meta`      | `FetchMeta`      | yes\*    | Honest accounting of how much of the source was actually fetched (see [FetchMeta](#fetchmeta) below). \*Required whenever the source paginates — never write a paginated tracker artifact without it.                                  |
+| Field             | Type             | Required | Meaning                                                                                                                                                                                                                                                                                                                         |
+| ----------------- | ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tickets`         | `TicketRecord[]` | no       | Work items within the audit period; omit or use `[]` if none                                                                                                                                                                                                                                                                    |
+| `incident_source` | `string \| null` | no       | Provenance label naming the incident-management system (e.g. `"pagerduty"`, `"opsgenie"`). Informational only: it does **not** upgrade MTTR reliability and does **not** award category 1103 — only a measurable recovery span in `collected/incidents.json` does. Omit or set `null` when no dedicated incident source exists. |
+| `fetch_meta`      | `FetchMeta`      | yes\*    | Honest accounting of how much of the source was actually fetched (see [FetchMeta](#fetchmeta) below). \*Required whenever the source paginates — never write a paginated tracker artifact without it.                                                                                                                           |
 
 ### FetchMeta
 
@@ -503,3 +503,64 @@ gh issue list --state all --limit 500 --json number,title,state,createdAt,closed
 Prefer richer sources when several are reachable: tracker MCP > acli > code-host issues. One tracker artifact only — never merge channels.
 
 **Viability threshold for the fallback.** Code-host issues are only a tracker when the project actually tracks work there. When the richer tracker (Jira, Linear, …) exists but is unreachable and the code-host fallback yields **fewer than 5 tickets in the audit window**, write the artifact with `available: false` and a `reason_if_absent` naming both facts — e.g. `"Jira (IGAL) unreachable: no Atlassian MCP, acli not on PATH; GitHub Issues fallback has 1 issue in window — not a viable tracker substitute"` — instead of scoring throughput/work-mix off a 0–1-ticket sample. A near-empty fallback produces garbage values, and whether it counts as "available" must not vary run to run.
+
+## Incidents (`collected/incidents.json`)
+
+Feeds MTTR (DF-07). Source-agnostic: normalise incidents from whatever the project uses — a dedicated tool (PagerDuty / OpsGenie / incident.io), a status page (Statuspage, Atlassian incident issue types), or code-host issues labelled as incidents (GitHub/GitLab `incident`/`sevN` labels) — into `IncidentRecord`s and pass them as an `IncidentsConnector`. Without this artifact the MTTR metric falls back to its git proxy and category 1103 stays SKIP.
+
+### IncidentRecord
+
+```jsonc
+{
+  "id": "INC-1024", // stable id from the source
+  "started_at": "2026-07-01T09:12:00Z", // ISO 8601 — opened/detected
+  "resolved_at": "2026-07-01T11:42:00Z", // ISO 8601 — service restored; omit/null if still open
+  "severity": "SEV1", // optional, verbatim
+  "source": "pagerduty", // optional provenance, e.g. "github-label:incident"
+}
+```
+
+### Writing `collected/incidents.json`
+
+Wrap the incidents in the standard collector envelope and write it to `collected/incidents.json`. You author only `incidents[]` and `period.source_label`:
+
+```jsonc
+{
+  "source": "incidents",
+  "available": true,
+  "reason_if_absent": null,
+  "period": {
+    "bucket_days": 30,
+    "lookback_days": 90,
+    "history_available_days": 90,
+    "source_label": "PagerDuty", // names the source everywhere, e.g. "GitHub incident labels"
+  },
+  "raw": {
+    "incidents": [
+      /* IncidentRecord[] */
+    ],
+  },
+}
+```
+
+`period.source_label` is the one write site, like every sibling connector recipe: the Connections & Sources column, the MTTR reliability note, and the headline delivery row all read it (a `raw.source_label`, if present from an older artifact, still takes precedence — you do not need to write it).
+
+**The engine derives the median — you do not.** Like the tracker collector (whose metrics derive their counts from `raw.tickets[]`), the MTTR metric computes the recovery aggregates itself from `raw.incidents[]`. Do not hand-write the fields below — the engine ignores any it finds and recomputes them, so a transcription slip cannot become a "measured" DORA number:
+
+- `count` — incidents in the audit window
+- `resolved_count` — incidents with a measurable `started_at → resolved_at` span
+- `invalid_count` — resolved incidents whose span could not be parsed (unparseable, reversed, or zero-length timestamps). A record with no `resolved_at` is **still open**, not invalid — it is never counted here
+- `median_duration_hours` — median recovery time in hours (the MTTR value)
+- `dropped_out_of_window` — incidents dropped for starting before the audit window
+
+Only incidents with a valid `started_at → resolved_at` span are measured; the engine clamps them to the audit window, reports the **median** recovery time in hours, and upgrades reliability to `maximal`. Query the same window as the other connectors.
+
+The clamp is anchored to the **newest incident's own `started_at`**, mirroring `clampToWindow` for CI runs and tracker tickets — not to a fixed calendar anchor. So an entirely historical export is kept in full and measured against its own newest record, rather than being excluded; the window length itself comes from `[meta].max_lookback_days`, not from the `period` you write.
+
+**Map semantically from the live tool response, not from a fixed field list.** Call the source's MCP/CLI, read the shape it actually returns, and map by meaning: whatever field marks **when the incident began** → `started_at`, **when service was restored** → `resolved_at`, and the severity/priority label → `severity` (leave `resolved_at` null for still-open incidents). The names below are only the _typical_ ones as of writing — if the live response differs, trust it over this list:
+
+- **PagerDuty / OpsGenie / incident.io** — open time is typically `created_at`/`opened_at`; restore time `resolved_at`/`closed_at`; severity `priority`/`urgency`.
+- **Statuspage / Atlassian** — typically `created_at` and `resolved_at`.
+- **GitHub/GitLab incident labels** — issues labelled `incident`/`sevN`; open = issue `created_at`, restore = `closed_at`; set `source: "github-label:<label>"`.
+
+Write `collected/incidents.json` once after accumulating all pages, with a `period` block recording the actual window queried, then re-run `enrich` to re-score DF-07.

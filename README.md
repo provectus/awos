@@ -49,7 +49,7 @@ Once your foundation is set, iterate through this cycle for each feature on your
 | `/awos:implement` | Runs tasks — delegates coding to sub-agents, tracks progress.                     | [Details](docs/commands/implement.md) |
 | `/awos:verify`    | Verifies spec completion — checks acceptance criteria, marks Status as Completed. | [Details](docs/commands/verify.md)    |
 
-> **When to skip the cycle**: Not every change needs a spec. Hotfixes, simple bugfixes, and small edits don't require the full spec workflow — Claude Code's built-in plan mode handles those just fine.
+> **When to skip the cycle**: Not every change needs a spec. Hotfixes, simple bugfixes, and small edits don't require the full spec workflow — Claude Code's built-in plan mode handles those just fine. Teams using a `/awos:flow`-generated command get this triage built in: on a small-signal it sizes the change with a quick evidence check and, when the change is confirmed small, delivers it without spec artifacts.
 
 ### Step 4: You're Awesome
 

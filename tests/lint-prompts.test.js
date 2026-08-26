@@ -905,6 +905,87 @@ test('flow.md investigation probes before claiming absence and validates ticket 
   }
 });
 
+test('the feature flow carries the evidence-based small-change triage', () => {
+  // PR #185 follow-up: small changes shouldn't pay full spec ceremony, but
+  // the requester's word alone must never route past it either (the
+  // objection that killed the /awos:spec `small:` scope hint). The generated
+  // feature command triages with evidence — an Explore pass plus an
+  // AskUserQuestion citing what it found — and a confirmed Small delivers
+  // with zero context/spec/ artifacts while keeping the review/CI/merge/
+  // close stages. The safe default is the full chain, keyed on
+  // AWOS_UNATTENDED for headless runs. Pin the stage marker and its
+  // position, the evidence contract, the no-spec-artifacts promise, and the
+  // policy's presence in the decision-record template and flow.md Step 4.
+  const body = readUtf8(
+    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+  );
+  const triageAt = body.indexOf('<!-- awos:flow:stage=small-triage -->');
+  assert.ok(
+    triageAt !== -1,
+    'implement-feature-template.md must carry the small-triage stage marker — the size triage is a reconcilable stage, not loose prose'
+  );
+  const resumeAt = body.indexOf('<!-- awos:flow:stage=resume-detection -->');
+  const workspaceAt = body.indexOf('<!-- awos:flow:stage=workspace -->');
+  assert.ok(
+    resumeAt !== -1 &&
+      workspaceAt !== -1 &&
+      resumeAt < triageAt &&
+      triageAt < workspaceAt,
+    'the small-triage stage must sit after resume-detection and before workspace — sizing happens once the ticket is normalized and before any branch is cut'
+  );
+  const triage = body.slice(
+    triageAt,
+    body.indexOf('<!-- /awos:flow:stage -->', triageAt)
+  );
+  assert.ok(
+    /Explore/.test(triage) && /AskUserQuestion/.test(triage),
+    "the small-triage stage must size with evidence — an Explore pass plus an AskUserQuestion confirmation — never on the requester's word alone"
+  );
+  assert.ok(
+    /citing the evidence/i.test(triage),
+    'the small-triage confirmation must cite the exploration evidence inside its options, so the user decides on facts they lacked'
+  );
+  assert.ok(
+    /never routes by itself/i.test(triage),
+    'the small-triage stage must state that a small-signal only triggers the check and never routes by itself — the declared-hint design PR #185 rejected'
+  );
+  assert.ok(
+    /AWOS_UNATTENDED/.test(triage) &&
+      /safe default is \*\*standard\*\*/i.test(triage),
+    'the small-triage safe default must be the full chain (standard), keyed on AWOS_UNATTENDED so an unattended run never enters the short path silently'
+  );
+  assert.ok(
+    /no `context\/spec\/` directory/.test(triage),
+    'a confirmed Small must deliver with zero context/spec/ artifacts — a shorter spec is still a spec, so the small path writes none'
+  );
+  assert.ok(
+    /\[Omit this stage entirely when the Small-Change Path section/.test(
+      triage
+    ),
+    'the small-triage stage must carry the generator instruction to omit it when the decision record disables the small-change path'
+  );
+
+  const dfTemplate = readUtf8(
+    path.join(pluginTemplatesDir, 'delivery-flow-template.md')
+  );
+  assert.ok(
+    /^## Small-Change Path/m.test(dfTemplate),
+    'delivery-flow-template.md must carry a Small-Change Path section so the triage policy is a recorded decision, not implicit command prose'
+  );
+  assert.ok(
+    /\*\*Enabled:\*\*/.test(dfTemplate) &&
+      /\*\*Safe default:\*\*/.test(dfTemplate),
+    'the Small-Change Path section must record the Enabled and Safe default fields — re-runs reconcile the policy from these'
+  );
+
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.ok(
+    /\*\*Small-change triage\*\*/.test(flow) &&
+      /Small-Change Path section/.test(flow),
+    'flow.md Step 4 must settle the small-change triage policy (enabled by default, stated in the confirmation summary) and record it in the Small-Change Path section'
+  );
+});
+
 test('fix-bug template reads remote links, sweeps all surfaces, and verifies subagent claims', () => {
   // Road-test #2 regressions (HOP-3749): the bug's real context (a
   // screenshot naming the broken surface) lived in a Jira remote link;
@@ -3390,7 +3471,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // together: plugin.json, marketplace.json, this pinned literal, and the
 // generator-version constant in plugins/awos/commands/flow.md. The pin
 // exists to force that deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.5';
+const EXPECTED_PLUGIN_VERSION = '2.5.0';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(

@@ -468,6 +468,73 @@ test('renderer refuses an --artifact target that would overwrite a canonical fil
   }
 });
 
+test('renderer renders markdown tables as tables, not as a wall of pipes', () => {
+  const md = SAMPLE_MD.replace(
+    '## 3. Scope and Boundaries',
+    `## 2b. Supported formats
+
+| Format | Max rows | Notes                |
+| ------ | -------: | :------------------: |
+| CSV    | 100,000  | Default selection    |
+| XLSX   |   50,000 | Preserves formatting |
+
+---
+
+## 3. Scope and Boundaries`
+  );
+  const { html } = renderInTemp(SAMPLE_VM, { md });
+  assert.ok(
+    html.includes('<table class="md">'),
+    'a markdown table must render as a real table — folded into a paragraph it reads as a wall of pipes and dashes'
+  );
+  assert.ok(
+    html.includes('<th>Format</th>') && html.includes('<td>CSV</td>'),
+    'the header row must become <th> cells and body rows <td> cells'
+  );
+  assert.ok(
+    !/<p[^>]*>[^<]*\| -----/.test(html) && !html.includes('| -------- |'),
+    'the separator row must be consumed as table structure, never emitted as visible text'
+  );
+  assert.ok(
+    html.includes('style="text-align:right"') &&
+      html.includes('style="text-align:center"'),
+    'column alignment from the separator row (---: and :---:) must be honored'
+  );
+  assert.ok(
+    html.includes('class="tablewrap"'),
+    'a table must sit in an overflow-x wrapper so a wide one scrolls instead of widening the page'
+  );
+});
+
+test('renderer escapes table cells and leaves non-table pipe lines as prose', () => {
+  const md = SAMPLE_MD.replace(
+    '## 3. Scope and Boundaries',
+    `## 2c. Edges
+
+| Field | Value |
+| ----- | ----- |
+| <script>alert(1)</script> | **bold** |
+
+A line with | pipes | but no separator row.
+
+## 3. Scope and Boundaries`
+  );
+  const { html } = renderInTemp(undefined, { md });
+  assert.ok(
+    !html.includes('<script>alert(1)</script>') &&
+      html.includes('&lt;script&gt;'),
+    'table cells are markdown content and must be escaped like any other text'
+  );
+  assert.ok(
+    html.includes('<strong>bold</strong>'),
+    'inline markdown inside a cell must still render'
+  );
+  assert.ok(
+    html.includes('A line with | pipes | but no separator row.'),
+    'pipes without a separator row are not a table — that text must stay prose rather than being eaten'
+  );
+});
+
 test('renderer degrades to a generic render when no view-model is given — it never fails the page', () => {
   const { html } = renderInTemp(undefined);
   assert.ok(

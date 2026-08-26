@@ -143,11 +143,58 @@ function parseSpec(md) {
   return spec;
 }
 
+// A GitHub-flavored table separator: only pipes, dashes, colons and space,
+// carrying at least one of each of the first two (e.g. "| --- | :--: |").
+function isTableSeparator(line) {
+  return /^[\s|:-]+$/.test(line) && line.includes('-') && line.includes('|');
+}
+
+function splitRow(line) {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.trim().replace(/\\\|/g, '|'));
+}
+
+function alignmentsFrom(separator) {
+  return splitRow(separator).map((spec) => {
+    const left = spec.startsWith(':');
+    const right = spec.endsWith(':');
+    if (left && right) return 'center';
+    if (right) return 'right';
+    return 'left';
+  });
+}
+
+// A table is a header row followed by a separator row. Returns the parsed
+// table and the index just past it, or null when the lines are not one.
+function parseTableAt(body, start) {
+  const header = body[start];
+  const separator = body[start + 1];
+  if (!header || !header.includes('|')) return null;
+  if (!separator || !isTableSeparator(separator)) return null;
+
+  const head = splitRow(header);
+  const align = alignmentsFrom(separator);
+  const rows = [];
+  let i = start + 2;
+  while (i < body.length && body[i].trim() && body[i].includes('|')) {
+    rows.push(splitRow(body[i]));
+    i++;
+  }
+  return { table: { type: 'table', head, align, rows }, next: i };
+}
+
 // From a body (array of lines), extract checkbox criteria (joining wrapped
-// continuation lines) and top-level prose bullets / paragraphs.
+// continuation lines) and the ordered content blocks — paragraphs, top-level
+// bullets, and tables. `prose` keeps the text-only view every existing caller
+// expects; `blocks` preserves order and type so tables can render as tables.
 function parseBody(body) {
   const criteria = [];
-  const prose = [];
+  const blocks = [];
+  const pushText = (text) => blocks.push({ type: 'text', text });
   let i = 0;
   while (i < body.length) {
     const line = body[i];
@@ -182,8 +229,18 @@ function parseBody(body) {
         i++;
       }
       if (!/^\*\*Acceptance Criteria:?\*\*/i.test(text.trim())) {
-        prose.push(text);
+        pushText(text);
       }
+      continue;
+    }
+
+    // Tables are checked before the paragraph branch below: their rows are
+    // neither bullets nor a bare rule, so that branch would otherwise fold the
+    // whole table — pipes, dashes and all — into one run-on paragraph.
+    const parsedTable = parseTableAt(body, i);
+    if (parsedTable) {
+      blocks.push(parsedTable.table);
+      i = parsedTable.next;
       continue;
     }
 
@@ -196,12 +253,13 @@ function parseBody(body) {
         text += ' ' + next.trim();
         i++;
       }
-      prose.push(text);
+      pushText(text);
       continue;
     }
     i++;
   }
-  return { criteria, prose };
+  const prose = blocks.filter((b) => b.type === 'text').map((b) => b.text);
+  return { criteria, prose, blocks };
 }
 
 // The template writes requirements as flat bullets with a nested acceptance
@@ -272,6 +330,37 @@ ${items}
 </ul></details>`;
 }
 
+function renderTable(t) {
+  const cell = (text, tag, align) =>
+    `<${tag}${align && align !== 'left' ? ` style="text-align:${align}"` : ''}>${inline(text)}</${tag}>`;
+  const head = t.head.length
+    ? `<thead><tr>${t.head.map((c, i) => cell(c, 'th', t.align[i])).join('')}</tr></thead>`
+    : '';
+  const rows = t.rows
+    .map(
+      (row) =>
+        `<tr>${row.map((c, i) => cell(c, 'td', t.align[i])).join('')}</tr>`
+    )
+    .join('\n');
+  // The wrapper scrolls a wide table instead of letting it widen the page.
+  return `<div class="tablewrap"><table class="md">${head}<tbody>
+${rows}
+</tbody></table></div>`;
+}
+
+// Render the ordered blocks of a body, with text laid out by the caller's
+// element (a paragraph in a card, a list item in a generic section) and tables
+// always rendered as tables.
+function renderBlocks(blocks, textTag, textClass) {
+  return blocks
+    .map((b) => {
+      if (b.type === 'table') return renderTable(b);
+      const cls = textClass ? ` class="${textClass}"` : '';
+      return `<${textTag}${cls}>${inline(b.text)}</${textTag}>`;
+    })
+    .join('\n');
+}
+
 function renderRequirement(sub, vm) {
   const parsed = parseBody(sub.body);
   const vmReq = findVmRequirement(vm, sub.title);
@@ -283,9 +372,7 @@ function renderRequirement(sub, vm) {
     vmReq && vmReq.one_liner
       ? `<p class="oneliner">${inline(vmReq.one_liner)}</p>`
       : '';
-  const prose = parsed.prose
-    .map((p) => `<p class="prose">${inline(p)}</p>`)
-    .join('\n');
+  const prose = renderBlocks(parsed.blocks, 'p', 'prose');
   return `<section class="req" id="${id}">
   <h3><span>${inline(sub.title)}</span><span class="provrow">${badges}</span></h3>
   ${oneLiner}
@@ -297,8 +384,8 @@ function renderRequirement(sub, vm) {
 function renderGenericSection(section) {
   const own = parseBody(section.body);
   const parts = [`<h2>${inline(section.title)}</h2>`];
-  if (own.prose.length || own.criteria.length) {
-    parts.push(own.prose.map((p) => `<p>${inline(p)}</p>`).join('\n'));
+  if (own.blocks.length || own.criteria.length) {
+    parts.push(renderBlocks(own.blocks, 'p', ''));
     if (own.criteria.length) parts.push(renderCriteria(own, null));
   }
   for (const sub of section.subs) {
@@ -309,6 +396,9 @@ function renderGenericSection(section) {
         `<ul>${parsed.prose.map((p) => `<li>${inline(p)}</li>`).join('\n')}</ul>`
       );
     }
+    for (const block of parsed.blocks) {
+      if (block.type === 'table') parts.push(renderTable(block));
+    }
     if (parsed.criteria.length) parts.push(renderCriteria(parsed, null));
   }
   return parts.filter(Boolean).join('\n');
@@ -317,10 +407,13 @@ function renderGenericSection(section) {
 function renderScope(section) {
   const cols = section.subs
     .map((sub) => {
-      const items = listItems(sub.body)
-        .map((p) => `<li>${inline(p)}</li>`)
+      const parsed = parseBody(sub.body);
+      const items = parsed.prose.map((p) => `<li>${inline(p)}</li>`).join('\n');
+      const tables = parsed.blocks
+        .filter((b) => b.type === 'table')
+        .map(renderTable)
         .join('\n');
-      return `<div><h4>${inline(sub.title)}</h4><ul>${items}</ul></div>`;
+      return `<div><h4>${inline(sub.title)}</h4><ul>${items}</ul>${tables}</div>`;
     })
     .join('\n');
   if (!cols) return renderGenericSection(section);
@@ -582,6 +675,11 @@ const CSS = `
   .cols li { margin: 5px 0; }
   footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
   code { background: var(--panel); border-radius: 4px; padding: 1px 5px; font-size: .92em; }
+  .tablewrap { overflow-x: auto; margin: 12px 0; }
+  table.md { border-collapse: collapse; font-size: 14px; min-width: 100%; }
+  table.md th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 8px 12px; border-bottom: 2px solid var(--line); white-space: nowrap; }
+  table.md td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.md tr:last-child td { border-bottom: none; }
 `;
 
 const TAB_JS = `

@@ -54,10 +54,13 @@ export function writeRepo(dir: string, files: Record<string, string>): void {
   }
 }
 
+/** Absolute path to references/standards.toml — the engine's single source of truth. */
+export function standardsPath(): string {
+  return join(SKILL, 'references', 'standards.toml');
+}
+
 export function loadStandards(): any {
-  return parse(
-    readFileSync(join(SKILL, 'references', 'standards.toml'), 'utf8')
-  );
+  return parse(readFileSync(standardsPath(), 'utf8'));
 }
 
 let standardsCache: any = null;

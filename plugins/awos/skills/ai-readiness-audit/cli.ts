@@ -8,7 +8,7 @@
  *   node dist/cli.js progress       <elapsed_seconds>  <done> <total>
  *   node dist/cli.js render         <audit.json>       --format md|html|both [--out-dir <dir>]
  *   node dist/cli.js rollup         <dir-of-per-repo-subdirs>
- *   node dist/cli.js audit-core     <repoPath>         <outDir>
+ *   node dist/cli.js audit-core     <repoPath>         <outDir> [--orchestration-root <path>|--no-orchestration-root]
  *   node dist/cli.js aggregate      <auditsDir>
  *   node dist/cli.js enrich         <repoPath>         <outDir>
  *   node dist/cli.js patch-judgment <auditsDir>        <patches.json|->
@@ -57,7 +57,7 @@ import { progress } from './progress.ts';
 // ---------------------------------------------------------------------------
 // audit-core (deterministic single-pass audit)
 // ---------------------------------------------------------------------------
-import { auditCore } from './audit_core.ts';
+import { auditCore, type AuditCoreOptions } from './audit_core.ts';
 import { hasEngineProvenance } from './provenance.ts';
 import {
   aggregate,
@@ -347,13 +347,37 @@ async function main(): Promise<void> {
           break;
         }
       }
+
+      // Orchestration root. Absent both flags, audit-core auto-detects, so a
+      // run from inside a member repo needs no flag at all. `--no-` is how the
+      // root itself is audited: it owns its tooling and inherits nothing.
+      const acArgs = process.argv.slice(5);
+      let acOpts: AuditCoreOptions | undefined;
+      if (acArgs.includes('--no-orchestration-root')) {
+        acOpts = { orchestrationRoot: null };
+      } else {
+        const rootIdx = acArgs.indexOf('--orchestration-root');
+        if (rootIdx !== -1) {
+          const rootArg = acArgs[rootIdx + 1];
+          if (!rootArg || rootArg.startsWith('--')) {
+            fail({
+              error: '--orchestration-root requires a path',
+              usage:
+                'node dist/cli.js audit-core <repoPath> <outDir> --orchestration-root <path>',
+            });
+          }
+          acOpts = { orchestrationRoot: resolve(rootArg) };
+        }
+      }
+
       const summary = await auditCore(
         repoPath,
         outDir,
         DETECTORS,
         METRICS,
         standardsTomlPath(),
-        command === 'enrich' ? join(outDir, 'collected') : undefined
+        command === 'enrich' ? join(outDir, 'collected') : undefined,
+        acOpts
       );
       printJson(summary);
       break;

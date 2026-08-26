@@ -11,7 +11,7 @@ import {
   ALL_HOOK_PATHS,
   ALL_MCP_CONFIG_PATHS,
 } from '../agent_tools.ts';
-import { isSubstantiveOrchestrationPath } from '../detectors/_base.ts';
+import { isSubstantiveOrchestrationPath } from '../fs_probe.ts';
 
 // ---------------------------------------------------------------------------
 // Shell helper

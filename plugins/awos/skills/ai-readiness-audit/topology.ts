@@ -21,11 +21,8 @@ import {
 } from 'node:fs';
 import { join, dirname, basename, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
-import {
-  iterFiles,
-  hasMatch,
-  isSubstantiveOrchestrationPath,
-} from './detectors/_base.ts';
+import { iterFiles, hasMatch } from './detectors/_base.ts';
+import { isSubstantiveOrchestrationPath } from './fs_probe.ts';
 import { findApiSpecFiles } from './detectors/api_specs.ts';
 import { detectCiConfigPath } from './ci_platforms.ts';
 import {

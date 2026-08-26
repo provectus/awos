@@ -582,12 +582,15 @@ test('SDD-04: detached HEAD pseudo-entry is not counted as a feature branch', ()
 // ---------------------------------------------------------------------------
 // detectSpecTriadComplete — code 2804 (SDD-05, detected)
 //
-// Checks every context/spec/NNN-* directory for the three required files:
-//   functional-spec.md, technical-considerations.md, tasks.md
+// Judges every spec/decision record — across whichever recognized
+// convention(s) a repo uses — against the full AWOS/Kiro/Agent-OS/Spec-Kit
+// file triad, or the ADR template sections. Each record earns fractional
+// credit (elements present / elements required), averaged across records —
+// a spec missing only one file is not zero credit.
 //
-// PASS if all spec dirs have all 3 files (or no spec dirs).
-// WARN if some dirs are incomplete (1-2 missing files).
-// FAIL if any dir has 0 of the 3 files.
+// PASS if the average credit is >=90% (or no records exist — SKIP).
+// WARN if 50-89%.
+// FAIL if <50%.
 // ---------------------------------------------------------------------------
 
 test('SDD-05: SKIP when no spec directories exist — absence is not compliance', () => {
@@ -610,15 +613,25 @@ test('SDD-05: PASS when all spec dirs have the full triad', () => {
   assert.equal(r.method, 'detected');
 });
 
-test('SDD-05: WARN when a spec dir is missing one file', () => {
+test('SDD-05: WARN (not FAIL) when the lone spec dir is missing one file — credit is fractional per record', () => {
   const t = tmp();
   const specDir = join(t, 'context', 'spec', '001-feature');
   mkdirSync(specDir, { recursive: true });
   writeFileSync(join(specDir, 'functional-spec.md'), '# spec\n');
   writeFileSync(join(specDir, 'technical-considerations.md'), '# tech\n');
-  // tasks.md missing
+  // tasks.md missing — 2/3 required elements present, so this record earns
+  // 0.667 credit rather than zero; a single mostly-complete spec must not
+  // swing the whole repo to a hard FAIL.
   const r = detectSpecTriadComplete(t);
-  assert.equal(r.status, 'WARN', 'missing 1 file → WARN');
+  assert.equal(
+    r.status,
+    'WARN',
+    '2/3 elements present on the only record → 0.667 ratio → WARN, not FAIL'
+  );
+  assert.ok(
+    r.evidence.some((e) => /2\/3/.test(e)),
+    `evidence must report the present/required count, got: ${JSON.stringify(r.evidence)}`
+  );
 });
 
 test('SDD-05: FAIL when a spec dir is completely empty (0 of 3 files)', () => {
@@ -636,31 +649,46 @@ test('SDD-05: WARN when one spec dir is complete but another is incomplete', () 
     'context/spec/001-ok/functional-spec.md': '# spec\n',
     'context/spec/001-ok/technical-considerations.md': '# tech\n',
     'context/spec/001-ok/tasks.md': '# tasks\n',
-    // dir2 missing technical-considerations.md and tasks.md → WARN (not 0 of 3)
+    // dir2 has 1/3 present (credit 0.333) → average ratio (1.0+0.333)/2 = 0.667 → WARN
     'context/spec/002-incomplete/functional-spec.md': '# spec\n',
   });
   const r = detectSpecTriadComplete(t);
   assert.equal(r.status, 'WARN', 'mixed completeness → WARN');
 });
 
+test('SDD-05: WARN exactly at the 0.5 ratio boundary (inclusive)', () => {
+  const t = tmp();
+  writeRepo(t, {
+    // Record A: fully complete → credit 1.0.
+    'context/spec/001-full/functional-spec.md': '# spec\n',
+    'context/spec/001-full/technical-considerations.md': '# tech\n',
+    'context/spec/001-full/tasks.md': '# tasks\n',
+    // Record B: nothing present → credit 0. Average ratio = (1.0+0)/2 = 0.5 exactly.
+  });
+  mkdirSync(join(t, 'context', 'spec', '002-empty'), { recursive: true });
+  const r = detectSpecTriadComplete(t);
+  assert.equal(
+    r.status,
+    'WARN',
+    'ratio of exactly 0.5 must land on the WARN side of the >=0.5 boundary, not FAIL'
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectStaleSpecs — code 2805 (SDD-06, detected)
 //
-// A spec is "stale" if it exists but tasks.md exists AND all tasks are marked
-// as done ([x]) — meaning the work is complete — or if the spec dir has only
-// partial files with no recent git modification.
+// Classifies every spec/decision record by its own convention's status
+// vocabulary, read from the record's status-bearing file (functional-spec.md
+// for AWOS, the record itself for a single-file ADR). A record whose status
+// is one of its convention's "active" values (e.g. AWOS Draft/In Review/
+// Approved) is still in flight; one whose status is "terminal" (AWOS
+// Completed) is settled, not stale. A record that declares no status this
+// check recognizes is excluded from the ratio rather than penalized.
 //
-// Simplified heuristic (deterministic):
-//   - Look at every context/spec/NNN-* dir that has tasks.md.
-//   - If ALL tasks in tasks.md are checked ([x] / [X]), mark as completed (not stale, PASS).
-//   - If tasks.md has ONLY unchecked tasks but functional-spec.md is present,
-//     it's actively in progress (PASS/OK).
-//   - A spec is stale if tasks.md is present but has zero task lines
-//     (empty stub that was never filled in).
-//
-// PASS if no stale specs.
-// WARN if 1 stale spec.
-// FAIL if 2+ stale specs.
+// PASS if none of the judged records are still active.
+// WARN if a minority (<=2 and <=half of judged records) are active.
+// FAIL otherwise.
+// SKIP if no record exists, or none declares a recognized status.
 // ---------------------------------------------------------------------------
 
 test('SDD-06: SKIP when no spec directories exist — absence is not compliance', () => {
@@ -671,50 +699,68 @@ test('SDD-06: SKIP when no spec directories exist — absence is not compliance'
   assert.equal(r.method, 'detected');
 });
 
-test('SDD-06: PASS when tasks.md has active (unchecked) tasks', () => {
+test('SDD-06: SKIP when the only spec has no recognized Status field', () => {
   const t = tmp();
-  const specDir = join(t, 'context', 'spec', '001-active');
+  const specDir = join(t, 'context', 'spec', '001-nostatus');
   mkdirSync(specDir, { recursive: true });
   writeFileSync(
-    join(specDir, 'tasks.md'),
-    '# Tasks\n\n- [ ] Task one\n- [ ] Task two\n'
+    join(specDir, 'functional-spec.md'),
+    '# Spec\n\nNo status here.\n'
   );
-  writeFileSync(join(specDir, 'functional-spec.md'), '# spec\n');
   const r = detectStaleSpecs(t);
-  assert.equal(r.status, 'PASS', 'active tasks → PASS');
+  assert.equal(
+    r.status,
+    'SKIP',
+    'a record must not be penalized for a status this check does not recognize'
+  );
 });
 
-test('SDD-06: PASS when tasks.md has all tasks completed ([x])', () => {
+test('SDD-06: PASS when the record has reached a terminal status', () => {
   const t = tmp();
   const specDir = join(t, 'context', 'spec', '001-done');
   mkdirSync(specDir, { recursive: true });
   writeFileSync(
-    join(specDir, 'tasks.md'),
-    '# Tasks\n\n- [x] Task one\n- [x] Task two\n'
+    join(specDir, 'functional-spec.md'),
+    '# Spec\n\n- **Status:** Completed\n'
   );
   const r = detectStaleSpecs(t);
-  assert.equal(r.status, 'PASS', 'completed tasks → PASS (not stale, done)');
+  assert.equal(
+    r.status,
+    'PASS',
+    "Completed is AWOS's terminal status — settled work is not stale"
+  );
 });
 
-test('SDD-06: WARN when 1 spec has an empty tasks.md stub (stale)', () => {
+test('SDD-06: WARN when 1 of 2 records is still in an active status', () => {
   const t = tmp();
-  const specDir = join(t, 'context', 'spec', '001-stale');
-  mkdirSync(specDir, { recursive: true });
-  writeFileSync(join(specDir, 'tasks.md'), '# Tasks\n\n');
-  writeFileSync(join(specDir, 'functional-spec.md'), '# spec\n');
+  writeRepo(t, {
+    'context/spec/001-done/functional-spec.md':
+      '# Spec\n\n- **Status:** Completed\n',
+    'context/spec/002-active/functional-spec.md':
+      '# Spec\n\n- **Status:** Draft\n',
+  });
   const r = detectStaleSpecs(t);
-  assert.equal(r.status, 'WARN', '1 stale spec → WARN');
+  assert.equal(
+    r.status,
+    'WARN',
+    '1 of 2 judged records still active (a minority, <=half) → WARN'
+  );
 });
 
-test('SDD-06: FAIL when 2+ specs have empty tasks.md stubs (stale)', () => {
+test('SDD-06: FAIL when active records are not a minority', () => {
   const t = tmp();
-  for (const name of ['001-stale-a', '002-stale-b']) {
-    const specDir = join(t, 'context', 'spec', name);
-    mkdirSync(specDir, { recursive: true });
-    writeFileSync(join(specDir, 'tasks.md'), '# Tasks\n\n');
-  }
+  writeRepo(t, {
+    'context/spec/001-active/functional-spec.md':
+      '# Spec\n\n- **Status:** Draft\n',
+    'context/spec/002-active/functional-spec.md':
+      '# Spec\n\n- **Status:** In Review\n',
+  });
   const r = detectStaleSpecs(t);
-  assert.equal(r.status, 'FAIL', '2 stale specs → FAIL');
+  assert.equal(
+    r.status,
+    'FAIL',
+    '2 of 2 judged records active — not a minority → FAIL'
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -984,7 +1030,14 @@ function writeAwosWorkspace(dir: string): void {
   }
   const spec = join(dir, 'context', 'spec', '001-demo');
   mkdirSync(spec, { recursive: true });
-  writeFileSync(join(spec, 'functional-spec.md'), SDD_CONTENT);
+  // SDD-06 reads this record's status from functional-spec.md. It must be a
+  // terminal AWOS status (not SDD_CONTENT's "Approved", which is active) so
+  // this fixture reads as settled — the inheritance tests below expect PASS
+  // for a fully-populated, self-sufficient spec workspace.
+  writeFileSync(
+    join(spec, 'functional-spec.md'),
+    '# Doc\n\n- **Status:** Completed\n\nLine four.\nLine five.\nLine six.\nLine seven.\nLine eight.\n'
+  );
   writeFileSync(join(spec, 'technical-considerations.md'), SDD_CONTENT);
   writeFileSync(
     join(spec, 'tasks.md'),
@@ -1176,6 +1229,217 @@ test('a single stray ADR is not a practice', () => {
       detectSpecWorkflowAdopted(repo).status,
       'FAIL',
       'one decision record is not a discipline; awarding it would make the check meaningless'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SDD-05/SDD-06 genericized — judged per spec-driven convention, not only AWOS
+// ---------------------------------------------------------------------------
+
+test('SDD-05 judges Kiro specs by the Kiro triad', () => {
+  const repo = tmpDir('awos-sdd05-kiro-');
+  try {
+    const spec = join(repo, '.kiro', 'specs', 'feature-a');
+    mkdirSync(spec, { recursive: true });
+    for (const f of ['requirements.md', 'design.md', 'tasks.md']) {
+      writeFileSync(join(spec, f), SDD_CONTENT);
+    }
+    assert.equal(
+      detectSpecTriadComplete(repo).status,
+      'PASS',
+      'a complete Kiro spec must not be marked incomplete for lacking AWOS filenames'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('SDD-05 judges ADRs by template conformance', () => {
+  const repo = tmpDir('awos-sdd05-adr-');
+  try {
+    mkdirSync(join(repo, 'docs', 'adr'), { recursive: true });
+    for (const n of ['0001-a.md', '0002-b.md', '0003-c.md']) {
+      writeFileSync(
+        join(repo, 'docs', 'adr', n),
+        `# ${n}\n\n## Status\n\nAccepted\n\n## Context\n\nWhy.\n\n## Decision\n\nWhat.\n\n## Consequences\n\nSo what.\n`
+      );
+    }
+    assert.equal(
+      detectSpecTriadComplete(repo).status,
+      'PASS',
+      'a single-file practice is complete when its records carry the template sections; demanding three files would be nonsense for ADRs'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('SDD-06 reads the ADR status vocabulary', () => {
+  const repo = tmpDir('awos-sdd06-adr-');
+  try {
+    mkdirSync(join(repo, 'docs', 'adr'), { recursive: true });
+    for (const n of ['0001-a.md', '0002-b.md', '0003-c.md']) {
+      writeFileSync(
+        join(repo, 'docs', 'adr', n),
+        `# ${n}\n\n## Status\n\nAccepted\n\n## Context\n\nWhy.\n\n## Decision\n\nWhat.\n\n## Consequences\n\nSo what.\n`
+      );
+    }
+    assert.equal(
+      detectStaleSpecs(repo).status,
+      'PASS',
+      'Accepted is a terminal ADR status — settled decisions are not abandoned work'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('SDD-06 flags records stuck in an active status', () => {
+  const repo = tmpDir('awos-sdd06-stale-');
+  try {
+    mkdirSync(join(repo, 'docs', 'adr'), { recursive: true });
+    for (const n of ['0001-a.md', '0002-b.md', '0003-c.md']) {
+      writeFileSync(
+        join(repo, 'docs', 'adr', n),
+        `# ${n}\n\n## Status\n\nProposed\n\n## Context\n\nWhy.\n\n## Decision\n\nWhat.\n\n## Consequences\n\nSo what.\n`
+      );
+    }
+    assert.notEqual(
+      detectStaleSpecs(repo).status,
+      'PASS',
+      'three records left Proposed is exactly the abandoned-mid-workflow signal this check exists to surface'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('SDD-06 recognizes AWOS status even in the real bullet/bold template format', () => {
+  const repo = tmpDir('awos-sdd06-bullet-');
+  try {
+    const spec = join(repo, 'context', 'spec', '001-real');
+    mkdirSync(spec, { recursive: true });
+    // The actual AWOS functional-spec template writes this as a bulleted,
+    // bolded key, not a bare "Status: X" line — templates/functional-spec-template.md:4.
+    writeFileSync(
+      join(spec, 'functional-spec.md'),
+      '# Functional Specification: Real feature\n\n- **Status:** Draft\n- **Author:** Someone\n'
+    );
+    const r = detectStaleSpecs(repo);
+    assert.notEqual(
+      r.status,
+      'SKIP',
+      'the real "- **Status:** Draft" bullet format must be recognized, not read as "no status declared"'
+    );
+    assert.ok(
+      r.evidence.some((e) => /in flight/i.test(e)),
+      `Draft is an active AWOS status and must show up as in flight, got: ${JSON.stringify(r.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('SDD-06 reads an ADR Status section even when it is the last heading in the file', () => {
+  const repo = tmpDir('awos-sdd06-lastsection-');
+  try {
+    mkdirSync(join(repo, 'docs', 'adr'), { recursive: true });
+    for (const n of ['0001-a.md', '0002-b.md', '0003-c.md']) {
+      // Status is the only, and therefore last, heading — there is no
+      // following "## ..." heading for the section-content regex to anchor
+      // on, so it must fall back to matching true end-of-file.
+      writeFileSync(
+        join(repo, 'docs', 'adr', n),
+        `# ${n}\n\n## Status\n\nAccepted\n`
+      );
+    }
+    const r = detectStaleSpecs(repo);
+    assert.equal(
+      r.status,
+      'PASS',
+      'Accepted must be read even with no heading after Status — a terse ADR must not read as SKIP for having no recognized status'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("SDD-05/SDD-06 SKIP for a single stray ADR, matching SDD-01's MIN_DECISION_RECORDS gate", () => {
+  const repo = tmpDir('awos-sdd0506-stray-');
+  try {
+    mkdirSync(join(repo, 'docs', 'adr'), { recursive: true });
+    writeFileSync(
+      join(repo, 'docs', 'adr', '0001-a.md'),
+      '# One\n\n## Status\n\nAccepted\n'
+    );
+    // detectSpecFrameworks requires MIN_DECISION_RECORDS (3) before it
+    // recognizes the ADR practice at all; specRootsFor alone does not apply
+    // that threshold. SDD-05/06 must go through detectSpecFrameworks first
+    // (as listSpecRecords does) so a single stray ADR is not scored as a
+    // one-record-complete practice.
+    assert.equal(
+      detectSpecTriadComplete(repo).status,
+      'SKIP',
+      'a stray ADR below MIN_DECISION_RECORDS must not register as a spec record for SDD-05'
+    );
+    assert.equal(
+      detectStaleSpecs(repo).status,
+      'SKIP',
+      'a stray ADR below MIN_DECISION_RECORDS must not register as a spec record for SDD-06'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('SDD-05 excludes a non-numbered stray dir under context/spec from the AWOS record count', () => {
+  const repo = tmpDir('awos-sdd05-numeric-');
+  try {
+    writeRepo(repo, {
+      'context/spec/001-good/functional-spec.md': '# spec\n',
+      'context/spec/001-good/technical-considerations.md': '# tech\n',
+      'context/spec/001-good/tasks.md': '# tasks\n',
+      // Not numbered — SDD-07's listSpecDirs already ignores this; SDD-05
+      // must agree, or the two checks disagree about what a spec is.
+      'context/spec/scratch-notes/functional-spec.md': '# spec\n',
+    });
+    const r = detectSpecTriadComplete(repo);
+    assert.equal(r.status, 'PASS', 'the one numbered, complete record → PASS');
+    assert.ok(
+      r.evidence.some((e) => e.includes('1/1 record(s)')),
+      `the non-numbered dir must not be counted as a second record, got: ${JSON.stringify(r.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('SDD-05 does not grade an ADR README index as a decision record', () => {
+  const repo = tmpDir('awos-sdd05-readme-');
+  try {
+    mkdirSync(join(repo, 'docs', 'adr'), { recursive: true });
+    // A README-style index is not a decision — grading it would drag down
+    // (or artificially pad) the completeness ratio for a practice whose
+    // real records are all complete.
+    writeFileSync(join(repo, 'docs', 'adr', 'README.md'), '# ADR index\n');
+    for (const n of ['0001-a.md', '0002-b.md', '0003-c.md']) {
+      writeFileSync(
+        join(repo, 'docs', 'adr', n),
+        `# ${n}\n\n## Status\n\nAccepted\n\n## Context\n\nWhy.\n\n## Decision\n\nWhat.\n\n## Consequences\n\nSo what.\n`
+      );
+    }
+    const r = detectSpecTriadComplete(repo);
+    assert.equal(
+      r.status,
+      'PASS',
+      'all 3 real ADR records are complete → PASS'
+    );
+    assert.ok(
+      r.evidence.some((e) => e.includes('3/3 record(s)')),
+      `README.md must not be counted as a 4th record, got: ${JSON.stringify(r.evidence)}`
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });

@@ -30,6 +30,25 @@ const dimensionsDir = path.join(
 );
 const templatesDir = path.join(repoRoot, 'templates');
 const pluginCommandsDir = path.join(repoRoot, 'plugins', 'awos', 'commands');
+const pluginReferencesDir = path.join(
+  repoRoot,
+  'plugins',
+  'awos',
+  'references'
+);
+
+// flow.md Step 4 reads its dimension definitions from a bundled reference file
+// rather than carrying them inline, so a re-run that revisits no dimensions
+// never loads them. Content assertions about what the interview teaches read
+// the command and that reference together — the pair is what the generator
+// works from. Assertions about structure or procedure read flow.md directly.
+function readFlowMaterial() {
+  return (
+    readUtf8(path.join(pluginCommandsDir, 'flow.md')) +
+    '\n' +
+    readUtf8(path.join(pluginReferencesDir, 'interview-dimensions.md'))
+  );
+}
 const pluginTemplatesDir = path.join(repoRoot, 'plugins', 'awos', 'templates');
 
 function readUtf8(p) {
@@ -775,7 +794,7 @@ test('verify.md and the flow templates never punt a drivable render to the user'
     );
   }
 
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /sanctioned verification path/i.test(flow),
     'flow.md worktree/shared-resource investigation must record a sanctioned verification path so the generated verify stage self-verifies instead of handing the user a `run` command'
@@ -818,7 +837,7 @@ test('the flow templates finalize the flow-log at commit-push and never leave it
     );
   }
 
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /stops writing to it once the change request is opened or merged/i.test(
       flow
@@ -843,7 +862,7 @@ test('the flow distinguishes interactive vs unattended AskUserQuestion timeouts'
   // once and announce the default. An irreversible step never proceeds
   // on a timeout. Lock the env-var contract into flow.md, both
   // templates, and the decision record.
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /AWOS_UNATTENDED/.test(flow),
     'flow.md must key the unanswered-question handling off the AWOS_UNATTENDED env var — interactive and headless runs treat a 60s timeout differently'
@@ -885,7 +904,7 @@ test('flow.md investigation probes before claiming absence and validates ticket 
   // undocumented install + codegen. Lock the probe list, the
   // no-absence-claims rule, transition-chain validation, and the
   // bring-up steps into flow.md and the decision-record template.
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /core\.hooksPath/.test(flow) && /\.pre-commit-config\.yaml/.test(flow),
     'flow.md Step 2 must carry an explicit pre-commit-hook probe list (core.hooksPath, .husky/, .pre-commit-config.yaml, …) — a hook found only in the conventional place is how the road-test missed a versioned one'
@@ -937,7 +956,7 @@ test('the flow separates repo-provisioned transports from machine-personal ones'
   // forced resolution, the operator prerequisites, the team-wide
   // phrasing, and the best-effort degradation into flow.md, the
   // decision-record template, and both command templates.
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /repo-provisioned/i.test(flow) && /machine-personal/i.test(flow),
     "flow.md Step 2 must classify every inventoried transport as repo-provisioned or machine-personal — an inventory of what answers in the generating session records one engineer's laptop as team infrastructure"
@@ -1136,7 +1155,7 @@ test('the spec interview is pre-seeded by the flow fetch stage, adding no new /a
 
   // flow.md §1 must ask, once at generation time, where the ticket's
   // surrounding context lives and which §7 transport reaches each.
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /where the ticket's surrounding context lives/i.test(flow) &&
       /documentation connector|Confluence\/Notion/i.test(flow) &&
@@ -1287,7 +1306,7 @@ test('flow.md generator version constant matches plugin.json and stamps the arti
   // against it to decide whether the templates have moved on (Step 1.4).
   // This test keeps the constant in sync with the manifest so the footer
   // provenance and re-run detection stay truthful.
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   const manifest = JSON.parse(
     readUtf8(
       path.join(repoRoot, 'plugins', 'awos', '.claude-plugin', 'plugin.json')
@@ -1335,7 +1354,7 @@ test('flow.md flags routing policies that route agents around the generated comm
   // auto-loads delivery-flow.md. flow.md must check always-loaded docs
   // for such a policy at investigation time and advise the wording fix
   // in the Step 8 project-side setup fixes (flag, never auto-edit).
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /Routing policy in always-loaded docs/i.test(flow),
     'flow.md Step 2 must inspect CLAUDE.md/AGENTS.md-style always-loaded docs for a prescribed-workflow section that routes agents through the manual /awos:* chain'
@@ -1386,7 +1405,7 @@ test('generated commands carry the hops-style Self-Improvement Loop with governe
     );
   }
 
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /Self-Improvement Loop/.test(flow) &&
       /never changes a delivery _?decision_? on its own/i.test(flow),
@@ -1402,6 +1421,72 @@ test('generated commands carry the hops-style Self-Improvement Loop with governe
   );
 });
 
+test('Step 4 keeps the dimension definitions in a bundled reference, not inline', () => {
+  // flow.md was 9.8k words and its Step 4 alone was 2.9k — reference material
+  // embedded in a procedure. A re-run that revisits no dimensions still carried
+  // all of it through the reconciliation pass, which is the pass already at its
+  // attention budget (see the manual-edit drop this suite now pins). Step 4
+  // keeps the interview procedure and reads the definitions on demand.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const ref = readUtf8(
+    path.join(pluginReferencesDir, 'interview-dimensions.md')
+  );
+
+  assert.ok(
+    ref.split(/\s+/).length > 1000,
+    'references/interview-dimensions.md must carry the dimension definitions — an empty or stub reference means Step 4 lost them rather than moved them'
+  );
+  for (const dimension of [
+    'Feature description source',
+    'Git flow',
+    'Repository topology',
+    'Review requirements',
+    'Delivery requirements',
+    'Trigger',
+    'Notifications',
+  ]) {
+    assert.ok(
+      ref.includes(`**${dimension}.**`),
+      `references/interview-dimensions.md must define the ${dimension} dimension — Step 4 interviews all seven and reads them from here`
+    );
+  }
+  assert.ok(
+    /Context strategy — derived, not asked/.test(ref) &&
+      /Worktree sub-interview/.test(ref),
+    'references/interview-dimensions.md must carry the two derived decisions (context strategy, worktree sub-interview) alongside the asked dimensions'
+  );
+
+  // The pairing is what makes the content assertions above meaningful: without
+  // this, re-inlining the dimensions into flow.md would leave every
+  // readFlowMaterial() assertion green while undoing the extraction.
+  assert.ok(
+    !/\*\*Feature description source\.\*\*/.test(flow),
+    'flow.md must not re-inline the dimension definitions — they belong in the bundled reference, or the re-run path pays for them again'
+  );
+  // Scoped to Step 4, not the document: the INPUTS block names the same path
+  // and the same skip-on-re-run rule, so a whole-file grep stays green after
+  // the Step 4 pointer is deleted — the exact failure bite-checking keeps
+  // surfacing in this suite.
+  const step4 = flow.slice(
+    flow.indexOf('## Step 4: Interview'),
+    flow.indexOf('## Step 4.5')
+  );
+  assert.ok(
+    /\$\{CLAUDE_PLUGIN_ROOT\}\/references\/interview-dimensions\.md/.test(
+      step4
+    ),
+    'flow.md must point Step 4 at ${CLAUDE_PLUGIN_ROOT}/references/interview-dimensions.md — an extracted reference nothing reads is just a deleted section'
+  );
+  assert.ok(
+    /Reference \(bundled, read on demand\)/.test(flow),
+    'flow.md INPUTS must declare the bundled reference so the file is a named input, not an undocumented dependency'
+  );
+  assert.ok(
+    /revisits none of them|revisits no dimensions/i.test(step4),
+    'flow.md must say a re-run revisiting no dimensions skips the reference — the conditional read is the whole point of extracting it'
+  );
+});
+
 test('Step 6 detects customizations against the record, not against a phantom prior generation', () => {
   // Canary flow-rerun-preserves-manual-edits failed 4/4 (three plugin states,
   // including two commits recorded as known-good) by silently dropping a
@@ -1412,7 +1497,7 @@ test('Step 6 detects customizations against the record, not against a phantom pr
   // with the old rule the model produced output BYTE-IDENTICAL to a no-guidance
   // control (0/6 vs 1/6 keeps), i.e. the rule was inert. The rule below scored
   // 6/6 in two independent 6-rep arms.
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   const detect = lineWith(
     flow,
     /Answer one question about the \*\*on-disk\*\* stage/
@@ -1471,7 +1556,7 @@ test('generated commands route a would-be editor to the decision record', () => 
     );
   }
 
-  const flow = readUtf8(pluginCommandsDir + '/flow.md');
+  const flow = readFlowMaterial();
   assert.ok(
     /change this command by re-running/i.test(flow),
     'flow.md Step 6 must tell the generator the intro routing paragraph is fixed prose carried through as-is, so it is never dropped or rewritten as a comment'
@@ -1522,7 +1607,7 @@ test('generated commands are clean, self-contained, and interaction-explicit', (
     'fix-bug-template.md must have its own local-review stage — review folded into remote-gates loses its independent context'
   );
 
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /no top-of-file comment/i.test(flow),
     'flow.md Step 6 must state the generated file carries no top-of-file comment — template headers are generator instructions'
@@ -1548,7 +1633,7 @@ test('a generator update triggers full regeneration even when no decision change
   // Lock the three fixes: generator update as an independent
   // regeneration trigger, generator-owned prose outside markers, and
   // fact-gap probes on any re-run.
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /generator-update re-run/i.test(flow),
     'flow.md Step 1 re-run detection must classify a footer version older than (or missing against) the constant as a generator-update re-run that regenerates every stage'
@@ -1689,7 +1774,7 @@ test('flow.md wires the delivery-flow generator contract end to end', () => {
   // joints of that contract — if any drifts, generation reads or writes the
   // wrong file. The command ships as a plugin command (plugins/awos/commands/),
   // not via the core installer — workshur asked to keep it out of the main flow.
-  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const body = readFlowMaterial();
   const requiredRefs = [
     // Templates ship bundled in the plugin (self-contained), not via the
     // installer's .awos/templates/ — a plugin user need not re-run the
@@ -1756,7 +1841,7 @@ test('flow.md re-run interviews only the dimensions the user chose', () => {
   // defaults instead of only the ones the user wanted to change. The re-run
   // path must collect a granular per-dimension selection in Step 1.3 and
   // interview only those, bulk-confirming the rest unchanged.
-  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const body = readFlowMaterial();
   assert.ok(
     /granular/i.test(body),
     'flow.md re-run path must collect a granular per-dimension selection (the individual dimensions), not coarse buckets that re-ask everything inside them'
@@ -1775,7 +1860,7 @@ test('flow.md keeps autonomy holistic and un-steered', () => {
   // The approval-gates question mis-steered the road-test user toward the
   // most-gated option, and autonomy was gates-only — reused interactive
   // skills and chain interviews impose pauses the gate choice never sees.
-  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const body = readFlowMaterial();
   assert.ok(
     /do \*\*not\*\* pre-mark the most-gated option/i.test(body),
     'flow.md approval-gates question must not pre-mark the most-gated option "(Recommended)" — the amount of gating is the user\'s autonomy call, and flow.md forbids decorative recommendations'
@@ -1797,7 +1882,7 @@ test('flow.md keeps autonomy holistic and un-steered', () => {
 test('flow.md tells the user to commit the generated artifacts', () => {
   // /awos:flow leaves delivery-flow.md + the generated command uncommitted;
   // the first run then warns on the dirty tree. Step 8 must close the gap.
-  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const body = readFlowMaterial();
   assert.ok(
     /commit the generated artifacts/i.test(body),
     'flow.md Step 8 must tell the user to commit the generated artifacts (delivery-flow.md, implement-feature.md, fix-bug.md when present) so the first run starts from a clean tree'
@@ -1809,7 +1894,7 @@ test('flow.md captures canonical project config and reconciles reused-skill cons
   // surfaced at runtime and was mis-blamed on the generated command. Step 2
   // must capture the canonical config and Step 4.5 must reconcile a reused
   // skill's hardcoded constants against it at generation time.
-  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const body = readFlowMaterial();
   assert.ok(
     /Canonical project config/i.test(body) && /base URL/i.test(body),
     'flow.md Step 2 must capture canonical project config (Jira base URL, Slack channel/handles, code-host org/repo) as project-config facts'
@@ -1846,7 +1931,7 @@ test('flow.md and the template guard the generated header against comment-nestin
   // outer <!-- … --> header comment; the inner --> closed the comment early
   // (CodeRabbit-flagged). The generator must be told to describe markers in
   // prose, never nest one HTML comment inside another.
-  const flowBody = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flowBody = readFlowMaterial();
   const tplBody = readUtf8(
     path.join(pluginTemplatesDir, 'implement-feature-template.md')
   );
@@ -2158,7 +2243,7 @@ test('flow.md wires fix-bug generation alongside implement-feature', () => {
   // /awos:flow must generate the optional second command from its own
   // template, gated on the Command-set decision, with the same
   // reconcile-on-rerun behavior as implement-feature.
-  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const body = readFlowMaterial();
   assert.ok(
     body.includes('${CLAUDE_PLUGIN_ROOT}/templates/fix-bug-template.md'),
     'flow.md must reference the bundled fix-bug-template.md so generation is self-contained in the plugin'
@@ -2179,7 +2264,7 @@ test('flow.md inventory covers platform build/verify toolchains', () => {
   // rule is derive-from-the-stack, not enumerate-the-platforms — and where
   // the project wraps its toolchain behind one entry point, that wrapper is
   // the transport, not the tool underneath.
-  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const body = readFlowMaterial();
   assert.ok(
     /Build & verify toolchain/i.test(body),
     "flow.md Step 2 inventory must record the project's build/verify toolchain as a transport"
@@ -2205,7 +2290,7 @@ test('generated commands resume from the roadmap and skip already-done work', ()
   const feat = readUtf8(
     path.join(pluginTemplatesDir, 'implement-feature-template.md')
   );
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /next incomplete item in `context\/product\/roadmap\.md`/i.test(feat),
     'implement-feature-template.md must resume from the next incomplete roadmap item when invoked with no input'
@@ -2243,7 +2328,7 @@ test('flow.md and the template record a ticket-state lifecycle and CI escalation
   // the failure path (review fails → back to To Do) — driven by a project
   // -built CI AI reviewer. And remote-gate waits need a max-wait/escalation
   // policy, not an unbounded poll.
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   const tpl = readUtf8(
     path.join(pluginTemplatesDir, 'delivery-flow-template.md')
   );
@@ -2287,7 +2372,7 @@ test('fix-bug-template.md supports a crash-report source', () => {
     /never auto-close/i.test(tpl),
     'fix-bug-template.md must allow writing an investigation note back to the crash issue without auto-closing it'
   );
-  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const flow = readFlowMaterial();
   assert.ok(
     /bug source/i.test(flow) && /crash report/i.test(flow),
     'flow.md bug-fix policy must ask the bug source, including a crash report from a crash-reporting tool'
@@ -2299,7 +2384,7 @@ test('flow.md interviews the command set and names', () => {
   // /everclear:fix); the generator must let the team pick which commands to
   // build and what to call them, and record the names so re-runs reconcile
   // the right files. This decision absorbs the old bug-fix opt-in.
-  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const body = readFlowMaterial();
   assert.ok(
     /Command set & names/i.test(body),
     'flow.md must interview a "Command set & names" decision — which commands to generate (feature, bug-fix, or both) and the slash-name for each'
@@ -2330,7 +2415,7 @@ test('flow.md reads configured sources from context/sources/sources.md', () => {
   // flow.md's tooling inventory and team documentation collection must
   // reuse sources already configured by configure-external-sources rather
   // than re-probing the same services independently.
-  const body = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const body = readFlowMaterial();
   assert.ok(
     body.includes('context/sources/sources.md'),
     'flow.md must reference context/sources/sources.md as an input for configured transports'

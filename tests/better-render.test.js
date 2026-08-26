@@ -167,8 +167,8 @@ function renderInTemp(
 test("renderer keeps requirements written in the template's flat-bullet shape (no ### subsections)", () => {
   const { html } = renderInTemp(SAMPLE_VM, { md: TEMPLATE_SHAPED_MD });
   assert.ok(
-    html.includes('Functional Requirements'),
-    'a requirements section without subsections must still render its heading — dropping the section is the bug this test pins'
+    html.includes('<h2>Requirements</h2>'),
+    'a requirements section without subsections must still reach the reader — dropping it entirely is the bug this test pins'
   );
   assert.ok(
     html.includes('reset my password'),
@@ -183,6 +183,29 @@ test("renderer keeps requirements written in the template's flat-bullet shape (n
     html.includes('1 of 2 criteria verified') &&
       html.includes('Acceptance criteria — 2 (1 verified)'),
     'the status-bar count and the rendered criteria list must describe the same criteria — the page must never count criteria it does not show'
+  );
+  // The content half above is not enough: a section can render as plain text
+  // and still satisfy it while losing every view-model layer.
+  assert.ok(
+    html.includes('class="req"'),
+    'a flat-bullet requirement must become a requirement card — the view-model enrichment below only attaches to cards'
+  );
+  assert.ok(
+    html.includes('Every report can be exported with one tap.'),
+    'the one-liner must reach a flat-bullet requirement, matched by its positional number (2.1)'
+  );
+  assert.ok(
+    html.includes('Happy path downloads a file') &&
+      html.includes('Failure names itself'),
+    "criteria micro-names must label a flat-bullet requirement's criteria"
+  );
+  assert.ok(
+    html.includes('>Interview<') && html.includes('>Web<'),
+    'provenance badges must reach a flat-bullet requirement — the badge is what a reviewer reads to weigh the evidence'
+  );
+  assert.ok(
+    html.includes('href="#r21"'),
+    'a finding anchored to #r21 must link, which requires the flat-bullet requirement to have been registered as a known anchor'
   );
 });
 
@@ -384,6 +407,17 @@ test('renderer survives a malformed-but-valid view-model instead of crashing the
       `a view-model with a wrong-typed collection (${JSON.stringify(vm).slice(0, 40)}…) must degrade that block, not fail the page — the markdown content must still render`
     );
   }
+
+  // A string criteria_names does not crash — it index-reads as characters — so
+  // the loop above would pass with the Array.isArray guard reverted. Pin the
+  // guard by its visible effect instead.
+  const { html } = renderInTemp({
+    requirements: [{ match: '2.1', criteria_names: 'not-an-array' }],
+  });
+  assert.ok(
+    !/<b>[a-z]<\/b>/.test(html),
+    'a string criteria_names must be rejected, not indexed character by character into single-letter criterion labels'
+  );
 });
 
 test('renderer falls back to a default canvas for non-positive diagram dimensions', () => {

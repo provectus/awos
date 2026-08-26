@@ -3519,6 +3519,14 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       'the scope boundary must be drafted and marked rather than asked — Step 6 runs before the files exist',
     ],
     [
+      'view_model_path="${TMPDIR:-/tmp}/spec-view-[index].json"',
+      'the temp paths must be resolved once with a TMPDIR fallback and reused — re-interpolating a bare $TMPDIR per step lets the file written and the file rendered diverge, and makes the cleanup rm a path that was never created',
+    ],
+    [
+      'MANUAL SOURCES ONLY',
+      'a configured-but-manual-only KB lane needs its own report label — SKIPPED implies an agent ran and NOT CONFIGURED tells the user to redo setup they already did',
+    ],
+    [
       '${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs',
       'the renderer must be invoked through ${CLAUDE_PLUGIN_ROOT} — a relative path breaks across install locations',
     ],

@@ -204,6 +204,37 @@ function parseBody(body) {
   return { criteria, prose };
 }
 
+// The template writes requirements as flat bullets with a nested acceptance
+// checklist, while models often emit numbered "### N.M" subsections instead.
+// Both are real. Split the flat shape into the same per-requirement units the
+// subsection shape yields, numbered positionally from the section heading
+// (section "2. Functional Requirements" -> 2.1, 2.2, …) so a view-model entry
+// matching "2.1" and a finding anchored to "#r21" resolve identically in both.
+function splitFlatRequirements(section) {
+  const sectionNumber = (section.title.match(/^(\d+)/) || [])[1];
+  if (!sectionNumber) return [];
+  // Only a section that actually carries criteria — otherwise an ordinary
+  // bulleted prose section would render as a wall of empty requirement cards.
+  if (!parseBody(section.body).criteria.length) return [];
+
+  const groups = [];
+  for (const line of section.body) {
+    const top = line.match(/^- (.+)$/);
+    const isCheckbox = /^- \[( |x|X)\]/.test(line);
+    const isLabel =
+      top && /^\*\*Acceptance Criteria:?\*\*/i.test(top[1].trim());
+    if (top && !isCheckbox && !isLabel) {
+      groups.push([line]);
+    } else if (groups.length) {
+      groups[groups.length - 1].push(line);
+    }
+  }
+
+  return groups
+    .map((body, idx) => ({ title: `${sectionNumber}.${idx + 1}`, body }))
+    .filter((sub) => parseBody(sub.body).criteria.length > 0);
+}
+
 function listItems(body) {
   return parseBody(body).prose;
 }
@@ -600,12 +631,17 @@ function render(md, rawVm, pluginVersion) {
   for (const section of spec.sections) {
     if (/scope/i.test(section.title) && section.subs.length) {
       scopeSection = section;
-    } else if (isRequirementSection(section) && section.subs.length) {
-      // Requirement cards need per-requirement ### subsections. A requirements
-      // section written in the template's flat-bullet shape (no subsections)
-      // must fall through to the generic renderer below, which shows its
-      // prose and criteria instead of silently dropping them.
-      requirementSubs.push(...section.subs);
+    } else if (isRequirementSection(section)) {
+      // Prefer explicit ### subsections; fall back to splitting flat bullets so
+      // the template's own shape gets requirement cards — and the view-model
+      // enrichment that rides on them — rather than plain text. If neither
+      // yields a unit, the section still renders generically below: showing it
+      // unenriched beats dropping it.
+      const subs = section.subs.length
+        ? section.subs
+        : splitFlatRequirements(section);
+      if (subs.length) requirementSubs.push(...subs);
+      else genericSections.push(section);
     } else if (
       /overview/i.test(section.title) &&
       vm &&

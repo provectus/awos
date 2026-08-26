@@ -1913,9 +1913,20 @@ test('implement-feature-template.md carries stage markers and the AWOS chain', (
     /never launch a nested headless session/i.test(body),
     'implement-feature-template.md must forbid nested `claude -p` calls — permission modes, PATH, and timeouts vary per machine; headless chaining lives at the trigger layer'
   );
+  // Scoped to the Monitor sentence, not the document: the failure-state half of
+  // this contract was advertised in the message but never asserted, so weakening
+  // the filter to "and success" left the suite green (caught by bite-check).
+  const monitorLine = lineWith(
+    body,
+    /`Monitor` tool, never foreground `sleep` loops/
+  );
   assert.ok(
-    /`Monitor` tool, never foreground `sleep` loops/.test(body),
-    'implement-feature-template.md must wait on remote gates with the Monitor tool, not blind sleep loops — and its filter must cover failure states, not just success'
+    monitorLine !== '',
+    'implement-feature-template.md must wait on remote gates with the Monitor tool, not blind sleep loops'
+  );
+  assert.ok(
+    /fail/i.test(monitorLine) && /not just success/i.test(monitorLine),
+    "implement-feature-template.md's Monitor filter must cover failure states, not just success — a monitor that greps only the success marker stays silent through a failed run"
   );
   assert.ok(
     /merge cleanly/.test(body) && /re-check mergeability/.test(body),
@@ -1934,6 +1945,19 @@ test('implement-feature-template.md carries stage markers and the AWOS chain', (
       /finding count/i.test(closeStage) &&
       closeStage.includes('review.md'),
     'implement-feature-template.md close stage must report the local review evidence — verdict, finding count, and the review file path (context/spec/{SPEC_NAME}/review.md)'
+  );
+  // The review-stage half of the same contract: the path leads the presentation
+  // on its own line. Only the close-stage half was pinned, so deleting the lead
+  // line left the suite green (caught by bite-check).
+  const reviewStage = body.slice(
+    body.indexOf('awos:flow:stage=local-review'),
+    body.indexOf('awos:flow:stage=commit-push')
+  );
+  assert.ok(
+    /Lead the review presentation to the user with that path on its own line/i.test(
+      reviewStage
+    ),
+    'implement-feature-template.md local-review stage must lead its presentation with the review file path on its own line — a path appended after a long findings list is the drop this guards against'
   );
   const stageOrder = [
     'fetch-ticket',

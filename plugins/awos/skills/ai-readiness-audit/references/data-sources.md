@@ -36,6 +36,8 @@ The audit scope is always **either a folder or a GitHub org — never a manifest
 3. **A GitHub org name** → **org mode** over the org's repos, enumerated with `gh repo list <org>` (gh CLI on PATH) or the GitHub MCP if present.
 4. **An orchestration root** (a git repo whose subdirectories hold independent git repos of their own — usually gitignored — **and** which itself carries the agent tooling governing them, e.g. `.claude/`, `.mcp.json`, `.awos`, `context/`) → **org mode** over the root plus its members. Both conditions are required — a repo that merely contains a nested checkout with no tooling of its own is case 1, not this case. The root is audited too, as member #1, since it carries the agent tooling the audit is measuring; `SKILL.md` Step 0 covers the flags that record this relationship.
 
+The tooling condition is presence, not proof of governance — a repo can carry its own tooling and still vendor an unrelated checkout, satisfying case 4 as written. Prefer case 1 when the nested repos look incidental (`examples/`, `vendor/`, `third_party/`, fixtures): a real orchestration root's members are the product's own services, referenced from its spec workspace, not incidental checkouts. This judgment call is unguarded in headless runs, where scope proceeds without confirmation — see `SKILL.md` Phase 0a.
+
 No scope manifest is read; there is no configuration file to author. Point the skill at the folder or org and it resolves the boundary itself.
 
 ### Monorepo detection (TOPO-01)

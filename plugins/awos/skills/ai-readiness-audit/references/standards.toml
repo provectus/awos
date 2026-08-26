@@ -59,6 +59,7 @@ dimension_order = [
 [category.merge_frequency]
 code = 301
 check_id = "DF-01"
+inherits_from_orchestration_root = false
 metric = "merge_frequency"
 dimension = "delivery-flow"
 weight = 10
@@ -84,6 +85,7 @@ basis_note = "x boundaries transcribe the DORA deployment-frequency bands (elite
 [category.lead_time_for_change]
 code = 401
 check_id = "DF-02"
+inherits_from_orchestration_root = false
 metric = "lead_time_for_change"
 dimension = "delivery-flow"
 weight = 10
@@ -109,6 +111,7 @@ basis_note = "x boundaries transcribe the DORA lead-time bands (elite < 1 day, h
 [category.pr_cycle_time]
 code = 501
 check_id = "DF-03"
+inherits_from_orchestration_root = false
 metric = "pr_cycle_time"
 dimension = "delivery-flow"
 weight = 3
@@ -134,6 +137,7 @@ basis_note = "No published numeric bands exist for PR cycle time; the curve mirr
 [category.change_failure_rate]
 code = 701
 check_id = "DF-04"
+inherits_from_orchestration_root = false
 metric = "change_failure_rate"
 dimension = "delivery-flow"
 weight = 10
@@ -159,6 +163,7 @@ basis_note = "The 15% zero-score point is the DORA 2023 medium-cluster change-fa
 [category.review_rework]
 code = 801
 check_id = "DF-05"
+inherits_from_orchestration_root = false
 metric = "review_rework"
 dimension = "delivery-flow"
 weight = 3
@@ -184,6 +189,7 @@ basis_note = "DX Core 4 publishes no numeric commits-per-PR thresholds; anchors 
 [category.rework_rate]
 code = 1401
 check_id = "DF-06"
+inherits_from_orchestration_root = false
 metric = "rework_rate"
 dimension = "delivery-flow"
 weight = 10
@@ -208,6 +214,7 @@ basis_note = "DORA publishes no numeric rework-rate thresholds; the good <15% / 
 [category.mttr]
 code = 1103
 check_id = "DF-07"
+inherits_from_orchestration_root = false
 metric = "mttr"
 dimension = "delivery-flow"
 weight = 5
@@ -235,6 +242,7 @@ basis_note = "x boundaries transcribe the DORA time-to-restore bands (elite < 1 
 [category.software_best_practices_sbp_01]
 code = 2700
 check_id = "SBP-01"
+inherits_from_orchestration_root = false
 metric = "SBP-01"
 dimension = "software-best-practices"
 weight = 5
@@ -251,6 +259,7 @@ last_verified = "2026-07-06"
 [category.software_best_practices_sbp_02]
 code = 2701
 check_id = "SBP-02"
+inherits_from_orchestration_root = false
 metric = "SBP-02"
 dimension = "software-best-practices"
 weight = 3
@@ -267,6 +276,7 @@ last_verified = "2026-07-06"
 [category.software_best_practices_sbp_03]
 code = 2702
 check_id = "SBP-03"
+inherits_from_orchestration_root = false
 metric = "SBP-03"
 dimension = "software-best-practices"
 weight = 5
@@ -285,6 +295,7 @@ last_verified = "2026-07-06"
 [category.software_best_practices_sbp_04]
 code = 2703
 check_id = "SBP-04"
+inherits_from_orchestration_root = false
 metric = "SBP-04"
 dimension = "software-best-practices"
 weight = 5
@@ -301,6 +312,7 @@ last_verified = "2026-07-06"
 [category.software_best_practices_sbp_05]
 code = 2705
 check_id = "SBP-05"
+inherits_from_orchestration_root = false
 metric = "SBP-05"
 dimension = "software-best-practices"
 weight = 3
@@ -317,6 +329,7 @@ last_verified = "2026-07-06"
 [category.software_best_practices_sbp_06]
 code = 2704
 check_id = "SBP-06"
+inherits_from_orchestration_root = false
 metric = "SBP-06"
 dimension = "software-best-practices"
 weight = 5
@@ -335,6 +348,7 @@ last_verified = "2026-07-06"
 [category.sbp_except_clause_syntax]
 code = 2706
 check_id = "SBP-07"
+inherits_from_orchestration_root = false
 metric = "SBP-07"
 dimension = "software-best-practices"
 weight = 1
@@ -352,6 +366,7 @@ last_verified = "2026-07-06"
 code = 2300
 metric = "SBP-08"
 check_id = "SBP-08"
+inherits_from_orchestration_root = false
 dimension = "software-best-practices"
 weight = 5
 pass_at = 0.50
@@ -370,6 +385,7 @@ last_verified = "2026-07-06"
 code = 2303
 metric = "SBP-09"
 check_id = "SBP-09"
+inherits_from_orchestration_root = false
 dimension = "software-best-practices"
 weight = 3
 method = "detected"
@@ -387,6 +403,7 @@ last_verified = "2026-07-06"
 [category.code_architecture_arch_01]
 code = 2100
 check_id = "ARCH-01"
+inherits_from_orchestration_root = false
 metric = "ARCH-01"
 dimension = "code-architecture"
 weight = 5
@@ -403,6 +420,7 @@ last_verified = "2026-07-06"
 [category.code_architecture_arch_02]
 code = 2101
 check_id = "ARCH-02"
+inherits_from_orchestration_root = false
 metric = "ARCH-02"
 dimension = "code-architecture"
 weight = 5
@@ -419,6 +437,7 @@ last_verified = "2026-07-06"
 [category.code_architecture_arch_03]
 code = 2102
 check_id = "ARCH-03"
+inherits_from_orchestration_root = false
 metric = "ARCH-03"
 dimension = "code-architecture"
 weight = 3
@@ -437,6 +456,7 @@ last_verified = "2026-07-06"
 [category.code_architecture_arch_04]
 code = 2103
 check_id = "ARCH-04"
+inherits_from_orchestration_root = false
 metric = "ARCH-04"
 dimension = "code-architecture"
 weight = 5
@@ -453,6 +473,7 @@ last_verified = "2026-07-06"
 [category.code_architecture_arch_05]
 code = 2104
 check_id = "ARCH-05"
+inherits_from_orchestration_root = false
 metric = "ARCH-05"
 dimension = "code-architecture"
 weight = 3
@@ -469,6 +490,7 @@ last_verified = "2026-07-06"
 [category.code_architecture_arch_06]
 code = 2105
 check_id = "ARCH-06"
+inherits_from_orchestration_root = false
 metric = "ARCH-06"
 dimension = "code-architecture"
 weight = 3
@@ -488,6 +510,7 @@ last_verified = "2026-07-06"
 code = 2304
 metric = "ARCH-07"
 check_id = "ARCH-07"
+inherits_from_orchestration_root = false
 dimension = "code-architecture"
 weight = 3
 method = "detected"
@@ -505,6 +528,7 @@ last_verified = "2026-07-06"
 [category.quality_assurance_qa_01]
 code = 2500
 check_id = "QA-01"
+inherits_from_orchestration_root = false
 metric = "QA-01"
 dimension = "quality-assurance"
 weight = 8
@@ -524,6 +548,7 @@ last_verified = "2026-07-06"
 [category.line_coverage]
 code = 2510
 check_id = "QA-02"
+inherits_from_orchestration_root = false
 metric = "line_coverage"
 dimension = "quality-assurance"
 weight = 3
@@ -549,6 +574,7 @@ basis_note = "The 60/75/90 boundaries transcribe Google Testing Blog's published
 [category.quality_assurance_qa_03]
 code = 2505
 check_id = "QA-03"
+inherits_from_orchestration_root = false
 metric = "QA-03"
 dimension = "quality-assurance"
 weight = 1
@@ -565,6 +591,7 @@ last_verified = "2026-07-06"
 [category.quality_assurance_qa_04]
 code = 2501
 check_id = "QA-04"
+inherits_from_orchestration_root = false
 metric = "QA-04"
 dimension = "quality-assurance"
 weight = 5
@@ -581,6 +608,7 @@ last_verified = "2026-07-06"
 [category.quality_assurance_qa_05]
 code = 2502
 check_id = "QA-05"
+inherits_from_orchestration_root = false
 metric = "QA-05"
 dimension = "quality-assurance"
 weight = 5
@@ -597,6 +625,7 @@ last_verified = "2026-07-06"
 [category.quality_assurance_qa_06]
 code = 2503
 check_id = "QA-06"
+inherits_from_orchestration_root = false
 metric = "QA-06"
 dimension = "quality-assurance"
 weight = 5
@@ -613,6 +642,7 @@ last_verified = "2026-07-06"
 [category.quality_assurance_qa_07]
 code = 2504
 check_id = "QA-07"
+inherits_from_orchestration_root = false
 metric = "QA-07"
 dimension = "quality-assurance"
 weight = 3
@@ -629,6 +659,7 @@ last_verified = "2026-07-06"
 [category.quality_assurance_qa_08]
 code = 2506
 check_id = "QA-08"
+inherits_from_orchestration_root = false
 metric = "QA-08"
 dimension = "quality-assurance"
 weight = 1
@@ -645,6 +676,7 @@ last_verified = "2026-07-06"
 [category.quality_assurance_qa_09]
 code = 2507
 check_id = "QA-09"
+inherits_from_orchestration_root = false
 metric = "QA-09"
 dimension = "quality-assurance"
 weight = 3
@@ -661,6 +693,7 @@ last_verified = "2026-07-06"
 [category.quality_assurance_qa_10]
 code = 2508
 check_id = "QA-10"
+inherits_from_orchestration_root = false
 metric = "QA-10"
 dimension = "quality-assurance"
 weight = 5
@@ -677,6 +710,7 @@ last_verified = "2026-07-06"
 [category.quality_assurance_qa_11]
 code = 2509
 check_id = "QA-11"
+inherits_from_orchestration_root = false
 metric = "QA-11"
 dimension = "quality-assurance"
 weight = 5
@@ -704,6 +738,7 @@ last_verified = "2026-07-06"
 [category.appsec_tls_enforced]
 code = 3000
 check_id = "AS-01"
+inherits_from_orchestration_root = false
 metric = "AS-01"
 dimension = "application-security"
 weight = 8
@@ -721,6 +756,7 @@ last_verified = "2026-07-06"
 [category.appsec_security_headers]
 code = 3001
 check_id = "AS-02"
+inherits_from_orchestration_root = false
 metric = "AS-02"
 dimension = "application-security"
 weight = 5
@@ -738,6 +774,7 @@ last_verified = "2026-07-06"
 [category.appsec_cors_not_wildcard]
 code = 3002
 check_id = "AS-03"
+inherits_from_orchestration_root = false
 metric = "AS-03"
 dimension = "application-security"
 weight = 5
@@ -755,6 +792,7 @@ last_verified = "2026-07-06"
 [category.appsec_parameterized_sql]
 code = 3003
 check_id = "AS-04"
+inherits_from_orchestration_root = false
 metric = "AS-04"
 dimension = "application-security"
 weight = 8
@@ -772,6 +810,7 @@ last_verified = "2026-07-06"
 [category.appsec_no_hardcoded_secrets]
 code = 3004
 check_id = "AS-05"
+inherits_from_orchestration_root = false
 metric = "AS-05"
 dimension = "application-security"
 weight = 8
@@ -789,6 +828,7 @@ last_verified = "2026-07-06"
 [category.appsec_auth_on_mutations]
 code = 3005
 check_id = "AS-06"
+inherits_from_orchestration_root = false
 metric = "AS-06"
 dimension = "application-security"
 weight = 8
@@ -808,6 +848,7 @@ last_verified = "2026-07-06"
 [category.appsec_password_session_hygiene]
 code = 3006
 check_id = "AS-07"
+inherits_from_orchestration_root = false
 metric = "AS-07"
 dimension = "application-security"
 weight = 5
@@ -825,6 +866,7 @@ last_verified = "2026-07-06"
 [category.appsec_input_validation]
 code = 3007
 check_id = "AS-08"
+inherits_from_orchestration_root = false
 metric = "AS-08"
 dimension = "application-security"
 weight = 5
@@ -842,6 +884,7 @@ last_verified = "2026-07-06"
 [category.appsec_rate_limiting]
 code = 3008
 check_id = "AS-09"
+inherits_from_orchestration_root = false
 metric = "AS-09"
 dimension = "application-security"
 weight = 3
@@ -859,6 +902,7 @@ last_verified = "2026-07-06"
 [category.appsec_authorization_correctness]
 code = 3009
 check_id = "AS-10"
+inherits_from_orchestration_root = false
 metric = "AS-10"
 dimension = "application-security"
 weight = 8
@@ -878,6 +922,7 @@ last_verified = "2026-07-06"
 [category.appsec_insecure_design]
 code = 3010
 check_id = "AS-11"
+inherits_from_orchestration_root = false
 metric = "AS-11"
 dimension = "application-security"
 weight = 5
@@ -897,6 +942,7 @@ last_verified = "2026-07-06"
 code = 2600
 metric = "AS-12"
 check_id = "AS-12"
+inherits_from_orchestration_root = false
 dimension = "application-security"
 weight = 8
 method = "detected"
@@ -913,6 +959,7 @@ last_verified = "2026-07-06"
 code = 2602
 metric = "AS-13"
 check_id = "AS-13"
+inherits_from_orchestration_root = false
 dimension = "application-security"
 weight = 5
 method = "detected"
@@ -929,6 +976,7 @@ last_verified = "2026-07-06"
 code = 2604
 metric = "AS-14"
 check_id = "AS-14"
+inherits_from_orchestration_root = false
 dimension = "application-security"
 weight = 5
 method = "detected"
@@ -946,6 +994,7 @@ last_verified = "2026-07-06"
 [category.supply_chain_security_scs_01]
 code = 2900
 check_id = "SCS-01"
+inherits_from_orchestration_root = false
 metric = "SCS-01"
 dimension = "supply-chain-security"
 weight = 8
@@ -962,6 +1011,7 @@ last_verified = "2026-07-06"
 [category.supply_chain_security_scs_02]
 code = 2901
 check_id = "SCS-02"
+inherits_from_orchestration_root = false
 metric = "SCS-02"
 dimension = "supply-chain-security"
 weight = 5
@@ -978,6 +1028,7 @@ last_verified = "2026-07-06"
 [category.supply_chain_security_scs_03]
 code = 2902
 check_id = "SCS-03"
+inherits_from_orchestration_root = false
 metric = "SCS-03"
 dimension = "supply-chain-security"
 weight = 5
@@ -996,6 +1047,7 @@ last_verified = "2026-07-06"
 [category.supply_chain_security_scs_04]
 code = 2903
 check_id = "SCS-04"
+inherits_from_orchestration_root = false
 metric = "SCS-04"
 dimension = "supply-chain-security"
 weight = 8
@@ -1013,6 +1065,7 @@ last_verified = "2026-07-06"
 [category.supply_chain_security_scs_05]
 code = 2904
 check_id = "SCS-05"
+inherits_from_orchestration_root = false
 metric = "SCS-05"
 dimension = "supply-chain-security"
 weight = 5
@@ -1029,6 +1082,7 @@ last_verified = "2026-07-06"
 [category.supply_chain_security_scs_06]
 code = 2905
 check_id = "SCS-06"
+inherits_from_orchestration_root = false
 metric = "SCS-06"
 dimension = "supply-chain-security"
 weight = 8
@@ -1045,6 +1099,7 @@ last_verified = "2026-07-06"
 [category.supply_chain_security_scs_07]
 code = 2906
 check_id = "SCS-07"
+inherits_from_orchestration_root = false
 metric = "SCS-07"
 dimension = "supply-chain-security"
 weight = 5
@@ -1061,6 +1116,7 @@ last_verified = "2026-07-06"
 [category.supply_chain_security_scs_08]
 code = 2907
 check_id = "SCS-08"
+inherits_from_orchestration_root = false
 metric = "SCS-08"
 dimension = "supply-chain-security"
 weight = 3
@@ -1080,6 +1136,7 @@ last_verified = "2026-07-06"
 code = 2400
 metric = "AIS-01"
 check_id = "AIS-01"
+inherits_from_orchestration_root = false
 dimension = "ai-security"
 weight = 8
 method = "detected"
@@ -1096,6 +1153,7 @@ last_verified = "2026-07-06"
 code = 2401
 metric = "AIS-02"
 check_id = "AIS-02"
+inherits_from_orchestration_root = false
 dimension = "ai-security"
 weight = 8
 method = "detected"
@@ -1112,6 +1170,7 @@ last_verified = "2026-07-06"
 code = 2402
 metric = "AIS-03"
 check_id = "AIS-03"
+inherits_from_orchestration_root = false
 dimension = "ai-security"
 weight = 8
 method = "detected"
@@ -1128,6 +1187,7 @@ last_verified = "2026-07-06"
 code = 2403
 metric = "AIS-04"
 check_id = "AIS-04"
+inherits_from_orchestration_root = false
 dimension = "ai-security"
 weight = 8
 method = "detected"
@@ -1144,6 +1204,7 @@ last_verified = "2026-07-06"
 code = 2404
 metric = "AIS-05"
 check_id = "AIS-05"
+inherits_from_orchestration_root = false
 dimension = "ai-security"
 weight = 5
 method = "detected"
@@ -1160,6 +1221,7 @@ last_verified = "2026-07-06"
 code = 2405
 metric = "AIS-06"
 check_id = "AIS-06"
+inherits_from_orchestration_root = false
 dimension = "ai-security"
 weight = 8
 method = "detected"
@@ -1176,6 +1238,7 @@ last_verified = "2026-07-06"
 code = 2601
 metric = "AIS-07"
 check_id = "AIS-07"
+inherits_from_orchestration_root = true
 dimension = "ai-security"
 weight = 8
 method = "detected"
@@ -1193,6 +1256,7 @@ last_verified = "2026-07-06"
 [category.documentation_doc_01]
 code = 2200
 check_id = "DOC-01"
+inherits_from_orchestration_root = false
 metric = "DOC-01"
 dimension = "documentation"
 weight = 8
@@ -1209,6 +1273,7 @@ last_verified = "2026-07-06"
 [category.documentation_doc_02]
 code = 2201
 check_id = "DOC-02"
+inherits_from_orchestration_root = false
 metric = "DOC-02"
 dimension = "documentation"
 weight = 3
@@ -1225,6 +1290,7 @@ last_verified = "2026-07-06"
 [category.documentation_doc_03]
 code = 2202
 check_id = "DOC-03"
+inherits_from_orchestration_root = false
 metric = "DOC-03"
 dimension = "documentation"
 weight = 5
@@ -1241,6 +1307,7 @@ last_verified = "2026-07-06"
 [category.documentation_doc_04]
 code = 2203
 check_id = "DOC-04"
+inherits_from_orchestration_root = false
 metric = "DOC-04"
 dimension = "documentation"
 weight = 3
@@ -1257,6 +1324,7 @@ last_verified = "2026-07-06"
 [category.documentation_doc_05]
 code = 2204
 check_id = "DOC-05"
+inherits_from_orchestration_root = false
 metric = "doc_coverage"
 dimension = "documentation"
 weight = 3
@@ -1273,6 +1341,7 @@ last_verified = "2026-07-06"
 [category.documentation_doc_06]
 code = 2205
 check_id = "DOC-06"
+inherits_from_orchestration_root = false
 metric = "doc_coverage"
 dimension = "documentation"
 weight = 3
@@ -1290,6 +1359,7 @@ last_verified = "2026-07-06"
 code = 2302
 metric = "DOC-07"
 check_id = "DOC-07"
+inherits_from_orchestration_root = true
 dimension = "documentation"
 weight = 5
 method = "detected"
@@ -1321,6 +1391,7 @@ last_verified = "2026-07-06"
 [category.ai_development_tooling_ai_01]
 code = 2000
 check_id = "AI-01"
+inherits_from_orchestration_root = false
 metric = "AI-01"
 dimension = "ai-development-tooling"
 weight = 8
@@ -1339,6 +1410,7 @@ last_verified = "2026-07-06"
 [category.ai_development_tooling_ai_02]
 code = 2001
 check_id = "AI-02"
+inherits_from_orchestration_root = true
 metric = "AI-02"
 dimension = "ai-development-tooling"
 weight = 3
@@ -1355,6 +1427,7 @@ last_verified = "2026-07-06"
 [category.ai_development_tooling_ai_03]
 code = 2002
 check_id = "AI-03"
+inherits_from_orchestration_root = true
 metric = "AI-03"
 dimension = "ai-development-tooling"
 weight = 1
@@ -1371,6 +1444,7 @@ last_verified = "2026-07-06"
 [category.ai_development_tooling_ai_04]
 code = 2003
 check_id = "AI-04"
+inherits_from_orchestration_root = true
 metric = "AI-04"
 dimension = "ai-development-tooling"
 weight = 3
@@ -1387,6 +1461,7 @@ last_verified = "2026-07-06"
 [category.ai_development_tooling_ai_05]
 code = 2004
 check_id = "AI-05"
+inherits_from_orchestration_root = true
 metric = "AI-05"
 dimension = "ai-development-tooling"
 weight = 1
@@ -1403,6 +1478,7 @@ last_verified = "2026-07-06"
 [category.ai_development_tooling_ai_06]
 code = 2005
 check_id = "AI-06"
+inherits_from_orchestration_root = false
 metric = "AI-06"
 dimension = "ai-development-tooling"
 weight = 5
@@ -1421,6 +1497,7 @@ last_verified = "2026-07-06"
 [category.ai_development_tooling_ai_07]
 code = 2006
 check_id = "AI-07"
+inherits_from_orchestration_root = false
 metric = "AI-07"
 dimension = "ai-development-tooling"
 weight = 8
@@ -1439,6 +1516,7 @@ last_verified = "2026-07-06"
 [category.spec_driven_development_sdd_01]
 code = 2800
 check_id = "SDD-01"
+inherits_from_orchestration_root = true
 metric = "SDD-01"
 dimension = "spec-driven-development"
 weight = 8
@@ -1455,6 +1533,7 @@ last_verified = "2026-07-06"
 [category.spec_driven_development_sdd_02]
 code = 2801
 check_id = "SDD-02"
+inherits_from_orchestration_root = true
 metric = "SDD-02"
 dimension = "spec-driven-development"
 weight = 5
@@ -1471,6 +1550,7 @@ last_verified = "2026-07-06"
 [category.spec_driven_development_sdd_03]
 code = 2802
 check_id = "SDD-03"
+inherits_from_orchestration_root = false
 metric = "SDD-03"
 dimension = "spec-driven-development"
 weight = 5
@@ -1487,6 +1567,7 @@ last_verified = "2026-07-06"
 [category.spec_driven_development_sdd_04]
 code = 2803
 check_id = "SDD-04"
+inherits_from_orchestration_root = false
 metric = "SDD-04"
 dimension = "spec-driven-development"
 weight = 8
@@ -1507,6 +1588,7 @@ last_verified = "2026-07-06"
 [category.spec_driven_development_sdd_05]
 code = 2804
 check_id = "SDD-05"
+inherits_from_orchestration_root = true
 metric = "SDD-05"
 dimension = "spec-driven-development"
 weight = 2
@@ -1523,6 +1605,7 @@ last_verified = "2026-07-06"
 [category.spec_driven_development_sdd_06]
 code = 2805
 check_id = "SDD-06"
+inherits_from_orchestration_root = true
 metric = "SDD-06"
 dimension = "spec-driven-development"
 weight = 3
@@ -1539,6 +1622,7 @@ last_verified = "2026-07-06"
 [category.spec_driven_development_sdd_07]
 code = 2806
 check_id = "SDD-07"
+inherits_from_orchestration_root = true
 metric = "SDD-07"
 dimension = "spec-driven-development"
 weight = 3
@@ -1570,6 +1654,7 @@ last_verified = "2026-07-06"
 [category.ai_tooling_claude_md]
 code = 101
 check_id = "ADP-01"
+inherits_from_orchestration_root = true
 metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 10
@@ -1586,6 +1671,7 @@ last_verified = "2026-07-06"
 [category.ai_tooling_skills]
 code = 102
 check_id = "ADP-02"
+inherits_from_orchestration_root = true
 metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 6
@@ -1602,6 +1688,7 @@ last_verified = "2026-07-06"
 [category.ai_tooling_commands]
 code = 103
 check_id = "ADP-03"
+inherits_from_orchestration_root = true
 metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -1618,6 +1705,7 @@ last_verified = "2026-07-06"
 [category.ai_tooling_hooks]
 code = 104
 check_id = "ADP-04"
+inherits_from_orchestration_root = true
 metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -1634,6 +1722,7 @@ last_verified = "2026-07-06"
 [category.ai_tooling_mcp]
 code = 105
 check_id = "ADP-05"
+inherits_from_orchestration_root = true
 metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -1650,6 +1739,7 @@ last_verified = "2026-07-06"
 [category.ai_tooling_spec_signals]
 code = 106
 check_id = "ADP-06"
+inherits_from_orchestration_root = true
 metric = "tooling_depth"
 dimension = "ai-sdlc-adoption"
 weight = 8
@@ -1668,6 +1758,7 @@ last_verified = "2026-07-06"
 [category.ai_attribution]
 code = 901
 check_id = "ADP-07"
+inherits_from_orchestration_root = false
 metric = "ai_attribution"
 dimension = "ai-sdlc-adoption"
 weight = 2
@@ -1690,6 +1781,7 @@ last_verified = "2026-07-06"
 [category.ci_pass_rate]
 code = 1001
 check_id = "ADP-08"
+inherits_from_orchestration_root = false
 metric = "ci_pass_rate"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -1713,6 +1805,7 @@ basis_note = "Fowler's CI article publishes no numeric pass-rate targets; the sc
 [category.pipeline_duration_trend]
 code = 1002
 check_id = "ADP-09"
+inherits_from_orchestration_root = false
 metric = "pipeline_duration"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -1740,6 +1833,7 @@ basis_note = "The 10-minute full-score anchor transcribes Fowler's CI ten-minute
 [category.work_mix_allocation]
 code = 1101
 check_id = "ADP-10"
+inherits_from_orchestration_root = false
 metric = "work_mix_allocation"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -1771,6 +1865,7 @@ low = "< 60%"
 [category.issue_throughput]
 code = 1102
 check_id = "ADP-11"
+inherits_from_orchestration_root = false
 metric = "issue_throughput"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -1794,6 +1889,7 @@ basis_note = "DX Core 4 publishes no numeric throughput thresholds; anchors are 
 [category.ticket_subtask_split]
 code = 1104
 check_id = "ADP-12"
+inherits_from_orchestration_root = false
 metric = "ticket_subtask_split"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -1817,6 +1913,7 @@ basis_note = "INVEST/DORA publish no numeric sub-task threshold (already stated 
 [category.ticket_description_quality]
 code = 1105
 check_id = "ADP-13"
+inherits_from_orchestration_root = false
 metric = "ticket_description_quality"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -1845,6 +1942,7 @@ basis_note = "Agile Alliance's Definition of Ready names acceptance criteria but
 [category.external_spec_coverage]
 code = 1201
 check_id = "ADP-14"
+inherits_from_orchestration_root = false
 metric = "external_spec_coverage"
 dimension = "ai-sdlc-adoption"
 weight = 5
@@ -1863,6 +1961,7 @@ last_verified = "2026-07-06"
 [category.onboarding_ease]
 code = 1501
 check_id = "ADP-15"
+inherits_from_orchestration_root = false
 metric = "onboarding_ease"
 dimension = "ai-sdlc-adoption"
 weight = 3
@@ -1892,6 +1991,7 @@ basis_note = "DX Core 4 publishes no numeric Time-to-10th-PR proxy targets (alre
 [category.active_contributors]
 code = 201
 check_id = "DESC-01"
+inherits_from_orchestration_root = false
 metric = "active_contributors"
 dimension = "descriptors"
 weight = 0
@@ -1911,6 +2011,7 @@ last_verified = "2026-07-06"
 [category.code_churn]
 code = 601
 check_id = "DESC-02"
+inherits_from_orchestration_root = false
 metric = "code_churn"
 dimension = "descriptors"
 weight = 0
@@ -1941,6 +2042,7 @@ basis_note = "DX Core 4 publishes no numeric code-turnover thresholds; anchors a
 [category.cyclomatic_complexity]
 code = 1301
 check_id = "DESC-03"
+inherits_from_orchestration_root = false
 metric = "cyclomatic_complexity"
 dimension = "descriptors"
 weight = 0
@@ -1966,6 +2068,7 @@ basis_note = "The CCN 10 boundary is McCabe's published 'reasonable upper limit'
 [category.loc_scale]
 code = 1302
 check_id = "DESC-04"
+inherits_from_orchestration_root = false
 metric = "loc_scale"
 dimension = "descriptors"
 weight = 0
@@ -1984,6 +2087,7 @@ last_verified = "2026-07-06"
 [category.dependency_count]
 code = 1303
 check_id = "DESC-05"
+inherits_from_orchestration_root = false
 metric = "dependency_count"
 dimension = "descriptors"
 weight = 0
@@ -2013,6 +2117,7 @@ last_verified = "2026-07-06"
 [category.prev_secrets_hygiene_enforced]
 code = 3100
 check_id = "PRV-01"
+inherits_from_orchestration_root = false
 metric = "PRV-01"
 dimension = "prevention-coverage"
 weight = 3
@@ -2033,6 +2138,7 @@ last_verified = "2026-07-06"
 [category.prev_secrets_hygiene_instructed]
 code = 3110
 check_id = "PRV-11"
+inherits_from_orchestration_root = false
 metric = "PRV-11"
 dimension = "prevention-coverage"
 weight = 2
@@ -2054,6 +2160,7 @@ last_verified = "2026-07-06"
 [category.prev_dependency_supply_chain_enforced]
 code = 3101
 check_id = "PRV-02"
+inherits_from_orchestration_root = false
 metric = "PRV-02"
 dimension = "prevention-coverage"
 weight = 3
@@ -2074,6 +2181,7 @@ last_verified = "2026-07-06"
 [category.prev_dependency_supply_chain_instructed]
 code = 3111
 check_id = "PRV-12"
+inherits_from_orchestration_root = false
 metric = "PRV-12"
 dimension = "prevention-coverage"
 weight = 2
@@ -2095,6 +2203,7 @@ last_verified = "2026-07-06"
 [category.prev_appsec_design_enforced]
 code = 3102
 check_id = "PRV-03"
+inherits_from_orchestration_root = false
 metric = "PRV-03"
 dimension = "prevention-coverage"
 weight = 3
@@ -2115,6 +2224,7 @@ last_verified = "2026-07-06"
 [category.prev_appsec_design_instructed]
 code = 3112
 check_id = "PRV-13"
+inherits_from_orchestration_root = false
 metric = "PRV-13"
 dimension = "prevention-coverage"
 weight = 2
@@ -2136,6 +2246,7 @@ last_verified = "2026-07-06"
 [category.prev_code_style_enforced]
 code = 3103
 check_id = "PRV-04"
+inherits_from_orchestration_root = false
 metric = "PRV-04"
 dimension = "prevention-coverage"
 weight = 3
@@ -2156,6 +2267,7 @@ last_verified = "2026-07-06"
 [category.prev_code_style_instructed]
 code = 3113
 check_id = "PRV-14"
+inherits_from_orchestration_root = false
 metric = "PRV-14"
 dimension = "prevention-coverage"
 weight = 2
@@ -2177,6 +2289,7 @@ last_verified = "2026-07-06"
 [category.prev_architecture_boundaries_enforced]
 code = 3104
 check_id = "PRV-05"
+inherits_from_orchestration_root = false
 metric = "PRV-05"
 dimension = "prevention-coverage"
 weight = 3
@@ -2197,6 +2310,7 @@ last_verified = "2026-07-06"
 [category.prev_architecture_boundaries_instructed]
 code = 3114
 check_id = "PRV-15"
+inherits_from_orchestration_root = false
 metric = "PRV-15"
 dimension = "prevention-coverage"
 weight = 2
@@ -2218,6 +2332,7 @@ last_verified = "2026-07-06"
 [category.prev_testing_discipline_enforced]
 code = 3105
 check_id = "PRV-06"
+inherits_from_orchestration_root = false
 metric = "PRV-06"
 dimension = "prevention-coverage"
 weight = 3
@@ -2239,6 +2354,7 @@ last_verified = "2026-07-06"
 [category.prev_testing_discipline_instructed]
 code = 3115
 check_id = "PRV-16"
+inherits_from_orchestration_root = false
 metric = "PRV-16"
 dimension = "prevention-coverage"
 weight = 2
@@ -2260,6 +2376,7 @@ last_verified = "2026-07-06"
 [category.prev_ai_file_integrity_enforced]
 code = 3106
 check_id = "PRV-07"
+inherits_from_orchestration_root = true
 metric = "PRV-07"
 dimension = "prevention-coverage"
 weight = 3
@@ -2280,6 +2397,7 @@ last_verified = "2026-07-06"
 [category.prev_ai_file_integrity_instructed]
 code = 3116
 check_id = "PRV-17"
+inherits_from_orchestration_root = true
 metric = "PRV-17"
 dimension = "prevention-coverage"
 weight = 2
@@ -2301,6 +2419,7 @@ last_verified = "2026-07-06"
 [category.prev_docs_freshness_enforced]
 code = 3107
 check_id = "PRV-08"
+inherits_from_orchestration_root = false
 metric = "PRV-08"
 dimension = "prevention-coverage"
 weight = 3
@@ -2321,6 +2440,7 @@ last_verified = "2026-07-06"
 [category.prev_docs_freshness_instructed]
 code = 3117
 check_id = "PRV-18"
+inherits_from_orchestration_root = false
 metric = "PRV-18"
 dimension = "prevention-coverage"
 weight = 2
@@ -2348,6 +2468,7 @@ last_verified = "2026-07-06"
 [category.org_ai_tooling_coverage]
 code = 9000
 check_id = "ORG-01"
+inherits_from_orchestration_root = false
 metric = "org_ai_tooling_coverage"
 dimension = "org-portfolio"
 weight = 10
@@ -2364,6 +2485,7 @@ last_verified = "2026-07-06"
 [category.org_capability_score]
 code = 9001
 check_id = "ORG-02"
+inherits_from_orchestration_root = false
 metric = "org_capability_score"
 dimension = "org-portfolio"
 weight = 10
@@ -2380,6 +2502,7 @@ last_verified = "2026-07-06"
 [category.org_measurement_coverage]
 code = 9002
 check_id = "ORG-03"
+inherits_from_orchestration_root = false
 metric = "org_measurement_coverage"
 dimension = "org-portfolio"
 weight = 10

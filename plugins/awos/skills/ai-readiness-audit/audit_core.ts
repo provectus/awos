@@ -513,6 +513,12 @@ interface Category {
   /** Optional one-line lead shown inline; the full `definition` stays in the tooltip. */
   summary?: string;
   applies_when?: string;
+  /**
+   * Whether this category may be credited from an orchestration root when the
+   * repository does not carry the capability itself. Required on every record;
+   * `tests/inheritance-policy.test.ts` enforces that.
+   */
+  inherits_from_orchestration_root?: boolean;
   reliability_default?: string;
   source?: string;
   sources?: string[];

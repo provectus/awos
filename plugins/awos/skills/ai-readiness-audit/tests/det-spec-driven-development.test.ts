@@ -763,6 +763,34 @@ test('SDD-06: FAIL when active records are not a minority', () => {
   );
 });
 
+test('SDD-06: SKIP when the status line is the unedited template menu, not a chosen value', () => {
+  // templates/functional-spec-template.md ships
+  // "- **Status:** Draft | In Review | Approved | Completed" — a menu of
+  // options, not a value. recordStatus() returns that whole string verbatim,
+  // and it must match neither statusActive nor statusTerminal by exact
+  // equality, so an unedited spec is excluded from the ratio instead of
+  // being counted as actively in flight.
+  const t = tmp();
+  const specDir = join(t, 'context', 'spec', '001-unedited');
+  mkdirSync(specDir, { recursive: true });
+  writeFileSync(
+    join(specDir, 'functional-spec.md'),
+    '# Spec\n\n- **Status:** Draft | In Review | Approved | Completed\n'
+  );
+  const r = detectStaleSpecs(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    'an unedited template menu declares no chosen status — it must not be counted active (which would corrupt the staleness ratio) or terminal'
+  );
+  assert.ok(
+    r.evidence.some((e) =>
+      e.includes('Draft | In Review | Approved | Completed')
+    ),
+    `evidence must name the offending unedited-template string, got: ${JSON.stringify(r.evidence)}`
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectAgentAnnotations — code 2806 (SDD-07, detected)
 //

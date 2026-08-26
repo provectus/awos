@@ -47,6 +47,16 @@ test('the declared inheriting set matches the design decision', () => {
   );
 });
 
+test('SDD-07 applies only to AWOS projects', () => {
+  const cats = loadStandards().category as Record<string, any>;
+  const sdd07 = Object.values(cats).find((c: any) => c.check_id === 'SDD-07');
+  assert.equal(
+    sdd07.applies_when,
+    'topology.uses_awos',
+    'agent annotations are an AWOS notation with no equivalent elsewhere; a non-AWOS repo must SKIP this check (neutral) rather than FAIL for not using a notation that does not apply to it'
+  );
+});
+
 test('an inheriting category is not gated on a member-local topology flag', () => {
   const categories = loadStandards().category as Record<string, any>;
   const widened = new Set<string>(ORCHESTRATION_WIDENED_FLAGS);

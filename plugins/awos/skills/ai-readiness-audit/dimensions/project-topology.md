@@ -118,6 +118,7 @@ The engine computes these topology flags deterministically (`topology.ts`) from 
 - `is_multi_service`: true|false (e.g. multiple independently deployable services detected)
 - `is_not_library`: true|false (e.g. project has a runnable service entry point, not a pure library)
 - `uses_auth`: true|false (e.g. OAuth, JWT, session middleware, or auth library import detected)
+- `uses_awos`: true|false (e.g. `.awos/` directory present, in this repo or an inherited orchestration root)
 - `uses_env_vars`: true|false (e.g. process.env / os.environ / .env file or dotenv library found)
 ```
 

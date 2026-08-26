@@ -481,3 +481,65 @@ for (const c of AI_INHERIT_CASES) {
     }
   });
 }
+
+// Issue: the DOC-07 fix for the unreadable ../../… trail in inherited
+// evidence paths applied only to end_to_end_delivery.ts. These four
+// detectors resolve an artifact's directory through probeRepoPath too, and
+// render evidence with relative(repoPath, absPath) unconditionally — for an
+// inherited artifact that produces the same ../../… trail; for an own-repo
+// artifact it must stay exactly what shipped before this branch, since a
+// repo with no orchestration root in scope must be completely unaffected.
+
+const AI_PATH_INHERIT_CASES = [
+  {
+    id: 'AI-02',
+    fn: detectCustomCommands,
+    write: writeCommands,
+    expectedRelFile: '.claude/commands/ship.md',
+  },
+  {
+    id: 'AI-03',
+    fn: detectClaudeSkills,
+    write: writeSkills,
+    expectedRelFile: '.claude/skills/demo/SKILL.md',
+  },
+  {
+    id: 'AI-05',
+    fn: detectClaudeHooks,
+    write: writeHooks,
+    expectedRelFile: '.claude/hooks/guard.sh',
+  },
+];
+
+for (const c of AI_PATH_INHERIT_CASES) {
+  test(`${c.id} own-repo evidence path is unaffected by orchestration-root support`, () => {
+    const t = tmp();
+    c.write(t);
+    const r = c.fn(t);
+    assert.ok(
+      r.evidence.some((e) => e.includes(c.expectedRelFile)),
+      `${c.id}'s own-repo evidence must render the same path as before orchestration-root support existed — no root is in scope here, so nothing about this path should change; got ${JSON.stringify(r.evidence)}`
+    );
+  });
+
+  test(`${c.id} inherited evidence path is readable, not a ../.. trail`, () => {
+    const { root, member } = orchestrationFixture(
+      `awos-readable-${c.id}-`,
+      c.write,
+      'root'
+    );
+    try {
+      const r = c.fn(member, inheritParams(root));
+      assert.ok(
+        r.evidence.some((e) => e.includes(c.expectedRelFile)),
+        `${c.id}'s inherited evidence must reconstruct the logical registry-relative location within the root, not the raw resolved path; got ${JSON.stringify(r.evidence)}`
+      );
+      assert.ok(
+        r.evidence.every((e) => !e.includes('../')),
+        `${c.id}'s inherited evidence must not render as an unreadable ../.. trail; got ${JSON.stringify(r.evidence)}`
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}

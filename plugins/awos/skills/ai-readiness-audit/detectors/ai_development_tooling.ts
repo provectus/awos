@@ -4,6 +4,7 @@ import {
   readTextSafe,
   probeRepoPath,
   inheritedNote,
+  PathOrigin,
 } from './_base.ts';
 import { existsSync, lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -13,6 +14,28 @@ import {
   ALL_MCP_CONFIG_PATHS,
   ALL_HOOK_PATHS,
 } from '../agent_tools.ts';
+
+/**
+ * Render an artifact's evidence path. Own repo: relative(repoPath, absPath) —
+ * byte-identical to every detector's pre-inheritance rendering, since a
+ * repository with no orchestration root in scope must be completely
+ * unaffected by this feature. Inherited: the logical registry-relative
+ * location within whichever workspace supplied it (relRegistryPath, plus
+ * however far absPath sits beneath resolvedBase) rather than a `../../…`
+ * trail out of the member — resolvedBase === absPath for a single-file probe
+ * collapses to relRegistryPath itself.
+ */
+function displayPath(
+  origin: PathOrigin,
+  repoPath: string,
+  resolvedBase: string,
+  relRegistryPath: string,
+  absPath: string
+): string {
+  return origin === 'inherited'
+    ? join(relRegistryPath, relative(resolvedBase, absPath))
+    : relative(repoPath, absPath);
+}
 
 // ---------------------------------------------------------------------------
 // detectCustomCommands — category 2001 (AI-02, method: detected)
@@ -35,20 +58,23 @@ export function detectCustomCommands(
     if (probe.path === null) continue;
     const files = iterFiles(probe.path, ['*.md']);
     if (files.length > 0) {
-      allFiles.push(...files);
+      for (const f of files) {
+        allFiles.push(
+          displayPath(probe.origin, repoPath, probe.path, relDir, f)
+        );
+      }
       foundDirs.push(relDir);
       if (probe.origin === 'inherited') inheritedAny = true;
     }
   }
 
   if (allFiles.length > 0) {
-    const names = allFiles.map((p) => relative(repoPath, p));
     return makeResult('PASS', allFiles.length, [
       inheritedNote(
         inheritedAny ? 'inherited' : 'own',
         `${allFiles.length} custom command/rule file(s) found under ${foundDirs.join(', ')}`
       ),
-      ...names.slice(0, 10).map((n) => `command: ${n}`),
+      ...allFiles.slice(0, 10).map((n) => `command: ${n}`),
     ]);
   }
   return makeResult('FAIL', 0, [
@@ -77,7 +103,7 @@ export function detectClaudeSkills(
   repoPath: string,
   params?: unknown
 ): ReturnType<typeof makeResult> {
-  const allFiles: string[] = [];
+  const names: string[] = [];
   let inheritedAny = false;
 
   for (const relSkillsRoot of ALL_SKILL_DIRS) {
@@ -108,23 +134,24 @@ export function detectClaudeSkills(
 
     for (const target of scanTargets) {
       for (const f of iterFiles(target, ['SKILL.md'])) {
-        allFiles.push(f);
+        // resolvedBase is `target`, not `skillsRoot`: `target` is where f was
+        // actually found (after realpath dereferencing symlinks), so
+        // relative(target, f) is always a clean same-tree path — computing it
+        // against the pre-dereference `skillsRoot` can cross a real-path
+        // boundary (e.g. macOS /var vs /private/var) and produce a spurious
+        // ../.. trail unrelated to orchestration-root inheritance.
+        names.push(
+          displayPath(probe.origin, repoPath, target, relSkillsRoot, f)
+        );
       }
     }
   }
 
-  if (allFiles.length > 0) {
-    const names = allFiles.map((p) => {
-      try {
-        return relative(repoPath, p);
-      } catch {
-        return p;
-      }
-    });
-    return makeResult('PASS', allFiles.length, [
+  if (names.length > 0) {
+    return makeResult('PASS', names.length, [
       inheritedNote(
         inheritedAny ? 'inherited' : 'own',
-        `${allFiles.length} SKILL.md file(s) found`
+        `${names.length} SKILL.md file(s) found`
       ),
       ...names.slice(0, 10).map((n) => `skill: ${n}`),
     ]);
@@ -195,7 +222,9 @@ export function detectClaudeHooks(
       '*.bash',
     ]);
     if (hookFiles.length > 0) {
-      const names = hookFiles.map((p) => relative(repoPath, p));
+      const names = hookFiles.map((p) =>
+        displayPath(probe.origin, repoPath, probe.path!, relHooksDir, p)
+      );
       return makeResult('PASS', hookFiles.length, [
         inheritedNote(
           probe.origin,
@@ -226,7 +255,7 @@ export function detectClaudeHooks(
         return makeResult('PASS', 1, [
           inheritedNote(
             probe.origin,
-            `"hooks" key found in ${relative(repoPath, settingsPath)}`
+            `"hooks" key found in ${displayPath(probe.origin, repoPath, settingsPath, relSettingsPath, settingsPath)}`
           ),
         ]);
       }
@@ -240,7 +269,7 @@ export function detectClaudeHooks(
       return makeResult('PASS', 1, [
         inheritedNote(
           probe.origin,
-          `"hooks" key configured in ${relative(repoPath, settingsPath)}`
+          `"hooks" key configured in ${displayPath(probe.origin, repoPath, settingsPath, relSettingsPath, settingsPath)}`
         ),
       ]);
     }

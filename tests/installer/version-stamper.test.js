@@ -216,6 +216,66 @@ test('a malformed package.json never fails the install', async () => {
   );
 });
 
+test('an unreadable stamp path never fails the install', async () => {
+  const workingDir = await freshTemp();
+  // Create .awos/.awos-version as a directory so reading it as a file
+  // rejects with EISDIR.
+  await fsPromises.mkdir(path.join(workingDir, '.awos', '.awos-version'), {
+    recursive: true,
+  });
+
+  const result = await silenced(() =>
+    stampVersion({ workingDir, packageRoot: repoRoot })
+  );
+
+  assert.equal(
+    result.versionStamped,
+    false,
+    'an install must never fail because the version stamp could not be written — an unreadable stamp path must resolve, not throw'
+  );
+  assert.equal(
+    result.versionStampFailed,
+    true,
+    'an install must never fail because the version stamp could not be written — an unreadable stamp path must be reported via versionStampFailed'
+  );
+  assert.equal(
+    result.version,
+    repoVersion,
+    'versionStampFailed must not suppress the version that was successfully read from package.json'
+  );
+});
+
+test('an unwritable stamp path never fails the install', async () => {
+  const workingDir = await freshTemp();
+  // Create .awos as a file (not a directory) so mkdir(.awos, {recursive})
+  // rejects with ENOTDIR.
+  await fsPromises.writeFile(
+    path.join(workingDir, '.awos'),
+    'not a dir',
+    'utf8'
+  );
+
+  const result = await silenced(() =>
+    stampVersion({ workingDir, packageRoot: repoRoot })
+  );
+
+  assert.equal(
+    result.versionStamped,
+    false,
+    'an install must never fail because the version stamp could not be written — an unwritable stamp path must resolve, not throw'
+  );
+  assert.equal(
+    result.versionStampFailed,
+    true,
+    'an install must never fail because the version stamp could not be written — an unwritable stamp path must be reported via versionStampFailed'
+  );
+  assert.equal(
+    result.version,
+    repoVersion,
+    'versionStampFailed must not suppress the version that was successfully read from package.json'
+  );
+});
+
 test('a package.json with no version field never fails the install', async () => {
   const workingDir = await freshTemp();
   const versionlessPackageRoot = await freshTemp();

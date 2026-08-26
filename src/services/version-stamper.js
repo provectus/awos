@@ -37,13 +37,16 @@ async function readStamp(stampPath) {
  * mcp-configurator.js, which throws on invalid JSON because that file is
  * the user's own and silent corruption there would matter. Here the
  * version stamp is ours to write; failing to write it should never fail
- * the install.
+ * the install. The same applies if the stamp path itself is unreadable or
+ * unwritable (e.g. `.awos/.awos-version` exists as a directory, or `.awos`
+ * is blocked by a file of the same name): the read/mkdir/write is caught
+ * and reported via `versionStampFailed` rather than rejecting.
  *
  * @param {Object} config - Configuration options
  * @param {string} config.workingDir - The working directory
  * @param {string} config.packageRoot - The root directory of the AWOS package
  * @param {boolean} config.dryRun - Whether to run in dry-run mode
- * @returns {Promise<Object>} Statistics: { versionStamped: boolean, version: string|null }
+ * @returns {Promise<Object>} Statistics: { versionStamped: boolean, version: string|null, versionStampFailed?: boolean }
  */
 async function stampVersion({ workingDir, packageRoot, dryRun = false }) {
   const packageJsonPath = path.join(packageRoot, 'package.json');
@@ -67,20 +70,26 @@ async function stampVersion({ workingDir, packageRoot, dryRun = false }) {
   }
 
   const stampPath = path.join(workingDir, VERSION_FILE);
-  const existingStamp = await readStamp(stampPath);
 
-  if (existingStamp === version) {
-    log(`${VERSION_FILE} already records ${version}`, 'info');
-    return { versionStamped: false, version };
+  try {
+    const existingStamp = await readStamp(stampPath);
+
+    if (existingStamp === version) {
+      log(`${VERSION_FILE} already records ${version}`, 'info');
+      return { versionStamped: false, version };
+    }
+
+    if (!dryRun) {
+      await fsPromises.mkdir(path.dirname(stampPath), { recursive: true });
+      await fsPromises.writeFile(stampPath, version, 'utf-8');
+      log(`Stamped ${VERSION_FILE} with ${version}`, 'success');
+    }
+
+    return { versionStamped: true, version };
+  } catch (error) {
+    log(`Could not write ${VERSION_FILE}: ${error.message}`, 'info');
+    return { versionStamped: false, versionStampFailed: true, version };
   }
-
-  if (!dryRun) {
-    await fsPromises.mkdir(path.dirname(stampPath), { recursive: true });
-    await fsPromises.writeFile(stampPath, version, 'utf-8');
-    log(`Stamped ${VERSION_FILE} with ${version}`, 'success');
-  }
-
-  return { versionStamped: true, version };
 }
 
 module.exports = { stampVersion };

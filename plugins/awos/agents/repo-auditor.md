@@ -12,14 +12,17 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
 - `<outDir>` — this repo's output directory, e.g. `context/audits/YYYY-MM-DD_HH-MM-SS/per-repo/<repo-name>`.
 - `<ENGINE>` — absolute path to the bundled engine `dist/cli.js`.
 - `<SKILL_DIR>` — the ai-readiness-audit skill directory (for `references/`).
+- `<ORCHESTRATION_ROOT>` — optional. When the caller supplies it, this repo is a member of an orchestration root that carries the agent tooling governing it. Pass it through to `audit-core` (step 1) and to your judgment reads (step 3). When the caller says `none`, pass `--no-orchestration-root` instead.
 
 ## Process — the single-repo audit, into `<outDir>`
 
 1. **Deterministic pass (one engine call).** Run:
 
    ```bash
-   node "<ENGINE>" audit-core "<repoPath>" "<outDir>"
+   node "<ENGINE>" audit-core "<repoPath>" "<outDir>" --orchestration-root "<ORCHESTRATION_ROOT>"
    ```
+
+   Use `--no-orchestration-root` in place of that flag when the caller passed `none`, and omit both flags entirely when the caller said nothing about a root — the engine then auto-detects. Do not pass the flag to `enrich`: `enrich` reads the root back from the artifact `audit-core` wrote, so re-passing it is at best redundant and at worst a way for the two passes to disagree.
 
    This scores every `detected`/`computed` category and writes `<outDir>/<dimension>.json` + `<outDir>/audit.json`. This one call **is** the whole deterministic slice. Never re-score a `detected`/`computed` check by hand, and never fan out a subagent per dimension — reconstructing a per-dimension flow is the failure mode this design exists to prevent.
 
@@ -40,6 +43,8 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
    ```
 
    Write the array to `<outDir>/judgments.json` — never a shared path like `/tmp/judgments.json`, which sibling auditors running concurrently would clobber, applying one repo's verdicts to another.
+
+   When `<ORCHESTRATION_ROOT>` is set, the agent-visible instruction surface spans both repositories. Read the root's instruction files as well as this repo's when deciding PRV-11…PRV-18, and name the source repository in every evidence bullet.
 
 4. **Author + render.** Fetch the values to transcribe with one read-only `report-context` call (never parse `audit.json`/`collected/*.json` yourself), author the report blocks (`headline`, `insights[]`, `recommendations[]`) into `<outDir>/report-blocks.json`, apply them with one `patch-report` call (it merges them into `audit.json` and writes `recommendations.md` — never edit `audit.json` directly), then render both reports in one call:
 

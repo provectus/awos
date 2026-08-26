@@ -31,6 +31,21 @@ const dimensionsDir = path.join(
 const templatesDir = path.join(repoRoot, 'templates');
 const pluginCommandsDir = path.join(repoRoot, 'plugins', 'awos', 'commands');
 const pluginTemplatesDir = path.join(repoRoot, 'plugins', 'awos', 'templates');
+const auditSkillFile = path.join(
+  repoRoot,
+  'plugins',
+  'awos',
+  'skills',
+  'ai-readiness-audit',
+  'SKILL.md'
+);
+const repoAuditorFile = path.join(
+  repoRoot,
+  'plugins',
+  'awos',
+  'agents',
+  'repo-auditor.md'
+);
 
 function readUtf8(p) {
   return fs.readFileSync(p, 'utf8');
@@ -4213,5 +4228,28 @@ test('hire.md treats an unanswered consent gate as withheld consent', () => {
   assert.ok(
     /do not re-ask the same question as plain text/i.test(body),
     'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
+  );
+});
+
+test('SKILL.md documents orchestration-root mode and both root flags', () => {
+  const skill = readUtf8(auditSkillFile);
+  assert.match(
+    skill,
+    /--orchestration-root/,
+    'SKILL.md must tell the orchestrator to pass --orchestration-root for member repos; without it every member is audited as an unrelated peer and loses the capability credit the engine can give it'
+  );
+  assert.match(
+    skill,
+    /--no-orchestration-root/,
+    'SKILL.md must tell the orchestrator to audit the root itself with --no-orchestration-root; auditing the root with inheritance on double-counts its own tooling'
+  );
+});
+
+test('repo-auditor accepts an orchestration root', () => {
+  const agent = readUtf8(repoAuditorFile);
+  assert.match(
+    agent,
+    /ORCHESTRATION_ROOT/,
+    'the per-repo auditor must accept and forward an orchestration root, or org-mode dispatch cannot deliver it'
   );
 });

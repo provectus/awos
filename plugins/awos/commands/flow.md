@@ -87,13 +87,13 @@ Then show the user which process documentation the investigation already found (
 
 ## Step 4: Interview — the Seven Dimensions
 
+**Read `${CLAUDE_PLUGIN_ROOT}/references/interview-dimensions.md` now, before asking anything.** It defines the seven dimensions this step interviews and the two it derives instead of asking (context strategy, worktrees); this step carries only the procedure for running the interview, so without that file there are no dimensions to interview. The one exception is a re-run whose Step 1.4 selection came back empty — no dimension is being revisited, so there is nothing to read it for.
+
 First settle every dimension the investigation and team docs already answer — those are not questions anymore. Present one summary of the inferred decisions for confirmation, then ask only the remaining open dimensions with `AskUserQuestion`. Batch independent dimensions into one call (it carries up to four questions); ask separately only when one answer feeds another — e.g. choosing worktrees opens the worktree sub-interview, and a connector choice determines which transport details to ask about. Record every decision with its rationale.
 
 On a **re-run**, the dimensions to revisit were already chosen in Step 1.4 — interview **only those**, with the recorded decision as each question's default. Do not re-ask the dimensions the user left unselected: confirm them as unchanged in one summary line (e.g. "Keeping git flow, topology, delivery, trigger, and notifications as recorded") and move on — no per-dimension prompt for them.
 
 The AWOS chain order is not a dimension: `/awos:verify` is the local verification gate and always runs before anything is committed, pushed, or opened as a change request. Interview the delivery decisions around the chain — never offer an option that moves a chain stage.
-
-The dimensions themselves — what each one covers, the options to offer, and the two derived decisions (context strategy, worktrees) — are defined in `${CLAUDE_PLUGIN_ROOT}/references/interview-dimensions.md`. Read that file when you reach the dimensions; a re-run that revisits none of them does not need it.
 
 ## Step 4.5: Reconcile Existing Automation — Reuse, Replace, or Compose
 

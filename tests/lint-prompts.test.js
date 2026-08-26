@@ -1482,8 +1482,10 @@ test('Step 4 keeps the dimension definitions in a bundled reference, not inline'
     'flow.md INPUTS must declare the bundled reference so the file is a named input, not an undocumented dependency'
   );
   assert.ok(
-    /revisits none of them|revisits no dimensions/i.test(step4),
-    'flow.md must say a re-run revisiting no dimensions skips the reference — the conditional read is the whole point of extracting it'
+    /re-run whose Step 1\.4 selection came back empty|revisits none of them|revisits no dimensions/i.test(
+      step4
+    ),
+    'flow.md Step 4 must name the re-run exception to the mandatory read — a run revisiting no dimension has nothing to read the reference for, and the conditional is the point of extracting it'
   );
 });
 

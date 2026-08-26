@@ -1421,6 +1421,34 @@ test('generated commands carry the hops-style Self-Improvement Loop with governe
   );
 });
 
+test('INTERACTION pins the unanswered-question defaults it promises', () => {
+  // The INTERACTION blanket names the fallback for every question that does not
+  // carry its own default. The reconciliation entry is load-bearing: "keep the
+  // manual edit" is the contract Step 6 enforces when a stage carries something
+  // the record cannot account for, and nothing pinned it — weakening it to "use
+  // judgement" left the suite green (found by bite-check while rewriting this
+  // section).
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const interaction = flow.slice(
+    flow.indexOf('# INTERACTION'),
+    flow.indexOf('# PROCESS')
+  );
+  assert.ok(
+    /for re-run reconciliation conflicts, keep the manual edit/i.test(
+      interaction
+    ),
+    'flow.md INTERACTION must name "keep the manual edit" as the unanswered-question default for re-run reconciliation conflicts — an unattended run resolves every keep/drop through this line'
+  );
+  assert.ok(
+    /most conservative option when nothing was inferred/i.test(interaction),
+    'flow.md INTERACTION must name the interview-dimension default (the inferred answer, or the most conservative option) — without it an unattended run picks blind'
+  );
+  assert.ok(
+    /Each option must stand on its own as a decision/i.test(interaction),
+    'flow.md INTERACTION must keep the stand-alone-option rule — it is what stops a question whose choices only differ by a follow-up the run will ask for anyway'
+  );
+});
+
 test('Step 4 keeps the dimension definitions in a bundled reference, not inline', () => {
   // flow.md was 9.8k words and its Step 4 alone was 2.9k — reference material
   // embedded in a procedure. A re-run that revisits no dimensions still carried

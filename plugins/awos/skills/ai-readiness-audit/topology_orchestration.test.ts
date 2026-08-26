@@ -149,7 +149,18 @@ test('detectOrchestrationRelation returns null for a standalone repo', () => {
   }
 });
 
-test('detectOrchestrationRelation ignores a symlinked sibling', () => {
+// Renamed from "detectOrchestrationRelation ignores a symlinked sibling": that
+// name promised symlink-specific safety this test did not check. The ancestor
+// walk resolves `own` via realpathSync exactly once (in workTreeRoot) and then
+// climbs plain `dirname()` on that real path — the loop never re-reads a
+// symlink or a directory entry, so there is no separate "follow the link"
+// step for a sibling repo to sneak through in the first place; deleting the
+// `symlinkSync` call changes nothing because `sibling` is simply not an
+// ancestor of `root` either way. What this test actually guards is that a
+// symlink sitting inside the root's tree (pointing at an unrelated repo) is
+// silent noise to the walk — not a decoy the walk mistakes for a real
+// ancestor step.
+test('detectOrchestrationRelation is unaffected by an unrelated symlink inside the root', () => {
   const base = tmpDir('awos-orch-symlink-');
   try {
     const root = join(base, 'root');
@@ -162,10 +173,33 @@ test('detectOrchestrationRelation ignores a symlinked sibling', () => {
     assert.equal(
       detectOrchestrationRelation(sibling).root,
       null,
-      'a repo reached only through a symlink is not nested inside the root and must not inherit'
+      'a sibling repo is not nested inside root regardless of an unrelated symlink living in the root tree — the ancestor walk climbs real directories, it does not scan for or follow links'
     );
   } finally {
     rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('detectOrchestrationRelation treats $HOME as a boundary, not a candidate root', () => {
+  const home = tmpDir('awos-orch-home-');
+  const originalHome = process.env.HOME;
+  try {
+    initRepo(home);
+    writeTooling(home);
+    const nested = join(home, 'code', 'bare');
+    initRepo(nested);
+
+    process.env.HOME = home;
+    const rel = detectOrchestrationRelation(nested);
+    assert.equal(
+      rel.root,
+      null,
+      '$HOME must be a boundary the ancestor walk stops at, not a candidate — crediting a home directory\'s personal tooling to an unrelated nested repo violates "assess the project, not the auditor\'s personal environment"'
+    );
+  } finally {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    rmSync(home, { recursive: true, force: true });
   }
 });
 
@@ -229,7 +263,7 @@ test('computeTopology widens agent-file flags to the orchestration root', () => 
     assert.equal(
       widened.has_commands_or_skills,
       true,
-      'has_commands_or_skills must widen to the orchestration root, otherwise AIS-07 SKIPs before inheritance can apply'
+      'has_commands_or_skills is widened for symmetry with the other tooling-presence flags, keeping the widened set stable as more inheriting categories are added — no category gated on it inherits today (AIS-06 gates on it but does not inherit; AIS-07 inherits but applies_when = "always", gated by nothing)'
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

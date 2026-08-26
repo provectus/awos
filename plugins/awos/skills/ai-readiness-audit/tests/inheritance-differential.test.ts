@@ -95,6 +95,17 @@ test('every check declared as inheriting actually responds to the root', async (
     // inheritance is a prompt contract, covered in Task 12.
     const JUDGMENT_ONLY = new Set(['PRV-17']);
 
+    // Known limitation: the `b.get(id) !== 'FAIL'` guard below skips a check
+    // whose status is equal with and without the root as long as that shared
+    // status isn't FAIL — so a declared-inheriting check resolving SKIP-both-
+    // ways or PENDING_JUDGMENT-both-ways passes silently instead of being
+    // flagged as dead. This is latent today (the fixture's content clears the
+    // substantiveness bar, so every declared check genuinely fires) but is
+    // reachable by a fixture edit as small as deleting one line. If this test
+    // ever starts reporting checks as dead, check the fixture content against
+    // MIN_SUBSTANTIVE_LINES (fs_probe.ts) first — a fixture file that dropped
+    // below that line count is the far more likely cause than a wiring bug.
+
     const dead: string[] = [];
     for (const id of INHERITING_CHECK_IDS) {
       if (JUDGMENT_ONLY.has(id)) continue;

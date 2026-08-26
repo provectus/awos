@@ -20,7 +20,12 @@ import {
   realpathSync,
 } from 'node:fs';
 import { join, dirname, basename, resolve, sep } from 'node:path';
-import { iterFiles, hasMatch } from './detectors/_base.ts';
+import { homedir } from 'node:os';
+import {
+  iterFiles,
+  hasMatch,
+  isSubstantiveOrchestrationPath,
+} from './detectors/_base.ts';
 import { findApiSpecFiles } from './detectors/api_specs.ts';
 import { detectCiConfigPath } from './ci_platforms.ts';
 import {
@@ -696,4 +701,194 @@ export function detectOrgParent(dir: string): OrgParentDetection {
     return { isOrgParent: false, gitRepoChildren: 0 };
   }
   return { isOrgParent: gitRepoChildren >= 2, gitRepoChildren };
+}
+
+// ---------------------------------------------------------------------------
+// Orchestration roots. A "meta-monorepo" keeps agent tooling in one git repo
+// and holds independent member repos in subdirectories. The member repos are
+// distinct work trees, so `git log` and the file walks at the root cannot see
+// them — the audit must run per repo, and the members must be credited for the
+// capability that lives at the root.
+//
+// Detection keys on "nested, distinct git work tree with a tooling-bearing
+// ancestor". `git check-ignore` is recorded as evidence but is deliberately
+// NOT a gate: an untracked or vendored nested repo has the same fairness
+// problem and needs no extra handling.
+// ---------------------------------------------------------------------------
+
+/** Files/dirs whose presence in an ancestor makes it an orchestration root. */
+const ORCHESTRATION_TOOLING_CANDIDATES = [
+  'CLAUDE.md',
+  'AGENTS.md',
+  'GEMINI.md',
+  '.claude/commands',
+  '.claude/skills',
+  '.claude/hooks',
+  '.claude/agents',
+  '.cursor/rules',
+  '.mcp.json',
+  '.awos',
+  'context/product',
+  'context/spec',
+];
+
+/** How many directory levels up to search for an orchestration root. */
+const ORCHESTRATION_ANCESTOR_LIMIT = 5;
+
+/** How many directory levels down to search for member repos. */
+const ORCHESTRATION_MEMBER_DEPTH = 4;
+
+export interface OrchestrationRelation {
+  /** Absolute path of the orchestration root, or null when there is none. */
+  root: string | null;
+  /** True when the root's .gitignore covers this repo. Evidence, not a gate. */
+  ignored: boolean;
+}
+
+/** Absolute work-tree root for `dir`, or null when `dir` is not in a work tree. */
+function workTreeRoot(dir: string): string | null {
+  try {
+    const out = execFileSync(
+      'git',
+      ['-C', dir, 'rev-parse', '--show-toplevel'],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf8',
+      }
+    );
+    return realpathSync(out.trim()).replace(/\/+$/, '');
+  } catch {
+    return null;
+  }
+}
+
+/** True when `dir` carries at least one substantive agent-tooling artifact. */
+function carriesSubstantiveTooling(dir: string): boolean {
+  return ORCHESTRATION_TOOLING_CANDIDATES.some((rel) =>
+    isSubstantiveOrchestrationPath(join(dir, rel))
+  );
+}
+
+/** Submodule paths declared by `dir`'s .gitmodules, as absolute paths. */
+function submodulePaths(dir: string): Set<string> {
+  const out = new Set<string>();
+  let text: string;
+  try {
+    text = readFileSync(join(dir, '.gitmodules'), 'utf8');
+  } catch {
+    return out;
+  }
+  for (const m of text.matchAll(/^\s*path\s*=\s*(.+)$/gm)) {
+    const p = m[1].trim();
+    if (!p) continue;
+    try {
+      out.add(realpathSync(join(dir, p)).replace(/\/+$/, ''));
+    } catch {
+      out.add(resolve(dir, p).replace(/\/+$/, ''));
+    }
+  }
+  return out;
+}
+
+/** True when `parent`'s gitignore rules cover `child`. */
+function isIgnoredBy(parent: string, child: string): boolean {
+  try {
+    execFileSync('git', ['-C', parent, 'check-ignore', '-q', child], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the orchestration root for `repoPath`, if any.
+ *
+ * Walks ancestors up to ORCHESTRATION_ANCESTOR_LIMIT levels, stopping at the
+ * filesystem root or $HOME. The nearest ancestor that is a DISTINCT work tree
+ * carrying substantive agent tooling wins. Submodule paths are excluded.
+ */
+export function detectOrchestrationRelation(
+  repoPath: string
+): OrchestrationRelation {
+  const none: OrchestrationRelation = { root: null, ignored: false };
+  const own = workTreeRoot(repoPath);
+  if (own === null) return none;
+
+  const home = (() => {
+    try {
+      return realpathSync(homedir()).replace(/\/+$/, '');
+    } catch {
+      return null;
+    }
+  })();
+
+  let cursor = dirname(own);
+  for (let i = 0; i < ORCHESTRATION_ANCESTOR_LIMIT; i++) {
+    if (cursor === dirname(cursor)) break; // filesystem root
+    const candidate = workTreeRoot(cursor);
+    if (candidate !== null && candidate !== own) {
+      // A submodule is a nested work tree, but its failure mode is
+      // double-counting rather than missing credit — out of scope here.
+      if (submodulePaths(candidate).has(own)) return none;
+      if (carriesSubstantiveTooling(candidate)) {
+        return { root: candidate, ignored: isIgnoredBy(candidate, own) };
+      }
+      // A distinct ancestor work tree without tooling ends the search: an
+      // orchestration root is the NEAREST tooling-bearing enclosing repo, and
+      // reaching past a repo boundary would credit an unrelated project.
+      return none;
+    }
+    if (home !== null && cursor === home) break;
+    cursor = dirname(cursor);
+  }
+  return none;
+}
+
+/**
+ * List member repositories nested inside `rootPath` — distinct work trees found
+ * by a depth-capped walk. Symlinks are not followed: a symlinked sibling is not
+ * nested, and following links risks cycles.
+ */
+export function detectOrchestrationMembers(rootPath: string): string[] {
+  const own = workTreeRoot(rootPath);
+  if (own === null) return [];
+  const submodules = submodulePaths(own);
+  const members: string[] = [];
+
+  const walk = (dir: string, depth: number): void => {
+    if (depth <= 0) return;
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e === '.git' || SYMLINK_WALK_SKIP.has(e)) continue;
+      const p = join(dir, e);
+      let stat;
+      try {
+        stat = lstatSync(p);
+      } catch {
+        continue;
+      }
+      if (!stat.isDirectory()) continue; // lstat: symlinks are skipped here
+      if (existsSync(join(p, '.git'))) {
+        let real: string;
+        try {
+          real = realpathSync(p).replace(/\/+$/, '');
+        } catch {
+          continue;
+        }
+        if (real !== own && !submodules.has(real)) members.push(real);
+        continue; // do not descend into a member repo
+      }
+      walk(p, depth - 1);
+    }
+  };
+
+  walk(own, ORCHESTRATION_MEMBER_DEPTH);
+  return members.sort();
 }

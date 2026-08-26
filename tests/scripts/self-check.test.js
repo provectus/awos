@@ -495,9 +495,9 @@ test('an absent version stamp reports unknown, not outdated', () => {
     'a release that predates the version stamp is an inconclusive probe — it must never report outdated'
   );
   assert.equal(
-    report.version.installed,
+    report.version.detail.package.installed,
     null,
-    'version.installed must be null when the stamp is absent'
+    'version.detail.package.installed must be null when the stamp is absent'
   );
 });
 
@@ -509,7 +509,7 @@ test('--offline skips the registry lookup and returns promptly', () => {
   const elapsed = Date.now() - started;
 
   assert.equal(
-    report.version.latest,
+    report.version.detail.package.latest,
     null,
     '--offline must leave the published version null rather than reaching the network'
   );
@@ -817,5 +817,61 @@ test('compareSemver orders releases and refuses non-comparable input', async () 
     worstStatus('unknown', 'outdated'),
     'outdated',
     'the version rollup must order outdated above unknown'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 23. checkVersion rollup — no contradictory top-level installed/latest
+// ---------------------------------------------------------------------------
+
+test('a current package with an outdated plugin rolls up to outdated without a contradictory top-level pair', async () => {
+  const { checkVersion } = await loadHelpers();
+
+  const pkg = {
+    status: 'ok',
+    reason: 'the installed package 1.4.0 is current',
+    installed: '1.4.0',
+    latest: '1.4.0',
+    remedy: [],
+  };
+  const plugin = {
+    status: 'outdated',
+    reason: 'the installed plugin is 1.3.0; 1.4.0 is published',
+    installed: '1.3.0',
+    latest: '1.4.0',
+    remedy: ['/plugin update awos@awos-marketplace'],
+  };
+
+  const version = checkVersion(pkg, plugin);
+
+  assert.equal(
+    version.status,
+    'outdated',
+    'the rollup must surface outdated when either component is outdated, even with a current package'
+  );
+  assert.equal(
+    'installed' in version,
+    false,
+    'the rollup must not carry a top-level installed field that could contradict a per-component verdict'
+  );
+  assert.equal(
+    'latest' in version,
+    false,
+    'the rollup must not carry a top-level latest field that could contradict a per-component verdict'
+  );
+  assert.deepEqual(
+    version.detail.package,
+    pkg,
+    'the package verdict, with its own current installed/latest pair, must survive unchanged under detail.package'
+  );
+  assert.deepEqual(
+    version.detail.plugin,
+    plugin,
+    'the plugin verdict, with its own outdated installed/latest pair, must survive unchanged under detail.plugin'
+  );
+  assert.deepEqual(
+    version.remedy,
+    ['/plugin update awos@awos-marketplace'],
+    'remedy must still accumulate the outdated component even though the package needs no remedy'
   );
 });

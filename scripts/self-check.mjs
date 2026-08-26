@@ -953,10 +953,16 @@ function driftVerdict(label, installed, latest, preReason, remedy) {
 
 /**
  * Roll the package and plugin drift verdicts into the single `version` check.
+ * The package and plugin versions come from independent streams (npm
+ * dist-tag vs. the local marketplace clone), so there is no single
+ * `installed`/`latest` pair that could sit beside the rolled-up `status`
+ * without risking a mismatch — those numbers live only under
+ * `detail.package` and `detail.plugin`, each next to its own `status` and
+ * `remedy`.
  * @param {object} pkg
  * @param {object} plugin
  */
-function checkVersion(pkg, plugin) {
+export function checkVersion(pkg, plugin) {
   const status = worstStatus(pkg.status, plugin.status);
   const reasons = [pkg.reason, plugin.reason].filter(
     (reason) => typeof reason === 'string' && reason !== ''
@@ -964,8 +970,6 @@ function checkVersion(pkg, plugin) {
   return {
     status,
     reason: reasons.join('; '),
-    installed: pkg.installed,
-    latest: pkg.latest,
     remedy: [...pkg.remedy, ...plugin.remedy],
     detail: { package: pkg, plugin },
   };

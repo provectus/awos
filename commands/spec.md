@@ -65,7 +65,7 @@ Otherwise report one line per finding, using that check's own `reason` as the wo
 - `hired_agents` is `stale` or `missing` → option **Refresh hired agents**, reporting `/awos:hire`.
 - `plugin` is `missing` or `disabled` → option **Install the AWOS plugin**, reporting the commands in `plugin.remedy`.
 - `mcp` is `missing` → option **Restore the recruitment MCP server**, reporting the commands in `mcp.remedy`.
-- `version` is `outdated` → option **Update AWOS**, reporting the commands in `version.remedy` along with `version.installed` and `version.latest`.
+- `version` is `outdated` → option **Update AWOS**, reporting, for each entry in `version.detail` whose own `status` is `outdated`, that entry's `remedy`, `installed`, and `latest` — a stale plugin and a stale package each get their own correct numbers.
 
 One thing the script cannot see: whether the recruitment MCP server is connected in this session. If the `mcp__awos-recruitment__*` tools are absent from your available tools, note that alongside any `mcp` finding — the server can be configured on disk yet not connected here.
 

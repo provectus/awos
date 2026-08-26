@@ -1402,6 +1402,47 @@ test('generated commands carry the hops-style Self-Improvement Loop with governe
   );
 });
 
+test('Step 6 detects customizations against the record, not against a phantom prior generation', () => {
+  // Canary flow-rerun-preserves-manual-edits failed 4/4 (three plugin states,
+  // including two commits recorded as known-good) by silently dropping a
+  // manual edit. Cause: Step 6 defined detection as "compare the on-disk stage
+  // against what the *previous* generation would have produced" — uncomputable,
+  // since only the current templates/ ships, and it disqualified the one
+  // comparison that IS computable. A 24-sample micro-test measured the result:
+  // with the old rule the model produced output BYTE-IDENTICAL to a no-guidance
+  // control (0/6 vs 1/6 keeps), i.e. the rule was inert. The rule below scored
+  // 6/6 in two independent 6-rep arms.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const detect = lineWith(
+    flow,
+    /Answer one question about the \*\*on-disk\*\* stage/
+  );
+  assert.ok(
+    detect !== '',
+    'flow.md Step 6 must state manual-edit detection as one question about the on-disk stage — an open-ended "did the user hand-edit this?" gave the model nothing decidable'
+  );
+  assert.ok(
+    /decision record does not account for/i.test(detect),
+    'flow.md Step 6 detection must compare the on-disk stage against the DECISION RECORD — both operands have to exist on disk, or detection silently returns nothing for every stage'
+  );
+  assert.ok(
+    /previous generation would have produced/i.test(detect) &&
+      /does not exist/i.test(detect),
+    'flow.md Step 6 must explicitly retire the prior-generation comparison and say why — without the counter, the uncomputable phrasing reads as the natural way to answer the question'
+  );
+
+  const act = lineWith(flow, /Nothing unaccounted-for/);
+  assert.ok(
+    /carry it into the stage you write/i.test(act) &&
+      /\*\*Local Customizations\*\*/.test(act),
+    'flow.md Step 6 must carry an unaccounted-for detail into the regenerated stage and record it in Local Customizations — preservation is the unconditional action, not the skipped-question default of a question an unattended run never asks'
+  );
+  assert.ok(
+    /When `AWOS_UNATTENDED` is unset, then also offer/i.test(act),
+    'flow.md Step 6 must make the keep/drop question a refinement that happens only in interactive runs — the write must never depend on an interaction an unattended run cannot have'
+  );
+});
+
 test('generated commands route a would-be editor to the decision record', () => {
   // The generated command is derived from context/product/delivery-flow.md and
   // is rewritten from it on every regeneration, but nothing in the file said

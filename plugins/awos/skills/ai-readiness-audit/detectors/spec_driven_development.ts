@@ -1140,6 +1140,17 @@ function taskBearingFile(framework: SpecFramework): string | null {
  * NOT stale by this check: there is no progress artifact yet to call "no
  * progress" against. A convention with no task-bearing file at all (e.g. a
  * single-file ADR) never counts as stuck, for the same reason.
+ *
+ * Deliberately narrow: a task list with every item unchecked is NOT stale,
+ * only a genuinely empty stub is. This check has no time signal anywhere —
+ * it cannot tell a spec broken into tasks yesterday from one abandoned six
+ * months ago. Flagging "written but unstarted" as abandonment would
+ * reintroduce false positives on ordinary in-progress work, one step after
+ * removing them (the whole reason this fix exists). A bare stub, by
+ * contrast, is unambiguous without any recency information: the
+ * convention's own triad says this file should hold tasks, and it holds
+ * none. Do not widen this to "all unchecked" — see the pinned regression
+ * test below for that exact case.
  */
 function isStuckWithNoProgress(r: SpecRecord): boolean {
   const taskFile = taskBearingFile(r.framework);
@@ -1195,9 +1206,9 @@ export function detectStaleSpecs(
   const evidence = [
     inheritedNote(
       origin,
-      `${stale.length} of ${judged} record(s) with a recognized status are still in flight`
+      `${stale.length} of ${judged} record(s) with a recognized status are stalled (active with zero task progress)`
     ),
-    ...stale.slice(0, 10).map((s) => inheritedNote(origin, `in flight: ${s}`)),
+    ...stale.slice(0, 10).map((s) => inheritedNote(origin, `stalled: ${s}`)),
   ];
   if (unknown.length > 0) {
     evidence.push(

@@ -834,13 +834,56 @@ test('SDD-06: an active record with an empty tasks.md stub is counted stale — 
   writeFileSync(join(specDir, 'tasks.md'), '# Tasks\n\nComing soon.\n');
   const r = detectStaleSpecs(t);
   assert.ok(
-    r.evidence.some((e) => /in flight/i.test(e) && e.includes('001-stuck')),
-    `an active record with a task file showing zero task items must be reported as in flight, got: ${JSON.stringify(r.evidence)}`
+    r.evidence.some((e) => /stalled/i.test(e) && e.includes('001-stuck')),
+    `an active record with a task file showing zero task items must be reported as stalled, got: ${JSON.stringify(r.evidence)}`
+  );
+  assert.ok(
+    r.evidence.some((e) =>
+      e.includes(
+        '1 of 1 record(s) with a recognized status are stalled (active with zero task progress)'
+      )
+    ),
+    `the headline must say "stalled", not "in flight" — "in flight" describes any active record, "stalled" describes the narrower active-and-zero-progress condition this check actually flags, got: ${JSON.stringify(r.evidence)}`
+  );
+  assert.ok(
+    r.evidence.every((e) => !/in flight/i.test(e)),
+    `evidence must not use the retired "in flight" wording anywhere, got: ${JSON.stringify(r.evidence)}`
   );
   assert.notEqual(
     r.status,
     'PASS',
     'the only record is active and has made zero task progress — this is exactly the abandonment case, must not PASS'
+  );
+});
+
+test('SDD-06: an active record whose tasks.md has items, all unchecked, is NOT stale — deliberately narrower than "zero checked"', () => {
+  // This check has no time signal: it cannot tell a task list broken down
+  // yesterday from one abandoned six months ago. A populated-but-unticked
+  // list is ordinary in-progress work, not an abandoned stub — flagging it
+  // would reintroduce the false-positive class this fix was reopened to
+  // remove. Only a genuinely empty task list (no `- [ ]` / `- [x]` lines at
+  // all) counts as stalled. Pinned so a future "restore the pre-branch
+  // all-unchecked signal" change gets caught here first.
+  const t = tmp();
+  const specDir = join(t, 'context', 'spec', '001-unstarted');
+  mkdirSync(specDir, { recursive: true });
+  writeFileSync(
+    join(specDir, 'functional-spec.md'),
+    '# Spec\n\n- **Status:** Draft\n'
+  );
+  writeFileSync(
+    join(specDir, 'tasks.md'),
+    '# Tasks\n\n- [ ] Design it\n- [ ] Build it\n- [ ] Ship it\n'
+  );
+  const r = detectStaleSpecs(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'a task list with items, even if none are checked yet, is not the abandonment signal this check flags'
+  );
+  assert.ok(
+    r.evidence.every((e) => !e.startsWith('stalled:')),
+    `no per-record "stalled:" evidence line is expected when its task list has items, got: ${JSON.stringify(r.evidence)}`
   );
 });
 
@@ -850,7 +893,7 @@ test('SDD-06: SKIP when the status line is the unedited template menu, not a cho
   // options, not a value. recordStatus() returns that whole string verbatim,
   // and it must match neither statusActive nor statusTerminal by exact
   // equality, so an unedited spec is excluded from the ratio instead of
-  // being counted as actively in flight.
+  // being counted as active (and therefore eligible to be flagged stalled).
   const t = tmp();
   const specDir = join(t, 'context', 'spec', '001-unedited');
   mkdirSync(specDir, { recursive: true });
@@ -1445,8 +1488,8 @@ test('SDD-06 recognizes AWOS status even in the real bullet/bold template format
       '# Functional Specification: Real feature\n\n- **Status:** Draft\n- **Author:** Someone\n'
     );
     // An empty tasks.md stub, so this record also clears the no-progress
-    // condition and shows up as "in flight" — proving the bullet-format
-    // status is actually being read, not just failing to SKIP by accident.
+    // condition and shows up as stalled — proving the bullet-format status
+    // is actually being read, not just failing to SKIP by accident.
     writeFileSync(join(spec, 'tasks.md'), '# Tasks\n\nTBD.\n');
     const r = detectStaleSpecs(repo);
     assert.notEqual(
@@ -1455,8 +1498,8 @@ test('SDD-06 recognizes AWOS status even in the real bullet/bold template format
       'the real "- **Status:** Draft" bullet format must be recognized, not read as "no status declared"'
     );
     assert.ok(
-      r.evidence.some((e) => /in flight/i.test(e)),
-      `Draft is an active AWOS status with zero task progress and must show up as in flight, got: ${JSON.stringify(r.evidence)}`
+      r.evidence.some((e) => /stalled/i.test(e)),
+      `Draft is an active AWOS status with zero task progress and must show up as stalled, got: ${JSON.stringify(r.evidence)}`
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });

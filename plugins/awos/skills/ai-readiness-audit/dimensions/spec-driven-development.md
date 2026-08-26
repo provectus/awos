@@ -91,7 +91,7 @@ Audits whether the project practises spec-driven development by any recognized c
 
 ### SDD-06: No stale or abandoned specs
 
-- **What:** An active record is only flagged when its convention's task artifact also shows zero progress — abandoned mid-workflow, not merely in flight. Staleness is judged against each convention's own status vocabulary and task artifact, not AWOS's.
+- **What:** An active record is only flagged when its convention's task artifact is completely empty — no task items listed at all — not merely unstarted with items still unchecked. Staleness is judged against each convention's own status vocabulary and task artifact, not AWOS's.
 - **How:**
   1. Read each record's declared status from its status-bearing file — the first triad file for a multi-file convention (`functional-spec.md` for AWOS), or the record itself for a single-file ADR
   2. Classify the status against the owning convention's own vocabulary:
@@ -99,11 +99,12 @@ Audits whether the project practises spec-driven development by any recognized c
      - Kiro / Agent-OS / GitHub Spec Kit: active = Draft, In Progress; terminal = Done, Completed
      - ADR: active = Proposed, Draft; terminal = Accepted, Superseded, Deprecated, Rejected
   3. A record whose declared status matches neither list by exact equality — including an unedited status placeholder, such as AWOS's shipped template menu `Draft | In Review | Approved | Completed` — declares no recognized status and is excluded from the ratio rather than counted either way
-  4. A terminal record is settled and is never stale. An active record alone is not abandonment — a spec opened five minutes ago is also "active" — so it only counts as stale when the convention's task-bearing record file (the `recordTriad` member whose name looks like a task list, e.g. `tasks.md`) both exists and shows zero task items (no `- [ ]` / `- [x]` lines at all). A record whose task file hasn't been authored yet is not counted stale — there is no progress artifact yet to call "no progress" against. A convention with no task-bearing file at all (a single-file ADR has none) can never contribute a stale record; that PASS is the honest outcome for a practice this check has no progress signal for, not a gap in the check
-  5. Count how many judged records are both active and stuck at zero task progress
-- **Pass:** None of the judged records are still active
-- **Warn:** A minority of judged records are active (at most 2, and at most half of the judged records)
-- **Fail:** Otherwise — active records are not a minority
+  4. A terminal record is settled and is never stale. An active record alone is not abandonment — a spec opened five minutes ago is also "active" — so it only counts as stale when the convention's task-bearing record file (the `recordTriad` member whose name looks like a task list, e.g. `tasks.md`) both exists and shows zero task items (no `- [ ]` / `- [x]` lines at all, checked or unchecked). A record whose task file hasn't been authored yet is not counted stale — there is no progress artifact yet to call "no progress" against. A convention with no task-bearing file at all (a single-file ADR has none) can never contribute a stale record; that PASS is the honest outcome for a practice this check has no progress signal for, not a gap in the check
+  5. A task list with items present but every one still unchecked is deliberately **not** flagged, even though it looks superficially similar to a stale spec. This check has no time signal anywhere: it cannot tell a task list written yesterday from one abandoned six months ago. Flagging "written but unstarted" as abandonment would fail an ordinary spec whose tasks were broken down today and will start tomorrow — the exact false-positive class this check exists to avoid. An empty stub is unambiguous without any recency information; a populated-but-unticked list is not
+  6. Count how many judged records are **stalled** — active AND stuck at zero task items
+- **Pass:** None of the judged records are stalled
+- **Warn:** A minority of judged records are stalled (at most 2, and at most half of the judged records)
+- **Fail:** Otherwise — stalled records are not a minority
 - **Skip-When:** No spec or decision records exist under any recognized convention, or none of them declares a status this check recognizes
 - **Severity:** medium
 - **Category:** 2805

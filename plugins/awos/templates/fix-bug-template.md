@@ -14,8 +14,9 @@ Fixed prose outside brackets survives into the generated command as-is.
 This entire comment is instructions to the generator: do NOT copy it, or any
 adaptation of it, into the generated file. The generated command starts at the
 frontmatter and carries no top-of-file comment — provenance lives in the
-footer marker, and "re-run /awos:flow to change a decision" belongs in the
-intro paragraph, one sentence, not a comment block. The generated command must
+footer marker, and the intro's "change this command by re-running" paragraph
+is fixed prose: keep it, never restate it as a comment block. The generated
+command must
 also be self-contained: never reference the sibling command ("same as
 implement-feature") — the commands know nothing about each other at run time.
 
@@ -34,6 +35,8 @@ middle changes.
 # Fix a Bug End-to-End
 
 Takes one bug — its report from [source per §1 of delivery-flow.md, a bug report rather than a feature ticket] — and drives it through diagnosis, a scoped fix with a regression test, re-verification of the touched acceptance criteria, and delivery until it is closed. On the way it keeps the owning spec honest: when the fix changes documented behavior, it amends that spec rather than letting it drift.
+
+Change this command by re-running `/awos:flow`. It is generated from `context/product/delivery-flow.md`, which is the source of truth for every decision below, and a regeneration rewrites this file from that record — so an edit made here lasts only once it is recorded, either in the record's **Local Customizations** section or as a decision of its own.
 
 ## Notifications
 

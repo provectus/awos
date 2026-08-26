@@ -1402,6 +1402,41 @@ test('generated commands carry the hops-style Self-Improvement Loop with governe
   );
 });
 
+test('generated commands route a would-be editor to the decision record', () => {
+  // The generated command is derived from context/product/delivery-flow.md and
+  // is rewritten from it on every regeneration, but nothing in the file said
+  // so: a hand-edit inside a stage survives only once Step 6 promotes it into
+  // Local Customizations, and the first regeneration after the edit is a
+  // single point of failure (canary flow-rerun-preserves-manual-edits). The
+  // intro paragraph is the one place a reader looks before editing, so the
+  // routing sentence is fixed prose in both templates rather than a generator
+  // instruction the generator may or may not emit.
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    const intro = lineWith(body, /Change this command by re-running/);
+    assert.ok(
+      intro !== '',
+      `${tmpl} intro must carry the "Change this command by re-running \`/awos:flow\`" routing paragraph as fixed prose — a generator instruction alone does not guarantee it reaches the generated command`
+    );
+    assert.ok(
+      /context\/product\/delivery-flow\.md/.test(intro) &&
+        /source of truth/i.test(intro),
+      `${tmpl} routing paragraph must name context/product/delivery-flow.md as the source of truth — a reader who does not know the file is derived has no reason to look there before editing`
+    );
+    assert.ok(
+      /regeneration rewrites this file/i.test(intro) &&
+        /\*\*Local Customizations\*\*/.test(intro),
+      `${tmpl} routing paragraph must state that regeneration rewrites the file and that an edit lasts only once recorded (Local Customizations) — the risk is what routes the reader, not the mechanism`
+    );
+  }
+
+  const flow = readUtf8(pluginCommandsDir + '/flow.md');
+  assert.ok(
+    /change this command by re-running/i.test(flow),
+    'flow.md Step 6 must tell the generator the intro routing paragraph is fixed prose carried through as-is, so it is never dropped or rewritten as a comment'
+  );
+});
+
 test('generated commands are clean, self-contained, and interaction-explicit', () => {
   // Road-test #3 feedback (sde-automation PR #26): the regenerated
   // commands copied the template's generator-facing header comment into

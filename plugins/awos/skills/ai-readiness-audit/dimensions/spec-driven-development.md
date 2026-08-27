@@ -8,7 +8,7 @@ depends-on: [project-topology]
 
 # Spec-Driven Development
 
-Audits whether the project practises spec-driven development by any recognized convention — AWOS, Kiro, Agent-OS, GitHub Spec Kit, or an ADR/design-doc practice — and whether its specs, architecture, and task assignments stay healthy over the project's life. Each convention provides its own structured workflow for designing work before it is built and recording that design where the next person or agent will find it; AWOS's version runs product definition, roadmap, architecture, functional specs, technical considerations, task breakdown with agent assignments, implementation, and verification. The checks below credit whichever convention a project actually uses, not AWOS specifically.
+Audits whether the project practises spec-driven development by any recognized convention — AWOS, Kiro, Agent-OS, GitHub Spec Kit, OpenSpec, GSD, or an ADR/design-doc practice — and whether its specs, architecture, and task assignments stay healthy over the project's life. Each convention provides its own structured workflow for designing work before it is built and recording that design where the next person or agent will find it; AWOS's version runs product definition, roadmap, architecture, functional specs, technical considerations, task breakdown with agent assignments, implementation, and verification. The checks below credit whichever convention a project actually uses, not AWOS specifically — the full registry (markers, spec roots, record file sets, status vocabularies) is the single source of truth in `spec_frameworks.ts`, so a new convention is added in one place and every check below picks it up.
 
 ## Checks
 
@@ -18,7 +18,7 @@ Audits whether the project practises spec-driven development by any recognized c
 - **How:**
   1. Check for AWOS first: `.awos/commands/*.md` (5+ command files) present, and either `context/product/` or `context/spec/` present
   2. AWOS counts as only partially adopted when just one half is present — the `.awos/` framework without a populated `context/product`/`context/spec`, or the reverse
-  3. If no AWOS marker is found, check the other recognized conventions: Kiro (`.kiro/specs/`), Agent-OS (`.agent-os/specs/`), GitHub Spec Kit (`.specify` or `specs/`), or an ADR/design-doc practice (`docs/adr/`, `doc/adr/`, `docs/decisions/`, `docs/rfcs/`, `design-docs/`). The ADR practice must clear a minimum of 3 records under its root to count as adopted — a single stray decision file is not a practice.
+  3. If no AWOS marker is found, check the other recognized conventions: Kiro (`.kiro/specs/`), Agent-OS (`.agent-os/specs/`), GitHub Spec Kit (`.specify` or `specs/`), OpenSpec (`openspec/`), GSD (`.planning/`), or an ADR/design-doc practice (`docs/adr/`, `doc/adr/`, `docs/decisions/`, `docs/rfcs/`, `design-docs/`). The ADR practice must clear a minimum of 3 records under its root to count as adopted — a single stray decision file is not a practice.
   4. For whichever convention's marker is found, check whether its spec root actually holds records, not just the marker
 - **Pass:** AWOS is fully set up (framework installed and at least one of `context/product`/`context/spec` populated), OR another recognized convention is in use and holds real records
 - **Warn:** AWOS is partially set up (only the framework or only the context directories present), OR another convention's marker is present but its spec root holds no records yet
@@ -31,8 +31,8 @@ Audits whether the project practises spec-driven development by any recognized c
 - **What:** The project records its product definition, roadmap, and architecture — under AWOS's filenames or a conventional equivalent
 - **How:**
   1. For each of the three foundational documents, check the first substantive match among its candidates:
-     - Product definition: `context/product/product-definition.md`, `context/product/product.md`, `docs/product.md`, `docs/product-definition.md`, `PRODUCT.md`, `docs/vision.md`
-     - Roadmap: `context/product/roadmap.md`, `docs/roadmap.md`, `ROADMAP.md`, `docs/milestones.md`
+     - Product definition: `context/product/product-definition.md`, `context/product/product.md`, `docs/product.md`, `docs/product-definition.md`, `PRODUCT.md`, `docs/vision.md`, `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md` (GSD)
+     - Roadmap: `context/product/roadmap.md`, `docs/roadmap.md`, `ROADMAP.md`, `docs/milestones.md`, `.planning/ROADMAP.md` (GSD)
      - Architecture record: `context/architecture/architecture.md`, `context/product/architecture.md`, `docs/architecture.md`, `ARCHITECTURE.md`, `docs/adr/README.md`, `docs/adr/index.md`, `docs/decisions/README.md`
   2. A document only counts if it is substantive — more than 5 non-blank lines
   3. For monorepos: also check service-level `*/context/product/` directories if detected in the topology artifact
@@ -63,7 +63,7 @@ Audits whether the project practises spec-driven development by any recognized c
 ### SDD-04: Features are implemented through specs
 
 - **What:** Significant features are built through a spec workflow (spec → tech → tasks → implement, or the equivalent stages of whichever convention is in use), not by ad-hoc prompting. Feature branches should show spec activity — tasks checked off, status updates — as evidence that specs drove the work.
-- **How:** Computed deterministically over the trunk's audit window (`[meta].max_lookback_days`, 90 by default). The denominator is merged feature work — first-parent merge commits plus squash/rebase-merged PRs (forge PR ref on the subject) — so repos whose CI deletes branches after merge still count all delivered work, not just currently-open branches. An event counts as spec-driven when its first-parent diff touched a recognised spec directory (`context/spec/`, `specs/`, `.kiro/specs/`, `.agent-os/specs/`, `docs/specs/`). Repos with no merge/PR workflow fall back to evaluating live feature branches against the trunk.
+- **How:** Computed deterministically over the trunk's audit window (`[meta].max_lookback_days`, 90 by default). The denominator is merged feature work — first-parent merge commits plus squash/rebase-merged PRs (forge PR ref on the subject) — so repos whose CI deletes branches after merge still count all delivered work, not just currently-open branches. An event counts as spec-driven when its first-parent diff touched a recognised spec directory — every recognized convention's own spec root (`context/spec/`, `.kiro/specs/`, `.agent-os/specs/`, `openspec/changes/`, `.planning/phases/`, …), plus the generic `specs/`, `spec/`, and `docs/specs/` conventions not tied to one framework. Repos with no merge/PR workflow fall back to evaluating live feature branches against the trunk.
 - **Pass:** 70%+ of feature branches touched spec files (tasks checked off, status updated)
 - **Warn:** 30-69% of feature branches touched spec files
 - **Fail:** Fewer than 30% of feature branches touched spec files, OR zero spec directories exist despite active development
@@ -74,14 +74,16 @@ Audits whether the project practises spec-driven development by any recognized c
 
 - **What:** Every spec/decision record under a recognized convention contains the file set — or, for a single-file ADR, the sections — that convention requires to be complete
 - **How:**
-  1. Enumerate every record under every recognized convention in use: AWOS's numbered `context/spec/NNN-*/` directories, Kiro's `.kiro/specs/*/`, Agent-OS's `.agent-os/specs/*/`, GitHub Spec Kit's `specs/*/`, or individual markdown files under an ADR root
+  1. Enumerate every record under every recognized convention in use: AWOS's numbered `context/spec/NNN-*/` directories, Kiro's `.kiro/specs/*/`, Agent-OS's `.agent-os/specs/*/`, GitHub Spec Kit's `specs/*/`, OpenSpec's `openspec/changes/*/`, GSD's `.planning/phases/*/`, or individual markdown files under an ADR root
   2. For a multi-file convention, check for its required record files:
      - AWOS: `functional-spec.md`, `technical-considerations.md`, `tasks.md`
      - Kiro: `requirements.md`, `design.md`, `tasks.md`
      - Agent-OS: `spec.md`, `tasks.md`
      - GitHub Spec Kit: `spec.md`, `plan.md`, `tasks.md`
-  3. For the single-file ADR convention, check for the required headings instead: `Status`, `Context`, `Decision`, `Consequences`
-  4. Each record earns fractional credit — elements present divided by elements required — rather than a binary complete/incomplete verdict. Average that credit across every record in the repo; a single spec missing only one file must not swing an otherwise-healthy repo to a hard FAIL.
+     - OpenSpec: `proposal.md`, `tasks.md` (`design.md` is optional per OpenSpec's own convention, so it is not required)
+  3. GSD's records are pattern-named rather than a fixed file set — a phase directory is complete once it holds at least one file matching `*-PLAN.md` (e.g. `03-01-PLAN.md`)
+  4. For the single-file ADR convention, check for the required headings instead: `Status`, `Context`, `Decision`, `Consequences`
+  5. Each record earns fractional credit — elements present divided by elements required — rather than a binary complete/incomplete verdict. Average that credit across every record in the repo; a single spec missing only one file must not swing an otherwise-healthy repo to a hard FAIL.
 - **Pass:** Average credit across all records is 90%+
 - **Warn:** Average credit is 50-89%
 - **Fail:** Average credit is below 50%
@@ -91,20 +93,20 @@ Audits whether the project practises spec-driven development by any recognized c
 
 ### SDD-06: No stale or abandoned specs
 
-- **What:** An active record is only flagged when its convention's task artifact is completely empty — no task items listed at all — not merely unstarted with items still unchecked. Staleness is judged against each convention's own status vocabulary and task artifact, not AWOS's.
+- **What:** A record is flagged when its status is in its convention's active vocabulary — status alone, not task-list progress. Staleness is judged against each convention's own status vocabulary, not AWOS's, and against a ratio that scales with how many records the project has.
 - **How:**
-  1. Read each record's declared status from its status-bearing file — the first triad file for a multi-file convention (`functional-spec.md` for AWOS), or the record itself for a single-file ADR
+  1. Read each record's declared status from its status-bearing file — the first triad file for a multi-file convention (`functional-spec.md` for AWOS), the record itself for a single-file ADR, or — for a convention that tracks status once for the whole project rather than per record (GSD's `.planning/STATE.md`) — that one shared file, applied to every record of the convention
   2. Classify the status against the owning convention's own vocabulary:
      - AWOS: active = Draft, In Review, Approved; terminal = Completed
-     - Kiro / Agent-OS / GitHub Spec Kit: active = Draft, In Progress; terminal = Done, Completed
+     - Kiro / Agent-OS / GitHub Spec Kit / OpenSpec: active = Draft, In Progress (Proposed for OpenSpec); terminal = Done, Completed (Approved/Archived/Deployed for OpenSpec)
      - ADR: active = Proposed, Draft; terminal = Accepted, Superseded, Deprecated, Rejected
+     - GSD (project-level, from `.planning/STATE.md`'s `status:` frontmatter): active = discussing, planning, executing, verifying, paused, stopped; terminal = complete, completed, done
   3. A record whose declared status matches neither list by exact equality — including an unedited status placeholder, such as AWOS's shipped template menu `Draft | In Review | Approved | Completed` — declares no recognized status and is excluded from the ratio rather than counted either way
-  4. A terminal record is settled and is never stale. An active record alone is not abandonment — a spec opened five minutes ago is also "active" — so it only counts as stale when the convention's task-bearing record file (the `recordTriad` member whose name looks like a task list, e.g. `tasks.md`) both exists and shows zero task items (no `- [ ]` / `- [x]` lines at all, checked or unchecked). A record whose task file hasn't been authored yet is not counted stale — there is no progress artifact yet to call "no progress" against. A convention with no task-bearing file at all (a single-file ADR has none) can never contribute a stale record; that PASS is the honest outcome for a practice this check has no progress signal for, not a gap in the check
-  5. A task list with items present but every one still unchecked is deliberately **not** flagged, even though it looks superficially similar to a stale spec. This check has no time signal anywhere: it cannot tell a task list written yesterday from one abandoned six months ago. Flagging "written but unstarted" as abandonment would fail an ordinary spec whose tasks were broken down today and will start tomorrow — the exact false-positive class this check exists to avoid. An empty stub is unambiguous without any recency information; a populated-but-unticked list is not
-  6. Count how many judged records are **stalled** — active AND stuck at zero task items
-- **Pass:** None of the judged records are stalled
-- **Warn:** A minority of judged records are stalled (at most 2, and at most half of the judged records)
-- **Fail:** Otherwise — stalled records are not a minority
+  4. A terminal record is settled and is never flagged. An active record is flagged regardless of how much of its task list is checked off, or whether it has a task list at all — there is no task-progress signal in this check. A project just starting out is not the audience this check scores against (it runs on projects already shown to the audit plugin), so the "five-minutes-old spec reads as abandoned" false positive an earlier task-progress condition guarded against does not arise in practice
+  5. Count how many judged records are **active**
+- **Pass:** None of the judged records are active
+- **Warn:** Fewer than half of the judged records are active
+- **Fail:** Half or more of the judged records are active
 - **Skip-When:** No spec or decision records exist under any recognized convention, or none of them declares a status this check recognizes
 - **Severity:** medium
 - **Category:** 2805

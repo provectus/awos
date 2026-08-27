@@ -243,6 +243,51 @@ test('detectBidirectionalLinks: spec exists but no impl cross-refs → WARN', ()
   );
 });
 
+test('detectBidirectionalLinks: impl→spec regex recognizes OpenSpec and GSD paths (registry-derived)', () => {
+  // SPEC_REF_RX is now built from the SPEC_FRAMEWORKS registry
+  // (spec_frameworks.ts) instead of a hand-maintained duplicate — this pins
+  // that the two frameworks added by that rework (OpenSpec, GSD) are
+  // actually recognized by the impl→spec half, not just present in the
+  // registry.
+  const t = tmp();
+  mkdirSync(join(t, 'context', 'spec', '001-x'), { recursive: true });
+  writeFileSync(
+    join(t, 'context', 'spec', '001-x', 'functional-spec.md'),
+    '# X\n\nImplemented in `src/x.ts`\n'
+  );
+  mkdirSync(join(t, 'src'), { recursive: true });
+  writeFileSync(
+    join(t, 'src', 'x.ts'),
+    '// See openspec/changes/add-thing/proposal.md\nexport const x = 1;\n'
+  );
+  const r = detectBidirectionalLinks(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'a source file referencing an openspec/changes/ path must count as an impl→spec reference'
+  );
+});
+
+test('detectBidirectionalLinks: impl→spec regex recognizes a GSD .planning/phases/ path', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'context', 'spec', '001-x'), { recursive: true });
+  writeFileSync(
+    join(t, 'context', 'spec', '001-x', 'functional-spec.md'),
+    '# X\n\nImplemented in `src/x.ts`\n'
+  );
+  mkdirSync(join(t, 'src'), { recursive: true });
+  writeFileSync(
+    join(t, 'src', 'x.ts'),
+    '// Plan: .planning/phases/01-init/01-01-PLAN.md\nexport const x = 1;\n'
+  );
+  const r = detectBidirectionalLinks(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'a source file referencing a .planning/phases/ path must count as an impl→spec reference'
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectLayerCoverage — category 2303 (SBP-09, method: detected)
 // applies_when: topology.has_multiple_layers

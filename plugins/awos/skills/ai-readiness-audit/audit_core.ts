@@ -1087,6 +1087,7 @@ export async function auditCore(
     linked_repos: linkedRepos,
     tech_stack: techStack,
     detection_conflicts: detectionConflicts,
+    orchestration_root: orchestrationRoot,
     derived_delivery: computeDerivedDelivery(
       collectedDir,
       trackerArt,

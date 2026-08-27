@@ -11,6 +11,7 @@ import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { CI_CONFIG_CANDIDATES } from '../ci_platforms.ts';
 import { ALL_SOURCE_GLOBS } from '../languages.ts';
+import { buildSpecRefPattern } from '../spec_frameworks.ts';
 
 // ---------------------------------------------------------------------------
 // detectVerticalDelivery — category 2300 (SBP-08, method: computed)
@@ -282,8 +283,10 @@ export function detectVerticalDelivery(
 // ---------------------------------------------------------------------------
 
 const IMPL_PATH_RX = /(?:^|[^\w])(src|app|lib|packages?|cmd|internal|pkg)\//i;
-const SPEC_REF_RX =
-  /context\/spec\/\d{3}-|(?<!\/)spec\/\d{3}-|\.specify\/|openspec\/|specs?\/[\w-]+\/(spec|design|tasks)\.md/i;
+// Derived from the SPEC_FRAMEWORKS registry (spec_frameworks.ts) — the same
+// single source of truth SDD-01/04/05/06 read — rather than a hand-maintained
+// duplicate that silently drifts from it.
+const SPEC_REF_RX = buildSpecRefPattern();
 
 const SPEC_REL_PATH = 'context/spec';
 

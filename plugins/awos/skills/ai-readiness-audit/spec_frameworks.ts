@@ -23,12 +23,26 @@ export interface SpecFramework {
   specRoots: string[];
   /** Files that together make one record complete. Empty for single-file practices. */
   recordTriad: string[];
+  /**
+   * Alternative to `recordTriad` for a convention whose record files are
+   * pattern-named rather than fixed (e.g. GSD's `NN-PP-PLAN.md`). A record
+   * directory is structurally complete when at least one of its files
+   * matches. A framework declares one or the other, never both.
+   */
+  recordFilePattern?: RegExp;
   /** Headings a single-file record must carry to be complete. */
   recordSections: string[];
   /** Status values meaning the record is still in flight. */
   statusActive: string[];
   /** Status values meaning the record is settled. */
   statusTerminal: string[];
+  /**
+   * Repo-relative path to a single project-level status file (e.g. GSD's
+   * `.planning/STATE.md`), for a convention that tracks status once for the
+   * whole project rather than per record. When set, every record of this
+   * framework is judged against this one file's status instead of its own.
+   */
+  projectStatusFile?: string;
 }
 
 /** Minimum records before a decision-record practice counts as adopted. */
@@ -111,6 +125,56 @@ export const SPEC_FRAMEWORKS: readonly SpecFramework[] = [
     statusActive: ['Proposed', 'Draft'],
     statusTerminal: ['Accepted', 'Superseded', 'Deprecated', 'Rejected'],
   },
+  {
+    id: 'openspec',
+    label: 'OpenSpec',
+    // openspec/ also holds a project.md and an archived/deployed specs/
+    // tree; changes/ is where individual proposals — the actual records —
+    // live, one directory per change (proposal.md, tasks.md, and an
+    // optional design.md). design.md is intentionally not required: it is
+    // documented as optional, and requiring it would penalize a project
+    // using OpenSpec correctly.
+    markers: ['openspec'],
+    specRoots: ['openspec/changes'],
+    recordTriad: ['proposal.md', 'tasks.md'],
+    recordSections: [],
+    // OpenSpec does not publish a `Status:` field on proposal.md — a change
+    // is "active" simply by living under changes/ and "terminal" once moved
+    // to changes/archive/. This check reads status from record content, not
+    // directory location, so these values are a best-effort placeholder: if
+    // a project's proposal.md never declares one of them, its records fall
+    // out of the ratio as "no recognized status" (see detectStaleSpecs)
+    // rather than being scored either way.
+    statusActive: ['Draft', 'In Progress', 'Proposed'],
+    statusTerminal: ['Approved', 'Archived', 'Completed', 'Deployed'],
+  },
+  {
+    id: 'gsd',
+    label: 'GSD',
+    // "Git. Ship. Done." — https://github.com/open-gsd/gsd-core
+    markers: ['.planning'],
+    specRoots: ['.planning/phases'],
+    recordTriad: [],
+    // GSD's records are pattern-named (03-01-PLAN.md, 03-02-PLAN.md, …)
+    // rather than a fixed file set — a phase directory is structurally
+    // complete once it holds at least one matching file.
+    recordFilePattern: /-PLAN\.md$/,
+    recordSections: [],
+    // Status is tracked once for the whole project in .planning/STATE.md's
+    // YAML frontmatter (`status: executing`), not per record — see
+    // projectStatusFile. Every phase directory is judged against this one
+    // vocabulary.
+    statusActive: [
+      'discussing',
+      'planning',
+      'executing',
+      'verifying',
+      'paused',
+      'stopped',
+    ],
+    statusTerminal: ['complete', 'completed', 'done'],
+    projectStatusFile: '.planning/STATE.md',
+  },
 ];
 
 /** Count markdown records directly under `dir`. */
@@ -176,4 +240,62 @@ export function specRootsFor(
       roots.push({ path: probe.path, origin: probe.origin, rel });
   }
   return roots;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// A specRoot equal to one of these is a generic conventional directory name
+// also used for non-spec purposes (RSpec/Jest test suites live in specs/ and
+// spec/ too) — it cannot be matched bare and is left to the generic
+// filename-based pattern below instead.
+const AMBIGUOUS_ROOT_NAMES = new Set(['specs', 'spec']);
+
+/**
+ * A single regex recognizing an impl-file reference to a spec/decision
+ * record under any recognized convention — the single source of truth for
+ * DOC-07's spec-reference matching, built from the same registry SDD-01/04/05/06
+ * read instead of a hand-maintained duplicate.
+ */
+export function buildSpecRefPattern(): RegExp {
+  const alternatives: string[] = [];
+
+  for (const fw of SPEC_FRAMEWORKS) {
+    // A decision record (ADR) is not a spec↔impl cross-reference in the
+    // sense DOC-07 measures — it documents a choice, not a plan an
+    // implementation traces back to.
+    if (fw.id === 'adr') continue;
+    for (const root of fw.specRoots) {
+      if (AMBIGUOUS_ROOT_NAMES.has(root)) continue;
+      alternatives.push(
+        fw.id === 'awos'
+          ? // AWOS numbers its records — require the numeric prefix, matching
+            // its own convention (and the pre-existing behavior here).
+            `${escapeRegex(root)}\\/\\d{3}-`
+          : `${escapeRegex(root)}\\/`
+      );
+    }
+  }
+
+  // Spec Kit's specRoot ("specs") is ambiguous on its own, but its install
+  // marker (.specify/) is unique enough to count as a reference by itself.
+  alternatives.push('\\.specify\\/');
+
+  // Generic multi-file record pattern: any specs?/ root — numbered or not —
+  // whose record holds one of the file names a recognized multi-file
+  // framework uses. Covers records living directly under a plain specs/ or
+  // spec/ directory rather than a dotted framework root.
+  const recordFiles = new Set<string>();
+  for (const fw of SPEC_FRAMEWORKS) {
+    for (const f of fw.recordTriad) recordFiles.add(f);
+  }
+  alternatives.push(
+    `specs?\\/[\\w-]+\\/(?:${[...recordFiles].map(escapeRegex).join('|')})`
+  );
+  // A bare numbered spec/NNN- convention outside context/ — not owned by any
+  // named framework, so not derivable from the registry.
+  alternatives.push('(?<!\\/)spec\\/\\d{3}-');
+
+  return new RegExp(alternatives.join('|'), 'i');
 }

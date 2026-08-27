@@ -155,7 +155,10 @@ function isSubstantive(filePath: string): boolean {
 // Each inner array is one required slot; the first path present and
 // substantive satisfies it. AWOS filenames come first because they are the
 // most specific, but a project that documents the same three things under
-// conventional names has the same capability.
+// conventional names has the same capability. GSD's .planning/PROJECT.md and
+// .planning/REQUIREMENTS.md land in the product-definition slot — both
+// describe what the product is and needs, which is the closer fit; GSD has
+// no equivalent of an architecture record, so nothing is added to that slot.
 const FOUNDATIONAL_DOC_CANDIDATES = [
   [
     'context/product/product-definition.md',
@@ -164,12 +167,15 @@ const FOUNDATIONAL_DOC_CANDIDATES = [
     'docs/product-definition.md',
     'PRODUCT.md',
     'docs/vision.md',
+    '.planning/PROJECT.md',
+    '.planning/REQUIREMENTS.md',
   ],
   [
     'context/product/roadmap.md',
     'docs/roadmap.md',
     'ROADMAP.md',
     'docs/milestones.md',
+    '.planning/ROADMAP.md',
   ],
   [
     'context/architecture/architecture.md',
@@ -589,16 +595,22 @@ function listLocalBranches(repoPath: string): string[] {
   }
 }
 
-// Spec directories recognised across common spec-driven frameworks (not just AWOS).
-// A changed path counts as a spec-touch when it falls under any of these roots.
-const SPEC_DIRS = [
-  'context/spec/', // AWOS
-  'specs/',
-  'spec/',
-  '.kiro/specs/', // Kiro
-  '.agent-os/specs/', // Agent-OS
-  'docs/specs/',
-] as const;
+// Spec directories recognised across common spec-driven frameworks (not just
+// AWOS) — derived from the SPEC_FRAMEWORKS registry (spec_frameworks.ts),
+// the same single source of truth SDD-01/05/06 and DOC-07 read, rather than
+// a hand-maintained duplicate. A changed path counts as a spec-touch when it
+// falls under any of these roots.
+const SPEC_DIRS: readonly string[] = [
+  ...new Set([
+    ...SPEC_FRAMEWORKS.filter((fw) => fw.id !== 'adr') // decision records aren't feature specs
+      .flatMap((fw) => fw.specRoots)
+      .map((root) => (root.endsWith('/') ? root : `${root}/`)),
+    // Generic conventions not tied to one framework's marker.
+    'specs/',
+    'spec/',
+    'docs/specs/',
+  ]),
+];
 
 // `spec/` and `specs/` are also where RSpec/Jasmine/Jest keep their TEST
 // suites — those files are tests, not spec-driven-development artifacts.
@@ -950,7 +962,11 @@ interface SpecRecord {
 function listSpecRecords(repoPath: string, params?: unknown): SpecRecord[] {
   const out: SpecRecord[] = [];
   for (const { framework } of detectSpecFrameworks(repoPath, params)) {
-    const singleFile = framework.recordTriad.length === 0;
+    // A pattern-named convention (GSD) still keeps one directory per record,
+    // like a fixed-triad one — only a convention with neither (ADR) is
+    // single-file.
+    const singleFile =
+      framework.recordTriad.length === 0 && !framework.recordFilePattern;
     for (const root of specRootsFor(repoPath, framework, params)) {
       let entries: string[];
       try {
@@ -1033,6 +1049,27 @@ interface RecordCompleteness {
 }
 
 function recordCompleteness(r: SpecRecord): RecordCompleteness {
+  if (r.framework.recordFilePattern) {
+    // Pattern-named records (GSD's NN-PP-PLAN.md) are complete once at
+    // least one matching file exists in the record directory — there is no
+    // fixed file set to check off.
+    let hasMatch = false;
+    try {
+      hasMatch = readdirSync(r.path).some((f) =>
+        r.framework.recordFilePattern!.test(f)
+      );
+    } catch {
+      hasMatch = false;
+    }
+    return {
+      record: r,
+      present: hasMatch ? 1 : 0,
+      required: 1,
+      missing: hasMatch
+        ? []
+        : [`a file matching ${r.framework.recordFilePattern}`],
+    };
+  }
   if (r.framework.recordTriad.length > 0) {
     const present = r.framework.recordTriad.filter((f) =>
       existsSync(join(r.path, f))
@@ -1109,55 +1146,36 @@ export function detectSpecTriadComplete(
 // vocabulary (e.g. AWOS: Draft/In Review/Approved are active, Completed is
 // terminal; ADR: Proposed/Draft are active, Accepted/Superseded/Deprecated/
 // Rejected are terminal). A record whose status is terminal is settled, not
-// stale.
+// stale. A convention that tracks status once for the whole project rather
+// than per record (GSD's .planning/STATE.md) judges every one of its
+// records against that single status instead of reading each record's own
+// file — see SpecFramework.projectStatusFile.
 //
-// Active status alone is not abandonment: a spec opened five minutes ago is
-// also "active". A record counts as stale only when it is BOTH active AND
-// its convention's task-bearing record file — the recordTriad member whose
-// name looks like a task list — exists and shows zero task items (an empty
-// stub nobody has filled in yet). A convention with no task-bearing file
-// (e.g. a single-file ADR) has no progress artifact to observe and can never
-// contribute a stale record.
+// Status alone decides staleness: a record is stale when its status is in
+// its convention's active vocabulary, full stop. There is no task-progress
+// signal here — a just-started project is not the audience this check
+// scores (it runs against projects already shown to the audit plugin), so
+// the "freshly opened spec looks abandoned" false positive that an earlier
+// task-progress condition guarded against does not arise in practice.
 //
-// PASS if no judged records are both active and stuck at zero task progress.
-// WARN if a minority (<=2 and <=half of judged records) are.
-// FAIL otherwise.
+// PASS if none of the judged records are active.
+// WARN if fewer than half of the judged records are active.
+// FAIL if half or more of the judged records are active.
 // SKIP if no record declares a status this check recognizes.
 // ---------------------------------------------------------------------------
 
-/** Any checkbox line, checked or not — evidence that a task list has been started. */
-const TASK_ITEM_RX = /^\s*-\s*\[[ xX]\]/m;
-
-/** The record-triad member that holds task items, or null for a framework with none. */
-function taskBearingFile(framework: SpecFramework): string | null {
-  return framework.recordTriad.find((f) => /task/i.test(f)) ?? null;
-}
-
-/**
- * Whether an active record has made zero task progress — its convention's
- * task file exists but contains no task items at all. A record whose task
- * file doesn't exist yet (freshly created, not authored to that point) is
- * NOT stale by this check: there is no progress artifact yet to call "no
- * progress" against. A convention with no task-bearing file at all (e.g. a
- * single-file ADR) never counts as stuck, for the same reason.
- *
- * Deliberately narrow: a task list with every item unchecked is NOT stale,
- * only a genuinely empty stub is. This check has no time signal anywhere —
- * it cannot tell a spec broken into tasks yesterday from one abandoned six
- * months ago. Flagging "written but unstarted" as abandonment would
- * reintroduce false positives on ordinary in-progress work, one step after
- * removing them (the whole reason this fix exists). A bare stub, by
- * contrast, is unambiguous without any recency information: the
- * convention's own triad says this file should hold tasks, and it holds
- * none. Do not widen this to "all unchecked" — see the pinned regression
- * test below for that exact case.
- */
-function isStuckWithNoProgress(r: SpecRecord): boolean {
-  const taskFile = taskBearingFile(r.framework);
-  if (taskFile === null) return false;
-  const content = readTextSafe(join(r.path, taskFile));
-  if (content === null) return false;
-  return !TASK_ITEM_RX.test(content);
+/** The status-bearing file for one record — its own file, or the framework's single project-level file. */
+function statusFileFor(
+  r: SpecRecord,
+  repoPath: string,
+  params?: unknown
+): string | null {
+  if (r.framework.projectStatusFile) {
+    return probeRepoPath(repoPath, params, r.framework.projectStatusFile).path;
+  }
+  return r.framework.recordTriad.length > 0
+    ? join(r.path, r.framework.recordTriad[0])
+    : r.path;
 }
 
 export function detectStaleSpecs(
@@ -1175,40 +1193,35 @@ export function detectStaleSpecs(
     ? 'inherited'
     : 'own';
 
-  const stale: string[] = [];
+  const active: string[] = [];
   const unknown: string[] = [];
   let judged = 0;
   for (const r of records) {
-    const statusFile =
-      r.framework.recordTriad.length > 0
-        ? join(r.path, r.framework.recordTriad[0])
-        : r.path;
-    const status = recordStatus(statusFile);
-    const active = r.framework.statusActive.some(
+    const statusFile = statusFileFor(r, repoPath, params);
+    const status = statusFile === null ? null : recordStatus(statusFile);
+    const isActive = r.framework.statusActive.some(
       (v) => v.toLowerCase() === (status ?? '').toLowerCase()
     );
-    const terminal = r.framework.statusTerminal.some(
+    const isTerminal = r.framework.statusTerminal.some(
       (v) => v.toLowerCase() === (status ?? '').toLowerCase()
     );
-    if (!active && !terminal) {
+    if (!isActive && !isTerminal) {
       // Neither vocabulary matched: the record declares no status this
-      // convention recognizes. Counting it stale would punish a project for
+      // convention recognizes. Counting it active would punish a project for
       // a wording choice, so it leaves the ratio entirely.
       unknown.push(`${r.name} (status: ${status ?? 'none declared'})`);
       continue;
     }
     judged += 1;
-    if (active && isStuckWithNoProgress(r)) {
-      stale.push(`${r.framework.label}: ${r.name} (${status})`);
-    }
+    if (isActive) active.push(`${r.framework.label}: ${r.name} (${status})`);
   }
 
   const evidence = [
     inheritedNote(
       origin,
-      `${stale.length} of ${judged} record(s) with a recognized status are stalled (active with zero task progress)`
+      `${active.length} of ${judged} record(s) with a recognized status are active`
     ),
-    ...stale.slice(0, 10).map((s) => inheritedNote(origin, `stalled: ${s}`)),
+    ...active.slice(0, 10).map((s) => inheritedNote(origin, `active: ${s}`)),
   ];
   if (unknown.length > 0) {
     evidence.push(
@@ -1220,11 +1233,10 @@ export function detectStaleSpecs(
   }
 
   if (judged === 0) return makeResult('SKIP', 0, evidence);
-  if (stale.length === 0) return makeResult('PASS', 0, evidence);
-  if (stale.length <= 2 && stale.length <= judged / 2) {
-    return makeResult('WARN', stale.length, evidence);
-  }
-  return makeResult('FAIL', stale.length, evidence);
+  if (active.length === 0) return makeResult('PASS', 0, evidence);
+  const ratio = active.length / judged;
+  if (ratio < 0.5) return makeResult('WARN', active.length, evidence);
+  return makeResult('FAIL', active.length, evidence);
 }
 
 // ---------------------------------------------------------------------------

@@ -679,23 +679,22 @@ test('SDD-05: WARN exactly at the 0.5 ratio boundary (inclusive)', () => {
 //
 // Classifies every spec/decision record by its own convention's status
 // vocabulary, read from the record's status-bearing file (functional-spec.md
-// for AWOS, the record itself for a single-file ADR). A record whose status
-// is one of its convention's "terminal" values (AWOS Completed) is settled,
-// not stale. A record that declares no status this check recognizes is
-// excluded from the ratio rather than penalized.
+// for AWOS, the record itself for a single-file ADR — or, for a convention
+// that tracks status once for the whole project (GSD), one shared file every
+// record is judged against). A record whose status is one of its
+// convention's "terminal" values (AWOS Completed) is settled, not stale. A
+// record that declares no status this check recognizes is excluded from the
+// ratio rather than penalized.
 //
-// Active status alone is not abandonment — a spec opened five minutes ago is
-// also "active". A record only counts as stale when it is BOTH active AND
-// its convention's task-bearing file (e.g. tasks.md, found via
-// framework.recordTriad) exists and shows zero task items — the actual
-// empty-stub signal. A convention with no task-bearing file (a single-file
-// ADR) has no progress artifact to observe and can never contribute a stale
-// record.
+// Status alone decides staleness: a record is stale when its status is in
+// its convention's active vocabulary, full stop — there is no task-progress
+// signal. This check runs against projects already shown to the audit
+// plugin, so a freshly-opened spec being "active" five minutes in does not
+// arise as a false positive in practice.
 //
-// PASS if none of the judged records are both active and stuck at zero
-// task progress.
-// WARN if a minority (<=2 and <=half of judged records) are active.
-// FAIL otherwise.
+// PASS if none of the judged records are active.
+// WARN if fewer than half of the judged records are active.
+// FAIL if half or more of the judged records are active.
 // SKIP if no record exists, or none declares a recognized status.
 // ---------------------------------------------------------------------------
 
@@ -739,47 +738,71 @@ test('SDD-06: PASS when the record has reached a terminal status', () => {
   );
 });
 
-test('SDD-06: WARN when 1 of 2 active records is also stuck with no task progress', () => {
+test('SDD-06: WARN when fewer than half of judged records are active', () => {
   const t = tmp();
   writeRepo(t, {
     'context/spec/001-done/functional-spec.md':
       '# Spec\n\n- **Status:** Completed\n',
-    // Active AND its tasks.md is an empty stub — the actual abandonment signal.
-    'context/spec/002-active/functional-spec.md':
+    'context/spec/002-done/functional-spec.md':
+      '# Spec\n\n- **Status:** Completed\n',
+    'context/spec/003-active/functional-spec.md':
       '# Spec\n\n- **Status:** Draft\n',
-    'context/spec/002-active/tasks.md': '# Tasks\n\nTBD.\n',
   });
   const r = detectStaleSpecs(t);
   assert.equal(
     r.status,
     'WARN',
-    '1 of 2 judged records both active and stuck at zero task progress (a minority, <=half) → WARN'
+    '1 of 3 judged records active (33%, below half) → WARN'
   );
 });
 
-test('SDD-06: FAIL when active-and-stuck records are not a minority', () => {
+test('SDD-06: FAIL at the exact half boundary — 2 of 4 judged records active', () => {
   const t = tmp();
   writeRepo(t, {
-    'context/spec/001-active/functional-spec.md':
+    'context/spec/001-done/functional-spec.md':
+      '# Spec\n\n- **Status:** Completed\n',
+    'context/spec/002-done/functional-spec.md':
+      '# Spec\n\n- **Status:** Completed\n',
+    'context/spec/003-active/functional-spec.md':
       '# Spec\n\n- **Status:** Draft\n',
-    'context/spec/001-active/tasks.md': '# Tasks\n\nTBD.\n',
-    'context/spec/002-active/functional-spec.md':
+    'context/spec/004-active/functional-spec.md':
       '# Spec\n\n- **Status:** In Review\n',
-    'context/spec/002-active/tasks.md': '# Tasks\n\nTBD.\n',
   });
   const r = detectStaleSpecs(t);
   assert.equal(
     r.status,
     'FAIL',
-    '2 of 2 judged records active and stuck at zero task progress — not a minority → FAIL'
+    '2 of 4 = exactly half — the band is "half or more", so the boundary itself must FAIL, not WARN'
   );
 });
 
-test('SDD-06: PASS for a brand-new spec still in Draft with no tasks.md yet', () => {
-  // A spec that has just been written (functional-spec.md only, tasks.md not
-  // authored yet) is not abandoned — it is five minutes old. Status alone
-  // must not be enough to flag it: there is no progress artifact yet to
-  // call "no progress" against.
+test('SDD-06: WARN just below the half boundary — 4 of 9 judged records active', () => {
+  const t = tmp();
+  const files: Record<string, string> = {};
+  for (let i = 1; i <= 4; i++) {
+    files[`context/spec/00${i}-active/functional-spec.md`] =
+      '# Spec\n\n- **Status:** Draft\n';
+  }
+  for (let i = 5; i <= 9; i++) {
+    files[`context/spec/00${i}-done/functional-spec.md`] =
+      '# Spec\n\n- **Status:** Completed\n';
+  }
+  writeRepo(t, files);
+  const r = detectStaleSpecs(t);
+  assert.equal(
+    r.status,
+    'WARN',
+    '4 of 9 ≈ 44%, just under half → WARN, one record short of the FAIL boundary'
+  );
+});
+
+test('SDD-06: a lone brand-new Draft spec with no tasks.md now counts toward the active ratio', () => {
+  // Removing the task-progress condition (issue: SDD-06 status-only rework)
+  // means a single active record is, by itself, 100% of the judged ratio —
+  // half or more — so it FAILs. This is the acknowledged behavior change:
+  // the false positive this used to guard against (a spec five minutes old
+  // reading as "abandoned") does not arise for projects the audit plugin is
+  // actually run against.
   const t = tmp();
   const specDir = join(t, 'context', 'spec', '001-brand-new');
   mkdirSync(specDir, { recursive: true });
@@ -788,102 +811,42 @@ test('SDD-06: PASS for a brand-new spec still in Draft with no tasks.md yet', ()
     '# Spec\n\n- **Status:** Draft\n'
   );
   const r = detectStaleSpecs(t);
-  assert.notEqual(
+  assert.equal(
     r.status,
     'FAIL',
-    'a brand-new Draft spec with no tasks.md yet must not read as abandoned'
+    'a lone active record is 100% of the judged ratio — half or more — under the status-only model'
   );
 });
 
-test('SDD-06: PASS for a normal pipeline of active-plus-completed specs that all show real task progress', () => {
+test('SDD-06: an active record counts even with a fully checked-off task list — status alone is the model now', () => {
+  // Proves isStuckWithNoProgress is actually gone, not just unreachable: this
+  // exact fixture (active status, tasks.md fully populated and checked)
+  // would have PASSed under the old task-progress condition. It must FAIL
+  // now because staleness is judged on status alone.
   const t = tmp();
-  const active = (n: string) => ({
-    [`context/spec/${n}/functional-spec.md`]: '# Spec\n\n- **Status:** Draft\n',
-    [`context/spec/${n}/tasks.md`]:
-      '# Tasks\n\n- [ ] Build it\n- [x] Design it\n',
-  });
-  const done = (n: string) => ({
-    [`context/spec/${n}/functional-spec.md`]:
-      '# Spec\n\n- **Status:** Completed\n',
-    [`context/spec/${n}/tasks.md`]:
-      '# Tasks\n\n- [x] Build it\n- [x] Ship it\n',
-  });
-  writeRepo(t, {
-    ...active('001-a'),
-    ...active('002-b'),
-    ...active('003-c'),
-    ...done('004-d'),
-    ...done('005-e'),
-  });
-  const r = detectStaleSpecs(t);
-  assert.notEqual(
-    r.status,
-    'FAIL',
-    'active specs with real (even partially unchecked) task lists are in-flight work, not abandonment'
-  );
-});
-
-test('SDD-06: an active record with an empty tasks.md stub is counted stale — the actual abandonment case', () => {
-  const t = tmp();
-  const specDir = join(t, 'context', 'spec', '001-stuck');
+  const specDir = join(t, 'context', 'spec', '001-active');
   mkdirSync(specDir, { recursive: true });
   writeFileSync(
     join(specDir, 'functional-spec.md'),
     '# Spec\n\n- **Status:** In Review\n'
   );
-  writeFileSync(join(specDir, 'tasks.md'), '# Tasks\n\nComing soon.\n');
-  const r = detectStaleSpecs(t);
-  assert.ok(
-    r.evidence.some((e) => /stalled/i.test(e) && e.includes('001-stuck')),
-    `an active record with a task file showing zero task items must be reported as stalled, got: ${JSON.stringify(r.evidence)}`
-  );
-  assert.ok(
-    r.evidence.some((e) =>
-      e.includes(
-        '1 of 1 record(s) with a recognized status are stalled (active with zero task progress)'
-      )
-    ),
-    `the headline must say "stalled", not "in flight" — "in flight" describes any active record, "stalled" describes the narrower active-and-zero-progress condition this check actually flags, got: ${JSON.stringify(r.evidence)}`
-  );
-  assert.ok(
-    r.evidence.every((e) => !/in flight/i.test(e)),
-    `evidence must not use the retired "in flight" wording anywhere, got: ${JSON.stringify(r.evidence)}`
-  );
-  assert.notEqual(
-    r.status,
-    'PASS',
-    'the only record is active and has made zero task progress — this is exactly the abandonment case, must not PASS'
-  );
-});
-
-test('SDD-06: an active record whose tasks.md has items, all unchecked, is NOT stale — deliberately narrower than "zero checked"', () => {
-  // This check has no time signal: it cannot tell a task list broken down
-  // yesterday from one abandoned six months ago. A populated-but-unticked
-  // list is ordinary in-progress work, not an abandoned stub — flagging it
-  // would reintroduce the false-positive class this fix was reopened to
-  // remove. Only a genuinely empty task list (no `- [ ]` / `- [x]` lines at
-  // all) counts as stalled. Pinned so a future "restore the pre-branch
-  // all-unchecked signal" change gets caught here first.
-  const t = tmp();
-  const specDir = join(t, 'context', 'spec', '001-unstarted');
-  mkdirSync(specDir, { recursive: true });
-  writeFileSync(
-    join(specDir, 'functional-spec.md'),
-    '# Spec\n\n- **Status:** Draft\n'
-  );
   writeFileSync(
     join(specDir, 'tasks.md'),
-    '# Tasks\n\n- [ ] Design it\n- [ ] Build it\n- [ ] Ship it\n'
+    '# Tasks\n\n- [x] Design it\n- [x] Build it\n- [x] Ship it\n'
   );
   const r = detectStaleSpecs(t);
   assert.equal(
     r.status,
-    'PASS',
-    'a task list with items, even if none are checked yet, is not the abandonment signal this check flags'
+    'FAIL',
+    'real, fully-checked task progress no longer exempts an active record — only its status is read'
   );
   assert.ok(
-    r.evidence.every((e) => !e.startsWith('stalled:')),
-    `no per-record "stalled:" evidence line is expected when its task list has items, got: ${JSON.stringify(r.evidence)}`
+    r.evidence.some((e) => e.includes('active: AWOS: 001-active')),
+    `evidence must label the record "active:", not the retired "stalled:" wording, got: ${JSON.stringify(r.evidence)}`
+  );
+  assert.ok(
+    r.evidence.every((e) => !/stalled|in flight/i.test(e)),
+    `evidence must not use the retired "stalled"/"in flight" wording, got: ${JSON.stringify(r.evidence)}`
   );
 });
 
@@ -1449,14 +1412,12 @@ test('SDD-06 reads the ADR status vocabulary', () => {
   }
 });
 
-test('SDD-06 does not flag an ADR-practice repo, even with active-status records — no task artifact to observe', () => {
-  // ADR is a single-file practice: its recordTriad is empty, so there is no
-  // task-bearing file this check can read progress from. Status alone (three
-  // records left Proposed) is no longer enough to call a record stale — a
-  // record is only stale when it is BOTH active AND its convention's task
-  // file exists and shows zero task items. ADR has no such file, so it can
-  // never contribute a stale record; PASS here is the honest outcome for a
-  // practice this check has no progress signal for, not a gap in the check.
+test('SDD-06 flags an ADR-practice repo whose records are all still Proposed — status alone, no task artifact needed', () => {
+  // Under the status-only model, an ADR practice is judged exactly like any
+  // other: three records all in the active vocabulary (Proposed) is 100% of
+  // the judged ratio, so it FAILs. This used to PASS unconditionally — ADR
+  // is single-file and had no task-bearing file for the old task-progress
+  // condition to read — but that condition no longer exists.
   const repo = tmpDir('awos-sdd06-adr-active-');
   try {
     mkdirSync(join(repo, 'docs', 'adr'), { recursive: true });
@@ -1468,8 +1429,8 @@ test('SDD-06 does not flag an ADR-practice repo, even with active-status records
     }
     assert.equal(
       detectStaleSpecs(repo).status,
-      'PASS',
-      'ADR has no task-bearing record file, so three Proposed records must not be flagged stale'
+      'FAIL',
+      'three Proposed (active) records out of three judged is half or more → FAIL, even though ADR has no task-bearing file'
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });
@@ -1487,10 +1448,6 @@ test('SDD-06 recognizes AWOS status even in the real bullet/bold template format
       join(spec, 'functional-spec.md'),
       '# Functional Specification: Real feature\n\n- **Status:** Draft\n- **Author:** Someone\n'
     );
-    // An empty tasks.md stub, so this record also clears the no-progress
-    // condition and shows up as stalled — proving the bullet-format status
-    // is actually being read, not just failing to SKIP by accident.
-    writeFileSync(join(spec, 'tasks.md'), '# Tasks\n\nTBD.\n');
     const r = detectStaleSpecs(repo);
     assert.notEqual(
       r.status,
@@ -1498,8 +1455,8 @@ test('SDD-06 recognizes AWOS status even in the real bullet/bold template format
       'the real "- **Status:** Draft" bullet format must be recognized, not read as "no status declared"'
     );
     assert.ok(
-      r.evidence.some((e) => /stalled/i.test(e)),
-      `Draft is an active AWOS status with zero task progress and must show up as stalled, got: ${JSON.stringify(r.evidence)}`
+      r.evidence.some((e) => /active/i.test(e)),
+      `Draft is an active AWOS status and must show up in the active ratio, got: ${JSON.stringify(r.evidence)}`
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });
@@ -1603,6 +1560,237 @@ test('SDD-05 does not grade an ADR README index as a decision record', () => {
     assert.ok(
       r.evidence.some((e) => e.includes('3/3 record(s)')),
       `README.md must not be counted as a 4th record, got: ${JSON.stringify(r.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// OpenSpec and GSD — newly recognized conventions (registry-driven, work
+// item 2). Covers SDD-01/04/06 per the rework's minimum test requirement.
+// ---------------------------------------------------------------------------
+
+test('OpenSpec: SDD-01 PASSes for a repo with a real change record', () => {
+  const repo = tmpDir('awos-sdd01-openspec-');
+  try {
+    writeRepo(repo, {
+      'openspec/project.md': '# Project conventions\n',
+      'openspec/changes/add-thing/proposal.md':
+        '# Add thing\n\nWhy and what.\n',
+      'openspec/changes/add-thing/tasks.md': '# Tasks\n\n- [ ] Do it\n',
+    });
+    const r = detectSpecWorkflowAdopted(repo);
+    assert.equal(
+      r.status,
+      'PASS',
+      'a real OpenSpec change record must be recognized as an adopted spec-driven practice'
+    );
+    assert.ok(
+      r.evidence.some((e) => /OpenSpec/i.test(e)),
+      `evidence must name OpenSpec as the recognized convention, got: ${JSON.stringify(r.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('OpenSpec: SDD-01 WARNs when the marker exists but changes/ holds no records yet', () => {
+  const repo = tmpDir('awos-sdd01-openspec-empty-');
+  try {
+    writeRepo(repo, { 'openspec/project.md': '# Project conventions\n' });
+    const r = detectSpecWorkflowAdopted(repo);
+    assert.equal(
+      r.status,
+      'WARN',
+      'the openspec/ marker is installed but holds no change records yet'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('OpenSpec: SDD-04 counts a branch touching openspec/changes/ as spec-driven', () => {
+  const t = tmp();
+  gitInit(t);
+  addBranch(t, 'feat-a', 'openspec/changes/add-a/proposal.md');
+  addBranch(t, 'feat-b', 'openspec/changes/add-b/proposal.md');
+  addBranch(t, 'feat-c'); // no spec touch
+  const r = detectBranchSpecRatio(t);
+  assert.equal(
+    r.value,
+    Math.round((2 / 3) * 1e10) / 1e10,
+    'ratio must count both openspec/changes/ touches'
+  );
+});
+
+test('OpenSpec: SDD-06 judges a change record against the OpenSpec status vocabulary', () => {
+  const t = tmp();
+  writeRepo(t, {
+    'openspec/changes/add-thing/proposal.md':
+      '# Add thing\n\n- **Status:** Draft\n\nWhy and what.\n',
+    'openspec/changes/add-thing/tasks.md': '# Tasks\n\n- [ ] Do it\n',
+  });
+  const r = detectStaleSpecs(t);
+  assert.equal(
+    r.status,
+    'FAIL',
+    'a lone Draft (active) OpenSpec record is 100% of the judged ratio → FAIL, same status-only model as every other convention'
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes('active: OpenSpec: add-thing')),
+    `evidence must name OpenSpec's record as active, got: ${JSON.stringify(r.evidence)}`
+  );
+});
+
+function writeGsdPhase(repo: string, phase: string, planFiles: string[]): void {
+  const dir = join(repo, '.planning', 'phases', phase);
+  mkdirSync(dir, { recursive: true });
+  for (const f of planFiles) writeFileSync(join(dir, f), `# ${f}\n`);
+}
+
+function writeGsdState(repo: string, status: string): void {
+  writeRepo(repo, {
+    '.planning/ROADMAP.md': '# Roadmap\n\nMilestones and phases.\n',
+    '.planning/STATE.md': `---\nstatus: ${status}\n---\n\n# State\n`,
+  });
+}
+
+test('GSD: SDD-01 PASSes for a repo with a real phase record', () => {
+  const repo = tmpDir('awos-sdd01-gsd-');
+  try {
+    writeGsdState(repo, 'executing');
+    writeGsdPhase(repo, '01-init', ['01-01-PLAN.md']);
+    const r = detectSpecWorkflowAdopted(repo);
+    assert.equal(
+      r.status,
+      'PASS',
+      'a real GSD phase record must be recognized as an adopted spec-driven practice'
+    );
+    assert.ok(
+      r.evidence.some((e) => /GSD/.test(e)),
+      `evidence must name GSD as the recognized convention, got: ${JSON.stringify(r.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('GSD: SDD-02 credits .planning/PROJECT.md and .planning/ROADMAP.md as foundational docs', () => {
+  const repo = tmpDir('awos-sdd02-gsd-');
+  try {
+    const long = Array.from({ length: 8 }, (_, i) => `Line ${i}.`).join('\n');
+    writeRepo(repo, {
+      '.planning/PROJECT.md': `# Project\n\n${long}\n`,
+      '.planning/ROADMAP.md': `# Roadmap\n\n${long}\n`,
+    });
+    const r = detectProductContextDocs(repo);
+    assert.ok(
+      r.evidence.some((e) => e.includes('.planning/PROJECT.md')),
+      `.planning/PROJECT.md must satisfy the product-definition slot, got: ${JSON.stringify(r.evidence)}`
+    );
+    assert.ok(
+      r.evidence.some((e) => e.includes('.planning/ROADMAP.md')),
+      `.planning/ROADMAP.md must satisfy the roadmap slot, got: ${JSON.stringify(r.evidence)}`
+    );
+    assert.equal(
+      r.value,
+      2,
+      'exactly the product-definition and roadmap slots are satisfied — GSD has no architecture-record equivalent'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('GSD: SDD-04 counts a branch touching .planning/phases/ as spec-driven', () => {
+  const t = tmp();
+  gitInit(t);
+  addBranch(t, 'feat-a', '.planning/phases/01-init/01-01-PLAN.md');
+  addBranch(t, 'feat-b'); // no spec touch
+  addBranch(t, 'feat-c'); // no spec touch
+  const r = detectBranchSpecRatio(t);
+  assert.equal(
+    r.value,
+    Math.round((1 / 3) * 1e10) / 1e10,
+    'ratio must count the .planning/phases/ touch'
+  );
+});
+
+test('GSD: SDD-05 a phase directory is complete once it holds one NN-PP-PLAN.md file', () => {
+  const repo = tmpDir('awos-sdd05-gsd-');
+  try {
+    writeGsdState(repo, 'executing');
+    writeGsdPhase(repo, '01-init', ['01-01-PLAN.md', '01-02-PLAN.md']);
+    const r = detectSpecTriadComplete(repo);
+    assert.equal(
+      r.status,
+      'PASS',
+      'a phase directory holding PLAN.md-pattern files is structurally complete'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('GSD: SDD-05 a phase directory with no matching PLAN.md file is incomplete', () => {
+  const repo = tmpDir('awos-sdd05-gsd-incomplete-');
+  try {
+    writeGsdState(repo, 'executing');
+    const dir = join(repo, '.planning', 'phases', '01-init');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'notes.md'), '# Notes\n');
+    const r = detectSpecTriadComplete(repo);
+    assert.notEqual(
+      r.status,
+      'PASS',
+      'a phase directory with no file matching -PLAN.md$ must not read as complete'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('GSD: SDD-06 judges every phase record against the single project-level STATE.md status', () => {
+  const repo = tmpDir('awos-sdd06-gsd-active-');
+  try {
+    writeGsdState(repo, 'executing'); // active
+    writeGsdPhase(repo, '01-init', ['01-01-PLAN.md']);
+    writeGsdPhase(repo, '02-next', ['02-01-PLAN.md']);
+    const r = detectStaleSpecs(repo);
+    assert.equal(
+      r.status,
+      'FAIL',
+      '2 of 2 judged records active (both read the one project-level "executing" status) — half or more → FAIL'
+    );
+    assert.ok(
+      r.evidence.some((e) => e.includes('active: GSD: 01-init (executing)')),
+      `evidence must show the shared status applied to the first phase, got: ${JSON.stringify(r.evidence)}`
+    );
+    assert.ok(
+      r.evidence.some((e) => e.includes('active: GSD: 02-next (executing)')),
+      `evidence must show the shared status applied to the second phase, got: ${JSON.stringify(r.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('GSD: SDD-06 PASSes once STATE.md declares a terminal status — every phase record settles together', () => {
+  // Proves the project-level status is actually read per call, not cached
+  // stale: the only thing that changes between this fixture and the previous
+  // one is STATE.md's status value, and every phase record's verdict flips
+  // with it.
+  const repo = tmpDir('awos-sdd06-gsd-done-');
+  try {
+    writeGsdState(repo, 'complete'); // terminal
+    writeGsdPhase(repo, '01-init', ['01-01-PLAN.md']);
+    writeGsdPhase(repo, '02-next', ['02-01-PLAN.md']);
+    const r = detectStaleSpecs(repo);
+    assert.equal(
+      r.status,
+      'PASS',
+      '0 of 2 judged records active once STATE.md reads "complete" (terminal) → PASS'
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });

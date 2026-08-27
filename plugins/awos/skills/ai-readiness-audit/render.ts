@@ -545,6 +545,19 @@ function isInformational(dim: DimensionArtifact): boolean {
  */
 const THROUGHPUT_ECHO_LABELS = new Set(['Merges', 'LOC']);
 
+/**
+ * SDD-04 (branch→spec ratio) and DOC-07 (spec↔impl bidirectional links) both
+ * read spec directories from git history/content within a single repo. In an
+ * orchestration-root layout the specs live at the root and the code lives in
+ * a member repo, so both structurally score zero in every member — a
+ * measurement limitation, not a failing practice. Named by check_id, the
+ * same identifier the checks table already keys rows on, so this never
+ * silently drifts from the checks it annotates.
+ */
+const CROSS_BOUNDARY_LIMITED_CHECKS = new Set(['SDD-04', 'DOC-07']);
+const CROSS_BOUNDARY_NOTE =
+  'cross-boundary limitation: in an orchestration-root layout the specs live at the root and the code lives in this member repo, so this check cannot measure across that boundary — an accepted metric limitation, not a failing practice';
+
 /** Plain-language lead for a check: prefer `plain`, fall back to `definition`. */
 function plainLead(c: Check): string {
   return c.plain && c.plain.trim().length > 0 ? c.plain : c.definition;
@@ -912,7 +925,14 @@ export function renderMarkdown(
         (c.status === 'FAIL' || c.status === 'WARN' || c.status === 'PARTIAL')
           ? ` · prevention: ${c.prevention.tier} (${c.prevention.cluster})`
           : '';
-      const hint = mdCell(`${c.hint ?? '—'}${preventionNote}`);
+      const crossBoundaryNote =
+        audit.orchestration_root != null &&
+        CROSS_BOUNDARY_LIMITED_CHECKS.has(c.check_id)
+          ? ` · ${CROSS_BOUNDARY_NOTE}`
+          : '';
+      const hint = mdCell(
+        `${c.hint ?? '—'}${preventionNote}${crossBoundaryNote}`
+      );
       const sourceCiteMd =
         c.source_url && c.source_date
           ? ` — [${mdCell(c.source)} ${mdCell(c.source_date)}](${c.source_url})`
@@ -1895,6 +1915,12 @@ function dimensionPage(
       evidenceItems.push(
         esc(`prevention: ${c.prevention.tier} (${c.prevention.cluster})`)
       );
+    }
+    if (
+      audit.orchestration_root != null &&
+      CROSS_BOUNDARY_LIMITED_CHECKS.has(c.check_id)
+    ) {
+      evidenceItems.push(esc(CROSS_BOUNDARY_NOTE));
     }
     const evidence =
       evidenceItems.length > 0 ? evidenceItems.join('<br>') : '—';

@@ -1709,3 +1709,80 @@ test('org Repositories table: Cycle time and MTTR column headers carry the same 
     'org MTTR column header tooltip must distinguish the DF-07 git proxy'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Cross-boundary limitation note (orchestration-root members) — SDD-04 and
+// DOC-07 structurally cannot score across the root↔member boundary; a report
+// reader must see why those checks stay red while everything else goes green.
+// ---------------------------------------------------------------------------
+
+test('renderHtml shows the cross-boundary note on SDD-04 and DOC-07 for a member repo', () => {
+  const sdd04 = makeCheck({
+    check_id: 'SDD-04',
+    status: 'FAIL',
+    weight_awarded: 0,
+    weight_max: 8,
+  });
+  const doc07 = makeCheck({
+    check_id: 'DOC-07',
+    status: 'FAIL',
+    weight_awarded: 0,
+    weight_max: 3,
+  });
+  const audit = makeAudit({
+    orchestration_root: '/repos/root',
+    dimensions: [
+      makeDim('spec-driven-development', [sdd04]),
+      makeDim('documentation', [doc07]),
+    ],
+  });
+  const html = renderHtml(audit);
+  assert.ok(
+    html.includes('cross-boundary limitation'),
+    'SDD-04/DOC-07 must carry the cross-boundary note when orchestration_root is set'
+  );
+  const md = renderMarkdown(audit);
+  assert.ok(
+    md.includes('cross-boundary limitation'),
+    'the Markdown report must carry the same note (via the Hint column)'
+  );
+});
+
+test('renderHtml omits the cross-boundary note for a standalone repo (no orchestration root)', () => {
+  const sdd04 = makeCheck({
+    check_id: 'SDD-04',
+    status: 'FAIL',
+    weight_awarded: 0,
+    weight_max: 8,
+  });
+  const audit = makeAudit({
+    orchestration_root: null,
+    dimensions: [makeDim('spec-driven-development', [sdd04])],
+  });
+  const html = renderHtml(audit);
+  assert.ok(
+    !html.includes('cross-boundary limitation'),
+    'a standalone repo (no orchestration root in scope) must not show the cross-boundary note'
+  );
+  const md = renderMarkdown(audit);
+  assert.ok(
+    !md.includes('cross-boundary limitation'),
+    'the Markdown report must not show the note for a standalone repo either'
+  );
+});
+
+test('renderHtml omits the cross-boundary note for an unrelated check even with an orchestration root in scope', () => {
+  const other = makeCheck({
+    check_id: 'SDD-01',
+    status: 'PASS',
+  });
+  const audit = makeAudit({
+    orchestration_root: '/repos/root',
+    dimensions: [makeDim('spec-driven-development', [other])],
+  });
+  const html = renderHtml(audit);
+  assert.ok(
+    !html.includes('cross-boundary limitation'),
+    'only SDD-04 and DOC-07 carry the note — an unrelated check must not, even when a root is in scope'
+  );
+});

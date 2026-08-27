@@ -14,8 +14,9 @@ Fixed prose outside brackets survives into the generated command as-is.
 This entire comment is instructions to the generator: do NOT copy it, or any
 adaptation of it, into the generated file. The generated command starts at the
 frontmatter and carries no top-of-file comment — provenance lives in the
-footer marker, and "re-run /awos:flow to change a decision" belongs in the
-intro paragraph, one sentence, not a comment block. The generated command must
+footer marker, and the intro's "change this command by re-running" paragraph
+is fixed prose: keep it, never restate it as a comment block. The generated
+command must
 also be self-contained: never reference the sibling command ("same as
 implement-feature") — the commands know nothing about each other at run time.
 
@@ -34,6 +35,8 @@ middle changes.
 # Fix a Bug End-to-End
 
 Takes one bug — its report from [source per §1 of delivery-flow.md, a bug report rather than a feature ticket] — and drives it through diagnosis, a scoped fix with a regression test, re-verification of the touched acceptance criteria, and delivery until it is closed. On the way it keeps the owning spec honest: when the fix changes documented behavior, it amends that spec rather than letting it drift.
+
+Change this command by re-running `/awos:flow`. It is generated from `context/product/delivery-flow.md`, which is the source of truth for every decision below, and a regeneration rewrites this file from that record — so an edit made here lasts only once it is recorded, either in the record's **Local Customizations** section or as a decision of its own.
 
 ## Notifications
 
@@ -70,9 +73,11 @@ This command is maintained through its own runs. When a run exposes a defect in 
 
 ### Step 1: Fetch & Normalize the Bug
 
+Before the first connector call, pre-flight the transports this run depends on: for each chosen transport §7 records, confirm the operator prerequisites it lists are in place — the auth and the access scope (a logged-in CLI, a valid token, write access to the code-host org, membership in the tracker project), not just that the binary or connector exists. Run it on the fast model tier (per §8) — it is a handful of cheap capability calls, not a fetch. Report a missing grant up front rather than at the stage that needs it — a prerequisite with a lead time is something the operator can start requesting now — and stop only when the missing access blocks a stage this run cannot skip (fetching the ticket, pushing the branch, merging). A transport §7 marks as an optional accelerator is exempt — its absence downgrades the stage that uses it, it never blocks the flow.
+
 [Connector-specific fetch using the chosen transport from §7 of delivery-flow.md, with its recorded fallback — reuse §1, but the source is a bug report rather than a feature ticket. Extract and keep: bug ID, title, the reported symptom, reproduction steps if given, affected area, link. For description-only sources this stage just normalizes the input. Store the bug ID as `BUG_ID`.]
 
-[Ticket sources: also fetch the ticket's **remote links, attachments, and linked conversations** (tracker remote links, attached screenshots, a linked chat thread) via the §7 transports and read the reachable ones — the report's real context often lives there, not in the description: a screenshot names WHICH surface renders the broken data while the description names another. List anything linked but unreachable in the normalized report instead of silently skipping it, so the diagnosis knows context is missing. Omit this paragraph for description-only sources.]
+[Ticket sources: also fetch the ticket's **remote links, attachments, and linked conversations** (tracker remote links, attached screenshots, a linked chat thread) via the §7 transports and read the reachable ones — the report's real context often lives there, not in the description: a screenshot names WHICH surface renders the broken data while the description names another. Treat any source whose §7 transport is an optional accelerator as best-effort — when it is unavailable, record what went ungathered in the flow log (`context/fix-log-{BUG_ID}.md`, whose path is known from this stage on) and carry on. List anything linked but unreachable — including anything gated behind a transport this run does not have — in the normalized report instead of silently skipping it, so the diagnosis knows context is missing. Omit this paragraph for description-only sources.]
 
 [Crash-report source (per the Bug-fix Flow source decision — e.g. Crashlytics, Sentry): fetch the issue and its most recent events via the §7 transport for the crash tool, and use the title/subtitle as the problem statement. Map every app-frame in the stack to a real `file:line` in the local checkout (Grep/Read), ignoring system frames. **If the stack is unsymbolicated** (raw addresses, no file/line), say so explicitly and do not invent line numbers — the symbol file (dSYM/source map) for that build was likely not uploaded. Capture impact — affected versions, user count, first/last-seen — and prefer a source-typed branch name (e.g. `bug/crash-<short-id>`) per §2. The diagnose stage starts from this stack context. Omit this paragraph when the bug-fix source decision does not include crash reports.]
 
@@ -82,7 +87,7 @@ This command is maintained through its own runs. When a run exposes a defect in 
 
 ### Step 2: Detect the Entry Point
 
-Start with a cheap preflight on the fast model tier (per §8): is this bug **already fixed**? Check the status across every source §1 records (bug reports can live in more than one place) before doing any work — if the tracker ticket is in a closed/fixed state, the crash issue is already resolved, or a merged change request exists, report that and stop rather than re-fixing. Then, if this bug's flow log exists (`context/fix-log-{BUG_ID}.md`), read it first — it names the last completed stage and carries the branch, commit, classification verdict, and change-request state, and is the resume signal for the middle stages that produce no scannable artifact. Resume is a dispatch, not a re-run: continue from the stage after the log's last completed entry — completed stages are skipped, not repeated.
+Settle the entry point before any work — a cheap status sweep on the fast model tier (per §8), a different question from Step 1's transport pre-flight: is this bug **already fixed**? Check the status across every source §1 records (bug reports can live in more than one place) before doing any work — if the tracker ticket is in a closed/fixed state, or the crash issue is already resolved, report that and stop rather than re-fixing. A merged change request is a stop on its own only for a ticketless source: merged with the ticket still open means delivery and close are still owed, so resume there rather than reporting a fix nobody finished. Then, if this bug's flow log exists (`context/fix-log-{BUG_ID}.md`), read it first — it names the last completed stage and carries the branch, commit, classification verdict, and change-request state, and is the resume signal for the middle stages that produce no scannable artifact. Resume is a dispatch, not a re-run: continue from the stage after the log's last completed entry — completed stages are skipped, not repeated.
 
 <!-- /awos:flow:stage -->
 
@@ -233,7 +238,7 @@ Merging is irreversible. Even when the recorded policy lets the flow merge, ask 
 
 [Per §5's definition of Done: gather the recorded evidence and report the final state to the user. When the source has tickets, transition the bug to its closed/fixed state using the chosen transport and attach the evidence; omit the transition for ticketless sources — the report to the user is the close.]
 
-Include the local review and the spec-amendment outcome in the reported evidence, so neither is buried in the logs. From the flow log, report: the review **verdict**, the **finding count** (by severity), the **review file path** as recorded in the flow log by the local-review stage, that a manual keep/drop gate ran over the findings, and — for a divergence fix — that the owning spec was amended (the criteria touched and the Change Log entry). The path lets the user re-open the full review without re-running.
+Include the local review and the spec-amendment outcome in the reported evidence, so neither is buried in the logs. From the flow log, report: the review **verdict**, the **finding count** (by severity), the **review file path** as recorded in the flow log by the local-review stage, that a manual keep/drop gate ran over the findings, and — for a divergence fix — that the owning spec was amended (the criteria touched and the Change Log entry). The path lets the user re-open the full review without re-running. Report the ungathered context alongside it: any source the fetch stage listed as unreachable and the transport that was missing, so a thin diagnosis is attributable to missing context rather than to the fix.
 
 [Crash-report source: optionally write a short investigation note back to the crash issue via the §7 transport — root cause, branch, files touched — but never auto-close it; a crash resolves on its own once a non-crashing build ships.]
 

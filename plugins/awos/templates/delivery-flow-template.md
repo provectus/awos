@@ -27,9 +27,9 @@ Which commands `/awos:flow` generated and their names — re-runs reconcile exac
 ## 1. Feature Description Source
 
 - **Source:** [Jira | Azure DevOps | Linear | Notion | GitHub/GitLab issue | local file | prompt text | pre-generated spec]
-- **Fetch transport:** [CLI command / MCP tool / plugin — from §7; name the fallback if the primary is unavailable]
+- **Fetch transport:** [CLI command / MCP tool / plugin — from §7; name the fallback if the primary is unavailable. This transport is repo-provisioned by definition and its absence is a hard stop — the flow cannot work on what it cannot fetch — so an optional accelerator is never recorded here]
 - **Normalization:** [what the flow extracts: ID, title, description, acceptance hints, link]
-- **Surrounding context to pre-seed the spec:** [where the ticket's framing context lives, each with its §7 transport — epic/parent ticket description, tracker remote/linked issues and attachments (design links, screenshots), a docs connector (Confluence/Notion pages the ticket references), a meeting-notes/chat source; the fetch stage pulls this alongside the ticket and lists any unreachable source instead of skipping it. "none" for a plain-prompt or local-file source with no tracker]
+- **Surrounding context to pre-seed the spec:** [where the ticket's framing context lives, each with its §7 transport and that transport's provenance (a source reachable only through one engineer's personal connector is an **optional accelerator**, not a flow dependency — its part of the fetch is best-effort: the stage records what it could not reach and continues, never blocks) — epic/parent ticket description, tracker remote/linked issues and attachments (design links, screenshots), a docs connector (Confluence/Notion pages the ticket references), a meeting-notes/chat source; the fetch stage pulls this alongside the ticket and lists any unreachable source instead of skipping it. "none" for a plain-prompt or local-file source with no tracker]
 - **Pre-generated specs:** [whether `context/spec/` directories may arrive pre-written, and the entry-point detection rule — resume from the first missing artifact]
 
 ## 2. Git Flow
@@ -46,7 +46,7 @@ Which commands `/awos:flow` generated and their names — re-runs reconcile exac
 - **Layout:** [monorepo | submodules | sibling repos at relative paths | symlinked | containerized]
 - **`context/` location & sharing:** [where the AWOS context folder lives and how this repo reaches it]
 - **Spec commits go to:** [which repo/branch holds `context/spec/` changes]
-- **Pre-flight check:** [how the flow verifies `context/` is reachable and current]
+- **`context/` reachability check:** [how the workspace stage verifies `context/` is reachable and current]
 
 ## 4. Review
 
@@ -81,9 +81,15 @@ Which commands `/awos:flow` generated and their names — re-runs reconcile exac
 
 ## 7. Tooling Inventory
 
-| Service | CLI | MCP | Plugin/Skill | Chosen Transport |
-| ------- | --- | --- | ------------ | ---------------- |
-| [Jira]  | [—] | [✓] | [—]          | [MCP — no CLI]   |
+Every chosen transport is repo-provisioned — declared in the repo (`.mcp.json`, `.claude/settings.json` `enabledPlugins`, a committed skill or agent) or pinned by the project's setup — so it is there for every teammate, not only for whoever generated this flow.
+
+| Service | CLI | MCP | Plugin/Skill | Chosen Transport | Provenance                       | Operator prerequisites                              |
+| ------- | --- | --- | ------------ | ---------------- | -------------------------------- | --------------------------------------------------- |
+| [Jira]  | [—] | [✓] | [—]          | [MCP — no CLI]   | [repo-provisioned — `.mcp.json`] | [Atlassian account with access to the ACME project] |
+
+**Machine-personal transports:** [every transport a stage wanted that exists only on an individual workstation — a user-level MCP server, a user-installed plugin, a CLI on one PATH and nowhere in the project's setup — with the resolution: provisioned repo-side (name the file and the entry added), kept as an optional accelerator (name the stage and how it degrades when the transport is absent), or dropped. "none — every chosen transport is repo-provisioned" when there were none.]
+
+**Long-lead operator prerequisites:** [prerequisites whose lead time is days rather than minutes — write access to a customer-owned code host, membership in an external tracker project, a cloud role — so the operator requests them before the first run instead of hitting them mid-flow. "none" if every prerequisite is self-service.]
 
 **Stage automation (reuse / replace / compose):** [for each stage where the project already had an overlapping command or skill — the stage, the existing automation, the decision (reuse it / replace with generated / compose), and the reason. "none" if the project had no overlapping automation.]
 
@@ -124,3 +130,4 @@ Manual edits to the generated command that the user chose to keep during regener
 ## Generation Log
 
 - [YYYY-MM-DD] — [initial generation | re-run: which dimensions changed | in-run fact correction by `<command>` run `<ticket>`: what was corrected — evidence: the disproving observation]
+- **Probe records** — [YYYY-MM-DD] — [what was probed and what came back, for each "no X" claim the decision sections above rely on (pre-commit hook locations, merge triggers, automatic reviewers, transports). Provenance lives here so the claims above stay decisions; a dated probe left inside a living decision section rots into a fact nobody re-checks.]

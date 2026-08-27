@@ -384,6 +384,21 @@ async function main(): Promise<void> {
       // run from inside a member repo needs no flag at all. `--no-` is how the
       // root itself is audited: it owns its tooling and inherits nothing.
       const acArgs = process.argv.slice(5);
+      // enrich re-scores against the first pass's artifacts and takes its root
+      // from them, so it has no use for these flags — and silently dropping a
+      // flag the caller passed deliberately is worse than refusing it.
+      if (command === 'enrich') {
+        const orchFlag = acArgs.find(
+          (a) => a === '--orchestration-root' || a === '--no-orchestration-root'
+        );
+        if (orchFlag) {
+          fail({
+            error: `${orchFlag} is not accepted by enrich`,
+            hint: 'enrich always inherits the orchestration root resolved by the first audit-core pass, read back from that pass’s artifacts. Pass the flag to audit-core instead.',
+            usage: 'node dist/cli.js enrich <repoPath> <outDir>',
+          });
+        }
+      }
       let acOpts: AuditCoreOptions | undefined;
       if (acArgs.includes('--no-orchestration-root')) {
         acOpts = { orchestrationRoot: null };

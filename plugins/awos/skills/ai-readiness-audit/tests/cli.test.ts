@@ -851,3 +851,39 @@ test('audit-core: a valid --orchestration-root is accepted and recorded', () => 
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+// The orchestration flag parsing is shared with audit-core, so enrich used to
+// parse these flags cleanly and then drop them: audit_core.ts ignores opts
+// entirely on the collectedDirOverride path.
+test('enrich: an orchestration-root flag is refused rather than silently dropped', () => {
+  const base = tmpDir('awos-enrich-orchflag-');
+  try {
+    const repo = join(base, 'member');
+    initGitRepo(repo);
+    for (const flag of [
+      ['--no-orchestration-root'],
+      ['--orchestration-root', repo],
+    ]) {
+      const { json, code } = runCli('enrich', repo, join(base, 'out'), ...flag);
+      assert.notEqual(
+        code,
+        0,
+        `enrich ${flag[0]} must fail — enrich re-scores against the first pass's artifacts and ignores these options, so accepting the flag tells the caller something took effect that did not`
+      );
+      const err = json as Record<string, unknown>;
+      assert.ok(
+        typeof err['error'] === 'string' &&
+          err['error'].includes(flag[0]) &&
+          err['error'].includes('enrich'),
+        `the error must name the rejected flag and enrich; got ${JSON.stringify(err)}`
+      );
+      assert.ok(
+        typeof err['hint'] === 'string' &&
+          err['hint'].includes('first audit-core pass'),
+        `the hint must point the caller at audit-core, where the root is actually resolved; got ${JSON.stringify(err)}`
+      );
+    }
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});

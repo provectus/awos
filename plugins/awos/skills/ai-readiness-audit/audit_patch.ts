@@ -162,6 +162,14 @@ export function aggregate(
     'linked_repos',
     'detection_conflicts',
     'standards_meta',
+    // A member repo's orchestration root. Only audit-core can determine it (it
+    // needs the repo path, which aggregate() does not have), so dropping it
+    // here loses it for good. `null` is meaningful — "the audited repo is not
+    // an orchestration member" — and the `!== undefined` guard below preserves
+    // that as null rather than treating it as absent. render.ts gates the
+    // whole cross-boundary note on this field, and patch-judgment aggregates
+    // before every render.
+    'orchestration_root',
   ]) {
     if (existing[block] !== undefined) audit[block] = existing[block];
   }

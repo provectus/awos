@@ -164,15 +164,29 @@ export const SPEC_FRAMEWORKS: readonly SpecFramework[] = [
     // YAML frontmatter (`status: executing`), not per record — see
     // projectStatusFile. Every phase directory is judged against this one
     // vocabulary.
-    statusActive: [
+    //
+    // statusActive/statusTerminal name AWOS's vocabulary ("still being
+    // drafted" vs. "shipped"), and that reading does not transfer to every
+    // framework — read them here as what detectStaleSpecs actually does with
+    // them: statusActive is "counts toward the stale ratio", statusTerminal
+    // is "settled or healthy, does not count against the project". For AWOS,
+    // "not yet Completed" is a fair per-record staleness proxy. For GSD,
+    // whose status is project-level, "not yet complete" would mean every
+    // in-progress GSD project FAILs SDD-06 by definition — the check would
+    // be reading "is this project finished?" rather than "is work stalled?".
+    // So only paused/stopped — the states that actually mean nobody is
+    // working on it — count as active; every working state (including
+    // discussing/planning, before any phase exists yet) reads as healthy.
+    statusActive: ['paused', 'stopped'],
+    statusTerminal: [
       'discussing',
       'planning',
       'executing',
       'verifying',
-      'paused',
-      'stopped',
+      'complete',
+      'completed',
+      'done',
     ],
-    statusTerminal: ['complete', 'completed', 'done'],
     projectStatusFile: '.planning/STATE.md',
   },
 ];
@@ -266,6 +280,14 @@ export function buildSpecRefPattern(): RegExp {
     // sense DOC-07 measures — it documents a choice, not a plan an
     // implementation traces back to.
     if (fw.id === 'adr') continue;
+    // Deliberate: only specRoots (where records actually live) count, not
+    // every marker. Before this rework, DOC-07's hand-written regex matched
+    // any path containing bare `openspec/` — so a reference to e.g.
+    // `openspec/project.md` (project conventions, not a record) counted as
+    // an impl→spec link. Deriving from specRoots narrows that to
+    // `openspec/changes/`, which is more correct — project.md isn't a spec
+    // record — but is a real behavior change from the old regex, reviewed
+    // and accepted rather than an incidental side effect.
     for (const root of fw.specRoots) {
       if (AMBIGUOUS_ROOT_NAMES.has(root)) continue;
       alternatives.push(

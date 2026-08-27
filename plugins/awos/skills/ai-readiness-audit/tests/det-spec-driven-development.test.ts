@@ -1751,36 +1751,59 @@ test('GSD: SDD-05 a phase directory with no matching PLAN.md file is incomplete'
   }
 });
 
-test('GSD: SDD-06 judges every phase record against the single project-level STATE.md status', () => {
-  const repo = tmpDir('awos-sdd06-gsd-active-');
+test('GSD: SDD-06 PASSes a project mid-flight ("executing") — working is not stalled', () => {
+  // "executing" means the team is actively working — the opposite of
+  // abandonment. Mapping every GSD working state to "active" (in the
+  // AWOS "not yet Completed" sense) would make SDD-06 read as "is this
+  // project finished?" and FAIL every in-progress GSD project by
+  // definition. Only paused/stopped — nobody working on it — count as
+  // stalled; see the companion test below.
+  const repo = tmpDir('awos-sdd06-gsd-executing-');
   try {
-    writeGsdState(repo, 'executing'); // active
+    writeGsdState(repo, 'executing');
     writeGsdPhase(repo, '01-init', ['01-01-PLAN.md']);
     writeGsdPhase(repo, '02-next', ['02-01-PLAN.md']);
     const r = detectStaleSpecs(repo);
     assert.equal(
       r.status,
-      'FAIL',
-      '2 of 2 judged records active (both read the one project-level "executing" status) — half or more → FAIL'
-    );
-    assert.ok(
-      r.evidence.some((e) => e.includes('active: GSD: 01-init (executing)')),
-      `evidence must show the shared status applied to the first phase, got: ${JSON.stringify(r.evidence)}`
-    );
-    assert.ok(
-      r.evidence.some((e) => e.includes('active: GSD: 02-next (executing)')),
-      `evidence must show the shared status applied to the second phase, got: ${JSON.stringify(r.evidence)}`
+      'PASS',
+      '0 of 2 judged records active — "executing" is a working (terminal, not-stalled) status for GSD, not an active/stale one'
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }
 });
 
-test('GSD: SDD-06 PASSes once STATE.md declares a terminal status — every phase record settles together', () => {
+test('GSD: SDD-06 flags a project whose STATE.md is paused — every phase record shares the one status', () => {
+  const repo = tmpDir('awos-sdd06-gsd-paused-');
+  try {
+    writeGsdState(repo, 'paused');
+    writeGsdPhase(repo, '01-init', ['01-01-PLAN.md']);
+    writeGsdPhase(repo, '02-next', ['02-01-PLAN.md']);
+    const r = detectStaleSpecs(repo);
+    assert.equal(
+      r.status,
+      'FAIL',
+      '2 of 2 judged records active (both read the one project-level "paused" status) — half or more → FAIL'
+    );
+    assert.ok(
+      r.evidence.some((e) => e.includes('active: GSD: 01-init (paused)')),
+      `evidence must show the shared "paused" status applied to the first phase, got: ${JSON.stringify(r.evidence)}`
+    );
+    assert.ok(
+      r.evidence.some((e) => e.includes('active: GSD: 02-next (paused)')),
+      `evidence must show the shared "paused" status applied to the second phase, got: ${JSON.stringify(r.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('GSD: SDD-06 PASSes once STATE.md declares the project done — every phase record settles together', () => {
   // Proves the project-level status is actually read per call, not cached
-  // stale: the only thing that changes between this fixture and the previous
-  // one is STATE.md's status value, and every phase record's verdict flips
-  // with it.
+  // stale: the only thing that changes between this fixture and the
+  // executing/paused fixtures above is STATE.md's status value, and every
+  // phase record's verdict flips with it.
   const repo = tmpDir('awos-sdd06-gsd-done-');
   try {
     writeGsdState(repo, 'complete'); // terminal

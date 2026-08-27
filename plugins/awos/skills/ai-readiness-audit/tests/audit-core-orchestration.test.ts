@@ -255,7 +255,7 @@ test('enrich fails loudly when neither artifact carries the orchestration root',
           standardsPath(),
           join(out, 'collected')
         ),
-      /cannot recover the orchestration root/,
+      /enrich: no orchestration_root field in/,
       'with no recoverable root, enrich must stop — silently continuing with null produces a wrong score, drops the widened gate from every inheriting judgment check, and leaves the orchestrator patching a check that no longer exists, with no error anywhere'
     );
   } finally {

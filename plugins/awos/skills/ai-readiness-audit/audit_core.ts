@@ -651,7 +651,7 @@ function recoverOrchestrationRoot(
     return { root: gitRaw.orchestration_root ?? null, ignored };
   }
   throw new Error(
-    `enrich: cannot recover the orchestration root the first pass resolved — neither ${auditJsonPath} nor ${gitJsonPath} carries an orchestration_root field. Continuing would silently re-score every inheriting check as if the member had no root. Re-run \`audit-core <repoPath> ${outDir}\` before enrich.`
+    `enrich: no orchestration_root field in ${auditJsonPath} or ${gitJsonPath}. enrich reads that root back from the first audit-core pass rather than re-detecting it, so there is nothing to re-score against. Run \`audit-core <repoPath> ${outDir}\` before enrich.`
   );
 }
 

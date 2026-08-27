@@ -12,6 +12,7 @@
 // whichever practice a repository actually uses.
 // ---------------------------------------------------------------------------
 import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { probeRepoPath, type PathOrigin } from './detectors/_base.ts';
 
 export interface SpecFramework {
@@ -191,6 +192,64 @@ export const SPEC_FRAMEWORKS: readonly SpecFramework[] = [
   },
 ];
 
+// A marker or specRoot equal to one of these is a generic conventional
+// directory name also used for non-spec purposes — RSpec, Jest and Mocha
+// suites all live in specs/ and spec/. Such a name proves nothing on its own:
+// as a marker it must be backed by an actual spec record (hasSpecRecord), and
+// in buildSpecRefPattern it cannot be matched bare and is left to the generic
+// filename-based pattern instead.
+const AMBIGUOUS_ROOT_NAMES = new Set(['specs', 'spec']);
+
+/**
+ * Does `dir` hold something recognizable as a spec record of `fw`?
+ *
+ * Used to qualify an ambiguous marker directory. A record is a markdown file
+ * named the way the framework names its records — one of its `recordTriad`
+ * files, a `recordFilePattern` match, or the `<name>.spec.md` form — found
+ * either directly in `dir` or one level down, which is where the
+ * `specs/NNN-feature/spec.md` layout `specify init` produces puts it.
+ *
+ * Deliberately not the full triad: a genuine Spec Kit repo commonly has
+ * spec.md and no plan.md/tasks.md yet, and requiring all three would reject
+ * it. Requiring markdown is what rules out a Jest/RSpec suite, whose files
+ * are .js/.ts/.rb.
+ */
+function hasSpecRecord(dir: string, fw: SpecFramework): boolean {
+  const triad = new Set(fw.recordTriad.map((f) => f.toLowerCase()));
+  const isRecordFile = (name: string): boolean => {
+    const lower = name.toLowerCase();
+    if (!lower.endsWith('.md')) return false;
+    return (
+      triad.has(lower) ||
+      lower.endsWith('.spec.md') ||
+      (fw.recordFilePattern?.test(name) ?? false)
+    );
+  };
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const e of entries) {
+    if (e.isFile() && isRecordFile(e.name)) return true;
+  }
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    try {
+      if (
+        readdirSync(join(dir, e.name), { withFileTypes: true }).some(
+          (c) => c.isFile() && isRecordFile(c.name)
+        )
+      )
+        return true;
+    } catch {
+      // Unreadable subdirectory — no evidence either way, keep looking.
+    }
+  }
+  return false;
+}
+
 /** Count markdown records directly under `dir`. */
 function recordCount(dir: string): number {
   try {
@@ -210,9 +269,12 @@ function recordCount(dir: string): number {
  * Which recognized practices this repository uses, and whether each was found
  * in the repo itself or inherited from an orchestration root.
  *
- * A framework with an explicit installation marker counts on presence alone. A
- * bare decision-record practice must clear MIN_DECISION_RECORDS: one stray ADR
- * is not a practice, and the dimension should not award points for it.
+ * A framework with an explicit installation marker (`.specify`, `.kiro/specs`,
+ * …) counts on presence alone. Two kinds of marker have to earn it: a bare
+ * decision-record practice must clear MIN_DECISION_RECORDS (one stray ADR is
+ * not a practice), and a marker named after a generic convention — Spec Kit's
+ * `specs`, which is equally a Jest/RSpec test directory — must hold a real
+ * spec record.
  */
 export function detectSpecFrameworks(
   repoPath: string,
@@ -225,6 +287,14 @@ export function detectSpecFrameworks(
       const probe = probeRepoPath(repoPath, params, marker);
       if (probe.path === null) continue;
       if (fw.id === 'adr' && recordCount(probe.path) < MIN_DECISION_RECORDS) {
+        continue;
+      }
+      // A marker whose name is a generic convention (Spec Kit's `specs`) is
+      // not evidence on its own — every Jest/RSpec/Mocha repo with a specs/
+      // test directory would qualify. Require a real spec record behind it.
+      // Unambiguous markers (`.specify`, `.kiro/specs`, …) still count on
+      // presence alone.
+      if (AMBIGUOUS_ROOT_NAMES.has(marker) && !hasSpecRecord(probe.path, fw)) {
         continue;
       }
       origin = probe.origin;
@@ -259,12 +329,6 @@ export function specRootsFor(
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-
-// A specRoot equal to one of these is a generic conventional directory name
-// also used for non-spec purposes (RSpec/Jest test suites live in specs/ and
-// spec/ too) — it cannot be matched bare and is left to the generic
-// filename-based pattern below instead.
-const AMBIGUOUS_ROOT_NAMES = new Set(['specs', 'spec']);
 
 /**
  * A single regex recognizing an impl-file reference to a spec/decision

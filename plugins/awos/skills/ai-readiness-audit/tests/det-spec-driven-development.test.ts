@@ -14,6 +14,7 @@ import {
   DETECTORS,
 } from '../detectors/spec_driven_development.ts';
 import { tmpDir, writeRepo } from './helpers.ts';
+import { detectSpecFrameworks } from '../spec_frameworks.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1814,6 +1815,80 @@ test('GSD: SDD-06 PASSes once STATE.md declares the project done — every phase
       r.status,
       'PASS',
       '0 of 2 judged records active once STATE.md reads "complete" (terminal) → PASS'
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GitHub Spec Kit detection — SDD-01 (code 2800) and the framework registry.
+//
+// Spec Kit's markers are `.specify` and `specs`. `.specify/` is unique enough
+// to stand alone; `specs/` is not — Jest, Mocha and RSpec projects all keep
+// test suites there. A bare test directory must not be credited as an adopted
+// spec practice (and must not flip topology.has_spec_workflow, which un-SKIPs
+// the rest of the dimension).
+// ---------------------------------------------------------------------------
+
+test('Spec Kit: a bare specs/ directory holding only test files is not an adopted spec practice', () => {
+  const repo = tmpDir('awos-sdd01-speckit-jest-');
+  try {
+    writeRepo(repo, {
+      'specs/user.spec.js':
+        "describe('user', () => {\n  it('works', () => {\n    expect(1).toBe(1);\n  });\n});\n",
+    });
+    const found = detectSpecFrameworks(repo).map((f) => f.framework.id);
+    assert.ok(
+      !found.includes('spec-kit'),
+      `a specs/ directory of Jest tests is not GitHub Spec Kit — "specs" is a conventional test-suite name, so the marker needs a real spec record behind it; got ${JSON.stringify(found)}`
+    );
+    const r = DETECTORS[2800](repo);
+    assert.notEqual(
+      r.status,
+      'PASS',
+      `SDD-01 must not award spec-driven credit to a repo whose only "spec" content is a Jest test directory; got ${r.status} with evidence ${JSON.stringify(r.evidence)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('Spec Kit: .specify/ alone is enough — the install marker is unambiguous', () => {
+  const repo = tmpDir('awos-sdd01-speckit-specify-');
+  try {
+    writeRepo(repo, {
+      '.specify/templates/spec-template.md': '# Spec template\n',
+    });
+    const found = detectSpecFrameworks(repo).map((f) => f.framework.id);
+    assert.ok(
+      found.includes('spec-kit'),
+      `.specify/ is Spec Kit's own installation directory and must qualify on its own, got ${JSON.stringify(found)}`
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('Spec Kit: a specs/ directory holding real spec records qualifies without .specify/', () => {
+  // The layout `specify init` produces: specs/NNN-feature/spec.md. Records may
+  // be spec.md alone — the full spec/plan/tasks triad is not required, and a
+  // real Spec Kit repo often has only spec.md at this stage.
+  const repo = tmpDir('awos-sdd01-speckit-records-');
+  try {
+    writeRepo(repo, {
+      'specs/001-user-onboarding/spec.md':
+        '# User onboarding\n\n## Requirements\n\nUsers can sign up.\n',
+    });
+    const found = detectSpecFrameworks(repo).map((f) => f.framework.id);
+    assert.ok(
+      found.includes('spec-kit'),
+      `specs/001-user-onboarding/spec.md is a genuine Spec Kit record and must be recognized, got ${JSON.stringify(found)}`
+    );
+    assert.equal(
+      DETECTORS[2800](repo).status,
+      'PASS',
+      'a repo with real spec records under specs/ has adopted a spec-driven practice'
     );
   } finally {
     rmSync(repo, { recursive: true, force: true });

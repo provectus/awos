@@ -595,6 +595,12 @@ export interface AuditCoreOptions {
    * undefined → auto-detect via detectOrchestrationRelation
    * string    → use this root
    * null      → inheritance explicitly disabled (how a root audits itself)
+   *
+   * `undefined` means auto-detect whether the key is absent or present-and-
+   * undefined, so forwarding an optional (`{ orchestrationRoot: cfg.root }`
+   * where `cfg.root` may be undefined) auto-detects rather than silently
+   * disabling a member's inherited credit. Only an explicit `null` turns
+   * inheritance off.
    */
   orchestrationRoot?: string | null;
 }
@@ -692,8 +698,8 @@ export async function auditCore(
     const recovered = recoverOrchestrationRoot(outDir, collectedDirOverride);
     orchestrationRoot = recovered.root;
     orchestrationRootIgnored = recovered.ignored;
-  } else if (opts && 'orchestrationRoot' in opts) {
-    orchestrationRoot = opts.orchestrationRoot ?? null;
+  } else if (opts && opts.orchestrationRoot !== undefined) {
+    orchestrationRoot = opts.orchestrationRoot;
   } else {
     const rel = detectOrchestrationRelation(repoPath);
     orchestrationRoot = rel.root;

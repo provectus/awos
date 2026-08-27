@@ -262,3 +262,58 @@ test('enrich fails loudly when neither artifact carries the orchestration root',
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// AuditCoreOptions.orchestrationRoot is a three-state contract. The states are
+// distinguished by VALUE, not by key presence: forwarding an optional
+// (`{ orchestrationRoot: cfg.root }` where cfg.root may be undefined)
+// typechecks under this repo's non-strict tsconfig, and reading it as "off"
+// would silently strip a member's inherited credit with nothing to notice it.
+test('orchestrationRoot: omitted and explicitly-undefined both mean auto-detect; only null means off', async () => {
+  const root = tmpDir('awos-ac-tristate-');
+  try {
+    initRepo(root);
+    writeTooling(root);
+    const member = join(root, 'services', 'api');
+    initRepo(member);
+    const outBase = tmpDir('awos-ac-tristate-out-');
+
+    const run = async (
+      name: string,
+      opts?: Parameters<typeof auditCore>[6]
+    ): Promise<string | null> => {
+      const summary = await auditCore(
+        member,
+        join(outBase, name),
+        DETECTORS,
+        METRICS,
+        standardsPath(),
+        undefined,
+        opts
+      );
+      return summary.orchestration_root;
+    };
+
+    assert.equal(
+      await run('omitted'),
+      realRoot(root),
+      'no options at all must auto-detect the root'
+    );
+    assert.equal(
+      await run('undefined', { orchestrationRoot: undefined }),
+      realRoot(root),
+      'an explicit undefined must auto-detect, exactly as the documented contract says — testing key presence instead of value turns a forwarded optional into "inheritance off" and silently drops the member\'s inherited credit'
+    );
+    assert.equal(
+      await run('null', { orchestrationRoot: null }),
+      null,
+      'only an explicit null disables inheritance — this is how the root audits itself'
+    );
+    assert.equal(
+      await run('string', { orchestrationRoot: '/tmp/some-root' }),
+      '/tmp/some-root',
+      'an explicit string must be used verbatim'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

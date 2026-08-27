@@ -781,7 +781,7 @@ export interface OrchestrationRelation {
 }
 
 /** Absolute work-tree root for `dir`, or null when `dir` is not in a work tree. */
-function workTreeRoot(dir: string): string | null {
+export function workTreeRoot(dir: string): string | null {
   try {
     const out = execFileSync(
       'git',

@@ -738,3 +738,116 @@ test('patch-judgment: boolean value is dropped with a warning, numeric value is 
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// 'audit-core --orchestration-root' — the one engine input an LLM hand-builds
+// (the org-mode repo-auditor subagent interpolates it), so a bad path is a
+// realistic input and must fail loudly rather than quietly scoring the member
+// as if the root carried no tooling.
+// ---------------------------------------------------------------------------
+
+/** Init a git work tree with one commit. */
+function initGitRepo(dir: string): void {
+  mkdirSync(dir, { recursive: true });
+  execFileSync('git', ['init', '-q'], { cwd: dir, stdio: 'ignore' });
+  writeFileSync(join(dir, 'README.md'), '# repo\n');
+  execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'ignore' });
+  execFileSync(
+    'git',
+    ['-c', 'user.name=t', '-c', 'user.email=t@e.x', 'commit', '-qm', 'init'],
+    { cwd: dir, stdio: 'ignore' }
+  );
+}
+
+test('audit-core: a non-existent --orchestration-root path exits non-zero naming the path', () => {
+  const base = tmpDir('awos-orchroot-missing-');
+  try {
+    const repo = join(base, 'member');
+    initGitRepo(repo);
+    const bogus = join(base, 'no-such-root');
+    const { json, code } = runCli(
+      'audit-core',
+      repo,
+      join(base, 'out'),
+      '--orchestration-root',
+      bogus
+    );
+    assert.notEqual(
+      code,
+      0,
+      'a --orchestration-root path that does not exist must fail the run — accepting it silently scores every inherited check as absent while audit.json still claims inheritance was in effect'
+    );
+    const err = json as Record<string, unknown>;
+    assert.ok(
+      typeof err['error'] === 'string' &&
+        err['error'].includes('does not exist') &&
+        err['error'].includes(bogus),
+      `the error must say the path does not exist and name the offending path; got ${JSON.stringify(err)}`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('audit-core: an --orchestration-root that is not a git work tree exits non-zero', () => {
+  const base = tmpDir('awos-orchroot-nongit-');
+  try {
+    const repo = join(base, 'member');
+    initGitRepo(repo);
+    // Exists, but carries no git work tree — a stale or mistyped path that
+    // happens to land on a real directory.
+    const notARepo = join(base, 'plain-dir');
+    mkdirSync(notARepo, { recursive: true });
+    const { json, code } = runCli(
+      'audit-core',
+      repo,
+      join(base, 'out'),
+      '--orchestration-root',
+      notARepo
+    );
+    assert.notEqual(
+      code,
+      0,
+      'an --orchestration-root outside any git work tree must fail — the orchestration root is by definition a git repository'
+    );
+    const err = json as Record<string, unknown>;
+    assert.ok(
+      typeof err['error'] === 'string' &&
+        err['error'].includes('not inside a git work tree') &&
+        err['error'].includes(notARepo),
+      `the error must say the path is not a git work tree and name it; got ${JSON.stringify(err)}`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('audit-core: a valid --orchestration-root is accepted and recorded', () => {
+  const base = tmpDir('awos-orchroot-valid-');
+  try {
+    const root = join(base, 'root');
+    initGitRepo(root);
+    const member = join(root, 'services', 'api');
+    initGitRepo(member);
+    const out = join(base, 'out');
+    const { json, code } = runCli(
+      'audit-core',
+      member,
+      out,
+      '--orchestration-root',
+      root
+    );
+    assert.equal(
+      code,
+      0,
+      'validation must not reject a real git work tree — that would disable inheritance for every legitimate member audit'
+    );
+    assert.equal(
+      (json as Record<string, unknown>)['orchestration_root'],
+      root,
+      'the validated root must be the one the audit runs with, unchanged'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});

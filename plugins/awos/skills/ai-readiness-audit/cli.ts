@@ -22,6 +22,7 @@ import {
   mkdirSync,
   readdirSync,
   statSync,
+  existsSync,
 } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,7 +67,7 @@ import {
   reportContext,
   type ReportBlocksPatch,
 } from './audit_patch.ts';
-import { detectOrgParent } from './topology.ts';
+import { detectOrgParent, workTreeRoot } from './topology.ts';
 
 /** Resolve the skill root (where references/ lives) from the bundle location. */
 function resolveSkillRoot(): string {
@@ -79,6 +80,37 @@ function resolveSkillRoot(): string {
 /** Path of the bundled standards.toml (the scoring source of truth). */
 function standardsTomlPath(): string {
   return join(resolveSkillRoot(), 'references', 'standards.toml');
+}
+
+/**
+ * Resolve and validate `--orchestration-root`. This is the one engine input an
+ * LLM hand-builds (the org-mode repo-auditor subagent interpolates the path),
+ * so a relative, stale, mistyped, or never-substituted `<ORCHESTRATION_ROOT>`
+ * placeholder is a realistic input. Unvalidated, every inherited probe under
+ * such a path just answers "absent" — indistinguishable from "the root carries
+ * no tooling" — while audit.json still records the bogus root and the report
+ * asserts an inheritance that never happened. Nothing else in the run fails,
+ * so the check has to happen here.
+ */
+function validOrchestrationRoot(rootArg: string): string {
+  const abs = resolve(rootArg);
+  const usage =
+    'node dist/cli.js audit-core <repoPath> <outDir> --orchestration-root <path>';
+  if (!existsSync(abs)) {
+    fail({
+      error: `--orchestration-root path does not exist: ${abs}`,
+      hint: 'pass an absolute path to the orchestration root repository (a relative path is resolved against the current working directory, and an unsubstituted placeholder never resolves)',
+      usage,
+    });
+  }
+  if (workTreeRoot(abs) === null) {
+    fail({
+      error: `--orchestration-root is not inside a git work tree: ${abs}`,
+      hint: 'the orchestration root is a git repository whose agent tooling the member repos inherit',
+      usage,
+    });
+  }
+  return abs;
 }
 
 // ---------------------------------------------------------------------------
@@ -366,7 +398,7 @@ async function main(): Promise<void> {
                 'node dist/cli.js audit-core <repoPath> <outDir> --orchestration-root <path>',
             });
           }
-          acOpts = { orchestrationRoot: resolve(rootArg) };
+          acOpts = { orchestrationRoot: validOrchestrationRoot(rootArg) };
         }
       }
 

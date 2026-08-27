@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import {
   detectOrchestrationRelation,
   detectOrchestrationMembers,
+  homeBoundary,
   computeTopology,
   ORCHESTRATION_WIDENED_FLAGS,
 } from './topology.ts';
@@ -307,4 +308,57 @@ test('ORCHESTRATION_WIDENED_FLAGS is the declared widening set', () => {
     ],
     'the widened-flag set is a contract other tests assert against; changing it must be deliberate'
   );
+});
+
+test('detectOrchestrationRelation stops at $HOME even when $HOME is not itself a work tree', () => {
+  // The other $HOME test covers the case where $HOME IS a git work tree, which
+  // the candidate-side guard catches. This one covers the cursor-side guard:
+  // git discovery fails at $HOME (a stale, invalid ~/.git — an aborted init or
+  // a moved work tree leaves exactly this), so the candidate is null there and
+  // the walk would otherwise climb straight past $HOME into whatever repo
+  // encloses it.
+  const base = tmpDir('awos-orch-homenotrepo-');
+  const originalHome = process.env.HOME;
+  try {
+    const outer = join(base, 'outer');
+    initRepo(outer);
+    writeTooling(outer);
+    const home = join(outer, 'home');
+    mkdirSync(home, { recursive: true });
+    writeFileSync(join(home, '.git'), 'gitdir: /nonexistent-gitdir\n');
+    const project = join(home, 'project');
+    initRepo(project);
+
+    process.env.HOME = home;
+    assert.equal(
+      detectOrchestrationRelation(project).root,
+      null,
+      "$HOME must end the ancestor walk whether or not it is a work tree itself — with git discovery failing at $HOME the walk must stop there rather than climbing out and crediting the enclosing repo's tooling"
+    );
+  } finally {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('homeBoundary() falls back to the unresolved $HOME rather than disappearing', () => {
+  // Both boundary guards in detectOrchestrationRelation are conditional on
+  // having a home path. A null here removes BOTH of them, so an unresolvable
+  // $HOME (containers, `nobody`-style CI users) silently turns the ancestor
+  // walk loose — the failure mode that once credited the auditor's own
+  // ~/.claude tooling to the audited repo.
+  const originalHome = process.env.HOME;
+  const missing = join(tmpDir('awos-orch-homegone-'), 'no-such-home');
+  try {
+    process.env.HOME = missing;
+    assert.equal(
+      homeBoundary(),
+      missing,
+      'an unresolvable $HOME must still yield a boundary — the unresolved path — never null, which would drop both boundary guards'
+    );
+  } finally {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+  }
 });

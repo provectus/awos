@@ -838,6 +838,27 @@ function isIgnoredBy(parent: string, child: string): boolean {
 }
 
 /**
+ * The `$HOME` boundary the orchestration ancestor walk stops at, normalized
+ * without a trailing slash.
+ *
+ * Resolved through realpathSync so a symlinked home compares equal to the
+ * canonical paths workTreeRoot() produces. When that resolution fails — $HOME
+ * absent or unreadable, as under a container or a `nobody`-style CI user — the
+ * unresolved path is the answer, never null. Both boundary guards below are
+ * conditional on this value, so a null would drop both of them at once and
+ * turn the ancestor walk loose out of the home directory: the failure mode
+ * that once credited the auditor's own ~/.claude tooling to the audited repo.
+ */
+export function homeBoundary(): string {
+  const raw = homedir().replace(/\/+$/, '');
+  try {
+    return realpathSync(raw).replace(/\/+$/, '');
+  } catch {
+    return raw;
+  }
+}
+
+/**
  * Resolve the orchestration root for `repoPath`, if any.
  *
  * Walks ancestors up to ORCHESTRATION_ANCESTOR_LIMIT levels, stopping at the
@@ -851,13 +872,7 @@ export function detectOrchestrationRelation(
   const own = workTreeRoot(repoPath);
   if (own === null) return none;
 
-  const home = (() => {
-    try {
-      return realpathSync(homedir()).replace(/\/+$/, '');
-    } catch {
-      return null;
-    }
-  })();
+  const home = homeBoundary();
 
   let cursor = dirname(own);
   for (let i = 0; i < ORCHESTRATION_ANCESTOR_LIMIT; i++) {
@@ -868,7 +883,7 @@ export function detectOrchestrationRelation(
     // ancestor step whenever $HOME itself is a git work tree (cursor need
     // never literally equal home for this to happen) — so the candidate, not
     // just cursor, must be checked against home before it can be credited.
-    if (candidate !== null && home !== null && candidate === home) break;
+    if (candidate === home) break;
     if (candidate !== null && candidate !== own) {
       // A submodule is a nested work tree, but its failure mode is
       // double-counting rather than missing credit — out of scope here.
@@ -883,7 +898,7 @@ export function detectOrchestrationRelation(
     }
     // Covers the case where $HOME is not itself a git work tree (candidate is
     // null for cursor === home), so the walk would otherwise climb past it.
-    if (home !== null && cursor === home) break;
+    if (cursor === home) break;
     cursor = dirname(cursor);
   }
   return none;

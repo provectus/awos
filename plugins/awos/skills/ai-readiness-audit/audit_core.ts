@@ -599,6 +599,65 @@ export interface AuditCoreOptions {
   orchestrationRoot?: string | null;
 }
 
+/**
+ * Recover the orchestration root the first pass resolved, for the `enrich`
+ * re-score. Reading it back — rather than re-detecting or asking the
+ * orchestrator to re-pass a flag — is what makes the two passes agree by
+ * construction; that guarantee only holds if a failed read-back stops the run.
+ *
+ * A silent fall back to `null` here is the damaging outcome: enrich would
+ * rebuild every judgment check without its widened gate, so an inheriting
+ * check such as PRV-17 flips `applies` to false and its weight leaves both the
+ * numerator and the denominator, the orchestrator's judgment verdict lands on
+ * a check that no longer exists, and every cross-boundary note disappears —
+ * a wrong score with no error anywhere.
+ *
+ * audit.json is the primary source: audit-core always writes it, aggregate()
+ * preserves the field, and it is not tied to whether git could run.
+ * collected/git.json carries the same value in its `raw` payload and is the
+ * fallback — but git writes `{}` as its raw payload when git is unavailable,
+ * exactly the case where the field is simply missing.
+ */
+function recoverOrchestrationRoot(
+  outDir: string,
+  collectedDirOverride: string
+): { root: string | null; ignored: boolean } {
+  const auditJsonPath = join(outDir, 'audit.json');
+  const gitJsonPath = join(collectedDirOverride, 'git.json');
+
+  const audit = readJsonIfPossible(auditJsonPath) as {
+    orchestration_root?: string | null;
+  } | null;
+  const gitRaw = (
+    readJsonIfPossible(gitJsonPath) as {
+      raw?: {
+        orchestration_root?: string | null;
+        orchestration_root_ignored?: boolean;
+      };
+    } | null
+  )?.raw;
+
+  const ignored = gitRaw?.orchestration_root_ignored ?? false;
+  if (audit && 'orchestration_root' in audit) {
+    return { root: audit.orchestration_root ?? null, ignored };
+  }
+  if (gitRaw && 'orchestration_root' in gitRaw) {
+    return { root: gitRaw.orchestration_root ?? null, ignored };
+  }
+  throw new Error(
+    `enrich: cannot recover the orchestration root the first pass resolved — neither ${auditJsonPath} nor ${gitJsonPath} carries an orchestration_root field. Continuing would silently re-score every inheriting check as if the member had no root. Re-run \`audit-core <repoPath> ${outDir}\` before enrich.`
+  );
+}
+
+/** Parse a JSON file, or null when it is missing or unparseable. */
+function readJsonIfPossible(path: string): unknown {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 export async function auditCore(
   repoPath: string,
   outDir: string,
@@ -630,20 +689,9 @@ export async function auditCore(
   let orchestrationRoot: string | null = null;
   let orchestrationRootIgnored = false;
   if (collectedDirOverride) {
-    try {
-      const prior = JSON.parse(
-        readFileSync(join(collectedDirOverride, 'git.json'), 'utf8')
-      ) as {
-        raw?: {
-          orchestration_root?: string | null;
-          orchestration_root_ignored?: boolean;
-        };
-      };
-      orchestrationRoot = prior.raw?.orchestration_root ?? null;
-      orchestrationRootIgnored = prior.raw?.orchestration_root_ignored ?? false;
-    } catch {
-      orchestrationRoot = null;
-    }
+    const recovered = recoverOrchestrationRoot(outDir, collectedDirOverride);
+    orchestrationRoot = recovered.root;
+    orchestrationRootIgnored = recovered.ignored;
   } else if (opts && 'orchestrationRoot' in opts) {
     orchestrationRoot = opts.orchestrationRoot ?? null;
   } else {

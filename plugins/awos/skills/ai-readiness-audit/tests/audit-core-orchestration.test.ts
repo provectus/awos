@@ -183,3 +183,82 @@ test('widening the agent-file flag does not un-SKIP non-inheriting checks', asyn
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// The read-back must not depend on the git collector. `orchestration_root`
+// lives in collected/git.json's `raw` payload, which is `{}` whenever git is
+// unavailable — so the field goes missing exactly when git breaks, and a
+// silent fall back to null would re-score every inheriting check as if the
+// member had no root at all.
+test('enrich recovers the root from audit.json when collected/git.json has lost it', async () => {
+  const root = tmpDir('awos-ac-readback-');
+  try {
+    initRepo(root);
+    writeTooling(root);
+    const member = join(root, 'services', 'api');
+    initRepo(member);
+    const out = join(tmpDir('awos-ac-readback-out-'), 'audit');
+
+    await auditCore(member, out, DETECTORS, METRICS, standardsPath());
+
+    // Simulate git being unavailable in the first pass: the collector wrote
+    // its artifact, but `raw` carries no orchestration_root.
+    const gitPath = join(out, 'collected', 'git.json');
+    const git = JSON.parse(readFileSync(gitPath, 'utf8'));
+    delete git.raw.orchestration_root;
+    writeFileSync(gitPath, JSON.stringify(git, null, 2));
+
+    const enriched = await auditCore(
+      member,
+      out,
+      DETECTORS,
+      METRICS,
+      standardsPath(),
+      join(out, 'collected')
+    );
+    assert.equal(
+      enriched.orchestration_root,
+      realRoot(root),
+      'enrich must recover the root from audit.json — the artifact audit-core always writes and aggregate() preserves — rather than degrading to null when the git collector artifact has no such field'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('enrich fails loudly when neither artifact carries the orchestration root', async () => {
+  const root = tmpDir('awos-ac-readback-fail-');
+  try {
+    initRepo(root);
+    writeTooling(root);
+    const member = join(root, 'services', 'api');
+    initRepo(member);
+    const out = join(tmpDir('awos-ac-readback-fail-out-'), 'audit');
+
+    await auditCore(member, out, DETECTORS, METRICS, standardsPath());
+
+    const gitPath = join(out, 'collected', 'git.json');
+    const git = JSON.parse(readFileSync(gitPath, 'utf8'));
+    delete git.raw.orchestration_root;
+    writeFileSync(gitPath, JSON.stringify(git, null, 2));
+    const auditPath = join(out, 'audit.json');
+    const audit = JSON.parse(readFileSync(auditPath, 'utf8'));
+    delete audit.orchestration_root;
+    writeFileSync(auditPath, JSON.stringify(audit, null, 2));
+
+    await assert.rejects(
+      () =>
+        auditCore(
+          member,
+          out,
+          DETECTORS,
+          METRICS,
+          standardsPath(),
+          join(out, 'collected')
+        ),
+      /cannot recover the orchestration root/,
+      'with no recoverable root, enrich must stop — silently continuing with null produces a wrong score, drops the widened gate from every inheriting judgment check, and leaves the orchestrator patching a check that no longer exists, with no error anywhere'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

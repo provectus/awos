@@ -41,3 +41,9 @@ That is why **`awos`** is built on a vertical structure, moving from a high-leve
 5. **Task List**: The turn-by-turn directions for our walk.
 
 Each step provides the right information at the right level of detail. By following this process, you tell a complete and coherent story to the AI agents, ensuring they have the full context they need to build your vision into reality.
+
+## When the Full Map Is Too Much: Quick Tasks
+
+Not every journey needs a country map, a city map, and turn-by-turn directions. Some work is a short walk to a place you already know — a focused bug fix, a small refactor, a config change. Forcing that through the full vertical structure adds ceremony without adding context the agent actually needs.
+
+For those, `/awos:quick` offers a shorter path: it plans a single task, delegates the coding to the same specialist agents `/awos:implement` uses, and records a lightweight `PLAN.md` and `SUMMARY.md` under `context/quick/` — separate from the roadmap. It preserves the two principles that make the full structure work — a written plan before code, and a specialist doing the work — while dropping the layers a one-off task doesn't warrant. Reach for the full cycle when the work is a genuine feature with its own story to tell; reach for `/awos:quick` when it isn't.

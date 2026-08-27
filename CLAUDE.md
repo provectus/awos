@@ -102,7 +102,9 @@ The canonical flow (each command is a markdown prompt under `commands/`):
 
 The first four are run once at project setup; the last five iterate per feature. Each command reads/writes a specific document under `context/` (e.g. `context/product/product-definition.md`, `context/spec/NNN-feature/tasks.md`). The numeric prefix on spec directories is allocated by `scripts/create-spec-directory.sh`.
 
-**Implementation delegation rule:** `/awos:implement` is an orchestrator only — it reads `tasks.md`, extracts the `**[Agent: name]**` marker from each task, and delegates to a subagent. The orchestrator is explicitly prohibited from editing code itself. Preserve this contract when editing `commands/implement.md`.
+**Quick-task shortcut:** `/awos:quick` sits alongside the canonical flow for contained, one-off work that doesn't justify a full spec. It plans a single task, delegates to a specialist subagent, and writes `PLAN.md`/`SUMMARY.md` under `context/quick/NNNNNNNN-slug/` — separate from `context/spec/` and never tracked in the roadmap. It shares `/awos:implement`'s orchestrator-only contract (delegates all code changes) and offers `list`/`status`/`resume` subcommands.
+
+**Implementation delegation rule:** `/awos:implement` is an orchestrator only — it reads `tasks.md`, extracts the `**[Agent: name]**` marker from each task, and delegates to a subagent. The orchestrator is explicitly prohibited from editing code itself. Preserve this contract when editing `commands/implement.md`. `/awos:quick` follows the same rule.
 
 ## Architecture: Installer Pipeline
 

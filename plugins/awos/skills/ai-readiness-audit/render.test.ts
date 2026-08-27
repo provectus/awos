@@ -1712,10 +1712,11 @@ test('org Repositories table: Cycle time and MTTR column headers carry the same 
 
 // ---------------------------------------------------------------------------
 // Cross-boundary limitation note (orchestration-root members) — SDD-04 reads
-// per-work-tree git history and so cannot score across the root↔member
-// boundary; a report reader must see why that check stays red while
-// everything else goes green. DOC-07 inherits the root's spec corpus and does
-// score across the boundary, so it must NOT carry the note.
+// per-work-tree git history, so a member's spec-touch ratio counts only the
+// spec edits that landed beside the code and understates the practice; a
+// report reader must see why that check reads low while everything else goes
+// green. DOC-07 inherits the root's spec corpus and is not depressed the same
+// way, so it must NOT carry the note.
 // ---------------------------------------------------------------------------
 
 test('renderHtml shows the cross-boundary note on SDD-04 for a member repo', () => {
@@ -1772,8 +1773,8 @@ test('renderHtml omits the cross-boundary note for checks that are not SDD-04, e
   // DOC-07 belongs on this side of the line, not with SDD-04: it inherits the
   // root's spec corpus via probeRepoPath() and matches those specs against the
   // member's own source paths, so it measures across the boundary and moves
-  // FAIL → WARN on a real member. Annotating it as structurally unmeasurable
-  // would contradict what the engine scores.
+  // FAIL → WARN on a real member. Annotating it as depressed by the split
+  // would claim a limitation the engine does not exhibit.
   const doc07 = makeCheck({
     check_id: 'DOC-07',
     status: 'WARN',
@@ -1795,6 +1796,6 @@ test('renderHtml omits the cross-boundary note for checks that are not SDD-04, e
   const md = renderMarkdown(audit);
   assert.ok(
     !md.includes('cross-boundary limitation'),
-    'the Markdown report must agree — DOC-07 scores across the boundary, so telling the reader it cannot measure there is simply false'
+    'the Markdown report must agree — DOC-07 scores across the boundary undepressed, so telling the reader its score is understated there is simply false'
   );
 });

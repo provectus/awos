@@ -481,9 +481,10 @@ export interface AuditJson {
   engine?: EngineProvenance;
   /**
    * Absolute path to the orchestration root this repo is a member of, or
-   * null for a standalone repo / the root itself. Stamped by audit-core from
-   * collected/git.json so the renderer can flag checks that structurally
-   * cannot score across the root↔member boundary (see SDD-04, DOC-07).
+   * null for a standalone repo / the root itself. Stamped by audit-core so
+   * the renderer can flag checks that structurally cannot score across the
+   * root↔member boundary (SDD-04 — see CROSS_BOUNDARY_LIMITED_CHECKS in
+   * render.ts).
    */
   orchestration_root?: string | null;
 }

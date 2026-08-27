@@ -53,7 +53,7 @@ test('aggregate() carries orchestration_root forward so the cross-boundary note 
     const md = renderMarkdown(after);
     assert.ok(
       md.includes('cross-boundary limitation'),
-      'the rendered report of an orchestration member must carry the cross-boundary limitation note on SDD-04/DOC-07 — its render gate reads audit.orchestration_root, which aggregate() must not have dropped'
+      'the rendered report of an orchestration member must carry the cross-boundary limitation note on SDD-04 — its render gate reads audit.orchestration_root, which aggregate() must not have dropped'
     );
   } finally {
     fx.cleanup();

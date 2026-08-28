@@ -59,6 +59,7 @@ import {
   detectLinkedRepos,
   detectFrameworks,
   detectOrchestrationRelation,
+  orchestrationRootIgnores,
   type TopologyFlags,
 } from './topology.ts';
 import { detectLanguages, LANGUAGES } from './languages.ts';
@@ -700,6 +701,14 @@ export async function auditCore(
     orchestrationRootIgnored = recovered.ignored;
   } else if (opts && opts.orchestrationRoot !== undefined) {
     orchestrationRoot = opts.orchestrationRoot;
+    // The org dispatch passes the root explicitly for every member, so the
+    // ignored half of the relation has to be derived here too — otherwise
+    // git.json reports orchestration_root_ignored: false for every dispatched
+    // member, including the gitignored ones the flag exists to describe.
+    orchestrationRootIgnored =
+      orchestrationRoot === null
+        ? false
+        : orchestrationRootIgnores(orchestrationRoot, repoPath);
   } else {
     const rel = detectOrchestrationRelation(repoPath);
     orchestrationRoot = rel.root;

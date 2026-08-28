@@ -852,6 +852,44 @@ test('audit-core: a valid --orchestration-root is accepted and recorded', () => 
   }
 });
 
+test('audit-core: an explicit --orchestration-root records the ignored relation', () => {
+  // The org dispatch supplies the root explicitly for every member, so this
+  // branch — not the auto-detect one — is what runs for the gitignored
+  // service subdirectories the field exists to describe.
+  const base = tmpDir('awos-orchroot-ignored-');
+  try {
+    const root = join(base, 'root');
+    initGitRepo(root);
+    writeFileSync(join(root, '.gitignore'), 'services/\n');
+    const member = join(root, 'services', 'api');
+    initGitRepo(member);
+    const out = join(base, 'out');
+    const { code } = runCli(
+      'audit-core',
+      member,
+      out,
+      '--orchestration-root',
+      root
+    );
+    assert.equal(code, 0, 'a gitignored member under a real root must audit');
+    const git = JSON.parse(
+      readFileSync(join(out, 'collected', 'git.json'), 'utf8')
+    ) as { raw: Record<string, unknown> };
+    assert.equal(
+      git.raw['orchestration_root'],
+      root,
+      'the explicitly supplied root must be recorded in the git artifact'
+    );
+    assert.equal(
+      git.raw['orchestration_root_ignored'],
+      true,
+      'the explicit-root branch must derive the ignored half of the relation, not leave it at false — the root gitignores services/, which is the exact layout orchestration_root_ignored exists to report'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 // The orchestration flag parsing is shared with audit-core, so enrich used to
 // parse these flags cleanly and then drop them: audit_core.ts ignores opts
 // entirely on the collectedDirOverride path.

@@ -838,6 +838,18 @@ function isIgnoredBy(parent: string, child: string): boolean {
 }
 
 /**
+ * True when the orchestration root's gitignore rules cover `repoPath`. The
+ * org dispatch supplies the root explicitly, so the ignored half of the
+ * relation has to be derivable without re-running the ancestor walk.
+ */
+export function orchestrationRootIgnores(
+  root: string,
+  repoPath: string
+): boolean {
+  return isIgnoredBy(root, workTreeRoot(repoPath) ?? resolve(repoPath));
+}
+
+/**
  * The `$HOME` boundary the orchestration ancestor walk stops at, normalized
  * without a trailing slash.
  *

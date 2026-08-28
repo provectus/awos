@@ -73,11 +73,83 @@ function quoteLike(frontmatter, key, value) {
 export function assemble(src, fills, stamp) {
   const parsed = parseTemplate(src);
 
-  // 1. Which stages are emitted, in template order.
+  // 1. Which stages are emitted, and in what order — template order, unless
+  // stageOrder overrides it (the change-request-first review move reorders
+  // stages this way).
   const omitStages = new Set(fills.omitStages || []);
-  const emitted = parsed.stages.filter((s) => !omitStages.has(s.id));
+  let baseStages = parsed.stages.filter((s) => !omitStages.has(s.id));
+  if (fills.stageOrder) {
+    const byId = new Map(baseStages.map((s) => [s.id, s]));
+    baseStages = fills.stageOrder.map((id) => {
+      const stage = byId.get(id);
+      if (!stage) {
+        throw new Error(`stageOrder references unknown stage "${id}"`);
+      }
+      return stage;
+    });
+  }
+
+  // 1a. Escape hatches that expand or replace a single template stage:
+  // repeat emits one labelled instance per entry (multi-environment
+  // deploys, multi-PR loops); custom replaces a stage's title and body
+  // wholesale while keeping its markers, so re-run attribution still works.
+  const repeatMap = fills.repeat || {};
+  const customMap = fills.custom || {};
+  let emitted = [];
+  for (const stage of baseStages) {
+    const instances = repeatMap[stage.id];
+    const custom = customMap[stage.id];
+    if (instances) {
+      for (const inst of instances) {
+        emitted.push({
+          id: `${stage.id}#${inst.label}`,
+          stageId: stage.id,
+          title: `${stage.title} — ${inst.label}`,
+          template: stage,
+          instanceSlots: inst.slots,
+        });
+      }
+    } else if (custom) {
+      emitted.push({
+        id: stage.id,
+        stageId: stage.id,
+        title: custom.title,
+        custom,
+      });
+    } else {
+      emitted.push({
+        id: stage.id,
+        stageId: stage.id,
+        title: stage.title,
+        template: stage,
+      });
+    }
+  }
+
+  // 1b. insert: a post-pass splice over the already-expanded list, so an
+  // anchor works regardless of where it landed (repeated, reordered, or
+  // last in the list).
+  for (const ins of fills.insert || []) {
+    const at = emitted.findIndex((e) => e.stageId === ins.after);
+    if (at === -1) {
+      throw new Error(`insert anchor "${ins.after}" is not an emitted stage`);
+    }
+    emitted.splice(at + 1, 0, {
+      id: ins.stage,
+      stageId: ins.stage,
+      title: ins.title,
+      body: ins.body,
+      verbatim: true,
+    });
+  }
+
+  // 1c. Step numbers are computed only after every stage the run will emit
+  // — reordered, repeated, overridden and inserted — is in its final slot.
   const stepOf = {};
-  emitted.forEach((s, i) => (stepOf[s.id] = i + 1));
+  emitted.forEach((e, i) => {
+    stepOf[e.id] = i + 1;
+    stepOf[e.stageId] = i + 1;
+  });
 
   const resolveRefs = (text) =>
     text.replace(STEP_REF_RE, (full, stageId) => {
@@ -104,12 +176,26 @@ export function assemble(src, fills, stamp) {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-  // 3. Stage bodies, numbered over emission order.
-  const blocks = emitted.map((stage, i) => {
-    const body = resolveRefs(excise(applySlots(stageBody(stage), fills.slots)))
+  // 3. Stage bodies, numbered over emission order. A verbatim (inserted)
+  // or custom body is model-authored prose, copied as-is aside from step
+  // references; a template stage still goes through slot fill and excision,
+  // with a repeat instance's own slots layered over the shared fills.
+  const blocks = emitted.map((entry, i) => {
+    let raw;
+    if (entry.verbatim) {
+      raw = entry.body;
+    } else if (entry.custom) {
+      raw = entry.custom.body;
+    } else {
+      const slots = entry.instanceSlots
+        ? { ...fills.slots, ...entry.instanceSlots }
+        : fills.slots;
+      raw = excise(applySlots(stageBody(entry.template), slots));
+    }
+    const body = resolveRefs(raw)
       .replace(/\n{3,}/g, '\n\n')
       .trim();
-    return stageBlock(stage.id, stage.title, i + 1, body);
+    return stageBlock(entry.id, entry.title, i + 1, body);
   });
 
   // 4. Frontmatter: substitute only the fields the caller provided.

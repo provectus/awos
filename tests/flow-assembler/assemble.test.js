@@ -261,3 +261,104 @@ test('excising a mid-stage block slot welds the fixed prose on either side witho
     'excising a mid-stage block slot must not leave a run of blank lines behind either'
   );
 });
+
+test('repeat emits one labelled instance per entry with identical fixed prose', () => {
+  const out = assemble(
+    mini,
+    {
+      ...FULL,
+      repeat: {
+        second: [
+          { label: 'staging', slots: { 'second.body': 'Deploy to staging.' } },
+          { label: 'prod', slots: { 'second.body': 'Deploy to prod.' } },
+        ],
+      },
+    },
+    STAMP
+  );
+  assert.ok(out.includes('<!-- awos:flow:stage=second#staging -->'));
+  assert.ok(out.includes('<!-- awos:flow:stage=second#prod -->'));
+  assert.ok(out.includes('### Step 2: Second — staging'));
+  assert.ok(out.includes('### Step 3: Second — prod'));
+  assert.ok(
+    out.includes('Deploy to staging.') && out.includes('Deploy to prod.'),
+    'each instance carries its own slot fills — this is what covers multi-environment deploys without retyping the stage'
+  );
+});
+
+test('insert places a new model-authored stage at its anchor and numbers it', () => {
+  const out = assemble(
+    mini,
+    {
+      ...FULL,
+      insert: [
+        {
+          after: 'first',
+          stage: 'canary',
+          title: 'Canary Watch',
+          body: 'Watch the canary.',
+        },
+      ],
+    },
+    STAMP
+  );
+  assert.ok(
+    out.includes('### Step 2: Canary Watch'),
+    'an inserted stage lands after its anchor'
+  );
+  assert.ok(
+    out.includes('<!-- awos:flow:stage=canary -->'),
+    'an inserted stage gets real markers'
+  );
+  assert.ok(
+    out.includes('### Step 3: Second'),
+    'stages after the insertion renumber'
+  );
+});
+
+test('custom replaces a template stage wholesale but keeps its markers', () => {
+  const out = assemble(
+    mini,
+    {
+      ...FULL,
+      custom: {
+        second: {
+          title: 'Second',
+          body: 'Entirely different.',
+          reason: 'skeleton did not fit',
+        },
+      },
+    },
+    STAMP
+  );
+  assert.ok(out.includes('Entirely different.'));
+  assert.ok(
+    !out.includes('Close it out.'),
+    'the template body is replaced, not appended to'
+  );
+  assert.ok(
+    out.includes('<!-- awos:flow:stage=second -->'),
+    'an overridden stage keeps its markers so re-run attribution still works on it'
+  );
+});
+
+test('stageOrder reorders stages and renumbers headings and refs together', () => {
+  const out = assemble(
+    mini,
+    { ...FULL, stageOrder: ['second', 'first'] },
+    STAMP
+  );
+  assert.ok(
+    out.includes('### Step 1: Second'),
+    'the reordered stage takes the first number'
+  );
+  assert.ok(out.includes('### Step 2: First'));
+  assert.ok(
+    out.includes('See Step 1.'),
+    'a step reference follows the reorder — this is the change-request-first review move'
+  );
+  assert.ok(
+    out.indexOf('stage=second') < out.indexOf('stage=first'),
+    'emission order follows stageOrder'
+  );
+});

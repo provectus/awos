@@ -56,7 +56,7 @@ Audits whether the project practises spec-driven development by any recognized c
 - **Pass:** All major technology choices in architecture.md are confirmed in the codebase, and no significant undocumented technologies found
 - **Warn:** 1-2 minor discrepancies (a small utility missing from the doc, or a planned-but-not-yet-used technology listed)
 - **Fail:** Major drift — a core technology (primary database, main framework, cloud provider) is listed but not used, OR a core technology in use is entirely absent from the architecture document
-- **Skip-When:** No narrative architecture document exists at any of those paths (covered by SDD-02). A repo whose only architecture record is an ADR index (`docs/adr/README.md` and similar, which SDD-02 accepts) also skips here — an index declares no technologies, so there is nothing to cross-reference.
+- **Skip-When:** No narrative architecture document exists at any of those paths (covered by SDD-02). A repo whose only architecture record is an ADR index (`docs/adr/README.md` and similar, which SDD-02 accepts) also skips here — an index declares no technologies, so there is nothing to cross-reference. In a member of an orchestration root, the root's architecture document is not inherited here even though SDD-02 accepts it as the architecture record: this check cross-references declared technologies against _this_ repository's code, and the root's document describes the whole platform, so every sibling service's stack would read as drift. A member with no architecture document of its own skips.
 - **Severity:** high
 - **Category:** 2802
 

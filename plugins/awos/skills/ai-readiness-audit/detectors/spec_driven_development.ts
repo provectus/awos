@@ -477,6 +477,16 @@ function mentionsTech(content: string, name: string): boolean {
 
 function findArchDoc(repoPath: string): string | null {
   // The narrative architecture documents SDD-02's architecture slot accepts.
+  //
+  // Local paths only, deliberately. A member of an orchestration root inherits
+  // the root's architecture document for SDD-02 (the record exists and is
+  // substantive), but not here: the root's document describes the whole
+  // platform, so tech-matching it against ONE member's code reports every
+  // sibling service's stack as drift — a compliant TypeScript member measured
+  // against a platform doc FAILs with 5 unevidenced mentions where it should
+  // SKIP. SDD-03's exclusion from the inheriting set is a recorded decision
+  // (standards.toml 2802, pinned by tests/helpers_orchestration.ts).
+  //
   // Deliberately NOT its ADR-index candidates (docs/adr/README.md and
   // friends): an index is a list of links, and tech-matching one finds no
   // technology mentions and so PASSes trivially — free credit is worse than
@@ -494,17 +504,29 @@ function findArchDoc(repoPath: string): string | null {
 
 export function detectArchTechMatch(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
   const archDoc = findArchDoc(repoPath);
   if (!archDoc) {
     // Absence of the doc is not compliance — there is nothing to match against.
-    return makeResult(
-      'SKIP',
-      null,
-      ['no architecture document found — tech-match check not applicable'],
-      'detected'
-    );
+    const evidence = [
+      'no architecture document found — tech-match check not applicable',
+    ];
+    // SDD-02 may have credited the root's architecture record for this member;
+    // saying why this check does not use it keeps the two lines from reading
+    // as a contradiction in the report.
+    const root =
+      (
+        params as
+          | { inheritance?: { orchestrationRoot?: string | null } }
+          | undefined
+      )?.inheritance?.orchestrationRoot ?? null;
+    if (root !== null && findArchDoc(root) !== null) {
+      evidence.push(
+        "the orchestration root's architecture document is not used here: it describes the platform rather than this repository's stack, so its technology mentions are not cross-referenced against this codebase"
+      );
+    }
+    return makeResult('SKIP', null, evidence, 'detected');
   }
 
   // Keep the original casing — ambiguous tech names (Go, Node, …) are only

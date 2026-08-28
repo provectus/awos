@@ -438,6 +438,60 @@ test('SDD-03: backticked `node` counts as a tech mention even in lowercase', () 
   );
 });
 
+test("SDD-03: a member does not inherit the root's architecture document, and says why", () => {
+  // SDD-02 credits a member with the orchestration root's architecture record,
+  // but SDD-03 must not tech-match against it: the root's document describes
+  // the whole platform, so every sibling service's stack reads as drift on a
+  // member that is perfectly consistent with it (measured: FAIL, value 5).
+  // The exclusion is pinned in standards.toml (2802,
+  // inherits_from_orchestration_root = false) and tests/inheritance-policy.test.ts;
+  // what this test adds is that the member's report says so, instead of showing
+  // "architecture record inherited from orchestration root" directly above
+  // "no architecture document found" with no explanation.
+  const root = tmp();
+  writeRepo(root, {
+    'context/architecture/architecture.md':
+      '# Architecture\n\nTypeScript services on Node, a Python/Django reporting app, PostgreSQL, Kafka, Redis, Terraform on AWS, Kubernetes.\n',
+  });
+  const member = tmp();
+  writeRepo(member, { 'index.ts': 'console.log("hello");\n' });
+
+  const r = detectArchTechMatch(member, {
+    inheritance: { orchestrationRoot: root, inherits: true },
+  });
+
+  assert.equal(
+    r.status,
+    'SKIP',
+    `a member with no architecture document of its own must SKIP, never be scored against the root's platform document; got ${r.status} (${JSON.stringify(r.evidence)})`
+  );
+  assert.ok(
+    r.evidence.some((e) => e.includes("orchestration root's architecture")),
+    `the SKIP evidence must say why the root's architecture document is not used here, so it does not read as a contradiction of SDD-02's inherited PASS; got ${JSON.stringify(r.evidence)}`
+  );
+});
+
+test('SDD-03: the local-only note is omitted when the root has no architecture document', () => {
+  // The explanatory line answers a specific contradiction in the report. With
+  // no document at the root there is no inherited PASS to contradict, so the
+  // plain SKIP evidence stands on its own.
+  const root = tmp();
+  writeRepo(root, { 'README.md': '# root\n' });
+  const member = tmp();
+  writeRepo(member, { 'index.ts': 'console.log("hello");\n' });
+
+  const r = detectArchTechMatch(member, {
+    inheritance: { orchestrationRoot: root, inherits: true },
+  });
+
+  assert.equal(r.status, 'SKIP', 'no architecture document anywhere → SKIP');
+  assert.equal(
+    r.evidence.length,
+    1,
+    `with no architecture document at the root there is nothing to explain away; got ${JSON.stringify(r.evidence)}`
+  );
+});
+
 // ---------------------------------------------------------------------------
 // detectBranchSpecRatio — code 2803 (SDD-04, computed)
 //

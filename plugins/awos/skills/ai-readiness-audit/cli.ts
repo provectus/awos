@@ -23,6 +23,7 @@ import {
   readdirSync,
   statSync,
   existsSync,
+  realpathSync,
 } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -103,10 +104,30 @@ function validOrchestrationRoot(rootArg: string): string {
       usage,
     });
   }
-  if (workTreeRoot(abs) === null) {
+  const top = workTreeRoot(abs);
+  if (top === null) {
     fail({
       error: `--orchestration-root is not inside a git work tree: ${abs}`,
       hint: 'the orchestration root is a git repository whose agent tooling the member repos inherit',
+      usage,
+    });
+  }
+  // Inside a work tree is not enough: inherited probes resolve `.claude/`,
+  // `.mcp.json` and `context/` relative to this exact path, so a subdirectory
+  // of the root answers "absent" for every inherited check while audit.json
+  // still records the root — the same silent miss the existence check above
+  // exists to prevent. Compare through realpath so a symlinked path
+  // (macOS /var → /private/var) is not rejected for the wrong reason.
+  let real = abs;
+  try {
+    real = realpathSync(abs).replace(/\/+$/, '');
+  } catch {
+    // Unreadable path — existsSync passed, so fall through with `abs`.
+  }
+  if (real !== top) {
+    fail({
+      error: `--orchestration-root is not the root of its git work tree: ${abs}`,
+      hint: `pass the work-tree root itself (${top}) — inherited-tooling probes resolve .claude/, .mcp.json and context/ relative to this path, so a subdirectory finds nothing and the audit records an inheritance that never happened`,
       usage,
     });
   }

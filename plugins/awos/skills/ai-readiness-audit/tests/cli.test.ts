@@ -822,6 +822,44 @@ test('audit-core: an --orchestration-root that is not a git work tree exits non-
   }
 });
 
+test('audit-core: an --orchestration-root inside but not at the work-tree root exits non-zero', () => {
+  // `git rev-parse --show-toplevel` succeeds from any directory inside a work
+  // tree, so "is in a work tree" accepted <root>/services. Every inherited
+  // probe then joins its registry-relative path onto that subdirectory, finds
+  // nothing, and reports "absent" — while audit.json still records the bogus
+  // root. That is the same silent miss the existence check guards against.
+  const base = tmpDir('awos-orchroot-subdir-');
+  try {
+    const root = join(base, 'root');
+    initGitRepo(root);
+    const subdir = join(root, 'services');
+    mkdirSync(subdir, { recursive: true });
+    const member = join(subdir, 'api');
+    initGitRepo(member);
+    const { json, code } = runCli(
+      'audit-core',
+      member,
+      join(base, 'out'),
+      '--orchestration-root',
+      subdir
+    );
+    assert.notEqual(
+      code,
+      0,
+      'a subdirectory of a work tree must be rejected as an orchestration root — inherited probes resolve relative to the supplied path, so every inherited check answers "absent" while the audit still claims an inheritance'
+    );
+    const err = json as Record<string, unknown>;
+    assert.ok(
+      typeof err['error'] === 'string' &&
+        err['error'].includes('not the root of its git work tree') &&
+        err['error'].includes(subdir),
+      `the error must say the path is not the work-tree root and name it; got ${JSON.stringify(err)}`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test('audit-core: a valid --orchestration-root is accepted and recorded', () => {
   const base = tmpDir('awos-orchroot-valid-');
   try {

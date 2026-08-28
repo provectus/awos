@@ -4,7 +4,7 @@
 // binary to naive tooling, the same trap that bit assemble.mjs's own copy.
 const SENTINEL = '\uE000';
 
-export function validateFills(parsed, fills) {
+export function validateFills(parsed, fills, context = {}) {
   const errors = [];
   const slots = fills.slots || {};
   const omitStages = new Set(fills.omitStages || []);
@@ -275,6 +275,42 @@ export function validateFills(parsed, fills) {
   const keptIds = parsed.stages
     .filter((s) => !omitStages.has(s.id) && !emptyRepeatStages.has(s.id))
     .map((s) => s.id);
+
+  // The migration gate: the caller (assemble-flow-command.mjs) sets this
+  // when --out already names a file and no baseline exists for it — an
+  // install that predates the assembler, where flow.md Step 6 item 2's
+  // fallback is the only thing standing between a hand-edit and silent
+  // overwrite. That fallback is otherwise satisfiable by doing nothing: a
+  // model can call diff, read "baseline absent", and go straight to
+  // writing fills without ever opening the on-disk file. Requiring a
+  // fills.migrationReview entry per kept stage forces the fallback's
+  // on-disk read to leave a trace — one that names the stage, so it is
+  // checked against the same stage's Local Customizations record, not a
+  // single blanket claim covering stages that were never actually read.
+  if (context.migrationGate) {
+    const ack = fills.migrationReview;
+    if (!ack || typeof ack !== 'object' || Array.isArray(ack)) {
+      errors.push(
+        `"--out" already exists with no baseline to diff against (an install that predates the assembler) — assemble refuses to overwrite it without fills.migrationReview, an object with one entry per kept stage (${keptIds.join(', ')}) naming what Step 6 item 2's on-disk-read fallback found there, or "none" where it found nothing`
+      );
+    } else {
+      for (const id of keptIds) {
+        const value = ack[id];
+        if (typeof value !== 'string' || value.trim() === '') {
+          errors.push(
+            `fills.migrationReview has no acknowledgement for kept stage "${id}" — every kept stage needs a non-empty entry, even "none", since an omitted or empty one is not an acknowledgement`
+          );
+        }
+      }
+      for (const id of Object.keys(ack)) {
+        if (!keptIds.includes(id))
+          errors.push(
+            `fills.migrationReview names "${id}", which is not a stage this run keeps`
+          );
+      }
+    }
+  }
+
   if (fills.stageOrder) {
     const a = [...fills.stageOrder].sort().join(',');
     const b = [...keptIds].sort().join(',');

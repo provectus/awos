@@ -285,3 +285,199 @@ test('a usage error (missing required flag) exits with the usage code, distinct 
   }
   assert.ok(threw, 'missing --out must fail, not silently proceed');
 });
+
+// The migration gate: every existing AWOS install has a generated command
+// and no baseline (the baseline mechanism is new to the assembler), so
+// assemble must refuse to overwrite that file unless the fills carry a
+// fills.migrationReview acknowledgement — flow.md Step 6 item 2's on-disk
+// fallback used to be skippable by doing nothing, since {"baseline":
+// "absent"} alone was never checked against anything.
+
+const LEGACY_CONTENT =
+  '# Old hand-maintained command\n\nContains a pre-assembler edit.\n';
+
+test('the migration gate fires: an existing command with no baseline and no migrationReview is refused, and nothing is overwritten', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-cli-'));
+  const fillsPath = path.join(dir, 'fills.json');
+  const outPath = path.join(dir, 'out.md');
+  const baselineDir = path.join(dir, '.flow');
+  fs.writeFileSync(outPath, LEGACY_CONTENT);
+  fs.writeFileSync(fillsPath, JSON.stringify(FILLS));
+  assert.throws(
+    () =>
+      run(
+        [
+          'assemble',
+          MINI,
+          fillsPath,
+          '--out',
+          outPath,
+          '--version',
+          '2.5.0',
+          '--date',
+          '2026-08-27',
+          '--source',
+          's',
+          '--baseline-dir',
+          baselineDir,
+        ],
+        { stdio: 'pipe' }
+      ),
+    /migrationReview/,
+    'the failure names the missing fill so the operator or model knows what to add'
+  );
+  assert.equal(
+    fs.readFileSync(outPath, 'utf8'),
+    LEGACY_CONTENT,
+    'the existing hand-maintained command must survive untouched — this is exactly the overwrite the gate exists to prevent'
+  );
+  assert.equal(
+    fs.existsSync(path.join(baselineDir, 'out.md.baseline.md')),
+    false,
+    'no baseline is written on a gated failure'
+  );
+  assert.equal(
+    fs.existsSync(path.join(baselineDir, 'out.md.fills.json')),
+    false,
+    'no fills file is written on a gated failure either'
+  );
+});
+
+test('the migration gate is satisfied by a proper migrationReview acknowledgement', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-cli-'));
+  const fillsPath = path.join(dir, 'fills.json');
+  const outPath = path.join(dir, 'out.md');
+  const baselineDir = path.join(dir, '.flow');
+  fs.writeFileSync(outPath, LEGACY_CONTENT);
+  const fills = {
+    ...FILLS,
+    migrationReview: {
+      first: 'carried forward a retry flag found in the old command',
+      second: 'none',
+    },
+  };
+  fs.writeFileSync(fillsPath, JSON.stringify(fills));
+  run([
+    'assemble',
+    MINI,
+    fillsPath,
+    '--out',
+    outPath,
+    '--version',
+    '2.5.0',
+    '--date',
+    '2026-08-27',
+    '--source',
+    's',
+    '--baseline-dir',
+    baselineDir,
+  ]);
+  assert.notEqual(
+    fs.readFileSync(outPath, 'utf8'),
+    LEGACY_CONTENT,
+    'a satisfied gate lets the migration regenerate the command as normal'
+  );
+  assert.ok(
+    fs.existsSync(path.join(baselineDir, 'out.md.baseline.md')),
+    'a baseline is written now, so the next re-run is a normal diff, not another migration'
+  );
+});
+
+test('the migration gate does not apply to a fresh install (no existing file at --out)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-cli-'));
+  const fillsPath = path.join(dir, 'fills.json');
+  const outPath = path.join(dir, 'out.md');
+  const baselineDir = path.join(dir, '.flow');
+  fs.writeFileSync(fillsPath, JSON.stringify(FILLS));
+  run([
+    'assemble',
+    MINI,
+    fillsPath,
+    '--out',
+    outPath,
+    '--version',
+    '2.5.0',
+    '--date',
+    '2026-08-27',
+    '--source',
+    's',
+    '--baseline-dir',
+    baselineDir,
+  ]);
+  assert.ok(
+    fs.existsSync(outPath),
+    'no file existed at --out, so there is nothing to migrate-gate — generation proceeds without a migrationReview fill'
+  );
+});
+
+test('the migration gate does not apply to a normal re-run once a baseline exists', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-cli-'));
+  const fillsPath = path.join(dir, 'fills.json');
+  const outPath = path.join(dir, 'out.md');
+  const baselineDir = path.join(dir, '.flow');
+  fs.writeFileSync(fillsPath, JSON.stringify(FILLS));
+  const args = [
+    'assemble',
+    MINI,
+    fillsPath,
+    '--out',
+    outPath,
+    '--version',
+    '2.5.0',
+    '--date',
+    '2026-08-27',
+    '--source',
+    's',
+    '--baseline-dir',
+    baselineDir,
+  ];
+  run(args); // first run creates the baseline, same as any fresh install
+  // Second run: --out now exists AND a baseline exists for it — a normal
+  // re-run, which the exact diff already protects. No migrationReview
+  // fill is supplied, and this must still succeed.
+  run(args);
+  assert.ok(
+    fs.existsSync(outPath),
+    'the re-run is ungated once a baseline is on disk'
+  );
+});
+
+test('the migration gate rejects an empty or omitted acknowledgement, not just a missing one, and writes nothing', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-cli-'));
+  const fillsPath = path.join(dir, 'fills.json');
+  const outPath = path.join(dir, 'out.md');
+  const baselineDir = path.join(dir, '.flow');
+  fs.writeFileSync(outPath, LEGACY_CONTENT);
+  // "first" is acknowledged with an empty string; "second" is omitted
+  // entirely — neither counts as a deliberate statement.
+  const fills = { ...FILLS, migrationReview: { first: '' } };
+  fs.writeFileSync(fillsPath, JSON.stringify(fills));
+  assert.throws(
+    () =>
+      run(
+        [
+          'assemble',
+          MINI,
+          fillsPath,
+          '--out',
+          outPath,
+          '--version',
+          '2.5.0',
+          '--date',
+          '2026-08-27',
+          '--source',
+          's',
+          '--baseline-dir',
+          baselineDir,
+        ],
+        { stdio: 'pipe' }
+      ),
+    /"first".*no acknowledgement|"second".*no acknowledgement/s,
+    'an empty string and an omitted key are both called out by name, not silently accepted'
+  );
+  assert.equal(
+    fs.readFileSync(outPath, 'utf8'),
+    LEGACY_CONTENT,
+    'the legacy file survives an invalid acknowledgement exactly as it survives a missing one'
+  );
+});

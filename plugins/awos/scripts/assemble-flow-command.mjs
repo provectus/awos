@@ -77,7 +77,18 @@ if (verb === 'slots') {
   const src = fs.readFileSync(templatePath, 'utf8');
   const fills = JSON.parse(fs.readFileSync(fillsPath, 'utf8'));
   const parsed = parseTemplate(src);
-  const errors = validateFills(parsed, fills);
+  const baselineDir =
+    opts['baseline-dir'] || path.join('context', 'product', '.flow');
+  const base = path.basename(opts.out);
+  const baselinePath = path.join(baselineDir, `${base}.baseline.md`);
+  // A target that already exists with no baseline predates the assembler —
+  // there is nothing to diff a hand-edit against, so this is the migration
+  // case flow.md Step 6 item 2 falls back for. Gate it in validateFills so
+  // it fails the same way (and as early as) any other invalid fill: nothing
+  // written. A fresh install (no existing --out) and a normal re-run
+  // (baseline present) both skip the gate.
+  const migrationGate = fs.existsSync(opts.out) && !fs.existsSync(baselinePath);
+  const errors = validateFills(parsed, fills, { migrationGate });
   if (errors.length) {
     fail(
       `fills are invalid — nothing was written:\n  - ${errors.join('\n  - ')}`
@@ -88,13 +99,10 @@ if (verb === 'slots') {
     date: opts.date,
     source: opts.source,
   });
-  const baselineDir =
-    opts['baseline-dir'] || path.join('context', 'product', '.flow');
   fs.mkdirSync(path.dirname(opts.out), { recursive: true });
   fs.mkdirSync(baselineDir, { recursive: true });
-  const base = path.basename(opts.out);
   fs.writeFileSync(opts.out, output);
-  fs.writeFileSync(path.join(baselineDir, `${base}.baseline.md`), output);
+  fs.writeFileSync(baselinePath, output);
   fs.writeFileSync(
     path.join(baselineDir, `${base}.fills.json`),
     `${JSON.stringify(fills, null, 2)}\n`
@@ -103,7 +111,7 @@ if (verb === 'slots') {
     `${JSON.stringify(
       {
         written: opts.out,
-        baseline: path.join(baselineDir, `${base}.baseline.md`),
+        baseline: baselinePath,
         stages: parsed.stages.length - (fills.omitStages || []).length,
       },
       null,

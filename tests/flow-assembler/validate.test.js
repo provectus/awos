@@ -21,7 +21,8 @@ const VALID = {
   },
 };
 
-const only = (fills) => validateFills(parsed, fills).join(' | ');
+const only = (fills, context) =>
+  validateFills(parsed, fills, context).join(' | ');
 
 test('valid fills produce no errors', () => {
   assert.deepEqual(validateFills(parsed, VALID), []);
@@ -519,5 +520,99 @@ test('a frontmatter value containing a colon-space is accepted by validation (as
     }),
     [],
     'a colon-space is a YAML quoting hazard, not a rejected value — assemble.mjs quotes it, validateFills only rejects what quoting cannot fix (a newline)'
+  );
+});
+
+// The migration gate: the caller sets context.migrationGate when --out
+// already names a file with no baseline to diff against (an install that
+// predates the assembler). flow.md Step 6 item 2's on-disk-read fallback
+// used to be satisfiable by doing nothing — a model could see
+// {"baseline":"absent"} and go straight to writing fills without ever
+// opening the existing file. fills.migrationReview forces that fallback to
+// leave a trace: one non-empty entry per kept stage (mini.md's template
+// keeps "first" and "second" here, since VALID omits neither).
+
+test('the migration gate is off by default, even with no migrationReview fill', () => {
+  assert.deepEqual(
+    validateFills(parsed, VALID, { migrationGate: false }),
+    [],
+    'a fresh install or a normal re-run (baseline present) must never require this fill — only the caller setting migrationGate turns the requirement on'
+  );
+});
+
+test('the migration gate rejects a run with no migrationReview fill at all', () => {
+  assert.match(
+    only({ ...VALID }, { migrationGate: true }),
+    /migrationReview/,
+    'an omitted fills.migrationReview is not an acknowledgement — the gate must name the missing fill'
+  );
+});
+
+test('the migration gate rejects an empty migrationReview object', () => {
+  const errors = validateFills(
+    parsed,
+    { ...VALID, migrationReview: {} },
+    { migrationGate: true }
+  );
+  assert.match(errors.join(' | '), /"first"/);
+  assert.match(errors.join(' | '), /"second"/);
+  errors.forEach((e) => assert.match(e, /no acknowledgement/));
+});
+
+test('the migration gate rejects an empty-string acknowledgement for one stage while accepting the other', () => {
+  const errors = validateFills(
+    parsed,
+    { ...VALID, migrationReview: { first: '  ', second: 'none' } },
+    { migrationGate: true }
+  );
+  assert.equal(
+    errors.length,
+    1,
+    'only "first" is missing a real acknowledgement'
+  );
+  assert.match(
+    errors[0],
+    /"first"/,
+    'an all-whitespace value is not an acknowledgement, so it is rejected the same as an empty string'
+  );
+});
+
+test('the migration gate rejects migrationReview naming a stage this run does not keep', () => {
+  assert.match(
+    only(
+      {
+        ...VALID,
+        migrationReview: { first: 'none', second: 'none', ghost: 'none' },
+      },
+      { migrationGate: true }
+    ),
+    /"ghost".*not a stage this run keeps/,
+    'a made-up stage id must not silently pass as an acknowledgement'
+  );
+});
+
+test('the migration gate rejects a non-object migrationReview', () => {
+  assert.match(
+    only({ ...VALID, migrationReview: 'none' }, { migrationGate: true }),
+    /migrationReview/,
+    'a bare string cannot name which stage it acknowledges'
+  );
+});
+
+test('the migration gate is satisfied by a non-empty entry for every kept stage, including the literal "none"', () => {
+  assert.deepEqual(
+    validateFills(
+      parsed,
+      {
+        ...VALID,
+        migrationReview: {
+          first: 'carried forward a retry flag from the old stage',
+          second: 'none',
+        },
+      },
+      { migrationGate: true }
+    ),
+    [],
+    'a deliberate "none" is as valid an acknowledgement as a real finding — the gate checks that the fallback ran, not what it found'
   );
 });

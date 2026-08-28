@@ -239,6 +239,27 @@ test('diff exits 0 on an absent baseline rather than treating it as an error', (
   assert.deepEqual(JSON.parse(result), { baseline: 'absent' });
 });
 
+test('diff exits 0 and reports the generated file absent, rather than crashing on ENOENT, on a first-ever generation', () => {
+  // flow.md's Step 6 item 2 calls diff unconditionally, before the command
+  // has ever been generated. diff's own generated-file read had no
+  // existence guard (unlike its baseline read), so this used to throw a
+  // raw ENOENT stack trace instead of reporting a state.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-cli-'));
+  const result = execFileSync(
+    process.execPath,
+    [
+      CLI,
+      'diff',
+      path.join(dir, 'does-not-exist.md'),
+      path.join(dir, 'also-missing.md'),
+    ],
+    { encoding: 'utf8' }
+  );
+  // execFileSync throws on a non-zero exit, so reaching here already
+  // proves exit 0; assert the payload too so the test documents why.
+  assert.deepEqual(JSON.parse(result), { generated: 'absent' });
+});
+
 test('a usage error (missing required flag) exits with the usage code, distinct from the validation code', () => {
   let threw = false;
   try {

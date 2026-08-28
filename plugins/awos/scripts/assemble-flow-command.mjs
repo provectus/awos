@@ -113,13 +113,22 @@ if (verb === 'slots') {
 } else if (verb === 'diff') {
   const [generatedPath, baselinePath] = rest;
   if (!generatedPath || !baselinePath) fail(USAGE, 2);
-  const generated = fs.readFileSync(generatedPath, 'utf8');
-  const baseline = fs.existsSync(baselinePath)
-    ? fs.readFileSync(baselinePath, 'utf8')
-    : null;
-  process.stdout.write(
-    `${JSON.stringify(diffStages(generated, baseline), null, 2)}\n`
-  );
+  if (!fs.existsSync(generatedPath)) {
+    // A first-ever generation has no on-disk command yet, and flow.md's
+    // Step 6 item 2 calls diff unconditionally — this is a state to
+    // report, exit 0, the same way an absent baseline is, not a crash.
+    process.stdout.write(
+      `${JSON.stringify({ generated: 'absent' }, null, 2)}\n`
+    );
+  } else {
+    const generated = fs.readFileSync(generatedPath, 'utf8');
+    const baseline = fs.existsSync(baselinePath)
+      ? fs.readFileSync(baselinePath, 'utf8')
+      : null;
+    process.stdout.write(
+      `${JSON.stringify(diffStages(generated, baseline), null, 2)}\n`
+    );
+  }
 } else {
   fail(USAGE, 2);
 }

@@ -1672,6 +1672,38 @@ test('OpenSpec: SDD-06 judges a change record against the OpenSpec status vocabu
   );
 });
 
+test('OpenSpec: changes/archive/ is a lifecycle container, not a record', () => {
+  // OpenSpec's own /opsx:archive command moves settled changes into
+  // openspec/changes/archive/. The container carries none of the record
+  // files, so grading it as a record scored 0/2 and dragged an ordinary,
+  // correctly-run OpenSpec repo from PASS to WARN — and SDD-06 emitted an
+  // evidence line about a directory that is not a change.
+  const t = tmp();
+  writeRepo(t, {
+    'openspec/changes/add-auth/proposal.md':
+      '# Add auth\n\n- **Status:** Draft\n\nWhy and what.\n',
+    'openspec/changes/add-auth/tasks.md': '# Tasks\n\n- [ ] Do it\n',
+    'openspec/changes/archive/old-change/proposal.md':
+      '# Old change\n\n- **Status:** Deployed\n\nWhy and what.\n',
+    'openspec/changes/archive/old-change/tasks.md': '# Tasks\n\n- [x] Done\n',
+  });
+  const triad = detectSpecTriadComplete(t);
+  assert.equal(
+    triad.status,
+    'PASS',
+    'the one active change is structurally complete — the archive container must not be graded as an incomplete second record'
+  );
+  assert.ok(
+    triad.evidence.every((e) => !/archive/.test(e)),
+    `SDD-05 evidence must not mention the archive container; got ${JSON.stringify(triad.evidence)}`
+  );
+  const stale = detectStaleSpecs(t);
+  assert.ok(
+    stale.evidence.every((e) => !/archive/.test(e)),
+    `SDD-06 must not report the archive container as a record with no recognized status; got ${JSON.stringify(stale.evidence)}`
+  );
+});
+
 function writeGsdPhase(repo: string, phase: string, planFiles: string[]): void {
   const dir = join(repo, '.planning', 'phases', phase);
   mkdirSync(dir, { recursive: true });

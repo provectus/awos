@@ -25,6 +25,13 @@ export interface SpecFramework {
   /** Files that together make one record complete. Empty for single-file practices. */
   recordTriad: string[];
   /**
+   * Directory names under a specRoot that are lifecycle containers, not
+   * records. OpenSpec moves settled changes into changes/archive/, which
+   * carries none of the record files and would otherwise be graded as an
+   * empty record.
+   */
+  recordSkipDirs?: string[];
+  /**
    * Alternative to `recordTriad` for a convention whose record files are
    * pattern-named rather than fixed (e.g. GSD's `NN-PP-PLAN.md`). A record
    * directory is structurally complete when at least one of its files
@@ -138,6 +145,10 @@ export const SPEC_FRAMEWORKS: readonly SpecFramework[] = [
     markers: ['openspec'],
     specRoots: ['openspec/changes'],
     recordTriad: ['proposal.md', 'tasks.md'],
+    // changes/archive/ is a lifecycle container, not a record. Its contents
+    // are settled changes; grading the container itself scores 0/2 and drags
+    // an ordinary OpenSpec repo to WARN.
+    recordSkipDirs: ['archive'],
     recordSections: [],
     // OpenSpec does not publish a `Status:` field on proposal.md — a change
     // is "active" simply by living under changes/ and "terminal" once moved

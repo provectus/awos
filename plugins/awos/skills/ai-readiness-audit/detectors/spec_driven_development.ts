@@ -981,6 +981,7 @@ function listSpecRecords(repoPath: string, params?: unknown): SpecRecord[] {
         } catch {
           continue;
         }
+        if (isDir && framework.recordSkipDirs?.includes(e)) continue;
         // Multi-file frameworks keep one directory per record; single-file
         // practices keep one markdown file per record. A README is an index,
         // not a decision, and must not be graded as one.

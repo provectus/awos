@@ -234,3 +234,30 @@ test('omitting a section strips its heading, body and both markers', () => {
     'section markers never reach the generated command, kept or omitted'
   );
 });
+
+test('excising a mid-stage block slot welds the fixed prose on either side without residue or a gap', () => {
+  // first.extra sits at the very end of its stage in the shared fixture, so
+  // excision residue there would be swallowed by the stage-body trim. This
+  // variant puts fixed prose after the slot too, so the excised block has
+  // fixed prose on both sides — the position that matters for a real
+  // template, where an optional slot mid-stage is followed by more prose.
+  const src = mini.replace(
+    '<awos-slot id="first.extra" optional>Per §3: an omittable paragraph.</awos-slot>\n\n<!-- /awos:flow:stage -->',
+    '<awos-slot id="first.extra" optional>Per §3: an omittable paragraph.</awos-slot>\n\nMonitor for the follow-up event.\n\n<!-- /awos:flow:stage -->'
+  );
+  const out = assemble(
+    src,
+    { ...FULL, slots: { ...FULL.slots, 'first.extra': null } },
+    STAMP
+  );
+  assert.ok(
+    out.includes(
+      'Fixed opening. Run the thing.\n\nMonitor for the follow-up event.'
+    ),
+    'the prose before and after an excised mid-stage block must end up separated by exactly one blank line — no leftover sentinel, and no welding the two paragraphs together'
+  );
+  assert.ok(
+    !/\n{3,}/.test(out),
+    'excising a mid-stage block slot must not leave a run of blank lines behind either'
+  );
+});

@@ -166,6 +166,65 @@ test('a validation failure leaves no baseline and no fills file behind, not just
   );
 });
 
+test('a fill that omits a non-optional stage is rejected by the validation gate specifically, not by assemble itself', () => {
+  // assemble.mjs has no defence of its own against omitStages naming a
+  // stage the template does not mark optional — it just filters the
+  // stage out and proceeds, silently dropping contracts the flow
+  // depends on. validateFills is the only guard for this shape of bad
+  // fill (unlike a missing slot value, which also makes assemble.mjs's
+  // own applySlots throw). This fixture is chosen specifically so the
+  // test cannot pass unless the CLI actually calls validateFills before
+  // assemble.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-cli-'));
+  const fillsPath = path.join(dir, 'fills.json');
+  const outPath = path.join(dir, 'out.md');
+  const baselineDir = path.join(dir, '.flow');
+  const bad = {
+    ...FILLS,
+    omitStages: ['first'],
+    slots: { 'intro.source': 'a ticket', 'notifications.body': 'post' },
+  };
+  fs.writeFileSync(fillsPath, JSON.stringify(bad));
+  assert.throws(
+    () =>
+      run(
+        [
+          'assemble',
+          MINI,
+          fillsPath,
+          '--out',
+          outPath,
+          '--version',
+          '2.5.0',
+          '--date',
+          '2026-08-27',
+          '--source',
+          's',
+          '--baseline-dir',
+          baselineDir,
+        ],
+        { stdio: 'pipe' }
+      ),
+    /stage "first" is not optional/,
+    'the error names the stage that cannot be omitted'
+  );
+  assert.equal(
+    fs.existsSync(outPath),
+    false,
+    'no command is written when omitStages names a non-optional stage'
+  );
+  assert.equal(
+    fs.existsSync(path.join(baselineDir, 'out.md.baseline.md')),
+    false,
+    'no baseline is written either'
+  );
+  assert.equal(
+    fs.existsSync(path.join(baselineDir, 'out.md.fills.json')),
+    false,
+    'no fills file is written either'
+  );
+});
+
 test('diff exits 0 on an absent baseline rather than treating it as an error', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-cli-'));
   const gen = path.join(dir, 'g.md');

@@ -124,3 +124,31 @@ test('assemble stamps the footer marker with date, version and source', () => {
     'provenance is stamped mechanically — a missing or stale version stamp is what makes a re-run skip regeneration'
   );
 });
+
+test('assemble leaves no run of blank lines anywhere, with every slot filled', () => {
+  const out = assemble(mini, FULL, STAMP);
+  assert.ok(
+    !/\n{3,}/.test(out),
+    'stripping the header comment or a section marker must collapse to a single blank line, never leave a run of them'
+  );
+  assert.ok(
+    out.includes('---\n\n# Mini Flow'),
+    'exactly one blank line must separate the frontmatter fence from the preamble, once the header comment is gone'
+  );
+});
+
+test('a null fill for a block slot leaves no extra blank line before the stage close marker', () => {
+  const out = assemble(
+    mini,
+    { ...FULL, slots: { ...FULL.slots, 'first.extra': null } },
+    STAMP
+  );
+  assert.ok(
+    !/\n{3,}/.test(out),
+    'excising a block slot must collapse to a single blank line, never leave a run of them'
+  );
+  assert.ok(
+    out.includes('Fixed opening. Run the thing.\n\n<!-- /awos:flow:stage -->'),
+    'excising the last slot in a stage body must leave exactly the one blank line that always separates a stage body from its close marker, not an extra one'
+  );
+});

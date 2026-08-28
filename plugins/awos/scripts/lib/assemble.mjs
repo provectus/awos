@@ -102,11 +102,13 @@ export function assemble(src, fills, stamp) {
   preamble = excise(applySlots(preamble, fills.slots));
   preamble = resolveRefs(preamble)
     .replace(/\n{3,}/g, '\n\n')
-    .trimEnd();
+    .trim();
 
   // 3. Stage bodies, numbered over emission order.
   const blocks = emitted.map((stage, i) => {
-    const body = resolveRefs(excise(applySlots(stageBody(stage), fills.slots)));
+    const body = resolveRefs(excise(applySlots(stageBody(stage), fills.slots)))
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
     return stageBlock(stage.id, stage.title, i + 1, body);
   });
 

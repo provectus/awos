@@ -260,6 +260,22 @@ test('a repeat instance label that is not lowercase kebab-case is rejected', () 
   );
 });
 
+test('two repeat instances on the same stage sharing a label are rejected', () => {
+  assert.match(
+    only({
+      ...VALID,
+      repeat: {
+        second: [
+          { label: 'prod', slots: {} },
+          { label: 'prod', slots: {} },
+        ],
+      },
+    }),
+    /stage "second" has more than one repeat instance labelled "prod"/,
+    'assemble.mjs would emit two markers with the identical id "second#prod", and diffStages\'s Map.set on that id keeps only the last — the first instance, and any hand-edit inside it, would silently disappear from the diff report'
+  );
+});
+
 // The next four tests all use VALID as-is (which already fills
 // second.body at the base level) and add a repeat instance that ALSO
 // overrides second.body — the shape that let bad content slip through

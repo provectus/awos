@@ -148,6 +148,7 @@ export function validateFills(parsed, fills) {
   const LABEL_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
   for (const [stageId, instances] of Object.entries(repeat)) {
     if (!stageById[stageId]) continue; // already flagged above
+    const seenLabels = new Set();
     (instances || []).forEach((inst, index) => {
       if (typeof inst.label !== 'string' || !LABEL_RE.test(inst.label)) {
         const shown =
@@ -157,6 +158,20 @@ export function validateFills(parsed, fills) {
         errors.push(
           `repeat instance #${index + 1} of stage "${stageId}" has label ${shown}, which must be lowercase kebab-case matching ${LABEL_RE.source} — it becomes part of the emitted marker id "${stageId}#${inst.label}"`
         );
+        return;
+      }
+      // Two instances sharing a label collide on the marker id assemble.mjs
+      // emits ("${stageId}#${label}"): assemble writes two markers with
+      // that identical id, and diffStages's Map.set on that id keeps only
+      // the last, so the first instance — and any hand-edit inside it —
+      // silently disappears from the diff report and gets overwritten on
+      // the next re-run.
+      if (seenLabels.has(inst.label)) {
+        errors.push(
+          `stage "${stageId}" has more than one repeat instance labelled "${inst.label}" — instance labels must be unique within a stage because they become the marker id "${stageId}#${inst.label}"`
+        );
+      } else {
+        seenLabels.add(inst.label);
       }
     });
   }

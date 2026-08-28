@@ -82,6 +82,13 @@ export function validateFills(parsed, fills) {
       );
   }
 
+  // The emptyRepeatStages exclusion here is kept in sync with
+  // coveredByEveryInstance's vacuous-truth-on-empty-array behavior below
+  // (an empty instances array is treated as "fully covered" without ever
+  // needing a base fill). If that vacuous truth is ever tightened — e.g.
+  // to require at least one instance before treating a slot as
+  // covered — this exclusion is what still keeps a zero-instance stage's
+  // slots from suddenly demanding a fill that was never meant to exist.
   const liveStages = new Set(
     parsed.stages
       .filter((s) => !omitStages.has(s.id) && !emptyRepeatStages.has(s.id))

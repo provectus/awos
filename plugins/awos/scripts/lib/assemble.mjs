@@ -61,13 +61,32 @@ function stageBlock(id, title, stepNo, body) {
   return `<!-- awos:flow:stage=${id} -->\n\n### Step ${stepNo}: ${title}\n\n${body}\n\n${STAGE_CLOSE}`;
 }
 
-// Reapply the quoting style (single, double, or none) the template's own
-// frontmatter line used for `key`, so a fill containing an apostrophe
-// cannot produce broken YAML.
-function quoteLike(frontmatter, key, value) {
-  const line = frontmatter.match(new RegExp(`^${key}:\\s*(.*)$`, 'm'));
-  const quote = line && /^['"]/.test(line[1]) ? line[1][0] : '';
-  return `${quote}${value}${quote}`;
+// A YAML plain scalar breaks in specific, known ways: a colon followed by
+// whitespace (or at the end of the value) parses as a mapping key, a value
+// starting with a flow-collection or other indicator character parses as
+// something other than a string, and a " #" sequence starts a comment
+// mid-value. Quote only when one of these hazards is present in the VALUE
+// ITSELF — the template's own quoting style for that field is not a
+// signal, since a differently-shaped fill can need quoting a field whose
+// original value never did (and vice versa).
+function needsYamlQuoting(value) {
+  return (
+    /^[[\]{}&*!|>'"%@`]/.test(value) ||
+    /^[?:-](\s|$)/.test(value) ||
+    /:(\s|$)/.test(value) ||
+    /\s#/.test(value) ||
+    /^\s|\s$/.test(value) ||
+    value === ''
+  );
+}
+
+// Single-quoting is always safe once a newline is ruled out (validateFills'
+// job, since no quoting style keeps a multi-line value on one frontmatter
+// line): the only escape a single-quoted YAML scalar ever needs is
+// doubling an embedded single quote.
+function quoteFrontmatterValue(value) {
+  if (!needsYamlQuoting(value)) return value;
+  return `'${value.replace(/'/g, "''")}'`;
 }
 
 export function assemble(src, fills, stamp) {
@@ -226,13 +245,13 @@ export function assemble(src, fills, stamp) {
   if (fm.description !== undefined) {
     frontmatter = frontmatter.replace(
       /^description:.*$/m,
-      `description: ${fm.description}`
+      `description: ${quoteFrontmatterValue(fm.description)}`
     );
   }
   if (fm['argument-hint'] !== undefined) {
     frontmatter = frontmatter.replace(
       /^argument-hint:.*$/m,
-      `argument-hint: ${quoteLike(parsed.frontmatter, 'argument-hint', fm['argument-hint'])}`
+      `argument-hint: ${quoteFrontmatterValue(fm['argument-hint'])}`
     );
   }
 

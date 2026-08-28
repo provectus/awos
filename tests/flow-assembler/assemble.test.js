@@ -113,6 +113,54 @@ test('assemble substitutes frontmatter so a renamed command gets matching metada
   );
 });
 
+// Quoting used to be decided by the TEMPLATE's own quoting style for
+// argument-hint (and never applied to description at all) — a value's own
+// hazards, not the field it happens to land in, are what break YAML.
+
+test('a description containing a colon-space is quoted, since unquoted it would parse as a nested mapping', () => {
+  const out = assemble(
+    mini,
+    {
+      ...FULL,
+      frontmatter: {
+        ...FULL.frontmatter,
+        description:
+          'Deliver one Linear issue end to end: spec, implement, verify, review, merge, close.',
+      },
+    },
+    STAMP
+  );
+  assert.ok(
+    out.includes(
+      "description: 'Deliver one Linear issue end to end: spec, implement, verify, review, merge, close.'\n"
+    ),
+    'an unquoted "key: value" containing ": " parses as YAML\'s own nested-mapping shape and the frontmatter block fails to parse — this must ship quoted'
+  );
+});
+
+test("a plain description with no YAML hazard is left unquoted, matching the templates' own style", () => {
+  const out = assemble(mini, FULL, STAMP);
+  assert.ok(
+    out.includes('description: Real description.\n'),
+    'quoting is a hazard-driven decision, not a blanket policy — a safe value stays unquoted'
+  );
+});
+
+test('a description value with an embedded single quote is escaped by doubling it', () => {
+  const out = assemble(
+    mini,
+    {
+      ...FULL,
+      frontmatter: { ...FULL.frontmatter, description: "it's fine: really" },
+    },
+    STAMP
+  );
+  assert.ok(
+    out.includes("description: 'it''s fine: really'\n"),
+    'a single-quoted YAML scalar escapes an embedded quote by doubling it, never with a backslash'
+  );
+});
+
 test('assemble stamps the footer marker with date, version and source', () => {
   const out = assemble(mini, FULL, STAMP);
   assert.ok(

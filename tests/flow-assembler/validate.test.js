@@ -38,7 +38,11 @@ test('an unknown slot id is rejected', () => {
 test('a missing fill for a live slot is rejected', () => {
   const slots = { ...VALID.slots };
   delete slots['first.body'];
-  assert.match(only({ slots }), /first\.body/, 'every live slot needs a fill');
+  assert.match(
+    only({ slots }),
+    /no fill for slot "first\.body"/,
+    'pinned to the dedicated "no fill" message, not just any message that happens to mention the slot id — the string/null type-check fallback also mentions the id for an undefined value, which would let this test pass even with the presence check removed'
+  );
 });
 
 test('a null fill for a non-optional slot is rejected', () => {
@@ -85,7 +89,8 @@ test('omitting a section the template does not mark optional is rejected', () =>
   );
   assert.match(
     validateFills(p, { ...VALID, omitSections: ['notifications'] }).join(' '),
-    /not optional/i
+    /not optional/i,
+    'a required section carries contracts; omitting it must be an error, not a judgment call'
   );
 });
 
@@ -103,7 +108,8 @@ test('an insert anchored at a stage that does not exist is rejected', () => {
       ...VALID,
       insert: [{ after: 'ghost', stage: 'x', title: 'X', body: 'y' }],
     }),
-    /ghost/
+    /ghost/,
+    'an insert anchored at a stage the template will never emit has nowhere to splice its block'
   );
 });
 
@@ -122,7 +128,8 @@ test('a stage named by more than one of omit/repeat/custom is rejected', () => {
       omitStages: ['second'],
       custom: { second: { title: 'Second', body: 'z', reason: 'r' } },
     }),
-    /more than one/i
+    /more than one/i,
+    'a stage claimed by two escape hatches at once is an ambiguous instruction, not a valid combination'
   );
 });
 
@@ -166,5 +173,50 @@ test('two inserts claiming the same stage id are rejected', () => {
     }),
     /extra/,
     'two inserts sharing one stage id collide the same way a template collision would'
+  );
+});
+
+test('a repeated stage whose instances all supply a slot needs no base fill', () => {
+  const slots = { ...VALID.slots };
+  delete slots['second.body'];
+  assert.deepEqual(
+    validateFills(parsed, {
+      slots,
+      repeat: {
+        second: [
+          { label: 'staging', slots: { 'second.body': 'Close staging.' } },
+        ],
+      },
+    }),
+    [],
+    'assemble.mjs merges {...fills.slots, ...instance.slots} per instance, so an instance-supplied fill is a complete substitute for a base one'
+  );
+});
+
+test('a repeated stage where only some instances supply a slot, and there is no base fill, is rejected', () => {
+  const slots = { ...VALID.slots };
+  delete slots['second.body'];
+  assert.match(
+    only({
+      slots,
+      repeat: {
+        second: [
+          { label: 'staging', slots: { 'second.body': 'Close staging.' } },
+          { label: 'prod', slots: {} },
+        ],
+      },
+    }),
+    /no fill for slot "second\.body"/,
+    'the prod instance has neither its own fill nor a base fill to fall back on and would reach assemble with nothing to substitute'
+  );
+});
+
+test('omitting an optional section drops its slot requirement entirely', () => {
+  const slots = { ...VALID.slots };
+  delete slots['notifications.body'];
+  assert.deepEqual(
+    validateFills(parsed, { slots, omitSections: ['notifications'] }),
+    [],
+    'a slot inside an omitted-and-optional section is not live, so it needs no fill and produces no error'
   );
 });

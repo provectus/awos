@@ -82,37 +82,60 @@ export function validateFills(parsed, fills) {
         `fills name slot "${id}", which this template does not define`
       );
   }
-  for (const slot of liveSlots) {
-    if (!(slot.id in slots)) {
-      errors.push(
-        `no fill for slot "${slot.id}" (stage/section: ${slot.stage || slot.section})`
-      );
-      continue;
-    }
-    const value = slots[slot.id];
+
+  // Checks one fill value's content — never its presence, callers decide
+  // that. Shared between a base fill and a repeat instance's own fill,
+  // since assemble.mjs treats both the same way once merged per instance.
+  function checkSlotValue(id, value, optional) {
     if (value === null) {
-      if (!slot.optional)
+      if (!optional)
         errors.push(
-          `slot "${slot.id}" is not optional — a null fill would excise fixed prose around it`
+          `slot "${id}" is not optional — a null fill would excise fixed prose around it`
         );
-      continue;
+      return;
     }
     if (typeof value !== 'string') {
-      errors.push(`slot "${slot.id}" must be a string or null`);
-      continue;
+      errors.push(`slot "${id}" must be a string or null`);
+      return;
     }
     if (value.includes('<!--') || value.includes('-->'))
       errors.push(
-        `slot "${slot.id}" contains an HTML comment delimiter — it would close the surrounding stage marker early and break the rest of the file`
+        `slot "${id}" contains an HTML comment delimiter — it would close the surrounding stage marker early and break the rest of the file`
       );
     if (/awos:flow:stage/.test(value))
       errors.push(
-        `slot "${slot.id}" contains a stage marker — markers are emitted by the assembler, never by a fill`
+        `slot "${id}" contains a stage marker — markers are emitted by the assembler, never by a fill`
       );
     if (value.includes(SENTINEL))
       errors.push(
-        `slot "${slot.id}" contains the excision sentinel character — assemble.mjs uses that codepoint to mark null fills, so this value would be silently excised`
+        `slot "${id}" contains the excision sentinel character — assemble.mjs uses that codepoint to mark null fills, so this value would be silently excised`
       );
+  }
+
+  for (const slot of liveSlots) {
+    if (slot.id in slots) {
+      checkSlotValue(slot.id, slots[slot.id], slot.optional);
+      continue;
+    }
+    // assemble.mjs fills a repeated stage's slots from
+    // {...fills.slots, ...instance.slots} per instance, so a base fill is
+    // unnecessary only when every instance of that stage supplies this
+    // slot itself. Partial coverage (some instances supply it, some
+    // don't) with no base fill falls through to the "no fill" error
+    // below — an uncovered instance would reach assemble with nothing to
+    // substitute.
+    const instances = slot.stage && repeat[slot.stage];
+    if (
+      instances &&
+      instances.every((inst) => inst.slots && slot.id in inst.slots)
+    ) {
+      for (const inst of instances)
+        checkSlotValue(slot.id, inst.slots[slot.id], slot.optional);
+      continue;
+    }
+    errors.push(
+      `no fill for slot "${slot.id}" (stage/section: ${slot.stage || slot.section})`
+    );
   }
 
   const keptIds = parsed.stages
@@ -128,13 +151,15 @@ export function validateFills(parsed, fills) {
   }
 
   const insertStageIds = new Set();
-  for (const ins of fills.insert || []) {
+  (fills.insert || []).forEach((ins, index) => {
     if (!keptIds.includes(ins.after))
       errors.push(
         `insert is anchored after "${ins.after}", which is not an emitted stage`
       );
     if (!ins.stage || !ins.title || !ins.body)
-      errors.push('every insert needs stage, title and body');
+      errors.push(
+        `insert #${index + 1} (anchored after "${ins.after}") is missing one of stage/title/body — every insert needs all three`
+      );
     if (ins.stage) {
       if (stageById[ins.stage])
         errors.push(
@@ -146,7 +171,7 @@ export function validateFills(parsed, fills) {
         );
       insertStageIds.add(ins.stage);
     }
-  }
+  });
 
   for (const target of parsed.stepRefs) {
     if (!keptIds.includes(target))

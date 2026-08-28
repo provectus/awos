@@ -12,7 +12,7 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
 - `<outDir>` — this repo's output directory, e.g. `context/audits/YYYY-MM-DD_HH-MM-SS/per-repo/<repo-name>`.
 - `<ENGINE>` — absolute path to the bundled engine `dist/cli.js`.
 - `<SKILL_DIR>` — the ai-readiness-audit skill directory (for `references/`).
-- `<ORCHESTRATION_ROOT>` — optional. When the caller supplies it, this repo is a member of an orchestration root that carries the agent tooling governing it. Pass it through to `audit-core` (step 1) and to your judgment reads (step 3). When the caller says `none`, pass `--no-orchestration-root` instead. When the caller says nothing about a root — ordinary org mode — pass neither flag.
+- `<ORCHESTRATION_ROOT>` — optional. When the caller supplies it, this repo is a member of an orchestration root that carries the agent tooling governing it. Pass it through to `audit-core` (step 1) and to your judgment reads (step 3). When the caller says `none`, pass `--no-orchestration-root` instead. When the caller says nothing about a root — ordinary org mode — pass neither flag; the engine then auto-detects the relation itself and reports whatever it resolved as `orchestration_root` in the `audit-core` summary. Step 3 uses the root the audit resolved, however it was resolved.
 
 ## Process — the single-repo audit, into `<outDir>`
 
@@ -50,7 +50,7 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
 
    Write the array to `<outDir>/judgments.json` — never a shared path like `/tmp/judgments.json`, which sibling auditors running concurrently would clobber, applying one repo's verdicts to another.
 
-   When `<ORCHESTRATION_ROOT>` is set, the agent-visible instruction surface spans both repositories. Read the root's instruction files as well as this repo's when deciding PRV-11…PRV-18, and name the source repository in every evidence bullet.
+   When this repo has an orchestration root, the agent-visible instruction surface spans both repositories. Read the root's instruction files as well as this repo's when deciding PRV-11…PRV-18, and name the source repository in every evidence bullet. The root is whichever one the audit resolved — the one the caller gave you, or, when you passed no flag, the one `audit-core` auto-detected and printed as `orchestration_root` in its summary (also recorded in `<outDir>/audit.json`). Read it from that output rather than from what the dispatch prompt said: the deterministic pass has already credited that root's instruction files to this repo (ADP-01, ADP-03, AI-02), so judging PRV-11…PRV-18 against this repo alone reports the member as ungoverned in the same audit that scored it as governed.
 
 4. **Author + render.** Fetch the values to transcribe with one read-only `report-context` call (never parse `audit.json`/`collected/*.json` yourself), author the report blocks (`headline`, `insights[]`, `recommendations[]`) into `<outDir>/report-blocks.json`, apply them with one `patch-report` call (it merges them into `audit.json` and writes `recommendations.md` — never edit `audit.json` directly), then render both reports in one call:
 

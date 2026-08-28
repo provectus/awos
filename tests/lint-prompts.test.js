@@ -4289,6 +4289,25 @@ test('repo-auditor leaves the root flag as a placeholder in the audit-core comma
   }
 });
 
+test('repo-auditor takes the judgment instruction corpus from the resolved root', () => {
+  // Round 1 made the no-flag case first-class: the engine auto-detects the
+  // root and credits its tooling to the member (ADP-01/ADP-03/AI-02 come back
+  // "inherited from orchestration root"). If the corpus rule keys on what the
+  // caller supplied instead, those same instruction files are invisible to
+  // PRV-11…PRV-18 and the member is judged ungoverned in an audit that just
+  // scored it as governed.
+  const agent = readUtf8(repoAuditorFile);
+  assert.match(
+    agent,
+    /orchestration_root/,
+    'repo-auditor must name where an auto-detected root is read back from (audit-core reports it as orchestration_root)'
+  );
+  assert.ok(
+    !agent.includes('When `<ORCHESTRATION_ROOT>` is set'),
+    'the instruction-corpus rule must key on the root the audit resolved, not on whether the caller supplied one'
+  );
+});
+
 test('SKILL.md Phase 0a routes an orchestration root to case 4, not case 1', () => {
   // Case 4's trigger ("has .git" + "holds independent git repos in
   // subdirectories" + "carries the tooling governing them") is a strict

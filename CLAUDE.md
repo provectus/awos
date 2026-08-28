@@ -114,6 +114,29 @@ The installer can restructure existing user projects between versions. Migration
 
 Always validate new migrations with `--dry-run` and ensure they are idempotent (re-running must be a no-op). Use `skip_if_any` to short-circuit when the migration has already been applied. See `CONTRIBUTING.md` for the migration schema.
 
+## The Flow Generator
+
+`/awos:flow` (`plugins/awos/commands/flow.md`) generates the project's `/implement-feature` and `/fix-bug` commands. It does **not** write them prose-by-prose: `plugins/awos/scripts/assemble-flow-command.mjs` (with `lib/{template,assemble,validate,diff}.mjs`) assembles them from `plugins/awos/templates/{implement-feature,fix-bug}-template.md`, and the model authors only the templates' `<awos-slot>` elements. Every other line of a template is copied byte-exact, which is what makes a stage invariant impossible to drop (issue #184).
+
+**The fact a maintainer must not miss:** a template has two kinds of prose, and they behave oppositely. Prose in the template's body, outside any `<awos-slot>`, ships verbatim into every generated command — a contract written there is guaranteed to appear. Prose written inside a slot instruction is only a suggestion to the generating model, and prose written in the template's leading HTML comment (the block right after the frontmatter) never reaches the model at all: `parseTemplate` treats that comment as author-facing documentation of the template's own syntax and excludes it from both the assembled output and the `slots` inventory the model reads. A contract placed in either of those two spots is not enforced, even though it reads like one. This exact mistake happened on this branch: the "each generated command is self-contained, never references its sibling" rule was moved into the templates' header comments during the assembler rewrite and silently stopped reaching the model; the fix restored it as fixed prose in `flow.md` Step 6 item 3, where fills are authored.
+
+Template constructs, all template-only and stripped at assembly:
+
+| Construct                                                              | Meaning                                                                    |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `<awos-slot id="stage.name">instruction</awos-slot>`                   | the generator fills this and nothing else                                  |
+| `<awos-slot … optional>`                                               | a `null` fill excises the slot's block, or collapses its inline whitespace |
+| `<!-- awos:flow:section=id optional --> … <!-- /awos:flow:section -->` | an omittable region of pre-stage prose                                     |
+| `<!-- awos:flow:stage=id optional -->`                                 | `optional` gates omission; the emitted marker stays plain                  |
+| `### <awos-step/>: Title`                                              | numbered mechanically over the emitted stages                              |
+| `<awos-step-ref stage="id"/>`                                          | resolved to that stage's emitted number                                    |
+
+Verbs: `slots <template>` (the inventory the model reads instead of the template), `assemble <template> <fills.json> --out … --version … --date … --source … [--baseline-dir …]` (writes the command plus `context/product/.flow/<name>.md.baseline.md` and `<name>.md.fills.json` — the baseline is byte-identical to the generated command, which is what makes a later hand-edit's attribution exact), and `diff <generated> <baseline>` (per-stage `unchanged`/`edited`/`absent`, used to carry forward manual edits on a re-run). `validateFills` runs before `assemble` and rejects the whole run, writing nothing, on any invalid fill; `assemble.mjs` has no defense of its own against, for example, a duplicate emitted stage id, so validation is the only guard against silent corruption. A `repeat` instance's `label` must be lowercase kebab-case and unique within its stage, because it becomes part of the marker id (`stage#label`) that `diff` parses back out.
+
+Escape hatches for structure a skeleton lacks, all declared in the fills: `repeat` (a stage per environment or change request), `insert` (a new stage at an anchor), `custom` (replace a stage wholesale, `reason` required), `stageOrder` (reorder — this is how §4's change-request-first timing moves the local review).
+
+Tests live in `tests/flow-assembler/` (`npm run test:flow-assembler`) plus the Layer-1 assertions in `tests/lint-prompts.test.js`. The plugin version moves as one commit across four places: `plugins/awos/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `EXPECTED_PLUGIN_VERSION` in `tests/lint-prompts.test.js`, and the generator-version constant in `flow.md` Step 1.
+
 ## The Audit Plugin
 
 `plugins/awos/` is a Claude Code plugin that adds the `/awos:ai-readiness-audit` command. The marketplace is declared in `.claude-plugin/marketplace.json` at the repo root, and the installer registers it in the user's settings during setup (`src/services/marketplace-configurator.js`).

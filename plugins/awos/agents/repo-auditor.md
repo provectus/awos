@@ -12,17 +12,23 @@ You audit exactly one repository for the AWOS AI-readiness audit and write its r
 - `<outDir>` — this repo's output directory, e.g. `context/audits/YYYY-MM-DD_HH-MM-SS/per-repo/<repo-name>`.
 - `<ENGINE>` — absolute path to the bundled engine `dist/cli.js`.
 - `<SKILL_DIR>` — the ai-readiness-audit skill directory (for `references/`).
-- `<ORCHESTRATION_ROOT>` — optional. When the caller supplies it, this repo is a member of an orchestration root that carries the agent tooling governing it. Pass it through to `audit-core` (step 1) and to your judgment reads (step 3). When the caller says `none`, pass `--no-orchestration-root` instead.
+- `<ORCHESTRATION_ROOT>` — optional. When the caller supplies it, this repo is a member of an orchestration root that carries the agent tooling governing it. Pass it through to `audit-core` (step 1) and to your judgment reads (step 3). When the caller says `none`, pass `--no-orchestration-root` instead. When the caller says nothing about a root — ordinary org mode — pass neither flag.
 
 ## Process — the single-repo audit, into `<outDir>`
 
 1. **Deterministic pass (one engine call).** Run:
 
    ```bash
-   node "<ENGINE>" audit-core "<repoPath>" "<outDir>" --orchestration-root "<ORCHESTRATION_ROOT>"
+   node "<ENGINE>" audit-core "<repoPath>" "<outDir>" <ROOT_FLAG>
    ```
 
-   Use `--no-orchestration-root` in place of that flag when the caller passed `none`, and omit both flags entirely when the caller said nothing about a root — the engine then auto-detects. Do not pass the flag to `enrich`: `enrich` reads the root back from the artifact `audit-core` wrote, so re-passing it is at best redundant and at worst a way for the two passes to disagree.
+   `<ROOT_FLAG>` is decided by what the caller said about an orchestration root, and it is the only part of the command that varies:
+
+   - a root path → `--orchestration-root "<ORCHESTRATION_ROOT>"`
+   - `none` → `--no-orchestration-root`
+   - nothing at all → no flag; the engine auto-detects the relation itself.
+
+   Do not pass either flag to `enrich`: `enrich` reads the root back from the artifact `audit-core` wrote, so re-passing it is at best redundant and at worst a way for the two passes to disagree.
 
    This scores every `detected`/`computed` category and writes `<outDir>/<dimension>.json` + `<outDir>/audit.json`. This one call **is** the whole deterministic slice. Never re-score a `detected`/`computed` check by hand, and never fan out a subagent per dimension — reconstructing a per-dimension flow is the failure mode this design exists to prevent.
 

@@ -4254,6 +4254,41 @@ test('repo-auditor accepts an orchestration root', () => {
   );
 });
 
+test('repo-auditor leaves the root flag as a placeholder in the audit-core command', () => {
+  // Ordinary org mode (a non-git parent folder, or a GitHub org) dispatches
+  // repo-auditors with no orchestration root at all. A fenced command that
+  // hardcodes `--orchestration-root "<ORCHESTRATION_ROOT>"` states a case the
+  // prose beneath it immediately contradicts, and a subagent copying the fence
+  // verbatim in that mode runs the engine with the literal placeholder string,
+  // which validOrchestrationRoot rejects and the per-repo audit dies.
+  const agent = readUtf8(repoAuditorFile);
+  const auditCoreLine = agent
+    .split('\n')
+    .find((line) => line.includes('audit-core "<repoPath>"'));
+  assert.ok(
+    auditCoreLine !== undefined,
+    'repo-auditor must show the audit-core command it dispatches'
+  );
+  assert.ok(
+    auditCoreLine.includes('<ROOT_FLAG>'),
+    'the audit-core command must end in the <ROOT_FLAG> placeholder rather than one hardcoded flag, so the no-root case is not contradicted by the fence itself'
+  );
+  assert.ok(
+    !auditCoreLine.includes('--orchestration-root'),
+    'the audit-core command must not hardcode --orchestration-root: ordinary org mode dispatches repo-auditors with no root, and a verbatim copy then passes the literal <ORCHESTRATION_ROOT> string to the engine'
+  );
+  for (const substitution of [
+    '`--orchestration-root "<ORCHESTRATION_ROOT>"`',
+    '`--no-orchestration-root`',
+    'no flag',
+  ]) {
+    assert.ok(
+      agent.includes(substitution),
+      `repo-auditor must spell out the ${substitution} substitution for <ROOT_FLAG>; all three cases are reachable from org-mode dispatch`
+    );
+  }
+});
+
 test('SKILL.md Phase 0a routes an orchestration root to case 4, not case 1', () => {
   // Case 4's trigger ("has .git" + "holds independent git repos in
   // subdirectories" + "carries the tooling governing them") is a strict

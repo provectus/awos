@@ -247,6 +247,19 @@ test('a repeat instance naming a real slot that belongs to a different stage is 
   );
 });
 
+test('a repeat instance label that is not lowercase kebab-case is rejected', () => {
+  assert.match(
+    only({
+      ...VALID,
+      repeat: {
+        second: [{ label: 'Prod EU', slots: {} }],
+      },
+    }),
+    /repeat instance #1 of stage "second" has label "Prod EU", which must be lowercase kebab-case/,
+    'assemble.mjs builds the marker id as `${stage.id}#${inst.label}` verbatim — a space or another "#" in the label either breaks diff.mjs\'s STAGE_RE outright (the stage silently vanishes from the diff report) or manufactures a colliding marker id, so this must be caught before the fill ever reaches assemble.mjs'
+  );
+});
+
 // The next four tests all use VALID as-is (which already fills
 // second.body at the base level) and add a repeat instance that ALSO
 // overrides second.body — the shape that let bad content slip through

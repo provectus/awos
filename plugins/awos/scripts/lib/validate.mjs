@@ -136,6 +136,31 @@ export function validateFills(parsed, fills) {
     });
   }
 
+  // A repeat instance's label becomes half of the marker id assemble.mjs
+  // emits (`${stage.id}#${inst.label}`) — the exact id diff.mjs's
+  // STAGE_RE must later re-parse out of the generated file to attribute a
+  // hand-edit to the right instance. An unconstrained label (free text, a
+  // space, another "#") either breaks that regex outright — the stage
+  // silently vanishes from the diff report, and a hand-edit inside it is
+  // overwritten on the next re-run — or produces a marker id colliding
+  // with something else. Constrain it to the same kebab shape stage and
+  // slot ids already use, so this is caught here instead of at diff time.
+  const LABEL_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  for (const [stageId, instances] of Object.entries(repeat)) {
+    if (!stageById[stageId]) continue; // already flagged above
+    (instances || []).forEach((inst, index) => {
+      if (typeof inst.label !== 'string' || !LABEL_RE.test(inst.label)) {
+        const shown =
+          typeof inst.label === 'string'
+            ? `"${inst.label}"`
+            : String(inst.label);
+        errors.push(
+          `repeat instance #${index + 1} of stage "${stageId}" has label ${shown}, which must be lowercase kebab-case matching ${LABEL_RE.source} — it becomes part of the emitted marker id "${stageId}#${inst.label}"`
+        );
+      }
+    });
+  }
+
   // Checks one fill value's content — never its presence, callers decide
   // that. Shared between a base fill and a repeat instance's own fill,
   // since assemble.mjs treats both the same way once merged per instance.

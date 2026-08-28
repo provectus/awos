@@ -35,10 +35,15 @@ test('a missing baseline is reported as a state, not an error', () => {
 
 test('an unedited command reports every stage unchanged', () => {
   const report = diffStages(gen('one'), gen('one'));
-  assert.equal(report.preamble, 'unchanged');
+  assert.equal(
+    report.preamble,
+    'unchanged',
+    'identical generated and baseline text must not be reported as a preamble edit'
+  );
   assert.deepEqual(
     report.stages.map((s) => s.status),
-    ['unchanged', 'unchanged']
+    ['unchanged', 'unchanged'],
+    'a byte-identical re-run must not flag any stage as edited or absent'
   );
 });
 
@@ -62,7 +67,8 @@ test('a stage deleted by hand is reported absent', () => {
   const report = diffStages(generated, gen('one'));
   assert.deepEqual(
     report.stages.find((s) => s.id === 'second'),
-    { id: 'second', status: 'absent' }
+    { id: 'second', status: 'absent' },
+    'a stage present in the baseline but missing from the generated file was deleted by hand, not merely edited — it must be reported "absent"'
   );
 });
 

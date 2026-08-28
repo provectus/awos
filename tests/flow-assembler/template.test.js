@@ -96,6 +96,44 @@ test('parseTemplate carries each slot instruction and its surrounding context', 
   );
 });
 
+test('parseTemplate reports the containing paragraph, not a truncated first line, as context for a multi-line slot', () => {
+  const src = `---
+description: d
+argument-hint: '[a]'
+---
+
+<!--
+Generator instructions.
+-->
+
+<!-- awos:flow:stage=first -->
+
+### <awos-step/>: First
+
+Before the slot, in its own paragraph.
+
+<awos-slot id="first.multi">Per §1, one of two shapes:
+
+- first shape
+- second shape</awos-slot>
+
+<!-- /awos:flow:stage -->
+
+<!-- awos:flow:generated date=[x] version=[x] source=x -->
+`;
+  const parsed = parseTemplate(src);
+  const slot = parsed.slots.find((s) => s.id === 'first.multi');
+  assert.equal(
+    slot.context,
+    '⟦slot⟧',
+    'the slot sits alone in its own blank-line-delimited paragraph, so the whole multi-line match must be replaced by the marker — the previous implementation matched `full` (the whole slot span) against `line.text` (only its first physical line), which never contains it once the slot spans lines, leaving context as the unreplaced original text'
+  );
+  assert.ok(
+    !slot.context.includes('<awos-slot'),
+    'context must never retain the raw opening tag — that is exactly what an unmatched replace leaves behind'
+  );
+});
+
 test('parseTemplate collects step-ref targets', () => {
   const parsed = parseTemplate(mini);
   assert.deepEqual(

@@ -190,6 +190,22 @@ for (const name of TEMPLATES) {
     );
   });
 
+  test(`${name} a multi-line slot's context, if any, is a real paragraph — never the raw opening tag`, () => {
+    // Not every template has a multi-line slot (fix-bug-template.md's
+    // local-review.shape is the one that does; implement-feature-template.md
+    // currently has none) — this just checks the invariant wherever one
+    // exists, rather than requiring one per template.
+    const parsed = parseTemplate(src);
+    for (const slot of parsed.slots.filter((s) =>
+      s.instruction.includes('\n')
+    )) {
+      assert.ok(
+        !slot.context.includes('<awos-slot'),
+        `${name}: slot "${slot.id}" spans multiple lines but its context still contains the raw opening tag — collectSlots's replace of the whole match against just the slot's first physical line didn't match`
+      );
+    }
+  });
+
   test(`${name} every step reference names an emitted stage`, () => {
     const parsed = parseTemplate(src);
     const ids = new Set(parsed.stages.map((s) => s.id));

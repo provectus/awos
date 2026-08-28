@@ -26,6 +26,19 @@ function lineAround(src, index) {
   return { start, end, text: src.slice(start, end) };
 }
 
+// The paragraph spanning [start, end) — blank-line-delimited on both sides,
+// or a string edge. `full` (the whole matched slot) can span several
+// physical lines, so `lineAround`'s single line is not guaranteed to
+// contain it; the paragraph always does, since a slot's own markup is never
+// itself split across a blank line.
+function paragraphAround(src, start, end) {
+  const prevBlank = src.lastIndexOf('\n\n', start);
+  const pStart = prevBlank === -1 ? 0 : prevBlank + 2;
+  const nextBlank = src.indexOf('\n\n', end);
+  const pEnd = nextBlank === -1 ? src.length : nextBlank;
+  return src.slice(pStart, pEnd);
+}
+
 function collectSlots(src, offset, stageId, out) {
   SLOT_RE.lastIndex = 0;
   let m;
@@ -33,13 +46,14 @@ function collectSlots(src, offset, stageId, out) {
     const [full, id, optionalAttr, instruction] = m;
     const line = lineAround(src, m.index);
     const withoutSlot = line.text.replace(full.split('\n')[0], '').trim();
+    const paragraph = paragraphAround(src, m.index, m.index + full.length);
     out.push({
       id,
       ...ownerOf(id, stageId),
       optional: Boolean(optionalAttr),
       inline: withoutSlot.length > 0 && !withoutSlot.startsWith('#'),
       instruction: instruction.trim(),
-      context: line.text.replace(full, '⟦slot⟧').trim(),
+      context: paragraph.replace(full, '⟦slot⟧').trim(),
       index: offset + m.index,
     });
   }

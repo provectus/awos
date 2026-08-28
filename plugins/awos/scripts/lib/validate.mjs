@@ -67,6 +67,20 @@ export function validateFills(parsed, fills) {
       errors.push(
         `custom override of "${id}" needs a "reason" — an override is a declared deviation`
       );
+    // assemble.mjs writes entry.title/entry.body into the output with no
+    // check of its own (unlike a slot fill, which validateFills always
+    // sees) — a custom override is just as capable of fabricating a stage
+    // marker or breaking comment structure as any other fill shape.
+    if (entry.title !== undefined) {
+      if (typeof entry.title !== 'string')
+        errors.push(`custom override of "${id}"'s title must be a string`);
+      else checkTextHazards(`custom override of "${id}"'s title`, entry.title);
+    }
+    if (entry.body !== undefined) {
+      if (typeof entry.body !== 'string')
+        errors.push(`custom override of "${id}"'s body must be a string`);
+      else checkTextHazards(`custom override of "${id}"'s body`, entry.body);
+    }
   }
   for (const id of new Set([
     ...omitStages,
@@ -176,6 +190,38 @@ export function validateFills(parsed, fills) {
     });
   }
 
+  // Checks one free-text value's content, regardless of which fill shape it
+  // came from (a slot fill, a repeat instance override, an insert's title
+  // or body, a custom override's title or body) — assemble.mjs writes all
+  // of these into the output the same uncontrolled way, so a payload that
+  // corrupts structure through one hatch corrupts it through any other.
+  //
+  // The comment-delimiter check only rejects an UNBALANCED "<!--"/"-->"
+  // count, not any occurrence: a complete, balanced comment a fill has a
+  // legitimate reason to mention (e.g. documenting the `<!-- skip-tests:
+  // true -->` convention) reads fine in the assembled file, while a stray
+  // unmatched delimiter breaks the comment structure of everything after
+  // it. The marker check is separate and stricter — it rejects the bare
+  // substring regardless of comment wrapping, because a fill that mentions
+  // "awos:flow:stage"/"awos:flow:section" at all is fabricating something
+  // that is the assembler's alone to emit.
+  function checkTextHazards(label, value) {
+    const opens = (value.match(/<!--/g) || []).length;
+    const closes = (value.match(/-->/g) || []).length;
+    if (opens !== closes)
+      errors.push(
+        `${label} contains an unbalanced HTML comment delimiter — a stray "<!--" or "-->" would break the comment structure of the rest of the file`
+      );
+    if (/awos:flow:(stage|section)/.test(value))
+      errors.push(
+        `${label} contains a stage marker or section marker — markers are emitted by the assembler, never by a fill`
+      );
+    if (value.includes(SENTINEL))
+      errors.push(
+        `${label} contains the excision sentinel character — assemble.mjs uses that codepoint to mark null fills, so this value would be silently excised`
+      );
+  }
+
   // Checks one fill value's content — never its presence, callers decide
   // that. Shared between a base fill and a repeat instance's own fill,
   // since assemble.mjs treats both the same way once merged per instance.
@@ -191,18 +237,7 @@ export function validateFills(parsed, fills) {
       errors.push(`slot "${id}" must be a string or null`);
       return;
     }
-    if (value.includes('<!--') || value.includes('-->'))
-      errors.push(
-        `slot "${id}" contains an HTML comment delimiter — it would close the surrounding stage marker early and break the rest of the file`
-      );
-    if (/awos:flow:stage/.test(value))
-      errors.push(
-        `slot "${id}" contains a stage marker — markers are emitted by the assembler, never by a fill`
-      );
-    if (value.includes(SENTINEL))
-      errors.push(
-        `slot "${id}" contains the excision sentinel character — assemble.mjs uses that codepoint to mark null fills, so this value would be silently excised`
-      );
+    checkTextHazards(`slot "${id}"`, value);
   }
 
   for (const slot of liveSlots) {
@@ -249,6 +284,24 @@ export function validateFills(parsed, fills) {
       );
   }
 
+  // The set of ids assemble.mjs will ACTUALLY emit for this run — not just
+  // the template's own stage ids. A repeated stage never emits its base id;
+  // it emits one `${id}#${label}` marker per instance instead, and an
+  // insert colliding with one of those is just as capable of corrupting
+  // diff.mjs's re-parse as colliding with a plain template stage id.
+  const emittedIds = new Set();
+  for (const id of keptIds) {
+    const instances = repeat[id];
+    if (instances && instances.length) {
+      for (const inst of instances) {
+        if (typeof inst.label === 'string')
+          emittedIds.add(`${id}#${inst.label}`);
+      }
+    } else {
+      emittedIds.add(id);
+    }
+  }
+
   const insertStageIds = new Set();
   (fills.insert || []).forEach((ins, index) => {
     if (!keptIds.includes(ins.after))
@@ -259,15 +312,41 @@ export function validateFills(parsed, fills) {
       errors.push(
         `insert #${index + 1} (anchored after "${ins.after}") is missing one of stage/title/body — every insert needs all three`
       );
+    if (typeof ins.title === 'string')
+      checkTextHazards(
+        `insert #${index + 1} (anchored after "${ins.after}")'s title`,
+        ins.title
+      );
+    else if (ins.title !== undefined)
+      errors.push(
+        `insert #${index + 1} (anchored after "${ins.after}")'s title must be a string`
+      );
+    if (typeof ins.body === 'string')
+      checkTextHazards(
+        `insert #${index + 1} (anchored after "${ins.after}")'s body`,
+        ins.body
+      );
+    else if (ins.body !== undefined)
+      errors.push(
+        `insert #${index + 1} (anchored after "${ins.after}")'s body must be a string`
+      );
     if (ins.stage) {
-      if (stageById[ins.stage])
+      // Same shape constraint as a repeat instance label (LABEL_RE, above):
+      // ins.stage becomes a marker id verbatim, and diff.mjs's STAGE_RE can
+      // only re-parse the kebab shape.
+      if (!LABEL_RE.test(ins.stage)) {
         errors.push(
-          `insert stage id "${ins.stage}" collides with a stage the template already defines — give it a distinct id`
+          `insert stage id "${ins.stage}" must be lowercase kebab-case matching ${LABEL_RE.source} — it becomes the emitted marker id "${ins.stage}" and diff.mjs's STAGE_RE must be able to re-parse it`
         );
-      else if (insertStageIds.has(ins.stage))
+      } else if (emittedIds.has(ins.stage)) {
+        errors.push(
+          `insert stage id "${ins.stage}" collides with a stage id assemble will actually emit — give it a distinct id`
+        );
+      } else if (insertStageIds.has(ins.stage)) {
         errors.push(
           `insert stage id "${ins.stage}" is claimed by more than one insert — give each a distinct id`
         );
+      }
       insertStageIds.add(ins.stage);
     }
   });
@@ -276,6 +355,26 @@ export function validateFills(parsed, fills) {
     if (!keptIds.includes(target))
       errors.push(
         `fixed prose carries <awos-step-ref stage="${target}"/>, but that stage is not emitted — the cross-reference would dangle`
+      );
+  }
+
+  // A newline in a frontmatter field cannot be quoted around — YAML has no
+  // escape that keeps a `key: value` line on one physical line once the
+  // value itself contains one, so assemble.mjs's quoting (however it
+  // quotes) cannot save it. A newline here either breaks the frontmatter
+  // block's parse outright or, worse, injects what reads as a second
+  // frontmatter key on the next line.
+  const fm = fills.frontmatter || {};
+  for (const key of ['description', 'argument-hint']) {
+    const value = fm[key];
+    if (value === undefined) continue;
+    if (typeof value !== 'string') {
+      errors.push(`frontmatter.${key} must be a string`);
+      continue;
+    }
+    if (/[\r\n]/.test(value))
+      errors.push(
+        `frontmatter.${key} contains a newline — a frontmatter value must be a single line`
       );
   }
 

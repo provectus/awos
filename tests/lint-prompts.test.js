@@ -2018,20 +2018,27 @@ test('the assembler makes header comment-nesting structurally impossible, not ju
   // comment early (CodeRabbit-flagged) — only possible when a fill can
   // smuggle comment syntax into the assembled output. The generating model
   // no longer reads or authors the template's header at all (Step 6 item 1:
-  // "do not read the template file itself"), and validate.mjs now rejects
-  // any fill containing a comment delimiter before assembly ever runs, so a
-  // nested comment can no longer be authored. flow.md needs no instruction
+  // "do not read the template file itself"), and validate.mjs rejects any
+  // fill that would smuggle an unmatched "-->" before assembly ever runs, so
+  // a nested comment can no longer be authored. flow.md needs no instruction
   // about it any more; the mechanism is pinned here instead.
+  //
+  // The check used to reject ANY "<!--"/"-->" occurrence — which
+  // false-positived on a fill legitimately quoting an existing marker
+  // convention (`<!-- skip-tests: true -->`) — and now rejects only an
+  // UNBALANCED count, which is the actual hazard this test protects
+  // against: a lone, unmatched "-->" is still always rejected.
   const validateSrc = readUtf8(
     path.join(repoRoot, 'plugins', 'awos', 'scripts', 'lib', 'validate.mjs')
   );
-  const checkSlotValueFn = validateSrc.slice(
-    validateSrc.indexOf('function checkSlotValue')
+  const checkTextHazardsFn = validateSrc.slice(
+    validateSrc.indexOf('function checkTextHazards')
   );
   assert.ok(
-    checkSlotValueFn.includes("value.includes('<!--')") &&
-      checkSlotValueFn.includes("value.includes('-->')"),
-    'validate.mjs checkSlotValue must reject any fill containing an HTML comment delimiter — a model-authored fill can never smuggle a "-->" that would close a stage marker early'
+    /const opens = .*<!--/.test(checkTextHazardsFn) &&
+      /const closes = .*-->/.test(checkTextHazardsFn) &&
+      /opens !== closes/.test(checkTextHazardsFn),
+    'validate.mjs checkTextHazards must reject an unbalanced "<!--"/"-->" delimiter count — a model-authored fill can never smuggle an unmatched "-->" that would close a stage marker (or anything else) early'
   );
 
   // The template's own header still documents the rule for whoever edits
@@ -4811,6 +4818,30 @@ test('flow.md pins each generated command as self-contained', () => {
     /never write a fill that references the sibling command/i.test(rule) &&
       /know[s]? nothing about each other at run time/i.test(rule),
     "flow.md Step 6's self-contained rule must forbid a fill referencing the sibling command's text and say why: the commands know nothing about each other at run time"
+  );
+});
+
+test('flow.md tells the generator a fill is spliced into its context, not a restatement of it', () => {
+  // The `slots` CLI's inventory carries `context` (the fixed prose a fill
+  // lands in, `⟦slot⟧` marking the spot) and `inline` for every slot, but
+  // nothing in flow.md ever told the generating model what either meant.
+  // A real generation produced seams where a fill and the fixed prose it
+  // was spliced into collided ungrammatically (e.g. a doubled "run
+  // `/awos:verify`"). Item 3 is where fills are authored, so the
+  // instruction belongs there.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const item3 = lineWith(flow, /`null` excises an `optional` slot\./);
+  assert.ok(
+    item3 !== '',
+    'flow.md Step 6 item 3 must exist — this is where fills are authored'
+  );
+  assert.ok(
+    /context/i.test(item3) && /⟦slot⟧/.test(item3),
+    'flow.md Step 6 item 3 must reference the `context` field and its `⟦slot⟧` marker, or the generator has no way to know a fill lands inside fixed prose rather than standing alone'
+  );
+  assert.ok(
+    /grammatical continuation/i.test(item3),
+    'flow.md must instruct the generator to write a fill as a grammatical continuation of its context — the concrete fix for the doubled-prose seam this instruction exists to prevent'
   );
 });
 

@@ -53,13 +53,32 @@ test('a null fill for a non-optional slot is rejected', () => {
   );
 });
 
-test('a fill containing an HTML comment delimiter is rejected', () => {
+// The check used to reject ANY occurrence of "<!--"/"-->" in a fill, which
+// false-positived on a fill legitimately mentioning an existing marker
+// convention (the `<!-- skip-tests: true -->` opt-out both templates
+// document). It now rejects only an UNBALANCED delimiter count — a stray,
+// unclosed comment actually breaks the file — plus the stage/section
+// marker shapes below, which are checked separately and are stricter.
+test('a fill containing an unbalanced HTML comment delimiter is rejected', () => {
   assert.match(
     only({
-      slots: { ...VALID.slots, 'first.body': 'see <!-- note --> here' },
+      slots: { ...VALID.slots, 'first.body': 'see <!-- note here' },
     }),
-    /comment/i,
-    'a comment delimiter inside a fill closes the surrounding stage marker early and breaks the rest of the file'
+    /unbalanced/i,
+    'a stray, unclosed "<!--" breaks the comment structure of everything that follows it in the assembled file'
+  );
+});
+
+test('a fill mentioning an existing marker convention in a complete, balanced comment is accepted', () => {
+  assert.deepEqual(
+    validateFills(parsed, {
+      slots: {
+        ...VALID.slots,
+        'first.body': 'Honor the `<!-- skip-tests: true -->` marker.',
+      },
+    }),
+    [],
+    'both templates document this exact marker in their own fixed prose — a fill quoting it is not a hazard, only a fill fabricating an awos:flow:stage/section marker or leaving a delimiter unbalanced is'
   );
 });
 
@@ -70,6 +89,16 @@ test('a fill containing a stage marker is rejected', () => {
     }),
     /stage marker/i,
     'a fill must never fabricate a stage marker — markers are the assembler’s to emit'
+  );
+});
+
+test('a fill containing a section marker is rejected', () => {
+  assert.match(
+    only({
+      slots: { ...VALID.slots, 'first.body': 'x awos:flow:section=fake y' },
+    }),
+    /section marker/i,
+    'a fill must never fabricate a section marker either — the same hazard as a stage marker, just the other construct'
   );
 });
 
@@ -159,6 +188,100 @@ test('an insert.stage id that collides with an existing stage is rejected', () =
     }),
     /second/,
     'an insert stage id that collides with a template stage produces two stages sharing one marker id, misattributing re-run diffs'
+  );
+});
+
+// Content checks used to be run only against slot fills — assemble.mjs
+// writes insert.body/insert.title and custom.body/custom.title into the
+// output with no check of its own, so either hatch was a way to smuggle a
+// fabricated stage marker or an unbalanced comment past validateFills
+// entirely.
+
+test('an insert body containing a stage marker is rejected', () => {
+  assert.match(
+    only({
+      ...VALID,
+      insert: [
+        {
+          after: 'first',
+          stage: 'canary',
+          title: 'Canary Watch',
+          body: 'Watch the canary.\n<!-- /awos:flow:stage -->\nThen promote.',
+        },
+      ],
+    }),
+    /stage marker/i,
+    "an embedded stage-close marker inside an insert body corrupts every later diff's stage count exactly as it would coming from a slot fill"
+  );
+});
+
+test('an insert title containing the excision sentinel is rejected', () => {
+  assert.match(
+    only({
+      ...VALID,
+      insert: [{ after: 'first', stage: 'canary', title: 'xy', body: 'ok' }],
+    }),
+    /sentinel/i,
+    'the sentinel check must cover an insert title too, not just its body or a slot fill'
+  );
+});
+
+test('a custom override body containing a stage marker is rejected', () => {
+  assert.match(
+    only({
+      ...VALID,
+      custom: {
+        second: {
+          title: 'Deliver',
+          body: 'Ship it. <!-- awos:flow:stage=evil --> done.',
+          reason: 'r',
+        },
+      },
+    }),
+    /stage marker/i,
+    'a fabricated stage-open marker inside a custom override body would look like a real one to diff.mjs, the same hazard a slot fill or an insert body carries'
+  );
+});
+
+test('an insert.stage id that is not lowercase kebab-case is rejected', () => {
+  assert.match(
+    only({
+      ...VALID,
+      insert: [
+        { after: 'first', stage: 'Canary Watch', title: 'X', body: 'y' },
+      ],
+    }),
+    /kebab-case/,
+    "diff.mjs's STAGE_RE only matches [a-z0-9#-]+ — an insert stage id outside that shape makes the stage vanish from every future diff report, and a hand-edit inside it is silently overwritten on the next re-run"
+  );
+});
+
+test('an insert.stage id shaped like a repeat-instance marker id is rejected', () => {
+  assert.match(
+    only({
+      ...VALID,
+      repeat: {
+        second: [
+          { label: 'staging', slots: {} },
+          { label: 'prod', slots: {} },
+        ],
+      },
+      insert: [{ after: 'first', stage: 'second#prod', title: 'X', body: 'y' }],
+    }),
+    /kebab-case/,
+    'assemble.mjs would otherwise write the marker id "second#prod" verbatim — identical to the real repeat instance\'s own marker id — and diffStages\'s Map.set on that id keeps only the last, silently dropping one of them; forbidding "#" in the kebab shape makes this collision impossible to construct'
+  );
+});
+
+test('an insert.stage id may reuse a template stage id that is fully repeated away, since that bare id is never emitted', () => {
+  assert.deepEqual(
+    validateFills(parsed, {
+      ...VALID,
+      repeat: { second: [{ label: 'staging', slots: {} }] },
+      insert: [{ after: 'first', stage: 'second', title: 'X', body: 'y' }],
+    }),
+    [],
+    'assemble.mjs emits a repeated stage as "${id}#${label}" instances only — it never emits the bare id "second" once repeat claims it — so checking against the ids assemble will actually emit (not the template\'s full stage list, which the old `stageById[ins.stage]` check used) lets an insert safely reuse that now-unused bare id'
   );
 });
 
@@ -281,7 +404,7 @@ test('two repeat instances on the same stage sharing a label are rejected', () =
 // overrides second.body — the shape that let bad content slip through
 // content checks were only ever run against the base value.
 
-test('a comment delimiter in a repeat instance override is rejected even when a base fill exists', () => {
+test('an unbalanced comment delimiter in a repeat instance override is rejected even when a base fill exists', () => {
   assert.match(
     only({
       ...VALID,
@@ -289,12 +412,12 @@ test('a comment delimiter in a repeat instance override is rejected even when a 
         second: [
           {
             label: 'staging',
-            slots: { 'second.body': 'see <!-- note --> here' },
+            slots: { 'second.body': 'see <!-- note here' },
           },
         ],
       },
     }),
-    /comment/i,
+    /unbalanced/i,
     "assemble.mjs uses the instance's own value for the staging block, not the base fill — the base being clean does not make the instance's value clean"
   );
 });
@@ -358,5 +481,43 @@ test('a repeat with zero instances on an optional stage is caught as a dangling 
     only({ slots, repeat: { second: [] } }),
     /step-ref|second/i,
     'stage "second" is optional so the zero-instance omission itself is not an error, but the fixed prose that step-refs it now dangles — validation must catch this before assemble throws on it'
+  );
+});
+
+// A newline in a frontmatter value cannot be quoted around in YAML — no
+// quoting style keeps a multi-line value on the field's one physical line.
+// assemble.mjs's quoting had no defense against this at all; the check has
+// to live in validateFills, before assemble ever runs.
+
+test('a frontmatter description containing a newline is rejected', () => {
+  assert.match(
+    only({ ...VALID, frontmatter: { description: 'line one\nline two' } }),
+    /frontmatter\.description.*newline/i,
+    "a newline in the description breaks the YAML frontmatter block's parse — or worse, reads as an injected second key on the next line"
+  );
+});
+
+test('a frontmatter argument-hint containing a newline is rejected', () => {
+  assert.match(
+    only({
+      ...VALID,
+      frontmatter: { 'argument-hint': '[a]\nmalicious: true' },
+    }),
+    /frontmatter\.argument-hint.*newline/i,
+    'the same hazard applies to argument-hint — both frontmatter fields need the same guard'
+  );
+});
+
+test('a frontmatter value containing a colon-space is accepted by validation (assemble is what quotes it)', () => {
+  assert.deepEqual(
+    validateFills(parsed, {
+      ...VALID,
+      frontmatter: {
+        description:
+          'Deliver one Linear issue end to end: spec, implement, verify, review, merge, close.',
+      },
+    }),
+    [],
+    'a colon-space is a YAML quoting hazard, not a rejected value — assemble.mjs quotes it, validateFills only rejects what quoting cannot fix (a newline)'
   );
 });

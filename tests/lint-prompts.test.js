@@ -4780,7 +4780,7 @@ test('both flow templates mark exactly the stages and sections that may be omitt
   for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
     const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
     const optionalStages = [
-      ...body.matchAll(/awos:flow:stage=([a-z-]+) optional/g),
+      ...body.matchAll(/awos:flow:stage=([a-z0-9-]+) optional/g),
     ].map((m) => m[1]);
     assert.deepEqual(
       optionalStages.sort(),

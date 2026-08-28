@@ -12,6 +12,7 @@
     "test:lint": "node --test tests/lint-prompts.test.js",
     "test:installer": "node --test 'tests/installer/*.test.js'",
     "test:fixtures": "node --test tests/fixtures.test.js",
+    "test:flow-assembler": "node --test 'tests/flow-assembler/*.test.js'",
     "test:audit-engine": "node --import tsx --test \"plugins/awos/skills/ai-readiness-audit/**/*.test.ts\"",
     "test:audit-harness": "node --import tsx --test \"tools/ai-readiness-audit/qa/*.test.ts\"",
     "test:audit-tools": "node --test tools/ai-readiness-audit/*.test.mjs",

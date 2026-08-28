@@ -4,24 +4,32 @@ argument-hint: '[bug — report ID, link, or description]'
 ---
 
 <!--
-Skeleton consumed by /awos:flow, generated alongside implement-feature.md from
-the same context/product/delivery-flow.md decision record. The generator
-replaces every [bracketed instruction] with project-specific prose from the
-decision record, omits stages the decisions rule out, and keeps the stage
-marker comments — they let re-runs attribute manual edits to specific stages.
-Fixed prose outside brackets survives into the generated command as-is.
+Skeleton consumed by /awos:flow via
+${CLAUDE_PLUGIN_ROOT}/scripts/assemble-flow-command.mjs. The generator fills
+the <awos-slot> elements and nothing else — every other line here is copied
+into the generated command byte-exact, so a contract written outside a slot
+cannot be dropped.
+
+Constructs, all template-only and stripped at assembly:
+  <awos-slot id="stage.name">instruction to the generator</awos-slot>
+  <awos-slot id="stage.name" optional>…</awos-slot>   a null fill excises it
+  a section span: an open/close HTML-comment marker pair — the opening one
+    names the section and can carry the optional flag, the closing one is bare
+  ### <awos-step/>: Title                  numbered mechanically
+  <awos-step-ref stage="…"/>               resolved to that stage's number
 
 This entire comment is instructions to the generator: do NOT copy it, or any
 adaptation of it, into the generated file. The generated command starts at the
-frontmatter and carries no top-of-file comment — provenance lives in the
-footer marker, and the intro's "change this command by re-running" paragraph
-is fixed prose: keep it, never restate it as a comment block. The generated
-command must
-also be self-contained: never reference the sibling command ("same as
-implement-feature") — the commands know nothing about each other at run time.
+frontmatter, carries no top-of-file comment (provenance lives in the footer
+marker; the intro's "change this command by re-running" paragraph is fixed
+prose — keep it, never restate it as a comment block), and is self-contained —
+it never references the sibling command, which it knows nothing about at run
+time.
 
-The stage markers are HTML comments: never nest one inside another — an inner
-arrow-close ends the outer comment early and breaks the rest of the file.
+The stage and section markers are HTML comments: never nest one inside another
+— an inner arrow-close ends the outer comment early and breaks the rest of
+the file. Stage markers survive into the generated command; the `optional`
+attribute does not.
 
 Generator context (not content): this is the lighter sibling of
 implement-feature.md — the three heavy feature stages (functional spec, tech
@@ -34,17 +42,21 @@ middle changes.
 
 # Fix a Bug End-to-End
 
-Takes one bug — its report from [source per §1 of delivery-flow.md, a bug report rather than a feature ticket] — and drives it through diagnosis, a scoped fix with a regression test, re-verification of the touched acceptance criteria, and delivery until it is closed. On the way it keeps the owning spec honest: when the fix changes documented behavior, it amends that spec rather than letting it drift.
+Takes one bug — its report from <awos-slot id="intro.source">source per §1 of delivery-flow.md, a bug report rather than a feature ticket</awos-slot> — and drives it through diagnosis, a scoped fix with a regression test, re-verification of the touched acceptance criteria, and delivery until it is closed. On the way it keeps the owning spec honest: when the fix changes documented behavior, it amends that spec rather than letting it drift.
 
 Change this command by re-running `/awos:flow`. It is generated from `context/product/delivery-flow.md`, which is the source of truth for every decision below, and a regeneration rewrites this file from that record — so an edit made here lasts only once it is recorded, either in the record's **Local Customizations** section or as a decision of its own.
 
+<!-- awos:flow:section=notifications optional -->
+
 ## Notifications
 
-[Per §9 of delivery-flow.md: on each recorded transition (e.g. root cause found, fix pushed, change request opened, gates passed, merged, closed, blocked-and-waiting), post a short status to the team channel via its §7 transport. Omit this section entirely if §9 records "none".]
+<awos-slot id="notifications.body">Per §9 of delivery-flow.md: on each recorded transition (e.g. root cause found, fix pushed, change request opened, gates passed, merged, closed, blocked-and-waiting), post a short status to the team channel via its §7 transport.</awos-slot>
+
+<!-- /awos:flow:section -->
 
 ## Arguments
 
-`$ARGUMENTS` — [expected bug reference shape per §1: a report ID, URL, or a free-text description]. If empty, ask the user.
+`$ARGUMENTS` — <awos-slot id="arguments.shape">expected bug reference shape per §1: a report ID, URL, or a free-text description</awos-slot>. If empty, ask the user.
 
 ## Context Discipline
 
@@ -71,39 +83,39 @@ This command is maintained through its own runs. When a run exposes a defect in 
 
 <!-- awos:flow:stage=fetch-bug -->
 
-### Step 1: Fetch & Normalize the Bug
+### <awos-step/>: Fetch & Normalize the Bug
 
 Before the first connector call, pre-flight the transports this run depends on: for each chosen transport §7 records, confirm the operator prerequisites it lists are in place — the auth and the access scope (a logged-in CLI, a valid token, write access to the code-host org, membership in the tracker project), not just that the binary or connector exists. Run it on the fast model tier (per §8) — it is a handful of cheap capability calls, not a fetch. Report a missing grant up front rather than at the stage that needs it — a prerequisite with a lead time is something the operator can start requesting now — and stop only when the missing access blocks a stage this run cannot skip (fetching the ticket, pushing the branch, merging). A transport §7 marks as an optional accelerator is exempt — its absence downgrades the stage that uses it, it never blocks the flow.
 
-[Connector-specific fetch using the chosen transport from §7 of delivery-flow.md, with its recorded fallback — reuse §1, but the source is a bug report rather than a feature ticket. Extract and keep: bug ID, title, the reported symptom, reproduction steps if given, affected area, link. For description-only sources this stage just normalizes the input. Store the bug ID as `BUG_ID`.]
+<awos-slot id="fetch-bug.fetch">Connector-specific fetch using the chosen transport from §7 of delivery-flow.md, with its recorded fallback — reuse §1, but the source is a bug report rather than a feature ticket. Extract and keep: bug ID, title, the reported symptom, reproduction steps if given, affected area, link. For description-only sources this stage just normalizes the input. Store the bug ID as `BUG_ID`.</awos-slot>
 
-[Ticket sources: also fetch the ticket's **remote links, attachments, and linked conversations** (tracker remote links, attached screenshots, a linked chat thread) via the §7 transports and read the reachable ones — the report's real context often lives there, not in the description: a screenshot names WHICH surface renders the broken data while the description names another. Treat any source whose §7 transport is an optional accelerator as best-effort — when it is unavailable, record what went ungathered in the flow log (`context/fix-log-{BUG_ID}.md`, whose path is known from this stage on) and carry on. List anything linked but unreachable — including anything gated behind a transport this run does not have — in the normalized report instead of silently skipping it, so the diagnosis knows context is missing. Omit this paragraph for description-only sources.]
+<awos-slot id="fetch-bug.linked-context" optional>Ticket sources: also fetch the ticket's **remote links, attachments, and linked conversations** (tracker remote links, attached screenshots, a linked chat thread) via the §7 transports and read the reachable ones — the report's real context often lives there, not in the description: a screenshot names WHICH surface renders the broken data while the description names another. Treat any source whose §7 transport is an optional accelerator as best-effort — when it is unavailable, record what went ungathered in the flow log (`context/fix-log-{BUG_ID}.md`, whose path is known from this stage on) and carry on. List anything linked but unreachable — including anything gated behind a transport this run does not have — in the normalized report instead of silently skipping it, so the diagnosis knows context is missing.</awos-slot>
 
-[Crash-report source (per the Bug-fix Flow source decision — e.g. Crashlytics, Sentry): fetch the issue and its most recent events via the §7 transport for the crash tool, and use the title/subtitle as the problem statement. Map every app-frame in the stack to a real `file:line` in the local checkout (Grep/Read), ignoring system frames. **If the stack is unsymbolicated** (raw addresses, no file/line), say so explicitly and do not invent line numbers — the symbol file (dSYM/source map) for that build was likely not uploaded. Capture impact — affected versions, user count, first/last-seen — and prefer a source-typed branch name (e.g. `bug/crash-<short-id>`) per §2. The diagnose stage starts from this stack context. Omit this paragraph when the bug-fix source decision does not include crash reports.]
+<awos-slot id="fetch-bug.crash-report" optional>Crash-report source (per the Bug-fix Flow source decision — e.g. Crashlytics, Sentry): fetch the issue and its most recent events via the §7 transport for the crash tool, and use the title/subtitle as the problem statement. Map every app-frame in the stack to a real `file:line` in the local checkout (Grep/Read), ignoring system frames. **If the stack is unsymbolicated** (raw addresses, no file/line), say so explicitly and do not invent line numbers — the symbol file (dSYM/source map) for that build was likely not uploaded. Capture impact — affected versions, user count, first/last-seen — and prefer a source-typed branch name (e.g. `bug/crash-<short-id>`) per §2. The diagnose stage starts from this stack context.</awos-slot>
 
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=resume-detection -->
 
-### Step 2: Detect the Entry Point
+### <awos-step/>: Detect the Entry Point
 
-Settle the entry point before any work — a cheap status sweep on the fast model tier (per §8), a different question from Step 1's transport pre-flight: is this bug **already fixed**? Check the status across every source §1 records (bug reports can live in more than one place) before doing any work — if the tracker ticket is in a closed/fixed state, or the crash issue is already resolved, report that and stop rather than re-fixing. A merged change request is a stop on its own only for a ticketless source: merged with the ticket still open means delivery and close are still owed, so resume there rather than reporting a fix nobody finished. Then, if this bug's flow log exists (`context/fix-log-{BUG_ID}.md`), read it first — it names the last completed stage and carries the branch, commit, classification verdict, and change-request state, and is the resume signal for the middle stages that produce no scannable artifact. Resume is a dispatch, not a re-run: continue from the stage after the log's last completed entry — completed stages are skipped, not repeated.
+Settle the entry point before any work — a cheap status sweep on the fast model tier (per §8), a different question from <awos-step-ref stage="fetch-bug"/>'s transport pre-flight: is this bug **already fixed**? Check the status across every source §1 records (bug reports can live in more than one place) before doing any work — if the tracker ticket is in a closed/fixed state, or the crash issue is already resolved, report that and stop rather than re-fixing. A merged change request is a stop on its own only for a ticketless source: merged with the ticket still open means delivery and close are still owed, so resume there rather than reporting a fix nobody finished. Then, if this bug's flow log exists (`context/fix-log-{BUG_ID}.md`), read it first — it names the last completed stage and carries the branch, commit, classification verdict, and change-request state, and is the resume signal for the middle stages that produce no scannable artifact. Resume is a dispatch, not a re-run: continue from the stage after the log's last completed entry — completed stages are skipped, not repeated.
 
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=workspace -->
 
-### Step 3: Prepare the Workspace
+### <awos-step/>: Prepare the Workspace
 
-[Per §2–§3 of delivery-flow.md: verify `context/` is reachable and current; warn on a dirty working tree (uncommitted AWOS artifacts left by `/awos:flow` are an expected cause, not a blocker); create the branch from the base branch using the project's naming convention; submodule init/update if required. For a worktree: invoke the project's own worktree command, skill, or init script when §2 records one, otherwise execute the §2 isolation recipe — bring-up steps included — verbatim. Never improvise worktree preparation in-run: real prep is bigger than `git worktree add` (installs, codegen, env files, service/network isolation), and the recorded recipe or project script is the tested path. Store the branch name as `BRANCH`.]
+<awos-slot id="workspace.body">Per §2–§3 of delivery-flow.md: verify `context/` is reachable and current; warn on a dirty working tree (uncommitted AWOS artifacts left by `/awos:flow` are an expected cause, not a blocker); create the branch from the base branch using the project's naming convention; submodule init/update if required. For a worktree: invoke the project's own worktree command, skill, or init script when §2 records one, otherwise execute the §2 isolation recipe — bring-up steps included — verbatim. Never improvise worktree preparation in-run: real prep is bigger than `git worktree add` (installs, codegen, env files, service/network isolation), and the recorded recipe or project script is the tested path. Store the branch name as `BRANCH`.</awos-slot>
 
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=diagnose -->
 
-### Step 4: Diagnose
+### <awos-step/>: Diagnose
 
-Reproduce the bug and find the root cause. Delegate the investigation to the built-in `Explore` subagent or a debugging specialist via **[Agent: name]** (per §8 model tier — judgment work) — the orchestrator does not read the whole codebase or write code itself. The subagent returns terse: the reproduction, the root-cause location (file/function), and a proposed minimal fix shape. If the bug cannot be reproduced, report that and stop rather than guessing at a fix.
+Reproduce the bug and find the root cause. Delegate the investigation to the built-in `Explore` subagent or a debugging specialist via **<awos-slot id="diagnose.agent">the specialist agent name from §8 / the hired roster for the affected area, written as `[Agent: name]`</awos-slot>** (per §8 model tier — judgment work) — the orchestrator does not read the whole codebase or write code itself. The subagent returns terse: the reproduction, the root-cause location (file/function), and a proposed minimal fix shape. If the bug cannot be reproduced, report that and stop rather than guessing at a fix.
 
 A symptom rarely has exactly one renderer. The diagnosis is not done at the first root cause: it must enumerate **every surface that renders or consumes the symptom data** — grep for sibling composers of the same output (other builders of the same title/string, widgets showing the same records, backend notification builders) — and return a verdict per surface, affected or clean. One data gap routinely hides behind several surfaces; fixing the named one and shipping leaves the others to come back as "reopened".
 
@@ -113,7 +125,7 @@ The diagnosis report labels every claim **verified** (the subagent read the name
 
 <!-- awos:flow:stage=classify -->
 
-### Step 5: Classify — Conformance vs. Divergence
+### <awos-step/>: Classify — Conformance vs. Divergence
 
 This gate decides whether the spec gets amended later, so it runs **before** any fix touches behavior. Locate the owning `context/spec/NNN-*/` for the affected behavior (read its `functional-spec.md`), then classify:
 
@@ -126,17 +138,17 @@ If the bug maps to **no** existing spec (legacy or cross-cutting behavior), do n
 
 <!-- awos:flow:stage=fix -->
 
-### Step 6: Fix
+### <awos-step/>: Fix
 
-Delegate the code change to a specialist via **[Agent: name]** (chosen from §8 / the hired roster for the affected area) — the orchestrator never edits code itself. Keep the change scope-disciplined: a flat task list targeting the root cause, no vertical slicing, no opportunistic refactors beyond what the fix needs. Pass the subagent the root-cause findings from Step 4 and the classification, not a re-derivation.
+Delegate the code change to a specialist via **<awos-slot id="fix.agent">the specialist agent name from §8 / the hired roster for the affected area, written as `[Agent: name]`</awos-slot>** (chosen from §8 / the hired roster for the affected area) — the orchestrator never edits code itself. Keep the change scope-disciplined: a flat task list targeting the root cause, no vertical slicing, no opportunistic refactors beyond what the fix needs. Pass the subagent the root-cause findings from <awos-step-ref stage="diagnose"/> and the classification, not a re-derivation.
 
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=regression-test -->
 
-### Step 7: Regression Test
+### <awos-step/>: Regression Test
 
-Add one test that fails on the old code and passes on the fix, capturing the bug so it cannot silently return. Delegate it to the testing specialist via **[Agent: name]**. Honor the `<!-- skip-tests: true -->` marker: if the owning spec's `tasks.md` carries it (the team opted out of generated test suites), skip adding an automated test and note that the regression is covered by the look-and-feel check in the next stage instead.
+Add one test that fails on the old code and passes on the fix, capturing the bug so it cannot silently return. Delegate it to the testing specialist via **<awos-slot id="regression-test.agent">the specialist agent name from §8 / the hired roster for the affected area, written as `[Agent: name]`</awos-slot>**. Honor the `<!-- skip-tests: true -->` marker: if the owning spec's `tasks.md` carries it (the team opted out of generated test suites), skip adding an automated test and note that the regression is covered by the look-and-feel check in the next stage instead.
 
 "Fails on the old code" is demonstrated, not asserted. The orchestrator verifies the test targets a **changed** site: revert the fix hunk (e.g. stash the fixed files), run the test and watch it fail, restore the fix, watch it pass — then record the fail→pass evidence in the flow log. A subagent can return a green-but-vacuous test that asserts a path that was already correct before the fix; green-on-old-code means the test captures nothing — reject it and have the specialist retarget the changed lines.
 
@@ -144,23 +156,23 @@ Add one test that fails on the old code and passes on the fix, capturing the bug
 
 <!-- awos:flow:stage=verify-criteria -->
 
-### Step 8: Verify the Touched Criteria
+### <awos-step/>: Verify the Touched Criteria
 
 Re-check **only** the acceptance criteria the bug touched, with `/awos:verify`'s evidence discipline — drive the UI/API for real, screenshot visual criteria to `docs/screenshots/`, and `AskUserQuestion` only when a criterion has no agent-driven render path at all. This is scoped: it does not re-run the whole acceptance set, does not flip the spec's Status, and honors `<!-- skip-tests: true -->` (look-and-feel walk-through only, no test suites). Report the criteria checked and their evidence.
 
-Running the app to verify is the flow's job, not the user's. [If §2/§3 recorded a shared resource the app binds — a port a running service holds, a single database, a device — the workspace guardrail reserves it for normal work, but this stage still verifies against a real render: reclaim the resource (stop and restart the service, use an alternate port, spin a throwaway instance) or drive the project's own §5 deploy/run step and verify against that, per the sanctioned verification path §2/§3 records. Do not hand the user a `run` command to execute, and do not defer a drivable criterion to a later manual deploy — the manual `AskUserQuestion` fallback is only for a criterion the agent genuinely cannot render here.]
+Running the app to verify is the flow's job, not the user's. <awos-slot id="verify-criteria.shared-resource" optional>If §2/§3 recorded a shared resource the app binds — a port a running service holds, a single database, a device — the workspace guardrail reserves it for normal work, but this stage still verifies against a real render: reclaim the resource (stop and restart the service, use an alternate port, spin a throwaway instance) or drive the project's own §5 deploy/run step and verify against that, per the sanctioned verification path §2/§3 records. Do not hand the user a `run` command to execute, and do not defer a drivable criterion to a later manual deploy — the manual `AskUserQuestion` fallback is only for a criterion the agent genuinely cannot render here.</awos-slot>
 
 Scale the evidence to what changed. When the fix touched only the data or payload and the diff contains no render-path edits, the sanctioned evidence is the demonstrated failing→passing regression test plus a unit-level render of the changed data with mocks — standing up the full stack (backend, database, seeded data) to watch an unchanged render branch repeat itself is disproportionate. This tier applies only when the render path is provably untouched by the diff; a fix that edits the render path itself still drives the UI/API for real.
 
-When Step 5 recorded **no owning spec**, there are no acceptance criteria to re-check: the verification evidence is the demonstrated failing→passing regression test plus a real render of the fixed behavior (per the tiers above). Record that evidence in the flow log and skip the spec-criteria re-check — do not fabricate criteria.
+When <awos-step-ref stage="classify"/> recorded **no owning spec**, there are no acceptance criteria to re-check: the verification evidence is the demonstrated failing→passing regression test plus a real render of the fixed behavior (per the tiers above). Record that evidence in the flow log and skip the spec-criteria re-check — do not fabricate criteria.
 
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=amend-spec -->
 
-### Step 9: Amend the Spec (on divergence)
+### <awos-step/>: Amend the Spec (on divergence)
 
-Conditional on the Step 5 verdict:
+Conditional on the <awos-step-ref stage="classify"/> verdict:
 
 - **Conformance** — nothing to amend; the spec was already correct. Skip to the next stage.
 - **Divergence** — confirm the amendment with the user first (`AskUserQuestion`: amend the spec / leave as a pending divergence — amending changes documented behavior; an unanswered confirmation means do not amend). Then invoke `/awos:spec` in update mode for the owning spec, passing the spec directory and a description of the behavior change (e.g. `/awos:spec amend spec NNN: <what changed and why>`). `/awos:spec`'s Mode Detection routes this to its Update Mode, which edits the affected acceptance criteria in place and appends a dated `## Change Log` entry — no new spec index is allocated, and a `Completed` Status is left untouched. Do not duplicate the amendment prose here; the amendment capability lives in core `/awos:spec`.
@@ -171,16 +183,16 @@ In either case, if the fix revealed that `product-definition.md` or `architectur
 
 <!-- awos:flow:stage=local-review -->
 
-### Step 10: Local Review
+### <awos-step/>: Local Review
 
 The review must stay independent of this conversation's authorship bias — it never happens inline in the orchestrator's own window, which just drove the fix:
 
-[Per §4 and the §8 context strategy, one of two shapes — decided at generation time by inspecting the review automation, never at run time:
+<awos-slot id="local-review.shape">Per §4 and the §8 context strategy, one of two shapes — decided at generation time by inspecting the review automation, never at run time:
 
 - The project has a review skill/command that itself dispatches subagents (most do): the orchestrator invokes it from the **main context** via the Skill tool — its own reviewer subagents provide the fresh, unbiased contexts. Do not wrap it in a subagent: agents do not nest, and this orchestrator already occupies the coordinator slot.
 - Otherwise: dispatch a dedicated **reviewer subagent** with the fixed verbatim prompt written here at generation time (diff range, spec paths, the project's review rules).
 
-In both shapes run the §4 static checks first, and keep the invocation fixed — do not add run-time focus areas drawn from what was fixed; the author framing the review is the bias.]
+In both shapes run the §4 static checks first, and keep the invocation fixed — do not add run-time focus areas drawn from what was fixed; the author framing the review is the bias.</awos-slot>
 
 The reviewer writes findings to a review file and returns only the verdict, the finding count by severity, and the file's path. Lead the presentation to the user with that path on its own line — e.g. `Review file: <path>` — before the verdict and findings, and record the same path in the flow log. Collect a keep/drop decision on the findings (`AskUserQuestion`), apply only accepted ones — via a fresh agent that reads the review file and the diff, never from your summary — and re-run the static checks after fixes.
 
@@ -188,23 +200,23 @@ The reviewer writes findings to a review file and returns only the verdict, the 
 
 <!-- awos:flow:stage=commit-push -->
 
-### Step 11: Commit & Push
+### <awos-step/>: Commit & Push
 
-Write this stage's flow-log entry **before** staging so the log rides in this commit — this is the flow-log's last committed state (see Context Discipline). Then stage only what this flow produced or touched — the delegated fix, the regression test, the flow log, spec/context artifacts, and any Self-Improvement Loop edits. Never a blanket `git add -A`: pre-existing dirty-tree files the workspace stage warned about stay unstaged; surface any unexpected changed file instead of staging it. Never stage `.env`, credentials, or secrets. [Commit message convention per §2, referencing `BUG_ID`; pre-commit hook failures: fix and amend.] Push `BRANCH` to the remote.
+Write this stage's flow-log entry **before** staging so the log rides in this commit — this is the flow-log's last committed state (see Context Discipline). Then stage only what this flow produced or touched — the delegated fix, the regression test, the flow log, spec/context artifacts, and any Self-Improvement Loop edits. Never a blanket `git add -A`: pre-existing dirty-tree files the workspace stage warned about stay unstaged; surface any unexpected changed file instead of staging it. Never stage `.env`, credentials, or secrets. <awos-slot id="commit-push.commit-convention">Commit message convention per §2, referencing `BUG_ID`; pre-commit hook failures: fix and amend.</awos-slot> Push `BRANCH` to the remote.
 
 <!-- /awos:flow:stage -->
 
-<!-- awos:flow:stage=remote-gates -->
+<!-- awos:flow:stage=remote-gates optional -->
 
-### Step 12: Remote Gates
+### <awos-step/>: Remote Gates
 
 This stage opens the change request. The flow log was finalized at commit-push — **do not append to the tracked flow-log from here on** (Context Discipline): a commit adding log lines is unwelcome on a change request under review, and impossible once it merges. Report gate progress to the user and via Notifications instead; once the change request exists, resume relies on the remote state, not the log.
 
-[Per §2 sync policy: before opening the change request, fetch the target branch and verify the branches merge cleanly — a dry-run merge or rebase. On conflicts: delegate resolution to a subagent (per §8), re-run the local gates on the resolved result, and push.]
+<awos-slot id="remote-gates.sync">Per §2 sync policy: before opening the change request, fetch the target branch and verify the branches merge cleanly — a dry-run merge or rebase. On conflicts: delegate resolution to a subagent (per §8), re-run the local gates on the resolved result, and push.</awos-slot>
 
-[Per §4: open the change request via the chosen transport from §7, then wait on every remote gate concurrently — CI checks, the automatic reviewer's pass (address its findings), human review (wait-or-poll policy), environment/soak/compliance gates — and join them before merge. On CI failure, per the recorded policy: delegate diagnosis and the fix to a subagent working from the failed job's logs, push, re-check until green — or report the first results and hand off. For a repo with no code host, the local suite already served as the gate — omit this stage and any other gate §4 rules out.]
+<awos-slot id="remote-gates.open-and-wait">Per §4: open the change request via the chosen transport from §7, then wait on every remote gate concurrently — CI checks, the automatic reviewer's pass (address its findings), human review (wait-or-poll policy), environment/soak/compliance gates — and join them before merge. On CI failure, per the recorded policy: delegate diagnosis and the fix to a subagent working from the failed job's logs, push, re-check until green — or report the first results and hand off. For a repo with no code host, the local suite already served as the gate — omit this stage and any other gate §4 rules out.</awos-slot>
 
-[Per §5's ticket-state map (omit for ticketless sources): transition the ticket to the in-review state when the change request opens, and back to the needs-work state if a gate or review fails, re-advancing it when the gates go green again. Follow the recorded transition chain for each event (including intermediate hops), not just the target state name.]
+<awos-slot id="remote-gates.ticket-transitions" optional>Per §5's ticket-state map: transition the ticket to the in-review state when the change request opens, and back to the needs-work state if a gate or review fails, re-advancing it when the gates go green again. Follow the recorded transition chain for each event (including intermediate hops), not just the target state name.</awos-slot>
 
 Wait with the `Monitor` tool, never foreground `sleep` loops: a poll loop that emits each gate's terminal result and exits when all are settled, its timeout sized to the typical pipeline duration recorded in §4, the poll interval 30s+ against remote APIs, and the filter covering every terminal state — failures and cancellations, not just success. Apply §4's max-wait & escalation policy when a poll window expires without the gates settling — auto-relaunch the monitor, or ask the human past the recorded threshold; never wait forever.
 
@@ -212,35 +224,35 @@ Wait with the `Monitor` tool, never foreground `sleep` loops: a poll loop that e
 
 <!-- awos:flow:stage=merge -->
 
-### Step 13: Merge
+### <awos-step/>: Merge
 
-[Per §2: the target branch may have moved while the gates ran — re-check mergeability via the chosen transport or a fresh fetch + dry-run merge. If it no longer merges cleanly: sync per the recorded policy (resolution delegated per §8), push, and return to Step 12 — the remote gates run again on the new commit before any merge.]
+<awos-slot id="merge.remergeability">Per §2: the target branch may have moved while the gates ran — re-check mergeability via the chosen transport or a fresh fetch + dry-run merge. If it no longer merges cleanly: sync per the recorded policy (resolution delegated per §8), push, and return to Step 12 — the remote gates run again on the new commit before any merge.</awos-slot>
 
-[Per §5 merge policy: a human merges — the flow's delivery work ends at this ready-to-merge hand-off: skip the flow-merge and proceed to the close stage, which reports the ready-to-merge state as the terminal evidence — or the flow merges via the chosen transport from §7, or a plain `git merge` + push for a repo without a code host.]
+<awos-slot id="merge.policy">Per §5 merge policy: a human merges — the flow's delivery work ends at this ready-to-merge hand-off: skip the flow-merge and proceed to the close stage, which reports the ready-to-merge state as the terminal evidence — or the flow merges via the chosen transport from §7, or a plain `git merge` + push for a repo without a code host.</awos-slot>
 
 Merging is irreversible. Even when the recorded policy lets the flow merge, ask the user for confirmation in this run (`AskUserQuestion`: merge / don't merge), after showing that every gate is green. A skipped or unanswered confirmation means do not merge — proceed to the close stage with the ready-to-merge state as the evidence.
 
-[Per §5 post-merge CI: pipelines triggered by the merge on the base branch — watch them via the chosen transport and, per the recorded policy, fix failures forward or report them. Omit if nothing runs on merge.]
+<awos-slot id="merge.post-merge-ci" optional>Per §5 post-merge CI: pipelines triggered by the merge on the base branch — watch them via the chosen transport and, per the recorded policy, fix failures forward or report them.</awos-slot>
 
 <!-- /awos:flow:stage -->
 
-<!-- awos:flow:stage=delivery -->
+<!-- awos:flow:stage=delivery optional -->
 
-### Step 14: Deliver
+### <awos-step/>: Deliver
 
-[Per §5: deployment mode, post-merge CI policy, version bump, and the deployment step — the command, and when the flow runs it: after the merge, after post-merge CI is green, or never. Omit what the decisions rule out; stop at the recorded hand-off point for manual or scheduled deployment. Omit this stage entirely when §5 rules out a dedicated delivery step for bug fixes — e.g. the fix rides along with the project's regular release train and needs no separate action here.]
+<awos-slot id="delivery.body">Per §5: deployment mode, post-merge CI policy, version bump, and the deployment step — the command, and when the flow runs it: after the merge, after post-merge CI is green, or never. Omit what the decisions rule out; stop at the recorded hand-off point for manual or scheduled deployment.</awos-slot>
 
 <!-- /awos:flow:stage -->
 
 <!-- awos:flow:stage=close-ticket -->
 
-### Step 15: Close the Ticket
+### <awos-step/>: Close the Ticket
 
-[Per §5's definition of Done: gather the recorded evidence and report the final state to the user. When the source has tickets, transition the bug to its closed/fixed state using the chosen transport and attach the evidence; omit the transition for ticketless sources — the report to the user is the close.]
+<awos-slot id="close-ticket.body">Per §5's definition of Done: gather the recorded evidence and report the final state to the user. When the source has tickets, transition the bug to its closed/fixed state using the chosen transport and attach the evidence; omit the transition for ticketless sources — the report to the user is the close.</awos-slot>
 
 Include the local review and the spec-amendment outcome in the reported evidence, so neither is buried in the logs. From the flow log, report: the review **verdict**, the **finding count** (by severity), the **review file path** as recorded in the flow log by the local-review stage, that a manual keep/drop gate ran over the findings, and — for a divergence fix — that the owning spec was amended (the criteria touched and the Change Log entry). The path lets the user re-open the full review without re-running. Report the ungathered context alongside it: any source the fetch stage listed as unreachable and the transport that was missing, so a thin diagnosis is attributable to missing context rather than to the fix.
 
-[Crash-report source: optionally write a short investigation note back to the crash issue via the §7 transport — root cause, branch, files touched — but never auto-close it; a crash resolves on its own once a non-crashing build ships.]
+<awos-slot id="close-ticket.crash-note" optional>Crash-report source: optionally write a short investigation note back to the crash issue via the §7 transport — root cause, branch, files touched — but never auto-close it; a crash resolves on its own once a non-crashing build ships.</awos-slot>
 
 Leave a clean working tree: do not write a closing flow-log entry (the log was finalized at commit-push and the change request is now open or merged — a new entry could never be committed into it). If any flow-created artifact is still uncommitted, surface it in the report rather than leaving it behind — an uncommitted leftover after a merged or in-review change request is a bug, not a record.
 

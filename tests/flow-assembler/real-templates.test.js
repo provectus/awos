@@ -39,6 +39,22 @@ function fillAll(parsed) {
 const INLINE_SLOT_RE =
   /(?:<awos-slot\b[^>]*>[\s\S]*?<\/awos-slot>|<awos-step-ref\b[^>]*\/>)/g;
 
+// Non-global twin of INLINE_SLOT_RE for boolean .test() checks — a global
+// regex is stateful (lastIndex), which makes repeated .test() calls on the
+// same object unsafe across a loop.
+const INLINE_SLOT_TEST_RE =
+  /(?:<awos-slot\b[^>]*>[\s\S]*?<\/awos-slot>|<awos-step-ref\b[^>]*\/>)/;
+
+// Matches one complete <awos-slot ...>...</awos-slot> element only (no
+// step-ref), including a body that spans multiple physical lines — a real
+// multi-paragraph or bulleted instruction. Used to cut whole slot spans out
+// before splitting the template into "fixed prose" lines: a multi-line
+// slot's interior lines (e.g. a bulleted sub-list) are instruction text the
+// generator replaces wholesale, and must be removed as one unit rather than
+// surviving as separate lines that line-by-line filtering would mistake
+// for fixed prose.
+const SLOT_ELEMENT_RE = /<awos-slot\b[^>]*>[\s\S]*?<\/awos-slot>/g;
+
 for (const name of TEMPLATES) {
   const src = fs.readFileSync(path.join(templatesDir, name), 'utf8');
 
@@ -74,8 +90,20 @@ for (const name of TEMPLATES) {
     );
     const out = assemble(src, fills, STAMP);
 
-    // Every fixed-prose line of the template must appear verbatim in the output.
+    // Every fixed-prose line of the template must appear verbatim in the
+    // output. Cut whole <awos-slot> elements out first — replacing each
+    // with a bare newline, not with nothing — so a multi-line slot's
+    // interior lines are removed as one unit (they are instruction text the
+    // generator replaces wholesale) and, just as importantly, so fixed
+    // prose that shares a line with a *mid-line* slot splits into two
+    // separate lines instead of being joined into one line that never
+    // appears in the output (the output has the filled slot value sitting
+    // between them, not nothing). <awos-step-ref/> is deliberately left
+    // un-cut here: it is single-line by construction, the '<awos-step'
+    // substring filter below already excludes its line, and the
+    // fragment-based check in the next test covers it properly.
     const fixedLines = src
+      .replace(SLOT_ELEMENT_RE, '\n')
       .split('\n')
       .filter(
         (l) =>
@@ -98,15 +126,23 @@ for (const name of TEMPLATES) {
     }
   });
 
-  // C10 strengthening: the test above skips any line containing "<awos-slot"
-  // wholesale, so fixed prose that shares a line with an inline slot was
-  // never checked — the intro's source sentence, the specs stage's "Honor
-  // the entry point" rule, the verify stage's "the flow's job, not the
-  // user's" line, the commit-push staging discipline, and others like them.
-  // Split each such line on the slot element(s) and assert every fixed
-  // fragment of 12+ characters survives assembly verbatim. The length floor
-  // avoids false failures on a stray backtick, dash, or bullet marker left
-  // over at a split boundary.
+  // C10 strengthening: the test above skips any line spanned by a whole
+  // <awos-slot> element, so fixed prose that shares a *single* line with an
+  // inline slot was never checked — the intro's source sentence, the specs
+  // stage's "Honor the entry point" rule, the verify stage's "the flow's
+  // job, not the user's" line, the commit-push staging discipline, and
+  // others like them. Split each such line on the slot element(s) and
+  // assert every fixed fragment of 12+ characters survives assembly
+  // verbatim. The length floor avoids false failures on a stray backtick,
+  // dash, or bullet marker left over at a split boundary.
+  //
+  // A line only qualifies here when the whole element — open tag through
+  // close — sits on that one physical line (tested with INLINE_SLOT_TEST_RE,
+  // which can't match across the line boundary since the string it's given
+  // has no newline in it). A genuinely multi-line slot's opening, interior,
+  // and closing lines do not qualify: their content was already stripped as
+  // one unit by the byte-exact test above, and there is no fixed prose
+  // sharing those lines left to check.
   test(`${name} fixed prose sharing a line with an inline slot survives assembly`, () => {
     const parsed = parseTemplate(src);
     const fills = fillAll(parsed);
@@ -120,7 +156,7 @@ for (const name of TEMPLATES) {
     const headerComment = parsed.headerComment || '';
     const lines = src
       .split('\n')
-      .filter((l) => l.includes('<awos-slot') && !headerComment.includes(l));
+      .filter((l) => INLINE_SLOT_TEST_RE.test(l) && !headerComment.includes(l));
     assert.ok(
       lines.length > 0,
       'expected at least one line mixing fixed prose with an inline slot'

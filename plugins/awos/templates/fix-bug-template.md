@@ -187,7 +187,12 @@ In either case, if the fix revealed that `product-definition.md` or `architectur
 
 The review must stay independent of this conversation's authorship bias — it never happens inline in the orchestrator's own window, which just drove the fix:
 
-<awos-slot id="local-review.shape">Per §4 and the §8 context strategy, one of two shapes — decided at generation time by inspecting the review automation, never at run time: The project has a review skill/command that itself dispatches subagents (most do): the orchestrator invokes it from the **main context** via the Skill tool — its own reviewer subagents provide the fresh, unbiased contexts. Do not wrap it in a subagent: agents do not nest, and this orchestrator already occupies the coordinator slot. Otherwise: dispatch a dedicated **reviewer subagent** with the fixed verbatim prompt written here at generation time (diff range, spec paths, the project's review rules). In both shapes run the §4 static checks first, and keep the invocation fixed — do not add run-time focus areas drawn from what was fixed; the author framing the review is the bias.</awos-slot>
+<awos-slot id="local-review.shape">Per §4 and the §8 context strategy, one of two shapes — decided at generation time by inspecting the review automation, never at run time:
+
+- The project has a review skill/command that itself dispatches subagents (most do): the orchestrator invokes it from the **main context** via the Skill tool — its own reviewer subagents provide the fresh, unbiased contexts. Do not wrap it in a subagent: agents do not nest, and this orchestrator already occupies the coordinator slot.
+- Otherwise: dispatch a dedicated **reviewer subagent** with the fixed verbatim prompt written here at generation time (diff range, spec paths, the project's review rules).
+
+In both shapes run the §4 static checks first, and keep the invocation fixed — do not add run-time focus areas drawn from what was fixed; the author framing the review is the bias.</awos-slot>
 
 The reviewer writes findings to a review file and returns only the verdict, the finding count by severity, and the file's path. Lead the presentation to the user with that path on its own line — e.g. `Review file: <path>` — before the verdict and findings, and record the same path in the flow log. Collect a keep/drop decision on the findings (`AskUserQuestion`), apply only accepted ones — via a fresh agent that reads the review file and the diff, never from your summary — and re-run the static checks after fixes.
 

@@ -476,9 +476,15 @@ function mentionsTech(content: string, name: string): boolean {
 }
 
 function findArchDoc(repoPath: string): string | null {
+  // The narrative architecture documents SDD-02's architecture slot accepts.
+  // Deliberately NOT its ADR-index candidates (docs/adr/README.md and
+  // friends): an index is a list of links, and tech-matching one finds no
+  // technology mentions and so PASSes trivially — free credit is worse than
+  // the honest SKIP a repo with no narrative architecture document gets.
   for (const candidate of [
     join(repoPath, 'context', 'architecture', 'architecture.md'),
     join(repoPath, 'context', 'product', 'architecture.md'),
+    join(repoPath, 'docs', 'architecture.md'),
     join(repoPath, 'ARCHITECTURE.md'),
   ]) {
     if (existsSync(candidate)) return candidate;

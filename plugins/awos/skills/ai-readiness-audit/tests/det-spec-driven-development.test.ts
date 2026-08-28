@@ -320,6 +320,47 @@ test('SDD-03: PASS when architecture doc mentions tech that is present in codeba
   assert.equal(r.status, 'PASS', 'mentioned tech present in codebase → PASS');
 });
 
+test('SDD-03: docs/architecture.md is scored, not SKIPped', () => {
+  // SDD-02's architecture slot accepts docs/architecture.md, but findArchDoc
+  // did not — so such a repo passed SDD-02 and skipped SDD-03, leaving its
+  // architecture drift unmeasured on a convention the audit recognizes.
+  const t = tmp();
+  mkdirSync(join(t, 'docs'), { recursive: true });
+  writeFileSync(
+    join(t, 'docs', 'architecture.md'),
+    '# Architecture\n\nWe use TypeScript.\n'
+  );
+  writeFileSync(join(t, 'index.ts'), 'console.log("hello");\n');
+  const r = detectArchTechMatch(t);
+  assert.notEqual(
+    r.status,
+    'SKIP',
+    'a repo documenting its architecture at docs/architecture.md must be scored, not skipped'
+  );
+  assert.equal(r.status, 'PASS', 'mentioned tech present in codebase → PASS');
+});
+
+test('SDD-03: an ADR-index-only repo still SKIPs rather than passing for free', () => {
+  // docs/adr/README.md satisfies SDD-02's architecture slot, but an ADR index
+  // is a list of links: tech-matching it finds no technology mentions and so
+  // lands on "0 unverified mentions" → PASS. That is free credit for a repo
+  // whose architecture record this check cannot assess — worse than the
+  // honest SKIP.
+  const t = tmp();
+  mkdirSync(join(t, 'docs', 'adr'), { recursive: true });
+  writeFileSync(
+    join(t, 'docs', 'adr', 'README.md'),
+    '# Decisions\n\n- [1. Record architecture decisions](0001-record-architecture-decisions.md)\n- [2. Use a queue](0002-use-a-queue.md)\n'
+  );
+  writeFileSync(join(t, 'index.ts'), 'console.log("hello");\n');
+  const r = detectArchTechMatch(t);
+  assert.equal(
+    r.status,
+    'SKIP',
+    'an index declares no technologies, so there is nothing to cross-reference — scoring it would hand out a PASS for zero evidence'
+  );
+});
+
 test('SDD-03: WARN when exactly 2 tech mentions cannot be verified in codebase', () => {
   const t = tmp();
   mkdirSync(join(t, 'context', 'architecture'), { recursive: true });

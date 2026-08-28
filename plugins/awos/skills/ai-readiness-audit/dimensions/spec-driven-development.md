@@ -44,9 +44,9 @@ Audits whether the project practises spec-driven development by any recognized c
 
 ### SDD-03: Architecture document reflects codebase reality
 
-- **What:** Technology choices declared in `context/product/architecture.md` match what is actually used in the codebase
+- **What:** Technology choices declared in the project's architecture document — `context/architecture/architecture.md`, `context/product/architecture.md`, `docs/architecture.md`, or `ARCHITECTURE.md`, whichever is present — match what is actually used in the codebase
 - **How:**
-  1. Read `context/product/architecture.md` and extract all technology choices (look for `**Component Name:** Technology Choice` entries or similar structured technology declarations across all architectural areas)
+  1. Read the first of those candidates that exists and extract all technology choices (look for `**Component Name:** Technology Choice` entries or similar structured technology declarations across all architectural areas)
   2. Read the topology summary from the topology artifact. Extract detected frameworks, languages, storage systems, and infrastructure tools
   3. Cross-reference: for each technology in architecture.md, check if it appears in the topology summary OR in package manifests (`package.json` dependencies, `build.gradle.kts` dependencies, `pyproject.toml` dependencies, `go.mod` requires, `Cargo.toml` dependencies — check whichever are relevant per the topology)
   4. Flag two types of drift:
@@ -56,7 +56,7 @@ Audits whether the project practises spec-driven development by any recognized c
 - **Pass:** All major technology choices in architecture.md are confirmed in the codebase, and no significant undocumented technologies found
 - **Warn:** 1-2 minor discrepancies (a small utility missing from the doc, or a planned-but-not-yet-used technology listed)
 - **Fail:** Major drift — a core technology (primary database, main framework, cloud provider) is listed but not used, OR a core technology in use is entirely absent from the architecture document
-- **Skip-When:** `context/product/architecture.md` does not exist (covered by SDD-02)
+- **Skip-When:** No narrative architecture document exists at any of those paths (covered by SDD-02). A repo whose only architecture record is an ADR index (`docs/adr/README.md` and similar, which SDD-02 accepts) also skips here — an index declares no technologies, so there is nothing to cross-reference.
 - **Severity:** high
 - **Category:** 2802
 

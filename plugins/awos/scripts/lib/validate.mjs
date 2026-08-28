@@ -42,6 +42,22 @@ export function validateFills(parsed, fills) {
         `repeat names "${id}", which is not a stage in this template`
       );
   }
+
+  // assemble.mjs emits a repeated stage once per instance — zero
+  // instances means the stage's marker, heading and body vanish from the
+  // output entirely, the same as omitStages, but silently: nothing else
+  // validates that omission against the stage's optionality or against
+  // fixed prose that step-refs it.
+  const emptyRepeatStages = new Set(
+    Object.keys(repeat).filter((id) => stageById[id] && repeat[id].length === 0)
+  );
+  for (const id of emptyRepeatStages) {
+    if (!stageById[id].optional)
+      errors.push(
+        `stage "${id}" has zero repeat instances, which omits it entirely — it is not optional in the template and cannot be omitted this way`
+      );
+  }
+
   for (const [id, entry] of Object.entries(custom)) {
     if (!stageById[id])
       errors.push(
@@ -67,7 +83,9 @@ export function validateFills(parsed, fills) {
   }
 
   const liveStages = new Set(
-    parsed.stages.filter((s) => !omitStages.has(s.id)).map((s) => s.id)
+    parsed.stages
+      .filter((s) => !omitStages.has(s.id) && !emptyRepeatStages.has(s.id))
+      .map((s) => s.id)
   );
   const liveSlots = parsed.slots.filter((s) =>
     s.stage
@@ -141,24 +159,30 @@ export function validateFills(parsed, fills) {
   }
 
   for (const slot of liveSlots) {
+    // assemble.mjs fills a repeated stage's slots from
+    // {...fills.slots, ...instance.slots} PER INSTANCE, regardless of
+    // whether a base fill also exists — an instance's own value always
+    // wins for that instance's block. So every instance that supplies its
+    // own value for this slot gets checked here unconditionally, even
+    // when a base fill is also present: checking only the base value
+    // would let an instance's comment delimiter, stage marker, sentinel
+    // or non-optional-null slip through untouched into that instance's
+    // output.
+    const instances = slot.stage && repeat[slot.stage];
+    let coveredByEveryInstance = Boolean(instances);
+    if (instances) {
+      for (const inst of instances) {
+        if (inst.slots && slot.id in inst.slots) {
+          checkSlotValue(slot.id, inst.slots[slot.id], slot.optional);
+        } else {
+          coveredByEveryInstance = false;
+        }
+      }
+    }
+    if (coveredByEveryInstance) continue;
+
     if (slot.id in slots) {
       checkSlotValue(slot.id, slots[slot.id], slot.optional);
-      continue;
-    }
-    // assemble.mjs fills a repeated stage's slots from
-    // {...fills.slots, ...instance.slots} per instance, so a base fill is
-    // unnecessary only when every instance of that stage supplies this
-    // slot itself. Partial coverage (some instances supply it, some
-    // don't) with no base fill falls through to the "no fill" error
-    // below — an uncovered instance would reach assemble with nothing to
-    // substitute.
-    const instances = slot.stage && repeat[slot.stage];
-    if (
-      instances &&
-      instances.every((inst) => inst.slots && slot.id in inst.slots)
-    ) {
-      for (const inst of instances)
-        checkSlotValue(slot.id, inst.slots[slot.id], slot.optional);
       continue;
     }
     errors.push(
@@ -167,7 +191,7 @@ export function validateFills(parsed, fills) {
   }
 
   const keptIds = parsed.stages
-    .filter((s) => !omitStages.has(s.id))
+    .filter((s) => !omitStages.has(s.id) && !emptyRepeatStages.has(s.id))
     .map((s) => s.id);
   if (fills.stageOrder) {
     const a = [...fills.stageOrder].sort().join(',');

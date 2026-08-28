@@ -246,3 +246,88 @@ test('a repeat instance naming a real slot that belongs to a different stage is 
     "the instance meant to override its own stage's slot; naming a real slot from a different stage silently does nothing there either"
   );
 });
+
+// The next four tests all use VALID as-is (which already fills
+// second.body at the base level) and add a repeat instance that ALSO
+// overrides second.body — the shape that let bad content slip through
+// content checks were only ever run against the base value.
+
+test('a comment delimiter in a repeat instance override is rejected even when a base fill exists', () => {
+  assert.match(
+    only({
+      ...VALID,
+      repeat: {
+        second: [
+          {
+            label: 'staging',
+            slots: { 'second.body': 'see <!-- note --> here' },
+          },
+        ],
+      },
+    }),
+    /comment/i,
+    "assemble.mjs uses the instance's own value for the staging block, not the base fill — the base being clean does not make the instance's value clean"
+  );
+});
+
+test('a stage marker in a repeat instance override is rejected even when a base fill exists', () => {
+  assert.match(
+    only({
+      ...VALID,
+      repeat: {
+        second: [
+          {
+            label: 'staging',
+            slots: { 'second.body': 'x awos:flow:stage=fake y' },
+          },
+        ],
+      },
+    }),
+    /stage marker/i,
+    'an instance override is just as capable of fabricating a stage marker as a base fill is'
+  );
+});
+
+test('the excision sentinel in a repeat instance override is rejected even when a base fill exists', () => {
+  assert.match(
+    only({
+      ...VALID,
+      repeat: {
+        second: [{ label: 'staging', slots: { 'second.body': 'x\uE000y' } }],
+      },
+    }),
+    /second\.body/,
+    "an instance override carrying the sentinel would be excised in that instance's block the same way a base fill carrying it would be"
+  );
+});
+
+test('a null override for a non-optional slot in a repeat instance is rejected even when a base fill exists', () => {
+  assert.match(
+    only({
+      ...VALID,
+      repeat: {
+        second: [{ label: 'staging', slots: { 'second.body': null } }],
+      },
+    }),
+    /not optional/i,
+    'second.body is not optional in the template; an instance cannot excise it any more than the base fill could'
+  );
+});
+
+test('a repeat with zero instances on a stage the template does not mark optional is rejected', () => {
+  assert.match(
+    only({ ...VALID, repeat: { first: [] } }),
+    /has zero repeat instances/i,
+    'assemble.mjs emits the stage zero times for zero instances — the same silent omission omitStages rejects, just reached through a different fill shape'
+  );
+});
+
+test('a repeat with zero instances on an optional stage is caught as a dangling step-ref, not left to assemble', () => {
+  const slots = { ...VALID.slots };
+  delete slots['second.body'];
+  assert.match(
+    only({ slots, repeat: { second: [] } }),
+    /step-ref|second/i,
+    'stage "second" is optional so the zero-instance omission itself is not an error, but the fixed prose that step-refs it now dangles — validation must catch this before assemble throws on it'
+  );
+});

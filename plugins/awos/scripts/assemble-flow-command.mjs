@@ -12,6 +12,13 @@ const USAGE = `usage:
   assemble-flow-command.mjs assemble <template> <fills.json> --out <path> --version <v> --date <YYYY-MM-DD> --source <path> [--baseline-dir <dir>]
   assemble-flow-command.mjs diff <generated> <baseline>`;
 
+// The stage-open markers in an assembled command, counted to report what a
+// run actually emitted. Same id character class as diff.mjs's STAGE_RE, so
+// a repeat instance ("delivery#prod") and an inserted stage both count; the
+// close marker carries no "=" and so cannot be double-counted, and
+// validate.mjs rejects any fill that contains a marker of its own.
+const EMITTED_STAGE_RE = /<!--\s*awos:flow:stage=[a-z0-9#-]+\s*-->/g;
+
 function fail(message, code = 1) {
   process.stderr.write(message.endsWith('\n') ? message : `${message}\n`);
   process.exit(code);
@@ -112,7 +119,11 @@ if (verb === 'slots') {
       {
         written: opts.out,
         baseline: baselinePath,
-        stages: parsed.stages.length - (fills.omitStages || []).length,
+        // Counted from the text that was just written, not derived from the
+        // template: repeat expands one stage into N instances and insert
+        // adds stages the template has none of, so any formula over
+        // parsed.stages misreports every run that uses a hatch.
+        stages: (output.match(EMITTED_STAGE_RE) || []).length,
       },
       null,
       2

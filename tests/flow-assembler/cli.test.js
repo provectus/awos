@@ -481,3 +481,62 @@ test('the migration gate rejects an empty or omitted acknowledgement, not just a
     'the legacy file survives an invalid acknowledgement exactly as it survives a missing one'
   );
 });
+
+test('assemble reports the number of stage markers it actually emitted, not the template stage count minus omissions', () => {
+  // The reported count used to be `parsed.stages.length -
+  // omitStages.length`, which ignores every hatch that changes what is
+  // emitted: a repeat expands one template stage into N instances, an
+  // insert adds a stage that is in no template. Two template stages, a
+  // two-instance repeat and one insert emit four stages; the old formula
+  // reported two. A zero-instance repeat undercounts the same way.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-cli-'));
+  const fillsPath = path.join(dir, 'fills.json');
+  const outPath = path.join(dir, 'out.md');
+  const fills = {
+    ...FILLS,
+    repeat: {
+      first: [{ label: 'dev' }, { label: 'prod' }],
+    },
+    insert: [
+      {
+        after: 'second',
+        stage: 'canary',
+        title: 'Canary',
+        body: 'Watch it for an hour.',
+      },
+    ],
+  };
+  fs.writeFileSync(fillsPath, JSON.stringify(fills));
+  const reported = JSON.parse(
+    run([
+      'assemble',
+      MINI,
+      fillsPath,
+      '--out',
+      outPath,
+      '--version',
+      '2.5.0',
+      '--date',
+      '2026-08-27',
+      '--source',
+      's',
+      '--baseline-dir',
+      path.join(dir, '.flow'),
+    ])
+  );
+  const emitted = (
+    fs
+      .readFileSync(outPath, 'utf8')
+      .match(/<!--\s*awos:flow:stage=[a-z0-9#-]+\s*-->/g) || []
+  ).length;
+  assert.equal(
+    emitted,
+    4,
+    'the fixture must actually emit four stages (first#dev, first#prod, second, canary), or this test is not exercising the hatches'
+  );
+  assert.equal(
+    reported.stages,
+    emitted,
+    'the reported stage count must match the stages in the file it just wrote — it is what the caller reads back to confirm the run, so a count that ignores repeat and insert misreports the generated command'
+  );
+});

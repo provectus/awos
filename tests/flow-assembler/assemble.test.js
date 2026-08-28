@@ -534,3 +534,101 @@ test('multiple inserts anchored at the same repeated stage land after its last i
     'both inserts land as one block after the anchor’s last instance, in the order they were declared'
   );
 });
+
+// The same positional contract, one layer up: a comment that is not the
+// template's leading generator comment is fixed content, and fixed content
+// is copied byte-exact.
+const NO_LEADING_COMMENT = `---
+description: No leading comment.
+---
+
+# Title
+
+Prose that comes before any comment at all.
+
+<!-- a fixed comment meant to ship -->
+
+<!-- awos:flow:stage=only -->
+
+### <awos-step/>: Only
+
+<awos-slot id="only.body">Per §1: the body.</awos-slot>
+
+<!-- /awos:flow:stage -->
+
+---
+
+<!-- awos:flow:generated date=[YYYY-MM-DD] version=[v] source=s -->
+`;
+
+test('a comment that does not lead the body is fixed content and survives into the generated command', () => {
+  const out = assemble(
+    NO_LEADING_COMMENT,
+    { slots: { 'only.body': 'Do it.' } },
+    STAMP
+  );
+  assert.ok(
+    out.includes('<!-- a fixed comment meant to ship -->'),
+    'only the leading comment is generator-only — stripping any other comment silently deletes template content, the exact loss the assembler exists to prevent (issue #184)'
+  );
+});
+
+// String.prototype.replace expands $&, $`, $' and $$ in a STRING
+// replacement, so a frontmatter value carrying one of those sequences used
+// to splice the matched line back into itself. A replacer FUNCTION emits
+// its return value literally.
+
+test('a description starting with "#" is quoted, since unquoted YAML reads it as a comment', () => {
+  const out = assemble(
+    mini,
+    {
+      ...FULL,
+      frontmatter: { ...FULL.frontmatter, description: '#184 flow assembler' },
+    },
+    STAMP
+  );
+  assert.ok(
+    out.includes("description: '#184 flow assembler'\n"),
+    'a "#" opening a plain scalar starts a YAML comment (YAML 1.2.2 §6.6), so the key would parse as null and the generated command would lose its description'
+  );
+});
+
+for (const dollar of ['$&', '$`', "$'", '$$']) {
+  test(`a description containing ${dollar} is emitted literally, not expanded as a replacement pattern`, () => {
+    const out = assemble(
+      mini,
+      {
+        ...FULL,
+        frontmatter: {
+          ...FULL.frontmatter,
+          description: `costs ${dollar} more`,
+        },
+      },
+      STAMP
+    );
+    assert.ok(
+      out.includes(`costs ${dollar} more`),
+      `"${dollar}" is a special replacement pattern in a string replacement — expanded, it splices the matched "description:" line into the value instead of writing the value the model authored`
+    );
+    assert.equal(
+      (out.match(/^description:/gm) || []).length,
+      1,
+      'the frontmatter must carry exactly one description key — an expanded $& re-injects the original key inside the value'
+    );
+  });
+}
+
+test('an argument-hint containing $& is emitted literally too', () => {
+  const out = assemble(
+    mini,
+    {
+      ...FULL,
+      frontmatter: { ...FULL.frontmatter, 'argument-hint': '[a $& b]' },
+    },
+    STAMP
+  );
+  assert.ok(
+    out.includes('[a $& b]'),
+    'both frontmatter substitutions run through the same replacement path, so both need the literal-emission guarantee'
+  );
+});

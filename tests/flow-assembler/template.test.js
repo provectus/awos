@@ -196,3 +196,44 @@ test('parseTemplate captures the footer marker block', () => {
     'the footer marker is stamped mechanically, so the parser must isolate it'
   );
 });
+
+// parseTemplate used to take the first HTML comment ANYWHERE in the body as
+// the generator header comment, and strip it from the preamble. CLAUDE.md's
+// contract is positional — the leading comment, the block right after the
+// frontmatter — so a template whose generator comment is absent lost the
+// first fixed comment in its prose instead.
+const NO_LEADING_COMMENT = `---
+description: No leading comment.
+---
+
+# Title
+
+Prose that comes before any comment at all.
+
+<!-- a fixed comment meant to ship -->
+
+<!-- awos:flow:stage=only -->
+
+### <awos-step/>: Only
+
+<awos-slot id="only.body">Per §1: the body.</awos-slot>
+
+<!-- /awos:flow:stage -->
+
+---
+
+<!-- awos:flow:generated date=[YYYY-MM-DD] version=[v] source=s -->
+`;
+
+test('parseTemplate treats only a comment leading the body as the generator header comment', () => {
+  const parsed = parseTemplate(NO_LEADING_COMMENT);
+  assert.equal(
+    parsed.headerComment,
+    null,
+    'a template with no comment right after the frontmatter has no header comment — a later comment in the prose is content, not generator instructions'
+  );
+  assert.ok(
+    parsed.preamble.includes('<!-- a fixed comment meant to ship -->'),
+    'a non-leading comment is fixed template content and must survive in the preamble, not be stripped as a header comment'
+  );
+});

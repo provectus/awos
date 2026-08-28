@@ -99,12 +99,17 @@ export function parseTemplate(src) {
   const bodyStart = fm ? fm[0].length : 0;
   const body = src.slice(bodyStart);
 
-  // The header comment is the first HTML comment in the body that is not a
-  // stage or section marker. It is instructions to the generator, never content.
+  // The header comment is the block leading the body — the HTML comment
+  // right after the frontmatter — when it is not a stage or section marker.
+  // It is instructions to the generator, never content. The match is
+  // anchored deliberately: a comment further down is fixed template content
+  // that must survive into the generated command, and a body-wide match
+  // would capture and strip it on any template that opens without a
+  // generator comment.
   let headerComment = null;
-  const firstComment = body.match(/<!--[\s\S]*?-->/);
-  if (firstComment && !/awos:flow:(stage|section)/.test(firstComment[0])) {
-    headerComment = firstComment[0];
+  const leadingComment = body.match(/^\s*(<!--[\s\S]*?-->)/);
+  if (leadingComment && !/awos:flow:(stage|section)/.test(leadingComment[1])) {
+    headerComment = leadingComment[1];
   }
 
   const footerMatch = body.match(FOOTER_RE);

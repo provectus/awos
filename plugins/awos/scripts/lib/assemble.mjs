@@ -65,13 +65,17 @@ function stageBlock(id, title, stepNo, body) {
 // whitespace (or at the end of the value) parses as a mapping key, a value
 // starting with a flow-collection or other indicator character parses as
 // something other than a string, and a " #" sequence starts a comment
-// mid-value. Quote only when one of these hazards is present in the VALUE
-// ITSELF — the template's own quoting style for that field is not a
-// signal, since a differently-shaped fill can need quoting a field whose
-// original value never did (and vice versa).
+// mid-value. "#" is a leading indicator for the same reason it is a
+// mid-value one: the space YAML writes after "description:" already meets
+// the comment's separation requirement (YAML 1.2.2 §6.6), so a value that
+// OPENS with "#" — "#184 flow assembler" — turns the whole value into a
+// comment and the key parses as null. Quote only when one of these hazards
+// is present in the VALUE ITSELF — the template's own quoting style for
+// that field is not a signal, since a differently-shaped fill can need
+// quoting a field whose original value never did (and vice versa).
 function needsYamlQuoting(value) {
   return (
-    /^[[\]{}&*!|>'"%@`]/.test(value) ||
+    /^[[\]{}&*!|>'"%@`#]/.test(value) ||
     /^[?:-](\s|$)/.test(value) ||
     /:(\s|$)/.test(value) ||
     /\s#/.test(value) ||
@@ -239,19 +243,27 @@ export function assemble(src, fills, stamp) {
     return stageBlock(entry.id, entry.title, i + 1, body);
   });
 
-  // 4. Frontmatter: substitute only the fields the caller provided.
+  // 4. Frontmatter: substitute only the fields the caller provided. Each
+  // substitution goes through a replacer FUNCTION, never a replacement
+  // string: a string replacement expands $&, $`, $' and $$, so a
+  // model-authored value carrying one of those sequences would splice the
+  // matched line — the template's own "description:" key included — back
+  // into the value. A replacer function's return value is emitted
+  // literally.
   const fm = fills.frontmatter || {};
   let frontmatter = parsed.frontmatter;
   if (fm.description !== undefined) {
+    const description = quoteFrontmatterValue(fm.description);
     frontmatter = frontmatter.replace(
       /^description:.*$/m,
-      `description: ${quoteFrontmatterValue(fm.description)}`
+      () => `description: ${description}`
     );
   }
   if (fm['argument-hint'] !== undefined) {
+    const hint = quoteFrontmatterValue(fm['argument-hint']);
     frontmatter = frontmatter.replace(
       /^argument-hint:.*$/m,
-      `argument-hint: ${quoteFrontmatterValue(fm['argument-hint'])}`
+      () => `argument-hint: ${hint}`
     );
   }
 

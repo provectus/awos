@@ -131,10 +131,9 @@ export function detectSpecWorkflowAdopted(
 // ---------------------------------------------------------------------------
 // detectProductContextDocs — category 2801 (SDD-02, method: detected)
 //
-// Checks for the three foundational AWOS documents:
-//   context/product/product-definition.md
-//   context/product/roadmap.md
-//   context/architecture/architecture.md  OR  context/product/architecture.md
+// Checks for the three foundational documents — product definition, roadmap,
+// and architecture record — under AWOS filenames or conventional equivalents
+// (see FOUNDATIONAL_DOC_CANDIDATES for each slot's candidate list).
 //
 // A document is "substantive" if it has more than 5 lines of non-blank content.
 //
@@ -231,20 +230,20 @@ export function detectProductContextDocs(
 
   if (count === 3) {
     return makeResult('PASS', count, [
-      'all 3 foundational AWOS documents present with substantive content',
+      'all 3 foundational documents present with substantive content',
       ...evidence,
     ]);
   }
 
   if (count === 2) {
     return makeResult('WARN', count, [
-      '2 of 3 foundational AWOS documents present',
+      '2 of 3 foundational documents present',
       ...evidence,
     ]);
   }
 
   return makeResult('FAIL', count, [
-    `only ${count} of 3 foundational AWOS documents present`,
+    `only ${count} of 3 foundational documents present`,
     ...evidence,
   ]);
 }

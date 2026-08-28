@@ -118,10 +118,9 @@ test('SDD-01: FAIL when context/ holds no workspace subdirs (e.g. only audit out
 // ---------------------------------------------------------------------------
 // detectProductContextDocs — code 2801 (SDD-02, detected)
 //
-// Check for the three foundational AWOS docs:
-//   context/product/product-definition.md
-//   context/product/roadmap.md
-//   context/architecture/architecture.md  (or context/product/architecture.md)
+// Check for the three foundational documents — product definition, roadmap,
+// and architecture record — under AWOS filenames or conventional equivalents
+// (FOUNDATIONAL_DOC_CANDIDATES holds each slot's candidate list).
 //
 // PASS if all 3 present and non-trivial (> 5 lines).
 // WARN if 2 of 3 present.
@@ -149,6 +148,35 @@ test('SDD-02: PASS when all three foundational docs are present and non-trivial'
   const r = detectProductContextDocs(t);
   assert.equal(r.status, 'PASS', 'all 3 present → PASS');
   assert.equal(r.method, 'detected');
+});
+
+test('SDD-02: the headline does not call a non-AWOS repo AWOS', () => {
+  // The candidates and the standards.toml definition were generalized to
+  // "AWOS filenames or conventional equivalents", but the three result
+  // headlines still said "foundational AWOS documents" — so a GSD or plain
+  // docs/ repo that satisfied all three slots without ever having heard of
+  // AWOS was told it had three AWOS documents.
+  const t = tmp();
+  mkdirSync(join(t, 'docs'), { recursive: true });
+  writeFileSync(join(t, 'docs', 'product.md'), PRODUCT_DOC_CONTENT);
+  writeFileSync(join(t, 'ROADMAP.md'), PRODUCT_DOC_CONTENT);
+  writeFileSync(join(t, 'docs', 'architecture.md'), PRODUCT_DOC_CONTENT);
+  const r = detectProductContextDocs(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'conventional equivalents satisfy all three slots'
+  );
+  assert.ok(
+    r.evidence.every((e) => !/foundational AWOS/.test(e)),
+    `no headline may frame a conventionally-named repo's documents as AWOS documents; got ${JSON.stringify(r.evidence)}`
+  );
+  assert.ok(
+    r.evidence.some((e) =>
+      /all 3 foundational documents present with substantive content/.test(e)
+    ),
+    `the PASS headline must be vendor-neutral; got ${JSON.stringify(r.evidence)}`
+  );
 });
 
 test('SDD-02: WARN when 2 of 3 foundational docs are present', () => {

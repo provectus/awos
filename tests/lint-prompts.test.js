@@ -65,6 +65,21 @@ function lineWith(body, re) {
   return body.split('\n').find((l) => re.test(l)) || '';
 }
 
+// A flow-assembler template's own top-of-file HTML comment is instructions to
+// a human maintaining the template — assemble.mjs's parseTemplate() strips it
+// before parsing slots or stages, and the generating model never reads the
+// template file at all (it works from the `slots` CLI's JSON). It also
+// contains literal example syntax (`<awos-slot id="stage.name">`, an
+// `<awos-step-ref stage="…"/>` with a placeholder) that would corrupt a naive
+// regex scan for real slot ids or step-refs. Strip it the same way
+// parseTemplate does — up through the first `-->`, which the header always is
+// since it is the first HTML comment in the file — before scanning either
+// template for slot/step-ref contracts.
+function stripTemplateHeader(raw) {
+  const closeAt = raw.indexOf('-->');
+  return closeAt === -1 ? raw : raw.slice(closeAt + 3);
+}
+
 function listMarkdown(dir) {
   if (!fs.existsSync(dir)) return [];
   return fs
@@ -1071,8 +1086,9 @@ test('the flow separates repo-provisioned transports from machine-personal ones'
       'pre-flight the transports this run depends on'
     );
     assert.ok(
-      preflightAt !== -1 && preflightAt < body.indexOf('### Step 2:'),
-      `${tmpl} must place the transport pre-flight inside the first stage, ahead of Step 2 — a pre-flight that runs after the ticket fetch cannot stop a missing tracker grant from failing the fetch raw`
+      preflightAt !== -1 &&
+        preflightAt < body.indexOf('<!-- awos:flow:stage=resume-detection -->'),
+      `${tmpl} must place the transport pre-flight inside the first stage, ahead of the resume-detection stage — a pre-flight that runs after the ticket fetch cannot stop a missing tracker grant from failing the fetch raw`
     );
     // The resume gate may *point at* the transport pre-flight to say it is a
     // different question — that contrast is the naming-apart this pins. What it
@@ -1507,44 +1523,72 @@ test('Step 4 keeps the dimension definitions in a bundled reference, not inline'
   );
 });
 
-test('Step 6 detects customizations against the record, not against a phantom prior generation', () => {
+test('Step 6 detects customizations via an exact diff against a persisted baseline, not a phantom prior generation', () => {
   // Canary flow-rerun-preserves-manual-edits failed 4/4 (three plugin states,
   // including two commits recorded as known-good) by silently dropping a
   // manual edit. Cause: Step 6 defined detection as "compare the on-disk stage
   // against what the *previous* generation would have produced" — uncomputable,
   // since only the current templates/ ships, and it disqualified the one
-  // comparison that IS computable. A 24-sample micro-test measured the result:
-  // with the old rule the model produced output BYTE-IDENTICAL to a no-guidance
-  // control (0/6 vs 1/6 keeps), i.e. the rule was inert. The rule below scored
-  // 6/6 in two independent 6-rep arms.
+  // comparison that IS computable. The assembler replaced the inference with a
+  // mechanism: `assemble` now persists an exact baseline alongside every write,
+  // and `diff` compares the on-disk file against that baseline byte-for-byte
+  // (plugins/awos/scripts/lib/diff.mjs) — detection is deterministic, so the
+  // old instruction has no work left to do and is gone from flow.md, not
+  // weakened.
   const flow = readFlowMaterial();
-  const detect = lineWith(
-    flow,
-    /Answer one question about the \*\*on-disk\*\* stage/
-  );
+  const detect = lineWith(flow, /\*\*Check for hand-edits\.\*\*/);
   assert.ok(
     detect !== '',
-    'flow.md Step 6 must state manual-edit detection as one question about the on-disk stage — an open-ended "did the user hand-edit this?" gave the model nothing decidable'
+    'flow.md Step 6 must name a "Check for hand-edits" step'
+  );
+  assert.ok(
+    /diff \.claude\/commands\/<name>\.md context\/product\/\.flow\/<name>\.md\.baseline\.md/.test(
+      detect
+    ),
+    'flow.md Step 6 must run the diff verb against the persisted per-command baseline file — that baseline, not an inferred prior generation, is the other operand of detection'
+  );
+  assert.ok(
+    /`unchanged`/.test(detect) &&
+      /`edited`/.test(detect) &&
+      /`absent`/.test(detect),
+    'flow.md Step 6 must classify each stage as unchanged, edited or absent from the diff — a deterministic result, not an open-ended "did the user hand-edit this?" question'
+  );
+  assert.ok(
+    /\{"baseline":"absent"\}/.test(detect) &&
+      /predate the assembler/i.test(detect),
+    'flow.md Step 6 must fall back to reading each on-disk stage only when the baseline is absent — every assembler-generated artifact has an exact baseline to diff against, so the fallback is for pre-assembler artifacts only'
   );
   assert.ok(
     /decision record does not account for/i.test(detect),
-    'flow.md Step 6 detection must compare the on-disk stage against the DECISION RECORD — both operands have to exist on disk, or detection silently returns nothing for every stage'
+    'flow.md Step 6 fallback (no baseline) must still compare the on-disk stage against the decision record, not reconstruct a prior generation'
   );
   assert.ok(
-    /previous generation would have produced/i.test(detect) &&
-      /does not exist/i.test(detect),
-    'flow.md Step 6 must explicitly retire the prior-generation comparison and say why — without the counter, the uncomputable phrasing reads as the natural way to answer the question'
-  );
-
-  const act = lineWith(flow, /Nothing unaccounted-for/);
-  assert.ok(
-    /carry it into the stage you write/i.test(act) &&
-      /\*\*Local Customizations\*\*/.test(act),
+    /carried into the stage you write/i.test(detect) &&
+      /\*\*Local Customizations\*\*/.test(detect),
     'flow.md Step 6 must carry an unaccounted-for detail into the regenerated stage and record it in Local Customizations — preservation is the unconditional action, not the skipped-question default of a question an unattended run never asks'
   );
   assert.ok(
-    /When `AWOS_UNATTENDED` is unset, then also offer/i.test(act),
+    /when `AWOS_UNATTENDED` is unset, also offer/i.test(detect),
     'flow.md Step 6 must make the keep/drop question a refinement that happens only in interactive runs — the write must never depend on an interaction an unattended run cannot have'
+  );
+
+  const diffSrc = readUtf8(
+    path.join(repoRoot, 'plugins', 'awos', 'scripts', 'lib', 'diff.mjs')
+  );
+  const diffFn = diffSrc.slice(diffSrc.indexOf('export function diffStages'));
+  // Pinned to the actual per-stage comparison expression, not just the
+  // presence of the status literals — 'edited'/'unchanged' also appear in the
+  // added/missing-stage bookkeeping around it, so a token-presence check
+  // stays green even if the real byte comparison is gutted (caught by
+  // bite-check: replacing the ternary with a constant left the surrounding
+  // literals intact and the weaker check green).
+  assert.ok(
+    diffFn.includes("g.stages.get(id) === body ? 'unchanged' : 'edited'"),
+    "diff.mjs diffStages() must compare the generated stage body against the baseline stage body verbatim (=== on the extracted text) — that exact comparison is the mechanism flow.md Step 6's `unchanged`/`edited` classification depends on"
+  );
+  assert.ok(
+    diffFn.includes('baseline === null') || diffFn.includes('baseline === undefined'),
+    "diff.mjs diffStages() must report {baseline:'absent'} when no baseline was passed — that is what routes flow.md Step 6 to its pre-assembler fallback instead of a byte comparison"
   );
 });
 
@@ -1574,13 +1618,16 @@ test('generated commands route a would-be editor to the decision record', () => 
         /\*\*Local Customizations\*\*/.test(intro),
       `${tmpl} routing paragraph must state that regeneration rewrites the file and that an edit lasts only once recorded (Local Customizations) — the risk is what routes the reader, not the mechanism`
     );
+    // The routing paragraph used to be a flow.md instruction the generator
+    // could drop or rewrite as a comment; now it is bare prose outside any
+    // <awos-slot>, so the assembler copies it byte-exact and there is no
+    // generator choice left to guard against — a stronger guarantee than
+    // the instruction it replaced.
+    assert.ok(
+      !intro.includes('<awos-slot'),
+      `${tmpl} routing paragraph must sit outside any <awos-slot> — it is fixed prose the assembler copies byte-exact, not text the generator decides whether to emit`
+    );
   }
-
-  const flow = readFlowMaterial();
-  assert.ok(
-    /change this command by re-running/i.test(flow),
-    'flow.md Step 6 must tell the generator the intro routing paragraph is fixed prose carried through as-is, so it is never dropped or rewritten as a comment'
-  );
 });
 
 test('generated commands are clean, self-contained, and interaction-explicit', () => {
@@ -1627,11 +1674,27 @@ test('generated commands are clean, self-contained, and interaction-explicit', (
     'fix-bug-template.md must have its own local-review stage — review folded into remote-gates loses its independent context'
   );
 
-  const flow = readFlowMaterial();
-  assert.ok(
-    /no top-of-file comment/i.test(flow),
-    'flow.md Step 6 must state the generated file carries no top-of-file comment — template headers are generator instructions'
+  // The "no top-of-file comment" rule used to be a flow.md instruction; it is
+  // now a structural guarantee. parseTemplate() strips the header comment out
+  // of the preamble it returns, and assemble() builds every generated file
+  // from frontmatter + that preamble + stage blocks + footer — the header text
+  // never reaches the assembled output regardless of what the generator does.
+  const templateSrc = readUtf8(
+    path.join(repoRoot, 'plugins', 'awos', 'scripts', 'lib', 'template.mjs')
   );
+  assert.ok(
+    templateSrc.includes("preamble = preamble.replace(headerComment, '')"),
+    'template.mjs parseTemplate must strip the header comment out of the preamble before assemble.mjs ever sees it, so a generated file structurally starts at frontmatter with no top-of-file comment'
+  );
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const tplBody = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /carries no top-of-file comment/i.test(tplBody),
+      `${tmpl} header must still document for a template maintainer that the generated file carries no top-of-file comment`
+    );
+  }
+
+  const flow = readFlowMaterial();
   assert.ok(
     /never improvises worktree preparation/i.test(flow),
     'flow.md worktree sub-interview must reuse an existing worktree command/script or record an exact recipe the stage executes verbatim'
@@ -1663,8 +1726,10 @@ test('a generator update triggers full regeneration even when no decision change
     'flow.md Step 6 must treat a decision change and a generator update as independent regeneration triggers — "no dimensions revisited" never means the old text stays'
   );
   assert.ok(
-    /never just a stamp-and-date update/i.test(flow),
-    'flow.md Step 6 must forbid the no-op failure mode: an outdated footer triggers stage regeneration, not just a version stamp'
+    /regeneration itself is unconditional/i.test(
+      lineWith(flow, /independent regeneration triggers/i)
+    ),
+    'flow.md Step 6 must forbid the no-op failure mode: a generator update always regenerates every stage — the diff only protects a hand-edit, it never gates whether regeneration happens'
   );
   assert.ok(
     /generator-owned/i.test(flow) && /outside the stage markers/i.test(flow),
@@ -1946,23 +2011,37 @@ test('delivery-flow-template.md carries a flow-agnostic Project Setup section', 
   );
 });
 
-test('flow.md and the template guard the generated header against comment-nesting', () => {
-  // A generated file embedded a literal awos:flow:stage marker inside its
-  // outer <!-- … --> header comment; the inner --> closed the comment early
-  // (CodeRabbit-flagged). The generator must be told to describe markers in
-  // prose, never nest one HTML comment inside another.
-  const flowBody = readFlowMaterial();
-  const tplBody = readUtf8(
-    path.join(pluginTemplatesDir, 'implement-feature-template.md')
+test('the assembler makes header comment-nesting structurally impossible, not just discouraged', () => {
+  // A generated file once embedded a literal awos:flow:stage marker inside
+  // its own outer <!-- … --> header comment; the inner --> closed the
+  // comment early (CodeRabbit-flagged) — only possible when a fill can
+  // smuggle comment syntax into the assembled output. The generating model
+  // no longer reads or authors the template's header at all (Step 6 item 1:
+  // "do not read the template file itself"), and validate.mjs now rejects
+  // any fill containing a comment delimiter before assembly ever runs, so a
+  // nested comment can no longer be authored. flow.md needs no instruction
+  // about it any more; the mechanism is pinned here instead.
+  const validateSrc = readUtf8(
+    path.join(repoRoot, 'plugins', 'awos', 'scripts', 'lib', 'validate.mjs')
+  );
+  const checkSlotValueFn = validateSrc.slice(
+    validateSrc.indexOf('function checkSlotValue')
   );
   assert.ok(
-    /never nest one inside another/i.test(flowBody),
-    "flow.md Step 6 must instruct the generator not to nest stage-marker HTML comments inside the generated file's own header comment"
+    checkSlotValueFn.includes("value.includes('<!--')") &&
+      checkSlotValueFn.includes("value.includes('-->')"),
+    'validate.mjs checkSlotValue must reject any fill containing an HTML comment delimiter — a model-authored fill can never smuggle a "-->" that would close a stage marker early'
   );
-  assert.ok(
-    /never nest one inside another/i.test(tplBody),
-    'implement-feature-template.md header must warn the generator never to nest the stage-marker comments'
-  );
+
+  // The template's own header still documents the rule for whoever edits
+  // the template file directly — the generating model never reads it.
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const tplBody = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.ok(
+      /never nest one inside another/i.test(tplBody),
+      `${tmpl} header must still warn a template maintainer never to nest the stage-marker comments`
+    );
+  }
 });
 
 test('implement-feature-template.md carries stage markers and the AWOS chain', () => {
@@ -2002,7 +2081,7 @@ test('implement-feature-template.md carries stage markers and the AWOS chain', (
   );
   for (const stage of ['local-review', 'remote-gates', 'merge']) {
     assert.ok(
-      body.includes(`<!-- awos:flow:stage=${stage} -->`),
+      new RegExp(`<!-- awos:flow:stage=${stage}( optional)? -->`).test(body),
       `implement-feature-template.md must carry the ${stage} stage — the flow reviews locally before spending CI minutes, waits on remote gates, and covers the merge step, not just PR creation`
     );
   }
@@ -2080,7 +2159,7 @@ test('implement-feature-template.md carries stage markers and the AWOS chain', (
     'close-ticket',
   ];
   const positions = stageOrder.map((s) =>
-    body.indexOf(`<!-- awos:flow:stage=${s} -->`)
+    body.search(new RegExp(`<!-- awos:flow:stage=${s}( optional)? -->`))
   );
   for (let i = 0; i < stageOrder.length; i++) {
     assert.ok(
@@ -2202,7 +2281,7 @@ test('fix-bug-template.md carries the canonical bug-fix stages and the classify 
     'close-ticket',
   ];
   const positions = stageOrder.map((s) =>
-    body.indexOf(`<!-- awos:flow:stage=${s} -->`)
+    body.search(new RegExp(`<!-- awos:flow:stage=${s}( optional)? -->`))
   );
   for (let i = 0; i < stageOrder.length; i++) {
     assert.ok(
@@ -2228,9 +2307,9 @@ test('fix-bug-template.md carries the canonical bug-fix stages and the classify 
     'fix-bug-template.md amend-spec stage must invoke core /awos:spec in update mode on a divergence, not duplicate amendment prose'
   );
   assert.ok(
-    body.includes('**[Agent:') &&
+    body.includes('[Agent: name]') &&
       /do not edit code in the main context/i.test(body),
-    'fix-bug-template.md must be orchestrator-only — the fix is delegated via **[Agent: name]** and the orchestrator never edits code itself'
+    'fix-bug-template.md must be orchestrator-only — the fix is delegated via a slot written as `[Agent: name]`, and the orchestrator never edits code itself'
   );
   assert.ok(
     body.includes('<!-- skip-tests: true -->'),
@@ -3794,7 +3873,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // together: plugin.json, marketplace.json, this pinned literal, and the
 // generator-version constant in plugins/awos/commands/flow.md. The pin
 // exists to force that deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.5';
+const EXPECTED_PLUGIN_VERSION = '2.5.0';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -4618,4 +4697,206 @@ test('hire.md treats an unanswered consent gate as withheld consent', () => {
     /do not re-ask the same question as plain text/i.test(body),
     'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
   );
+});
+
+// The assembler is the mechanism that makes issue #184 impossible: fixed
+// template prose is copied, never regenerated. These assertions protect the
+// contract surface a grep can see; the assembler's own behaviour is covered by
+// tests/flow-assembler/.
+test('flow.md Step 6 generates by assembly, not by rewriting the template', () => {
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  assert.match(
+    flow,
+    /scripts\/assemble-flow-command\.mjs/,
+    'flow.md Step 6 must name the assembler script by path — generation runs through it, not through the model rewriting the template'
+  );
+  assert.match(
+    lineWith(flow, /do not read the template file itself/i),
+    /fixed prose is not yours to reproduce/i,
+    'Step 6 must tell the generator not to read the template — reading it is what invites re-emitting its fixed prose (issue #184)'
+  );
+  assert.match(
+    flow,
+    /command -v node/,
+    'flow.md Step 1 must preflight node — the assembler has no fallback path'
+  );
+  assert.ok(
+    !/what the previous generation would have produced/i.test(flow),
+    'the phantom-prior-generation comparison is replaced by an exact diff against a persisted baseline — its wording must not survive'
+  );
+  // Scoped to Step 8, not the document: the baseline path also appears twice
+  // in Step 6's diff/assemble invocations, so a whole-file grep stays green
+  // even if Step 8 never lists it among the project-side ignore fixes (caught
+  // by bite-check).
+  assert.match(
+    flow.slice(flow.indexOf('## Step 8')),
+    /context\/product\/\.flow\//,
+    'Step 8 must list the baseline directory among the project-side ignore fixes, or a repo-wide format gate fails on the flow’s own output'
+  );
+});
+
+test('both flow templates use slot elements and never bracket instructions', () => {
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    assert.match(
+      body,
+      /<awos-slot id="/,
+      `${tmpl} must define its generator instructions as <awos-slot> elements`
+    );
+    const stripped = body.replace(/<awos-slot[\s\S]*?<\/awos-slot>/g, '');
+    const leftoverBracket = stripped
+      .split('\n')
+      .find(
+        (l) => /^\s*\[[A-Z]/.test(l) || /\s\[(Per|If|Connector|Commit|Ticket|Crash)\b/.test(l)
+      );
+    assert.equal(
+      leftoverBracket,
+      undefined,
+      `${tmpl} still carries a bracket instruction outside a slot — it would be copied into the generated command verbatim:\n  ${leftoverBracket}`
+    );
+    assert.match(
+      body,
+      /### <awos-step\/>:/,
+      `${tmpl} headings must use the step token so numbering survives omissions and reorders`
+    );
+    assert.ok(
+      !/^### Step \d+:/m.test(body),
+      `${tmpl} must not hard-code step numbers in headings — an omitted stage would leave a gap`
+    );
+  }
+});
+
+test('both flow templates mark exactly the stages and sections that may be omitted', () => {
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = readUtf8(path.join(pluginTemplatesDir, tmpl));
+    const optionalStages = [
+      ...body.matchAll(/awos:flow:stage=([a-z-]+) optional/g),
+    ].map((m) => m[1]);
+    assert.deepEqual(
+      optionalStages.sort(),
+      ['delivery', 'remote-gates'],
+      `${tmpl}: only remote-gates and delivery are omittable at generation time — a run-time conditional stage such as amend-spec must stay required`
+    );
+    assert.match(
+      body,
+      /awos:flow:section=notifications optional/,
+      `${tmpl}: the Notifications section is the one omittable pre-stage region (§9 "none")`
+    );
+  }
+});
+
+test('flow.md pins each generated command as self-contained', () => {
+  // Lost during the Task 10 flow.md rewrite, restored in dfbc605 — and lost
+  // silently the first time because nothing pinned it. The only existing
+  // assertion for "self-contained" checks the TEMPLATES' header-comment copy
+  // (tests/lint-prompts.test.js around 'never nest one inside another'),
+  // which is documentation for a human template maintainer: the assembler
+  // strips that header before parsing, and the generating model never reads
+  // the template file at all (it works from the `slots` CLI's JSON output).
+  // Nothing was pinning the instruction the model actually follows. This is
+  // that assertion, against flow.md itself.
+  const flow = readUtf8(path.join(pluginCommandsDir, 'flow.md'));
+  const rule = lineWith(
+    flow,
+    /Each generated command is \*\*self-contained\*\*/
+  );
+  assert.ok(
+    rule !== '',
+    'flow.md Step 6 must state that each generated command is self-contained'
+  );
+  assert.ok(
+    /never write a fill that references the sibling command/i.test(rule) &&
+      /know[s]? nothing about each other at run time/i.test(rule),
+    "flow.md Step 6's self-contained rule must forbid a fill referencing the sibling command's text and say why: the commands know nothing about each other at run time"
+  );
+});
+
+test('every <awos-slot> id is unique and well-formed within its template', () => {
+  const SLOT_ID_RE = /<awos-slot id="([^"]*)"/g;
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = stripTemplateHeader(
+      readUtf8(path.join(pluginTemplatesDir, tmpl))
+    );
+    const ids = [...body.matchAll(SLOT_ID_RE)].map((m) => m[1]);
+    assert.ok(
+      ids.length > 0,
+      `${tmpl} must define at least one <awos-slot>`
+    );
+    for (const id of ids) {
+      assert.match(
+        id,
+        /^[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+(?:-[a-z0-9]+)*$/,
+        `${tmpl} slot id "${id}" must be a well-formed "stage.name" (lowercase, hyphenated) — assemble.mjs's SLOT_RE only matches [a-z0-9.-]+, and a malformed id is simply never filled, leaving the raw <awos-slot> tag in the generated command`
+      );
+    }
+    const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
+    assert.deepEqual(
+      dupes,
+      [],
+      `${tmpl} must not declare the same slot id twice (found: ${dupes.join(', ')}) — assemble.mjs's global regex substitution fills every occurrence of an id from one fill, so a duplicate silently reuses one stage's fill inside a different stage`
+    );
+  }
+});
+
+test('every <awos-step-ref> in the templates names a stage the same template declares', () => {
+  const STAGE_ID_RE = /<!--\s*awos:flow:stage=([a-z0-9-]+)(?:\s+optional)?\s*-->/g;
+  const STEP_REF_RE = /<awos-step-ref stage="([^"]*)"/g;
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = stripTemplateHeader(
+      readUtf8(path.join(pluginTemplatesDir, tmpl))
+    );
+    const stageIds = new Set(
+      [...body.matchAll(STAGE_ID_RE)].map((m) => m[1])
+    );
+    const refIds = [...body.matchAll(STEP_REF_RE)].map((m) => m[1]);
+    assert.ok(refIds.length > 0, `${tmpl} must use at least one <awos-step-ref>`);
+    const dangling = refIds.filter((id) => !stageIds.has(id));
+    assert.deepEqual(
+      dangling,
+      [],
+      `${tmpl} has an <awos-step-ref stage="..."/> naming a stage the template never declares (dangling: ${dangling.join(', ')}) — assemble.mjs throws "points at a stage that is not emitted" only for a stage omitted at generation time, not for a typo'd id that was never a stage to begin with`
+    );
+  }
+});
+
+test('every optional slot in the templates sits at a sentence boundary, so a null fill excises cleanly', () => {
+  // assemble.mjs's excise() drops a sentinel's whole line when the sentinel is
+  // alone on it (a block slot), or collapses surrounding whitespace to a
+  // single space (or nothing at a line edge) for an inline slot. Either
+  // mechanism produces prose that reads correctly only when the slot itself
+  // sits at a sentence boundary — mid-clause, collapsing whitespace still
+  // fuses two clause fragments into a broken sentence. This check is
+  // necessarily a heuristic (it cannot judge English grammar), but it catches
+  // the concrete failure mode: an optional slot's opening tag is preceded
+  // by a line start or sentence-ending punctuation, and its closing tag is
+  // followed by a line end or the start of a new sentence.
+  const SLOT_RE =
+    /<awos-slot id="([a-z0-9.-]+)"(\s+optional)?\s*>([\s\S]*?)<\/awos-slot>/g;
+  for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
+    const body = stripTemplateHeader(
+      readUtf8(path.join(pluginTemplatesDir, tmpl))
+    );
+    SLOT_RE.lastIndex = 0;
+    let m;
+    let checked = 0;
+    while ((m = SLOT_RE.exec(body)) !== null) {
+      if (!m[2]) continue; // only optional slots are ever excised
+      checked++;
+      const start = m.index;
+      const end = m.index + m[0].length;
+      const beforeTrimmed = body.slice(0, start).replace(/[ \t]+$/, '');
+      const lastCh = beforeTrimmed.slice(-1);
+      const atLineStart = /(^|\n)$/.test(beforeTrimmed);
+      const afterTrimmed = body.slice(end).replace(/^[ \t]+/, '');
+      const nextCh = afterTrimmed.slice(0, 1);
+      const atLineEnd = /^(\n|$)/.test(afterTrimmed);
+      const beforeOk = atLineStart || /[.:!?]/.test(lastCh);
+      const afterOk = atLineEnd || /[A-Z]/.test(nextCh);
+      assert.ok(
+        beforeOk && afterOk,
+        `${tmpl} optional slot "${m[1]}" does not sit at a sentence boundary (preceding char "${lastCh}", following char "${nextCh}") — excising it on a null fill would fuse two clause fragments into a broken sentence`
+      );
+    }
+    assert.ok(checked > 0, `${tmpl} must have at least one optional slot to check`);
+  }
 });

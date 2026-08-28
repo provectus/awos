@@ -126,30 +126,40 @@ export function assemble(src, fills, stamp) {
     }
   }
 
-  // 1b. insert: a post-pass splice over the already-expanded list, so an
-  // anchor works regardless of where it landed (repeated, reordered, or
-  // last in the list). An anchor that names a repeated stage lands after
-  // its LAST instance — "insert a canary stage after delivery" means once
-  // delivery is finished, not wedged between two of its environments — so
-  // this finds the last matching index, not the first.
+  // 1b. insert: a post-pass over the already-expanded list, so an anchor
+  // works regardless of where it landed (repeated, reordered, or last in
+  // the list). Inserts are grouped by anchor and spliced as one block, in
+  // declaration order — otherwise two inserts sharing an anchor (a canary
+  // and a soak stage, both after delivery) would each search for the same
+  // anchor position and the second splice would land in front of the
+  // first, silently reversing structure the model explicitly declared. An
+  // anchor that names a repeated stage lands after its LAST instance —
+  // "insert a canary stage after delivery" means once delivery is
+  // entirely finished, not wedged between two of its environments.
+  const insertGroups = new Map();
   for (const ins of fills.insert || []) {
+    if (!insertGroups.has(ins.after)) insertGroups.set(ins.after, []);
+    insertGroups.get(ins.after).push(ins);
+  }
+  for (const [anchor, group] of insertGroups) {
     let at = -1;
     for (let i = emitted.length - 1; i >= 0; i--) {
-      if (emitted[i].stageId === ins.after) {
+      if (emitted[i].stageId === anchor) {
         at = i;
         break;
       }
     }
     if (at === -1) {
-      throw new Error(`insert anchor "${ins.after}" is not an emitted stage`);
+      throw new Error(`insert anchor "${anchor}" is not an emitted stage`);
     }
-    emitted.splice(at + 1, 0, {
+    const block = group.map((ins) => ({
       id: ins.stage,
       stageId: ins.stage,
       title: ins.title,
       body: ins.body,
       verbatim: true,
-    });
+    }));
+    emitted.splice(at + 1, 0, ...block);
   }
 
   // 1c. Step numbers are computed only after every stage the run will emit

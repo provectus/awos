@@ -26,17 +26,46 @@ function lineAround(src, index) {
   return { start, end, text: src.slice(start, end) };
 }
 
-// The paragraph spanning [start, end) — blank-line-delimited on both sides,
-// or a string edge. `full` (the whole matched slot) can span several
+// The paragraph bounds spanning [start, end) — blank-line-delimited on both
+// sides, or a string edge. `full` (the whole matched slot) can span several
 // physical lines, so `lineAround`'s single line is not guaranteed to
 // contain it; the paragraph always does, since a slot's own markup is never
 // itself split across a blank line.
-function paragraphAround(src, start, end) {
+function paragraphBounds(src, start, end) {
   const prevBlank = src.lastIndexOf('\n\n', start);
   const pStart = prevBlank === -1 ? 0 : prevBlank + 2;
   const nextBlank = src.indexOf('\n\n', end);
   const pEnd = nextBlank === -1 ? src.length : nextBlank;
-  return src.slice(pStart, pEnd);
+  return { pStart, pEnd };
+}
+
+// Matches any complete <awos-slot ...>...</awos-slot> element, used to scan
+// a paragraph for every slot it contains — not just the one this call is
+// building context for. A paragraph can hold several slots (three
+// consecutive numbered list items with no blank line between them form one
+// paragraph, for instance), and each one's context must show the others as
+// already-resolved neighbours, never as their raw markup.
+const PARAGRAPH_SLOT_RE = /<awos-slot\b[^>]*>[\s\S]*?<\/awos-slot>/g;
+
+// Renders a paragraph as the slot starting at `relStart` will see it: its
+// own span becomes ⟦slot⟧, and every sibling slot's span — found by
+// scanning the paragraph for every <awos-slot> element, not by
+// string-matching `full`, since `.replace(full, …)` only ever touches the
+// first occurrence and would leave (or misidentify) any other slot in the
+// same paragraph — becomes ⟦other-slot⟧, so the model can tell "my
+// insertion point" from "another fill lands here" without seeing raw markup.
+function renderContext(paragraph, relStart) {
+  PARAGRAPH_SLOT_RE.lastIndex = 0;
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = PARAGRAPH_SLOT_RE.exec(paragraph)) !== null) {
+    out += paragraph.slice(last, m.index);
+    out += m.index === relStart ? '⟦slot⟧' : '⟦other-slot⟧';
+    last = m.index + m[0].length;
+  }
+  out += paragraph.slice(last);
+  return out;
 }
 
 function collectSlots(src, offset, stageId, out) {
@@ -46,14 +75,19 @@ function collectSlots(src, offset, stageId, out) {
     const [full, id, optionalAttr, instruction] = m;
     const line = lineAround(src, m.index);
     const withoutSlot = line.text.replace(full.split('\n')[0], '').trim();
-    const paragraph = paragraphAround(src, m.index, m.index + full.length);
+    const { pStart, pEnd } = paragraphBounds(
+      src,
+      m.index,
+      m.index + full.length
+    );
+    const paragraph = src.slice(pStart, pEnd);
     out.push({
       id,
       ...ownerOf(id, stageId),
       optional: Boolean(optionalAttr),
       inline: withoutSlot.length > 0 && !withoutSlot.startsWith('#'),
       instruction: instruction.trim(),
-      context: paragraph.replace(full, '⟦slot⟧').trim(),
+      context: renderContext(paragraph, m.index - pStart).trim(),
       index: offset + m.index,
     });
   }

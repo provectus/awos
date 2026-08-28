@@ -134,6 +134,51 @@ Before the slot, in its own paragraph.
   );
 });
 
+test('parseTemplate resolves every sibling slot sharing a paragraph, not just the one being described', () => {
+  // Three single-line list items with no blank line between them form one
+  // paragraph. Fixing the multi-line case above by string-replacing only
+  // `full` (this slot's own match) leaves every *other* slot in that
+  // paragraph as raw markup — the regression this test pins down.
+  const src = `---
+description: d
+argument-hint: '[a]'
+---
+
+<!-- awos:flow:stage=first -->
+
+### <awos-step/>: First
+
+1. one — <awos-slot id="first.a">fill a</awos-slot>
+2. two — <awos-slot id="first.b">fill b</awos-slot>
+3. three — <awos-slot id="first.c">fill c</awos-slot>
+
+<!-- /awos:flow:stage -->
+
+<!-- awos:flow:generated date=[x] version=[x] source=x -->
+`;
+  const parsed = parseTemplate(src);
+  const byId = Object.fromEntries(parsed.slots.map((s) => [s.id, s]));
+  assert.equal(
+    byId['first.a'].context,
+    '1. one — ⟦slot⟧\n2. two — ⟦other-slot⟧\n3. three — ⟦other-slot⟧',
+    'the slot being described gets ⟦slot⟧; every sibling in the same paragraph gets a distinct marker, never its raw <awos-slot> tag'
+  );
+  assert.equal(
+    byId['first.b'].context,
+    '1. one — ⟦other-slot⟧\n2. two — ⟦slot⟧\n3. three — ⟦other-slot⟧'
+  );
+  assert.equal(
+    byId['first.c'].context,
+    '1. one — ⟦other-slot⟧\n2. two — ⟦other-slot⟧\n3. three — ⟦slot⟧'
+  );
+  for (const slot of parsed.slots) {
+    assert.ok(
+      !slot.context.includes('<awos-slot'),
+      `slot "${slot.id}" must never see a sibling's raw markup`
+    );
+  }
+});
+
 test('parseTemplate collects step-ref targets', () => {
   const parsed = parseTemplate(mini);
   assert.deepEqual(

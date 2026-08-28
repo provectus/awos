@@ -190,18 +190,23 @@ for (const name of TEMPLATES) {
     );
   });
 
-  test(`${name} a multi-line slot's context, if any, is a real paragraph — never the raw opening tag`, () => {
-    // Not every template has a multi-line slot (fix-bug-template.md's
-    // local-review.shape is the one that does; implement-feature-template.md
-    // currently has none) — this just checks the invariant wherever one
-    // exists, rather than requiring one per template.
+  test(`${name} no slot's context leaks another slot's raw markup`, () => {
+    // The honest contract, checkable for every slot regardless of whether
+    // it spans one line or several, and regardless of whether it shares its
+    // paragraph with sibling slots: a slot's context is what the generating
+    // model sees in place of the template, so a literal "<awos-slot" inside
+    // it means either this slot's own opening tag survived (the multi-line
+    // case: a paragraph-spanning match whose context still shows raw markup
+    // instead of a real paragraph) or a sibling's did (three consecutive
+    // list items sharing one paragraph, where fixing the first case by
+    // string-replacing only the first match left the other two untouched).
+    // Both are the same defect from the model's point of view — a context
+    // it cannot use to tell where its own fill lands.
     const parsed = parseTemplate(src);
-    for (const slot of parsed.slots.filter((s) =>
-      s.instruction.includes('\n')
-    )) {
+    for (const slot of parsed.slots) {
       assert.ok(
         !slot.context.includes('<awos-slot'),
-        `${name}: slot "${slot.id}" spans multiple lines but its context still contains the raw opening tag — collectSlots's replace of the whole match against just the slot's first physical line didn't match`
+        `${name}: slot "${slot.id}"'s context contains raw <awos-slot markup instead of a resolved ⟦slot⟧/⟦other-slot⟧ marker:\n  ${slot.context}`
       );
     }
   });

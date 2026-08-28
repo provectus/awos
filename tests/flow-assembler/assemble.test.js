@@ -152,3 +152,85 @@ test('a null fill for a block slot leaves no extra blank line before the stage c
     'excising the last slot in a stage body must leave exactly the one blank line that always separates a stage body from its close marker, not an extra one'
   );
 });
+
+test('a null fill for an optional block slot removes its paragraph cleanly', () => {
+  const out = assemble(
+    mini,
+    { ...FULL, slots: { ...FULL.slots, 'first.extra': null } },
+    STAMP
+  );
+  assert.ok(
+    !out.includes('other thing'),
+    'a null fill removes the slot content'
+  );
+  assert.ok(
+    !/\n{3,}/.test(out),
+    'excising a block slot must not leave a triple blank line behind'
+  );
+  assert.ok(
+    out.includes('Fixed opening. Run the thing.'),
+    'the neighbouring fixed prose is untouched by an excision'
+  );
+});
+
+test('a null fill for an inline slot collapses whitespace instead of leaving a gap', () => {
+  const src = mini.replace(
+    '<awos-slot id="intro.source">the source per §1</awos-slot>',
+    '<awos-slot id="intro.source" optional>the source per §1</awos-slot>'
+  );
+  const out = assemble(
+    src,
+    { ...FULL, slots: { ...FULL.slots, 'intro.source': null } },
+    STAMP
+  );
+  assert.ok(
+    out.includes('Intro naming inline.'),
+    'an inline excision leaves exactly one space, not two'
+  );
+  assert.ok(
+    !/ {2}/.test(out),
+    'no double spaces may be introduced by excision'
+  );
+});
+
+test('omitting an optional stage removes its markers, heading and body together', () => {
+  const fills = {
+    ...FULL,
+    omitStages: ['second'],
+    slots: { ...FULL.slots },
+  };
+  delete fills.slots['second.body'];
+  const src = mini.replace(
+    'See <awos-step-ref stage="second"/>.',
+    'No ref here.'
+  );
+  const out = assemble(src, fills, STAMP);
+  assert.ok(!out.includes('Close it out.'), 'the omitted stage body is gone');
+  assert.ok(
+    !out.includes('stage=second'),
+    'an omitted stage leaves no marker behind — a stray marker would make re-run attribution nonsense'
+  );
+  assert.ok(
+    out.includes('### Step 1: First'),
+    'the surviving stage keeps its number'
+  );
+});
+
+test('omitting a section strips its heading, body and both markers', () => {
+  const fills = {
+    ...FULL,
+    omitSections: ['notifications'],
+    slots: { ...FULL.slots },
+  };
+  delete fills.slots['notifications.body'];
+  const out = assemble(mini, fills, STAMP);
+  assert.ok(
+    !out.includes('## Notifications'),
+    'the omitted section heading is gone'
+  );
+  assert.ok(!out.includes('Post to #team'), 'the omitted section body is gone');
+  assert.ok(
+    !out.includes('awos:flow:section'),
+    'section markers never reach the generated command, kept or omitted'
+  );
+});

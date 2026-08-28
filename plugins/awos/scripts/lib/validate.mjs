@@ -83,6 +83,34 @@ export function validateFills(parsed, fills) {
       );
   }
 
+  // A repeat instance's own slots must name real slots that belong to the
+  // stage being repeated — the same contract Object.keys(slots) enforces
+  // for the base fill. An unrecognized or wrong-stage key here is not
+  // applied anywhere in the assembled output (assemble.mjs only
+  // substitutes keys its own stage body's <awos-slot> markers reference),
+  // so it silently drops whatever override the model meant to make.
+  for (const [stageId, instances] of Object.entries(repeat)) {
+    if (!stageById[stageId]) continue; // already flagged above
+    (instances || []).forEach((inst, index) => {
+      const label = inst.label || `#${index + 1}`;
+      for (const key of Object.keys(inst.slots || {})) {
+        const owner = known.get(key);
+        if (!owner) {
+          errors.push(
+            `repeat instance "${stageId}#${label}" names slot "${key}", which this template does not define`
+          );
+        } else if (owner.stage !== stageId) {
+          const belongsTo = owner.stage
+            ? `stage "${owner.stage}"`
+            : `section "${owner.section}"`;
+          errors.push(
+            `repeat instance "${stageId}#${label}" names slot "${key}", which belongs to ${belongsTo}, not stage "${stageId}"`
+          );
+        }
+      }
+    });
+  }
+
   // Checks one fill value's content — never its presence, callers decide
   // that. Shared between a base fill and a repeat instance's own fill,
   // since assemble.mjs treats both the same way once merged per instance.

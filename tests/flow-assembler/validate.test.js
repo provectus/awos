@@ -220,3 +220,29 @@ test('omitting an optional section drops its slot requirement entirely', () => {
     'a slot inside an omitted-and-optional section is not live, so it needs no fill and produces no error'
   );
 });
+
+test('an unknown slot id inside a repeat instance is rejected', () => {
+  assert.match(
+    only({
+      ...VALID,
+      repeat: {
+        second: [{ label: 'staging', slots: { 'second.bdoy': 'x' } }],
+      },
+    }),
+    /repeat instance "second#staging" names slot "second\.bdoy"/,
+    "a typo in an instance override is not applied anywhere in the assembled output — assemble.mjs only substitutes keys that stage's own body actually references — so it must be rejected the same way an unknown base slot id is"
+  );
+});
+
+test('a repeat instance naming a real slot that belongs to a different stage is rejected', () => {
+  assert.match(
+    only({
+      ...VALID,
+      repeat: {
+        second: [{ label: 'staging', slots: { 'first.body': 'x' } }],
+      },
+    }),
+    /repeat instance "second#staging" names slot "first\.body", which belongs to stage "first"/,
+    "the instance meant to override its own stage's slot; naming a real slot from a different stage silently does nothing there either"
+  );
+});

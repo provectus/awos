@@ -1587,7 +1587,8 @@ test('Step 6 detects customizations via an exact diff against a persisted baseli
     "diff.mjs diffStages() must compare the generated stage body against the baseline stage body verbatim (=== on the extracted text) — that exact comparison is the mechanism flow.md Step 6's `unchanged`/`edited` classification depends on"
   );
   assert.ok(
-    diffFn.includes('baseline === null') || diffFn.includes('baseline === undefined'),
+    diffFn.includes('baseline === null') ||
+      diffFn.includes('baseline === undefined'),
     "diff.mjs diffStages() must report {baseline:'absent'} when no baseline was passed — that is what routes flow.md Step 6 to its pre-assembler fallback instead of a byte comparison"
   );
 });
@@ -4747,7 +4748,9 @@ test('both flow templates use slot elements and never bracket instructions', () 
     const leftoverBracket = stripped
       .split('\n')
       .find(
-        (l) => /^\s*\[[A-Z]/.test(l) || /\s\[(Per|If|Connector|Commit|Ticket|Crash)\b/.test(l)
+        (l) =>
+          /^\s*\[[A-Z]/.test(l) ||
+          /\s\[(Per|If|Connector|Commit|Ticket|Crash)\b/.test(l)
       );
     assert.equal(
       leftoverBracket,
@@ -4818,10 +4821,7 @@ test('every <awos-slot> id is unique and well-formed within its template', () =>
       readUtf8(path.join(pluginTemplatesDir, tmpl))
     );
     const ids = [...body.matchAll(SLOT_ID_RE)].map((m) => m[1]);
-    assert.ok(
-      ids.length > 0,
-      `${tmpl} must define at least one <awos-slot>`
-    );
+    assert.ok(ids.length > 0, `${tmpl} must define at least one <awos-slot>`);
     for (const id of ids) {
       assert.match(
         id,
@@ -4839,17 +4839,19 @@ test('every <awos-slot> id is unique and well-formed within its template', () =>
 });
 
 test('every <awos-step-ref> in the templates names a stage the same template declares', () => {
-  const STAGE_ID_RE = /<!--\s*awos:flow:stage=([a-z0-9-]+)(?:\s+optional)?\s*-->/g;
+  const STAGE_ID_RE =
+    /<!--\s*awos:flow:stage=([a-z0-9-]+)(?:\s+optional)?\s*-->/g;
   const STEP_REF_RE = /<awos-step-ref stage="([^"]*)"/g;
   for (const tmpl of ['implement-feature-template.md', 'fix-bug-template.md']) {
     const body = stripTemplateHeader(
       readUtf8(path.join(pluginTemplatesDir, tmpl))
     );
-    const stageIds = new Set(
-      [...body.matchAll(STAGE_ID_RE)].map((m) => m[1])
-    );
+    const stageIds = new Set([...body.matchAll(STAGE_ID_RE)].map((m) => m[1]));
     const refIds = [...body.matchAll(STEP_REF_RE)].map((m) => m[1]);
-    assert.ok(refIds.length > 0, `${tmpl} must use at least one <awos-step-ref>`);
+    assert.ok(
+      refIds.length > 0,
+      `${tmpl} must use at least one <awos-step-ref>`
+    );
     const dangling = refIds.filter((id) => !stageIds.has(id));
     assert.deepEqual(
       dangling,
@@ -4897,6 +4899,9 @@ test('every optional slot in the templates sits at a sentence boundary, so a nul
         `${tmpl} optional slot "${m[1]}" does not sit at a sentence boundary (preceding char "${lastCh}", following char "${nextCh}") — excising it on a null fill would fuse two clause fragments into a broken sentence`
       );
     }
-    assert.ok(checked > 0, `${tmpl} must have at least one optional slot to check`);
+    assert.ok(
+      checked > 0,
+      `${tmpl} must have at least one optional slot to check`
+    );
   }
 });

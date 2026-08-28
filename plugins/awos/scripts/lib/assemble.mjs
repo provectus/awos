@@ -128,9 +128,18 @@ export function assemble(src, fills, stamp) {
 
   // 1b. insert: a post-pass splice over the already-expanded list, so an
   // anchor works regardless of where it landed (repeated, reordered, or
-  // last in the list).
+  // last in the list). An anchor that names a repeated stage lands after
+  // its LAST instance — "insert a canary stage after delivery" means once
+  // delivery is finished, not wedged between two of its environments — so
+  // this finds the last matching index, not the first.
   for (const ins of fills.insert || []) {
-    const at = emitted.findIndex((e) => e.stageId === ins.after);
+    let at = -1;
+    for (let i = emitted.length - 1; i >= 0; i--) {
+      if (emitted[i].stageId === ins.after) {
+        at = i;
+        break;
+      }
+    }
     if (at === -1) {
       throw new Error(`insert anchor "${ins.after}" is not an emitted stage`);
     }
@@ -145,10 +154,13 @@ export function assemble(src, fills, stamp) {
 
   // 1c. Step numbers are computed only after every stage the run will emit
   // — reordered, repeated, overridden and inserted — is in its final slot.
+  // A repeated stage's base id resolves to its FIRST instance — a step
+  // reference means where that stage begins, not where its last
+  // environment finishes — so an id already claimed is never overwritten.
   const stepOf = {};
   emitted.forEach((e, i) => {
-    stepOf[e.id] = i + 1;
-    stepOf[e.stageId] = i + 1;
+    if (!(e.id in stepOf)) stepOf[e.id] = i + 1;
+    if (!(e.stageId in stepOf)) stepOf[e.stageId] = i + 1;
   });
 
   const resolveRefs = (text) =>

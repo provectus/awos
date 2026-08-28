@@ -362,3 +362,61 @@ test('stageOrder reorders stages and renumbers headings and refs together', () =
     'emission order follows stageOrder'
   );
 });
+
+test('a step reference to a repeated stage points at its first instance, where the stage begins', () => {
+  const out = assemble(
+    mini,
+    {
+      ...FULL,
+      repeat: {
+        second: [
+          {
+            label: 'staging',
+            slots: { 'second.body': 'Deploy to staging.' },
+          },
+          { label: 'prod', slots: { 'second.body': 'Deploy to prod.' } },
+        ],
+      },
+    },
+    STAMP
+  );
+  assert.ok(
+    out.includes('See Step 2.'),
+    '"return to Step N" means where the stage begins, not where its last environment finishes — Step 2 is the staging instance, not Step 3 (prod)'
+  );
+});
+
+test('insert anchored after a repeated stage lands after its last instance, not wedged between two of its environments', () => {
+  const out = assemble(
+    mini,
+    {
+      ...FULL,
+      repeat: {
+        second: [
+          {
+            label: 'staging',
+            slots: { 'second.body': 'Deploy to staging.' },
+          },
+          { label: 'prod', slots: { 'second.body': 'Deploy to prod.' } },
+        ],
+      },
+      insert: [
+        {
+          after: 'second',
+          stage: 'audit',
+          title: 'Audit',
+          body: 'Audit check.',
+        },
+      ],
+    },
+    STAMP
+  );
+  assert.ok(
+    out.includes('### Step 4: Audit'),
+    'an insert anchored on a repeated stage runs once that stage is entirely finished, so it lands after the LAST instance (prod, Step 3) as Step 4 — not between staging and prod'
+  );
+  assert.ok(
+    out.indexOf('stage=second#prod') < out.indexOf('stage=audit'),
+    'the inserted stage is emitted after every repeated instance of its anchor'
+  );
+});

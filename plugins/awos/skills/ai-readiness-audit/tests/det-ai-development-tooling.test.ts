@@ -482,6 +482,144 @@ for (const c of AI_INHERIT_CASES) {
   });
 }
 
+// --- hybrid trees: the member owns one surface, the root owns another -------
+//
+// probeRepoPath enforces own-beats-inherited within a single candidate path,
+// but nothing enforced it ACROSS the candidate list. AI-05 returns the first
+// match and ALL_HOOK_PATHS lists .claude/hooks before .kiro/hooks, so an
+// inherited candidate that sorts earlier silently discarded a member's own
+// hooks. AI-02/AI-04 accumulate across candidates instead, so both surfaces
+// are genuinely present and neither is suppressed — what was wrong there is
+// attribution, since one "inherited" note covered the member's own files too.
+
+/** Build a root/member tree, populating each side separately. */
+function hybridFixture(
+  prefix: string,
+  writeRoot: (dir: string) => void,
+  writeMember: (dir: string) => void
+): { root: string; member: string } {
+  const root = tmpDir(prefix);
+  const member = join(root, 'services', 'api');
+  mkdirSync(member, { recursive: true });
+  writeRoot(root);
+  writeMember(member);
+  return { root, member };
+}
+
+test("AI-05 reports the member's own hooks even when the root owns an earlier-sorting hooks directory", () => {
+  const { root, member } = hybridFixture(
+    'awos-hybrid-AI-05-',
+    writeHooks, // root: .claude/hooks/guard.sh
+    (dir) => {
+      mkdirSync(join(dir, '.kiro', 'hooks'), { recursive: true });
+      writeFileSync(
+        join(dir, '.kiro', 'hooks', 'own.sh'),
+        '#!/bin/sh\n# member hook\necho own\necho line four\necho line five\necho line six\necho line seven\n'
+      );
+    }
+  );
+  try {
+    const res = detectClaudeHooks(member, inheritParams(root));
+    assert.equal(res.status, 'PASS', 'a member with its own hooks must PASS');
+    assert.ok(
+      res.evidence.some((e) => e.includes('.kiro/hooks')),
+      `AI-05 must report the member's own .kiro/hooks, not the root's earlier-sorting .claude/hooks; got ${JSON.stringify(res.evidence)}`
+    );
+    assert.ok(
+      !res.evidence.some((e) => /inherited from orchestration root/.test(e)),
+      `AI-05 must not mark a member-owned capability as inherited — own-repo evidence beats inherited evidence unconditionally; got ${JSON.stringify(res.evidence)}`
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('AI-02 keeps both surfaces and attributes each file to its origin', () => {
+  const { root, member } = hybridFixture(
+    'awos-hybrid-AI-02-',
+    writeCommands, // root: .claude/commands/ship.md
+    (dir) => {
+      mkdirSync(join(dir, '.cursor', 'rules'), { recursive: true });
+      writeFileSync(
+        join(dir, '.cursor', 'rules', 'own.md'),
+        INHERIT_FIXTURE_CONTENT
+      );
+    }
+  );
+  try {
+    const res = detectCustomCommands(member, inheritParams(root));
+    assert.equal(res.status, 'PASS');
+    assert.equal(
+      res.value,
+      2,
+      'both surfaces are visible to an agent working in the member tree, so neither is suppressed'
+    );
+    assert.ok(
+      res.evidence.some((e) =>
+        /1 in this repo, 1 inherited from the orchestration root/.test(e)
+      ),
+      `the headline must name the own/inherited split rather than calling the whole finding inherited; got ${JSON.stringify(res.evidence)}`
+    );
+    assert.ok(
+      res.evidence.some(
+        (e) => e.includes('.cursor/rules/own.md') && !e.includes('(inherited)')
+      ),
+      `the member's own file must be listed unmarked; got ${JSON.stringify(res.evidence)}`
+    );
+    assert.ok(
+      res.evidence.some(
+        (e) =>
+          e.includes('.claude/commands/ship.md') && e.includes('(inherited)')
+      ),
+      `the root's file must be marked inherited — an inherited path renders registry-relative and is otherwise indistinguishable from an own one; got ${JSON.stringify(res.evidence)}`
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('AI-04 keeps both MCP configs and attributes each to its origin', () => {
+  const { root, member } = hybridFixture(
+    'awos-hybrid-AI-04-',
+    writeMcp, // root: .mcp.json
+    (dir) => {
+      mkdirSync(join(dir, '.cursor'), { recursive: true });
+      writeFileSync(
+        join(dir, '.cursor', 'mcp.json'),
+        '{\n  "mcpServers": {\n    "own": {\n      "command": "own"\n    }\n  }\n}\n'
+      );
+    }
+  );
+  try {
+    const res = detectMcpConfig(member, inheritParams(root));
+    assert.equal(res.status, 'PASS');
+    assert.equal(res.value, 2, 'both MCP surfaces must be reported');
+    assert.ok(
+      res.evidence.some((e) =>
+        /1 in this repo, 1 inherited from the orchestration root/.test(e)
+      ),
+      `the headline must name the own/inherited split; got ${JSON.stringify(res.evidence)}`
+    );
+    assert.ok(
+      res.evidence.some(
+        (e) =>
+          e.startsWith('MCP config: .cursor/mcp.json') &&
+          !e.includes('(inherited)')
+      ),
+      `the member's own MCP config must be listed unmarked; got ${JSON.stringify(res.evidence)}`
+    );
+    assert.ok(
+      res.evidence.some(
+        (e) =>
+          e.startsWith('MCP config: .mcp.json') && e.includes('(inherited)')
+      ),
+      `the root's MCP config must be marked inherited; got ${JSON.stringify(res.evidence)}`
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // Issue: the DOC-07 fix for the unreadable ../../… trail in inherited
 // evidence paths applied only to end_to_end_delivery.ts. These four
 // detectors resolve an artifact's directory through probeRepoPath too, and

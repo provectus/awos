@@ -616,3 +616,124 @@ test('the migration gate is satisfied by a non-empty entry for every kept stage,
     'a deliberate "none" is as valid an acknowledgement as a real finding — the gate checks that the fallback ran, not what it found'
   );
 });
+
+// fills.json is model-authored, so a container can arrive with the wrong
+// type entirely. validateFills' job is to hand back a readable list of
+// what is wrong with the fills; a TypeError out of the middle of the pass
+// is neither readable nor a list. Each malformed container is reported and
+// normalized to an empty one, so the rest of the pass still runs.
+
+test('a repeat entry that is not an array is reported, not thrown', () => {
+  let errors;
+  assert.doesNotThrow(() => {
+    errors = validateFills(parsed, { ...VALID, repeat: { first: {} } });
+  }, 'a non-array repeat entry used to throw "(instances || []).forEach is not a function" out of validateFills');
+  assert.match(
+    errors.join(' | '),
+    /repeat.*"first".*array/i,
+    'the error must name the container and the type it needed, so the model can fix the fill it authored'
+  );
+});
+
+test('a custom entry that is null is reported, not thrown', () => {
+  let errors;
+  assert.doesNotThrow(() => {
+    errors = validateFills(parsed, { ...VALID, custom: { first: null } });
+  }, 'a null custom entry used to throw "Cannot read properties of null (reading \'reason\')"');
+  assert.match(
+    errors.join(' | '),
+    /custom.*"first".*object/i,
+    'the error must name the offending override and the shape it needed'
+  );
+});
+
+test('an insert that is not an array is reported, not thrown', () => {
+  let errors;
+  assert.doesNotThrow(() => {
+    errors = validateFills(parsed, { ...VALID, insert: {} });
+  }, 'a non-array insert used to throw "(fills.insert || []).forEach is not a function"');
+  assert.match(
+    errors.join(' | '),
+    /insert.*array/i,
+    'insert is a list of stages to splice in — the error must say so'
+  );
+});
+
+test('an omitStages that is not an array is reported, not thrown', () => {
+  let errors;
+  assert.doesNotThrow(() => {
+    errors = validateFills(parsed, { ...VALID, omitStages: 5 });
+  }, 'a non-iterable omitStages used to throw "number 5 is not iterable" from the Set constructor on the first line of the pass');
+  assert.match(
+    errors.join(' | '),
+    /omitStages.*array/i,
+    'the error must name the container and the type it needed'
+  );
+});
+
+test('a malformed container does not stop the pass — every problem in the fills is reported at once', () => {
+  const slots = { ...VALID.slots };
+  delete slots['intro.source'];
+  const errors = validateFills(parsed, {
+    slots,
+    omitStages: 5,
+    insert: {},
+    custom: { first: null },
+    repeat: { second: {} },
+  });
+  const joined = errors.join(' | ');
+  for (const expected of ['omitStages', 'insert', 'custom', 'repeat']) {
+    assert.match(
+      joined,
+      new RegExp(expected),
+      `every malformed container must be reported in one pass, not just the first one — "${expected}" is missing`
+    );
+  }
+  assert.match(
+    joined,
+    /no fill for slot "intro\.source"/,
+    'the checks after the malformed containers must still run — normalizing to an empty container is what keeps the model from fixing one shape error at a time'
+  );
+});
+
+test('a repeat instance that is not an object is reported, not thrown', () => {
+  let errors;
+  assert.doesNotThrow(() => {
+    errors = validateFills(parsed, {
+      ...VALID,
+      repeat: { first: ['dev'] },
+    });
+  }, 'a non-object repeat instance must not throw out of the label or slots checks');
+  assert.match(
+    errors.join(' | '),
+    /repeat instance #1 of stage "first" must be a JSON object/,
+    'the error must name the shape the instance needed and locate it by stage and position, since a malformed instance has no label to name it by'
+  );
+});
+
+test('a repeat instance whose own "slots" is not an object is reported, not thrown', () => {
+  let errors;
+  assert.doesNotThrow(() => {
+    errors = validateFills(parsed, {
+      ...VALID,
+      repeat: { first: [{ label: 'dev', slots: 'first.body' }] },
+    });
+  }, 'a non-object instance "slots" used to throw "Cannot use \'in\' operator to search for ..." from the per-instance coverage check');
+  assert.match(
+    errors.join(' | '),
+    /repeat instance #1 of stage "first" has "slots"/,
+    'the per-instance slot overrides are a map of slot id to fill — the error must say which instance carries the wrong shape'
+  );
+});
+
+test('a stageOrder that is not an array is reported, not thrown', () => {
+  let errors;
+  assert.doesNotThrow(() => {
+    errors = validateFills(parsed, { ...VALID, stageOrder: 5 });
+  }, 'a non-iterable stageOrder used to throw "number 5 is not iterable" from its spread');
+  assert.match(
+    errors.join(' | '),
+    /stageOrder.*array/i,
+    'stageOrder is a permutation of stage ids — the error must say what shape was expected'
+  );
+});

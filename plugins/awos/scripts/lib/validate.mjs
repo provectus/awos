@@ -4,13 +4,89 @@
 // binary to naive tooling, the same trap that bit assemble.mjs's own copy.
 const SENTINEL = '\uE000';
 
+// A JSON object — not an array, not null. The shape every fill container
+// that maps ids to values has to have.
+function isPlainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// Names what actually arrived, so the error tells the model which of its
+// containers to fix without it having to guess.
+function describeType(value) {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'an array';
+  return `a ${typeof value}`;
+}
+
 export function validateFills(parsed, fills, context = {}) {
   const errors = [];
-  const slots = fills.slots || {};
-  const omitStages = new Set(fills.omitStages || []);
-  const omitSections = new Set(fills.omitSections || []);
-  const repeat = fills.repeat || {};
-  const custom = fills.custom || {};
+
+  // fills.json is model-authored, so a container can arrive with the wrong
+  // type entirely — a repeat entry as an object, an insert as a map, an
+  // omitStages as a number. Each of those used to throw a TypeError out of
+  // the middle of the pass, which is neither this module's job (it returns
+  // a list of what is wrong with the fills) nor usable by the model that
+  // has to fix them. So every container is checked as it is read: the
+  // error is recorded and the container normalized to an empty one, so the
+  // remaining checks still run and one call reports every problem.
+  const objectFill = (key, value) => {
+    if (value === undefined || value === null) return {};
+    if (!isPlainObject(value)) {
+      errors.push(
+        `${key} must be a JSON object, not ${describeType(value)} — it is ignored for the rest of this check`
+      );
+      return {};
+    }
+    return value;
+  };
+  const arrayFill = (key, value) => {
+    if (value === undefined || value === null) return [];
+    if (!Array.isArray(value)) {
+      errors.push(
+        `${key} must be a JSON array, not ${describeType(value)} — it is ignored for the rest of this check`
+      );
+      return [];
+    }
+    return value;
+  };
+
+  const slots = objectFill('slots', fills.slots);
+  const omitStages = new Set(arrayFill('omitStages', fills.omitStages));
+  const omitSections = new Set(arrayFill('omitSections', fills.omitSections));
+  const custom = objectFill('custom', fills.custom);
+  const insert = arrayFill('insert', fills.insert);
+
+  // repeat is two containers deep: a map of stage id to a list of
+  // instances, each an object with its own slots. It is normalized into a
+  // fresh map — never by mutating the caller's fills, which the caller goes
+  // on to persist — so every loop below can assume an array of objects.
+  const repeat = {};
+  for (const [id, instances] of Object.entries(
+    objectFill('repeat', fills.repeat)
+  )) {
+    if (!Array.isArray(instances)) {
+      errors.push(
+        `repeat entry for "${id}" must be a JSON array of instances, not ${describeType(instances)}`
+      );
+      repeat[id] = [];
+      continue;
+    }
+    repeat[id] = instances.map((inst, index) => {
+      if (!isPlainObject(inst)) {
+        errors.push(
+          `repeat instance #${index + 1} of stage "${id}" must be a JSON object carrying a "label", not ${describeType(inst)}`
+        );
+        return {};
+      }
+      if (inst.slots !== undefined && !isPlainObject(inst.slots)) {
+        errors.push(
+          `repeat instance #${index + 1} of stage "${id}" has "slots" of ${describeType(inst.slots)} — it must be a JSON object mapping slot ids to fills`
+        );
+        return { ...inst, slots: {} };
+      }
+      return inst;
+    });
+  }
 
   const stageById = Object.fromEntries(parsed.stages.map((s) => [s.id, s]));
   const sectionById = Object.fromEntries(parsed.sections.map((s) => [s.id, s]));
@@ -63,6 +139,14 @@ export function validateFills(parsed, fills, context = {}) {
       errors.push(
         `custom names "${id}", which is not a stage in this template`
       );
+    // The entry itself, before any of its fields are read: an override
+    // that is not an object has no reason, title or body to check.
+    if (!isPlainObject(entry)) {
+      errors.push(
+        `custom override of "${id}" must be a JSON object with a "reason" (and optionally "title"/"body"), not ${describeType(entry)}`
+      );
+      continue;
+    }
     if (!entry.reason)
       errors.push(
         `custom override of "${id}" needs a "reason" — an override is a declared deviation`
@@ -311,7 +395,11 @@ export function validateFills(parsed, fills, context = {}) {
     }
   }
 
-  if (fills.stageOrder) {
+  if (fills.stageOrder !== undefined && !Array.isArray(fills.stageOrder)) {
+    errors.push(
+      `stageOrder must be a JSON array of stage ids, not ${describeType(fills.stageOrder)} — it is ignored for the rest of this check`
+    );
+  } else if (fills.stageOrder) {
     const a = [...fills.stageOrder].sort().join(',');
     const b = [...keptIds].sort().join(',');
     if (a !== b)
@@ -339,7 +427,15 @@ export function validateFills(parsed, fills, context = {}) {
   }
 
   const insertStageIds = new Set();
-  (fills.insert || []).forEach((ins, index) => {
+  insert.forEach((ins, index) => {
+    // The entry itself, before any of its fields are read: an insert that
+    // is not an object has no anchor, id, title or body to check.
+    if (!isPlainObject(ins)) {
+      errors.push(
+        `insert #${index + 1} must be a JSON object with "after"/"stage"/"title"/"body", not ${describeType(ins)}`
+      );
+      return;
+    }
     if (!keptIds.includes(ins.after))
       errors.push(
         `insert is anchored after "${ins.after}", which is not an emitted stage`

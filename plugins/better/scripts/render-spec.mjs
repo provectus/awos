@@ -293,10 +293,6 @@ function splitFlatRequirements(section) {
     .filter((sub) => parseBody(sub.body).criteria.length > 0);
 }
 
-function listItems(body) {
-  return parseBody(body).prose;
-}
-
 // ---------------------------------------------------------------------------
 // Composition
 // ---------------------------------------------------------------------------

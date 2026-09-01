@@ -57,9 +57,9 @@ That's it! By following these steps, you can systematically turn your vision int
 
 ## The `awos` Philosophy
 
-The **`awos`** framework is built on a simple but powerful idea: AI agents, like human developers, need clear context to do great work. Without a structured plan, even the most advanced LLM can act like a confused intern. **`awos`** provides a step-by-step workflow that transforms your vision into a detailed blueprint that AI agents can understand and execute flawlessly.
+**`awos`** is a method for turning intent into working software with agents, where the human decides and the agent builds. Its product is not documents but agreement — a confirmed, shared understanding between you and the agent about what is being built and why, reached before any code is written.
 
-[Read more about the philosophy behind **`awos`**](docs/rationale.md)
+[Why **`awos`** works](docs/rationale.md) · [The philosophy](docs/philosophy.md) · [Where it is heading](docs/direction.md)
 
 ## Command Reference
 

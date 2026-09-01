@@ -42,7 +42,11 @@ Knowledge produced by a change outlives the change. A new piece of work starts f
 
 Intent → confirmed understanding → implementation → verification. Everything around that path — backlog, branching, code review, deployment, tickets, team tooling — is something `awos` plugs into, never something it provides.
 
-### 9. `awos` is for work worth specifying
+### 9. `awos` speaks one host, natively
+
+`awos` is built for Claude Code, by design. The method depends on what the host actually provides — subagents, structured questions to the human, hooks, skills, plugins — and it uses those primitives directly, with no abstraction layer between them and the prompts. This is a quality decision, not a convenience: every layer meant to make `awos` portable would flatten the host's capabilities to the lowest common denominator and make the behavior of the method harder to test and tune. One host means one set of behaviors to verify against, and the full depth of that host's tools available to the method.
+
+### 10. `awos` is for work worth specifying
 
 When the cost of being wrong is lower than the cost of agreeing first, `awos` is the wrong tool, and it says so. Exploration, prototypes, hotfixes, and small edits have their own tools.
 

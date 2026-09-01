@@ -39,8 +39,6 @@ These commands establish your project's foundation. Run them once at the start, 
 
 Once your foundation is set, iterate through this cycle for each feature on your roadmap. These commands are designed to be run repeatedly — once per feature.
 
-> **Tip**: Don't hesitate to delete specs after implementation. Completed specs can become outdated and confuse the AI. Your code documentation is the source of truth.
-
 | Command           | What it does                                                                      | Docs                                  |
 | ----------------- | --------------------------------------------------------------------------------- | ------------------------------------- |
 | `/awos:spec`      | Creates the Functional Spec — what the feature does for the user.                 | [Details](docs/commands/spec.md)      |

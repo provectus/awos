@@ -3824,6 +3824,161 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
   );
 });
 
+// The better plugin has its own independent version line. Its discipline
+// is three files moving together: its plugin.json, its marketplace.json entry,
+// and this pinned literal (it has no generator-version constant).
+const EXPECTED_BETTER_PLUGIN_VERSION = '0.1.0';
+
+test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
+  const pluginManifest = JSON.parse(
+    readUtf8(
+      path.join(repoRoot, 'plugins', 'better', '.claude-plugin', 'plugin.json')
+    )
+  );
+  const marketplace = JSON.parse(
+    readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
+  );
+  const entries = marketplace.plugins.filter(
+    (p) => p.name === 'better' && p.source === './plugins/better'
+  );
+  assert.equal(
+    entries.length,
+    1,
+    'marketplace.json must contain exactly one plugins entry with name="better" and source="./plugins/better" — a near-miss name or source would register a different plugin than the one this pin guards'
+  );
+  const [entry] = entries;
+  assert.equal(
+    pluginManifest.version,
+    entry.version,
+    `plugins/better/.claude-plugin/plugin.json version ("${pluginManifest.version}") must match the better marketplace entry version ("${entry.version}") — bump both together`
+  );
+  assert.equal(
+    pluginManifest.version,
+    EXPECTED_BETTER_PLUGIN_VERSION,
+    `plugins/better/.claude-plugin/plugin.json version must be "${EXPECTED_BETTER_PLUGIN_VERSION}" — the better version moves as one deliberate commit (its plugin.json + its marketplace.json entry + this pin, together) when plugin behavior changes. Got "${pluginManifest.version}"`
+  );
+});
+
+test('better command keeps its structural contracts (fan-out, unattended handling, core-contract references)', () => {
+  const cmd = readUtf8(
+    path.join(repoRoot, 'plugins', 'better', 'commands', 'spec.md')
+  );
+  const requiredSubstrings = [
+    [
+      'single message, as parallel `Agent` calls',
+      'the research fan-out must be dispatched as parallel Agent calls in a single message — sequential or discretionary dispatch is the failure mode this contract prevents',
+    ],
+    [
+      'AWOS_UNATTENDED',
+      'the command must read AWOS_UNATTENDED to branch interactive vs unattended question handling',
+    ],
+    [
+      '[NEEDS CLARIFICATION',
+      'unresolved details must be captured as [NEEDS CLARIFICATION: …] markers, never as stop signals',
+    ],
+    [
+      '## Language Rules',
+      'the non-technical Language Rules section carried from core spec.md must be present',
+    ],
+    [
+      '.awos/templates/functional-spec-template.md',
+      'the command must fill the installed core template (same deliverable contract as /awos:spec)',
+    ],
+    [
+      'create-spec-directory.sh',
+      'the command must allocate the spec directory via the core script (same numbering as /awos:spec)',
+    ],
+    [
+      'research-notes.md',
+      'the command must write the research-notes.md side artifact alongside the spec',
+    ],
+    [
+      '`## Status: configured`',
+      'the internal-KB lane must gate on the exact sources.md status idiom used across AWOS commands',
+    ],
+    [
+      'The verifier runs exactly once',
+      'the blind-verification cycle must be bounded to a single verifier dispatch',
+    ],
+    [
+      'This step asks the user nothing',
+      'synthesis must not interview — under claude -p a dismissed question ends the turn, so every question the research raises has to wait until after Step 7 writes the deliverables',
+    ],
+    [
+      'When `AWOS_UNATTENDED` is set, skip this round entirely',
+      'the opening interview must be skipped outright in unattended runs — it is the only ask that precedes the writes, so it is the only one that can still cost both deliverables',
+    ],
+    [
+      'Do not ask here: this step precedes the write',
+      'the scope boundary must be drafted and marked rather than asked — Step 6 runs before the files exist',
+    ],
+    [
+      'view_model_path="${TMPDIR:-/tmp}/spec-view-[index].json"',
+      'the temp paths must be resolved once with a TMPDIR fallback and reused — re-interpolating a bare $TMPDIR per step lets the file written and the file rendered diverge, and makes the cleanup rm a path that was never created',
+    ],
+    [
+      'MANUAL SOURCES ONLY',
+      'a configured-but-manual-only KB lane needs its own report label — SKIPPED implies an agent ran and NOT CONFIGURED tells the user to redo setup they already did',
+    ],
+    [
+      '${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs',
+      'the renderer must be invoked through ${CLAUDE_PLUGIN_ROOT} — a relative path breaks across install locations',
+    ],
+    [
+      'Agent(subagent_type="better:spec-verifier")',
+      'the blind verifier must be dispatched by its plugin-prefixed subagent_type — without the better: prefix the agent does not resolve and the verification pass silently never runs',
+    ],
+    [
+      'one bullet at a time',
+      'the self-review must re-read acceptance criteria one bullet at a time (carried from core spec.md) — checking the set as a whole lets a single non-compliant bullet survive',
+    ],
+    [
+      'free-text option for open-ended markers',
+      'marker resolution must offer free text (carried from core spec.md) — not every [NEEDS CLARIFICATION] reduces to an option set',
+    ],
+    [
+      'functional-spec.html',
+      'the command must name the rendered review page as a derived output',
+    ],
+    [
+      'never fatal',
+      'the render step must be non-fatal — the markdown deliverables stand alone if the render fails',
+    ],
+    [
+      '--artifact',
+      'the artifact publish path must use the renderer fragment mode, not upload the standalone document',
+    ],
+    [
+      'withheld consent',
+      'publishing to an external service is a consent gate — an unanswered question means no, inverting the usual proceed-with-default rule',
+    ],
+    [
+      '**only** the absolute path',
+      'the verifier dispatch must pass only the spec file path — session context would contaminate the blind read',
+    ],
+  ];
+  for (const [needle, contract] of requiredSubstrings) {
+    assert.ok(
+      cmd.includes(needle),
+      `plugins/better/commands/spec.md must contain "${needle}" — ${contract}`
+    );
+  }
+});
+
+test('better spec-verifier agent stays blind (tools restricted to Read, no other file reads)', () => {
+  const agent = readUtf8(
+    path.join(repoRoot, 'plugins', 'better', 'agents', 'spec-verifier.md')
+  );
+  assert.ok(
+    /^tools: Read$/m.test(agent),
+    'spec-verifier.md frontmatter must restrict the agent to `tools: Read` — the blind read depends on the agent being unable to explore the repo'
+  );
+  assert.ok(
+    agent.includes('Do not read any other file'),
+    'spec-verifier.md body must prohibit reading any file other than the dispatched spec path'
+  );
+});
+
 test('TS engine scaffold present (package.json/tsconfig + collectors/detectors/metrics/tests dirs)', () => {
   const skill = path.join(
     repoRoot,

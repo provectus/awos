@@ -55,4 +55,4 @@ The method is a single path: intent → confirmed understanding → implementati
 - **Advancing looks like:** fewer commands doing the same work; an integration in place of an owned capability; a proven experiment folded into core and its predecessor removed.
 - **Regressing looks like:** a capability that sits outside the path, however useful; two ways to do the same step kept alive indefinitely; a feature that serves the host tool rather than the method.
 
-Serves principles 8 and 9.
+Serves principles 8 and 10.

@@ -26,13 +26,13 @@ There is always a moment where the human can see what the agent understood and s
 
 Implementation is judged by how faithfully it realizes the confirmed understanding, and verification checks the result against that agreement rather than only whether the code works. Implementation improvements belong in `awos` when they raise that fidelity or make deviation from the agreement visible sooner; improvements to code quality in general belong to the host tool.
 
-### 5. Every artifact has one reader
+### 5. Write for the reader
 
-Agents read structured truth. Humans read what they need to decide. Nothing serves both: when a document tries, it fails the human, and the human stops reading. Human-facing views are derived from the agent-facing source, never maintained by hand, and exist to enable a decision.
+Agents and humans need information presented differently. Keep the structured source useful for agents, and derive focused human-facing views from it whenever someone needs to review or make a decision.
 
-### 6. What is unsaid is part of the spec
+### 6. Make the missing parts reviewable
 
-Assumptions, decisions made without being asked, and things left unchanged are made visible. Rework comes from omissions, and omissions are what a human cannot hold in their head unaided while reviewing a long list of requirements.
+What is written in a specification is easy to review. What is missing is much harder to notice, even when it is essential. `awos` looks for gaps in requirements and acceptance criteria, makes every inference explicit, and shows the evidence behind it. When there is not enough evidence, it raises an open question instead of guessing.
 
 ### 7. The project remembers
 
@@ -48,7 +48,7 @@ Intent → confirmed understanding → implementation → verification. Everythi
 
 ### 10. `awos` is for work worth specifying
 
-When the cost of being wrong is lower than the cost of agreeing first, `awos` is the wrong tool, and it says so. Exploration, prototypes, hotfixes, and small edits have their own tools.
+Reaching agreement before building takes time. Use `awos` when that effort costs less than getting the result wrong. For exploration, prototypes, hotfixes, and small edits, the agent's normal planning is usually enough.
 
 ## What `awos` Is Not
 

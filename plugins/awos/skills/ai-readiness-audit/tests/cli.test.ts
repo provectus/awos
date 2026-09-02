@@ -738,3 +738,228 @@ test('patch-judgment: boolean value is dropped with a warning, numeric value is 
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// 'audit-core --orchestration-root' — the one engine input an LLM hand-builds
+// (the org-mode repo-auditor subagent interpolates it), so a bad path is a
+// realistic input and must fail loudly rather than quietly scoring the member
+// as if the root carried no tooling.
+// ---------------------------------------------------------------------------
+
+/** Init a git work tree with one commit. */
+function initGitRepo(dir: string): void {
+  mkdirSync(dir, { recursive: true });
+  execFileSync('git', ['init', '-q'], { cwd: dir, stdio: 'ignore' });
+  writeFileSync(join(dir, 'README.md'), '# repo\n');
+  execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'ignore' });
+  execFileSync(
+    'git',
+    ['-c', 'user.name=t', '-c', 'user.email=t@e.x', 'commit', '-qm', 'init'],
+    { cwd: dir, stdio: 'ignore' }
+  );
+}
+
+test('audit-core: a non-existent --orchestration-root path exits non-zero naming the path', () => {
+  const base = tmpDir('awos-orchroot-missing-');
+  try {
+    const repo = join(base, 'member');
+    initGitRepo(repo);
+    const bogus = join(base, 'no-such-root');
+    const { json, code } = runCli(
+      'audit-core',
+      repo,
+      join(base, 'out'),
+      '--orchestration-root',
+      bogus
+    );
+    assert.notEqual(
+      code,
+      0,
+      'a --orchestration-root path that does not exist must fail the run — accepting it silently scores every inherited check as absent while audit.json still claims inheritance was in effect'
+    );
+    const err = json as Record<string, unknown>;
+    assert.ok(
+      typeof err['error'] === 'string' &&
+        err['error'].includes('does not exist') &&
+        err['error'].includes(bogus),
+      `the error must say the path does not exist and name the offending path; got ${JSON.stringify(err)}`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('audit-core: an --orchestration-root that is not a git work tree exits non-zero', () => {
+  const base = tmpDir('awos-orchroot-nongit-');
+  try {
+    const repo = join(base, 'member');
+    initGitRepo(repo);
+    // Exists, but carries no git work tree — a stale or mistyped path that
+    // happens to land on a real directory.
+    const notARepo = join(base, 'plain-dir');
+    mkdirSync(notARepo, { recursive: true });
+    const { json, code } = runCli(
+      'audit-core',
+      repo,
+      join(base, 'out'),
+      '--orchestration-root',
+      notARepo
+    );
+    assert.notEqual(
+      code,
+      0,
+      'an --orchestration-root outside any git work tree must fail — the orchestration root is by definition a git repository'
+    );
+    const err = json as Record<string, unknown>;
+    assert.ok(
+      typeof err['error'] === 'string' &&
+        err['error'].includes('not inside a git work tree') &&
+        err['error'].includes(notARepo),
+      `the error must say the path is not a git work tree and name it; got ${JSON.stringify(err)}`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('audit-core: an --orchestration-root inside but not at the work-tree root exits non-zero', () => {
+  // `git rev-parse --show-toplevel` succeeds from any directory inside a work
+  // tree, so "is in a work tree" accepted <root>/services. Every inherited
+  // probe then joins its registry-relative path onto that subdirectory, finds
+  // nothing, and reports "absent" — while audit.json still records the bogus
+  // root. That is the same silent miss the existence check guards against.
+  const base = tmpDir('awos-orchroot-subdir-');
+  try {
+    const root = join(base, 'root');
+    initGitRepo(root);
+    const subdir = join(root, 'services');
+    mkdirSync(subdir, { recursive: true });
+    const member = join(subdir, 'api');
+    initGitRepo(member);
+    const { json, code } = runCli(
+      'audit-core',
+      member,
+      join(base, 'out'),
+      '--orchestration-root',
+      subdir
+    );
+    assert.notEqual(
+      code,
+      0,
+      'a subdirectory of a work tree must be rejected as an orchestration root — inherited probes resolve relative to the supplied path, so every inherited check answers "absent" while the audit still claims an inheritance'
+    );
+    const err = json as Record<string, unknown>;
+    assert.ok(
+      typeof err['error'] === 'string' &&
+        err['error'].includes('not the root of its git work tree') &&
+        err['error'].includes(subdir),
+      `the error must say the path is not the work-tree root and name it; got ${JSON.stringify(err)}`
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('audit-core: a valid --orchestration-root is accepted and recorded', () => {
+  const base = tmpDir('awos-orchroot-valid-');
+  try {
+    const root = join(base, 'root');
+    initGitRepo(root);
+    const member = join(root, 'services', 'api');
+    initGitRepo(member);
+    const out = join(base, 'out');
+    const { json, code } = runCli(
+      'audit-core',
+      member,
+      out,
+      '--orchestration-root',
+      root
+    );
+    assert.equal(
+      code,
+      0,
+      'validation must not reject a real git work tree — that would disable inheritance for every legitimate member audit'
+    );
+    assert.equal(
+      (json as Record<string, unknown>)['orchestration_root'],
+      root,
+      'the validated root must be the one the audit runs with, unchanged'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('audit-core: an explicit --orchestration-root records the ignored relation', () => {
+  // The org dispatch supplies the root explicitly for every member, so this
+  // branch — not the auto-detect one — is what runs for the gitignored
+  // service subdirectories the field exists to describe.
+  const base = tmpDir('awos-orchroot-ignored-');
+  try {
+    const root = join(base, 'root');
+    initGitRepo(root);
+    writeFileSync(join(root, '.gitignore'), 'services/\n');
+    const member = join(root, 'services', 'api');
+    initGitRepo(member);
+    const out = join(base, 'out');
+    const { code } = runCli(
+      'audit-core',
+      member,
+      out,
+      '--orchestration-root',
+      root
+    );
+    assert.equal(code, 0, 'a gitignored member under a real root must audit');
+    const git = JSON.parse(
+      readFileSync(join(out, 'collected', 'git.json'), 'utf8')
+    ) as { raw: Record<string, unknown> };
+    assert.equal(
+      git.raw['orchestration_root'],
+      root,
+      'the explicitly supplied root must be recorded in the git artifact'
+    );
+    assert.equal(
+      git.raw['orchestration_root_ignored'],
+      true,
+      'the explicit-root branch must derive the ignored half of the relation, not leave it at false — the root gitignores services/, which is the exact layout orchestration_root_ignored exists to report'
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// The orchestration flag parsing is shared with audit-core, so enrich used to
+// parse these flags cleanly and then drop them: audit_core.ts ignores opts
+// entirely on the collectedDirOverride path.
+test('enrich: an orchestration-root flag is refused rather than silently dropped', () => {
+  const base = tmpDir('awos-enrich-orchflag-');
+  try {
+    const repo = join(base, 'member');
+    initGitRepo(repo);
+    for (const flag of [
+      ['--no-orchestration-root'],
+      ['--orchestration-root', repo],
+    ]) {
+      const { json, code } = runCli('enrich', repo, join(base, 'out'), ...flag);
+      assert.notEqual(
+        code,
+        0,
+        `enrich ${flag[0]} must fail — enrich re-scores against the first pass's artifacts and ignores these options, so accepting the flag tells the caller something took effect that did not`
+      );
+      const err = json as Record<string, unknown>;
+      assert.ok(
+        typeof err['error'] === 'string' &&
+          err['error'].includes(flag[0]) &&
+          err['error'].includes('enrich'),
+        `the error must name the rejected flag and enrich; got ${JSON.stringify(err)}`
+      );
+      assert.ok(
+        typeof err['hint'] === 'string' &&
+          err['hint'].includes('first audit-core pass'),
+        `the hint must point the caller at audit-core, where the root is actually resolved; got ${JSON.stringify(err)}`
+      );
+    }
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});

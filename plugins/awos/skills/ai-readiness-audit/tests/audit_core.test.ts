@@ -27,6 +27,20 @@ const STANDARDS_PATH = join(SKILL_ROOT, 'references', 'standards.toml');
 // output JSON shape (auditing the skill itself — git is always available). The
 // run is expensive; the tests below are read-only, so they assert against the
 // same output instead of each re-running auditCore.
+/**
+ * Seed the record a first audit-core pass leaves behind, for tests that drive
+ * the enrich re-score path (auditCore with a collected-dir override) against a
+ * hand-built collected/ dir. enrich reads the orchestration root back from the
+ * first pass's audit.json rather than re-detecting it, and refuses to run when
+ * no such record exists — `null` is what a standalone repo's pass writes.
+ */
+function seedPriorPass(outDir: string): void {
+  writeFileSync(
+    join(outDir, 'audit.json'),
+    JSON.stringify({ orchestration_root: null })
+  );
+}
+
 let REAL_REPO_OUT: string;
 before(async () => {
   REAL_REPO_OUT = tmpDir('audit-core-real-repo-');
@@ -764,6 +778,7 @@ test('scoreBadge: weight-0 categories keep raw-score thresholds (INFO replaces t
 
 test('summary.artifact_warnings flags a data-rich ci.json missing available:true', async () => {
   const outDir = tmpDir('audit-core-malformed-out-');
+  seedPriorPass(outDir);
   const collectedDir = tmpDir('audit-core-malformed-collected-');
   writeFileSync(
     join(collectedDir, 'ci.json'),
@@ -847,6 +862,7 @@ test('connector-scored check evidence names the source_label it was measured fro
     })
   );
   const outDir = tmpDir('audit-core-prov-out-');
+  seedPriorPass(outDir);
   await auditCore(repoDir, outDir, {}, METRICS, STANDARDS_PATH, collectedDir);
   const dim = JSON.parse(
     readFileSync(join(outDir, 'ai-sdlc-adoption.json'), 'utf8')
@@ -870,6 +886,7 @@ test('connector-scored check evidence names the source_label it was measured fro
 
 test('summary.artifact_warnings flags code_host pr records with unparseable timestamps', async () => {
   const outDir = tmpDir('audit-core-chbad-out-');
+  seedPriorPass(outDir);
   const collectedDir = tmpDir('audit-core-chbad-collected-');
   writeFileSync(
     join(collectedDir, 'code_host.json'),
@@ -920,6 +937,7 @@ test('summary.artifact_warnings flags code_host pr records with unparseable time
 
 test('summary.artifact_warnings flags a thin code_host fetch (no first_commit_at/commit_count anywhere)', async () => {
   const outDir = tmpDir('audit-core-chthin-out-');
+  seedPriorPass(outDir);
   const collectedDir = tmpDir('audit-core-chthin-collected-');
   writeFileSync(
     join(collectedDir, 'code_host.json'),
@@ -973,6 +991,7 @@ test('summary.artifact_warnings flags an incidents batch where every record is s
   // resolved recovery span": coherent, alarming, and false. Same guard shape
   // as the code_host thin-fetch warning above.
   const outDir = tmpDir('audit-core-inc-open-out-');
+  seedPriorPass(outDir);
   const collectedDir = tmpDir('audit-core-inc-open-collected-');
   writeFileSync(
     join(collectedDir, 'incidents.json'),
@@ -1025,6 +1044,7 @@ test('summary.artifact_warnings flags a raw.incidents that is not an array', asy
   // note reads "no incidents in window": wrong-but-quiet. The shape warning is
   // the only signal left, so it must fire.
   const outDir = tmpDir('audit-core-inc-shape-out-');
+  seedPriorPass(outDir);
   const collectedDir = tmpDir('audit-core-inc-shape-collected-');
   writeFileSync(
     join(collectedDir, 'incidents.json'),

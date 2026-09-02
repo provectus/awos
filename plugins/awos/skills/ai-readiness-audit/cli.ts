@@ -8,7 +8,7 @@
  *   node dist/cli.js progress       <elapsed_seconds>  <done> <total>
  *   node dist/cli.js render         <audit.json>       --format md|html|both [--out-dir <dir>]
  *   node dist/cli.js rollup         <dir-of-per-repo-subdirs>
- *   node dist/cli.js audit-core     <repoPath>         <outDir>
+ *   node dist/cli.js audit-core     <repoPath>         <outDir> [--orchestration-root <path>|--no-orchestration-root]
  *   node dist/cli.js aggregate      <auditsDir>
  *   node dist/cli.js enrich         <repoPath>         <outDir>
  *   node dist/cli.js patch-judgment <auditsDir>        <patches.json|->
@@ -22,6 +22,8 @@ import {
   mkdirSync,
   readdirSync,
   statSync,
+  existsSync,
+  realpathSync,
 } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,7 +59,7 @@ import { progress } from './progress.ts';
 // ---------------------------------------------------------------------------
 // audit-core (deterministic single-pass audit)
 // ---------------------------------------------------------------------------
-import { auditCore } from './audit_core.ts';
+import { auditCore, type AuditCoreOptions } from './audit_core.ts';
 import { hasEngineProvenance } from './provenance.ts';
 import {
   aggregate,
@@ -66,7 +68,7 @@ import {
   reportContext,
   type ReportBlocksPatch,
 } from './audit_patch.ts';
-import { detectOrgParent } from './topology.ts';
+import { detectOrgParent, workTreeRoot } from './topology.ts';
 
 /** Resolve the skill root (where references/ lives) from the bundle location. */
 function resolveSkillRoot(): string {
@@ -79,6 +81,57 @@ function resolveSkillRoot(): string {
 /** Path of the bundled standards.toml (the scoring source of truth). */
 function standardsTomlPath(): string {
   return join(resolveSkillRoot(), 'references', 'standards.toml');
+}
+
+/**
+ * Resolve and validate `--orchestration-root`. This is the one engine input an
+ * LLM hand-builds (the org-mode repo-auditor subagent interpolates the path),
+ * so a relative, stale, mistyped, or never-substituted `<ORCHESTRATION_ROOT>`
+ * placeholder is a realistic input. Unvalidated, every inherited probe under
+ * such a path just answers "absent" — indistinguishable from "the root carries
+ * no tooling" — while audit.json still records the bogus root and the report
+ * asserts an inheritance that never happened. Nothing else in the run fails,
+ * so the check has to happen here.
+ */
+function validOrchestrationRoot(rootArg: string): string {
+  const abs = resolve(rootArg);
+  const usage =
+    'node dist/cli.js audit-core <repoPath> <outDir> --orchestration-root <path>';
+  if (!existsSync(abs)) {
+    fail({
+      error: `--orchestration-root path does not exist: ${abs}`,
+      hint: 'pass an absolute path to the orchestration root repository (a relative path is resolved against the current working directory, and an unsubstituted placeholder never resolves)',
+      usage,
+    });
+  }
+  const top = workTreeRoot(abs);
+  if (top === null) {
+    fail({
+      error: `--orchestration-root is not inside a git work tree: ${abs}`,
+      hint: 'the orchestration root is a git repository whose agent tooling the member repos inherit',
+      usage,
+    });
+  }
+  // Inside a work tree is not enough: inherited probes resolve `.claude/`,
+  // `.mcp.json` and `context/` relative to this exact path, so a subdirectory
+  // of the root answers "absent" for every inherited check while audit.json
+  // still records the root — the same silent miss the existence check above
+  // exists to prevent. Compare through realpath so a symlinked path
+  // (macOS /var → /private/var) is not rejected for the wrong reason.
+  let real = abs;
+  try {
+    real = realpathSync(abs).replace(/\/+$/, '');
+  } catch {
+    // Unreadable path — existsSync passed, so fall through with `abs`.
+  }
+  if (real !== top) {
+    fail({
+      error: `--orchestration-root is not the root of its git work tree: ${abs}`,
+      hint: `pass the work-tree root itself (${top}) — inherited-tooling probes resolve .claude/, .mcp.json and context/ relative to this path, so a subdirectory finds nothing and the audit records an inheritance that never happened`,
+      usage,
+    });
+  }
+  return abs;
 }
 
 // ---------------------------------------------------------------------------
@@ -347,13 +400,52 @@ async function main(): Promise<void> {
           break;
         }
       }
+
+      // Orchestration root. Absent both flags, audit-core auto-detects, so a
+      // run from inside a member repo needs no flag at all. `--no-` is how the
+      // root itself is audited: it owns its tooling and inherits nothing.
+      const acArgs = process.argv.slice(5);
+      // enrich re-scores against the first pass's artifacts and takes its root
+      // from them, so it has no use for these flags — and silently dropping a
+      // flag the caller passed deliberately is worse than refusing it.
+      if (command === 'enrich') {
+        const orchFlag = acArgs.find(
+          (a) => a === '--orchestration-root' || a === '--no-orchestration-root'
+        );
+        if (orchFlag) {
+          fail({
+            error: `${orchFlag} is not accepted by enrich`,
+            hint: 'enrich always inherits the orchestration root resolved by the first audit-core pass, read back from that pass’s artifacts. Pass the flag to audit-core instead.',
+            usage: 'node dist/cli.js enrich <repoPath> <outDir>',
+          });
+        }
+      }
+      let acOpts: AuditCoreOptions | undefined;
+      if (acArgs.includes('--no-orchestration-root')) {
+        acOpts = { orchestrationRoot: null };
+      } else {
+        const rootIdx = acArgs.indexOf('--orchestration-root');
+        if (rootIdx !== -1) {
+          const rootArg = acArgs[rootIdx + 1];
+          if (!rootArg || rootArg.startsWith('--')) {
+            fail({
+              error: '--orchestration-root requires a path',
+              usage:
+                'node dist/cli.js audit-core <repoPath> <outDir> --orchestration-root <path>',
+            });
+          }
+          acOpts = { orchestrationRoot: validOrchestrationRoot(rootArg) };
+        }
+      }
+
       const summary = await auditCore(
         repoPath,
         outDir,
         DETECTORS,
         METRICS,
         standardsTomlPath(),
-        command === 'enrich' ? join(outDir, 'collected') : undefined
+        command === 'enrich' ? join(outDir, 'collected') : undefined,
+        acOpts
       );
       printJson(summary);
       break;

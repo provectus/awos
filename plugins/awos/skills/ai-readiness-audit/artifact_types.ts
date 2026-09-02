@@ -479,6 +479,13 @@ export interface AuditJson {
   source_probes?: SourceProbe[];
   /** Provenance stamp written only by audit-core — see EngineProvenance. */
   engine?: EngineProvenance;
+  /**
+   * Absolute path to the orchestration root this repo is a member of, or
+   * null for a standalone repo / the root itself. Stamped by audit-core so
+   * the renderer can flag checks whose score the root↔member split depresses
+   * (SDD-04 — see CROSS_BOUNDARY_LIMITED_CHECKS in render.ts).
+   */
+  orchestration_root?: string | null;
 }
 
 // ---------------------------------------------------------------------------

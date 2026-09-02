@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   detectSecretScanGate,
@@ -446,6 +446,118 @@ test('PRV-07: no guard mechanism is FAIL', () => {
   writeFileSync(join(t, 'CLAUDE.md'), '# rules\n');
   const r = detectAgentSurfaceGuard(t);
   assert.equal(r.status, 'FAIL');
+});
+
+// --- orchestration-root inheritance ---------------------------------------
+
+function writeGuardHooks(dir: string): void {
+  mkdirSync(join(dir, '.claude'), { recursive: true });
+  writeFileSync(
+    join(dir, '.claude', 'settings.json'),
+    '{\n  "hooks": {\n    "PreToolUse": [\n      { "matcher": "Read", "hooks": [] }\n    ]\n  }\n}\n'
+  );
+}
+
+/** Build a root-with-member tree; `writeInto` populates whichever dir it is given. */
+function orchestrationFixture(
+  prefix: string,
+  writeInto: (dir: string) => void,
+  target: 'root' | 'member'
+): { root: string; member: string } {
+  const root = tmpDir(prefix);
+  const member = join(root, 'services', 'api');
+  mkdirSync(member, { recursive: true });
+  writeInto(target === 'root' ? root : member);
+  return { root, member };
+}
+
+function inheritParams(root: string) {
+  return { inheritance: { orchestrationRoot: root, inherits: true } };
+}
+
+test('PRV-07 inherits capability from the orchestration root', () => {
+  const { root, member } = orchestrationFixture(
+    'awos-inherit-PRV-07-',
+    writeGuardHooks,
+    'root'
+  );
+  try {
+    assert.equal(
+      detectAgentSurfaceGuard(member).status,
+      'FAIL',
+      'PRV-07 must FAIL for a member with no root in scope — otherwise the inheritance test proves nothing'
+    );
+    const res = detectAgentSurfaceGuard(member, inheritParams(root));
+    assert.equal(
+      res.status,
+      'PASS',
+      'PRV-07 must be credited from the orchestration root via its AIS-07 delegate, which is where the hook guard actually lives'
+    );
+    assert.ok(
+      res.evidence.some((e) => /inherited from orchestration root/.test(e)),
+      `PRV-07's evidence must say the credit was inherited, so a reader can trace it; got ${JSON.stringify(res.evidence)}`
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('PRV-07 is unchanged for a member carrying its own capability', () => {
+  const { root, member } = orchestrationFixture(
+    'awos-own-PRV-07-',
+    writeGuardHooks,
+    'member'
+  );
+  try {
+    const bare = detectAgentSurfaceGuard(member);
+    const withRoot = detectAgentSurfaceGuard(member, inheritParams(root));
+    assert.deepEqual(
+      withRoot,
+      bare,
+      'PRV-07 must produce byte-identical results for a self-sufficient member whether or not a root is in scope — this is the no-regression guarantee for repos that already pass'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('PRV-07 does not inherit when the category policy is false', () => {
+  const { root, member } = orchestrationFixture(
+    'awos-nopolicy-PRV-07-',
+    writeGuardHooks,
+    'root'
+  );
+  try {
+    const res = detectAgentSurfaceGuard(member, {
+      inheritance: { orchestrationRoot: root, inherits: false },
+    });
+    assert.equal(
+      res.status,
+      'FAIL',
+      'PRV-07 must respect its standards.toml policy — a root in scope is not by itself permission to inherit'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('PRV-07 forwards inheritance into the AIS-07 delegate', () => {
+  const root = tmpDir('awos-prv07-delegate-');
+  const member = join(root, 'services', 'api');
+  try {
+    mkdirSync(member, { recursive: true });
+    writeGuardHooks(root);
+    const res = detectAgentSurfaceGuard(member, {
+      inheritance: { orchestrationRoot: root, inherits: true },
+    });
+    assert.equal(
+      res.status,
+      'PASS',
+      'PRV-07 delegates to AIS-07 and must forward its params — calling the delegate without them silently drops inheritance'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 // ---------------------------------------------------------------------------

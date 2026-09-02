@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import {
@@ -160,6 +160,65 @@ test('detectBidirectionalLinks: spec references impl AND impl references spec �
   assert.equal(r.method, 'detected');
 });
 
+// Issue: introducing orchestration-root inheritance for DOC-07 initially
+// switched the spec→impl evidence path base unconditionally, so an own-repo
+// audit (no orchestration root involved at all) silently lost its
+// context/spec/ prefix. A repo that is not a member of an orchestration root
+// must be completely unaffected by this feature — this pins that invariant.
+test('detectBidirectionalLinks: own-repo evidence path is unaffected by orchestration-root support', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'context', 'spec', '001-demo'), { recursive: true });
+  writeFileSync(
+    join(t, 'context', 'spec', '001-demo', 'functional-spec.md'),
+    '# Demo spec\n\nImplemented in `src/demo.ts`\n'
+  );
+  mkdirSync(join(t, 'src'), { recursive: true });
+  writeFileSync(
+    join(t, 'src', 'demo.ts'),
+    '// Spec: context/spec/001-demo\nexport const demo = 1;\n'
+  );
+  const r = detectBidirectionalLinks(t);
+  assert.ok(
+    r.evidence.some((e) =>
+      e.includes('context/spec/001-demo/functional-spec.md')
+    ),
+    `an own-repo audit (no orchestration root in play) must render the same evidence path as before orchestration-root support existed — the context/spec/ prefix must not silently disappear; got ${JSON.stringify(r.evidence)}`
+  );
+});
+
+test('detectBidirectionalLinks: inherited spec evidence renders a readable path, not a ../.. trail', () => {
+  const root = tmpDir('e2e-doc07-readable-');
+  const member = join(root, 'services', 'api');
+  mkdirSync(member, { recursive: true });
+  mkdirSync(join(root, 'context', 'spec', '001-demo'), { recursive: true });
+  writeFileSync(
+    join(root, 'context', 'spec', '001-demo', 'functional-spec.md'),
+    '# Demo spec\n\nImplemented in `src/demo.ts`.\n\nLine four.\nLine five.\nLine six.\nLine seven.\n'
+  );
+  mkdirSync(join(member, 'src'), { recursive: true });
+  writeFileSync(
+    join(member, 'src', 'demo.ts'),
+    '// Spec: context/spec/001-demo\nexport const demo = 1;\n'
+  );
+  try {
+    const r = detectBidirectionalLinks(member, {
+      inheritance: { orchestrationRoot: root, inherits: true },
+    });
+    assert.ok(
+      r.evidence.some((e) =>
+        e.includes('context/spec/001-demo/functional-spec.md')
+      ),
+      `inherited spec evidence must reconstruct the logical context/spec/… location, not the raw resolved path; got ${JSON.stringify(r.evidence)}`
+    );
+    assert.ok(
+      r.evidence.every((e) => !e.includes('../')),
+      `inherited spec evidence must not render as an unreadable ../.. trail; got ${JSON.stringify(r.evidence)}`
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('detectBidirectionalLinks: no spec dir → FAIL', () => {
   const t = tmp();
   writeFileSync(join(t, 'main.ts'), 'export const x = 1;\n');
@@ -181,6 +240,51 @@ test('detectBidirectionalLinks: spec exists but no impl cross-refs → WARN', ()
   assert.ok(
     r.status === 'WARN' || r.status === 'FAIL',
     'expected WARN or FAIL when only one direction of links exists'
+  );
+});
+
+test('detectBidirectionalLinks: impl→spec regex recognizes OpenSpec and GSD paths (registry-derived)', () => {
+  // SPEC_REF_RX is now built from the SPEC_FRAMEWORKS registry
+  // (spec_frameworks.ts) instead of a hand-maintained duplicate — this pins
+  // that the two frameworks added by that rework (OpenSpec, GSD) are
+  // actually recognized by the impl→spec half, not just present in the
+  // registry.
+  const t = tmp();
+  mkdirSync(join(t, 'context', 'spec', '001-x'), { recursive: true });
+  writeFileSync(
+    join(t, 'context', 'spec', '001-x', 'functional-spec.md'),
+    '# X\n\nImplemented in `src/x.ts`\n'
+  );
+  mkdirSync(join(t, 'src'), { recursive: true });
+  writeFileSync(
+    join(t, 'src', 'x.ts'),
+    '// See openspec/changes/add-thing/proposal.md\nexport const x = 1;\n'
+  );
+  const r = detectBidirectionalLinks(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'a source file referencing an openspec/changes/ path must count as an impl→spec reference'
+  );
+});
+
+test('detectBidirectionalLinks: impl→spec regex recognizes a GSD .planning/phases/ path', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'context', 'spec', '001-x'), { recursive: true });
+  writeFileSync(
+    join(t, 'context', 'spec', '001-x', 'functional-spec.md'),
+    '# X\n\nImplemented in `src/x.ts`\n'
+  );
+  mkdirSync(join(t, 'src'), { recursive: true });
+  writeFileSync(
+    join(t, 'src', 'x.ts'),
+    '// Plan: .planning/phases/01-init/01-01-PLAN.md\nexport const x = 1;\n'
+  );
+  const r = detectBidirectionalLinks(t);
+  assert.equal(
+    r.status,
+    'PASS',
+    'a source file referencing a .planning/phases/ path must count as an impl→spec reference'
   );
 });
 
@@ -381,4 +485,100 @@ test('detectVerticalDelivery: pass_at param is honored — 0.5 ratio is PASS by 
     r.evidence.some((e) => e.includes('below 60%')),
     `WARN evidence must cite the resolved pass_at (60%); got: ${r.evidence[0]}`
   );
+});
+
+// ---------------------------------------------------------------------------
+// Orchestration-root inheritance — DOC-07
+//
+// The member always supplies the implementation half of the link (the code
+// has to live where the code is); the root may supply the spec half, since
+// in this layout the spec workspace lives at the root by design.
+// ---------------------------------------------------------------------------
+
+function writeImplRef(dir: string): void {
+  mkdirSync(join(dir, 'src'), { recursive: true });
+  writeFileSync(
+    join(dir, 'src', 'handler.ts'),
+    '// Implements context/spec/001-demo\nexport const handler = () => null;\n'
+  );
+}
+
+function writeSpecWithImplRef(dir: string): void {
+  const specDir = join(dir, 'context', 'spec', '001-demo');
+  mkdirSync(specDir, { recursive: true });
+  writeFileSync(
+    join(specDir, 'functional-spec.md'),
+    '# Functional Spec\n\nImplemented in src/handler.ts.\n\nLine four.\nLine five.\nLine six.\nLine seven.\n'
+  );
+}
+
+function inheritParams(root: string) {
+  return { inheritance: { orchestrationRoot: root, inherits: true } };
+}
+
+/** Root carries the spec half; member always carries the implementation half. */
+function docInheritFixture(prefix: string): { root: string; member: string } {
+  const root = tmpDir(prefix);
+  const member = join(root, 'services', 'api');
+  mkdirSync(member, { recursive: true });
+  writeSpecWithImplRef(root);
+  writeImplRef(member);
+  return { root, member };
+}
+
+test('DOC-07 inherits the spec half of the link from the orchestration root', () => {
+  const { root, member } = docInheritFixture('e2e-doc07-inherit-');
+  try {
+    assert.equal(
+      detectBidirectionalLinks(member).status,
+      'FAIL',
+      'DOC-07 must FAIL for a member with no context/spec/ and no root in scope — otherwise the inheritance test proves nothing'
+    );
+    const res = detectBidirectionalLinks(member, inheritParams(root));
+    assert.equal(
+      res.status,
+      'PASS',
+      'DOC-07 must be credited once the spec half is visible via the orchestration root and the impl half is visible in the member'
+    );
+    assert.ok(
+      res.evidence.some((e) => /inherited from orchestration root/.test(e)),
+      `DOC-07's evidence must say the spec-side credit was inherited; got ${JSON.stringify(res.evidence)}`
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('DOC-07 is unchanged for a member carrying both halves itself', () => {
+  const root = tmpDir('e2e-doc07-own-root-');
+  const member = tmpDir('e2e-doc07-own-member-');
+  writeSpecWithImplRef(member);
+  writeImplRef(member);
+  try {
+    const bare = detectBidirectionalLinks(member);
+    const withRoot = detectBidirectionalLinks(member, inheritParams(root));
+    assert.deepEqual(
+      withRoot,
+      bare,
+      'DOC-07 must produce byte-identical results for a self-sufficient member whether or not a root is in scope — this is the no-regression guarantee for repos that already pass'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('DOC-07 does not inherit the spec half when the category policy is false', () => {
+  const { root, member } = docInheritFixture('e2e-doc07-nopolicy-');
+  try {
+    const res = detectBidirectionalLinks(member, {
+      inheritance: { orchestrationRoot: root, inherits: false },
+    });
+    assert.equal(
+      res.status,
+      'FAIL',
+      'DOC-07 must respect its standards.toml policy — a root in scope is not by itself permission to inherit'
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -20,7 +20,9 @@ import {
   realpathSync,
 } from 'node:fs';
 import { join, dirname, basename, resolve, sep } from 'node:path';
+import { homedir } from 'node:os';
 import { iterFiles, hasMatch } from './detectors/_base.ts';
+import { isSubstantiveOrchestrationPath } from './fs_probe.ts';
 import { findApiSpecFiles } from './detectors/api_specs.ts';
 import { detectCiConfigPath } from './ci_platforms.ts';
 import {
@@ -31,8 +33,26 @@ import {
   ALL_MCP_CONFIG_PATHS,
 } from './agent_tools.ts';
 import { ALL_SOURCE_GLOBS } from './languages.ts';
+import { detectSpecFrameworks } from './spec_frameworks.ts';
 
 export type TopologyFlags = Record<string, boolean>;
+
+/**
+ * Flags that widen to the orchestration root when one is in scope.
+ *
+ * `applies_when` is evaluated before a detector runs, so a category gated on a
+ * flag that is false never reaches the detector that would have inherited its
+ * capability. Every flag gating an inheriting category must therefore appear
+ * here. Everything else — has_ci, has_http_api, is_monorepo — describes the
+ * member's own code and deployment and must stay member-local.
+ */
+export const ORCHESTRATION_WIDENED_FLAGS = [
+  'has_ai_agent_files',
+  'has_agent_instruction_files',
+  'has_commands_or_skills',
+  'has_spec_workflow',
+  'uses_awos',
+] as const;
 
 /** True if any of the given repo-relative paths exists. */
 function anyPath(repoPath: string, names: string[]): boolean {
@@ -102,7 +122,8 @@ export function computeTopology(
     has_docs_connector?: boolean;
     has_incident_source?: boolean;
     has_code_host?: boolean;
-  }
+  },
+  orchestrationRoot?: string | null
 ): TopologyFlags {
   const settings = readIfExists(repoPath, '.claude/settings.json');
 
@@ -152,15 +173,27 @@ export function computeTopology(
   const hasEnvFiles =
     anyPath(repoPath, ['.env']) || anyGlob(repoPath, ['.env', '.env.*']);
 
+  // Widen only the flags that gate an inheriting category. See
+  // ORCHESTRATION_WIDENED_FLAGS for why this set and no other.
+  const rootHasAgentFiles =
+    orchestrationRoot != null &&
+    (anyPath(orchestrationRoot, [
+      ...ALL_INSTRUCTION_FILES,
+      ...ALL_TOOL_CONFIG_DIRS,
+    ]) ||
+      anyGlob(orchestrationRoot, ALL_INSTRUCTION_FILES));
+  const rootHasCommandsOrSkills =
+    orchestrationRoot != null &&
+    anyPath(orchestrationRoot, [...ALL_RULE_COMMAND_DIRS, ...ALL_SKILL_DIRS]);
+
   const flags: TopologyFlags = {
     has_topology: true,
     has_ci: detectCiConfigPath(repoPath) !== null,
-    has_ai_agent_files: hasAgentFiles,
-    has_agent_instruction_files: hasAgentFiles,
-    has_commands_or_skills: anyPath(repoPath, [
-      ...ALL_RULE_COMMAND_DIRS,
-      ...ALL_SKILL_DIRS,
-    ]),
+    has_ai_agent_files: hasAgentFiles || rootHasAgentFiles,
+    has_agent_instruction_files: hasAgentFiles || rootHasAgentFiles,
+    has_commands_or_skills:
+      anyPath(repoPath, [...ALL_RULE_COMMAND_DIRS, ...ALL_SKILL_DIRS]) ||
+      rootHasCommandsOrSkills,
     has_hooks:
       /"hooks"\s*:/.test(settings) ||
       anyPath(repoPath, ['.pre-commit-config.yaml', '.husky']),
@@ -264,6 +297,13 @@ export function computeTopology(
         'requirements.txt',
         'Pipfile',
       ]),
+    has_spec_workflow:
+      detectSpecFrameworks(repoPath).length > 0 ||
+      (orchestrationRoot != null &&
+        detectSpecFrameworks(orchestrationRoot).length > 0),
+    uses_awos:
+      anyPath(repoPath, ['.awos']) ||
+      (orchestrationRoot != null && anyPath(orchestrationRoot, ['.awos'])),
     // Connector-dependent — repo alone cannot prove these. Default false; the
     // orchestrator flips them true after a successful MCP connector fetch.
     has_tracker: Boolean(connectors?.has_tracker),
@@ -696,4 +736,229 @@ export function detectOrgParent(dir: string): OrgParentDetection {
     return { isOrgParent: false, gitRepoChildren: 0 };
   }
   return { isOrgParent: gitRepoChildren >= 2, gitRepoChildren };
+}
+
+// ---------------------------------------------------------------------------
+// Orchestration roots. A "meta-monorepo" keeps agent tooling in one git repo
+// and holds independent member repos in subdirectories. The member repos are
+// distinct work trees, so `git log` and the file walks at the root cannot see
+// them — the audit must run per repo, and the members must be credited for the
+// capability that lives at the root.
+//
+// Detection keys on "nested, distinct git work tree with a tooling-bearing
+// ancestor". `git check-ignore` is recorded as evidence but is deliberately
+// NOT a gate: an untracked or vendored nested repo has the same fairness
+// problem and needs no extra handling.
+// ---------------------------------------------------------------------------
+
+/** Files/dirs whose presence in an ancestor makes it an orchestration root. */
+const ORCHESTRATION_TOOLING_CANDIDATES = [
+  'CLAUDE.md',
+  'AGENTS.md',
+  'GEMINI.md',
+  '.claude/commands',
+  '.claude/skills',
+  '.claude/hooks',
+  '.claude/agents',
+  '.cursor/rules',
+  '.mcp.json',
+  '.awos',
+  'context/product',
+  'context/spec',
+];
+
+/** How many directory levels up to search for an orchestration root. */
+const ORCHESTRATION_ANCESTOR_LIMIT = 5;
+
+/** How many directory levels down to search for member repos. */
+const ORCHESTRATION_MEMBER_DEPTH = 4;
+
+export interface OrchestrationRelation {
+  /** Absolute path of the orchestration root, or null when there is none. */
+  root: string | null;
+  /** True when the root's .gitignore covers this repo. Evidence, not a gate. */
+  ignored: boolean;
+}
+
+/** Absolute work-tree root for `dir`, or null when `dir` is not in a work tree. */
+export function workTreeRoot(dir: string): string | null {
+  try {
+    const out = execFileSync(
+      'git',
+      ['-C', dir, 'rev-parse', '--show-toplevel'],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf8',
+      }
+    );
+    return realpathSync(out.trim()).replace(/\/+$/, '');
+  } catch {
+    return null;
+  }
+}
+
+/** True when `dir` carries at least one substantive agent-tooling artifact. */
+function carriesSubstantiveTooling(dir: string): boolean {
+  return ORCHESTRATION_TOOLING_CANDIDATES.some((rel) =>
+    isSubstantiveOrchestrationPath(join(dir, rel))
+  );
+}
+
+/** Submodule paths declared by `dir`'s .gitmodules, as absolute paths. */
+function submodulePaths(dir: string): Set<string> {
+  const out = new Set<string>();
+  let text: string;
+  try {
+    text = readFileSync(join(dir, '.gitmodules'), 'utf8');
+  } catch {
+    return out;
+  }
+  for (const m of text.matchAll(/^\s*path\s*=\s*(.+)$/gm)) {
+    const p = m[1].trim();
+    if (!p) continue;
+    try {
+      out.add(realpathSync(join(dir, p)).replace(/\/+$/, ''));
+    } catch {
+      out.add(resolve(dir, p).replace(/\/+$/, ''));
+    }
+  }
+  return out;
+}
+
+/** True when `parent`'s gitignore rules cover `child`. */
+function isIgnoredBy(parent: string, child: string): boolean {
+  try {
+    execFileSync('git', ['-C', parent, 'check-ignore', '-q', child], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when the orchestration root's gitignore rules cover `repoPath`. The
+ * org dispatch supplies the root explicitly, so the ignored half of the
+ * relation has to be derivable without re-running the ancestor walk.
+ */
+export function orchestrationRootIgnores(
+  root: string,
+  repoPath: string
+): boolean {
+  return isIgnoredBy(root, workTreeRoot(repoPath) ?? resolve(repoPath));
+}
+
+/**
+ * The `$HOME` boundary the orchestration ancestor walk stops at, normalized
+ * without a trailing slash.
+ *
+ * Resolved through realpathSync so a symlinked home compares equal to the
+ * canonical paths workTreeRoot() produces. When that resolution fails — $HOME
+ * absent or unreadable, as under a container or a `nobody`-style CI user — the
+ * unresolved path is the answer, never null. Both boundary guards below are
+ * conditional on this value, so a null would drop both of them at once and
+ * turn the ancestor walk loose out of the home directory: the failure mode
+ * that once credited the auditor's own ~/.claude tooling to the audited repo.
+ */
+export function homeBoundary(): string {
+  const raw = homedir().replace(/\/+$/, '');
+  try {
+    return realpathSync(raw).replace(/\/+$/, '');
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Resolve the orchestration root for `repoPath`, if any.
+ *
+ * Walks ancestors up to ORCHESTRATION_ANCESTOR_LIMIT levels, stopping at the
+ * filesystem root or $HOME. The nearest ancestor that is a DISTINCT work tree
+ * carrying substantive agent tooling wins. Submodule paths are excluded.
+ */
+export function detectOrchestrationRelation(
+  repoPath: string
+): OrchestrationRelation {
+  const none: OrchestrationRelation = { root: null, ignored: false };
+  const own = workTreeRoot(repoPath);
+  if (own === null) return none;
+
+  const home = homeBoundary();
+
+  let cursor = dirname(own);
+  for (let i = 0; i < ORCHESTRATION_ANCESTOR_LIMIT; i++) {
+    if (cursor === dirname(cursor)) break; // filesystem root
+    const candidate = workTreeRoot(cursor);
+    // $HOME is a boundary, not a candidate: `workTreeRoot(cursor)` resolves to
+    // the enclosing repo's toplevel, which reaches $HOME on the very first
+    // ancestor step whenever $HOME itself is a git work tree (cursor need
+    // never literally equal home for this to happen) — so the candidate, not
+    // just cursor, must be checked against home before it can be credited.
+    if (candidate === home) break;
+    if (candidate !== null && candidate !== own) {
+      // A submodule is a nested work tree, but its failure mode is
+      // double-counting rather than missing credit — out of scope here.
+      if (submodulePaths(candidate).has(own)) return none;
+      if (carriesSubstantiveTooling(candidate)) {
+        return { root: candidate, ignored: isIgnoredBy(candidate, own) };
+      }
+      // A distinct ancestor work tree without tooling ends the search: an
+      // orchestration root is the NEAREST tooling-bearing enclosing repo, and
+      // reaching past a repo boundary would credit an unrelated project.
+      return none;
+    }
+    // Covers the case where $HOME is not itself a git work tree (candidate is
+    // null for cursor === home), so the walk would otherwise climb past it.
+    if (cursor === home) break;
+    cursor = dirname(cursor);
+  }
+  return none;
+}
+
+/**
+ * List member repositories nested inside `rootPath` — distinct work trees found
+ * by a depth-capped walk. Symlinks are not followed: a symlinked sibling is not
+ * nested, and following links risks cycles.
+ */
+export function detectOrchestrationMembers(rootPath: string): string[] {
+  const own = workTreeRoot(rootPath);
+  if (own === null) return [];
+  const submodules = submodulePaths(own);
+  const members: string[] = [];
+
+  const walk = (dir: string, depth: number): void => {
+    if (depth <= 0) return;
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e === '.git' || SYMLINK_WALK_SKIP.has(e)) continue;
+      const p = join(dir, e);
+      let stat;
+      try {
+        stat = lstatSync(p);
+      } catch {
+        continue;
+      }
+      if (!stat.isDirectory()) continue; // lstat: symlinks are skipped here
+      if (existsSync(join(p, '.git'))) {
+        let real: string;
+        try {
+          real = realpathSync(p).replace(/\/+$/, '');
+        } catch {
+          continue;
+        }
+        if (real !== own && !submodules.has(real)) members.push(real);
+        continue; // do not descend into a member repo
+      }
+      walk(p, depth - 1);
+    }
+  };
+
+  walk(own, ORCHESTRATION_MEMBER_DEPTH);
+  return members.sort();
 }

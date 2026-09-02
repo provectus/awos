@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { detectAwosInstalled } from './spec_driven_development.ts';
+import { detectSpecWorkflowAdopted } from './spec_driven_development.ts';
 import { tmpDir } from '../tests/helpers.ts';
 
 test('SDD-01 FAILs when context/ holds only the audit output dir', () => {
@@ -14,7 +14,7 @@ test('SDD-01 FAILs when context/ holds only the audit output dir', () => {
     mkdirSync(join(repo, 'context', 'audits', '2026-07-02'), {
       recursive: true,
     });
-    const res = detectAwosInstalled(repo);
+    const res = detectSpecWorkflowAdopted(repo);
     assert.equal(
       res.status,
       'FAIL',
@@ -30,7 +30,7 @@ test('SDD-01 PASSes with .awos/ plus a real spec workspace (context/product)', (
   try {
     mkdirSync(join(repo, '.awos'), { recursive: true });
     mkdirSync(join(repo, 'context', 'product'), { recursive: true });
-    const res = detectAwosInstalled(repo);
+    const res = detectSpecWorkflowAdopted(repo);
     assert.equal(
       res.status,
       'PASS',
@@ -45,7 +45,7 @@ test('SDD-01 WARNs when only the workspace exists (context/spec, no .awos/)', ()
   const repo = tmpDir('awos-sdd01-warn-');
   try {
     mkdirSync(join(repo, 'context', 'spec'), { recursive: true });
-    const res = detectAwosInstalled(repo);
+    const res = detectSpecWorkflowAdopted(repo);
     assert.equal(
       res.status,
       'WARN',

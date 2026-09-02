@@ -3,9 +3,12 @@ import {
   iterFiles,
   iterFilesIgnoreInsensitive,
   readTextSafe,
+  probeRepoPath,
+  inheritedNote,
 } from './_base.ts';
 import { existsSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
+import { displayPath } from '../fs_probe.ts';
 import { ALL_HOOK_PATHS } from '../agent_tools.ts';
 
 // ---------------------------------------------------------------------------
@@ -90,25 +93,33 @@ const HOOK_SENSITIVE_RX =
 
 export function detectAgentSafetyHooks(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  // Check settings files for hooks key (Claude Code only for now)
-  const settingsPaths = [
-    join(repoPath, '.claude', 'settings.json'),
-    join(repoPath, '.claude', 'settings.local.json'),
+  // Check settings files for hooks key (Claude Code only for now); own-repo
+  // wins, falling back to the orchestration root when this category's policy
+  // allows it (probeRepoPath).
+  const settingsRelPaths = [
+    '.claude/settings.json',
+    '.claude/settings.local.json',
   ];
 
-  for (const sp of settingsPaths) {
-    if (!existsSync(sp)) continue;
+  for (const rel of settingsRelPaths) {
+    const probe = probeRepoPath(repoPath, params, rel);
+    const sp = probe.path;
+    if (sp === null) continue;
     const content = readTextSafe(sp);
     if (content === null) continue;
+    const shown = displayPath(probe.origin, repoPath, sp, rel, sp);
     let parsed: unknown;
     try {
       parsed = JSON.parse(content);
     } catch {
       if (/"hooks"\s*:/.test(content)) {
         return makeResult('PASS', 1, [
-          `"hooks" key pattern found in ${relative(repoPath, sp)} (file could not be parsed as JSON)`,
+          inheritedNote(
+            probe.origin,
+            `"hooks" key pattern found in ${shown} (file could not be parsed as JSON)`
+          ),
         ]);
       }
       continue;
@@ -119,30 +130,42 @@ export function detectAgentSafetyHooks(
       'hooks' in (parsed as Record<string, unknown>)
     ) {
       return makeResult('PASS', 1, [
-        `"hooks" key configured in ${relative(repoPath, sp)}`,
+        inheritedNote(probe.origin, `"hooks" key configured in ${shown}`),
       ]);
     }
   }
 
   // Check all agentic tool hook directories for scripts that guard sensitive files
   for (const relHooksDir of ALL_HOOK_PATHS) {
-    const hooksDir = join(repoPath, relHooksDir);
-    if (!existsSync(hooksDir)) continue;
+    const probe = probeRepoPath(repoPath, params, relHooksDir);
+    if (probe.path === null) continue;
+    const hooksDir = probe.path;
     const hookFiles = iterFiles(hooksDir, HOOK_FILES_GLOBS);
     for (const f of hookFiles) {
       const src = readTextSafe(f);
       if (src === null) continue;
       if (HOOK_SENSITIVE_RX.test(src)) {
         return makeResult('PASS', 1, [
-          `hook script references sensitive file patterns: ${relative(repoPath, f)}`,
+          inheritedNote(
+            probe.origin,
+            `hook script references sensitive file patterns: ${displayPath(probe.origin, repoPath, hooksDir, relHooksDir, f)}`
+          ),
         ]);
       }
     }
     if (hookFiles.length > 0) {
       // Hooks exist but none clearly guard sensitive files — still better than nothing
       return makeResult('WARN', hookFiles.length, [
-        `${hookFiles.length} hook file(s) found in ${relHooksDir}, none matching .env/secret/credential/.pem/.key patterns`,
-        ...hookFiles.slice(0, 5).map((f) => `hook: ${relative(repoPath, f)}`),
+        inheritedNote(
+          probe.origin,
+          `${hookFiles.length} hook file(s) found in ${relHooksDir}, none matching .env/secret/credential/.pem/.key patterns`
+        ),
+        ...hookFiles
+          .slice(0, 5)
+          .map(
+            (f) =>
+              `hook: ${displayPath(probe.origin, repoPath, hooksDir, relHooksDir, f)}`
+          ),
       ]);
     }
   }

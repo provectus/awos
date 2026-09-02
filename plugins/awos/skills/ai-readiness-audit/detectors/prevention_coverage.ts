@@ -609,9 +609,11 @@ const AGENT_FILE_CI_RX =
 
 export function detectAgentSurfaceGuard(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const delegated = detectAgentSafetyHooks(repoPath);
+  // Forward params so the AIS-07 delegate can inherit from the orchestration
+  // root too — calling it without params would silently drop inheritance.
+  const delegated = detectAgentSafetyHooks(repoPath, params);
   if (delegated.status === 'PASS') return delegated;
 
   const ciHits = gateMatches(gateSurfaces(repoPath), AGENT_FILE_CI_RX, ['ci']);

@@ -11,6 +11,7 @@ import {
   ALL_HOOK_PATHS,
   ALL_MCP_CONFIG_PATHS,
 } from '../agent_tools.ts';
+import { isSubstantiveOrchestrationPath } from '../fs_probe.ts';
 
 // ---------------------------------------------------------------------------
 // Shell helper
@@ -431,8 +432,42 @@ const TOOLING_CANDIDATES = [
   ]),
 ];
 
-function getToolingPaths(repoPath: string): string[] {
-  return TOOLING_CANDIDATES.filter((p) => existsSync(join(repoPath, p)));
+export type ToolingPathOrigin = 'own' | 'inherited';
+
+export interface ToolingPathScan {
+  paths: string[];
+  origins: Record<string, ToolingPathOrigin>;
+}
+
+/**
+ * Tooling paths present for this repo, with provenance.
+ *
+ * When an orchestration root is in scope, a candidate the repo does not carry
+ * itself is credited from the root — but only if the root's copy is
+ * substantive. Own-repo paths always win, so a member carrying its own tooling
+ * scores exactly as it did before orchestration roots existed.
+ */
+function getToolingPaths(
+  repoPath: string,
+  orchestrationRoot?: string | null
+): ToolingPathScan {
+  const paths: string[] = [];
+  const origins: Record<string, ToolingPathOrigin> = {};
+  for (const p of TOOLING_CANDIDATES) {
+    if (existsSync(join(repoPath, p))) {
+      paths.push(p);
+      origins[p] = 'own';
+      continue;
+    }
+    if (
+      orchestrationRoot != null &&
+      isSubstantiveOrchestrationPath(join(orchestrationRoot, p))
+    ) {
+      paths.push(p);
+      origins[p] = 'inherited';
+    }
+  }
+  return { paths, origins };
 }
 
 // ---------------------------------------------------------------------------
@@ -1153,6 +1188,12 @@ export interface GitRaw {
   total_commits: number;
   ai_marked_commits: number;
   tooling_paths: string[];
+  /** Provenance for each entry in tooling_paths: own repo, or the orchestration root. */
+  tooling_path_origins: Record<string, ToolingPathOrigin>;
+  /** Resolved orchestration root for this audit, or null. Read back by `enrich`. */
+  orchestration_root: string | null;
+  /** Whether the orchestration root gitignores this repo. Report evidence only. */
+  orchestration_root_ignored: boolean;
   merge_records: MergeRecord[];
   window_stats: WindowStats;
   numstat_totals: NumstatTotals;
@@ -1169,6 +1210,10 @@ export interface GitCollectOptions {
   activeContributorThreshold?: number;
   /** meta.rework_horizon_days */
   reworkHorizonDays?: number;
+  /** Orchestration root to inherit tooling from; null or absent disables inheritance. */
+  orchestrationRoot?: string | null;
+  /** Whether that root gitignores this repo — carried for report evidence. */
+  orchestrationRootIgnored?: boolean;
 }
 
 export function collect(
@@ -1180,6 +1225,8 @@ export function collect(
     opts.activeContributorThreshold ?? ACTIVE_CONTRIBUTOR_THRESHOLD_DEFAULT;
   const reworkHorizonDays =
     opts.reworkHorizonDays ?? REWORK_HORIZON_DAYS_DEFAULT;
+  const orchestrationRoot = opts.orchestrationRoot ?? null;
+  const orchestrationRootIgnored = opts.orchestrationRootIgnored ?? false;
 
   resetRunErrors();
 
@@ -1211,12 +1258,16 @@ export function collect(
   const anchor =
     trunkTipDate(repoPath, trunk.ref) ?? latestCommitDate(repoPath);
   if (anchor === null) {
+    const toolingScan = getToolingPaths(repoPath, orchestrationRoot);
     const raw: GitRaw = {
       default_branch: trunk.branch,
       trunk,
       total_commits: 0,
       ai_marked_commits: 0,
-      tooling_paths: getToolingPaths(repoPath),
+      tooling_paths: toolingScan.paths,
+      tooling_path_origins: toolingScan.origins,
+      orchestration_root: orchestrationRoot,
+      orchestration_root_ignored: orchestrationRootIgnored,
       merge_records: [],
       // buildWindowStats/getCodeTurnover return their empty/null shapes
       // without further git calls when the repo has no commits.
@@ -1248,7 +1299,8 @@ export function collect(
 
   const total_commits = getTotalCommits(repoPath, trunk.ref);
   const ai_marked_commits = getAiMarkedCommits(repoPath, trunk.ref);
-  const tooling_paths = getToolingPaths(repoPath);
+  const toolingScan = getToolingPaths(repoPath, orchestrationRoot);
+  const tooling_paths = toolingScan.paths;
   // One squash scan over all history; buildWindowStats folds it instead of
   // running its own log pass.
   const squashEvents = scanSquashMerges(repoPath, trunk.ref);
@@ -1277,6 +1329,9 @@ export function collect(
     total_commits,
     ai_marked_commits,
     tooling_paths,
+    tooling_path_origins: toolingScan.origins,
+    orchestration_root: orchestrationRoot,
+    orchestration_root_ignored: orchestrationRootIgnored,
     merge_records,
     window_stats,
     numstat_totals,

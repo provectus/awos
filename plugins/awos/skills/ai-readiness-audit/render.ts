@@ -545,6 +545,28 @@ function isInformational(dim: DimensionArtifact): boolean {
  */
 const THROUGHPUT_ECHO_LABELS = new Set(['Merges', 'LOC']);
 
+/**
+ * SDD-04 (branch→spec ratio) correlates a work tree's own branches against the
+ * spec directories touched in that same work tree's git history. In an
+ * orchestration-root layout most spec edits land as commits in the root repo
+ * while the code lands in the member, so a member's ratio sees only the spec
+ * touches that happened to land beside the code and reads lower than the
+ * practice actually is. The check still scores in a member — measured across
+ * the eight members of a real portfolio it ranges from 0 to ~3.7 of 8, and the
+ * zeros are thin infra repos with almost no PR activity rather than a boundary
+ * effect — so this annotates a depressed score, not an unearnable one. Named
+ * by check_id, the same identifier the checks table already keys rows on, so
+ * this never silently drifts from the checks it annotates.
+ *
+ * DOC-07 (spec↔impl bidirectional links) is deliberately not listed. It
+ * inherits the root's spec corpus and matches it against the member's own
+ * source paths, so the split does not depress it the same way — annotating it
+ * here would claim a limitation it does not have.
+ */
+const CROSS_BOUNDARY_LIMITED_CHECKS = new Set(['SDD-04']);
+const CROSS_BOUNDARY_NOTE =
+  "cross-boundary limitation: in an orchestration-root layout most spec edits land as commits in the root repo while the code lands in this member, so this member's spec-touch ratio reads lower than the practice actually is — an understated score, not a failing practice";
+
 /** Plain-language lead for a check: prefer `plain`, fall back to `definition`. */
 function plainLead(c: Check): string {
   return c.plain && c.plain.trim().length > 0 ? c.plain : c.definition;
@@ -912,7 +934,14 @@ export function renderMarkdown(
         (c.status === 'FAIL' || c.status === 'WARN' || c.status === 'PARTIAL')
           ? ` · prevention: ${c.prevention.tier} (${c.prevention.cluster})`
           : '';
-      const hint = mdCell(`${c.hint ?? '—'}${preventionNote}`);
+      const crossBoundaryNote =
+        audit.orchestration_root != null &&
+        CROSS_BOUNDARY_LIMITED_CHECKS.has(c.check_id)
+          ? ` · ${CROSS_BOUNDARY_NOTE}`
+          : '';
+      const hint = mdCell(
+        `${c.hint ?? '—'}${preventionNote}${crossBoundaryNote}`
+      );
       const sourceCiteMd =
         c.source_url && c.source_date
           ? ` — [${mdCell(c.source)} ${mdCell(c.source_date)}](${c.source_url})`
@@ -1895,6 +1924,12 @@ function dimensionPage(
       evidenceItems.push(
         esc(`prevention: ${c.prevention.tier} (${c.prevention.cluster})`)
       );
+    }
+    if (
+      audit.orchestration_root != null &&
+      CROSS_BOUNDARY_LIMITED_CHECKS.has(c.check_id)
+    ) {
+      evidenceItems.push(esc(CROSS_BOUNDARY_NOTE));
     }
     const evidence =
       evidenceItems.length > 0 ? evidenceItems.join('<br>') : '—';

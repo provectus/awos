@@ -1,6 +1,13 @@
-import { makeResult, iterFiles, readTextSafe } from './_base.ts';
+import {
+  makeResult,
+  iterFiles,
+  readTextSafe,
+  probeRepoPath,
+  inheritedNote,
+} from './_base.ts';
 import { existsSync, lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { displayPath } from '../fs_probe.ts';
 import {
   ALL_RULE_COMMAND_DIRS,
   ALL_SKILL_DIRS,
@@ -18,26 +25,50 @@ import {
 
 export function detectCustomCommands(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const allFiles: string[] = [];
+  // Attribution is per file, not per finding: a member with its own
+  // .cursor/rules under a root with .claude/commands genuinely has both
+  // surfaces, so neither is suppressed — but a single "inherited" headline
+  // over the whole set misreports the member's own files as the root's, and
+  // an inherited path renders registry-relative and so is indistinguishable
+  // from an own one.
+  const allFiles: { display: string; origin: 'own' | 'inherited' }[] = [];
   const foundDirs: string[] = [];
 
   for (const relDir of ALL_RULE_COMMAND_DIRS) {
-    const dir = join(repoPath, relDir);
-    if (!existsSync(dir)) continue;
-    const files = iterFiles(dir, ['*.md']);
+    const probe = probeRepoPath(repoPath, params, relDir);
+    if (probe.path === null) continue;
+    const files = iterFiles(probe.path, ['*.md']);
     if (files.length > 0) {
-      allFiles.push(...files);
+      for (const f of files) {
+        allFiles.push({
+          display: displayPath(probe.origin, repoPath, probe.path, relDir, f),
+          origin: probe.origin,
+        });
+      }
       foundDirs.push(relDir);
     }
   }
 
   if (allFiles.length > 0) {
-    const names = allFiles.map((p) => relative(repoPath, p));
+    const ownCount = allFiles.filter((f) => f.origin === 'own').length;
+    const inheritedCount = allFiles.length - ownCount;
+    const where = `${allFiles.length} custom command/rule file(s) found under ${foundDirs.join(', ')}`;
+    const headline =
+      inheritedCount === 0
+        ? where
+        : ownCount === 0
+          ? inheritedNote('inherited', where)
+          : `${where} — ${ownCount} in this repo, ${inheritedCount} inherited from the orchestration root`;
     return makeResult('PASS', allFiles.length, [
-      `${allFiles.length} custom command/rule file(s) found under ${foundDirs.join(', ')}`,
-      ...names.slice(0, 10).map((n) => `command: ${n}`),
+      headline,
+      ...allFiles
+        .slice(0, 10)
+        .map(
+          (f) =>
+            `command: ${f.display}${f.origin === 'inherited' ? ' (inherited)' : ''}`
+        ),
     ]);
   }
   return makeResult('FAIL', 0, [
@@ -64,13 +95,16 @@ function tryRealpath(p: string): string | null {
 
 export function detectClaudeSkills(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const allFiles: string[] = [];
+  const names: string[] = [];
+  let inheritedAny = false;
 
   for (const relSkillsRoot of ALL_SKILL_DIRS) {
-    const skillsRoot = join(repoPath, relSkillsRoot);
-    if (!existsSync(skillsRoot)) continue;
+    const probe = probeRepoPath(repoPath, params, relSkillsRoot);
+    if (probe.path === null) continue;
+    if (probe.origin === 'inherited') inheritedAny = true;
+    const skillsRoot = probe.path;
 
     const realSkillsRoot = tryRealpath(skillsRoot) ?? skillsRoot;
     const scanTargets = new Set<string>([realSkillsRoot]);
@@ -94,21 +128,25 @@ export function detectClaudeSkills(
 
     for (const target of scanTargets) {
       for (const f of iterFiles(target, ['SKILL.md'])) {
-        allFiles.push(f);
+        // resolvedBase is `target`, not `skillsRoot`: `target` is where f was
+        // actually found (after realpath dereferencing symlinks), so
+        // relative(target, f) is always a clean same-tree path — computing it
+        // against the pre-dereference `skillsRoot` can cross a real-path
+        // boundary (e.g. macOS /var vs /private/var) and produce a spurious
+        // ../.. trail unrelated to orchestration-root inheritance.
+        names.push(
+          displayPath(probe.origin, repoPath, target, relSkillsRoot, f)
+        );
       }
     }
   }
 
-  if (allFiles.length > 0) {
-    const names = allFiles.map((p) => {
-      try {
-        return relative(repoPath, p);
-      } catch {
-        return p;
-      }
-    });
-    return makeResult('PASS', allFiles.length, [
-      `${allFiles.length} SKILL.md file(s) found`,
+  if (names.length > 0) {
+    return makeResult('PASS', names.length, [
+      inheritedNote(
+        inheritedAny ? 'inherited' : 'own',
+        `${names.length} SKILL.md file(s) found`
+      ),
       ...names.slice(0, 10).map((n) => `skill: ${n}`),
     ]);
   }
@@ -127,18 +165,33 @@ export function detectClaudeSkills(
 
 export function detectMcpConfig(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const found: string[] = [];
+  // Per-candidate attribution, for the same reason as AI-02: an own
+  // .cursor/mcp.json and an inherited .mcp.json are two real MCP surfaces,
+  // and the evidence has to say which is which.
+  const found: { relPath: string; origin: 'own' | 'inherited' }[] = [];
   for (const relPath of ALL_MCP_CONFIG_PATHS) {
-    if (existsSync(join(repoPath, relPath))) {
-      found.push(relPath);
-    }
+    const probe = probeRepoPath(repoPath, params, relPath);
+    if (probe.path === null) continue;
+    found.push({ relPath, origin: probe.origin });
   }
   if (found.length > 0) {
+    const ownCount = found.filter((f) => f.origin === 'own').length;
+    const inheritedCount = found.length - ownCount;
+    const where = `MCP configuration found: ${found.map((f) => f.relPath).join(', ')}`;
+    const headline =
+      inheritedCount === 0
+        ? where
+        : ownCount === 0
+          ? inheritedNote('inherited', where)
+          : `${where} — ${ownCount} in this repo, ${inheritedCount} inherited from the orchestration root`;
     return makeResult('PASS', found.length, [
-      `MCP configuration found: ${found.join(', ')}`,
-      ...found.map((f) => `MCP config: ${f}`),
+      headline,
+      ...found.map(
+        (f) =>
+          `MCP config: ${f.relPath}${f.origin === 'inherited' ? ' (inherited)' : ''}`
+      ),
     ]);
   }
   return makeResult('FAIL', 0, [
@@ -159,13 +212,39 @@ export function detectMcpConfig(
 
 export function detectClaudeHooks(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
+  // Own-repo capability wins across ALL candidate paths, not just within one:
+  // ALL_HOOK_PATHS lists .claude/hooks before .kiro/hooks, so without this
+  // first own-only pass a member with its own .kiro/hooks is reported as
+  // inheriting the root's .claude/hooks and its own hooks never appear.
+  // Passing no params disables inheritance inside probeRepoPath. This also
+  // orders the two mechanisms correctly — own settings.json hooks now beat an
+  // inherited .claude/hooks/ — at the cost of one extra own-only scan when the
+  // member has nothing of its own.
+  return (
+    resolveHooks(repoPath, undefined) ??
+    resolveHooks(repoPath, params) ??
+    makeResult('FAIL', 0, [
+      'no agentic coding tool hooks found — no lifecycle hooks or settings hooks configured',
+    ])
+  );
+}
+
+/**
+ * Resolve hooks for one inheritance setting: hook directories first, then
+ * settings-file hooks. Returns null when nothing is found, so the caller can
+ * fall through from the own-only pass to the inheriting one.
+ */
+function resolveHooks(
+  repoPath: string,
+  params: unknown
+): ReturnType<typeof makeResult> | null {
   // Check for hook files in any agentic tool hooks directory
   for (const relHooksDir of ALL_HOOK_PATHS) {
-    const hooksDir = join(repoPath, relHooksDir);
-    if (!existsSync(hooksDir)) continue;
-    const hookFiles = iterFiles(hooksDir, [
+    const probe = probeRepoPath(repoPath, params, relHooksDir);
+    if (probe.path === null) continue;
+    const hookFiles = iterFiles(probe.path, [
       '*.sh',
       '*.js',
       '*.ts',
@@ -173,21 +252,28 @@ export function detectClaudeHooks(
       '*.bash',
     ]);
     if (hookFiles.length > 0) {
-      const names = hookFiles.map((p) => relative(repoPath, p));
+      const names = hookFiles.map((p) =>
+        displayPath(probe.origin, repoPath, probe.path!, relHooksDir, p)
+      );
       return makeResult('PASS', hookFiles.length, [
-        `${hookFiles.length} hook file(s) found in ${relHooksDir}`,
+        inheritedNote(
+          probe.origin,
+          `${hookFiles.length} hook file(s) found in ${relHooksDir}`
+        ),
         ...names.slice(0, 10).map((n) => `hook file: ${n}`),
       ]);
     }
   }
 
   // Check for "hooks" key in settings files (Claude Code .claude/settings.json)
-  const settingsFiles = [
-    join(repoPath, '.claude', 'settings.json'),
-    join(repoPath, '.claude', 'settings.local.json'),
+  const settingsRelPaths = [
+    join('.claude', 'settings.json'),
+    join('.claude', 'settings.local.json'),
   ];
-  for (const settingsPath of settingsFiles) {
-    if (!existsSync(settingsPath)) continue;
+  for (const relSettingsPath of settingsRelPaths) {
+    const probe = probeRepoPath(repoPath, params, relSettingsPath);
+    if (probe.path === null) continue;
+    const settingsPath = probe.path;
     const content = readTextSafe(settingsPath);
     if (content === null) continue;
     let parsed: unknown;
@@ -197,7 +283,10 @@ export function detectClaudeHooks(
       // If we can't parse it, look for "hooks" as a string pattern
       if (/"hooks"\s*:/.test(content)) {
         return makeResult('PASS', 1, [
-          `"hooks" key found in ${relative(repoPath, settingsPath)}`,
+          inheritedNote(
+            probe.origin,
+            `"hooks" key found in ${displayPath(probe.origin, repoPath, settingsPath, relSettingsPath, settingsPath)}`
+          ),
         ]);
       }
       continue;
@@ -208,14 +297,15 @@ export function detectClaudeHooks(
       'hooks' in (parsed as Record<string, unknown>)
     ) {
       return makeResult('PASS', 1, [
-        `"hooks" key configured in ${relative(repoPath, settingsPath)}`,
+        inheritedNote(
+          probe.origin,
+          `"hooks" key configured in ${displayPath(probe.origin, repoPath, settingsPath, relSettingsPath, settingsPath)}`
+        ),
       ]);
     }
   }
 
-  return makeResult('FAIL', 0, [
-    'no agentic coding tool hooks found — no lifecycle hooks or settings hooks configured',
-  ]);
+  return null;
 }
 
 // ---------------------------------------------------------------------------

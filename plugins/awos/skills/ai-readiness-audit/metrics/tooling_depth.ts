@@ -84,6 +84,13 @@ export function compute(
 
   const toolingPaths: string[] = raw.tooling_paths;
 
+  // Provenance is an additive field: artifacts written by an older engine have
+  // no origins map, and every path is then treated as own-repo capability.
+  const origins: Record<string, string> =
+    raw.tooling_path_origins && typeof raw.tooling_path_origins === 'object'
+      ? (raw.tooling_path_origins as Record<string, string>)
+      : {};
+
   // Determine which category codes are present and build per-code evidence.
   const awarded: number[] = [];
   const evidencePerCode: Record<number, string[]> = {};
@@ -91,16 +98,24 @@ export function compute(
     // Path-boundary match: a registry path matches only itself or paths nested
     // under it ("<p>/..."), never a sibling sharing the prefix (".awos" must
     // not match ".awos-legacy").
-    const present = entry.paths.some((p) => {
+    const matched: string[] = [];
+    for (const p of entry.paths) {
       const base = p.replace(/\/$/, '');
-      return toolingPaths.some(
-        (tp) => tp === base || tp.startsWith(base + '/')
-      );
-    });
+      for (const tp of toolingPaths) {
+        if (tp === base || tp.startsWith(base + '/')) matched.push(tp);
+      }
+    }
+    const present = matched.length > 0;
     const label = LAYER_LABELS[entry.code] ?? `layer ${entry.code}`;
     if (present) {
       awarded.push(entry.code);
-      evidencePerCode[entry.code] = [`layer present: ${label}`];
+      // A layer counts as inherited only when EVERY matching path came from
+      // the orchestration root. Any own-repo path means the member carries
+      // the capability itself and the plain wording is accurate.
+      const allInherited = matched.every((tp) => origins[tp] === 'inherited');
+      evidencePerCode[entry.code] = allInherited
+        ? [`layer present (inherited from orchestration root): ${label}`]
+        : [`layer present: ${label}`];
     } else {
       evidencePerCode[entry.code] = [`layer absent: ${label}`];
     }

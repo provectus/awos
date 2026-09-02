@@ -50,6 +50,21 @@ function readFlowMaterial() {
   );
 }
 const pluginTemplatesDir = path.join(repoRoot, 'plugins', 'awos', 'templates');
+const auditSkillFile = path.join(
+  repoRoot,
+  'plugins',
+  'awos',
+  'skills',
+  'ai-readiness-audit',
+  'SKILL.md'
+);
+const repoAuditorFile = path.join(
+  repoRoot,
+  'plugins',
+  'awos',
+  'agents',
+  'repo-auditor.md'
+);
 
 function readUtf8(p) {
   return fs.readFileSync(p, 'utf8');
@@ -4772,5 +4787,114 @@ test('hire.md treats an unanswered consent gate as withheld consent', () => {
   assert.ok(
     /do not re-ask the same question as plain text/i.test(body),
     'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
+  );
+});
+
+test('SKILL.md documents orchestration-root mode and both root flags', () => {
+  const skill = readUtf8(auditSkillFile);
+  assert.match(
+    skill,
+    /--orchestration-root/,
+    'SKILL.md must tell the orchestrator to pass --orchestration-root for member repos; without it every member is audited as an unrelated peer and loses the capability credit the engine can give it'
+  );
+  assert.match(
+    skill,
+    /--no-orchestration-root/,
+    'SKILL.md must tell the orchestrator to audit the root itself with --no-orchestration-root; auditing the root with inheritance on double-counts its own tooling'
+  );
+});
+
+test('repo-auditor accepts an orchestration root', () => {
+  const agent = readUtf8(repoAuditorFile);
+  assert.match(
+    agent,
+    /ORCHESTRATION_ROOT/,
+    'the per-repo auditor must accept and forward an orchestration root, or org-mode dispatch cannot deliver it'
+  );
+});
+
+test('repo-auditor leaves the root flag as a placeholder in the audit-core command', () => {
+  // Ordinary org mode (a non-git parent folder, or a GitHub org) dispatches
+  // repo-auditors with no orchestration root at all. A fenced command that
+  // hardcodes `--orchestration-root "<ORCHESTRATION_ROOT>"` states a case the
+  // prose beneath it immediately contradicts, and a subagent copying the fence
+  // verbatim in that mode runs the engine with the literal placeholder string,
+  // which validOrchestrationRoot rejects and the per-repo audit dies.
+  const agent = readUtf8(repoAuditorFile);
+  const auditCoreLine = agent
+    .split('\n')
+    .find((line) => line.includes('audit-core "<repoPath>"'));
+  assert.ok(
+    auditCoreLine !== undefined,
+    'repo-auditor must show the audit-core command it dispatches'
+  );
+  assert.ok(
+    auditCoreLine.includes('<ROOT_FLAG>'),
+    'the audit-core command must end in the <ROOT_FLAG> placeholder rather than one hardcoded flag, so the no-root case is not contradicted by the fence itself'
+  );
+  assert.ok(
+    !auditCoreLine.includes('--orchestration-root'),
+    'the audit-core command must not hardcode --orchestration-root: ordinary org mode dispatches repo-auditors with no root, and a verbatim copy then passes the literal <ORCHESTRATION_ROOT> string to the engine'
+  );
+  for (const substitution of [
+    '`--orchestration-root "<ORCHESTRATION_ROOT>"`',
+    '`--no-orchestration-root`',
+    'no flag',
+  ]) {
+    assert.ok(
+      agent.includes(substitution),
+      `repo-auditor must spell out the ${substitution} substitution for <ROOT_FLAG>; all three cases are reachable from org-mode dispatch`
+    );
+  }
+});
+
+test('repo-auditor takes the judgment instruction corpus from the resolved root', () => {
+  // Round 1 made the no-flag case first-class: the engine auto-detects the
+  // root and credits its tooling to the member (ADP-01/ADP-03/AI-02 come back
+  // "inherited from orchestration root"). If the corpus rule keys on what the
+  // caller supplied instead, those same instruction files are invisible to
+  // PRV-11…PRV-18 and the member is judged ungoverned in an audit that just
+  // scored it as governed.
+  const agent = readUtf8(repoAuditorFile);
+  assert.match(
+    agent,
+    /orchestration_root/,
+    'repo-auditor must name where an auto-detected root is read back from (audit-core reports it as orchestration_root)'
+  );
+  assert.ok(
+    !agent.includes('When `<ORCHESTRATION_ROOT>` is set'),
+    'the instruction-corpus rule must key on the root the audit resolved, not on whether the caller supplied one'
+  );
+});
+
+test('SKILL.md Phase 0a routes an orchestration root to case 4, not case 1', () => {
+  // Case 4's trigger ("has .git" + "holds independent git repos in
+  // subdirectories" + "carries the tooling governing them") is a strict
+  // superset of case 1's ("has .git"). Reading top-to-bottom, an
+  // orchestrator must be told case 1 does not match a target that also
+  // satisfies case 4 — otherwise it stops at case 1 and never reaches the
+  // orchestration-root case at all. This pins the disambiguating clause's
+  // presence, its ordering ahead of case 4, and case 4's tooling gate (which
+  // stops a plain nested checkout — an examples app, a vendored library —
+  // from being mistaken for an orchestration root). It cannot verify that a
+  // model actually applies these rules correctly when reasoning
+  // top-to-bottom — that's a behavioral contract for the awos-qa harness,
+  // not a grep.
+  const skill = readUtf8(auditSkillFile);
+  assert.match(
+    skill,
+    /is not itself an orchestration root/,
+    'case 1 must explicitly exclude a target that is itself an orchestration root, or an orchestrator reading top-to-bottom matches case 1 before ever reaching case 4'
+  );
+  assert.match(
+    skill,
+    /carries the agent tooling that governs them/,
+    "case 4 must require governing tooling, not just containment, or an ordinary project with a nested checkout (vendored library, examples app) is misdetected as an orchestration root's portfolio"
+  );
+  const case1Index = skill.indexOf('is not itself an orchestration root');
+  const case4Index = skill.indexOf('**An orchestration root**');
+  assert.ok(
+    case1Index !== -1 && case4Index !== -1 && case1Index < case4Index,
+    'case 1 (with its exclusion clause) must appear before case 4 in Phase 0a so a top-to-bottom read resolves the precedence correctly'
   );
 });

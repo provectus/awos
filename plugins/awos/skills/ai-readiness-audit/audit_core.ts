@@ -58,6 +58,8 @@ import {
   computeTopology,
   detectLinkedRepos,
   detectFrameworks,
+  detectOrchestrationRelation,
+  orchestrationRootIgnores,
   type TopologyFlags,
 } from './topology.ts';
 import { detectLanguages, LANGUAGES } from './languages.ts';
@@ -513,6 +515,12 @@ interface Category {
   /** Optional one-line lead shown inline; the full `definition` stays in the tooltip. */
   summary?: string;
   applies_when?: string;
+  /**
+   * Whether this category may be credited from an orchestration root when the
+   * repository does not carry the capability itself. Required on every record;
+   * `tests/inheritance-policy.test.ts` enforces that.
+   */
+  inherits_from_orchestration_root?: boolean;
   reliability_default?: string;
   source?: string;
   sources?: string[];
@@ -579,6 +587,82 @@ export interface AuditCoreSummary {
    */
   window_anchor: string | null;
   duration_ms: number;
+  /** Orchestration root this audit inherited from, or null. */
+  orchestration_root: string | null;
+}
+
+export interface AuditCoreOptions {
+  /**
+   * undefined → auto-detect via detectOrchestrationRelation
+   * string    → use this root
+   * null      → inheritance explicitly disabled (how a root audits itself)
+   *
+   * `undefined` means auto-detect whether the key is absent or present-and-
+   * undefined, so forwarding an optional (`{ orchestrationRoot: cfg.root }`
+   * where `cfg.root` may be undefined) auto-detects rather than silently
+   * disabling a member's inherited credit. Only an explicit `null` turns
+   * inheritance off.
+   */
+  orchestrationRoot?: string | null;
+}
+
+/**
+ * Recover the orchestration root the first pass resolved, for the `enrich`
+ * re-score. Reading it back — rather than re-detecting or asking the
+ * orchestrator to re-pass a flag — is what makes the two passes agree by
+ * construction; that guarantee only holds if a failed read-back stops the run.
+ *
+ * A silent fall back to `null` here is the damaging outcome: enrich would
+ * rebuild every judgment check without its widened gate, so an inheriting
+ * check such as PRV-17 flips `applies` to false and its weight leaves both the
+ * numerator and the denominator, the orchestrator's judgment verdict lands on
+ * a check that no longer exists, and every cross-boundary note disappears —
+ * a wrong score with no error anywhere.
+ *
+ * audit.json is the primary source: audit-core always writes it, aggregate()
+ * preserves the field, and it is not tied to whether git could run.
+ * collected/git.json carries the same value in its `raw` payload and is the
+ * fallback — but git writes `{}` as its raw payload when git is unavailable,
+ * exactly the case where the field is simply missing.
+ */
+function recoverOrchestrationRoot(
+  outDir: string,
+  collectedDirOverride: string
+): { root: string | null; ignored: boolean } {
+  const auditJsonPath = join(outDir, 'audit.json');
+  const gitJsonPath = join(collectedDirOverride, 'git.json');
+
+  const audit = readJsonIfPossible(auditJsonPath) as {
+    orchestration_root?: string | null;
+  } | null;
+  const gitRaw = (
+    readJsonIfPossible(gitJsonPath) as {
+      raw?: {
+        orchestration_root?: string | null;
+        orchestration_root_ignored?: boolean;
+      };
+    } | null
+  )?.raw;
+
+  const ignored = gitRaw?.orchestration_root_ignored ?? false;
+  if (audit && 'orchestration_root' in audit) {
+    return { root: audit.orchestration_root ?? null, ignored };
+  }
+  if (gitRaw && 'orchestration_root' in gitRaw) {
+    return { root: gitRaw.orchestration_root ?? null, ignored };
+  }
+  throw new Error(
+    `enrich: no orchestration_root field in ${auditJsonPath} or ${gitJsonPath}. enrich reads that root back from the first audit-core pass rather than re-detecting it, so there is nothing to re-score against. Run \`audit-core <repoPath> ${outDir}\` before enrich.`
+  );
+}
+
+/** Parse a JSON file, or null when it is missing or unparseable. */
+function readJsonIfPossible(path: string): unknown {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 export async function auditCore(
@@ -594,7 +678,8 @@ export async function auditCore(
   // Repo-derived checks (detectors, AST metrics) are reused from the
   // per-dimension artifacts already in outDir instead of being recomputed —
   // the repo hasn't changed; only connector-affected categories re-score.
-  collectedDirOverride?: string
+  collectedDirOverride?: string,
+  opts?: AuditCoreOptions
 ): Promise<AuditCoreSummary> {
   const start = Date.now();
   const standards = loadStandards(standardsPath);
@@ -603,6 +688,32 @@ export async function auditCore(
   mkdirSync(outDir, { recursive: true });
 
   const skillRoot = dirname(dirname(standardsPath));
+
+  // Orchestration root: resolved ONCE per audit. On the enrich path it is read
+  // back from the artifact the first pass wrote, never re-detected — that is
+  // what makes the two passes agree by construction rather than by the
+  // orchestrator remembering to re-pass a flag.
+  let orchestrationRoot: string | null = null;
+  let orchestrationRootIgnored = false;
+  if (collectedDirOverride) {
+    const recovered = recoverOrchestrationRoot(outDir, collectedDirOverride);
+    orchestrationRoot = recovered.root;
+    orchestrationRootIgnored = recovered.ignored;
+  } else if (opts && opts.orchestrationRoot !== undefined) {
+    orchestrationRoot = opts.orchestrationRoot;
+    // The org dispatch passes the root explicitly for every member, so the
+    // ignored half of the relation has to be derived here too — otherwise
+    // git.json reports orchestration_root_ignored: false for every dispatched
+    // member, including the gitignored ones the flag exists to describe.
+    orchestrationRootIgnored =
+      orchestrationRoot === null
+        ? false
+        : orchestrationRootIgnores(orchestrationRoot, repoPath);
+  } else {
+    const rel = detectOrchestrationRelation(repoPath);
+    orchestrationRoot = rel.root;
+    orchestrationRootIgnored = rel.ignored;
+  }
 
   // 1. Deterministic collectors → collected/ artifacts. git is always present;
   //    ci self-probes; tracker/docs emit available:false without a connector.
@@ -614,7 +725,11 @@ export async function auditCore(
     const period = periodFromStandards(standards);
     const gitOpts = gitOptsFromStandards(standards);
     for (const art of [
-      collectGit(repoPath, period, gitOpts),
+      collectGit(repoPath, period, {
+        ...gitOpts,
+        orchestrationRoot,
+        orchestrationRootIgnored,
+      }),
       collectCi(repoPath, period),
       collectTracker(repoPath, period),
       collectDocs(repoPath, period),
@@ -754,7 +869,7 @@ export async function auditCore(
   const incidentsRaw = incidentsArt?.raw as
     | { incidents?: Parameters<typeof deriveIncidentAggregates>[0] }
     | undefined;
-  const topology: TopologyFlags = computeTopology(repoPath, {
+  const connectorFlags = {
     has_tracker: Boolean(trackerArt?.available),
     has_docs_connector: Boolean(docsArt?.available),
     // A real, measurable incident source: the connector-passed incidents
@@ -768,7 +883,17 @@ export async function auditCore(
       hasMeasurableIncidents(incidentsRaw?.incidents, lookbackDays(standards))
     ),
     has_code_host: Boolean(codeHostArt?.available),
-  });
+  };
+  const topology: TopologyFlags = computeTopology(repoPath, connectorFlags);
+  // Widened view: identical except that the agent-tooling flags also consider
+  // the orchestration root. Handed ONLY to categories that inherit — see
+  // ORCHESTRATION_WIDENED_FLAGS. Applying it globally would un-SKIP AIS-01,
+  // AIS-02 and AIS-05 in every member repo, turning a neutral SKIP into a FAIL
+  // for capability the member was never expected to carry.
+  const topologyInherited: TopologyFlags =
+    orchestrationRoot === null
+      ? topology
+      : computeTopology(repoPath, connectorFlags, orchestrationRoot);
 
   // 2b. Enrich reuse: on the enrich path the repo has not changed since
   //     audit-core wrote the per-dimension artifacts, so repo-derived results
@@ -884,8 +1009,11 @@ export async function auditCore(
           repoPath,
           awarded,
           skippedByMetric,
-          topology,
-          metricMeta
+          c.inherits_from_orchestration_root === true
+            ? topologyInherited
+            : topology,
+          metricMeta,
+          orchestrationRoot
         );
     // Connector-scored check → say in Evidence which channel the value was
     // measured from (the artifact's source_label). Dedup keeps enrich re-runs
@@ -1022,6 +1150,7 @@ export async function auditCore(
     linked_repos: linkedRepos,
     tech_stack: techStack,
     detection_conflicts: detectionConflicts,
+    orchestration_root: orchestrationRoot,
     derived_delivery: computeDerivedDelivery(
       collectedDir,
       trackerArt,
@@ -1049,6 +1178,7 @@ export async function auditCore(
     lookback_days: periodFromStandards(standards).lookback_days,
     window_anchor: gitWindowAnchor(collected),
     duration_ms: Date.now() - start,
+    orchestration_root: orchestrationRoot,
   };
 }
 
@@ -1277,7 +1407,8 @@ function buildCheck(
   awarded: Set<number>,
   skippedByMetric: Set<number>,
   topology: TopologyFlags,
-  metricMeta?: Map<number, MetricMeta>
+  metricMeta?: Map<number, MetricMeta>,
+  orchestrationRoot: string | null = null
 ): CheckRecord {
   let status: CheckStatus;
   let value: unknown = null;
@@ -1307,6 +1438,10 @@ function buildCheck(
         pass_at: c.pass_at,
         warn_at: c.warn_at,
         fail_at: c.fail_at,
+        inheritance: {
+          orchestrationRoot,
+          inherits: c.inherits_from_orchestration_root === true,
+        },
       });
     } catch (err) {
       r = {

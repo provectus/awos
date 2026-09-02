@@ -1,4 +1,12 @@
-import { makeResult, iterFiles, readTextSafe, detectTrunk } from './_base.ts';
+import {
+  makeResult,
+  iterFiles,
+  readTextSafe,
+  detectTrunk,
+  probeRepoPath,
+  inheritedNote,
+  PathOrigin,
+} from './_base.ts';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -9,58 +17,123 @@ import {
   FIX_SUBJECT_RX,
   REVERT_SUBJECT_RX,
 } from '../collectors/git.ts';
+import {
+  detectSpecFrameworks,
+  specRootsFor,
+  SPEC_FRAMEWORKS,
+  type SpecFramework,
+} from '../spec_frameworks.ts';
 
 // ---------------------------------------------------------------------------
-// detectAwosInstalled — category 2800 (SDD-01, method: detected)
+// detectSpecWorkflowAdopted — category 2800 (SDD-01, method: detected)
 //
-// PASS if both .awos/ and context/ directories exist.
-// WARN if only one is present.
-// FAIL if neither is present.
+// Whether the project practises spec-driven development at all, by any
+// recognized convention. AWOS is one of them, not the definition of the check:
+// a project with a disciplined ADR or design-doc practice is doing the thing
+// this dimension measures and earns the credit.
+//
+// PASS when a recognized practice is adopted.
+// WARN when a practice's marker exists but carries no records yet.
+// FAIL when no design record of any kind is present.
 // ---------------------------------------------------------------------------
 
-export function detectAwosInstalled(
+export function detectSpecWorkflowAdopted(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const hasAwos = existsSync(join(repoPath, '.awos'));
-  // A bare context/ directory is NOT evidence of a spec workspace — the audit
-  // itself creates context/audits/ for its output. Only the workspace subdirs
-  // the installer creates (context/product, context/spec) count.
-  const hasContext =
-    existsSync(join(repoPath, 'context', 'product')) ||
-    existsSync(join(repoPath, 'context', 'spec'));
+  // AWOS keeps its original three-way semantics EXACTLY. Genericizing this
+  // dimension is about no longer penalizing projects that never adopted AWOS
+  // (issue #160); it must not silently move the score of a project that did.
+  // The pinned regression test detectors/spec_driven_development_sdd01.test.ts
+  // encodes those semantics — including the self-pollution guard (a bare
+  // context/ holding only the audit's own context/audits/ output must FAIL) —
+  // and it must stay green WITHOUT being edited.
+  const awos = probeRepoPath(repoPath, params, '.awos');
+  const product = probeRepoPath(repoPath, params, 'context/product');
+  const spec = probeRepoPath(repoPath, params, 'context/spec');
+  const workspace = product.path !== null ? product : spec;
+  const awosOrigin =
+    awos.origin === 'inherited' || workspace.origin === 'inherited'
+      ? 'inherited'
+      : 'own';
 
-  if (hasAwos && hasContext) {
+  if (awos.path !== null && workspace.path !== null) {
     return makeResult('PASS', 2, [
-      '.awos/ directory found',
-      'context/product or context/spec directory found',
+      inheritedNote(awosOrigin, '.awos/ directory found'),
+      inheritedNote(
+        awosOrigin,
+        'context/product or context/spec directory found'
+      ),
+    ]);
+  }
+  if (awos.path !== null) {
+    return makeResult('WARN', 1, [
+      inheritedNote(
+        awosOrigin,
+        '.awos/ directory found; context/product and context/spec directories not found'
+      ),
+    ]);
+  }
+  if (workspace.path !== null) {
+    return makeResult('WARN', 1, [
+      inheritedNote(
+        awosOrigin,
+        'context/product or context/spec directory found; .awos/ directory not found'
+      ),
     ]);
   }
 
-  if (hasAwos) {
-    return makeResult('WARN', 1, [
-      '.awos/ directory found; context/product and context/spec directories not found',
-    ]);
+  // No AWOS. This is the half issue #160 is about: credit any other
+  // recognized practice instead of hard-failing the project for not being an
+  // AWOS project.
+  const others = detectSpecFrameworks(repoPath, params).filter(
+    (f) => f.framework.id !== 'awos'
+  );
+  // Evidence must name the roots that actually exist, not every root the
+  // framework could possibly use — an ADR-only repo's evidence naming
+  // docs/rfcs, doc/adr, etc. as "in use" would send a reader looking for
+  // paths that were never there. specRootsFor already tells us which
+  // markers matched; thread that through instead of falling back to
+  // framework.specRoots (the full declared list).
+  const withRecords = others
+    .map((f) => ({ ...f, roots: specRootsFor(repoPath, f.framework, params) }))
+    .filter((f) => f.roots.length > 0);
+  if (withRecords.length > 0) {
+    return makeResult(
+      'PASS',
+      withRecords.length,
+      withRecords.map((f) =>
+        inheritedNote(
+          f.origin,
+          `${f.framework.label} in use (${f.roots.map((r) => r.rel).join(', ')})`
+        )
+      )
+    );
   }
-
-  if (hasContext) {
-    return makeResult('WARN', 1, [
-      'context/product or context/spec directory found; .awos/ directory not found',
-    ]);
+  if (others.length > 0) {
+    return makeResult(
+      'WARN',
+      others.length,
+      others.map((f) =>
+        inheritedNote(
+          f.origin,
+          `${f.framework.label} is installed but holds no spec records yet`
+        )
+      )
+    );
   }
 
   return makeResult('FAIL', 0, [
-    'neither .awos/ nor context/product nor context/spec directory found',
+    `no spec-driven practice found — checked for ${SPEC_FRAMEWORKS.map((f) => f.label).join(', ')}`,
   ]);
 }
 
 // ---------------------------------------------------------------------------
 // detectProductContextDocs — category 2801 (SDD-02, method: detected)
 //
-// Checks for the three foundational AWOS documents:
-//   context/product/product-definition.md
-//   context/product/roadmap.md
-//   context/architecture/architecture.md  OR  context/product/architecture.md
+// Checks for the three foundational documents — product definition, roadmap,
+// and architecture record — under AWOS filenames or conventional equivalents
+// (see FOUNDATIONAL_DOC_CANDIDATES for each slot's candidate list).
 //
 // A document is "substantive" if it has more than 5 lines of non-blank content.
 //
@@ -78,31 +151,74 @@ function isSubstantive(filePath: string): boolean {
   return nonBlankLines.length > MIN_SUBSTANTIVE_LINES;
 }
 
+// Each inner array is one required slot; the first path present and
+// substantive satisfies it. AWOS filenames come first because they are the
+// most specific, but a project that documents the same three things under
+// conventional names has the same capability. GSD's .planning/PROJECT.md and
+// .planning/REQUIREMENTS.md land in the product-definition slot — both
+// describe what the product is and needs, which is the closer fit; GSD has
+// no equivalent of an architecture record, so nothing is added to that slot.
 const FOUNDATIONAL_DOC_CANDIDATES = [
-  ['context/product/product-definition.md'],
-  ['context/product/roadmap.md'],
-  ['context/architecture/architecture.md', 'context/product/architecture.md'],
+  [
+    'context/product/product-definition.md',
+    'context/product/product.md',
+    'docs/product.md',
+    'docs/product-definition.md',
+    'PRODUCT.md',
+    'docs/vision.md',
+    '.planning/PROJECT.md',
+    '.planning/REQUIREMENTS.md',
+  ],
+  [
+    'context/product/roadmap.md',
+    'docs/roadmap.md',
+    'ROADMAP.md',
+    'docs/milestones.md',
+    '.planning/ROADMAP.md',
+  ],
+  [
+    'context/architecture/architecture.md',
+    'context/product/architecture.md',
+    'docs/architecture.md',
+    'ARCHITECTURE.md',
+    'docs/adr/README.md',
+    'docs/adr/index.md',
+    'docs/decisions/README.md',
+  ],
+];
+
+// One label per slot in FOUNDATIONAL_DOC_CANDIDATES, in the same order.
+const FOUNDATIONAL_DOC_SLOT_LABELS = [
+  'product definition',
+  'roadmap',
+  'architecture record',
 ];
 
 export function detectProductContextDocs(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
   const found: string[] = [];
   const missing: string[] = [];
 
-  for (const candidates of FOUNDATIONAL_DOC_CANDIDATES) {
+  for (const [slot, candidates] of FOUNDATIONAL_DOC_CANDIDATES.entries()) {
     let matched = false;
     for (const candidate of candidates) {
-      const fullPath = join(repoPath, candidate);
-      if (existsSync(fullPath) && isSubstantive(fullPath)) {
-        found.push(candidate);
+      const probe = probeRepoPath(repoPath, params, candidate);
+      if (probe.path !== null && isSubstantive(probe.path)) {
+        found.push(
+          probe.origin === 'inherited'
+            ? `${candidate} (inherited from orchestration root)`
+            : candidate
+        );
         matched = true;
         break;
       }
     }
     if (!matched) {
-      missing.push(candidates[0]);
+      missing.push(
+        `${FOUNDATIONAL_DOC_SLOT_LABELS[slot]} (looked for ${candidates.join(', ')})`
+      );
     }
   }
 
@@ -114,20 +230,20 @@ export function detectProductContextDocs(
 
   if (count === 3) {
     return makeResult('PASS', count, [
-      'all 3 foundational AWOS documents present with substantive content',
+      'all 3 foundational documents present with substantive content',
       ...evidence,
     ]);
   }
 
   if (count === 2) {
     return makeResult('WARN', count, [
-      '2 of 3 foundational AWOS documents present',
+      '2 of 3 foundational documents present',
       ...evidence,
     ]);
   }
 
   return makeResult('FAIL', count, [
-    `only ${count} of 3 foundational AWOS documents present`,
+    `only ${count} of 3 foundational documents present`,
     ...evidence,
   ]);
 }
@@ -360,9 +476,25 @@ function mentionsTech(content: string, name: string): boolean {
 }
 
 function findArchDoc(repoPath: string): string | null {
+  // The narrative architecture documents SDD-02's architecture slot accepts.
+  //
+  // Local paths only, deliberately. A member of an orchestration root inherits
+  // the root's architecture document for SDD-02 (the record exists and is
+  // substantive), but not here: the root's document describes the whole
+  // platform, so tech-matching it against ONE member's code reports every
+  // sibling service's stack as drift — a compliant TypeScript member measured
+  // against a platform doc FAILs with 5 unevidenced mentions where it should
+  // SKIP. SDD-03's exclusion from the inheriting set is a recorded decision
+  // (standards.toml 2802, pinned by tests/helpers_orchestration.ts).
+  //
+  // Deliberately NOT its ADR-index candidates (docs/adr/README.md and
+  // friends): an index is a list of links, and tech-matching one finds no
+  // technology mentions and so PASSes trivially — free credit is worse than
+  // the honest SKIP a repo with no narrative architecture document gets.
   for (const candidate of [
     join(repoPath, 'context', 'architecture', 'architecture.md'),
     join(repoPath, 'context', 'product', 'architecture.md'),
+    join(repoPath, 'docs', 'architecture.md'),
     join(repoPath, 'ARCHITECTURE.md'),
   ]) {
     if (existsSync(candidate)) return candidate;
@@ -372,17 +504,29 @@ function findArchDoc(repoPath: string): string | null {
 
 export function detectArchTechMatch(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
   const archDoc = findArchDoc(repoPath);
   if (!archDoc) {
     // Absence of the doc is not compliance — there is nothing to match against.
-    return makeResult(
-      'SKIP',
-      null,
-      ['no architecture document found — tech-match check not applicable'],
-      'detected'
-    );
+    const evidence = [
+      'no architecture document found — tech-match check not applicable',
+    ];
+    // SDD-02 may have credited the root's architecture record for this member;
+    // saying why this check does not use it keeps the two lines from reading
+    // as a contradiction in the report.
+    const root =
+      (
+        params as
+          | { inheritance?: { orchestrationRoot?: string | null } }
+          | undefined
+      )?.inheritance?.orchestrationRoot ?? null;
+    if (root !== null && findArchDoc(root) !== null) {
+      evidence.push(
+        "the orchestration root's architecture document is not used here: it describes the platform rather than this repository's stack, so its technology mentions are not cross-referenced against this codebase"
+      );
+    }
+    return makeResult('SKIP', null, evidence, 'detected');
   }
 
   // Keep the original casing — ambiguous tech names (Go, Node, …) are only
@@ -478,16 +622,22 @@ function listLocalBranches(repoPath: string): string[] {
   }
 }
 
-// Spec directories recognised across common spec-driven frameworks (not just AWOS).
-// A changed path counts as a spec-touch when it falls under any of these roots.
-const SPEC_DIRS = [
-  'context/spec/', // AWOS
-  'specs/',
-  'spec/',
-  '.kiro/specs/', // Kiro
-  '.agent-os/specs/', // Agent-OS
-  'docs/specs/',
-] as const;
+// Spec directories recognised across common spec-driven frameworks (not just
+// AWOS) — derived from the SPEC_FRAMEWORKS registry (spec_frameworks.ts),
+// the same single source of truth SDD-01/05/06 and DOC-07 read, rather than
+// a hand-maintained duplicate. A changed path counts as a spec-touch when it
+// falls under any of these roots.
+const SPEC_DIRS: readonly string[] = [
+  ...new Set([
+    ...SPEC_FRAMEWORKS.filter((fw) => fw.id !== 'adr') // decision records aren't feature specs
+      .flatMap((fw) => fw.specRoots)
+      .map((root) => (root.endsWith('/') ? root : `${root}/`)),
+    // Generic conventions not tied to one framework's marker.
+    'specs/',
+    'spec/',
+    'docs/specs/',
+  ]),
+];
 
 // `spec/` and `specs/` are also where RSpec/Jasmine/Jest keep their TEST
 // suites — those files are tests, not spec-driven-development artifacts.
@@ -765,182 +915,356 @@ export function detectBranchSpecRatio(
 // ---------------------------------------------------------------------------
 // detectSpecTriadComplete — category 2804 (SDD-05, method: detected)
 //
-// Checks every context/spec/NNN-* directory for the spec triad:
-//   functional-spec.md, technical-considerations.md, tasks.md
+// Judges every spec/decision record against whichever convention produced
+// it — the full file set for multi-file frameworks (AWOS, Kiro, Agent-OS,
+// Spec Kit), or the standard template sections for a single-file decision
+// record (ADR). Demanding the AWOS triad of a Kiro spec or an ADR was the
+// mechanism by which this check penalized every project that never adopted
+// AWOS (issue #160).
 //
-// PASS if all spec dirs have all 3 files (or no spec dirs found).
-// WARN if some dirs have 1-2 of 3 (incomplete but not empty).
-// FAIL if any dir has 0 of the 3 files.
+// Each record earns fractional credit (elements present / elements
+// required), averaged across all records — not a binary complete/incomplete
+// verdict per record. A single spec missing only one file must not swing an
+// otherwise-healthy repo to a hard FAIL.
+//
+// PASS if the average credit is >=90% (or no records exist — SKIP).
+// WARN if 50-89%.
+// FAIL if <50%.
 // ---------------------------------------------------------------------------
 
-const SPEC_TRIAD = [
-  'functional-spec.md',
-  'technical-considerations.md',
-  'tasks.md',
-];
+/** One spec-record directory, with the provenance of the workspace it came from. */
+export interface SpecDirRef {
+  /** Absolute path to the spec directory. */
+  path: string;
+  /** Display name for evidence — the directory's own name, never a ../.. path. */
+  name: string;
+  origin: PathOrigin;
+}
 
-function listSpecDirs(repoPath: string): string[] {
-  const specBase = join(repoPath, 'context', 'spec');
-  if (!existsSync(specBase)) return [];
+/**
+ * AWOS spec directories only — kept for detectAgentAnnotations (SDD-07),
+ * which stays AWOS-specific by design. SDD-05 and SDD-06 use listSpecRecords
+ * below instead, so they judge whichever spec-driven convention a project
+ * actually uses.
+ */
+function listSpecDirs(repoPath: string, params?: unknown): SpecDirRef[] {
+  const probe = probeRepoPath(repoPath, params, 'context/spec');
+  if (probe.path === null) return [];
+  let entries: string[];
   try {
-    return readdirSync(specBase)
-      .filter((name) => /^\d{3}-/.test(name))
-      .sort()
-      .map((name) => join(specBase, name))
-      .filter((p) => {
-        try {
-          return statSync(p).isDirectory();
-        } catch {
-          return false;
-        }
-      });
+    entries = readdirSync(probe.path);
   } catch {
     return [];
   }
+  const out: SpecDirRef[] = [];
+  for (const e of entries) {
+    // AWOS spec directories are numbered (001-feature-name) — the numeric
+    // prefix is what enforces ordering. This filter is load-bearing: without
+    // it every stray subdirectory under context/spec counts as a spec and
+    // SDD-07 silently changes verdicts. It is preserved verbatim from the
+    // original implementation.
+    if (!/^\d{3}-/.test(e)) continue;
+    const full = join(probe.path, e);
+    try {
+      if (!statSync(full).isDirectory()) continue;
+    } catch {
+      continue;
+    }
+    out.push({ path: full, name: e, origin: probe.origin });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-interface SpecDirStatus {
-  dir: string;
-  present: string[];
+/** One spec/decision record, resolved under whichever framework owns it. */
+interface SpecRecord {
+  /** Absolute path: a directory for multi-file frameworks, a file for ADRs. */
+  path: string;
+  /** Display name for evidence — never a ../.. path. */
+  name: string;
+  framework: SpecFramework;
+  origin: PathOrigin;
+}
+
+/** Every spec/decision record across every recognized framework in use. */
+function listSpecRecords(repoPath: string, params?: unknown): SpecRecord[] {
+  const out: SpecRecord[] = [];
+  for (const { framework } of detectSpecFrameworks(repoPath, params)) {
+    // A pattern-named convention (GSD) still keeps one directory per record,
+    // like a fixed-triad one — only a convention with neither (ADR) is
+    // single-file.
+    const singleFile =
+      framework.recordTriad.length === 0 && !framework.recordFilePattern;
+    for (const root of specRootsFor(repoPath, framework, params)) {
+      let entries: string[];
+      try {
+        entries = readdirSync(root.path);
+      } catch {
+        continue;
+      }
+      for (const e of entries) {
+        const full = join(root.path, e);
+        let isDir: boolean;
+        try {
+          isDir = statSync(full).isDirectory();
+        } catch {
+          continue;
+        }
+        if (isDir && framework.recordSkipDirs?.includes(e)) continue;
+        // Multi-file frameworks keep one directory per record; single-file
+        // practices keep one markdown file per record. A README is an index,
+        // not a decision, and must not be graded as one.
+        if (singleFile) {
+          if (isDir || !e.endsWith('.md') || e.toLowerCase() === 'readme.md') {
+            continue;
+          }
+        } else if (!isDir) {
+          continue;
+        }
+        // AWOS numbers its spec directories (001-feature-name) and
+        // listSpecDirs above filters on that prefix. SDD-07 still uses
+        // listSpecDirs, so without the same filter here SDD-05/06 would
+        // count directories SDD-07 ignores — two checks disagreeing about
+        // what a spec is, in the same repo. The filter is AWOS-specific by
+        // design: Kiro and Agent-OS specs are not numbered, so applying it
+        // to every framework would silently zero them out.
+        if (framework.id === 'awos' && !/^\d{3}-/.test(e)) continue;
+        out.push({ path: full, name: e, framework, origin: root.origin });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * A record's declared status, or null when it declares none.
+ * Accepts the AWOS inline form (`- **Status:** Approved`, with or without a
+ * leading list marker or bold) and the ADR section form (`## Status`
+ * followed by the value on a later line).
+ */
+function recordStatus(filePath: string): string | null {
+  const text = readTextSafe(filePath);
+  if (text === null) return null;
+  const inline = text.match(
+    /^\s*[-*]?\s*(?:\*\*)?Status(?:\*\*)?\s*:\s*(.+?)\s*$/im
+  );
+  if (inline) return inline[1].replace(/\*+/g, '').trim();
+  // JS has no \Z end-of-string anchor; $(?![\s\S]) is the equivalent — plain
+  // $ under the /m flag would stop at the first blank line inside the
+  // section instead of at the next heading or true end of file.
+  const section = text.match(
+    /^#{1,6}\s*Status\s*$([\s\S]*?)(?=^#{1,6}\s|$(?![\s\S]))/im
+  );
+  if (section) {
+    const first = section[1]
+      .split('\n')
+      .map((l) => l.trim())
+      .find(Boolean);
+    if (first)
+      return first
+        .replace(/^[-*]\s*/, '')
+        .replace(/\*+/g, '')
+        .trim();
+  }
+  return null;
+}
+
+/** How complete one record is: the elements its convention requires, and how many are present. */
+interface RecordCompleteness {
+  record: SpecRecord;
+  present: number;
+  required: number;
   missing: string[];
+}
+
+function recordCompleteness(r: SpecRecord): RecordCompleteness {
+  if (r.framework.recordFilePattern) {
+    // Pattern-named records (GSD's NN-PP-PLAN.md) are complete once at
+    // least one matching file exists in the record directory — there is no
+    // fixed file set to check off.
+    let hasMatch = false;
+    try {
+      hasMatch = readdirSync(r.path).some((f) =>
+        r.framework.recordFilePattern!.test(f)
+      );
+    } catch {
+      hasMatch = false;
+    }
+    return {
+      record: r,
+      present: hasMatch ? 1 : 0,
+      required: 1,
+      missing: hasMatch
+        ? []
+        : [`a file matching ${r.framework.recordFilePattern}`],
+    };
+  }
+  if (r.framework.recordTriad.length > 0) {
+    const present = r.framework.recordTriad.filter((f) =>
+      existsSync(join(r.path, f))
+    );
+    return {
+      record: r,
+      present: present.length,
+      required: r.framework.recordTriad.length,
+      missing: r.framework.recordTriad.filter((f) => !present.includes(f)),
+    };
+  }
+  const text = readTextSafe(r.path) ?? '';
+  const present = r.framework.recordSections.filter((sec) =>
+    new RegExp(`^#{1,6}\\s*${sec}\\s*$`, 'im').test(text)
+  );
+  return {
+    record: r,
+    present: present.length,
+    required: r.framework.recordSections.length,
+    missing: r.framework.recordSections.filter((s) => !present.includes(s)),
+  };
 }
 
 export function detectSpecTriadComplete(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const specDirs = listSpecDirs(repoPath);
-
-  if (specDirs.length === 0) {
-    // A repo with zero specs must not score on spec completeness.
-    return makeResult(
-      'SKIP',
-      null,
-      ['no spec directories found — triad check not applicable'],
-      'detected'
-    );
+  const records = listSpecRecords(repoPath, params);
+  if (records.length === 0) {
+    // A repo with zero spec/decision records must not score on completeness.
+    return makeResult('SKIP', 0, [
+      'no spec or decision records found under any recognized convention',
+    ]);
   }
 
-  const statuses: SpecDirStatus[] = [];
-
-  for (const dir of specDirs) {
-    const present = SPEC_TRIAD.filter((f) => existsSync(join(dir, f)));
-    const missing = SPEC_TRIAD.filter((f) => !existsSync(join(dir, f)));
-    statuses.push({ dir: relative(repoPath, dir), present, missing });
-  }
-
-  const empty = statuses.filter((s) => s.present.length === 0);
-  const incomplete = statuses.filter(
-    (s) => s.present.length > 0 && s.missing.length > 0
+  const scored = records.map(recordCompleteness);
+  // Credit is fractional per record (present/required elements), not a
+  // binary complete/incomplete verdict: a spec missing only tasks.md is
+  // meaningfully more complete than an empty directory, and a single
+  // mostly-complete record must not swing the whole repo to a hard FAIL.
+  const totalCredit = scored.reduce(
+    (sum, s) => sum + (s.required > 0 ? s.present / s.required : 1),
+    0
   );
-  const complete = statuses.filter((s) => s.missing.length === 0);
+  const ratio = totalCredit / records.length;
+  const complete = scored.filter((s) => s.missing.length === 0);
+  const incomplete = scored.filter((s) => s.missing.length > 0);
 
-  const evidence = [
-    `${complete.length}/${specDirs.length} spec dirs have all 3 files`,
-    ...incomplete.map(
+  const origin: PathOrigin = records.every((r) => r.origin === 'inherited')
+    ? 'inherited'
+    : 'own';
+  const headline = inheritedNote(
+    origin,
+    `${complete.length}/${records.length} record(s) structurally complete`
+  );
+  const detail = incomplete
+    .slice(0, 10)
+    .map(
       (s) =>
-        `${s.dir} — ${s.present.length}/3 spec-triad artifacts present (missing: ${s.missing.join(', ')})`
-    ),
-    ...empty.map((s) => `${s.dir} — 0/3 spec-triad artifacts present`),
-  ];
+        `${s.record.framework.label}: ${s.record.name} — ${s.present}/${s.required} required elements present (missing: ${s.missing.join(', ')})`
+    );
 
-  if (empty.length > 0) {
-    return makeResult('FAIL', empty.length, [
-      `${empty.length} spec dir(s) have none of the 3 required files`,
-      ...evidence,
-    ]);
+  if (ratio >= 0.9) return makeResult('PASS', complete.length, [headline]);
+  if (ratio >= 0.5) {
+    return makeResult('WARN', complete.length, [headline, ...detail]);
   }
-
-  if (incomplete.length > 0) {
-    return makeResult('WARN', incomplete.length, [
-      `${incomplete.length} spec dir(s) are incomplete (have some but not all 3 files)`,
-      ...evidence,
-    ]);
-  }
-
-  return makeResult('PASS', specDirs.length, [
-    `all ${specDirs.length} spec dir(s) have the complete triad`,
-    ...evidence,
-  ]);
+  return makeResult('FAIL', complete.length, [headline, ...detail]);
 }
 
 // ---------------------------------------------------------------------------
 // detectStaleSpecs — category 2805 (SDD-06, method: detected)
 //
-// A spec is "stale" if its tasks.md exists but contains no task lines
-// (empty stub that was never filled in).
+// Classifies every spec/decision record by its own convention's status
+// vocabulary (e.g. AWOS: Draft/In Review/Approved are active, Completed is
+// terminal; ADR: Proposed/Draft are active, Accepted/Superseded/Deprecated/
+// Rejected are terminal). A record whose status is terminal is settled, not
+// stale. A convention that tracks status once for the whole project rather
+// than per record (GSD's .planning/STATE.md) judges every one of its
+// records against that single status instead of reading each record's own
+// file — see SpecFramework.projectStatusFile.
 //
-// A spec is "active" if tasks.md has unchecked tasks ([ ]).
-// A spec is "done" if all tasks in tasks.md are checked ([x]/[X]).
-// Both active and done are PASS states.
+// Status alone decides staleness: a record is stale when its status is in
+// its convention's active vocabulary, full stop. There is no task-progress
+// signal here — a just-started project is not the audience this check
+// scores (it runs against projects already shown to the audit plugin), so
+// the "freshly opened spec looks abandoned" false positive that an earlier
+// task-progress condition guarded against does not arise in practice.
 //
-// PASS if no stale specs.
-// WARN if 1 stale spec.
-// FAIL if 2+ stale specs.
+// PASS if none of the judged records are active.
+// WARN if fewer than half of the judged records are active.
+// FAIL if half or more of the judged records are active.
+// SKIP if no record declares a status this check recognizes.
 // ---------------------------------------------------------------------------
 
-const TASK_LINE_RX = /^\s*-\s*\[[ xX]\]/m;
-const UNCHECKED_RX = /^\s*-\s*\[ \]/m;
+/** The status-bearing file for one record — its own file, or the framework's single project-level file. */
+function statusFileFor(
+  r: SpecRecord,
+  repoPath: string,
+  params?: unknown
+): string | null {
+  if (r.framework.projectStatusFile) {
+    return probeRepoPath(repoPath, params, r.framework.projectStatusFile).path;
+  }
+  return r.framework.recordTriad.length > 0
+    ? join(r.path, r.framework.recordTriad[0])
+    : r.path;
+}
 
 export function detectStaleSpecs(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const specDirs = listSpecDirs(repoPath);
-
-  if (specDirs.length === 0) {
-    // No specs → nothing can be stale, but nothing can be healthy either.
-    return makeResult(
-      'SKIP',
-      null,
-      ['no spec directories found — stale-spec check not applicable'],
-      'detected'
-    );
-  }
-
-  const stale: string[] = [];
-  const active: string[] = [];
-  const done: string[] = [];
-
-  for (const dir of specDirs) {
-    const tasksPath = join(dir, 'tasks.md');
-    if (!existsSync(tasksPath)) continue;
-
-    const content = readTextSafe(tasksPath);
-    if (content === null) continue;
-
-    const hasTasks = TASK_LINE_RX.test(content);
-    if (!hasTasks) {
-      // tasks.md exists but has no task items → stale
-      stale.push(relative(repoPath, dir));
-    } else if (UNCHECKED_RX.test(content)) {
-      active.push(relative(repoPath, dir));
-    } else {
-      done.push(relative(repoPath, dir));
-    }
-  }
-
-  const evidence = [
-    ...active.map((d) => `active (has open tasks): ${d}`),
-    ...done.map((d) => `done (all tasks complete): ${d}`),
-    ...stale.map((d) => `stale (tasks.md has no task items): ${d}`),
-  ];
-
-  if (stale.length === 0) {
-    return makeResult('PASS', 0, ['no stale specs found', ...evidence]);
-  }
-
-  if (stale.length === 1) {
-    return makeResult('WARN', stale.length, [
-      `1 stale spec detected (tasks.md is an empty stub)`,
-      ...evidence,
+  const records = listSpecRecords(repoPath, params);
+  if (records.length === 0) {
+    return makeResult('SKIP', 0, [
+      'no spec or decision records found under any recognized convention',
     ]);
   }
 
-  return makeResult('FAIL', stale.length, [
-    `${stale.length} stale specs detected (tasks.md empty stubs)`,
-    ...evidence,
-  ]);
+  const origin: PathOrigin = records.every((r) => r.origin === 'inherited')
+    ? 'inherited'
+    : 'own';
+
+  const active: string[] = [];
+  const unknown: string[] = [];
+  let judged = 0;
+  for (const r of records) {
+    const statusFile = statusFileFor(r, repoPath, params);
+    const status = statusFile === null ? null : recordStatus(statusFile);
+    const isActive = r.framework.statusActive.some(
+      (v) => v.toLowerCase() === (status ?? '').toLowerCase()
+    );
+    const isTerminal = r.framework.statusTerminal.some(
+      (v) => v.toLowerCase() === (status ?? '').toLowerCase()
+    );
+    if (!isActive && !isTerminal) {
+      // Neither vocabulary matched: the record declares no status this
+      // convention recognizes. Counting it active would punish a project for
+      // a wording choice, so it leaves the ratio entirely.
+      unknown.push(`${r.name} (status: ${status ?? 'none declared'})`);
+      continue;
+    }
+    judged += 1;
+    if (isActive) active.push(`${r.framework.label}: ${r.name} (${status})`);
+  }
+
+  const evidence = [
+    inheritedNote(
+      origin,
+      `${active.length} of ${judged} record(s) with a recognized status are active`
+    ),
+    ...active.slice(0, 10).map((s) => inheritedNote(origin, `active: ${s}`)),
+  ];
+  if (unknown.length > 0) {
+    evidence.push(
+      inheritedNote(
+        origin,
+        `${unknown.length} record(s) declare no status this convention recognizes and are excluded from the ratio: ${unknown.slice(0, 5).join('; ')}`
+      )
+    );
+  }
+
+  if (judged === 0) return makeResult('SKIP', 0, evidence);
+  if (active.length === 0) return makeResult('PASS', 0, evidence);
+  const ratio = active.length / judged;
+  if (ratio < 0.5) return makeResult('WARN', active.length, evidence);
+  return makeResult('FAIL', active.length, evidence);
 }
 
 // ---------------------------------------------------------------------------
@@ -966,13 +1290,13 @@ export function detectAgentAnnotations(
   const passAt = p?.pass_at ?? 0.7;
   const warnAt = p?.warn_at ?? 0.4;
   const passAtPct = Math.round(passAt * 100);
-  const specDirs = listSpecDirs(repoPath);
+  const specDirs = listSpecDirs(repoPath, params);
 
   let totalTasks = 0;
   let annotatedTasks = 0;
 
-  for (const dir of specDirs) {
-    const tasksPath = join(dir, 'tasks.md');
+  for (const ref of specDirs) {
+    const tasksPath = join(ref.path, 'tasks.md');
     if (!existsSync(tasksPath)) continue;
 
     const content = readTextSafe(tasksPath);
@@ -994,27 +1318,44 @@ export function detectAgentAnnotations(
     ]);
   }
 
+  // A single listSpecDirs() call resolves entirely from one location (own or
+  // inherited), so every ref shares the same origin; specDirs is non-empty
+  // here (totalTasks > 0 requires at least one).
+  const origin: PathOrigin = specDirs[0].origin;
+
   const ratio = Math.round((annotatedTasks / totalTasks) * 1e10) / 1e10;
   const evidence = [
-    `${annotatedTasks}/${totalTasks} task lines have **[Agent: ...]** annotations (${Math.round(ratio * 100)}%)`,
+    inheritedNote(
+      origin,
+      `${annotatedTasks}/${totalTasks} task lines have **[Agent: ...]** annotations (${Math.round(ratio * 100)}%)`
+    ),
   ];
 
   if (ratio >= passAt) {
     return makeResult('PASS', ratio, [
-      `${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`,
+      inheritedNote(
+        origin,
+        `${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`
+      ),
       ...evidence,
     ]);
   }
 
   if (ratio >= warnAt) {
     return makeResult('WARN', ratio, [
-      `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (below ${passAtPct}%)`,
+      inheritedNote(
+        origin,
+        `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (below ${passAtPct}%)`
+      ),
       ...evidence,
     ]);
   }
 
   return makeResult('FAIL', ratio, [
-    `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`,
+    inheritedNote(
+      origin,
+      `only ${Math.round(ratio * 100)}% of tasks annotated with agent assignments (threshold: ${passAtPct}%)`
+    ),
     ...evidence,
   ]);
 }
@@ -1028,7 +1369,7 @@ export const DETECTORS: Record<
   number,
   (repoPath: string, params?: unknown) => ReturnType<typeof makeResult>
 > = {
-  2800: detectAwosInstalled, // SDD-01 AWOS installed
+  2800: detectSpecWorkflowAdopted, // SDD-01 spec-driven practice adopted
   2801: detectProductContextDocs, // SDD-02 foundational product docs
   2802: detectArchTechMatch, // SDD-03 tech choices match codebase
   2803: detectBranchSpecRatio, // SDD-04 branch→spec ratio (computed)

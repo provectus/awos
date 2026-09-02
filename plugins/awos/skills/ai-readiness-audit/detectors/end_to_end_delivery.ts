@@ -1,9 +1,17 @@
-import { makeResult, iterFiles, readTextSafe, detectTrunk } from './_base.ts';
+import {
+  makeResult,
+  iterFiles,
+  readTextSafe,
+  detectTrunk,
+  probeRepoPath,
+  inheritedNote,
+} from './_base.ts';
 import { existsSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { CI_CONFIG_CANDIDATES } from '../ci_platforms.ts';
 import { ALL_SOURCE_GLOBS } from '../languages.ts';
+import { buildSpecRefPattern } from '../spec_frameworks.ts';
 
 // ---------------------------------------------------------------------------
 // detectVerticalDelivery — category 2300 (SBP-08, method: computed)
@@ -275,17 +283,22 @@ export function detectVerticalDelivery(
 // ---------------------------------------------------------------------------
 
 const IMPL_PATH_RX = /(?:^|[^\w])(src|app|lib|packages?|cmd|internal|pkg)\//i;
-const SPEC_REF_RX =
-  /context\/spec\/\d{3}-|(?<!\/)spec\/\d{3}-|\.specify\/|openspec\/|specs?\/[\w-]+\/(spec|design|tasks)\.md/i;
+// Derived from the SPEC_FRAMEWORKS registry (spec_frameworks.ts) — the same
+// single source of truth SDD-01/04/05/06 read — rather than a hand-maintained
+// duplicate that silently drifts from it.
+const SPEC_REF_RX = buildSpecRefPattern();
+
+const SPEC_REL_PATH = 'context/spec';
 
 export function detectBidirectionalLinks(
   repoPath: string,
-  _params?: unknown
+  params?: unknown
 ): ReturnType<typeof makeResult> {
-  const specBase = join(repoPath, 'context', 'spec');
-  if (!existsSync(specBase)) {
+  const specProbe = probeRepoPath(repoPath, params, SPEC_REL_PATH);
+  if (specProbe.path === null) {
     return makeResult('FAIL', 0, ['no context/spec/ directory found']);
   }
+  const specBase = specProbe.path;
 
   // Collect spec markdown files
   const specFiles = iterFiles(specBase, ['*.md']);
@@ -304,7 +317,22 @@ export function detectBidirectionalLinks(
     if (content === null) continue;
     if (IMPL_PATH_RX.test(content)) {
       specRefsImpl = true;
-      specImplEvidence.push(`spec→impl reference in: ${relative(repoPath, f)}`);
+      // Own repo: relative(repoPath, f) — byte-identical to before this file
+      // ever supported orchestration roots, since specBase === join(repoPath,
+      // SPEC_REL_PATH) in that case. Inherited: specBase lives outside
+      // repoPath, so relative(repoPath, f) would render as an unreadable
+      // ../../… trail — reconstruct the logical context/spec/… location
+      // within the workspace that actually supplied it instead.
+      const displayPath =
+        specProbe.origin === 'inherited'
+          ? join(SPEC_REL_PATH, relative(specBase, f))
+          : relative(repoPath, f);
+      specImplEvidence.push(
+        inheritedNote(
+          specProbe.origin,
+          `spec→impl reference in: ${displayPath}`
+        )
+      );
       if (specImplEvidence.length >= 3) break;
     }
   }
@@ -338,9 +366,12 @@ export function detectBidirectionalLinks(
   if (specRefsImpl || implRefsSpec) {
     return makeResult('WARN', 1, [
       'only one direction of spec↔impl cross-references found',
-      specRefsImpl
-        ? 'spec files reference implementation paths'
-        : 'no spec files reference implementation paths',
+      inheritedNote(
+        specProbe.origin,
+        specRefsImpl
+          ? 'spec files reference implementation paths'
+          : 'no spec files reference implementation paths'
+      ),
       implRefsSpec
         ? 'implementation files reference spec directories'
         : 'no implementation files reference spec directories',

@@ -1,43 +1,39 @@
-# The `awos` Philosophy: Why It Works
+# Why `awos` Works
 
-In the new era of AI-powered development, it's tempting to ask an LLM to "just write the code." However, this often leads to poor results. This document explains the thinking behind the **`awos`** framework and why its structured process is the key to building high-quality software with AI agents.
+What `awos` is, and is not, is defined in [Philosophy](philosophy.md); where it is heading, in [Direction](direction.md). This is the reasoning behind both.
 
-## The Problem: LLMs Are Like Confused Interns
+## A Senior Engineer on Their First Day
 
-Imagine you have a new, very smart intern. If you tell them, "build a login feature," without any other information, what will you get? They will build _a_ login feature, but it probably won't be the _right_ one for your product.
+A modern coding agent is a very senior engineer on their first day at your company. There is no stack it does not know and no pattern it has not seen. What it lacks is what any senior lacks on day one: it does not know how things are done here, and it does not know what the thing you are asking for is.
 
-LLMs are the same. They are incredibly powerful, but they start with zero knowledge of your project. Without complete, well-organized information about the problem, the desired solution, and the technical environment, an LLM will produce generic, incorrect code. **The `awos` framework is designed to turn a confused intern into an expert team member by giving it the context it needs.**
+The second gap is the dangerous one, and seniority is what makes it dangerous. A junior who does not understand a task asks. A senior who does not understand a task makes a reasonable assumption, keeps going, and you find out what they assumed at review. The agent does the same: given an incomplete picture, it fills the gaps with something plausible and builds it well.
 
-## Your New Job: Making Your Product the Next "Tetris"
+## Context Engineering Solved the First Half
 
-LLM agents are brilliant at creating things they already understand deeply. Ask one to make a game like Tetris, and it will do a great job. Why? Because the concept of Tetris is part of its vast, pre-existing knowledge.
+"How things are done here" is a solved problem, and it is not what `awos` is for. Well-kept instruction files, architecture notes, and the codebase itself give the agent the conventions, the stack, and the shape of the system, and current models read them well. Teams that do this get code that fits.
 
-However, the LLM knows nothing about _your_ business, _your_ product, or _your_ users.
+They still get rework. We measured this across our own teams: the ones that adopted agent-driven development most heavily also had the highest rework rates. The code fits the codebase and misses what was wanted.
 
-The most essential work for a modern software team is to provide this context to the AI agents. Your job is to carefully explain every piece of your project until the LLM "knows" your product as well as it knows Tetris. **`awos` provides the tools to teach the AI the rules of your unique game.**
+## The Half It Did Not Solve
 
-## How We Teach: The Power of Specifications
+The missing half is intent: what the feature is, why it exists, what it must and must not do. That knowledge usually does not live in one place, and often not in the head of the person at the keyboard. They were handed a ticket; the reasons stayed with a product manager, a customer conversation, a decision made months ago, or a behavior of the existing system that everyone assumes and nobody wrote down.
 
-The primary "lesson plan" for teaching an LLM is a good specification.
+Nothing in a codebase can supply this, so the agent supplies it itself: plausibly, silently, and wrong in ways nobody notices until the feature exists. Rework comes from a confident answer to a question nobody asked.
 
-A proper specification doesn't just list features. It clearly explains _what_ a feature must do, _why_ it is needed, and _who_ it is for. This understanding of the ultimate goal is essential. When everyone (including the AI agent) is aligned on the goal, we can build exactly what is expected on the first try.
+## Making It as Known as Tetris
 
-This is the key to true efficiency. The power of LLMs is not just writing code fast; it's writing the _correct_ code fast. **A good specification ensures the AI's speed is applied in the right direction.**
+Ask an agent to build Tetris and it builds a good one, because it knows what Tetris is before it writes a line: every rule, every edge case, what "done" looks like. Nobody briefed it; the game is fully known.
 
-## A Complete Story: The `awos` Vertical Structure
+The feature, not the codebase, has to become that known: what it is, why, and where it stops. No one person can dictate that knowledge. It is assembled from the ticket, the code, the past decisions, and the people who hold the pieces, and it is not complete until the gaps are visible and someone has said what goes in them.
 
-A product is more than just a collection of features; it has a broader context of business goals and technical rules. Each specification exists for a reason that is part of a bigger story.
+## Why Agreement
 
-That is why **`awos`** is built on a vertical structure, moving from a high-level vision down to the smallest implementation detail. Think of it like using a map with different zoom levels.
+`awos` follows one path: describe the change, confirm the agent understood it, build it, and check the result against what was agreed.
 
-1. **Product Definition**: The 10,000-foot view of the entire world.
+A specification nobody confirmed is a well-formatted guess. What produces a feature that ships right the first time is the moment where a person sees what the agent understood, including what it assumed and what it left out, and says "yes, that" or "no, not that" before any code exists. The specification is where that agreement is stored.
 
-2. **Roadmap**: Zooming in on the country we will visit this year.
+From there, the human decides, the agent builds, and the build is judged by how faithfully it honors the agreement rather than by whether the code works.
 
-3. **Functional Spec**: Zooming in on the specific city we are exploring today.
+## When Not to Use It
 
-4. **Technical Spec**: The detailed street map of that city.
-
-5. **Task List**: The turn-by-turn directions for our walk.
-
-Each step provides the right information at the right level of detail. By following this process, you tell a complete and coherent story to the AI agents, ensuring they have the full context they need to build your vision into reality.
+Agreeing first costs time, so `awos` is for changes where being wrong costs more: a feature that touches several parts of the system, a behavior other people depend on, work that will be hard to undo. A prototype, a hotfix, or a small edit does not need it; the agent's own planning handles those well.

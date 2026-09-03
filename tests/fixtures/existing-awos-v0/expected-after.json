@@ -1,8 +1,10 @@
 {
   "_comment": "Pre-existing stale .awos/commands/architecture.md must be overwritten by the framework's current content (the contains check pins a substring from the real commands/architecture.md, which the STALE-V0-CONTENT marker is not in).",
+  "_comment_version_stamp": "The before/ tree also carries a stale .awos/.awos-version reading 1.0.0. Asserting the stamp no longer contains it pins the upgrade-rewrite path end to end through the real orchestrator: an existing stamp from an older release must be replaced with the version being installed, not left in place.",
   ".awos/commands/architecture.md": {
     "exists": true,
     "contains": "# ROLE",
     "notContains": "STALE-V0-CONTENT"
-  }
+  },
+  ".awos/.awos-version": { "exists": true, "notContains": "1.0.0" }
 }

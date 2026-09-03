@@ -17,6 +17,8 @@ A new numbered directory is created for each spec (e.g., `001-user-auth`, `002-f
 
 ## How it works
 
+**Before it starts**: once a day, the command runs a quick self-check on your AWOS install — whether your hired-agent report still matches your agents and architecture, whether the `awos` plugin and MCP server are set up, and whether you're on the latest AWOS and plugin versions. It only reports what it finds and suggests commands to run; it never installs or updates anything itself.
+
 1. **Picks the topic**: Either uses your prompt as the feature topic, or automatically selects the next incomplete item from the roadmap.
 2. **Gathers context**: Reads the product definition and roadmap to understand what's already documented about this feature.
 3. **Interactive drafting**: Presents what it already knows, then asks targeted questions to fill in the gaps — focusing on the "why" (user pain points) and the "what" (functional requirements). For every requirement, it probes for edge cases like a QA tester would.
@@ -30,6 +32,7 @@ A new numbered directory is created for each spec (e.g., `001-user-auth`, `002-f
 - **Thinks like a tester.** Aggressively clarifies ambiguities — "What file formats are allowed?", "What happens on failure?", "What's the max file size?"
 - **[NEEDS CLARIFICATION] tags.** If something can't be confirmed, it's flagged explicitly rather than assumed. This prevents silent assumptions from causing bugs later.
 - **Testable acceptance criteria.** Every requirement is turned into a concrete, verifiable acceptance criterion (Given/When/Then style).
+- **Daily self-check.** The command checks your AWOS install once a day. It's advisory only — it reports the commands to run and never installs or updates anything itself.
 
 ## Common misconceptions
 

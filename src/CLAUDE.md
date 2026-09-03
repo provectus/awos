@@ -17,7 +17,8 @@ When a user runs `npx @provectusinc/awos`, this script:
 
 1. Creates directories in their project (`.awos/`, `.claude/`, `context/`)
 2. Copies framework files from this package into those directories
-3. Shows progress messages and statistics
+3. Stamps the installed AWOS version into `.awos/.awos-version`
+4. Shows progress messages and statistics
 
 That's it. Simple file copying with a nice UI.
 
@@ -32,7 +33,8 @@ src/
 │   ├── file-copier.js      # Does the file copying + preserveOnUpdate conflict scan
 │   ├── directory-creator.js # Creates directories
 │   ├── mcp-configurator.js
-│   └── marketplace-configurator.js
+│   ├── marketplace-configurator.js
+│   └── version-stamper.js  # writes .awos/.awos-version (final setup step)
 ├── utils/
 │   ├── fs-utils.js
 │   ├── logger.js

@@ -26,7 +26,7 @@ awos/
 │   ├── commands/        # Individual command reference docs
 │   ├── rationale.md
 │   └── testing-strategies.md
-├── scripts/             # AWOS scripts
+├── scripts/             # Runtime helpers copied verbatim to .awos/scripts/ — pin the module dialect in the extension (.mjs or .cjs, never a bare .js), since the installer doesn't control the target project's package.json "type" field
 ├── commands/            # AWOS command prompts
 ├── templates/           # Document templates
 ├── claude/              # Claude Code integration files
@@ -36,16 +36,19 @@ awos/
 
 ## Running the Test Suite
 
-The repo ships with three test layers under `tests/`, all using Node's `node:test` built-in — no npm dependencies needed.
+The repo ships with four test layers under `tests/`, all using Node's `node:test` built-in — no npm dependencies needed.
 
 ```bash
 npm test                   # all layers (primary path; CI runs this on Node 22)
 npm run test:lint          # static prompt linter
 npm run test:installer     # installer unit tests
 npm run test:fixtures      # fixture project tests
+npm run test:scripts       # tests for scripts/self-check.mjs
 
 bun test tests/            # optional local cross-runtime spot-check
 ```
+
+**Testing the self-check's version-drift path locally:** it always reports `unknown` when run against this repo, because `package.json` here carries the `0.0.0-develop` placeholder and the check deliberately skips non-release versions. To exercise it, run `node scripts/self-check.mjs --root <path-to-scratch-project>` against a scratch project with a hand-written `.awos/.awos-version` file instead — otherwise you'll conclude the check is broken when it's working as designed.
 
 Layer 1 (`tests/lint-prompts.test.js`) catches wrapper/root-command drift, dimension DAG breaks, and `setup-config.js` mismatches. Layers 2 and 3 (`tests/installer/`, `tests/fixtures.test.js`) exercise the installer against `fs.mkdtemp()` directories and commit-tracked fixture projects.
 

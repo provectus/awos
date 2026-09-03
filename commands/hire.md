@@ -241,6 +241,8 @@ Rules for the **Installed Hooks** table:
 
 The **Gaps** section may be empty. If non-empty, each bullet is one line: `- <Technology>: <what's missing> → <suggested action>`.
 
+Once the file is written, run `node .awos/scripts/self-check.mjs --record`. It stamps a machine-readable footer onto `hired-agents.md` recording the agent roster and a hash of `context/product/architecture.md` — that footer is what lets later commands detect the report has gone stale. The step is optional: if the script is absent (a project installed before it shipped), skip it silently and continue.
+
 ## Step 9: Final Summary
 
 Report:

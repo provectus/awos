@@ -26,9 +26,9 @@ There is always a moment where the human can see what the agent understood and s
 
 Implementation is judged by how faithfully it realizes the confirmed understanding, and verification checks the result against that agreement rather than only whether the code works. Implementation improvements belong in `awos` when they raise that fidelity or make deviation from the agreement visible sooner; improvements to code quality in general belong to the host tool.
 
-### 5. `awos` verifies its own work
+### 5. `awos` checks its own work
 
-Work is done when the checks pass, not when the agent says so — and `awos` runs the checks itself. This is only possible when acceptance criteria are concrete enough for `awos` to check each one; a criterion only a person can judge is marked as such, and `awos` brings them the evidence. A change that makes the work harder to verify is not an improvement.
+`awos` does not consider work done until it has made sure of it itself. Noticing that something is incomplete, wrong, or missing is `awos`'s job, not the human's. Where it cannot make sure, it says so. Quality and the ability to check it advance together — more checks do not make the work good, and good work is not done until it can be checked. A change to `awos` that trades one for the other is not an improvement.
 
 ### 6. Write for the reader
 

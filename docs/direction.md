@@ -11,7 +11,7 @@ The directions `awos` always moves in. None of them is ever finished, since each
 - **Advancing looks like:** a misunderstanding surfaces earlier than it did before; the time to a confident yes or no goes down; something a person had to hold in their head is now something they can read.
 - **Regressing looks like:** more content to review without more decisions to make; a check that happens after implementation instead of before; a confirmation that is a formality because nobody could evaluate it.
 
-Serves principles 1, 3, 5, and 6.
+Serves principles 1, 3, 6, and 7.
 
 ## Toward discovery
 
@@ -22,7 +22,7 @@ Intent is scattered across code, tickets, documentation, past decisions, and oth
 - **Advancing looks like:** a source of intent that `awos` reads on its own; a question the human no longer has to be asked; a gap that is surfaced as unknown instead of silently filled.
 - **Regressing looks like:** a longer interview; a file the human must maintain so that the agent can read it; an agent that resolves ambiguity by picking the plausible option.
 
-Serves principle 2; supports 3 and 6.
+Serves principle 2; supports 3 and 7.
 
 ## Toward memory
 
@@ -33,7 +33,7 @@ A project that remembers what it is makes every subsequent change easier to spec
 - **Advancing looks like:** knowledge produced by a change is retained by the flow itself; a later spec reads what an earlier one established; the product's current behavior is available to the agent, not only its history of intentions.
 - **Regressing looks like:** artifacts treated as disposable once implemented; upkeep of knowledge delegated to people; a document nothing in the flow keeps current.
 
-Serves principle 7; deepens 6.
+Serves principle 8; deepens 7.
 
 ## Toward fidelity
 
@@ -44,7 +44,7 @@ Agreement is only worth reaching if the build honors it. `awos` moves toward imp
 - **Advancing looks like:** fewer corrections between implementation and verification; a deviation from the agreement caught by the flow rather than by a person; an implementation that needs less supervision to stay on the agreed path.
 - **Regressing looks like:** an agent improvising beyond what was agreed; verification that checks only that the code works, not that it is what was agreed; a capability that improves code in general but not its fidelity to the agreement.
 
-Serves principles 1 and 4.
+Serves principles 1, 4, and 5.
 
 ## Toward a smaller surface
 
@@ -55,4 +55,4 @@ The method is a single path: intent → confirmed understanding → implementati
 - **Advancing looks like:** fewer commands doing the same work; an integration in place of an owned capability; a proven experiment folded into core and its predecessor removed.
 - **Regressing looks like:** a capability that sits outside the path, however useful; two ways to do the same step kept alive indefinitely; a feature that serves the host tool rather than the method.
 
-Serves principles 8 and 10.
+Serves principles 9 and 11.

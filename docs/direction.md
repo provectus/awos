@@ -1,6 +1,6 @@
 # Direction
 
-The directions `awos` always moves in. None of them is ever finished, since each is something the framework can always be more of, and none carries a date or a priority; those belong to the roadmap. Each follows from the principles in [Philosophy](philosophy.md).
+The directions `awos` always moves in. None of them is ever finished, since each is something the framework can always be more of, and none carries a date or a priority; those belong to the roadmap. When two directions pull against each other, toward agreement wins: the confirmation moment is what `awos` exists for, and the other four directions serve it. Each direction follows from the principles in [Philosophy](philosophy.md); principle 10 (one host) is a standing constraint on all of them rather than a direction of its own.
 
 ## Toward agreement
 

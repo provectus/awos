@@ -4,7 +4,7 @@ description: >-
   Detect and configure external documentation sources (wikis, ticket systems,
   chats, email). Guides MCP/CLI tool setup, handles editor restart-resume,
   and writes structured source configuration to context/sources/sources.md.
-  Called by onboarding commands when a brownfield project has external docs.
+  Directly invocable; today it serves /better:spec's research lane.
 argument-hint: ''
 ---
 

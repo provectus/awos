@@ -41,6 +41,22 @@ async function writeFile(p, content = 'placeholder\n') {
   await fsPromises.writeFile(p, content, 'utf8');
 }
 
+async function latestMigrationVersion() {
+  const files = (await fsPromises.readdir(migrationsDir)).filter((f) =>
+    f.endsWith('.json')
+  );
+  const versions = await Promise.all(
+    files.map(async (f) => {
+      const content = await fsPromises.readFile(
+        path.join(migrationsDir, f),
+        'utf8'
+      );
+      return JSON.parse(content).version;
+    })
+  );
+  return Math.max(...versions);
+}
+
 test('all migrations run end-to-end then re-running is a no-op', async () => {
   const workingDir = await freshTemp();
 
@@ -132,14 +148,21 @@ test('migration 001 skip_if_any leaves the source file untouched', async () => {
 });
 
 test('migration 001 in isolation: source-only state moves to migrated state', async () => {
-  // Hand-build a working dir that only triggers migration 001 (no preconditions
-  // for 002), so we can inspect 001's effect in isolation. Migration 002 has
-  // require_any: [.awos/subagents, .claude/agents/domain-experts]. After 001
-  // moves the file to domain-experts/, 002's precondition matches, so 002 also
-  // fires. To verify 001 alone, we have to read the state between the two —
-  // not easily possible via the public API. Instead, this test asserts that
-  // after the combined run, the .awos/.migration-version reaches 2, proving
-  // 001 ran (its precondition file was present) and the chain completed.
+  // Hand-build a working dir that only satisfies migration 001's
+  // precondition (a python-expert.md at the old path) — 002's
+  // domain-experts/ precondition is satisfied once 001 moves the file
+  // there, but 003 (remove-roadmap) and 004 (remove-hire) find nothing:
+  // this working dir has no .awos/commands/roadmap.md, no
+  // .awos/templates/roadmap-template.md, no .awos/commands/hire.md, and
+  // no .awos/templates/agent-template.md. runMigrations still writes the
+  // version file after every pending migration it iterates, not only the
+  // ones whose preconditions matched (see runner.js: `writeVersion` runs
+  // unconditionally inside the pending-migrations loop), so the version
+  // file always advances to the highest version among ALL migration
+  // files — not just the ones that actually touched this working dir.
+  // Assert that dynamically (the max `version` across
+  // src/migrations/*.json) so this test needs no manual bump whenever a
+  // migration is added.
   const workingDir = await freshTemp();
   await writeFile(
     path.join(workingDir, '.claude', 'agents', 'python-expert.md'),
@@ -148,14 +171,15 @@ test('migration 001 in isolation: source-only state moves to migrated state', as
 
   await silenced(() => runMigrations(workingDir));
 
+  const expectedLatest = await latestMigrationVersion();
   const versionContent = await fsPromises.readFile(
     path.join(workingDir, '.awos', '.migration-version'),
     'utf8'
   );
   assert.equal(
     versionContent.trim(),
-    '2',
-    'expected migrations 001 through 002 to all run, leaving version=2'
+    String(expectedLatest),
+    `expected the migration-version file to reach the latest migration version (${expectedLatest}) — runMigrations advances the version marker for every pending migration it iterates, whether or not that migration's preconditions matched this working dir`
   );
 });
 

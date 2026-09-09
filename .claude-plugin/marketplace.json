@@ -5,20 +5,20 @@
   },
   "metadata": {
     "description": "AWOS plugins for AI-native development workflows",
-    "version": "2.4.5"
+    "version": "3.0.0"
   },
   "plugins": [
     {
       "name": "awos",
       "source": "./plugins/awos",
-      "description": "Extends AWOS core with AI-powered delivery automation: audits a project's AI-readiness across quality dimensions (/awos:ai-readiness-audit) and sets up an end-to-end delivery flow — feature and optional bug-fix commands — tailored to the team (/awos:flow).",
-      "version": "2.4.5"
+      "description": "Extends AWOS core with AI-readiness auditing: /awos:ai-readiness-audit scores a repository — or a whole org — across quality dimensions with a deterministic measurement engine and renders evidence-backed reports; also ships the directly-invocable configure-external-sources skill.",
+      "version": "3.0.0"
     },
     {
       "name": "better",
       "source": "./plugins/better",
       "description": "Experimental research-backed functional specs: /better:spec forks the core spec flow, fans out codebase, web, and internal-KB research agents before drafting, and blind-verifies the written spec with a context-free reader.",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }

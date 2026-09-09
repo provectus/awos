@@ -32,12 +32,10 @@ That is why **`awos`** is built on a vertical structure, moving from a high-leve
 
 1. **Product Definition**: The 10,000-foot view of the entire world.
 
-2. **Roadmap**: Zooming in on the country we will visit this year.
+2. **Functional Spec**: Zooming in on the specific city we are exploring today.
 
-3. **Functional Spec**: Zooming in on the specific city we are exploring today.
+3. **Technical Spec**: The detailed street map of that city.
 
-4. **Technical Spec**: The detailed street map of that city.
-
-5. **Task List**: The turn-by-turn directions for our walk.
+4. **Task List**: The turn-by-turn directions for our walk.
 
 Each step provides the right information at the right level of detail. By following this process, you tell a complete and coherent story to the AI agents, ensuring they have the full context they need to build your vision into reality.

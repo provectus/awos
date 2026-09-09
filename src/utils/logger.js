@@ -81,7 +81,6 @@ function showSummary(statistics, options) {
   const filesSkipped = statistics.filesSkipped || statistics.skipped || 0;
   const migrationsApplied = statistics.migrations || 0;
 
-  const mcpConfigured = statistics.mcpConfigured || false;
   const marketplaceConfigured = statistics.marketplaceConfigured || false;
 
   const summaryItems = [
@@ -94,12 +93,6 @@ function showSummary(statistics, options) {
   if (migrationsApplied > 0) {
     summaryItems.push(['Migrations applied', migrationsApplied]);
   }
-
-  // Add MCP configuration status
-  summaryItems.push([
-    mcpConfigured ? 'MCP server configured' : 'MCP server already configured',
-    mcpConfigured ? 1 : 0,
-  ]);
 
   // Add marketplace registration status
   summaryItems.push([
@@ -137,10 +130,6 @@ function showSummary(statistics, options) {
         labelText = 'Would preserve existing items';
       } else if (label === 'Migrations applied') {
         labelText = 'Would apply migrations';
-      } else if (label === 'MCP server configured') {
-        labelText = 'Would configure MCP server';
-      } else if (label === 'MCP server already configured') {
-        labelText = 'MCP server already configured';
       } else if (label === 'Marketplace registered') {
         labelText = 'Would register marketplace';
       } else if (label === 'Marketplace already registered') {

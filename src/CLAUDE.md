@@ -31,7 +31,6 @@ src/
 ├── services/
 │   ├── file-copier.js      # Does the file copying + preserveOnUpdate conflict scan
 │   ├── directory-creator.js # Creates directories
-│   ├── mcp-configurator.js
 │   └── marketplace-configurator.js
 ├── utils/
 │   ├── fs-utils.js
@@ -54,7 +53,7 @@ From `config/setup-config.js`:
 | `scripts/`         | `.awos/scripts/`         | no               |
 | `claude/commands/` | `.claude/commands/awos/` | **yes**          |
 
-`.claude/agents/` is intentionally **not** a copy destination — it is the user's customization area for project-local subagents. AWOS-shipped agents (e.g. `testing-expert`) ride in via `awos-recruitment` on demand, so the installer never auto-populates this directory.
+`.claude/agents/` is intentionally **not** a copy destination — it is the user's customization area for project-local subagents. AWOS installs no agents of its own — agents come from the host's own ecosystem (project `.claude/agents/` files and plugins) — so the installer never auto-populates this directory.
 
 **Why the difference?**
 

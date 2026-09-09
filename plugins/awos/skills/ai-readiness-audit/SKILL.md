@@ -105,7 +105,7 @@ Report coarse progress for the user across the run. The deterministic Step 4 pas
 node "${CLAUDE_SKILL_DIR}/dist/cli.js" progress <elapsed_seconds> <done> <total>
 ```
 
-It returns `pct` (fraction 0–1 complete) and `eta_seconds`; print a single readable line such as `[Audit] scoring complete — 70% — ETA ~1 min remaining`. ETA is a wall-clock UX estimate, not a scored or deterministic metric. Exclude time spent waiting on the user from the elapsed timer — pause it across every `AskUserQuestion` call (Step 0 scope confirmation, Step 6 next-steps) and subtract that wait before passing `elapsed_seconds`. In headless mode (`--output-format stream-json`) emit the same JSON as a stream line; the artifact-count fallback is always observable too (`ls context/audits/YYYY-MM-DD_HH-MM-SS/*.json | wc -l`).
+It returns `pct` (fraction 0–1 complete) and `eta_seconds`; print a single readable line such as `[Audit] scoring complete — 70% — ETA ~1 min remaining`. ETA is a wall-clock UX estimate, not a scored or deterministic metric. Exclude time spent waiting on the user from the elapsed timer — pause it across every `AskUserQuestion` call (e.g. the Step 0 scope confirmation) and subtract that wait before passing `elapsed_seconds`. In headless mode (`--output-format stream-json`) emit the same JSON as a stream line; the artifact-count fallback is always observable too (`ls context/audits/YYYY-MM-DD_HH-MM-SS/*.json | wc -l`).
 
 ## Step 5 — Patch the LLM-only slice, then render
 
@@ -158,7 +158,7 @@ node "${CLAUDE_SKILL_DIR}/dist/cli.js" patch-judgment "context/audits/YYYY-MM-DD
    node "${CLAUDE_SKILL_DIR}/dist/cli.js" report-context "context/audits/YYYY-MM-DD_HH-MM-SS"
    ```
 
-   Transcribe from that output only — read it directly from the command result (do not redirect it to a file and parse it with `python3`/`node -e`; that is the same inline-script pattern, one step removed), and do not open `audit.json` or `collected/*.json` to hunt for values. Then write the three optional blocks (schema in `output-format.md` → "Report blocks") into `context/audits/YYYY-MM-DD_HH-MM-SS/report-blocks.json` and apply them with a single engine call, which merges them into `audit.json` and also writes `recommendations.md` from the same array (the input `/awos:roadmap` consumes):
+   Transcribe from that output only — read it directly from the command result (do not redirect it to a file and parse it with `python3`/`node -e`; that is the same inline-script pattern, one step removed), and do not open `audit.json` or `collected/*.json` to hunt for values. Then write the three optional blocks (schema in `output-format.md` → "Report blocks") into `context/audits/YYYY-MM-DD_HH-MM-SS/report-blocks.json` and apply them with a single engine call, which merges them into `audit.json` and also writes `recommendations.md` from the same array (the audit's actionable follow-up artifact):
 
    ```bash
    cat > context/audits/YYYY-MM-DD_HH-MM-SS/report-blocks.json <<'JSON'
@@ -256,38 +256,13 @@ Contributor counts in the org report are always aggregate — no per-person data
 
 ## Step 6 — What's Next?
 
-After presenting the report, offer follow-up next steps. Both `report.md` and `report.html` were already produced in Step 5 — Step 6 never (re-)generates the report; it only offers what to do next.
+After presenting the report, close by pointing the user forward. Both `report.md` and `report.html` were already produced in Step 5 — Step 6 never (re-)generates or hand-writes a report; it only says what to do next.
 
-### Headless mode (no interactive input)
+The actionable artifact is `context/audits/YYYY-MM-DD_HH-MM-SS/recommendations.md` — the prioritized improvements the audit surfaced. Point the user at it (alongside `report.html`) and suggest working through it: tackle the quick wins directly, and feed the larger items into the team's planning flow. This closing pointer is plain prose in every mode — there is no question to ask here, so headless runs (e.g. CI or `--output-format stream-json`) finish the same way.
 
-When `AskUserQuestion` receives its default answer (non-interactive, e.g. CI or `--output-format stream-json`), there is nothing to ask and nothing to render — the reports already exist from Step 5. Finish by pointing the user at `context/audits/YYYY-MM-DD_HH-MM-SS/report.html` and `recommendations.md`. Never hand-write or re-render a report.
-
-### Interactive mode
-
-Offer next steps using `AskUserQuestion` with `multiSelect: true`. The HTML report already exists (Step 5), so it is not an option here — offer only roadmap follow-ups.
-
-### Detect context
-
-- **AWOS installed:** `.awos/commands/` directory exists
-- **Roadmap exists:** `context/product/roadmap.md` file exists
-
-### Build options
-
-**If AWOS installed + roadmap exists:**
-
-- "Update roadmap with audit findings" — incorporate recommendations into the existing product roadmap
-
-**If AWOS installed + no roadmap:**
-
-- "Create a roadmap informed by audit findings" — start a new roadmap using audit results as input
-
-**If AWOS is NOT installed**, append this note after the question:
+**If AWOS is NOT installed** (`.awos/commands/` directory does not exist), append this note:
 
 > Tip: install AWOS (`npx @provectusinc/awos`) — the best way to make your repo AI-friendly and act on these findings.
-
-### Execute selected options
-
-- **Roadmap (update or create):** Tell the user to run `/awos:roadmap` and reference the audit recommendations at `context/audits/YYYY-MM-DD_HH-MM-SS/recommendations.md` as input.
 
 ## Adding New Dimensions
 

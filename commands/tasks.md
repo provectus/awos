@@ -69,14 +69,14 @@ Follow this process precisely.
   3.  Under that slice, create the nested tasks (database, backend, frontend) needed to implement and verify **only that slice**.
   4.  Assign a subagent to every task:
       - Identify the technology or domain the task involves.
-      - Enumerate the universe of available specialist subagents by inspecting the `Agent` tool's description block in your own system prompt. This is an introspection step — no tool call is required, but it is mandatory. Both kinds of agents are listed there: project-local ones (declared as files under `.claude/agents/*.md`) and plugin-provided ones. Tell them apart by the `plugin-name:` prefix on `subagent_type` — plugin-provided agents carry it (e.g. `python-development:python-pro`); project-local agents do not. The always-available built-in `general-purpose` is your fallback when no specialist matches.
+      - Enumerate the universe of available specialist subagents by inspecting the `Agent` tool's description block in your own system prompt. This is an introspection step — no tool call is required, but it is mandatory. Both kinds of agents are listed there: project-local ones (declared as files under `.claude/agents/*.md`) and plugin-provided ones. Tell them apart by the `plugin-name:` prefix on `subagent_type` — plugin-provided agents carry it (e.g. `python-development:python-pro`); project-local agents do not.
       - Match the task to a subagent based on technology keywords, task intent, and the tech stack identified in `technical-considerations.md`.
       - Append the assignment as `**[Agent: agent-name]**` at the end of the task description.
-      - Use `general-purpose` only when no specialist matches — track these for the Recommendations table.
+      - When no available agent covers a task, do not invent a specialist name and do not silently fall back to `general-purpose` — that is a staffing gap in the plan. Leave the task unassigned for now and resolve the gap with the user in Step 3b.
   5.  Within the same slice, after the implementation tasks, add a Verify task that exercises the slice end-to-end and deletes its own verification artifacts before completing. Skip the Verify task if `SKIP_TESTS = true`.
   6.  Repeat steps 1-5 for each subsequent slice until all spec requirements are covered.
   7.  Append the **Feature Testing & Regression** slice as the final slice (skip this step entirely if `SKIP_TESTS = true`). See **Step 3a** below for how to select the QA agent and emit the slice — do not invent your own wording.
-  8.  For each slice's Verify task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing for the Recommendations table in Step 4.
+  8.  For each slice's Verify task, identify required MCPs/services (browser MCP, curl, database access, etc.) and note any that may be missing for the Recommendations table in Step 5.
 
 ## Step 3a: Select the QA Agent and Emit the Feature Testing & Regression Slice
 
@@ -84,12 +84,11 @@ Skip this step if `SKIP_TESTS = true`.
 
 1.  **Search for a QA-coded subagent** by introspecting the `Agent` tool's description block from Step 3.4. Pick the best fit using this order, but do not hardcode names — match on responsibility:
     - A project-specific tester for the actual stack (e.g. `react-testing`, `pytest-tester`, a custom `acceptance-tester` in `.claude/agents/`).
-    - A general AWOS testing agent if installed (e.g. `testing-expert` from the `awos-recruitment` registry).
-    - The built-in `general-purpose` agent as the last resort.
-2.  **If no project-specific tester or AWOS testing agent is found,** stop and ask the user via `AskUserQuestion`. Present exactly three options:
-    1.  **Install a testing agent now** — run `/awos:hire` to add `testing-expert` (or a more specific tester) from the registry, then re-run `/awos:tasks`.
-    2.  **Generate the slice with `general-purpose`** — proceed and produce the Feature Testing & Regression slice, marking its tasks `**[Agent: general-purpose]**`. Flag this in the Recommendations table. (Default when the question is skipped.)
-    3.  **Skip the Feature Testing & Regression slice** — set `SKIP_TESTS = true` for this run only; the user can re-run `/awos:tasks` later once a tester is hired.
+    - Any other QA-coded agent, project-local or plugin-provided.
+2.  **If no QA-coded agent is found,** the plan has a staffing gap. Surface it via `AskUserQuestion` with exactly three options:
+    1.  **Assign `general-purpose` and proceed** — produce the Feature Testing & Regression slice with its tasks marked `**[Agent: general-purpose]**`. (Default when the question is skipped.)
+    2.  **Record the gap as an open question** — same assignment, plus an entry in the `## Open Questions` section of `tasks.md` (see Step 3b) naming the missing QA specialist, so the gap stays visible in the plan.
+    3.  **Skip the Feature Testing & Regression slice** — set `SKIP_TESTS = true` for this run only; the user can re-run `/awos:tasks` once a QA-coded agent is available in the project.
 
 3.  **Emit the slice** using the template below. Substitute `{qa-agent}` with the agent name selected above. Substitute `N` with the next slice number. Keep the wording — downstream automations depend on this exact structure.
 
@@ -121,24 +120,34 @@ Skip this step if `SKIP_TESTS = true`.
       - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with @spec: [spec-directory] and @regression if suitable for long-term regression. **[Agent: testing-expert]**`
       - `[ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**`
 
+## Step 3b: Record Staffing Gaps
+
+Skip this step if every task matched an available agent in Step 3.4 and no QA gap was recorded in Step 3a.
+
+1.  Collect the tasks left unassigned in Step 3.4 — the ones no available agent covers — plus any QA gap the user chose to record in Step 3a. These are staffing gaps in the plan, and the user decides how to carry them, not you.
+2.  Mark every uncovered task `**[Agent: general-purpose]**` so the plan stays executable (every task must carry a marker for `/awos:implement`), and prepare a short `## Open Questions` section for the top of the task list naming the missing expertise and the affected tasks — the gap stays visible in the plan instead of disappearing behind a generalist assignment. The user decides how to carry these gaps in Step 5, after the file is written.
+
 ## Step 4: Write the Task List
 
-1.  Write the complete slice/task list to `tasks.md` in the chosen spec directory. **Write the file without waiting for approval** — generating a task list is reversible (re-run `/awos:tasks` to revise), so the deliverable must never be gated behind a confirmation that an unattended run cannot answer.
+1.  Write the complete slice/task list (including any `## Open Questions` section from Step 3b) to `tasks.md` in the chosen spec directory. **Write the file without waiting for approval** — generating a task list is reversible (re-run `/awos:tasks` to revise), so the deliverable must never be gated behind a confirmation that an unattended run cannot answer.
 2.  Record a one-line marker at the very top of the generated `tasks.md`: `<!-- not-user-reviewed -->`. The file is written before review (Step 5), so it starts as a draft; Step 5 removes this marker once the user has reviewed it. Keep the marker shape exactly — downstream automations grep for it to tell a draft from a reviewed plan.
 3.  If `SKIP_TESTS = true`, record a one-line note at the top of the generated `tasks.md` so that downstream commands (e.g. `/awos:verify`) can detect the choice: `<!-- skip-tests: true -->`.
 
 ## Step 5: Surface for Review and Recommend Next Step
 
 1.  Report the saved path and present the slice/task plan for review.
-2.  Ask for review feedback strictly via the `AskUserQuestion` tool (e.g. options "Looks good — keep it as saved" / "I want changes") — never in plain text, which would end a non-interactive turn before the review outcome can be reported.
-3.  **When the user responds** (either "looks good" or after you apply their requested changes and re-save): remove the `<!-- not-user-reviewed -->` marker from the top of `tasks.md`, since the plan has now been reviewed. If they requested changes, apply them — adjust, split, merge slices or tasks, or reassign subagents — and re-save before removing the marker.
-4.  **If the review question goes unanswered** (dismissed, or the run is non-interactive): leave the file exactly as saved, marker included. Its presence is the signal that the plan was written but not reviewed; do not remove it.
-5.  If any tasks were assigned to `general-purpose` (because no specialist exists) or verification cannot be performed (missing MCPs/services), surface a table:
+2.  If Step 3b recorded staffing gaps, surface them now — after the write — in a single `AskUserQuestion` that names the uncovered tasks and the missing expertise. Two options:
+    1.  **Accept the `general-purpose` assignments** — remove the `## Open Questions` section from `tasks.md` and re-save; the uncovered tasks run under the built-in generalist.
+    2.  **Keep the gaps recorded** — the file stands as written; the user resolves each gap later by adding a covering agent to the project and re-running `/awos:tasks`, or by accepting the assignment then. (Default when the question is skipped — an unanswered question never hides a staffing gap.)
+3.  Ask for review feedback strictly via the `AskUserQuestion` tool (e.g. options "Looks good — keep it as saved" / "I want changes") — never in plain text, which would end a non-interactive turn before the review outcome can be reported.
+4.  **When the user responds** (either "looks good" or after you apply their requested changes and re-save): remove the `<!-- not-user-reviewed -->` marker from the top of `tasks.md`, since the plan has now been reviewed. If they requested changes, apply them — adjust, split, merge slices or tasks, or reassign subagents — and re-save before removing the marker.
+5.  **If the review question goes unanswered** (dismissed, or the run is non-interactive): leave the file exactly as saved, marker included. Its presence is the signal that the plan was written but not reviewed; do not remove it.
+6.  If verification cannot be performed for any slice (missing MCPs/services), surface a table:
 
-    | Task/Slice            | Issue                                                                               | Recommendation                                       |
-    | --------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------- |
-    | Slice 2: Task 3       | Assigned to `general-purpose` — no TypeScript specialist                            | Install `typescript-pro` agent for proper delegation |
-    | Slice N (QA)          | Feature Testing & Regression slice uses `general-purpose` — no QA-coded agent hired | Run `/awos:hire` to install `testing-expert`         |
-    | Slice 3: Verification | Browser MCP not available                                                           | Install browser MCP to enable UI verification        |
+    | Task/Slice            | Issue                     | Recommendation                                |
+    | --------------------- | ------------------------- | --------------------------------------------- |
+    | Slice 3: Verification | Browser MCP not available | Install browser MCP to enable UI verification |
 
-6.  Report the next command: `/awos:implement`.
+    If staffing gaps were recorded as open questions in Step 3b, point the user to the `## Open Questions` section at the top of `tasks.md` in the same report.
+
+7.  Report the next command: `/awos:implement`.

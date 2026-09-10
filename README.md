@@ -39,8 +39,6 @@ These commands establish your project's foundation. Run them once at the start, 
 
 Once your foundation is set, iterate through this cycle for each feature on your roadmap. These commands are designed to be run repeatedly — once per feature.
 
-> **Tip**: Don't hesitate to delete specs after implementation. Completed specs can become outdated and confuse the AI. Your code documentation is the source of truth.
-
 | Command           | What it does                                                                      | Docs                                  |
 | ----------------- | --------------------------------------------------------------------------------- | ------------------------------------- |
 | `/awos:spec`      | Creates the Functional Spec — what the feature does for the user.                 | [Details](docs/commands/spec.md)      |
@@ -57,9 +55,9 @@ That's it! By following these steps, you can systematically turn your vision int
 
 ## The `awos` Philosophy
 
-The **`awos`** framework is built on a simple but powerful idea: AI agents, like human developers, need clear context to do great work. Without a structured plan, even the most advanced LLM can act like a confused intern. **`awos`** provides a step-by-step workflow that transforms your vision into a detailed blueprint that AI agents can understand and execute flawlessly.
+**`awos`** is a method for turning intent into working software with agents, where the human decides and the agent builds. Its product is not documents but agreement — a confirmed, shared understanding between you and the agent about what is being built and why, reached before any code is written.
 
-[Read more about the philosophy behind **`awos`**](docs/rationale.md)
+[Why **`awos`** works](docs/rationale.md) · [The philosophy](docs/philosophy.md) · [Where it is heading](docs/direction.md)
 
 ## Command Reference
 

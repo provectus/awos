@@ -117,19 +117,21 @@ test('SDD-01: FAIL when context/ holds no workspace subdirs (e.g. only audit out
 // ---------------------------------------------------------------------------
 // detectProductContextDocs — code 2801 (SDD-02, detected)
 //
-// Check for the three foundational AWOS docs:
+// Check for the two foundational AWOS docs:
 //   context/product/product-definition.md
-//   context/product/roadmap.md
 //   context/architecture/architecture.md  (or context/product/architecture.md)
 //
-// PASS if all 3 present and non-trivial (> 5 lines).
-// WARN if 2 of 3 present.
-// FAIL if fewer than 2 present.
+// context/product/roadmap.md is deliberately not counted — /awos:roadmap was
+// removed in AWOS 3.0, so legacy roadmap files earn no credit.
+//
+// PASS if both present and non-trivial (> 5 lines).
+// WARN if 1 of 2 present.
+// FAIL if neither present.
 // ---------------------------------------------------------------------------
 
 const PRODUCT_DOC_CONTENT = Array(10).fill('meaningful content\n').join('');
 
-test('SDD-02: PASS when all three foundational docs are present and non-trivial', () => {
+test('SDD-02: PASS when both foundational docs are present and non-trivial', () => {
   const t = tmp();
   mkdirSync(join(t, 'context', 'product'), { recursive: true });
   mkdirSync(join(t, 'context', 'architecture'), { recursive: true });
@@ -138,42 +140,45 @@ test('SDD-02: PASS when all three foundational docs are present and non-trivial'
     PRODUCT_DOC_CONTENT
   );
   writeFileSync(
-    join(t, 'context', 'product', 'roadmap.md'),
-    PRODUCT_DOC_CONTENT
-  );
-  writeFileSync(
     join(t, 'context', 'architecture', 'architecture.md'),
     PRODUCT_DOC_CONTENT
   );
   const r = detectProductContextDocs(t);
-  assert.equal(r.status, 'PASS', 'all 3 present → PASS');
+  assert.equal(r.status, 'PASS', 'both docs present → PASS');
   assert.equal(r.method, 'detected');
 });
 
-test('SDD-02: WARN when 2 of 3 foundational docs are present', () => {
+test('SDD-02: WARN when 1 of 2 foundational docs is present', () => {
   const t = tmp();
   mkdirSync(join(t, 'context', 'product'), { recursive: true });
   writeFileSync(
     join(t, 'context', 'product', 'product-definition.md'),
     PRODUCT_DOC_CONTENT
   );
+  const r = detectProductContextDocs(t);
+  assert.equal(r.status, 'WARN', '1 of 2 present → WARN');
+});
+
+test('SDD-02: FAIL when neither foundational doc is present', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'context', 'product'), { recursive: true });
+  const r = detectProductContextDocs(t);
+  assert.equal(r.status, 'FAIL', 'neither doc present → FAIL');
+});
+
+test('SDD-02: a legacy roadmap.md earns no credit (removed from the required set in AWOS 3.0)', () => {
+  const t = tmp();
+  mkdirSync(join(t, 'context', 'product'), { recursive: true });
   writeFileSync(
     join(t, 'context', 'product', 'roadmap.md'),
     PRODUCT_DOC_CONTENT
   );
   const r = detectProductContextDocs(t);
-  assert.equal(r.status, 'WARN', '2 of 3 present → WARN');
-});
-
-test('SDD-02: FAIL when fewer than 2 foundational docs are present', () => {
-  const t = tmp();
-  mkdirSync(join(t, 'context', 'product'), { recursive: true });
-  writeFileSync(
-    join(t, 'context', 'product', 'product-definition.md'),
-    PRODUCT_DOC_CONTENT
+  assert.equal(
+    r.status,
+    'FAIL',
+    'a substantive roadmap.md alone must not count toward the foundational docs'
   );
-  const r = detectProductContextDocs(t);
-  assert.equal(r.status, 'FAIL', '1 of 3 present → FAIL');
 });
 
 test('SDD-02: FAIL when docs are present but trivial (≤ 5 lines)', () => {
@@ -186,15 +191,11 @@ test('SDD-02: FAIL when docs are present but trivial (≤ 5 lines)', () => {
     '# placeholder\n\nTODO\n'
   );
   writeFileSync(
-    join(t, 'context', 'product', 'roadmap.md'),
-    '# placeholder\n\nTODO\n'
-  );
-  writeFileSync(
     join(t, 'context', 'architecture', 'architecture.md'),
     '# placeholder\n\nTODO\n'
   );
   const r = detectProductContextDocs(t);
-  // All 3 present but trivial → counts as 0 substantive → FAIL
+  // Both present but trivial → counts as 0 substantive → FAIL
   assert.equal(r.status, 'FAIL', 'trivial docs → FAIL');
 });
 

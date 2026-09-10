@@ -57,16 +57,19 @@ export function detectAwosInstalled(
 // ---------------------------------------------------------------------------
 // detectProductContextDocs — category 2801 (SDD-02, method: detected)
 //
-// Checks for the three foundational AWOS documents:
+// Checks for the two foundational AWOS documents:
 //   context/product/product-definition.md
-//   context/product/roadmap.md
 //   context/architecture/architecture.md  OR  context/product/architecture.md
+//
+// context/product/roadmap.md is deliberately not required (and earns no
+// credit): /awos:roadmap was removed in AWOS 3.0, so the canonical flow
+// never creates it — legacy roadmap files are unmaintained.
 //
 // A document is "substantive" if it has more than 5 lines of non-blank content.
 //
-// PASS if 3 substantive docs found.
-// WARN if 2 substantive docs found.
-// FAIL if fewer than 2 found.
+// PASS if both substantive docs found.
+// WARN if 1 substantive doc found.
+// FAIL if none found.
 // ---------------------------------------------------------------------------
 
 const MIN_SUBSTANTIVE_LINES = 5;
@@ -80,7 +83,6 @@ function isSubstantive(filePath: string): boolean {
 
 const FOUNDATIONAL_DOC_CANDIDATES = [
   ['context/product/product-definition.md'],
-  ['context/product/roadmap.md'],
   ['context/architecture/architecture.md', 'context/product/architecture.md'],
 ];
 
@@ -112,22 +114,22 @@ export function detectProductContextDocs(
     ...missing.map((m) => `missing or trivial: ${m}`),
   ];
 
-  if (count === 3) {
+  if (count === 2) {
     return makeResult('PASS', count, [
-      'all 3 foundational AWOS documents present with substantive content',
+      'both foundational AWOS documents present with substantive content',
       ...evidence,
     ]);
   }
 
-  if (count === 2) {
+  if (count === 1) {
     return makeResult('WARN', count, [
-      '2 of 3 foundational AWOS documents present',
+      '1 of 2 foundational AWOS documents present',
       ...evidence,
     ]);
   }
 
   return makeResult('FAIL', count, [
-    `only ${count} of 3 foundational AWOS documents present`,
+    'neither foundational AWOS document present with substantive content',
     ...evidence,
   ]);
 }

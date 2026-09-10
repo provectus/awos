@@ -8,7 +8,7 @@ depends-on: [project-topology]
 
 # Spec-Driven Development
 
-Audits whether the project uses AWOS for spec-driven development. AWOS provides a structured workflow: product definition, roadmap, architecture, functional specs, technical considerations, task breakdown with agent assignments, implementation, and verification. SDD-01 is a gatekeeper check — if AWOS is not installed, all subsequent checks SKIP automatically.
+Audits whether the project uses AWOS for spec-driven development. AWOS provides a structured workflow: product definition, architecture, functional specs, technical considerations, task breakdown with agent assignments, implementation, and verification. SDD-01 is a gatekeeper check — if AWOS is not installed, all subsequent checks SKIP automatically.
 
 ## Checks
 
@@ -16,7 +16,7 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 
 - **What:** AWOS framework is installed in the project, providing the spec-driven development workflow
 - **How:**
-  1. Check for AWOS core directory: Glob for `.awos/commands/*.md` — expect at least 5 command files (product, roadmap, architecture, spec, tech, tasks, implement, verify)
+  1. Check for AWOS core directory: Glob for `.awos/commands/*.md` — expect at least 5 command files (product, architecture, spec, tech, tasks, implement, verify)
   2. Check for Claude Code wrapper commands: Glob for `.claude/commands/awos/*.md`
   3. Check for AWOS context directories: verify `context/product/` and `context/spec/` directories exist
   4. Minimum to pass: `.awos/commands/` has 5+ command files AND `.claude/commands/awos/` has wrapper files AND both `context/product/` and `context/spec/` directories exist
@@ -28,15 +28,14 @@ Audits whether the project uses AWOS for spec-driven development. AWOS provides 
 
 ### SDD-02: Product context documents are complete
 
-- **What:** The three foundational AWOS documents exist and contain substantive content: product definition, roadmap, and architecture
+- **What:** The two foundational AWOS documents exist and contain substantive content: product definition and architecture. `context/product/roadmap.md` is deliberately not counted — the roadmap command was removed in AWOS 3.0, so the canonical flow never creates it and legacy roadmap files are unmaintained
 - **How:**
   1. Check for `context/product/product-definition.md` (or `context/product/product.md`). Read the file and verify it contains at least a project name, vision/purpose, and target audience (the core sections from the AWOS product-definition template)
-  2. Check for `context/product/roadmap.md`. Read and verify it contains at least one phase with checklist items (`- [ ]` or `- [x]`)
-  3. Check for `context/product/architecture.md`. Read and verify it contains at least two architectural area sections with technology choice entries
-  4. For monorepos: also check service-level `*/context/product/` directories if detected in the topology artifact
-- **Pass:** All three documents exist with substantive content matching their AWOS template structure
-- **Warn:** All three documents exist but one or more is skeletal (fewer than 20 lines, or missing key sections like target audience in product-definition, phases in roadmap, or technology choices in architecture)
-- **Fail:** One or more of the three foundational documents is missing entirely
+  2. Check for `context/architecture/architecture.md` (or `context/product/architecture.md`). Read and verify it contains at least two architectural area sections with technology choice entries
+  3. For monorepos: also check service-level `*/context/product/` directories if detected in the topology artifact
+- **Pass:** Both documents exist with substantive content matching their AWOS template structure
+- **Warn:** Both documents exist but one or more is skeletal (fewer than 20 lines, or missing key sections like target audience in product-definition, or technology choices in architecture)
+- **Fail:** One or both of the two foundational documents is missing entirely
 - **Skip-When:** SDD-01 is FAIL (AWOS not installed)
 - **Severity:** high
 - **Category:** 2801
@@ -135,7 +134,7 @@ When writing the dimension artifact, include this structured summary for downstr
 
 ```
 - **AWOS installed:** yes | no
-- **Product context:** [which of product-definition / roadmap / architecture exist]
+- **Product context:** [which of product-definition / architecture exist]
 - **Spec count:** N directories (N complete, N partial, N skeleton)
 - **Spec status distribution:** N Draft, N In Review, N Approved, N Completed
 - **Stale specs:** N stale (list directory names)

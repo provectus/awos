@@ -79,8 +79,8 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 1.  **Check User Prompt:** Analyze the content of the `<user_prompt>` tag.
 2.  **Determine Topic:**
     - If the `<user_prompt>` tag is **not empty**, this is your **topic**. Announce it: "Okay, let's create a functional specification for: '`<user_prompt>`'."
-    - If the `<user_prompt>` tag is **empty**, ask the user for the topic via `AskUserQuestion` — offer the most plausible candidates from `context/product/product-definition.md` as options; free text covers everything else.
-    - If no answer arrives (e.g. an unattended `claude -p` run), stop with one line: there is no topic and nobody to ask — re-run as `/awos:spec <topic>`. Do not guess a topic from the product definition or the codebase.
+    - If the `<user_prompt>` tag is **empty** and `AWOS_UNATTENDED` is set, stop with one line **before asking anything**: there is no topic and nobody to ask — re-run as `/awos:spec <topic>`. Do not guess a topic from the product definition or the codebase. The stop must precede the question: under `claude -p` a dismissed `AskUserQuestion` ends the turn, so an instruction placed after the ask can never execute unattended.
+    - If the `<user_prompt>` tag is **empty** and the run is interactive, ask the user for the topic via `AskUserQuestion` — offer the most plausible candidates from `context/product/product-definition.md` as options; free text covers everything else. If the question is dismissed, the run ends with it — the topic exception in `# INTERACTION`, not a marker.
 3.  Scope boundary: you are working on this single **topic** only. Anything adjacent belongs in a separate specification.
 
 ### Step 2: Gather Context and Extract Known Information

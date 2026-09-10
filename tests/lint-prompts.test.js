@@ -1988,6 +1988,10 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       '**only** the absolute path',
       'the verifier dispatch must pass only the spec file path — session context would contaminate the blind read',
     ],
+    [
+      'Do not guess a topic from the product definition or the codebase.',
+      'the no-topic bail-out must refuse to invent a topic — shared verbatim with core spec.md (see the shared-bail-out test below)',
+    ],
   ];
   for (const [needle, contract] of requiredSubstrings) {
     assert.ok(
@@ -1995,6 +1999,20 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       `plugins/better/commands/spec.md must contain "${needle}" — ${contract}`
     );
   }
+});
+
+test('core spec.md shares the no-topic bail-out contract with /better:spec', () => {
+  const core = readUtf8(path.join(repoRoot, 'commands', 'spec.md'));
+  assert.ok(
+    core.includes(
+      'Do not guess a topic from the product definition or the codebase.'
+    ),
+    'commands/spec.md must refuse to invent a topic when the prompt is empty — the same sentence /better:spec pins, so the two contract-identical spec commands cannot drift apart silently'
+  );
+  assert.ok(
+    core.includes('AWOS_UNATTENDED'),
+    'commands/spec.md must branch on AWOS_UNATTENDED for the no-topic stop — the stop has to precede the topic question, because under claude -p a dismissed AskUserQuestion ends the turn and an instruction placed after it never executes'
+  );
 });
 
 test('better spec-verifier agent stays blind (tools restricted to Read, no other file reads)', () => {

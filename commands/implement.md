@@ -53,7 +53,7 @@ Follow this process precisely. Steps 2–5 form the per-task loop: repeat them f
 1.  Read `[target-spec-directory]/tasks.md`. Re-reading it each iteration ensures the next task is selected from the latest on-disk state.
 2.  Pick the next task in scope. Tasks are the nested checkbox lines under a slice header — they carry the `**[Agent: name]**` marker. Skip slice headers themselves (`- [ ] **Slice N: ...**`); they are composite groupings, not units of work. If the user named a single task, that's the only task; once it's done the loop ends. Otherwise pick the first remaining `[ ]` task in document order from the freshly-read `tasks.md`. If no incomplete tasks remain, exit the loop and go to Step 6.
 3.  Extract the agent assignment from the selected task line:
-    - Look for the `**[Agent: agent-name]**` pattern in the task line (e.g., `python-expert`, `react-expert`, `testing-expert`).
+    - Look for the `**[Agent: agent-name]**` pattern in the task line (e.g., `python-expert`, `react-expert`).
     - If no assignment is found, default to `general-purpose`.
     - Verify the named agent exists by checking it against the `Agent` tool's description block in your own system prompt, which lists every available agent — project-local ones (files under `.claude/agents/*.md`) and plugin-provided ones (recognized by the `plugin-name:` prefix on `subagent_type`). This is introspection, not a tool call.
     - If the named agent is not in that list, delegate this task to `general-purpose` instead and record the substitution — which task, which missing agent — for the Step 6 report. A plan may name specialists that were never installed or have since been removed; the task still runs, just without the specialist.

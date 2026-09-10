@@ -29,7 +29,7 @@ A **slice** is the top-level grouping checkbox — a vertical, end-to-end runnab
 # INTERACTION
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
-- A skipped or unanswered question is never a stop signal. Fall back to the documented default for that question and continue through the remaining steps, including writing `tasks.md`.
+- A skipped or unanswered question is never a stop signal. Fall back to the documented default for that question and continue through the remaining steps, including writing `tasks.md`. The one exception is the target-spec question in Step 1: without a selected spec there is nothing to plan, so an unanswered selection ends the run cleanly instead of falling back.
 
 <!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
@@ -42,7 +42,7 @@ Follow this process precisely.
 ## Step 1: Identify the Target Specification
 
 1.  Analyze `<user_prompt>`. If it clearly references a spec by name or index, identify the corresponding directory in `context/spec/`.
-2.  If the prompt is empty or ambiguous, list the spec directories that contain both `functional-spec.md` and `technical-considerations.md` and ask the user to choose. Do not proceed until a valid spec is selected.
+2.  If the prompt is empty or ambiguous, ask the user to choose via `AskUserQuestion`, offering the spec directories that contain both `functional-spec.md` and `technical-considerations.md` as options. Spec selection has no fallback default — without a target spec there is nothing to plan — so an unanswered selection ends the run cleanly (the Step 1 exception in `# INTERACTION`).
 3.  **Interpret the prompt's intent on testing.** Read `<user_prompt>` and decide whether the user wants to skip generated tests (e.g. wording like "skip tests", "no tests", "prototype", "throwaway", or an explicit `--no-tests` argument). Use natural-language understanding — substring matching alone would false-positive on phrases like "don't skip tests". When uncertain, ask the user via `AskUserQuestion` before continuing. Set `SKIP_TESTS = true` only when the intent is clear. Strip any explicit `--no-tests` / `skip tests` token from the prompt before further processing.
 
 ## Step 2: Gather and Synthesize Context
@@ -72,7 +72,7 @@ Follow this process precisely.
       - Enumerate the universe of available specialist subagents by inspecting the `Agent` tool's description block in your own system prompt. This is an introspection step — no tool call is required, but it is mandatory. Both kinds of agents are listed there: project-local ones (declared as files under `.claude/agents/*.md`) and plugin-provided ones. Tell them apart by the `plugin-name:` prefix on `subagent_type` — plugin-provided agents carry it (e.g. `python-development:python-pro`); project-local agents do not.
       - Match the task to a subagent based on technology keywords, task intent, and the tech stack identified in `technical-considerations.md`.
       - Append the assignment as `**[Agent: agent-name]**` at the end of the task description.
-      - When no available agent covers a task, do not invent a specialist name and do not silently fall back to `general-purpose` — that is a staffing gap in the plan. Leave the task unassigned for now and resolve the gap with the user in Step 3b.
+      - When no available agent covers a task, do not invent a specialist name and do not silently fall back to `general-purpose` — that is a staffing gap in the plan. Leave the task unassigned for now; Step 3b records the gap in the plan, and the user resolves it in Step 5, after the file is written.
   5.  Within the same slice, after the implementation tasks, add a Verify task that exercises the slice end-to-end and deletes its own verification artifacts before completing. Skip the Verify task if `SKIP_TESTS = true`.
   6.  Repeat steps 1-5 for each subsequent slice until all spec requirements are covered.
   7.  Append the **Feature Testing & Regression** slice as the final slice (skip this step entirely if `SKIP_TESTS = true`). See **Step 3a** below for how to select the QA agent and emit the slice — do not invent your own wording.
@@ -86,8 +86,8 @@ Skip this step if `SKIP_TESTS = true`.
     - A project-specific tester for the actual stack (e.g. `react-testing`, `pytest-tester`, a custom `acceptance-tester` in `.claude/agents/`).
     - Any other QA-coded agent, project-local or plugin-provided.
 2.  **If no QA-coded agent is found,** the plan has a staffing gap. Surface it via `AskUserQuestion` with exactly three options:
-    1.  **Assign `general-purpose` and proceed** — produce the Feature Testing & Regression slice with its tasks marked `**[Agent: general-purpose]**`. (Default when the question is skipped.)
-    2.  **Record the gap as an open question** — same assignment, plus an entry in the `## Open Questions` section of `tasks.md` (see Step 3b) naming the missing QA specialist, so the gap stays visible in the plan.
+    1.  **Record the gap as an open question** — produce the Feature Testing & Regression slice with its tasks marked `**[Agent: general-purpose]**`, plus an entry in the `## Open Questions` section of `tasks.md` (see Step 3b) naming the missing QA specialist, so the gap stays visible in the plan. (Default when the question is skipped — an unanswered question never hides a staffing gap.)
+    2.  **Assign `general-purpose` and proceed without recording** — same assignment, no `## Open Questions` entry. This is a deliberate decision to run QA under the generalist, so it is never the silent default.
     3.  **Skip the Feature Testing & Regression slice** — set `SKIP_TESTS = true` for this run only; the user can re-run `/awos:tasks` once a QA-coded agent is available in the project.
 
 3.  **Emit the slice** using the template below. Substitute `{qa-agent}` with the agent name selected above. Substitute `N` with the next slice number. Keep the wording — downstream automations depend on this exact structure.
@@ -100,7 +100,7 @@ Skip this step if `SKIP_TESTS = true`.
       - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: {qa-agent}]**
     ```
 
-- **Example of applying the rule for "User Profile Picture Upload":**
+- **Example of applying the rule for "User Profile Picture Upload":** The agent names below assume a project whose `Agent`-tool roster happens to provide `react-expert`, `python-expert`, `manual-qa-expert`, and `testing-expert`. In a real run every name comes from the Step 3.4 introspection — a task no listed agent covers goes through Steps 3a/3b, never borrows a name from this example.
   - **Bad, Horizontal Plan (DO NOT DO THIS):**
     - `[ ] Add avatar_url to users table`
     - `[ ] Create all avatar API endpoints (upload, delete)`
@@ -124,7 +124,7 @@ Skip this step if `SKIP_TESTS = true`.
 
 Skip this step if every task matched an available agent in Step 3.4 and no QA gap was recorded in Step 3a.
 
-1.  Collect the tasks left unassigned in Step 3.4 — the ones no available agent covers — plus any QA gap the user chose to record in Step 3a. These are staffing gaps in the plan, and the user decides how to carry them, not you.
+1.  Collect the tasks left unassigned in Step 3.4 — the ones no available agent covers — plus any QA gap recorded in Step 3a. These are staffing gaps in the plan, and the user decides how to carry them, not you.
 2.  Mark every uncovered task `**[Agent: general-purpose]**` so the plan stays executable (every task must carry a marker for `/awos:implement`), and prepare a short `## Open Questions` section for the top of the task list naming the missing expertise and the affected tasks — the gap stays visible in the plan instead of disappearing behind a generalist assignment. The user decides how to carry these gaps in Step 5, after the file is written.
 
 ## Step 4: Write the Task List

@@ -30,6 +30,7 @@ Your primary task is to create the technical specification for a given feature. 
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
 - **A skipped or unanswered question is never a stop signal. Record your best-fit option as an explicit `**Assumption:**` in the draft and continue through the remaining steps, including writing the deliverable.**
+- The one exception is the target-spec selection in Step 1: without a spec there is no deliverable to draft, so an unanswered selection ends the run cleanly.
 
 <!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
@@ -42,7 +43,7 @@ Follow this process precisely.
 ### Step 1: Identify the Target Specification
 
 1.  Analyze `<user_prompt>`. If it clearly references a spec by name or index, identify the corresponding directory in `context/spec/`.
-2.  If the prompt is empty or ambiguous, list the available spec directories and ask the user to choose. Do not proceed until a valid spec is selected.
+2.  If the prompt is empty or ambiguous, ask the user to choose via `AskUserQuestion`, offering the available spec directories as options. Spec selection has no fallback default — without a target spec there is no deliverable to draft — so an unanswered selection ends the run cleanly (the Step 1 exception in `# INTERACTION`).
 
 ### Step 2: Gather and Synthesize Context
 

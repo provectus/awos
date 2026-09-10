@@ -1,6 +1,6 @@
 {
   "version": 4,
-  "name": "Remove /awos:hire framework files (the user's .claude/commands/awos/hire.md wrapper is deliberately preserved)",
+  "name": "Remove /awos:hire framework files and its awos-recruitment MCP entry (the user's .claude/commands/awos/hire.md wrapper is deliberately preserved)",
   "preconditions": {
     "require_any": [
       ".awos/commands/hire.md",
@@ -15,6 +15,11 @@
     {
       "type": "delete",
       "from": ".awos/templates/agent-template.md"
+    },
+    {
+      "type": "remove_json_key",
+      "file": ".mcp.json",
+      "key": "mcpServers.awos-recruitment"
     }
   ]
 }

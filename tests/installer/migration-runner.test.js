@@ -98,9 +98,11 @@ test('all migrations run end-to-end then re-running is a no-op', async () => {
   const versionFile = path.join(workingDir, '.awos', '.migration-version');
   assert.ok(exists(versionFile), '.awos/.migration-version should be written');
   const versionContent = await fsPromises.readFile(versionFile, 'utf8');
-  assert.ok(
-    parseInt(versionContent.trim(), 10) >= 2,
-    `migration version should be at least 2 (latest), got "${versionContent.trim()}"`
+  const expectedLatest = await latestMigrationVersion();
+  assert.equal(
+    parseInt(versionContent.trim(), 10),
+    expectedLatest,
+    `migration version should reach the latest migration version (${expectedLatest}), got "${versionContent.trim()}"`
   );
 
   // Second run: no migrations to apply (version file is up to date).
@@ -109,6 +111,155 @@ test('all migrations run end-to-end then re-running is a no-op', async () => {
     second.applied,
     0,
     're-running migrations should report zero applied'
+  );
+});
+
+test('migrations 003 and 004 delete the roadmap/hire framework files and the awos-recruitment MCP entry when present', async () => {
+  const workingDir = await freshTemp();
+
+  // Seed every delete target of migrations 003 and 004 — the positive path,
+  // where the preconditions match AND the files are actually on disk.
+  const frameworkFiles = [
+    path.join(workingDir, '.awos', 'commands', 'roadmap.md'),
+    path.join(workingDir, '.awos', 'templates', 'roadmap-template.md'),
+    path.join(workingDir, '.awos', 'commands', 'hire.md'),
+    path.join(workingDir, '.awos', 'templates', 'agent-template.md'),
+  ];
+  for (const f of frameworkFiles) await writeFile(f);
+
+  // Seed the user-owned files the migrations must preserve.
+  const preservedFiles = [
+    path.join(workingDir, '.claude', 'commands', 'awos', 'roadmap.md'),
+    path.join(workingDir, '.claude', 'commands', 'awos', 'hire.md'),
+    path.join(workingDir, 'context', 'product', 'roadmap.md'),
+  ];
+  for (const f of preservedFiles) await writeFile(f, 'user content\n');
+
+  // Seed the .mcp.json a pre-3.0 install wrote, plus a user-added server.
+  const mcpPath = path.join(workingDir, '.mcp.json');
+  await writeFile(
+    mcpPath,
+    JSON.stringify(
+      {
+        mcpServers: {
+          'awos-recruitment': {
+            type: 'http',
+            url: 'https://recruitment.awos.provectus.pro/mcp',
+          },
+          'user-server': { type: 'http', url: 'https://example.com/mcp' },
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  );
+
+  await silenced(() => runMigrations(workingDir));
+
+  for (const f of frameworkFiles) {
+    assert.equal(
+      exists(f),
+      false,
+      `migrations 003/004 must delete the framework file ${path.relative(workingDir, f)}`
+    );
+  }
+  for (const f of preservedFiles) {
+    assert.ok(
+      exists(f),
+      `migrations must never touch the user-owned file ${path.relative(workingDir, f)}`
+    );
+  }
+
+  const mcp = JSON.parse(await fsPromises.readFile(mcpPath, 'utf8'));
+  assert.equal(
+    'awos-recruitment' in mcp.mcpServers,
+    false,
+    'migration 004 must remove the awos-recruitment entry the installer wrote'
+  );
+  assert.ok(
+    mcp.mcpServers['user-server'],
+    'migration 004 must leave user-added MCP servers untouched'
+  );
+
+  const second = await silenced(() => runMigrations(workingDir));
+  assert.equal(
+    second.applied,
+    0,
+    're-running migrations 003/004 must be a no-op'
+  );
+});
+
+test('migration 004 remove_json_key skips gracefully when .mcp.json is absent, malformed, entry-free, or under dry-run', async () => {
+  // Absent file: preconditions match via hire.md, but no .mcp.json exists.
+  const noFile = await freshTemp();
+  await writeFile(path.join(noFile, '.awos', 'commands', 'hire.md'));
+  await silenced(() => runMigrations(noFile));
+  assert.equal(
+    exists(path.join(noFile, '.mcp.json')),
+    false,
+    'a project without .mcp.json must not gain one from the key-removal op'
+  );
+
+  // Malformed JSON: the user's file must be left byte-for-byte untouched.
+  const badJson = await freshTemp();
+  await writeFile(path.join(badJson, '.awos', 'commands', 'hire.md'));
+  await writeFile(path.join(badJson, '.mcp.json'), '{ not json\n');
+  await silenced(() => runMigrations(badJson));
+  assert.equal(
+    await fsPromises.readFile(path.join(badJson, '.mcp.json'), 'utf8'),
+    '{ not json\n',
+    'an unparseable .mcp.json must be skipped, not rewritten or clobbered'
+  );
+
+  // Entry absent: user servers survive and the file is not corrupted.
+  const noEntry = await freshTemp();
+  await writeFile(path.join(noEntry, '.awos', 'commands', 'hire.md'));
+  await writeFile(
+    path.join(noEntry, '.mcp.json'),
+    JSON.stringify(
+      {
+        mcpServers: {
+          'user-server': { type: 'http', url: 'https://example.com/mcp' },
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  );
+  await silenced(() => runMigrations(noEntry));
+  const after = JSON.parse(
+    await fsPromises.readFile(path.join(noEntry, '.mcp.json'), 'utf8')
+  );
+  assert.ok(
+    after.mcpServers['user-server'],
+    'a .mcp.json without the awos entry must keep its user servers'
+  );
+
+  // Dry-run: the awos entry must survive.
+  const dry = await freshTemp();
+  await writeFile(path.join(dry, '.awos', 'commands', 'hire.md'));
+  await writeFile(
+    path.join(dry, '.mcp.json'),
+    JSON.stringify(
+      {
+        mcpServers: {
+          'awos-recruitment': {
+            type: 'http',
+            url: 'https://recruitment.awos.provectus.pro/mcp',
+          },
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  );
+  await silenced(() => runMigrations(dry, { dryRun: true }));
+  const dryAfter = JSON.parse(
+    await fsPromises.readFile(path.join(dry, '.mcp.json'), 'utf8')
+  );
+  assert.ok(
+    dryAfter.mcpServers['awos-recruitment'],
+    'dry-run must not remove the awos-recruitment MCP entry'
   );
 });
 

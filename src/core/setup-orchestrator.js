@@ -87,7 +87,7 @@ async function runSetup({
   // Step 4: Installing components
   showStep(
     'Installing Components',
-    'Copying commands, templates, and agents',
+    'Copying commands, templates, and scripts',
     4,
     TOTAL_STEPS
   );

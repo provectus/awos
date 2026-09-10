@@ -93,7 +93,9 @@ async function executeOperation(
   workingDir,
   { dryRun = false } = {}
 ) {
-  const sourcePath = path.normalize(path.join(workingDir, operation.from));
+  const sourcePath = operation.from
+    ? path.normalize(path.join(workingDir, operation.from))
+    : null;
   const targetPath = operation.to
     ? path.normalize(path.join(workingDir, operation.to))
     : null;
@@ -206,22 +208,77 @@ async function executeOperation(
             'item'
           );
         }
+      } else if (!(await exists(sourcePath))) {
+        // fs.rm with force:true never throws ENOENT, so the not-found case
+        // must be detected up front or the log claims a deletion that never
+        // happened.
+        log(
+          `  ${style.dim('–')} Skipped delete (not found): ${operation.from}`,
+          'item'
+        );
       } else {
-        try {
-          await fs.rm(sourcePath, { recursive: true, force: true });
-          log(`  Deleted: ${operation.from}`, 'success');
-        } catch (error) {
-          if (error.code !== 'ENOENT') {
-            throw error;
-          }
-          // Path doesn't exist, that's okay for delete
-          log(
-            `  ${style.dim('–')} Skipped delete (not found): ${operation.from}`,
-            'item'
-          );
-        }
+        await fs.rm(sourcePath, { recursive: true, force: true });
+        log(`  Deleted: ${operation.from}`, 'success');
       }
       break;
+
+    case 'remove_json_key': {
+      // Removes one key (dot-path) from a JSON file the installer itself
+      // wrote earlier (e.g. the awos-recruitment server entry in .mcp.json).
+      // The file belongs to the user's project, so anything unexpected —
+      // missing file, unparseable JSON, absent key — is a skip, not an error.
+      const filePath = path.normalize(path.join(workingDir, operation.file));
+      const keySegments = operation.key.split('.');
+      const label = `${operation.key} from ${operation.file}`;
+      const skip = (reason) =>
+        log(
+          dryRun
+            ? `  ${style.dim('[DRY-RUN]')} Would skip key removal (${reason}): ${label}`
+            : `  ${style.dim('–')} Skipped key removal (${reason}): ${label}`,
+          'item'
+        );
+
+      if (!(await exists(filePath))) {
+        skip('file not found');
+        return;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(await fs.readFile(filePath, 'utf-8'));
+      } catch {
+        skip('file is not valid JSON');
+        return;
+      }
+
+      let parent = parsed;
+      for (const segment of keySegments.slice(0, -1)) {
+        parent =
+          parent && typeof parent === 'object' ? parent[segment] : undefined;
+      }
+      const leaf = keySegments[keySegments.length - 1];
+      if (
+        !parent ||
+        typeof parent !== 'object' ||
+        !Object.prototype.hasOwnProperty.call(parent, leaf)
+      ) {
+        skip('key not present');
+        return;
+      }
+
+      if (dryRun) {
+        log(`  ${style.dim('[DRY-RUN]')} Would remove: ${label}`, 'item');
+      } else {
+        delete parent[leaf];
+        await fs.writeFile(
+          filePath,
+          JSON.stringify(parsed, null, 2) + '\n',
+          'utf-8'
+        );
+        log(`  Removed: ${label}`, 'success');
+      }
+      break;
+    }
 
     default:
       throw new Error(`Unknown operation type: ${operation.type}`);

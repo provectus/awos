@@ -189,6 +189,39 @@ test('migrations 003 and 004 delete the roadmap/hire framework files and the awo
   );
 });
 
+test('migration 004 cleans the awos-recruitment entry even when the hire framework files are already gone', async () => {
+  // A user who deleted .awos/ wholesale (taking hire.md and the version
+  // file with it) but kept .mcp.json must still get the stale entry
+  // removed — .mcp.json is itself a require_any precondition, so the
+  // migration cannot be skipped past and stamped as done.
+  const workingDir = await freshTemp();
+  const mcpPath = path.join(workingDir, '.mcp.json');
+  await writeFile(
+    mcpPath,
+    JSON.stringify(
+      {
+        mcpServers: {
+          'awos-recruitment': {
+            type: 'http',
+            url: 'https://recruitment.awos.provectus.pro/mcp',
+          },
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  );
+
+  await silenced(() => runMigrations(workingDir));
+
+  const mcp = JSON.parse(await fsPromises.readFile(mcpPath, 'utf8'));
+  assert.equal(
+    'awos-recruitment' in mcp.mcpServers,
+    false,
+    'migration 004 must remove the awos-recruitment entry when .mcp.json alone matches its preconditions'
+  );
+});
+
 test('migration 004 remove_json_key skips gracefully when .mcp.json is absent, malformed, entry-free, or under dry-run', async () => {
   // Absent file: preconditions match via hire.md, but no .mcp.json exists.
   const noFile = await freshTemp();

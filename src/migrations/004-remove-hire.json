@@ -4,7 +4,8 @@
   "preconditions": {
     "require_any": [
       ".awos/commands/hire.md",
-      ".awos/templates/agent-template.md"
+      ".awos/templates/agent-template.md",
+      ".mcp.json"
     ]
   },
   "operations": [

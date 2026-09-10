@@ -138,6 +138,10 @@ Same discipline as Phase 4, applied to the issue tracker (18 open issues as of 2
 
 **Exit:** every open issue carries a phase or gap reference, or was closed with its reason named; no issue targets removed code.
 
+**Status: executed 2026-09-10.** Closed 10 (#178, #184 mooted by Phase 1; #157, #158, #159, #172, #173, #176, #179, #186 as end-of-life under the #189 test — every close names its kernel's successor home). Kept 8 as fix-worthy wrong-output bugs with beta-window comments and `bug` labels: #160, #162, #163, #165, #175, #190, #191, #192. Filed #201 (installer version-drift, kernel of #188) and #202 (better:spec KB-lane, Phase 7.6 coordination). The Phase 2a `roadmap.md` dependency issue was not filed — resolved in execution by the spec-anchor decision (#200); a #172 re-file was not created — the obligation lives here until the successor repo is a working venue.
+
+**Successor-audit requirements (kernels carried out of closed issues/PRs, 2026-09-10):** narrative claims mechanically traceable to check evidence (#157); an applicability model with "can't determine" and deployment context (#158); a per-ecosystem fixture matrix, Maven multi-module first (#159); orchestration-root / multi-repo topology as first-class (#172, with the feasibility notes and counterfactual tables); attribution as an unscored descriptor, if anywhere (#173); BDD suites first-class and a pyramid check that SKIPs rather than PASSes on unclassifiable trees (#176); one definition of "project file" plus coverage-report dedup (#179); the measured-or-not MTTR decision owned by a single function (#186).
+
 ## Phase 6 — Consolidate the flow
 
 Two consolidations, one target: the flow becomes `spec → tech → implement`, each step one command.

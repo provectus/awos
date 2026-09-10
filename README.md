@@ -2,7 +2,7 @@
 
 # **Agentic Workflow Operating System**
 
-**`awos`**[^1] is a framework for spec-driven development that transforms Claude Code from a chat interface into an autonomous engineering department. By creating a structured chain of intent, you enable agents to execute large-scale features independently — ensuring results that are production-ready.
+**`awos`**[^1] is a framework for spec-driven development built on Claude Code. By creating a structured chain of intent, you enable agents to execute large-scale features independently — ensuring results that are production-ready.
 
 ## Quick Start
 

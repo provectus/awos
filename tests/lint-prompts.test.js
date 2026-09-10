@@ -3827,7 +3827,7 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
 // The better plugin has its own independent version line. Its discipline
 // is three files moving together: its plugin.json, its marketplace.json entry,
 // and this pinned literal (it has no generator-version constant).
-const EXPECTED_BETTER_PLUGIN_VERSION = '0.1.0';
+const EXPECTED_BETTER_PLUGIN_VERSION = '0.2.0';
 
 test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -3955,6 +3955,22 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
     [
       '**only** the absolute path',
       'the verifier dispatch must pass only the spec file path — session context would contaminate the blind read',
+    ],
+    [
+      '`[prior]`',
+      'the prior-agreements lane must carry its own origin label — merged into [code] its findings read as description of the current code rather than as agreements the spec has to confirm or supersede',
+    ],
+    [
+      'NO PRIOR AGREEMENTS',
+      'a repository that records no prior agreements needs its own empty-result idiom — without one the lane pads its list, and an invented agreement is worse than none',
+    ],
+    [
+      'Confirm the supersession, or keep the agreed behavior.',
+      'a prior agreement the topic changes must become a marker the user answers — silently rewriting an agreement is the failure the lane exists to prevent',
+    ],
+    [
+      'not for conventions, stack choices, or code structure',
+      'the lane must be scoped to decisions about behavior — conventions and stack are context engineering, which the rationale calls solved and outside what awos is for; without this boundary the lane drifts into re-deriving how things are done here',
     ],
   ];
   for (const [needle, contract] of requiredSubstrings) {

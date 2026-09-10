@@ -550,3 +550,45 @@ test('renderer degrades to a generic render when no view-model is given — it n
     'view-model-only sections must be omitted, not rendered empty, when no view-model is given'
   );
 });
+
+test('renderer gives prior-agreement provenance its own lane and badge, never the KB fallback', () => {
+  const { html } = renderInTemp({
+    findings: {
+      prior: [
+        {
+          text: 'Spec 001 agreed exports are always UTF-8.',
+          impact: 'Carried into 2.1 unchanged.',
+          anchor: '#r21',
+        },
+      ],
+    },
+    requirements: [
+      {
+        match: '2.1',
+        one_liner: 'Every report can be exported with one tap.',
+        sources: ['prior'],
+        criteria_names: [],
+      },
+    ],
+  });
+  assert.ok(
+    html.includes('Prior agreements'),
+    'the prior-agreements lane must get its own findings tab — folding it into the codebase tab loses the distinction between what the code does and what was agreed'
+  );
+  assert.ok(
+    html.includes('Spec 001 agreed exports are always UTF-8.'),
+    'a finding reported by the prior-agreements lane must render in that lane, not be dropped'
+  );
+  assert.ok(
+    html.includes('class="src prior"') && html.includes('Prior agreement'),
+    'a "prior" source must render its own badge class and label — badge() falls back to the kb class for unknown keys, so an unregistered source silently mislabels a requirement as knowledge-base-sourced'
+  );
+  assert.ok(
+    !/class="src kb"[^<]*>Prior/.test(html),
+    'the prior badge must never inherit the kb class — the review page states where each requirement came from, and a wrong provenance badge misinforms the person approving it'
+  );
+  assert.ok(
+    html.includes('--src-prior:'),
+    'the prior badge needs its own theme variable in both palettes — an undefined custom property renders the pill with no background at all'
+  );
+});

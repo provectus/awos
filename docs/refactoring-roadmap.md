@@ -18,7 +18,7 @@
 
 **Target main flow: `spec → tech → implement`** (foundation: `product → architecture`). `tasks` and `verify` are not target-flow steps: `/awos:implement` absorbs both — it splits the scope itself, runs through it, and verifies the result, all in one. That consolidation is Phase 6A. And the spec step means `/better:spec` — **THE spec command**, WIP status notwithstanding (Daria, 2026-09-09); the roadmap plans around it, and it folds into core as Phase 6B. Phases 1–3 operate on the command set as it exists today.
 
-**Status as of 2026-09-10:** Phases 1, 2a, 2b, and 3 executed — one commit on the `cleaning` branch. See each phase's "Executed" note below for what shipped and what was deliberately deferred. Phases 4–8 remain planned.
+**Status as of 2026-09-10:** Phases 1–5 executed. Phases 1, 2a, 2b, 3: one commit on the `cleaning` branch, now open as PR #200 (`major` → npm v2.0.0). Phase 4: 14 PRs closed with principle + kernel comments, #199 merged (pending the maintainer's approve click), #189 closed superseding its split ask; open PRs are down to #200, #199, #194. Phase 5: issue tracker triaged 18 → 10 (8 beta-window audit bugs + #201/#202); the kernels from every audit close are consolidated in the successor-audit requirements block under Phase 5. See each phase's "Executed"/"Status" note for what shipped and what was deliberately deferred. **Paused after Phase 5 (2026-09-10).** Next: Phase 6A — its design inputs are gathered under 6A; the three design questions there are the phase-start work. Phases 6–8 remain planned.
 
 Companion documents: `philosophy-alignment.md` (verdicts — why each removal), `known-gaps.md` (living gap registry — diagnosis and evidence).
 
@@ -103,6 +103,8 @@ Work items:
 **Interim note:** this phase's `tasks.md` changes are interim — Phase 6 absorbs tasks into implement. Executing Phases 3 and 6A together avoids touching the same files twice; landing the marker-resolution duty directly in the rewritten `implement` is the cleaner path if timing allows.
 
 ## Phase 4 — Open-PR cleanup
+
+**Status: executed 2026-09-10.** 14 PRs closed, each comment naming its principle and its kernel's home (verdicts in the table below, updated same day); #199 merged (one-line README de-hype — approve click pending); #189 closed outright, superseding the split ask; #194 untouched on its own track. The `major` release label had to be created (repo had only minor/patch). Exit criterion met: no open PR contradicts the philosophy or a planned phase.
 
 Runs after the removals (Phases 1–3): by then most contested PRs target code that no longer exists, so the triage is mechanical rather than argumentative — and the removals never wait on PR archaeology. Every open PR gets the five-direction test; a close on philosophy grounds names the principle and **preserves the kernel** — the problem the PR solved is carried into a phase note or an issue. The philosophy PR itself is not part of this cleanup; it lands on its own track.
 

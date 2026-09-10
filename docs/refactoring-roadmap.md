@@ -40,7 +40,7 @@ Companion documents: `philosophy-alignment.md` (verdicts — why each removal), 
 
 **As executed:**
 
-- The `AskUserQuestion` reference example moved to `commands/product.md`.
+- The `AskUserQuestion` reference example moved from `flow.md` to `commands/tasks.md` — CLAUDE.md's "prefer AskUserQuestion over plain prose" bullet names it. (This record previously misnamed `commands/product.md`; CLAUDE.md never pointed there.)
 - Class-3 disownment for `/implement-feature`, `/fix-bug`, and `delivery-flow.md` is delivered as a note in `plugins/awos/README.md`, not as installer output — no migration touches these files; the note is the entire mechanism.
 - Plugin version bumped 2.4.5 → 3.0.0, moving three files (not four): `flow.md`'s generator-version constant no longer exists to anchor a fourth, so the lockstep discipline collapsed to `marketplace.json`, `plugins/awos/.claude-plugin/plugin.json`, and the `EXPECTED_PLUGIN_VERSION` test pin.
 

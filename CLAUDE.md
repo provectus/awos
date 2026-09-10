@@ -91,7 +91,7 @@ Each file in `claude/commands/{name}.md` is a tiny wrapper that points at `.awos
 
 AWOS is **spec-driven** — all project state lives in markdown files under `context/` in the user's project, not in chat history. An AI agent can rehydrate full context by reading the files alone.
 
-`/awos:product` is interview-only — it never reads code. `/awos:architecture` always runs an unconditional codebase-gather pass: an existing stack becomes the architecture defaults, cited with evidence, and confirmed in normal review like any other draft. It also keeps reading `context/sources/sources.md` when a project has one configured — the `configure-external-sources` skill that writes it remains directly invocable (it is no longer called from an onboarding command) and today serves `/better:spec`'s research lane until Phase 7 of the refactoring roadmap dissolves it in favor of runtime tool introspection.
+`/awos:product` is interview-only — it never reads code. `/awos:architecture` runs an unconditional codebase-gather pass when creating the architecture document: an existing stack becomes the architecture defaults, cited with evidence, and confirmed in normal review like any other draft. (Update Mode revises by interview without re-gathering.) It also keeps reading `context/sources/sources.md` when a project has one configured — the `configure-external-sources` skill that writes it remains directly invocable (it is no longer called from an onboarding command) and today serves `/better:spec`'s research lane until Phase 7 of the refactoring roadmap dissolves it in favor of runtime tool introspection.
 
 The canonical flow (each command is a markdown prompt under `commands/`):
 

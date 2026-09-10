@@ -67,9 +67,10 @@ const copyOperations = [
       'https://github.com/provectus/awos/tree/main/claude/commands',
   },
   // Note: `.claude/agents/` is intentionally NOT a copy destination. It is the
-  // user's customization area (project-local subagents). AWOS-shipped agents
-  // (e.g. `testing-expert`) are hired on demand via `awos-recruitment`, so the
-  // installer must not silently overwrite anything users put there.
+  // user's customization area (project-local subagents). AWOS installs no
+  // agents of its own — agents come from the host's own ecosystem (project
+  // .claude/agents/ files and plugins) — so the installer must not silently
+  // overwrite anything users put there.
 ];
 
 module.exports = {

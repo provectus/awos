@@ -51,7 +51,7 @@ bun test tests/            # optional local cross-runtime spot-check
 
 Layer 1 (`tests/lint-prompts.test.js`) catches wrapper/root-command drift, dimension DAG breaks, and `setup-config.js` mismatches. Layers 2 and 3 (`tests/installer/`, `tests/fixtures.test.js`) exercise the installer against `fs.mkdtemp()` directories and commit-tracked fixture projects.
 
-When you add a new structural contract — a wrapper frontmatter key, an `agent-template.md` field, a migration, a marker pattern — add its lint rule, installer test, or fixture in the **same PR**. The safety net only works if coverage keeps pace.
+When you add a new structural contract — a wrapper frontmatter key, a migration, a marker pattern — add its lint rule, installer test, or fixture in the **same PR**. The safety net only works if coverage keeps pace.
 
 To add a fixture: drop a directory under `tests/fixtures/<name>/`, optionally with a `before/` subtree (gets copied to the temp project as the starting state) and an `expected-after.json` manifest listing the files to assert. See existing fixtures for examples.
 
@@ -107,7 +107,7 @@ When you need to move or restructure files in existing installations:
    src/migrations/NNN-description.json
    ```
 
-   Where NNN is the next sequential number (e.g., 002, 003).
+   Where NNN is the next sequential number after the highest existing migration.
 
 2. Define the migration with preconditions:
    ```json
@@ -140,6 +140,7 @@ When you need to move or restructure files in existing installations:
 - **`move`**: Move file from one location to another
 - **`copy`**: Copy file to new location
 - **`delete`**: Remove file
+- **`remove_json_key`**: Remove one key (dot-path `key`) from a JSON `file` the installer wrote earlier (e.g. an `.mcp.json` server entry). A missing file, invalid JSON, or absent key is a logged skip, never an error
 
 ### Testing Migrations
 

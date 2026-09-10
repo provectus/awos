@@ -11,20 +11,14 @@ This command creates (or updates) your system architecture document — the tech
 ## Prerequisites
 
 - `context/product/product-definition.md` must exist.
-- `context/product/roadmap.md` must exist.
+- `context/sources/sources.md` (optional) — when a configured external-sources file exists, the agent also retrieves documentation context from those sources.
 
-Run `/awos:product` and `/awos:roadmap` first.
+Run `/awos:product` first.
 
 ## How it works
 
-- **Creation Mode**: The agent drafts every architectural area in one pass — proposing concrete technologies with justifications and alternatives for each area (application stack, data layer, infrastructure, etc.) — and saves `architecture.md` without waiting for approval. You then review the saved document and adjust anything you'd change.
+- **Creation Mode**: The agent starts by exploring your codebase with a focused `Explore` pass — every Creation Mode run, on every project. Any existing technology stack it finds (languages, frameworks, databases, infrastructure) becomes the default for the matching architecture decisions, each backed by file-path citations; on a repository with no source code the pass simply finds nothing and the draft comes from your product definition and best-practice defaults. The agent then drafts every architectural area in one pass — proposing concrete technologies with justifications and alternatives for each area (application stack, data layer, infrastructure, etc.) — and saves `architecture.md` without waiting for approval. You then review the saved document: choices seeded from the codebase are called out with their evidence, assumption-based ones are labeled, and you adjust anything you'd change.
 - **Update Mode**: The agent presents the current architecture, asks what you'd like to change, and proposes specific modifications. It checks for consistency — flagging conflicts with existing decisions or potential impacts.
-
-After saving, the agent reviews your tech stack against available specialist agents and presents a coverage table showing what's covered and what's missing. If gaps exist, it recommends running `/awos:hire`.
-
-## Brownfield mode
-
-If `/awos:product` detected an existing codebase (leaving a `context/product/brownfield.md`), this command discovers the **existing tech stack** via a focused `Explore` pass and uses those findings as the **defaults** for the architecture decisions they cover (brownfield-seeded defaults are triaged with you after the document is saved; where no finding exists, it falls back to a best-practice default labeled as an assumption). It then cleans up the brownfield scaffolding — deleting `brownfield.md` and removing `context/sources/` unless durable source config is worth keeping. See the [Brownfield Adoption Guide](../brownfield-adoption.md) for the artifact lifecycle and secret-handling guidance.
 
 ## Common misconceptions
 
@@ -44,4 +38,4 @@ If `/awos:product` detected an existing codebase (leaving a `context/product/bro
 
 ## What happens next
 
-Run `/awos:hire` to set up specialist agents for your tech stack.
+Run `/awos:spec` to write the functional spec for your first feature.

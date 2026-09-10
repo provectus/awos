@@ -41,6 +41,22 @@ async function writeFile(p, content = 'placeholder\n') {
   await fsPromises.writeFile(p, content, 'utf8');
 }
 
+async function latestMigrationVersion() {
+  const files = (await fsPromises.readdir(migrationsDir)).filter((f) =>
+    f.endsWith('.json')
+  );
+  const versions = await Promise.all(
+    files.map(async (f) => {
+      const content = await fsPromises.readFile(
+        path.join(migrationsDir, f),
+        'utf8'
+      );
+      return JSON.parse(content).version;
+    })
+  );
+  return Math.max(...versions);
+}
+
 test('all migrations run end-to-end then re-running is a no-op', async () => {
   const workingDir = await freshTemp();
 
@@ -82,9 +98,11 @@ test('all migrations run end-to-end then re-running is a no-op', async () => {
   const versionFile = path.join(workingDir, '.awos', '.migration-version');
   assert.ok(exists(versionFile), '.awos/.migration-version should be written');
   const versionContent = await fsPromises.readFile(versionFile, 'utf8');
-  assert.ok(
-    parseInt(versionContent.trim(), 10) >= 2,
-    `migration version should be at least 2 (latest), got "${versionContent.trim()}"`
+  const expectedLatest = await latestMigrationVersion();
+  assert.equal(
+    parseInt(versionContent.trim(), 10),
+    expectedLatest,
+    `migration version should reach the latest migration version (${expectedLatest}), got "${versionContent.trim()}"`
   );
 
   // Second run: no migrations to apply (version file is up to date).
@@ -93,6 +111,188 @@ test('all migrations run end-to-end then re-running is a no-op', async () => {
     second.applied,
     0,
     're-running migrations should report zero applied'
+  );
+});
+
+test('migrations 003 and 004 delete the roadmap/hire framework files and the awos-recruitment MCP entry when present', async () => {
+  const workingDir = await freshTemp();
+
+  // Seed every delete target of migrations 003 and 004 — the positive path,
+  // where the preconditions match AND the files are actually on disk.
+  const frameworkFiles = [
+    path.join(workingDir, '.awos', 'commands', 'roadmap.md'),
+    path.join(workingDir, '.awos', 'templates', 'roadmap-template.md'),
+    path.join(workingDir, '.awos', 'commands', 'hire.md'),
+    path.join(workingDir, '.awos', 'templates', 'agent-template.md'),
+  ];
+  for (const f of frameworkFiles) await writeFile(f);
+
+  // Seed the user-owned files the migrations must preserve.
+  const preservedFiles = [
+    path.join(workingDir, '.claude', 'commands', 'awos', 'roadmap.md'),
+    path.join(workingDir, '.claude', 'commands', 'awos', 'hire.md'),
+    path.join(workingDir, 'context', 'product', 'roadmap.md'),
+  ];
+  for (const f of preservedFiles) await writeFile(f, 'user content\n');
+
+  // Seed the .mcp.json a pre-3.0 install wrote, plus a user-added server.
+  const mcpPath = path.join(workingDir, '.mcp.json');
+  await writeFile(
+    mcpPath,
+    JSON.stringify(
+      {
+        mcpServers: {
+          'awos-recruitment': {
+            type: 'http',
+            url: 'https://recruitment.awos.provectus.pro/mcp',
+          },
+          'user-server': { type: 'http', url: 'https://example.com/mcp' },
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  );
+
+  await silenced(() => runMigrations(workingDir));
+
+  for (const f of frameworkFiles) {
+    assert.equal(
+      exists(f),
+      false,
+      `migrations 003/004 must delete the framework file ${path.relative(workingDir, f)}`
+    );
+  }
+  for (const f of preservedFiles) {
+    assert.ok(
+      exists(f),
+      `migrations must never touch the user-owned file ${path.relative(workingDir, f)}`
+    );
+  }
+
+  const mcp = JSON.parse(await fsPromises.readFile(mcpPath, 'utf8'));
+  assert.equal(
+    'awos-recruitment' in mcp.mcpServers,
+    false,
+    'migration 004 must remove the awos-recruitment entry the installer wrote'
+  );
+  assert.ok(
+    mcp.mcpServers['user-server'],
+    'migration 004 must leave user-added MCP servers untouched'
+  );
+
+  const second = await silenced(() => runMigrations(workingDir));
+  assert.equal(
+    second.applied,
+    0,
+    're-running migrations 003/004 must be a no-op'
+  );
+});
+
+test('migration 004 cleans the awos-recruitment entry even when the hire framework files are already gone', async () => {
+  // A user who deleted .awos/ wholesale (taking hire.md and the version
+  // file with it) but kept .mcp.json must still get the stale entry
+  // removed — .mcp.json is itself a require_any precondition, so the
+  // migration cannot be skipped past and stamped as done.
+  const workingDir = await freshTemp();
+  const mcpPath = path.join(workingDir, '.mcp.json');
+  await writeFile(
+    mcpPath,
+    JSON.stringify(
+      {
+        mcpServers: {
+          'awos-recruitment': {
+            type: 'http',
+            url: 'https://recruitment.awos.provectus.pro/mcp',
+          },
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  );
+
+  await silenced(() => runMigrations(workingDir));
+
+  const mcp = JSON.parse(await fsPromises.readFile(mcpPath, 'utf8'));
+  assert.equal(
+    'awos-recruitment' in mcp.mcpServers,
+    false,
+    'migration 004 must remove the awos-recruitment entry when .mcp.json alone matches its preconditions'
+  );
+});
+
+test('migration 004 remove_json_key skips gracefully when .mcp.json is absent, malformed, entry-free, or under dry-run', async () => {
+  // Absent file: preconditions match via hire.md, but no .mcp.json exists.
+  const noFile = await freshTemp();
+  await writeFile(path.join(noFile, '.awos', 'commands', 'hire.md'));
+  await silenced(() => runMigrations(noFile));
+  assert.equal(
+    exists(path.join(noFile, '.mcp.json')),
+    false,
+    'a project without .mcp.json must not gain one from the key-removal op'
+  );
+
+  // Malformed JSON: the user's file must be left byte-for-byte untouched.
+  const badJson = await freshTemp();
+  await writeFile(path.join(badJson, '.awos', 'commands', 'hire.md'));
+  await writeFile(path.join(badJson, '.mcp.json'), '{ not json\n');
+  await silenced(() => runMigrations(badJson));
+  assert.equal(
+    await fsPromises.readFile(path.join(badJson, '.mcp.json'), 'utf8'),
+    '{ not json\n',
+    'an unparseable .mcp.json must be skipped, not rewritten or clobbered'
+  );
+
+  // Entry absent: user servers survive and the file is not corrupted.
+  const noEntry = await freshTemp();
+  await writeFile(path.join(noEntry, '.awos', 'commands', 'hire.md'));
+  await writeFile(
+    path.join(noEntry, '.mcp.json'),
+    JSON.stringify(
+      {
+        mcpServers: {
+          'user-server': { type: 'http', url: 'https://example.com/mcp' },
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  );
+  await silenced(() => runMigrations(noEntry));
+  const after = JSON.parse(
+    await fsPromises.readFile(path.join(noEntry, '.mcp.json'), 'utf8')
+  );
+  assert.ok(
+    after.mcpServers['user-server'],
+    'a .mcp.json without the awos entry must keep its user servers'
+  );
+
+  // Dry-run: the awos entry must survive.
+  const dry = await freshTemp();
+  await writeFile(path.join(dry, '.awos', 'commands', 'hire.md'));
+  await writeFile(
+    path.join(dry, '.mcp.json'),
+    JSON.stringify(
+      {
+        mcpServers: {
+          'awos-recruitment': {
+            type: 'http',
+            url: 'https://recruitment.awos.provectus.pro/mcp',
+          },
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  );
+  await silenced(() => runMigrations(dry, { dryRun: true }));
+  const dryAfter = JSON.parse(
+    await fsPromises.readFile(path.join(dry, '.mcp.json'), 'utf8')
+  );
+  assert.ok(
+    dryAfter.mcpServers['awos-recruitment'],
+    'dry-run must not remove the awos-recruitment MCP entry'
   );
 });
 
@@ -132,14 +332,21 @@ test('migration 001 skip_if_any leaves the source file untouched', async () => {
 });
 
 test('migration 001 in isolation: source-only state moves to migrated state', async () => {
-  // Hand-build a working dir that only triggers migration 001 (no preconditions
-  // for 002), so we can inspect 001's effect in isolation. Migration 002 has
-  // require_any: [.awos/subagents, .claude/agents/domain-experts]. After 001
-  // moves the file to domain-experts/, 002's precondition matches, so 002 also
-  // fires. To verify 001 alone, we have to read the state between the two —
-  // not easily possible via the public API. Instead, this test asserts that
-  // after the combined run, the .awos/.migration-version reaches 2, proving
-  // 001 ran (its precondition file was present) and the chain completed.
+  // Hand-build a working dir that only satisfies migration 001's
+  // precondition (a python-expert.md at the old path) — 002's
+  // domain-experts/ precondition is satisfied once 001 moves the file
+  // there, but 003 (remove-roadmap) and 004 (remove-hire) find nothing:
+  // this working dir has no .awos/commands/roadmap.md, no
+  // .awos/templates/roadmap-template.md, no .awos/commands/hire.md, and
+  // no .awos/templates/agent-template.md. runMigrations still writes the
+  // version file after every pending migration it iterates, not only the
+  // ones whose preconditions matched (see runner.js: `writeVersion` runs
+  // unconditionally inside the pending-migrations loop), so the version
+  // file always advances to the highest version among ALL migration
+  // files — not just the ones that actually touched this working dir.
+  // Assert that dynamically (the max `version` across
+  // src/migrations/*.json) so this test needs no manual bump whenever a
+  // migration is added.
   const workingDir = await freshTemp();
   await writeFile(
     path.join(workingDir, '.claude', 'agents', 'python-expert.md'),
@@ -148,14 +355,15 @@ test('migration 001 in isolation: source-only state moves to migrated state', as
 
   await silenced(() => runMigrations(workingDir));
 
+  const expectedLatest = await latestMigrationVersion();
   const versionContent = await fsPromises.readFile(
     path.join(workingDir, '.awos', '.migration-version'),
     'utf8'
   );
   assert.equal(
     versionContent.trim(),
-    '2',
-    'expected migrations 001 through 002 to all run, leaving version=2'
+    String(expectedLatest),
+    `expected the migration-version file to reach the latest migration version (${expectedLatest}) — runMigrations advances the version marker for every pending migration it iterates, whether or not that migration's preconditions matched this working dir`
   );
 });
 

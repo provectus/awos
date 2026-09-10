@@ -30,7 +30,6 @@ Your primary task is to **fill in** a product definition template using a guided
 # OUTPUTS
 
 1.  **`context/product/product-definition.md`:** The complete, non-technical product definition, created by filling in the template.
-2.  **Optional Output:** `context/product/brownfield.md`. Created on brownfield projects only. Downstream commands (`/awos:roadmap`, `/awos:architecture`) extend and eventually delete this file.
 
 ---
 
@@ -58,7 +57,7 @@ First, check if the file `context/product/product-definition.md` exists.
 
 ### Step 2A: Update Mode
 
-1.  Read `context/product/product-definition.md` into context. Tell the user you found it and ask which section to update — surface the main section titles so they can pick.
+1.  Read `context/product/product-definition.md` into context. Tell the user you found it and use `AskUserQuestion` to ask which section to update, offering the main section titles as options.
 2.  Once they choose, jump to the matching section in Creation Mode below, ask only the questions needed to refresh that section, then return here.
 3.  After each update, ask whether they want to change another section or save. When they're done, proceed to **Step 3: File Generation**.
 
@@ -66,72 +65,13 @@ First, check if the file `context/product/product-definition.md` exists.
 
 ### Step 2B: Creation Mode
 
-1.  **Brownfield decision.** Decide whether to use existing source code as context, in this order — and never block the write on the choice:
-
-    a. **Prompt intent first.** Read `<user_prompt>`. If it clearly asks to use or explore the existing codebase (e.g. "explore existing code", "use the current codebase", "brownfield"), the decision is **explore**. If it clearly opts out (e.g. "without brownfield detection", "from scratch", "ignore existing code", "greenfield"), the decision is **skip**. Interpret intent with natural-language understanding, not substring matching — "don't explore the codebase" is a **skip**, not an explore. When the prompt states a preference, act on it and do not ask.
-
-    b. **Silent prompt.** If `<user_prompt>` says nothing either way, check whether the project already has source code by looking for common indicators (`src/`, `app/`, `lib/`, `package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml`, `Gemfile`, `build.gradle`, `*.csproj`, `Makefile`, `CMakeLists.txt`, `setup.py`, `pyproject.toml`, or similar). If none are found, the decision is **skip**. If any are found, always ask the user with `AskUserQuestion` — **Yes, explore the codebase** ("Use existing code as context for the product definition") and **No, start from scratch** ("Treat this as a new project — ignore existing code"), using these exact option labels. If the question goes unanswered, default to **Yes, explore the codebase** and continue.
-
-2.  **If the decision is explore,** run a comprehensive exploration before drafting:
-
-    a. Launch an `Explore` agent focused on the product domain:
-
-    ```text
-    Agent(subagent_type="Explore", description="Understand existing product", prompt="
-    Explore this codebase and determine what this project does. Focus on:
-    - Purpose and problem being solved (README, docs, package metadata, comments)
-    - Target audience signals (UI copy, API design, documentation tone, onboarding flow)
-    - Main features and capabilities (entry points, routes, commands, key modules)
-    - User journey (how someone uses this from start to finish)
-
-    For each finding, cite the file paths that evidence it. Be concise — report findings as bullet points.
-    ")
-    ```
-
-    b. Create `context/product/brownfield.md` with a `## Product` heading and record the findings under it. If the exploration surfaced nothing, still create the file with an empty `## Product` section; downstream commands (`/awos:roadmap`, `/awos:architecture`) key on the file's existence to run their own explorations. The findings are triaged with the user later, in **Step 4** — after the definition is saved — so exploration never blocks the write.
-
-3.  **External documentation sources.** Check `context/sources/sources.md`:
-
-    - If it does not exist and no brownfield.md was created, skip to substep 4.
-    - If it exists with `## Status: none`, skip to substep 4 — user previously declined.
-    - If it exists with `## Status: configured`, skip straight to retrieval below.
-    - If it exists with `## Status: restart-pending`, `## Status: verifying`, or `## Status: verified`, re-invoke the skill: `Skill(name="awos:configure-external-sources")`. If the Skill call fails, check the error: if the skill is not found (plugin absent), inform the user that the `awos` plugin is needed to finish source setup; if the call was rejected for another reason, report the error message. Either way, skip to substep 4 and leave `sources.md` untouched so the user's existing configuration is preserved. If the skill triggers an editor restart, stop here.
-    - If it does not exist and `context/product/brownfield.md` was created in substep 2, use `AskUserQuestion` to ask: "Do you have external documentation (wikis, tickets, chats, email) you'd like to import into the project context?" with options **Yes** and **No**. If the question goes unanswered, default to **No**. Then take exactly one of these two branches:
-      - **No** (including unanswered) — skip to substep 4 and **write nothing at all**: do not create `context/sources/`, and do not invoke the skill. The second bullet above reads an existing `## Status: none` back as "previously declined" and stops asking, so writing one here would turn "not this time" into "never ask again".
-      - **Yes** — invoke the skill: `Skill(name="awos:configure-external-sources")`. If the skill triggers an editor restart, stop here. If the Skill call fails, check the error: if the skill is not found (plugin absent), inform the user they can install it from the marketplace to enable external documentation import; if the call was rejected for another reason, report the error message to the user. **Only in this failure case**, write `context/sources/sources.md` with `## Status: none` so the next run does not re-ask for something the project cannot set up yet, then continue to substep 4.
-
-    **Retrieval.** If `context/sources/sources.md` exists with `## Status: configured`, read it and retrieve content from each configured source. For sources with `Access: mcp` or `Access: cli`, launch one Explore agent per source using the tool named in the `Tool:` field. For sources with `Access: manual`, use `AskUserQuestion` to let the user paste relevant content directly.
-
-    For `mcp` or `cli` sources:
-
-    ```text
-    Agent(subagent_type="Explore", description="Retrieve {platform} docs", prompt="
-    Use the {tool name} tools to retrieve content from {scope}.
-    Extract information relevant to product definition:
-    - Product requirements and stated goals
-    - Target audience descriptions
-    - Key decisions about what to build and why
-    - User feedback and pain points
-
-    The following findings were already confirmed by the user — do not repeat them:
-
-    <existing_findings>
-    {paste any existing context/product/brownfield.md content here, or 'none'}
-    </existing_findings>
-
-    Report only product-relevant findings. For each finding, note the source. Be concise — bullet points.
-    ")
-    ```
-
-    Record retrieved findings for the draft in substep 4. The findings are triaged with the user in **Step 4**, after the definition is saved.
-
-4.  Draft every section of the template up front so a complete definition exists before any further back-and-forth — use `<user_prompt>` (when non-empty) as the starting point, fold in any brownfield findings from substep 2 and documentation findings from substep 3, and fill the rest from reasonable best-practice assumptions. Never block on a question before the write:
+1.  Draft every section of the template up front so a complete definition exists before any back-and-forth — use `<user_prompt>` (when non-empty) as the starting point and fill the rest from reasonable best-practice assumptions. The definition describes the product in business terms and never depends on reading source code — technology and codebase discovery belong to `/awos:architecture`. Never block on a question before the write:
     - **Project Name & Vision:** the project's name and its core purpose.
     - **Target Audience & Personas:** who the product is for, plus one simple persona.
     - **Success Metrics:** how the product's impact on the user is measured.
     - **Core Features & User Journey:** the 3-5 most important high-level features and a simple user workflow.
     - **Project Boundaries:** what is essential for the first version (In-Scope) and what can wait (Out-of-Scope).
-5.  Proceed to **Step 3: File Generation**. The draft is saved there and refined with the user in **Step 4**, so it lands on disk even when no one is available to answer questions.
+2.  Proceed to **Step 3: File Generation**. The draft is saved there and refined with the user in **Step 4**, so it lands on disk even when no one is available to answer questions.
 
 ---
 
@@ -145,6 +85,5 @@ First, check if the file `context/product/product-definition.md` exists.
 ### Step 4: Refine and Recommend Next Step
 
 1.  Present the saved definition and offer to refine it — ask which sections to adjust, then apply changes and re-save.
-2.  **If `context/product/brownfield.md` was created in Step 2,** triage its findings with the user now. Group related findings by category and use `AskUserQuestion` to batch up to four per call, offering **Accept** and **Reject** for each (the user can also select "Other" for free-text feedback — treat it according to intent). Remove rejected findings from `context/product/brownfield.md` and from the saved definition, and re-save both; for corrected findings, record the corrected version.
-3.  If no answer comes (e.g. an unattended `claude -p` run), leave the saved definition and findings in place; the user can revise later by re-running `/awos:product`.
-4.  Report the saved path and the next command: `/awos:roadmap`.
+2.  If no answer comes (e.g. an unattended `claude -p` run), leave the saved definition in place; the user can revise later by re-running `/awos:product`.
+3.  Report the saved path and the next command: `/awos:architecture`.

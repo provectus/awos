@@ -40,8 +40,7 @@ AWOS uses a **document-centric approach** where all project state lives in struc
 
 **Key Document Types:**
 - `context/product/product-definition.md` - Business vision and requirements
-- `context/roadmap/roadmap.md` - Feature prioritization and planning
-- `context/architecture/architecture.md` - Technical blueprint and decisions
+- `context/product/architecture.md` - Technical blueprint and decisions
 - `context/spec/[feature]/functional-spec.md` - Feature requirements (what/why)
 - `context/spec/[feature]/technical-considerations.md` - Implementation plan (how)
 - `context/spec/[feature]/tasks.md` - Checklist of implementable tasks
@@ -56,8 +55,8 @@ Each command follows a consistent structure:
 
 **Sequential Workflow:**
 ```
-/awos:product → /awos:roadmap → /awos:architecture →
-/awos:spec → /awos:tech → /awos:tasks → /awos:implement
+/awos:product → /awos:architecture →
+/awos:spec → /awos:tech → /awos:tasks → /awos:implement → /awos:verify
 ```
 
 ## Agent Delegation Pattern

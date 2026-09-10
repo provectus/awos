@@ -4,13 +4,13 @@ description: >-
   Detect and configure external documentation sources (wikis, ticket systems,
   chats, email). Guides MCP/CLI tool setup, handles editor restart-resume,
   and writes structured source configuration to context/sources/sources.md.
-  Called by onboarding commands when a brownfield project has external docs.
+  Directly invocable; today it serves /better:spec's research lane.
 argument-hint: ''
 ---
 
 # External Sources — Setup Orchestrator
 
-You configure access to external documentation platforms so that onboarding commands can retrieve project knowledge from wikis, ticket systems, chats, and email. Your only output is the structured source manifest at `context/sources/sources.md`. You do not retrieve content from the sources — the calling command handles retrieval after you finish.
+You configure access to external documentation platforms — wikis, ticket systems, chats, and email — for the commands that read the source manifest (e.g. `/awos:architecture`, `/better:spec`). Your only output is the structured source manifest at `context/sources/sources.md`. You do not retrieve content from the sources — the commands that consume the manifest handle retrieval later.
 
 ## Step 1 — Check Existing State
 
@@ -64,9 +64,9 @@ For each selected platform:
 
 If any MCP servers were added during Step 4, write `context/sources/sources.md` with `## Status: restart-pending` and a `## Source:` section for each configured source (category, platform, access method, tool name — scope left blank for now). Then tell the user:
 
-> MCP servers have been configured. To pick them up, exit this session (Ctrl+C twice or `/exit`) and resume it — the exit message prints a `claude --resume <id>` command you can use. If any servers need interactive authentication, run `/mcp` after resuming to authenticate before continuing. Then re-run `/awos:product` and source setup will continue automatically.
+> MCP servers have been configured. To pick them up, exit this session (Ctrl+C twice or `/exit`) and resume it — the exit message prints a `claude --resume <id>` command you can use. If any servers need interactive authentication, run `/mcp` after resuming to authenticate before continuing. Then invoke this skill again (`configure-external-sources`) and source setup will continue automatically from where it left off.
 
-Stop here. When `/awos:product` re-invokes this skill, Step 1 will route to Step 6.
+Stop here. When the skill runs again, Step 1 will route to Step 6.
 
 If no MCP restart is needed (tools were already available, CLI was chosen, or manual export selected), continue to Step 6.
 

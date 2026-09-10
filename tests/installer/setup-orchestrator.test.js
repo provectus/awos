@@ -40,8 +40,8 @@ test('end-to-end setup completes against a fresh temp dir', async () => {
   await silenced(() => runSetup({ workingDir, packageRoot: repoRoot }));
 
   // Expected top-level layout — these are the directories declared in
-  // src/config/setup-config.js plus the .mcp.json and .claude/settings.json
-  // that the configurator steps create.
+  // src/config/setup-config.js plus the .claude/settings.json
+  // that the marketplace-configurator step creates.
   for (const p of [
     '.awos',
     '.awos/commands',
@@ -73,10 +73,12 @@ test('end-to-end setup completes against a fresh temp dir', async () => {
     );
   }
 
-  // MCP and marketplace files exist.
+  // The marketplace file exists; no .mcp.json — the installer stopped
+  // configuring MCP servers when /awos:hire and its agent registry were
+  // removed, so setup must not create one.
   assert.ok(
-    exists(path.join(workingDir, '.mcp.json')),
-    '.mcp.json should be created by the MCP configurator'
+    !exists(path.join(workingDir, '.mcp.json')),
+    'setup must not create .mcp.json — the MCP-configurator step was removed with /awos:hire'
   );
   assert.ok(
     exists(path.join(workingDir, '.claude', 'settings.json')),

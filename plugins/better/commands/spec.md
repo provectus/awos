@@ -1,6 +1,6 @@
 ---
 description: Creates the Functional Spec with a parallel research fan-out and a blind verification pass — an experimental, higher-rigor take on /awos:spec.
-argument-hint: '[topic, optional — defaults to the next incomplete roadmap item]'
+argument-hint: '[topic — the feature or capability to specify]'
 ---
 
 # ROLE
@@ -23,7 +23,7 @@ The spec must be readable by anyone — a designer, a project manager, a stakeho
 
 # TASK
 
-Create a new functional specification file, enriched by parallel research. You will determine the topic from the user's prompt or the product roadmap, interview the user, dispatch research agents against the current understanding, synthesize their findings into the draft, populate the template at `.awos/templates/functional-spec-template.md`, save the spec plus a `research-notes.md` side artifact into a dedicated spec directory, blind-verify the saved spec with the `better:spec-verifier` agent, and finally render `functional-spec.html` — a human-friendly review page — via the bundled deterministic renderer.
+Create a new functional specification file, enriched by parallel research. You will determine the topic (from the user's prompt, or from the opening interview when none was given), interview the user, dispatch research agents against the current understanding, synthesize their findings into the draft, populate the template at `.awos/templates/functional-spec-template.md`, save the spec plus a `research-notes.md` side artifact into a dedicated spec directory, blind-verify the saved spec with the `better:spec-verifier` agent, and finally render `functional-spec.html` — a human-friendly review page — via the bundled deterministic renderer.
 
 ---
 
@@ -31,8 +31,7 @@ Create a new functional specification file, enriched by parallel research. You w
 
 - **User Prompt (Optional):** <user_prompt>$ARGUMENTS</user_prompt>
 - **Template File:** `.awos/templates/functional-spec-template.md` (installed by AWOS core).
-- **Context File 1:** `context/product/product-definition.md`.
-- **Context File 2:** `context/product/roadmap.md`.
+- **Context File:** `context/product/product-definition.md`.
 - **Optional Input:** `context/sources/sources.md` (external source configuration — when present with `## Status: configured`, provides already-configured transports for the internal-KB research lane).
 - **External Command:** `.awos/scripts/create-spec-directory.sh [short-name]` (installed by AWOS core).
 - **Verification Agent:** `better:spec-verifier` (bundled with this plugin).
@@ -67,23 +66,23 @@ Follow this process precisely.
 Your first goal is to determine the **topic** — the single, specific feature or capability that this specification will define.
 
 1. If `<user_prompt>` is **not empty**, it is your **topic**. Announce it: "Okay, let's create a functional specification for: '`<user_prompt>`'."
-2. If `<user_prompt>` is **empty**, read `context/product/roadmap.md`, find the **first incomplete checklist item** (`- [ ] ...`), and use it as your **topic**. Announce: "Since no topic was provided, I'll start with the next incomplete item from the roadmap: **'[Name of Roadmap Item]'**."
-3. If all roadmap items are complete, stop and inform the user.
-4. Scope boundary: you are working on this single **topic** only. All other roadmap items are out-of-scope and will be addressed in separate specifications.
+2. If `<user_prompt>` is **empty** and the run is interactive (`AWOS_UNATTENDED` unset), the topic comes from the user in Step 3: the Round One batch opens with a topic question. Do not ask a separate question here — one batched interview is the contract. Until that answer arrives, treat the topic as pending and defer the topic-scoped part of Step 2.
+3. If `<user_prompt>` is **empty** and `AWOS_UNATTENDED` is set, stop with one line: there is no topic and nobody to ask — re-run as `/better:spec <topic>`. Do not guess a topic from the product definition or the codebase.
+4. Scope boundary: you are working on this single **topic** only. Anything adjacent belongs in a separate specification.
 
 ### Step 2: Gather Context and Extract Known Information
 
 - Consume source material already in the prompt — before interviewing, and without a new question. Scan `<user_prompt>` for ticket IDs, URLs, or file paths. When any are present, fetch or read them first and fold what they say into the known-information extraction below. Use whatever transport is available for each reference, in this order of preference: a matching MCP tool already in context, a CLI already on PATH (`gh`, `glab`, a tracker CLI), `WebFetch` for a plain URL, or a direct file read for a path; when `context/sources/sources.md` exists with `## Status: configured`, use the transport it records for that service. Do not add an "any source material?" question. List anything referenced but unreachable in your Step 3 summary so the user knows that context is missing.
-- Read `context/product/product-definition.md` and `context/product/roadmap.md` to understand goals, target audience, and priorities.
-- Focus on your topic only. Extract everything already documented about it: the purpose and rationale, expected user capabilities, and any mentioned constraints or boundaries.
+- Read `context/product/product-definition.md` to understand goals, target audience, and priorities.
+- Focus on your topic only. Extract everything already documented about it: the purpose and rationale, expected user capabilities, and any mentioned constraints or boundaries. When the topic is still pending (empty prompt, interactive run), do the general reading now and run this topic-scoped extraction right after Step 3 names the topic.
 - Identify what is **already clear** versus what **needs clarification**. Never ask questions whose answers are already documented.
 
 ### Step 3: Interview Round One — the Big Picture
 
-- Present a summary: "Based on the roadmap and product definition, here's what I understand: [summarize known purpose, user capabilities, and context]. Let me clarify the big picture before I research the details."
+- Present a summary: "Based on the product definition, here's what I understand: [summarize known purpose, user capabilities, and context]. Let me clarify the big picture before I research the details." When the topic is still pending, summarize the product context instead and say the first question sets the topic.
 - Ask only the big-picture questions in this round: the user pain point (the "why"), the core capability (what the user will be able to do), and the rough boundaries. Defer every detail question — formats, limits, error text, edge cases — to Step 9, where the research findings will have made the questions sharper.
-- Put them in **one** batched `AskUserQuestion` call. This is the only question the command asks before the files exist, so it is also the only one that can end an unattended turn before anything is written; one call is one such moment instead of several.
-- **When `AWOS_UNATTENDED` is set, skip this round entirely** — there is nobody to interview. Draft from the topic, the roadmap, and the product definition, and mark every big-picture gap the interview would have closed with `[NEEDS CLARIFICATION: …]`. The research fan-out in Step 4 runs on that understanding exactly as it would on an interviewed one.
+- Put them in **one** batched `AskUserQuestion` call. When no topic was provided, the topic question opens that same batch — offer the most plausible candidates from the product definition as options; free text covers everything else. This is the only question the command asks before the files exist, so it is also the only one that can end an unattended turn before anything is written; one call is one such moment instead of several.
+- **When `AWOS_UNATTENDED` is set, skip this round entirely** — there is nobody to interview. Draft from the topic and the product definition, and mark every big-picture gap the interview would have closed with `[NEEDS CLARIFICATION: …]`. The research fan-out in Step 4 runs on that understanding exactly as it would on an interviewed one.
 - All questions must be non-technical, answerable by a product manager or designer, and scoped to your **topic** only. When you encounter technical identifiers in context files, silently map them to plain-language labels; never surface a code identifier in a question.
 
 ### Step 4: Research Fan-Out
@@ -102,7 +101,7 @@ Research is done; turn it into draft material. This step asks the user nothing �
 
 1. Merge the findings, keeping their origin labels (`[code]` / `[web]` / `[kb]`). Set aside the raw technical form of every finding for `research-notes.md` (Step 7).
 2. Sort the findings into three piles:
-   - **Conflicts** — a finding contradicts the user's answers, the roadmap, or another finding. Draft the requirement on the better-evidenced side, and mark it: `[NEEDS CLARIFICATION: <what the user said> vs <what research found> — drafted on the second; confirm or correct.]` A conflict is the one pile where the assumption may be wrong in a way that reshapes the requirement, so name both sides in the marker rather than quietly picking one.
+   - **Conflicts** — a finding contradicts the user's answers, the product definition, or another finding. Draft the requirement on the better-evidenced side, and mark it: `[NEEDS CLARIFICATION: <what the user said> vs <what research found> — drafted on the second; confirm or correct.]` A conflict is the one pile where the assumption may be wrong in a way that reshapes the requirement, so name both sides in the marker rather than quietly picking one.
    - **Discovered decisions** — a finding surfaces a choice the user has not made (a convention comparable products follow, an edge case the codebase already handles a particular way). Draft the finding-backed option as the working assumption and mark it: `[NEEDS CLARIFICATION: <the choice> — assumed <the finding-backed option>; confirm or choose otherwise.]`
    - **Uncontroversial detail** — edge cases, boundary behavior, and error paths no reasonable user would dispute. Fold these directly into the draft as requirements and acceptance criteria; they need no marker.
 3. Write every marker so the draft reads as a complete specification with the assumption in place, not as a document with a hole in it. A reviewer who never answers a single question must still get a coherent, testable spec whose assumptions are all visible.
@@ -115,7 +114,7 @@ Draft the specification section by section from the template, exactly as the cor
 1. **Overview and Rationale (The "Why"):** ground it in the pain point from Round One and any `[web]`/`[kb]` context that sharpens the rationale.
 2. **Functional Requirements (The "What"):** capture what the user can do, including the boundary and error behavior surfaced by research — what error message appears, what limits exist, what happens when the action fails. Mark every unresolved detail with `[NEEDS CLARIFICATION: your specific question]` directly in the draft.
 3. **Acceptance Criteria:** every requirement gets at least one criterion in the When/Then shape — the words **when** and **then** both appear, in that order, within a single sentence (Given optional, only when the precondition affects the outcome). Requirements with boundary or error behavior get at least one failure-path criterion.
-4. **Scope and Boundaries:** add all other roadmap items to Out-of-Scope automatically and say you did so. For exclusions within the topic itself, draft the boundary research and Round One imply, and mark it — `[NEEDS CLARIFICATION: assumed <X> is out of scope; confirm or pull it in.]` — for Step 9. Do not ask here: this step precedes the write.
+4. **Scope and Boundaries:** out-of-scope entries come only from Round One and the research findings. Draft the boundary they imply, and mark it — `[NEEDS CLARIFICATION: assumed <X> is out of scope; confirm or pull it in.]` — for Step 9. Do not ask here: this step precedes the write.
 
 Then self-review the full draft end to end: replace any developer-facing language that slipped in; make vague or unmeasurable wording concrete in user-perceivable terms or convert it to a `[NEEDS CLARIFICATION: …]` marker; confirm every requirement carries at least one acceptance criterion. Then re-read the acceptance criteria one bullet at a time — not the set as a whole — and rewrite any bullet that does not carry both `when` and `then` in a single sentence. Checking the set as a whole is how a single non-compliant bullet survives.
 

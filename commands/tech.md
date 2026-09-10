@@ -30,6 +30,7 @@ Your primary task is to create the technical specification for a given feature. 
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
 - **A skipped or unanswered question is never a stop signal. Record your best-fit option as an explicit `**Assumption:**` in the draft and continue through the remaining steps, including writing the deliverable.**
+- The one exception is the target-spec selection in Step 1: without a spec there is no deliverable to draft, so an unanswered selection ends the run cleanly.
 
 <!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
@@ -42,7 +43,7 @@ Follow this process precisely.
 ### Step 1: Identify the Target Specification
 
 1.  Analyze `<user_prompt>`. If it clearly references a spec by name or index, identify the corresponding directory in `context/spec/`.
-2.  If the prompt is empty or ambiguous, list the available spec directories and ask the user to choose. Do not proceed until a valid spec is selected.
+2.  If the prompt is empty or ambiguous, ask the user to choose via `AskUserQuestion`, offering the available spec directories as options. Spec selection has no fallback default — without a target spec there is no deliverable to draft — so an unanswered selection ends the run cleanly (the Step 1 exception in `# INTERACTION`).
 
 ### Step 2: Gather and Synthesize Context
 
@@ -56,7 +57,7 @@ Follow this process precisely.
     Agent(subagent_type="<agent-name>", description="<3-5 word summary>", prompt="<context + tech-stack questions for this stack>")
     ```
 
-    For plugin-provided specialists, `<agent-name>` carries the `plugin-name:` prefix (e.g. `python-development:python-pro`). If no specialist exists for a stack, draft that stack's sections yourself after the exploration reports back, and note the gap so `/awos:hire` can address it.
+    For plugin-provided specialists, `<agent-name>` carries the `plugin-name:` prefix (e.g. `python-development:python-pro`). If no specialist exists for a stack, draft that stack's sections yourself after the exploration reports back, and note the gap so the user knows those sections were drafted without a specialist.
 
 ### Step 3: Propose and Draft the Technical Plan (Interactive)
 
@@ -89,6 +90,6 @@ Write the completed draft to the `technical-considerations.md` file inside the d
 ### Step 5: Surface for Review and Recommend Next Step
 
 1.  Report the saved path. Surface any choices that were recorded as assumptions (rather than confirmed by the user) so they are easy to spot and challenge. If the user requests changes, apply them and re-save; otherwise they can revise later by re-running `/awos:tech` against the same spec.
-2.  Review the saved spec for new technologies, frameworks, tools, or testing approaches not already covered by the project's existing architecture and specialist agents.
-    - If new capabilities are needed: recommend a pre-filled hire command: `/awos:hire cover [directory-name]: need [comma-separated list of new technologies/capabilities]`, followed by `/awos:tasks`.
-    - Otherwise: report the next command: `/awos:tasks`.
+2.  Review the saved spec for new technologies, frameworks, tools, or testing approaches not covered by any available specialist agent (from the Step 2 introspection).
+    - If gaps exist: name them so the user knows which parts of the plan lack specialist coverage — `/awos:tasks` will surface those as staffing gaps and assign the general-purpose agent by default. The user can install a matching specialist agent or plugin before implementing if they want specialist coverage.
+    - Report the next command: `/awos:tasks`.

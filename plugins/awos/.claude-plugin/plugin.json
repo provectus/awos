@@ -1,10 +1,10 @@
 {
   "name": "awos",
-  "version": "2.4.5",
-  "description": "Extends AWOS core with AI-powered delivery automation: audits a project's AI-readiness across quality dimensions (/awos:ai-readiness-audit) and sets up an end-to-end delivery flow — feature and optional bug-fix commands — tailored to the team (/awos:flow).",
+  "version": "3.0.0",
+  "description": "Extends AWOS core with AI-readiness auditing: /awos:ai-readiness-audit scores a repository — or a whole org — across quality dimensions with a deterministic measurement engine and renders evidence-backed reports; also ships the directly-invocable configure-external-sources skill.",
   "author": {
     "name": "Provectus"
   },
   "license": "MIT",
-  "keywords": ["audit", "code-quality", "dimensions", "delivery-flow", "bug-fix"]
+  "keywords": ["audit", "ai-readiness", "code-quality", "dimensions"]
 }

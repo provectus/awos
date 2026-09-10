@@ -20,7 +20,7 @@ The spec must be readable by anyone — a designer, a project manager, a stakeho
 
 # TASK
 
-Your primary task is to create a new functional specification file. You will determine the topic of the spec based on the user's prompt or the product roadmap. You will then interactively gather all necessary information from the user, clarifying every detail, and populate the template at `.awos/templates/functional-spec-template.md`. Finally, you will use a script to create a dedicated directory for the spec and save the content there.
+Your primary task is to create a new functional specification file. You will determine the topic of the spec from the user's prompt, or ask the user for one when the prompt is empty. You will then interactively gather all necessary information from the user, clarifying every detail, and populate the template at `.awos/templates/functional-spec-template.md`. Finally, you will use a script to create a dedicated directory for the spec and save the content there.
 
 ---
 
@@ -28,8 +28,7 @@ Your primary task is to create a new functional specification file. You will det
 
 - **User Prompt (Optional):** <user_prompt>$ARGUMENTS</user_prompt>.
 - **Template File:** `.awos/templates/functional-spec-template.md`.
-- **Context File 1:** `context/product/product-definition.md`.
-- **Context File 2:** `context/product/roadmap.md`.
+- **Context File:** `context/product/product-definition.md`.
 - **External Command:** `.awos/scripts/create-spec-directory.sh [short-name]`.
 - **Output File:** `context/spec/[index]-[short-name]/functional-spec.md`.
 
@@ -38,7 +37,7 @@ Your primary task is to create a new functional specification file. You will det
 # INTERACTION
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
-- A skipped or unanswered question is never a stop signal. Mark the unresolved detail with a `[NEEDS CLARIFICATION: …]` marker and continue through the remaining steps, including writing `functional-spec.md`.
+- A skipped or unanswered question is never a stop signal. Mark the unresolved detail with a `[NEEDS CLARIFICATION: …]` marker and continue through the remaining steps, including writing `functional-spec.md`. The one exception is the topic question in Step 1: without a topic there is nothing to specify, so an unanswered topic question ends the run cleanly instead of becoming a marker.
 
 <!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
@@ -50,7 +49,7 @@ Follow this process precisely.
 
 ### Mode Detection (do this first)
 
-Before determining a topic, decide whether this run **creates** a new spec or **amends** an existing one. Parse `<user_prompt>` for a reference to an existing spec — a spec number (`002`), a spec directory name (`002-task-scheduling`), or an explicit "amend/update spec NNN: \<what changed\>" phrasing (how the generated `fix-bug` command's `amend-spec` stage invokes this command after a behavior-changing fix).
+Before determining a topic, decide whether this run **creates** a new spec or **amends** an existing one. Parse `<user_prompt>` for a reference to an existing spec — a spec number (`002`), a spec directory name (`002-task-scheduling`), or an explicit "amend/update spec NNN: \<what changed\>" phrasing (e.g. after a behavior-changing bug fix).
 
 - If the prompt names a spec whose `context/spec/[index]-[short-name]/functional-spec.md` exists, go to **Update Mode** below.
 - Otherwise, fall through to **Creation Mode** (Step 1 onward) — today's flow.
@@ -80,27 +79,26 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 1.  **Check User Prompt:** Analyze the content of the `<user_prompt>` tag.
 2.  **Determine Topic:**
     - If the `<user_prompt>` tag is **not empty**, this is your **topic**. Announce it: "Okay, let's create a functional specification for: '`<user_prompt>`'."
-    - If the `<user_prompt>` tag is **empty**, read `context/product/roadmap.md`, find the **first incomplete checklist item** (`- [ ] ...`), and use it as your **topic**. Announce: "Since no topic was provided, I'll start with the next incomplete item from the roadmap: **'[Name of Roadmap Item]'**."
-    - If all roadmap items are complete, stop and inform the user.
-3.  Scope boundary: you are working on this single **topic** only. All other roadmap items are out-of-scope and will be addressed in separate specifications.
+    - If the `<user_prompt>` tag is **empty** and `AWOS_UNATTENDED` is set, stop with one line **before asking anything**: there is no topic and nobody to ask — re-run as `/awos:spec <topic>`. Do not guess a topic from the product definition or the codebase. The stop must precede the question: under `claude -p` a dismissed `AskUserQuestion` ends the turn, so an instruction placed after the ask can never execute unattended.
+    - If the `<user_prompt>` tag is **empty** and the run is interactive, ask the user for the topic via `AskUserQuestion` — offer the most plausible candidates from `context/product/product-definition.md` as options; free text covers everything else. If the question is dismissed, the run ends with it — the topic exception in `# INTERACTION`, not a marker.
+3.  Scope boundary: you are working on this single **topic** only. Anything adjacent belongs in a separate specification.
 
 ### Step 2: Gather Context and Extract Known Information
 
-- **Consume source material already in the prompt — before interviewing, and without a new question.** Scan `<user_prompt>` for ticket IDs, URLs, or file paths (a Jira/Linear/GitHub issue reference, a Confluence/Notion link, an attached design doc, a local path). When any are present, fetch or read them first and fold what they say into the known-information extraction below — this is what turns a cold interview into a warm one, cutting the questions in Step 3 to the few genuinely open details. Use whatever transport is available for each reference, in this order of preference: a matching MCP tool already in context, a CLI already on PATH (`gh`, `glab`, a tracker CLI), `WebFetch` for a plain URL, or a direct file read for a path; when `context/sources/sources.md` exists with `## Status: configured`, use the transport it records for that service. Do **not** add an "any source material?" question — the ask is net-negative when the prompt carries no references. Read only what the prompt already points at; list anything referenced but unreachable in your Step 3 summary so the user knows that context is missing, rather than silently skipping it. (When this command is invoked by the generated `/implement-feature` flow, the fetch stage has already pulled the ticket and its surrounding context and passes them in — read that bundle rather than re-fetching.)
-- Read `context/product/product-definition.md` and `context/product/roadmap.md` to understand goals, target audience, and priorities.
+- **Consume source material already in the prompt — before interviewing, and without a new question.** Scan `<user_prompt>` for ticket IDs, URLs, or file paths (a Jira/Linear/GitHub issue reference, a Confluence/Notion link, an attached design doc, a local path). When any are present, fetch or read them first and fold what they say into the known-information extraction below — this is what turns a cold interview into a warm one, cutting the questions in Step 3 to the few genuinely open details. Use whatever transport is available for each reference, in this order of preference: a matching MCP tool already in context, a CLI already on PATH (`gh`, `glab`, a tracker CLI), `WebFetch` for a plain URL, or a direct file read for a path; when `context/sources/sources.md` exists with `## Status: configured`, use the transport it records for that service. Do **not** add an "any source material?" question — the ask is net-negative when the prompt carries no references. Read only what the prompt already points at; list anything referenced but unreachable in your Step 3 summary so the user knows that context is missing, rather than silently skipping it.
+- Read `context/product/product-definition.md` to understand goals, target audience, and priorities.
 - Focus on your topic only. Extract all information already documented about it:
   - The purpose and rationale (why it exists)
   - Expected user capabilities (what users will be able to do)
   - Any mentioned constraints or boundaries
-- As you read the roadmap, note all OTHER roadmap items. They are automatically out-of-scope for this specification.
 - Identify what is **already clear** from these documents versus what **needs clarification**. You will use this extracted context to avoid asking questions whose answers are already documented.
 
 ### Step 3: Interactive Drafting and Clarification
 
-- **Before asking questions:** Present a summary to the user: "Based on the roadmap and product definition, here's what I understand: [summarize known purpose, user capabilities, and context]. Let me clarify the remaining details."
-- Only ask questions whose answers are NOT already documented in the roadmap or product definition.
+- **Before asking questions:** Present a summary to the user: "Based on the product definition, here's what I understand: [summarize known purpose, user capabilities, and context]. Let me clarify the remaining details."
+- Only ask questions whose answers are NOT already documented in the product definition.
 - Your questions should emphasize the 'why' - the problem or user pain point this feature is meant to address, and the specific user value it delivers.
-- **Scope Rule:** All questions and discussions must relate ONLY to your **topic**. Do not ask about or discuss functionality from other roadmap items.
+- **Scope Rule:** All questions and discussions must relate ONLY to your **topic**. Anything adjacent belongs in a separate specification.
 - **Non-Technical Questions Only:** Your questions must be answerable by a product manager or designer — never ask about data models, API design, storage, architecture, state management, caching, or any implementation detail. Frame every question in terms of what the user sees, does, or experiences. If you need to understand a behavior, ask "What should the user see when…?" not "How should the system handle…?"
 - **Never Surface Technical Names:** When you encounter technical identifiers (field names, API response keys, database columns, type names, etc.) in context files, silently map them to plain-language labels. Do not ask the user to confirm whether a user-facing label corresponds to a technical field name. If you are unsure what a technical term means in user-facing language, ask "What does the user call [plain description of the concept]?" — never expose the raw identifier.
 - **Self-Check Before Every Question:** Re-read your question. If it contains a code identifier (camelCase, snake_case, PascalCase, or a name that only appears in source code / API schemas), rewrite the question without it. If the question cannot be asked without referencing the identifier, it is a technical question — drop it.
@@ -133,7 +131,7 @@ Your first goal is to determine the **topic** - the single, specific feature or 
 
 4.  **Scope and Boundaries:**
     - Ask the user what should be excluded from this specific **topic**.
-    - Add other roadmap items to Out-of-Scope automatically, and tell the user you've done so.
+    - Out-of-scope entries come only from the user's answers and the topic's own boundaries — never add them automatically.
     - Focus only on clarifying boundaries within the current **topic** itself.
     - Example: "To keep this focused on [your topic], what related aspects should we explicitly not include? For example, should we include [specific feature within this topic]?"
 

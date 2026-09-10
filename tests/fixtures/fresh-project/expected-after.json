@@ -4,7 +4,10 @@
   ".awos/commands/implement.md": { "exists": true },
   ".awos/commands/tasks.md": { "exists": true, "contains": "**[Agent: " },
   ".awos/commands/verify.md": { "exists": true },
-  ".awos/templates/agent-template.md": { "exists": true },
+  ".awos/commands/roadmap.md": { "exists": false },
+  ".awos/commands/hire.md": { "exists": false },
+  ".awos/templates/roadmap-template.md": { "exists": false },
+  ".awos/templates/agent-template.md": { "exists": false },
   ".awos/scripts/create-spec-directory.sh": { "exists": true },
   ".claude/commands/awos/architecture.md": { "exists": true },
   ".claude/commands/awos/implement.md": {
@@ -12,7 +15,7 @@
     "contains": ".awos/commands/implement.md"
   },
   ".claude/settings.json": { "exists": true, "contains": "awos-marketplace" },
-  ".mcp.json": { "exists": true, "contains": "awos-recruitment" },
+  ".mcp.json": { "exists": false },
   "context/product": { "exists": true },
   "context/spec": { "exists": true }
 }

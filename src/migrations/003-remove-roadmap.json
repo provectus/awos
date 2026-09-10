@@ -1,0 +1,20 @@
+{
+  "version": 3,
+  "name": "Remove roadmap command internals (the user's .claude/commands/awos/roadmap.md wrapper and context/product/roadmap.md are preserved)",
+  "preconditions": {
+    "require_any": [
+      ".awos/commands/roadmap.md",
+      ".awos/templates/roadmap-template.md"
+    ]
+  },
+  "operations": [
+    {
+      "type": "delete",
+      "from": ".awos/commands/roadmap.md"
+    },
+    {
+      "type": "delete",
+      "from": ".awos/templates/roadmap-template.md"
+    }
+  ]
+}

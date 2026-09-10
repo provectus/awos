@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "AWOS plugins for AI-native development workflows",
-    "version": "3.0.0"
+    "version": "3.0.1"
   },
   "plugins": [
     {
       "name": "awos",
       "source": "./plugins/awos",
       "description": "Extends AWOS core with AI-readiness auditing: /awos:ai-readiness-audit scores a repository — or a whole org — across quality dimensions with a deterministic measurement engine and renders evidence-backed reports; also ships the directly-invocable configure-external-sources skill.",
-      "version": "3.0.0"
+      "version": "3.0.1"
     },
     {
       "name": "better",

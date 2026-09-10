@@ -24,7 +24,9 @@ cd awos
 awos/
 ├── docs/                # AWOS documentation
 │   ├── commands/        # Individual command reference docs
-│   ├── rationale.md
+│   ├── philosophy.md    # What awos is and is not; the principles every change is measured against
+│   ├── direction.md     # The directions awos always moves in; a test for new ideas
+│   ├── rationale.md     # Why awos works, for first-time readers
 │   └── testing-strategies.md
 ├── scripts/             # AWOS scripts
 ├── commands/            # AWOS command prompts

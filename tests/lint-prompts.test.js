@@ -3969,6 +3969,14 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       'a prior agreement the topic changes must become a marker the user answers — silently rewriting an agreement is the failure the lane exists to prevent',
     ],
     [
+      'carrying its verdict',
+      'the prior-agreements lane must return a per-finding intact/changed/unclear verdict — measured twice on a large repo, an orchestrator left to classify the findings itself in the synthesis step dropped the supersession entirely; the agent that read the source is the one that can judge it',
+    ],
+    [
+      'the counts must match',
+      'the self-review must count markers against the changed and unclear findings before the write — it is the only step that can catch a supersession lost between synthesis and draft, and after the write the marker can no longer be added unattended',
+    ],
+    [
       'the topic is the request, not the confirmation',
       'a superseded agreement must become a marker even when the topic states the change outright — measured on a large repo, the command otherwise records the supersession as a visible note and skips the question, which keeps the reader informed but removes the confirmation moment the agreement depends on',
     ],

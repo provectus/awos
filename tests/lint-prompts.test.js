@@ -3969,6 +3969,10 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       'a prior agreement the topic changes must become a marker the user answers — silently rewriting an agreement is the failure the lane exists to prevent',
     ],
     [
+      'the topic is the request, not the confirmation',
+      'a superseded agreement must become a marker even when the topic states the change outright — measured on a large repo, the command otherwise records the supersession as a visible note and skips the question, which keeps the reader informed but removes the confirmation moment the agreement depends on',
+    ],
+    [
       'not for conventions, stack choices, or code structure',
       'the lane must be scoped to decisions about behavior — conventions and stack are context engineering, which the rationale calls solved and outside what awos is for; without this boundary the lane drifts into re-deriving how things are done here',
     ],

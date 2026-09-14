@@ -108,10 +108,11 @@ Follow this logic precisely.
 ## Scenario 2: Update Mode
 
 1.  Read the existing `architecture.md` and `product-definition.md`.
-2.  Present the current architecture and ask the user what to change.
-3.  Propose a specific, reasoned change, preferring scalable and cost-effective options. For example: to support file uploads, propose adding S3 under Data & Persistence.
-4.  Before saving, check whether the change conflicts with existing principles, technologies, or cost/operational constraints. For complex changes (e.g., swapping a database), discuss the potential impacts and migration strategy with the user. Surface any concern before applying.
-5.  When all changes are confirmed, proceed to **Step 3: Finalization**.
+2.  **Codebase re-gather.** Run the same codebase exploration as Creation Mode substep 2 — the identical `Explore` agent and prompt. Compare its findings against what the document records and collect every divergence as a drift item: a technology evidenced in the code but absent from the document, a recorded choice the code no longer evidences, or a mismatch (a different version, a replacement in place). Each drift item carries its file-path citations. When nothing diverges — or the repository has no source code — there are no drift items and the update proceeds from the conversation alone.
+3.  Present the current architecture together with any drift items, and ask the user what to change. Resolve each drift item with `AskUserQuestion`: **Adopt** (the document takes what the code shows, citations included) or **Keep as recorded** (the code state is transitional or wrong — note the stated reason on the decision). The default for an unanswered drift question is **Keep as recorded** — drift is never applied to the document silently.
+4.  Propose a specific, reasoned change, preferring scalable and cost-effective options. For example: to support file uploads, propose adding S3 under Data & Persistence.
+5.  Before saving, check whether the change conflicts with existing principles, technologies, or cost/operational constraints. For complex changes (e.g., swapping a database), discuss the potential impacts and migration strategy with the user. Surface any concern before applying.
+6.  When all changes are confirmed, proceed to **Step 3: Finalization**.
 
 ---
 

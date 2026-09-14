@@ -248,6 +248,7 @@ Phases 1, 2a, 2b, and 3 landed here on 2026-09-10 without their paired `awos-qa`
 - [ ] Retire the flow-generation behavioral scenarios (`/awos:flow` interview, `/implement-feature`/`/fix-bug` generation, re-run reconciliation) — Phase 1 removed the command.
 - [ ] Update the hire/tasks scenarios to the staffing-gap flow — Phase 3 replaced "`/awos:hire` provisions an agent" with "`/awos:tasks` introspects, surfaces a staffing gap as an open question when no agent covers a task, and `/awos:implement` falls back to general-purpose and reports the substitution."
 - [ ] Update the spec scenarios to the topic-required anchor — the roadmap lane dropped from both spec commands (Phase 2a); scenarios that anchored a spec via the roadmap need a topic-anchored equivalent.
+- [ ] Add the architecture Update Mode drift scenario — gap 6 closed 2026-09-14: an update run against a codebase that diverged from the recorded architecture must surface the drift as a confirmation question (and must not rewrite the document without one).
 
 ---
 
@@ -262,6 +263,8 @@ Phases 1, 2a, 2b, and 3 landed here on 2026-09-10 without their paired `awos-qa`
 - `/awos:product` has zero code-reading, full stop — matching option (b)'s discipline. It never runs `Explore`, never stages a `brownfield.md`, never triages findings against the interview.
 - The discovery regression is not accepted as a permanent gap (option (b)'s fallback) — it's answered by **relocating** the gather pass rather than dissolving it (option (a)'s move), but into `/awos:architecture` instead of leaving it in `/awos:product`. `/awos:architecture` always runs an unconditional `Explore` codebase-gather pass: an existing stack becomes the architecture defaults, cited with evidence, confirmed in the normal review like any other draft — modeless, no brownfield/greenfield branching.
 - Net effect: no "brownfield" concept anywhere (principle 2 with no exceptions, same as option (a)'s outcome), and `/awos:product` is interview-only (the guarantee option (b) named), because the codebase-as-intent-source duty moved downstream to the command that actually owns technical facts rather than disappearing.
+
+**Follow-through (2026-09-14):** the resolution as first shipped left the gather a creation-time-only event — Update Mode revised by interview alone, so the document could only drift from the code after day one (known-gaps gap 6, which this Open question was to be decided together with but which was not revisited when the question resolved). Closed: `/awos:architecture` Update Mode now re-runs the same Creation Mode gather, diffs findings against the recorded architecture, and confirms each drift item with the user (adopt / keep as recorded — never silent). Guarded by a Layer-1 lint contract.
 
 **Original options, for the record:**
 

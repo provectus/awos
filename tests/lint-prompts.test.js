@@ -1078,6 +1078,40 @@ test('architecture.md docs retrieval reports only NEW findings', () => {
   }
 });
 
+test('architecture.md Update Mode re-gathers the codebase and confirms drift', () => {
+  // Closes known-gaps gap 6: Update Mode must run the same codebase
+  // exploration Creation Mode runs and diff its findings against the
+  // recorded architecture — the document may only diverge from the code
+  // with the user's explicit say-so. An Update Mode that revises by
+  // interview alone re-opens the gap.
+  const body = readUtf8(path.join(commandsDir, 'architecture.md'));
+  const updateBlock = body
+    .split(/## Scenario 2: Update Mode/i)
+    .slice(1)
+    .join('')
+    .split(/### Step 3/i)[0];
+  assert.ok(
+    /re-gather/i.test(updateBlock),
+    'commands/architecture.md Update Mode must contain the codebase re-gather step'
+  );
+  assert.ok(
+    /same codebase exploration as Creation Mode/i.test(updateBlock),
+    'Update Mode must reuse the Creation Mode exploration (same Explore agent and prompt), not define a second gather'
+  );
+  assert.ok(
+    /drift/i.test(updateBlock),
+    'Update Mode must diff gather findings against the document and surface drift'
+  );
+  assert.ok(
+    updateBlock.includes('AskUserQuestion'),
+    'Update Mode must resolve each drift item via AskUserQuestion, never silently'
+  );
+  assert.ok(
+    updateBlock.includes('Keep as recorded'),
+    "Update Mode must document 'Keep as recorded' as the unanswered-drift-question default"
+  );
+});
+
 test('no prompt file mentions brownfield (Phase 2b: brownfield onboarding removed)', () => {
   // Phase 2b retired the brownfield-detection flow (product.md creating
   // brownfield.md, roadmap.md/architecture.md consuming it, the accept/

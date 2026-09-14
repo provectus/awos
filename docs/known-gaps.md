@@ -16,7 +16,6 @@ Gaps between what the philosophy and docs promise and what the flow actually doe
 | 3   | Nothing keeps completed specs current                      | Phase 7, item 4             |
 | 4   | Philosophy's contracts have no enforcement                 | Phase 7, item 3             |
 | 5   | Legacy in-repo audit pending removal                       | Phase 8 (last, gated)       |
-| 6   | Update Mode never re-gathers                               | Unscheduled                 |
 | 7   | Changed agreements lose their why                          | Phase 7, item 5             |
 | 8   | Architecture decisions flatten their alternatives          | Phase 7 (rides memory work) |
 | 9   | Intent sources beyond the interview are unread             | Unscheduled                 |
@@ -61,12 +60,7 @@ Gaps between what the philosophy and docs promise and what the flow actually doe
 - **Interim scoring bug:** with `/awos:roadmap` removed (PR #200), the audit's SDD-02 check still counts `context/product/roadmap.md` among the three required foundational documents — every correct greenfield project scores a permanent WARN, and existing projects keep earning credit for a file no command maintains anymore. The fix (drop roadmap.md from SDD-02's required set in standards.toml + the SDD detector, rebuild `dist/`, patch plugin bump) ships as a dedicated follow-up PR — the roadmap's Phase-5 triage rule classifies wrong-score bugs as fix-worthy, so this does not wait for Phase 8.
 - **Roadmap:** Phase 8 — deliberately **last**, gated on the successor passing beta; the in-repo audit stays operational until then. The plugin and marketplace machinery retire with it. _(An earlier sketch here — keep `/awos:flow`, repoint brownfield docs — is superseded: flow goes in Phase 1, brownfield docs in Phase 2, and the successor pointer lands with Phase 8, whose gate makes it announceable by definition.)_
 
-## 6. Update Mode never re-gathers
-
-- **Observed:** `/awos:product`'s Update Mode revises the definition from the conversation alone — nothing re-reads the code or any other source on a re-run. After the foundation exists, the definition moves only by interview while the product keeps changing.
-- **Why it matters:** the memory direction's advancing test is "the product's _current_ behavior is available to the agent, not only its history of intentions." A definition that can only drift fails it structurally; every later spec inherits the drift.
-- **Fix sketch:** Update Mode runs the same gather step Creation Mode runs, diffs findings against the recorded definition, and surfaces drift for confirmation.
-- **Roadmap:** unscheduled — intersects the Open question (a modeless gather step would naturally run on update too); decide together.
+_(Gap 6 — "Update Mode never re-gathers" — closed 2026-09-14. Written against `/awos:product` before the Open question relocated the gather pass; post-relocation it belonged to `/awos:architecture`, whose Update Mode now re-runs the Creation Mode gather, diffs findings against the recorded architecture, and confirms each drift item with the user. `/awos:product` staying interview-only is the 2b design, not this gap; the product definition's currency is gap 3's absorption work. Numbers are stable IDs — 6 is not reused.)_
 
 ## 7. Changed agreements lose their why
 

@@ -18,7 +18,7 @@ Run `/awos:product` first.
 ## How it works
 
 - **Creation Mode**: The agent starts by exploring your codebase with a focused `Explore` pass — every Creation Mode run, on every project. Any existing technology stack it finds (languages, frameworks, databases, infrastructure) becomes the default for the matching architecture decisions, each backed by file-path citations; on a repository with no source code the pass simply finds nothing and the draft comes from your product definition and best-practice defaults. The agent then drafts every architectural area in one pass — proposing concrete technologies with justifications and alternatives for each area (application stack, data layer, infrastructure, etc.) — and saves `architecture.md` without waiting for approval. You then review the saved document: choices seeded from the codebase are called out with their evidence, assumption-based ones are labeled, and you adjust anything you'd change.
-- **Update Mode**: The agent presents the current architecture, asks what you'd like to change, and proposes specific modifications. It checks for consistency — flagging conflicts with existing decisions or potential impacts.
+- **Update Mode**: The agent re-runs the same codebase exploration and diffs what it finds against the recorded architecture. Any drift — a technology the code uses but the document never recorded, or a recorded choice the code has moved away from — is surfaced with its file-path evidence for you to adopt or keep as recorded; nothing is rewritten silently. It then presents the current architecture, asks what you'd like to change, and proposes specific modifications, checking for consistency — flagging conflicts with existing decisions or potential impacts.
 
 ## Common misconceptions
 

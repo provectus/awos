@@ -64,13 +64,13 @@ Follow this logic precisely.
     - Testing frameworks and tools
     - Build tools, bundlers, CI/CD
 
-    For each technology found, cite the file paths that evidence it. If the repository contains no source code, say so and report nothing else. Be concise — report findings as bullet points.
+    For each technology found, cite the file paths that evidence it. If the repository contains no code and no configuration evidencing a technology stack (no source files, package manifests, infrastructure, or CI config), say so and report nothing else. Be concise — report findings as bullet points.
     ")
     ```
 
-    Whatever the exploration finds becomes the default for the matching architectural decisions in the draft below, with each finding carrying its file-path citations into the draft. When the repository has no source code, the pass simply finds nothing and the draft proceeds from the product definition and best-practice assumptions alone. Findings are confirmed with the user during review in **Step 3: Finalization** — after the architecture is saved — so exploration never blocks the write.
+    Whatever the exploration finds becomes the default for the matching architectural decisions in the draft below, with each finding carrying its file-path citations into the draft. When the repository holds no such evidence, the pass simply finds nothing and the draft proceeds from the product definition and best-practice assumptions alone. Findings are confirmed with the user during review in **Step 3: Finalization** — after the architecture is saved — so exploration never blocks the write.
 
-3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured`, read it and retrieve content from each configured source. For sources with `Access: mcp` or `Access: cli`, launch one Explore agent per source using the tool named in the `Tool:` field. For sources with `Access: manual`, use `AskUserQuestion` to let the user paste relevant content directly.
+3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured`, read it and retrieve content from each configured source. For sources with `Access: mcp` or `Access: cli`, launch one Explore agent per source using the tool named in the `Tool:` field. For sources with `Access: manual`, do not request content here — note them as pending and ask for the pasted content in **Step 3: Finalization**, after the architecture is saved. A pre-write question nobody answers would end an unattended run before the deliverable exists.
 
     For `mcp` or `cli` sources:
 
@@ -108,7 +108,7 @@ Follow this logic precisely.
 ## Scenario 2: Update Mode
 
 1.  Read the existing `architecture.md` and `product-definition.md`.
-2.  **Codebase re-gather.** Run the same codebase exploration as Creation Mode substep 2 — the identical `Explore` agent and prompt. Compare its findings against what the document records and collect every divergence as a drift item: a technology evidenced in the code but absent from the document, a recorded choice the code no longer evidences, or a mismatch (a different version, a replacement in place). Each drift item carries its file-path citations. When nothing diverges — or the repository has no source code — there are no drift items and the update proceeds from the conversation alone.
+2.  **Codebase re-gather.** Run the same codebase exploration as Creation Mode substep 2 — the identical `Explore` agent and prompt. Compare its findings against what the document records and collect every divergence as a drift item: a technology evidenced in the code but absent from the document, a recorded choice the code no longer evidences, or a mismatch (a different version, a replacement in place). Each drift item carries its file-path citations. When nothing diverges — or the repository holds no stack evidence at all — there are no drift items and the update proceeds from the conversation alone.
 3.  Present the current architecture together with any drift items, and ask the user what to change. Resolve each drift item with `AskUserQuestion`: **Adopt** (the document takes what the code shows, citations included) or **Keep as recorded** (the code state is transitional or wrong — note the stated reason on the decision). The default for an unanswered drift question is **Keep as recorded** — drift is never applied to the document silently.
 4.  Propose a specific, reasoned change, preferring scalable and cost-effective options. For example: to support file uploads, propose adding S3 under Data & Persistence.
 5.  Before saving, check whether the change conflicts with existing principles, technologies, or cost/operational constraints. For complex changes (e.g., swapping a database), discuss the potential impacts and migration strategy with the user. Surface any concern before applying.
@@ -119,5 +119,5 @@ Follow this logic precisely.
 ### Step 3: Finalization
 
 1.  Write the architecture content to `context/product/architecture.md`. **Write the file without waiting for approval** — an architecture is reversible (re-run `/awos:architecture` to revise), so the deliverable is never gated behind a confirmation an unattended run cannot answer.
-2.  Present the saved architecture for review. Call out which choices were seeded by the codebase exploration or documentation retrieval (with their citations) and which are labeled assumptions, and ask what to change. Apply requested changes and re-save; otherwise the user can revise later by re-running `/awos:architecture`.
+2.  Present the saved architecture for review. Call out which choices were seeded by the codebase exploration or documentation retrieval (with their citations) and which are labeled assumptions, and ask what to change. If any manual sources were noted as pending, ask the user now to paste the relevant content from them, and fold what they provide into the document like any other requested change. Apply requested changes and re-save; otherwise the user can revise later by re-running `/awos:architecture`.
 3.  Report the saved path and the next command: `/awos:spec`.

@@ -43,7 +43,7 @@ Follow this process precisely.
 ### Step 1: Identify the Target Specification
 
 1.  Analyze `<user_prompt>`. If it clearly references a spec by name or index, identify the corresponding directory in `context/spec/`.
-2.  If the prompt is empty or ambiguous, ask the user to choose via `AskUserQuestion`, offering the available spec directories as options. Spec selection has no fallback default — without a target spec there is no deliverable to draft — so an unanswered selection ends the run cleanly (the Step 1 exception in `# INTERACTION`).
+2.  If the prompt is empty, ambiguous, or references a spec that matches no directory in `context/spec/`, ask the user to choose via `AskUserQuestion`, offering the available spec directories as options (for an unmatched reference, name the reference that failed to resolve). Spec selection has no fallback default — without a target spec there is no deliverable to draft — so an unanswered selection ends the run cleanly (the Step 1 exception in `# INTERACTION`).
 
 ### Step 2: Gather and Synthesize Context
 

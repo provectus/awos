@@ -140,7 +140,7 @@ When you need to move or restructure files in existing installations:
 - **`move`**: Move file from one location to another
 - **`copy`**: Copy file to new location
 - **`delete`**: Remove file
-- **`remove_json_key`**: Remove one key (dot-path `key`) from a JSON `file` the installer wrote earlier (e.g. an `.mcp.json` server entry). A missing file, invalid JSON, or absent key is a logged skip, never an error
+- **`remove_json_key`**: Remove one key (dot-path `key`) from a JSON `file` the installer wrote earlier (e.g. an `.mcp.json` server entry). A missing file, invalid JSON, or absent key is a logged skip, never an error — and the migration still counts as applied (the version stamp advances), so a skipped removal is not retried on later runs. This is deliberate: the file belongs to the user's project, and withholding the stamp would re-attempt the migration on every future install
 
 ### Testing Migrations
 

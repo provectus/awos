@@ -256,7 +256,7 @@ Contributor counts in the org report are always aggregate — no per-person data
 
 ## Step 6 — What's Next?
 
-After presenting the report, close by pointing the user forward. Both `report.md` and `report.html` were already produced in Step 5 — Step 6 never (re-)generates or hand-writes a report; it only says what to do next.
+After presenting the report, offer follow-up next steps. Both `report.md` and `report.html` were already produced in Step 5 — Step 6 never (re-)generates or hand-writes a report; it only offers what to do next.
 
 The actionable artifact is `context/audits/YYYY-MM-DD_HH-MM-SS/recommendations.md` — the prioritized improvements the audit surfaced. Point the user at it (alongside `report.html`) and suggest working through it: tackle the quick wins directly, and feed the larger items into the team's planning flow. This closing pointer is plain prose in every mode — there is no question to ask here, so headless runs (e.g. CI or `--output-format stream-json`) finish the same way.
 

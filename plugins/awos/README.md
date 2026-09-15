@@ -1,8 +1,6 @@
 # AWOS Plugin
 
-> **Deprecated.** The audit is in maintenance and scheduled for removal once its successor ships (see `docs/2.0/refactoring-roadmap.md`, Phase 8). During the window, wrong-output bugs are still fixed and audits keep working; no new capabilities are added. Reports produced by the audit are unaffected — this notice is for operators, not audit readers.
-
-An extensible, dimension-based AI-readiness audit (`/awos:ai-readiness-audit`) for AWOS projects. A deterministic TypeScript engine scores every dimension in a single pass; the model fills only a small judgment slice and authors the plain-language narrative. Run `/awos:ai-readiness-audit` and get a scored report with actionable recommendations.
+Extensible, dimension-based code quality audit for Claude Code. A deterministic TypeScript engine scores every dimension in a single pass; the model fills only a small judgment slice and authors the plain-language narrative. Run `/awos:ai-readiness-audit` and get a scored report with actionable recommendations.
 
 ## Install
 

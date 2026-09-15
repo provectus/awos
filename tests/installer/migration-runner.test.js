@@ -143,7 +143,7 @@ test('migrations 003 and 004 delete the roadmap/hire templates, tombstone the co
   ];
   for (const f of preservedFiles) await writeFile(f, 'user content\n');
 
-  // Seed the .mcp.json a pre-3.0 install wrote, plus a user-added server.
+  // Seed the .mcp.json a pre-2.0 install wrote, plus a user-added server.
   const mcpPath = path.join(workingDir, '.mcp.json');
   await writeFile(
     mcpPath,
@@ -364,6 +364,47 @@ test('migration 004 remove_json_key skips gracefully when .mcp.json is absent, m
   assert.ok(
     dryAfter.mcpServers['awos-recruitment'],
     'dry-run must not remove the awos-recruitment MCP entry'
+  );
+});
+
+test('a migration whose operations all skip reports zero applied', async () => {
+  // Log honesty: a fresh never-AWOS project with a user-authored
+  // .mcp.json matches migration 004's preconditions (bare .mcp.json is
+  // in require_any so the wholesale-.awos-deletion case stays covered),
+  // but every operation skips — no hire files, no awos-recruitment
+  // entry. The run must not print "Applied 1 migration(s)" over zero
+  // changed bytes; support cannot diagnose logs that claim phantom work.
+  const workingDir = await freshTemp();
+  await writeFile(
+    path.join(workingDir, '.mcp.json'),
+    JSON.stringify(
+      {
+        mcpServers: {
+          'user-server': { type: 'http', url: 'https://example.com/mcp' },
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  );
+
+  const result = await silenced(() => runMigrations(workingDir));
+
+  assert.equal(
+    result.applied,
+    0,
+    'a run where every operation skipped must report zero applied migrations — the log must never claim work that never happened'
+  );
+  const expectedLatest = await latestMigrationVersion();
+  assert.equal(
+    (
+      await fsPromises.readFile(
+        path.join(workingDir, '.awos', '.migration-version'),
+        'utf8'
+      )
+    ).trim(),
+    String(expectedLatest),
+    'the version stamp still advances on a skip-only run, so skipped operations are not retried forever'
   );
 });
 

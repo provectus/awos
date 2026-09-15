@@ -108,7 +108,10 @@ async function lexists(filePath) {
  * @param {Object} operation - The operation to execute
  * @param {string} workingDir - Working directory
  * @param {Object} options - Execution options
- * @returns {Promise<void>}
+ * @returns {Promise<boolean>} Whether the operation changed anything
+ *   (or would have, under dry-run). Skips return falsy so a migration
+ *   whose operations all skipped is reported as skipped, not applied —
+ *   the log must never claim work that never happened.
  */
 async function executeOperation(
   operation,
@@ -154,6 +157,7 @@ async function executeOperation(
           `  ${style.dim('[DRY-RUN]')} Would move: ${operation.from} → ${operation.to}`,
           'item'
         );
+        return true;
       } else {
         if (!sourceExists) {
           // Source doesn't exist - skip silently (might be already migrated)
@@ -170,8 +174,8 @@ async function executeOperation(
         // Perform the move
         await fs.rename(sourcePath, targetPath);
         log(`  Moved: ${operation.from} → ${operation.to}`, 'success');
+        return true;
       }
-      break;
 
     case 'copy':
       if (!sourcePath) {
@@ -204,6 +208,7 @@ async function executeOperation(
           `  ${style.dim('[DRY-RUN]')} Would copy: ${operation.from} → ${operation.to}`,
           'item'
         );
+        return true;
       } else {
         if (!copySourceExists) {
           // Source doesn't exist - skip silently
@@ -220,8 +225,8 @@ async function executeOperation(
         // Perform the copy
         await fs.copyFile(sourcePath, targetPath);
         log(`  Copied: ${operation.from} → ${operation.to}`, 'success');
+        return true;
       }
-      break;
 
     case 'delete':
       if (!sourcePath) {
@@ -233,13 +238,15 @@ async function executeOperation(
             `  ${style.dim('[DRY-RUN]')} Would skip delete (not found): ${operation.from}`,
             'item'
           );
-        } else {
-          log(
-            `  ${style.dim('[DRY-RUN]')} Would delete: ${operation.from}`,
-            'item'
-          );
+          return false;
         }
-      } else if (!(await lexists(sourcePath))) {
+        log(
+          `  ${style.dim('[DRY-RUN]')} Would delete: ${operation.from}`,
+          'item'
+        );
+        return true;
+      }
+      if (!(await lexists(sourcePath))) {
         // fs.rm with force:true never throws ENOENT, so the not-found case
         // must be detected up front or the log claims a deletion that never
         // happened.
@@ -247,11 +254,11 @@ async function executeOperation(
           `  ${style.dim('–')} Skipped delete (not found): ${operation.from}`,
           'item'
         );
-      } else {
-        await fs.rm(sourcePath, { recursive: true, force: true });
-        log(`  Deleted: ${operation.from}`, 'success');
+        return false;
       }
-      break;
+      await fs.rm(sourcePath, { recursive: true, force: true });
+      log(`  Deleted: ${operation.from}`, 'success');
+      return true;
 
     case 'remove_json_key': {
       // Removes one key (dot-path) from a JSON file the installer itself
@@ -311,16 +318,24 @@ async function executeOperation(
 
       if (dryRun) {
         log(`  ${style.dim('[DRY-RUN]')} Would remove: ${label}`, 'item');
-      } else {
-        delete parent[leaf];
-        await fs.writeFile(
-          filePath,
-          JSON.stringify(parsed, null, 2) + '\n',
-          'utf-8'
-        );
-        log(`  Removed: ${label}`, 'success');
+        return true;
       }
-      break;
+      delete parent[leaf];
+      // Write-to-temp + rename: an in-place write interrupted mid-flight
+      // would leave .mcp.json as truncated invalid JSON — breaking every
+      // MCP server the user configured — and the invalid-JSON skip above
+      // would then abandon the corrupt file for good. A same-directory
+      // rename is atomic: the file is always either the old content or
+      // the new, never a torn write.
+      const tmpPath = `${filePath}.awos-tmp`;
+      await fs.writeFile(
+        tmpPath,
+        JSON.stringify(parsed, null, 2) + '\n',
+        'utf-8'
+      );
+      await fs.rename(tmpPath, filePath);
+      log(`  Removed: ${label}`, 'success');
+      return true;
     }
 
     case 'replace_content': {
@@ -349,28 +364,28 @@ async function executeOperation(
             : `  ${style.dim('–')} Skipped content replace (not found): ${operation.file}`,
           'item'
         );
-        return;
+        return false;
       }
       if (dryRun) {
         log(
           `  ${style.dim('[DRY-RUN]')} Would ${targetFound ? 'replace content' : `create (${operation.create_if} present)`}: ${operation.file}`,
           'item'
         );
-      } else {
-        if (!targetFound) {
-          await fs.mkdir(path.dirname(filePath), { recursive: true });
-        }
-        await fs.writeFile(
-          filePath,
-          operation.content.join('\n') + '\n',
-          'utf-8'
-        );
-        log(
-          `  ${targetFound ? 'Replaced content' : `Created (${operation.create_if} present)`}: ${operation.file}`,
-          'success'
-        );
+        return true;
       }
-      break;
+      if (!targetFound) {
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+      }
+      await fs.writeFile(
+        filePath,
+        operation.content.join('\n') + '\n',
+        'utf-8'
+      );
+      log(
+        `  ${targetFound ? 'Replaced content' : `Created (${operation.create_if} present)`}: ${operation.file}`,
+        'success'
+      );
+      return true;
     }
 
     default:
@@ -479,12 +494,17 @@ async function executeMigration(migration, workingDir, options = {}) {
       : 'not_applicable';
   }
 
-  // Execute operations
-  let operationsExecuted = 0;
+  // Execute operations, counting only the ones that actually changed
+  // something (or would, under dry-run). A migration whose preconditions
+  // matched but whose every operation skipped did no work — reporting it
+  // as applied would claim changes that never happened (e.g. migration 4
+  // matching on a user's own .mcp.json in a project that never had hire).
+  let changedOperations = 0;
   for (const operation of migration.operations) {
     try {
-      await executeOperation(operation, workingDir, options);
-      operationsExecuted++;
+      if (await executeOperation(operation, workingDir, options)) {
+        changedOperations++;
+      }
     } catch (error) {
       throw new Error(
         `Migration ${migration.version} failed during ${operation.type} operation: ${error.message}`
@@ -492,7 +512,7 @@ async function executeMigration(migration, workingDir, options = {}) {
     }
   }
 
-  return operationsExecuted > 0 ? 'applied' : 'skipped';
+  return changedOperations > 0 ? 'applied' : 'skipped';
 }
 
 /**

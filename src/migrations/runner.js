@@ -280,6 +280,39 @@ async function executeOperation(
       break;
     }
 
+    case 'replace_content': {
+      // Replaces the whole content of a file the installer itself wrote
+      // earlier (e.g. a removed command's body becomes a tombstone that a
+      // preserved user wrapper still resolves to). Replace-only by design:
+      // when the target is absent there is nothing stale to defuse, and
+      // creating it would plant framework files in projects that never had
+      // them — so a missing file is a skip, not a create.
+      const filePath = path.normalize(path.join(workingDir, operation.file));
+      if (!(await exists(filePath))) {
+        log(
+          dryRun
+            ? `  ${style.dim('[DRY-RUN]')} Would skip content replace (not found): ${operation.file}`
+            : `  ${style.dim('–')} Skipped content replace (not found): ${operation.file}`,
+          'item'
+        );
+        return;
+      }
+      if (dryRun) {
+        log(
+          `  ${style.dim('[DRY-RUN]')} Would replace content: ${operation.file}`,
+          'item'
+        );
+      } else {
+        await fs.writeFile(
+          filePath,
+          operation.content.join('\n') + '\n',
+          'utf-8'
+        );
+        log(`  Replaced content: ${operation.file}`, 'success');
+      }
+      break;
+    }
+
     default:
       throw new Error(`Unknown operation type: ${operation.type}`);
   }

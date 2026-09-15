@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "name": "Remove roadmap command internals (the user's .claude/commands/awos/roadmap.md wrapper and context/product/roadmap.md are preserved)",
+  "name": "Remove roadmap internals: delete the template and tombstone the command body, so a preserved .claude/commands/awos/roadmap.md wrapper resolves to a removal notice instead of a broken import (context/product/roadmap.md is untouched)",
   "preconditions": {
     "require_any": [
       ".awos/commands/roadmap.md",
@@ -9,8 +9,19 @@
   },
   "operations": [
     {
-      "type": "delete",
-      "from": ".awos/commands/roadmap.md"
+      "type": "replace_content",
+      "file": ".awos/commands/roadmap.md",
+      "content": [
+        "# Removed Command",
+        "",
+        "`/awos:roadmap` was removed in AWOS 2.0. AWOS is not a planning or backlog tool: specs are anchored by an explicit topic now, not by a roadmap item.",
+        "",
+        "Tell the user the following, then stop. Do not build, update, or review a roadmap document.",
+        "",
+        "- This command no longer exists. To start a feature, run `/awos:spec` and state the topic directly.",
+        "- If `context/product/roadmap.md` exists, it is theirs to keep, mine for spec topics, or delete — AWOS no longer reads or maintains it.",
+        "- This notice comes from a leftover command wrapper. To remove it, delete `.claude/commands/awos/roadmap.md` and `.awos/commands/roadmap.md`."
+      ]
     },
     {
       "type": "delete",

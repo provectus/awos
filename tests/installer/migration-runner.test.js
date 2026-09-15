@@ -114,18 +114,23 @@ test('all migrations run end-to-end then re-running is a no-op', async () => {
   );
 });
 
-test('migrations 003 and 004 delete the roadmap/hire framework files and the awos-recruitment MCP entry when present', async () => {
+test('migrations 003 and 004 delete the roadmap/hire templates, tombstone the command bodies, and remove the awos-recruitment MCP entry when present', async () => {
   const workingDir = await freshTemp();
 
-  // Seed every delete target of migrations 003 and 004 — the positive path,
-  // where the preconditions match AND the files are actually on disk.
-  const frameworkFiles = [
-    path.join(workingDir, '.awos', 'commands', 'roadmap.md'),
+  // Seed every target of migrations 003 and 004 — the positive path, where
+  // the preconditions match AND the files are actually on disk. Templates
+  // are deleted outright; the command bodies are replaced with tombstones
+  // so a preserved wrapper's @-import resolves to a removal notice instead
+  // of a broken reference the model could improvise removed behavior from.
+  const deletedFiles = [
     path.join(workingDir, '.awos', 'templates', 'roadmap-template.md'),
-    path.join(workingDir, '.awos', 'commands', 'hire.md'),
     path.join(workingDir, '.awos', 'templates', 'agent-template.md'),
   ];
-  for (const f of frameworkFiles) await writeFile(f);
+  const tombstonedFiles = [
+    path.join(workingDir, '.awos', 'commands', 'roadmap.md'),
+    path.join(workingDir, '.awos', 'commands', 'hire.md'),
+  ];
+  for (const f of [...deletedFiles, ...tombstonedFiles]) await writeFile(f);
 
   // Seed the user-owned files the migrations must preserve.
   const preservedFiles = [
@@ -156,16 +161,40 @@ test('migrations 003 and 004 delete the roadmap/hire framework files and the awo
 
   await silenced(() => runMigrations(workingDir));
 
-  for (const f of frameworkFiles) {
+  for (const f of deletedFiles) {
     assert.equal(
       exists(f),
       false,
-      `migrations 003/004 must delete the framework file ${path.relative(workingDir, f)}`
+      `migrations 003/004 must delete the framework template ${path.relative(workingDir, f)}`
     );
   }
-  for (const f of preservedFiles) {
+  for (const f of tombstonedFiles) {
+    const body = await fsPromises.readFile(f, 'utf8');
     assert.ok(
-      exists(f),
+      body.includes('removed in AWOS 2.0'),
+      `${path.relative(workingDir, f)} must carry the AWOS 2.0 removal-notice tombstone, not its old command body`
+    );
+  }
+  const roadmapTombstone = await fsPromises.readFile(
+    path.join(workingDir, '.awos', 'commands', 'roadmap.md'),
+    'utf8'
+  );
+  assert.ok(
+    roadmapTombstone.includes('/awos:spec'),
+    'the roadmap tombstone must point users at the replacement path (/awos:spec with an explicit topic)'
+  );
+  const hireTombstone = await fsPromises.readFile(
+    path.join(workingDir, '.awos', 'commands', 'hire.md'),
+    'utf8'
+  );
+  assert.ok(
+    hireTombstone.includes('staffing gap'),
+    'the hire tombstone must point users at the replacement path (staffing gaps surfaced by /awos:tasks)'
+  );
+  for (const f of preservedFiles) {
+    assert.equal(
+      await fsPromises.readFile(f, 'utf8'),
+      'user content\n',
       `migrations must never touch the user-owned file ${path.relative(workingDir, f)}`
     );
   }
@@ -219,6 +248,45 @@ test('migration 004 cleans the awos-recruitment entry even when the hire framewo
     'awos-recruitment' in mcp.mcpServers,
     false,
     'migration 004 must remove the awos-recruitment entry when .mcp.json alone matches its preconditions'
+  );
+  assert.equal(
+    exists(path.join(workingDir, '.awos', 'commands', 'hire.md')),
+    false,
+    'the tombstone op is replace-only: a project whose .mcp.json alone matched the preconditions must not gain a .awos/commands/hire.md it never had'
+  );
+});
+
+test('tombstone replace_content is idempotent and dry-run leaves the original command body untouched', async () => {
+  // Dry-run: the old command body must survive byte-for-byte.
+  const dry = await freshTemp();
+  const dryTarget = path.join(dry, '.awos', 'commands', 'roadmap.md');
+  await writeFile(dryTarget, 'original roadmap command body\n');
+  await silenced(() => runMigrations(dry, { dryRun: true }));
+  assert.equal(
+    await fsPromises.readFile(dryTarget, 'utf8'),
+    'original roadmap command body\n',
+    'dry-run must not replace the command body with the tombstone'
+  );
+
+  // Operation-level idempotency: resetting the version marker and re-running
+  // must reproduce the identical tombstone, not error or double-apply.
+  const workingDir = await freshTemp();
+  const target = path.join(workingDir, '.awos', 'commands', 'roadmap.md');
+  await writeFile(target, 'original roadmap command body\n');
+  await silenced(() => runMigrations(workingDir));
+  const firstTombstone = await fsPromises.readFile(target, 'utf8');
+  assert.ok(
+    firstTombstone.includes('removed in AWOS 2.0'),
+    'first run must replace the command body with the tombstone'
+  );
+  await fsPromises.rm(path.join(workingDir, '.awos', '.migration-version'), {
+    force: true,
+  });
+  await silenced(() => runMigrations(workingDir));
+  assert.equal(
+    await fsPromises.readFile(target, 'utf8'),
+    firstTombstone,
+    're-running migration 003 with the version marker reset must leave the tombstone byte-identical'
   );
 });
 

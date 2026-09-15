@@ -85,10 +85,7 @@ Skip this step if `SKIP_TESTS = true`.
 1.  **Search for a QA-coded subagent** by introspecting the `Agent` tool's description block from Step 3.4. Pick the best fit using this order, but do not hardcode names — match on responsibility:
     - A project-specific tester for the actual stack (e.g. `react-testing`, `pytest-tester`, a custom `acceptance-tester` in `.claude/agents/`).
     - Any other QA-coded agent, project-local or plugin-provided.
-2.  **If no QA-coded agent is found,** the plan has a staffing gap. Surface it via `AskUserQuestion` with exactly three options:
-    1.  **Record the gap as an open question** — produce the Feature Testing & Regression slice with its tasks marked `**[Agent: general-purpose]**`, plus an entry in the `## Open Questions` section of `tasks.md` (see Step 3b) naming the missing QA specialist, so the gap stays visible in the plan. (Default when the question is skipped — an unanswered question never hides a staffing gap.)
-    2.  **Assign `general-purpose` and proceed without recording** — same assignment, no `## Open Questions` entry. This is a deliberate decision to run QA under the generalist, so it is never the silent default.
-    3.  **Skip the Feature Testing & Regression slice** — set `SKIP_TESTS = true` for this run only; the user can re-run `/awos:tasks` once a QA-coded agent is available in the project.
+2.  **If no QA-coded agent is found,** the plan has a staffing gap. Do not ask about it here — a question at this point would precede the Step 4 write, and a dismissed pre-write question ends an unattended run with no `tasks.md` at all. Emit the slice with `{qa-agent}` substituted as `general-purpose` and hand the gap to Step 3b, which records it alongside the other staffing gaps; the user decides in Step 5, after the file is written, where this QA gap carries one extra option (dropping the slice).
 
 3.  **Emit the slice** using the template below. Substitute `{qa-agent}` with the agent name selected above. Substitute `N` with the next slice number. Keep the wording — downstream automations depend on this exact structure.
 
@@ -136,9 +133,10 @@ Skip this step if every task matched an available agent in Step 3.4 and no QA ga
 ## Step 5: Surface for Review and Recommend Next Step
 
 1.  Report the saved path and present the slice/task plan for review.
-2.  If Step 3b recorded staffing gaps, surface them now — after the write — in a single `AskUserQuestion` that names the uncovered tasks and the missing expertise. Two options:
+2.  If Step 3b recorded staffing gaps, surface them now — after the write — in a single `AskUserQuestion` that names the uncovered tasks and the missing expertise. Two options, plus a third when the QA gap from Step 3a is among them:
     1.  **Accept the `general-purpose` assignments** — remove the `## Open Questions` section from `tasks.md` and re-save; the uncovered tasks run under the built-in generalist.
     2.  **Keep the gaps recorded** — the file stands as written; the user resolves each gap later by adding a covering agent to the project and re-running `/awos:tasks`, or by accepting the assignment then. (Default when the question is skipped — an unanswered question never hides a staffing gap.)
+    3.  **Drop the Feature Testing & Regression slice** (offered only for the Step 3a QA gap) — remove the slice from `tasks.md`, add the `<!-- skip-tests: true -->` marker at the top so downstream commands detect the choice, and re-save; re-run `/awos:tasks` once a QA-coded agent is available to restore it.
 3.  Ask for review feedback strictly via the `AskUserQuestion` tool (e.g. options "Looks good — keep it as saved" / "I want changes") — never in plain text, which would end a non-interactive turn before the review outcome can be reported.
 4.  **When the user responds** (either "looks good" or after you apply their requested changes and re-save): remove the `<!-- not-user-reviewed -->` marker from the top of `tasks.md`, since the plan has now been reviewed. If they requested changes, apply them — adjust, split, merge slices or tasks, or reassign subagents — and re-save before removing the marker.
 5.  **If the review question goes unanswered** (dismissed, or the run is non-interactive): leave the file exactly as saved, marker included. Its presence is the signal that the plan was written but not reviewed; do not remove it.

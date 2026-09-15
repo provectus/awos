@@ -16,6 +16,14 @@ Your task is to manage the architecture file located at `context/product/archite
 
 # INPUTS & OUTPUTS
 
+- **Initial Prompt:** An optional change request within the `<user_prompt>` XML tag — in Update Mode it names what to change (e.g. handed off by `/awos:verify`):
+
+  ```xml
+  <user_prompt>
+  $ARGUMENTS
+  </user_prompt>
+  ```
+
 - **Template File:** `.awos/templates/architecture-template.md` (The required structure).
 - **Prerequisite Input:** `context/product/product-definition.md` (The "what" and "why").
 - **Optional Input:** `context/sources/sources.md` (external source configuration for targeted retrieval).
@@ -27,6 +35,7 @@ Your task is to manage the architecture file located at `context/product/archite
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
 - A skipped or unanswered question is never a stop signal. Fall back to the documented default for that question and continue through the remaining steps, including writing `context/product/architecture.md`.
+- The one exception is Update Mode's what-to-change question when `<user_prompt>` is empty: with no requested change and no answer there is nothing to update, so the run ends cleanly after reporting any drift found.
 
 <!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
@@ -109,10 +118,10 @@ Follow this logic precisely.
 
 1.  Read the existing `architecture.md` and `product-definition.md`.
 2.  **Codebase re-gather.** Run the same codebase exploration as Creation Mode substep 2 — the identical `Explore` agent and prompt. Compare its findings against what the document records and collect every divergence as a drift item: a technology evidenced in the code but absent from the document, a recorded choice the code no longer evidences, or a mismatch (a different version, a replacement in place). Each drift item carries its file-path citations. When nothing diverges — or the repository holds no stack evidence at all — there are no drift items and the update proceeds from the conversation alone.
-3.  Present the current architecture together with any drift items, and ask the user what to change. Resolve each drift item with `AskUserQuestion`: **Adopt** (the document takes what the code shows, citations included) or **Keep as recorded** (the code state is transitional or wrong — note the stated reason on the decision). The default for an unanswered drift question is **Keep as recorded** — drift is never applied to the document silently.
+3.  Determine the requested change. When `<user_prompt>` is non-empty, it is the change request — this is the receiving side of `/awos:verify`'s "run `/awos:architecture <prompt describing what changed>`" handoff, so consume it directly and do not re-ask what to change. When it is empty, present the current architecture together with any drift items and ask the user what to change; if no answer comes (e.g. an unattended run), there is no change to apply — report the drift items and end the run cleanly (the exception in `# INTERACTION`).
 4.  Propose a specific, reasoned change, preferring scalable and cost-effective options. For example: to support file uploads, propose adding S3 under Data & Persistence.
 5.  Before saving, check whether the change conflicts with existing principles, technologies, or cost/operational constraints. For complex changes (e.g., swapping a database), discuss the potential impacts and migration strategy with the user. Surface any concern before applying.
-6.  When all changes are confirmed, proceed to **Step 3: Finalization**.
+6.  Proceed to **Step 3: Finalization**. Drift items travel with the draft unresolved: the write records the requested change only — never an unconfirmed drift adoption — and the drift questions come after the write, where a dismissed question can no longer cost the deliverable.
 
 ---
 
@@ -120,4 +129,5 @@ Follow this logic precisely.
 
 1.  Write the architecture content to `context/product/architecture.md`. **Write the file without waiting for approval** — an architecture is reversible (re-run `/awos:architecture` to revise), so the deliverable is never gated behind a confirmation an unattended run cannot answer.
 2.  Present the saved architecture for review. Call out which choices were seeded by the codebase exploration or documentation retrieval (with their citations) and which are labeled assumptions, and ask what to change. If any manual sources were noted as pending, ask the user now to paste the relevant content from them, and fold what they provide into the document like any other requested change. Apply requested changes and re-save; otherwise the user can revise later by re-running `/awos:architecture`.
-3.  Report the saved path and the next command: `/awos:spec`.
+3.  **Update Mode only — resolve drift, after the write.** For each drift item collected in the re-gather, ask via `AskUserQuestion`: **Adopt** (the document takes what the code shows, citations included) or **Keep as recorded** (the code state is transitional or wrong — note the stated reason on the decision). The default for an unanswered drift question is **Keep as recorded** — drift is never applied to the document silently, and the document as saved already reflects that default. Apply adopted items and re-save.
+4.  Report the saved path and the next command: `/awos:spec`.

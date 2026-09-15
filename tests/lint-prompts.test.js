@@ -1078,18 +1078,25 @@ test('architecture.md docs retrieval reports only NEW findings', () => {
   }
 });
 
-test('architecture.md Update Mode re-gathers the codebase and confirms drift', () => {
+test('architecture.md Update Mode re-gathers the codebase and confirms drift after the write', () => {
   // Closes known-gaps gap 6: Update Mode must run the same codebase
   // exploration Creation Mode runs and diff its findings against the
   // recorded architecture — the document may only diverge from the code
   // with the user's explicit say-so. An Update Mode that revises by
-  // interview alone re-opens the gap.
+  // interview alone re-opens the gap. Ordering is part of the contract:
+  // the per-drift AskUserQuestion is dismissable, so it must come after
+  // the Finalization write — a pre-write drift question ends an
+  // unattended run with no deliverable.
   const body = readUtf8(path.join(commandsDir, 'architecture.md'));
   const updateBlock = body
     .split(/## Scenario 2: Update Mode/i)
     .slice(1)
     .join('')
     .split(/### Step 3/i)[0];
+  const finalizationBlock = body
+    .split(/### Step 3: Finalization/i)
+    .slice(1)
+    .join('');
   assert.ok(
     /re-gather/i.test(updateBlock),
     'commands/architecture.md Update Mode must contain the codebase re-gather step'
@@ -1103,12 +1110,18 @@ test('architecture.md Update Mode re-gathers the codebase and confirms drift', (
     'Update Mode must diff gather findings against the document and surface drift'
   );
   assert.ok(
-    updateBlock.includes('AskUserQuestion'),
-    'Update Mode must resolve each drift item via AskUserQuestion, never silently'
+    !updateBlock.includes('AskUserQuestion'),
+    'the drift AskUserQuestion must not fire before the Finalization write — a dismissed pre-write question ends an unattended run before the deliverable exists'
   );
   assert.ok(
-    updateBlock.includes('Keep as recorded'),
-    "Update Mode must document 'Keep as recorded' as the unanswered-drift-question default"
+    finalizationBlock.includes('AskUserQuestion') &&
+      finalizationBlock.includes('Adopt') &&
+      finalizationBlock.includes('Keep as recorded'),
+    "Finalization must resolve each drift item via AskUserQuestion with Adopt / 'Keep as recorded' options, after the write"
+  );
+  assert.ok(
+    /never applied to the document silently/i.test(finalizationBlock),
+    "Finalization must document 'Keep as recorded' as the unanswered-drift-question default — drift is never applied silently"
   );
 });
 

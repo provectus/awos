@@ -1860,7 +1860,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // and its generator-version constant were removed with the flow feature —
 // the lockstep is three files now, not four.) The pin exists to force that
 // deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '3.0.0';
+const EXPECTED_PLUGIN_VERSION = '2.4.6';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -1893,7 +1893,7 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
 // The better plugin has its own independent version line. Its discipline
 // is three files moving together: its plugin.json, its marketplace.json entry,
 // and this pinned literal (it has no generator-version constant).
-const EXPECTED_BETTER_PLUGIN_VERSION = '0.2.0';
+const EXPECTED_BETTER_PLUGIN_VERSION = '0.1.1';
 
 test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(

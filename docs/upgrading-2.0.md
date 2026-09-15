@@ -36,4 +36,4 @@ Pre-2.0 installs registered an `awos-recruitment` MCP server in your project's `
 ## Version notes
 
 - npm package: **2.0.0** (this release).
-- awos plugin (`/awos:ai-readiness-audit`): **3.0.0** — an independent version line, bumped in lockstep with these removals.
+- awos plugin (`/awos:ai-readiness-audit`): **2.4.6** — a patch on its independent version line. Audit scoring is unchanged in this release; the version stamped in audit reports stays comparable with earlier 2.4.x audits.

@@ -4,13 +4,15 @@
   "preconditions": {
     "require_any": [
       ".awos/commands/roadmap.md",
-      ".awos/templates/roadmap-template.md"
+      ".awos/templates/roadmap-template.md",
+      ".claude/commands/awos/roadmap.md"
     ]
   },
   "operations": [
     {
       "type": "replace_content",
       "file": ".awos/commands/roadmap.md",
+      "create_if": ".claude/commands/awos/roadmap.md",
       "content": [
         "# Removed Command",
         "",

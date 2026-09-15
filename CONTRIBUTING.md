@@ -141,7 +141,7 @@ When you need to move or restructure files in existing installations:
 - **`copy`**: Copy file to new location
 - **`delete`**: Remove file
 - **`remove_json_key`**: Remove one key (dot-path `key`) from a JSON `file` the installer wrote earlier (e.g. an `.mcp.json` server entry). A missing file, invalid JSON, or absent key is a logged skip, never an error — and the migration still counts as applied (the version stamp advances), so a skipped removal is not retried on later runs. This is deliberate: the file belongs to the user's project, and withholding the stamp would re-attempt the migration on every future install
-- **`replace_content`**: Replace the entire content of a `file` with `content` (an array of lines, joined with newlines). Replace-only: a missing file is a logged skip, never a create. Used to turn a removed command's body into a tombstone that a preserved user wrapper still resolves to — without planting framework files in projects that never had them (fresh installs must stay clean, which `tests/fixtures/fresh-project` asserts)
+- **`replace_content`**: Replace the entire content of a `file` with `content` (an array of lines, joined with newlines). Replace-only by default: a missing file is a logged skip, never a create — so tombstones don't get planted into projects that never had the original (fresh installs must stay clean, which `tests/fixtures/fresh-project` asserts). The optional `create_if` field names a path whose presence authorizes creating the missing target (e.g. a preserved wrapper whose `@`-import would otherwise stay broken in a clone that committed `.claude/` but not `.awos/`)
 
 ### Testing Migrations
 

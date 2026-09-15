@@ -14,7 +14,10 @@ const fs = require('node:fs');
 const fsPromises = fs.promises;
 const path = require('node:path');
 
-const { runMigrations } = require('../../src/migrations/runner');
+const {
+  runMigrations,
+  executeOperation,
+} = require('../../src/migrations/runner');
 const {
   makeTempDir,
   removeTempDir,
@@ -474,6 +477,89 @@ test('migration versions are sequential with no gaps or duplicates', async () =>
     new Set(versions).size,
     versions.length,
     'migration versions must be unique'
+  );
+});
+
+test('migrations 003/004 create the tombstones for a wrapper-only project (committed .claude/, absent .awos/)', async () => {
+  // A teammate clones a project that committed its .claude/ wrappers but
+  // not .awos/ (nothing tells users to commit .awos/). The wrappers
+  // @-import .awos/commands/{roadmap,hire}.md — without the create_if
+  // authorization the migrations would go not_applicable, the version
+  // would stamp anyway, and the broken imports would be permanent.
+  const workingDir = await freshTemp();
+  await writeFile(
+    path.join(workingDir, '.claude', 'commands', 'awos', 'roadmap.md'),
+    'user wrapper\n'
+  );
+  await writeFile(
+    path.join(workingDir, '.claude', 'commands', 'awos', 'hire.md'),
+    'user wrapper\n'
+  );
+
+  await silenced(() => runMigrations(workingDir));
+
+  for (const name of ['roadmap.md', 'hire.md']) {
+    const target = path.join(workingDir, '.awos', 'commands', name);
+    assert.ok(
+      exists(target),
+      `.awos/commands/${name} must be created when its preserved wrapper exists — the wrapper's @-import must never stay broken`
+    );
+    assert.ok(
+      (await fsPromises.readFile(target, 'utf8')).includes(
+        'removed in AWOS 2.0'
+      ),
+      `.awos/commands/${name} must carry the removal-notice tombstone`
+    );
+  }
+});
+
+test('operation-level contracts: missing "from" throws, dangling symlinks are deleted, unreadable JSON files fail loudly', async () => {
+  const workingDir = await freshTemp();
+
+  // A delete/move/copy authored without "from" (e.g. copying the `file`
+  // key from a replace_content op above it) must fail migration
+  // authoring loudly, not log a green "Skipped delete (not found):
+  // undefined" no-op.
+  for (const type of ['delete', 'move', 'copy']) {
+    await assert.rejects(
+      () => executeOperation({ type, to: 'x.md' }, workingDir),
+      /requires "from" field/,
+      `a ${type} operation without "from" must throw, not silently no-op`
+    );
+  }
+
+  // A dangling symlink is a real, deletable entry: the delete op must
+  // remove it (fs.access follows the link and would misreport it as
+  // absent, leaving the dead link behind).
+  const linkPath = path.join(workingDir, 'dangling-link.md');
+  await fsPromises.symlink(
+    path.join(workingDir, 'no-such-target.md'),
+    linkPath
+  );
+  await silenced(() =>
+    executeOperation({ type: 'delete', from: 'dangling-link.md' }, workingDir)
+  );
+  await assert.rejects(
+    () => fsPromises.lstat(linkPath),
+    { code: 'ENOENT' },
+    'delete must remove a dangling symlink, not skip it as "not found"'
+  );
+
+  // A .mcp.json that exists but cannot be read as a file (here: it is a
+  // directory, EISDIR) is an environmental failure — it must throw so
+  // the migration retries next run, never be mislabeled "file is not
+  // valid JSON" and permanently forfeited.
+  await fsPromises.mkdir(path.join(workingDir, '.mcp.json'));
+  await assert.rejects(
+    () =>
+      silenced(() =>
+        executeOperation(
+          { type: 'remove_json_key', file: '.mcp.json', key: 'mcpServers.x' },
+          workingDir
+        )
+      ),
+    (error) => error.code === 'EISDIR',
+    'an unreadable .mcp.json must fail the migration loudly, not be skipped as invalid JSON'
   );
 });
 

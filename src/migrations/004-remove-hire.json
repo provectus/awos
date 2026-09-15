@@ -5,6 +5,7 @@
     "require_any": [
       ".awos/commands/hire.md",
       ".awos/templates/agent-template.md",
+      ".claude/commands/awos/hire.md",
       ".mcp.json"
     ]
   },
@@ -12,6 +13,7 @@
     {
       "type": "replace_content",
       "file": ".awos/commands/hire.md",
+      "create_if": ".claude/commands/awos/hire.md",
       "content": [
         "# Removed Command",
         "",

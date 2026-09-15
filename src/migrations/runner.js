@@ -82,6 +82,28 @@ async function exists(filePath) {
 }
 
 /**
+ * Check if a path entry itself exists, via lstat — a dangling symlink
+ * counts, since the entry is real and deletable (fs.access follows the
+ * link and would misreport it as absent). Only "no entry here" codes
+ * (ENOENT, ENOTDIR) mean false; anything else (e.g. EACCES) is a real
+ * failure and propagates, so the migration fails loudly and is retried
+ * on the next run instead of logging a skip and stamping the version.
+ * @param {string} filePath - Path to check
+ * @returns {Promise<boolean>}
+ */
+async function lexists(filePath) {
+  try {
+    await fs.lstat(filePath);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
  * Execute a single operation
  * @param {Object} operation - The operation to execute
  * @param {string} workingDir - Working directory
@@ -102,6 +124,9 @@ async function executeOperation(
 
   switch (operation.type) {
     case 'move':
+      if (!sourcePath) {
+        throw new Error('Move operation requires "from" field');
+      }
       if (!targetPath) {
         throw new Error('Move operation requires "to" field');
       }
@@ -149,6 +174,9 @@ async function executeOperation(
       break;
 
     case 'copy':
+      if (!sourcePath) {
+        throw new Error('Copy operation requires "from" field');
+      }
       if (!targetPath) {
         throw new Error('Copy operation requires "to" field');
       }
@@ -196,8 +224,11 @@ async function executeOperation(
       break;
 
     case 'delete':
+      if (!sourcePath) {
+        throw new Error('Delete operation requires "from" field');
+      }
       if (dryRun) {
-        if (!(await exists(sourcePath))) {
+        if (!(await lexists(sourcePath))) {
           log(
             `  ${style.dim('[DRY-RUN]')} Would skip delete (not found): ${operation.from}`,
             'item'
@@ -208,7 +239,7 @@ async function executeOperation(
             'item'
           );
         }
-      } else if (!(await exists(sourcePath))) {
+      } else if (!(await lexists(sourcePath))) {
         // fs.rm with force:true never throws ENOENT, so the not-found case
         // must be detected up front or the log claims a deletion that never
         // happened.
@@ -238,14 +269,26 @@ async function executeOperation(
           'item'
         );
 
-      if (!(await exists(filePath))) {
-        skip('file not found');
-        return;
+      // Read and parse failures are different animals: an unreadable file
+      // (EACCES, EISDIR, …) is an environmental failure — throw, so the
+      // migration fails loudly, the version is not stamped, and the next
+      // run retries. Only a file that genuinely isn't there is the
+      // "nothing to clean" skip, and only unparseable content earns the
+      // invalid-JSON label.
+      let raw;
+      try {
+        raw = await fs.readFile(filePath, 'utf-8');
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          skip('file not found');
+          return;
+        }
+        throw error;
       }
 
       let parsed;
       try {
-        parsed = JSON.parse(await fs.readFile(filePath, 'utf-8'));
+        parsed = JSON.parse(raw);
       } catch {
         skip('file is not valid JSON');
         return;
@@ -283,12 +326,23 @@ async function executeOperation(
     case 'replace_content': {
       // Replaces the whole content of a file the installer itself wrote
       // earlier (e.g. a removed command's body becomes a tombstone that a
-      // preserved user wrapper still resolves to). Replace-only by design:
+      // preserved user wrapper still resolves to). Replace-only by default:
       // when the target is absent there is nothing stale to defuse, and
       // creating it would plant framework files in projects that never had
-      // them — so a missing file is a skip, not a create.
+      // them — so a missing file is a skip, not a create. The optional
+      // `create_if` field names a path whose presence authorizes creating
+      // the missing target (e.g. a preserved wrapper whose @-import would
+      // otherwise stay broken in a clone that committed .claude/ but not
+      // .awos/) — fresh projects have no such trigger, so they stay clean.
       const filePath = path.normalize(path.join(workingDir, operation.file));
-      if (!(await exists(filePath))) {
+      const targetFound = await lexists(filePath);
+      const createAuthorized =
+        !targetFound &&
+        operation.create_if &&
+        (await lexists(
+          path.normalize(path.join(workingDir, operation.create_if))
+        ));
+      if (!targetFound && !createAuthorized) {
         log(
           dryRun
             ? `  ${style.dim('[DRY-RUN]')} Would skip content replace (not found): ${operation.file}`
@@ -299,16 +353,22 @@ async function executeOperation(
       }
       if (dryRun) {
         log(
-          `  ${style.dim('[DRY-RUN]')} Would replace content: ${operation.file}`,
+          `  ${style.dim('[DRY-RUN]')} Would ${targetFound ? 'replace content' : `create (${operation.create_if} present)`}: ${operation.file}`,
           'item'
         );
       } else {
+        if (!targetFound) {
+          await fs.mkdir(path.dirname(filePath), { recursive: true });
+        }
         await fs.writeFile(
           filePath,
           operation.content.join('\n') + '\n',
           'utf-8'
         );
-        log(`  Replaced content: ${operation.file}`, 'success');
+        log(
+          `  ${targetFound ? 'Replaced content' : `Created (${operation.create_if} present)`}: ${operation.file}`,
+          'success'
+        );
       }
       break;
     }
@@ -529,4 +589,6 @@ async function runMigrations(workingDir, options = {}) {
   }
 }
 
-module.exports = { runMigrations };
+// executeOperation is exported for the op-level unit tests only — the
+// installer itself goes through runMigrations.
+module.exports = { runMigrations, executeOperation };

@@ -152,12 +152,13 @@ test('agent marker pattern is preserved', () => {
 test('subagent-enumerating commands tell Claude how to discover agents', () => {
   // tasks.md and tech.md only need to know what
   // specialist agents exist and what each one covers — enough to pick
-  // an assignee / draft a stack section. Both
+  // an assignee / draft a stack section — and implement.md verifies a
+  // task's named agent against the same roster before delegating. All
   // project-local and plugin-provided agents are listed in the Agent
   // tool's description block at runtime, so introspecting that block
-  // is sufficient — neither command needs to Read each
+  // is sufficient — no command needs to Read each
   // `.claude/agents/*.md` file and parse YAML frontmatter.
-  const lightReferencers = ['tasks.md', 'tech.md'];
+  const lightReferencers = ['tasks.md', 'tech.md', 'implement.md'];
   for (const file of lightReferencers) {
     const body = readUtf8(path.join(commandsDir, file));
     assert.ok(
@@ -431,13 +432,14 @@ test('wrappers do not duplicate the AskUserQuestion rule', () => {
 });
 
 test('subagent-enumerating commands cover plugin-provided agents', () => {
-  // /awos:tech and /awos:tasks assign or report on
-  // specialists. Each must instruct Claude to look beyond
+  // /awos:tech and /awos:tasks assign or report on specialists, and
+  // /awos:implement verifies each task's named agent before
+  // delegating. Each must instruct Claude to look beyond
   // .claude/agents/*.md and also enumerate plugin-provided agents
   // (recognized by the "plugin-name:" prefix on subagent_type, which
   // only appears in the Agent tool's description block). Without this,
   // plugin-shipped specialists are invisible to the orchestrator.
-  const enumerators = ['tech.md', 'tasks.md'];
+  const enumerators = ['tech.md', 'tasks.md', 'implement.md'];
   for (const file of enumerators) {
     const body = readUtf8(path.join(commandsDir, file));
     assert.ok(
@@ -449,6 +451,29 @@ test('subagent-enumerating commands cover plugin-provided agents', () => {
       `commands/${file} must tell Claude to read the Agent tool's description block to find plugin-provided agents`
     );
   }
+});
+
+test('implement.md falls back to general-purpose for a missing agent and reports the substitution', () => {
+  // The hire removal dissolved agent provisioning into the path: a
+  // tasks.md may name a specialist that was never installed or has
+  // since been removed, and the tombstones + upgrading guide promise
+  // that such a task still runs. implement.md must (a) fall back to
+  // general-purpose instead of dispatching an unresolvable
+  // subagent_type, and (b) say so — substituted work must never be
+  // presented as specialist work.
+  const body = readUtf8(path.join(commandsDir, 'implement.md'));
+  assert.ok(
+    /falling back to `general-purpose`/.test(body),
+    'commands/implement.md must fall back to `general-purpose` when a task names an agent that is not installed'
+  );
+  assert.ok(
+    /record the substitution/i.test(body),
+    'commands/implement.md must record each general-purpose substitution (which task, which missing agent) for the final report'
+  );
+  assert.ok(
+    body.includes('Never present substituted work as specialist work'),
+    'commands/implement.md must keep the substitution-honesty rule — the completion report names every fallback'
+  );
 });
 
 test('implement.md and tech.md show explicit Agent() invocation syntax', () => {

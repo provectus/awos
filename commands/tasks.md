@@ -97,7 +97,7 @@ Skip this step if `SKIP_TESTS = true`.
       - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: {qa-agent}]**
     ```
 
-- **Example of applying the rule for "User Profile Picture Upload":** The agent names below assume a project whose `Agent`-tool roster happens to provide `react-expert`, `python-expert`, `manual-qa-expert`, and `testing-expert`. In a real run every name comes from the Step 3.4 introspection — a task no listed agent covers goes through Steps 3a/3b, never borrows a name from this example.
+- **Example of applying the rule for "User Profile Picture Upload":** The agent names below assume a project whose `Agent`-tool roster happens to provide `react-expert`, `python-expert`, and `manual-qa-expert`. Slice 3 keeps the literal `{qa-agent}` placeholder from the Step 3a template — in a real plan it is substituted with the QA agent selected there (or `general-purpose` when none exists). In a real run every name comes from the Step 3.4 introspection — a task no listed agent covers goes through Steps 3a/3b, never borrows a name from this example.
   - **Bad, Horizontal Plan (DO NOT DO THIS):**
     - `[ ] Add avatar_url to users table`
     - `[ ] Create all avatar API endpoints (upload, delete)`
@@ -114,8 +114,8 @@ Skip this step if `SKIP_TESTS = true`.
       - `[ ] Verify: Run the application, drive the profile page through the available browser-automation tool (whichever the project ships — playwright-cli, cypress, the chrome MCP, etc.), confirm the correct avatar or placeholder is shown, and delete any screenshots or recordings produced during the check. **[Agent: manual-qa-expert]**`
     - `[ ] **Slice 3: Feature Testing & Regression**`
       > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
-      - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with @spec: [spec-directory] and @regression if suitable for long-term regression. **[Agent: testing-expert]**`
-      - `[ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: testing-expert]**`
+      - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with @spec: [spec-directory] and @regression if suitable for long-term regression. **[Agent: {qa-agent}]**`
+      - `[ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: {qa-agent}]**`
 
 ## Step 3b: Record Staffing Gaps
 

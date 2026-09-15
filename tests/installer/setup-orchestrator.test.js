@@ -1,7 +1,7 @@
 /**
  * Unit tests for src/core/setup-orchestrator.js.
  *
- * Runs the full six-step pipeline against a fresh temp directory and
+ * Runs the full five-step pipeline against a fresh temp directory and
  * verifies the resulting tree. Re-running it should be safely idempotent.
  */
 

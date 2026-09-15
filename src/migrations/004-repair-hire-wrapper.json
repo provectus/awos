@@ -1,0 +1,26 @@
+{
+  "version": 4,
+  "name": "Repair a broken hire wrapper import: the preserved .claude/commands/awos/hire.md points at a command body this project does not have, so a removal notice is written there (an existing local hire command is left untouched and keeps working)",
+  "preconditions": {
+    "require_all": [".claude/commands/awos/hire.md"],
+    "skip_if_any": [".awos/commands/hire.md"]
+  },
+  "operations": [
+    {
+      "type": "replace_content",
+      "file": ".awos/commands/hire.md",
+      "create_if": ".claude/commands/awos/hire.md",
+      "content": [
+        "# Removed Command",
+        "",
+        "`/awos:hire` was removed in AWOS 2.0. AWOS no longer provisions agents: they come from the host's own ecosystem (project `.claude/agents/` files and plugins). (This notice was written because your preserved command wrapper pointed at a file this project did not have — there was no local copy of the old command to keep working.)",
+        "",
+        "Tell the user the following, then stop. Do not create or install any agent files.",
+        "",
+        "- This command no longer ships with AWOS. Staffing is handled on the path: `/awos:tasks` surfaces a staffing gap as an open question when no installed agent covers a task, and `/awos:implement` falls back to `general-purpose` and reports the substitution.",
+        "- Agents previously installed under `.claude/agents/` are theirs to keep or delete.",
+        "- To remove this notice, delete `.claude/commands/awos/hire.md` and `.awos/commands/hire.md`."
+      ]
+    }
+  ]
+}

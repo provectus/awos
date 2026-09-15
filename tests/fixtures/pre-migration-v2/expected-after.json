@@ -1,0 +1,23 @@
+{
+  "_comment": "A project at migration version 2 with the full pre-2.0 roadmap/hire footprint — the positive path for migrations 003/004 through the real installer pipeline (the unit layer covers the runner in isolation; this covers the migration+copy interplay). Expected: templates deleted; command bodies replaced with the AWOS 2.0 tombstone and NOT resurrected by the copy step (roadmap/hire are no longer shipped); customized wrappers, the user's context/product/roadmap.md, and the user's own MCP server preserved byte-for-byte / intact; only the awos-recruitment entry leaves .mcp.json; current commands and new wrappers still install. The version file's numeric content is asserted dynamically by tests/installer/migration-runner.test.js — only its existence is pinned here.",
+  ".awos/commands/roadmap.md": {
+    "contains": "removed in AWOS 2.0",
+    "notContains": "Old pre-2.0 /awos:roadmap command body"
+  },
+  ".awos/commands/hire.md": {
+    "contains": "removed in AWOS 2.0",
+    "notContains": "Old pre-2.0 /awos:hire command body"
+  },
+  ".awos/templates/roadmap-template.md": { "exists": false },
+  ".awos/templates/agent-template.md": { "exists": false },
+  ".claude/commands/awos/roadmap.md": { "unchanged": true },
+  ".claude/commands/awos/hire.md": { "unchanged": true },
+  "context/product/roadmap.md": { "unchanged": true },
+  ".mcp.json": {
+    "contains": "user-server",
+    "notContains": "awos-recruitment"
+  },
+  ".awos/.migration-version": { "exists": true },
+  ".awos/commands/spec.md": { "exists": true },
+  ".claude/commands/awos/spec.md": { "exists": true }
+}

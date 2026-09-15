@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "awos-recruitment": {
+      "type": "http",
+      "url": "https://recruitment.awos.provectus.pro/mcp"
+    },
+    "user-server": {
+      "type": "http",
+      "url": "https://example.com/mcp"
+    }
+  }
+}

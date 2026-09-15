@@ -43,7 +43,8 @@ tests/
 │   ├── existing-awos-v0/
 │   ├── customized-wrapper/
 │   ├── mid-workflow/
-│   └── pre-migration-v1/
+│   ├── pre-migration-v1/
+│   └── pre-migration-v2/
 └── helpers/
     ├── frontmatter.js              # minimal YAML-frontmatter parser, no deps
     ├── manifest.js                 # load + assert fixture manifests
@@ -106,13 +107,14 @@ Each `expected-after.json` lists files with one or more of: `{ exists, sha256, c
 
 Currently shipped fixtures:
 
-| Fixture               | Scenario                                                    | What it pins down                                                                                                            |
-| --------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `fresh-project/`      | Empty project                                               | Full install layout: `.awos/commands/`, `.claude/commands/awos/`, `context/`, `.awos/.migration-version`                     |
-| `existing-awos-v0/`   | Stale `.awos/commands/architecture.md` from a prior install | Framework internals always get the latest content (overwritten)                                                              |
-| `customized-wrapper/` | User-customized `.claude/commands/awos/architecture.md`     | Pins the current always-overwrite behavior; see the §11 open question in the plan                                            |
-| `mid-workflow/`       | Populated `context/spec/001-test-feature/*.md`              | Installer never touches user spec work                                                                                       |
-| `pre-migration-v1/`   | `.claude/agents/python-expert.md` at the pre-v1 path        | Migrations 001 + 002 land cleanly; 003/004 are no-ops on this tree and the version file reaches the latest migration version |
+| Fixture               | Scenario                                                    | What it pins down                                                                                                                                                                                                               |
+| --------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fresh-project/`      | Empty project                                               | Full install layout: `.awos/commands/`, `.claude/commands/awos/`, `context/`, `.awos/.migration-version`                                                                                                                        |
+| `existing-awos-v0/`   | Stale `.awos/commands/architecture.md` from a prior install | Framework internals always get the latest content (overwritten)                                                                                                                                                                 |
+| `customized-wrapper/` | User-customized `.claude/commands/awos/architecture.md`     | Pins the current always-overwrite behavior; see the §11 open question in the plan                                                                                                                                               |
+| `mid-workflow/`       | Populated `context/spec/001-test-feature/*.md`              | Installer never touches user spec work                                                                                                                                                                                          |
+| `pre-migration-v1/`   | `.claude/agents/python-expert.md` at the pre-v1 path        | Migrations 001 + 002 land cleanly; 003/004 are no-ops on this tree and the version file reaches the latest migration version                                                                                                    |
+| `pre-migration-v2/`   | Full pre-2.0 roadmap/hire footprint at migration version 2  | Migrations 003 + 004 positive path end-to-end: templates deleted, command bodies tombstoned (not resurrected by the copy step), customized wrappers / user roadmap / user MCP servers preserved, awos-recruitment entry removed |
 
 Adding a new fixture: create `tests/fixtures/<name>/`, optionally with a `before/` subtree, plus an `expected-after.json` manifest. The harness picks it up automatically.
 

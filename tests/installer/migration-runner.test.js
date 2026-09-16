@@ -547,6 +547,29 @@ test('operation-level contracts: missing "from" throws, dangling symlinks are de
       `a ${type} operation without "from" must throw, not silently no-op`
     );
   }
+  await assert.rejects(
+    () => executeOperation({ type: 'remove_json_key', key: 'a.b' }, workingDir),
+    /requires "file" field/,
+    'a remove_json_key operation without "file" must throw a clean authoring error, not a raw TypeError'
+  );
+  await assert.rejects(
+    () =>
+      executeOperation({ type: 'remove_json_key', file: 'x.json' }, workingDir),
+    /requires "key" field/,
+    'a remove_json_key operation without "key" must throw a clean authoring error'
+  );
+  await assert.rejects(
+    () =>
+      executeOperation({ type: 'replace_content', content: ['x'] }, workingDir),
+    /requires "file" field/,
+    'a replace_content operation without "file" must throw a clean authoring error'
+  );
+  await assert.rejects(
+    () =>
+      executeOperation({ type: 'replace_content', file: 'x.md' }, workingDir),
+    /requires a "content" array field/,
+    'a replace_content operation without a content array must throw a clean authoring error'
+  );
 
   // A dangling symlink is a real, deletable entry: the delete op must
   // remove it (fs.access follows the link and would misreport it as
@@ -580,6 +603,144 @@ test('operation-level contracts: missing "from" throws, dangling symlinks are de
       ),
     (error) => error.code === 'EISDIR',
     'an unreadable .mcp.json must fail the migration loudly, not be skipped as invalid JSON'
+  );
+});
+
+test('preconditions probe with lstat: a dangling symlink counts as a present body and is preserved', async () => {
+  // The probe policy is unified — preconditions and operations must
+  // agree on what "exists" means, or a migration wedges half-way
+  // (preconditions say the body is absent, the op sees the entry, and
+  // the write either throws or lands through the dead link). A dangling
+  // symlink at the body path is treated as present: 003 skips, the
+  // entry is left alone, and nothing is written anywhere.
+  const workingDir = await freshTemp();
+  await writeFile(
+    path.join(workingDir, '.claude', 'commands', 'awos', 'roadmap.md'),
+    'user wrapper\n'
+  );
+  const bodyPath = path.join(workingDir, '.awos', 'commands', 'roadmap.md');
+  await fsPromises.mkdir(path.dirname(bodyPath), { recursive: true });
+  await fsPromises.symlink(
+    path.join(workingDir, 'no-such-target.md'),
+    bodyPath
+  );
+
+  await silenced(() => runMigrations(workingDir));
+
+  const stat = await fsPromises.lstat(bodyPath);
+  assert.ok(
+    stat.isSymbolicLink(),
+    'the dangling symlink at the body path must be preserved untouched — not replaced, not written through'
+  );
+});
+
+test('an optional migration that fails warns, halts version advancement, and retries on the next run', async () => {
+  // Migrations run before the copy step, so a throwing migration blocks
+  // ALL future installs. The 2.0 migrations are repairs/cleanups marked
+  // optional: a failure (here, .mcp.json is a directory, so the read
+  // throws EISDIR) must not abort the run — it warns, leaves the version
+  // below the failed migration, and succeeds once the cause is fixed.
+  const workingDir = await freshTemp();
+  await fsPromises.mkdir(path.join(workingDir, '.mcp.json'), {
+    recursive: true,
+  });
+
+  const first = await silenced(() => runMigrations(workingDir));
+  assert.equal(
+    first.applied,
+    0,
+    'the failed optional migration must not count as applied'
+  );
+  assert.equal(
+    first.current,
+    4,
+    'version advancement must halt below the failed optional migration (005) so it is retried'
+  );
+
+  // Fix the cause and re-run: the pending migration completes normally.
+  await fsPromises.rmdir(path.join(workingDir, '.mcp.json'));
+  await writeFile(
+    path.join(workingDir, '.mcp.json'),
+    JSON.stringify(
+      {
+        mcpServers: {
+          'awos-recruitment': {
+            type: 'http',
+            url: 'https://recruitment.awos.provectus.pro/mcp',
+          },
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  );
+  const second = await silenced(() => runMigrations(workingDir));
+  assert.equal(
+    second.applied,
+    1,
+    'once the cause is repaired, the retried migration must run and apply'
+  );
+  const mcp = JSON.parse(
+    await fsPromises.readFile(path.join(workingDir, '.mcp.json'), 'utf8')
+  );
+  assert.equal(
+    'awos-recruitment' in mcp.mcpServers,
+    false,
+    'the retried migration 005 must complete the cleanup it previously could not'
+  );
+});
+
+test('remove_json_key writes through a symlinked .mcp.json and preserves its mode', async () => {
+  // A .mcp.json symlinked from a dotfiles repo must stay a symlink with
+  // its target updated (a plain rename would strand the target and
+  // orphan the link), and a 0600 config must not come back 0644.
+  const workingDir = await freshTemp();
+  const targetPath = path.join(workingDir, 'dotfiles', 'mcp.json');
+  await writeFile(
+    targetPath,
+    JSON.stringify(
+      {
+        mcpServers: {
+          'awos-recruitment': {
+            type: 'http',
+            url: 'https://recruitment.awos.provectus.pro/mcp',
+          },
+          'user-server': { type: 'http', url: 'https://example.com/mcp' },
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  );
+  await fsPromises.chmod(targetPath, 0o600);
+  const linkPath = path.join(workingDir, '.mcp.json');
+  await fsPromises.symlink(targetPath, linkPath);
+
+  await silenced(() => runMigrations(workingDir));
+
+  assert.ok(
+    (await fsPromises.lstat(linkPath)).isSymbolicLink(),
+    '.mcp.json must remain a symlink after the key removal — the link is the user’s setup'
+  );
+  const target = JSON.parse(await fsPromises.readFile(targetPath, 'utf8'));
+  assert.equal(
+    'awos-recruitment' in target.mcpServers,
+    false,
+    'the key removal must land in the symlink target, not a replacement file'
+  );
+  assert.ok(
+    target.mcpServers['user-server'],
+    'user servers in the symlink target must survive'
+  );
+  assert.equal(
+    (await fsPromises.stat(targetPath)).mode & 0o777,
+    0o600,
+    'the original 0600 mode must be preserved through the atomic rewrite'
+  );
+  assert.equal(
+    exists(`${targetPath}.awos-tmp`),
+    false,
+    'no temp-file litter may remain after a successful rewrite'
   );
 });
 

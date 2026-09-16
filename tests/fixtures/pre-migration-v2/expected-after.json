@@ -1,14 +1,36 @@
 {
-  "_comment": "A project at migration version 2 with the full pre-2.0 roadmap/hire footprint — the disown-in-place proof through the real installer pipeline (decided 2026-09-15: removed commands are no longer shipped or updated, but present local copies are never deleted or rewritten, so users who rely on them keep working frozen 1.x copies). Expected: command bodies and templates byte-identical to before/ (the copy step no longer ships them, so nothing overwrites them either); customized wrappers, the user's context/product/roadmap.md, and the entire .mcp.json — awos-recruitment entry included, since hire is present and the recruitment service stays up — all unchanged; current commands and new wrappers still install. The wrapper-repair tombstone path (wrapper present, body absent) is covered at the unit layer, not by this tree. The version file's numeric content is asserted dynamically by tests/installer/migration-runner.test.js — only its existence is pinned here.",
-  ".awos/commands/roadmap.md": { "unchanged": true },
-  ".awos/commands/hire.md": { "unchanged": true },
-  ".awos/templates/roadmap-template.md": { "unchanged": true },
-  ".awos/templates/agent-template.md": { "unchanged": true },
-  ".claude/commands/awos/roadmap.md": { "unchanged": true },
-  ".claude/commands/awos/hire.md": { "unchanged": true },
-  "context/product/roadmap.md": { "unchanged": true },
-  ".mcp.json": { "unchanged": true },
-  ".awos/.migration-version": { "exists": true },
-  ".awos/commands/spec.md": { "exists": true },
-  ".claude/commands/awos/spec.md": { "exists": true }
+  "_comment": "A project at migration version 2 with the full pre-2.0 roadmap/hire footprint — the disown-in-place proof through the real installer pipeline (decided 2026-09-15: removed commands are no longer shipped or updated, but present local copies are never deleted or rewritten, so users who rely on them keep working frozen 1.x copies). Expected: command bodies and templates byte-identical to before/ (the copy step no longer ships them, so nothing overwrites them either); customized wrappers, the user's context/product/roadmap.md, and the entire .mcp.json — awos-recruitment entry included, since hire is present and the recruitment service stays up — all unchanged; current commands and new wrappers still install. The wrapper-repair tombstone path (wrapper present, body absent) is covered at the unit layer, not by this tree. The version file is pinned as changed:true — the before/ tree seeds it at '2', so the installer must have advanced it, proving the migration step actually ran through this pipeline; the exact number stays dynamic in the unit layer.",
+  ".awos/commands/roadmap.md": {
+    "unchanged": true
+  },
+  ".awos/commands/hire.md": {
+    "unchanged": true
+  },
+  ".awos/templates/roadmap-template.md": {
+    "unchanged": true
+  },
+  ".awos/templates/agent-template.md": {
+    "unchanged": true
+  },
+  ".claude/commands/awos/roadmap.md": {
+    "unchanged": true
+  },
+  ".claude/commands/awos/hire.md": {
+    "unchanged": true
+  },
+  "context/product/roadmap.md": {
+    "unchanged": true
+  },
+  ".mcp.json": {
+    "unchanged": true
+  },
+  ".awos/.migration-version": {
+    "changed": true
+  },
+  ".awos/commands/spec.md": {
+    "exists": true
+  },
+  ".claude/commands/awos/spec.md": {
+    "exists": true
+  }
 }

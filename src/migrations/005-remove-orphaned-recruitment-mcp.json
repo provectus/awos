@@ -1,6 +1,7 @@
 {
   "version": 5,
   "name": "Remove the awos-recruitment MCP entry only when no trace of /awos:hire remains (a project that still has the hire command or its wrapper keeps the entry — the recruitment service stays available for frozen local copies)",
+  "optional": true,
   "preconditions": {
     "require_all": [".mcp.json"],
     "skip_if_any": [".awos/commands/hire.md", ".claude/commands/awos/hire.md"]

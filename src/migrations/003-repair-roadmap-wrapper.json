@@ -1,6 +1,7 @@
 {
   "version": 3,
   "name": "Repair a broken roadmap wrapper import: the preserved .claude/commands/awos/roadmap.md points at a command body this project does not have, so a removal notice is written there (an existing local roadmap command is left untouched and keeps working)",
+  "optional": true,
   "preconditions": {
     "require_all": [".claude/commands/awos/roadmap.md"],
     "skip_if_any": [".awos/commands/roadmap.md"]

@@ -68,26 +68,16 @@ async function loadMigrations() {
 }
 
 /**
- * Check if a file exists
- * @param {string} filePath - Path to check
- * @returns {Promise<boolean>}
- */
-async function exists(filePath) {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Check if a path entry itself exists, via lstat — a dangling symlink
- * counts, since the entry is real and deletable (fs.access follows the
- * link and would misreport it as absent). Only "no entry here" codes
- * (ENOENT, ENOTDIR) mean false; anything else (e.g. EACCES) is a real
- * failure and propagates, so the migration fails loudly and is retried
- * on the next run instead of logging a skip and stamping the version.
+ * The one probe used everywhere — preconditions and every operation.
+ * lstat-based: a dangling symlink counts as present, since the entry is
+ * real (fs.access follows the link and would misreport it as absent,
+ * flipping precondition decisions). Only "no entry here" codes (ENOENT,
+ * ENOTDIR) mean false; anything else (e.g. EACCES) is a real failure
+ * and propagates, so the migration fails loudly and is retried on the
+ * next run instead of logging a skip and stamping the version. A split
+ * probe policy is worse than either policy alone: preconditions and
+ * operations disagreeing about whether a path exists is how a migration
+ * wedges half-way.
  * @param {string} filePath - Path to check
  * @returns {Promise<boolean>}
  */
@@ -135,8 +125,8 @@ async function executeOperation(
       }
 
       // Check if source exists
-      const sourceExists = await exists(sourcePath);
-      const targetExists = await exists(targetPath);
+      const sourceExists = await lexists(sourcePath);
+      const targetExists = await lexists(targetPath);
 
       if (dryRun) {
         if (!sourceExists) {
@@ -186,8 +176,8 @@ async function executeOperation(
       }
 
       // Check if source exists
-      const copySourceExists = await exists(sourcePath);
-      const copyTargetExists = await exists(targetPath);
+      const copySourceExists = await lexists(sourcePath);
+      const copyTargetExists = await lexists(targetPath);
 
       if (dryRun) {
         if (!copySourceExists) {
@@ -265,6 +255,12 @@ async function executeOperation(
       // wrote earlier (e.g. the awos-recruitment server entry in .mcp.json).
       // The file belongs to the user's project, so anything unexpected —
       // missing file, unparseable JSON, absent key — is a skip, not an error.
+      if (!operation.file) {
+        throw new Error('remove_json_key operation requires "file" field');
+      }
+      if (!operation.key) {
+        throw new Error('remove_json_key operation requires "key" field');
+      }
       const filePath = path.normalize(path.join(workingDir, operation.file));
       const keySegments = operation.key.split('.');
       const label = `${operation.key} from ${operation.file}`;
@@ -321,19 +317,31 @@ async function executeOperation(
         return true;
       }
       delete parent[leaf];
-      // Write-to-temp + rename: an in-place write interrupted mid-flight
-      // would leave .mcp.json as truncated invalid JSON — breaking every
-      // MCP server the user configured — and the invalid-JSON skip above
-      // would then abandon the corrupt file for good. A same-directory
-      // rename is atomic: the file is always either the old content or
-      // the new, never a torn write.
-      const tmpPath = `${filePath}.awos-tmp`;
-      await fs.writeFile(
-        tmpPath,
-        JSON.stringify(parsed, null, 2) + '\n',
-        'utf-8'
-      );
-      await fs.rename(tmpPath, filePath);
+      // Atomic replace that survives symlinks and preserves permissions.
+      // Write-to-temp + same-directory rename keeps the file either the
+      // old content or the new, never a torn write (an in-place write
+      // interrupted mid-flight would leave truncated JSON that the
+      // invalid-JSON skip above then abandons for good). The rename must
+      // target the REAL file: a .mcp.json symlinked from a dotfiles repo
+      // is written through, not replaced with a regular file that strands
+      // the link target. The original mode is copied onto the temp file
+      // first — a 0600 config must not come back world-readable — and the
+      // temp file is removed if anything fails in between.
+      const realPath = await fs.realpath(filePath);
+      const { mode } = await fs.stat(realPath);
+      const tmpPath = `${realPath}.awos-tmp`;
+      try {
+        await fs.writeFile(
+          tmpPath,
+          JSON.stringify(parsed, null, 2) + '\n',
+          'utf-8'
+        );
+        await fs.chmod(tmpPath, mode);
+        await fs.rename(tmpPath, realPath);
+      } catch (error) {
+        await fs.rm(tmpPath, { force: true });
+        throw error;
+      }
       log(`  Removed: ${label}`, 'success');
       return true;
     }
@@ -349,6 +357,14 @@ async function executeOperation(
       // the missing target (e.g. a preserved wrapper whose @-import would
       // otherwise stay broken in a clone that committed .claude/ but not
       // .awos/) — fresh projects have no such trigger, so they stay clean.
+      if (!operation.file) {
+        throw new Error('replace_content operation requires "file" field');
+      }
+      if (!Array.isArray(operation.content)) {
+        throw new Error(
+          'replace_content operation requires a "content" array field'
+        );
+      }
       const filePath = path.normalize(path.join(workingDir, operation.file));
       const targetFound = await lexists(filePath);
       const createAuthorized =
@@ -376,11 +392,23 @@ async function executeOperation(
       if (!targetFound) {
         await fs.mkdir(path.dirname(filePath), { recursive: true });
       }
-      await fs.writeFile(
-        filePath,
-        operation.content.join('\n') + '\n',
-        'utf-8'
-      );
+      // Atomic write (temp + same-directory rename): a partial tombstone
+      // interrupted mid-write would be frozen forever by the migration's
+      // skip_if_any on the next run — a torn file must never be able to
+      // pass for a preserved 1.x body. The temp file is removed if
+      // anything fails in between.
+      const contentTmpPath = `${filePath}.awos-tmp`;
+      try {
+        await fs.writeFile(
+          contentTmpPath,
+          operation.content.join('\n') + '\n',
+          'utf-8'
+        );
+        await fs.rename(contentTmpPath, filePath);
+      } catch (error) {
+        await fs.rm(contentTmpPath, { force: true });
+        throw error;
+      }
       log(
         `  ${targetFound ? 'Replaced content' : `Created (${operation.create_if} present)`}: ${operation.file}`,
         'success'
@@ -406,14 +434,18 @@ async function checkPreconditions(preconditions, workingDir, dryRun = false) {
     return { shouldRun: true, reason: null };
   }
 
-  // Check skip_if_any conditions (files that indicate migration already applied)
+  // Check skip_if_any conditions. A match means the migration has
+  // nothing to do here — either it already ran, or (disown-in-place)
+  // the file it would repair is deliberately preserved. The label must
+  // not claim a migration happened when the policy is preservation.
   if (preconditions.skip_if_any) {
     for (const checkPath of preconditions.skip_if_any) {
       const fullPath = path.join(workingDir, checkPath);
-      if (await exists(fullPath)) {
+      if (await lexists(fullPath)) {
         return {
           shouldRun: false,
-          reason: `Already migrated (${checkPath} exists)`,
+          matchedSkip: true,
+          reason: `Nothing to do (${checkPath} is present)`,
         };
       }
     }
@@ -424,7 +456,7 @@ async function checkPreconditions(preconditions, workingDir, dryRun = false) {
     let foundOne = false;
     for (const checkPath of preconditions.require_any) {
       const fullPath = path.join(workingDir, checkPath);
-      if (await exists(fullPath)) {
+      if (await lexists(fullPath)) {
         foundOne = true;
         break;
       }
@@ -441,7 +473,7 @@ async function checkPreconditions(preconditions, workingDir, dryRun = false) {
   if (preconditions.require_all) {
     for (const checkPath of preconditions.require_all) {
       const fullPath = path.join(workingDir, checkPath);
-      if (!(await exists(fullPath))) {
+      if (!(await lexists(fullPath))) {
         return {
           shouldRun: false,
           reason: `Not applicable (${checkPath} not found)`,
@@ -454,7 +486,7 @@ async function checkPreconditions(preconditions, workingDir, dryRun = false) {
   if (preconditions.error_if_any) {
     for (const checkPath of preconditions.error_if_any) {
       const fullPath = path.join(workingDir, checkPath);
-      if (await exists(fullPath)) {
+      if (await lexists(fullPath)) {
         throw new Error(
           `Migration blocked: Unexpected file found at ${checkPath}. ` +
             `This may indicate a custom setup that requires manual migration.`
@@ -477,7 +509,7 @@ async function executeMigration(migration, workingDir, options = {}) {
   const { dryRun = false } = options;
 
   // Check preconditions
-  const { shouldRun, reason } = await checkPreconditions(
+  const { shouldRun, reason, matchedSkip } = await checkPreconditions(
     migration.preconditions,
     workingDir,
     dryRun
@@ -489,15 +521,13 @@ async function executeMigration(migration, workingDir, options = {}) {
       log(`  ${style.dim('[DRY-RUN]')} Would skip: ${reason}`, 'item');
     }
     // Don't log anything for non-dry-run skips to avoid confusion
-    return reason?.includes('Already migrated')
-      ? 'already_applied'
-      : 'not_applicable';
+    return matchedSkip ? 'already_applied' : 'not_applicable';
   }
 
   // Execute operations, counting only the ones that actually changed
   // something (or would, under dry-run). A migration whose preconditions
   // matched but whose every operation skipped did no work — reporting it
-  // as applied would claim changes that never happened (e.g. migration 4
+  // as applied would claim changes that never happened (e.g. migration 5
   // matching on a user's own .mcp.json in a project that never had hire).
   let changedOperations = 0;
   for (const operation of migration.operations) {
@@ -551,8 +581,11 @@ async function runMigrations(workingDir, options = {}) {
       log(`${style.info('ℹ')} ${pending.length} migration(s) to apply`, 'info');
     }
 
-    // Execute migrations in order
+    // Execute migrations in order. stampedVersion tracks what the
+    // version file actually says — an optional-migration failure halts
+    // advancement early, so the loop's end is not proof of the latest.
     let applicableMigrations = 0;
+    let stampedVersion = currentVersion;
     for (const migration of pending) {
       if (dryRun) {
         log(
@@ -566,7 +599,24 @@ async function runMigrations(workingDir, options = {}) {
         );
       }
 
-      const status = await executeMigration(migration, workingDir, { dryRun });
+      let status;
+      try {
+        status = await executeMigration(migration, workingDir, { dryRun });
+      } catch (error) {
+        if (migration.optional) {
+          // An optional migration (a repair or cleanup) must never block
+          // the install: warn, halt version advancement — so this and any
+          // later migrations are retried on the next update — and let
+          // setup continue to the copy step. Only migrations the layout
+          // depends on may abort the run.
+          log(
+            `${style.warn('⚠')} Migration ${migration.version} could not run and will be retried on the next update: ${error.message}`,
+            'item'
+          );
+          break;
+        }
+        throw error;
+      }
 
       // Only count migrations that are actually applied or would be applied
       if (status === 'applied') {
@@ -576,6 +626,7 @@ async function runMigrations(workingDir, options = {}) {
       if (!dryRun) {
         // Update version after successful migration
         await writeVersion(versionFile, migration.version);
+        stampedVersion = migration.version;
       }
     }
 
@@ -592,11 +643,7 @@ async function runMigrations(workingDir, options = {}) {
 
     return {
       applied: applicableMigrations,
-      current: dryRun
-        ? currentVersion
-        : pending.length > 0
-          ? pending[pending.length - 1].version
-          : currentVersion,
+      current: dryRun ? currentVersion : stampedVersion,
       latest: Math.max(...migrations.map((m) => m.version)),
     };
   } catch (error) {

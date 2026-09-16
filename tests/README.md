@@ -103,7 +103,7 @@ Cost: ~50 ms.
 3. Run the real installer (`runSetup({ workingDir, packageRoot: repoRoot })`).
 4. Load `expected-after.json` and assert the resulting tree matches the manifest.
 
-Each `expected-after.json` lists files with one or more of: `{ exists, sha256, contains, unchanged }`. Files not listed are not asserted — fixtures are deliberately selective.
+Each `expected-after.json` lists files with one or more of: `{ exists, sha256, contains, notContains, unchanged, changed }` (`changed` = exists and differs from `before/` — proof a step ran where bare existence would be tautological). Files not listed are not asserted — fixtures are deliberately selective.
 
 Currently shipped fixtures:
 

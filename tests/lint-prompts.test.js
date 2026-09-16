@@ -687,6 +687,53 @@ test('verify.md never punts a drivable render to the user', () => {
   );
 });
 
+test('both spec commands pre-seed from prompt source material and never ask for it', () => {
+  // Restored after the flow removal deleted the mixed test that carried
+  // it: the "consume source material already in the prompt" contract is
+  // not flow-dependent — it scans <user_prompt>, whose standing producer
+  // is the user's own invocation — and it ships verbatim in
+  // commands/spec.md and near-verbatim in plugins/better/commands/spec.md.
+  // The prohibition guards against the net-negative regression: a per-run
+  // "any source material?" question costs every prompt that carries no
+  // references.
+  const specFiles = [
+    path.join(commandsDir, 'spec.md'),
+    path.join(repoRoot, 'plugins', 'better', 'commands', 'spec.md'),
+  ];
+  for (const file of specFiles) {
+    const rel = path.relative(repoRoot, file);
+    const body = readUtf8(file);
+    assert.ok(
+      /Consume source material already in the prompt/i.test(body) &&
+        /ticket IDs, URLs, or file paths/i.test(body),
+      `${rel} must consume ticket IDs / URLs / file paths already in <user_prompt> before the interview, folding them into the known-info extraction`
+    );
+    assert.ok(
+      /without a new question/i.test(body),
+      `${rel} must pre-seed WITHOUT adding a source-material question`
+    );
+    // The presence checks prove the prohibition prose survives, not that
+    // no forbidden ask was added — pin the phrase to a single occurrence
+    // and require that one to be the prohibition itself: a reintroduced
+    // "any source material?" ask trips the count.
+    assert.strictEqual(
+      (body.match(/any source material/gi) || []).length,
+      1,
+      `${rel} must name "any source material" exactly once — only in the prohibition, never as an added ask`
+    );
+    assert.ok(
+      /Do (\*\*)?not(\*\*)? add an "any source material\?" question/.test(body),
+      `the single "any source material" mention in ${rel} must be the prohibition sentence, not a reintroduced source-material question`
+    );
+  }
+  // The core command additionally states the rationale, so the "why"
+  // travels with the rule when the better variant folds into core (6B).
+  assert.ok(
+    /net-negative/i.test(readUtf8(specFiles[0])),
+    'commands/spec.md must keep the net-negative rationale on the prohibition'
+  );
+});
+
 test('completion claims require fresh evidence — the verification reflex is baked into agent prompts', () => {
   // The verification-before-completion discipline: an agent may not
   // report its own work as done on belief ("should work", "Done!") —

@@ -58,7 +58,7 @@ First, check if the file `context/product/product-definition.md` exists.
 ### Step 2A: Update Mode
 
 1.  Read `context/product/product-definition.md` into context. When `<user_prompt>` is non-empty, it is the change request — this is the receiving side of `/awos:verify`'s "run `/awos:product <prompt describing what changed>`" handoff, so consume it directly: identify the affected section(s), apply the described change to the draft, and proceed straight to **Step 3: File Generation** without asking which section to update. Refinement happens in Step 4, after the write.
-2.  When `<user_prompt>` is empty, tell the user you found the definition and use `AskUserQuestion` to ask which section to update, offering the main section titles as options.
+2.  When `<user_prompt>` is empty, tell the user you found the definition and use `AskUserQuestion` to ask which section to update. The tool lists at most four options per question and the definition has five sections — offer the four most likely titles as options and name the remaining section in the question text; the built-in free-text answer covers it.
 3.  Once they choose, jump to the matching section in Creation Mode below, ask only the questions needed to refresh that section, then return here.
 4.  After each update, ask whether they want to change another section or save. When they're done, proceed to **Step 3: File Generation**.
 

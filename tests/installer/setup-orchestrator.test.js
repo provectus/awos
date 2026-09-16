@@ -34,6 +34,74 @@ after(async () => {
   for (const d of createdDirs) await removeTempDir(d);
 });
 
+async function captureOutput(fn) {
+  const lines = [];
+  const origLog = console.log;
+  const origInfo = console.info;
+  const origErr = console.error;
+  const origWrite = process.stdout.write.bind(process.stdout);
+  console.log = (...args) => lines.push(args.join(' '));
+  console.info = () => {};
+  console.error = () => {};
+  process.stdout.write = () => true;
+  try {
+    await fn();
+  } finally {
+    console.log = origLog;
+    console.info = origInfo;
+    console.error = origErr;
+    process.stdout.write = origWrite;
+  }
+  return lines.join('\n');
+}
+
+test('the update output tells legacy projects their removed commands are preserved and links the guide', async () => {
+  // Alignment-review concern: the upgrade guide is unreachable if
+  // nothing in the update output points at it — the users most affected
+  // by the 2.0 removals (those still carrying roadmap/hire) must hear
+  // about them from the update itself, not from a doc they never open.
+  const legacyDir = await freshTemp();
+  await fsPromises.mkdir(path.join(legacyDir, '.claude', 'commands', 'awos'), {
+    recursive: true,
+  });
+  await fsPromises.writeFile(
+    path.join(legacyDir, '.claude', 'commands', 'awos', 'roadmap.md'),
+    'wrapper\n'
+  );
+  await fsPromises.mkdir(path.join(legacyDir, '.awos', 'commands'), {
+    recursive: true,
+  });
+  await fsPromises.writeFile(
+    path.join(legacyDir, '.awos', 'commands', 'hire.md'),
+    '1.x body\n'
+  );
+
+  const output = await captureOutput(() =>
+    runSetup({ workingDir: legacyDir, packageRoot: repoRoot })
+  );
+  assert.ok(
+    output.includes('/awos:roadmap') && output.includes('/awos:hire'),
+    'the legacy notice must name each detected removed command'
+  );
+  assert.ok(
+    output.includes('preserved and keep working'),
+    'the legacy notice must state the preservation policy'
+  );
+  assert.ok(
+    output.includes('docs/2.0/upgrading-2.0.md'),
+    'the legacy notice must link the upgrade guide'
+  );
+
+  const freshDir = await freshTemp();
+  const freshOutput = await captureOutput(() =>
+    runSetup({ workingDir: freshDir, packageRoot: repoRoot })
+  );
+  assert.ok(
+    !freshOutput.includes('left AWOS in 2.0'),
+    'a fresh project must not get the legacy notice'
+  );
+});
+
 test('end-to-end setup completes against a fresh temp dir', async () => {
   const workingDir = await freshTemp();
 

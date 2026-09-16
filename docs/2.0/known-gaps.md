@@ -9,21 +9,22 @@ Gaps between what the philosophy and docs promise and what the flow actually doe
 
 ## Index
 
-| #   | Gap                                                        | Roadmap                     |
-| --- | ---------------------------------------------------------- | --------------------------- |
-| 1   | `[NEEDS CLARIFICATION]` markers invisible downstream       | Phase 7, item 1             |
-| 2   | No confirmation story for unattended runs                  | Phase 7, item 2             |
-| 3   | Nothing keeps completed specs current                      | Phase 7, item 4             |
-| 4   | Philosophy's contracts have no enforcement                 | Phase 7, item 3             |
-| 5   | Legacy in-repo audit pending removal                       | Phase 8 (last, gated)       |
-| 7   | Changed agreements lose their why                          | Phase 7, item 5             |
-| 8   | Architecture decisions flatten their alternatives          | Phase 7 (rides memory work) |
-| 9   | Intent sources beyond the interview are unread             | Unscheduled                 |
-| 10  | Roadmap removal presumes a tracker no command reads        | Unscheduled                 |
-| 11  | First-time-right — principle 1's measure — is unmeasurable | Unscheduled                 |
-| 12  | The spec→tech seam is unchecked                            | Unscheduled                 |
-| 13  | Derived human views exist only at the spec step            | Unscheduled                 |
-| 14  | People as an intent source are unreachable                 | Unscheduled                 |
+| #   | Gap                                                         | Roadmap                     |
+| --- | ----------------------------------------------------------- | --------------------------- |
+| 1   | `[NEEDS CLARIFICATION]` markers invisible downstream        | Phase 7, item 1             |
+| 2   | No confirmation story for unattended runs                   | Phase 7, item 2             |
+| 3   | Nothing keeps completed specs current                       | Phase 7, item 4             |
+| 4   | Philosophy's contracts have no enforcement                  | Phase 7, item 3             |
+| 5   | Legacy in-repo audit pending removal                        | Phase 8 (last, gated)       |
+| 7   | Changed agreements lose their why                           | Phase 7, item 5             |
+| 8   | Architecture decisions flatten their alternatives           | Phase 7 (rides memory work) |
+| 9   | Intent sources beyond the interview are unread              | Unscheduled                 |
+| 10  | Roadmap removal presumes a tracker no command reads         | Unscheduled                 |
+| 11  | First-time-right — principle 1's measure — is unmeasurable  | Unscheduled                 |
+| 12  | The spec→tech seam is unchecked                             | Unscheduled                 |
+| 13  | Derived human views exist only at the spec step             | Unscheduled                 |
+| 14  | People as an intent source are unreachable                  | Unscheduled                 |
+| 15  | Product-capability discovery from code lost with brownfield | Unscheduled                 |
 
 ## 1. `[NEEDS CLARIFICATION]` markers are invisible downstream
 
@@ -117,3 +118,10 @@ _(Gap 6 — "Update Mode never re-gathers" — closed 2026-09-14. Written agains
 - **Why it matters:** discovery's "asking the human only what nobody else can answer" quietly assumes the right human is in the chair. When the answer lives with a PM or the person who took the customer call, awos has no mechanism at all — the fourth intent source is structurally unreachable.
 - **Fix sketch:** cheapest first — the spec's open questions and labeled assumptions emitted as a shareable ask-list addressed to whoever can answer (the rendered review page is the natural carrier); answers fold back through the spec's update mode as ordinary confirmations.
 - **Roadmap:** unscheduled.
+
+## 15. Product-capability discovery from code was lost with brownfield removal
+
+- **Observed:** 1.x `/awos:product` gathered purpose, audience, and features from an existing codebase into `brownfield.md`. The Phase 2b relocation moved only the technology-stack gather into `/awos:architecture` — its Explore prompt is stack-scoped (languages, databases, infrastructure, CI). Nothing in 2.0 reads the codebase for product-level intent; on a brownfield adoption, `commands/product.md` Creation Mode fills unprompted sections from best-practice assumptions.
+- **Why it matters:** for an existing product, the code's behavior is the richest record of what the product already does — the rationale names "a behavior of the existing system that everyone assumes and nobody wrote down" as exactly where intent hides, and the discovery direction's regression test (a longer interview) trips for brownfield adopters. `/better:spec`'s codebase research lane recovers this per spec, but the product definition itself starts blind. The Phase 2b record reads as if the Open question's relocation covered the whole gather; it covered the technical half.
+- **Fix sketch:** a product-level gather feeding `/awos:product`'s draft — the behavioral surface (routes, screens, commands, jobs) reported in business language, confirmed in the normal post-write review like architecture's stack findings; shaped together with gap 9's in-repo intent sources.
+- **Roadmap:** unscheduled — natural companion to gap 9 and Phase 7's discovery work.

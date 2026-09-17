@@ -55,38 +55,71 @@ async function captureOutput(fn) {
   return lines.join('\n');
 }
 
-test('the update output tells legacy projects their removed commands are preserved and links the guide', async () => {
-  // Alignment-review concern: the upgrade guide is unreachable if
-  // nothing in the update output points at it — the users most affected
-  // by the 2.0 removals (those still carrying roadmap) must hear
-  // about them from the update itself, not from a doc they never open.
+test('the update tells a legacy project what happened to its roadmap command — once — and rewrites a pristine wrapper', async () => {
+  // The upgrade guide is unreachable if nothing in the update output
+  // points at it, and a notice that repeats on every update is noise
+  // users learn to ignore. The announcement rides on migration 003
+  // itself, so it prints exactly when the shutdown happens; the wrapper
+  // is the one file that keeps /awos:roadmap callable, so a never-edited
+  // 1.x wrapper is rewritten to say the command was removed while a
+  // customized one is preserved (the unit layer covers that case).
   const legacyDir = await freshTemp();
-  await fsPromises.mkdir(path.join(legacyDir, '.claude', 'commands', 'awos'), {
-    recursive: true,
-  });
+  const wrapperPath = path.join(
+    legacyDir,
+    '.claude',
+    'commands',
+    'awos',
+    'roadmap.md'
+  );
+  await fsPromises.mkdir(path.dirname(wrapperPath), { recursive: true });
+  // Byte-identical to the wrapper npm 1.3.0–1.4.0 shipped.
   await fsPromises.writeFile(
-    path.join(legacyDir, '.claude', 'commands', 'awos', 'roadmap.md'),
-    'wrapper\n'
+    wrapperPath,
+    [
+      '---',
+      'description: Builds the Product Roadmap — features and their order.',
+      "argument-hint: '[change request, optional]'",
+      '---',
+      '',
+      '@.awos/commands/roadmap.md',
+      '',
+    ].join('\n')
   );
 
   const output = await captureOutput(() =>
     runSetup({ workingDir: legacyDir, packageRoot: repoRoot })
   );
   assert.ok(
-    output.includes('/awos:roadmap'),
-    'the legacy notice must name each detected removed command'
+    output.includes('/awos:roadmap left AWOS in 2.0'),
+    'the update must announce the roadmap shutdown when migration 003 applies'
   );
   assert.ok(
-    !output.includes('/awos:hire'),
-    'the legacy notice must not name /awos:hire — it is a current command, not a removed one'
-  );
-  assert.ok(
-    output.includes('yours to maintain'),
-    'the legacy notice must state the graceful-shutdown policy: the command answers that the feature left, the user documents stay theirs'
+    output.includes(
+      'delete .claude/commands/awos/roadmap.md and .awos/commands/roadmap.md'
+    ),
+    'the announcement must name the two files to delete to drop the command entirely'
   );
   assert.ok(
     output.includes('docs/2.0/upgrading-2.0.md'),
-    'the legacy notice must link the upgrade guide'
+    'the announcement must link the upgrade guide'
+  );
+  assert.ok(
+    !output.includes('/awos:hire'),
+    'the announcement must not name /awos:hire — it is a current command, not a removed one'
+  );
+  const wrapper = await fsPromises.readFile(wrapperPath, 'utf8');
+  assert.ok(
+    wrapper.includes('Removed in AWOS 2.0') &&
+      wrapper.includes('@.awos/commands/roadmap.md'),
+    'a never-edited 1.x wrapper must be rewritten to the 2.0 removal wrapper that still resolves to the notice'
+  );
+
+  const secondOutput = await captureOutput(() =>
+    runSetup({ workingDir: legacyDir, packageRoot: repoRoot })
+  );
+  assert.ok(
+    !secondOutput.includes('left AWOS in 2.0'),
+    'the announcement must not repeat on the next update — the migration has already applied'
   );
 
   const freshDir = await freshTemp();
@@ -95,7 +128,7 @@ test('the update output tells legacy projects their removed commands are preserv
   );
   assert.ok(
     !freshOutput.includes('left AWOS in 2.0'),
-    'a fresh project must not get the legacy notice'
+    'a fresh project must not get the announcement'
   );
   assert.ok(
     freshOutput.includes('MCP server configured'),

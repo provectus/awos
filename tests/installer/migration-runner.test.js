@@ -193,6 +193,109 @@ test('a full pre-2.0 roadmap footprint is shut down gracefully — the body beco
   );
 });
 
+test('a never-edited 1.x wrapper is rewritten to the 2.0 removal wrapper; a customized wrapper is preserved; the shutdown notice is returned once', async () => {
+  // Three wrapper variants shipped between npm 0.0.8 and 1.4.0. Any of
+  // them, byte-identical, provably carries nothing of the user's, so 003
+  // rewrites it: the palette then says the command was removed while the
+  // wrapper still resolves to the notice, so calling it answers. One
+  // edited byte and the wrapper is the user's — preserved untouched, and
+  // it still resolves to the same notice.
+  const shipped = [
+    [
+      '---',
+      'description: Builds the Product Roadmap — features and their order.',
+      '---',
+      '',
+      'Refer to the instructions located in this file: .awos/commands/roadmap.md',
+      '',
+    ].join('\n'),
+    [
+      '---',
+      'description: Builds the Product Roadmap — features and their order.',
+      '---',
+      '',
+      'Use `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.',
+      '',
+      'Refer to the instructions located in this file: .awos/commands/roadmap.md',
+      '',
+    ].join('\n'),
+    [
+      '---',
+      'description: Builds the Product Roadmap — features and their order.',
+      "argument-hint: '[change request, optional]'",
+      '---',
+      '',
+      '@.awos/commands/roadmap.md',
+      '',
+    ].join('\n'),
+  ];
+  for (const content of shipped) {
+    const dir = await freshTemp();
+    const wrapper = path.join(dir, '.claude', 'commands', 'awos', 'roadmap.md');
+    await writeFile(wrapper, content);
+    const result = await silenced(() => runMigrations(dir));
+    const after = await fsPromises.readFile(wrapper, 'utf8');
+    assert.ok(
+      after.includes('Removed in AWOS 2.0') &&
+        after.includes('@.awos/commands/roadmap.md'),
+      'a wrapper byte-identical to a shipped 1.x version must be rewritten to the 2.0 removal wrapper that still resolves to the notice'
+    );
+    assert.deepEqual(
+      result.notices.map((n) => n.version),
+      [3],
+      'the shutdown notice must be returned exactly once, from migration 003'
+    );
+    assert.ok(
+      result.notices[0].lines.some((l) =>
+        l.includes('/awos:roadmap left AWOS in 2.0')
+      ),
+      'the notice must announce the shutdown'
+    );
+  }
+
+  const customized = await freshTemp();
+  const customWrapper = path.join(
+    customized,
+    '.claude',
+    'commands',
+    'awos',
+    'roadmap.md'
+  );
+  const customContent = shipped[2].replace(
+    '@.awos/commands/roadmap.md',
+    'Team note: ask about Q3 first.\n\n@.awos/commands/roadmap.md'
+  );
+  await writeFile(customWrapper, customContent);
+  await silenced(() => runMigrations(customized));
+  assert.equal(
+    await fsPromises.readFile(customWrapper, 'utf8'),
+    customContent,
+    'a customized wrapper must be preserved byte-identical — one edited byte makes it the user’s'
+  );
+  assert.ok(
+    (
+      await fsPromises.readFile(
+        path.join(customized, '.awos', 'commands', 'roadmap.md'),
+        'utf8'
+      )
+    ).includes('removed in AWOS 2.0'),
+    'the preserved wrapper must still resolve to the removal notice'
+  );
+
+  const alreadyDone = await freshTemp();
+  await writeFile(
+    path.join(alreadyDone, '.claude', 'commands', 'awos', 'roadmap.md'),
+    customContent
+  );
+  await silenced(() => runMigrations(alreadyDone));
+  const again = await silenced(() => runMigrations(alreadyDone));
+  assert.deepEqual(
+    again.notices,
+    [],
+    'a notice is tied to the migration applying — a later run must not repeat it'
+  );
+});
+
 test('a present command body is replaced with the removal notice, and the notice is idempotent and dry-run-safe', async () => {
   // A present body — with or without a wrapper — becomes the notice:
   // migration 003 has no skip on the body, because a frozen 1.x copy
@@ -536,5 +639,108 @@ test('migration runs in dry-run without touching disk', async () => {
     exists(path.join(workingDir, '.awos', '.migration-version')),
     false,
     'dry-run must not write the migration version file'
+  );
+});
+
+async function syntheticMigrationsDir(migrations) {
+  const dir = await freshTemp();
+  for (const migration of migrations) {
+    await writeFile(
+      path.join(
+        dir,
+        `${String(migration.version).padStart(3, '0')}-synthetic.json`
+      ),
+      JSON.stringify(migration, null, 2) + '\n'
+    );
+  }
+  return dir;
+}
+
+// A migration that always throws: replace_content authorized by create_if
+// under a path whose parent is a regular file, so the mkdir fails.
+function failingMigration(version, optional) {
+  return {
+    version,
+    name: `synthetic ${version}`,
+    optional,
+    preconditions: { require_all: ['trigger.md'] },
+    operations: [
+      {
+        type: 'replace_content',
+        file: 'blocker/target.md',
+        create_if: 'trigger.md',
+        content: ['x'],
+      },
+    ],
+  };
+}
+
+function trivialMigration(version, optional) {
+  return {
+    version,
+    name: `synthetic ${version}`,
+    optional,
+    preconditions: { require_all: ['trigger.md'] },
+    operations: [
+      { type: 'copy', from: 'trigger.md', to: `copy-${version}.md` },
+    ],
+  };
+}
+
+test('an optional migration followed only by optional ones fails soft: warned, all deferred, version held', async () => {
+  // Ordering is a contract: the migrations after a failed one wait for
+  // it instead of running out of turn — and since every one of them is
+  // optional, the install can live without them until the next update.
+  const migrationsDir = await syntheticMigrationsDir([
+    failingMigration(1, true),
+    trivialMigration(2, true),
+  ]);
+  const workingDir = await freshTemp();
+  await writeFile(path.join(workingDir, 'trigger.md'), 'trigger\n');
+  await writeFile(path.join(workingDir, 'blocker'), 'not a directory\n');
+
+  const result = await silenced(() =>
+    runMigrations(workingDir, { migrationsDir })
+  );
+  assert.equal(result.applied, 0, 'nothing may be reported applied');
+  assert.equal(
+    result.current,
+    0,
+    'the version must stay below the failed migration'
+  );
+  assert.equal(
+    exists(path.join(workingDir, 'copy-2.md')),
+    false,
+    'the migration queued behind the failed one must not run out of turn'
+  );
+});
+
+test('an optional migration followed by a required one fails hard: the run aborts instead of skipping the required migration', async () => {
+  // The required migration must neither run on a layout the failed
+  // repair did not prepare nor be skipped silently — so the optional
+  // failure aborts the run exactly as the required migration's own
+  // failure would, and nothing is stamped.
+  const migrationsDir = await syntheticMigrationsDir([
+    failingMigration(1, true),
+    trivialMigration(2, false),
+  ]);
+  const workingDir = await freshTemp();
+  await writeFile(path.join(workingDir, 'trigger.md'), 'trigger\n');
+  await writeFile(path.join(workingDir, 'blocker'), 'not a directory\n');
+
+  await assert.rejects(
+    () => silenced(() => runMigrations(workingDir, { migrationsDir })),
+    /migration 2 must run after it, so the install cannot continue/,
+    'a required migration queued behind a failed optional one must abort the run, naming the dependency'
+  );
+  assert.equal(
+    exists(path.join(workingDir, '.awos', '.migration-version')),
+    false,
+    'no version may be stamped when the run aborts before any migration succeeds'
+  );
+  assert.equal(
+    exists(path.join(workingDir, 'copy-2.md')),
+    false,
+    'the required migration must not have run'
   );
 });

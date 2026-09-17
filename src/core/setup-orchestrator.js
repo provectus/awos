@@ -4,10 +4,8 @@
  * Single Responsibility: Orchestration of setup workflow
  */
 
-const path = require('path');
 const { AWOS_ASCII, AWOS_SUBTITLE, style } = require('../config/constants');
 const { directories, copyOperations } = require('../config/setup-config');
-const { pathExists } = require('../utils/fs-utils');
 const {
   showHeader,
   showStep,
@@ -134,38 +132,6 @@ async function runSetup({
     migrations: migrationStatistics.applied,
   };
   showSummary(statistics, { dryRun });
-
-  // Legacy notice: a project still carrying commands that left the
-  // framework in 2.0 hears it from the update itself — the upgrade
-  // guide is unreachable if nothing in the update output points at it.
-  const legacyCommands = [];
-  for (const [command, traces] of [
-    [
-      '/awos:roadmap',
-      ['.awos/commands/roadmap.md', '.claude/commands/awos/roadmap.md'],
-    ],
-  ]) {
-    for (const trace of traces) {
-      if (await pathExists(path.join(workingDir, trace))) {
-        legacyCommands.push(command);
-        break;
-      }
-    }
-  }
-  if (legacyCommands.length > 0) {
-    log(
-      `This project carries commands that left AWOS in 2.0: ${legacyCommands.join(', ')}.`,
-      'info'
-    );
-    log(
-      'Calling them now answers that the feature left AWOS; your own documents (e.g. context/product/roadmap.md) are untouched and yours to maintain.',
-      'item'
-    );
-    log(
-      'What changed and why: https://github.com/provectus/awos/blob/main/docs/2.0/upgrading-2.0.md',
-      'item'
-    );
-  }
 }
 
 module.exports = { runSetup };

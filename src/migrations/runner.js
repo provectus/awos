@@ -6,6 +6,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
+const crypto = require('crypto');
 const { log, clearLine } = require('../utils/logger');
 const { style } = require('../config/constants');
 
@@ -41,10 +42,10 @@ async function writeVersion(versionFile, version) {
 
 /**
  * Load all migration files from the migrations directory
+ * @param {string} migrationsDir - Directory holding the NNN-*.json files
  * @returns {Promise<Array>} Sorted array of migrations
  */
-async function loadMigrations() {
-  const migrationsDir = path.join(__dirname);
+async function loadMigrations(migrationsDir) {
   const files = await fs.readdir(migrationsDir);
 
   const migrations = [];
@@ -261,6 +262,10 @@ async function executeOperation(
       // the missing target (e.g. a preserved wrapper whose @-import would
       // otherwise stay broken in a clone that committed .claude/ but not
       // .awos/) — fresh projects have no such trigger, so they stay clean.
+      // The optional `if_sha256` field (one hash or a list) restricts the
+      // replace to a file whose current content is byte-identical to a
+      // known shipped version: a user-editable file is rewritten only when
+      // it provably carries nothing of the user's, and preserved otherwise.
       if (!operation.file) {
         throw new Error('replace_content operation requires "file" field');
       }
@@ -285,6 +290,22 @@ async function executeOperation(
           'item'
         );
         return false;
+      }
+      if (targetFound && operation.if_sha256) {
+        const allowed = [].concat(operation.if_sha256);
+        const current = crypto
+          .createHash('sha256')
+          .update(await fs.readFile(filePath))
+          .digest('hex');
+        if (!allowed.includes(current)) {
+          log(
+            dryRun
+              ? `  ${style.dim('[DRY-RUN]')} Would skip content replace (customized, preserved): ${operation.file}`
+              : `  ${style.dim('–')} Skipped content replace (customized, preserved): ${operation.file}`,
+            'item'
+          );
+          return false;
+        }
       }
       if (dryRun) {
         log(
@@ -338,9 +359,9 @@ async function checkPreconditions(preconditions, workingDir, dryRun = false) {
   }
 
   // Check skip_if_any conditions. A match means the migration has
-  // nothing to do here — either it already ran, or (disown-in-place)
-  // the file it would repair is deliberately preserved. The label must
-  // not claim a migration happened when the policy is preservation.
+  // nothing to do here — either it already ran, or the file it would
+  // act on is deliberately left alone. The label must not claim a
+  // migration happened when the policy is preservation.
   if (preconditions.skip_if_any) {
     for (const checkPath of preconditions.skip_if_any) {
       const fullPath = path.join(workingDir, checkPath);
@@ -455,7 +476,10 @@ async function executeMigration(migration, workingDir, options = {}) {
  * @returns {Promise<Object>} Migration statistics
  */
 async function runMigrations(workingDir, options = {}) {
-  const { dryRun = false } = options;
+  // migrationsDir is injectable for the unit tests only (synthetic
+  // migrations pin runner semantics the shipped set cannot reach); the
+  // installer always runs the migrations shipped next to this file.
+  const { dryRun = false, migrationsDir = __dirname } = options;
   const versionFile = path.join(workingDir, '.awos', '.migration-version');
 
   try {
@@ -463,7 +487,7 @@ async function runMigrations(workingDir, options = {}) {
     const currentVersion = await readVersion(versionFile);
 
     // Load all migrations
-    const migrations = await loadMigrations();
+    const migrations = await loadMigrations(migrationsDir);
 
     // Filter pending migrations
     const pending = migrations.filter((m) => m.version > currentVersion);
@@ -476,6 +500,7 @@ async function runMigrations(workingDir, options = {}) {
           migrations.length > 0
             ? Math.max(...migrations.map((m) => m.version))
             : 0,
+        notices: [],
       };
     }
 
@@ -489,7 +514,8 @@ async function runMigrations(workingDir, options = {}) {
     // advancement early, so the loop's end is not proof of the latest.
     let applicableMigrations = 0;
     let stampedVersion = currentVersion;
-    for (const migration of pending) {
+    const notices = [];
+    for (const [index, migration] of pending.entries()) {
       if (dryRun) {
         log(
           `Checking migration ${migration.version}: ${migration.name}`,
@@ -506,17 +532,32 @@ async function runMigrations(workingDir, options = {}) {
       try {
         status = await executeMigration(migration, workingDir, { dryRun });
       } catch (error) {
-        if (migration.optional) {
+        const later = pending.slice(index + 1);
+        const laterRequired = later.find((m) => !m.optional);
+        if (migration.optional && !laterRequired) {
           // An optional migration (a repair or cleanup) must never block
           // the install: warn, halt version advancement — so this and any
           // later migrations are retried on the next update — and let
-          // setup continue to the copy step. Only migrations the layout
-          // depends on may abort the run.
+          // setup continue to the copy step. Ordering is a contract, so
+          // the later ones wait too rather than running out of turn.
+          const deferred =
+            later.length > 0
+              ? ` (migration${later.length > 1 ? 's' : ''} ${later.map((m) => m.version).join(', ')} deferred with it)`
+              : '';
           log(
-            `${style.warn('⚠')} Migration ${migration.version} could not run and will be retried on the next update: ${error.message}`,
+            `${style.warn('⚠')} Migration ${migration.version} could not run and will be retried on the next update${deferred}: ${error.message}`,
             'item'
           );
           break;
+        }
+        if (migration.optional) {
+          // A required migration is queued behind this one. It must
+          // neither run on a layout this repair failed to prepare nor be
+          // skipped silently — so the failure aborts the run the way a
+          // required migration's own failure would.
+          throw new Error(
+            `${error.message} — migration ${laterRequired.version} must run after it, so the install cannot continue`
+          );
         }
         throw error;
       }
@@ -524,6 +565,15 @@ async function runMigrations(workingDir, options = {}) {
       // Only count migrations that are actually applied or would be applied
       if (status === 'applied') {
         applicableMigrations++;
+        // A migration may carry a user-facing notice — the announcement
+        // of what it just changed and what the user can do about it. It
+        // is printed once, right here, only when the migration actually
+        // did something; the installer needs no product knowledge of
+        // its own to tell a legacy project what happened.
+        if (!dryRun && Array.isArray(migration.notice)) {
+          for (const line of migration.notice) log(line, 'item');
+          notices.push({ version: migration.version, lines: migration.notice });
+        }
       }
 
       if (!dryRun) {
@@ -548,6 +598,7 @@ async function runMigrations(workingDir, options = {}) {
       applied: applicableMigrations,
       current: dryRun ? currentVersion : stampedVersion,
       latest: Math.max(...migrations.map((m) => m.version)),
+      notices,
     };
   } catch (error) {
     // Clean error message for better user experience

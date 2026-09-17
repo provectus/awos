@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "name": "Retire /awos:roadmap gracefully: replace the project's local copy of the command body with a removal notice (created where only the wrapper remains) so the command answers that the roadmap feature left AWOS, and delete the orphaned roadmap template; the wrapper and the user's context/product/roadmap.md are left untouched",
+  "name": "Retire /awos:roadmap gracefully: the local command body becomes a removal notice (created where only the wrapper remains), the orphaned template is deleted, a never-edited 1.x wrapper is rewritten to the 2.0 removal wrapper, and a customized wrapper and the user's context/product/roadmap.md are left untouched",
   "optional": true,
   "preconditions": {
     "require_any": [
@@ -29,6 +29,27 @@
     {
       "type": "delete",
       "from": ".awos/templates/roadmap-template.md"
+    },
+    {
+      "type": "replace_content",
+      "file": ".claude/commands/awos/roadmap.md",
+      "if_sha256": [
+        "36d4a5dac6461b3481f97a6e5ff9105bf8d200e09b1ed47d315c0e5aa0269ec6",
+        "3d69a69ce16b12cf47c6e9f161756ebd141079d167b4380de82512200caa7221",
+        "3a3ae6a046bb3df99f2f1367f9ef214741d9792409931a40d3f81921f56a8596"
+      ],
+      "content": [
+        "---",
+        "description: Removed in AWOS 2.0 — explains what replaced the roadmap.",
+        "---",
+        "",
+        "@.awos/commands/roadmap.md"
+      ]
     }
+  ],
+  "notice": [
+    "/awos:roadmap left AWOS in 2.0. Calling it now explains what replaced it; your context/product/roadmap.md is untouched and yours to maintain.",
+    "To drop the command entirely, delete .claude/commands/awos/roadmap.md and .awos/commands/roadmap.md.",
+    "What changed and why: https://github.com/provectus/awos/blob/main/docs/2.0/upgrading-2.0.md"
   ]
 }

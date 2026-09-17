@@ -71,7 +71,7 @@ Behavioral end-to-end tests (real `claude` sessions, session-log parsing) live i
 - **`context/product/hired-agents.md` rename pinned.** The `/awos:hire`-owned coverage report is referenced at its post-rename path; no prompt still references the legacy `context/product/agents.md`.
 - **Slash-command cross-references.** Every `/awos:<word>` mentioned in any prompt resolves to a real `commands/<word>.md` (or the plugin path for `/awos:ai-readiness-audit`).
 - **Dimension DAG.** Every dimension under `plugins/awos/skills/ai-readiness-audit/dimensions/*.md` has required frontmatter, `name` matches its filename, severity is in the allowed set, `depends-on` entries resolve to real dimension names, and the graph topologically sorts (no cycles).
-- **`context/...` path consistency.** Cross-prompt path references are mutually reachable — if two prompts read the same path, at least one writer of it must exist.
+- **`context/...` path consistency.** The canonical `context/...` paths appear in the prompts that must reference them. The lint does not build a reader/writer map — a path read by two prompts and written by none (today: the compatibility read of a user-owned `context/product/roadmap.md`) passes by design.
 - **`setup-config.js` ↔ source-tree consistency.** Every `copyOperation.source` directory exists; every top-level source directory matching `^(commands|templates|scripts|claude)/` is referenced by exactly one `copyOperation`.
 
 Cost: ~30 ms. Catches roughly 80 % of structural regressions on its own.
@@ -83,12 +83,15 @@ Cost: ~30 ms. Catches roughly 80 % of structural regressions on its own.
 - **`file-copier.test.js`**
   - Fresh install lands every source file at its declared destination.
   - Synthetic `commands/synth-test.md` is auto-discovered (validates "no `setup-config.js` edit needed when adding files inside an existing tree").
-  - Wrapper overwrite behavior pinned to current code (`.claude/commands/awos/*.md` _is_ overwritten on update). Comments in the test point at the open §11 docs-vs-code question; flip the assertion when that's resolved intentionally.
+  - Wrapper preservation pinned: existing `.claude/commands/awos/*.md` are left untouched under the non-interactive default, new wrappers still install, `--overwrite` forces a fresh sync.
   - Dry-run honesty: `dryRun: true` produces zero filesystem changes.
 - **`migration-runner.test.js`**
-  - Migration 001 is idempotent (run twice, second run is a no-op).
-  - `skip_if_any` triggers on already-migrated state and reports `already_applied`.
-  - Migration version meta-test: every JSON under `src/migrations/` has a unique version, no gaps, no duplicates.
+  - Migration 001 is idempotent (run twice, second run is a no-op); `skip_if_any` leaves already-migrated state alone.
+  - Migration 003 (roadmap shutdown) end-to-end: the local body becomes the removal notice (wrapper-only, body-only, and template-only footprints), the template is deleted, a wrapper byte-identical to any shipped 1.x version is rewritten (`replace_content` + `if_sha256`) while a customized one is preserved, and the `notice` is returned once and never on a rerun.
+  - `replace_content` contracts: replace-only unless `create_if` authorizes a create; already-current content is a skip, so a version-marker-reset rerun reports zero applied; atomic temp-and-rename write; a dangling symlink at the target is replaced, not written through.
+  - One `lstat` probe policy for preconditions and operations; missing `from`/`file`/`content` fields throw clean authoring errors.
+  - Optional migrations, pinned with synthetic migrations via the injectable `migrationsDir`: a failure followed only by optional migrations warns and defers them all; a failure with a required migration queued behind it aborts the run.
+  - Migration version meta-test: every JSON under `src/migrations/` has a unique version, no gaps, no duplicates; version assertions derive the expected number from the shipped files.
   - Dry-run does not touch disk.
 - **`setup-orchestrator.test.js`**
   - End-to-end `runSetup({ workingDir, packageRoot })` against a temp dir completes without throwing.
@@ -113,14 +116,14 @@ Currently shipped fixtures:
 | --------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `fresh-project/`      | Empty project                                               | Full install layout: `.awos/commands/`, `.claude/commands/awos/`, `context/`, `.awos/.migration-version`                                                                                                                                                                                                                                                                                                                                                           |
 | `existing-awos-v0/`   | Stale `.awos/commands/architecture.md` from a prior install | Framework internals always get the latest content (overwritten)                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `customized-wrapper/` | User-customized `.claude/commands/awos/architecture.md`     | Pins the current always-overwrite behavior; see the §11 open question in the plan                                                                                                                                                                                                                                                                                                                                                                                  |
+| `customized-wrapper/` | User-customized `.claude/commands/awos/architecture.md`     | Pins wrapper preservation under the non-interactive default: existing wrappers untouched, new wrappers still installed                                                                                                                                                                                                                                                                                                                                             |
 | `mid-workflow/`       | Populated `context/spec/001-test-feature/*.md`              | Installer never touches user spec work                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `pre-migration-v1/`   | `.claude/agents/python-expert.md` at the pre-v1 path        | Migrations 001 + 002 land cleanly; 003 is a no-op on this tree and the version file reaches the latest migration version                                                                                                                                                                                                                                                                                                                                           |
 | `pre-migration-v2/`   | Full pre-2.0 roadmap/hire footprint at migration version 2  | Graceful shutdown end-to-end for roadmap: migration 003 replaces the local command body with the removal notice and deletes the orphaned template, while the wrapper and the user roadmap stay byte-identical. Hire is current again, so its stale 1.x body and agent-template are overwritten by the copy step while the customized hire wrapper and the full `.mcp.json` (awos-recruitment entry already present) stay untouched; current commands still install |
 
 Adding a new fixture: create `tests/fixtures/<name>/`, optionally with a `before/` subtree, plus an `expected-after.json` manifest. The harness picks it up automatically.
 
-Cost: ~65 ms for all five.
+Cost: ~65 ms for all six.
 
 ## Behavioral end-to-end tests live in the `awos-qa` repo
 

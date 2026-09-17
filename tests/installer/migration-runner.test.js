@@ -44,6 +44,17 @@ async function writeFile(p, content = 'placeholder\n') {
   await fsPromises.writeFile(p, content, 'utf8');
 }
 
+async function loadShippedMigrations() {
+  const files = (await fsPromises.readdir(migrationsDir)).filter((f) =>
+    f.endsWith('.json')
+  );
+  return Promise.all(
+    files.map(async (f) =>
+      JSON.parse(await fsPromises.readFile(path.join(migrationsDir, f), 'utf8'))
+    )
+  );
+}
+
 async function latestMigrationVersion() {
   const files = (await fsPromises.readdir(migrationsDir)).filter((f) =>
     f.endsWith('.json')
@@ -296,6 +307,39 @@ test('a never-edited 1.x wrapper is rewritten to the 2.0 removal wrapper; a cust
   );
 });
 
+test('a template-only leftover is cleaned: the orphaned template is deleted and no body is created', async () => {
+  // A project that deleted the roadmap command and wrapper by hand but
+  // kept the template still has a roadmap trace; the shutdown removes
+  // it and plants nothing — with no wrapper, there is nothing for a
+  // notice body to resolve from.
+  const workingDir = await freshTemp();
+  const templatePath = path.join(
+    workingDir,
+    '.awos',
+    'templates',
+    'roadmap-template.md'
+  );
+  await writeFile(templatePath, '1.x template\n');
+
+  const result = await silenced(() => runMigrations(workingDir));
+
+  assert.equal(
+    exists(templatePath),
+    false,
+    'the orphaned template must be deleted'
+  );
+  assert.equal(
+    exists(path.join(workingDir, '.awos', 'commands', 'roadmap.md')),
+    false,
+    'no notice body may be created when there is no wrapper to resolve from it'
+  );
+  assert.equal(
+    result.applied,
+    1,
+    'the shutdown migration must count as applied — it deleted the template'
+  );
+});
+
 test('a present command body is replaced with the removal notice, and the notice is idempotent and dry-run-safe', async () => {
   // A present body — with or without a wrapper — becomes the notice:
   // migration 003 has no skip on the body, because a frozen 1.x copy
@@ -339,11 +383,16 @@ test('a present command body is replaced with the removal notice, and the notice
   await fsPromises.rm(path.join(workingDir, '.awos', '.migration-version'), {
     force: true,
   });
-  await silenced(() => runMigrations(workingDir));
+  const rerun = await silenced(() => runMigrations(workingDir));
   assert.equal(
     await fsPromises.readFile(target, 'utf8'),
     firstTombstone,
     're-running migration 003 with the version marker reset must leave the repair notice byte-identical'
+  );
+  assert.equal(
+    rerun.applied,
+    0,
+    'the rerun must report zero applied — the notice is already current, so no operation changed anything'
   );
 });
 
@@ -583,10 +632,13 @@ test('an optional migration that fails warns, halts version advancement, and ret
     0,
     'the failed optional migration must not count as applied'
   );
+  const shutdown = (await loadShippedMigrations()).find((m) =>
+    m.operations.some((op) => op.file === '.awos/commands/roadmap.md')
+  );
   assert.equal(
     first.current,
-    2,
-    'version advancement must halt below the failed optional migration (003) so it is retried'
+    shutdown.version - 1,
+    `version advancement must halt below the failed optional migration (${shutdown.version}) so it is retried`
   );
 
   // Fix the cause and re-run: the pending migration completes normally.

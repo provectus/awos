@@ -95,6 +95,23 @@ async function lexists(filePath) {
 }
 
 /**
+ * Read a file's text, or null when the entry has no readable content
+ * (absent, or a dangling symlink). Any other failure propagates.
+ * @param {string} filePath - Path to read
+ * @returns {Promise<string|null>}
+ */
+async function readIfReadable(filePath) {
+  try {
+    return await fs.readFile(filePath, 'utf-8');
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
  * Execute a single operation
  * @param {Object} operation - The operation to execute
  * @param {string} workingDir - Working directory
@@ -135,14 +152,14 @@ async function executeOperation(
             `  ${style.dim('[DRY-RUN]')} Would skip move (source not found): ${operation.from}`,
             'item'
           );
-          return;
+          return false;
         }
         if (targetExists) {
           log(
             `  ${style.warn('⚠')} ${style.dim('[DRY-RUN]')} Would skip move (target exists): ${operation.to}`,
             'item'
           );
-          return;
+          return false;
         }
         log(
           `  ${style.dim('[DRY-RUN]')} Would move: ${operation.from} → ${operation.to}`,
@@ -152,11 +169,11 @@ async function executeOperation(
       } else {
         if (!sourceExists) {
           // Source doesn't exist - skip silently (might be already migrated)
-          return;
+          return false;
         }
         if (targetExists) {
           // Target already exists - skip silently (already migrated)
-          return;
+          return false;
         }
 
         // Ensure target directory exists
@@ -186,14 +203,14 @@ async function executeOperation(
             `  ${style.dim('[DRY-RUN]')} Would skip copy (source not found): ${operation.from}`,
             'item'
           );
-          return;
+          return false;
         }
         if (copyTargetExists) {
           log(
             `  ${style.warn('⚠')} ${style.dim('[DRY-RUN]')} Would skip copy (target exists): ${operation.to}`,
             'item'
           );
-          return;
+          return false;
         }
         log(
           `  ${style.dim('[DRY-RUN]')} Would copy: ${operation.from} → ${operation.to}`,
@@ -203,11 +220,11 @@ async function executeOperation(
       } else {
         if (!copySourceExists) {
           // Source doesn't exist - skip silently
-          return;
+          return false;
         }
         if (copyTargetExists) {
           // Target already exists - skip silently
-          return;
+          return false;
         }
 
         // Ensure target directory exists
@@ -276,12 +293,13 @@ async function executeOperation(
       }
       const filePath = path.normalize(path.join(workingDir, operation.file));
       const targetFound = await lexists(filePath);
-      const createAuthorized =
+      const createAuthorized = Boolean(
         !targetFound &&
         operation.create_if &&
         (await lexists(
           path.normalize(path.join(workingDir, operation.create_if))
-        ));
+        ))
+      );
       if (!targetFound && !createAuthorized) {
         log(
           dryRun
@@ -291,12 +309,32 @@ async function executeOperation(
         );
         return false;
       }
+      const payload = operation.content.join('\n') + '\n';
+      // The entry may be a dangling symlink (lstat says present, read says
+      // ENOENT): then there is no current content to compare — the
+      // replace goes ahead and the rename puts a real file in its place.
+      const currentContent = await readIfReadable(filePath);
+      if (
+        targetFound &&
+        currentContent !== null &&
+        currentContent === payload
+      ) {
+        // Already the intended content: a rerun (e.g. after a version
+        // marker reset) must not log a replace that changed nothing.
+        log(
+          dryRun
+            ? `  ${style.dim('[DRY-RUN]')} Would skip content replace (already current): ${operation.file}`
+            : `  ${style.dim('–')} Skipped content replace (already current): ${operation.file}`,
+          'item'
+        );
+        return false;
+      }
       if (targetFound && operation.if_sha256) {
         const allowed = [].concat(operation.if_sha256);
-        const current = crypto
-          .createHash('sha256')
-          .update(await fs.readFile(filePath))
-          .digest('hex');
+        const current =
+          currentContent === null
+            ? null
+            : crypto.createHash('sha256').update(currentContent).digest('hex');
         if (!allowed.includes(current)) {
           log(
             dryRun
@@ -323,11 +361,7 @@ async function executeOperation(
       // file is removed if anything fails in between.
       const contentTmpPath = `${filePath}.awos-tmp`;
       try {
-        await fs.writeFile(
-          contentTmpPath,
-          operation.content.join('\n') + '\n',
-          'utf-8'
-        );
+        await fs.writeFile(contentTmpPath, payload, 'utf-8');
         await fs.rename(contentTmpPath, filePath);
       } catch (error) {
         await fs.rm(contentTmpPath, { force: true });

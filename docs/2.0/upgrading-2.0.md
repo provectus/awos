@@ -1,6 +1,6 @@
 # Upgrading to AWOS 2.0
 
-AWOS 2.0 narrows the framework to its core method: agree on what to build, then build it. Two commands leave the framework — but nothing of yours is deleted: the retired roadmap command is shut down gracefully (its local body becomes a removal notice and its template is removed; your documents stay untouched), and commands the flow plugin generated for you keep working. Updating is the same command as always:
+AWOS 2.0 narrows the framework to its core method: agree on what to build, then build it. Two commands and the brownfield onboarding leave the framework — but nothing of yours is deleted: the retired roadmap command is shut down gracefully (its local body becomes a removal notice and its template is removed; your documents stay untouched), and commands the flow plugin generated for you keep working. Updating is the same command as always:
 
 ```sh
 npx @provectusinc/awos
@@ -32,3 +32,4 @@ Migrations handle the rest.
 
 - npm package: **2.0.0** (this release).
 - awos plugin (`/awos:ai-readiness-audit`): **2.4.6** — a patch on its independent version line. Audit scoring is unchanged in this release; the version stamped in audit reports stays comparable with earlier 2.4.x audits.
+- better plugin (`/better:spec`): **0.1.1** — a patch; dropping the roadmap lane changes no deliverable contract.

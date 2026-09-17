@@ -46,7 +46,7 @@ The engine, the `dist/` bundle, the `repo-auditor` agent, the `standards-refresh
 - "Not a planning or backlog tool"; principle 9 lists "backlog" first among the things awos plugs into, _never provides_.
 - The discovery regression: `roadmap.md` is "a file the human must maintain so that the agent can read it" — a duplicate of the tracker awos should be reading.
 
-**Disposition:** removed — Phase 2a. The tracker-reading successor the rationale presumes is registry gap 10, unscheduled.
+**Disposition:** removed — Phase 2a. The tracker-reading successor the rationale presumes is registry gap 10, unscheduled. One residual, accepted by decision (Daria, 2026-09-17, no sunset): both spec commands keep offering a maintained `context/product/roadmap.md`'s incomplete items as topic candidates while the file exists — a compatibility read of a user-owned file, not a feature, and a knowing exception to the discovery regression cited above.
 
 ### 3. `/awos:hire`
 

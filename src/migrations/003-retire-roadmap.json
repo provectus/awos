@@ -1,6 +1,7 @@
 {
   "version": 3,
-  "name": "Retire /awos:roadmap gracefully: the local command body becomes a removal notice (created where only the wrapper remains), the orphaned template is deleted, a never-edited 1.x wrapper is rewritten to the 2.0 removal wrapper, and a customized wrapper and the user's context/product/roadmap.md are left untouched",
+  "name": "Retire /awos:roadmap: notice over the local body, delete the template, rewrite a pristine wrapper",
+  "description": "Graceful shutdown of the roadmap command (decided 2026-09-17). The project's local .awos/commands/roadmap.md becomes a removal notice (created where only the wrapper remains), so calling /awos:roadmap answers that the feature left AWOS instead of running a frozen 1.x copy. The orphaned .awos/templates/roadmap-template.md is deleted — nothing reads it once the command is a notice. A wrapper byte-identical to any shipped 1.x version (if_sha256) is rewritten to the 2.0 removal wrapper so the palette says the command was removed; a customized wrapper and the user's context/product/roadmap.md are left untouched. The notice below prints once, when this migration applies.",
   "optional": true,
   "preconditions": {
     "require_any": [
@@ -22,7 +23,7 @@
         "Tell the user the following, then stop. Do not build, update, or review a roadmap document.",
         "",
         "- This command no longer ships with AWOS. To start a feature, run `/awos:spec` and state the topic directly.",
-        "- If `context/product/roadmap.md` exists, it is theirs: AWOS no longer creates, updates, or marks it, so keeping it current is their own work now — by hand or with a command of their own. While it exists, `/awos:spec` and `/better:spec` still offer its incomplete items as topic candidates.",
+        "- If `context/product/roadmap.md` exists, it is theirs: AWOS no longer creates, updates, or marks it, so keeping it current is their own work now — by hand or with a command of their own. While it exists, the spec command still offers its incomplete items as topic candidates.",
         "- To remove this notice, delete `.claude/commands/awos/roadmap.md` and `.awos/commands/roadmap.md`."
       ]
     },

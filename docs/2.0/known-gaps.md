@@ -86,7 +86,7 @@ _(Gap 6 — "Update Mode never re-gathers" — closed 2026-09-14. Written agains
 
 ## 10. Roadmap removal presumes a tracker no command reads
 
-- **Observed:** the rationale for removing `/awos:roadmap` — "the backlog belongs to the team's tracker; spec takes its topic from a ticket" — presumes tickets are reachable, but no command reads a tracker, and nothing is scheduled to. Post-refactor, spec's topic comes from user prose alone.
+- **Observed:** the rationale for removing `/awos:roadmap` — "the backlog belongs to the team's tracker; spec takes its topic from a ticket" — presumes tickets are reachable, but no command reads a tracker, and nothing is scheduled to. Post-refactor, spec's topic comes from user prose, with candidates offered from the product definition and — as a compatibility read of a user-owned file, while one exists — a maintained `context/product/roadmap.md`.
 - **Why it matters:** the removal's justification quietly depends on an integration that exists nowhere. The ticket is the single most common place a feature's intent starts. This is also the first instance of a wider class: principle 9 describes a plugs-into posture (backlog, branching, review, deploy, tickets), and awos currently plugs into none of them — it ignores them.
 - **Fix sketch:** spec-time topic intake accepts a ticket reference and reads it through the host's connected tools (introspection, per the sources-dissolution decision), asking the human only what the ticket does not answer.
 - **Roadmap:** unscheduled — Phase 7 sweep candidate.

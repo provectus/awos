@@ -130,4 +130,16 @@ Follow this logic precisely.
 1.  Write the architecture content to `context/product/architecture.md`. **Write the file without waiting for approval** — an architecture is reversible (re-run `/awos:architecture` to revise), so the deliverable is never gated behind a confirmation an unattended run cannot answer.
 2.  Present the saved architecture for review. Call out which choices were seeded by the codebase exploration or documentation retrieval (with their citations) and which are labeled assumptions, and ask what to change. If any manual sources were noted as pending, ask the user now to paste the relevant content from them, and fold what they provide into the document like any other requested change. Apply requested changes and re-save; otherwise the user can revise later by re-running `/awos:architecture`.
 3.  **Update Mode only — resolve drift, after the write.** For each drift item collected in the re-gather, ask via `AskUserQuestion`: **Adopt** (the document takes what the code shows, citations included) or **Keep as recorded** (the code state is transitional or wrong — note the stated reason on the decision). The default for an unanswered drift question is **Keep as recorded** — drift is never applied to the document silently, and the document as saved already reflects that default. Apply adopted items and re-save.
-4.  Report the saved path and the next command: `/awos:spec`.
+4.  Proceed to **Step 4: Coverage Hint**.
+
+---
+
+### Step 4: Coverage Hint
+
+Give the user a quick read on whether the stack already has specialist agents — but do not persist this anywhere. The durable coverage report is owned by `/awos:hire` (see `context/product/hired-agents.md` after that command runs).
+
+1.  List the technologies in the saved architecture (languages, frameworks, cloud providers, databases, infrastructure tools).
+2.  Look at the names of subagents registered in `.claude/agents/` (if any). Without going deep, note how many of the listed technologies do not appear to have a matching specialist by description.
+3.  Report the saved path and the next commands:
+    - `/awos:hire` (always — it owns the canonical coverage report and installs missing specialists).
+    - `/awos:spec` after `/awos:hire`.

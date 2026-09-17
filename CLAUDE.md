@@ -96,17 +96,17 @@ AWOS is **spec-driven** — all project state lives in markdown files under `con
 The canonical flow (each command is a markdown prompt under `commands/`):
 
 ```
-Foundation (once):  /awos:product → /awos:architecture
+Foundation (once):  /awos:product → /awos:architecture → /awos:hire
 Per feature:        /awos:spec → /awos:tech → /awos:tasks → /awos:implement → /awos:verify
 ```
 
-The first two are run once at project setup; the last five iterate per feature. Each command reads/writes a specific document under `context/` (e.g. `context/product/product-definition.md`, `context/spec/NNN-feature/tasks.md`). The numeric prefix on spec directories is allocated by `scripts/create-spec-directory.sh`.
+The first three are run once at project setup; the last five iterate per feature. Each command reads/writes a specific document under `context/` (e.g. `context/product/product-definition.md`, `context/spec/NNN-feature/tasks.md`). The numeric prefix on spec directories is allocated by `scripts/create-spec-directory.sh`.
 
 **Implementation delegation rule:** `/awos:implement` is an orchestrator only — it reads `tasks.md`, extracts the `**[Agent: name]**` marker from each task, and delegates to a subagent. The orchestrator is explicitly prohibited from editing code itself. Preserve this contract when editing `commands/implement.md`.
 
 ## Architecture: Installer Pipeline
 
-`src/core/setup-orchestrator.js` runs five numbered steps: init → create directories → run migrations → copy files → register plugin marketplace. Each step lives in its own service module under `src/services/`. The orchestrator and `setup-config.js` are the two files to touch when changing setup behavior.
+`src/core/setup-orchestrator.js` runs six numbered steps: init → create directories → run migrations → copy files → configure MCP → register plugin marketplace. Each step lives in its own service module under `src/services/`. The orchestrator and `setup-config.js` are the two files to touch when changing setup behavior.
 
 ## Migrations
 
@@ -170,7 +170,7 @@ These commands assume `node`/`npm` resolve to a real Node toolchain (as on CI an
 
 ## Editing Prompts
 
-Files under `commands/`, `claude/commands/`, and `plugins/` are prompts. Re-read Anthropic's guidance before any large rewrite — it changes:
+Files under `commands/`, `claude/commands/`, `plugins/`, and `templates/agent-template.md` are prompts. Re-read Anthropic's guidance before any large rewrite — it changes:
 
 - <https://code.claude.com/docs/en/best-practices>
 - <https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices>
@@ -181,7 +181,7 @@ Non-obvious rules for this repo:
 
 - **Dial back aggressive emphasis.** Opus 4.6+ overtriggers on `CRITICAL` / `YOU MUST` / `STRICTLY PROHIBITED`. Use plain declarative sentences; reserve one bold-emphasis rule per file for the one most likely to be ignored.
 - **Use `Agent`, not `Task`,** when naming the delegation tool. `Task(...)` aliases still work but the tool was renamed in Claude Code v2.1.63.
-- **Both project-local and plugin-provided agents surface in the `Agent` tool's description block at runtime.** Project-local agents come from `.claude/agents/*.md`; plugin-provided ones are recognized by the `plugin-name:` prefix on `subagent_type` (e.g. `python-development:python-pro`). Commands that need to know what specialists exist and what each covers (e.g. `commands/tasks.md`, `commands/tech.md`) introspect the description block — no tool calls needed, no asymmetry between the two kinds, and no exception left that reads the agent files directly.
+- **Both project-local and plugin-provided agents surface in the `Agent` tool's description block at runtime.** Project-local agents come from `.claude/agents/*.md`; plugin-provided ones are recognized by the `plugin-name:` prefix on `subagent_type` (e.g. `python-development:python-pro`). For commands that only need to know what specialists exist and what each covers (e.g. `commands/tasks.md`, `commands/tech.md`), introspect the description block — no tool calls needed, no asymmetry between the two kinds. Read `.claude/agents/*.md` directly only when the command actually consumes the file contents beyond `name` + `description` — e.g. `commands/hire.md`, which reads `skills:` arrays to build its coverage table and appends to them when installing new skills.
 - **Don't gratuitously name "Claude Code" inside prompts.** The host is already implied by paths (`.claude/agents/*.md`), conventions (the `plugin-name:` prefix on `subagent_type`), and tool names (`Agent` / `Read` / `Glob`). Explicit "loaded by Claude Code" / "in Claude Code" attributions in the prompt body almost always just trim.
 - **Prefer the built-in `Explore` and `Plan` subagents** for read-heavy context-gathering. Don't have an orchestrator command read the whole codebase in its own context.
 - **Skip ceremonial preambles** like "Great!", "I will now…", "All done!" — modern models trim them naturally and AWOS prompts shouldn't fight that.

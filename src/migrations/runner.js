@@ -527,8 +527,8 @@ async function executeMigration(migration, workingDir, options = {}) {
   // Execute operations, counting only the ones that actually changed
   // something (or would, under dry-run). A migration whose preconditions
   // matched but whose every operation skipped did no work — reporting it
-  // as applied would claim changes that never happened (e.g. migration 5
-  // matching on a user's own .mcp.json in a project that never had hire).
+  // as applied would claim changes that never happened (e.g. a cleanup
+  // matching on a user's own file that holds nothing to clean).
   let changedOperations = 0;
   for (const operation of migration.operations) {
     try {

@@ -150,20 +150,43 @@ test('agent marker pattern is preserved', () => {
 });
 
 test('subagent-enumerating commands tell Claude how to discover agents', () => {
-  // tasks.md and tech.md only need to know what
+  // hire.md actively consumes agent frontmatter — it builds a coverage
+  // table that depends on each agent's `skills:` list, and Step 6
+  // appends newly installed skills back into the file. It is the only
+  // command with a real reason to Read each `.claude/agents/*.md` and
+  // parse YAML frontmatter.
+  //
+  // tasks.md, tech.md, and architecture.md only need to know what
   // specialist agents exist and what each one covers — enough to pick
-  // an assignee / draft a stack section — and implement.md verifies a
-  // task's named agent against the same roster before delegating. All
-  // project-local and plugin-provided agents are listed in the Agent
-  // tool's description block at runtime, so introspecting that block
-  // is sufficient — no command needs to Read each
-  // `.claude/agents/*.md` file and parse YAML frontmatter.
-  const lightReferencers = ['tasks.md', 'tech.md', 'implement.md'];
-  for (const file of lightReferencers) {
+  // an assignee / draft a stack section / hint at coverage — and
+  // implement.md verifies a task's named agent against the same roster
+  // before delegating. Both project-local and plugin-provided agents
+  // are listed in the Agent tool's description block at runtime, so
+  // introspecting that block is sufficient. Forcing them to Read the
+  // files (as earlier versions of this test did) over-specified the
+  // implementation; the awos-qa contract is the output (correct
+  // `**[Agent: ...]**` markers, no hallucinations), not the tool
+  // sequence used to produce it.
+  const frontmatterReaders = ['hire.md'];
+  const lightReferencers = [
+    'tasks.md',
+    'tech.md',
+    'architecture.md',
+    'implement.md',
+  ];
+
+  for (const file of [...frontmatterReaders, ...lightReferencers]) {
     const body = readUtf8(path.join(commandsDir, file));
     assert.ok(
       body.includes('.claude/agents/'),
       `commands/${file} must reference '.claude/agents/' as the subagent discovery source`
+    );
+  }
+  for (const file of frontmatterReaders) {
+    const body = readUtf8(path.join(commandsDir, file));
+    assert.ok(
+      /frontmatter|YAML/.test(body),
+      `commands/${file} must tell Claude to parse the discovered agents' frontmatter (it writes back to the skills: list)`
     );
   }
 });
@@ -282,6 +305,18 @@ test('dimension dependency DAG resolves and is acyclic', () => {
     byName.size,
     'dimension dependency DAG contains a cycle'
   );
+});
+
+test('agent-template.md has the expected frontmatter shape', () => {
+  const file = path.join(templatesDir, 'agent-template.md');
+  const { data, hasFrontmatter } = parse(readUtf8(file));
+  assert.ok(hasFrontmatter, 'agent-template.md must have frontmatter');
+  for (const key of ['name', 'description', 'skills']) {
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(data, key),
+      `agent-template.md missing key "${key}"`
+    );
+  }
 });
 
 test('setup-config.js source directories exist on disk', () => {
@@ -431,15 +466,59 @@ test('wrappers do not duplicate the AskUserQuestion rule', () => {
   );
 });
 
+test('hired-agents.md is the canonical coverage-report path', () => {
+  // The /awos:hire-owned coverage report was renamed from
+  // context/product/agents.md to context/product/hired-agents.md so
+  // the filename carries both producer (/awos:hire) and content
+  // (registered agents). Lint pins both halves of the rename: at
+  // least one prompt must reference the new path, and no prompt may
+  // still reference the old one.
+  const promptDirs = [commandsDir, wrappersDir, templatesDir];
+  let referencesNew = false;
+  const stalePaths = [];
+  for (const dir of promptDirs) {
+    for (const f of listMarkdown(dir)) {
+      const body = readUtf8(path.join(dir, f));
+      if (body.includes('context/product/hired-agents.md'))
+        referencesNew = true;
+      if (/context\/product\/agents\.md/.test(body)) {
+        stalePaths.push(path.relative(repoRoot, path.join(dir, f)));
+      }
+    }
+  }
+  assert.deepEqual(
+    stalePaths,
+    [],
+    `prompts still reference the pre-rename path context/product/agents.md: ${stalePaths.join(', ')}`
+  );
+  assert.ok(
+    referencesNew,
+    'no prompt references context/product/hired-agents.md — the post-rename canonical path should appear in at least architecture.md and hire.md'
+  );
+});
+
+test('agent-template.md cues the spawned agent to apply its skills', () => {
+  // /awos:hire writes a `skills:` list into each agent's frontmatter,
+  // and Claude Code attaches those skills when the agent runs. But the
+  // attachment is only useful if the agent's prompt body cues it to
+  // actually apply them. The template body must therefore tell the
+  // agent to consult its frontmatter `skills:` list when working.
+  const body = readUtf8(path.join(templatesDir, 'agent-template.md'));
+  assert.ok(
+    /skills\b[^\n]*\bfrontmatter\b|\bfrontmatter\b[^\n]*\bskills\b/i.test(body),
+    'templates/agent-template.md body must instruct the agent to apply skills declared in its frontmatter'
+  );
+});
+
 test('subagent-enumerating commands cover plugin-provided agents', () => {
-  // /awos:tech and /awos:tasks assign or report on specialists, and
-  // /awos:implement verifies each task's named agent before
+  // /awos:tech, /awos:hire, and /awos:tasks assign or report on
+  // specialists, and /awos:implement verifies each task's named agent before
   // delegating. Each must instruct Claude to look beyond
   // .claude/agents/*.md and also enumerate plugin-provided agents
   // (recognized by the "plugin-name:" prefix on subagent_type, which
   // only appears in the Agent tool's description block). Without this,
   // plugin-shipped specialists are invisible to the orchestrator.
-  const enumerators = ['tech.md', 'tasks.md', 'implement.md'];
+  const enumerators = ['tech.md', 'hire.md', 'tasks.md', 'implement.md'];
   for (const file of enumerators) {
     const body = readUtf8(path.join(commandsDir, file));
     assert.ok(
@@ -454,10 +533,9 @@ test('subagent-enumerating commands cover plugin-provided agents', () => {
 });
 
 test('implement.md falls back to general-purpose for a missing agent and reports the substitution', () => {
-  // The hire removal dissolved agent provisioning into the path: a
-  // tasks.md may name a specialist that was never installed or has
-  // since been removed, and the tombstones + upgrading guide promise
-  // that such a task still runs. implement.md must (a) fall back to
+  // A tasks.md may name a specialist that was never installed, has
+  // since been removed, or has not been hired yet, and the upgrading
+  // guide promises that such a task still runs. implement.md must (a) fall back to
   // general-purpose instead of dispatching an unresolvable
   // subagent_type, and (b) say so — substituted work must never be
   // presented as specialist work.
@@ -741,7 +819,8 @@ test('completion claims require fresh evidence — the verification reflex is ba
   // test written for a change is proven by failing without that
   // change. "RED validation" is the canonical name — coined by the
   // testing slice commands/tasks.md emits — so other prompts reference
-  // it rather than coining parallel terms. /awos:implement's
+  // it rather than coining parallel terms. agent-template.md is the
+  // ancestor of every hired specialist; /awos:implement's
   // <completion_evidence> block makes each subagent prove the tests it
   // writes, and Step 4's independent spot-check treats that proof as a
   // claim to verify, not a fact to relay.
@@ -749,6 +828,28 @@ test('completion claims require fresh evidence — the verification reflex is ba
   assert.ok(
     /RED validation/.test(tasks),
     'commands/tasks.md testing slice must carry the literal "RED validation" wording — the other prompts reference it as the canonical term'
+  );
+
+  const agentTemplate = readUtf8(path.join(templatesDir, 'agent-template.md'));
+  assert.ok(
+    /completion claim cites its evidence/i.test(agentTemplate),
+    'templates/agent-template.md must require completion claims to cite fresh evidence — every hired agent inherits this template'
+  );
+  assert.ok(
+    /browser-automation/i.test(agentTemplate) &&
+      /docs\/screenshots\//.test(agentTemplate) &&
+      /curl/.test(agentTemplate),
+    "templates/agent-template.md must name the sanctioned evidence forms, mirroring commands/verify.md — browser-automation + screenshot to docs/screenshots/ for UI; curl/shell/log/database/MCP for the rest — so evidence isn't read as test-only"
+  );
+  assert.ok(
+    /RED validation/.test(agentTemplate) &&
+      /revert|stash/i.test(agentTemplate) &&
+      /fail/i.test(agentTemplate),
+    'templates/agent-template.md must require RED validation of new tests — revert the covered change, see the test fail, restore, see it pass'
+  );
+  assert.ok(
+    /opted out of tests/i.test(agentTemplate),
+    'templates/agent-template.md must make the tests opt-out explicit — evidence stays required in another form, and RED validation goes inert rather than prompting an unwanted test'
   );
 
   const implement = readUtf8(path.join(commandsDir, 'implement.md'));
@@ -771,9 +872,9 @@ test('setup-config does not auto-populate .claude/agents/', () => {
   // .claude/agents/ is the user's customization area. The earlier draft
   // of this PR shipped a `plugins/awos/agents` → `.claude/agents` copy
   // operation that would silently clobber user-authored subagents on
-  // every install. AWOS does not manage a project's specialist subagents
-  // at all — so the installer must not create or overwrite anything
-  // under .claude/agents/.
+  // every install. AWOS-bundled agents (e.g. testing-expert) are hired
+  // through awos-recruitment instead — so the installer must not
+  // create or overwrite anything under .claude/agents/.
   const { copyOperations } = require(
     path.join(repoRoot, 'src', 'config', 'setup-config.js')
   );
@@ -2859,7 +2960,13 @@ test('every artifact-producing command writes before review, never gating the wr
   // may reintroduce a write-gating phrase. A genuine decision is fine — it
   // just has to be an AskUserQuestion (which an answer-map can answer)
   // placed before anything is written, not prose the run stalls on.
-  const producers = ['product.md', 'architecture.md', 'spec.md', 'tasks.md'];
+  const producers = [
+    'product.md',
+    'architecture.md',
+    'spec.md',
+    'tasks.md',
+    'hire.md',
+  ];
   for (const name of producers) {
     const body = readUtf8(path.join(commandsDir, name));
     assert.ok(
@@ -2914,5 +3021,86 @@ test('commands/spec.md mandates the when/then pair per acceptance criterion', ()
   assert.ok(
     /one bullet at a time/.test(body),
     'commands/spec.md Definition of Done must re-check acceptance criteria one bullet at a time'
+  );
+});
+
+test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
+  // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
+  // propose a QA agent by searching the registry, not by always
+  // including testing-expert or always recommending Playwright for
+  // any frontend stack. Lock out the prior hard rules so they do not
+  // creep back in.
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    /QA Complement Rule/.test(body),
+    'commands/hire.md must declare a QA Complement Rule section'
+  );
+  assert.ok(
+    !/always include\s+`?testing-expert`?/i.test(body),
+    'commands/hire.md must not declare a blanket "always include testing-expert" rule — the rule is search-first now'
+  );
+  assert.ok(
+    !/always include\s+`?playwright`?/i.test(body),
+    'commands/hire.md must not declare a blanket "always include playwright" rule for any stack — tool choice depends on the project'
+  );
+});
+
+test('hire.md installs hooks from the registry and never authors them', () => {
+  // Hooks are the fourth recruitment component type, but unlike agents
+  // they are executable shell behavior — hire may only install what the
+  // registry ships, never fabricate hook commands, and must roster the
+  // post-install state. See docs: design spec 2026-07-17-hire-hooks.
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    body.includes('npx @provectusinc/awos-recruitment hook ') &&
+      body.includes('bunx @provectusinc/awos-recruitment hook '),
+    'commands/hire.md must install hooks via the awos-recruitment `hook` verb in both npx and bunx forms'
+  );
+  assert.ok(
+    body.includes('.claude/settings.local.json') &&
+      body.includes('A missing or unparseable file means no existing hooks'),
+    'commands/hire.md Step 3 must discover existing hooks from the project settings files (.claude/settings.json / .claude/settings.local.json), treating a missing or unparseable file as no existing hooks'
+  );
+  assert.ok(
+    body.includes('## Installed Hooks'),
+    'commands/hire.md Step 8 coverage-report structure must contain the "## Installed Hooks" section'
+  );
+  assert.ok(
+    body.includes('| Name | Event | Command | Description |'),
+    'commands/hire.md Step 8 Installed Hooks table must use the exact header Name/Event/Command/Description — Event and Command are the only cells derivable from bare settings entries; Name and Description must fall back to "—" rather than be invented'
+  );
+  assert.ok(
+    /never author hook/i.test(body),
+    'commands/hire.md must state that hooks come from the registry only — hire never authors hook entries or commands'
+  );
+  assert.ok(
+    body.includes('two separate gates') &&
+      body.includes('shell script that runs automatically'),
+    'commands/hire.md Step 4 must gate hook consent separately from the passive skills/MCPs/agents confirmation, naming that hooks install auto-running shell scripts'
+  );
+  assert.ok(
+    body.includes('second half of the hook consent') &&
+      body.includes('.claude/hooks/<name>/HOOK.md'),
+    'commands/hire.md Step 5 must read back the installed HOOK.md and entrypoint script after install and offer rollback on mismatch — registry metadata is not vetted against the script'
+  );
+});
+
+test('hire.md treats an unanswered consent gate as withheld consent', () => {
+  // Installing needs permission; the coverage report does not. If the gate
+  // gets no answer the command must skip the install and keep going, rather
+  // than re-asking in prose or ending the turn — otherwise a run that could
+  // not answer produces no context/product/hired-agents.md at all.
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    /gets no answer[\s\S]{0,200}treat consent as withheld/i.test(body),
+    'commands/hire.md Step 4 must treat an unanswered consent gate as withheld consent'
+  );
+  assert.ok(
+    /install nothing that gate covered and continue/i.test(body),
+    'commands/hire.md Step 4 must continue to Step 6 after an unanswered gate instead of stopping'
+  );
+  assert.ok(
+    /do not re-ask the same question as plain text/i.test(body),
+    'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
   );
 });

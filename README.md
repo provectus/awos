@@ -29,6 +29,7 @@ These commands establish your project's foundation. Run them once at the start, 
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | `/awos:product`      | Defines the Product — what, why, and for who.                                                                                 | [Details](docs/commands/product.md)      |
 | `/awos:architecture` | Defines the System Architecture — stack, DBs, infra. Adopts your existing stack automatically when the repo already has code. | [Details](docs/commands/architecture.md) |
+| `/awos:hire`         | Hires specialist agents — finds, installs skills and MCPs, generates agent files.                                             | [Details](docs/commands/hire.md)         |
 
 ### Step 3: Feature Development Cycle
 

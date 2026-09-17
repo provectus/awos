@@ -84,6 +84,7 @@ Skip this step if `SKIP_TESTS = true`.
 
 1.  **Search for a QA-coded subagent** by introspecting the `Agent` tool's description block from Step 3.4. Pick the best fit using this order, but do not hardcode names — match on responsibility:
     - A project-specific tester for the actual stack (e.g. `react-testing`, `pytest-tester`, a custom `acceptance-tester` in `.claude/agents/`).
+    - A general AWOS testing agent if installed (e.g. `testing-expert` from the `awos-recruitment` registry).
     - Any other QA-coded agent, project-local or plugin-provided.
 2.  **If no QA-coded agent is found,** the plan has a staffing gap. Do not ask about it here — a question at this point would precede the Step 4 write, and a dismissed pre-write question ends an unattended run with no `tasks.md` at all. Emit the slice with `{qa-agent}` substituted as `general-purpose` and hand the gap to Step 3b, which records it alongside the other staffing gaps; the user decides in Step 5, after the file is written, where this QA gap carries one extra option (dropping the slice).
 
@@ -135,8 +136,8 @@ Skip this step if every task matched an available agent in Step 3.4 and no QA ga
 1.  Report the saved path and present the slice/task plan for review.
 2.  If Step 3b recorded staffing gaps, surface them now — after the write — in a single `AskUserQuestion` that names the uncovered tasks and the missing expertise. Two options, plus a third when the QA gap from Step 3a is among them:
     1.  **Accept the `general-purpose` assignments** — remove the `## Open Questions` section from `tasks.md` and re-save; the uncovered tasks run under the built-in generalist.
-    2.  **Keep the gaps recorded** — the file stands as written; the user resolves each gap later by adding a covering agent to the project and re-running `/awos:tasks`, or by accepting the assignment then. (Default when the question is skipped — an unanswered question never hides a staffing gap.)
-    3.  **Drop the Feature Testing & Regression slice** (offered only for the Step 3a QA gap) — remove the slice and its QA entry from `## Open Questions`, and re-save. Do not add the `<!-- skip-tests: true -->` marker: that marker means the whole spec opted out of tests (the Step 1 decision), while this drops only the end-to-end regression slice — every remaining task and per-slice Verify step keeps its testing expectations. Re-run `/awos:tasks` once a QA-coded agent is available to restore the slice.
+    2.  **Keep the gaps recorded** — the file stands as written; the user resolves each gap later by running `/awos:hire` to install a covering agent (or adding one to the project by hand) and re-running `/awos:tasks`, or by accepting the assignment then. (Default when the question is skipped — an unanswered question never hides a staffing gap.)
+    3.  **Drop the Feature Testing & Regression slice** (offered only for the Step 3a QA gap) — remove the slice and its QA entry from `## Open Questions`, and re-save. Do not add the `<!-- skip-tests: true -->` marker: that marker means the whole spec opted out of tests (the Step 1 decision), while this drops only the end-to-end regression slice — every remaining task and per-slice Verify step keeps its testing expectations. Re-run `/awos:tasks` once a QA-coded agent is available (e.g. after `/awos:hire` installs `testing-expert`) to restore the slice.
 3.  Ask for review feedback strictly via the `AskUserQuestion` tool (e.g. options "Looks good — keep it as saved" / "I want changes") — never in plain text, which would end a non-interactive turn before the review outcome can be reported.
 4.  **When the user responds** (either "looks good" or after you apply their requested changes and re-save): remove the `<!-- not-user-reviewed -->` marker from the top of `tasks.md`, since the plan has now been reviewed. If they requested changes, apply them — adjust, split, merge slices or tasks, or reassign subagents — and re-save before removing the marker.
 5.  **If the review question goes unanswered** (dismissed, or the run is non-interactive): leave the file exactly as saved, marker included. Its presence is the signal that the plan was written but not reviewed; do not remove it.
@@ -146,6 +147,6 @@ Skip this step if every task matched an available agent in Step 3.4 and no QA ga
     | --------------------- | ------------------------- | --------------------------------------------- |
     | Slice 3: Verification | Browser MCP not available | Install browser MCP to enable UI verification |
 
-    If staffing gaps were recorded as open questions in Step 3b, point the user to the `## Open Questions` section at the top of `tasks.md` in the same report.
+    If staffing gaps were recorded as open questions in Step 3b, point the user to the `## Open Questions` section at the top of `tasks.md` in the same report, and recommend `/awos:hire` to fill them.
 
 7.  Report the next command: `/awos:implement`.

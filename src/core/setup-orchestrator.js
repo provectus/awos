@@ -17,6 +17,7 @@ const {
 } = require('../utils/logger');
 const { createDirectories } = require('../services/directory-creator');
 const { executeCopyOperations } = require('../services/file-copier');
+const { configureMcp } = require('../services/mcp-configurator');
 const {
   configureMarketplace,
 } = require('../services/marketplace-configurator');
@@ -42,7 +43,7 @@ async function runSetup({
   dryRun = false,
   promptForOverwrite,
 }) {
-  const TOTAL_STEPS = 5;
+  const TOTAL_STEPS = 6;
 
   // Display header
   showHeader(AWOS_ASCII, AWOS_SUBTITLE);
@@ -101,11 +102,21 @@ async function runSetup({
     dryRun,
   });
 
-  // Step 5: Register Marketplace
+  // Step 5: Configure MCP
+  showStep(
+    'Configuring MCP',
+    'Setting up MCP server configuration',
+    5,
+    TOTAL_STEPS
+  );
+  const mcpStatistics = await configureMcp({ workingDir, dryRun });
+  clearLine();
+
+  // Step 6: Register Marketplace
   showStep(
     'Registering Marketplace',
     'Adding AWOS plugin marketplace to settings',
-    5,
+    6,
     TOTAL_STEPS
   );
   const marketplaceStatistics = await configureMarketplace({
@@ -118,6 +129,7 @@ async function runSetup({
   const statistics = {
     ...directoryStatistics,
     ...fileStatistics,
+    ...mcpStatistics,
     ...marketplaceStatistics,
     migrations: migrationStatistics.applied,
   };
@@ -132,7 +144,6 @@ async function runSetup({
       '/awos:roadmap',
       ['.awos/commands/roadmap.md', '.claude/commands/awos/roadmap.md'],
     ],
-    ['/awos:hire', ['.awos/commands/hire.md', '.claude/commands/awos/hire.md']],
   ]) {
     for (const trace of traces) {
       if (await pathExists(path.join(workingDir, trace))) {

@@ -145,7 +145,7 @@ When you need to move or restructure files in existing installations:
 
 ### Optional Migrations
 
-- **`optional: true`** (top-level field): marks a repair or cleanup the install can live without. When an optional migration fails, the runner logs a warning, halts version advancement — so it and any later migrations retry on the next update — and lets setup continue to the copy step. Only migrations the project layout depends on may abort the run (the default for migrations without the flag). All three 2.0 migrations are optional.
+- **`optional: true`** (top-level field): marks a repair or cleanup the install can live without. When an optional migration fails, the runner logs a warning, halts version advancement — so it and any later migrations retry on the next update — and lets setup continue to the copy step. Only migrations the project layout depends on may abort the run (the default for migrations without the flag). The 2.0 migration (003) is optional.
 
 ### Testing Migrations
 

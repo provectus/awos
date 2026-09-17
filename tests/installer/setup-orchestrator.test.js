@@ -58,7 +58,7 @@ async function captureOutput(fn) {
 test('the update output tells legacy projects their removed commands are preserved and links the guide', async () => {
   // Alignment-review concern: the upgrade guide is unreachable if
   // nothing in the update output points at it — the users most affected
-  // by the 2.0 removals (those still carrying roadmap/hire) must hear
+  // by the 2.0 removals (those still carrying roadmap) must hear
   // about them from the update itself, not from a doc they never open.
   const legacyDir = await freshTemp();
   await fsPromises.mkdir(path.join(legacyDir, '.claude', 'commands', 'awos'), {
@@ -68,20 +68,17 @@ test('the update output tells legacy projects their removed commands are preserv
     path.join(legacyDir, '.claude', 'commands', 'awos', 'roadmap.md'),
     'wrapper\n'
   );
-  await fsPromises.mkdir(path.join(legacyDir, '.awos', 'commands'), {
-    recursive: true,
-  });
-  await fsPromises.writeFile(
-    path.join(legacyDir, '.awos', 'commands', 'hire.md'),
-    '1.x body\n'
-  );
 
   const output = await captureOutput(() =>
     runSetup({ workingDir: legacyDir, packageRoot: repoRoot })
   );
   assert.ok(
-    output.includes('/awos:roadmap') && output.includes('/awos:hire'),
+    output.includes('/awos:roadmap'),
     'the legacy notice must name each detected removed command'
+  );
+  assert.ok(
+    !output.includes('/awos:hire'),
+    'the legacy notice must not name /awos:hire — it is a current command, not a removed one'
   );
   assert.ok(
     output.includes('preserved and keep working'),
@@ -141,12 +138,10 @@ test('end-to-end setup completes against a fresh temp dir', async () => {
     );
   }
 
-  // The marketplace file exists; no .mcp.json — the installer stopped
-  // configuring MCP servers when /awos:hire and its agent registry were
-  // removed, so setup must not create one.
+  // MCP and marketplace files exist.
   assert.ok(
-    !exists(path.join(workingDir, '.mcp.json')),
-    'setup must not create .mcp.json — the MCP-configurator step was removed with /awos:hire'
+    exists(path.join(workingDir, '.mcp.json')),
+    '.mcp.json should be created by the MCP configurator'
   );
   assert.ok(
     exists(path.join(workingDir, '.claude', 'settings.json')),

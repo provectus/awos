@@ -14,16 +14,16 @@ The existing product surface judged against the philosophy on PR #194 — the el
 
 ## Verdict summary
 
-| #   | Item                                     | Verdict                   | Disposition                                  |
-| --- | ---------------------------------------- | ------------------------- | -------------------------------------------- |
-| 1   | AI-readiness audit stack                 | Misaligned                | Remove — Phase 8 (last, gated on successor)  |
-| 2   | `/awos:roadmap`                          | Misaligned                | Remove — Phase 2a                            |
-| 3   | `/awos:hire`                             | Misaligned                | Remove — Phase 3                             |
-| 4   | `/awos:flow`                             | Misaligned                | Remove — Phase 1                             |
-| 5   | `configure-external-sources`             | Misaligned (reclassified) | Dissolve — Phase 7, item 6                   |
-| 6   | `/awos:spec` + `/better:spec` coexisting | Tension (resolved)        | `better:spec` is THE spec — Phase 6B fold-in |
-| 7   | `implement` → `verify` marker blindness  | Tension (flow gap)        | Registry gaps 1–2 — Phase 7, items 1–2       |
-| —   | Everything else                          | Aligned                   | Keep                                         |
+| #   | Item                                     | Verdict                    | Disposition                                  |
+| --- | ---------------------------------------- | -------------------------- | -------------------------------------------- |
+| 1   | AI-readiness audit stack                 | Misaligned                 | Remove — Phase 8 (last, gated on successor)  |
+| 2   | `/awos:roadmap`                          | Misaligned                 | Remove — Phase 2a                            |
+| 3   | `/awos:hire`                             | ~~Misaligned~~ (withdrawn) | Keep — Phase 3 reverted 2026-09-17           |
+| 4   | `/awos:flow`                             | Misaligned                 | Remove — Phase 1                             |
+| 5   | `configure-external-sources`             | Misaligned (reclassified)  | Dissolve — Phase 7, item 6                   |
+| 6   | `/awos:spec` + `/better:spec` coexisting | Tension (resolved)         | `better:spec` is THE spec — Phase 6B fold-in |
+| 7   | `implement` → `verify` marker blindness  | Tension (flow gap)         | Registry gaps 1–2 — Phase 7, items 1–2       |
+| —   | Everything else                          | Aligned                    | Keep                                         |
 
 ## Misaligned
 
@@ -56,7 +56,7 @@ The engine, the `dist/` bundle, the `repo-auditor` agent, the `standards-refresh
 - The smaller-surface regression: "a feature that serves the host tool rather than the method."
 - Its one path link — `[Agent: name]` markers must resolve — does not require awos to own discovery and installation.
 
-**Disposition:** removed — Phase 3. The marker-resolution duty dissolves into `/awos:tasks` (gap surfacing) and `/awos:implement` (general-purpose fallback, reported).
+**Disposition:** ~~removed — Phase 3. The marker-resolution duty dissolves into `/awos:tasks` (gap surfacing) and `/awos:implement` (general-purpose fallback, reported).~~ **Reverted 2026-09-17 (Daria):** removing `/awos:hire` completely was a mistake — the command is restored and stays. The staffing-gap surfacing in `/awos:tasks` and the general-purpose fallback in `/awos:implement` remain as safety nets, pointing at `/awos:hire` as the way to fill a gap.
 
 ### 4. `/awos:flow` (and the generated `/implement-feature`, `/fix-bug`)
 

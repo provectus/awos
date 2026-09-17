@@ -1,10 +1,12 @@
 {
   "version": 3,
-  "name": "Repair a broken roadmap wrapper import: the preserved .claude/commands/awos/roadmap.md points at a command body this project does not have, so a removal notice is written there (an existing local roadmap command is left untouched and keeps working)",
+  "name": "Retire /awos:roadmap gracefully: replace the project's local copy of the command body with a removal notice (created where only the wrapper remains), so the command answers that the roadmap feature left AWOS; the wrapper, the template, and the user's context/product/roadmap.md are left untouched",
   "optional": true,
   "preconditions": {
-    "require_all": [".claude/commands/awos/roadmap.md"],
-    "skip_if_any": [".awos/commands/roadmap.md"]
+    "require_any": [
+      ".awos/commands/roadmap.md",
+      ".claude/commands/awos/roadmap.md"
+    ]
   },
   "operations": [
     {
@@ -14,12 +16,12 @@
       "content": [
         "# Removed Command",
         "",
-        "`/awos:roadmap` was removed in AWOS 2.0. AWOS is not a planning or backlog tool: specs are anchored by an explicit topic now, not by a roadmap item. (This notice was written because your preserved command wrapper pointed at a file this project did not have — there was no local copy of the old command to keep working.)",
+        "`/awos:roadmap` was removed in AWOS 2.0. AWOS is not a planning or backlog tool: specs are anchored by an explicit topic now, not by a roadmap item. This notice replaced the project's local copy of the old command so that calling it says so instead of running a frozen 1.x copy.",
         "",
         "Tell the user the following, then stop. Do not build, update, or review a roadmap document.",
         "",
         "- This command no longer ships with AWOS. To start a feature, run `/awos:spec` and state the topic directly.",
-        "- If `context/product/roadmap.md` exists, it is theirs to keep or delete — AWOS no longer creates or updates it, but while it exists, `/awos:spec` offers its incomplete items as topic candidates.",
+        "- If `context/product/roadmap.md` exists, it is theirs: AWOS no longer creates, updates, or marks it, so keeping it current is their own work now — by hand or with a command of their own. While it exists, `/awos:spec` and `/better:spec` still offer its incomplete items as topic candidates.",
         "- To remove this notice, delete `.claude/commands/awos/roadmap.md` and `.awos/commands/roadmap.md`."
       ]
     }

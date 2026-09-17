@@ -296,11 +296,10 @@ async function executeOperation(
       if (!targetFound) {
         await fs.mkdir(path.dirname(filePath), { recursive: true });
       }
-      // Atomic write (temp + same-directory rename): a partial tombstone
-      // interrupted mid-write would be frozen forever by the migration's
-      // skip_if_any on the next run — a torn file must never be able to
-      // pass for a preserved 1.x body. The temp file is removed if
-      // anything fails in between.
+      // Atomic write (temp + same-directory rename): a partial notice
+      // interrupted mid-write would be stamped as done and never retried
+      // — a torn file must never be able to pass for the notice. The temp
+      // file is removed if anything fails in between.
       const contentTmpPath = `${filePath}.awos-tmp`;
       try {
         await fs.writeFile(

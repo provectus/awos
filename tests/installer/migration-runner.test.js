@@ -117,21 +117,25 @@ test('all migrations run end-to-end then re-running is a no-op', async () => {
   );
 });
 
-test('a full pre-2.0 roadmap footprint is disowned in place — nothing deleted, nothing rewritten', async () => {
+test('a full pre-2.0 roadmap footprint is shut down gracefully — the body becomes the removal notice, everything else is untouched', async () => {
   const workingDir = await freshTemp();
 
-  // Disown-in-place (decided 2026-09-15): a project that still has its
-  // 1.x roadmap command body and template keeps them, frozen and
-  // working — AWOS no longer ships or updates them, but migrations never
-  // reach in and break what works. .mcp.json is no migration's concern
-  // either: the installer's own MCP step owns that file.
-  const preservedFrameworkFiles = [
-    path.join(workingDir, '.awos', 'commands', 'roadmap.md'),
-    path.join(workingDir, '.awos', 'templates', 'roadmap-template.md'),
-  ];
-  for (const f of preservedFrameworkFiles) {
-    await writeFile(f, `1.x body of ${path.basename(f)}\n`);
-  }
+  // Graceful shutdown (decided 2026-09-17): a project that still has its
+  // 1.x roadmap command gets the body replaced with the removal notice,
+  // so /awos:roadmap answers that the feature left AWOS instead of
+  // running a frozen copy. The template, the wrapper, and the user's own
+  // roadmap document are never touched — a roadmap the team keeps
+  // current is theirs. .mcp.json is no migration's concern either: the
+  // installer's own MCP step owns that file.
+  const bodyPath = path.join(workingDir, '.awos', 'commands', 'roadmap.md');
+  await writeFile(bodyPath, '1.x body of roadmap.md\n');
+  const templatePath = path.join(
+    workingDir,
+    '.awos',
+    'templates',
+    'roadmap-template.md'
+  );
+  await writeFile(templatePath, '1.x body of roadmap-template.md\n');
   const preservedUserFiles = [
     path.join(workingDir, '.claude', 'commands', 'awos', 'roadmap.md'),
     path.join(workingDir, 'context', 'product', 'roadmap.md'),
@@ -158,13 +162,17 @@ test('a full pre-2.0 roadmap footprint is disowned in place — nothing deleted,
 
   const result = await silenced(() => runMigrations(workingDir));
 
-  for (const f of preservedFrameworkFiles) {
-    assert.equal(
-      await fsPromises.readFile(f, 'utf8'),
-      `1.x body of ${path.basename(f)}\n`,
-      `${path.relative(workingDir, f)} must survive byte-identical — removed commands are disowned in place, never deleted or rewritten`
-    );
-  }
+  assert.ok(
+    (await fsPromises.readFile(bodyPath, 'utf8')).includes(
+      'removed in AWOS 2.0'
+    ),
+    '.awos/commands/roadmap.md must become the removal notice — /awos:roadmap answers that the feature left instead of running the 1.x copy'
+  );
+  assert.equal(
+    await fsPromises.readFile(templatePath, 'utf8'),
+    '1.x body of roadmap-template.md\n',
+    'the roadmap template must survive byte-identical — it is the user’s if they keep a roadmap by hand'
+  );
   for (const f of preservedUserFiles) {
     assert.equal(
       await fsPromises.readFile(f, 'utf8'),
@@ -179,30 +187,24 @@ test('a full pre-2.0 roadmap footprint is disowned in place — nothing deleted,
   );
   assert.equal(
     result.applied,
-    0,
-    'a fully-preserved project has no migration work to apply — every 2.0 migration skips'
-  );
-  assert.ok(
-    exists(path.join(workingDir, '.awos', '.migration-version')),
-    'the version stamp still advances so the skipped migrations are not re-evaluated forever'
+    1,
+    'exactly one migration (003, the roadmap shutdown) applies to this footprint'
   );
 });
 
-test('an existing command body is never tombstoned, and wrapper repair is idempotent and dry-run-safe', async () => {
-  // A present body — even alongside a wrapper — is disowned in place:
-  // migration 003's skip_if_any sees it and leaves it byte-identical.
-  const preserved = await freshTemp();
-  const preservedBody = path.join(preserved, '.awos', 'commands', 'roadmap.md');
-  await writeFile(preservedBody, 'original roadmap command body\n');
-  await writeFile(
-    path.join(preserved, '.claude', 'commands', 'awos', 'roadmap.md'),
-    'user wrapper\n'
-  );
-  await silenced(() => runMigrations(preserved));
-  assert.equal(
-    await fsPromises.readFile(preservedBody, 'utf8'),
-    'original roadmap command body\n',
-    'a present command body must never be replaced with the tombstone — the frozen 1.x copy keeps working'
+test('a present command body is replaced with the removal notice, and the notice is idempotent and dry-run-safe', async () => {
+  // A present body — with or without a wrapper — becomes the notice:
+  // migration 003 has no skip on the body, because a frozen 1.x copy
+  // that keeps running is exactly what graceful shutdown rules out.
+  const present = await freshTemp();
+  const presentBody = path.join(present, '.awos', 'commands', 'roadmap.md');
+  await writeFile(presentBody, 'original roadmap command body\n');
+  await silenced(() => runMigrations(present));
+  assert.ok(
+    (await fsPromises.readFile(presentBody, 'utf8')).includes(
+      'removed in AWOS 2.0'
+    ),
+    'a present command body must be replaced with the removal notice even when no wrapper exists — the body alone is a roadmap trace'
   );
 
   // Wrapper-only project: dry-run writes nothing; the real run creates
@@ -422,13 +424,13 @@ test('operation-level contracts: missing "from" throws, missing replace_content 
   );
 });
 
-test('preconditions probe with lstat: a dangling symlink counts as a present body and is preserved', async () => {
+test('preconditions probe with lstat: a dangling symlink at the body path is replaced by the notice, not written through', async () => {
   // The probe policy is unified — preconditions and operations must
-  // agree on what "exists" means, or a migration wedges half-way
-  // (preconditions say the body is absent, the op sees the entry, and
-  // the write either throws or lands through the dead link). A dangling
-  // symlink at the body path is treated as present: 003 skips, the
-  // entry is left alone, and nothing is written anywhere.
+  // agree on what "exists" means, or a migration wedges half-way. A
+  // dangling symlink at the body path counts as present for both: the
+  // notice is written to a temp file and renamed over the link entry, so
+  // the result is a regular file with the notice — never a write through
+  // the dead link, never a throw.
   const workingDir = await freshTemp();
   await writeFile(
     path.join(workingDir, '.claude', 'commands', 'awos', 'roadmap.md'),
@@ -441,13 +443,20 @@ test('preconditions probe with lstat: a dangling symlink counts as a present bod
     bodyPath
   );
 
-  await silenced(() => runMigrations(workingDir));
+  const result = await silenced(() => runMigrations(workingDir));
 
   const stat = await fsPromises.lstat(bodyPath);
   assert.ok(
-    stat.isSymbolicLink(),
-    'the dangling symlink at the body path must be preserved untouched — not replaced, not written through'
+    stat.isFile() && !stat.isSymbolicLink(),
+    'the dangling symlink must be replaced by a regular file carrying the notice'
   );
+  assert.ok(
+    (await fsPromises.readFile(bodyPath, 'utf8')).includes(
+      'removed in AWOS 2.0'
+    ),
+    'the body must carry the removal notice after the symlink is replaced'
+  );
+  assert.equal(result.applied, 1, 'the shutdown migration must apply once');
 });
 
 test('an optional migration that fails warns, halts version advancement, and retries on the next run', async () => {

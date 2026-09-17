@@ -158,7 +158,7 @@ async function runSetup({
       'info'
     );
     log(
-      'Your local copies are preserved and keep working; AWOS no longer ships or updates them.',
+      'Calling them now answers that the feature left AWOS; your own documents (e.g. context/product/roadmap.md) are untouched and yours to maintain.',
       'item'
     );
     log(

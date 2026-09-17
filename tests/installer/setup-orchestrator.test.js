@@ -81,8 +81,8 @@ test('the update output tells legacy projects their removed commands are preserv
     'the legacy notice must not name /awos:hire — it is a current command, not a removed one'
   );
   assert.ok(
-    output.includes('preserved and keep working'),
-    'the legacy notice must state the preservation policy'
+    output.includes('yours to maintain'),
+    'the legacy notice must state the graceful-shutdown policy: the command answers that the feature left, the user documents stay theirs'
   );
   assert.ok(
     output.includes('docs/2.0/upgrading-2.0.md'),

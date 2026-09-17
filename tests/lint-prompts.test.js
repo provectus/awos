@@ -1252,7 +1252,7 @@ test('architecture.md docs retrieval reports only NEW findings', () => {
 });
 
 test('architecture.md Update Mode re-gathers the codebase and confirms drift after the write', () => {
-  // Closes known-gaps gap 6: Update Mode must run the same codebase
+  // Closes the architecture-drift gap (the retired registry's gap 6): Update Mode must run the same codebase
   // exploration Creation Mode runs and diff its findings against the
   // recorded architecture — the document may only diverge from the code
   // with the user's explicit say-so. An Update Mode that revises by

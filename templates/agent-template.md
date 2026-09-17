@@ -1,6 +1,8 @@
 ---
 name: [agent-name]
 description: [When Claude should delegate to this agent]
+model: sonnet
+effort: low
 skills: []
 ---
 

@@ -55,7 +55,7 @@ Each command follows a consistent structure:
 
 **Sequential Workflow:**
 ```
-/awos:product → /awos:architecture →
+/awos:product → /awos:architecture → /awos:hire →
 /awos:spec → /awos:tech → /awos:tasks → /awos:implement → /awos:verify
 ```
 

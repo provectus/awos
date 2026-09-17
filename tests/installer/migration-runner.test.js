@@ -241,72 +241,6 @@ test('an existing command body is never tombstoned, and wrapper repair is idempo
   );
 });
 
-test('remove_json_key skips gracefully when the JSON file is malformed, entry-free, or under dry-run', async () => {
-  // The user's file is never an error surface: anything unexpected is a
-  // logged skip that leaves the bytes alone.
-  const op = {
-    type: 'remove_json_key',
-    file: '.mcp.json',
-    key: 'mcpServers.stale-server',
-  };
-
-  // Malformed JSON: the user's file must be left byte-for-byte untouched.
-  const badJson = await freshTemp();
-  await writeFile(path.join(badJson, '.mcp.json'), '{ not json\n');
-  await silenced(() => executeOperation(op, badJson));
-  assert.equal(
-    await fsPromises.readFile(path.join(badJson, '.mcp.json'), 'utf8'),
-    '{ not json\n',
-    'an unparseable .mcp.json must be skipped, not rewritten or clobbered'
-  );
-
-  // Key absent: other entries survive and the file is not corrupted.
-  const noEntry = await freshTemp();
-  await writeFile(
-    path.join(noEntry, '.mcp.json'),
-    JSON.stringify(
-      {
-        mcpServers: {
-          'user-server': { type: 'http', url: 'https://example.com/mcp' },
-        },
-      },
-      null,
-      2
-    ) + '\n'
-  );
-  await silenced(() => executeOperation(op, noEntry));
-  const after = JSON.parse(
-    await fsPromises.readFile(path.join(noEntry, '.mcp.json'), 'utf8')
-  );
-  assert.ok(
-    after.mcpServers['user-server'],
-    'a .mcp.json without the targeted key must keep its other servers'
-  );
-
-  // Dry-run: the targeted key must survive.
-  const dry = await freshTemp();
-  await writeFile(
-    path.join(dry, '.mcp.json'),
-    JSON.stringify(
-      {
-        mcpServers: {
-          'stale-server': { type: 'http', url: 'https://example.com/old' },
-        },
-      },
-      null,
-      2
-    ) + '\n'
-  );
-  await silenced(() => executeOperation(op, dry, { dryRun: true }));
-  const dryAfter = JSON.parse(
-    await fsPromises.readFile(path.join(dry, '.mcp.json'), 'utf8')
-  );
-  assert.ok(
-    dryAfter.mcpServers['stale-server'],
-    'dry-run must not remove the targeted key'
-  );
-});
-
 test('migration 001 skip_if_any leaves the source file untouched', async () => {
   const workingDir = await freshTemp();
   // Pre-create the post-migration target — skip_if_any should fire and the
@@ -443,7 +377,7 @@ test('migration 003 creates the tombstone for a wrapper-only project (committed 
   );
 });
 
-test('operation-level contracts: missing "from" throws, dangling symlinks are deleted, unreadable JSON files fail loudly', async () => {
+test('operation-level contracts: missing "from" throws, missing replace_content fields throw, dangling symlinks are deleted', async () => {
   const workingDir = await freshTemp();
 
   // A delete/move/copy authored without "from" (e.g. copying the `file`
@@ -457,17 +391,6 @@ test('operation-level contracts: missing "from" throws, dangling symlinks are de
       `a ${type} operation without "from" must throw, not silently no-op`
     );
   }
-  await assert.rejects(
-    () => executeOperation({ type: 'remove_json_key', key: 'a.b' }, workingDir),
-    /requires "file" field/,
-    'a remove_json_key operation without "file" must throw a clean authoring error, not a raw TypeError'
-  );
-  await assert.rejects(
-    () =>
-      executeOperation({ type: 'remove_json_key', file: 'x.json' }, workingDir),
-    /requires "key" field/,
-    'a remove_json_key operation without "key" must throw a clean authoring error'
-  );
   await assert.rejects(
     () =>
       executeOperation({ type: 'replace_content', content: ['x'] }, workingDir),
@@ -496,23 +419,6 @@ test('operation-level contracts: missing "from" throws, dangling symlinks are de
     () => fsPromises.lstat(linkPath),
     { code: 'ENOENT' },
     'delete must remove a dangling symlink, not skip it as "not found"'
-  );
-
-  // A .mcp.json that exists but cannot be read as a file (here: it is a
-  // directory, EISDIR) is an environmental failure — it must throw so
-  // the migration retries next run, never be mislabeled "file is not
-  // valid JSON" and permanently forfeited.
-  await fsPromises.mkdir(path.join(workingDir, '.mcp.json'));
-  await assert.rejects(
-    () =>
-      silenced(() =>
-        executeOperation(
-          { type: 'remove_json_key', file: '.mcp.json', key: 'mcpServers.x' },
-          workingDir
-        )
-      ),
-    (error) => error.code === 'EISDIR',
-    'an unreadable .mcp.json must fail the migration loudly, not be skipped as invalid JSON'
   );
 });
 
@@ -586,66 +492,6 @@ test('an optional migration that fails warns, halts version advancement, and ret
       )
     ).includes('removed in AWOS 2.0'),
     'the retried migration 003 must complete the repair it previously could not'
-  );
-});
-
-test('remove_json_key writes through a symlinked .mcp.json and preserves its mode', async () => {
-  // A .mcp.json symlinked from a dotfiles repo must stay a symlink with
-  // its target updated (a plain rename would strand the target and
-  // orphan the link), and a 0600 config must not come back 0644.
-  const workingDir = await freshTemp();
-  const targetPath = path.join(workingDir, 'dotfiles', 'mcp.json');
-  await writeFile(
-    targetPath,
-    JSON.stringify(
-      {
-        mcpServers: {
-          'stale-server': { type: 'http', url: 'https://example.com/old' },
-          'user-server': { type: 'http', url: 'https://example.com/mcp' },
-        },
-      },
-      null,
-      2
-    ) + '\n'
-  );
-  await fsPromises.chmod(targetPath, 0o600);
-  const linkPath = path.join(workingDir, '.mcp.json');
-  await fsPromises.symlink(targetPath, linkPath);
-
-  await silenced(() =>
-    executeOperation(
-      {
-        type: 'remove_json_key',
-        file: '.mcp.json',
-        key: 'mcpServers.stale-server',
-      },
-      workingDir
-    )
-  );
-
-  assert.ok(
-    (await fsPromises.lstat(linkPath)).isSymbolicLink(),
-    '.mcp.json must remain a symlink after the key removal — the link is the user’s setup'
-  );
-  const target = JSON.parse(await fsPromises.readFile(targetPath, 'utf8'));
-  assert.equal(
-    'stale-server' in target.mcpServers,
-    false,
-    'the key removal must land in the symlink target, not a replacement file'
-  );
-  assert.ok(
-    target.mcpServers['user-server'],
-    'user servers in the symlink target must survive'
-  );
-  assert.equal(
-    (await fsPromises.stat(targetPath)).mode & 0o777,
-    0o600,
-    'the original 0600 mode must be preserved through the atomic rewrite'
-  );
-  assert.equal(
-    exists(`${targetPath}.awos-tmp`),
-    false,
-    'no temp-file litter may remain after a successful rewrite'
   );
 });
 

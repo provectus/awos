@@ -1,7 +1,7 @@
 /**
  * Unit tests for src/core/setup-orchestrator.js.
  *
- * Runs the full five-step pipeline against a fresh temp directory and
+ * Runs the full six-step pipeline against a fresh temp directory and
  * verifies the resulting tree. Re-running it should be safely idempotent.
  */
 
@@ -97,6 +97,10 @@ test('the update output tells legacy projects their removed commands are preserv
     !freshOutput.includes('left AWOS in 2.0'),
     'a fresh project must not get the legacy notice'
   );
+  assert.ok(
+    freshOutput.includes('MCP server configured'),
+    'the summary must report the MCP step — the installer writes .mcp.json into the project and has to say so'
+  );
 });
 
 test('end-to-end setup completes against a fresh temp dir', async () => {
@@ -105,8 +109,8 @@ test('end-to-end setup completes against a fresh temp dir', async () => {
   await silenced(() => runSetup({ workingDir, packageRoot: repoRoot }));
 
   // Expected top-level layout — these are the directories declared in
-  // src/config/setup-config.js plus the .claude/settings.json
-  // that the marketplace-configurator step creates.
+  // src/config/setup-config.js plus the .mcp.json and .claude/settings.json
+  // that the configurator steps create.
   for (const p of [
     '.awos',
     '.awos/commands',

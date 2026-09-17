@@ -18,7 +18,7 @@ The existing product surface judged against the philosophy on PR #194 — the el
 | --- | ---------------------------------------- | -------------------------- | -------------------------------------------- |
 | 1   | AI-readiness audit stack                 | Misaligned                 | Remove — Phase 8 (last, gated on successor)  |
 | 2   | `/awos:roadmap`                          | Misaligned                 | Remove — Phase 2a                            |
-| 3   | `/awos:hire`                             | ~~Misaligned~~ (withdrawn) | Keep — Phase 3 reverted 2026-09-17           |
+| 3   | `/awos:hire`                             | ~~Misaligned~~ → acquitted | Keep — Phase 3 reverted 2026-09-17 (see §3)  |
 | 4   | `/awos:flow`                             | Misaligned                 | Remove — Phase 1                             |
 | 5   | `configure-external-sources`             | Misaligned (reclassified)  | Dissolve — Phase 7, item 6                   |
 | 6   | `/awos:spec` + `/better:spec` coexisting | Tension (resolved)         | `better:spec` is THE spec — Phase 6B fold-in |
@@ -56,7 +56,7 @@ The engine, the `dist/` bundle, the `repo-auditor` agent, the `standards-refresh
 - The smaller-surface regression: "a feature that serves the host tool rather than the method."
 - Its one path link — `[Agent: name]` markers must resolve — does not require awos to own discovery and installation.
 
-**Disposition:** ~~removed — Phase 3. The marker-resolution duty dissolves into `/awos:tasks` (gap surfacing) and `/awos:implement` (general-purpose fallback, reported).~~ **Reverted 2026-09-17 (Daria):** removing `/awos:hire` completely was a mistake — the command is restored and stays. The staffing-gap surfacing in `/awos:tasks` and the general-purpose fallback in `/awos:implement` remain as safety nets, pointing at `/awos:hire` as the way to fill a gap.
+**Disposition:** ~~removed — Phase 3. The marker-resolution duty dissolves into `/awos:tasks` (gap surfacing) and `/awos:implement` (general-purpose fallback, reported).~~ **Acquitted 2026-09-17 (Daria's decision; reasoning recorded at revert time):** the conviction under-weighted hire's path duty. The `[Agent: name]` marker is the one place the path depends on staffing, and the host has no primitive that turns an architecture into a project-scoped, skill-attached agent file. When the host's ecosystem does not cover a stack, `/awos:tasks` can only record the gap and `/awos:implement` can only substitute a generalist — neither closes it; hire is the on-path step that does (principle 4's "specialist quality belongs to the host tool" presumes the specialist exists). So the third bullet above is wrong as stated: marker resolution does require a provisioning path, and awos owns it. The first two bullets stand as the boundary, not the verdict — anything hire does beyond closing a path gap (a curated registry drifting toward a "bundle of best practices") is the regression to watch. The staffing-gap surfacing in `/awos:tasks` and the reported fallback in `/awos:implement` remain as the safety net for plans written before hire has run.
 
 ### 4. `/awos:flow` (and the generated `/implement-feature`, `/fix-bug`)
 
@@ -73,7 +73,7 @@ _Reclassified 2026-09-09: the first pass listed this under Aligned as "the pures
 
 **Convicted by:**
 
-- Guiding MCP/CLI setup is **host provisioning** — the same conviction as hire.
+- Guiding MCP/CLI setup is **host provisioning** — the conviction the hire verdict was first built on (hire was later acquitted on path-duty grounds, item 3; this skill carries no such duty).
 - `sources.md` is the discovery regression verbatim — "a file the human must maintain so that the agent can read it" — duplicating connection state the host already holds.
 - The source locations it records are **product knowledge filed outside the product definition** (principle 8).
 
@@ -104,6 +104,6 @@ _Reclassified 2026-09-09: the first pass listed this under Aligned as "the pures
 
 ## End state
 
-**Target main flow: `spec → tech → implement`** (foundation: `product → architecture`).
+**Target main flow: `spec → tech → implement`** (foundation: `product → architecture → hire`).
 
-After this roadmap executes, the surviving commands are `product`, `architecture`, `spec`, `tech`, `tasks`, `implement`, `verify` — but `tasks` and `verify` are **not steps of the target flow**: roadmap Phase 6 rewrites `/awos:implement` to absorb both — it splits the scope itself, runs through it, and verifies the result, all in one command. The Open question — whether awos ever reads the codebase it builds in — resolved 2026-09-10: `/awos:architecture` gathers the codebase on every run (creation seeds defaults with evidence; update diffs the gather against the document and confirms drift).
+After this roadmap executes, the surviving commands are `product`, `architecture`, `hire`, `spec`, `tech`, `tasks`, `implement`, `verify` — but `tasks` and `verify` are **not steps of the target flow**: roadmap Phase 6 rewrites `/awos:implement` to absorb both — it splits the scope itself, runs through it, and verifies the result, all in one command. The Open question — whether awos ever reads the codebase it builds in — resolved 2026-09-10: `/awos:architecture` gathers the codebase on every run (creation seeds defaults with evidence; update diffs the gather against the document and confirms drift).

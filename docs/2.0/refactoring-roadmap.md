@@ -20,7 +20,7 @@
 
 **Status as of 2026-09-10:** Phases 1–5 executed. **Phase 3 reverted 2026-09-17 (Daria):** removing `/awos:hire` completely was a mistake — the command, its wrapper, docs page, and `agent-template.md`, the installer's `awos-recruitment` MCP step (six steps again), and the `/awos:hire` pointers in the other prompts are restored, and the two hire migrations (004/005, never released) are dropped; the phase is struck below. Phases 1, 2a, 2b, 3: one commit on the `cleaning` branch, now open as PR #200 (`major` → npm v2.0.0). Phase 4: 14 PRs closed with principle + kernel comments, #199 (one-line README de-hype) merged 2026-09-15, #189 closed superseding its split ask; open PRs are down to #200 and #194. Phase 5: issue tracker triaged 18 → 10 (8 beta-window audit bugs + #201/#202); the kernels from every audit close are consolidated in the successor-audit requirements block under Phase 5. See each phase's "Executed"/"Status" note for what shipped and what was deliberately deferred. **Paused after Phase 5 (2026-09-10).** Next: Phase 6A — its design inputs are gathered under 6A; the three design questions there are the phase-start work. Phases 6–8 remain planned.
 
-Companion documents `philosophy-alignment.md` (verdicts) and `known-gaps.md` (gap registry) were **deleted 2026-09-17** (Daria): both were written to the plan and then patched after each reversal until they described neither the code nor the decisions. The gap analysis restarts from a blank page; gap numbers cited below refer to the retired registry and stay as history.
+Companion documents `philosophy-alignment.md` (verdicts) and `known-gaps.md` (gap registry) were **deleted 2026-09-17** (Daria): both were written to the plan and then patched after each reversal until they described neither the code nor the decisions. The gap analysis was redone from a blank page the same day: `gaps.md` (promise, current behaviour, evidence, status per gap). Gap numbers cited below refer to the retired registry and stay as history; `gaps.md` uses its own numbering.
 
 ---
 
@@ -188,7 +188,7 @@ With the surface small and consolidated, invest in the method — built into the
    - Establish the convention: consumers **introspect the host's connected tools at runtime**; a named source with no reachable tool becomes an open question (principle 2); setup and egress consent belong to the host (principle 10).
    - Shaped by the Open question's resolution (a modeless gather pass is the section's natural consumer) and paced with the better workstream's KB-lane adaptation.
 
-When this phase is planned, sweep the fresh gap analysis for entries marked **unscheduled** — schedule or explicitly defer each.
+When this phase is planned, sweep `gaps.md` for entries marked **open** — schedule or explicitly defer each.
 
 ## Phase 8 — Remove the audit stack (last)
 
@@ -220,7 +220,7 @@ When this phase is planned, sweep the fresh gap analysis for entries marked **un
 - Each phase's PR body names the philosophy principle/direction it serves.
 - Before each phase, sweep open PRs for conflicts; close moot ones with a pointer to this roadmap.
 - **awos-qa lockstep:** every phase that changes the command surface lands a paired `awos-qa` update in the same window — the sibling repo is part of each phase's definition of done.
-- **Gaps:** the plan lives here; the gap analysis is being redone from a blank page (2026-09-17) and will name its own home. Until then a new gap found during any phase is recorded in that phase's notes, then scheduled. A gap is closed only when the flow actually closes it.
+- **Gaps:** `gaps.md` names each gap with its promise, current behaviour, evidence, and status; the plan lives here. A new gap found during any phase is recorded there first, then scheduled. A gap is closed only when the flow actually closes it.
 
 ### User-file policy (decided 2026-09-09)
 

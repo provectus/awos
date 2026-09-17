@@ -1,5 +1,5 @@
 {
-  "_comment": "A project at migration version 2 with the full pre-2.0 roadmap/hire footprint. Roadmap is the graceful-shutdown proof through the real installer pipeline (decided 2026-09-17): its local command body is replaced with the removal notice (changed:true, contains 'Removed Command') so /awos:roadmap answers that the feature left AWOS instead of running the 1.x copy, while the roadmap template, the customized wrapper, and the user's context/product/roadmap.md are byte-identical to before/. Hire is a current command again (its removal was reverted 2026-09-17), so its stale 1.x body and agent-template are framework internals that the copy step overwrites (changed:true). The entire .mcp.json is unchanged — the awos-recruitment entry is already present, so the MCP step leaves the file byte-identical; current commands and new wrappers still install. The wrapper-only path (wrapper present, body absent) is covered at the unit layer, not by this tree. The version file is pinned as changed:true — the before/ tree seeds it at '2', so the installer must have advanced it, proving the migration step actually ran through this pipeline; the exact number stays dynamic in the unit layer.",
+  "_comment": "A project at migration version 2 with the full pre-2.0 roadmap/hire footprint. Roadmap is the graceful-shutdown proof through the real installer pipeline (decided 2026-09-17): its local command body is replaced with the removal notice (changed:true, contains 'Removed Command') so /awos:roadmap answers that the feature left AWOS instead of running the 1.x copy, and the orphaned roadmap template is deleted, while the customized wrapper and the user's context/product/roadmap.md are byte-identical to before/. Hire is a current command again (its removal was reverted 2026-09-17), so its stale 1.x body and agent-template are framework internals that the copy step overwrites (changed:true). The entire .mcp.json is unchanged — the awos-recruitment entry is already present, so the MCP step leaves the file byte-identical; current commands and new wrappers still install. The wrapper-only path (wrapper present, body absent) is covered at the unit layer, not by this tree. The version file is pinned as changed:true — the before/ tree seeds it at '2', so the installer must have advanced it, proving the migration step actually ran through this pipeline; the exact number stays dynamic in the unit layer.",
   ".awos/commands/roadmap.md": {
     "changed": true,
     "contains": "Removed Command"
@@ -8,7 +8,7 @@
     "changed": true
   },
   ".awos/templates/roadmap-template.md": {
-    "unchanged": true
+    "exists": false
   },
   ".awos/templates/agent-template.md": {
     "changed": true

@@ -1,11 +1,12 @@
 {
   "version": 3,
-  "name": "Retire /awos:roadmap gracefully: replace the project's local copy of the command body with a removal notice (created where only the wrapper remains), so the command answers that the roadmap feature left AWOS; the wrapper, the template, and the user's context/product/roadmap.md are left untouched",
+  "name": "Retire /awos:roadmap gracefully: replace the project's local copy of the command body with a removal notice (created where only the wrapper remains) so the command answers that the roadmap feature left AWOS, and delete the orphaned roadmap template; the wrapper and the user's context/product/roadmap.md are left untouched",
   "optional": true,
   "preconditions": {
     "require_any": [
       ".awos/commands/roadmap.md",
-      ".claude/commands/awos/roadmap.md"
+      ".claude/commands/awos/roadmap.md",
+      ".awos/templates/roadmap-template.md"
     ]
   },
   "operations": [
@@ -24,6 +25,10 @@
         "- If `context/product/roadmap.md` exists, it is theirs: AWOS no longer creates, updates, or marks it, so keeping it current is their own work now — by hand or with a command of their own. While it exists, `/awos:spec` and `/better:spec` still offer its incomplete items as topic candidates.",
         "- To remove this notice, delete `.claude/commands/awos/roadmap.md` and `.awos/commands/roadmap.md`."
       ]
+    },
+    {
+      "type": "delete",
+      "from": ".awos/templates/roadmap-template.md"
     }
   ]
 }

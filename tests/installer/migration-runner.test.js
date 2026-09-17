@@ -123,9 +123,10 @@ test('a full pre-2.0 roadmap footprint is shut down gracefully — the body beco
   // Graceful shutdown (decided 2026-09-17): a project that still has its
   // 1.x roadmap command gets the body replaced with the removal notice,
   // so /awos:roadmap answers that the feature left AWOS instead of
-  // running a frozen copy. The template, the wrapper, and the user's own
-  // roadmap document are never touched — a roadmap the team keeps
-  // current is theirs. .mcp.json is no migration's concern either: the
+  // running a frozen copy, and the orphaned template goes with it —
+  // nothing reads it once the command is a notice. The wrapper and the
+  // user's own roadmap document are never touched — a roadmap the team
+  // keeps current is theirs. .mcp.json is no migration's concern either: the
   // installer's own MCP step owns that file.
   const bodyPath = path.join(workingDir, '.awos', 'commands', 'roadmap.md');
   await writeFile(bodyPath, '1.x body of roadmap.md\n');
@@ -169,9 +170,9 @@ test('a full pre-2.0 roadmap footprint is shut down gracefully — the body beco
     '.awos/commands/roadmap.md must become the removal notice — /awos:roadmap answers that the feature left instead of running the 1.x copy'
   );
   assert.equal(
-    await fsPromises.readFile(templatePath, 'utf8'),
-    '1.x body of roadmap-template.md\n',
-    'the roadmap template must survive byte-identical — it is the user’s if they keep a roadmap by hand'
+    exists(templatePath),
+    false,
+    'the orphaned roadmap template must be deleted — nothing reads it once the command is a notice'
   );
   for (const f of preservedUserFiles) {
     assert.equal(

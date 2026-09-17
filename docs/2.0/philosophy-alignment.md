@@ -14,16 +14,16 @@ The existing product surface judged against the philosophy on PR #194 — the el
 
 ## Verdict summary
 
-| #   | Item                                     | Verdict                    | Disposition                                  |
-| --- | ---------------------------------------- | -------------------------- | -------------------------------------------- |
-| 1   | AI-readiness audit stack                 | Misaligned                 | Remove — Phase 8 (last, gated on successor)  |
-| 2   | `/awos:roadmap`                          | Misaligned                 | Remove — Phase 2a                            |
-| 3   | `/awos:hire`                             | ~~Misaligned~~ → acquitted | Keep — Phase 3 reverted 2026-09-17 (see §3)  |
-| 4   | `/awos:flow`                             | Misaligned                 | Remove — Phase 1                             |
-| 5   | `configure-external-sources`             | Misaligned (reclassified)  | Dissolve — Phase 7, item 6                   |
-| 6   | `/awos:spec` + `/better:spec` coexisting | Tension (resolved)         | `better:spec` is THE spec — Phase 6B fold-in |
-| 7   | `implement` → `verify` marker blindness  | Tension (flow gap)         | Registry gaps 1–2 — Phase 7, items 1–2       |
-| —   | Everything else                          | Aligned                    | Keep                                         |
+| #   | Item                                     | Verdict                   | Disposition                                  |
+| --- | ---------------------------------------- | ------------------------- | -------------------------------------------- |
+| 1   | AI-readiness audit stack                 | Misaligned                | Remove — Phase 8 (last, gated on successor)  |
+| 2   | `/awos:roadmap`                          | Misaligned                | Remove — Phase 2a                            |
+| 3   | `/awos:hire`                             | Misaligned (stands)       | Kept as is for now — fate undecided (see §3) |
+| 4   | `/awos:flow`                             | Misaligned                | Remove — Phase 1                             |
+| 5   | `configure-external-sources`             | Misaligned (reclassified) | Dissolve — Phase 7, item 6                   |
+| 6   | `/awos:spec` + `/better:spec` coexisting | Tension (resolved)        | `better:spec` is THE spec — Phase 6B fold-in |
+| 7   | `implement` → `verify` marker blindness  | Tension (flow gap)        | Registry gaps 1–2 — Phase 7, items 1–2       |
+| —   | Everything else                          | Aligned                   | Keep                                         |
 
 ## Misaligned
 
@@ -56,7 +56,7 @@ The engine, the `dist/` bundle, the `repo-auditor` agent, the `standards-refresh
 - The smaller-surface regression: "a feature that serves the host tool rather than the method."
 - Its one path link — `[Agent: name]` markers must resolve — does not require awos to own discovery and installation.
 
-**Disposition:** ~~removed — Phase 3. The marker-resolution duty dissolves into `/awos:tasks` (gap surfacing) and `/awos:implement` (general-purpose fallback, reported).~~ **Acquitted 2026-09-17 (Daria's decision; reasoning recorded at revert time):** the conviction under-weighted hire's path duty. The `[Agent: name]` marker is the one place the path depends on staffing, and the host has no primitive that turns an architecture into a project-scoped, skill-attached agent file. When the host's ecosystem does not cover a stack, `/awos:tasks` can only record the gap and `/awos:implement` can only substitute a generalist — neither closes it; hire is the on-path step that does (principle 4's "specialist quality belongs to the host tool" presumes the specialist exists). So the third bullet above is wrong as stated: marker resolution does require a provisioning path, and awos owns it. The first two bullets stand as the boundary, not the verdict — anything hire does beyond closing a path gap (a curated registry drifting toward a "bundle of best practices") is the regression to watch. The staffing-gap surfacing in `/awos:tasks` and the reported fallback in `/awos:implement` remain as the safety net for plans written before hire has run.
+**Disposition:** ~~removed — Phase 3. The marker-resolution duty dissolves into `/awos:tasks` (gap surfacing) and `/awos:implement` (general-purpose fallback, reported).~~ **Reverted 2026-09-17 (Daria): kept as is for now — fate undecided.** The three convictions above stand; nothing here acquits hire. Removing it completely was a mistake in sequencing, not a verdict: the command, its template, and the installer's `awos-recruitment` step are restored verbatim, knowingly against the philosophy, until its fate is decided — and that includes the skill, MCP, and hook installation the first bullet names, which is tolerated debt in the meantime, not an exception. The staffing-gap surfacing in `/awos:tasks` and the reported fallback in `/awos:implement` stay as safety nets. When the decision is made, this entry gets a real disposition: an acquittal that answers the convictions, or a scheduled removal.
 
 ### 4. `/awos:flow` (and the generated `/implement-feature`, `/fix-bug`)
 
@@ -73,7 +73,7 @@ _Reclassified 2026-09-09: the first pass listed this under Aligned as "the pures
 
 **Convicted by:**
 
-- Guiding MCP/CLI setup is **host provisioning** — the conviction the hire verdict was first built on (hire was later acquitted on path-duty grounds, item 3; this skill carries no such duty).
+- Guiding MCP/CLI setup is **host provisioning** — the same conviction as hire (item 3, whose removal is reverted and fate undecided; the conviction itself stands).
 - `sources.md` is the discovery regression verbatim — "a file the human must maintain so that the agent can read it" — duplicating connection state the host already holds.
 - The source locations it records are **product knowledge filed outside the product definition** (principle 8).
 

@@ -11,7 +11,7 @@
 
 **How this list was produced.** By the [`philosophy-gap-review`](../../.claude/skills/philosophy-gap-review/SKILL.md) maintainer skill, run on 2026-09-18 under the scope rule above. **Raised by** records how many of its three blind reviewers found the gap independently: three of three is strong signal; one of three is a defensible reading one reviewer had and the others did not.
 
-**Status vocabulary.** _open_ — nobody owns it yet; _scheduled_ — a `roadmap-2.0.md` item closes it (cited by item number, D-N for a decision point); _undecided_ — closing it waits on a decision that has not been made.
+**Status vocabulary.** _open_ — nobody owns it yet; _scheduled_ — a `roadmap-2.0.md` item closes it (cited by item number, D-N for a decision point); _undecided_ — closing it waits on a decision that has not been made; _decided_ — kept on purpose, listed so the decision stays visible next to its cost.
 
 **Closes in.** The `better` command whose new version is expected to close the gap. Where a gap spans a seam, every command on the seam is named — the producer that must emit something and the consumer that must honour it. _not a command_ marks gaps that live in the installer, docs, tests, or a plugin's positioning rather than in a prompt.
 
@@ -61,8 +61,8 @@
 - **Today:** the topic question offers items from a user-curated `context/product/roadmap.md` "indefinitely — no sunset", while the upgrade guide tells the user to "tick shipped items yourself". A file the human maintains for the agent to read, on a command that otherwise finds intent on its own.
 - **Evidence:** `plugins/better/commands/spec.md:84`; `roadmap-2.0.md` Appendix A (class 1: no sunset); `docs/2.0/upgrading-1.x.md:28`; `docs/direction.md` "Toward discovery".
 - **Raised by:** 2 of 3.
-- **Closes in:** none — decided; listed so the cost stays visible.
-- **Status:** explicitly decided to keep; listed so the decision is visible next to its cost.
+- **Closes in:** not a command — kept by decision; no closer.
+- **Status:** decided — kept; listed so the decision stays visible next to its cost.
 
 ## Confirmed understanding
 

@@ -3840,7 +3840,7 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
 // The better plugin has its own independent version line. Its discipline
 // is three files moving together: its plugin.json, its marketplace.json entry,
 // and this pinned literal (it has no generator-version constant).
-const EXPECTED_BETTER_PLUGIN_VERSION = '0.1.0';
+const EXPECTED_BETTER_PLUGIN_VERSION = '0.2.0';
 
 test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -3968,6 +3968,42 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
     [
       '**only** the absolute path',
       'the verifier dispatch must pass only the spec file path — session context would contaminate the blind read',
+    ],
+    [
+      '`[prior]`',
+      'the prior-agreements lane must carry its own origin label — merged into [code] its findings read as description of the current code rather than as agreements the spec has to confirm or supersede',
+    ],
+    [
+      'NO PRIOR AGREEMENTS',
+      'a repository that records no prior agreements needs its own empty-result idiom — without one the lane pads its list, and an invented agreement is worse than none',
+    ],
+    [
+      'Confirm the supersession, or keep the agreed behavior.',
+      'a prior agreement the topic changes must become a marker the user answers — silently rewriting an agreement is the failure the lane exists to prevent',
+    ],
+    [
+      'a charge in two halves, reported as two separate lists',
+      'the codebase lane carries two duties and must report them apart — merged into one list, a recorded agreement reads as a description of current code and the superseded pile has nothing to key on',
+    ],
+    [
+      'close it with a verdict against the topic',
+      'each recorded agreement must carry a per-finding intact/changed/unclear verdict — measured twice on a large repo, an orchestrator left to classify the findings itself in the synthesis step dropped the supersession entirely; the agent that read the source is the one that can judge it',
+    ],
+    [
+      'carrying its verdict',
+      'the verdict must travel with the finding into synthesis, not be re-derived there',
+    ],
+    [
+      'the counts must match',
+      'the self-review must count markers against the changed and unclear findings before the write — it is the only step that can catch a supersession lost between synthesis and draft, and after the write the marker can no longer be added unattended',
+    ],
+    [
+      'the topic is the request, not the confirmation',
+      'a superseded agreement must become a marker even when the topic states the change outright — measured on a large repo, the command otherwise records the supersession as a visible note and skips the question, which keeps the reader informed but removes the confirmation moment the agreement depends on',
+    ],
+    [
+      'not for conventions, stack choices, or code structure',
+      'the lane must be scoped to decisions about behavior — conventions and stack are context engineering, which the rationale calls solved and outside what awos is for; without this boundary the lane drifts into re-deriving how things are done here',
     ],
   ];
   for (const [needle, contract] of requiredSubstrings) {

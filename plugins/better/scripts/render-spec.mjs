@@ -30,7 +30,8 @@
  * View-model schema (all fields optional):
  * {
  *   "at_a_glance": ["plain-language bullet", ...],
- *   "decisions": [{ "decision", "choice", "why", "sources": ["interview"|"code"|"web"|"kb"] }],
+ *   "decisions": [{ "decision", "choice", "why",
+ *                   "sources": ["interview"|"code"|"prior"|"web"|"kb"] }],
  *   "diagram": {
  *     "title": "Session lifecycle", "note": "caption",
  *     "width": 880, "height": 320,
@@ -41,7 +42,8 @@
  *     ]
  *   },
  *   "findings": {
- *     "code": [{ "text", "impact", "anchor": "#r21" }], "web": [...], "kb": [...],
+ *     "code": [{ "text", "impact", "anchor": "#r21" }],
+ *     "prior": [...], "web": [...], "kb": [...],
  *     "kb_note": "shown when the kb list is empty"
  *   },
  *   "requirements": [{ "match": "2.1", "one_liner", "sources": [...], "criteria_names": ["...", ...] }]
@@ -56,6 +58,7 @@ import { fileURLToPath } from 'node:url';
 const SOURCE_LABELS = {
   interview: 'Interview',
   code: 'Codebase',
+  prior: 'Prior agreement',
   web: 'Web',
   kb: 'KB',
 };
@@ -439,6 +442,7 @@ ${rows}
 function renderFindings(vm, knownAnchors) {
   const groups = [
     ['code', 'Codebase exploration'],
+    ['prior', 'Prior agreements'],
     ['web', 'Web research'],
     ['kb', 'Knowledge base'],
   ];
@@ -581,14 +585,16 @@ ${d.note ? `<div class="diagram-note">${inline(d.note)}</div>` : ''}`;
 const LIGHT_VARS = `
     --bg: #ffffff; --panel: #f6f7f9; --ink: #1c2430; --muted: #5b6572;
     --line: #e3e7ec; --accent: #2563eb;
-    --src-interview: #2563eb; --src-code: #7c3aed; --src-web: #0f766e; --src-kb: #b45309;
+    --src-interview: #2563eb; --src-code: #7c3aed; --src-prior: #be123c;
+    --src-web: #0f766e; --src-kb: #b45309;
     --ok: #15803d; --pending: #9aa3ad; --warn: #b45309; --chip-ink: #ffffff;
 `;
 
 const DARK_VARS = `
     --bg: #10151c; --panel: #171e27; --ink: #e8edf3; --muted: #9aa7b5;
     --line: #26303c; --accent: #60a5fa;
-    --src-interview: #60a5fa; --src-code: #bda6f5; --src-web: #4fd1c0; --src-kb: #f0b26b;
+    --src-interview: #60a5fa; --src-code: #bda6f5; --src-prior: #fda4af;
+    --src-web: #4fd1c0; --src-kb: #f0b26b;
     --ok: #4ade80; --pending: #64748b; --warn: #f0b26b; --chip-ink: #10151c;
 `;
 
@@ -619,6 +625,7 @@ const CSS = `
   .src { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; color: var(--chip-ink); white-space: nowrap; }
   .src.interview { background: var(--src-interview); }
   .src.code { background: var(--src-code); }
+  .src.prior { background: var(--src-prior); }
   .src.web { background: var(--src-web); }
   .src.kb { background: var(--src-kb); }
   .glance { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; margin-top: 14px; }
@@ -702,6 +709,7 @@ function normalizeViewModel(raw) {
       // Entries, not just the collection: a null in any lane would reach
       // renderFindings and throw on f.anchor, costing the whole page.
       code: items(f.code),
+      prior: items(f.prior),
       web: items(f.web),
       kb: items(f.kb),
       kb_note: typeof f.kb_note === 'string' ? f.kb_note : '',

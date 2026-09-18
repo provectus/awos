@@ -20,7 +20,7 @@ A new numbered directory is created for each spec (e.g., `001-user-auth`, `002-f
 1. **Picks the topic**: Either uses your prompt as the feature topic, or automatically selects the next incomplete item from the roadmap.
 2. **Gathers context**: Reads the product definition and roadmap to understand what's already documented about this feature.
 3. **Interactive drafting**: Presents what it already knows, then asks targeted questions to fill in the gaps — focusing on the "why" (user pain points) and the "what" (functional requirements). For every requirement, it probes for edge cases like a QA tester would.
-4. **Marks ambiguities**: Anything that can't be resolved gets tagged with `[NEEDS CLARIFICATION: question]` directly in the document.
+4. **Resolves or marks ambiguities**: Where the product definition, the roadmap, or the codebase supports one reading, it adopts that reading and records it under **Assumptions** with its source. Anything left without a defensible default gets tagged with `[NEEDS CLARIFICATION: question]` directly in the document.
 5. **Creates the spec**: Runs a script to create the directory and saves the approved spec.
 
 ## Key behaviors
@@ -28,7 +28,7 @@ A new numbered directory is created for each spec (e.g., `001-user-auth`, `002-f
 - **One feature per spec.** Each spec covers exactly one roadmap item. All other roadmap items are automatically placed out-of-scope.
 - **Non-technical language.** Describes what users can do, not how the system implements it. The "how" comes in `/awos:tech`.
 - **Thinks like a tester.** Aggressively clarifies ambiguities — "What file formats are allowed?", "What happens on failure?", "What's the max file size?"
-- **[NEEDS CLARIFICATION] tags.** If something can't be confirmed, it's flagged explicitly rather than assumed. This prevents silent assumptions from causing bugs later.
+- **Assumptions and [NEEDS CLARIFICATION] tags.** An interpretation the source material supports is adopted and listed under **Assumptions**, with the document or code it came from. What no source can settle is flagged as a tag rather than assumed, so the questions you are asked are the ones only you can answer.
 - **Testable acceptance criteria.** Every requirement is turned into a concrete, verifiable acceptance criterion (Given/When/Then style).
 
 ## Common misconceptions

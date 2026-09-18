@@ -47,6 +47,14 @@ _Clearly define what is and is not included in this work to prevent ambiguity._
 
 ---
 
+## 4. Assumptions
+
+_Interpretations adopted during drafting, where the source material supported one reading. Each entry names the assumption and the document or code it was drawn from. Leave empty when every ambiguity was resolved with the user._
+
+- [Assumption] — [source it was drawn from]
+
+---
+
 ## Change Log
 
 _Dated amendments made after the spec was first written — typically by `/awos:spec` in Update Mode when a bug fix changed documented behavior. Each entry records the date, the source reference (bug id or fix description), and what behavior changed and why. Leave empty until the first amendment._

@@ -423,7 +423,7 @@ export function patchReportBlocks(
   }
   writeFileSync(auditPath, JSON.stringify(audit, null, 2));
 
-  // recommendations.md — the long-form file /awos:roadmap consumes, derived
+  // recommendations.md — the audit's long-form follow-up artifact, derived
   // from the exact same array so the two can never drift.
   let recommendationsMd: string | null = null;
   const recs = (audit.recommendations ?? []) as Array<Record<string, unknown>>;

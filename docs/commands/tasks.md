@@ -17,16 +17,16 @@ This command creates an actionable plan by breaking down the technical specifica
 1. **Identifies the target spec**: Uses your prompt or asks you to choose from available specs.
 2. **Analyzes both specs**: Reads the functional and technical specifications to understand both "what" and "how".
 3. **Creates vertical slices**: Generates a list where each slice is a small, end-to-end piece of functionality — not a horizontal layer.
-4. **Assigns agents**: Each task under a slice gets a specialist agent assignment (e.g., `**[Agent: python-expert]**`) based on the technology involved.
+4. **Assigns agents**: Each task under a slice gets an agent assignment (e.g., `**[Agent: python-expert]**`) matched against the agents actually available in the session, based on the technology involved.
 5. **Adds verification steps**: Each slice includes test scenarios that agents must verify using real tools (browser MCP, curl, shell, etc.).
-6. **Presents for review**: Shows the full slice/task list for your approval before saving.
+6. **Presents for review**: Saves the plan first, then shows the full slice/task list for review — the `<!-- not-user-reviewed -->` marker clears once you confirm.
 
 ## Key behaviors
 
 - **Vertical slicing is the core principle.** Each slice delivers end-to-end functionality — database + API + UI together for one small feature. The application must remain runnable after each slice is completed.
 - **Slices group tasks; tasks are atoms.** A slice is the vertical grouping header (composite, never executed directly). A task is the atomic unit under it, carrying a `**[Agent: name]**` marker and executed by one subagent.
 - **No horizontal slices.** "Do all database work" followed by "Do all API work" is explicitly prohibited. Instead: "Slice 1: Display placeholder avatar" → "Slice 2: Upload and display real avatar".
-- **Agent assignment.** Every task includes a `**[Agent: agent-name]**` tag. Tasks that don't match any specialist get assigned to `general-purpose`, with a recommendation table flagging these gaps.
+- **Agent assignment.** Every task includes a `**[Agent: agent-name]**` tag, matched from the agents available in the session. When no agent covers a task, the command surfaces the staffing gap as a question — assign the built-in `general-purpose` and proceed, or record the gap as an open question in `tasks.md` — instead of inventing a specialist name.
 - **Testable slices.** Each slice must be verifiable. The command identifies required MCPs/services for testing and warns if any are missing.
 - **Incremental delivery.** After each slice is implemented, you should be able to start the app and see progress.
 

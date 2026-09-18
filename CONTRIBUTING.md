@@ -51,7 +51,7 @@ bun test tests/            # optional local cross-runtime spot-check
 
 Layer 1 (`tests/lint-prompts.test.js`) catches wrapper/root-command drift, dimension DAG breaks, and `setup-config.js` mismatches. Layers 2 and 3 (`tests/installer/`, `tests/fixtures.test.js`) exercise the installer against `fs.mkdtemp()` directories and commit-tracked fixture projects.
 
-When you add a new structural contract — a wrapper frontmatter key, an `agent-template.md` field, a migration, a marker pattern — add its lint rule, installer test, or fixture in the **same PR**. The safety net only works if coverage keeps pace.
+When you add a new structural contract — a wrapper frontmatter key, a migration, a marker pattern — add its lint rule, installer test, or fixture in the **same PR**. The safety net only works if coverage keeps pace.
 
 To add a fixture: drop a directory under `tests/fixtures/<name>/`, optionally with a `before/` subtree (gets copied to the temp project as the starting state) and an `expected-after.json` manifest listing the files to assert. See existing fixtures for examples.
 
@@ -107,7 +107,7 @@ When you need to move or restructure files in existing installations:
    src/migrations/NNN-description.json
    ```
 
-   Where NNN is the next sequential number (e.g., 002, 003).
+   Where NNN is the next sequential number after the highest existing migration.
 
 2. Define the migration with preconditions:
    ```json
@@ -140,6 +140,12 @@ When you need to move or restructure files in existing installations:
 - **`move`**: Move file from one location to another
 - **`copy`**: Copy file to new location
 - **`delete`**: Remove file
+- **`replace_content`**: Replace the entire content of a `file` with `content` (an array of lines, joined with newlines). Replace-only by default: a missing file is a logged skip, never a create — so tombstones don't get planted into projects that never had the original (fresh installs must stay clean, which `tests/fixtures/fresh-project` asserts). The optional `create_if` field names a path whose presence authorizes creating the missing target. The optional `if_sha256` field (one hash or a list) restricts the replace to a file whose current content is byte-identical to a known shipped version — the guard for rewriting a user-editable file only when it provably carries nothing of the user's (003 uses it on the roadmap wrapper). Current use: writing the `/awos:roadmap` removal notice over a project's local copy of the retired command (graceful shutdown — the command answers that the feature left AWOS instead of running a frozen 1.x copy), with `create_if` so a wrapper whose body is missing gets the notice too, while projects with no roadmap trace gain nothing (fresh installs stay clean, which `tests/fixtures/fresh-project` asserts)
+
+### Optional Migrations
+
+- **`optional: true`** (top-level field): marks a repair or cleanup the install can live without. When an optional migration fails, the runner logs a warning, halts version advancement — so it and any later migrations retry on the next update — and lets setup continue to the copy step, provided every migration queued behind it is optional too (ordering is a contract, so they wait rather than run out of turn). If a _required_ migration is queued behind the failed one, the failure aborts the run exactly as a required migration's own failure would — it must neither run on a layout the repair did not prepare nor be skipped silently. Migrations without the flag abort on failure. Migration 003 is optional.
+- **`notice`** (top-level field, optional): an array of lines the runner prints once, right after the migration actually applies (never on a skip, never under `--dry-run`), and returns in `runMigrations`' `notices`. This is how a migration that retires a command tells the user what happened and what they can do about it — the installer holds no product knowledge of its own.
 
 ### Testing Migrations
 

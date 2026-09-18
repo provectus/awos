@@ -24,7 +24,7 @@ const script = path.join(
 
 const SAMPLE_MD = `# Functional Specification: CSV Export
 
-- **Roadmap Item:** Export reports as CSV
+- **Topic:** Export reports as CSV
 - **Status:** Draft
 - **Author:** Test Author
 
@@ -96,7 +96,7 @@ const SAMPLE_VM = {
 // shapes are real, and the renderer must not lose either.)
 const TEMPLATE_SHAPED_MD = `# Functional Specification: Password Reset
 
-- **Roadmap Item:** Let users reset passwords
+- **Topic:** Let users reset passwords
 - **Status:** Draft
 
 ---

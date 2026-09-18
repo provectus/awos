@@ -4,11 +4,10 @@
 
 ## What it does
 
-This command validates that the implemented feature meets all acceptance criteria from the functional spec. When everything passes, it marks the spec as completed and updates the roadmap. It updates:
+This command validates that the implemented feature meets all acceptance criteria from the functional spec. When everything passes, it marks the spec as completed. It updates:
 
 - `context/spec/[index]-[name]/functional-spec.md` — marks criteria `[x]`, sets Status to `Completed`.
 - `context/spec/[index]-[name]/technical-considerations.md` — sets Status to `Completed`.
-- `context/product/roadmap.md` — marks the corresponding roadmap item `[x]`.
 
 ## Prerequisites
 
@@ -19,14 +18,13 @@ This command validates that the implemented feature meets all acceptance criteri
 
 1. **Finds the target spec**: Uses your prompt to target a specific spec, or automatically finds the first spec where all tasks are done but Status isn't yet `Completed`.
 2. **Verifies acceptance criteria**: Goes through each criterion in the functional spec and checks whether the implementation satisfies it.
-3. **Marks completion**: If all criteria pass — updates Status to `Completed` in both spec files and marks the roadmap item as done.
-4. **Reviews product context**: Checks whether the product definition, architecture, or roadmap documents need updates based on what was learned during implementation. If discrepancies exist, suggests specific commands to run.
+3. **Marks completion**: If all criteria pass — updates Status to `Completed` in both spec files.
+4. **Reviews product context**: Checks whether the product definition or architecture documents need updates based on what was learned during implementation. If discrepancies exist, suggests specific commands to run.
 
 ## Key behaviors
 
 - **Criterion-by-criterion verification.** Each acceptance criterion is checked individually. If any criterion fails, verification stops and reports what's missing.
 - **Stops on failure.** If a criterion isn't met, the command reports which one failed and why — it doesn't skip or ignore failures.
-- **Updates the roadmap.** Successful verification automatically marks the corresponding roadmap item as complete.
 - **Detects drift.** If the implementation diverged from what's documented (e.g., a new caching layer was added that's not in the architecture), it suggests running the appropriate `/awos:*` command to update the docs.
 
 ## Common misconceptions
@@ -47,4 +45,4 @@ This command validates that the implemented feature meets all acceptance criteri
 
 ## What happens next
 
-Repeat the feature cycle (`/awos:spec` → `/awos:tech` → `/awos:tasks` → `/awos:implement` → `/awos:verify`) for the next roadmap item.
+Repeat the feature cycle (`/awos:spec` → `/awos:tech` → `/awos:tasks` → `/awos:implement` → `/awos:verify`) for the next feature.

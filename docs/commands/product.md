@@ -16,20 +16,15 @@ None. This is the first command you run.
 
 The command operates in two modes:
 
-- **Creation Mode** (no existing definition): Walks you through each section of the product definition template interactively — project name and vision, target audience and personas, success metrics, core features and user journey, and project boundaries (in-scope vs. out-of-scope).
+- **Creation Mode** (no existing definition): Drafts every section of the product definition from your initial prompt — project name and vision, target audience and personas, success metrics, core features and user journey, and project boundaries (in-scope vs. out-of-scope) — saves the file, then refines it with you section by section.
 - **Update Mode** (definition already exists): Presents a menu of sections from your existing definition and lets you update specific parts without redoing the entire document.
 
 ## Key behaviors
 
 - **Non-technical language only.** This document describes business goals, user needs, and value — not implementation details. The agent will steer you away from technical language.
+- **Interview-driven.** The definition comes from your prompt and the conversation, never from reading your source code — codebase discovery happens later, in `/awos:architecture`.
 - **Single output.** The full product definition file is created or updated in place.
 - **Idempotent.** You can re-run this command at any time to refine your product definition as your understanding evolves.
-
-## Brownfield mode
-
-On an existing codebase, Creation Mode can draft the product definition from your source instead of a blank interview: it detects existing code (honoring explicit "explore" / "start from scratch" intent, otherwise scanning for source indicators and confirming with you), explores it with an `Explore` agent, and triages each finding with you (Accept / Reject) after the definition is saved. It can also import **external documentation** — wikis, tickets, chats — via the `awos:configure-external-sources` skill.
-
-See the [Brownfield Adoption Guide](../brownfield-adoption.md) for the full path — detection, external sources, and how `brownfield.md` flows through `/awos:roadmap` and `/awos:architecture`.
 
 ## Common misconceptions
 
@@ -49,4 +44,4 @@ See the [Brownfield Adoption Guide](../brownfield-adoption.md) for the full path
 
 ## What happens next
 
-Run `/awos:roadmap` to plan the features and their order.
+Run `/awos:architecture` to define the technical blueprint.

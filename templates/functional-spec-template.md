@@ -1,6 +1,6 @@
 # Functional Specification: [Name of the Change]
 
-- **Roadmap Item:** [Description of the single roadmap item]
+- **Topic:** [The single feature or capability this specification defines]
 - **Status:** Draft | In Review | Approved | Completed
 - **Author:** [Author's Name]
 

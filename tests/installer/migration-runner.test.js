@@ -353,9 +353,14 @@ test('a present command body is replaced with the removal notice, and the notice
     'a present command body must be replaced with the removal notice even when no wrapper exists — the body alone is a roadmap trace'
   );
 
-  // Wrapper-only project: dry-run writes nothing; the real run creates
-  // the repair notice; a version-marker reset re-run reproduces it
-  // byte-identically instead of erroring or double-applying.
+  // Wrapper-only project (a teammate cloned committed .claude/ wrappers
+  // but not .awos/ — nothing tells users to commit .awos/): the wrapper
+  // @-imports .awos/commands/roadmap.md, and without the create_if
+  // authorization the migration would go not_applicable, the version
+  // would stamp anyway, and the broken import would be permanent. So:
+  // dry-run writes nothing; the real run creates the repair notice; a
+  // version-marker reset re-run reproduces it byte-identically instead
+  // of erroring or double-applying.
   const workingDir = await freshTemp();
   const wrapper = path.join(
     workingDir,
@@ -502,31 +507,6 @@ test('migration versions are sequential with no gaps or duplicates', async () =>
     new Set(versions).size,
     versions.length,
     'migration versions must be unique'
-  );
-});
-
-test('migration 003 creates the tombstone for a wrapper-only project (committed .claude/, absent .awos/)', async () => {
-  // A teammate clones a project that committed its .claude/ wrappers but
-  // not .awos/ (nothing tells users to commit .awos/). The wrapper
-  // @-imports .awos/commands/roadmap.md — without the create_if
-  // authorization the migration would go not_applicable, the version
-  // would stamp anyway, and the broken import would be permanent.
-  const workingDir = await freshTemp();
-  await writeFile(
-    path.join(workingDir, '.claude', 'commands', 'awos', 'roadmap.md'),
-    'user wrapper\n'
-  );
-
-  await silenced(() => runMigrations(workingDir));
-
-  const target = path.join(workingDir, '.awos', 'commands', 'roadmap.md');
-  assert.ok(
-    exists(target),
-    ".awos/commands/roadmap.md must be created when its preserved wrapper exists — the wrapper's @-import must never stay broken"
-  );
-  assert.ok(
-    (await fsPromises.readFile(target, 'utf8')).includes('removed from AWOS'),
-    '.awos/commands/roadmap.md must carry the removal-notice tombstone'
   );
 });
 

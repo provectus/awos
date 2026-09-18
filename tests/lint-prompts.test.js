@@ -634,6 +634,49 @@ test('ai-sdlc-adoption dimension exists with correct frontmatter and required bo
   );
 });
 
+test('commands/tasks.md records staffing gaps as open questions after the write', () => {
+  // A task no available agent covers is a staffing gap the user decides
+  // on, not a silent general-purpose fallback. The plan must stay
+  // executable (every task carries a marker for /awos:implement), the gap
+  // must stay visible in the file (a `## Open Questions` section), that
+  // section must never look like tasks (prose or bullets, no checkbox
+  // lines — or /awos:implement would run them and /awos:verify could never
+  // see the spec complete), and the decision must be asked after the
+  // Step 4 write with "keep the gaps recorded" as the unanswered default,
+  // so an unanswered question never hides a gap.
+  const body = readUtf8(path.join(commandsDir, 'tasks.md'));
+  assert.ok(
+    /## Step 3b: Record Staffing Gaps/.test(body),
+    'commands/tasks.md must carry a Step 3b that records staffing gaps'
+  );
+  const step3b = body
+    .split(/## Step 3b/i)
+    .slice(1)
+    .join('')
+    .split(/## Step 4/i)[0];
+  assert.ok(
+    step3b.includes('`## Open Questions`') &&
+      step3b.includes('**[Agent: general-purpose]**'),
+    'commands/tasks.md Step 3b must mark uncovered tasks general-purpose (the plan stays executable) and record the gap in a `## Open Questions` section'
+  );
+  assert.ok(
+    /never as checkbox lines/i.test(step3b),
+    'commands/tasks.md Step 3b must forbid checkbox lines in ## Open Questions — otherwise /awos:implement treats them as tasks and /awos:verify never sees the spec complete'
+  );
+  const step5 = body
+    .split(/## Step 5/i)
+    .slice(1)
+    .join('');
+  assert.ok(
+    step5.includes('Accept the `general-purpose` assignments') &&
+      step5.includes('Keep the gaps recorded') &&
+      /Keep the gaps recorded[^\n]*Default when the question is skipped/.test(
+        step5
+      ),
+    'commands/tasks.md Step 5 must ask accept-or-keep after the write, with "keep the gaps recorded" as the unanswered default'
+  );
+});
+
 test('commands/tasks.md picks the QA agent with a search-first rule', () => {
   // Option A: testing-expert is one option among many — not a hard
   // requirement. tasks.md must (a) instruct the agent to search for a
@@ -646,9 +689,27 @@ test('commands/tasks.md picks the QA agent with a search-first rule', () => {
     /Search for a QA-coded subagent/i.test(body),
     'commands/tasks.md must instruct a search-first QA agent selection (Step 3a)'
   );
+  // A missing QA agent is a staffing gap, and the gap question is
+  // dismissable — so it must come after the Step 4 write (a dismissed
+  // pre-write question ends an unattended run with no tasks.md), and it
+  // must carry the slice-drop option only the QA gap has.
+  const preWriteBlock = body
+    .split(/## Step 3a/i)
+    .slice(1)
+    .join('')
+    .split(/## Step 4/i)[0];
+  const step5Block = body
+    .split(/## Step 5/i)
+    .slice(1)
+    .join('');
   assert.ok(
-    body.includes('AskUserQuestion'),
-    'commands/tasks.md must use AskUserQuestion to offer the 3-option fallback when no QA agent is available'
+    !preWriteBlock.includes('AskUserQuestion'),
+    'commands/tasks.md Steps 3a/3b must not ask about the QA or staffing gap before the Step 4 write — a dismissed pre-write question ends an unattended run with no deliverable'
+  );
+  assert.ok(
+    step5Block.includes('AskUserQuestion') &&
+      step5Block.includes('Drop the Feature Testing & Regression slice'),
+    'commands/tasks.md Step 5 must resolve the QA gap via AskUserQuestion after the write, offering the slice-drop option'
   );
   assert.ok(
     !/Requires\s+`?testing-expert`?\s+agent\.\s+If it is not present/i.test(
@@ -1112,11 +1173,10 @@ test('platform reference files exist under configure-external-sources skill', ()
   }
 });
 
-test('manual sources are handled across skill and commands', () => {
-  // SKILL.md must offer manual as an access method in the manifest, and
-  // architecture.md — the one remaining retrieval command — must branch on
-  // manual sources (user pastes content directly rather than calling a
-  // tool). architecture.md is the only retrieval command left.
+test('configure-external-sources SKILL.md offers manual as an access method', () => {
+  // The manifest must let a source be configured as manual (the user
+  // pastes content instead of a tool fetching it); the consuming side of
+  // that contract is pinned in the architecture.md retrieval test below.
   const skillPath = path.join(
     repoRoot,
     'plugins',
@@ -1130,17 +1190,6 @@ test('manual sources are handled across skill and commands', () => {
     /Access:.*manual/i.test(skillBody),
     'SKILL.md manifest must include Access: manual as an option'
   );
-  for (const cmd of ['architecture.md']) {
-    const body = readUtf8(path.join(commandsDir, cmd));
-    const extDocBlock = body
-      .split(/external documentation (sources|context)/i)
-      .slice(1)
-      .join('');
-    assert.ok(
-      /manual/i.test(extDocBlock),
-      `commands/${cmd} retrieval must handle manual sources`
-    );
-  }
 });
 
 test('configure-external-sources SKILL.md has fallback for failed verification', () => {
@@ -1171,84 +1220,41 @@ test('configure-external-sources SKILL.md has fallback for failed verification',
   );
 });
 
-test('architecture.md does not invoke configure-external-sources skill', () => {
-  // architecture.md must not try to create sources from scratch — it only
-  // reads context/sources/sources.md if some other process already
-  // configured it (nothing in this repo invokes the skill anymore since
-  // product.md dropped the sources-offer along with brownfield onboarding).
-  for (const cmd of ['architecture.md']) {
-    const body = readUtf8(path.join(commandsDir, cmd));
-    assert.ok(
-      !body.includes('Skill(name="awos:configure-external-sources")'),
-      `commands/${cmd} must not invoke the configure-external-sources skill directly`
-    );
-    assert.ok(
-      body.includes('context/sources/sources.md'),
-      `commands/${cmd} must reference context/sources/sources.md for retrieval`
-    );
-  }
-});
-
-test('architecture.md reads context/sources/sources.md for documentation retrieval', () => {
-  // /awos:architecture must reference sources.md inside the "External
-  // documentation context" block — not just in INPUTS & OUTPUTS declarations.
+test('architecture.md external-documentation retrieval contract', () => {
+  // architecture.md is the only command left that reads external sources
+  // (product.md dropped its sources offer with brownfield onboarding), so
+  // the whole retrieval contract is pinned here in one place. It must (a)
+  // never invoke the configure-external-sources skill — it only consumes a
+  // sources.md some other process wrote; (b) guard retrieval on that file
+  // existing with configured status, inside the retrieval block rather
+  // than only in INPUTS; (c) branch on manual sources, which the user
+  // pastes rather than a tool fetching; and (d) pass the Step 2 codebase
+  // findings to the retrieval agent inside <existing_findings> with a
+  // "report only NEW" instruction — passing the block is what suppresses
+  // duplicate findings, and the instruction is what makes the block act.
   const body = readUtf8(path.join(commandsDir, 'architecture.md'));
   const extDocBlock = body
     .split(/external documentation context/i)
     .slice(1)
     .join('');
   assert.ok(
-    extDocBlock.includes('context/sources/sources.md'),
-    'commands/architecture.md must reference context/sources/sources.md inside the External documentation context block'
+    !body.includes('Skill(name="awos:configure-external-sources")'),
+    'commands/architecture.md must not invoke the configure-external-sources skill — it only reads a sources.md some other process configured'
   );
-});
-
-test('architecture.md passes existing findings to its documentation retrieval', () => {
-  // architecture.md's external-documentation retrieval prompt must pass the
-  // codebase-exploration findings gathered in Step 2 via <existing_findings>
-  // tags, so the docs-retrieval agent does not repeat what codebase
-  // exploration already found.
-  for (const cmd of ['architecture.md']) {
-    const body = readUtf8(path.join(commandsDir, cmd));
-    assert.ok(
-      body.includes('<existing_findings>'),
-      `commands/${cmd} must pass existing findings to the Explore agent to avoid duplicates`
-    );
-  }
-});
-
-test('architecture.md guards retrieval on context/sources/sources.md existence', () => {
-  for (const cmd of ['architecture.md']) {
-    const body = readUtf8(path.join(commandsDir, cmd));
-    const extDocBlock = body
-      .split(/external documentation context/i)
-      .slice(1)
-      .join('');
-    assert.ok(
-      /sources\.md.*exists.*configured|sources\.md.*configured/i.test(
-        extDocBlock
-      ),
-      `commands/${cmd} must guard documentation retrieval on context/sources/sources.md existence with configured status`
-    );
-  }
-});
-
-test('architecture.md docs retrieval reports only NEW findings', () => {
-  // architecture.md's <existing_findings> block now carries the codebase-
-  // exploration findings from Step 2 (not brownfield.md, which no longer
-  // exists) — the "Report only NEW" instruction is what makes passing that
-  // block actually suppress duplicate findings in the docs-retrieval pass.
-  for (const cmd of ['architecture.md']) {
-    const body = readUtf8(path.join(commandsDir, cmd));
-    assert.ok(
-      body.includes('<existing_findings>'),
-      `commands/${cmd} must pass existing findings inside <existing_findings> tags to the Explore agent`
-    );
-    assert.ok(
-      /Report only NEW/i.test(body),
-      `commands/${cmd} must instruct the Explore agent to report only NEW findings`
-    );
-  }
+  assert.ok(
+    /sources\.md.*exists.*configured|sources\.md.*configured/i.test(
+      extDocBlock
+    ),
+    'commands/architecture.md must guard documentation retrieval on context/sources/sources.md existing with configured status, inside the External documentation context block'
+  );
+  assert.ok(
+    /manual/i.test(extDocBlock),
+    'commands/architecture.md retrieval must branch on manual sources (user-pasted content, no tool fetch)'
+  );
+  assert.ok(
+    body.includes('<existing_findings>') && /Report only NEW/i.test(body),
+    'commands/architecture.md must pass the codebase findings inside <existing_findings> and instruct the retrieval agent to report only NEW findings'
+  );
 });
 
 test('architecture.md Update Mode re-gathers the codebase and confirms drift after the write', () => {

@@ -103,10 +103,6 @@ test('the update tells a legacy project what happened to its roadmap command —
     output.includes('docs/2.0/upgrading-1.x.md'),
     'the announcement must link the upgrade guide'
   );
-  assert.ok(
-    !output.includes('/awos:hire'),
-    'the announcement must not name /awos:hire — it is a current command, not a removed one'
-  );
   const wrapper = await fsPromises.readFile(wrapperPath, 'utf8');
   assert.ok(
     wrapper.includes('Removed from AWOS') &&

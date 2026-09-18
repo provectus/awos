@@ -172,7 +172,7 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
       - `[domain]` → the domain name (e.g., "frontend", "backend", "infrastructure")
       - `[technology list]` → comma-separated list of technologies for this domain
       - `[Responsibility aligned with the agent's domain]` → specific responsibilities derived from the architecture
-      - `model` and `effort` → keep the template's `sonnet` and `low`. An agent file that omits them inherits the orchestrator's model and effort level, which is what makes a routine implementation task think for minutes on a model priced for hard reasoning. Raise either one only for a role whose tasks are genuinely reasoning-heavy, and name that role when you show the file in step 5.
+      - `model` and `effort` → keep the template's `sonnet` and `low`. An agent file that omits them inherits the orchestrator's model and effort level, which is what makes a routine implementation task think for minutes on a model priced for hard reasoning. Raise either one only for a role whose tasks are genuinely reasoning-heavy, and name that role when you show the file for review.
         Add any installed skills to the `skills` list.
 4.  For **Partially Covered** roles: read the existing agent file and append newly installed skills to its `skills` list.
 5.  **Write the agent files, then show each generated or updated file to the user for review** and apply any adjustments they ask for. Writing before the review is safe here: an agent file is reversible — re-run `/awos:hire` to revise it, or delete it.

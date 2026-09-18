@@ -121,7 +121,7 @@ npx @provectusinc/awos
 
 **Your customizations are preserved.** Files under `.awos/` are framework internals and are always updated. Files in `.claude/commands/awos` are your customization layer: when existing wrappers would be overwritten, the installer asks first — and in non-interactive runs it preserves them by default (pass `--overwrite` for a deliberate fresh sync).
 
-**Upgrading from AWOS 1.x?** See the [upgrade guide](docs/2.0/upgrading-1.x.md) for what left the framework and what happens to the local copies you already have — nothing of yours is deleted.
+**Upgrading an existing project?** See the [upgrade guide](docs/2.0/upgrading-1.x.md) for what left the framework and what happens to the local copies you already have — nothing of yours is deleted.
 
 ---
 

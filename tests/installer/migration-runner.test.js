@@ -242,6 +242,12 @@ test('a never-edited 1.x wrapper is rewritten to the removal wrapper; a customiz
     const dir = await freshTemp();
     const wrapper = path.join(dir, '.claude', 'commands', 'awos', 'roadmap.md');
     await writeFile(wrapper, content);
+    await silenced(() => runMigrations(dir, { dryRun: true }));
+    assert.equal(
+      await fsPromises.readFile(wrapper, 'utf8'),
+      content,
+      'a dry run must leave a hash-matched shipped wrapper byte-identical — the if_sha256 rewrite branch must not write under --dry-run'
+    );
     const result = await silenced(() => runMigrations(dir));
     const after = await fsPromises.readFile(wrapper, 'utf8');
     assert.ok(

@@ -61,7 +61,7 @@
 - **Today:** the topic question offers items from a user-curated `context/product/roadmap.md` "indefinitely — no sunset", while the upgrade guide tells the user to "tick shipped items yourself". A file the human maintains for the agent to read, on a command that otherwise finds intent on its own.
 - **Evidence:** `plugins/better/commands/spec.md:84`; `roadmap-2.0.md` Appendix A (class 1: no sunset); `docs/2.0/upgrading-1.x.md:28`; `docs/direction.md` "Toward discovery".
 - **Raised by:** 2 of 3.
-- **Closes in:** `better:spec` — drop the legacy `roadmap.md` read, or give it the sunset it lacks.
+- **Closes in:** none — decided; listed so the cost stays visible.
 - **Status:** explicitly decided to keep; listed so the decision is visible next to its cost.
 
 ## Confirmed understanding

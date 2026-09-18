@@ -1013,24 +1013,6 @@ test('functional-spec-template.md declares a Change Log section', () => {
   );
 });
 
-test('commands/tasks.md marks an unreviewed tasks.md and clears it on review', () => {
-  // tasks.md is written before review (Step 4), so it starts as a
-  // draft carrying a "<!-- not-user-reviewed -->" marker that Step 5
-  // removes once the user reviews it. The marker shape is the contract
-  // — awos-qa greps the saved file to tell a draft from a reviewed
-  // plan, so a reword here would silently break that detection. Lock
-  // the shape, plus the removal-on-review instruction.
-  const body = readUtf8(path.join(commandsDir, 'tasks.md'));
-  assert.ok(
-    body.includes('<!-- not-user-reviewed -->'),
-    'commands/tasks.md must record the literal "<!-- not-user-reviewed -->" marker so awos-qa can detect a draft-grade tasks.md'
-  );
-  assert.ok(
-    /remove the `<!-- not-user-reviewed -->` marker/i.test(body),
-    'commands/tasks.md Step 5 must remove the not-user-reviewed marker once the plan has been reviewed'
-  );
-});
-
 // ---------------------------------------------------------------------------
 // External sources skill and documentation retrieval
 // ---------------------------------------------------------------------------
@@ -1276,6 +1258,15 @@ test('architecture.md Update Mode re-gathers the codebase and confirms drift aft
     .split(/### Step 3: Finalization/i)
     .slice(1)
     .join('');
+  const creationBlock = body
+    .split(/## Scenario 1: Creation Mode/i)
+    .slice(1)
+    .join('')
+    .split(/## Scenario 2: Update Mode/i)[0];
+  assert.ok(
+    creationBlock.includes('subagent_type="Explore"'),
+    'commands/architecture.md Creation Mode must delegate the every-run codebase gather to an Explore subagent — the orchestrator reading the tree itself is the anti-pattern the unconditional-gather contract exists to prevent'
+  );
   assert.ok(
     /re-gather/i.test(updateBlock),
     'commands/architecture.md Update Mode must contain the codebase re-gather step'

@@ -123,7 +123,7 @@ Skip this step if `SKIP_TESTS = true`.
 Skip this step if every task matched an available agent in Step 3.4 and no QA gap was recorded in Step 3a.
 
 1.  Collect the tasks left unassigned in Step 3.4 — the ones no available agent covers — plus any QA gap recorded in Step 3a. These are staffing gaps in the plan, and the user decides how to carry them, not you.
-2.  Mark every uncovered task `**[Agent: general-purpose]**` so the plan stays executable (every task must carry a marker for `/awos:implement`), and prepare a short `## Open Questions` section for the top of the task list naming the missing expertise and the affected tasks — the gap stays visible in the plan instead of disappearing behind a generalist assignment. The user decides how to carry these gaps in Step 5, after the file is written.
+2.  Mark every uncovered task `**[Agent: general-purpose]**` so the plan stays executable (every task must carry a marker for `/awos:implement`), and prepare a short `## Open Questions` section for the top of the task list naming the missing expertise and the affected tasks — written as prose or plain bullets, never as checkbox lines, so `/awos:implement` and `/awos:verify` do not mistake the open questions for tasks. The gap stays visible in the plan instead of disappearing behind a generalist assignment. The user decides how to carry these gaps in Step 5, after the file is written.
 
 ## Step 4: Write the Task List
 

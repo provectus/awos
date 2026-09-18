@@ -3969,8 +3969,16 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       'a prior agreement the topic changes must become a marker the user answers — silently rewriting an agreement is the failure the lane exists to prevent',
     ],
     [
+      'a charge in two halves, reported as two separate lists',
+      'the codebase lane carries two duties and must report them apart — merged into one list, a recorded agreement reads as a description of current code and the superseded pile has nothing to key on',
+    ],
+    [
+      'close it with a verdict against the topic',
+      'each recorded agreement must carry a per-finding intact/changed/unclear verdict — measured twice on a large repo, an orchestrator left to classify the findings itself in the synthesis step dropped the supersession entirely; the agent that read the source is the one that can judge it',
+    ],
+    [
       'carrying its verdict',
-      'the prior-agreements lane must return a per-finding intact/changed/unclear verdict — measured twice on a large repo, an orchestrator left to classify the findings itself in the synthesis step dropped the supersession entirely; the agent that read the source is the one that can judge it',
+      'the verdict must travel with the finding into synthesis, not be re-derived there',
     ],
     [
       'the counts must match',

@@ -219,7 +219,7 @@ When this phase is planned, sweep `gaps.md` for entries marked **open** — sche
 - Removals of user-visible commands get `major` release labels; migrations are idempotent and `--dry-run` validated.
 - Each phase's PR body names the philosophy principle/direction it serves.
 - Before each phase, sweep open PRs for conflicts; close moot ones with a pointer to this roadmap.
-- **awos-qa lockstep:** every phase that changes the command surface lands a paired `awos-qa` update in the same window — the sibling repo is part of each phase's definition of done.
+- **awos-qa lockstep:** every phase that changes the command surface records its paired `awos-qa` update with an owner and a target, and lands it once the command surface it tests has settled — the sibling repo is part of each phase's definition of done, but a suite rewritten against a surface that is still moving is rework, not coverage. (Amended 2026-09-18, Daria; the original "same window" wording assumed phases landing one at a time.)
 - **Gaps:** `gaps.md` names each gap with its promise, current behaviour, evidence, and status; the plan lives here. A new gap found during any phase is recorded there first, then scheduled. A gap is closed only when the flow actually closes it.
 
 ### User-file policy (decided 2026-09-09)
@@ -242,13 +242,14 @@ Notes:
 
 ## awos-qa follow-up (owed)
 
-Phases 1, 2a, 2b, and 3 landed here on 2026-09-10 without their paired `awos-qa` update — the "awos-qa lockstep" cross-cutting rule above is not yet satisfied for this wave. Owed, not yet scheduled to a specific session:
+Phases 1, 2a, 2b, and 3 landed here on 2026-09-10 without their paired `awos-qa` update. **Phase A landed 2026-09-18 as [awos-qa PR #51](https://github.com/provectus/awos-qa/pull/51)** (owner: Daria): the 18 scenarios the removals invalidate are retired, the survivors and the harness are aligned, no recorded runs needed — 41 scenarios remain, unit layer green. Phase B (recorded runs; the new scenarios below plus the product TUI rewrite and the headless-product retire-or-repurpose) waits for the hire decision and Phase 6A, since both move the prompts it would test.
 
-- [ ] Retire the brownfield behavioral scenarios (detection, `brownfield.md` staging, triage protocol) — Phase 2b removed the machinery they exercise.
-- [ ] Retire the flow-generation behavioral scenarios (`/awos:flow` interview, `/implement-feature`/`/fix-bug` generation, re-run reconciliation) — Phase 1 removed the command.
+- [x] Retire the brownfield behavioral scenarios (detection, `brownfield.md` staging, triage protocol) — Phase 2b removed the machinery they exercise. _Phase A, PR #51._
+- [x] Retire the flow-generation behavioral scenarios (`/awos:flow` interview, `/implement-feature`/`/fix-bug` generation, re-run reconciliation) — Phase 1 removed the command. _Phase A, PR #51._
 - [ ] ~~Update the hire/tasks scenarios to the staffing-gap flow — Phase 3 replaced "`/awos:hire` provisions an agent" with "`/awos:tasks` introspects, surfaces a staffing gap as an open question when no agent covers a task, and `/awos:implement` falls back to general-purpose and reports the substitution."~~ Void — Phase 3 reverted 2026-09-17: `/awos:hire` provisions agents again; the staffing-gap surfacing stays as a safety net that points at it.
-- [ ] Update the spec scenarios to the topic-required anchor — the roadmap lane dropped from both spec commands (Phase 2a); scenarios that anchored a spec via the roadmap need a topic-anchored equivalent.
-- [ ] Add the architecture Update Mode drift scenario — gap 6 closed 2026-09-14: an update run against a codebase that diverged from the recorded architecture must surface the drift as a confirmation question (and must not rewrite the document without one).
+- [x] ~~Update the spec scenarios to the topic-required anchor — the roadmap lane dropped from both spec commands (Phase 2a); scenarios that anchored a spec via the roadmap need a topic-anchored equivalent.~~ Smaller than stated: no scenario ever anchored a spec via the roadmap — all three pass a topic. Phase A fixed their prose and kept one seeded legacy `roadmap.md` as the deliberate topic-candidate case. Still owed in Phase B: `/awos:spec` with an empty prompt under `AWOS_UNATTENDED` (must stop, write nothing, ask nothing) and the interactive legacy-candidate offer.
+- [ ] Add the architecture Update Mode drift scenario (Phase B) — gap 6 closed 2026-09-14: an update run against a codebase that diverged from the recorded architecture must surface the drift as a confirmation question (and must not rewrite the document without one).
+- [ ] Phase B, new coverage the 2.0 prompts introduce: the tasks staffing-gap open question after the write (Accept / Keep / Drop variants); the implement general-purpose fallback for an uninstalled agent, named in the report; the installer upgrade through migration 003 with a `/awos:roadmap` call afterwards hitting the removal notice.
 
 ---
 

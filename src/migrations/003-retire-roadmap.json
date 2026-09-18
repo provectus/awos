@@ -1,7 +1,7 @@
 {
   "version": 3,
   "name": "Retire /awos:roadmap: notice over the local body, delete the template, rewrite a pristine wrapper",
-  "description": "Graceful shutdown of the roadmap command (decided 2026-09-17). The project's local .awos/commands/roadmap.md becomes a removal notice (created where only the wrapper remains), so calling /awos:roadmap answers that the feature left AWOS instead of running a frozen 1.x copy. The orphaned .awos/templates/roadmap-template.md is deleted — nothing reads it once the command is a notice. A wrapper byte-identical to any shipped 1.x version (if_sha256) is rewritten to the 2.0 removal wrapper so the palette says the command was removed; a customized wrapper and the user's context/product/roadmap.md are left untouched. The notice below prints once, when this migration applies.",
+  "description": "Graceful shutdown of the roadmap command (decided 2026-09-17). The project's local .awos/commands/roadmap.md becomes a removal notice (created where only the wrapper remains), so calling /awos:roadmap answers that the feature left AWOS instead of running a frozen 1.x copy. The orphaned .awos/templates/roadmap-template.md is deleted — nothing reads it once the command is a notice. A wrapper byte-identical to any shipped 1.x version (if_sha256) is rewritten to a removal wrapper so the palette says the command was removed; a customized wrapper and the user's context/product/roadmap.md are left untouched. The notice below prints once, when this migration applies.",
   "optional": true,
   "preconditions": {
     "require_any": [
@@ -18,7 +18,7 @@
       "content": [
         "# Removed Command",
         "",
-        "`/awos:roadmap` was removed in AWOS 2.0. AWOS is not a planning or backlog tool: specs are anchored by an explicit topic now, not by a roadmap item. This notice replaced the project's local copy of the old command so that calling it says so instead of running a frozen 1.x copy.",
+        "`/awos:roadmap` was removed from AWOS. AWOS is not a planning or backlog tool: specs are anchored by an explicit topic now, not by a roadmap item. This notice replaced the project's local copy of the old command so that calling it says so instead of running a frozen 1.x copy.",
         "",
         "Tell the user the following, then stop. Do not build, update, or review a roadmap document.",
         "",
@@ -41,7 +41,7 @@
       ],
       "content": [
         "---",
-        "description: Removed in AWOS 2.0 — explains what replaced the roadmap.",
+        "description: Removed from AWOS — explains what replaced the roadmap.",
         "---",
         "",
         "@.awos/commands/roadmap.md"
@@ -49,8 +49,8 @@
     }
   ],
   "notice": [
-    "/awos:roadmap left AWOS in 2.0. Calling it now explains what replaced it; your context/product/roadmap.md is untouched and yours to maintain.",
+    "/awos:roadmap left AWOS. Calling it now explains what replaced it; your context/product/roadmap.md is untouched and yours to maintain.",
     "To drop the command entirely, delete .claude/commands/awos/roadmap.md and .awos/commands/roadmap.md.",
-    "What changed and why: https://github.com/provectus/awos/blob/main/docs/2.0/upgrading-2.0.md"
+    "What changed and why: https://github.com/provectus/awos/blob/main/docs/2.0/upgrading-1.x.md"
   ]
 }

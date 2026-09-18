@@ -90,7 +90,7 @@ test('the update tells a legacy project what happened to its roadmap command —
     runSetup({ workingDir: legacyDir, packageRoot: repoRoot })
   );
   assert.ok(
-    output.includes('/awos:roadmap left AWOS in 2.0'),
+    output.includes('/awos:roadmap left AWOS.'),
     'the update must announce the roadmap shutdown when migration 003 applies'
   );
   assert.ok(
@@ -100,7 +100,7 @@ test('the update tells a legacy project what happened to its roadmap command —
     'the announcement must name the two files to delete to drop the command entirely'
   );
   assert.ok(
-    output.includes('docs/2.0/upgrading-2.0.md'),
+    output.includes('docs/2.0/upgrading-1.x.md'),
     'the announcement must link the upgrade guide'
   );
   assert.ok(
@@ -109,16 +109,16 @@ test('the update tells a legacy project what happened to its roadmap command —
   );
   const wrapper = await fsPromises.readFile(wrapperPath, 'utf8');
   assert.ok(
-    wrapper.includes('Removed in AWOS 2.0') &&
+    wrapper.includes('Removed from AWOS') &&
       wrapper.includes('@.awos/commands/roadmap.md'),
-    'a never-edited 1.x wrapper must be rewritten to the 2.0 removal wrapper that still resolves to the notice'
+    'a never-edited 1.x wrapper must be rewritten to the removal wrapper that still resolves to the notice'
   );
 
   const secondOutput = await captureOutput(() =>
     runSetup({ workingDir: legacyDir, packageRoot: repoRoot })
   );
   assert.ok(
-    !secondOutput.includes('left AWOS in 2.0'),
+    !secondOutput.includes('left AWOS.'),
     'the announcement must not repeat on the next update — the migration has already applied'
   );
 
@@ -127,7 +127,7 @@ test('the update tells a legacy project what happened to its roadmap command —
     runSetup({ workingDir: freshDir, packageRoot: repoRoot })
   );
   assert.ok(
-    !freshOutput.includes('left AWOS in 2.0'),
+    !freshOutput.includes('left AWOS.'),
     'a fresh project must not get the announcement'
   );
   assert.ok(

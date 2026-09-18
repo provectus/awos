@@ -175,9 +175,7 @@ test('a full pre-2.0 roadmap footprint is shut down gracefully — the body beco
   const result = await silenced(() => runMigrations(workingDir));
 
   assert.ok(
-    (await fsPromises.readFile(bodyPath, 'utf8')).includes(
-      'removed in AWOS 2.0'
-    ),
+    (await fsPromises.readFile(bodyPath, 'utf8')).includes('removed from AWOS'),
     '.awos/commands/roadmap.md must become the removal notice — /awos:roadmap answers that the feature left instead of running the 1.x copy'
   );
   assert.equal(
@@ -204,7 +202,7 @@ test('a full pre-2.0 roadmap footprint is shut down gracefully — the body beco
   );
 });
 
-test('a never-edited 1.x wrapper is rewritten to the 2.0 removal wrapper; a customized wrapper is preserved; the shutdown notice is returned once', async () => {
+test('a never-edited 1.x wrapper is rewritten to the removal wrapper; a customized wrapper is preserved; the shutdown notice is returned once', async () => {
   // Three wrapper variants shipped between npm 0.0.8 and 1.4.0. Any of
   // them, byte-identical, provably carries nothing of the user's, so 003
   // rewrites it: the palette then says the command was removed while the
@@ -247,9 +245,9 @@ test('a never-edited 1.x wrapper is rewritten to the 2.0 removal wrapper; a cust
     const result = await silenced(() => runMigrations(dir));
     const after = await fsPromises.readFile(wrapper, 'utf8');
     assert.ok(
-      after.includes('Removed in AWOS 2.0') &&
+      after.includes('Removed from AWOS') &&
         after.includes('@.awos/commands/roadmap.md'),
-      'a wrapper byte-identical to a shipped 1.x version must be rewritten to the 2.0 removal wrapper that still resolves to the notice'
+      'a wrapper byte-identical to a shipped 1.x version must be rewritten to the removal wrapper that still resolves to the notice'
     );
     assert.deepEqual(
       result.notices.map((n) => n.version),
@@ -258,7 +256,7 @@ test('a never-edited 1.x wrapper is rewritten to the 2.0 removal wrapper; a cust
     );
     assert.ok(
       result.notices[0].lines.some((l) =>
-        l.includes('/awos:roadmap left AWOS in 2.0')
+        l.includes('/awos:roadmap left AWOS.')
       ),
       'the notice must announce the shutdown'
     );
@@ -289,7 +287,7 @@ test('a never-edited 1.x wrapper is rewritten to the 2.0 removal wrapper; a cust
         path.join(customized, '.awos', 'commands', 'roadmap.md'),
         'utf8'
       )
-    ).includes('removed in AWOS 2.0'),
+    ).includes('removed from AWOS'),
     'the preserved wrapper must still resolve to the removal notice'
   );
 
@@ -350,7 +348,7 @@ test('a present command body is replaced with the removal notice, and the notice
   await silenced(() => runMigrations(present));
   assert.ok(
     (await fsPromises.readFile(presentBody, 'utf8')).includes(
-      'removed in AWOS 2.0'
+      'removed from AWOS'
     ),
     'a present command body must be replaced with the removal notice even when no wrapper exists — the body alone is a roadmap trace'
   );
@@ -377,7 +375,7 @@ test('a present command body is replaced with the removal notice, and the notice
   await silenced(() => runMigrations(workingDir));
   const firstTombstone = await fsPromises.readFile(target, 'utf8');
   assert.ok(
-    firstTombstone.includes('removed in AWOS 2.0'),
+    firstTombstone.includes('removed from AWOS'),
     'the real run must repair the broken wrapper import with the removal notice'
   );
   await fsPromises.rm(path.join(workingDir, '.awos', '.migration-version'), {
@@ -527,7 +525,7 @@ test('migration 003 creates the tombstone for a wrapper-only project (committed 
     ".awos/commands/roadmap.md must be created when its preserved wrapper exists — the wrapper's @-import must never stay broken"
   );
   assert.ok(
-    (await fsPromises.readFile(target, 'utf8')).includes('removed in AWOS 2.0'),
+    (await fsPromises.readFile(target, 'utf8')).includes('removed from AWOS'),
     '.awos/commands/roadmap.md must carry the removal-notice tombstone'
   );
 });
@@ -604,9 +602,7 @@ test('preconditions probe with lstat: a dangling symlink at the body path is rep
     'the dangling symlink must be replaced by a regular file carrying the notice'
   );
   assert.ok(
-    (await fsPromises.readFile(bodyPath, 'utf8')).includes(
-      'removed in AWOS 2.0'
-    ),
+    (await fsPromises.readFile(bodyPath, 'utf8')).includes('removed from AWOS'),
     'the body must carry the removal notice after the symlink is replaced'
   );
   assert.equal(result.applied, 1, 'the shutdown migration must apply once');
@@ -614,7 +610,7 @@ test('preconditions probe with lstat: a dangling symlink at the body path is rep
 
 test('an optional migration that fails warns, halts version advancement, and retries on the next run', async () => {
   // Migrations run before the copy step, so a throwing migration blocks
-  // ALL future installs. The 2.0 wrapper repair (003) is marked optional:
+  // ALL future installs. The wrapper repair (003) is marked optional:
   // a failure (here, .awos/commands is a regular file, so creating the
   // tombstone under it throws) must not abort the run — it warns, leaves
   // the version below the failed migration, and succeeds once the cause
@@ -655,7 +651,7 @@ test('an optional migration that fails warns, halts version advancement, and ret
         path.join(workingDir, '.awos', 'commands', 'roadmap.md'),
         'utf8'
       )
-    ).includes('removed in AWOS 2.0'),
+    ).includes('removed from AWOS'),
     'the retried migration 003 must complete the repair it previously could not'
   );
 });

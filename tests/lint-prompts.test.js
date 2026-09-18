@@ -3884,6 +3884,99 @@ test(`better plugin.json version matches its marketplace entry and equals ${EXPE
   );
 });
 
+// The profiler plugin has its own independent version line, with the same
+// three-file discipline as better: plugin.json, marketplace entry, this pin.
+const EXPECTED_PROFILER_PLUGIN_VERSION = '0.1.0';
+
+test(`profiler plugin.json version matches its marketplace entry and equals ${EXPECTED_PROFILER_PLUGIN_VERSION}`, () => {
+  const pluginManifest = JSON.parse(
+    readUtf8(
+      path.join(
+        repoRoot,
+        'plugins',
+        'profiler',
+        '.claude-plugin',
+        'plugin.json'
+      )
+    )
+  );
+  const marketplace = JSON.parse(
+    readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
+  );
+  const entries = marketplace.plugins.filter(
+    (p) => p.name === 'profiler' && p.source === './plugins/profiler'
+  );
+  assert.equal(
+    entries.length,
+    1,
+    'marketplace.json must contain exactly one plugins entry with name="profiler" and source="./plugins/profiler"'
+  );
+  assert.equal(
+    pluginManifest.version,
+    entries[0].version,
+    `plugins/profiler/.claude-plugin/plugin.json version ("${pluginManifest.version}") must match the profiler marketplace entry version ("${entries[0].version}") — bump both together`
+  );
+  assert.equal(
+    pluginManifest.version,
+    EXPECTED_PROFILER_PLUGIN_VERSION,
+    `plugins/profiler/.claude-plugin/plugin.json version must be "${EXPECTED_PROFILER_PLUGIN_VERSION}" — the profiler version moves as one deliberate commit (its plugin.json + its marketplace.json entry + this pin) when plugin behavior changes. Got "${pluginManifest.version}"`
+  );
+});
+
+test('profiler skill and script are wired together', () => {
+  // The skill is the only prompt in the plugin; it must exist with a name
+  // frontmatter (which becomes /profiler:<name>) and must invoke the
+  // bundled script through ${CLAUDE_PLUGIN_ROOT}, the only path that
+  // resolves once the plugin is installed. The script must be present and
+  // executable by node without dependencies.
+  const skillFile = path.join(
+    repoRoot,
+    'plugins',
+    'profiler',
+    'skills',
+    'implement',
+    'SKILL.md'
+  );
+  assert.ok(
+    fs.existsSync(skillFile),
+    'plugins/profiler/skills/implement/SKILL.md must exist'
+  );
+  const { data, body } = parse(readUtf8(skillFile));
+  assert.equal(
+    data.name,
+    'implement',
+    'the skill frontmatter name must be "implement" so it surfaces as /profiler:implement'
+  );
+  assert.ok(
+    body.includes('${CLAUDE_PLUGIN_ROOT}/scripts/profile-implement.mjs'),
+    'SKILL.md must run the bundled script via ${CLAUDE_PLUGIN_ROOT}/scripts/profile-implement.mjs'
+  );
+  assert.ok(
+    /AskUserQuestion/.test(body),
+    'SKILL.md must ask for the mode with AskUserQuestion when none is given'
+  );
+  assert.ok(
+    /Do not kill processes or stop agents yourself/.test(body),
+    'SKILL.md must leave releasing a stall to the user — the profiler observes, it does not act'
+  );
+  const scriptFile = path.join(
+    repoRoot,
+    'plugins',
+    'profiler',
+    'scripts',
+    'profile-implement.mjs'
+  );
+  assert.ok(
+    fs.existsSync(scriptFile),
+    'plugins/profiler/scripts/profile-implement.mjs must exist'
+  );
+  const src = readUtf8(scriptFile);
+  assert.ok(
+    !/from ['"](?!node:)/.test(src),
+    'profile-implement.mjs must import only node: built-ins — the plugin ships with no dependencies'
+  );
+});
+
 test('better command keeps its structural contracts (fan-out, unattended handling, core-contract references)', () => {
   const cmd = readUtf8(
     path.join(repoRoot, 'plugins', 'better', 'commands', 'spec.md')

@@ -347,6 +347,27 @@ test('agent-template.md has the expected frontmatter shape', () => {
   }
 });
 
+test('hired specialists cannot re-delegate: template denies Agent, hire.md enforces it', () => {
+  // A specialist with the Agent tool tends to forward its brief to another
+  // agent (even its own type) instead of doing the work — profiled
+  // /awos:implement runs showed verify tasks three delegation hops deep.
+  // The template denies the tool for generated agents; hire.md applies the
+  // same denial to registry-installed and pre-existing agent files, which
+  // never pass through the template.
+  const { data } = parse(
+    readUtf8(path.join(templatesDir, 'agent-template.md'))
+  );
+  assert.ok(
+    /\bAgent\b/.test(String(data.disallowedTools ?? '')),
+    'templates/agent-template.md frontmatter must carry `disallowedTools: Agent` so a generated specialist cannot spawn subagents'
+  );
+  const hire = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    /disallowedTools: Agent/.test(hire),
+    'commands/hire.md must ensure every installed or existing agent file carries `disallowedTools: Agent` — registry agents never pass through the template'
+  );
+});
+
 test('setup-config.js source directories exist on disk', () => {
   const { copyOperations } = require(
     path.join(repoRoot, 'src', 'config', 'setup-config.js')
@@ -402,12 +423,16 @@ test('implement.md uses XML scope, investigate, skills, and completion-evidence 
   //   <scope_discipline>             — keep the change minimal, don't over-engineer
   //   <investigate_before_answering> — read the relevant files, don't hallucinate
   //   <use_available_skills>         — apply matching project/user/plugin skills
+  //   <do_the_work_yourself>         — the specialist implements, it doesn't re-delegate
+  //   <command_hygiene>              — no daemon piped into tail/grep, stop by PID, timeouts
   //   <completion_evidence>          — cite fresh command output, no belief-based "done"
   const body = readUtf8(path.join(commandsDir, 'implement.md'));
   const needed = [
     '<scope_discipline>',
     '<investigate_before_answering>',
     '<use_available_skills>',
+    '<do_the_work_yourself>',
+    '<command_hygiene>',
     '<completion_evidence>',
   ];
   const missing = needed.filter((tag) => !body.includes(tag));

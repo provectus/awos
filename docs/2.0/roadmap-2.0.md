@@ -38,7 +38,7 @@ Phase 0's remaining work and Phase 1 overlap: the lane evaluation runs while the
 
 ## Phase 0 — Preparation (PR #200)
 
-**Status: executed on the `phase-0` branch; PR #200 is open, `minor` label (relabelled from `major` on 2026-09-18 — it is a 1.x release), MERGEABLE, 0 unresolved threads as of 2026-09-18.** The full record is PR #200 — its body, its commits, and the dispositions recorded on each PR and issue it closed. What it delivered, as facts:
+**Status: executed on the PR #200 branch; the PR is open, `minor` label (relabelled from `major` on 2026-09-18 — it is a 1.x release), MERGEABLE, 0 unresolved threads as of 2026-09-18.** The full record is PR #200 — its body, its commits, and the dispositions recorded on each PR and issue it closed. What it delivered, as facts:
 
 - **Removed:** `/awos:flow` and its generated delivery commands; `/awos:roadmap`, its template, and the roadmap lane in both spec commands; the brownfield subsystem (detection, staging file, triage) — `/awos:product` is interview-only and `/awos:architecture` runs an unconditional codebase gather with drift confirmation in Update Mode.
 - **Kept, deliberately:** `/awos:hire` (removal reverted 2026-09-17 — fate undecided, D-7); the AI-readiness audit (retires in Phase 5, not marked deprecated — do not re-propose); a compatibility read of a user-maintained `context/product/roadmap.md` as spec topic candidates, no sunset.

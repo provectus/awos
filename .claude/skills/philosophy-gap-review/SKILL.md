@@ -49,7 +49,7 @@ Each run costs roughly 250k tokens per reviewer and 6–7 minutes wall clock. Wa
 
 1. Cluster the three lists by underlying defect, not by title. Two reviewers describing one seam from two principles are one gap. A facet only one reviewer saw (for example "provenance lives only in the ephemeral view-model") stays its own entry if it has its own evidence.
 2. Count **Raised by** (1, 2, or 3 of 3). Order the merged list by count, then by severity within a count.
-3. Keep every citation from every reviewer for a cluster; do not re-verify line numbers individually, say so in the recap.
+3. Keep every citation from every reviewer for a cluster; do not re-verify this run's line numbers individually, say so in the recap. Carried-over entries are the exception: Step 3 reopens their citations.
 4. Cross-reference against the current `docs/2.0/gaps.md`: which merged gaps are new, which existing entries no reviewer raised.
 5. Present the merged list in chat and stop. Do not touch the registry until Daria says "rewrite".
 
@@ -64,10 +64,10 @@ Rewrite `docs/2.0/gaps.md` in full. Header keeps **Author**, **Created** (the or
 - **Evidence:** `file:lines`; …
 - **Raised by:** N of 3.
 - **Closes in:** `better:<command>` …, or `not a command — …`, or `undecided — …`
-- **Status:** open | scheduled — Phase … | undecided — …
+- **Status:** open | scheduled — Phase … | undecided — … | decided — …
 ```
 
-Sections: Intent; Confirmed understanding; Implementation; Verification; Memory; Surface; `awos` checking its own work. Existing entries no reviewer raised are kept only if their evidence still holds, marked _carried over_ in Raised by; otherwise they are dropped and the recap says why. Run `npx prettier --check docs/2.0/gaps.md`. Leave the file uncommitted.
+Sections: Intent; Confirmed understanding; Implementation; Verification; Memory; Surface; `awos` checking its own work. Existing entries no reviewer raised are kept only if their evidence still holds — reopen each citation and confirm the path and lines still show the gap — marked _carried over_ in Raised by; otherwise they are dropped and the recap says why. Run `npx prettier --check docs/2.0/gaps.md`. Leave the file uncommitted.
 
 ## Decisions that shape this skill (do not re-litigate)
 

@@ -339,12 +339,25 @@ test('agent-template.md has the expected frontmatter shape', () => {
   const file = path.join(templatesDir, 'agent-template.md');
   const { data, hasFrontmatter } = parse(readUtf8(file));
   assert.ok(hasFrontmatter, 'agent-template.md must have frontmatter');
-  for (const key of ['name', 'description', 'skills']) {
+  for (const key of ['name', 'description', 'model', 'effort', 'skills']) {
     assert.ok(
       Object.prototype.hasOwnProperty.call(data, key),
       `agent-template.md missing key "${key}"`
     );
   }
+  // The defaults are the contract, not just the keys. An agent file that
+  // omits model/effort inherits the orchestrator's, which is what makes a
+  // routine implementation task run on a model priced for hard reasoning.
+  assert.strictEqual(
+    data.model,
+    'sonnet',
+    `agent-template.md must default model to "sonnet" — every hired agent inherits this file, so a change here silently re-prices every delegated task. Got "${data.model}"`
+  );
+  assert.strictEqual(
+    data.effort,
+    'low',
+    `agent-template.md must default effort to "low" — raising it is a per-role decision /awos:hire makes deliberately, never the template's default. Got "${data.effort}"`
+  );
 });
 
 test('setup-config.js source directories exist on disk', () => {

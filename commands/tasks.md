@@ -61,7 +61,7 @@ Follow this process precisely.
   - Check that the project has the MCPs, services, and dependencies needed for testing each slice. If something is missing, instruct the user to install it.
   - If a slice cannot be tested, explain why and get user approval before proceeding.
   - A slice is not complete unless it is tested or the user has explicitly approved skipping the test.
-  - **Verification artifacts are ephemeral.** Inline an artifact cleanup step into each Verify task — screenshots, recorded videos, generated e2e scripts and any other ephemeral files produced during verification get deleted at the end of the Verify task itself. Do **not** delete artifacts from the Feature Testing & Regression slice — those are intentionally kept for the regression suite.
+  - **Verification artifacts are ephemeral.** Inline an artifact cleanup step into each Verify task — screenshots, recorded videos, generated e2e scripts and any other ephemeral files produced during verification get deleted at the end of the Verify task itself. The same step stops every server, browser, or daemon the Verify task started, by the PID recorded when it was started — a daemon's own stop or close command is never piped into another command, which waits on the daemon's open pipe and hangs the task. Do **not** delete artifacts from the Feature Testing & Regression slice — those are intentionally kept for the regression suite.
 
 - **Your Thought Process for Generating the Plan:**
   1.  Identify the absolute smallest piece of user-visible value from the spec. This is **Slice 1**.

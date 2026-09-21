@@ -27,11 +27,12 @@ This command validates that the implemented feature meets all acceptance criteri
 - **Criterion-by-criterion verification.** Each acceptance criterion is checked individually. If any criterion fails, verification stops and reports what's missing.
 - **Stops on failure.** If a criterion isn't met, the command reports which one failed and why — it doesn't skip or ignore failures.
 - **Updates the roadmap.** Successful verification automatically marks the corresponding roadmap item as complete.
+- **Quick mode for low-risk specs.** With the `<!-- quick-verify: true -->` marker in `tasks.md`, verification is a single test-suite run: if the suite is green, every criterion is marked complete and the spec is closed. Use it for small changes where a full criterion walk costs more than it catches.
 - **Detects drift.** If the implementation diverged from what's documented (e.g., a new caching layer was added that's not in the architecture), it suggests running the appropriate `/awos:*` command to update the docs.
 
 ## Common misconceptions
 
-- **"This runs automated tests."** No. It verifies acceptance criteria from the functional spec against the actual implementation. It checks what was built, not test suite results.
+- **"This runs automated tests."** Only in quick mode. By default it verifies acceptance criteria from the functional spec against the actual implementation; with `<!-- quick-verify: true -->` the test suite result is what closes the spec.
 - **"I can verify before all tasks are done."** The command requires all tasks in `tasks.md` to be marked complete before it will proceed.
 - **"Once verified, I'm done forever."** Verification marks this spec as complete, but if the implementation introduced changes to your architecture or product understanding, follow the suggested commands to update those docs.
 

@@ -45,3 +45,5 @@ Intent → confirmed understanding → implementation → verification.
 ## 11. `awos` is for work worth specifying
 
 Reaching agreement before building takes time.
+
+<!-- Kept in step with philosophy.md; see that page for the full reasoning. -->

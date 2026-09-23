@@ -50,8 +50,6 @@ tests/
     └── temp-project.js             # mkdtemp / copyTree / silenced helpers
 ```
 
-Behavioral end-to-end tests (real `claude` sessions, session-log parsing) live in the separate **`awos-qa`** repository.
-
 ## Layer 1 — Static prompt linter
 
 `tests/lint-prompts.test.js`. Reads markdown across `commands/`, `claude/commands/`, `templates/`, and `plugins/awos/skills/ai-readiness-audit/dimensions/` and asserts:
@@ -120,11 +118,9 @@ Adding a new fixture: create `tests/fixtures/<name>/`, optionally with a `before
 
 Cost: ~65 ms for all five.
 
-## Behavioral end-to-end tests live in the `awos-qa` repo
+## Behavioral checks are manual
 
-Static lint catches "prompt mentions X"; only running the real LLM catches "Claude actually did X". That second class of test lives in the separate **`awos-qa`** repository, sibling to this one. It drives a Claude Code session against a seeded scratch project and parses the resulting session log to assert on the tool-call trace.
-
-It's intentionally a separate repo so prompt-author iteration here doesn't pull in the behavioral-test surface area, and so awos-qa can grow other test types (perf, evals, integration) without coupling them to AWOS's release cycle.
+Static lint catches "prompt mentions X"; only running the real LLM catches "Claude actually did X". `npm test` has no automated layer for that second class. The one exception is `/awos:ai-readiness-audit`: the opt-in harness in `tools/ai-readiness-audit/qa/` (`npm run audit:test`) runs the real command and checks its transcript and artifacts. Verify any other prompt behavior by running the command against a separate scratch project (see "Testing prompt changes" in `CONTRIBUTING.md`) and note the run in the PR.
 
 ## Adding tests for new contracts
 

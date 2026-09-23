@@ -124,12 +124,12 @@ npx @provectusinc/awos
 
 **What gets updated:**
 
-- Commands in `.awos/commands`
-- Templates in `.awos/templates`
-- Scripts in `.awos/scripts`
-- Commands in `.claude/commands/awos`
+- Commands in `.awos/commands` — always overwritten
+- Templates in `.awos/templates` — always overwritten
+- Scripts in `.awos/scripts` — always overwritten
+- Wrappers in `.claude/commands/awos` — preserved by default
 
-**Important:** The installer will overwrite existing files in `.claude/commands/awos`. If you've customized these files, back them up first.
+**Your customizations are safe.** The wrappers in `.claude/commands/awos` are your customization layer. When the installer finds wrappers that already exist, it asks before overwriting them; declining keeps your edits and still installs any new wrappers you don't have yet. Non-interactive runs (CI, piped input) never overwrite. Pass `--overwrite` to force a fresh sync, or `--no-overwrite` to make the safe default explicit. To pick up upstream wrapper changes by hand, diff against <https://github.com/provectus/awos/tree/main/claude/commands>.
 
 ---
 

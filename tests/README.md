@@ -82,7 +82,7 @@ Cost: ~30 ms. Catches roughly 80 % of structural regressions on its own.
 - **`file-copier.test.js`**
   - Fresh install lands every source file at its declared destination.
   - Synthetic `commands/synth-test.md` is auto-discovered (validates "no `setup-config.js` edit needed when adding files inside an existing tree").
-  - Wrapper overwrite behavior pinned to current code (`.claude/commands/awos/*.md` _is_ overwritten on update). Comments in the test point at the open §11 docs-vs-code question; flip the assertion when that's resolved intentionally.
+  - Wrapper preservation: existing `.claude/commands/awos/*.md` files are kept when `promptForOverwrite` returns `false`, replaced when it returns `true`, the prompt is never called on a fresh install or in dry-run, and declining still installs wrappers the user does not have yet.
   - Dry-run honesty: `dryRun: true` produces zero filesystem changes.
 - **`migration-runner.test.js`**
   - Migration 001 is idempotent (run twice, second run is a no-op).
@@ -112,7 +112,7 @@ Currently shipped fixtures:
 | --------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `fresh-project/`      | Empty project                                               | Full install layout: `.awos/commands/`, `.claude/commands/awos/`, `context/`, `.awos/.migration-version` |
 | `existing-awos-v0/`   | Stale `.awos/commands/architecture.md` from a prior install | Framework internals always get the latest content (overwritten)                                          |
-| `customized-wrapper/` | User-customized `.claude/commands/awos/architecture.md`     | Pins the current always-overwrite behavior; see the §11 open question in the plan                        |
+| `customized-wrapper/` | User-customized `.claude/commands/awos/architecture.md`     | Customized wrapper is preserved verbatim (non-TTY default); a wrapper the user lacks is still installed  |
 | `mid-workflow/`       | Populated `context/spec/001-test-feature/*.md`              | Installer never touches user spec work                                                                   |
 | `pre-migration-v1/`   | `.claude/agents/python-expert.md` at the pre-v1 path        | Migrations 001 + 002 land cleanly and the version file reads `2`                                         |
 

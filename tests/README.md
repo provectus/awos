@@ -120,7 +120,7 @@ Cost: ~65 ms for all five.
 
 ## Behavioral checks are manual
 
-Static lint catches "prompt mentions X"; only running the real LLM catches "Claude actually did X". There is no automated layer for that second class. Verify prompt behavior by running the command against a separate scratch project (see `CONTRIBUTING.md`) and note the run in the PR.
+Static lint catches "prompt mentions X"; only running the real LLM catches "Claude actually did X". `npm test` has no automated layer for that second class. The one exception is `/awos:ai-readiness-audit`: the opt-in harness in `tools/ai-readiness-audit/qa/` (`npm run audit:test`) runs the real command and checks its transcript and artifacts. Verify any other prompt behavior by running the command against a separate scratch project (see "Testing prompt changes" in `CONTRIBUTING.md`) and note the run in the PR.
 
 ## Adding tests for new contracts
 

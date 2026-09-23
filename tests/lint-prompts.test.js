@@ -614,16 +614,14 @@ test('agent-template.md cues the spawned agent to apply its skills', () => {
 });
 
 test('commands/tasks.md emits a Feature Testing & Regression slice', () => {
-  // The QA pyramid PR makes every spec end with a "Feature Testing &
-  // Regression" slice (unless the user opts out). Downstream tools —
-  // /awos:implement, /awos:verify, the SDD-07 audit dimension — grep
-  // for this literal slice name. If the slice is renamed or
-  // dropped, the assertion catches the regression before behavior tests
-  // hit it.
+  // Every spec ends with a "Feature Testing & Regression" slice (unless
+  // the user opts out). commands/verify.md refers to this slice by its
+  // literal name, so renaming or dropping it silently breaks that
+  // reference.
   const body = readUtf8(path.join(commandsDir, 'tasks.md'));
   assert.ok(
     body.includes('Feature Testing & Regression'),
-    'commands/tasks.md must reference the literal "Feature Testing & Regression" slice name so /awos:verify and SDD-07 can detect it'
+    'commands/tasks.md must reference the literal "Feature Testing & Regression" slice name that commands/verify.md refers to'
   );
 });
 

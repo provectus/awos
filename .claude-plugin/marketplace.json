@@ -19,6 +19,12 @@
       "source": "./plugins/better",
       "description": "Experimental research-backed functional specs: /better:spec forks the core spec flow, fans out codebase, web, and internal-KB research agents before drafting, and blind-verifies the written spec with a context-free reader.",
       "version": "0.1.0"
+    },
+    {
+      "name": "profiler",
+      "source": "./plugins/profiler",
+      "description": "Profiles /awos:implement runs from Claude Code session transcripts: where wall-clock went (model generation, tools, tests, stalls, idle), per-subagent rates, delegation chains, effort leaks, and a live watch mode that flags hung commands while a run is in progress (/profiler:implement).",
+      "version": "0.1.0"
     }
   ]
 }

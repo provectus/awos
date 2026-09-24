@@ -3,7 +3,7 @@
 - **Author:** Daria Garanina
 - **Created:** 2026-09-18
 - **Status:** Draft, pending team review
-- **Role:** the plan for AWOS 2.0 — what gets built, in what order, gated on what, and which decisions are still open. The principles it serves are in [Philosophy](../philosophy.md), [Direction](../direction.md), and [Rationale](../rationale.md); each item names the principle (§N) or direction it advances, and when two directions pull against each other, toward agreement wins. Decision points (D-N) carry a recommendation, not a decision; the register at the end collects them.
+- **Role:** the plan for AWOS 2.0 — what gets built, in what order, gated on what, and which decisions are still open. The principles it serves are in [Philosophy](../philosophy.md), [Direction](../direction.md), and [Rationale](../rationale.md); each item names the principle (§N) or direction it advances, and when two directions pull against each other, toward agreement wins. Decision points (D-N) carry a recommendation, not a decision.
 
 ---
 
@@ -33,7 +33,7 @@ Implement (with the hire rework) and Memory come first, next to each other, righ
 
 ## Phase 0: Preparation
 
-Done on the PR #200 branch: `/awos:flow`, `/awos:roadmap`, and the brownfield subsystem are removed; `/awos:product` is interview-only; `/awos:architecture` gathers the codebase unconditionally and confirms drift item by item in Update Mode; the user-file policy is adopted (Appendix A); the philosophy documents are on `main`. Kept on purpose: `/awos:hire` (reworked in Phase 1) and the AI-readiness audit (retires in Phase 6, not marked deprecated before then). What remains to remove, and when:
+Done on the PR #200 branch: `/awos:flow`, `/awos:roadmap`, and the brownfield subsystem are removed; `/awos:product` is interview-only; `/awos:architecture` gathers the codebase unconditionally and confirms drift item by item in Update Mode; the user-file policy is adopted; the philosophy documents are on `main`. Kept on purpose: `/awos:hire` (reworked in Phase 1) and the AI-readiness audit (retires in Phase 6, not marked deprecated before then). What remains to remove, and when:
 
 | Candidate                                                                                                       | Disposition                                                                        | Where              |
 | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------ |
@@ -141,7 +141,7 @@ The experiment: store functional specs in memory. An outdated spec is either not
 
 - **First.** Sources and knowledge-base access are fixed before the rest of this phase; the spec's knowledge-base lane depends on it.
 - **Problem.** The rigidly structured `sources.md` is useless for the model and sometimes confuses it; `/better:spec`'s knowledge-base lane and `/awos:architecture`'s retrieval are gated on it; the skill that writes it lives in the audit plugin.
-- **Design.** Two different jobs. Which tools are connected is the host's knowledge — every `better` command introspects it at runtime; a hand-written manifest of it is the discovery direction's named regression. What each tool is _for_ here, and where the non-tool sources live (a Slack channel, a runbook, a person), is project knowledge and belongs in the project's documents in plain prose (§8). Delete `configure-external-sources` and `context/sources/` in the same release (user copies of `sources.md` are class 3 — disowned, never touched). The knowledge-base lane reads ticket and communication sources, not documentation only; until this lands, lift the category filter on the existing manifest.
+- **Design.** Two different jobs. Which tools are connected is the host's knowledge — every `better` command introspects it at runtime; a hand-written manifest of it is the discovery direction's named regression. What each tool is _for_ here, and where the non-tool sources live (a Slack channel, a runbook, a person), is project knowledge and belongs in the project's documents in plain prose (§8). Delete `configure-external-sources` and `context/sources/` in the same release (user copies of `sources.md` are never touched). The knowledge-base lane reads ticket and communication sources, not documentation only; until this lands, lift the category filter on the existing manifest.
 - **Decision point D-8 — location and shape.** (a) One plain-text "Knowledge sources" section in `product-definition.md`. (b) Two sections split by consumer: "Where intent lives" in `product-definition.md` (read by `better:spec`'s research lanes) and "Where operations live" in `architecture.md` (read by `better:implement`'s agents). (c) A separate file. Recommendation: (b) — it matches who reads what and adds no file; if Phase 4 later drops one of the two documents, its section moves to whatever survives, or to (c). Owner: unassigned.
 
 ### 3.2 Confirmation status
@@ -215,7 +215,7 @@ The installer installs the `better` plugin as the path; README, `docs/commands/`
 
 ### 5.2 Core command retirement
 
-Each core command retires when its `better` version is beta, under the user-file policy's graceful shutdown: the local body becomes a removal notice pointing at the `better` command; pristine wrappers are rewritten; customized wrappers and all `context/` content are preserved. One migration per retirement wave; `--dry-run` validated; idempotent.
+Each core command retires when its `better` version is beta, under the user-file policy: awos deletes only what it wrote and the user never touched, and anything carrying user intent is preserved and surfaced. The local body becomes a removal notice pointing at the `better` command; pristine wrappers are rewritten; customized wrappers and all `context/` content are preserved. One migration per retirement wave; `--dry-run` validated; idempotent. The per-file table lives in the upgrade guide, `docs/2.0/upgrading-1.x.md`.
 
 ### 5.3 Hire and the installer
 
@@ -238,46 +238,3 @@ Delete `.github/copilot-instructions.md`; strip Cursor and Copilot pointers from
 Last. **Gate: the successor audit, developed in its separate repository, has passed beta.** Delete `plugins/awos/skills/ai-readiness-audit/`, `agents/repo-auditor.md`, `standards-refresh`, `tools/ai-readiness-audit/`, `dist/`, the engine scripts, devDependencies, and CI jobs; retire the now-empty `awos` plugin and the marketplace machinery and its installer step. The audit is not marked deprecated before then. Its Spec-Driven-Development dimension still scores a 2.0 project down for following 2.0 (it expects `roadmap` and `context/product/roadmap.md`); that rides until this phase, and is reopened as one fix if the successor slips past Phase 5.
 
 **Successor-audit requirements** (owned by the successor repository): narrative claims mechanically traceable to check evidence (#157); an applicability model with "can't determine" and deployment context (#158); a per-ecosystem fixture matrix, Maven multi-module first (#159); orchestration-root / multi-repo topology as first-class (#172); attribution as an unscored descriptor, if anywhere (#173); BDD suites first-class and a pyramid check that SKIPs rather than PASSes on unclassifiable trees (#176); one definition of "project file" plus coverage-report dedup (#179); the measured-or-not MTTR decision owned by a single function (#186).
-
----
-
-## Decision register
-
-| ID   | Decision                                          | Options                                                                                                                       | Recommendation                         | Owner                    | Needed by      |
-| ---- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------------------------ | -------------- |
-| D-1  | Where the confirmation is recorded                | (a) `Status` in the document; (b) sidecar file                                                                                | (a)                                    | Daria                    | Phase 3 start  |
-| D-2  | Where the profiler lives                          | (a) awos marketplace, as today; (b) awos-qa                                                                                   | (b) when Phase 5 collapses plugins     | Daria, kmakarychev-dev   | Phase 5        |
-| D-3  | Prior agreements: separate lane or merged         | (a) fourth lane (#205); (b) merged into codebase lane with verdict rule; (c) measure both                                     | (c), bias to (b)                       | Rail                     | Phase 0 exit   |
-| D-4  | Is the scope split a confirmation moment          | (a) internal; (b) reviewable                                                                                                  | (a), (b) behind a flag                 | `better:implement` owner | Phase 1 start  |
-| D-5  | How `better:implement` reports                    | (a) chat; (b) `run.md` in the spec directory                                                                                  | (b)                                    | `better:implement` owner | Phase 1 start  |
-| D-6  | `**[Agent: name]**` convention without `tasks.md` | (a) carry into `run.md`; (b) drop, report agent choice                                                                        | (b) unless D-4 = (b)                   | `better:implement` owner | Phase 1        |
-| D-7  | Hire's fate                                       | (a) `better:hire` foundation step; (b) `better:implement` hires on demand; (c) leaves the path                                | (b)                                    | Daria, Rail              | Phase 1        |
-| D-8  | Sources: location and shape                       | (a) one section in product definition; (b) intent in product definition + operations in architecture; (c) separate file       | (b); moves if Phase 4 drops a document | unassigned               | Phase 3 start  |
-| D-9  | Memory and sources: one story or two              | one / two                                                                                                                     | two, shared home                       | Rail                     | Phase 2 review |
-| D-10 | `better` during 1.x                               | Decided: `better` becomes core at the 2.0 release. Open: installer installs the plugin, or README points at `/plugin install` | installer installs it                  | Daria                    | Phase 4 beta   |
-
----
-
-## Rules
-
-- Lint and test updates ship in the same PR as the change they pin; every `better` command ships with its lint contracts and its awos-qa scenarios in the same phase.
-- Removals of user-visible commands ship with idempotent, `--dry-run`-validated migrations and the graceful shutdown as their compatibility story; the user-file policy governs every retirement.
-- The `major` label is reserved for the release that makes `better` core (Phase 5); every release before it is a 1.x `minor`, PR #200 included.
-- Each PR body names the principle or direction it serves.
-- awos-qa lockstep is recorded per phase with an owner and a target and lands once the surface settles.
-- A new gap found during any phase is raised with the team and is not scheduled here as its own item; a gap is closed only when the flow closes it.
-- The `better` plugin version moves as one deliberate commit per phase, three files together, until D-10 collapses the line.
-
----
-
-## Appendix A: User-file policy
-
-_awos deletes only what awos wrote and the user never touched; anything carrying user intent is preserved and surfaced, never silently removed._ Every retirement in Phase 5 follows this table.
-
-| Class | Files                                                                        | Treatment                                                                                                                                                                                                                                                                                                                                         |
-| ----- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | `.awos/` internals                                                           | Migrations delete freely. Graceful shutdown for retired commands: the local command body is replaced with a removal notice, so calling it answers that the feature left AWOS instead of running a frozen copy; the orphaned template is removed. `context/product/roadmap.md` is the team's own tool — never created, updated, or marked by AWOS. |
-| 2     | Wrappers in `.claude/commands/awos/`                                         | A wrapper byte-identical to any shipped 1.x version is rewritten to the removal wrapper, so it still resolves to the notice. A customized wrapper is preserved untouched and resolves to the same notice. Deleting either file is the user's move.                                                                                                |
-| 3     | User content (`context/product/*.md`, generated flow commands, `sources.md`) | Never touched; explicitly disowned in the upgrade guide and the plugin README ("yours to keep, move, or delete").                                                                                                                                                                                                                                 |
-
-The marketplace registration in user settings follows the same rule: removed when it is exactly the entry the installer wrote, left and notified otherwise. Mechanics live in the installer's migrations.

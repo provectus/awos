@@ -22,8 +22,8 @@ The way to 2.0 is through experiments that define what 2.0 is, not through items
 | 0     | Preparation — flow, roadmap, brownfield removed; philosophy adopted; prior-agreements lane in flight              | —                                               | Done except three merges (#200, awos-qa #51, #205) and the lane evaluation                       |
 | 1     | Implement — one command that splits the work, implements it, and verifies the result; verify first; hire reworked | Phase 0                                         | `better:implement` benchmarked against `/awos:implement` on the profiler's criteria; D-7 decided |
 | 2     | Memory — an experiment: can memory-based context, in a solution of the team's own, replace the Product Definition | Phase 0                                         | Team review of the results; if the memory infrastructure is not viable, investment stops         |
-| 3     | BetterSpec — the seam contract, proven on `better:spec`: what every `better` command emits and honours            | Sources and knowledge-base access fixed (4.3)   | Contract in templates and lint; `better:spec` release                                            |
-| 4     | Foundation experiment — does the path need `/product` and `/architecture`, and in what shape; sources revisited   | Phase 2 review, for the Product Definition half | Team review of the results; each document kept, reworked, or dropped; `sources.md` dissolved     |
+| 3     | BetterSpec — the seam contract, proven on `better:spec`: what every `better` command emits and honours            | Phase 0                                         | `sources.md` dissolved; contract in templates and lint; `better:spec` release                    |
+| 4     | Foundation experiment — does the path need `/product` and `/architecture`, and in what shape                      | Phase 2 review, for the Product Definition half | Team review of the results; each document kept, reworked, or dropped                             |
 | 5     | Switch the path — installer and docs point at `better`; core commands retire; release CI/CD                       | Phases 1 and 3 in beta; Phase 4 reviewed        | A newcomer following the README reaches the `better` flow and nothing else                       |
 | 6     | Audit stack retirement, and with it the marketplace machinery it justified                                        | External successor audit passes beta            | Timing depends on another repository                                                             |
 
@@ -38,7 +38,7 @@ Done on the PR #200 branch: `/awos:flow`, `/awos:roadmap`, and the brownfield su
 | Candidate                                                                                                       | Disposition                                                                        | Where              |
 | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------ |
 | Core `spec`, `tech`, `tasks`, `implement`, `verify`, `product`, `architecture`                                  | Graceful shutdown, each when its `better` version reaches beta or Phase 4 drops it | Phase 5            |
-| `configure-external-sources` skill + `context/sources/` conventions                                             | Dissolved into host-tool introspection                                             | Phase 4, item 4.3  |
+| `configure-external-sources` skill + `context/sources/` conventions                                             | Dissolved into host-tool introspection                                             | Phase 3, item 3.1  |
 | `hire`                                                                                                          | Reworked under D-7; retires only if D-7 removes it                                 | Phase 1            |
 | AI-readiness audit, `standards-refresh`, engine, `dist/`, marketplace machinery                                 | Deleted when the external successor passes beta                                    | Phase 6            |
 | Multi-host residue (`.github/copilot-instructions.md`, Cursor/Copilot pointers in `docs/testing-strategies.md`) | Deleted — principle 10                                                             | Phase 5 docs sweep |
@@ -75,7 +75,7 @@ Done on the PR #200 branch: `/awos:flow`, `/awos:roadmap`, and the brownfield su
 
 ### 1.3 Technical spec
 
-Out of scope: the step works and needs no redesign. What the seam contract asks of `better:tech` — reading the spec's status and markers, opening `research-notes.md` — sits with the contract (3.9).
+Out of scope: the step works and needs no redesign. What the seam contract asks of `better:tech` — reading the spec's status and markers, opening `research-notes.md` — sits with the contract (3.10).
 
 ### 1.4 Profiler and benchmark criteria
 
@@ -133,48 +133,55 @@ The experiment: store functional specs in memory. An outdated spec is either not
 
 ## Phase 3: BetterSpec and the seam contract
 
-**Goal.** Fix what every command on the path emits and honours — so the `better` commands are built against a contract instead of retrofitted — and prove it on `better:spec`, the one `better` command that exists. BetterSpec stays a standalone item: it has value on its own — better acceptance criteria, even with the current implement — but sources and knowledge-base access must be fixed first (4.3). Serves §3, §2 and §7, §6, §5, and the fidelity direction.
+**Goal.** Fix what every command on the path emits and honours — so the `better` commands are built against a contract instead of retrofitted — and prove it on `better:spec`, the one `better` command that exists. BetterSpec stays a standalone item: it has value on its own — better acceptance criteria, even with the current implement — but sources and knowledge-base access are fixed first (3.1). Serves §3, §2 and §7, §6, §5, and the fidelity direction.
 
 **Why the seam.** `/better:spec` produces the richest agreement in the repo, and every signal in it — the confirmation, the markers, the provenance, the verifier's residuals — is dropped at the boundary to the next command. `better:implement` (Phase 1) is built before this contract exists; when the contract lands, its verify reads the agreement the seam records instead of the raw spec.
 
-### 3.1 Confirmation status
+### 3.1 Sources revisited
+
+- **First.** Sources and knowledge-base access are fixed before the rest of this phase; the spec's knowledge-base lane depends on it.
+- **Problem.** The rigidly structured `sources.md` is useless for the model and sometimes confuses it; `/better:spec`'s knowledge-base lane and `/awos:architecture`'s retrieval are gated on it; the skill that writes it lives in the audit plugin.
+- **Design.** Two different jobs. Which tools are connected is the host's knowledge — every `better` command introspects it at runtime; a hand-written manifest of it is the discovery direction's named regression. What each tool is _for_ here, and where the non-tool sources live (a Slack channel, a runbook, a person), is project knowledge and belongs in the project's documents in plain prose (§8). Delete `configure-external-sources` and `context/sources/` in the same release (user copies of `sources.md` are class 3 — disowned, never touched). The knowledge-base lane reads ticket and communication sources, not documentation only; until this lands, lift the category filter on the existing manifest.
+- **Decision point D-8 — location and shape.** (a) One plain-text "Knowledge sources" section in `product-definition.md`. (b) Two sections split by consumer: "Where intent lives" in `product-definition.md` (read by `better:spec`'s research lanes) and "Where operations live" in `architecture.md` (read by `better:implement`'s agents). (c) A separate file. Recommendation: (b) — it matches who reads what and adds no file; if Phase 4 later drops one of the two documents, its section moves to whatever survives, or to (c). Owner: unassigned.
+
+### 3.2 Confirmation status
 
 - A `Status` vocabulary the flow actually writes and reads: `Draft` (written, not yet put to a human) → `Confirmed` (a human said yes, in-session or asynchronously) → `Completed` (verified against the agreement). `better:spec` writes `Draft` and moves to `Confirmed` when the post-write review is answered; `better:tech` and `better:implement` refuse a `Draft` spec unless an explicit override is passed. The templates lose `In Review | Approved`. Asynchronous shape: an unattended run ends by opening a PR that carries the spec and tech spec; approving that PR is the confirmation.
 - **Decision point D-1 — where the confirmation is recorded.** (a) A `Status` field in the spec's header, as today. (b) A sidecar file per spec directory that also records who confirmed and what was open. Recommendation: (a) — one document, one source of truth (§6).
 
-### 3.2 Marker vocabulary
+### 3.3 Marker vocabulary
 
 One marker convention across all five `better` commands — the `[NEEDS CLARIFICATION: …]` form — with one rule for consumers: a command that reads a document carrying an unresolved marker resolves it with the human, carries it forward explicitly, or refuses to proceed; it never builds over it silently. One unattended contract for every `better` command: `AWOS_UNATTENDED` skips interviews, never resolves a marker, and never proceeds past a `Draft` gate. Foundation documents record which sections were interviewed, gathered with evidence, or assumed. Written into the templates, pinned by lint.
 
-### 3.3 Provenance in the source
+### 3.4 Provenance in the source
 
 Provenance becomes part of the markdown spec (a per-requirement source tag and a "Decisions" section), and `render-spec.mjs` derives the review page from the markdown alone — no view-model file — so any command that edits or verifies the spec can regenerate the page.
 
-### 3.4 Repo gates
+### 3.5 Repo gates
 
-Flip the `test` CI job to blocking; extend the lint scope to `plugins/better/**`; add a lint contract per item in 3.1–3.3 as it lands. The engine job stays non-blocking until Phase 6 removes it. §5 applied to ourselves.
+Flip the `test` CI job to blocking; extend the lint scope to `plugins/better/**`; add a lint contract per item in 3.2–3.4 as it lands. The engine job stays non-blocking until Phase 6 removes it. §5 applied to ourselves.
 
-### 3.5 Verifier completeness and residuals
+### 3.6 Verifier completeness and residuals
 
 Give `spec-verifier` the product definition and the research findings as a second input and two more questions: did every finding land in a requirement or get explicitly dropped, and does the spec contradict the product definition. Run it once more after the post-write edits. Write residuals into the spec as markers.
 
-### 3.6 Open questions on the review page
+### 3.7 Open questions on the review page
 
-An "Open questions" section first on the page; the page regenerated from the markdown (3.3) by any command that edits or verifies the spec.
+An "Open questions" section first on the page; the page regenerated from the markdown (3.4) by any command that edits or verifies the spec.
 
-### 3.7 Update Mode in `better:spec`
+### 3.8 Update Mode in `better:spec`
 
 An Update Mode with the same rigor as creation — the prior-agreements lane runs against the amendment, the change is confirmed, the Change Log records why. The amended spec returns to `Draft` for the affected criteria so `better:implement` reopens them.
 
-### 3.8 Egress consent and the web lane
+### 3.9 Egress consent and the web lane
 
 The web lane sits behind the same consent posture as the knowledge-base lane and artifact publishing, and is skipped when the brief is marked internal or when comparable-product research cannot move the outcome (§1). The gate is a one-time project setting, not a per-run question.
 
-### 3.9 `better:tech` and the seam
+### 3.10 `better:tech` and the seam
 
 The technical spec step itself is out of scope (1.3); this is only what it must honour once the contract exists. `better:tech` opens by reading the spec's status and markers — a `Draft` spec stops it, an unresolved marker is resolved or carried forward, never built over. It reads `research-notes.md`. It writes first and confirms after, honouring the unattended contract. Where it must choose without evidence it writes a marker, not an `**Assumption:**`.
 
-**Exit.** Templates carry the status and marker vocabulary and `better:spec` is the first command to emit both; lint pins them; the review page derives from markdown alone and shows open questions; verifier and Update Mode shipped; web-lane consent in place; `better:tech` honours the seam; `test` CI job blocking; `better` plugin version bumped as one commit.
+**Exit.** `sources.md` dissolved and D-8 decided; templates carry the status and marker vocabulary and `better:spec` is the first command to emit both; lint pins them; the review page derives from markdown alone and shows open questions; verifier and Update Mode shipped; web-lane consent in place; `better:tech` honours the seam; `test` CI job blocking; `better` plugin version bumped as one commit.
 
 ---
 
@@ -186,20 +193,13 @@ The technical spec step itself is out of scope (1.3); this is only what it must 
 
 ### 4.1 `/awos:product`
 
-Follows the Phase 2 review: if memory replaces the Product Definition, the command goes with it. If the document stays, the rework is: interview-only stays; unanswered sections become markers, not assumptions; a derived view at confirmation; a "Where intent lives" section (4.3) naming the ticket, chat, and document sources `better:spec` should read; the status vocabulary, so `better:spec` can tell a confirmed product definition from a draft.
+Follows the Phase 2 review: if memory replaces the Product Definition, the command goes with it. If the document stays, the rework is: interview-only stays; unanswered sections become markers, not assumptions; a derived view at confirmation; a "Where intent lives" section (3.1) naming the ticket, chat, and document sources `better:spec` should read; the status vocabulary, so `better:spec` can tell a confirmed product definition from a draft.
 
 ### 4.2 `/awos:architecture`
 
-The question is whether the codebase gather and the drift confirmation earn their place on the path, or whether `better:spec`'s codebase lane and `better:implement`'s agents find what they need without a maintained document. If the document stays, the rework is: keep the gather and drift mechanics; an unevidenced choice is a marker, not a default (3.2); sections record interviewed / gathered / assumed; a derived view at confirmation (3.3); doc retrieval by host-tool introspection (4.3); the hire pointer follows D-7; the document becomes the home of _operational_ knowledge sources (4.3) — where implementers look when debugging.
+The question is whether the codebase gather and the drift confirmation earn their place on the path, or whether `better:spec`'s codebase lane and `better:implement`'s agents find what they need without a maintained document. If the document stays, the rework is: keep the gather and drift mechanics; an unevidenced choice is a marker, not a default (3.3); sections record interviewed / gathered / assumed; a derived view at confirmation (3.4); doc retrieval by host-tool introspection (3.1); the hire pointer follows D-7; the document becomes the home of _operational_ knowledge sources (3.1) — where implementers look when debugging.
 
-### 4.3 Sources revisited
-
-- **Precondition for Phase 3.** Sources and knowledge-base access must be fixed before BetterSpec, whatever this phase decides about the two documents.
-- **Problem.** The rigidly structured `sources.md` is useless for the model and sometimes confuses it; `/better:spec`'s knowledge-base lane and `/awos:architecture`'s retrieval are gated on it; the skill that writes it lives in the audit plugin.
-- **Design.** Two different jobs. Which tools are connected is the host's knowledge — every `better` command introspects it at runtime; a hand-written manifest of it is the discovery direction's named regression. What each tool is _for_ here, and where the non-tool sources live (a Slack channel, a runbook, a person), is project knowledge and belongs in the project's documents in plain prose (§8). Delete `configure-external-sources` and `context/sources/` in the same release (user copies of `sources.md` are class 3 — disowned, never touched). The knowledge-base lane reads ticket and communication sources, not documentation only; until this lands, lift the category filter on the existing manifest.
-- **Decision point D-8 — location and shape.** (a) One plain-text "Knowledge sources" section in `product-definition.md`. (b) Two sections split by consumer: "Where intent lives" in `product-definition.md` (read by `better:spec`'s research lanes) and "Where operations live" in `architecture.md` (read by `better:implement`'s agents). (c) A separate file. Recommendation: (b) if both documents survive this phase — it matches who reads what and adds no file; (c) if either is dropped. Owner: unassigned.
-
-**Exit.** The team reviews the results and decides per document: kept, reworked, or dropped. `sources.md` dissolved; D-8 decided on whatever survives.
+**Exit.** The team reviews the results and decides per document: kept, reworked, or dropped.
 
 ---
 
@@ -223,7 +223,7 @@ D-7 is decided in Phase 1. Whatever the choice, the installer's unconditional `a
 
 ### 5.4 Release and test automation
 
-Blocking tests (3.4); plugin version pins checked in CI against the marketplace as a blocking job; a release job that publishes the plugin versions alongside the npm package so the marketplace never lags the tag; the awos-qa behavioural suite triggered on a `better` command change (needs a Claude runtime in CI — _assumption_: a token is available to the org; if not, awos-qa stays a manual pre-release gate); the Phase 1 profiler benchmark run against a fixed fixture spec on each `better:implement` change, so a regression in fidelity or wall time is visible in the PR. awos-recruitment's own CI is out of scope; if D-7 chooses (b), the MCP's search contract becomes an interface `better:implement` depends on and gets a contract test here.
+Blocking tests (3.5); plugin version pins checked in CI against the marketplace as a blocking job; a release job that publishes the plugin versions alongside the npm package so the marketplace never lags the tag; the awos-qa behavioural suite triggered on a `better` command change (needs a Claude runtime in CI — _assumption_: a token is available to the org; if not, awos-qa stays a manual pre-release gate); the Phase 1 profiler benchmark run against a fixed fixture spec on each `better:implement` change, so a regression in fidelity or wall time is visible in the PR. awos-recruitment's own CI is out of scope; if D-7 chooses (b), the MCP's search contract becomes an interface `better:implement` depends on and gets a contract test here.
 
 ### 5.5 Docs and multi-host residue
 
@@ -243,18 +243,18 @@ Last. **Gate: the successor audit, developed in its separate repository, has pas
 
 ## Decision register
 
-| ID   | Decision                                          | Options                                                                                                                       | Recommendation                     | Owner                    | Needed by      |
-| ---- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------ | -------------- |
-| D-1  | Where the confirmation is recorded                | (a) `Status` in the document; (b) sidecar file                                                                                | (a)                                | Daria                    | Phase 3 start  |
-| D-2  | Where the profiler lives                          | (a) awos marketplace, as today; (b) awos-qa                                                                                   | (b) when Phase 5 collapses plugins | Daria, kmakarychev-dev   | Phase 5        |
-| D-3  | Prior agreements: separate lane or merged         | (a) fourth lane (#205); (b) merged into codebase lane with verdict rule; (c) measure both                                     | (c), bias to (b)                   | Rail                     | Phase 0 exit   |
-| D-4  | Is the scope split a confirmation moment          | (a) internal; (b) reviewable                                                                                                  | (a), (b) behind a flag             | `better:implement` owner | Phase 1 start  |
-| D-5  | How `better:implement` reports                    | (a) chat; (b) `run.md` in the spec directory                                                                                  | (b)                                | `better:implement` owner | Phase 1 start  |
-| D-6  | `**[Agent: name]**` convention without `tasks.md` | (a) carry into `run.md`; (b) drop, report agent choice                                                                        | (b) unless D-4 = (b)               | `better:implement` owner | Phase 1        |
-| D-7  | Hire's fate                                       | (a) `better:hire` foundation step; (b) `better:implement` hires on demand; (c) leaves the path                                | (b)                                | Daria, Rail              | Phase 1        |
-| D-8  | Sources: location and shape                       | (a) one section in product definition; (b) intent in product definition + operations in architecture; (c) separate file       | (b) if both documents survive      | unassigned               | Phase 4 review |
-| D-9  | Memory and sources: one story or two              | one / two                                                                                                                     | two, shared home                   | Rail                     | Phase 2 review |
-| D-10 | `better` during 1.x                               | Decided: `better` becomes core at the 2.0 release. Open: installer installs the plugin, or README points at `/plugin install` | installer installs it              | Daria                    | Phase 4 beta   |
+| ID   | Decision                                          | Options                                                                                                                       | Recommendation                         | Owner                    | Needed by      |
+| ---- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------------------------ | -------------- |
+| D-1  | Where the confirmation is recorded                | (a) `Status` in the document; (b) sidecar file                                                                                | (a)                                    | Daria                    | Phase 3 start  |
+| D-2  | Where the profiler lives                          | (a) awos marketplace, as today; (b) awos-qa                                                                                   | (b) when Phase 5 collapses plugins     | Daria, kmakarychev-dev   | Phase 5        |
+| D-3  | Prior agreements: separate lane or merged         | (a) fourth lane (#205); (b) merged into codebase lane with verdict rule; (c) measure both                                     | (c), bias to (b)                       | Rail                     | Phase 0 exit   |
+| D-4  | Is the scope split a confirmation moment          | (a) internal; (b) reviewable                                                                                                  | (a), (b) behind a flag                 | `better:implement` owner | Phase 1 start  |
+| D-5  | How `better:implement` reports                    | (a) chat; (b) `run.md` in the spec directory                                                                                  | (b)                                    | `better:implement` owner | Phase 1 start  |
+| D-6  | `**[Agent: name]**` convention without `tasks.md` | (a) carry into `run.md`; (b) drop, report agent choice                                                                        | (b) unless D-4 = (b)                   | `better:implement` owner | Phase 1        |
+| D-7  | Hire's fate                                       | (a) `better:hire` foundation step; (b) `better:implement` hires on demand; (c) leaves the path                                | (b)                                    | Daria, Rail              | Phase 1        |
+| D-8  | Sources: location and shape                       | (a) one section in product definition; (b) intent in product definition + operations in architecture; (c) separate file       | (b); moves if Phase 4 drops a document | unassigned               | Phase 3 start  |
+| D-9  | Memory and sources: one story or two              | one / two                                                                                                                     | two, shared home                       | Rail                     | Phase 2 review |
+| D-10 | `better` during 1.x                               | Decided: `better` becomes core at the 2.0 release. Open: installer installs the plugin, or README points at `/plugin install` | installer installs it                  | Daria                    | Phase 4 beta   |
 
 ---
 

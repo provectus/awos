@@ -19,8 +19,10 @@ permissions:
   contents: read
   id-token: write
 
+# One group per version: a shared group keeps only one pending run, so a
+# third queued release would cancel the second before it ever published.
 concurrency:
-  group: publish
+  group: publish-${{ github.event.release.tag_name || inputs.version }}
   cancel-in-progress: false
 
 jobs:

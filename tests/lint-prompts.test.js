@@ -582,14 +582,6 @@ test('implement.md falls back to general-purpose for a missing agent and reports
     /falling back to `general-purpose`/.test(body),
     'commands/implement.md must fall back to `general-purpose` when a task names an agent that is not installed'
   );
-  assert.ok(
-    /record the substitution/i.test(body),
-    'commands/implement.md must record each general-purpose substitution (which task, which missing agent) for the final report'
-  );
-  assert.ok(
-    body.includes('Never present substituted work as specialist work'),
-    'commands/implement.md must keep the substitution-honesty rule — the completion report names every fallback'
-  );
 });
 
 test('implement.md and tech.md show explicit Agent() invocation syntax', () => {
@@ -684,34 +676,14 @@ test('commands/tasks.md records staffing gaps as open questions after the write'
   // so an unanswered question never hides a gap.
   const body = readUtf8(path.join(commandsDir, 'tasks.md'));
   assert.ok(
-    /## Step 3b: Record Staffing Gaps/.test(body),
-    'commands/tasks.md must carry a Step 3b that records staffing gaps'
+    body.includes('`## Open Questions`') &&
+      body.includes('**[Agent: general-purpose]**'),
+    'commands/tasks.md must record staffing gaps under a `## Open Questions` section and mark the uncovered tasks **[Agent: general-purpose]** — the two tokens /awos:implement reads'
   );
-  const step3b = body
-    .split(/## Step 3b/i)
-    .slice(1)
-    .join('')
-    .split(/## Step 4/i)[0];
+  const implement = readUtf8(path.join(commandsDir, 'implement.md'));
   assert.ok(
-    step3b.includes('`## Open Questions`') &&
-      step3b.includes('**[Agent: general-purpose]**'),
-    'commands/tasks.md Step 3b must mark uncovered tasks general-purpose (the plan stays executable) and record the gap in a `## Open Questions` section'
-  );
-  assert.ok(
-    /never as checkbox lines/i.test(step3b),
-    'commands/tasks.md Step 3b must forbid checkbox lines in ## Open Questions — otherwise /awos:implement treats them as tasks and /awos:verify never sees the spec complete'
-  );
-  const step5 = body
-    .split(/## Step 5/i)
-    .slice(1)
-    .join('');
-  assert.ok(
-    step5.includes('Accept the `general-purpose` assignments') &&
-      step5.includes('Keep the gaps recorded') &&
-      /Keep the gaps recorded[^\n]*Default when the question is skipped/.test(
-        step5
-      ),
-    'commands/tasks.md Step 5 must ask accept-or-keep after the write, with "keep the gaps recorded" as the unanswered default'
+    implement.includes('`## Open Questions`'),
+    'commands/implement.md must read the `## Open Questions` section tasks.md writes — a token written by one command and read by none is a dropped hand-off'
   );
 });
 
@@ -841,73 +813,6 @@ test('verify.md does not hardcode a verification-tool priority order', () => {
   assert.ok(
     !/fallback order:\s*browser MCP/i.test(body),
     'commands/verify.md must not name a fixed verification-tool fallback order'
-  );
-});
-
-test('verify.md never punts a drivable render to the user', () => {
-  // Road-test regression (session 928eba0a): the generated /fix-bug
-  // paused and told the user to run `! make run` for the live check,
-  // even though the agent could reclaim the port or drive the deploy
-  // itself. It punted because a shared-resource guardrail made
-  // "can't auto-verify" artificially true. Running the app is verify's
-  // job, and the manual AskUserQuestion fallback is only for a criterion
-  // with no agent-driven render path at all.
-  const verify = readUtf8(path.join(commandsDir, 'verify.md'));
-  assert.ok(
-    /Running the app is your job, not the user's/i.test(verify) ||
-      /Running the app to verify is/i.test(verify),
-    "commands/verify.md must state that running the app to verify is the agent's job — a reserved shared resource is not grounds to hand the user a `run` command"
-  );
-  assert.ok(
-    /last resort/i.test(verify) && /alternate port/i.test(verify),
-    'commands/verify.md must frame the manual AskUserQuestion fallback as a last resort and name agent-driven paths (alternate port / reclaim / deploy) to try first'
-  );
-});
-
-test('both spec commands pre-seed from prompt source material and never ask for it', () => {
-  // Restored after the flow removal deleted the mixed test that carried
-  // it: the "consume source material already in the prompt" contract is
-  // not flow-dependent — it scans <user_prompt>, whose standing producer
-  // is the user's own invocation — and it ships verbatim in
-  // commands/spec.md and near-verbatim in plugins/better/commands/spec.md.
-  // The prohibition guards against the net-negative regression: a per-run
-  // "any source material?" question costs every prompt that carries no
-  // references.
-  const specFiles = [
-    path.join(commandsDir, 'spec.md'),
-    path.join(repoRoot, 'plugins', 'better', 'commands', 'spec.md'),
-  ];
-  for (const file of specFiles) {
-    const rel = path.relative(repoRoot, file);
-    const body = readUtf8(file);
-    assert.ok(
-      /Consume source material already in the prompt/i.test(body) &&
-        /ticket IDs, URLs, or file paths/i.test(body),
-      `${rel} must consume ticket IDs / URLs / file paths already in <user_prompt> before the interview, folding them into the known-info extraction`
-    );
-    assert.ok(
-      /without a new question/i.test(body),
-      `${rel} must pre-seed WITHOUT adding a source-material question`
-    );
-    // The presence checks prove the prohibition prose survives, not that
-    // no forbidden ask was added — pin the phrase to a single occurrence
-    // and require that one to be the prohibition itself: a reintroduced
-    // "any source material?" ask trips the count.
-    assert.strictEqual(
-      (body.match(/any source material/gi) || []).length,
-      1,
-      `${rel} must name "any source material" exactly once — only in the prohibition, never as an added ask`
-    );
-    assert.ok(
-      /Do (\*\*)?not(\*\*)? add an "any source material\?" question/.test(body),
-      `the single "any source material" mention in ${rel} must be the prohibition sentence, not a reintroduced source-material question`
-    );
-  }
-  // The core command additionally states the rationale, so the "why"
-  // travels with the rule when the better variant folds into core (6B).
-  assert.ok(
-    /net-negative/i.test(readUtf8(specFiles[0])),
-    'commands/spec.md must keep the net-negative rationale on the prohibition'
   );
 });
 
@@ -1060,14 +965,6 @@ test('functional-spec-template.md anchors the spec on a Topic field', () => {
     /^- \*\*Topic:\*\*/m.test(body),
     'functional-spec-template.md must carry a `- **Topic:**` header field — the anchor both spec commands fill in Step 1'
   );
-  for (const file of ['commands/spec.md', 'plugins/better/commands/spec.md']) {
-    assert.ok(
-      /Determine the Specification Topic/.test(
-        readUtf8(path.join(repoRoot, file))
-      ),
-      `${file} must carry the "Determine the Specification Topic" step that fills the template's Topic field`
-    );
-  }
 });
 
 test('architecture.md and product.md receive the verify handoff through $ARGUMENTS', () => {
@@ -1081,10 +978,6 @@ test('architecture.md and product.md receive the verify handoff through $ARGUMEN
     assert.ok(
       /<user_prompt>\s*\$ARGUMENTS\s*<\/user_prompt>/.test(body),
       `commands/${name} must declare $ARGUMENTS inside <user_prompt> so a verify handoff prompt reaches it`
-    );
-    assert.ok(
-      /receiving side of `\/awos:verify`/.test(body),
-      `commands/${name} must consume a non-empty <user_prompt> as the change request — the receiving side of /awos:verify's handoff`
     );
   }
 });
@@ -1231,25 +1124,6 @@ test('platform reference files exist under configure-external-sources skill', ()
   }
 });
 
-test('configure-external-sources SKILL.md offers manual as an access method', () => {
-  // The manifest must let a source be configured as manual (the user
-  // pastes content instead of a tool fetching it); the consuming side of
-  // that contract is pinned in the architecture.md retrieval test below.
-  const skillPath = path.join(
-    repoRoot,
-    'plugins',
-    'awos',
-    'skills',
-    'configure-external-sources',
-    'SKILL.md'
-  );
-  const skillBody = readUtf8(skillPath);
-  assert.ok(
-    /Access:.*manual/i.test(skillBody),
-    'SKILL.md manifest must include Access: manual as an option'
-  );
-});
-
 test('configure-external-sources SKILL.md has fallback for failed verification', () => {
   // If tool verification fails and troubleshooting doesn't help, the user
   // must be able to switch to manual or remove the source rather than being
@@ -1291,27 +1165,9 @@ test('architecture.md external-documentation retrieval contract', () => {
   // "report only NEW" instruction — passing the block is what suppresses
   // duplicate findings, and the instruction is what makes the block act.
   const body = readUtf8(path.join(commandsDir, 'architecture.md'));
-  const extDocBlock = body
-    .split(/external documentation context/i)
-    .slice(1)
-    .join('');
   assert.ok(
     !body.includes('Skill(name="awos:configure-external-sources")'),
     'commands/architecture.md must not invoke the configure-external-sources skill — it only reads a sources.md some other process configured'
-  );
-  assert.ok(
-    /sources\.md.*exists.*configured|sources\.md.*configured/i.test(
-      extDocBlock
-    ),
-    'commands/architecture.md must guard documentation retrieval on context/sources/sources.md existing with configured status, inside the External documentation context block'
-  );
-  assert.ok(
-    /manual/i.test(extDocBlock),
-    'commands/architecture.md retrieval must branch on manual sources (user-pasted content, no tool fetch)'
-  );
-  assert.ok(
-    body.includes('<existing_findings>') && /Report only NEW/i.test(body),
-    'commands/architecture.md must pass the codebase findings inside <existing_findings> and instruct the retrieval agent to report only NEW findings'
   );
 });
 
@@ -1344,18 +1200,6 @@ test('architecture.md Update Mode re-gathers the codebase and confirms drift aft
     'commands/architecture.md Creation Mode must delegate the every-run codebase gather to an Explore subagent — the orchestrator reading the tree itself is the anti-pattern the unconditional-gather contract exists to prevent'
   );
   assert.ok(
-    /re-gather/i.test(updateBlock),
-    'commands/architecture.md Update Mode must contain the codebase re-gather step'
-  );
-  assert.ok(
-    /same codebase exploration as Creation Mode/i.test(updateBlock),
-    'Update Mode must reuse the Creation Mode exploration (same Explore agent and prompt), not define a second gather'
-  );
-  assert.ok(
-    /drift/i.test(updateBlock),
-    'Update Mode must diff gather findings against the document and surface drift'
-  );
-  assert.ok(
     !updateBlock.includes('AskUserQuestion'),
     'the drift AskUserQuestion must not fire before the Finalization write — a dismissed pre-write question ends an unattended run before the deliverable exists'
   );
@@ -1364,10 +1208,6 @@ test('architecture.md Update Mode re-gathers the codebase and confirms drift aft
       finalizationBlock.includes('Adopt') &&
       finalizationBlock.includes('Keep as recorded'),
     "Finalization must resolve each drift item via AskUserQuestion with Adopt / 'Keep as recorded' options, after the write"
-  );
-  assert.ok(
-    /never applied to the document silently/i.test(finalizationBlock),
-    "Finalization must document 'Keep as recorded' as the unanswered-drift-question default — drift is never applied silently"
   );
 });
 

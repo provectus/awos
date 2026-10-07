@@ -108,3 +108,5 @@ After the loop exits, count completed `[x]` and total tasks in the target spec's
 - If all tasks are `[x]`: "All tasks complete (100%). Run `/awos:verify` to verify acceptance criteria and mark spec as Completed."
 
 If any task was delegated to `general-purpose` because its `**[Agent: name]**` marker named an agent that is not installed (recorded in Step 2), list each substitution: the task and the missing agent name (e.g., "Task 2.3 ran under `general-purpose` — `rust-expert` is not installed"). Never present substituted work as specialist work.
+
+If `tasks.md` carries a `## Open Questions` section, repeat its entries here. `/awos:tasks` records staffing gaps there — tasks it assigned to `general-purpose` because no installed agent covered them — and the user kept them recorded rather than resolving them, so this run executed those tasks under the generalist. The report is where that choice becomes visible again.

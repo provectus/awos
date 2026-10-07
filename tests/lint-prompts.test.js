@@ -1051,6 +1051,44 @@ test('functional-spec-template.md declares a Change Log section', () => {
   );
 });
 
+test('functional-spec-template.md anchors the spec on a Topic field', () => {
+  // With the roadmap retired, the explicit topic is what anchors a spec.
+  // Both spec commands fill it (Step 1 "Determine the Specification
+  // Topic"); the template must carry the field they write into.
+  const body = readUtf8(path.join(templatesDir, 'functional-spec-template.md'));
+  assert.ok(
+    /^- \*\*Topic:\*\*/m.test(body),
+    'functional-spec-template.md must carry a `- **Topic:**` header field — the anchor both spec commands fill in Step 1'
+  );
+  for (const file of ['commands/spec.md', 'plugins/better/commands/spec.md']) {
+    assert.ok(
+      /Determine the Specification Topic/.test(
+        readUtf8(path.join(repoRoot, file))
+      ),
+      `${file} must carry the "Determine the Specification Topic" step that fills the template's Topic field`
+    );
+  }
+});
+
+test('architecture.md and product.md receive the verify handoff through $ARGUMENTS', () => {
+  // /awos:verify ends by telling the user to run
+  // `/awos:architecture <prompt>` or `/awos:product <prompt>` describing
+  // what changed. Each receiver must declare $ARGUMENTS inside
+  // <user_prompt> and consume it as the change request in Update Mode —
+  // otherwise the handoff reaches a command that re-asks what to change.
+  for (const name of ['architecture.md', 'product.md']) {
+    const body = readUtf8(path.join(commandsDir, name));
+    assert.ok(
+      /<user_prompt>\s*\$ARGUMENTS\s*<\/user_prompt>/.test(body),
+      `commands/${name} must declare $ARGUMENTS inside <user_prompt> so a verify handoff prompt reaches it`
+    );
+    assert.ok(
+      /receiving side of `\/awos:verify`/.test(body),
+      `commands/${name} must consume a non-empty <user_prompt> as the change request — the receiving side of /awos:verify's handoff`
+    );
+  }
+});
+
 // ---------------------------------------------------------------------------
 // External sources skill and documentation retrieval
 // ---------------------------------------------------------------------------

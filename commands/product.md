@@ -37,6 +37,7 @@ Your primary task is to **fill in** a product definition template using a guided
 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
 - A skipped or unanswered question is never a stop signal. Fall back to a documented default or assumption for that question and continue through the remaining steps, including writing `context/product/product-definition.md`.
+- The one exception is Update Mode's which-section question when `<user_prompt>` is empty: with no requested change and no answer there is nothing to update, so the run ends cleanly, leaving the saved definition untouched.
 
 <!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 

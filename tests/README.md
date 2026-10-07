@@ -1,6 +1,6 @@
 # AWOS test suite
 
-A three-layer safety net that catches structural regressions in AWOS prompts and installer behavior at PR time. Built on Node's `node:test` built-in — **zero npm dependencies**. Runs identically under `node --test` (CI primary) and `bun test` (local cross-runtime sanity).
+A safety net that catches structural regressions in AWOS prompts and installer behavior at PR time. Three layers live in this directory and are built on Node's `node:test` built-in with **zero npm dependencies**; `npm test` also runs the audit engine's TypeScript layer (`plugins/awos/skills/ai-readiness-audit/**/*.test.ts`, needs `npm ci` for `tsx`), described in the root `CLAUDE.md`. Runs identically under `node --test` (CI primary) and `bun test` (local cross-runtime sanity).
 
 ## Why this exists
 
@@ -31,11 +31,16 @@ CI runs `npm test` under Node 22 in `.github/workflows/quality-check.yml` (non-b
 tests/
 ├── README.md                       # this file
 ├── lint-prompts.test.js            # Layer 1: static prompt linter
+├── better-render.test.js           # Layer 1: plugins/better render-spec.mjs contracts
+├── profiler-script.test.js         # Layer 1: plugins/profiler script against a synthetic session
 ├── config/
 │   └── wrapper-schema.json         # which wrapper frontmatter fields are required
 ├── installer/                      # Layer 2: installer unit tests
+│   ├── configurators.test.js
 │   ├── file-copier.test.js
 │   ├── migration-runner.test.js
+│   ├── pattern-matcher.test.js
+│   ├── prompt.test.js
 │   └── setup-orchestrator.test.js
 ├── fixtures.test.js                # Layer 3: harness for example projects
 ├── fixtures/                       # Layer 3: example projects

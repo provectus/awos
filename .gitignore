@@ -13,3 +13,6 @@ __pycache__/
 
 # Local review drafts/plans (pr-review, pr-comments-address)
 review/
+
+# Serena (LSP-backed coding agent) per-project config and memories
+.serena/

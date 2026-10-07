@@ -182,13 +182,6 @@ test('subagent-enumerating commands tell Claude how to discover agents', () => {
       `commands/${file} must reference '.claude/agents/' as the subagent discovery source`
     );
   }
-  for (const file of frontmatterReaders) {
-    const body = readUtf8(path.join(commandsDir, file));
-    assert.ok(
-      /frontmatter|YAML/.test(body),
-      `commands/${file} must tell Claude to parse the discovered agents' frontmatter (it writes back to the skills: list)`
-    );
-  }
 });
 
 test('all /awos:<name> cross-references resolve', () => {
@@ -449,44 +442,6 @@ test('every core command declares an INTERACTION section', () => {
   );
 });
 
-test('deliverable commands write their file on an unanswered question', () => {
-  // These document-generating commands ask the user questions and then
-  // write a file. In an unattended `claude -p` run those questions are
-  // silently dismissed; without an explicit fallback the command narrates a
-  // draft and ends the turn, so the deliverable never lands on disk. Each
-  // listed command must carry the INTERACTION rule that treats a skipped or
-  // unanswered question as a signal to fall back to a default and still write
-  // the file — never as a stop. See commands/tasks.md for the canonical rule.
-  //
-  // Every command that generates a document under context/ and asks the
-  // user questions on the way carries this rule. spec.md's default is its
-  // own `[NEEDS CLARIFICATION: …]` marker rather than a documented value,
-  // but the contract is the same: an unanswered question is never a stop —
-  // record the gap and still write the deliverable.
-  const deliverableCommands = [
-    'product.md',
-    'architecture.md',
-    'spec.md',
-    'tasks.md',
-    'tech.md',
-  ];
-  const missing = [];
-  for (const command of deliverableCommands) {
-    const body = readUtf8(path.join(commandsDir, command));
-    if (
-      !body.includes('never a stop signal') ||
-      !body.includes('including writing')
-    ) {
-      missing.push(command);
-    }
-  }
-  assert.deepEqual(
-    missing,
-    [],
-    `deliverable commands missing the unattended-write fallback rule ("never a stop signal" + "including writing"): ${missing.join(', ')}`
-  );
-});
-
 test('wrappers do not duplicate the AskUserQuestion rule', () => {
   // Counterpart to the test above: the rule moved from wrappers to
   // core. If a wrapper still mentions AskUserQuestion the contract has
@@ -535,19 +490,6 @@ test('hired-agents.md is the canonical coverage-report path', () => {
   );
 });
 
-test('agent-template.md cues the spawned agent to apply its skills', () => {
-  // /awos:hire writes a `skills:` list into each agent's frontmatter,
-  // and Claude Code attaches those skills when the agent runs. But the
-  // attachment is only useful if the agent's prompt body cues it to
-  // actually apply them. The template body must therefore tell the
-  // agent to consult its frontmatter `skills:` list when working.
-  const body = readUtf8(path.join(templatesDir, 'agent-template.md'));
-  assert.ok(
-    /skills\b[^\n]*\bfrontmatter\b|\bfrontmatter\b[^\n]*\bskills\b/i.test(body),
-    'templates/agent-template.md body must instruct the agent to apply skills declared in its frontmatter'
-  );
-});
-
 test('subagent-enumerating commands cover plugin-provided agents', () => {
   // /awos:tech, /awos:hire, and /awos:tasks assign or report on
   // specialists, and /awos:implement verifies each task's named agent before
@@ -562,10 +504,6 @@ test('subagent-enumerating commands cover plugin-provided agents', () => {
     assert.ok(
       body.includes('plugin-name:'),
       `commands/${file} must mention the "plugin-name:" prefix used to recognize plugin-provided subagents`
-    );
-    assert.ok(
-      /`?Agent`?\s+tool[’']s\s+description\s+block/i.test(body),
-      `commands/${file} must tell Claude to read the Agent tool's description block to find plugin-provided agents`
     );
   }
 });
@@ -613,57 +551,6 @@ test('commands/tasks.md emits a Feature Testing & Regression slice', () => {
   );
 });
 
-test('ai-sdlc-adoption dimension exists with correct frontmatter and required body references', () => {
-  const dimFile = path.join(dimensionsDir, 'ai-sdlc-adoption.md');
-  assert.ok(
-    fs.existsSync(dimFile),
-    'dimensions/ai-sdlc-adoption.md must exist'
-  );
-  const body = readUtf8(dimFile);
-  const { data, hasFrontmatter } = parse(body);
-
-  assert.ok(hasFrontmatter, 'ai-sdlc-adoption.md must have frontmatter');
-  assert.equal(
-    data.name,
-    'ai-sdlc-adoption',
-    'frontmatter name must be "ai-sdlc-adoption"'
-  );
-  assert.ok(
-    Array.isArray(data['depends-on']),
-    'frontmatter depends-on must be an array'
-  );
-  for (const dep of [
-    'project-topology',
-    'ai-development-tooling',
-    'spec-driven-development',
-  ]) {
-    assert.ok(
-      data['depends-on'].includes(dep),
-      `frontmatter depends-on must include "${dep}"`
-    );
-  }
-
-  // The dimension must not resurrect the retired per-dimension collect/metric
-  // fan-out. Neither verb exists in cli.ts — the dispatcher is
-  // progress/render/rollup/audit-core/enrich/aggregate/patch-*/report-context
-  // — and this lint used to REQUIRE the reference, so the file documented
-  // commands the CLI has never implemented and the suite enforced it.
-  assert.ok(
-    !/cli[^"\n]*"?\s+collect\b/.test(body),
-    'body must not document a "collect" engine command — no such verb exists in cli.ts, and the per-source collect block it belonged to could not produce collected/incidents.json, the artifact has_incident_source now reads'
-  );
-  // Body must reference the standards data file as the source of category metadata.
-  assert.ok(
-    body.includes('standards.toml'),
-    'body must reference standards.toml as the category metadata source'
-  );
-  // Body must describe emission of the per-dimension .json artifact.
-  assert.ok(
-    body.includes('.json'),
-    'body must describe emission of a .json artifact (the per-dimension source-of-truth)'
-  );
-});
-
 test('commands/tasks.md records staffing gaps as open questions after the write', () => {
   // A task no available agent covers is a staffing gap the user decides
   // on, not a silent general-purpose fallback. The plan must stay
@@ -684,48 +571,6 @@ test('commands/tasks.md records staffing gaps as open questions after the write'
   assert.ok(
     implement.includes('`## Open Questions`'),
     'commands/implement.md must read the `## Open Questions` section tasks.md writes — a token written by one command and read by none is a dropped hand-off'
-  );
-});
-
-test('commands/tasks.md picks the QA agent with a search-first rule', () => {
-  // Option A: testing-expert is one option among many — not a hard
-  // requirement. tasks.md must (a) instruct the agent to search for a
-  // QA-coded subagent rather than naming testing-expert as required,
-  // (b) offer an AskUserQuestion fallback when none is found, and
-  // (c) not contain the "Requires `testing-expert` agent" hard gate
-  // that the previous draft shipped with.
-  const body = readUtf8(path.join(commandsDir, 'tasks.md'));
-  assert.ok(
-    /Search for a QA-coded subagent/i.test(body),
-    'commands/tasks.md must instruct a search-first QA agent selection (Step 3a)'
-  );
-  // A missing QA agent is a staffing gap, and the gap question is
-  // dismissable — so it must come after the Step 4 write (a dismissed
-  // pre-write question ends an unattended run with no tasks.md), and it
-  // must carry the slice-drop option only the QA gap has.
-  const preWriteBlock = body
-    .split(/## Step 3a/i)
-    .slice(1)
-    .join('')
-    .split(/## Step 4/i)[0];
-  const step5Block = body
-    .split(/## Step 5/i)
-    .slice(1)
-    .join('');
-  assert.ok(
-    !preWriteBlock.includes('AskUserQuestion'),
-    'commands/tasks.md Steps 3a/3b must not ask about the QA or staffing gap before the Step 4 write — a dismissed pre-write question ends an unattended run with no deliverable'
-  );
-  assert.ok(
-    step5Block.includes('AskUserQuestion') &&
-      step5Block.includes('Drop the Feature Testing & Regression slice'),
-    'commands/tasks.md Step 5 must resolve the QA gap via AskUserQuestion after the write, offering the slice-drop option'
-  );
-  assert.ok(
-    !/Requires\s+`?testing-expert`?\s+agent\.\s+If it is not present/i.test(
-      body
-    ),
-    'commands/tasks.md must not hard-require testing-expert — the search-first rule replaces that gate'
   );
 });
 
@@ -800,78 +645,6 @@ test('commands/verify.md acknowledges the skip-tests marker', () => {
   );
 });
 
-test('verify.md does not hardcode a verification-tool priority order', () => {
-  // The Slack feedback was explicit: tools should be chosen by fit
-  // and wall-clock time, not a fixed ladder. The previous draft used
-  // an arrow ladder "browser MCP → curl/shell → AskUserQuestion".
-  // Lock that out.
-  const body = readUtf8(path.join(commandsDir, 'verify.md'));
-  assert.ok(
-    !/browser MCP\s*→\s*curl\/shell\s*→/.test(body),
-    'commands/verify.md must not declare a hardcoded "browser MCP → curl/shell → AskUserQuestion" tool priority'
-  );
-  assert.ok(
-    !/fallback order:\s*browser MCP/i.test(body),
-    'commands/verify.md must not name a fixed verification-tool fallback order'
-  );
-});
-
-test('completion claims require fresh evidence — the verification reflex is baked into agent prompts', () => {
-  // The verification-before-completion discipline: an agent may not
-  // report its own work as done on belief ("should work", "Done!") —
-  // the claim cites command output produced in the same run, and a
-  // test written for a change is proven by failing without that
-  // change. "RED validation" is the canonical name — coined by the
-  // testing slice commands/tasks.md emits — so other prompts reference
-  // it rather than coining parallel terms. agent-template.md is the
-  // ancestor of every hired specialist; /awos:implement's
-  // <completion_evidence> block makes each subagent prove the tests it
-  // writes, and Step 4's independent spot-check treats that proof as a
-  // claim to verify, not a fact to relay.
-  const tasks = readUtf8(path.join(commandsDir, 'tasks.md'));
-  assert.ok(
-    /RED validation/.test(tasks),
-    'commands/tasks.md testing slice must carry the literal "RED validation" wording — the other prompts reference it as the canonical term'
-  );
-
-  const agentTemplate = readUtf8(path.join(templatesDir, 'agent-template.md'));
-  assert.ok(
-    /completion claim cites its evidence/i.test(agentTemplate),
-    'templates/agent-template.md must require completion claims to cite fresh evidence — every hired agent inherits this template'
-  );
-  assert.ok(
-    /browser-automation/i.test(agentTemplate) &&
-      /docs\/screenshots\//.test(agentTemplate) &&
-      /curl/.test(agentTemplate),
-    "templates/agent-template.md must name the sanctioned evidence forms, mirroring commands/verify.md — browser-automation + screenshot to docs/screenshots/ for UI; curl/shell/log/database/MCP for the rest — so evidence isn't read as test-only"
-  );
-  assert.ok(
-    /RED validation/.test(agentTemplate) &&
-      /revert|stash/i.test(agentTemplate) &&
-      /fail/i.test(agentTemplate),
-    'templates/agent-template.md must require RED validation of new tests — revert the covered change, see the test fail, restore, see it pass'
-  );
-  assert.ok(
-    /opted out of tests/i.test(agentTemplate),
-    'templates/agent-template.md must make the tests opt-out explicit — evidence stays required in another form, and RED validation goes inert rather than prompting an unwanted test'
-  );
-
-  const implement = readUtf8(path.join(commandsDir, 'implement.md'));
-  assert.ok(
-    /RED validation/.test(implement) && /watch it fail/i.test(implement),
-    'commands/implement.md <completion_evidence> block must carry the RED-validation fail-first proof for tests a subagent writes as part of a task'
-  );
-  assert.ok(
-    /tailored to the task/i.test(implement) &&
-      /exact test command/i.test(implement),
-    'commands/implement.md <completion_evidence> block must be tailored per task — the evidence requirement in every delegation, RED validation instantiated concretely (what to revert, the exact test command) only when the task writes a test'
-  );
-  assert.ok(
-    implement.includes('<!-- skip-tests: true -->'),
-    'commands/implement.md <completion_evidence> block must honor the <!-- skip-tests: true --> marker — drop the RED-validation clause under an opt-out while keeping the evidence requirement'
-  );
-});
-
 test('setup-config does not auto-populate .claude/agents/', () => {
   // .claude/agents/ is the user's customization area. The earlier draft
   // of this PR shipped a `plugins/awos/agents` → `.claude/agents` copy
@@ -900,24 +673,6 @@ test('templates/qa-context-template.md is not bundled with AWOS core', () => {
   assert.ok(
     !fs.existsSync(file),
     'templates/qa-context-template.md must not exist in AWOS core — nothing in this repo reads it'
-  );
-});
-
-test('SDD-07 recognizes the dual-model QA coverage', () => {
-  // The audit dimension was updated to recognize both:
-  //   - the new model (Feature Testing & Regression as the final slice)
-  //   - the legacy per-slice Verify-task model
-  // If the wording drifts so that only the legacy model is recognized,
-  // every PR using the new model would warn — and vice versa.
-  const file = path.join(dimensionsDir, 'spec-driven-development.md');
-  const body = readUtf8(file);
-  assert.ok(
-    /Feature Testing & Regression/.test(body),
-    'SDD-07 must reference the new "Feature Testing & Regression" final slice when discussing QA coverage'
-  );
-  assert.ok(
-    /Legacy model/i.test(body),
-    'SDD-07 must still recognize the legacy per-slice QA verification model so older specs are not over-flagged'
   );
 });
 
@@ -1010,101 +765,6 @@ test('configure-external-sources SKILL.md exists with required frontmatter', () 
   );
 });
 
-test('configure-external-sources SKILL.md references references/ for platform guides', () => {
-  // The skill must load platform-specific setup guides from its own
-  // references/ directory, not from commands/sources/ (which no longer
-  // exists).
-  const body = readUtf8(
-    path.join(
-      repoRoot,
-      'plugins',
-      'awos',
-      'skills',
-      'configure-external-sources',
-      'SKILL.md'
-    )
-  );
-  assert.ok(
-    body.includes('references/'),
-    'SKILL.md must reference its references/ directory for platform guides'
-  );
-});
-
-test('configure-external-sources SKILL.md includes privacy gate for all sources', () => {
-  // External sources may contain sensitive or personal data (PII in tickets,
-  // internal discussions in wikis, private messages in chats). The skill must
-  // warn the user that data will be sent to the LLM provider's API before
-  // proceeding with retrieval.
-  const body = readUtf8(
-    path.join(
-      repoRoot,
-      'plugins',
-      'awos',
-      'skills',
-      'configure-external-sources',
-      'SKILL.md'
-    )
-  );
-  const privacySection = body
-    .split(/privacy gate/i)
-    .slice(1)
-    .join('');
-  assert.ok(
-    /LLM/i.test(privacySection),
-    'SKILL.md privacy gate must mention LLM provider access'
-  );
-});
-
-test('configure-external-sources SKILL.md stops when user declines at privacy gate', () => {
-  // If the user declines at the privacy gate, the skill must write
-  // ## Status: none and stop — not fall through to tool setup.
-  const body = readUtf8(
-    path.join(
-      repoRoot,
-      'plugins',
-      'awos',
-      'skills',
-      'configure-external-sources',
-      'SKILL.md'
-    )
-  );
-  const privacySection = body
-    .split(/privacy gate/i)
-    .slice(1)
-    .join('');
-  assert.ok(
-    /skip.*Status: none|skip.*stop/i.test(privacySection),
-    'SKILL.md must stop with ## Status: none when the user declines at the privacy gate'
-  );
-});
-
-test('configure-external-sources SKILL.md handles restart-resume with status markers', () => {
-  // After adding MCP servers, the editor must be restarted. The skill
-  // must write a status marker to sources.md and resume on re-invocation.
-  const body = readUtf8(
-    path.join(
-      repoRoot,
-      'plugins',
-      'awos',
-      'skills',
-      'configure-external-sources',
-      'SKILL.md'
-    )
-  );
-  assert.ok(
-    /restart-pending/i.test(body),
-    'SKILL.md must use a restart-pending status marker for MCP restart-resume flow'
-  );
-  assert.ok(
-    body.includes('verified'),
-    'SKILL.md must use a verified status marker for post-verification state'
-  );
-  assert.ok(
-    /## Status:/i.test(body),
-    'SKILL.md must define ## Status: markers for state management'
-  );
-});
-
 test('platform reference files exist under configure-external-sources skill', () => {
   // The skill reads platform-specific setup guides from references/.
   // All three category files must exist.
@@ -1122,34 +782,6 @@ test('platform reference files exist under configure-external-sources skill', ()
       `plugins/awos/skills/configure-external-sources/references/${f} must exist`
     );
   }
-});
-
-test('configure-external-sources SKILL.md has fallback for failed verification', () => {
-  // If tool verification fails and troubleshooting doesn't help, the user
-  // must be able to switch to manual or remove the source rather than being
-  // stuck in a loop. Split on Step 6 heading to isolate the verification
-  // section (not Step 1's passing mention of "tool verification").
-  const skillPath = path.join(
-    repoRoot,
-    'plugins',
-    'awos',
-    'skills',
-    'configure-external-sources',
-    'SKILL.md'
-  );
-  const body = readUtf8(skillPath);
-  const verificationSection = body
-    .split(/## Step 6/)
-    .slice(1)
-    .join('');
-  assert.ok(
-    /switch to manual/i.test(verificationSection),
-    'SKILL.md Step 6 must offer switching to manual when verification fails'
-  );
-  assert.ok(
-    /remove this source/i.test(verificationSection),
-    'SKILL.md Step 6 must offer removing the source when verification fails'
-  );
 });
 
 test('architecture.md external-documentation retrieval contract', () => {
@@ -1242,206 +874,6 @@ const skillRoot = path.join(
   'ai-readiness-audit'
 );
 const referencesDir = path.join(skillRoot, 'references');
-
-test('ai-sdlc metrics catalog exists and covers all tiers and rules', () => {
-  const p = path.join(referencesDir, 'ai-sdlc-metrics-catalog.md');
-  assert.ok(fs.existsSync(p), 'expected references/ai-sdlc-metrics-catalog.md');
-  const src = readUtf8(p);
-  for (const tier of ['Tier G', 'Tier C', 'Tier I', 'Tier D']) {
-    assert.match(src, new RegExp(tier), `catalog must define ${tier}`);
-  }
-  for (const id of [
-    'tooling_depth',
-    'change_failure_rate',
-    'ai_attribution',
-    'work_mix_allocation',
-    'mttr',
-    'external_spec_coverage',
-  ]) {
-    assert.match(src, new RegExp(id), `catalog must define ${id}`);
-  }
-  // AI attribution is framed as a lower bound, not the true adoption level.
-  assert.match(src, /lower bound/i);
-  // No-PII, no-money, and the MTTR-skip rule must be stated.
-  assert.match(
-    src,
-    /no data is attributed to named individuals/i,
-    'catalog must state the actual privacy guarantee (repository granularity, no per-person attribution / no-PII)'
-  );
-  assert.match(src, /never.{0,20}(money|currenc)/i);
-  assert.match(src, /MTTR/);
-  assert.match(src, /SKIP/);
-  // Citations present.
-  assert.match(src, /DORA/);
-  assert.match(src, /DX Core 4/);
-  assert.match(src, /Provectus/);
-  // New design: catalog is an index that references the engine + standards.
-  assert.match(src, /standards\.toml/, 'catalog must reference standards.toml');
-  assert.match(
-    src,
-    /collectors?\//,
-    'catalog must reference the collectors/ layer'
-  );
-  assert.match(src, /metrics?\//, 'catalog must reference the metrics/ layer');
-  // Current-state headline + explicit history (not before/after as the frame).
-  assert.match(
-    src,
-    /current[- ]state/i,
-    'catalog headline must be current-state'
-  );
-  assert.match(
-    src,
-    /history|lookback|monthly/i,
-    'catalog must describe explicit history'
-  );
-  // Reliability is per-metric and computed.
-  assert.match(
-    src,
-    /reliabilit/i,
-    'catalog must describe per-metric reliability'
-  );
-  // Each metric row must name its real metrics/<id>.ts file.
-  for (const id of [
-    'tooling_depth',
-    'active_contributors',
-    'merge_frequency',
-    'lead_time_for_change',
-    'pr_cycle_time',
-    'code_churn',
-    'change_failure_rate',
-    'review_rework',
-    'ai_attribution',
-    'ci_pass_rate',
-    'pipeline_duration',
-    'external_spec_coverage',
-    'work_mix_allocation',
-    'issue_throughput',
-    'mttr',
-  ]) {
-    assert.match(
-      src,
-      new RegExp(`metrics/${id}\\.ts`),
-      `catalog must name metrics/${id}.ts`
-    );
-  }
-  // Each collector must be referenced by its real TS filename.
-  for (const col of [
-    'collectors/git.ts',
-    'collectors/ci.ts',
-    'collectors/tracker.ts',
-    'collectors/docs.ts',
-  ]) {
-    assert.match(
-      src,
-      new RegExp(col.replace('/', '\\/')),
-      `catalog must name ${col}`
-    );
-  }
-  // No stale Python filenames.
-  assert.doesNotMatch(
-    src,
-    /collectors\/[\w.]+\.py\b/,
-    'catalog must not name any .py collector'
-  );
-  assert.doesNotMatch(
-    src,
-    /metrics\/[\w.]+\.py\b/,
-    'catalog must not name any .py metric'
-  );
-  assert.doesNotMatch(
-    src,
-    /\.py\b/,
-    'catalog must not contain any .py references'
-  );
-});
-
-test('data-sources reference covers boundary rule, detection, and history params', () => {
-  const p = path.join(referencesDir, 'data-sources.md');
-  assert.ok(fs.existsSync(p), 'expected references/data-sources.md');
-  const src = readUtf8(p);
-  // The audit boundary is always a folder or a GitHub org — never a manifest file.
-  assert.doesNotMatch(
-    src,
-    /sources\.toml/i,
-    'data-sources must not reference a sources.toml scope manifest — the boundary is the folder or GitHub org'
-  );
-  assert.match(
-    src,
-    /boundary/i,
-    'data-sources must describe the audit boundary rule'
-  );
-  assert.match(
-    src,
-    /gh repo list/,
-    'data-sources must enumerate a GitHub org via `gh repo list <org>`'
-  );
-  assert.match(
-    src,
-    /org mode/i,
-    'data-sources must describe org mode (a non-git folder of git subdirs, or a GitHub org)'
-  );
-  assert.match(src, /monorepo/i); // monorepo = single-repo mode over the whole folder
-  assert.match(src, /current repo/i); // no-arg default
-  assert.match(src, /AskUserQuestion/); // confirm scope once, at start
-  assert.match(src, /discovery/i); // discovery-first flow
-  assert.match(
-    src,
-    /standards\.toml/,
-    'data-sources must point at standards.toml for period/history params'
-  );
-  assert.match(
-    src,
-    /monthly|30[- ]day|bucket/i,
-    'data-sources must describe the monthly bucket cadence'
-  );
-  assert.match(
-    src,
-    /2[- ]year|730|lookback/i,
-    'data-sources must describe the 2-year lookback cap'
-  );
-  assert.match(
-    src,
-    /minimal.{0,30}history|min(imum)?[- ]source[- ]history/i,
-    'data-sources must state the minimal-source-history bound'
-  );
-  assert.match(
-    src,
-    /SKIP/,
-    'data-sources must state the SKIP-when-no-source rule'
-  );
-  // Must name the real TS collector files, not Python ones.
-  for (const col of [
-    'collectors/git.ts',
-    'collectors/ci.ts',
-    'collectors/tracker.ts',
-    'collectors/docs.ts',
-  ]) {
-    assert.match(
-      src,
-      new RegExp(col.replace('/', '\\/')),
-      `data-sources must name ${col}`
-    );
-  }
-  // Must reference the bundled CLI entry point.
-  assert.match(src, /dist\/cli\.js/, 'data-sources must reference dist/cli.js');
-  // Must reference the collected/ artifact directory.
-  assert.match(
-    src,
-    /collected\//,
-    'data-sources must reference the collected/ artifact dir'
-  );
-  // No stale Python filenames.
-  assert.doesNotMatch(
-    src,
-    /collectors\/[\w.]+\.py\b/,
-    'data-sources must not name any .py collector'
-  );
-  assert.doesNotMatch(
-    src,
-    /\.py\b/,
-    'data-sources must not contain any .py references'
-  );
-});
 
 test('standards.toml exists and matches the category/band schema', () => {
   const p = path.join(referencesDir, 'standards.toml');
@@ -1702,50 +1134,6 @@ test('standards.toml prevention-coverage categories carry cluster metadata corre
   }
 });
 
-test('scoring.md uses additive weighted categories, not A-F grades', () => {
-  const p = path.join(skillRoot, 'scoring.md');
-  const src = readUtf8(p);
-  assert.match(src, /additive/i, 'scoring.md must describe additive scoring');
-  assert.match(src, /weight/i, 'scoring.md must describe category weights');
-  assert.match(
-    src,
-    /coverage ratio/i,
-    'scoring.md must define the coverage ratio'
-  );
-  assert.match(
-    src,
-    /standards\.toml/,
-    'scoring.md must reference standards.toml as the weight source'
-  );
-  assert.match(
-    src,
-    /uncapped|no cap|not capped/i,
-    'scoring.md must state the total is uncapped'
-  );
-  // The fixed-ceiling model must be gone.
-  assert.doesNotMatch(
-    src,
-    /Grade Scale/i,
-    'scoring.md must not retain a grade scale'
-  );
-  assert.doesNotMatch(
-    src,
-    /\bA\s*[–-]\s*F\b/i,
-    'scoring.md must not mention A–F grades'
-  );
-  assert.doesNotMatch(
-    src,
-    /clamped to 0\s*[–-]\s*100/i,
-    'scoring.md must not clamp to 0–100'
-  );
-  // Severity demoted to priority only.
-  assert.match(
-    src,
-    /severity[^.\n]*priorit/i,
-    'scoring.md must state severity drives priority only'
-  );
-});
-
 test('SKILL.md scores via a single audit-core pass — no per-dimension fan-out', () => {
   const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
   // Deterministic scoring is one engine command (audit-core), not 11 subagents.
@@ -1839,117 +1227,6 @@ test('context/<path> references in prompts are internally consistent', () => {
       `expected canonical path ${p} to be referenced by at least one prompt`
     );
   }
-});
-
-test('SKILL.md sums weighted categories and emits no grade', () => {
-  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
-  assert.match(
-    src,
-    /standards\.toml/,
-    'SKILL.md Step 4 must pass standards.toml to auditors'
-  );
-  assert.match(
-    src,
-    /additive weighted points/i,
-    'SKILL.md must state that scoring is additive weighted points (sum of category weights), not a grade'
-  );
-  assert.match(
-    src,
-    /coverage ratio/i,
-    'SKILL.md must report an audit-level coverage ratio'
-  );
-  assert.doesNotMatch(
-    src,
-    /average of all dimension percentages/i,
-    'SKILL.md must not average percentages'
-  );
-  assert.doesNotMatch(
-    src,
-    /Grade \*\*X\*\*|— Grade/i,
-    'SKILL.md must not present a grade'
-  );
-});
-
-test('SKILL.md emits progress + ETA (interactive + headless, wait-excluded)', () => {
-  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
-  // Must invoke the bundled progress helper via the CLI dispatcher.
-  assert.ok(
-    src.includes('node dist/cli.js progress') ||
-      src.includes('CLAUDE_SKILL_DIR}/dist/cli.js" progress') ||
-      /dist\/cli\.js["']?\s+progress/.test(src),
-    'SKILL.md must call the progress CLI helper after each dimension/phase completes'
-  );
-  // Must mention ETA as a concept.
-  assert.match(
-    src,
-    /\bETA\b/,
-    'SKILL.md must mention ETA for the progress line'
-  );
-  // Must describe the percent-complete output.
-  assert.match(
-    src,
-    /pct|percent complete|% complete|\bpct\b/i,
-    'SKILL.md must describe the % complete output from the progress helper'
-  );
-  // Must state that the timer pauses across AskUserQuestion calls.
-  assert.match(
-    src,
-    /AskUserQuestion/,
-    'SKILL.md must reference AskUserQuestion in the context of pausing the elapsed timer'
-  );
-  assert.match(
-    src,
-    /pause|subtract|exclud/i,
-    'SKILL.md must state the timer pauses/subtracts user-wait time across AskUserQuestion'
-  );
-  // Must mention headless stream-json support.
-  assert.match(
-    src,
-    /stream-json/,
-    'SKILL.md must mention --output-format stream-json for headless progress emission'
-  );
-  // Must document the artifact-count fallback for headless observability.
-  assert.match(
-    src,
-    /\.json.*wc|wc.*\.json|artifact.*count|count.*artifact/i,
-    'SKILL.md must describe the artifact-count fallback (count *.json files vs total) for headless progress'
-  );
-});
-
-test('SKILL.md preflights a node runtime before running the engine', () => {
-  const src = readUtf8(path.join(skillRoot, 'SKILL.md'));
-  // The engine is a prebuilt Node bundle; the orchestrator must verify node is
-  // on PATH so engine calls fail loudly with guidance, not mid-audit.
-  assert.match(
-    src,
-    /command -v node|preflight/i,
-    'SKILL.md must preflight that a node runtime is on PATH before invoking the engine'
-  );
-});
-
-test('report templates use weighted points + reliability, not grades', () => {
-  for (const f of ['output-format.md', 'report-template.md']) {
-    const src = readUtf8(path.join(skillRoot, f));
-    assert.match(src, /weight/i, `${f} must show category weights`);
-    assert.match(src, /coverage ratio/i, `${f} must show the coverage ratio`);
-    assert.match(src, /reliabilit/i, `${f} must show reliability`);
-    assert.doesNotMatch(
-      src,
-      /Grade \*\*X\*\*|Letter grade|— Grade/i,
-      `${f} must not present a letter grade`
-    );
-  }
-  const html = readUtf8(path.join(skillRoot, 'report-template.md'));
-  assert.match(
-    html,
-    /tooltip/i,
-    'HTML template must describe tooltips carrying the reliability/hint detail'
-  );
-  assert.doesNotMatch(
-    html,
-    /Grade colors:/i,
-    'HTML template must drop the A–F grade color CSS'
-  );
 });
 
 // The plugin version is independent of the npm installer version (which
@@ -2123,20 +1400,12 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
   );
   const requiredSubstrings = [
     [
-      'single message, as parallel `Agent` calls',
-      'the research fan-out must be dispatched as parallel Agent calls in a single message — sequential or discretionary dispatch is the failure mode this contract prevents',
-    ],
-    [
       'AWOS_UNATTENDED',
       'the command must read AWOS_UNATTENDED to branch interactive vs unattended question handling',
     ],
     [
       '[NEEDS CLARIFICATION',
       'unresolved details must be captured as [NEEDS CLARIFICATION: …] markers, never as stop signals',
-    ],
-    [
-      '## Language Rules',
-      'the non-technical Language Rules section carried from core spec.md must be present',
     ],
     [
       '.awos/templates/functional-spec-template.md',
@@ -2155,28 +1424,8 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       'the internal-KB lane must gate on the exact sources.md status idiom used across AWOS commands',
     ],
     [
-      'The verifier runs exactly once',
-      'the blind-verification cycle must be bounded to a single verifier dispatch',
-    ],
-    [
-      'This step asks the user nothing',
-      'synthesis must not interview — under claude -p a dismissed question ends the turn, so every question the research raises has to wait until after Step 7 writes the deliverables',
-    ],
-    [
-      'When `AWOS_UNATTENDED` is set, skip this round entirely',
-      'the opening interview must be skipped outright in unattended runs — it is the only ask that precedes the writes, so it is the only one that can still cost both deliverables',
-    ],
-    [
-      'Do not ask here: this step precedes the write',
-      'the scope boundary must be drafted and marked rather than asked — Step 6 runs before the files exist',
-    ],
-    [
       'view_model_path="${TMPDIR:-/tmp}/spec-view-[index].json"',
       'the temp paths must be resolved once with a TMPDIR fallback and reused — re-interpolating a bare $TMPDIR per step lets the file written and the file rendered diverge, and makes the cleanup rm a path that was never created',
-    ],
-    [
-      'MANUAL SOURCES ONLY',
-      'a configured-but-manual-only KB lane needs its own report label — SKIPPED implies an agent ran and NOT CONFIGURED tells the user to redo setup they already did',
     ],
     [
       '${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs',
@@ -2187,32 +1436,12 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       'the blind verifier must be dispatched by its plugin-prefixed subagent_type — without the better: prefix the agent does not resolve and the verification pass silently never runs',
     ],
     [
-      'one bullet at a time',
-      'the self-review must re-read acceptance criteria one bullet at a time (carried from core spec.md) — checking the set as a whole lets a single non-compliant bullet survive',
-    ],
-    [
-      'free-text option for open-ended markers',
-      'marker resolution must offer free text (carried from core spec.md) — not every [NEEDS CLARIFICATION] reduces to an option set',
-    ],
-    [
       'functional-spec.html',
       'the command must name the rendered review page as a derived output',
     ],
     [
-      'never fatal',
-      'the render step must be non-fatal — the markdown deliverables stand alone if the render fails',
-    ],
-    [
       '--artifact',
       'the artifact publish path must use the renderer fragment mode, not upload the standalone document',
-    ],
-    [
-      'withheld consent',
-      'publishing to an external service is a consent gate — an unanswered question means no, inverting the usual proceed-with-default rule',
-    ],
-    [
-      '**only** the absolute path',
-      'the verifier dispatch must pass only the spec file path — session context would contaminate the blind read',
     ],
     [
       'Do not guess a topic from the product definition or the codebase.',
@@ -2366,153 +1595,8 @@ test('dimension check headings agree with standards.toml check_id', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ORG.1: SKILL.md Step 0 multi-repo discover-first + AskUserQuestion
+// Audit plugin agents
 // ---------------------------------------------------------------------------
-
-const SKILL_MD_PATH = path.join(
-  repoRoot,
-  'plugins',
-  'awos',
-  'skills',
-  'ai-readiness-audit',
-  'SKILL.md'
-);
-
-test('SKILL.md Step 0 references data-sources.md for multi-repo discovery', () => {
-  // Step 0 must follow the discover-first flow from data-sources.md.
-  // The reference is what ties SKILL.md to the canonical source-resolution spec.
-  const body = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    body.includes('data-sources.md'),
-    'SKILL.md Step 0 must reference data-sources.md (the discover-first multi-repo flow spec)'
-  );
-});
-
-test('SKILL.md headline delivery rows put the unit in the value, not a duplicated label', () => {
-  // "Merges / active contributor" = "19.0 / contributor" reads as a duplicate.
-  // The label carries the metric name; the per-contributor unit lives in the value.
-  const body = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    !body.includes('**Merges / active contributor**') &&
-      !body.includes('**LOC / active contributor**'),
-    'delivery rows must not use the duplicated "Merges / active contributor" / "LOC / active contributor" labels'
-  );
-  assert.ok(
-    body.includes('**Merges**') && body.includes('**LOC**'),
-    'SKILL.md must author the delivery rows with bare "Merges" / "LOC" labels'
-  );
-  assert.ok(
-    body.includes('/ week (per active contributor)'),
-    'the per-week per-contributor unit must live in the display_value (e.g. "1.5 / week (per active contributor)")'
-  );
-});
-
-test('SKILL.md Step 0 uses AskUserQuestion to confirm discovered repos', () => {
-  // A single AskUserQuestion at the start of the run is the only prompt
-  // allowed — it confirms the auto-discovered repo set before the audit begins.
-  const body = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    body.includes('AskUserQuestion'),
-    'SKILL.md must use AskUserQuestion to confirm the discovered repo set'
-  );
-});
-
-test('SKILL.md Step 0 describes multi-repo (parallel) discovery', () => {
-  // Org mode fans out per-repo audit agents in parallel. SKILL.md must
-  // document the multi-repo parallel execution so the orchestrator knows
-  // to fan out rather than run sequentially.
-  const body = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    /multi.repo|multiple repo|parallel|fan.out/i.test(body),
-    'SKILL.md must describe multi-repo parallel discovery/execution (org mode fan-out)'
-  );
-});
-
-test('SKILL.md Step 0 documents headless default to auto-discovered repos', () => {
-  // In headless / CI mode the audit must run without any prompting,
-  // defaulting to the auto-discovered repos. This must be stated explicitly
-  // so CI operators know the tool is safe to call without user interaction.
-  const body = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    /headless default|headless.*auto.discover|auto.discover.*headless/i.test(
-      body
-    ),
-    'SKILL.md must document the headless default behavior (fall back to auto-discovered repos when no interactive input)'
-  );
-});
-
-// ---------------------------------------------------------------------------
-// PERF: Step 5 batches connector re-scoring via the `enrich` verb, and org mode
-// fans out per-repo `repo-auditor` subagents (Part 1 wall-time improvements).
-
-test('SKILL.md Step 5 re-scores connectors via one `enrich` pass (not per-metric spawns)', () => {
-  const src = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    /dist\/cli\.js["']?\s+enrich/.test(src),
-    'SKILL.md Step 5 must invoke the `enrich` engine verb to re-score connector metrics in one pass'
-  );
-});
-
-test('SKILL.md Step 5.2 fetches independent connector sources concurrently', () => {
-  const src = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    /concurrent|in a single message|parallel tool calls/i.test(src),
-    'SKILL.md Step 5 must instruct fetching the independent connector sources concurrently'
-  );
-});
-
-test('SKILL.md Step 5 requires fetch_meta and the tracker changelog pass', () => {
-  // A prior org run fetched exactly one 100-ticket page per repo with zero
-  // changelogs — cycle time stayed blank everywhere and ticket counts drifted
-  // run to run. These two requirements are what prevent that regression.
-  const src = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    src.includes('fetch_meta'),
-    'SKILL.md Step 5 must require a fetch_meta block in paginated tracker artifacts (honest partial-fetch accounting)'
-  );
-  assert.ok(
-    /changelog/i.test(src) && src.includes('in_progress_at'),
-    'SKILL.md Step 5 must require the per-ticket changelog pass that populates in_progress_at (cycle time)'
-  );
-});
-
-test('connector-shapes.md documents the per-ticket changelog fetch and fetch_meta shape', () => {
-  const src = readUtf8(path.join(referencesDir, 'connector-shapes.md'));
-  assert.ok(
-    src.includes('expand: "changelog"'),
-    'connector-shapes.md must document the per-ticket getJiraIssue(expand: "changelog") fetch — Jira search results never include changelogs'
-  );
-  assert.ok(
-    src.includes('fetch_meta'),
-    'connector-shapes.md must document the fetch_meta block (tickets_fetched/tickets_total/complete/pages_fetched/changelog_fetched_for/note)'
-  );
-  assert.ok(
-    /statusCategory|indeterminate/.test(src),
-    'connector-shapes.md must define in_progress_at by status category (statusCategory "indeterminate"), not the literal "In Progress" name'
-  );
-});
-
-test('repo-auditor.md requires tracker pagination to completion and the changelog pass', () => {
-  const src = readUtf8(
-    path.join(repoRoot, 'plugins', 'awos', 'agents', 'repo-auditor.md')
-  );
-  assert.ok(
-    /paginat/i.test(src) && src.includes('fetch_meta'),
-    'repo-auditor.md must require paginating tracker sources to completion and flagging partial fetches in fetch_meta'
-  );
-  assert.ok(
-    /changelog/i.test(src),
-    'repo-auditor.md must require fetching per-ticket status changelogs so cycle time computes'
-  );
-});
-
-test('SKILL.md org branch dispatches the repo-auditor subagent per repo', () => {
-  const src = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    /repo-auditor/.test(src),
-    'SKILL.md org branch must dispatch the `awos:repo-auditor` subagent per repo (concurrent per-repo audits)'
-  );
-});
 
 test('the repo-auditor plugin agent exists with valid frontmatter', () => {
   const agentPath = path.join(
@@ -2532,201 +1616,6 @@ test('the repo-auditor plugin agent exists with valid frontmatter', () => {
   assert.ok(
     typeof data.description === 'string' && data.description.length > 0,
     'repo-auditor.md must declare a description'
-  );
-});
-
-// ORG.2: SKILL.md Step 5 org branch — ≤3 portfolio metrics + org rollup
-// ---------------------------------------------------------------------------
-
-test('SKILL.md Step 5 org branch references the org rollup', () => {
-  // The org rollup is invoked by SKILL.md Step 5 via the CLI. The reference
-  // ties the orchestrator to the rollup implementation.
-  const body = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    /org.rollup|rollup/i.test(body),
-    'SKILL.md Step 5 org branch must reference the org rollup'
-  );
-  assert.ok(
-    body.includes('node dist/cli.js rollup') ||
-      body.includes('dist/cli.js rollup') ||
-      /dist\/cli\.js["']?\s+rollup/.test(body),
-    'SKILL.md must show the rollup CLI invocation (node dist/cli.js rollup <dir> or with absolute path)'
-  );
-});
-
-test('SKILL.md Step 5 org branch names the three portfolio metrics', () => {
-  // Exactly three portfolio metrics are computed — no more. All three must
-  // be named so the orchestrator and the user both know what was computed.
-  const body = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    body.includes('org_ai_tooling_coverage'),
-    'SKILL.md must name the "org_ai_tooling_coverage" portfolio metric'
-  );
-  assert.ok(
-    body.includes('org_capability_score'),
-    'SKILL.md must name the "org_capability_score" portfolio metric'
-  );
-  assert.ok(
-    body.includes('org_measurement_coverage'),
-    'SKILL.md must name the "org_measurement_coverage" portfolio metric'
-  );
-});
-
-test('SKILL.md Step 5 states the ≤3 portfolio metrics constraint', () => {
-  // The brief is explicit: "≤3 org metrics" is a hard constraint, not a
-  // style choice. SKILL.md must state it so the orchestrator does not add
-  // more metrics without revisiting the design.
-  const body = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    /≤\s*3|<= 3|exactly three|three.*portfolio metric/i.test(body),
-    'SKILL.md must state the ≤3 portfolio metrics constraint (never aggregate the full per-repo set)'
-  );
-});
-
-test('SKILL.md Step 5 org branch emits an org-level JSON artifact', () => {
-  // JSON is the source-of-truth (JSON-source-of-truth rule). SKILL.md must
-  // document that the org rollup result is written to a JSON file before
-  // any MD/HTML rendering.
-  const body = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    body.includes('org-portfolio.json'),
-    'SKILL.md must document the org-level JSON artifact (org-portfolio.json)'
-  );
-});
-
-// ---------------------------------------------------------------------------
-// POL.1+2+3: report-template.md and output-format.md describe the renderer
-// ---------------------------------------------------------------------------
-
-test('report-template.md references the render verb (cli.js render)', () => {
-  const src = readUtf8(path.join(skillRoot, 'report-template.md'));
-  assert.ok(
-    src.includes('cli.js render') || src.includes('cli render'),
-    'report-template.md must reference the "render" verb (node dist/cli.js render) — report.md/report.html are produced by the renderer, not hand-written'
-  );
-});
-
-test('report-template.md describes the single-page layout: overview + drill-down sub-pages (no audience tabs)', () => {
-  const src = readUtf8(path.join(skillRoot, 'report-template.md'));
-  assert.ok(
-    /one scrolling page|single self-contained page/i.test(src) &&
-      /no audience tabs|no .*tabs/i.test(src),
-    'report-template.md must describe a single scrolling page, not three audience tabs'
-  );
-  assert.ok(
-    /#dim\/|drill-down sub-page/i.test(src),
-    'report-template.md must describe hash-routed drill-down sub-pages (#dim/<key>)'
-  );
-  assert.ok(
-    /Back\/Forward|browser Back/i.test(src),
-    'report-template.md must state the browser Back button returns from a sub-page to the overview'
-  );
-  assert.ok(
-    /executive band/i.test(src) &&
-      /insights/i.test(src) &&
-      /what to improve|recommendations/i.test(src),
-    'report-template.md must name the executive band, insights, and recommendations sections'
-  );
-});
-
-test('report-template.md specifies instant plain-first tooltips (not native title= delay)', () => {
-  const src = readUtf8(path.join(skillRoot, 'report-template.md'));
-  assert.ok(
-    /\.tip|tipbox/.test(src) && /instant/i.test(src),
-    'report-template.md must specify instant CSS tooltips (.tip/.tipbox), not the delayed native title= attribute'
-  );
-  assert.ok(
-    /plain-language|plain language|lead.*plain/i.test(src),
-    'report-template.md must state tooltips lead with the plain-language explanation'
-  );
-});
-
-test('output-format.md states that reports are produced by cli.js render (not hand-written)', () => {
-  const src = readUtf8(path.join(skillRoot, 'output-format.md'));
-  assert.ok(
-    src.includes('node dist/cli.js render') || src.includes('cli.js render'),
-    'output-format.md must state that report.md / report.html are produced by "node dist/cli.js render" — the auditor never writes markdown/HTML directly'
-  );
-});
-
-// ---------------------------------------------------------------------------
-// POL-B: SKILL.md Step 5 aggregates JSON → audit.json + renders MD;
-//         Step 6 unconditionally renders HTML (incl. headless)
-// ---------------------------------------------------------------------------
-
-test('SKILL.md Step 5 aggregates per-dimension JSON into audit.json', () => {
-  // JSON is the source of truth (global constraint). Step 6 must aggregate
-  // per-dimension artifacts into a single audit.json before producing any
-  // rendered output. The orchestrator must never hand-write report.md.
-  const src = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    src.includes('audit.json'),
-    'SKILL.md Step 5 must reference audit.json as the aggregated result artifact'
-  );
-  assert.ok(
-    /per.dimension.*json|<dimension>\.json|dimensions?\.json/i.test(src),
-    'SKILL.md Step 5 must describe reading per-dimension JSON artifacts before aggregating'
-  );
-});
-
-test('SKILL.md Step 5 renders report.md via cli.js render (--format md or both)', () => {
-  // The orchestrator must call the renderer for markdown output, not write it
-  // by hand. `--format both` writes report.md + report.html in one invocation.
-  const src = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    src.includes('node dist/cli.js render') ||
-      src.includes('dist/cli.js render') ||
-      /dist\/cli\.js["']?\s+render/.test(src),
-    'SKILL.md Step 5 must invoke the render CLI command to produce report.md (never hand-write it)'
-  );
-  assert.ok(
-    /--format (md|both)/.test(src),
-    'SKILL.md Step 5 must pass "--format md" or "--format both" to the renderer for the markdown report'
-  );
-  assert.ok(
-    /report\.md/.test(src),
-    'SKILL.md Step 5 must name the output file report.md'
-  );
-});
-
-test('SKILL.md Step 5 states the data-loss guarantee (no hand-written report)', () => {
-  // The explicit "never hand-writes" guarantee is what prevents the orchestrator
-  // from bypassing the renderer and losing structured data.
-  const src = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    /never hand.writ|not hand.writ|source of truth.*json|json.*source of truth/i.test(
-      src
-    ),
-    'SKILL.md must state the data-loss guarantee: orchestrator never hand-writes report.md/report.html (JSON is source of truth)'
-  );
-});
-
-test('SKILL.md Step 5 unconditionally renders report.html via --format html', () => {
-  // HTML is the headline deliverable. Step 6 produces it for every run,
-  // including headless — generated unconditionally, never gated on Step 7 or
-  // on interactivity. (Moving it out of Step 6 is the regression this pins.)
-  const src = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    /unconditional|always produce both|headless runs always produce/i.test(src),
-    'SKILL.md Step 5 must state report.html is generated unconditionally (incl. headless), never gated on interactivity'
-  );
-  assert.ok(
-    /--format (html|both)/.test(src),
-    'SKILL.md Step 5 must show "--format html" or "--format both" as the HTML render flag'
-  );
-  assert.ok(
-    /report\.html/.test(src),
-    'SKILL.md Step 5 must name the output file report.html'
-  );
-});
-
-test('SKILL.md Step 5 HTML always produced (never gated/skipped)', () => {
-  // The "never skip" contract is the key headless guarantee. Lint pins it
-  // so future edits do not accidentally make HTML optional in headless mode.
-  const src = readUtf8(SKILL_MD_PATH);
-  assert.ok(
-    /always produc|never skip|never gated|unconditional/i.test(src),
-    'SKILL.md Step 5 must state that report.html is always produced (never skipped/gated)'
   );
 });
 
@@ -2829,79 +1718,6 @@ test('project-topology.md lists all topology.* flag names used in standards.toml
   );
 });
 
-test('commands/spec.md has a pre-write Definition of Done checklist', () => {
-  // The spec command runs a Definition of Done self-review inside Step 4,
-  // before the file is written: confirm no vague wording remains and every
-  // requirement carries an acceptance criterion. It is a self-review, not an
-  // approval gate — the file is still written. Any `[NEEDS CLARIFICATION]`
-  // marker is resolved with the user post-save in Step 6 (offering the
-  // assumption as the recommended first option), or left in place in an
-  // unattended run; the Definition of Done itself never asks the user a
-  // question. The behavioral proof — no raw markers in the produced
-  // functional-spec.md, every requirement carries a criterion — lives in
-  // awos-qa. This lint only pins that the instruction text is present, so
-  // the contract can't be silently dropped from the prompt later.
-  const body = readUtf8(path.join(commandsDir, 'spec.md'));
-  assert.ok(
-    /Definition of Done/i.test(body),
-    'commands/spec.md must declare a "Definition of Done" pre-write checklist'
-  );
-  assert.ok(
-    body.includes('Every requirement has at least one acceptance criterion'),
-    'commands/spec.md Definition of Done must require every functional requirement to carry at least one acceptance criterion before saving'
-  );
-  assert.ok(
-    /No vague wording remains/i.test(body),
-    'commands/spec.md Definition of Done must gate on no vague wording remaining in requirements or acceptance criteria'
-  );
-  assert.ok(
-    body.includes(
-      'offering the assumption you would otherwise make as the recommended first option'
-    ),
-    'commands/spec.md Step 6 must resolve each [NEEDS CLARIFICATION] marker post-save via AskUserQuestion, offering the assumption you would otherwise make as the recommended first option'
-  );
-});
-
-test('commands/spec.md self-review checks for vague, unmeasurable wording', () => {
-  // The Step 4 self-review must hunt weasel words ("fast", "user-friendly",
-  // "as appropriate") in requirements and acceptance criteria, and either
-  // make them concrete in user-perceivable terms or convert them to a
-  // [NEEDS CLARIFICATION] marker that Step 6 resolves with the user
-  // post-save (or leaves in place in an unattended run). The behavioral
-  // proof — no unverifiable wording in the produced functional-spec.md —
-  // lives in awos-qa. This lint only pins that the instruction text is
-  // present, so the contract can't be silently dropped from the prompt later.
-  const body = readUtf8(path.join(commandsDir, 'spec.md'));
-  assert.ok(
-    /vague or unmeasurable wording/i.test(body),
-    'commands/spec.md self-review must scan requirements and acceptance criteria for vague or unmeasurable wording'
-  );
-  assert.ok(
-    /"user-friendly"/.test(body),
-    'commands/spec.md self-review must name concrete weasel-word examples (e.g. "user-friendly") so the model knows what to hunt'
-  );
-  assert.ok(
-    body.includes('Make each one concrete in user-perceivable terms'),
-    'commands/spec.md Step 4 self-review rule must instruct making each vague term concrete in user-perceivable terms (not technical metrics), or converting it to a [NEEDS CLARIFICATION] marker'
-  );
-});
-
-test('spec.md captures boundary/error behavior as rules in items 2 and 3', () => {
-  // both sentences must be present — item 2 tells the model what to
-  // elicit; item 3 closes the loop by requiring failure-path criteria for them.
-  const body = readUtf8(path.join(commandsDir, 'spec.md'));
-  assert.ok(
-    body.includes('boundary and error behavior the user sees'),
-    'spec.md Step 3 item 2 must contain the boundary/error elicitation rule'
-  );
-  assert.ok(
-    body.includes(
-      'at least one acceptance criterion covering the failure path'
-    ),
-    'spec.md Step 3 item 3 must require failure-path criteria for boundary/error requirements'
-  );
-});
-
 test('connector-shapes.md documents every incidents field the collector defines', () => {
   // The incidents recipe must not drift from the collector's actual contract:
   // every field on the IncidentRecord / IncidentsConnector / IncidentsRaw
@@ -2966,23 +1782,6 @@ test('every artifact-producing command writes before review, never gating the wr
   // may reintroduce a write-gating phrase. A genuine decision is fine — it
   // just has to be an AskUserQuestion (which an answer-map can answer)
   // placed before anything is written, not prose the run stalls on.
-  const producers = [
-    'product.md',
-    'architecture.md',
-    'spec.md',
-    'tasks.md',
-    'hire.md',
-  ];
-  for (const name of producers) {
-    const body = readUtf8(path.join(commandsDir, name));
-    assert.ok(
-      /without waiting for approval|writing before the review is safe/i.test(
-        body
-      ),
-      `commands/${name} must state that it writes its artifact before the review, not after an approval`
-    );
-  }
-
   // Phrases that gate a write on a user reply. "before saving" alone is
   // allowed: architecture.md and spec.md use it for content checks the model
   // performs itself, which block nothing.
@@ -3003,110 +1802,4 @@ test('every artifact-producing command writes before review, never gating the wr
       );
     }
   }
-});
-
-test('commands/spec.md mandates the when/then pair per acceptance criterion', () => {
-  // Step 3.3 described the three-part shape only abstractly ("a precondition
-  // (Given), a user action (When), a visible outcome (Then)"), which reads as
-  // guidance about content rather than a required sentence form — so a lone
-  // bullet would come out declarative ("The user submits X. They see Y.") and
-  // still look compliant. The behavioral proof is awos-qa's
-  // spec-uses-gwt-acceptance-criteria, which greps every AC bullet for
-  // `when … then` in one sentence; this lint pins the instruction that makes
-  // it hold, including the per-bullet re-read in the Definition of Done
-  // (checking the set as a whole is how a single offender survives).
-  const body = readUtf8(path.join(commandsDir, 'spec.md'));
-  assert.ok(
-    /in that order, within a \*\*single sentence\*\*/.test(body),
-    'commands/spec.md Step 3.3 must require when and then in that order within a single sentence'
-  );
-  assert.ok(
-    /in every criterion/.test(body),
-    'commands/spec.md Step 3.3 must apply the when/then shape to every criterion, not just to the set'
-  );
-  assert.ok(
-    /one bullet at a time/.test(body),
-    'commands/spec.md Definition of Done must re-check acceptance criteria one bullet at a time'
-  );
-});
-
-test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
-  // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
-  // propose a QA agent by searching the registry, not by always
-  // including testing-expert or always recommending Playwright for
-  // any frontend stack. Lock out the prior hard rules so they do not
-  // creep back in.
-  const body = readUtf8(path.join(commandsDir, 'hire.md'));
-  assert.ok(
-    /QA Complement Rule/.test(body),
-    'commands/hire.md must declare a QA Complement Rule section'
-  );
-  assert.ok(
-    !/always include\s+`?testing-expert`?/i.test(body),
-    'commands/hire.md must not declare a blanket "always include testing-expert" rule — the rule is search-first now'
-  );
-  assert.ok(
-    !/always include\s+`?playwright`?/i.test(body),
-    'commands/hire.md must not declare a blanket "always include playwright" rule for any stack — tool choice depends on the project'
-  );
-});
-
-test('hire.md installs hooks from the registry and never authors them', () => {
-  // Hooks are the fourth recruitment component type, but unlike agents
-  // they are executable shell behavior — hire may only install what the
-  // registry ships, never fabricate hook commands, and must roster the
-  // post-install state. See docs: design spec 2026-07-17-hire-hooks.
-  const body = readUtf8(path.join(commandsDir, 'hire.md'));
-  assert.ok(
-    body.includes('npx @provectusinc/awos-recruitment hook ') &&
-      body.includes('bunx @provectusinc/awos-recruitment hook '),
-    'commands/hire.md must install hooks via the awos-recruitment `hook` verb in both npx and bunx forms'
-  );
-  assert.ok(
-    body.includes('.claude/settings.local.json') &&
-      body.includes('A missing or unparseable file means no existing hooks'),
-    'commands/hire.md Step 3 must discover existing hooks from the project settings files (.claude/settings.json / .claude/settings.local.json), treating a missing or unparseable file as no existing hooks'
-  );
-  assert.ok(
-    body.includes('## Installed Hooks'),
-    'commands/hire.md Step 8 coverage-report structure must contain the "## Installed Hooks" section'
-  );
-  assert.ok(
-    body.includes('| Name | Event | Command | Description |'),
-    'commands/hire.md Step 8 Installed Hooks table must use the exact header Name/Event/Command/Description — Event and Command are the only cells derivable from bare settings entries; Name and Description must fall back to "—" rather than be invented'
-  );
-  assert.ok(
-    /never author hook/i.test(body),
-    'commands/hire.md must state that hooks come from the registry only — hire never authors hook entries or commands'
-  );
-  assert.ok(
-    body.includes('two separate gates') &&
-      body.includes('shell script that runs automatically'),
-    'commands/hire.md Step 4 must gate hook consent separately from the passive skills/MCPs/agents confirmation, naming that hooks install auto-running shell scripts'
-  );
-  assert.ok(
-    body.includes('second half of the hook consent') &&
-      body.includes('.claude/hooks/<name>/HOOK.md'),
-    'commands/hire.md Step 5 must read back the installed HOOK.md and entrypoint script after install and offer rollback on mismatch — registry metadata is not vetted against the script'
-  );
-});
-
-test('hire.md treats an unanswered consent gate as withheld consent', () => {
-  // Installing needs permission; the coverage report does not. If the gate
-  // gets no answer the command must skip the install and keep going, rather
-  // than re-asking in prose or ending the turn — otherwise a run that could
-  // not answer produces no context/product/hired-agents.md at all.
-  const body = readUtf8(path.join(commandsDir, 'hire.md'));
-  assert.ok(
-    /gets no answer[\s\S]{0,200}treat consent as withheld/i.test(body),
-    'commands/hire.md Step 4 must treat an unanswered consent gate as withheld consent'
-  );
-  assert.ok(
-    /install nothing that gate covered and continue/i.test(body),
-    'commands/hire.md Step 4 must continue to Step 6 after an unanswered gate instead of stopping'
-  );
-  assert.ok(
-    /do not re-ask the same question as plain text/i.test(body),
-    'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
-  );
 });

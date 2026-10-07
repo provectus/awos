@@ -17,6 +17,9 @@
  *   - notContains (string)  — file body must NOT include this substring
  *   - unchanged   (boolean) — file body must equal the byte-for-byte content
  *                              recorded in the fixture's `before/` tree
+ *   - changed     (boolean) — file must exist AND differ from the content in
+ *                              the fixture's `before/` tree (proves a step
+ *                              actually ran, where exists would be tautological)
  *   - sha256      (string)  — file body must hash to this hex digest
  *
  * Files NOT listed in the manifest are not asserted. This keeps fixtures
@@ -91,6 +94,25 @@ function assertManifest({ manifest, workingDir, beforeDir }) {
       if (actual !== spec.sha256) {
         throw new Error(
           `manifest mismatch for ${relPath}: sha256 expected ${spec.sha256}, got ${actual}`
+        );
+      }
+    }
+
+    if (spec.changed === true) {
+      if (!beforeDir) {
+        throw new Error(
+          `manifest entry ${relPath} uses "changed: true" but no beforeDir was provided`
+        );
+      }
+      const beforePath = path.join(beforeDir, relPath);
+      if (!fs.existsSync(beforePath)) {
+        throw new Error(
+          `manifest entry ${relPath} expected "changed: true" but the file is not in the fixture's before/ tree — with no baseline, use "exists" instead`
+        );
+      }
+      if (fs.readFileSync(beforePath).equals(fs.readFileSync(fullPath))) {
+        throw new Error(
+          `manifest mismatch for ${relPath}: expected the file to differ from before/ (proof the step ran), but it is byte-identical`
         );
       }
     }

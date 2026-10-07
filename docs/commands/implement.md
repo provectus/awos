@@ -20,7 +20,7 @@ The actual code changes are made by the specialist subagents it delegates to.
 1. **Finds the next task**: Scans spec directories in order, finds the first incomplete task. Or uses your prompt to target a specific spec/task.
 2. **Loads full context**: Reads all three spec files (functional, technical, tasks) so the delegated agent has complete information.
 3. **Extracts agent assignment**: Reads the `**[Agent: agent-name]**` tag from the task description to determine which specialist to delegate to.
-4. **Delegates to subagent**: Sends a detailed prompt with full context and clear success criteria to the specialist agent (or `general-purpose` if no assignment found).
+4. **Delegates to subagent**: Sends a detailed prompt with full context and clear success criteria to the specialist agent. Falls back to `general-purpose` when no assignment is found — or when the named agent isn't installed — and states the substitution in its report.
 5. **Updates progress**: Marks the completed task `[x]` in `tasks.md`. If all tasks under a slice are done, marks the slice header too.
 6. **Reports status**: Shows completion percentage (e.g., "5/12 tasks done (42%)").
 
@@ -28,6 +28,7 @@ The actual code changes are made by the specialist subagents it delegates to.
 
 - **Strictly an orchestrator.** The implement command is prohibited from writing, editing, or modifying any production code, configuration files, or database schemas. It only delegates and tracks.
 - **Full context per delegation.** Each subagent receives the complete functional spec, technical spec, and task list — not just the task description. This ensures agents have all the context they need.
+- **Honest fallback.** A task whose `**[Agent: name]**` marker names an agent that isn't installed still runs — delegated to the general-purpose agent — and the completion report states which task ran under the fallback and which agent was missing.
 - **Automatic task progression.** When run without arguments, it automatically finds and starts the next incomplete task.
 - **Slice/task tracking.** When all tasks under a slice are marked complete, the slice header is automatically marked complete too.
 

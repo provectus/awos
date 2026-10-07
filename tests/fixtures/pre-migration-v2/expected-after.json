@@ -1,0 +1,37 @@
+{
+  "_comment": "A project at migration version 2 with the full 1.x roadmap/hire footprint, run through the real installer. Contract: the local roadmap command body becomes the removal notice (changed, contains 'Removed Command') and the orphaned roadmap template is deleted; the customized roadmap wrapper, the customized hire wrapper, the user's context/product/roadmap.md, and .mcp.json (awos-recruitment already present) are byte-identical to before/; the stale 1.x hire body and agent-template are framework internals the copy step overwrites (changed); current commands and new wrappers still install; the version file advanced from the seeded '2' (changed — the exact number is pinned in the unit layer). The wrapper-only path (wrapper present, body absent) is covered at the unit layer, not by this tree.",
+  ".awos/commands/roadmap.md": {
+    "changed": true,
+    "contains": "Removed Command"
+  },
+  ".awos/commands/hire.md": {
+    "changed": true
+  },
+  ".awos/templates/roadmap-template.md": {
+    "exists": false
+  },
+  ".awos/templates/agent-template.md": {
+    "changed": true
+  },
+  ".claude/commands/awos/roadmap.md": {
+    "unchanged": true
+  },
+  ".claude/commands/awos/hire.md": {
+    "unchanged": true
+  },
+  "context/product/roadmap.md": {
+    "unchanged": true
+  },
+  ".mcp.json": {
+    "unchanged": true
+  },
+  ".awos/.migration-version": {
+    "changed": true
+  },
+  ".awos/commands/spec.md": {
+    "exists": true
+  },
+  ".claude/commands/awos/spec.md": {
+    "exists": true
+  }
+}

@@ -21,23 +21,19 @@ npx @provectusinc/awos
 
 This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, and the `context/` directory where your project documents will live. It also registers the AWOS plugin marketplace in your project settings.
 
-> **Running on an existing codebase?** The recommended first step is an AI-readiness audit: install the plugin with `/plugin install awos@awos-marketplace`, then run `/awos:ai-readiness-audit` for a scored assessment with actionable recommendations. From there AWOS integrates seamlessly with brownfield projects — `/awos:product` auto-detects your code and the later foundation commands build on that, so you won't start from a blank slate. See the **[Brownfield Adoption Guide](docs/brownfield-adoption.md)** for the full path.
-
 ### Step 2: Foundation Setup
 
 These commands establish your project's foundation. Run them once at the start, and re-run them as your project evolves — requirements change, architecture decisions get refined, and that's normal.
 
-| Command              | What it does                                                                                                                                                       | Docs                                            |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| `/awos:product`      | Defines the Product — what, why, and for who.                                                                                                                      | [Details](docs/commands/product.md)             |
-| `/awos:roadmap`      | Builds the Product Roadmap — features and their order.                                                                                                             | [Details](docs/commands/roadmap.md)             |
-| `/awos:architecture` | Defines the System Architecture — stack, DBs, infra.                                                                                                               | [Details](docs/commands/architecture.md)        |
-| `/awos:hire`         | Hires specialist agents — finds, installs skills and MCPs, generates agent files.                                                                                  | [Details](docs/commands/hire.md)                |
-| `/awos:flow`         | Generates the team's delivery flow — project-specific `/implement-feature` and `/fix-bug` commands that drive a ticket end to end. Available from AWOS plugin now. | [Details](plugins/awos/README.md#delivery-flow) |
+| Command              | What it does                                                                                                                  | Docs                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `/awos:product`      | Defines the Product — what, why, and for who.                                                                                 | [Details](docs/commands/product.md)      |
+| `/awos:architecture` | Defines the System Architecture — stack, DBs, infra. Adopts your existing stack automatically when the repo already has code. | [Details](docs/commands/architecture.md) |
+| `/awos:hire`         | Hires specialist agents — finds, installs skills and MCPs, generates agent files.                                             | [Details](docs/commands/hire.md)         |
 
 ### Step 3: Feature Development Cycle
 
-Once your foundation is set, iterate through this cycle for each feature on your roadmap. These commands are designed to be run repeatedly — once per feature.
+Once your foundation is set, iterate through this cycle for each feature you build. These commands are designed to be run repeatedly — once per feature.
 
 | Command           | What it does                                                                      | Docs                                  |
 | ----------------- | --------------------------------------------------------------------------------- | ------------------------------------- |
@@ -70,12 +66,6 @@ Each command has detailed documentation covering how it works, key behaviors, co
 The **`awos`** framework is flexible and non-prescriptive when it comes to testing. Teams can adopt the testing approach that best fits their project — whether that's TDD, BDD, integration testing, or a combination of strategies.
 
 [Explore testing strategies and customization options](docs/testing-strategies.md)
-
-## Brownfield Adoption
-
-Adopting **`awos`** on an existing codebase runs the same commands as greenfield, with extra awareness of code that already exists — plus a recommended AI-readiness audit up front. `/awos:product` detects your source; the later foundation commands inventory what's already built and adopt your current stack as the architecture defaults.
-
-[Read the Brownfield Adoption Guide](docs/brownfield-adoption.md)
 
 ## Customizing `awos`
 
@@ -129,7 +119,9 @@ npx @provectusinc/awos
 - Scripts in `.awos/scripts`
 - Commands in `.claude/commands/awos`
 
-**Important:** The installer will overwrite existing files in `.claude/commands/awos`. If you've customized these files, back them up first.
+**Your customizations are preserved.** Files under `.awos/` are framework internals and are always updated. Files in `.claude/commands/awos` are your customization layer: when existing wrappers would be overwritten, the installer asks first — and in non-interactive runs it preserves them by default (pass `--overwrite` for a deliberate fresh sync).
+
+**Upgrading an existing project?** See the [upgrade guide](docs/2.0/upgrading-1.x.md) for what left the framework and what happens to the local copies you already have — nothing of yours is deleted.
 
 ---
 

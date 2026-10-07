@@ -70,7 +70,7 @@ Output that says `N events found` or `M pass` tells you the suite ran, not what 
 
 ### Adding tests for new contracts
 
-When a change introduces a structural contract — frontmatter key, marker pattern, migration, copy-table entry — its test ships in the same PR. Surface-area contracts (something a grep can catch) go to Layer 1. Mechanical contracts (installer behavior, migration idempotency) go to Layer 2 or 3. Behavioral contracts ("Claude must actually call X") belong in the `awos-qa` repository.
+When a change introduces a structural contract — frontmatter key, marker pattern, migration, copy-table entry — its test ships in the same PR. Surface-area contracts (something a grep can catch) go to Layer 1. Mechanical contracts (installer behavior, migration idempotency) go to Layer 2 or 3. Behavioral contracts ("Claude must actually call X") belong in the `awos-qa` repository. A Layer 1 test pins a token two files must agree on, or a structure a grep can verify — never a sentence: a prose pin fails when the wording improves and passes when the behaviour around it is deleted (rule and the three incident-guard exceptions in `tests/README.md`).
 
 ## Architecture: The Two-Folder Customization Model
 

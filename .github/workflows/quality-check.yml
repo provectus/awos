@@ -25,9 +25,25 @@ jobs:
         # with the prettier devDependency in package.json.
         run: npx prettier@3.8.4 . --check
 
-  # Test suite — non-blocking initially.
-  # Flip `continue-on-error: false` to make this a required gate once it has
-  # been green on two consecutive PRs (see plan PR 4).
+  # The three no-dependency layers (prompt lint, installer units, fixtures) plus
+  # the renderer and profiler script tests — deterministic, under two seconds,
+  # no `npm ci`. This is the blocking gate.
+  test-core:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Run core tests
+        run: npm run test:core
+
+  # Full suite including the TypeScript engine layer — non-blocking until
+  # Phase 6 retires the engine (docs/2.0/roadmap-2.0.md).
   test:
     runs-on: ubuntu-latest
     continue-on-error: true

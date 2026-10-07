@@ -34,6 +34,104 @@ after(async () => {
   for (const d of createdDirs) await removeTempDir(d);
 });
 
+async function captureOutput(fn) {
+  const lines = [];
+  const origLog = console.log;
+  const origInfo = console.info;
+  const origErr = console.error;
+  const origWrite = process.stdout.write.bind(process.stdout);
+  console.log = (...args) => lines.push(args.join(' '));
+  console.info = () => {};
+  console.error = () => {};
+  process.stdout.write = () => true;
+  try {
+    await fn();
+  } finally {
+    console.log = origLog;
+    console.info = origInfo;
+    console.error = origErr;
+    process.stdout.write = origWrite;
+  }
+  return lines.join('\n');
+}
+
+test('the update tells a legacy project what happened to its roadmap command — once — and rewrites a pristine wrapper', async () => {
+  // The upgrade guide is unreachable if nothing in the update output
+  // points at it, and a notice that repeats on every update is noise
+  // users learn to ignore. The announcement rides on migration 003
+  // itself, so it prints exactly when the shutdown happens; the wrapper
+  // is the one file that keeps /awos:roadmap callable, so a never-edited
+  // 1.x wrapper is rewritten to say the command was removed while a
+  // customized one is preserved (the unit layer covers that case).
+  const legacyDir = await freshTemp();
+  const wrapperPath = path.join(
+    legacyDir,
+    '.claude',
+    'commands',
+    'awos',
+    'roadmap.md'
+  );
+  await fsPromises.mkdir(path.dirname(wrapperPath), { recursive: true });
+  // Byte-identical to the wrapper npm 1.3.0–1.4.0 shipped.
+  await fsPromises.writeFile(
+    wrapperPath,
+    [
+      '---',
+      'description: Builds the Product Roadmap — features and their order.',
+      "argument-hint: '[change request, optional]'",
+      '---',
+      '',
+      '@.awos/commands/roadmap.md',
+      '',
+    ].join('\n')
+  );
+
+  const output = await captureOutput(() =>
+    runSetup({ workingDir: legacyDir, packageRoot: repoRoot })
+  );
+  assert.ok(
+    output.includes('/awos:roadmap left AWOS.'),
+    'the update must announce the roadmap shutdown when migration 003 applies'
+  );
+  assert.ok(
+    output.includes(
+      'delete .claude/commands/awos/roadmap.md and .awos/commands/roadmap.md'
+    ),
+    'the announcement must name the two files to delete to drop the command entirely'
+  );
+  assert.ok(
+    output.includes('docs/2.0/upgrading-1.x.md'),
+    'the announcement must link the upgrade guide'
+  );
+  const wrapper = await fsPromises.readFile(wrapperPath, 'utf8');
+  assert.ok(
+    wrapper.includes('Removed from AWOS') &&
+      wrapper.includes('@.awos/commands/roadmap.md'),
+    'a never-edited 1.x wrapper must be rewritten to the removal wrapper that still resolves to the notice'
+  );
+
+  const secondOutput = await captureOutput(() =>
+    runSetup({ workingDir: legacyDir, packageRoot: repoRoot })
+  );
+  assert.ok(
+    !secondOutput.includes('left AWOS.'),
+    'the announcement must not repeat on the next update — the migration has already applied'
+  );
+
+  const freshDir = await freshTemp();
+  const freshOutput = await captureOutput(() =>
+    runSetup({ workingDir: freshDir, packageRoot: repoRoot })
+  );
+  assert.ok(
+    !freshOutput.includes('left AWOS.'),
+    'a fresh project must not get the announcement'
+  );
+  assert.ok(
+    freshOutput.includes('MCP server configured'),
+    'the summary must report the MCP step — the installer writes .mcp.json into the project and has to say so'
+  );
+});
+
 test('end-to-end setup completes against a fresh temp dir', async () => {
   const workingDir = await freshTemp();
 

@@ -6,6 +6,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
+const crypto = require('crypto');
 const { log, clearLine } = require('../utils/logger');
 const { style } = require('../config/constants');
 
@@ -41,10 +42,10 @@ async function writeVersion(versionFile, version) {
 
 /**
  * Load all migration files from the migrations directory
+ * @param {string} migrationsDir - Directory holding the NNN-*.json files
  * @returns {Promise<Array>} Sorted array of migrations
  */
-async function loadMigrations() {
-  const migrationsDir = path.join(__dirname);
+async function loadMigrations(migrationsDir) {
   const files = await fs.readdir(migrationsDir);
 
   const migrations = [];
@@ -68,16 +69,45 @@ async function loadMigrations() {
 }
 
 /**
- * Check if a file exists
+ * The one probe used everywhere — preconditions and every operation.
+ * lstat-based: a dangling symlink counts as present, since the entry is
+ * real (fs.access follows the link and would misreport it as absent,
+ * flipping precondition decisions). Only "no entry here" codes (ENOENT,
+ * ENOTDIR) mean false; anything else (e.g. EACCES) is a real failure
+ * and propagates, so the migration fails loudly and is retried on the
+ * next run instead of logging a skip and stamping the version. A split
+ * probe policy is worse than either policy alone: preconditions and
+ * operations disagreeing about whether a path exists is how a migration
+ * wedges half-way.
  * @param {string} filePath - Path to check
  * @returns {Promise<boolean>}
  */
-async function exists(filePath) {
+async function lexists(filePath) {
   try {
-    await fs.access(filePath);
+    await fs.lstat(filePath);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Read a file's text, or null when the entry has no readable content
+ * (absent, or a dangling symlink). Any other failure propagates.
+ * @param {string} filePath - Path to read
+ * @returns {Promise<string|null>}
+ */
+async function readIfReadable(filePath) {
+  try {
+    return await fs.readFile(filePath, 'utf-8');
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+      return null;
+    }
+    throw error;
   }
 }
 
@@ -86,27 +116,35 @@ async function exists(filePath) {
  * @param {Object} operation - The operation to execute
  * @param {string} workingDir - Working directory
  * @param {Object} options - Execution options
- * @returns {Promise<void>}
+ * @returns {Promise<boolean>} Whether the operation changed anything
+ *   (or would have, under dry-run). Skips return falsy so a migration
+ *   whose operations all skipped is reported as skipped, not applied —
+ *   the log must never claim work that never happened.
  */
 async function executeOperation(
   operation,
   workingDir,
   { dryRun = false } = {}
 ) {
-  const sourcePath = path.normalize(path.join(workingDir, operation.from));
+  const sourcePath = operation.from
+    ? path.normalize(path.join(workingDir, operation.from))
+    : null;
   const targetPath = operation.to
     ? path.normalize(path.join(workingDir, operation.to))
     : null;
 
   switch (operation.type) {
     case 'move':
+      if (!sourcePath) {
+        throw new Error('Move operation requires "from" field');
+      }
       if (!targetPath) {
         throw new Error('Move operation requires "to" field');
       }
 
       // Check if source exists
-      const sourceExists = await exists(sourcePath);
-      const targetExists = await exists(targetPath);
+      const sourceExists = await lexists(sourcePath);
+      const targetExists = await lexists(targetPath);
 
       if (dryRun) {
         if (!sourceExists) {
@@ -114,27 +152,28 @@ async function executeOperation(
             `  ${style.dim('[DRY-RUN]')} Would skip move (source not found): ${operation.from}`,
             'item'
           );
-          return;
+          return false;
         }
         if (targetExists) {
           log(
             `  ${style.warn('⚠')} ${style.dim('[DRY-RUN]')} Would skip move (target exists): ${operation.to}`,
             'item'
           );
-          return;
+          return false;
         }
         log(
           `  ${style.dim('[DRY-RUN]')} Would move: ${operation.from} → ${operation.to}`,
           'item'
         );
+        return true;
       } else {
         if (!sourceExists) {
           // Source doesn't exist - skip silently (might be already migrated)
-          return;
+          return false;
         }
         if (targetExists) {
           // Target already exists - skip silently (already migrated)
-          return;
+          return false;
         }
 
         // Ensure target directory exists
@@ -143,17 +182,20 @@ async function executeOperation(
         // Perform the move
         await fs.rename(sourcePath, targetPath);
         log(`  Moved: ${operation.from} → ${operation.to}`, 'success');
+        return true;
       }
-      break;
 
     case 'copy':
+      if (!sourcePath) {
+        throw new Error('Copy operation requires "from" field');
+      }
       if (!targetPath) {
         throw new Error('Copy operation requires "to" field');
       }
 
       // Check if source exists
-      const copySourceExists = await exists(sourcePath);
-      const copyTargetExists = await exists(targetPath);
+      const copySourceExists = await lexists(sourcePath);
+      const copyTargetExists = await lexists(targetPath);
 
       if (dryRun) {
         if (!copySourceExists) {
@@ -161,27 +203,28 @@ async function executeOperation(
             `  ${style.dim('[DRY-RUN]')} Would skip copy (source not found): ${operation.from}`,
             'item'
           );
-          return;
+          return false;
         }
         if (copyTargetExists) {
           log(
             `  ${style.warn('⚠')} ${style.dim('[DRY-RUN]')} Would skip copy (target exists): ${operation.to}`,
             'item'
           );
-          return;
+          return false;
         }
         log(
           `  ${style.dim('[DRY-RUN]')} Would copy: ${operation.from} → ${operation.to}`,
           'item'
         );
+        return true;
       } else {
         if (!copySourceExists) {
           // Source doesn't exist - skip silently
-          return;
+          return false;
         }
         if (copyTargetExists) {
           // Target already exists - skip silently
-          return;
+          return false;
         }
 
         // Ensure target directory exists
@@ -190,38 +233,146 @@ async function executeOperation(
         // Perform the copy
         await fs.copyFile(sourcePath, targetPath);
         log(`  Copied: ${operation.from} → ${operation.to}`, 'success');
+        return true;
       }
-      break;
 
     case 'delete':
+      if (!sourcePath) {
+        throw new Error('Delete operation requires "from" field');
+      }
       if (dryRun) {
-        if (!(await exists(sourcePath))) {
+        if (!(await lexists(sourcePath))) {
           log(
             `  ${style.dim('[DRY-RUN]')} Would skip delete (not found): ${operation.from}`,
             'item'
           );
-        } else {
-          log(
-            `  ${style.dim('[DRY-RUN]')} Would delete: ${operation.from}`,
-            'item'
-          );
+          return false;
         }
-      } else {
-        try {
-          await fs.rm(sourcePath, { recursive: true, force: true });
-          log(`  Deleted: ${operation.from}`, 'success');
-        } catch (error) {
-          if (error.code !== 'ENOENT') {
-            throw error;
-          }
-          // Path doesn't exist, that's okay for delete
+        log(
+          `  ${style.dim('[DRY-RUN]')} Would delete: ${operation.from}`,
+          'item'
+        );
+        return true;
+      }
+      if (!(await lexists(sourcePath))) {
+        // fs.rm with force:true never throws ENOENT, so the not-found case
+        // must be detected up front or the log claims a deletion that never
+        // happened.
+        log(
+          `  ${style.dim('–')} Skipped delete (not found): ${operation.from}`,
+          'item'
+        );
+        return false;
+      }
+      await fs.rm(sourcePath, { recursive: true, force: true });
+      log(`  Deleted: ${operation.from}`, 'success');
+      return true;
+
+    case 'replace_content': {
+      // Replaces the whole content of a file the installer itself wrote
+      // earlier (e.g. a removed command's body becomes a tombstone that a
+      // preserved user wrapper still resolves to). Replace-only by default:
+      // when the target is absent there is nothing stale to defuse, and
+      // creating it would plant framework files in projects that never had
+      // them — so a missing file is a skip, not a create. The optional
+      // `create_if` field names a path whose presence authorizes creating
+      // the missing target (e.g. a preserved wrapper whose @-import would
+      // otherwise stay broken in a clone that committed .claude/ but not
+      // .awos/) — fresh projects have no such trigger, so they stay clean.
+      // The optional `if_sha256` field (one hash or a list) restricts the
+      // replace to a file whose current content is byte-identical to a
+      // known shipped version: a user-editable file is rewritten only when
+      // it provably carries nothing of the user's, and preserved otherwise.
+      if (!operation.file) {
+        throw new Error('replace_content operation requires "file" field');
+      }
+      if (!Array.isArray(operation.content)) {
+        throw new Error(
+          'replace_content operation requires a "content" array field'
+        );
+      }
+      const filePath = path.normalize(path.join(workingDir, operation.file));
+      const targetFound = await lexists(filePath);
+      const createAuthorized = Boolean(
+        !targetFound &&
+        operation.create_if &&
+        (await lexists(
+          path.normalize(path.join(workingDir, operation.create_if))
+        ))
+      );
+      if (!targetFound && !createAuthorized) {
+        log(
+          dryRun
+            ? `  ${style.dim('[DRY-RUN]')} Would skip content replace (not found): ${operation.file}`
+            : `  ${style.dim('–')} Skipped content replace (not found): ${operation.file}`,
+          'item'
+        );
+        return false;
+      }
+      const payload = operation.content.join('\n') + '\n';
+      // The entry may be a dangling symlink (lstat says present, read says
+      // ENOENT): then there is no current content to compare — the
+      // replace goes ahead and the rename puts a real file in its place.
+      const currentContent = await readIfReadable(filePath);
+      if (
+        targetFound &&
+        currentContent !== null &&
+        currentContent === payload
+      ) {
+        // Already the intended content: a rerun (e.g. after a version
+        // marker reset) must not log a replace that changed nothing.
+        log(
+          dryRun
+            ? `  ${style.dim('[DRY-RUN]')} Would skip content replace (already current): ${operation.file}`
+            : `  ${style.dim('–')} Skipped content replace (already current): ${operation.file}`,
+          'item'
+        );
+        return false;
+      }
+      if (targetFound && operation.if_sha256) {
+        const allowed = [].concat(operation.if_sha256);
+        const current =
+          currentContent === null
+            ? null
+            : crypto.createHash('sha256').update(currentContent).digest('hex');
+        if (!allowed.includes(current)) {
           log(
-            `  ${style.dim('–')} Skipped delete (not found): ${operation.from}`,
+            dryRun
+              ? `  ${style.dim('[DRY-RUN]')} Would skip content replace (customized, preserved): ${operation.file}`
+              : `  ${style.dim('–')} Skipped content replace (customized, preserved): ${operation.file}`,
             'item'
           );
+          return false;
         }
       }
-      break;
+      if (dryRun) {
+        log(
+          `  ${style.dim('[DRY-RUN]')} Would ${targetFound ? 'replace content' : `create (${operation.create_if} present)`}: ${operation.file}`,
+          'item'
+        );
+        return true;
+      }
+      if (!targetFound) {
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+      }
+      // Atomic write (temp + same-directory rename): a partial notice
+      // interrupted mid-write would be stamped as done and never retried
+      // — a torn file must never be able to pass for the notice. The temp
+      // file is removed if anything fails in between.
+      const contentTmpPath = `${filePath}.awos-tmp`;
+      try {
+        await fs.writeFile(contentTmpPath, payload, 'utf-8');
+        await fs.rename(contentTmpPath, filePath);
+      } catch (error) {
+        await fs.rm(contentTmpPath, { force: true });
+        throw error;
+      }
+      log(
+        `  ${targetFound ? 'Replaced content' : `Created (${operation.create_if} present)`}: ${operation.file}`,
+        'success'
+      );
+      return true;
+    }
 
     default:
       throw new Error(`Unknown operation type: ${operation.type}`);
@@ -241,14 +392,18 @@ async function checkPreconditions(preconditions, workingDir, dryRun = false) {
     return { shouldRun: true, reason: null };
   }
 
-  // Check skip_if_any conditions (files that indicate migration already applied)
+  // Check skip_if_any conditions. A match means the migration has
+  // nothing to do here — either it already ran, or the file it would
+  // act on is deliberately left alone. The label must not claim a
+  // migration happened when the policy is preservation.
   if (preconditions.skip_if_any) {
     for (const checkPath of preconditions.skip_if_any) {
       const fullPath = path.join(workingDir, checkPath);
-      if (await exists(fullPath)) {
+      if (await lexists(fullPath)) {
         return {
           shouldRun: false,
-          reason: `Already migrated (${checkPath} exists)`,
+          matchedSkip: true,
+          reason: `Nothing to do (${checkPath} is present)`,
         };
       }
     }
@@ -259,7 +414,7 @@ async function checkPreconditions(preconditions, workingDir, dryRun = false) {
     let foundOne = false;
     for (const checkPath of preconditions.require_any) {
       const fullPath = path.join(workingDir, checkPath);
-      if (await exists(fullPath)) {
+      if (await lexists(fullPath)) {
         foundOne = true;
         break;
       }
@@ -276,7 +431,7 @@ async function checkPreconditions(preconditions, workingDir, dryRun = false) {
   if (preconditions.require_all) {
     for (const checkPath of preconditions.require_all) {
       const fullPath = path.join(workingDir, checkPath);
-      if (!(await exists(fullPath))) {
+      if (!(await lexists(fullPath))) {
         return {
           shouldRun: false,
           reason: `Not applicable (${checkPath} not found)`,
@@ -289,7 +444,7 @@ async function checkPreconditions(preconditions, workingDir, dryRun = false) {
   if (preconditions.error_if_any) {
     for (const checkPath of preconditions.error_if_any) {
       const fullPath = path.join(workingDir, checkPath);
-      if (await exists(fullPath)) {
+      if (await lexists(fullPath)) {
         throw new Error(
           `Migration blocked: Unexpected file found at ${checkPath}. ` +
             `This may indicate a custom setup that requires manual migration.`
@@ -312,7 +467,7 @@ async function executeMigration(migration, workingDir, options = {}) {
   const { dryRun = false } = options;
 
   // Check preconditions
-  const { shouldRun, reason } = await checkPreconditions(
+  const { shouldRun, reason, matchedSkip } = await checkPreconditions(
     migration.preconditions,
     workingDir,
     dryRun
@@ -324,17 +479,20 @@ async function executeMigration(migration, workingDir, options = {}) {
       log(`  ${style.dim('[DRY-RUN]')} Would skip: ${reason}`, 'item');
     }
     // Don't log anything for non-dry-run skips to avoid confusion
-    return reason?.includes('Already migrated')
-      ? 'already_applied'
-      : 'not_applicable';
+    return matchedSkip ? 'already_applied' : 'not_applicable';
   }
 
-  // Execute operations
-  let operationsExecuted = 0;
+  // Execute operations, counting only the ones that actually changed
+  // something (or would, under dry-run). A migration whose preconditions
+  // matched but whose every operation skipped did no work — reporting it
+  // as applied would claim changes that never happened (e.g. a cleanup
+  // matching on a user's own file that holds nothing to clean).
+  let changedOperations = 0;
   for (const operation of migration.operations) {
     try {
-      await executeOperation(operation, workingDir, options);
-      operationsExecuted++;
+      if (await executeOperation(operation, workingDir, options)) {
+        changedOperations++;
+      }
     } catch (error) {
       throw new Error(
         `Migration ${migration.version} failed during ${operation.type} operation: ${error.message}`
@@ -342,7 +500,7 @@ async function executeMigration(migration, workingDir, options = {}) {
     }
   }
 
-  return operationsExecuted > 0 ? 'applied' : 'skipped';
+  return changedOperations > 0 ? 'applied' : 'skipped';
 }
 
 /**
@@ -352,7 +510,10 @@ async function executeMigration(migration, workingDir, options = {}) {
  * @returns {Promise<Object>} Migration statistics
  */
 async function runMigrations(workingDir, options = {}) {
-  const { dryRun = false } = options;
+  // migrationsDir is injectable for the unit tests only (synthetic
+  // migrations pin runner semantics the shipped set cannot reach); the
+  // installer always runs the migrations shipped next to this file.
+  const { dryRun = false, migrationsDir = __dirname } = options;
   const versionFile = path.join(workingDir, '.awos', '.migration-version');
 
   try {
@@ -360,7 +521,7 @@ async function runMigrations(workingDir, options = {}) {
     const currentVersion = await readVersion(versionFile);
 
     // Load all migrations
-    const migrations = await loadMigrations();
+    const migrations = await loadMigrations(migrationsDir);
 
     // Filter pending migrations
     const pending = migrations.filter((m) => m.version > currentVersion);
@@ -373,6 +534,7 @@ async function runMigrations(workingDir, options = {}) {
           migrations.length > 0
             ? Math.max(...migrations.map((m) => m.version))
             : 0,
+        notices: [],
       };
     }
 
@@ -381,9 +543,13 @@ async function runMigrations(workingDir, options = {}) {
       log(`${style.info('ℹ')} ${pending.length} migration(s) to apply`, 'info');
     }
 
-    // Execute migrations in order
+    // Execute migrations in order. stampedVersion tracks what the
+    // version file actually says — an optional-migration failure halts
+    // advancement early, so the loop's end is not proof of the latest.
     let applicableMigrations = 0;
-    for (const migration of pending) {
+    let stampedVersion = currentVersion;
+    const notices = [];
+    for (const [index, migration] of pending.entries()) {
       if (dryRun) {
         log(
           `Checking migration ${migration.version}: ${migration.name}`,
@@ -396,16 +562,58 @@ async function runMigrations(workingDir, options = {}) {
         );
       }
 
-      const status = await executeMigration(migration, workingDir, { dryRun });
+      let status;
+      try {
+        status = await executeMigration(migration, workingDir, { dryRun });
+      } catch (error) {
+        const later = pending.slice(index + 1);
+        const laterRequired = later.find((m) => !m.optional);
+        if (migration.optional && !laterRequired) {
+          // An optional migration (a repair or cleanup) must never block
+          // the install: warn, halt version advancement — so this and any
+          // later migrations are retried on the next update — and let
+          // setup continue to the copy step. Ordering is a contract, so
+          // the later ones wait too rather than running out of turn.
+          const deferred =
+            later.length > 0
+              ? ` (migration${later.length > 1 ? 's' : ''} ${later.map((m) => m.version).join(', ')} deferred with it)`
+              : '';
+          log(
+            `${style.warn('⚠')} Migration ${migration.version} could not run and will be retried on the next update${deferred}: ${error.message}`,
+            'item'
+          );
+          break;
+        }
+        if (migration.optional) {
+          // A required migration is queued behind this one. It must
+          // neither run on a layout this repair failed to prepare nor be
+          // skipped silently — so the failure aborts the run the way a
+          // required migration's own failure would.
+          throw new Error(
+            `${error.message} — migration ${laterRequired.version} must run after it, so the install cannot continue`
+          );
+        }
+        throw error;
+      }
 
       // Only count migrations that are actually applied or would be applied
       if (status === 'applied') {
         applicableMigrations++;
+        // A migration may carry a user-facing notice — the announcement
+        // of what it just changed and what the user can do about it. It
+        // is printed once, right here, only when the migration actually
+        // did something; the installer needs no product knowledge of
+        // its own to tell a legacy project what happened.
+        if (!dryRun && Array.isArray(migration.notice)) {
+          for (const line of migration.notice) log(line, 'item');
+          notices.push({ version: migration.version, lines: migration.notice });
+        }
       }
 
       if (!dryRun) {
         // Update version after successful migration
         await writeVersion(versionFile, migration.version);
+        stampedVersion = migration.version;
       }
     }
 
@@ -422,12 +630,9 @@ async function runMigrations(workingDir, options = {}) {
 
     return {
       applied: applicableMigrations,
-      current: dryRun
-        ? currentVersion
-        : pending.length > 0
-          ? pending[pending.length - 1].version
-          : currentVersion,
+      current: dryRun ? currentVersion : stampedVersion,
       latest: Math.max(...migrations.map((m) => m.version)),
+      notices,
     };
   } catch (error) {
     // Clean error message for better user experience
@@ -439,4 +644,6 @@ async function runMigrations(workingDir, options = {}) {
   }
 }
 
-module.exports = { runMigrations };
+// executeOperation is exported for the op-level unit tests only — the
+// installer itself goes through runMigrations.
+module.exports = { runMigrations, executeOperation };

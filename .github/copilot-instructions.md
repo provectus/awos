@@ -29,9 +29,10 @@ This is a framework for spec-driven development using AI agents. It provides str
 **Installation Flow:**
 ```
 npx @provectusinc/awos
-├── Creates `.claude/commands/awos/` (copies all commands/*.md files)
-├── Creates `.awos/templates/` (copies templates/*.md files)
-└── Creates `.awos/scripts/` (copies scripts/*.sh files)
+├── Creates `.awos/commands/` (copies commands/*.md — full prompts, always overwritten)
+├── Creates `.awos/templates/` (copies templates/*.md — always overwritten)
+├── Creates `.awos/scripts/` (copies scripts/*.sh — always overwritten)
+└── Creates `.claude/commands/awos/` (copies claude/commands/*.md — thin wrappers, preserved on update)
 ```
 
 ## Document-Driven State Management
@@ -93,6 +94,6 @@ The `/awos:implement` command acts as an **engineering manager** that:
 - The main entry point is `index.js` with shebang for CLI execution
 - Package is published as `@provectusinc/awos` with binary configuration
 - Uses Node.js built-in modules (no external dependencies)
-- Copies files only if they don't exist (never overwrites user customizations)
+- Framework files under `.awos/` are overwritten on every run; wrappers under `.claude/commands/awos/` are the user's customization layer and are preserved by default (the installer asks before overwriting, and non-interactive runs never overwrite)
 
 When working with this codebase, remember that you're building **AI agent orchestration framework**, not end-user applications. Focus on clear prompt engineering, structured document templates, and maintainable command workflows.

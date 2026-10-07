@@ -16,7 +16,7 @@ Your task is to manage the architecture file located at `context/product/archite
 
 # INPUTS & OUTPUTS
 
-- **Initial Prompt:** An optional change request within the `<user_prompt>` XML tag — in Update Mode it names what to change (e.g. handed off by `/awos:verify`):
+- **Initial Prompt:** An optional prompt within the `<user_prompt>` XML tag — in Creation Mode it states constraints the draft must honour; in Update Mode it names what to change (e.g. handed off by `/awos:verify`):
 
   ```xml
   <user_prompt>
@@ -77,7 +77,7 @@ Follow this logic precisely.
     ")
     ```
 
-    Whatever the exploration finds becomes the default for the matching architectural decisions in the draft below, with each finding carrying its file-path citations into the draft. When the repository holds no such evidence, the pass simply finds nothing and the draft proceeds from the product definition and best-practice assumptions alone. Findings are confirmed with the user during review in **Step 3: Finalization** — after the architecture is saved — so exploration never blocks the write.
+    Whatever the exploration finds becomes the default for the matching architectural decisions in the draft below, with each finding carrying its file-path citations into the draft. When the repository holds no such evidence, the pass simply finds nothing and the draft proceeds from `<user_prompt>`, the product definition, and best-practice assumptions alone. Findings are confirmed with the user during review in **Step 3: Finalization** — after the architecture is saved — so exploration never blocks the write.
 
 3.  **External documentation context.** If `context/sources/sources.md` exists with `## Status: configured`, read it and retrieve content from each configured source. For sources with `Access: mcp` or `Access: cli`, launch one Explore agent per source using the tool named in the `Tool:` field. For sources with `Access: manual`, do not request content here — note them as pending and ask for the pasted content in **Step 3: Finalization**, after the architecture is saved. A pre-write question nobody answers would end an unattended run before the deliverable exists.
 

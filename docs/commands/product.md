@@ -16,13 +16,13 @@ None. This is the first command you run.
 
 The command operates in two modes:
 
-- **Creation Mode** (no existing definition): Drafts every section of the product definition from your initial prompt — project name and vision, target audience and personas, success metrics, core features and user journey, and project boundaries (in-scope vs. out-of-scope) — saves the file, then refines it with you section by section.
+- **Creation Mode** (no existing definition): Drafts every section of the product definition from your initial prompt — project name and vision, target audience and personas, success metrics, core features and user journey, and project boundaries (in-scope vs. out-of-scope) — saves the file, then offers to refine it with you.
 - **Update Mode** (definition already exists): Presents a menu of sections from your existing definition and lets you update specific parts without redoing the entire document.
 
 ## Key behaviors
 
 - **Non-technical language only.** This document describes business goals, user needs, and value — not implementation details. The agent will steer you away from technical language.
-- **Interview-driven.** The definition comes from your prompt and the conversation, never from reading your source code — codebase discovery happens later, in `/awos:architecture`.
+- **Prompt-driven.** The definition comes from your prompt and the refinement that follows, never from reading your source code — codebase discovery happens later, in `/awos:architecture`.
 - **Single output.** The full product definition file is created or updated in place.
 - **Idempotent.** You can re-run this command at any time to refine your product definition as your understanding evolves.
 

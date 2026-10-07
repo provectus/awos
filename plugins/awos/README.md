@@ -16,7 +16,7 @@ To register the marketplace manually:
 /plugin marketplace add provectus/awos
 ```
 
-> **Adopting AWOS on an existing codebase?** Run the audit before the foundation commands to get a baseline score and a punch list, then re-run it after adoption and compare the two reports. Its scoring is self-contained (it does not depend on the specialist agents `/awos:hire` installs), so it works the same on an untouched repo.
+> **Adopting AWOS on an existing codebase?** Run the audit before the foundation commands to get a baseline score and a punch list, then re-run it after adoption and compare the two reports (one caveat: the Spec-Driven-Development dimension still expects a `context/product/roadmap.md`, which the current flow no longer creates — see `docs/2.0/roadmap-2.0.md`, Phase 6). Its scoring is self-contained (it does not depend on the specialist agents `/awos:hire` installs), so it works the same on an untouched repo.
 
 ## Usage
 

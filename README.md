@@ -16,7 +16,7 @@
 ### Step 1: Install `awos`
 
 ```sh
-npx @provectusinc/awos
+npx @provectus/awos
 ```
 
 This sets up the `.awos/` directory (commands, templates, scripts), the `.claude/commands/awos/` wrappers, and the `context/` directory where your project documents will live. It also registers the AWOS plugin marketplace in your project settings.

@@ -31,8 +31,8 @@ npm run test:coverage      # prints per-file coverage table for src/
 npm run test:coverage:gate # fails if coverage drops below env thresholds
 bun test --coverage tests/ # local cross-runtime coverage (Bun version)
 
-# Behavioral / session-log E2E lives in the awos-qa repository
-# (sibling to this one). See its README for how to run.
+# Behavioral checks (does Claude actually do X) are manual: run the
+# command in a scratch project as described in CONTRIBUTING.md.
 
 # Test installer against a separate project (pick one runner; $AWOS_REPO is the absolute path to this repo):
 cd ~/some-scratch-project
@@ -62,7 +62,7 @@ CI runs both: a non-blocking **coverage-report** job that just prints the table,
 
 Local Bun fallback: `bun test --coverage tests/` produces an equivalent table (slightly different column set) when Node isn't installed.
 
-Behavioral end-to-end tests — the ones that run a real Claude Code session against a seeded scratch project and assert on the actual tool-call trace — live in the separate **`awos-qa`** repository (sibling to this one). See its README for how to run them.
+There is no automated behavioral layer. Whether Claude actually does what a prompt says is checked by running the command in a separate scratch project, as described in `CONTRIBUTING.md`.
 
 ### Tests must narrate what they checked
 
@@ -70,7 +70,7 @@ Output that says `N events found` or `M pass` tells you the suite ran, not what 
 
 ### Adding tests for new contracts
 
-When a change introduces a structural contract — frontmatter key, marker pattern, migration, copy-table entry — its test ships in the same PR. Surface-area contracts (something a grep can catch) go to Layer 1. Mechanical contracts (installer behavior, migration idempotency) go to Layer 2 or 3. Behavioral contracts ("Claude must actually call X") belong in the `awos-qa` repository.
+When a change introduces a structural contract — frontmatter key, marker pattern, migration, copy-table entry — its test ships in the same PR. Surface-area contracts (something a grep can catch) go to Layer 1. Mechanical contracts (installer behavior, migration idempotency) go to Layer 2 or 3. Behavioral contracts ("Claude must actually call X") have no automated layer; verify them by hand in a scratch project and note the run in the PR.
 
 ## Architecture: The Two-Folder Customization Model
 

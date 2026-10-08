@@ -158,15 +158,13 @@ test('subagent-enumerating commands tell Claude how to discover agents', () => {
   //
   // tasks.md, tech.md, and architecture.md only need to know what
   // specialist agents exist and what each one covers — enough to pick
-  // an assignee / draft a stack section / hint at coverage — and
-  // implement.md verifies a task's named agent against the same roster
-  // before delegating. Both project-local and plugin-provided agents
-  // are listed in the Agent tool's description block at runtime, so
-  // introspecting that block is sufficient. Forcing them to Read the
-  // files (as earlier versions of this test did) over-specified the
-  // implementation; the awos-qa contract is the output (correct
-  // `**[Agent: ...]**` markers, no hallucinations), not the tool
-  // sequence used to produce it.
+  // an assignee / draft a stack section / hint at coverage. Both
+  // project-local and plugin-provided agents are listed in the Agent
+  // tool's description block at runtime, so introspecting that block
+  // is sufficient. Forcing them to Read the files (as earlier versions
+  // of this test did) over-specified the implementation; the behavioral
+  // contract is the output (correct `**[Agent: ...]**` markers, no
+  // hallucinations), not the tool sequence used to produce it.
   const frontmatterReaders = ['hire.md'];
   const lightReferencers = [
     'tasks.md',
@@ -600,16 +598,14 @@ test('implement.md and tech.md show explicit Agent() invocation syntax', () => {
 });
 
 test('commands/tasks.md emits a Feature Testing & Regression slice', () => {
-  // The QA pyramid PR makes every spec end with a "Feature Testing &
-  // Regression" slice (unless the user opts out). Downstream tools —
-  // /awos:implement, the SDD-07 audit dimension, the awos-qa scenarios —
-  // grep for this literal slice name. If the slice is renamed or
-  // dropped, the assertion catches the regression before behavior tests
-  // hit it.
+  // Every spec ends with a "Feature Testing & Regression" slice (unless
+  // the user opts out). commands/verify.md refers to this slice by its
+  // literal name, so renaming or dropping it silently breaks that
+  // reference.
   const body = readUtf8(path.join(commandsDir, 'tasks.md'));
   assert.ok(
     body.includes('Feature Testing & Regression'),
-    'commands/tasks.md must reference the literal "Feature Testing & Regression" slice name so SDD-07 and awos-qa can detect it'
+    'commands/tasks.md must reference the literal "Feature Testing & Regression" slice name that commands/verify.md refers to'
   );
 });
 
@@ -748,13 +744,13 @@ test('commands/tasks.md marks an unreviewed tasks.md and clears it on review', (
   // tasks.md is written before review (Step 4), so it starts as a
   // draft carrying a "<!-- not-user-reviewed -->" marker that Step 5
   // removes once the user reviews it. The marker shape is the contract
-  // — awos-qa greps the saved file to tell a draft from a reviewed
-  // plan, so a reword here would silently break that detection. Lock
+  // — /awos:implement greps the saved file to tell a draft from a
+  // reviewed plan, so a reword here would silently break that detection. Lock
   // the shape, plus the removal-on-review instruction.
   const body = readUtf8(path.join(commandsDir, 'tasks.md'));
   assert.ok(
     body.includes('<!-- not-user-reviewed -->'),
-    'commands/tasks.md must record the literal "<!-- not-user-reviewed -->" marker so awos-qa can detect a draft-grade tasks.md'
+    'commands/tasks.md must record the literal "<!-- not-user-reviewed -->" marker so /awos:implement can detect a draft-grade tasks.md'
   );
   assert.ok(
     /remove the `<!-- not-user-reviewed -->` marker/i.test(body),
@@ -2838,8 +2834,8 @@ test('commands/spec.md has a pre-write Definition of Done checklist', () => {
   // assumption as the recommended first option), or left in place in an
   // unattended run; the Definition of Done itself never asks the user a
   // question. The behavioral proof — no raw markers in the produced
-  // functional-spec.md, every requirement carries a criterion — lives in
-  // awos-qa. This lint only pins that the instruction text is present, so
+  // functional-spec.md, every requirement carries a criterion — is a
+  // manual scratch-project run. This lint only pins that the instruction text is present, so
   // the contract can't be silently dropped from the prompt later.
   const body = readUtf8(path.join(commandsDir, 'spec.md'));
   assert.ok(
@@ -2869,7 +2865,7 @@ test('commands/spec.md self-review checks for vague, unmeasurable wording', () =
   // [NEEDS CLARIFICATION] marker that Step 6 resolves with the user
   // post-save (or leaves in place in an unattended run). The behavioral
   // proof — no unverifiable wording in the produced functional-spec.md —
-  // lives in awos-qa. This lint only pins that the instruction text is
+  // is a manual scratch-project run. This lint only pins that the instruction text is
   // present, so the contract can't be silently dropped from the prompt later.
   const body = readUtf8(path.join(commandsDir, 'spec.md'));
   assert.ok(
@@ -3010,10 +3006,9 @@ test('commands/spec.md mandates the when/then pair per acceptance criterion', ()
   // (Given), a user action (When), a visible outcome (Then)"), which reads as
   // guidance about content rather than a required sentence form — so a lone
   // bullet would come out declarative ("The user submits X. They see Y.") and
-  // still look compliant. The behavioral proof is awos-qa's
-  // spec-uses-gwt-acceptance-criteria, which greps every AC bullet for
-  // `when … then` in one sentence; this lint pins the instruction that makes
-  // it hold, including the per-bullet re-read in the Definition of Done
+  // still look compliant. The behavioral proof is a manual check that every
+  // AC bullet in a produced spec carries `when … then` in one sentence; this
+  // lint pins the instruction that makes it hold, including the per-bullet re-read in the Definition of Done
   // (checking the set as a whole is how a single offender survives).
   const body = readUtf8(path.join(commandsDir, 'spec.md'));
   assert.ok(

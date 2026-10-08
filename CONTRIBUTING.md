@@ -85,6 +85,15 @@ npx ~/repos/provectus/awos/index.js
 - ✅ Commands are copied to the right locations
 - ✅ Commands are working as expected
 
+#### Testing prompt changes
+
+The test suite checks that a prompt says the right things, not that Claude does them. To check behavior:
+
+1. Install your local clone into the scratch project (see above).
+2. Open Claude Code in the scratch project and run the command you changed (for example `/awos:tasks`) on input that exercises your change.
+3. Confirm Claude does what the change intends — the files it writes, the questions it asks, the agents it delegates to.
+4. Note the command, the input, and what you observed in the PR description.
+
 #### If you make changes to the installer code:
 
 - ✅ All directories are created correctly

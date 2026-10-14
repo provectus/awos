@@ -84,11 +84,11 @@ Follow this process precisely.
 
 ## Step 4: Search the MCP Server
 
-1.  For each **Missing** or **Partially Covered** role, call the `awos-recruitment` MCP server's `search` tool with a natural-language query built from technology names and domain. Issue these searches in parallel — one call per role. Example queries:
+1.  For each **Missing** or **Partially Covered** role, call the `awos-recruitment` MCP server's `search_capabilities` tool with a natural-language query built from technology names and domain. Issue these searches in parallel — one call per role. Example queries:
     - `"React TypeScript frontend development"`
     - `"Python FastAPI backend API"`
     - `"AWS Terraform infrastructure deployment"`
-2.  In the same parallel batch, issue hook searches with the registry's `type="hook"` filter. Hooks are project-wide guardrails and side-effects (format-on-edit, lint/test gates, commit checks, docs freshness, dangerous-command blocking) — their relevance is orthogonal to agent coverage, so these searches run even when every role is Covered. The registry matches a query against each hook's name + description embedding, so phrase each query as a short natural-language problem statement — the way a hook's description would read — and keep **one intent per query**; concatenating intents or toolchain keywords into one query dilutes the match below the score threshold. Derive the intents from the project's toolchain and conventions. Examples:
+2.  In the same parallel batch, issue hook searches with the registry's `type="hook"` filter. Hooks are project-wide guardrails and side-effects (format-on-edit, lint/test gates, commit checks, docs freshness, dangerous-command blocking) — their relevance is orthogonal to agent coverage, so these searches run even when every role is Covered. The registry matches a query against the embedding of each hook's description (not its name), so phrase each query as a short natural-language problem statement — the way a hook's description would read — and keep **one intent per query**; concatenating intents or toolchain keywords into one query dilutes the match below the score threshold. Derive the intents from the project's toolchain and conventions. Examples:
     - `"format code automatically after edits"`
     - `"run lint and tests before completing work"`
     - `"keep documentation updated before committing"`

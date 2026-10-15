@@ -40,7 +40,7 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/profile-implement.mjs" watch [--session <id>
 
 `report` prints Markdown. Write the optional JSON to the session scratchpad, never into the user's project: transcripts contain prompts and code, and the profile is a derived view of them.
 
-For `watch`, arm it with the `Monitor` tool, persistent, so each stdout line arrives as a notification. The script polls every five minutes and exits on its own when the orchestrator prints its completion line or the user sends the next prompt. Its lines are:
+For `watch`, arm it with the `Monitor` tool, persistent, so each stdout line arrives as a notification. The script polls every five minutes and exits on its own when the orchestrator prints its completion line or the user starts another AWOS command. An answer to a question, `continue`, or `/login` stays inside the run and is reported as a user prompt. Its lines are:
 
 - `DONE <type> "<description>": …` — a working agent finished, with its wall, model, tool, and test time, turns, seconds per turn, tokens per turn, thinking share.
 - `DONE (delegator) …` — an agent that handed its task to a nested agent; its own numbers are not meaningful.

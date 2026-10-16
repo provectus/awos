@@ -1,0 +1,6 @@
+{
+  "name": "@atlas/messaging",
+  "private": true,
+  "description": "The two file-backed queues, addressed-command envelopes, config, ids, and clock.",
+  "main": "src/index.js"
+}

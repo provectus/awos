@@ -1,0 +1,6 @@
+{
+  "name": "@atlas/promotions-service",
+  "private": true,
+  "description": "Background worker owning the promotions store: consumes quote events, applies promotion rules, emits promotion-applied events.",
+  "main": "src/service.js"
+}

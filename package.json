@@ -8,7 +8,7 @@
   },
   "main": "index.js",
   "scripts": {
-    "test": "node --test 'tests/**/*.test.js' && npm run test:audit-engine && npm run test:audit-harness && npm run test:audit-tools",
+    "test": "node --test 'tests/*.test.js' 'tests/installer/*.test.js' && npm run test:audit-engine && npm run test:audit-harness && npm run test:audit-tools",
     "test:lint": "node --test tests/lint-prompts.test.js",
     "test:installer": "node --test 'tests/installer/*.test.js'",
     "test:fixtures": "node --test tests/fixtures.test.js",
@@ -20,8 +20,8 @@
     "audit:smoke": "node --import tsx tools/ai-readiness-audit/qa/compliance_smoke.ts",
     "typecheck": "tsc --noEmit",
     "build:audit-engine": "node tools/ai-readiness-audit/build-engine.mjs",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-exclude='tests/**' --test-coverage-exclude='src/index.js' 'tests/**/*.test.js'",
-    "test:coverage:gate": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-exclude='tests/**' --test-coverage-exclude='src/index.js' --test-coverage-lines=${COVERAGE_LINES:-85} --test-coverage-functions=${COVERAGE_FUNCTIONS:-95} --test-coverage-branches=${COVERAGE_BRANCHES:-80} 'tests/**/*.test.js'"
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-exclude='tests/**' --test-coverage-exclude='src/index.js' 'tests/*.test.js' 'tests/installer/*.test.js'",
+    "test:coverage:gate": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-exclude='tests/**' --test-coverage-exclude='src/index.js' --test-coverage-lines=${COVERAGE_LINES:-85} --test-coverage-functions=${COVERAGE_FUNCTIONS:-95} --test-coverage-branches=${COVERAGE_BRANCHES:-80} 'tests/*.test.js' 'tests/installer/*.test.js'"
   },
   "keywords": [],
   "author": "Provectus Inc.",

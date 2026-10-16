@@ -72,6 +72,10 @@ Output that says `N events found` or `M pass` tells you the suite ran, not what 
 
 When a change introduces a structural contract — frontmatter key, marker pattern, migration, copy-table entry — its test ships in the same PR. Surface-area contracts (something a grep can catch) go to Layer 1. Mechanical contracts (installer behavior, migration idempotency) go to Layer 2 or 3. Behavioral contracts ("Claude must actually call X") have no automated layer; verify them by hand in a scratch project and note the run in the PR.
 
+### The C4 eval harness
+
+`tools/c4-evals/` is developer tooling (never shipped by the installer) for measuring whether a prompt/template variant changes real `tasks → implement` outcomes: `run-eval.mjs` executes one arm against a scratch copy of an eval fixture as two headless `claude -p` sessions, `grade-run.mjs` extracts deterministic metrics, `compare-arms.mjs` applies a pre-registered decision rule. Eval fixtures live in `tests/fixtures/eval-*/` — they are campaign inputs with their own contract tests in `tests/c4-evals.test.js`, not installer fixtures (`tests/fixtures.test.js` skips the `eval-` prefix). Design, pre-registration, and the three 2026-10 campaign results are under `docs/2.0/` (`c4-diagram-eval-plan.md`, `c4-diagram-evidence.md`, the dated notes, and `data/` for the raw campaign summaries). Campaigns spend real subscription usage and are run manually; CI runs only the free contract tests.
+
 ## Architecture: The Two-Folder Customization Model
 
 The installer copies files into **two destination folders** with different semantics — this is load-bearing for the whole UX:

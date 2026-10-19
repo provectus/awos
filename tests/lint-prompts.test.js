@@ -868,6 +868,57 @@ test('completion claims require fresh evidence — the verification reflex is ba
   );
 });
 
+test('hire.md checks installed skills for updates and never overwrites local edits', () => {
+  // The registry records installed skills in .claude/awos-recruitment.lock.json
+  // and ships `skill status` / `skill update`. hire runs the check between
+  // the inventory and the registry search, through the installer CLI (not
+  // an MCP tool), always with --no-overwrite so a locally edited skill is
+  // never replaced, and proposes the registry's skill-update-check hook
+  // through the existing hook consent gate rather than a second question.
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    body.includes('npx @provectusinc/awos-recruitment skill status --json') &&
+      body.includes('bunx @provectusinc/awos-recruitment skill status --json'),
+    'commands/hire.md Step 4 must check installed skills via the awos-recruitment `skill status --json` verb in both npx and bunx forms'
+  );
+  assert.ok(
+    body.indexOf('skill status --json') < body.indexOf('`search` tool'),
+    'commands/hire.md must run the skill update check before the registry search'
+  );
+  assert.ok(
+    body.includes(
+      'npx @provectusinc/awos-recruitment skill update --no-overwrite'
+    ) &&
+      body.includes(
+        'bunx @provectusinc/awos-recruitment skill update --no-overwrite'
+      ),
+    'commands/hire.md Step 4 must update skills via the awos-recruitment `skill update` verb in both npx and bunx forms'
+  );
+  assert.ok(
+    !/skill update(?! --no-overwrite)/.test(body),
+    "commands/hire.md must never invoke `skill update` without --no-overwrite — locally edited skills are the user's work"
+  );
+  assert.ok(
+    /skip the rest of this step silently/i.test(body),
+    'commands/hire.md Step 4 must skip silently when the CLI fails or the registry server is unreachable'
+  );
+  assert.ok(
+    body.includes(
+      'Update the outdated skills now? Skills you edited locally are kept.'
+    ),
+    'commands/hire.md Step 4 must ask one AskUserQuestion before updating, saying that local edits are kept'
+  );
+  assert.ok(
+    /does not delete anything/i.test(body),
+    'commands/hire.md Step 4 must only report removed skills, never delete them'
+  );
+  assert.ok(
+    body.includes('`skill-update-check`') &&
+      /do not ask a second question/i.test(body),
+    'commands/hire.md Step 5 Gate 2 must propose the skill-update-check hook through the same hook consent question, not a second one'
+  );
+});
+
 test('setup-config does not auto-populate .claude/agents/', () => {
   // .claude/agents/ is the user's customization area. The earlier draft
   // of this PR shipped a `plugins/awos/agents` → `.claude/agents` copy
@@ -3064,11 +3115,11 @@ test('hire.md installs hooks from the registry and never authors them', () => {
   );
   assert.ok(
     body.includes('## Installed Hooks'),
-    'commands/hire.md Step 8 coverage-report structure must contain the "## Installed Hooks" section'
+    'commands/hire.md Step 9 coverage-report structure must contain the "## Installed Hooks" section'
   );
   assert.ok(
     body.includes('| Name | Event | Command | Description |'),
-    'commands/hire.md Step 8 Installed Hooks table must use the exact header Name/Event/Command/Description — Event and Command are the only cells derivable from bare settings entries; Name and Description must fall back to "—" rather than be invented'
+    'commands/hire.md Step 9 Installed Hooks table must use the exact header Name/Event/Command/Description — Event and Command are the only cells derivable from bare settings entries; Name and Description must fall back to "—" rather than be invented'
   );
   assert.ok(
     /never author hook/i.test(body),
@@ -3077,12 +3128,12 @@ test('hire.md installs hooks from the registry and never authors them', () => {
   assert.ok(
     body.includes('two separate gates') &&
       body.includes('shell script that runs automatically'),
-    'commands/hire.md Step 4 must gate hook consent separately from the passive skills/MCPs/agents confirmation, naming that hooks install auto-running shell scripts'
+    'commands/hire.md Step 5 must gate hook consent separately from the passive skills/MCPs/agents confirmation, naming that hooks install auto-running shell scripts'
   );
   assert.ok(
     body.includes('second half of the hook consent') &&
       body.includes('.claude/hooks/<name>/HOOK.md'),
-    'commands/hire.md Step 5 must read back the installed HOOK.md and entrypoint script after install and offer rollback on mismatch — registry metadata is not vetted against the script'
+    'commands/hire.md Step 6 must read back the installed HOOK.md and entrypoint script after install and offer rollback on mismatch — registry metadata is not vetted against the script'
   );
 });
 
@@ -3094,14 +3145,14 @@ test('hire.md treats an unanswered consent gate as withheld consent', () => {
   const body = readUtf8(path.join(commandsDir, 'hire.md'));
   assert.ok(
     /gets no answer[\s\S]{0,200}treat consent as withheld/i.test(body),
-    'commands/hire.md Step 4 must treat an unanswered consent gate as withheld consent'
+    'commands/hire.md Step 5 must treat an unanswered consent gate as withheld consent'
   );
   assert.ok(
     /install nothing that gate covered and continue/i.test(body),
-    'commands/hire.md Step 4 must continue to Step 6 after an unanswered gate instead of stopping'
+    'commands/hire.md Step 5 must continue to Step 7 after an unanswered gate instead of stopping'
   );
   assert.ok(
     /do not re-ask the same question as plain text/i.test(body),
-    'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
+    'commands/hire.md Step 5 must forbid re-asking the consent gate as plain text'
   );
 });

@@ -53,7 +53,7 @@ Follow this process precisely.
     - **Documentation** (doc generators, API docs, knowledge bases)
     - **Solution Ownership** (product management, project tracking, analytics)
 4.  For each domain that has technologies, define an ideal agent role name in kebab-case (e.g., `react-frontend`, `python-backend`, `aws-infra`).
-5.  Record the identified domains, technologies, and proposed agent roles, and show them as a table. These are proposals to be checked against what the project already has, so continue to Step 3 rather than treating the table as a decision — Step 3 re-shows each role with its coverage status, Step 4 asks before anything is installed, and Step 8 writes the final roster to `context/product/hired-agents.md`.
+5.  Record the identified domains, technologies, and proposed agent roles, and show them as a table. These are proposals to be checked against what the project already has, so continue to Step 3 rather than treating the table as a decision — Step 3 re-shows each role with its coverage status, Step 5 asks before anything is installed, and Step 9 writes the final roster to `context/product/hired-agents.md`.
 
     | Domain         | Technologies                | Proposed Agent Role |
     | -------------- | --------------------------- | ------------------- |
@@ -67,7 +67,7 @@ Follow this process precisely.
 1.  Discover existing agents and skills. The discovery covers **both** sources below — finding agents in one does not satisfy the other:
     - **Project-local agents** — use `Glob` for `.claude/agents/*.md`, then call the `Read` tool on each matched file (one `Read` per file — do not substitute `Bash` with `head`/`cat`/`find -exec`, even though it would be fewer calls). For each file, extract `name`, `description`, and `skills` from its YAML frontmatter. Filenames alone are not enough — the coverage table needs each agent's description and skill list.
     - **Plugin-provided agents** — inspect the `Agent` tool's description block in your own system prompt and collect every agent whose `subagent_type` carries a `plugin-name:` prefix (e.g. `python-development:python-pro`, `backend-development:backend-architect`). This is an introspection step — no tool call is required, but the step is mandatory.
-    - **Installed hooks** — if `.claude/settings.json` or `.claude/settings.local.json` exists in the project, `Read` it and collect the configured hooks (event, matcher, command). A missing or unparseable file means no existing hooks — not an error. This set filters duplicates out of the Step 4 hook proposal and populates the Step 8 roster. User-level settings (`~/.claude/settings.json`) are out of scope.
+    - **Installed hooks** — if `.claude/settings.json` or `.claude/settings.local.json` exists in the project, `Read` it and collect the configured hooks (event, matcher, command). A missing or unparseable file means no existing hooks — not an error. This set filters duplicates out of the Step 5 hook proposal and populates the Step 9 roster. User-level settings (`~/.claude/settings.json`) are out of scope.
     - Search for available skills across the project (`.claude/skills/`, plugin-provided skills, any other skill locations).
     - Report each registered specialist subagent's name and description (project-local and plugin-provided alike) so the orchestrator can match domains against them.
 2.  Compare against the proposed roles from Step 2 and classify coverage:
@@ -82,7 +82,38 @@ Follow this process precisely.
     | `python-backend` | ⚠️ Partially Covered | general-purpose         | Missing FastAPI skills  |
     | `aws-infra`      | ❌ Missing           | —                       | No infrastructure agent |
 
-## Step 4: Search the MCP Server
+## Step 4: Check Installed Skills for Updates
+
+Skip this step when `.claude/skills/` does not exist or contains no directories.
+
+1.  Pick the package runner with the rule from Step 6 (`bunx` when `bun.lockb` or `bun.lock` is present in the project root, otherwise `npx`) and run:
+
+    ```
+    npx @provectusinc/awos-recruitment skill status --json
+    bunx @provectusinc/awos-recruitment skill status --json
+    ```
+
+    The command prints one JSON object per installed skill with `name`, `state`, `detail`, and `replacement`. `state` is one of `up-to-date`, `outdated`, `modified-locally`, `removed`, `not-in-registry`, `no-lock-entry`, `missing-locally`. Skills installed before the registry kept `.claude/awos-recruitment.lock.json` are matched against its version history, so an unmodified old copy reports `outdated`.
+
+2.  If the command fails, the runner is missing, or the registry server is unreachable, skip the rest of this step silently and continue to Step 5 — the same way Step 5 proceeds when the MCP server is unavailable.
+3.  If no skill is `outdated` or `removed`, continue to Step 5 silently.
+4.  Otherwise show one table with the `outdated` and `removed` skills (for `removed`, put the `replacement` in the Detail column), then ask one `AskUserQuestion`: "Update the outdated skills now? Skills you edited locally are kept." with the options **Update now** and **Skip**.
+
+    | Skill            | State    | Detail                       |
+    | ---------------- | -------- | ---------------------------- |
+    | `fastapi-expert` | outdated | 1.2.0 → 1.4.0                |
+    | `aws-deploy`     | removed  | replaced by `aws-cdk-deploy` |
+
+5.  On **Update now**, run:
+
+    ```
+    npx @provectusinc/awos-recruitment skill update --no-overwrite
+    bunx @provectusinc/awos-recruitment skill update --no-overwrite
+    ```
+
+    Show its output. The command replaces every `outdated` skill, records the new version in `.claude/awos-recruitment.lock.json`, and never touches a skill with local edits — it prints `Kept local copy of '<name>'` for each one. List those kept skills so the user knows they are still on the old version. Always pass `--no-overwrite`; local edits are the user's work and this command does not replace them. On **Skip**, or when the question comes back unanswered, continue. `removed` skills are reported only — this command does not delete anything.
+
+## Step 5: Search the MCP Server
 
 1.  For each **Missing** or **Partially Covered** role, call the `awos-recruitment` MCP server's `search` tool with a natural-language query built from technology names and domain. Issue these searches in parallel — one call per role. Example queries:
     - `"React TypeScript frontend development"`
@@ -93,9 +124,9 @@ Follow this process precisely.
     - `"run lint and tests before completing work"`
     - `"keep documentation updated before committing"`
 
-    Filter the results against the hooks already configured (Step 3). If the searches return no hooks, skip the hooks phase silently — no warning needed.
+    Filter the results against the hooks already configured (Step 3). If the searches return no hooks and `skill-update-check` is already configured (see Gate 2 below), skip the hooks phase silently — no warning needed.
 
-3.  If the `awos-recruitment` MCP server is not available or returns errors, tell the user it is unavailable and that you will proceed with generating agent files using general configuration. Note that they can prepare custom skills and agents in `.claude/skills/` and `.claude/agents/`, and wire their own hooks in `.claude/settings.json`. Skip to **Step 6**.
+3.  If the `awos-recruitment` MCP server is not available or returns errors, tell the user it is unavailable and that you will proceed with generating agent files using general configuration. Note that they can prepare custom skills and agents in `.claude/skills/` and `.claude/agents/`, and wire their own hooks in `.claude/settings.json`. Skip to **Step 7**.
 4.  Gather all found skills, MCPs, agents, and hooks from the search results.
 5.  Show the user what was found and collect consent in **two separate gates** — never one blanket confirmation covering both:
 
@@ -108,13 +139,16 @@ Follow this process precisely.
 
     **Gate 2 — hooks.** Hooks are different in kind: each one installs a shell script that runs automatically on the listed lifecycle event, with no invocation by the user. Show them in their own table with behavior-level detail, then ask a dedicated `AskUserQuestion` that names the executable nature — e.g. "These hooks install shell scripts that run automatically on the listed events — install them?" — so approving the passive batch can never silently approve executable behavior:
 
-    | Hook               | Event       | What it runs                          | Why relevant                   |
-    | ------------------ | ----------- | ------------------------------------- | ------------------------------ |
-    | `prettier-on-edit` | PostToolUse | `prettier --write` on the edited file | Prettier is the repo formatter |
+    | Hook                 | Event        | What it runs                                                                                                                                                  | Why relevant                                             |
+    | -------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+    | `prettier-on-edit`   | PostToolUse  | `prettier --write` on the edited file                                                                                                                         | Prettier is the repo formatter                           |
+    | `skill-update-check` | SessionStart | runs on SessionStart, sends `.claude/awos-recruitment.lock.json` to the registry server, prints one line when skills are outdated, once a day, silent offline | keeps the Step 4 check current between `/awos:hire` runs |
 
-    Tell the user that the "What it runs" column comes from registry metadata (the hook's `HOOK.md`), which the registry does not vet against the script itself, and that the actual installed script will be shown for review immediately after install (Step 5.4) — the registry CLI has no preview mode, so the on-disk copy is the first chance to inspect the real behavior.
+    If `skill-update-check` is not among the hooks collected in Step 3, add it to this table whether or not the hook searches returned it — it is the registry's own hook. It goes through the same consent question as every other hook in the table; do not ask a second question for it.
 
-6.  **If a gate gets no answer — the `AskUserQuestion` tool is unavailable, or the question comes back unanswered — treat consent as withheld.** Install nothing that gate covered and continue to Step 6. Do not re-ask the same question as plain text, and do not end the turn. Installing is what needed permission; the coverage report does not, so Step 8 still runs and records what is actually on disk. List the components you did not install under **Gaps** so the user can approve them on a later run.
+    Tell the user that the "What it runs" column comes from registry metadata (the hook's `HOOK.md`), which the registry does not vet against the script itself, and that the actual installed script will be shown for review immediately after install (Step 6.4) — the registry CLI has no preview mode, so the on-disk copy is the first chance to inspect the real behavior.
+
+6.  **If a gate gets no answer — the `AskUserQuestion` tool is unavailable, or the question comes back unanswered — treat consent as withheld.** Install nothing that gate covered and continue to Step 7. Do not re-ask the same question as plain text, and do not end the turn. Installing is what needed permission; the coverage report does not, so Step 9 still runs and records what is actually on disk. List the components you did not install under **Gaps** so the user can approve them on a later run.
 
 **QA Complement Rule:**
 
@@ -124,11 +158,11 @@ Pick **one** QA agent per primary role, in this order of preference:
 
 1. A technology-specific tester from the registry or already in `.claude/agents/` (e.g. an agent dedicated to the project's actual testing stack — pytest-focused, React-component-focused, etc.).
 2. The generic `testing-expert` from the `awos-recruitment` registry if no technology-specific tester is found.
-3. Otherwise, no QA agent — record the gap in the Step 7 warning table.
+3. Otherwise, no QA agent — record the gap in the Step 8 warning table.
 
 Do **not** hardcode tool names or runners (Playwright, Cypress, WebdriverIO, Vitest, pytest…) into the proposal. Pick a runner only after the project's actual stack is known — by reading `technical-considerations.md`, the package manifest, or any existing test configuration — and prefer whatever is already configured before suggesting a new one. Optimize for the project's testing efficiency and developer wall-clock time, not for a fixed default.
 
-## Step 5: Install Found Components
+## Step 6: Install Found Components
 
 Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock` is present in the project root, otherwise use `npx`. The commands below show both; pick one.
 
@@ -156,16 +190,16 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
 
     The CLI writes hook entries into the project's `.claude/settings.json` (script payloads into `.claude/hooks/`) and is idempotent on re-run. Hooks come from the registry only — never author hook entries or commands yourself, and never generate hooks from a template. If the registry has none, none are installed.
 
-    After the CLI reports success, complete the second half of the hook consent: for each hook just installed, `Read` the installed `.claude/hooks/<name>/HOOK.md` and the entrypoint script it references, and summarize to the user what the script actually does — the commands it runs, the files it touches, what it can block. If the script's real behavior exceeds or contradicts the metadata the user approved in Step 4, ask the user with `AskUserQuestion` whether to keep it or roll it back; on rollback, delete `.claude/hooks/<name>/` and remove the settings entry the CLI just added (undoing the CLI's own write is rollback, not authoring).
+    After the CLI reports success, complete the second half of the hook consent: for each hook just installed, `Read` the installed `.claude/hooks/<name>/HOOK.md` and the entrypoint script it references, and summarize to the user what the script actually does — the commands it runs, the files it touches, what it can block. If the script's real behavior exceeds or contradicts the metadata the user approved in Step 5, ask the user with `AskUserQuestion` whether to keep it or roll it back; on rollback, delete `.claude/hooks/<name>/` and remove the settings entry the CLI just added (undoing the CLI's own write is rollback, not authoring).
 
 5.  Report successes and failures for each installation.
 
-## Step 6: Generate or Update Agent Files
+## Step 7: Generate or Update Agent Files
 
 1.  Read the agent template from `.awos/templates/agent-template.md`.
 2.  Ensure `.claude/agents/` exists; create it if it does not.
 3.  For **Missing** roles:
-    - If a registry agent was successfully installed for this role in Step 5, skip generation — the installed agent already covers the role.
+    - If a registry agent was successfully installed for this role in Step 6, skip generation — the installed agent already covers the role.
     - Otherwise, generate a new agent file at `.claude/agents/{role-name}.md` from the template. Fill in:
       - `[agent-name]` → the kebab-case role name
       - `[When Claude should delegate to this agent]` → trigger phrasing based on domain and technologies
@@ -178,7 +212,7 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
 5.  For every agent file this run installed from the registry or generated — and for every existing file in `.claude/agents/` that lacks it — ensure the frontmatter carries `disallowedTools: Agent`. `/awos:implement` routes each task to one specialist; a specialist that can spawn agents tends to forward its brief instead of doing it, adding a hop and no work. Keep the `Agent` tool only for an agent whose description names it as a coordinator, and say so in the review.
 6.  **Write the agent files, then show each generated or updated file to the user for review** and apply any adjustments they ask for. Writing before the review is safe here: an agent file is reversible — re-run `/awos:hire` to revise it, or delete it.
 
-## Step 7: Warn About Missing Skills
+## Step 8: Warn About Missing Skills
 
 1.  Collect technologies or skills that were not found on the MCP server (server unavailable, or no results).
 2.  If there are gaps, show the user a warning table:
@@ -190,7 +224,7 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
 
 3.  Advise the user that the generated agents will work using general knowledge, but custom skills and agents in `.claude/skills/` and `.claude/agents/` will improve results for the gaps above.
 
-## Step 8: Write Coverage Report
+## Step 9: Write Coverage Report
 
 Write `context/product/hired-agents.md` with the post-install state. This file is the canonical, durable coverage report — `/awos:hire` owns it and is the only command that refreshes it. Anyone reading `architecture.md` should follow the pointer back to here, not look for an inline table.
 
@@ -229,7 +263,7 @@ Rules for the **Coverage by Technology** rows:
 
 Rules for the **Registered Specialist Subagents** table:
 
-- One row per subagent currently in `.claude/agents/*.md` after this run completes (including ones installed in Step 5 and ones generated in Step 6).
+- One row per subagent currently in `.claude/agents/*.md` after this run completes (including ones installed in Step 6 and ones generated in Step 7).
 - Pull `name`, `description`, and `skills` directly from each agent file's YAML frontmatter.
 
 Rules for the **Installed Hooks** table:
@@ -243,7 +277,7 @@ Rules for the **Installed Hooks** table:
 
 The **Gaps** section may be empty. If non-empty, each bullet is one line: `- <Technology>: <what's missing> → <suggested action>`.
 
-## Step 9: Final Summary
+## Step 10: Final Summary
 
 Report:
 

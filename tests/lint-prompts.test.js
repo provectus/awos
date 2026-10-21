@@ -1074,9 +1074,14 @@ test('configure-external-sources SKILL.md stops when user declines at privacy ga
   );
 });
 
-test('configure-external-sources SKILL.md handles restart-resume with status markers', () => {
-  // After adding MCP servers, the editor must be restarted. The skill
-  // must write a status marker to sources.md and resume on re-invocation.
+test('configure-external-sources SKILL.md connects the current user every run', () => {
+  // The manifest is committed and shared; access is per person. The skill
+  // must (a) not stop when sources.md is already configured — a teammate
+  // who cloned the repo still needs their own connections; (b) classify
+  // each source by probing (reachable / unauthenticated / absent) rather
+  // than storing connection state in the manifest; (c) add MCP servers
+  // project-scoped so the definition ships in .mcp.json; and (d) never
+  // seed a repo's sources from other repositories.
   const body = readUtf8(
     path.join(
       repoRoot,
@@ -1088,22 +1093,102 @@ test('configure-external-sources SKILL.md handles restart-resume with status mar
     )
   );
   assert.ok(
-    /restart-pending/i.test(body),
-    'SKILL.md must use a restart-pending status marker for MCP restart-resume flow'
-  );
-  assert.ok(
-    body.includes('verified'),
-    'SKILL.md must use a verified status marker for post-verification state'
-  );
-  assert.ok(
     /## Status:/i.test(body),
-    'SKILL.md must define ## Status: markers for state management'
+    'SKILL.md must define ## Status: markers for the manifest'
+  );
+  for (const state of ['reachable', 'unauthenticated', 'absent']) {
+    assert.ok(
+      body.includes(`**${state}**`),
+      `SKILL.md must define the per-user probe state "${state}"`
+    );
+  }
+  assert.ok(
+    body.includes(
+      '`## Status: configured` → the record exists; skip to Step 5'
+    ),
+    'SKILL.md must route a configured manifest to the connect step, not stop'
+  );
+  assert.ok(
+    body.includes('--scope project'),
+    'SKILL.md must add MCP servers with --scope project so the definition lands in .mcp.json'
+  );
+  assert.ok(
+    /never written down/i.test(body),
+    'SKILL.md must state that connection state is derived by probing, never stored in the manifest'
+  );
+  assert.ok(
+    /not a liveness call/i.test(body),
+    'SKILL.md must verify each source with a read from the recorded scope, not a liveness call'
+  );
+  assert.ok(
+    body.includes('- Verify:'),
+    'SKILL.md manifest format must carry a Verify line so a teammate can repeat the scope read'
+  );
+  assert.ok(
+    /Never look in other repositories/i.test(body),
+    'SKILL.md must not seed sources from other repositories'
+  );
+});
+
+test('better:spec internal-KB lane reads only manifest fields the configure-external-sources skill writes', () => {
+  // The seam between the skill (writer of context/sources/sources.md) and
+  // the better:spec research lane (its reader). Every field the lane copies
+  // into the KB agent's prompt must be a field the skill's manifest format
+  // defines, every Role value the lane names must be one the skill allows,
+  // and the lane must not gate on the retired Category: field — a manifest
+  // the skill writes would then never dispatch the lane.
+  const skill = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins',
+      'awos',
+      'skills',
+      'configure-external-sources',
+      'SKILL.md'
+    )
+  );
+  const spec = readUtf8(
+    path.join(repoRoot, 'plugins', 'better', 'commands', 'spec.md')
+  );
+  const lane = spec
+    .split('**Internal-KB lane (dispatched when configured).**')
+    .slice(1)
+    .join('')
+    .split('\n')[0];
+  assert.ok(
+    lane.length > 0,
+    'plugins/better/commands/spec.md must still carry the "Internal-KB lane (dispatched when configured)" paragraph'
+  );
+  const fields = [...lane.matchAll(/`([A-Z][A-Za-z ]*):`/g)].map((m) => m[1]);
+  assert.ok(
+    fields.length >= 4,
+    `the KB lane must name the manifest fields it copies into the agent prompt as \`Field:\` tokens; found ${fields.length}`
+  );
+  for (const field of new Set(fields)) {
+    assert.ok(
+      skill.includes(`- ${field}:`),
+      `the KB lane reads manifest field "${field}:" but configure-external-sources SKILL.md's manifest format does not define a "- ${field}:" line — writer and reader have drifted`
+    );
+  }
+  for (const role of ['tracker', 'docs', 'communication', 'vcs', 'infra']) {
+    assert.ok(
+      lane.includes(role),
+      `the KB lane must dispatch for Role "${role}" — the lane reads every source role, not documentation only`
+    );
+    assert.ok(
+      skill.includes(`\`${role}\``),
+      `configure-external-sources SKILL.md must allow Role "${role}" — the lane names it`
+    );
+  }
+  assert.ok(
+    !spec.includes('Category:'),
+    'plugins/better/commands/spec.md must not gate on the retired Category: field — the skill writes Role:, so a Category: gate never matches'
   );
 });
 
 test('platform reference files exist under configure-external-sources skill', () => {
   // The skill reads platform-specific setup guides from references/.
-  // All three category files must exist.
+  // Every role's reference file must exist.
   const refsDir = path.join(
     repoRoot,
     'plugins',
@@ -1112,7 +1197,13 @@ test('platform reference files exist under configure-external-sources skill', ()
     'configure-external-sources',
     'references'
   );
-  for (const f of ['documentation.md', 'tickets.md', 'communication.md']) {
+  for (const f of [
+    'code-hosting.md',
+    'documentation.md',
+    'tickets.md',
+    'communication.md',
+    'infrastructure.md',
+  ]) {
     assert.ok(
       fs.existsSync(path.join(refsDir, f)),
       `plugins/awos/skills/configure-external-sources/references/${f} must exist`
@@ -1123,8 +1214,8 @@ test('platform reference files exist under configure-external-sources skill', ()
 test('configure-external-sources SKILL.md has fallback for failed verification', () => {
   // If tool verification fails and troubleshooting doesn't help, the user
   // must be able to switch to manual or remove the source rather than being
-  // stuck in a loop. Split on Step 6 heading to isolate the verification
-  // section (not Step 1's passing mention of "tool verification").
+  // stuck in a loop. Split on the Step 5 heading to isolate the connect
+  // section.
   const skillPath = path.join(
     repoRoot,
     'plugins',
@@ -1135,16 +1226,16 @@ test('configure-external-sources SKILL.md has fallback for failed verification',
   );
   const body = readUtf8(skillPath);
   const verificationSection = body
-    .split(/## Step 6/)
+    .split(/## Step 5/)
     .slice(1)
     .join('');
   assert.ok(
     /switch to manual/i.test(verificationSection),
-    'SKILL.md Step 6 must offer switching to manual when verification fails'
+    'SKILL.md Step 5 must offer switching to manual when verification fails'
   );
   assert.ok(
     /remove this source/i.test(verificationSection),
-    'SKILL.md Step 6 must offer removing the source when verification fails'
+    'SKILL.md Step 5 must offer removing the source when verification fails'
   );
 });
 
@@ -1955,7 +2046,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // and its generator-version constant were removed with the flow feature —
 // the lockstep is three files now, not four.) The pin exists to force that
 // deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.6';
+const EXPECTED_PLUGIN_VERSION = '2.4.7';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -1988,7 +2079,7 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
 // The better plugin has its own independent version line. Its discipline
 // is three files moving together: its plugin.json, its marketplace.json entry,
 // and this pinned literal (it has no generator-version constant).
-const EXPECTED_BETTER_PLUGIN_VERSION = '0.1.1';
+const EXPECTED_BETTER_PLUGIN_VERSION = '0.2.0';
 
 test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -2156,15 +2247,15 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
     ],
     [
       'This step asks the user nothing',
-      'synthesis must not interview — under claude -p a dismissed question ends the turn, so every question the research raises has to wait until after Step 7 writes the deliverables',
+      'synthesis must not interview — under claude -p a dismissed question ends the turn, so every question the research raises has to wait until after Step 8 writes the spec',
     ],
     [
       'When `AWOS_UNATTENDED` is set, skip this round entirely',
-      'the opening interview must be skipped outright in unattended runs — it is the only ask that precedes the writes, so it is the only one that can still cost both deliverables',
+      'the understanding gate must be skipped outright in unattended runs — there is nobody to hold the conversation with, and a dismissed question would end the turn before the spec exists',
     ],
     [
       'Do not ask here: this step precedes the write',
-      'the scope boundary must be drafted and marked rather than asked — Step 6 runs before the files exist',
+      'the scope boundary must be drafted and marked rather than asked — Step 7 runs before the spec file exists',
     ],
     [
       'view_model_path="${TMPDIR:-/tmp}/spec-view-[index].json"',
@@ -2213,6 +2304,30 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
     [
       'Do not guess a topic from the product definition or the codebase.',
       'the no-topic bail-out must refuse to invent a topic — shared verbatim with core spec.md (see the shared-bail-out test below)',
+    ],
+    [
+      'feature-brief.md',
+      'the command must write the feature brief — the persistent state of the understanding gate — before the first question is asked',
+    ],
+    [
+      '**Normally:**',
+      'every quirk in the brief must be stated against its baseline — a quirk without the expectation it deviates from is unreadable to someone new to the feature',
+    ],
+    [
+      'Define a term before you use it',
+      'the gate must assume the user does not know the feature vocabulary — a briefing that uses undefined terms excludes exactly the person the gate exists for',
+    ],
+    [
+      'not the brief itself',
+      'the opening message of the gate must point the user at feature-brief.md instead of restating it — a brief compressed into chat loses the vocabulary and quirks a newcomer needs',
+    ],
+    [
+      'Never check the gate yourself',
+      'the understanding gate is confirmed only by an explicit user answer — the agent inferring confirmation defeats the gate',
+    ],
+    [
+      'Discover sources now',
+      'the command must offer sources discovery when context/sources/sources.md is absent, with a skip — suggested, never enforced',
     ],
   ];
   for (const [needle, contract] of requiredSubstrings) {

@@ -1,110 +1,176 @@
 ---
 name: configure-external-sources
 description: >-
-  Detect and configure external documentation sources (wikis, ticket systems,
-  chats, email). Guides MCP/CLI tool setup, handles editor restart-resume,
-  and writes structured source configuration to context/sources/sources.md.
-  Directly invocable; today it serves /better:spec's research lane.
+  Record where a project's knowledge lives (tickets, documentation,
+  communication, version control, infrastructure) in
+  context/sources/sources.md, and connect the current user to every recorded
+  source — pick the path, install CLIs or project-scoped MCP servers, drive
+  logins, verify with a real read from the recorded scope. Run it after
+  cloning a repo whose sources.md someone else wrote. Directly invocable;
+  serves /better:spec's research lanes.
 argument-hint: ''
 ---
 
-# External Sources — Setup Orchestrator
+# Knowledge Sources — Setup and Connection
 
-You configure access to external documentation platforms — wikis, ticket systems, chats, and email — for the commands that read the source manifest (e.g. `/awos:architecture`, `/better:spec`). Your only output is the structured source manifest at `context/sources/sources.md`. You do not retrieve content from the sources — the commands that consume the manifest handle retrieval later.
+Two jobs. First, once per repository: record where the project's knowledge lives — the issue tracker, the documentation, the communication channels, the version control host, the cloud infrastructure. That record is `context/sources/sources.md`; it is committed, and everyone who clones the repository shares it. Second, per person, every run: make sure the user in front of you can reach every recorded source from this session, and prove it with a read from the recorded scope. Access is personal — a teammate who pulls the repository gets the record, not the connections — so the second job runs even when the file already exists.
 
-## Step 1 — Check Existing State
+You write `sources.md`, `.mcp.json` (project-scoped server definitions), and nothing else. You never write a credential anywhere. You do not retrieve project content; the commands that read the manifest do that later.
 
-Read `context/sources/sources.md` if it exists.
+## The manifest
 
-- If the file contains `## Status: configured` → sources are already set up. Stop — nothing to do.
-- If the file contains `## Status: restart-pending` → a previous run was interrupted for an editor restart. Skip to **Step 6** (tool verification).
-- If the file contains `## Status: verifying` → a previous run was interrupted during tool verification. Skip to **Step 6** (tool verification).
-- If the file contains `## Status: verified` → tools were verified but scope was not yet collected. Skip to **Step 7** (scope collection).
-- If the file contains `## Status: none` → the user previously indicated no external sources. Stop.
-- If the file does not exist → continue to Step 2.
-
-## Step 2 — Identify Sources
-
-Use `AskUserQuestion` with `multiSelect: true` to ask: "Does your project have external documentation in any of these?" with options:
-
-- **Documentation / Wiki** — "Confluence, Notion, Google Docs, SharePoint, etc."
-- **Ticket System** — "Jira, Linear, GitHub Issues, GitLab Issues, etc."
-- **Chat / Messaging** — "Slack, Teams, Google Chat, etc."
-- **Email** — "Gmail, Outlook, etc."
-- **None of the above** — "No external documentation to import"
-
-If the user selects "None", write `context/sources/sources.md` with `## Status: none` and stop.
-
-For each selected category, use `AskUserQuestion` to identify the specific platform(s):
-
-- **Documentation:** Confluence, Notion, Google Docs/Drive, SharePoint, Other
-- **Tickets:** Jira, Linear, GitHub Issues, GitLab Issues, Other
-- **Chat:** Slack, Microsoft Teams, Google Chat, Other
-- **Email:** Gmail, Outlook, Other
-
-If the user selects "Other" for any category, read the full reference file at `references/{documentation,tickets,communication}.md` (relative to this SKILL.md) and present the additional platforms listed there as follow-up options.
-
-## Step 3 — Privacy Gate
-
-Use `AskUserQuestion` to confirm: "Retrieving content from these sources will send data to the LLM provider's API. This data may include sensitive or personal information (PII in tickets, internal discussions in wikis, private messages in chats). Do you wish to proceed?" with options **Yes, proceed** and **No, skip external sources**. If skipped, write `context/sources/sources.md` with `## Status: none` and stop.
-
-## Step 4 — Tool Setup
-
-For each selected platform:
-
-1. **Discover available tools.** Check what tools are already available in the environment for this platform (e.g., existing MCP servers, installed CLIs like `gh`). Then read `references/{documentation,tickets,communication}.md` (relative to this SKILL.md) for known MCP servers and CLI tools for the platform.
-
-2. **Present options.** If tools are already available in the environment for this platform, present them via `AskUserQuestion` along with **I have a different tool** and **Manual** (user pastes content) as alternatives. If no tools are already available, default to **Manual** and offer tool installation as an explicit opt-in — "I can help set up an MCP server or CLI tool if you want live retrieval." Always include **I have a different tool** so users can specify their own MCP server or CLI (e.g. a corporate or custom fork). If selected, ask the user for the tool name, type (MCP server or CLI), and setup command, then guide accordingly. Do not label any option as "recommended." For each tool option, write a brief, objective comparison — note whether it is vendor-provided or community-built, check its package stats and recent update activity, and summarize its trade-offs (e.g. a vendor-provided server may be more actively maintained but could have narrower scope; a community server may exist specifically because the official one lacks features or has unwanted capabilities like sending messages). Let the user make a deliberate choice.
-
-3. **Guide installation.** For the user's chosen tool, use the setup details from the reference file to guide installation and authentication. For MCP servers, use `npx`/`bunx` or `claude mcp add` — do not instruct the user to clone repositories. For manual access, no setup is needed — the user will paste content directly during retrieval.
-
-4. **Track the result.** Record the access method chosen (mcp, cli, or manual) and the tool name for each source.
-
-## Step 5 — Restart Check
-
-If any MCP servers were added during Step 4, write `context/sources/sources.md` with `## Status: restart-pending` and a `## Source:` section for each configured source (category, platform, access method, tool name — scope left blank for now). Then tell the user:
-
-> MCP servers have been configured. To pick them up, exit this session (Ctrl+C twice or `/exit`) and resume it — the exit message prints a `claude --resume <id>` command you can use. If any servers need interactive authentication, run `/mcp` after resuming to authenticate before continuing. Then invoke this skill again (`configure-external-sources`) and source setup will continue automatically from where it left off.
-
-Stop here. When the skill runs again, Step 1 will route to Step 6.
-
-If no MCP restart is needed (tools were already available, CLI was chosen, or manual export selected), continue to Step 6.
-
-## Step 6 — Tool Verification
-
-Update the status in `context/sources/sources.md` to `verifying`. If the file already exists (from a restart-pending state), update in place; otherwise write a new file with the current source list.
-
-For each configured MCP or CLI tool, attempt a simple read operation (e.g., search for a known term, list projects, or list channels) to confirm the tool responds. If verification fails, read the matching section from the reference file and help troubleshoot authentication or configuration. If the tool still fails after troubleshooting, use `AskUserQuestion` to ask: "Could not verify {tool name} for {platform}. What would you like to do?" with options **Switch to manual** and **Remove this source**. On switch, update the source's access method to manual. On remove, drop the source from the manifest — do not include it in `sources.md`. If the list becomes empty after removals, write `## Status: none` and stop.
-
-Once all remaining tools are verified, update the status in `context/sources/sources.md` to `verified`.
-
-## Step 7 — Scope Collection
-
-Use `AskUserQuestion` per source to collect the specific scope to query:
-
-- **Wiki/Docs:** page URLs, space keys, or search terms for relevant documentation
-- **Tickets:** project keys, filter URLs, labels/tags, or epic links covering the project
-- **Chat:** channel names or URLs (public/project channels, not DMs)
-- **Email:** search queries, thread subjects, or label names
-
-## Step 8 — Write Source Manifest
-
-Write the final `context/sources/sources.md` with `## Status: configured` and all sources. Use this format:
+A source is a place knowledge lives. A role can have any number of sources — two trackers during a migration, a GitHub org and a GitLab instance, AWS and Azure side by side — each as its own record.
 
 ```markdown
-# External Sources
+# Knowledge Sources
 
 ## Status: configured
 
-## Source: {id}
+Discovery ran on 2026-10-20. This file is shared with everyone who clones the repository and holds no credentials. Access is per person: after cloning, run the `configure-external-sources` skill to connect your own session to these sources.
 
-- Category: {documentation|tickets|communication}
-- Platform: {platform name}
-- Access: {mcp|cli|manual}
-- Tool: {MCP server name or CLI tool name, or 'n/a' for manual}
-- Scope: {user-provided scope from Step 7}
+## Source: jira
+
+- Role: tracker
+- Platform: Jira Cloud (provectus.atlassian.net)
+- Access: mcp
+- Tool: atlassian (project-scoped, in .mcp.json)
+- Requires: OAuth login through /mcp
+- Scope: project key APP
+- Verify: fetch one issue with JQL `project = APP ORDER BY updated DESC` (limit 1)
+- Use for: where feature requirements, acceptance criteria and their discussion are recorded
+
+## Source: github
+
+- Role: vcs
+- Platform: GitHub (acme/analytics-platform)
+- Access: cli
+- Tool: gh
+- Requires: gh login (`gh auth login --web`)
+- Scope: this repository; the `acme` org for the other repositories of the system
+- Verify: `gh pr list --repo acme/analytics-platform --limit 1`
+- Use for: pull request history and review threads, issues, the other repositories this service talks to
+
+## Source: aws
+
+- Role: infra
+- Platform: AWS (account 123456789012, eu-west-1)
+- Access: cli
+- Tool: aws
+- Requires: AWS credentials for account 123456789012 (SSO; `aws sso login`)
+- Scope: the account above; read-only lookups
+- Verify: `aws sts get-caller-identity` reports account 123456789012
+- Use for: the shape of the deployed system — hosted services, secrets by name, index and table structure
 ```
 
-One `## Source:` section per configured source. The `{id}` is a kebab-case slug derived from the platform name (e.g., `confluence`, `github-issues`, `slack`). If the same platform appears twice, add a disambiguating suffix.
+Field rules:
 
-If any MCP servers or CLI tools were installed during this flow, suggest the user document the setup steps in the project README so other team members can replicate the configuration. Note that installed MCP servers and their credentials persist in the user's Claude config beyond this onboarding flow.
+- `Role` is one of `tracker`, `docs`, `communication`, `vcs`, `infra`.
+- `Access` is `mcp`, `cli`, or `manual`. `Tool` names the path: the MCP server as it appears in `.mcp.json`, the CLI binary, a project-local script by path, or `n/a` for manual. When the team reaches one source several ways, list them all, separated by `;` — a teammate picks whichever they have.
+- `Requires` names what a person must have before the source answers — a login, an environment variable by name, credentials for a named account. Never a value.
+- `Scope` is the part of the platform that belongs to this project: project keys, spaces, channels, the org and repository, the account. `Verify` is the read that proves the scope is reachable, written so anyone can repeat it. A `Requires` line always has a matching `Verify` line.
+- `Use for` is plain prose telling a research agent what it will find there and when to look.
+- An infrastructure record stays short: the account, the region, read-only intent. The research agent explores the account at spec time; an inventory of resources does not belong here.
+- `## Status: none` is also a valid manifest. It records that discovery ran, when, and what was checked, so the next person can tell "looked and found nothing" from "never looked".
+- The manifest never records a person's connection state. Which sources this user can reach right now is derived by probing, never written down.
+
+## Step 1 — Inventory this session
+
+Silently, before any question. The inventory provides defaults and candidate paths; it never decides what a source is. Do not read other repositories.
+
+- The git remote (`git remote -v`): the version control host and the organization.
+- CLIs on `PATH` and their login state: `gh auth status`, `glab auth status`, `aws sts get-caller-identity` (note the account it reports, or that the token has expired), `az account show`, `gcloud auth list`, any tracker CLI.
+- MCP servers loaded in this session (their tools appear as `mcp__<server>__*`), with what each server's description says it reaches. A server that fronts several platforms at once — a company knowledge hub that reads tickets, wiki pages, chat and meeting recordings — is a path to each of those platforms, and may also be a source of its own under `communication` for what only it holds, such as meeting recordings.
+- `.mcp.json` in the repository root: every server it declares, and whether its tools are loaded. Declared but not loaded means not yet approved for this project in this session, or the session predates it.
+- Project-local paths: scripts under `.claude/skills/*/scripts/` and `scripts/` that talk to a tracker, a wiki, chat or a cloud, and credential files next to them (presence and path only, never contents).
+- Environment variables that the manifest's `Requires` lines name, by presence only (`test -n "$VAR"`), never by value.
+
+## Step 2 — Route on the manifest
+
+Read `context/sources/sources.md` if it exists.
+
+- Absent → Step 3.
+- `## Status: none` → say when discovery last ran and what it checked, then ask with `AskUserQuestion`: **Run discovery again** or **Keep as is**. Keep → stop.
+- `## Status: configured` → the record exists; skip to Step 5 and connect this user. Do not re-interview. If the user asked to add or change a source, run Step 3 for that source only, then continue to Step 5.
+
+When `AWOS_UNATTENDED` is set: run Step 1, then Step 5's probe only, report the states, write nothing, ask nothing.
+
+## Step 3 — Interview: roles, then platforms
+
+One `AskUserQuestion` call with two multi-select questions: "Which of these hold knowledge about this project?"
+
+- Project knowledge: **Issue tracker**, **Documentation / wiki**, **Communication** (chat, email, meeting recordings)
+- Engineering: **Version control host**, **Cloud infrastructure**
+
+Any combination is valid, including none. If nothing is selected, write the manifest with `## Status: none` and the discovery note, and stop.
+
+Then, for each selected role, ask which platforms — multi-select, several allowed, because a role can have more than one source:
+
+- Tracker: Jira, Linear, GitHub Issues, Other
+- Docs: Confluence, Notion, Google Docs / Drive, Other
+- Communication: Slack, Microsoft Teams, Email, Other (Google Chat, meeting recordings, a knowledge hub)
+- Version control: GitHub, GitLab, Bitbucket, Other
+- Infrastructure: AWS, Google Cloud, Azure, Other
+
+Put the inventory to work here: a platform the inventory already points at (the remote is GitHub; an Atlassian server is loaded; a knowledge-hub server is loaded that holds meeting recordings) is named first with its evidence in the option description. A question holds at most four options, so when a loaded server adds a platform the list did not have, it takes the place of the least likely default and the rest stay reachable through **Other**. **Other** reads the matching file under `references/` (relative to this SKILL.md: `tickets.md`, `documentation.md`, `communication.md`, `code-hosting.md`, `infrastructure.md`) and offers the platforms listed there.
+
+Every selected platform becomes one source. Ask nothing about tools or scope yet.
+
+## Step 4 — Privacy gate
+
+Ask once with `AskUserQuestion`: "Research agents will read these sources and send what they find to the LLM provider's API. That can include personal data in tickets, internal discussions, private messages, and the names of production hosts and accounts. The manifest itself is committed to the repository; it names hosts, accounts and secret names, never credentials. Proceed?" with the options **Yes, proceed** and **No, skip external sources**. On skip, write the manifest with `## Status: none` and stop.
+
+## Step 5 — Connect this user to every source
+
+Run this for every source — the ones just chosen in Step 3, or the ones recorded in the manifest when it already existed. Work through the sources one at a time, in manifest order.
+
+### 5a. The path
+
+A path is how this person reaches the platform from this session. Candidates come from the inventory: a loaded MCP server whose description covers the platform, a CLI on `PATH`, a project-local script, a server declared in `.mcp.json` but not loaded. When the manifest already lists a `Tool`, that comes first.
+
+- Exactly one candidate → take it, say so in one line.
+- Several, or none → `AskUserQuestion`: detected candidates first with their evidence, then the tools from the platform's `references/` entry with a one-line objective comparison each (vendor-provided or community-built, how recently updated, what it cannot do — never "recommended"), then **I have a different tool** and **Manual** (the user pastes content when a command asks). Four options per question; a second question in the same call when there are more.
+
+Install or configure what the user chose. MCP servers are added with `claude mcp add --scope project …` so the definition lands in `.mcp.json` and ships with the repository; a server that needs a token takes it as `${VAR_NAME}` in the definition, and the value stays in the user's environment. Never the user or local scope for a project source. CLIs are installed with the platform's package manager; the reference file has the command. A newly added MCP server loads on the next session start: say so, finish the remaining sources, and tell the user at the end to restart (`/exit`, then the printed `claude --resume <id>` command), approve the project servers when prompted, and run this skill again — it will pick up here.
+
+### 5b. The scope
+
+A path says the platform answers; the scope says which part of it is this project. Ask with `AskUserQuestion`, free text allowed, with candidates the path can list: project keys from the tracker's project list, spaces from the wiki, channels from the chat server, the entity or workspace a knowledge-hub server resolves for the repository name, the org and repository from the git remote, the account the cloud CLI reports. A knowledge-hub server that fronts several platforms always needs this binding — its presence says nothing about which project it serves. Also collect `Use for` in the same call, with a suggested sentence.
+
+Skip this for a source whose manifest record already has a `Scope`.
+
+### 5c. The read
+
+Verify with a read from the scope, not a liveness call. Use the `Verify:` line from the manifest, or write one now from the platform's `Verify:` entry in the reference file applied to the scope: one issue from the project key, one page from the space, one message from the channel, one pull request from the repository, the caller identity matching the account. Classify:
+
+- **reachable** — the read returns data from the scope.
+- **unauthenticated** — the path is present but the read fails on auth, or the login has expired.
+- **absent** — the CLI is not on `PATH`, or the MCP server is not loaded in this session.
+
+A read that answers but returns nothing from the scope — the server is live but the board is not linked, the search finds no page in the space — is not reachable. Say what came back and treat it as a failure of this path.
+
+Fix, then re-read:
+
+- Absent CLI → install it (reference file), then continue to login.
+- Absent MCP, declared in `.mcp.json` → needs the restart described in 5a; note it and move on to the next source.
+- Unauthenticated CLI → the login runs in this session: `gh auth login --web` and `aws sso login --profile <name>` block on the browser and return. `aws configure sso` and `glab auth login` are interactive and need the user's terminal: ask them to run it as `! <command>` and tell you when done.
+- Unauthenticated MCP (OAuth) → name the exact step: run `/mcp`, choose the server, choose **Authenticate**, complete the browser consent, then tell you. Re-read when they return. You cannot complete an OAuth flow yourself.
+- A missing environment variable named in `Requires` → say which one, where to get its value (reference file), and that it belongs in the shell or a git-ignored `.env`, never in the repository.
+- The read answers but not from the scope → go back to 5a and offer the other paths; if none reaches the scope, the failure question below.
+
+When a source still fails, ask with `AskUserQuestion`: "Could not connect {source}. What now?" with **Skip for now** (the commands that use the manifest will report it unreachable for this session; the record stays), **Switch to manual** (edits the shared `Access:` line — confirm this is about the source, not about this user's access), and **Remove this source** (same caveat). Ask it for every failing source before Step 6; nothing is left in an undecided state.
+
+## Step 6 — Write the manifest
+
+Write `context/sources/sources.md` with `## Status: configured` in the format above, one record per source. When the manifest already existed, change only what this run learned about the project: a path this user connected through that the `Tool` line did not list is appended to it, a `Verify` line written in 5c is added, a switch to manual or a removal the user confirmed is applied. Nothing about which sources this user reached is written.
+
+## Step 7 — Report
+
+One table: source, role, state after this run, and the one action left for the user if any (a restart, a login, a skipped source). If `.mcp.json` or the manifest changed, list the files to commit. Nothing else — the commands that consume the manifest take it from here.
+
+## Rules
+
+- Roles and platforms come from the user; the inventory supplies defaults and paths, never sources.
+- A fixed-choice ask is an `AskUserQuestion`, never a numbered list in prose. Four options per question; more questions in one call when needed.
+- Never print, echo, or write a credential. Reference variables by name.
+- Never look in other repositories to seed this one.
+- Name no vendor in your questions that the user, the inventory, or a reference file did not name first.

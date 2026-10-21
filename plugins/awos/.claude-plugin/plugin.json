@@ -1,6 +1,6 @@
 {
   "name": "awos",
-  "version": "2.4.6",
+  "version": "2.4.7",
   "description": "Extends AWOS core with AI-readiness auditing: audits a project's AI-readiness across quality dimensions (/awos:ai-readiness-audit); also ships the directly-invocable configure-external-sources skill.",
   "author": {
     "name": "Provectus"

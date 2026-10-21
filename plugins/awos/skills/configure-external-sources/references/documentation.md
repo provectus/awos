@@ -9,7 +9,7 @@ Known tools and access methods for wiki and documentation platforms. The skill u
 **MCP Server — Atlassian Remote MCP**
 
 - Type: Remote (cloud-hosted by Atlassian)
-- Install: `claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp`
+- Install: `claude mcp add --scope project --transport http atlassian https://mcp.atlassian.com/v1/mcp`
 - Auth: OAuth 2.1 — a browser window opens for consent on first use. Alternatively, use API token auth with a base64-encoded `email:api-token` pair (generate tokens at https://id.atlassian.com/manage-profile/security/api-tokens).
 - Covers: Confluence and Jira from the same MCP server.
 - Verify: Search for a known page title using the Confluence search tool.
@@ -127,7 +127,7 @@ Known tools and access methods for wiki and documentation platforms. The skill u
 
 - Type: Remote (cloud-hosted by Coda)
 - URL: `https://coda.io/apis/mcp`
-- Install: `claude mcp add --transport http Coda https://coda.io/apis/mcp`
+- Install: `claude mcp add --scope project --transport http Coda https://coda.io/apis/mcp`
 - Auth: OAuth — opens a browser for consent on first use.
 - Verify: List documents in your workspace.
 
@@ -255,7 +255,7 @@ Known tools and access methods for wiki and documentation platforms. The skill u
 **MCP Server — Vendor-Provided**
 
 - Type: Remote (self-hosted URL)
-- Install: `claude mcp add --transport http outline https://<yoursubdomain>.getoutline.com/mcp`
+- Install: `claude mcp add --scope project --transport http outline https://<yoursubdomain>.getoutline.com/mcp`
 - Auth: OAuth (automatic login window) or `OUTLINE_API_KEY` environment variable for stdio mode.
 - Verify: Search for a known document.
 

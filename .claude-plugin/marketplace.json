@@ -5,20 +5,20 @@
   },
   "metadata": {
     "description": "AWOS plugins for AI-native development workflows",
-    "version": "2.4.6"
+    "version": "2.4.7"
   },
   "plugins": [
     {
       "name": "awos",
       "source": "./plugins/awos",
       "description": "Extends AWOS core with AI-readiness auditing: audits a project's AI-readiness across quality dimensions (/awos:ai-readiness-audit); also ships the directly-invocable configure-external-sources skill.",
-      "version": "2.4.6"
+      "version": "2.4.7"
     },
     {
       "name": "better",
       "source": "./plugins/better",
-      "description": "Experimental research-backed functional specs: /better:spec forks the core spec flow, fans out codebase, web, and internal-KB research agents before drafting, and blind-verifies the written spec with a context-free reader.",
-      "version": "0.1.1"
+      "description": "Experimental research-backed functional specs: /better:spec researches first, writes a feature brief and holds an understanding gate before drafting, fans out codebase, web, and internal-KB research agents, and blind-verifies the written spec with a context-free reader.",
+      "version": "0.2.0"
     },
     {
       "name": "profiler",

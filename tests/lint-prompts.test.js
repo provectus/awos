@@ -1215,12 +1215,7 @@ test('platform reference files exist under configure-external-sources skill', ()
     'configure-external-sources',
     'references'
   );
-  for (const f of [
-    'documentation.md',
-    'tickets.md',
-    'communication.md',
-    'infrastructure.md',
-  ]) {
+  for (const f of ['documentation.md', 'tickets.md', 'communication.md']) {
     assert.ok(
       fs.existsSync(path.join(refsDir, f)),
       `plugins/awos/skills/configure-external-sources/references/${f} must exist`

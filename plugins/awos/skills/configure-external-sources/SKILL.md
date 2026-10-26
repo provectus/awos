@@ -55,7 +55,7 @@ Discovery ran on [date]. This file is shared with everyone who clones the reposi
 - Role: infra
 - Platform: AWS (account 123456789012, eu-west-1)
 - Access: cli
-- Tool: aws
+- Tool: aws (or any path to the account this session has)
 - Requires: AWS credentials for account 123456789012 (SSO; `aws sso login`)
 - Scope: the account above; read-only lookups
 - Verify: `aws sts get-caller-identity` reports account 123456789012
@@ -70,13 +70,13 @@ Field rules:
 - `Scope` is the part of the platform that belongs to this project: project keys, spaces, channels, the organization or group that holds the system's repositories, the account. `Verify` is the read that proves the scope is reachable, written so anyone can repeat it. A `Requires` line always has a matching `Verify` line.
 - `Use for` is plain prose telling a research agent what it will find there and when to look.
 - A version control record is about the system's other repositories, not this one: the checkout already says where it is hosted. The record names the host and the organization, group or workspace a research agent should look in for sister repositories; when the system is this one repository, there is nothing to record.
-- An infrastructure record stays short: the account, the region, read-only intent. The research agent explores the account at spec time; an inventory of resources does not belong here. A system that runs nowhere beyond this repository — a library, a local tool, something not deployed yet — has no infrastructure record.
+- An infrastructure record stays short: the provider, the account or project identifier, the region, read-only intent — identifiers that locate the project's slice of the provider, never a credential. How to read it is the agent's choice at run time, the provider's CLI or an MCP server for it. The research agent explores from there at spec time; an inventory of resources does not belong here. A system that runs nowhere beyond this repository — a library, a local tool, something not deployed yet — has no infrastructure record.
 - `## Status: none` is also a valid manifest. It records that discovery ran, when, and what was checked, so the next person can tell "looked and found nothing" from "never looked". The discovery note in a `configured` manifest does the same for roles that were asked and answered with nothing — "no infrastructure beyond this repository", "no other repositories".
 - The manifest never records a person's connection state. Which sources this user can reach right now is derived by probing, never written down.
 
 ## Step 1 — Inventory this session
 
-Silently, before any question. The inventory provides defaults and candidate paths; it never decides what a source is. Do not read other repositories.
+Silently, before any question. The inventory provides defaults and candidate paths; it never decides what a source is. Only what belongs to the repository — the git remote, `.mcp.json`, project-local scripts — says anything about this project; a CLI on `PATH` or a server loaded for the user says only what this machine can reach, and a machine reaches many things that have nothing to do with the project. Do not read other repositories.
 
 Run each check as its own plain command — `command -v aws`, `aws sts get-caller-identity`, `test -n "$JIRA_API_TOKEN" && echo set || echo unset` — never as one shell loop or script. The host's permission check reads every command before it runs; a compound command with `for` loops, indirect expansion such as `${(P)v}`, or a `timeout` wrapper is one it cannot classify, so it stops to ask the user to approve it, and an unattended run is denied outright.
 
@@ -106,15 +106,15 @@ One `AskUserQuestion` call with two multi-select questions: "Which of these hold
 
 Any combination is valid, including none. A system that is one repository and runs nowhere else leaves both engineering roles unselected; record that in the discovery note so the next person knows it was asked. If nothing at all is selected, write the manifest with `## Status: none` and the discovery note, and stop.
 
-Then, for each selected role, settle which platforms. When the inventory points at exactly one platform for the role — the remote is on GitHub, one cloud CLI is logged in, one tracker server is loaded — take it, say so in one line with the evidence, and ask nothing; the scope step confirms the details. Otherwise ask which platforms — multi-select, several allowed, because a role can have more than one source — one question per role, each with that role's platforms only. Never put two roles in one question: a list that mixes GitHub with AWS cannot be answered.
+Then, for each selected role, settle which platforms. When evidence that belongs to the repository names exactly one platform for the role — the git remote for the version control host, a server declared in the repo's `.mcp.json` for a tracker or wiki — take it, say so in one line with the evidence, and ask nothing; the scope step confirms the details. Session evidence — a cloud CLI that is logged in, a server loaded for the user — never settles a role: it is named first in the question, with what it reaches, and the user decides. Otherwise ask which platforms — multi-select, several allowed, because a role can have more than one source — one question per role, each with that role's platforms only. Never put two roles in one question: a list that mixes GitHub with AWS cannot be answered.
 
 - Tracker: Jira, Linear, GitHub Issues, Other
 - Docs: Confluence, Notion, Google Docs / Drive, Other
 - Communication: Slack, Microsoft Teams, Email, Other (Google Chat, meeting recordings, a knowledge hub)
 - Version control: GitHub, GitLab, Bitbucket, Other
-- Infrastructure: AWS, Google Cloud, Azure, Other — "runs locally only" or "not deployed yet" is an answer too: no record, and a line in the discovery note
+- Infrastructure: AWS, Google Cloud, Azure, **None** (runs locally, or no infrastructure yet), plus **Other** as the free-text entry the question always carries — Heroku, a self-managed server, a plain Linux machine, anything that hosts the running system. Whatever is named there becomes a record like any other, with the host or account as its scope. **None** writes no record and a line in the discovery note
 
-Put the inventory to work here: when a role is asked, a platform the inventory points at (an Atlassian server is loaded; a knowledge-hub server is loaded that holds meeting recordings) is named first with its evidence in the option description. A question holds at most four options, so when a loaded server adds a platform the list did not have, it takes the place of the least likely default and the rest stay reachable through **Other**. **Other** reads the matching file under `references/` (relative to this SKILL.md: `tickets.md`, `documentation.md`, `communication.md`, `infrastructure.md`) and offers the platforms listed there; a version control host has no reference file — the agent reaches any host with what it has.
+Put the inventory to work here: when a role is asked, a platform the inventory points at (an Atlassian server is loaded; a knowledge-hub server is loaded that holds meeting recordings) is named first with its evidence in the option description. A question holds at most four options, so when a loaded server adds a platform the list did not have, it takes the place of the least likely default and the rest stay reachable through **Other**. **Other** reads the matching file under `references/` (relative to this SKILL.md: `tickets.md`, `documentation.md`, `communication.md`) and offers the platforms listed there; a version control host or a cloud provider has no reference file — the user names it, and the agent reaches it with what it has.
 
 Every selected platform becomes one source. Ask nothing about tools or scope yet.
 
@@ -132,7 +132,7 @@ A path is how this person reaches the platform from this session. Candidates com
 
 - Exactly one candidate → take it, say so in one line.
 - Several, or none → `AskUserQuestion`: detected candidates first with their evidence, then the tools from the platform's `references/` entry with a one-line objective comparison each (vendor-provided or community-built, how recently updated, what it cannot do — never "recommended"), then **I have a different tool** and **Manual** (the user pastes content when a command asks). Four options per question; a second question in the same call when there are more.
-- A version control host takes whatever path this session already has — the host's CLI, a host MCP server, or the git remote itself — and prescribes none: the record is read by agents that pick their own way to a repository host.
+- A version control host or a cloud provider takes whatever path this session already has — the host's or provider's CLI, an MCP server for it, for a host the git remote itself — and prescribes none: the record is read by agents that pick their own way in. When nothing is present, name the provider's own CLI and its login as the one thing to install; there is no comparison to make.
 
 Install or configure what the user chose. MCP servers are added with `claude mcp add --scope project …` so the definition lands in `.mcp.json` and ships with the repository; a server that needs a token takes it as `${VAR_NAME}` in the definition, and the value stays in the user's environment. Never the user or local scope for a project source. CLIs are installed with the platform's package manager; the reference file has the command. A newly added MCP server loads on the next session start: say so, finish the remaining sources, and tell the user at the end to restart (`/exit`, then the printed `claude --resume <id>` command), approve the project servers when prompted, and run this skill again — it will pick up here.
 
@@ -144,7 +144,7 @@ Skip this for a source whose manifest record already has a `Scope`.
 
 ### 5c. The read
 
-Verify with a read from the scope, not a liveness call. Use the `Verify:` line from the manifest, or write one now from the platform's `Verify:` entry in the reference file applied to the scope: one issue from the project key, one page from the space, one message from the channel, one repository listed in the organization, the caller identity matching the account. Classify:
+Verify with a read from the scope, not a liveness call. Use the `Verify:` line from the manifest, or write one now — from the platform's `Verify:` entry in the reference file where one exists, otherwise the smallest read that names the scope — applied to the scope: one issue from the project key, one page from the space, one message from the channel, one repository listed in the organization, the caller identity matching the account. Classify:
 
 - **reachable** — the read returns data from the scope.
 - **unauthenticated** — the path is present but the read fails on auth, or the login has expired.

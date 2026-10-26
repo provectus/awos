@@ -25,7 +25,7 @@
  * box/arrow/text items — geometry is numeric-coerced and every label is
  * escaped. Raw SVG/HTML from the view-model is never interpolated (the
  * view-model is authored after web research and is untrusted as markup);
- * a legacy "svg" field is ignored.
+ * a raw "svg" field is ignored.
  *
  * View-model schema (all fields optional):
  * {

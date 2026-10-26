@@ -31,9 +31,9 @@ Migrations handle the rest.
 | `/implement-feature`, `/fix-bug`, `delivery-flow.md` | Preserved and disowned — generated for you, they keep working when given an argument, they're yours now.                                                                                                                                                               |
 | `context/product/brownfield.md`                      | Preserved, but no longer read: 1.x wrote it during onboarding for `/awos:architecture` to absorb and delete, and nothing reads it now — `/awos:architecture` re-inspects the codebase on every run instead. Yours to keep or delete.                                   |
 
-## The research-first spec command (October 2026)
+## The research-first spec command
 
-A later 1.x minor promotes the experimental `/better:spec` flow into core `/awos:spec`. The command set does not change and neither does the deliverable: `context/spec/NNN-name/functional-spec.md` is written from the same template to the same place, and `/awos:tech` and everything downstream read it unchanged. What changes is how the spec is reached, and what else the directory holds afterwards.
+A later 1.x minor makes `/awos:spec` research-first. The command set does not change and neither does the deliverable: `context/spec/NNN-name/functional-spec.md` is written from the same template to the same place, and `/awos:tech` and everything downstream read it unchanged. What changes is how the spec is reached, and what else the directory holds afterwards.
 
 | What you see                                      | What it is                                                                                                                                                                                                                                                                                                                                                                                               |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -46,8 +46,6 @@ A later 1.x minor promotes the experimental `/better:spec` flow into core `/awos
 | `/awos:spec 014` amends, `/awos:spec 014` resumes | Both go by what the spec directory holds: a `functional-spec.md` routes to the in-place amendment (Update Mode, unchanged), a `Draft` brief without a spec resumes the understanding gate.                                                                                                                                                                                                               |
 
 Unattended runs (`AWOS_UNATTENDED=1` with a topic) skip the sources offer, the topic question and the gate, never publish, and still write every file, marking the spec as drafted from research alone.
-
-The `better` plugin stays installed and unchanged: `/better:spec` is where the next round of spec improvements is tried before it is promoted. Running it today produces the same flow as core.
 
 ## Version notes
 

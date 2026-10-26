@@ -1137,98 +1137,72 @@ test('configure-external-sources SKILL.md connects the current user every run', 
   );
 });
 
-// The two research-backed spec commands: core /awos:spec (the promoted flow)
-// and the experimental /better:spec it was promoted from, which stays in the
-// repo as the place where the next round of spec improvements is tried.
-// Contracts shared by both are linted over this list; the per-file
-// differences (which verifier agent, where the renderer lives) are pinned
-// alongside.
-const SPEC_COMMANDS = [
-  {
-    label: 'commands/spec.md',
-    file: path.join(repoRoot, 'commands', 'spec.md'),
-    verifierDispatch: 'Agent(subagent_type="spec-verifier")',
-    verifierContract:
-      'core /awos:spec must dispatch the installed spec-verifier agent by its unprefixed name — the installer copies it to .claude/agents/awos/, where Claude Code identifies it by the name frontmatter, not by path',
-    renderer: 'node ".awos/scripts/render-spec.mjs"',
-    rendererContract:
-      'core /awos:spec must run the renderer the installer copied to .awos/scripts/ — there is no plugin root to resolve it through',
-    agentFile: path.join(repoRoot, 'claude', 'agents', 'spec-verifier.md'),
-  },
-  {
-    label: 'plugins/better/commands/spec.md',
-    file: path.join(repoRoot, 'plugins', 'better', 'commands', 'spec.md'),
-    verifierDispatch: 'Agent(subagent_type="better:spec-verifier")',
-    verifierContract:
-      'the blind verifier must be dispatched by its plugin-prefixed subagent_type — without the better: prefix the agent does not resolve and the verification pass silently never runs',
-    renderer: 'node "${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs"',
-    rendererContract:
-      'the renderer must be invoked through ${CLAUDE_PLUGIN_ROOT} — a relative path breaks across install locations',
-    agentFile: path.join(
+// The research-backed spec command and the files its contracts bind to.
+const SPEC = {
+  label: 'commands/spec.md',
+  file: path.join(repoRoot, 'commands', 'spec.md'),
+  verifierDispatch: 'Agent(subagent_type="spec-verifier")',
+  verifierContract:
+    '/awos:spec must dispatch the installed spec-verifier agent by its unprefixed name — the installer copies it to .claude/agents/awos/, where Claude Code identifies it by the name frontmatter, not by path',
+  renderer: 'node ".awos/scripts/render-spec.mjs"',
+  rendererContract:
+    '/awos:spec must run the renderer the installer copies to .awos/scripts/ — any other path is not installed',
+  agentFile: path.join(repoRoot, 'claude', 'agents', 'spec-verifier.md'),
+};
+
+test('/awos:spec internal-KB lane reads only manifest fields the configure-external-sources skill writes', () => {
+  // The seam between the skill (writer of context/sources/sources.md) and
+  // the spec command's research lane (its reader). Every field the lane copies
+  // into the KB agent's prompt must be a field the skill's manifest format
+  // defines, every Role value the lane names must be one the skill allows,
+  // and the lane must not gate on the retired Category: field — a manifest
+  // the skill writes would then never dispatch the lane.
+  const skill = readUtf8(
+    path.join(
       repoRoot,
       'plugins',
-      'better',
-      'agents',
-      'spec-verifier.md'
-    ),
-  },
-];
-
-for (const cmd of SPEC_COMMANDS) {
-  test(`${cmd.label} internal-KB lane reads only manifest fields the configure-external-sources skill writes`, () => {
-    // The seam between the skill (writer of context/sources/sources.md) and
-    // the spec command's research lane (its reader). Every field the lane copies
-    // into the KB agent's prompt must be a field the skill's manifest format
-    // defines, every Role value the lane names must be one the skill allows,
-    // and the lane must not gate on the retired Category: field — a manifest
-    // the skill writes would then never dispatch the lane.
-    const skill = readUtf8(
-      path.join(
-        repoRoot,
-        'plugins',
-        'awos',
-        'skills',
-        'configure-external-sources',
-        'SKILL.md'
-      )
-    );
-    const spec = readUtf8(cmd.file);
-    const lane = spec
-      .split('**Internal-KB lane (dispatched when configured).**')
-      .slice(1)
-      .join('')
-      .split('\n')[0];
+      'awos',
+      'skills',
+      'configure-external-sources',
+      'SKILL.md'
+    )
+  );
+  const spec = readUtf8(SPEC.file);
+  const lane = spec
+    .split('**Internal-KB lane (dispatched when configured).**')
+    .slice(1)
+    .join('')
+    .split('\n')[0];
+  assert.ok(
+    lane.length > 0,
+    `${SPEC.label} must still carry the "Internal-KB lane (dispatched when configured)" paragraph`
+  );
+  const fields = [...lane.matchAll(/`([A-Z][A-Za-z ]*):`/g)].map((m) => m[1]);
+  assert.ok(
+    fields.length >= 4,
+    `the KB lane must name the manifest fields it copies into the agent prompt as \`Field:\` tokens; found ${fields.length}`
+  );
+  for (const field of new Set(fields)) {
     assert.ok(
-      lane.length > 0,
-      `${cmd.label} must still carry the "Internal-KB lane (dispatched when configured)" paragraph`
+      skill.includes(`- ${field}:`),
+      `the KB lane reads manifest field "${field}:" but configure-external-sources SKILL.md's manifest format does not define a "- ${field}:" line — writer and reader have drifted`
     );
-    const fields = [...lane.matchAll(/`([A-Z][A-Za-z ]*):`/g)].map((m) => m[1]);
+  }
+  for (const role of ['tracker', 'docs', 'communication', 'vcs', 'infra']) {
     assert.ok(
-      fields.length >= 4,
-      `the KB lane must name the manifest fields it copies into the agent prompt as \`Field:\` tokens; found ${fields.length}`
+      lane.includes(role),
+      `the KB lane must dispatch for Role "${role}" — the lane reads every source role, not documentation only`
     );
-    for (const field of new Set(fields)) {
-      assert.ok(
-        skill.includes(`- ${field}:`),
-        `the KB lane reads manifest field "${field}:" but configure-external-sources SKILL.md's manifest format does not define a "- ${field}:" line — writer and reader have drifted`
-      );
-    }
-    for (const role of ['tracker', 'docs', 'communication', 'vcs', 'infra']) {
-      assert.ok(
-        lane.includes(role),
-        `the KB lane must dispatch for Role "${role}" — the lane reads every source role, not documentation only`
-      );
-      assert.ok(
-        skill.includes(`\`${role}\``),
-        `configure-external-sources SKILL.md must allow Role "${role}" — the lane names it`
-      );
-    }
     assert.ok(
-      !spec.includes('Category:'),
-      `${cmd.label} must not gate on the retired Category: field — the skill writes Role:, so a Category: gate never matches`
+      skill.includes(`\`${role}\``),
+      `configure-external-sources SKILL.md must allow Role "${role}" — the lane names it`
     );
-  });
-}
+  }
+  assert.ok(
+    !spec.includes('Category:'),
+    `${SPEC.label} must not gate on the retired Category: field — the skill writes Role:, so a Category: gate never matches`
+  );
+});
 
 test('platform reference files exist under configure-external-sources skill', () => {
   // The skill reads platform-specific setup guides from references/.
@@ -1242,7 +1216,6 @@ test('platform reference files exist under configure-external-sources skill', ()
     'references'
   );
   for (const f of [
-    'code-hosting.md',
     'documentation.md',
     'tickets.md',
     'communication.md',
@@ -2120,43 +2093,8 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
   );
 });
 
-// The better plugin has its own independent version line. Its discipline
-// is three files moving together: its plugin.json, its marketplace.json entry,
-// and this pinned literal (it has no generator-version constant).
-const EXPECTED_BETTER_PLUGIN_VERSION = '0.2.0';
-
-test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
-  const pluginManifest = JSON.parse(
-    readUtf8(
-      path.join(repoRoot, 'plugins', 'better', '.claude-plugin', 'plugin.json')
-    )
-  );
-  const marketplace = JSON.parse(
-    readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
-  );
-  const entries = marketplace.plugins.filter(
-    (p) => p.name === 'better' && p.source === './plugins/better'
-  );
-  assert.equal(
-    entries.length,
-    1,
-    'marketplace.json must contain exactly one plugins entry with name="better" and source="./plugins/better" — a near-miss name or source would register a different plugin than the one this pin guards'
-  );
-  const [entry] = entries;
-  assert.equal(
-    pluginManifest.version,
-    entry.version,
-    `plugins/better/.claude-plugin/plugin.json version ("${pluginManifest.version}") must match the better marketplace entry version ("${entry.version}") — bump both together`
-  );
-  assert.equal(
-    pluginManifest.version,
-    EXPECTED_BETTER_PLUGIN_VERSION,
-    `plugins/better/.claude-plugin/plugin.json version must be "${EXPECTED_BETTER_PLUGIN_VERSION}" — the better version moves as one deliberate commit (its plugin.json + its marketplace.json entry + this pin, together) when plugin behavior changes. Got "${pluginManifest.version}"`
-  );
-});
-
 // The profiler plugin has its own independent version line, with the same
-// three-file discipline as better: plugin.json, marketplace entry, this pin.
+// three-file discipline as awos: plugin.json, marketplace entry, this pin.
 const EXPECTED_PROFILER_PLUGIN_VERSION = '0.1.0';
 
 test(`profiler plugin.json version matches its marketplace entry and equals ${EXPECTED_PROFILER_PLUGIN_VERSION}`, () => {
@@ -2248,232 +2186,157 @@ test('profiler skill and script are wired together', () => {
   );
 });
 
-for (const spec of SPEC_COMMANDS) {
-  test(`${spec.label} keeps the research-backed spec contracts (fan-out, gate, unattended handling, verification, render)`, () => {
-    const cmd = readUtf8(spec.file);
-    const requiredSubstrings = [
-      [
-        'single message, as parallel `Agent` calls',
-        'the research fan-out must be dispatched as parallel Agent calls in a single message — sequential or discretionary dispatch is the failure mode this contract prevents',
-      ],
-      [
-        'AWOS_UNATTENDED',
-        'the command must read AWOS_UNATTENDED to branch interactive vs unattended question handling',
-      ],
-      [
-        '[NEEDS CLARIFICATION',
-        'unresolved details must be captured as [NEEDS CLARIFICATION: …] markers, never as stop signals',
-      ],
-      [
-        '## Language Rules',
-        'the non-technical Language Rules section carried from core spec.md must be present',
-      ],
-      [
-        '.awos/templates/functional-spec-template.md',
-        'the command must fill the installed core template (one deliverable contract for both spec commands)',
-      ],
-      [
-        'create-spec-directory.sh',
-        'the command must allocate the spec directory via the core script (one numbering for both spec commands)',
-      ],
-      [
-        'research-notes.md',
-        'the command must write the research-notes.md side artifact alongside the spec',
-      ],
-      [
-        '`## Status: configured`',
-        'the internal-KB lane must gate on the exact sources.md status idiom used across AWOS commands',
-      ],
-      [
-        'The verifier runs exactly once',
-        'the blind-verification cycle must be bounded to a single verifier dispatch',
-      ],
-      [
-        'This step asks the user nothing',
-        'synthesis must not interview — under claude -p a dismissed question ends the turn, so every question the research raises has to wait until after Step 8 writes the spec',
-      ],
-      [
-        'When `AWOS_UNATTENDED` is set, skip this round entirely',
-        'the understanding gate must be skipped outright in unattended runs — there is nobody to hold the conversation with, and a dismissed question would end the turn before the spec exists',
-      ],
-      [
-        'Do not ask here: this step precedes the write',
-        'the scope boundary must be drafted and marked rather than asked — Step 7 runs before the spec file exists',
-      ],
-      [
-        'view_model_path="${TMPDIR:-/tmp}/spec-view-[index].json"',
-        'the temp paths must be resolved once with a TMPDIR fallback and reused — re-interpolating a bare $TMPDIR per step lets the file written and the file rendered diverge, and makes the cleanup rm a path that was never created',
-      ],
-      [
-        'MANUAL SOURCES ONLY',
-        'a configured-but-manual-only KB lane needs its own report label — SKIPPED implies an agent ran and NOT CONFIGURED tells the user to redo setup they already did',
-      ],
-      [spec.renderer, spec.rendererContract],
-      [spec.verifierDispatch, spec.verifierContract],
-      [
-        'one bullet at a time',
-        'the self-review must re-read acceptance criteria one bullet at a time (carried from core spec.md) — checking the set as a whole lets a single non-compliant bullet survive',
-      ],
-      [
-        'free-text option for open-ended markers',
-        'marker resolution must offer free text (carried from core spec.md) — not every [NEEDS CLARIFICATION] reduces to an option set',
-      ],
-      [
-        'functional-spec.html',
-        'the command must name the rendered review page as a derived output',
-      ],
-      [
-        'never fatal',
-        'the render step must be non-fatal — the markdown deliverables stand alone if the render fails',
-      ],
-      [
-        '--artifact',
-        'the artifact publish path must use the renderer fragment mode, not upload the standalone document',
-      ],
-      [
-        'withheld consent',
-        'publishing to an external service is a consent gate — an unanswered question means no, inverting the usual proceed-with-default rule',
-      ],
-      [
-        '**only** the absolute path',
-        'the verifier dispatch must pass only the spec file path — session context would contaminate the blind read',
-      ],
-      [
-        'Do not guess a topic from the product definition or the codebase.',
-        'the no-topic bail-out must refuse to invent a topic — shared verbatim with core spec.md (see the shared-bail-out test below)',
-      ],
-      [
-        'feature-brief.md',
-        'the command must write the feature brief — the persistent state of the understanding gate — before the first question is asked',
-      ],
-      [
-        '**Normally:**',
-        'every quirk in the brief must be stated against its baseline — a quirk without the expectation it deviates from is unreadable to someone new to the feature',
-      ],
-      [
-        'Define a term before you use it',
-        'the gate must assume the user does not know the feature vocabulary — a briefing that uses undefined terms excludes exactly the person the gate exists for',
-      ],
-      [
-        'not the brief itself',
-        'the opening message of the gate must point the user at feature-brief.md instead of restating it — a brief compressed into chat loses the vocabulary and quirks a newcomer needs',
-      ],
-      [
-        'Never check the gate yourself',
-        'the understanding gate is confirmed only by an explicit user answer — the agent inferring confirmation defeats the gate',
-      ],
-      [
-        'Discover sources now',
-        'the command must offer sources discovery when context/sources/sources.md is absent, with a skip — suggested, never enforced',
-      ],
-    ];
-    for (const [needle, contract] of requiredSubstrings) {
-      assert.ok(
-        cmd.includes(needle),
-        `${spec.label} must contain "${needle}" — ${contract}`
-      );
-    }
-  });
-
-  test(`${spec.label} dispatches a verifier whose agent file exists and declares that name`, () => {
-    // The dispatch string and the agent's `name:` frontmatter are the two
-    // halves of one contract: a rename on either side makes the Agent call
-    // fail to resolve, and the command then reports verification as skipped
-    // on every run.
-    const agent = readUtf8(spec.agentFile);
-    const name = agent.match(/^name: (.+)$/m)?.[1];
-    assert.ok(name, `${spec.agentFile} must declare a name: frontmatter field`);
-    assert.ok(
-      spec.verifierDispatch.endsWith(`:${name}")`) ||
-        spec.verifierDispatch.endsWith(`="${name}")`),
-      `${spec.label} dispatches ${spec.verifierDispatch} but its agent file declares name "${name}" — the two must agree or the verifier never runs`
-    );
-  });
-}
-
-test('the two spec commands share the research-backed flow — only the verifier and renderer references differ', () => {
-  // /awos:spec was promoted from /better:spec; the plugin stays as the
-  // sandbox for the next round. Until the plugin diverges on purpose, the
-  // prose of the shared steps must stay identical so a fix landing in one
-  // is not silently missing from the other. Compared after normalising the
-  // references that legitimately differ. When the better command starts a
-  // deliberate experiment, narrow this to the sections still shared rather
-  // than deleting it.
-  const normalise = (body) =>
-    body
-      .replace(
-        /"\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/render-spec\.mjs"/g,
-        'RENDERER'
-      )
-      .replace(/"\.awos\/scripts\/render-spec\.mjs"/g, 'RENDERER')
-      .replace(/better:spec-verifier/g, 'VERIFIER')
-      .replace(/"spec-verifier"/g, '"VERIFIER"')
-      .replace(/\/better:spec/g, '/awos:spec');
-  const sectionsOf = (body) => {
-    const out = {};
-    for (const chunk of body.split(/^### /m).slice(1)) {
-      const title = chunk.split('\n')[0].trim();
-      out[title] = normalise(chunk);
-    }
-    return out;
-  };
-  const core = sectionsOf(readUtf8(path.join(repoRoot, 'commands', 'spec.md')));
-  const better = sectionsOf(
-    readUtf8(path.join(repoRoot, 'plugins', 'better', 'commands', 'spec.md'))
-  );
-  // Steps whose text is shared verbatim. Mode Detection / Step 0 / Step 1 /
-  // Step 7 / Step 8 / Step 9 differ by design: core keeps Update Mode and
-  // the Definition of Done, the plugin keeps its "install core first"
-  // prerequisite and defers amendments to core.
-  const shared = [
-    'Step 2: Gather Context and Allocate the Spec Directory',
-    'Step 3: Research Fan-Out',
-    'Step 4: Write the Feature Brief and the Research Notes',
-    'Step 6: Synthesis',
-    'Step 10: Final Review — Resolve the Open Questions',
-    'Step 11: Render the Review Page and Report',
+test('commands/spec.md keeps the research-backed spec contracts (fan-out, gate, unattended handling, verification, render)', () => {
+  const cmd = readUtf8(SPEC.file);
+  const requiredSubstrings = [
+    [
+      'single message, as parallel `Agent` calls',
+      'the research fan-out must be dispatched as parallel Agent calls in a single message — sequential or discretionary dispatch is the failure mode this contract prevents',
+    ],
+    [
+      'AWOS_UNATTENDED',
+      'the command must read AWOS_UNATTENDED to branch interactive vs unattended question handling',
+    ],
+    [
+      '[NEEDS CLARIFICATION',
+      'unresolved details must be captured as [NEEDS CLARIFICATION: …] markers, never as stop signals',
+    ],
+    [
+      '## Language Rules',
+      'the non-technical Language Rules section must be present',
+    ],
+    [
+      '.awos/templates/functional-spec-template.md',
+      'the command must fill the installed template — the one deliverable contract /awos:tech reads',
+    ],
+    [
+      'create-spec-directory.sh',
+      'the command must allocate the spec directory via create-spec-directory.sh — the only source of spec numbering',
+    ],
+    [
+      'research-notes.md',
+      'the command must write the research-notes.md side artifact alongside the spec',
+    ],
+    [
+      '`## Status: configured`',
+      'the internal-KB lane must gate on the exact sources.md status idiom used across AWOS commands',
+    ],
+    [
+      'The verifier runs exactly once',
+      'the blind-verification cycle must be bounded to a single verifier dispatch',
+    ],
+    [
+      'This step asks the user nothing',
+      'synthesis must not interview — under claude -p a dismissed question ends the turn, so every question the research raises has to wait until after Step 8 writes the spec',
+    ],
+    [
+      'When `AWOS_UNATTENDED` is set, skip this round entirely',
+      'the understanding gate must be skipped outright in unattended runs — there is nobody to hold the conversation with, and a dismissed question would end the turn before the spec exists',
+    ],
+    [
+      'Do not ask here: this step precedes the write',
+      'the scope boundary must be drafted and marked rather than asked — Step 7 runs before the spec file exists',
+    ],
+    [
+      'view_model_path="${TMPDIR:-/tmp}/spec-view-[index].json"',
+      'the temp paths must be resolved once with a TMPDIR fallback and reused — re-interpolating a bare $TMPDIR per step lets the file written and the file rendered diverge, and makes the cleanup rm a path that was never created',
+    ],
+    [
+      'MANUAL SOURCES ONLY',
+      'a configured-but-manual-only KB lane needs its own report label — SKIPPED implies an agent ran and NOT CONFIGURED tells the user to redo setup they already did',
+    ],
+    [SPEC.renderer, SPEC.rendererContract],
+    [SPEC.verifierDispatch, SPEC.verifierContract],
+    [
+      'one bullet at a time',
+      'the self-review must re-read acceptance criteria one bullet at a time — checking the set as a whole lets a single non-compliant bullet survive',
+    ],
+    [
+      'free-text option for open-ended markers',
+      'marker resolution must offer free text — not every [NEEDS CLARIFICATION] reduces to an option set',
+    ],
+    [
+      'functional-spec.html',
+      'the command must name the rendered review page as a derived output',
+    ],
+    [
+      'never fatal',
+      'the render step must be non-fatal — the markdown deliverables stand alone if the render fails',
+    ],
+    [
+      '--artifact',
+      'the artifact publish path must use the renderer fragment mode, not upload the standalone document',
+    ],
+    [
+      'withheld consent',
+      'publishing to an external service is a consent gate — an unanswered question means no, inverting the usual proceed-with-default rule',
+    ],
+    [
+      '**only** the absolute path',
+      'the verifier dispatch must pass only the spec file path — session context would contaminate the blind read',
+    ],
+    [
+      'Do not guess a topic from the product definition or the codebase.',
+      'the no-topic bail-out must refuse to invent a topic — a guessed topic produces a spec nobody asked for',
+    ],
+    [
+      'feature-brief.md',
+      'the command must write the feature brief — the persistent state of the understanding gate — before the first question is asked',
+    ],
+    [
+      '**Normally:**',
+      'every quirk in the brief must be stated against its baseline — a quirk without the expectation it deviates from is unreadable to someone new to the feature',
+    ],
+    [
+      'Define a term before you use it',
+      'the gate must assume the user does not know the feature vocabulary — a briefing that uses undefined terms excludes exactly the person the gate exists for',
+    ],
+    [
+      'not the brief itself',
+      'the opening message of the gate must point the user at feature-brief.md instead of restating it — a brief compressed into chat loses the vocabulary and quirks a newcomer needs',
+    ],
+    [
+      'Never check the gate yourself',
+      'the understanding gate is confirmed only by an explicit user answer — the agent inferring confirmation defeats the gate',
+    ],
+    [
+      'Discover sources now',
+      'the command must offer sources discovery when context/sources/sources.md is absent, with a skip — suggested, never enforced',
+    ],
   ];
-  for (const title of shared) {
-    assert.ok(core[title], `commands/spec.md must carry a "### ${title}" step`);
+  for (const [needle, contract] of requiredSubstrings) {
     assert.ok(
-      better[title],
-      `plugins/better/commands/spec.md must carry a "### ${title}" step`
-    );
-    assert.strictEqual(
-      core[title],
-      better[title],
-      `"### ${title}" has drifted between commands/spec.md and plugins/better/commands/spec.md — port the change to both, or narrow this test if the plugin is deliberately experimenting with this step`
+      cmd.includes(needle),
+      `${SPEC.label} must contain "${needle}" — ${contract}`
     );
   }
 });
 
-test('core spec.md shares the no-topic bail-out contract with /better:spec', () => {
-  const core = readUtf8(path.join(repoRoot, 'commands', 'spec.md'));
+test('commands/spec.md dispatches a verifier whose agent file exists and declares that name', () => {
+  // The dispatch string and the agent's `name:` frontmatter are the two
+  // halves of one contract: a rename on either side makes the Agent call
+  // fail to resolve, and the command then reports verification as skipped
+  // on every run.
+  const agent = readUtf8(SPEC.agentFile);
+  const name = agent.match(/^name: (.+)$/m)?.[1];
+  assert.ok(name, `${SPEC.agentFile} must declare a name: frontmatter field`);
   assert.ok(
-    core.includes(
-      'Do not guess a topic from the product definition or the codebase.'
-    ),
-    'commands/spec.md must refuse to invent a topic when the prompt is empty — the same sentence /better:spec pins, so the two contract-identical spec commands cannot drift apart silently'
-  );
-  assert.ok(
-    core.includes('AWOS_UNATTENDED'),
-    'commands/spec.md must branch on AWOS_UNATTENDED for the no-topic stop — the stop has to precede the topic question, because under claude -p a dismissed AskUserQuestion ends the turn and an instruction placed after it never executes'
+    SPEC.verifierDispatch.endsWith(`="${name}")`),
+    `${SPEC.label} dispatches ${SPEC.verifierDispatch} but its agent file declares name "${name}" — the two must agree or the verifier never runs`
   );
 });
 
-for (const spec of SPEC_COMMANDS) {
-  test(`${path.relative(repoRoot, spec.agentFile)} spec-verifier agent stays blind (tools restricted to Read, no other file reads)`, () => {
-    const agent = readUtf8(spec.agentFile);
-    assert.ok(
-      /^tools: Read$/m.test(agent),
-      `${path.relative(repoRoot, spec.agentFile)} frontmatter must restrict the agent to \`tools: Read\` — the blind read depends on the agent being unable to explore the repo`
-    );
-    assert.ok(
-      agent.includes('Do not read any other file'),
-      `${path.relative(repoRoot, spec.agentFile)} body must prohibit reading any file other than the dispatched spec path`
-    );
-  });
-}
+test('claude/agents/spec-verifier.md stays blind (tools restricted to Read, no other file reads)', () => {
+  const agent = readUtf8(SPEC.agentFile);
+  assert.ok(
+    /^tools: Read$/m.test(agent),
+    `${path.relative(repoRoot, SPEC.agentFile)} frontmatter must restrict the agent to \`tools: Read\` — the blind read depends on the agent being unable to explore the repo`
+  );
+  assert.ok(
+    agent.includes('Do not read any other file'),
+    `${path.relative(repoRoot, SPEC.agentFile)} body must prohibit reading any file other than the dispatched spec path`
+  );
+});
 
 test('claude/agents operation installs under .claude/agents/awos and is marked preserveOnUpdate', () => {
   // `.claude/agents/` is the user's area (hired specialists live there), so

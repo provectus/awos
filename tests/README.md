@@ -31,7 +31,7 @@ CI runs `npm test` under Node 22 in `.github/workflows/quality-check.yml` (non-b
 tests/
 ├── README.md                       # this file
 ├── lint-prompts.test.js            # Layer 1: static prompt linter
-├── better-render.test.js           # Layer 1: render-spec.mjs contracts (core scripts/ copy and plugins/better copy)
+├── render-spec.test.js             # Layer 1: scripts/render-spec.mjs contracts
 ├── profiler-script.test.js         # Layer 1: plugins/profiler script against a synthetic session
 ├── config/
 │   └── wrapper-schema.json         # which wrapper frontmatter fields are required
@@ -76,7 +76,7 @@ tests/
 - **Dimension DAG.** Every dimension under `plugins/awos/skills/ai-readiness-audit/dimensions/*.md` has required frontmatter, `name` matches its filename, severity is in the allowed set, `depends-on` entries resolve to real dimension names, and the graph topologically sorts (no cycles).
 - **`context/...` path consistency.** The canonical `context/...` paths appear in the prompts that must reference them. The lint does not build a reader/writer map — a path read by two prompts and written by none (today: the compatibility read of a user-owned `context/product/roadmap.md`) passes by design.
 - **`setup-config.js` ↔ source-tree consistency.** Every `copyOperation.source` directory exists; every top-level source directory matching `^(commands|templates|scripts|claude)/` is referenced by exactly one `copyOperation`. `claude/agents` must install under `.claude/agents/awos/` with `preserveOnUpdate`.
-- **The two spec commands stay in step.** `commands/spec.md` (promoted from the better plugin) and `plugins/better/commands/spec.md` (kept as the sandbox for the next round) share one list of research-backed contracts — parallel fan-out, the feature brief and its gate, unattended handling, a once-only blind verifier dispatched with the spec path alone, the non-fatal render and the opt-in artifact publish — pinned per file with the verifier name and renderer path each one legitimately uses; each command's verifier dispatch must match the `name:` of its agent file, both agent files must stay `tools: Read`; and the steps the two commands share verbatim are compared after normalising those references, so a fix landing in one cannot be silently missing from the other.
+- **`/awos:spec` research-backed contracts.** `commands/spec.md` must dispatch the research fan-out as parallel `Agent` calls in one message, write the feature brief with every quirk against its baseline, point the user at the brief instead of restating it, never confirm the understanding gate itself, skip the gate and every question under `AWOS_UNATTENDED`, offer sources discovery with a skip, dispatch the blind verifier exactly once with only the spec path, run the installed renderer non-fatally, and treat the artifact publish as withheld consent. The verifier dispatch must match the `name:` in `claude/agents/spec-verifier.md`, and that agent must stay `tools: Read`.
 
 Cost: ~30 ms. Catches roughly 80 % of structural regressions on its own.
 

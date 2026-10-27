@@ -59,7 +59,7 @@ Discovery ran on [date]. This file is shared with everyone who clones the reposi
 - Requires: AWS credentials for account 123456789012 (SSO; `aws sso login`)
 - Scope: the account above; read-only lookups
 - Verify: `aws sts get-caller-identity` reports account 123456789012
-- Use for: the shape of the deployed system — hosted services, secrets by name, index and table structure
+- Use for: which services are deployed and in which region. Do not read secret values. Do not connect to data stores.
 ```
 
 Field rules:

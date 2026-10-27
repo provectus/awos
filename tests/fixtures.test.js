@@ -44,11 +44,16 @@ after(async () => {
 
 function listFixtures() {
   if (!fs.existsSync(fixturesDir)) return [];
-  return fs
-    .readdirSync(fixturesDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name)
-    .sort();
+  return (
+    fs
+      .readdirSync(fixturesDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      // eval-* fixtures are eval-campaign inputs (see docs/2.0/c4-diagram-eval-plan.md),
+      // not installer fixtures: they carry no expected-after.json manifest.
+      .filter((name) => !name.startsWith('eval-'))
+      .sort()
+  );
 }
 
 const fixtures = listFixtures();

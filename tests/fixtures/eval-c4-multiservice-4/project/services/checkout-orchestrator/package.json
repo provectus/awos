@@ -1,0 +1,6 @@
+{
+  "name": "@atlas/checkout-orchestrator",
+  "private": true,
+  "description": "Background worker running the checkout saga; owns the orders store and the pricing ledger.",
+  "main": "src/service.js"
+}

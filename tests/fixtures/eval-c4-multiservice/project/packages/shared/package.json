@@ -1,0 +1,5 @@
+{
+  "name": "@shiplog/shared",
+  "private": true,
+  "description": "Domain models, validation, config, and the shared job queue."
+}

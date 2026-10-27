@@ -1,0 +1,6 @@
+{
+  "name": "@meterhub/core",
+  "private": true,
+  "description": "Shared models, validation, config, and the file-backed queue.",
+  "main": "src/config.js"
+}

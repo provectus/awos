@@ -1,0 +1,20 @@
+{
+  "comment": "Files/dirs the 001-meter-replacement spec legitimately touches, per its technical considerations. The eval's out-of-scope grader flags any other edit. 'ignored' paths are neither in nor out of scope (runtime state, AWOS install artifacts, planning docs).",
+  "allowed": [
+    "packages/core/src/models",
+    "packages/core/src/validation.js",
+    "services/ingest-api/src/routes",
+    "services/ingest-api/src/router.js",
+    "services/ingest-api/src/clients",
+    "services/ingest-api/src/store",
+    "services/billing-engine/src/handlers",
+    "services/billing-engine/src/cycles.js",
+    "services/billing-engine/src/store",
+    "services/billing-engine/src/engine.js",
+    "services/portal-api/src/routes",
+    "services/portal-api/src/views",
+    "services/portal-api/src/serializers",
+    "tests"
+  ],
+  "ignored": ["context", "var", ".awos", ".claude", "node_modules"]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "@meterhub/portal-api",
+  "private": true,
+  "description": "Customer-facing HTTP API: usage history and invoices, read from the billing engine's stores.",
+  "main": "src/server.js"
+}

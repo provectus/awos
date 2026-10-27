@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * render-spec.mjs — deterministic review-page renderer for /better:spec.
+ * render-spec.mjs — deterministic review-page renderer for /awos:spec.
  *
  * Usage:
  *   node render-spec.mjs <spec-dir> [view-model.json] [--artifact <fragment-out>]
@@ -25,7 +25,7 @@
  * box/arrow/text items — geometry is numeric-coerced and every label is
  * escaped. Raw SVG/HTML from the view-model is never interpolated (the
  * view-model is authored after web research and is untrusted as markup);
- * a legacy "svg" field is ignored.
+ * a raw "svg" field is ignored.
  *
  * View-model schema (all fields optional):
  * {
@@ -51,7 +51,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 
 const SOURCE_LABELS = {
   interview: 'Interview',
@@ -711,7 +710,7 @@ function normalizeViewModel(raw) {
   };
 }
 
-function render(md, rawVm, pluginVersion) {
+function render(md, rawVm) {
   const vm = normalizeViewModel(rawVm);
   const spec = parseSpec(md);
 
@@ -797,7 +796,7 @@ ${scopeSection ? renderScope(scopeSection) : ''}
 ${genericSections.map((s) => renderGenericSection(s)).join('\n')}
 <footer>
   This page is a <strong>review lens</strong> — the canonical, normative contract is <code>functional-spec.md</code> in this directory; approvals bind to it, and the technical detail behind the findings lives in <code>research-notes.md</code>.<br>
-  Generated ${today} from functional-spec.md (${esc(hash)})${status ? `, status <em>${inline(status)}</em>` : ''}${total ? ` — ${total} criteria, ${done} verified` : ''}. Rendered by the better plugin${pluginVersion ? ` v${esc(pluginVersion)}` : ''}.
+  Generated ${today} from functional-spec.md (${esc(hash)})${status ? `, status <em>${inline(status)}</em>` : ''}${total ? ` — ${total} criteria, ${done} verified` : ''}. Rendered by AWOS (/awos:spec).
 </footer>
 </main>
 <script>${TAB_JS}</script>`;
@@ -865,21 +864,7 @@ function main() {
     }
   }
 
-  let pluginVersion = '';
-  try {
-    const selfDir = path.dirname(fileURLToPath(import.meta.url));
-    const manifest = JSON.parse(
-      fs.readFileSync(
-        path.join(selfDir, '..', '.claude-plugin', 'plugin.json'),
-        'utf8'
-      )
-    );
-    pluginVersion = manifest.version || '';
-  } catch {
-    // Version is cosmetic; render without it.
-  }
-
-  const out = render(md, vm, pluginVersion);
+  const out = render(md, vm);
   const outPath = path.join(specDir, 'functional-spec.html');
   if (
     artifactPath &&

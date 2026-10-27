@@ -57,23 +57,16 @@ function createDefaultOverwritePrompt({
       )
     );
     output.write('\n');
-    output.write(
-      '  Starting with this version, AWOS preserves the wrappers under\n'
-    );
+    output.write('  AWOS preserves the files under\n');
     output.write(
       '  ' +
         style.bold(operation.destination) +
-        ' as your customization layer. They are the place to\n'
+        ' as your customization layer. They can be\n'
     );
     output.write(
-      '  customize Claude Code commands, and the installer no longer\n'
+      '  hand-edited safely, and the installer no longer clobbers them\n'
     );
-    output.write(
-      '  clobbers them on update (the framework now targets Claude Code\n'
-    );
-    output.write(
-      '  exclusively, so the wrappers can be hand-edited safely).\n'
-    );
+    output.write('  on update.\n');
     output.write('\n');
     output.write('  The following file(s) would be overwritten:\n');
     for (const f of files) {
@@ -82,7 +75,7 @@ function createDefaultOverwritePrompt({
     if (operation.manualUpdateUrl) {
       output.write('\n');
       output.write(
-        '  If you skip, you can review the latest canonical wrappers at:\n'
+        '  If you skip, you can review the latest canonical files at:\n'
       );
       output.write('    ' + style.info(operation.manualUpdateUrl) + '\n');
     }

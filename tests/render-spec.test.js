@@ -1,10 +1,10 @@
 'use strict';
 
-// Contract tests for the better plugin's deterministic spec renderer
-// (plugins/better/scripts/render-spec.mjs): criteria are extracted verbatim
-// from the markdown, counts are computed not authored, the view-model only
-// layers on top, and a missing view-model degrades to a generic render
-// instead of failing.
+// Contract tests for scripts/render-spec.mjs, the deterministic spec renderer
+// /awos:spec runs as its last step: criteria are extracted verbatim from the
+// markdown, counts are computed not authored, the view-model only layers on
+// top, and a missing view-model degrades to a generic render instead of
+// failing.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -14,13 +14,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const repoRoot = path.join(__dirname, '..');
-const script = path.join(
-  repoRoot,
-  'plugins',
-  'better',
-  'scripts',
-  'render-spec.mjs'
-);
+const script = path.join(repoRoot, 'scripts', 'render-spec.mjs');
 
 const SAMPLE_MD = `# Functional Specification: CSV Export
 
@@ -136,7 +130,7 @@ function renderInTemp(
     expectFailure = false,
   } = {}
 ) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-render-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'render-spec-'));
   fs.writeFileSync(path.join(dir, 'functional-spec.md'), md);
   const args = [script, dir];
   if (vm !== undefined) {
@@ -286,7 +280,14 @@ test('renderer never interpolates markup from the view-model — hostile payload
           label: '</text><script>alert(8)</script>',
         },
         { type: 'arrow', x1: 'javascript:alert(9)', y1: 0, x2: 50, y2: 50 },
-        { type: 'arrow', x1: 10, y1: 30, x2: 130, y2: 30, label: 'ok arrow' },
+        {
+          type: 'arrow',
+          x1: 10,
+          y1: 30,
+          x2: 130,
+          y2: 30,
+          label: 'ok arrow',
+        },
       ],
     },
   };

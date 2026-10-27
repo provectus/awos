@@ -369,8 +369,15 @@ test('every top-level framework directory is referenced by setup-config', () => 
     path.join(repoRoot, 'src', 'config', 'setup-config.js')
   );
   const referenced = new Set(copyOperations.map((op) => op.source));
-  // Top-level framework dirs we expect: commands, templates, scripts, claude/commands.
-  const expected = ['commands', 'templates', 'scripts', 'claude/commands'];
+  // Top-level framework dirs we expect: commands, templates, scripts,
+  // claude/commands, claude/agents.
+  const expected = [
+    'commands',
+    'templates',
+    'scripts',
+    'claude/commands',
+    'claude/agents',
+  ];
   for (const dir of expected) {
     assert.ok(
       referenced.has(dir),
@@ -1074,9 +1081,14 @@ test('configure-external-sources SKILL.md stops when user declines at privacy ga
   );
 });
 
-test('configure-external-sources SKILL.md handles restart-resume with status markers', () => {
-  // After adding MCP servers, the editor must be restarted. The skill
-  // must write a status marker to sources.md and resume on re-invocation.
+test('configure-external-sources SKILL.md connects the current user every run', () => {
+  // The manifest is committed and shared; access is per person. The skill
+  // must (a) not stop when sources.md is already configured — a teammate
+  // who cloned the repo still needs their own connections; (b) classify
+  // each source by probing (reachable / unauthenticated / absent) rather
+  // than storing connection state in the manifest; (c) add MCP servers
+  // project-scoped so the definition ships in .mcp.json; and (d) never
+  // seed a repo's sources from other repositories.
   const body = readUtf8(
     path.join(
       repoRoot,
@@ -1088,22 +1100,113 @@ test('configure-external-sources SKILL.md handles restart-resume with status mar
     )
   );
   assert.ok(
-    /restart-pending/i.test(body),
-    'SKILL.md must use a restart-pending status marker for MCP restart-resume flow'
-  );
-  assert.ok(
-    body.includes('verified'),
-    'SKILL.md must use a verified status marker for post-verification state'
-  );
-  assert.ok(
     /## Status:/i.test(body),
-    'SKILL.md must define ## Status: markers for state management'
+    'SKILL.md must define ## Status: markers for the manifest'
+  );
+  for (const state of ['reachable', 'unauthenticated', 'absent']) {
+    assert.ok(
+      body.includes(`**${state}**`),
+      `SKILL.md must define the per-user probe state "${state}"`
+    );
+  }
+  assert.ok(
+    body.includes(
+      '`## Status: configured` → the record exists; skip to Step 5'
+    ),
+    'SKILL.md must route a configured manifest to the connect step, not stop'
+  );
+  assert.ok(
+    body.includes('--scope project'),
+    'SKILL.md must add MCP servers with --scope project so the definition lands in .mcp.json'
+  );
+  assert.ok(
+    /never written down/i.test(body),
+    'SKILL.md must state that connection state is derived by probing, never stored in the manifest'
+  );
+  assert.ok(
+    /not a liveness call/i.test(body),
+    'SKILL.md must verify each source with a read from the recorded scope, not a liveness call'
+  );
+  assert.ok(
+    body.includes('- Verify:'),
+    'SKILL.md manifest format must carry a Verify line so a teammate can repeat the scope read'
+  );
+  assert.ok(
+    /Never look in other repositories/i.test(body),
+    'SKILL.md must not seed sources from other repositories'
+  );
+});
+
+// The research-backed spec command and the files its contracts bind to.
+const SPEC = {
+  label: 'commands/spec.md',
+  file: path.join(repoRoot, 'commands', 'spec.md'),
+  verifierDispatch: 'Agent(subagent_type="spec-verifier")',
+  verifierContract:
+    '/awos:spec must dispatch the installed spec-verifier agent by its unprefixed name — the installer copies it to .claude/agents/awos/, where Claude Code identifies it by the name frontmatter, not by path',
+  renderer: 'node ".awos/scripts/render-spec.mjs"',
+  rendererContract:
+    '/awos:spec must run the renderer the installer copies to .awos/scripts/ — any other path is not installed',
+  agentFile: path.join(repoRoot, 'claude', 'agents', 'spec-verifier.md'),
+};
+
+test('/awos:spec internal-KB lane reads only manifest fields the configure-external-sources skill writes', () => {
+  // The seam between the skill (writer of context/sources/sources.md) and
+  // the spec command's research lane (its reader). Every field the lane copies
+  // into the KB agent's prompt must be a field the skill's manifest format
+  // defines, every Role value the lane names must be one the skill allows,
+  // and the lane must not gate on the retired Category: field — a manifest
+  // the skill writes would then never dispatch the lane.
+  const skill = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins',
+      'awos',
+      'skills',
+      'configure-external-sources',
+      'SKILL.md'
+    )
+  );
+  const spec = readUtf8(SPEC.file);
+  const lane = spec
+    .split('**Internal-KB lane (dispatched when configured).**')
+    .slice(1)
+    .join('')
+    .split('\n')[0];
+  assert.ok(
+    lane.length > 0,
+    `${SPEC.label} must still carry the "Internal-KB lane (dispatched when configured)" paragraph`
+  );
+  const fields = [...lane.matchAll(/`([A-Z][A-Za-z ]*):`/g)].map((m) => m[1]);
+  assert.ok(
+    fields.length >= 4,
+    `the KB lane must name the manifest fields it copies into the agent prompt as \`Field:\` tokens; found ${fields.length}`
+  );
+  for (const field of new Set(fields)) {
+    assert.ok(
+      skill.includes(`- ${field}:`),
+      `the KB lane reads manifest field "${field}:" but configure-external-sources SKILL.md's manifest format does not define a "- ${field}:" line — writer and reader have drifted`
+    );
+  }
+  for (const role of ['tracker', 'docs', 'communication', 'vcs', 'infra']) {
+    assert.ok(
+      lane.includes(role),
+      `the KB lane must dispatch for Role "${role}" — the lane reads every source role, not documentation only`
+    );
+    assert.ok(
+      skill.includes(`\`${role}\``),
+      `configure-external-sources SKILL.md must allow Role "${role}" — the lane names it`
+    );
+  }
+  assert.ok(
+    !spec.includes('Category:'),
+    `${SPEC.label} must not gate on the retired Category: field — the skill writes Role:, so a Category: gate never matches`
   );
 });
 
 test('platform reference files exist under configure-external-sources skill', () => {
   // The skill reads platform-specific setup guides from references/.
-  // All three category files must exist.
+  // Every role's reference file must exist.
   const refsDir = path.join(
     repoRoot,
     'plugins',
@@ -1123,8 +1226,8 @@ test('platform reference files exist under configure-external-sources skill', ()
 test('configure-external-sources SKILL.md has fallback for failed verification', () => {
   // If tool verification fails and troubleshooting doesn't help, the user
   // must be able to switch to manual or remove the source rather than being
-  // stuck in a loop. Split on Step 6 heading to isolate the verification
-  // section (not Step 1's passing mention of "tool verification").
+  // stuck in a loop. Split on the Step 5 heading to isolate the connect
+  // section.
   const skillPath = path.join(
     repoRoot,
     'plugins',
@@ -1135,16 +1238,16 @@ test('configure-external-sources SKILL.md has fallback for failed verification',
   );
   const body = readUtf8(skillPath);
   const verificationSection = body
-    .split(/## Step 6/)
+    .split(/## Step 5/)
     .slice(1)
     .join('');
   assert.ok(
     /switch to manual/i.test(verificationSection),
-    'SKILL.md Step 6 must offer switching to manual when verification fails'
+    'SKILL.md Step 5 must offer switching to manual when verification fails'
   );
   assert.ok(
     /remove this source/i.test(verificationSection),
-    'SKILL.md Step 6 must offer removing the source when verification fails'
+    'SKILL.md Step 5 must offer removing the source when verification fails'
   );
 });
 
@@ -1955,7 +2058,7 @@ test('report templates use weighted points + reliability, not grades', () => {
 // and its generator-version constant were removed with the flow feature —
 // the lockstep is three files now, not four.) The pin exists to force that
 // deliberateness, not to freeze the version.
-const EXPECTED_PLUGIN_VERSION = '2.4.6';
+const EXPECTED_PLUGIN_VERSION = '2.4.7';
 
 test(`plugin.json version matches the awos marketplace entry and equals ${EXPECTED_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -1985,43 +2088,8 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
   );
 });
 
-// The better plugin has its own independent version line. Its discipline
-// is three files moving together: its plugin.json, its marketplace.json entry,
-// and this pinned literal (it has no generator-version constant).
-const EXPECTED_BETTER_PLUGIN_VERSION = '0.1.1';
-
-test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
-  const pluginManifest = JSON.parse(
-    readUtf8(
-      path.join(repoRoot, 'plugins', 'better', '.claude-plugin', 'plugin.json')
-    )
-  );
-  const marketplace = JSON.parse(
-    readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
-  );
-  const entries = marketplace.plugins.filter(
-    (p) => p.name === 'better' && p.source === './plugins/better'
-  );
-  assert.equal(
-    entries.length,
-    1,
-    'marketplace.json must contain exactly one plugins entry with name="better" and source="./plugins/better" — a near-miss name or source would register a different plugin than the one this pin guards'
-  );
-  const [entry] = entries;
-  assert.equal(
-    pluginManifest.version,
-    entry.version,
-    `plugins/better/.claude-plugin/plugin.json version ("${pluginManifest.version}") must match the better marketplace entry version ("${entry.version}") — bump both together`
-  );
-  assert.equal(
-    pluginManifest.version,
-    EXPECTED_BETTER_PLUGIN_VERSION,
-    `plugins/better/.claude-plugin/plugin.json version must be "${EXPECTED_BETTER_PLUGIN_VERSION}" — the better version moves as one deliberate commit (its plugin.json + its marketplace.json entry + this pin, together) when plugin behavior changes. Got "${pluginManifest.version}"`
-  );
-});
-
 // The profiler plugin has its own independent version line, with the same
-// three-file discipline as better: plugin.json, marketplace entry, this pin.
+// three-file discipline as awos: plugin.json, marketplace entry, this pin.
 const EXPECTED_PROFILER_PLUGIN_VERSION = '0.1.0';
 
 test(`profiler plugin.json version matches its marketplace entry and equals ${EXPECTED_PROFILER_PLUGIN_VERSION}`, () => {
@@ -2113,10 +2181,8 @@ test('profiler skill and script are wired together', () => {
   );
 });
 
-test('better command keeps its structural contracts (fan-out, unattended handling, core-contract references)', () => {
-  const cmd = readUtf8(
-    path.join(repoRoot, 'plugins', 'better', 'commands', 'spec.md')
-  );
+test('commands/spec.md keeps the research-backed spec contracts (fan-out, gate, unattended handling, verification, render)', () => {
+  const cmd = readUtf8(SPEC.file);
   const requiredSubstrings = [
     [
       'single message, as parallel `Agent` calls',
@@ -2132,15 +2198,15 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
     ],
     [
       '## Language Rules',
-      'the non-technical Language Rules section carried from core spec.md must be present',
+      'the non-technical Language Rules section must be present',
     ],
     [
       '.awos/templates/functional-spec-template.md',
-      'the command must fill the installed core template (same deliverable contract as /awos:spec)',
+      'the command must fill the installed template — the one deliverable contract /awos:tech reads',
     ],
     [
       'create-spec-directory.sh',
-      'the command must allocate the spec directory via the core script (same numbering as /awos:spec)',
+      'the command must allocate the spec directory via create-spec-directory.sh — the only source of spec numbering',
     ],
     [
       'research-notes.md',
@@ -2156,15 +2222,15 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
     ],
     [
       'This step asks the user nothing',
-      'synthesis must not interview — under claude -p a dismissed question ends the turn, so every question the research raises has to wait until after Step 7 writes the deliverables',
+      'synthesis must not interview — under claude -p a dismissed question ends the turn, so every question the research raises has to wait until after Step 8 writes the spec',
     ],
     [
       'When `AWOS_UNATTENDED` is set, skip this round entirely',
-      'the opening interview must be skipped outright in unattended runs — it is the only ask that precedes the writes, so it is the only one that can still cost both deliverables',
+      'the understanding gate must be skipped outright in unattended runs — there is nobody to hold the conversation with, and a dismissed question would end the turn before the spec exists',
     ],
     [
       'Do not ask here: this step precedes the write',
-      'the scope boundary must be drafted and marked rather than asked — Step 6 runs before the files exist',
+      'the scope boundary must be drafted and marked rather than asked — Step 7 runs before the spec file exists',
     ],
     [
       'view_model_path="${TMPDIR:-/tmp}/spec-view-[index].json"',
@@ -2174,21 +2240,15 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
       'MANUAL SOURCES ONLY',
       'a configured-but-manual-only KB lane needs its own report label — SKIPPED implies an agent ran and NOT CONFIGURED tells the user to redo setup they already did',
     ],
-    [
-      '${CLAUDE_PLUGIN_ROOT}/scripts/render-spec.mjs',
-      'the renderer must be invoked through ${CLAUDE_PLUGIN_ROOT} — a relative path breaks across install locations',
-    ],
-    [
-      'Agent(subagent_type="better:spec-verifier")',
-      'the blind verifier must be dispatched by its plugin-prefixed subagent_type — without the better: prefix the agent does not resolve and the verification pass silently never runs',
-    ],
+    [SPEC.renderer, SPEC.rendererContract],
+    [SPEC.verifierDispatch, SPEC.verifierContract],
     [
       'one bullet at a time',
-      'the self-review must re-read acceptance criteria one bullet at a time (carried from core spec.md) — checking the set as a whole lets a single non-compliant bullet survive',
+      'the self-review must re-read acceptance criteria one bullet at a time — checking the set as a whole lets a single non-compliant bullet survive',
     ],
     [
       'free-text option for open-ended markers',
-      'marker resolution must offer free text (carried from core spec.md) — not every [NEEDS CLARIFICATION] reduces to an option set',
+      'marker resolution must offer free text — not every [NEEDS CLARIFICATION] reduces to an option set',
     ],
     [
       'functional-spec.html',
@@ -2212,42 +2272,87 @@ test('better command keeps its structural contracts (fan-out, unattended handlin
     ],
     [
       'Do not guess a topic from the product definition or the codebase.',
-      'the no-topic bail-out must refuse to invent a topic — shared verbatim with core spec.md (see the shared-bail-out test below)',
+      'the no-topic bail-out must refuse to invent a topic — a guessed topic produces a spec nobody asked for',
+    ],
+    [
+      'feature-brief.md',
+      'the command must write the feature brief — the persistent state of the understanding gate — before the first question is asked',
+    ],
+    [
+      '**Normally:**',
+      'every quirk in the brief must be stated against its baseline — a quirk without the expectation it deviates from is unreadable to someone new to the feature',
+    ],
+    [
+      'Define a term before you use it',
+      'the gate must assume the user does not know the feature vocabulary — a briefing that uses undefined terms excludes exactly the person the gate exists for',
+    ],
+    [
+      'not the brief itself',
+      'the opening message of the gate must point the user at feature-brief.md instead of restating it — a brief compressed into chat loses the vocabulary and quirks a newcomer needs',
+    ],
+    [
+      'Never check the gate yourself',
+      'the understanding gate is confirmed only by an explicit user answer — the agent inferring confirmation defeats the gate',
+    ],
+    [
+      'Discover sources now',
+      'the command must offer sources discovery when context/sources/sources.md is absent, with a skip — suggested, never enforced',
     ],
   ];
   for (const [needle, contract] of requiredSubstrings) {
     assert.ok(
       cmd.includes(needle),
-      `plugins/better/commands/spec.md must contain "${needle}" — ${contract}`
+      `${SPEC.label} must contain "${needle}" — ${contract}`
     );
   }
 });
 
-test('core spec.md shares the no-topic bail-out contract with /better:spec', () => {
-  const core = readUtf8(path.join(repoRoot, 'commands', 'spec.md'));
+test('commands/spec.md dispatches a verifier whose agent file exists and declares that name', () => {
+  // The dispatch string and the agent's `name:` frontmatter are the two
+  // halves of one contract: a rename on either side makes the Agent call
+  // fail to resolve, and the command then reports verification as skipped
+  // on every run.
+  const agent = readUtf8(SPEC.agentFile);
+  const name = agent.match(/^name: (.+)$/m)?.[1];
+  assert.ok(name, `${SPEC.agentFile} must declare a name: frontmatter field`);
   assert.ok(
-    core.includes(
-      'Do not guess a topic from the product definition or the codebase.'
-    ),
-    'commands/spec.md must refuse to invent a topic when the prompt is empty — the same sentence /better:spec pins, so the two contract-identical spec commands cannot drift apart silently'
-  );
-  assert.ok(
-    core.includes('AWOS_UNATTENDED'),
-    'commands/spec.md must branch on AWOS_UNATTENDED for the no-topic stop — the stop has to precede the topic question, because under claude -p a dismissed AskUserQuestion ends the turn and an instruction placed after it never executes'
+    SPEC.verifierDispatch.endsWith(`="${name}")`),
+    `${SPEC.label} dispatches ${SPEC.verifierDispatch} but its agent file declares name "${name}" — the two must agree or the verifier never runs`
   );
 });
 
-test('better spec-verifier agent stays blind (tools restricted to Read, no other file reads)', () => {
-  const agent = readUtf8(
-    path.join(repoRoot, 'plugins', 'better', 'agents', 'spec-verifier.md')
-  );
+test('claude/agents/spec-verifier.md stays blind (tools restricted to Read, no other file reads)', () => {
+  const agent = readUtf8(SPEC.agentFile);
   assert.ok(
     /^tools: Read$/m.test(agent),
-    'spec-verifier.md frontmatter must restrict the agent to `tools: Read` — the blind read depends on the agent being unable to explore the repo'
+    `${path.relative(repoRoot, SPEC.agentFile)} frontmatter must restrict the agent to \`tools: Read\` — the blind read depends on the agent being unable to explore the repo`
   );
   assert.ok(
     agent.includes('Do not read any other file'),
-    'spec-verifier.md body must prohibit reading any file other than the dispatched spec path'
+    `${path.relative(repoRoot, SPEC.agentFile)} body must prohibit reading any file other than the dispatched spec path`
+  );
+});
+
+test('claude/agents operation installs under .claude/agents/awos and is marked preserveOnUpdate', () => {
+  // `.claude/agents/` is the user's area (hired specialists live there), so
+  // AWOS-shipped agents go into an `awos/` subfolder and get the wrapper
+  // treatment: never clobbered without asking. A root destination would put
+  // installer-owned files next to user-owned ones with no way to tell them
+  // apart on update.
+  const { copyOperations } = require(
+    path.join(repoRoot, 'src', 'config', 'setup-config.js')
+  );
+  const op = copyOperations.find((o) => o.source === 'claude/agents');
+  assert.ok(op, 'setup-config must copy claude/agents');
+  assert.strictEqual(
+    op.destination,
+    '.claude/agents/awos',
+    'AWOS-shipped agents must land in the .claude/agents/awos subfolder, not the root of the user-owned agents directory'
+  );
+  assert.strictEqual(
+    op.preserveOnUpdate,
+    true,
+    'claude/agents must be preserveOnUpdate — the installer asks before overwriting an agent file the user may have edited'
   );
 });
 
@@ -2852,9 +2957,9 @@ test('commands/spec.md has a pre-write Definition of Done checklist', () => {
   );
   assert.ok(
     body.includes(
-      'offering the assumption you would otherwise make as the recommended first option'
+      'offering the assumption already in the draft as the recommended first option'
     ),
-    'commands/spec.md Step 6 must resolve each [NEEDS CLARIFICATION] marker post-save via AskUserQuestion, offering the assumption you would otherwise make as the recommended first option'
+    'commands/spec.md final review must resolve each [NEEDS CLARIFICATION] marker post-save via AskUserQuestion, offering the assumption already drafted as the recommended first option'
   );
 });
 

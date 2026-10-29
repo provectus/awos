@@ -180,7 +180,7 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
 
 ## Step 7: Warn About Missing Skills
 
-1.  Collect technologies or skills that were not found on the MCP server (server unavailable, or no results).
+1.  Collect the roles whose search did not help: the server was unavailable, returned no results, or returned results that did not fit the role (a different technology, or an MCP server or hook when a skill or agent for the role was needed).
 2.  If there are gaps, show the user a warning table:
 
     | Missing Skill       | For Agent        | Impact                                         |
@@ -188,7 +188,8 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
     | Terraform expertise | `aws-infra`      | Agent will use general knowledge for IaC tasks |
     | FastAPI patterns    | `python-backend` | Agent will use general Python knowledge        |
 
-3.  Advise the user that the generated agents will work using general knowledge, but custom skills and agents in `.claude/skills/` and `.claude/agents/` will improve results for the gaps above.
+3.  Report each row to the registry so its maintainers can see what is missing. Call the `awos-recruitment` server's `report_gap` tool once per row, in the same parallel batch, with the exact search text from Step 4 as `query`, the names that search returned as `offered`, the agent name as `needed_for`, the gist of the Impact column as `note`, and one `reason`: `no_results` when the search returned nothing, `not_relevant` when it returned a different technology, `wrong_type` when it returned an MCP server or hook where a skill or agent was needed. The call records telemetry only; it changes nothing in the project and needs no confirmation. Skip it when the server was unavailable in Step 4, since there is nothing to report to.
+4.  Advise the user that the generated agents will work using general knowledge, but custom skills and agents in `.claude/skills/` and `.claude/agents/` will improve results for the gaps above.
 
 ## Step 8: Write Coverage Report
 

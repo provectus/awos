@@ -3130,6 +3130,30 @@ test('commands/spec.md mandates the when/then pair per acceptance criterion', ()
   );
 });
 
+test('hire.md reports unmet searches back to the registry via report_gap', () => {
+  // The registry's Skill Gaps insight only sees searches with a low
+  // similarity score. A result the registry is confident about can still
+  // be the wrong capability for the role, and only /awos:hire knows that.
+  // Step 7 must send each Missing Skills row to the registry's report_gap
+  // tool with one of its three reasons, and must skip the call when the
+  // server was unavailable (there is nothing to report to).
+  const body = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    body.includes('`report_gap`'),
+    "commands/hire.md Step 7 must call the awos-recruitment server's report_gap tool for each Missing Skills row"
+  );
+  for (const reason of ['no_results', 'not_relevant', 'wrong_type']) {
+    assert.ok(
+      body.includes(`\`${reason}\``),
+      `commands/hire.md must name the report_gap reason \`${reason}\` so the orchestrator picks from the registry's fixed set`
+    );
+  }
+  assert.ok(
+    /Skip it when the server was unavailable/.test(body),
+    'commands/hire.md must skip report_gap when the registry server was unavailable — a report to an unreachable server is a wasted error'
+  );
+});
+
 test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
   // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
   // propose a QA agent by searching the registry, not by always

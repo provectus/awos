@@ -84,10 +84,10 @@ Follow this process precisely.
 
 ## Step 4: Search the MCP Server
 
-1.  For each **Missing** or **Partially Covered** role, call the `awos-recruitment` MCP server's `search_capabilities` tool with a natural-language query built from technology names and domain. Issue these searches in parallel — one call per role. Example queries:
-    - `"React TypeScript frontend development"`
-    - `"Python FastAPI backend API"`
-    - `"AWS Terraform infrastructure deployment"`
+1.  For each **Missing** or **Partially Covered** role, search the registry once per technology, not once per role. Call the `awos-recruitment` MCP server's `search_capabilities` tool with one technology and what the project does with it, and do not pass a `type` filter. Issue these searches in parallel. The registry describes each skill by one technology, so a query that bundles a whole role (`"React TypeScript frontend development"`) matches every skill weakly, while one technology per query matches the skills the role needs. A role is a container: the skills its searches return go into its `skills:` list in Step 6, and an agent result covers the whole role. Example queries for a `react-frontend` role whose stack is React, TypeScript, and Vitest:
+    - `"React component rendering and performance"`
+    - `"TypeScript conventions and type design"`
+    - `"Vitest unit testing"`
 2.  In the same parallel batch, issue hook searches with the registry's `type="hook"` filter. Hooks are project-wide guardrails and side-effects (format-on-edit, lint/test gates, commit checks, docs freshness, dangerous-command blocking) — their relevance is orthogonal to agent coverage, so these searches run even when every role is Covered. The registry matches a query against the embedding of each hook's description (not its name), so phrase each query as a short natural-language problem statement — the way a hook's description would read — and keep **one intent per query**; concatenating intents or toolchain keywords into one query dilutes the match below the score threshold. Derive the intents from the project's toolchain and conventions. Examples:
     - `"format code automatically after edits"`
     - `"run lint and tests before completing work"`
@@ -96,7 +96,7 @@ Follow this process precisely.
     Filter the results against the hooks already configured (Step 3). If the searches return no hooks, skip the hooks phase silently — no warning needed.
 
 3.  If the `awos-recruitment` MCP server is not available or returns errors, tell the user it is unavailable and that you will proceed with generating agent files using general configuration. Note that they can prepare custom skills and agents in `.claude/skills/` and `.claude/agents/`, and wire their own hooks in `.claude/settings.json`. Skip to **Step 6**.
-4.  Gather all found skills, MCPs, agents, and hooks from the search results.
+4.  Gather all found skills, MCPs, agents, and hooks from the search results. Read each result's `type` field to tell them apart: `skill`, `agent`, `tool` (an MCP server), or `hook`. The type decides the install command in Step 5. Do not infer it from the name — `playwright` is a `tool`, not a skill.
 5.  Show the user what was found and collect consent in **two separate gates** — never one blanket confirmation covering both:
 
     | Role             | Found Skills                  | Found MCPs | Found Agents       |
@@ -130,7 +130,7 @@ Do **not** hardcode tool names or runners (Playwright, Cypress, WebdriverIO, Vit
 
 ## Step 5: Install Found Components
 
-Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock` is present in the project root, otherwise use `npx`. The commands below show both; pick one.
+Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock` is present in the project root, otherwise use `npx`. The commands below show both; pick one. Pick the command from each result's `type` (Step 4.4): `skill` → `skill`, `tool` → `mcp`, `agent` → `agent`, `hook` → `hook`.
 
 1.  Install skills:
     ```

@@ -11,7 +11,7 @@ When working here, identify which layer your change touches. Editing a prompt un
 
 ## Where the Project's Knowledge Lives
 
-This repo keeps its own `context/sources/sources.md`, the same file the `configure-external-sources` skill writes for any AWOS project. Read it before looking for an issue, a discussion, a call, or a sister repository: it records each source, what it is for, and how to reach it (GitHub Issues and the `provectus` organization via `gh`; the `#proj-awos` Slack channel and the AWOS call recordings via the Barley MCP server declared in `.mcp.json`). The file is committed and holds no credentials. Access is personal, so run the skill once per clone to connect your own session. `/awos:spec` and `/awos:architecture` consume the file when run here exactly as they would in any project; nothing about that behavior is specific to this repo.
+This repo keeps its own `context/sources/sources.md`, the same file the `configure-external-sources` skill writes for any AWOS project. Read it before looking for an issue, a discussion, a call, or a sister repository: it records each source, what it is for, and how to reach it. The file is committed and holds no credentials. Access is personal, so run the skill once per clone to connect your own session.
 
 ## Critical Rule: Do Not Run the Installer Here
 

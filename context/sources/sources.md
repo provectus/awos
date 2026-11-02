@@ -2,9 +2,9 @@
 
 ## Status: configured
 
-Discovery ran on 2026-10-27. This file is shared with everyone who clones the repository and holds no credentials. Access is per person: after cloning, run the `configure-external-sources` skill to connect your own session to these sources.
+Discovery ran on 2026-11-02. This file is shared with everyone who clones the repository and holds no credentials. Access is per person: after cloning, run the `configure-external-sources` skill to connect your own session to these sources.
 
-Asked and answered with nothing: documentation / wiki (none beyond the `docs/` folder in this repository) and infrastructure (the framework is an npm package and a Claude Code plugin; it runs nowhere beyond this repository). The private Slack channel the core team uses is deliberately not recorded here.
+Asked and answered with nothing: documentation / wiki (none beyond the `docs/` folder in this repository) and infrastructure (the framework is an npm package and a Claude Code plugin; it runs nowhere beyond this repository).
 
 ## Source: github-issues
 

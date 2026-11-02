@@ -9,6 +9,10 @@ This repo contains **two distinct things** that live side-by-side:
 
 When working here, identify which layer your change touches. Editing a prompt under `commands/foo.md` is product work; editing `src/services/file-copier.js` is installer work.
 
+## Where the Project's Knowledge Lives
+
+This repo keeps its own `context/sources/sources.md`, the same file the `configure-external-sources` skill writes for any AWOS project. Read it before looking for an issue, a discussion, a call, or a sister repository: it records each source, what it is for, and how to reach it. The file is committed and holds no credentials. Access is personal, so run the skill once per clone to connect your own session.
+
 ## Critical Rule: Do Not Run the Installer Here
 
 **Never run the installer inside this repo** — neither `npx @provectusinc/awos` / `npx ./index.js` nor `bunx @provectusinc/awos` / `bun index.js`. The installer creates `.awos/`, `.claude/`, and `context/` directories — running it here pollutes the source tree with copies of files that already exist as originals. To test installer changes, run it against a separate scratch project as described in `CONTRIBUTING.md`.

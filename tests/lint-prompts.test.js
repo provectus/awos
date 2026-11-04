@@ -553,6 +553,28 @@ test('agent-template.md cues the spawned agent to apply its skills', () => {
   );
 });
 
+test('a hired agent is a container for a role, not an expert persona', () => {
+  // Decided at the 2026-10-29 sync: an agent is a container (role, model,
+  // effort, tool bounds, `skills:` list) and the knowledge of each
+  // technology lives in its skills. A template body that opens with
+  // "deep expertise in React, TypeScript" puts the knowledge in the wrong
+  // place and reads as a persona instead of a role.
+  const template = readUtf8(path.join(templatesDir, 'agent-template.md'));
+  assert.ok(
+    !/deep expertise|\bexpert\b/i.test(template),
+    'templates/agent-template.md must not frame the agent as an expert persona — the knowledge lives in its skills'
+  );
+  assert.ok(
+    /knowledge comes from the skills/i.test(template),
+    'templates/agent-template.md must say the knowledge comes from the skills in `skills:`, not from the agent body'
+  );
+  const hire = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    /agent file is a container/i.test(hire),
+    'commands/hire.md Step 6 must describe the agent file as a container for a role so a generated body is not written as a persona'
+  );
+});
+
 test('subagent-enumerating commands cover plugin-provided agents', () => {
   // /awos:tech, /awos:hire, and /awos:tasks assign or report on
   // specialists, and /awos:implement verifies each task's named agent before

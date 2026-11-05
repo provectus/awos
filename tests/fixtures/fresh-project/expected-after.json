@@ -14,7 +14,6 @@
     "exists": true,
     "contains": "tools: Read"
   },
-  ".claude/agents/awos/hire.md": { "exists": true, "contains": "name: hire" },
   ".claude/commands/awos/architecture.md": { "exists": true },
   ".claude/commands/awos/implement.md": {
     "exists": true,

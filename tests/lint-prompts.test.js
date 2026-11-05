@@ -2216,7 +2216,7 @@ test('profiler skill and script are wired together', () => {
   );
 });
 
-test('commands/spec.md keeps the research-backed spec contracts (fan-out, gate, unattended handling, verification, render)', () => {
+test('commands/spec.md keeps the research-backed spec contracts (fan-out, unattended handling, verification, render)', () => {
   const cmd = readUtf8(SPEC.file);
   const requiredSubstrings = [
     [
@@ -2258,10 +2258,6 @@ test('commands/spec.md keeps the research-backed spec contracts (fan-out, gate, 
     [
       'This step asks the user nothing',
       'synthesis must not interview — under claude -p a dismissed question ends the turn, so every question the research raises has to wait until after Step 8 writes the spec',
-    ],
-    [
-      'When `AWOS_UNATTENDED` is set, skip this round entirely',
-      'the understanding gate must be skipped outright in unattended runs — there is nobody to hold the conversation with, and a dismissed question would end the turn before the spec exists',
     ],
     [
       'Do not ask here: this step precedes the write',
@@ -2310,26 +2306,6 @@ test('commands/spec.md keeps the research-backed spec contracts (fan-out, gate, 
       'the no-topic bail-out must refuse to invent a topic — a guessed topic produces a spec nobody asked for',
     ],
     [
-      'feature-brief.md',
-      'the command must write the feature brief — the persistent state of the understanding gate — before the first question is asked',
-    ],
-    [
-      '**Normally:**',
-      'every quirk in the brief must be stated against its baseline — a quirk without the expectation it deviates from is unreadable to someone new to the feature',
-    ],
-    [
-      'Define a term before you use it',
-      'the gate must assume the user does not know the feature vocabulary — a briefing that uses undefined terms excludes exactly the person the gate exists for',
-    ],
-    [
-      'not the brief itself',
-      'the opening message of the gate must point the user at feature-brief.md instead of restating it — a brief compressed into chat loses the vocabulary and quirks a newcomer needs',
-    ],
-    [
-      'Never check the gate yourself',
-      'the understanding gate is confirmed only by an explicit user answer — the agent inferring confirmation defeats the gate',
-    ],
-    [
       'Discover sources now',
       'the command must offer sources discovery when context/sources/sources.md is absent, with a skip — suggested, never enforced',
     ],
@@ -2338,6 +2314,16 @@ test('commands/spec.md keeps the research-backed spec contracts (fan-out, gate, 
     assert.ok(
       cmd.includes(needle),
       `${SPEC.label} must contain "${needle}" — ${contract}`
+    );
+  }
+  // The spec is drafted straight from the research notes. A feature brief
+  // with a confirmation conversation used to sit between the research and
+  // the draft; the team retired it as an extra step in front of a spec whose
+  // author already understands the feature, so nothing may reintroduce it.
+  for (const banned of [/feature-brief\.md/, /understanding gate/i]) {
+    assert.ok(
+      !banned.test(cmd),
+      `${SPEC.label} must not match ${banned} — the spec is drafted from research-notes.md directly; no brief or confirmation conversation sits between the research and the draft`
     );
   }
 });

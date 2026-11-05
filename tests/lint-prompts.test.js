@@ -2091,7 +2091,7 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
 // The better plugin has its own independent version line. Its discipline
 // is three files moving together: its plugin.json, its marketplace.json entry,
 // and this pinned literal.
-const EXPECTED_BETTER_PLUGIN_VERSION = '0.3.0';
+const EXPECTED_BETTER_PLUGIN_VERSION = '0.3.1';
 
 test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(

@@ -18,7 +18,7 @@
       "name": "better",
       "source": "./plugins/better",
       "description": "Experimental one-command implementation: /better:implement splits an agreed spec into units, delegates each by path, checks every unit against its acceptance criteria, and verifies the whole against the agreement before the spec is called done, with run.md in the spec directory as the resumable checkpoint.",
-      "version": "0.3.0"
+      "version": "0.3.1"
     },
     {
       "name": "profiler",

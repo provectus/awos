@@ -3428,3 +3428,174 @@ test('better:implement keeps the completion line the profiler reads', () => {
     'plugins/profiler/scripts/profile-implement.mjs must still match "Implementation run complete" — the join key with better:implement and core implement.md'
   );
 });
+
+// The hire agent (claude/agents/hire.md) and the /awos:tech hire step.
+// One role per dispatch, two modes (propose, then install after the command
+// asked the user), caller-agnostic so /awos:hire can dispatch it later
+// without a rewrite. /awos:tech Step 5 is its first caller.
+// ---------------------------------------------------------------------------
+
+const HIRE_AGENT_PATH = path.join(repoRoot, 'claude', 'agents', 'hire.md');
+const TECH_PATH = path.join(commandsDir, 'tech.md');
+
+test('the hire core agent exists with valid frontmatter and no Agent tool', () => {
+  assert.ok(
+    fs.existsSync(HIRE_AGENT_PATH),
+    'claude/agents/hire.md must exist — /awos:tech dispatches it for a staffing gap and the installer ships it under .claude/agents/awos/'
+  );
+  const { data, hasFrontmatter } = parse(readUtf8(HIRE_AGENT_PATH));
+  assert.ok(hasFrontmatter, 'claude/agents/hire.md must have YAML frontmatter');
+  assert.equal(
+    data.name,
+    'hire',
+    'hire agent name must be "hire" — the dispatch string is Agent(subagent_type="hire")'
+  );
+  assert.ok(
+    typeof data.description === 'string' && data.description.length > 0,
+    'claude/agents/hire.md must declare a description — the Agent tool lists agents by it'
+  );
+  assert.equal(
+    data.model,
+    'sonnet',
+    'claude/agents/hire.md must pin model: sonnet — a registry search and a template fill are routine work'
+  );
+  const tools = String(data.tools ?? '');
+  for (const tool of [
+    'Read',
+    'Write',
+    'Bash',
+    'mcp__awos-recruitment__search_capabilities',
+    'mcp__awos-recruitment__report_gap',
+  ]) {
+    assert.ok(
+      tools.includes(tool),
+      `claude/agents/hire.md tools: must include ${tool} — the agent reads the template, writes the agent file, runs the install CLI and talks to the registry itself`
+    );
+  }
+  assert.ok(
+    !/\bAgent\b/.test(tools),
+    'claude/agents/hire.md tools: must not carry Agent — a hire that re-delegates adds a hop and no install'
+  );
+});
+
+test('hire agent offers skills and registry agents only, in two modes, with parseable deliverables', () => {
+  const body = readUtf8(HIRE_AGENT_PATH);
+  for (const [token, why] of [
+    ['<mode>', 'the mode selector'],
+    ['propose', 'the propose mode'],
+    ['install', 'the install mode'],
+    ['<expertise>', 'the expertise phrase the caller recorded'],
+    ['<technologies>', 'technologies the caller already derived'],
+    ['<contextPath>', 'the document to read technologies from'],
+    [
+      '<existingAgentPath>',
+      'the partially-covered case: extend, do not create',
+    ],
+    ['search_capabilities', 'the registry search tool'],
+    ['report_gap', 'the unmet-search telemetry'],
+    ['@provectusinc/awos-recruitment', 'the install CLI'],
+    ['agent-template.md', 'the container agent template'],
+    ['skills:', 'the skills list the container carries'],
+    ['### Proposal', 'the propose-mode success deliverable'],
+    ['### No proposal', 'the propose-mode empty deliverable'],
+    ['### Installed', 'the install-mode success deliverable'],
+    ['### Install failed', 'the install-mode failure deliverable'],
+    ['hired-agents.md', 'the coverage report it patches'],
+  ]) {
+    assert.ok(
+      body.includes(token),
+      `claude/agents/hire.md must carry ${token} — ${why}`
+    );
+  }
+  assert.ok(
+    /never offer or install them/.test(body) &&
+      /hook/i.test(body) &&
+      /MCP/.test(body),
+    'claude/agents/hire.md must state that hooks and MCP servers are never offered or installed — they run on their own and need their own consent gate'
+  );
+  assert.ok(
+    /patch the rows you change and never regenerate/i.test(body),
+    'claude/agents/hire.md must patch the rows it changes in hired-agents.md and never regenerate the file — /awos:hire owns the regeneration'
+  );
+  assert.ok(
+    /Never `expert`/.test(body),
+    'claude/agents/hire.md must forbid `expert` in role names — an agent is a container for skills, not a persona'
+  );
+  assert.ok(
+    /empty `skills:` list is the defect/.test(body),
+    'claude/agents/hire.md must refuse to write a container agent with an empty skills: list — frontmatter skills are the whole point of the container'
+  );
+});
+
+test('hire agent names no caller', () => {
+  const src = readUtf8(HIRE_AGENT_PATH);
+  for (const [pattern, label] of [
+    [/implement/i, 'implement'],
+    [/\btech\b/i, 'tech'],
+    [/run\.md/, 'run.md'],
+    [/\/awos:/, '/awos:'],
+    [/\/better:/, '/better:'],
+  ]) {
+    assert.ok(
+      !pattern.test(src),
+      `claude/agents/hire.md must not mention ${label} — the agent fills one staffing gap for any caller, so /awos:hire can dispatch it later without a rewrite`
+    );
+  }
+});
+
+test('/awos:tech dispatches the hire agent and its agent file declares that name', () => {
+  const body = readUtf8(TECH_PATH);
+  const dispatch = 'Agent(subagent_type="hire"';
+  assert.ok(
+    body.includes(dispatch),
+    `commands/tech.md must dispatch ${dispatch} — the core agent by its frontmatter name`
+  );
+  const name = readUtf8(HIRE_AGENT_PATH).match(/^name: (.+)$/m)?.[1];
+  assert.equal(
+    name,
+    'hire',
+    `commands/tech.md dispatches subagent_type="hire" but claude/agents/hire.md declares name "${name}" — the two must agree or the hire never runs`
+  );
+});
+
+test('/awos:tech hires only on consent and keeps hire logic in the agent', () => {
+  // The command asks; the agent searches and installs. Propose comes
+  // first, the consent question second, install third, and nothing
+  // installs unattended or when the registry is not connected.
+  const body = readUtf8(TECH_PATH);
+  const step5 = body.split(/### Step 5/)[1];
+  assert.ok(step5, 'commands/tech.md must keep a "### Step 5" section');
+  const proposeAt = step5.indexOf('<mode>propose</mode>');
+  const askAt = step5.indexOf('AskUserQuestion');
+  const installAt = step5.indexOf('<mode>install</mode>');
+  assert.ok(
+    proposeAt !== -1 &&
+      askAt !== -1 &&
+      installAt !== -1 &&
+      proposeAt < askAt &&
+      askAt < installAt,
+    'commands/tech.md Step 5 must order the hire flow propose dispatch → consent AskUserQuestion → install dispatch — an install before consent would change the project without agreement'
+  );
+  assert.ok(
+    step5.includes('**Install**') && step5.includes('**Skip**'),
+    'commands/tech.md Step 5 consent must offer **Install** and **Skip**, with Skip the default when unanswered'
+  );
+  assert.ok(
+    step5.includes('/awos:hire cover [directory-name]'),
+    'commands/tech.md Step 5 must keep the pre-filled /awos:hire cover [directory-name] command as the fallback when the registry is not connected or a proposal is skipped'
+  );
+  assert.ok(
+    body.includes('AWOS_UNATTENDED'),
+    'commands/tech.md must name AWOS_UNATTENDED — an unattended run never installs'
+  );
+  for (const token of [
+    'search_capabilities',
+    'report_gap',
+    '@provectusinc/awos-recruitment',
+  ]) {
+    assert.ok(
+      !body.includes(token),
+      `commands/tech.md must not carry ${token} — the registry search, telemetry and install CLI live in claude/agents/hire.md`
+    );
+  }
+});

@@ -31,6 +31,7 @@ Your primary task is to create the technical specification for a given feature. 
 - Use the `AskUserQuestion` tool for multiple-choice questions instead of plain text or numbered lists.
 - **A skipped or unanswered question is never a stop signal. Record your best-fit option as an explicit `**Assumption:**` in the draft and continue through the remaining steps, including writing the deliverable.**
 - The one exception is the target-spec selection in Step 1: without a spec there is no deliverable to draft, so an unanswered selection ends the run cleanly.
+- The hire consent in Step 5 is the one question whose skip means _install nothing_: a dismissed or unanswered consent, or `AWOS_UNATTENDED`, leaves the project untouched and the pre-filled `/awos:hire` command in the report.
 
 <!-- Editor note (not an instruction): this rule is necessary but not sufficient. In `claude -p` a dismissed AskUserQuestion ends the turn, so a deliverable Write placed after such a question never runs unattended. The fix is structural — keep the Write ahead of any dismissable question, then refine afterward. -->
 
@@ -87,9 +88,23 @@ Follow this process precisely.
 
 Write the completed draft to the `technical-considerations.md` file inside the directory identified in Step 1. Write the file whether or not every question was answered — drafting a tech spec is reversible (re-run `/awos:tech` to revise), so the deliverable is never gated behind a confirmation an unattended run cannot answer.
 
-### Step 5: Surface for Review and Recommend Next Step
+### Step 5: Surface for Review, Hire for the Gaps, Recommend Next Step
 
 1.  Report the saved path. Surface any choices that were recorded as assumptions (rather than confirmed by the user) so they are easy to spot and challenge. If the user requests changes, apply them and re-save; otherwise they can revise later by re-running `/awos:tech` against the same spec.
-2.  Review the saved spec for new technologies, frameworks, tools, or testing approaches not already covered by the project's existing architecture and specialist agents.
-    - If new capabilities are needed: recommend a pre-filled hire command: `/awos:hire cover [directory-name]: need [comma-separated list of new technologies/capabilities]`, followed by `/awos:tasks`.
-    - Otherwise: report the next command: `/awos:tasks`.
+2.  Collect the staffing gaps: the stacks Step 2.4 found no specialist for, plus any technology, framework, tool or testing approach the saved spec introduces that no agent in the `Agent` tool's description block covers (the same introspection as Step 2.2). One role per gap, with the technologies behind it. When there are none, report the next command, `/awos:tasks`, and stop.
+3.  When the `awos-recruitment` search tool is not in your own tool list, the registry is not connected: recommend the pre-filled hire command `/awos:hire cover [directory-name]: need [comma-separated list of new technologies/capabilities]`, followed by `/awos:tasks`, and stop.
+4.  Dispatch one proposal per role, all in one message. Pass the technologies you derived, so the agent reads nothing:
+
+    ```text
+    Agent(subagent_type="hire", description="Propose agent for <expertise>", prompt="<mode>propose</mode> <expertise>[the missing expertise, one phrase]</expertise> <technologies>[one technology per line]</technologies> <agentsDir>[absolute path of .claude/agents/]</agentsDir>")
+    ```
+
+5.  A `### No proposal` is a gap the registry cannot fill: report it with the agent's reason and the pre-filled `/awos:hire cover …` command; nothing else happens for it.
+6.  For every `### Proposal`, ask once with `AskUserQuestion`, one question per role in the same call: quote the proposal's Skills, Agents and Container lines with their scores, with the options **Install** and **Skip** (the default when unanswered). Nothing is installed before this question. When `AWOS_UNATTENDED` is set, do not ask: every proposal is skipped.
+7.  For each approved role, dispatch the install, all approved roles in one message, with the role, description, skills and agents copied from the proposal; a gap that is an existing agent lacking a skill also passes `<existingAgentPath>`:
+
+    ```text
+    Agent(subagent_type="hire", description="Install <role>", prompt="<mode>install</mode> <role>…</role> <description>…</description> <skills>…</skills> <agents>…</agents> <templatePath>[absolute path of .awos/templates/agent-template.md]</templatePath> <agentsDir>[absolute path of .claude/agents/]</agentsDir>")
+    ```
+
+8.  Report: each `### Installed` (the agent, its skills, whether the coverage report was patched), each `### Install failed` with its reason and the pre-filled `/awos:hire cover …` command, and each skipped proposal with the same command. An agent installed here is in the `Agent` tool's list for `/awos:tasks` and `/awos:implement` in a new session; this session picks the file up on a delay of about a minute. End with the next command: `/awos:tasks`.

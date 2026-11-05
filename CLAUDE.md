@@ -80,17 +80,17 @@ When a change introduces a structural contract — frontmatter key, marker patte
 
 The installer copies files into **two destination folders** with different semantics — this is load-bearing for the whole UX:
 
-| Source             | Destination              | Semantics                                                                |
-| ------------------ | ------------------------ | ------------------------------------------------------------------------ |
-| `commands/`        | `.awos/commands/`        | Framework internals. Overwritten on every update.                        |
-| `templates/`       | `.awos/templates/`       | Framework internals. Overwritten on every update.                        |
-| `scripts/`         | `.awos/scripts/`         | Framework internals. Overwritten on every update.                        |
-| `claude/commands/` | `.claude/commands/awos/` | Thin wrappers. User-editable customization layer — preserved on update.  |
-| `claude/agents/`   | `.claude/agents/awos/`   | AWOS-shipped subagents (the blind `spec-verifier`). Preserved on update. |
+| Source             | Destination              | Semantics                                                                                  |
+| ------------------ | ------------------------ | ------------------------------------------------------------------------------------------ |
+| `commands/`        | `.awos/commands/`        | Framework internals. Overwritten on every update.                                          |
+| `templates/`       | `.awos/templates/`       | Framework internals. Overwritten on every update.                                          |
+| `scripts/`         | `.awos/scripts/`         | Framework internals. Overwritten on every update.                                          |
+| `claude/commands/` | `.claude/commands/awos/` | Thin wrappers. User-editable customization layer — preserved on update.                    |
+| `claude/agents/`   | `.claude/agents/awos/`   | AWOS-shipped subagents (the blind `spec-verifier`, the `hire` agent). Preserved on update. |
 
 Each file in `claude/commands/{name}.md` is a tiny wrapper that points at `.awos/commands/{name}.md`. Users add custom instructions in the wrapper without losing them on update. When you add a new command, you must add both the full prompt in `commands/` AND a wrapper in `claude/commands/`. The copy table is defined in `src/config/setup-config.js`.
 
-`claude/agents/` holds the subagents AWOS itself ships (today only `spec-verifier`, which `/awos:spec` dispatches). They install into the `awos/` subfolder of `.claude/agents/` — Claude Code scans that directory recursively and identifies an agent by its `name` frontmatter, not its path — so installer-owned files never sit next to the specialists `/awos:hire` writes into the root. The root of `.claude/agents/` stays user-owned; the installer never writes there.
+`claude/agents/` holds the subagents AWOS itself ships: `spec-verifier`, which `/awos:spec` dispatches, and `hire`, which `/awos:tech` dispatches for each staffing gap the saved tech spec leaves (one role per dispatch; propose mode returns a proposal, the command asks one consent question, install mode installs the approved skills and agent, writes or extends one container agent from the template, and patches the rows it changes in `context/product/hired-agents.md`; the agent names no caller, so `/awos:hire` can dispatch it too). They install into the `awos/` subfolder of `.claude/agents/` — Claude Code scans that directory recursively and identifies an agent by its `name` frontmatter, not its path — so installer-owned files never sit next to the specialists `/awos:hire` writes into the root. The root of `.claude/agents/` stays user-owned; the installer never writes there.
 
 **Wrapper-preservation policy.** The `claude/commands` and `claude/agents` copy operations are marked `preserveOnUpdate: true`. On every install, the file-copier scans `.claude/commands/awos/` and `.claude/agents/awos/` for files that already exist and would be clobbered. If any conflicts are found, the installer asks the user before overwriting; opting out leaves the existing wrappers untouched, while wrappers the user has never had (e.g. newly added commands) are still installed. Non-interactive runs (CI, piped, tests) default to **preserve** — silent overwrite of customizations is the bug this policy exists to prevent. CI/scripts that genuinely want a fresh sync can pass `--overwrite`; `--no-overwrite` is the explicit form of the safe default. Users who decline overwrite see a pointer to <https://github.com/provectus/awos/tree/main/claude/commands> for manual diffing.
 

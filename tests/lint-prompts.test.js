@@ -2091,7 +2091,7 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
 // The better plugin has its own independent version line. Its discipline
 // is three files moving together: its plugin.json, its marketplace.json entry,
 // and this pinned literal.
-const EXPECTED_BETTER_PLUGIN_VERSION = '0.3.1';
+const EXPECTED_BETTER_PLUGIN_VERSION = '0.3.2';
 
 test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -3586,6 +3586,12 @@ test('/awos:tech hires only on consent and keeps hire logic in the agent', () =>
       step5.includes('**Install the registry agent instead**') &&
       step5.includes('**Skip**'),
     'commands/tech.md Step 5 consent must offer **Install** (the container), **Install the registry agent instead** (only when the proposal lists an alternative) and **Skip**, with Skip the default when unanswered'
+  );
+  assert.ok(
+    step5.includes('**extension**') &&
+      step5.includes('**new role**') &&
+      step5.includes('<existingAgentPath>'),
+    'commands/tech.md Step 5 must sort each gap into an extension of an installed agent (skills added to it, passing <existingAgentPath>) or a new role — adding skills to the agent that already covers the stack is the common case'
   );
   assert.ok(
     step5.includes('/awos:hire cover [directory-name]'),

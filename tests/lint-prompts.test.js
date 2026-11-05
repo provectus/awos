@@ -3431,8 +3431,8 @@ test('better:implement keeps the completion line the profiler reads', () => {
 
 // The hire agent (claude/agents/hire.md) and the /awos:tech hire step.
 // One role per dispatch, two modes (propose, then install after the command
-// asked the user), caller-agnostic so /awos:hire can dispatch it later
-// without a rewrite. /awos:tech Step 5 is its first caller.
+// asked the user), caller-agnostic: any command can dispatch it, and
+// /awos:tech Step 5 does.
 // ---------------------------------------------------------------------------
 
 const HIRE_AGENT_PATH = path.join(repoRoot, 'claude', 'agents', 'hire.md');
@@ -3543,7 +3543,7 @@ test('hire agent names no caller', () => {
   ]) {
     assert.ok(
       !pattern.test(src),
-      `claude/agents/hire.md must not mention ${label} — the agent fills one staffing gap for any caller, so /awos:hire can dispatch it later without a rewrite`
+      `claude/agents/hire.md must not mention ${label} — the agent fills one staffing gap for any caller, including /awos:hire`
     );
   }
 });

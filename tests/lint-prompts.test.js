@@ -3525,6 +3525,11 @@ test('hire agent offers skills and registry agents only, in two modes, with pars
     /empty `skills:` list is the defect/.test(body),
     'claude/agents/hire.md must refuse to write a container agent with an empty skills: list — frontmatter skills are the whole point of the container'
   );
+  assert.ok(
+    /listed as an alternative, never proposed in its place/.test(body) &&
+      body.includes('- Alternative:'),
+    "claude/agents/hire.md must propose the container by default and list a matching registry agent only as an alternative — registry agents are for roles that need their own shape, and that choice is the user's"
+  );
 });
 
 test('hire agent names no caller', () => {
@@ -3577,8 +3582,10 @@ test('/awos:tech hires only on consent and keeps hire logic in the agent', () =>
     'commands/tech.md Step 5 must order the hire flow propose dispatch → consent AskUserQuestion → install dispatch — an install before consent would change the project without agreement'
   );
   assert.ok(
-    step5.includes('**Install**') && step5.includes('**Skip**'),
-    'commands/tech.md Step 5 consent must offer **Install** and **Skip**, with Skip the default when unanswered'
+    step5.includes('**Install**') &&
+      step5.includes('**Install the registry agent instead**') &&
+      step5.includes('**Skip**'),
+    'commands/tech.md Step 5 consent must offer **Install** (the container), **Install the registry agent instead** (only when the proposal lists an alternative) and **Skip**, with Skip the default when unanswered'
   );
   assert.ok(
     step5.includes('/awos:hire cover [directory-name]'),

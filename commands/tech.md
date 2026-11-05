@@ -100,8 +100,8 @@ Write the completed draft to the `technical-considerations.md` file inside the d
     ```
 
 5.  A `### No proposal` is a gap the registry cannot fill: report it with the agent's reason and the pre-filled `/awos:hire cover …` command; nothing else happens for it.
-6.  For every `### Proposal`, ask once with `AskUserQuestion`, one question per role in the same call: quote the proposal's Skills, Agents and Container lines with their scores, with the options **Install** and **Skip** (the default when unanswered). Nothing is installed before this question. When `AWOS_UNATTENDED` is set, do not ask: every proposal is skipped.
-7.  For each approved role, dispatch the install, all approved roles in one message, with the role, description, skills and agents copied from the proposal; a gap that is an existing agent lacking a skill also passes `<existingAgentPath>`:
+6.  For every `### Proposal`, ask once with `AskUserQuestion`, one question per role in the same call: quote the proposal's Skills, Container and Alternative lines with their scores, with the options **Install** (the container with its skills), **Install the registry agent instead** (offered only when the proposal's Alternative line names one) and **Skip** (the default when unanswered). Nothing is installed before this question. When `AWOS_UNATTENDED` is set, do not ask: every proposal is skipped.
+7.  For each approved role, dispatch the install, all approved roles in one message, with the role, description and skills copied from the proposal, and `<agents>` holding the alternative only when the user chose it (empty otherwise); a gap that is an existing agent lacking a skill also passes `<existingAgentPath>`:
 
     ```text
     Agent(subagent_type="hire", description="Install <role>", prompt="<mode>install</mode> <role>…</role> <description>…</description> <skills>…</skills> <agents>…</agents> <templatePath>[absolute path of .awos/templates/agent-template.md]</templatePath> <agentsDir>[absolute path of .claude/agents/]</agentsDir>")

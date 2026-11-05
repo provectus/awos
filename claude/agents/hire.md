@@ -22,7 +22,7 @@ Propose mode:
 
 Install mode:
 
-- `<role>`, `<description>`, `<skills>`, `<agents>` — copied from your own proposal, with the skills and the agent the user approved (either list may be empty).
+- `<role>`, `<description>`, `<skills>`, `<agents>` — copied from your own proposal: the skills the user approved, and in `<agents>` the alternative registry agent only when the user chose it instead of the container (otherwise empty).
 - `<templatePath>` — the agent template, normally `.awos/templates/agent-template.md`.
 - `<agentsDir>` — as above.
 - `<existingAgentPath>` — optional; an agent file that already covers the role and only lacks the skills. When given, the skills are added to that file and no new file is written.
@@ -32,7 +32,7 @@ Install mode:
 1. Technologies. Use `<technologies>` when given. Otherwise read `<contextPath>` once and list the one to three technologies behind `<expertise>` that the document names. When neither yields any, the expertise phrase itself is the only query.
 2. Role name. Kebab-case, two or three words, the main technology plus the domain: `terraform-infra`, `react-frontend`, `postgres-database`. Never `expert` or a synonym for a person; the name says what the container is for, not who it pretends to be. Glob `<agentsDir>` for `*.md` and pick a name no file uses.
 3. Search. One `search_capabilities` call per technology, all in one message, no `type` filter. Phrase each query as the technology plus what the project does with it — `Terraform modules for AWS ECS deployment`, not the role name: the registry describes each skill by one technology, and a role-shaped query matches everything weakly.
-4. Filter, per query. Keep results of type `skill` and `agent` only. Of those, keep at most the two highest-scoring whose name or description names the queried technology or a direct synonym; a result that names a different technology is noise whatever its score. A registry agent is offered only when its description covers the role's main technology; it then becomes the role's agent and no container agent is written. Otherwise the proposal is the kept skills plus a new container agent named `<role>` that carries them in `skills:`. When no skill and no agent survive the filter for any technology, there is no proposal.
+4. Filter, per query. Keep results of type `skill` and `agent` only. Of those, keep at most the two highest-scoring whose name or description names the queried technology or a direct synonym; a result that names a different technology is noise whatever its score. The proposal is the kept skills plus a new container agent named `<role>` that carries them in `skills:`; that is the default, whatever the registry holds. A registry agent whose description covers the role's main technology is listed as an alternative, never proposed in its place: registry agents exist for roles that need their own shape (their own tools or instructions), and whether this role is one is the user's call, made through the caller. When no skill survives the filter for any technology, there is no proposal, even if a registry agent matched.
 5. Report what the registry lacks. For every technology whose query kept nothing, call `report_gap` once, all in one message: `query` the exact search text, `offered` the names the search returned, `needed_for` the role name, `note` the expertise phrase, and one `reason` — `no_results` when nothing came back, `not_relevant` when only other technologies did, `wrong_type` when only hooks or MCP servers did. This is telemetry for the registry maintainers and needs no consent. Skip it when the registry was unreachable.
 6. When the search tool is unavailable or every call errors, the registry is unreachable: return `### No proposal` with `Registry: unreachable`. When every technology kept nothing, return `### No proposal` with one reason per technology.
 
@@ -49,7 +49,7 @@ Install mode:
    A non-zero exit is recorded against each name in that call; the rest of the install continues with what succeeded.
 
 3. The agent file. Exactly one file is the role's agent after this step, and it carries the installed skills:
-   - When a registry agent installed: it is the role's agent, and the CLI wrote it to `<agentsDir>/<agent name>.md`. Read that file, add the installed skill names to its frontmatter `skills:` list (create the list when the file has none), make sure the frontmatter carries `disallowedTools: Agent`, and write it back with nothing else changed.
+   - When a registry agent installed (the user chose it instead of the container): it is the role's agent, and the CLI wrote it to `<agentsDir>/<agent name>.md`. Read that file, add the installed skill names to its frontmatter `skills:` list (create the list when the file has none), make sure the frontmatter carries `disallowedTools: Agent`, and write it back with nothing else changed.
    - When `<existingAgentPath>` was given: the same, on that file.
    - Otherwise, when at least one skill installed, read `<templatePath>` and write `<agentsDir>/<role>.md` from it: `name` is `<role>`, `description` is `<description>`, `model: sonnet` and `effort: low` kept as the template has them, `skills:` the installed skill names, `disallowedTools: Agent` kept; the domain and the technology list from the proposal; one responsibility line per technology. When the file already exists or the template is missing, write nothing and return `### Install failed`.
    - When no registry agent installed, no existing file was given and no skill installed, write nothing and return `### Install failed`: a container with an empty `skills:` list is the defect this agent exists to prevent.
@@ -71,8 +71,8 @@ Return your result directly in your reply, under exactly one of these headers, s
 - Expertise: [the phrase you were given, verbatim]
 - Description: [one sentence saying when to delegate to this agent]
 - Skills: terraform-pro (0.82, Terraform), aws-deploy (0.71, AWS ECS)
-- Agents: none — or: aws-infra-agent (0.88, AWS) — becomes the role's agent, no container
-- Container: terraform-infra (new, skills: terraform-pro, aws-deploy) — or: none
+- Container: terraform-infra (new, skills: terraform-pro, aws-deploy)
+- Alternative: none — or: aws-infra-agent (0.88, AWS) — a registry agent the user may install instead of the container
 - Not found: Docker — 2 results, none relevant (reported)
 
 ### No proposal

@@ -3073,6 +3073,7 @@ test('every artifact-producing command writes before review, never gating the wr
     'spec.md',
     'tasks.md',
     'hire.md',
+    'dr-plan.md',
   ];
   for (const name of producers) {
     const body = readUtf8(path.join(commandsDir, name));
@@ -3233,4 +3234,109 @@ test('hire.md treats an unanswered consent gate as withheld consent', () => {
     /do not re-ask the same question as plain text/i.test(body),
     'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
   );
+});
+
+test('dr-plan.md stays read-only, never reads secret values, and plans for region loss only', () => {
+  // /awos:dr-plan runs against a live cloud account. Its whole safety model
+  // is that it only reads: a plan that applies infrastructure, fails over a
+  // resource or prints a secret value would do the damage the plan is meant
+  // to prevent. Its scope is also deliberate: in-region losses are
+  // architecture gaps, not disaster recovery.
+  const body = readUtf8(path.join(commandsDir, 'dr-plan.md'));
+  assert.ok(
+    /\*\*Read-only, always\.\*\*/.test(body),
+    'commands/dr-plan.md must keep its bold "Read-only, always." constraint — the one rule the command most needs followed'
+  );
+  assert.ok(
+    /never read a secret value/i.test(body),
+    'commands/dr-plan.md must forbid reading secret values (names only)'
+  );
+  const secretValueReads = [
+    /keyvault secret show/,
+    /get-secret-value/,
+    /secrets versions access/,
+  ];
+  for (const rx of secretValueReads) {
+    assert.ok(
+      !rx.test(body),
+      `commands/dr-plan.md must not name a secret-value read (${rx}), even as an example`
+    );
+  }
+  assert.ok(
+    /Scope: region loss only/.test(body),
+    'commands/dr-plan.md must state that it plans for region loss only, and routes in-region losses to the architecture'
+  );
+  // Plan drafting is routed by model: the design-heavy improvement plan on
+  // the stronger model, the transcription-shaped plans on a cheaper one. The
+  // routing names aliases, never version ids, so it does not go stale, and
+  // a rejected alias must fall back rather than fail the run.
+  for (const [model, effort] of [
+    ['opus', 'medium'],
+    ['fable', 'high'],
+  ]) {
+    assert.ok(
+      new RegExp('`' + model + '`\\s*\\|\\s*`' + effort + '`').test(body),
+      `commands/dr-plan.md must route a plan to model \`${model}\` at effort \`${effort}\` in its Step 4 table`
+    );
+  }
+  assert.ok(
+    !/claude-(opus|fable|sonnet|haiku)-\d/.test(body),
+    'commands/dr-plan.md must name model aliases (opus, fable), not pinned version ids that go stale'
+  );
+  assert.ok(
+    /Fallback\. If an `Agent` call is rejected for its `model` or `effort`/.test(
+      body
+    ),
+    'commands/dr-plan.md must fall back to the default model when a model or effort override is rejected'
+  );
+  // Commands in a table cell are unreadable under pressure and can't be
+  // copied cleanly; the output keeps them in fenced code blocks.
+  assert.ok(
+    /Never put a command in a table cell/.test(body),
+    'commands/dr-plan.md Writing Rule 4 must keep commands out of table cells (fenced code blocks only)'
+  );
+  assert.ok(
+    /reported by location only/.test(body),
+    'commands/dr-plan.md must report a misplaced secret by location only — never open, decode or measure it'
+  );
+  assert.ok(
+    /Never loop over every resource in the account/.test(body),
+    'commands/dr-plan.md live checks must be scoped to the environment, not swept account-wide'
+  );
+  for (const name of [
+    'dr-recovery-today-template.md',
+    'dr-improvement-plan-template.md',
+  ]) {
+    const tpl = readUtf8(path.join(templatesDir, name));
+    const cellCommands = tpl
+      .split('\n')
+      .filter((l) => l.startsWith('|') && /`\[(read-only|command)/.test(l));
+    assert.deepEqual(
+      cellCommands,
+      [],
+      `templates/${name} must not put a command placeholder in a table cell — use a fenced block below the table`
+    );
+    assert.ok(
+      /```bash\n\[read-only/.test(tpl),
+      `templates/${name} must show the check as a fenced bash block`
+    );
+  }
+  assert.ok(
+    /runs no cloud or platform command/.test(body),
+    'commands/dr-plan.md drafting subagents must work from the facts file only — live checks stay with the orchestrator'
+  );
+  for (const name of [
+    'dr-overview-template.md',
+    'dr-recovery-today-template.md',
+    'dr-improvement-plan-template.md',
+  ]) {
+    assert.ok(
+      body.includes(`.awos/templates/${name}`),
+      `commands/dr-plan.md must reference its template .awos/templates/${name}`
+    );
+    assert.ok(
+      fs.existsSync(path.join(templatesDir, name)),
+      `templates/${name} must exist — commands/dr-plan.md fills it`
+    );
+  }
 });

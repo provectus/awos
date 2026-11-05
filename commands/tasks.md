@@ -94,7 +94,7 @@ Skip this step if `SKIP_TESTS = true`.
     - [ ] **Slice N: Feature Testing & Regression**
 
       > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
-      - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with `@spec: [spec-directory]` and `@regression` if suitable for long-term regression. **[Agent: {qa-agent}]**
+      - [ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Prove each test with RED validation: temporarily revert the change it covers, watch that single test fail, restore the tree exactly, and watch it pass. Annotate each test with `@spec: [spec-directory]` and `@regression` if suitable for long-term regression. **[Agent: {qa-agent}]**
       - [ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: {qa-agent}]**
     ```
 
@@ -115,7 +115,7 @@ Skip this step if `SKIP_TESTS = true`.
       - `[ ] Verify: Run the application, drive the profile page through the available browser-automation tool (whichever the project ships — playwright-cli, cypress, the chrome MCP, etc.), confirm the correct avatar or placeholder is shown, and delete any screenshots or recordings produced during the check. **[Agent: manual-qa-expert]**`
     - `[ ] **Slice 3: Feature Testing & Regression**`
       > Verifies the whole feature end-to-end against functional-spec.md, run after all implementation slices are complete.
-      - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Write tests with RED validation (must fail before implementation is confirmed done). Annotate each test with @spec: [spec-directory] and @regression if suitable for long-term regression. **[Agent: {qa-agent}]**`
+      - `[ ] Read functional-spec.md acceptance criteria in full. Generate acceptance-level tests that verify the entire feature as a whole — not individual slices. Cover applicable layers (unit for pure logic, integration for service interactions, e2e for user flows) based on the project's testing stack. Prove each test with RED validation: temporarily revert the change it covers, watch that single test fail, restore the tree exactly, and watch it pass. Annotate each test with @spec: [spec-directory] and @regression if suitable for long-term regression. **[Agent: {qa-agent}]**`
       - `[ ] Run all generated tests. All must pass. Fix any failures before proceeding. **[Agent: {qa-agent}]**`
 
 ## Step 3b: Record Staffing Gaps

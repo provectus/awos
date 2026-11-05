@@ -2088,8 +2088,43 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
   );
 });
 
+// The better plugin has its own independent version line. Its discipline
+// is three files moving together: its plugin.json, its marketplace.json entry,
+// and this pinned literal.
+const EXPECTED_BETTER_PLUGIN_VERSION = '0.3.2';
+
+test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
+  const pluginManifest = JSON.parse(
+    readUtf8(
+      path.join(repoRoot, 'plugins', 'better', '.claude-plugin', 'plugin.json')
+    )
+  );
+  const marketplace = JSON.parse(
+    readUtf8(path.join(repoRoot, '.claude-plugin', 'marketplace.json'))
+  );
+  const entries = marketplace.plugins.filter(
+    (p) => p.name === 'better' && p.source === './plugins/better'
+  );
+  assert.equal(
+    entries.length,
+    1,
+    'marketplace.json must contain exactly one plugins entry with name="better" and source="./plugins/better" — a near-miss name or source would register a different plugin than the one this pin guards'
+  );
+  const [entry] = entries;
+  assert.equal(
+    pluginManifest.version,
+    entry.version,
+    `plugins/better/.claude-plugin/plugin.json version ("${pluginManifest.version}") must match the better marketplace entry version ("${entry.version}") — bump both together`
+  );
+  assert.equal(
+    pluginManifest.version,
+    EXPECTED_BETTER_PLUGIN_VERSION,
+    `plugins/better/.claude-plugin/plugin.json version must be "${EXPECTED_BETTER_PLUGIN_VERSION}" — the better version moves as one deliberate commit (its plugin.json + its marketplace.json entry + this pin, together) when plugin behavior changes. Got "${pluginManifest.version}"`
+  );
+});
+
 // The profiler plugin has its own independent version line, with the same
-// three-file discipline as awos: plugin.json, marketplace entry, this pin.
+// three-file discipline as awos and better: plugin.json, marketplace entry, this pin.
 const EXPECTED_PROFILER_PLUGIN_VERSION = '0.1.0';
 
 test(`profiler plugin.json version matches its marketplace entry and equals ${EXPECTED_PROFILER_PLUGIN_VERSION}`, () => {
@@ -3218,5 +3253,239 @@ test('hire.md treats an unanswered consent gate as withheld consent', () => {
   assert.ok(
     /do not re-ask the same question as plain text/i.test(body),
     'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// /better:implement — the one-command implementation experiment
+// (plugins/better/commands/implement.md): one run that splits, delegates
+// and verifies. These tests pin the contracts a prompt edit must keep.
+// ---------------------------------------------------------------------------
+// /better:implement — the one-command implementation experiment
+// (plugins/better/commands/implement.md): one run that splits, delegates
+// and verifies. These tests pin the contracts a prompt edit must keep.
+// ---------------------------------------------------------------------------
+
+const betterImplementPath = path.join(
+  repoRoot,
+  'plugins',
+  'better',
+  'commands',
+  'implement.md'
+);
+
+test('better:implement keeps run.md as the checkpoint and writes it before its one question', () => {
+  // The split is internal: the plan is never put to the user for review —
+  // the spec and tech spec are the agreement. What the user gets instead
+  // is a checkpoint, run.md in the spec directory, written before the only question the split asks (the
+  // staffing gap), so a dismissed question under `claude -p` still leaves
+  // the run resumable.
+  const body = readUtf8(betterImplementPath);
+  const { data, hasFrontmatter } = parse(body);
+  assert.ok(
+    hasFrontmatter && typeof data.description === 'string',
+    'plugins/better/commands/implement.md must carry frontmatter with a description — the slash-command palette shows it'
+  );
+  assert.ok(
+    body.includes('`run.md`'),
+    'better:implement must keep its checkpoint in `run.md` inside the spec directory'
+  );
+  const step2 = body.split(/### Step 2/)[1].split(/### Step 3/)[0];
+  const writeAt = step2.indexOf('Write `run.md`');
+  const askAt = step2.indexOf('AskUserQuestion');
+  assert.ok(
+    writeAt !== -1 && askAt !== -1 && writeAt < askAt,
+    'better:implement Step 2 must write run.md before the staffing-gap AskUserQuestion — a dismissed pre-write question ends an unattended run with no checkpoint'
+  );
+  assert.ok(
+    /general-purpose\*\* \(the default when unanswered/.test(step2),
+    'better:implement staffing-gap question must default to general-purpose when unanswered, with the gap kept on record'
+  );
+  assert.ok(
+    /resume/i.test(body) && /Never re-split/.test(body),
+    'better:implement must resume from an existing run.md rather than re-splitting the spec'
+  );
+});
+
+test('better:implement delegates by path and verbatim, never a re-authored brief', () => {
+  // A re-authored unit body is where fidelity to the agreement leaks. The
+  // subagent gets the paths of the three documents and the
+  // unit's run.md block copied unchanged.
+  const body = readUtf8(betterImplementPath);
+  const step3 = body.split(/### Step 3/)[1].split(/### Step 4/)[0];
+  assert.ok(
+    /by path and verbatim/.test(step3),
+    'better:implement Step 3 must compose the delegation prompt by path and verbatim'
+  );
+  for (const file of [
+    'functional-spec.md',
+    'technical-considerations.md',
+    'run.md',
+  ]) {
+    assert.ok(
+      step3.includes(`\`${file}\``),
+      `better:implement Step 3 must hand the subagent the path of ${file}`
+    );
+  }
+  assert.ok(
+    /Do not paraphrase/.test(step3),
+    'better:implement Step 3 must forbid paraphrasing the documents or re-authoring the unit'
+  );
+  for (const tag of [
+    '<scope_discipline>',
+    '<investigate_before_answering>',
+    '<use_available_skills>',
+    '<do_the_work_yourself>',
+    '<command_hygiene>',
+    '<completion_evidence>',
+    '<ask_instead_of_guessing>',
+  ]) {
+    assert.ok(
+      step3.includes(tag),
+      `better:implement Step 3 must pass the ${tag} guardrail block to every subagent`
+    );
+  }
+  assert.ok(
+    /Agent\(subagent_type=/.test(step3),
+    'better:implement Step 3 must show an explicit Agent(subagent_type=…) call so the delegation is concrete'
+  );
+  assert.ok(
+    /do not write or edit code/i.test(body),
+    'better:implement must keep the orchestrator out of the code — every change is made by a delegated subagent'
+  );
+});
+
+test('better:implement verifies against the agreement inside the loop', () => {
+  // Verification is the loop's exit criterion:
+  // each unit's criteria are checked as it completes, the whole is checked
+  // against the agreement (criteria, Out-of-Scope, the tech spec's
+  // decisions and assumptions), a failed criterion becomes one rework
+  // unit, a second failure goes to the human, and a criterion the run
+  // cannot check gets a distinguishable mark.
+  const body = readUtf8(betterImplementPath);
+  assert.ok(
+    /report is a claim, not a fact/.test(body),
+    "better:implement Step 4 must frame a subagent's report as a claim to spot-check, not a fact to relay"
+  );
+  for (const [token, why] of [
+    ['`[x]`', 'the met mark'],
+    ['`[ ]`', 'the failed mark'],
+    ['`[?]`', 'the could-not-check mark put to the human'],
+    ['Out-of-Scope', 'the boundary check'],
+    ['Assumptions recorded', "the tech spec's recorded assumptions check"],
+    ['Rework-of:', 'the rework unit shape'],
+    ['Status: Completed', 'the spec completion write'],
+    ['Status: blocked', 'the resumable stop'],
+    ['AWOS_UNATTENDED', 'the unattended defaults'],
+  ]) {
+    assert.ok(
+      body.includes(token),
+      `better:implement must carry ${token} — ${why}`
+    );
+  }
+  assert.ok(
+    /Rework, once per criterion/.test(body) && /not retried/.test(body),
+    'better:implement must bound the rework loop to one rework unit per failed criterion and put a second failure to the user'
+  );
+  assert.ok(
+    /\/awos:architecture \[what changed\]/.test(body) &&
+      /\/awos:product \[what changed\]/.test(body),
+    'better:implement Step 6 must print the /awos:architecture or /awos:product prompt when the product documents drifted, never edit them itself'
+  );
+});
+
+test('better:implement keeps the completion line the profiler reads', () => {
+  // plugins/profiler/scripts/profile-implement.mjs detects the end of an
+  // implement run by the literal first line of the report. The command and
+  // the profiler script must agree on it, or `watch` never prints RUN
+  // ENDED for a /better:implement run.
+  const body = readUtf8(betterImplementPath);
+  const profiler = readUtf8(
+    path.join(
+      repoRoot,
+      'plugins',
+      'profiler',
+      'scripts',
+      'profile-implement.mjs'
+    )
+  );
+  assert.ok(
+    body.includes('`Implementation run complete.`'),
+    'better:implement Step 7 must open its report with the literal line "Implementation run complete."'
+  );
+  assert.ok(
+    profiler.includes('Implementation run complete'),
+    'plugins/profiler/scripts/profile-implement.mjs must still match "Implementation run complete" — the join key with better:implement and core implement.md'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// The /awos:tech hire step (commands/tech.md Step 5): search once per
+// technology, one consent per role, install, patch the coverage report.
+// ---------------------------------------------------------------------------
+
+const TECH_PATH = path.join(commandsDir, 'tech.md');
+
+test('/awos:tech hires for the gaps the spec leaves, on consent, after the deliverable is written', () => {
+  const body = readUtf8(TECH_PATH);
+  const step5 = body.split(/### Step 5/)[1];
+  assert.ok(step5, 'commands/tech.md must keep a "### Step 5" section');
+  const searchAt = step5.indexOf('`search_capabilities`');
+  const askAt = step5.indexOf('AskUserQuestion');
+  const installAt = step5.indexOf('@provectusinc/awos-recruitment');
+  assert.ok(
+    searchAt !== -1 &&
+      askAt !== -1 &&
+      installAt !== -1 &&
+      searchAt < askAt &&
+      askAt < installAt,
+    'commands/tech.md Step 5 must order the hire step registry search → consent AskUserQuestion → install CLI — an install before consent would change the project without agreement'
+  );
+  assert.ok(
+    body.indexOf('### Step 4') < body.indexOf('### Step 5'),
+    'commands/tech.md must write technical-considerations.md (Step 4) before the hire step (Step 5) — a dismissed consent must never cost the deliverable'
+  );
+  for (const [token, why] of [
+    ['**extension**', 'a technology inside a covered stack extends that agent'],
+    ['**new role**', 'a technology with no covering agent gets a container'],
+    [
+      '**alternative**',
+      'a matching registry agent is only an alternative to the container',
+    ],
+    ['**Install**', 'the consent option that installs'],
+    [
+      '**Install the registry agent instead**',
+      'the consent option for the alternative',
+    ],
+    ['**Skip**', 'the consent default'],
+    [
+      '/awos:hire cover [directory-name]',
+      'the fallback when the registry is not connected or a proposal is skipped',
+    ],
+    ['AWOS_UNATTENDED', 'an unattended run installs nothing'],
+    ['report_gap', 'unmet searches are reported to the registry'],
+    ['agent-template.md', 'a new container comes from the project template'],
+    ['hired-agents.md', 'the coverage report is patched'],
+    ['skills: none found', 'a new role is proposed even without skills'],
+    ['Never `expert`', 'no persona in a role name'],
+    [
+      'filling the placeholders and nothing more',
+      'no persona and no copied skill content in the body',
+    ],
+    [
+      'append the technologies this install covers to its `description`',
+      'an extended agent advertises what it now covers',
+    ],
+  ]) {
+    assert.ok(
+      step5.includes(token),
+      `commands/tech.md Step 5 must carry ${token} — ${why}`
+    );
+  }
+  assert.ok(
+    /never offer or install them here/.test(step5) &&
+      /hook/i.test(step5) &&
+      /MCP/.test(step5),
+    'commands/tech.md Step 5 must never offer hooks or MCP servers — they run on their own and need the consent gates of /awos:hire'
   );
 });

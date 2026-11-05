@@ -1,6 +1,6 @@
 # Better Plugin (experimental)
 
-The `better` namespace hosts experimental, higher-rigor forks of core AWOS commands. The current one is `/better:implement`: one command that takes an agreed spec from its technical plan to verified completion. It splits the work into units, delegates each, keeps its state in a `run.md` checkpoint next to the spec, and does not call the spec done until every acceptance criterion has been checked against the agreement.
+The `better` namespace holds experimental, higher-rigor forks of core AWOS commands. It holds one command, `/better:implement`: one command that takes an agreed spec from its technical plan to verified completion. It splits the work into units, delegates each, keeps its state in a `run.md` checkpoint next to the spec, and does not call the spec done until every acceptance criterion has been checked against the agreement.
 
 ## Install
 

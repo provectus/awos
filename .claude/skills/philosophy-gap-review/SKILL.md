@@ -26,18 +26,23 @@ Scope notes are free text and become the **Scope rule** block in every reviewer 
 
 - `judge the spec step only via /better:spec; core commands/spec.md is retired; do not list "two spec commands coexist"` (2026-09-18, second run)
 - none (2026-09-18, first run — whole branch, every command judged)
+- `review PR #200: judge the diff against main and the seams it touches; pre-existing gaps out of scope unless made worse; hire (D-7), the roadmap compatibility read, and core/better coexistence are decided` (2026-10-07, third run — a PR, not a branch)
+
+Scope notes narrow; they must not prime. A note like "check the principle each PR removal cites" tells every reviewer where to look and what to find, and three reviewers then agree on the same reading of the same sentence. Put such a check in one reviewer's lens (below), never in the shared scope rule.
 
 Read `docs/2.0/roadmap-2.0.md` yourself before spawning, so you can say at merge time which concerns a phase already targets.
 
 ## Step 1 — spawn three reviewers in one message
 
-Three `Agent` calls, `subagent_type: general-purpose`, in a single message so they run concurrently. Identical prompts except nothing — the independence comes from separate contexts, not from different briefs. The prompt, verbatim apart from the two bracketed slots:
+Three `Agent` calls, `subagent_type: general-purpose`, in a single message so they run concurrently. Separate contexts give independent *tracing*, not independent *framing*: three copies of one prompt converge on the same salient reading, so a 3-of-3 count measures how visible a gap is to that prompt, not how true it is (2026-10-07: the top 3-of-3 concern was wrong). Each reviewer therefore gets one different **lens** sentence — the rest of the prompt stays identical. Pick three from: the seams (what each command hands to the next and whether the next honours it); the removals (does what was taken out leave a promise unkept, and does the stated principle actually support the removal); the agreement cost (would the missing confirmation be a decision or just more content to review — the direction doc's own regression); the unattended path (`claude -p`, dismissed questions, empty prompts); the upgrade (what an existing 1.x project is left holding). The prompt, verbatim apart from the three bracketed slots:
 
 > You are an experienced Tech Lead who has passed CCAR-F and CCAR-P, has built multiple Agentic SDLC solutions and frameworks, and balances common sense, critical thinking, and perfectionism. You are reviewing the `awos` repository at [repo path] on the current branch [branch] (do not switch branches, do not modify any files, do not run the installer).
 >
 > **Goal.** Find ALL gaps between the awos philosophy and the actual state of awos on this branch. A gap is any place where what the repo ships (prompts, wrappers, templates, scripts, plugins, installer, docs, tests) does not keep the promise the philosophy makes, or actively regresses against one of the five directions.
 >
 > **Scope rule.** [scope notes, or omit the block]
+>
+> **Lens.** Find every gap, but look hardest at [the lens sentence] — the other reviewers lead with other angles.
 >
 > **Step 1 — read the philosophy in full:** docs/philosophy.md, docs/direction.md, docs/rationale.md, README.md, CLAUDE.md. We want your independent judgment, not an echo of any earlier review. You MAY read docs/2.0/roadmap-2.0.md and docs/2.0/upgrading-1.x.md for what is already planned, but plans are not closures: a gap that is only "scheduled" is still a gap and must be listed (note the planned closure).
 >
@@ -52,8 +57,9 @@ Each run costs roughly 250k tokens per reviewer and 6–7 minutes wall clock. Wa
 1. Cluster the three lists by underlying defect, not by title. Two reviewers describing one seam from two principles are one gap. A facet only one reviewer saw (for example "provenance lives only in the ephemeral view-model") stays its own entry if it has its own evidence.
 2. Count **Raised by** (1, 2, or 3 of 3). Order the merged list by count, then by severity within a count.
 3. Keep every citation from every reviewer for a cluster; do not re-verify this run's line numbers individually, say so in the recap.
-4. Cross-reference against `docs/2.0/roadmap-2.0.md`: which concerns a phase or decision point already targets, which have no home in the plan.
-5. Present the merged list in chat and stop. Write nothing to the repository.
+4. Spot-check before presenting. For every concern rated high, and every 3-of-3 regardless of severity, open the files it cites (one `grep -n` / `sed -n` each) and confirm the claim, not the line number: does the promise really go unkept, or does another file keep it? Test a "confirmation was removed" concern against the agreement direction's regression ("more content to review without more decisions to make") and a "capability was removed" concern against whether the capability was serving the principle at all. Withdraw or downgrade in the merge, and say in the recap which concerns moved and why. The case that forced this: on 2026-10-07 all three reviewers rated "retiring the roadmap removed the flow's only record of shipped work" high; `commands/verify.md` writes `Status: Completed` on every spec, so the record was never the roadmap.
+5. Cross-reference against `docs/2.0/roadmap-2.0.md`: which concerns a phase or decision point already targets, which have no home in the plan.
+6. Present the merged list in chat and stop. Write nothing to the repository.
 
 ## Step 3 — the report
 

@@ -3522,8 +3522,16 @@ test('hire agent offers skills and registry agents only, in two modes, with pars
     'claude/agents/hire.md must forbid `expert` in role names — an agent is a container for skills, not a persona'
   );
   assert.ok(
-    /empty `skills:` list is the defect/.test(body),
-    'claude/agents/hire.md must refuse to write a container agent with an empty skills: list — frontmatter skills are the whole point of the container'
+    /filling the placeholders and nothing more/.test(body) &&
+      /append the technologies this install covers to its `description`/.test(
+        body
+      ),
+    'claude/agents/hire.md must fill the template placeholders and nothing more (no persona, no copied skill content) and, on an extension, append the covered technologies to the agent description — the caller matches stacks against descriptions'
+  );
+  assert.ok(
+    /Skills: none found/.test(body) &&
+      /when nothing new is left to add, there is no proposal/.test(body),
+    'claude/agents/hire.md must still propose a new role when the registry has no skill for it, and propose nothing for an extension with nothing to add — a bare role still gives tasks an agent to be assigned to'
   );
   assert.ok(
     /listed as an alternative, never proposed in its place/.test(body) &&

@@ -79,7 +79,12 @@ Follow this process precisely.
     - Example: "For the database, the functional spec implies we need to store the image location. I'll **assume** we should add a new `avatar_url` (TEXT) column to the `users` table. **Is that assumption correct?**"
     - Example: "For the API, I'll propose a `POST /api/v1/users/me/avatar` endpoint that accepts a multipart/form-data request. **Does that fit the requirements?**"
 
-3.  **Risk and Impact Analysis:**
+3.  **Component Diagram (when boundaries are crossed):**
+    - When the change touches more than one component, service, or datastore, add the template's `Component Diagram (C4)` subsection: a Mermaid `flowchart` with C4 styling (box = component, cylinder = datastore) showing only the touched components inside their containers, new components marked, and each edge labeled with what flows across it. Scope it to the affected containers — the diagram doubles as the change's blast-radius statement for `/awos:tasks` and `/awos:implement`.
+    - Skip the subsection for single-component changes; a diagram of one box is noise.
+    - Draw only what the spec and the architecture document evidence — the diagram restates the plan, it never introduces structure the prose does not.
+
+4.  **Risk and Impact Analysis:**
     - Proactively identify potential issues and propose solutions.
     - Example: "A key risk here is handling large or malicious file uploads. I will add a 'Risk & Mitigation' note to include server-side validation of file type and size, and to process uploads asynchronously. Is there anything else we should be concerned about?"
 

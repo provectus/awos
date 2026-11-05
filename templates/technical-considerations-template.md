@@ -39,6 +39,7 @@ _Detail the technical implementation. Include descriptions of any changes to the
 - **API Contracts:** _Detail any new or modified API endpoints (`METHOD /path`)._
 - **Component Breakdown:** _Describe new UI or backend components to be built._
 - **Logic / Algorithm:** _Explain any complex business logic or algorithms._
+- **Component Diagram (C4):** _When the change crosses component or service boundaries, draw the touched components inside their containers as a Mermaid flowchart with C4 styling (box = component, cylinder = datastore), mark new components, and label each edge with what flows across it. Scope it to the affected containers only — everything outside the boxes is out of scope for the change. Skip this subsection for single-component changes._
 
 ---
 

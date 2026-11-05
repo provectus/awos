@@ -127,6 +127,8 @@ Currently shipped fixtures:
 
 Adding a new fixture: create `tests/fixtures/<name>/`, optionally with a `before/` subtree, plus an `expected-after.json` manifest. The harness picks it up automatically.
 
+Directories prefixed `eval-` are **not** installer fixtures and are skipped by this harness: they are input projects for the C4 eval campaigns (`tools/c4-evals/`), each a complete synthetic multi-service codebase with arm-variant context documents and grader manifests. Their contracts (arm B contains arm A verbatim, manifests regenerate byte-identically, feature tests fail pre-implementation) live in `tests/c4-evals.test.js`.
+
 Cost: ~65 ms for all six.
 
 ## Behavioral checks are manual

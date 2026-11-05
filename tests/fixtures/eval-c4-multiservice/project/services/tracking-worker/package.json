@@ -1,0 +1,6 @@
+{
+  "name": "@shiplog/tracking-worker",
+  "private": true,
+  "description": "Background worker maintaining shipment tracking records.",
+  "main": "src/worker.js"
+}

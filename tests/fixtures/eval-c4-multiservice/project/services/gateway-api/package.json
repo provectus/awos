@@ -1,0 +1,6 @@
+{
+  "name": "@shiplog/gateway-api",
+  "private": true,
+  "description": "Public HTTP API: orders, shipments, carrier webhooks.",
+  "main": "src/server.js"
+}

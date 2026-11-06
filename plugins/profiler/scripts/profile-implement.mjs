@@ -151,6 +151,22 @@ function isPrompt(row) {
   if (c.includes('<task-notification>')) return false;
   if (c.includes('SYSTEM NOTIFICATION')) return false;
   if (c.startsWith('[Request interrupted')) return false;
+  // Background teammates report back as user-role messages; they are agent
+  // traffic, not the user typing.
+  if (c.includes('<teammate-message')) return false;
+  // The host echoes back the output of a local slash command such as /login
+  // and of a `!` shell command; only the command the user typed is a prompt.
+  if (
+    /^\s*<(local-command-(stdout|stderr|caveat)|bash-(stdout|stderr))>/.test(c)
+  )
+    return false;
+  // Usage-limit notices are injected by the host, not typed by the user.
+  if (
+    /^\s*\[?(Usage limit reached|Earlier usage-limit notes|Your claude\.ai usage limit)/i.test(
+      c
+    )
+  )
+    return false;
   return true;
 }
 
@@ -163,12 +179,28 @@ function isImplementPrompt(row) {
   );
 }
 
+// A prompt that starts another AWOS command ends the current run. Any other
+// prompt — an answer, "continue", /login after an expired session — happens
+// inside the run and is recorded as an intervention.
+function isAwosCommandPrompt(row) {
+  const c = content(row);
+  return /<command-name>\/awos:/.test(c) || /^\s*\/awos:/.test(c);
+}
+
+// implement.md asks for "All tasks complete (100%). Run /awos:verify …" or
+// "Implementation run complete. N/M tasks done", but models paraphrase it
+// ("All tasks complete.", "**All 50 tasks complete (100%)**") or drop the
+// first sentence and keep only the closing pointer to /awos:verify, which
+// implement.md gives only when every task is done. The "All … tasks
+// complete" phrase is matched at the start of a line, so prose like "once
+// all tasks complete" does not end the run.
+const RUN_END_RE =
+  /Implementation run complete|(?:^|\n)\s*(?:\*\*)?All (?:\d+ )?(?:\w+ )?tasks (?:are )?complete\b|\/awos:verify\b/;
+
 function runEndedText(row) {
   if (row.type !== 'assistant') return null;
   const t = textOf(row);
-  if (/Implementation run complete|All tasks complete \(100%\)/.test(t))
-    return t;
-  return null;
+  return RUN_END_RE.test(t) ? t : null;
 }
 
 // ---------- session discovery ----------
@@ -193,6 +225,7 @@ export function findRuns(mainRows) {
     let end = mainRows[mainRows.length - 1].__t;
     let endReason = 'session end';
     let completedText = null;
+    const interventions = [];
     for (let j = i + 1; j < mainRows.length; j++) {
       const r = mainRows[j];
       const done = runEndedText(r);
@@ -202,11 +235,20 @@ export function findRuns(mainRows) {
         endReason = 'completed';
         break;
       }
-      if (isPrompt(r)) {
+      if (!isPrompt(r)) continue;
+      if (isAwosCommandPrompt(r)) {
         end = r.__t;
-        endReason = 'next user prompt';
+        endReason = 'next command';
         break;
       }
+      // The run waited on the user from its last line to this prompt; a gap
+      // over IDLE_GAP_SEC is idle and already excluded everywhere else.
+      const waitSec = (r.__t - mainRows[j - 1].__t) / 1000;
+      interventions.push({
+        at: r.__t,
+        text: String(content(r)).replace(/\s+/g, ' ').slice(0, 120),
+        waitSec: waitSec > IDLE_GAP_SEC ? 0 : waitSec,
+      });
     }
     runs.push({
       index: runs.length + 1,
@@ -216,6 +258,7 @@ export function findRuns(mainRows) {
       endReason,
       completed: Boolean(completedText),
       completedText,
+      interventions,
       prompt: String(content(mainRows[i])).replace(/\s+/g, ' ').slice(0, 160),
     });
   }
@@ -452,8 +495,18 @@ function machineActiveDuring(projectsDir, fromMs, toMs, excludeFile) {
 
 export function profileRun(ctx, run) {
   const { mainRows, agents, now, mainModel } = ctx;
-  const live = !run.completed && run.endReason === 'session end';
-  const end = live ? now : Math.min(run.end, now);
+  // A run with no completion line and no later command is live only while
+  // something is still writing. Background subagents can outlive the
+  // orchestrator's last line, so the last activity is the latest line in
+  // the main transcript or in any subagent started within the run.
+  const openEnded = !run.completed && run.endReason === 'session end';
+  const lastActivity = openEnded
+    ? agents
+        .filter((a) => a.first !== null && a.first >= run.start)
+        .reduce((t, a) => Math.max(t, a.last), run.end)
+    : run.end;
+  const live = openEnded && (now - lastActivity) / 1000 < IDLE_GAP_SEC;
+  const end = live ? now : Math.min(lastActivity, now);
   const inRun = agents.filter((a) => a.first >= run.start && a.first <= end);
   const byId = new Map(inRun.map((a) => [a.id, a]));
   const byToolUse = new Map(
@@ -572,6 +625,8 @@ export function profileRun(ctx, run) {
     orchestratorModelSec: orch.modelSec,
     orchestratorToolSec: orch.toolSec,
     orchestratorIdleSec: orch.idleSec,
+    userPrompts: run.interventions.length,
+    userWaitSec: run.interventions.reduce((s, x) => s + x.waitSec, 0),
     turns,
     secPerTurn: turns ? sum(working, 'modelSec') / turns : 0,
     tokensPerTurn: turns ? sum(working, 'outputTokens') / turns : 0,
@@ -601,6 +656,7 @@ export function profileRun(ctx, run) {
   return {
     run,
     live,
+    end,
     totals,
     agents: inRun,
     working,
@@ -674,12 +730,20 @@ export function renderRun(p, ctx) {
   } = p;
   const out = [];
   out.push(
-    `## Implement run ${run.index} — ${iso(run.start)} → ${iso(run.end)} (${hrs(totals.wallSec)})`
+    `## Implement run ${run.index} — ${iso(run.start)} → ${iso(p.end)} (${hrs(totals.wallSec)})`
   );
   out.push('');
   out.push(
-    `Session \`${ctx.session.id}\`, orchestrator model \`${ctx.mainModel || '?'}\`. ${run.completed ? "Completed with the orchestrator's completion line" : run.endReason === 'next user prompt' ? 'Ended by the next user prompt, no completion line' : 'Still running or ended without a completion line'}.`
+    `Session \`${ctx.session.id}\`, orchestrator model \`${ctx.mainModel || '?'}\`. ${run.completed ? "Completed with the orchestrator's completion line" : run.endReason === 'next command' ? 'Ended by the next AWOS command, no completion line' : p.live ? 'Still running' : 'Ended without a completion line; measured to the last transcript activity'}.`
   );
+  if (run.interventions.length) {
+    out.push('');
+    out.push(
+      `User prompts inside the run: ${run.interventions.length} (${run.interventions
+        .map((x) => `"${x.text.slice(0, 40)}"`)
+        .join(', ')}).`
+    );
+  }
   out.push('');
   out.push('### Where the time went');
   out.push('');
@@ -698,6 +762,9 @@ export function renderRun(p, ctx) {
   );
   out.push(
     `| Orchestrator waiting on its own tools | ${hrs(totals.orchestratorToolSec)} |`
+  );
+  out.push(
+    `| Waiting on the user (${totals.userPrompts} prompts inside the run) | ${hrs(totals.userWaitSec)} |`
   );
   out.push(
     `| Idle gaps over ${IDLE_GAP_SEC / 60} min (main session) | ${hrs(totals.orchestratorIdleSec)} |`
@@ -857,8 +924,9 @@ function cmdReport(args) {
       run: {
         ...p.run,
         start: new Date(p.run.start).toISOString(),
-        end: new Date(p.run.end).toISOString(),
+        end: new Date(p.end).toISOString(),
       },
+      live: p.live,
       totals: p.totals,
       concurrency: p.concurrency,
       bigGaps: p.bigGaps.map((g) => ({
@@ -959,7 +1027,7 @@ function cmdWatch(args) {
         `IDLE orchestrator and every subagent silent for ${min(mainQuiet)} — the run may be waiting on you or stopped`
       );
     }
-    const ended = run.completed || run.endReason === 'next user prompt';
+    const ended = run.completed || run.endReason === 'next command';
     if (Date.now() - lastSummary > 1800 * 1000 || ended) {
       lastSummary = Date.now();
       const t = p.totals;
@@ -969,7 +1037,7 @@ function cmdWatch(args) {
     }
     if (ended) {
       line(
-        `RUN ENDED ${run.completed ? run.completedText.replace(/\s+/g, ' ').slice(0, 160) : 'by the next user prompt'}`
+        `RUN ENDED ${run.completed ? run.completedText.replace(/\s+/g, ' ').slice(0, 160) : 'by the next AWOS command'}`
       );
       return true;
     }

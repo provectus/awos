@@ -2112,7 +2112,7 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
 
 // The profiler plugin has its own independent version line, with the same
 // three-file discipline as awos: plugin.json, marketplace entry, this pin.
-const EXPECTED_PROFILER_PLUGIN_VERSION = '0.1.0';
+const EXPECTED_PROFILER_PLUGIN_VERSION = '0.2.0';
 
 test(`profiler plugin.json version matches its marketplace entry and equals ${EXPECTED_PROFILER_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(

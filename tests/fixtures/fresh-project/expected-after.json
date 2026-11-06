@@ -9,6 +9,11 @@
   ".awos/templates/roadmap-template.md": { "exists": false },
   ".awos/templates/agent-template.md": { "exists": true },
   ".awos/scripts/create-spec-directory.sh": { "exists": true },
+  ".awos/scripts/render-spec.mjs": { "exists": true },
+  ".claude/agents/awos/spec-verifier.md": {
+    "exists": true,
+    "contains": "tools: Read"
+  },
   ".claude/commands/awos/architecture.md": { "exists": true },
   ".claude/commands/awos/implement.md": {
     "exists": true,

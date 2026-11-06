@@ -162,7 +162,7 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
 
 ## Step 6: Generate or Update Agent Files
 
-1.  Read the agent template from `.awos/templates/agent-template.md`.
+1.  Read the agent template from `.awos/templates/agent-template.md`. An agent file is a container for a role. The frontmatter sets the name, model, effort, tool bounds, and the `skills:` list; the body names the role, its scope, and its responsibilities. The knowledge of each technology lives in the skills, not in the body. Do not write the body as an expert persona, and do not copy skill content into it.
 2.  Ensure `.claude/agents/` exists; create it if it does not.
 3.  For **Missing** roles:
     - If a registry agent was successfully installed for this role in Step 5, skip generation — the installed agent already covers the role.
@@ -170,17 +170,17 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
       - `[agent-name]` → the kebab-case role name
       - `[When Claude should delegate to this agent]` → trigger phrasing based on domain and technologies
       - `[domain]` → the domain name (e.g., "frontend", "backend", "infrastructure")
-      - `[technology list]` → comma-separated list of technologies for this domain
+      - `[technology list]` → comma-separated list of technologies for this domain, taken from the architecture
+      - `skills` → every skill installed in Step 5 for this role's technologies. A role whose searches found no skill still gets an agent file with `skills: []`; its technologies go to the Step 7 table.
       - `[Responsibility aligned with the agent's domain]` → specific responsibilities derived from the architecture
       - `model` and `effort` → keep the template's `sonnet` and `low`. An agent file that omits them inherits the orchestrator's model and effort level, which is what makes a routine implementation task think for minutes on a model priced for hard reasoning. Raise either one only for a role whose tasks are genuinely reasoning-heavy, and name that role when you show the file for review.
-        Add any installed skills to the `skills` list.
-4.  For **Partially Covered** roles: read the existing agent file and append newly installed skills to its `skills` list.
+4.  For **Partially Covered** roles: read the existing agent file and append newly installed skills to its `skills` list. Leave the body as it is unless the user asks for a change.
 5.  For every agent file this run installed from the registry or generated — and for every existing file in `.claude/agents/` that lacks it — ensure the frontmatter carries `disallowedTools: Agent`. `/awos:implement` routes each task to one specialist; a specialist that can spawn agents tends to forward its brief instead of doing it, adding a hop and no work. Keep the `Agent` tool only for an agent whose description names it as a coordinator, and say so in the review.
 6.  **Write the agent files, then show each generated or updated file to the user for review** and apply any adjustments they ask for. Writing before the review is safe here: an agent file is reversible — re-run `/awos:hire` to revise it, or delete it.
 
 ## Step 7: Warn About Missing Skills
 
-1.  Collect technologies or skills that were not found on the MCP server (server unavailable, or no results).
+1.  Collect the roles whose search did not help: the server was unavailable, returned no results, or returned results that did not fit the role (a different technology, or an MCP server or hook when a skill or agent for the role was needed).
 2.  If there are gaps, show the user a warning table:
 
     | Missing Skill       | For Agent        | Impact                                         |
@@ -188,7 +188,8 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
     | Terraform expertise | `aws-infra`      | Agent will use general knowledge for IaC tasks |
     | FastAPI patterns    | `python-backend` | Agent will use general Python knowledge        |
 
-3.  Advise the user that the generated agents will work using general knowledge, but custom skills and agents in `.claude/skills/` and `.claude/agents/` will improve results for the gaps above.
+3.  Report each row to the registry so its maintainers can see what is missing. Call the `awos-recruitment` server's `report_gap` tool once per row, in the same parallel batch, with the exact search text from Step 4 as `query`, the names that search returned as `offered`, the agent name as `needed_for`, the gist of the Impact column as `note`, and one `reason`: `no_results` when the search returned nothing, `not_relevant` when it returned a different technology, `wrong_type` when it returned an MCP server or hook where a skill or agent was needed. The call records telemetry only; it changes nothing in the project and needs no confirmation. Skip it when the server was unavailable in Step 4, since there is nothing to report to.
+4.  Advise the user that the generated agents will work using general knowledge, but custom skills and agents in `.claude/skills/` and `.claude/agents/` will improve results for the gaps above.
 
 ## Step 8: Write Coverage Report
 

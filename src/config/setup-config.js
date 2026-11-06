@@ -66,10 +66,22 @@ const copyOperations = [
     manualUpdateUrl:
       'https://github.com/provectus/awos/tree/main/claude/commands',
   },
-  // Note: `.claude/agents/` is intentionally NOT a copy destination. It is the
-  // user's customization area (project-local subagents). AWOS-shipped agents
-  // (e.g. `testing-expert`) are hired on demand via `awos-recruitment`, so the
-  // installer must not silently overwrite anything users put there.
+  {
+    source: 'claude/agents',
+    destination: '.claude/agents/awos',
+    patterns: ['*'],
+    description: 'AWOS subagents',
+    // `.claude/agents/` is the user's customization area (project-local
+    // subagents, including the specialists `/awos:hire` installs there), so
+    // the installer never writes into its root. The agents AWOS itself ships
+    // (e.g. the blind `spec-verifier` that `/awos:spec` dispatches) land in
+    // the `awos/` subfolder — Claude Code scans `.claude/agents/` recursively
+    // and identifies an agent by its `name` frontmatter, not its path — and
+    // get the same preserve-on-update treatment as the command wrappers.
+    preserveOnUpdate: true,
+    manualUpdateUrl:
+      'https://github.com/provectus/awos/tree/main/claude/agents',
+  },
 ];
 
 module.exports = {

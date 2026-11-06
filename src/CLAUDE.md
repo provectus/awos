@@ -53,8 +53,9 @@ From `config/setup-config.js`:
 | `templates/`       | `.awos/templates/`       | no               |
 | `scripts/`         | `.awos/scripts/`         | no               |
 | `claude/commands/` | `.claude/commands/awos/` | **yes**          |
+| `claude/agents/`   | `.claude/agents/awos/`   | **yes**          |
 
-`.claude/agents/` is intentionally **not** a copy destination — it is the user's customization area for project-local subagents. AWOS-shipped agents (e.g. `testing-expert`) ride in via `awos-recruitment` on demand, so the installer never auto-populates this directory.
+The root of `.claude/agents/` is the user's customization area for project-local subagents — the specialists `/awos:hire` installs via `awos-recruitment` live there, and the installer never writes into it. The agents AWOS itself ships (today the blind `spec-verifier` that `/awos:spec` dispatches) go into the `awos/` subfolder, which Claude Code scans like any other (agents are identified by their `name` frontmatter, not their path), and get the same preserve-on-update treatment as the command wrappers.
 
 **Why the difference?**
 
@@ -67,11 +68,11 @@ Operations marked `preserveOnUpdate: true` run a conflict scan in `file-copier.j
 
 **`--dry-run`** — Shows preview of what will be updated without making changes.
 
-**`--overwrite`** — Forces overwrite of `.claude/commands/awos/*` even when those wrappers already exist. Use in CI or scripted reinstalls when you intentionally want a fresh sync.
+**`--overwrite`** — Forces overwrite of `.claude/commands/awos/*` and `.claude/agents/awos/*` even when those files already exist. Use in CI or scripted reinstalls when you intentionally want a fresh sync.
 
-**`--no-overwrite`** — Explicit opt-out from overwriting `.claude/commands/awos/*`. Same effect as the safe default for non-TTY runs.
+**`--no-overwrite`** — Explicit opt-out from overwriting `.claude/commands/awos/*` and `.claude/agents/awos/*`. Same effect as the safe default for non-TTY runs.
 
-Files under `.awos/` are updated unconditionally — these are framework internals. Files under `.claude/commands/awos/` are the user's customization layer; the installer prompts before overwriting them when they already exist. In non-interactive runs (no TTY), the default is **preserve** to avoid silently clobbering user edits — pass `--overwrite` to override.
+Files under `.awos/` are updated unconditionally — these are framework internals. Files under `.claude/commands/awos/` and `.claude/agents/awos/` are the user's customization layer; the installer prompts before overwriting them when they already exist. In non-interactive runs (no TTY), the default is **preserve** to avoid silently clobbering user edits — pass `--overwrite` to override.
 
 ## Common Modifications
 

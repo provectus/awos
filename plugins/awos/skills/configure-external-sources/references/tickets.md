@@ -9,7 +9,7 @@ Known tools and access methods for ticket and project management platforms. The 
 **MCP Server — Atlassian Remote MCP**
 
 - Type: Remote (cloud-hosted by Atlassian)
-- Install: `claude mcp add --transport http atlassian https://mcp.atlassian.com/v1/mcp`
+- Install: `claude mcp add --scope project --transport http atlassian https://mcp.atlassian.com/v1/mcp`
 - Auth: OAuth 2.1 — a browser window opens for consent on first use. Alternatively, use API token auth (generate at https://id.atlassian.com/manage-profile/security/api-tokens).
 - Covers: Jira and Confluence from the same MCP server. If Confluence is also configured, the same server handles both.
 - Verify: Search for issues in a known project using JQL.

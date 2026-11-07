@@ -172,8 +172,16 @@ Then self-review the full draft end to end. For every sentence, ask: "Would this
 ### Step 7: File Generation
 
 1. Write `functional-spec.md` into the spec directory allocated in Step 2, filling the template at `.awos/templates/functional-spec-template.md`.
-2. Update `research-notes.md` with any findings synthesis reshaped and with the final state of the unresolved conflicts.
-3. Write without waiting for approval — a spec is reversible (re-run this command to revise or amend), and open questions are already captured as `[NEEDS CLARIFICATION: …]` markers, so the deliverable is never gated behind a confirmation an unattended run cannot answer.
+2. Lint the saved file right after the write:
+
+   ```bash
+   node ".awos/scripts/lint-spec.mjs" "context/spec/[index]-[short-name]"
+   ```
+
+   Report its output. The lint is a report, never fatal: if `node` is missing (`command -v node`) or the script errors, say the lint was skipped and why, and continue. Act on its findings by kind. `criterion-shape` (a criterion with no single sentence carrying `when` before `then`) and `requirement-without-criteria` are mechanical errors — fix them in the file and re-run the lint before Step 8. `unresolved-marker` errors are expected at this point: Step 9 resolves the markers, so leave them. `weak-word` warnings are the Step 6 self-review list applied to the saved text — treat each like the self-review did: a number in user-perceivable terms, or a `[NEEDS CLARIFICATION: …]` marker when the user has not decided the value.
+
+3. Update `research-notes.md` with any findings synthesis reshaped and with the final state of the unresolved conflicts.
+4. Write without waiting for approval — a spec is reversible (re-run this command to revise or amend), and open questions are already captured as `[NEEDS CLARIFICATION: …]` markers, so the deliverable is never gated behind a confirmation an unattended run cannot answer.
 
 ### Step 8: Blind Verification
 
@@ -238,4 +246,4 @@ The spec content is now final for this run, so render the human-facing review pa
 
    This runs on every path — offer declined, `Artifact` tool absent, unattended run, render failed, or published. The view-model holds the spec's content; it does not belong in shared temporary storage once the run is done.
 
-5. Report: all three saved paths, the artifact URL if one was published, any research lane that was `SKIPPED`, `NOT CONFIGURED`, or `MANUAL SOURCES ONLY` (configured documentation sources exist but all are `Access: manual`, so no agent ran — the user was invited to paste from them in Step 9), any verifier findings left unresolved, any `[NEEDS CLARIFICATION: …]` markers left in the spec, and the next command: `/awos:tech`. Note that the HTML is a point-in-time snapshot stamped with its generation date — it does not update when the spec is later edited or verified.
+5. Report: all three saved paths, the Step 7 lint verdict (or that it was skipped), the artifact URL if one was published, any research lane that was `SKIPPED`, `NOT CONFIGURED`, or `MANUAL SOURCES ONLY` (configured documentation sources exist but all are `Access: manual`, so no agent ran — the user was invited to paste from them in Step 9), any verifier findings left unresolved, any `[NEEDS CLARIFICATION: …]` markers left in the spec, and the next command: `/awos:tech`. Note that the HTML is a point-in-time snapshot stamped with its generation date — it does not update when the spec is later edited or verified.

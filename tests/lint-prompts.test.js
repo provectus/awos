@@ -1169,6 +1169,9 @@ const SPEC = {
   renderer: 'node ".awos/scripts/render-spec.mjs"',
   rendererContract:
     '/awos:spec must run the renderer the installer copies to .awos/scripts/ — any other path is not installed',
+  linter: 'node ".awos/scripts/lint-spec.mjs"',
+  linterContract:
+    '/awos:spec must lint the saved functional-spec.md with the script the installer copies to .awos/scripts/ — the command has process rigor, the lint is the only check on the produced document',
   agentFile: path.join(repoRoot, 'claude', 'agents', 'spec-verifier.md'),
 };
 
@@ -2259,6 +2262,15 @@ test('commands/spec.md keeps the research-backed spec contracts (fan-out, unatte
       'a configured-but-manual-only KB lane needs its own report label — SKIPPED implies an agent ran and NOT CONFIGURED tells the user to redo setup they already did',
     ],
     [SPEC.renderer, SPEC.rendererContract],
+    [SPEC.linter, SPEC.linterContract],
+    [
+      'fix them in the file and re-run the lint before Step 8',
+      'mechanical lint errors (criterion shape, requirement without criteria) must be fixed before the blind verifier runs — the verifier is for judgment, not for a missing when/then',
+    ],
+    [
+      '`unresolved-marker` errors are expected at this point',
+      'the Step 7 lint must not treat markers as something to fix — Step 9 resolves them with the user, and an unattended run leaves them by design',
+    ],
     [SPEC.verifierDispatch, SPEC.verifierContract],
     [
       'one bullet at a time',
@@ -3240,5 +3252,101 @@ test('hire.md treats an unanswered consent gate as withheld consent', () => {
   assert.ok(
     /do not re-ask the same question as plain text/i.test(body),
     'commands/hire.md Step 4 must forbid re-asking the consent gate as plain text'
+  );
+});
+
+test('commands/spec.md lints the spec right after the write and before the blind verifier', () => {
+  // The lint is the one check on the produced document. It has to run on
+  // the saved file (after the Write), ahead of the verifier (so mechanical
+  // errors never reach it), and be a report rather than a gate — a missing
+  // node must not cost the deliverable.
+  const body = readUtf8(SPEC.file);
+  const write = body.indexOf(
+    'Write `functional-spec.md` into the spec directory'
+  );
+  const lint = body.indexOf(SPEC.linter);
+  const verifier = body.indexOf('### Step 8: Blind Verification');
+  assert.ok(
+    write !== -1 && lint !== -1 && verifier !== -1,
+    'commands/spec.md must still carry the write, the lint call and the Step 8 heading'
+  );
+  assert.ok(
+    write < lint && lint < verifier,
+    'commands/spec.md must run lint-spec.mjs after writing functional-spec.md and before Step 8 — the verifier reads a file the lint has already cleaned'
+  );
+  assert.ok(
+    /The lint is a report, never fatal/.test(body),
+    'commands/spec.md must make the lint non-fatal — a missing node or a script error reports and continues'
+  );
+  assert.ok(
+    fs.existsSync(path.join(repoRoot, 'scripts', 'lint-spec.mjs')),
+    'scripts/lint-spec.mjs must exist — the copy operation ships every file under scripts/ to .awos/scripts/'
+  );
+});
+
+test('commands/tech.md resolves [NEEDS CLARIFICATION] markers before any technical drafting', () => {
+  // /awos:implement pastes the whole functional spec into every delegation,
+  // so a marker that survives /awos:tech reaches the implementing agents.
+  // The tech command must read the spec first and either resolve each
+  // marker with the user (the drafted assumption as the recommended first
+  // option, free text for open-ended ones) or, unattended, carry it forward
+  // as an explicit **Assumption:** in the tech spec — never build over it.
+  const body = readUtf8(path.join(commandsDir, 'tech.md'));
+  const resolve = body.indexOf(
+    "### Step 2: Resolve the Functional Spec's Open Questions"
+  );
+  const draft = body.indexOf('Propose and Draft the Technical Plan');
+  assert.ok(
+    resolve !== -1,
+    'commands/tech.md must carry a "Resolve the Functional Spec\'s Open Questions" step'
+  );
+  assert.ok(
+    draft !== -1 && resolve < draft,
+    'commands/tech.md must resolve the markers before the drafting step — a tech spec drafted over a marker inherits the guess'
+  );
+  const step = body.slice(resolve, draft);
+  for (const [needle, contract] of [
+    [
+      '[NEEDS CLARIFICATION',
+      'the step must search the functional spec for the marker syntax /awos:spec writes',
+    ],
+    [
+      'AWOS_UNATTENDED',
+      'the step must branch on AWOS_UNATTENDED — interactive runs ask, unattended runs carry markers forward',
+    ],
+    [
+      'recommended first option',
+      'each marker question must offer the assumption the spec was drafted on as the recommended first option',
+    ],
+    [
+      'free-text option',
+      'marker resolution must offer free text — not every marker reduces to an option set',
+    ],
+    [
+      '`AskUserQuestion`',
+      'markers are resolved via AskUserQuestion, not prose questions',
+    ],
+    [
+      '**Assumption:**',
+      'an unresolved marker must become a listed **Assumption:** in the tech spec so the inherited open question is visible to the reader',
+    ],
+    [
+      'never built over silently',
+      'the step must state the rule it exists for — a marker is never built over silently',
+    ],
+    [
+      '## Change Log',
+      'a resolved marker is folded into functional-spec.md with a Change Log entry, the same amendment trail /awos:spec Update Mode leaves',
+    ],
+  ]) {
+    assert.ok(
+      step.includes(needle),
+      `commands/tech.md Step 2 must contain "${needle}" — ${contract}`
+    );
+  }
+  const docs = readUtf8(path.join(repoRoot, 'docs', 'commands', 'tech.md'));
+  assert.ok(
+    docs.includes('[NEEDS CLARIFICATION') && docs.includes('**Assumption:**'),
+    'docs/commands/tech.md must describe the marker-resolution step and the unattended Assumption fallback — users read the docs, not the prompt'
   );
 });

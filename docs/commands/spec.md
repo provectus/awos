@@ -43,7 +43,9 @@ The ordering is deliberate: a written artifact precedes every question about the
 - **Non-technical language.** Describes what users can do, not how the system implements it. The "how" comes in `/awos:tech`. Technical evidence lives in `research-notes.md`, never in the spec.
 - **Thinks like a tester.** Boundary and error behavior — limits, failure messages, what happens when an action fails — gets its own acceptance criteria.
 - **[NEEDS CLARIFICATION] tags.** If something can't be confirmed, it's drafted on the best-evidenced assumption and flagged explicitly rather than assumed silently.
-- **Testable acceptance criteria.** Every requirement is turned into concrete, verifiable criteria in Given/When/Then form, each one carrying `when` and `then` in a single sentence.
+- **One sentence per requirement.** Each requirement is a numbered `### 2.N` subsection whose statement names who acts, what triggers it, and what the user gets — "When the user …, they …", "While …", "If …, then …", "Where … is enabled, …" — so the requirement and its criteria share a grammar and the Change Log can point at a number.
+- **Testable acceptance criteria.** Every requirement is turned into concrete, verifiable criteria in Given/When/Then form, each one carrying `when` and `then` in a single sentence. Failure classes (empty, invalid, over a limit, no permission, changed meanwhile, offline) each get their own criterion when they apply; parallel cases go in a table.
+- **Assumptions and a glossary.** What the spec takes as true without confirmation is listed with what changes if it is wrong; every term a newcomer could misread is defined once, and that one term is used throughout.
 - **A blind second reader.** The verifier proves the spec stands on its own — for a designer, a tester, or the next model session.
 
 ## Common misconceptions

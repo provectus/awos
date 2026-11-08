@@ -84,10 +84,11 @@ const SAMPLE_VM = {
   ],
 };
 
-// The shape templates/functional-spec-template.md actually produces:
-// requirements as flat bullets with a nested **Acceptance Criteria:** checklist,
-// no ### subsections. (SAMPLE_MD above uses per-requirement subsections — both
-// shapes are real, and the renderer must not lose either.)
+// The legacy flat shape older specs still carry: requirements as flat bullets
+// with a nested **Acceptance Criteria:** checklist, no ### subsections.
+// (SAMPLE_MD above uses the per-requirement ### 2.N subsections the current
+// template asks for — both shapes are real, and the renderer must not lose
+// either.)
 const TEMPLATE_SHAPED_MD = `# Functional Specification: Password Reset
 
 - **Topic:** Let users reset passwords

@@ -45,13 +45,22 @@ Follow this process precisely.
 1.  Analyze `<user_prompt>`. If it clearly references a spec by name or index, identify the corresponding directory in `context/spec/`.
 2.  If the prompt is empty, ambiguous, or references a spec that matches no directory in `context/spec/`, ask the user to choose via `AskUserQuestion`, offering the available spec directories as options (for an unmatched reference, name the reference that failed to resolve). Spec selection has no fallback default — without a target spec there is no deliverable to draft — so an unanswered selection ends the run cleanly (the Step 1 exception in `# INTERACTION`).
 
-### Step 2: Gather and Synthesize Context
+### Step 2: Resolve the Functional Spec's Open Questions
 
-1.  Read the `functional-spec.md` from the chosen directory and the main `context/product/architecture.md`. These two inputs are independent — issue both `Read` calls in a single tool-use block (parallel tool calls). Sequence reads only when one's output feeds the next.
+Read the chosen directory's `functional-spec.md` before any technical drafting and search it for `[NEEDS CLARIFICATION: …]` markers — the questions `/awos:spec` could not settle, each carrying the assumption the spec was drafted on. A marker is a decision nobody has made. A technical spec drafted over one inherits the guess, and `/awos:implement` pastes the whole functional spec, markers included, into every delegation. So every marker is resolved here or carried forward explicitly, never built over silently.
+
+1.  No markers: continue to Step 3.
+2.  Interactive run (`AWOS_UNATTENDED` unset): resolve each marker via `AskUserQuestion` — the assumption the marker carries as the recommended first option, any alternative the marker or the spec names as a further option, and a free-text option for open-ended markers (not every marker reduces to an option set). Batch up to four markers per call, in the order they appear in the spec. Keep the questions non-technical: a product manager or designer must be able to answer them. Fold each answer into `functional-spec.md` — replace the marker with the decided wording in the requirement and its acceptance criteria, then append a dated `## Change Log` entry naming the requirement and `resolved via /awos:tech` — and carry the decision into the technical spec wherever it bears on the design.
+3.  Unattended run (`AWOS_UNATTENDED` set), or a marker question left unanswered: do not edit the functional spec. Carry each remaining marker forward as a listed `**Assumption:**` in the technical spec — one line per marker: the requirement it sits in, the assumption the design builds on, and what changes if it is wrong — so a reader of `technical-considerations.md` sees every open question the design inherited. Surface the list again in Step 6.
+4.  After folding answers into the functional spec, re-run `node ".awos/scripts/lint-spec.mjs" "context/spec/[directory-name]"` when `node` is on PATH: it confirms no marker remains and the edited criteria kept their when/then shape. Its output is a report, never a stop.
+
+### Step 3: Gather and Synthesize Context
+
+1.  Read `context/product/architecture.md` alongside the `functional-spec.md` already read in Step 2 (re-read it if Step 2 edited it). Independent inputs are read in a single tool-use block (parallel tool calls); sequence reads only when one's output feeds the next.
 2.  Identify candidate specialist subagents: determine which technology stack(s) this feature primarily involves (e.g., Python backend, React frontend, or both). Enumerate the universe of registered specialists by inspecting the `Agent` tool's description block in your own system prompt. This is an introspection step — no tool call is required, but it is mandatory. Both kinds of agents are listed there: project-local ones (declared as files under `.claude/agents/*.md`) and plugin-provided ones. Tell them apart by the `plugin-name:` prefix on `subagent_type` — plugin-provided agents carry it (e.g. `python-development:python-pro`, `backend-development:backend-architect`); project-local agents do not. Match each stack against this list, plus always-available built-ins (`general-purpose`, `Explore`, `Plan`).
 
 3.  Analyze the codebase: delegate the read-only exploration to the built-in `Explore` agent to keep the orchestrator context lean. If the feature spans multiple stacks, run one exploration per stack in parallel.
-4.  For each stack the feature touches, invoke its matched specialist (project-local or plugin-provided, from step 2) via the `Agent` tool. Pass the functional spec, the relevant architecture sections, and the exploration findings as context. Specialists carry skill attachments in their frontmatter, so running them is what makes those skills load — drafting tech-stack sections in the orchestrator bypasses both the specialist and its skills. Run independent specialist calls in parallel.
+4.  For each stack the feature touches, invoke its matched specialist (project-local or plugin-provided, from item 2 above) via the `Agent` tool. Pass the functional spec, the relevant architecture sections, and the exploration findings as context. Specialists carry skill attachments in their frontmatter, so running them is what makes those skills load — drafting tech-stack sections in the orchestrator bypasses both the specialist and its skills. Run independent specialist calls in parallel.
 
     ```text
     Agent(subagent_type="<agent-name>", description="<3-5 word summary>", prompt="<context + tech-stack questions for this stack>")
@@ -59,7 +68,7 @@ Follow this process precisely.
 
     For plugin-provided specialists, `<agent-name>` carries the `plugin-name:` prefix (e.g. `python-development:python-pro`). If no specialist exists for a stack, draft that stack's sections yourself after the exploration reports back, and note the gap so `/awos:hire` can address it.
 
-### Step 3: Propose and Draft the Technical Plan (Interactive)
+### Step 4: Propose and Draft the Technical Plan (Interactive)
 
 - You will now fill the template section by section. Your primary goal is to create a concrete plan, making reasonable assumptions and verifying them with the user.
 
@@ -83,11 +92,11 @@ Follow this process precisely.
     - Proactively identify potential issues and propose solutions.
     - Example: "A key risk here is handling large or malicious file uploads. I will add a 'Risk & Mitigation' note to include server-side validation of file type and size, and to process uploads asynchronously. Is there anything else we should be concerned about?"
 
-### Step 4: Write the Deliverable
+### Step 5: Write the Deliverable
 
 Write the completed draft to the `technical-considerations.md` file inside the directory identified in Step 1. Write the file whether or not every question was answered — drafting a tech spec is reversible (re-run `/awos:tech` to revise), so the deliverable is never gated behind a confirmation an unattended run cannot answer.
 
-### Step 5: Surface for Review and Recommend Next Step
+### Step 6: Surface for Review and Recommend Next Step
 
 1.  Report the saved path. Surface any choices that were recorded as assumptions (rather than confirmed by the user) so they are easy to spot and challenge. If the user requests changes, apply them and re-save; otherwise they can revise later by re-running `/awos:tech` against the same spec.
 2.  Review the saved spec for new technologies, frameworks, tools, or testing approaches not already covered by the project's existing architecture and specialist agents.

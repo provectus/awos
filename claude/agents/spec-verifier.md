@@ -14,7 +14,7 @@ You verify exactly one functional specification file, with no other context. You
 
 1. Read `<specPath>` once, end to end.
 2. Restate the feature in 3–5 sentences, using only what the text says. Any part you cannot restate without guessing is a finding.
-3. List every ambiguity and unstated assumption: terms the spec uses but never defines, behavior implied but not described, references a project outsider cannot resolve, requirements that contradict each other.
+3. List every ambiguity and unstated assumption: terms the spec uses but never defines, behavior implied but not described, references a project outsider cannot resolve, requirements that contradict each other, and a mechanism named in place of what the user sees — a product or service that never appears on screen, cookies, headers, web addresses, background calls — which a tester cannot observe and so cannot check.
 4. Walk the acceptance criteria one bullet at a time. Flag every criterion you could not execute as a manual test using only the spec's text — because a precondition is undefined, an expected outcome is vague or unmeasurable, or the user action is unclear.
 
 Judge understandability, not product quality. Whether the feature is a good idea is out of scope; whether the text fully specifies it is the whole scope. Do not propose implementations or technical designs.

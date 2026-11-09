@@ -10,6 +10,7 @@
   ".awos/templates/agent-template.md": { "exists": true },
   ".awos/scripts/create-spec-directory.sh": { "exists": true },
   ".awos/scripts/render-spec.mjs": { "exists": true },
+  ".awos/scripts/lint-spec.mjs": { "exists": true },
   ".claude/agents/awos/spec-verifier.md": {
     "exists": true,
     "contains": "tools: Read"

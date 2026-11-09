@@ -16,14 +16,16 @@ This command creates the technical specification — the engineering plan that t
 ## How it works
 
 1. **Identifies the target spec**: Uses your prompt to find the right spec directory, or asks you to choose from available specs.
-2. **Gathers context**: Reads the functional spec, architecture document, and analyzes the existing codebase. If specialist subagents are available (e.g., `python-expert`, `react-expert`), it delegates codebase analysis to them.
-3. **Interactive drafting**: Works through the template section by section — high-level approach, detailed system changes, API contracts, data models, risks. For each decision, it proposes an assumption and asks you to confirm.
-4. **Checks for new capabilities**: After saving, reviews whether the spec introduces technologies not covered by your current agents. If so, generates a pre-filled `/awos:hire` command.
+2. **Resolves the spec's open questions first**: Reads the functional spec and looks for `[NEEDS CLARIFICATION: …]` markers left by `/awos:spec`. Each one is put to you — the assumption the spec was drafted on is the recommended option, with free text for open-ended questions — and your answer is folded into the functional spec with a Change Log entry. In an unattended run (`AWOS_UNATTENDED` set), or when a question goes unanswered, the marker is carried into the tech spec as a listed `**Assumption:**` instead. Nothing technical is drafted over a marker silently.
+3. **Gathers context**: Reads the functional spec, architecture document, and analyzes the existing codebase. If specialist subagents are available (e.g., `python-expert`, `react-expert`), it delegates codebase analysis to them.
+4. **Interactive drafting**: Works through the template section by section — high-level approach, detailed system changes, API contracts, data models, risks. For each decision, it proposes an assumption and asks you to confirm.
+5. **Checks for new capabilities**: After saving, reviews whether the spec introduces technologies not covered by your current agents. If so, generates a pre-filled `/awos:hire` command.
 
 ## Key behaviors
 
 - **Structures and contracts, not full implementations.** Describes table schemas (key columns and relationships), API endpoints (methods and payload shapes), and file responsibilities — not complete code.
 - **"Assume but verify."** The agent proposes specific technical decisions as assumptions and asks for your approval before proceeding. Nothing is silently assumed.
+- **Open questions are closed before design starts.** A `[NEEDS CLARIFICATION: …]` marker in the functional spec is either resolved with you or listed as an explicit assumption in the tech spec — never built over. Downstream commands paste the functional spec into every delegation, so a marker that survives this step reaches the implementing agents.
 - **Delegates codebase analysis.** If specialist agents exist for your tech stack, the command uses them to analyze existing patterns and conventions.
 - **Risk identification.** Proactively flags potential issues (performance, security, migration risks) and proposes mitigations.
 

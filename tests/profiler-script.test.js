@@ -700,6 +700,46 @@ test('a run with no completion line ends at its last activity, not at the time o
   );
 });
 
+test('a second /better:implement starts a new run, and an answer in between stays inside the first one', () => {
+  // A /better:implement run that stops without its completion line is
+  // started again with the same command. That prompt is an AWOS command, so
+  // it ends the first run; it is not an answer inside it.
+  const BETTER =
+    '<command-message>better:implement</command-message>\n<command-name>/better:implement</command-name>\n<command-args>008</command-args>';
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(root, [
+    userText(at(0), BETTER),
+    assistant(at(60), 'b-1', MAIN, [text('Which port does the backend use?')], 10),
+    userText(at(2 * 60), '8888'),
+    assistant(at(3 * 60), 'b-2', MAIN, [text('Working on slice 1.')], 10),
+    userText(at(30 * 60), BETTER),
+    assistant(
+      at(31 * 60),
+      'b-3',
+      MAIN,
+      [text('Implementation run complete. 3/3 tasks done (100%).')],
+      10
+    ),
+  ]);
+  const { json } = reportJson(proj, sid, root, at(40 * 60), ['--run', 'all']);
+  assert.equal(
+    json.runs.length,
+    2,
+    'two /better:implement prompts make two runs; the answer "8888" does not split the first one'
+  );
+  const r1 = json.runs[0];
+  assert.equal(r1.run.endReason, 'next command', 'the second /better:implement ends the first run');
+  assert.ok(
+    Math.abs(r1.totals.wallSec - 30 * 60) < 2,
+    `run 1 ends at the second /better:implement at 30 min; got ${r1.totals.wallSec}s`
+  );
+  assert.deepEqual(
+    r1.run.interventions.map((x) => x.text),
+    ['8888'],
+    'only the answer is a prompt inside the first run, not the next /better:implement'
+  );
+});
+
 test('answers and "continue" stay inside the run, teammate and usage-limit messages are not prompts, and the next /awos: command starts a new run', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
   const { proj, sid } = writeSession(root, [

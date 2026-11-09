@@ -182,12 +182,13 @@ function isImplementPrompt(row) {
   );
 }
 
-// A prompt that starts another AWOS command ends the current run. Any other
-// prompt — an answer, "continue", /login after an expired session — happens
-// inside the run and is recorded as an intervention.
+// A prompt that starts another AWOS command (/awos:… or the better plugin's
+// /better:…) ends the current run. Any other prompt — an answer, "continue",
+// /login after an expired session — happens inside the run and is recorded
+// as an intervention.
 function isAwosCommandPrompt(row) {
   const c = content(row);
-  return /<command-name>\/awos:/.test(c) || /^\s*\/awos:/.test(c);
+  return /<command-name>\/(awos|better):/.test(c) || /^\s*\/(awos|better):/.test(c);
 }
 
 // implement.md asks for "All tasks complete (100%). Run /awos:verify …" or

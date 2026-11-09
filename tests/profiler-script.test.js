@@ -454,6 +454,38 @@ test('sessions lists only sessions that contain an implement run', () => {
   );
 });
 
+test('sessions lists a /better:implement run too — the plugin fork shares the join key', () => {
+  // plugins/better/commands/implement.md prints the same completion line
+  // as core implement.md, so a better:implement session is a run this
+  // profiler reads. The headless transcript carries the command-name tag.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const proj = path.join(root, '-Users-someone-Work-proj');
+  fs.mkdirSync(proj, { recursive: true });
+  fs.writeFileSync(
+    path.join(proj, 'sess-better.jsonl'),
+    [
+      userText(
+        at(0),
+        '<command-message>better:implement</command-message>\n<command-name>/better:implement</command-name>\n<command-args>002</command-args>'
+      ),
+      assistant(
+        at(60),
+        'm-b-1',
+        MAIN,
+        [text('Implementation run complete.')],
+        20
+      ),
+    ].join('\n') + '\n'
+  );
+  const res = run(['sessions', '--projects', proj], root);
+  assert.equal(res.status, 0, `sessions must exit 0; output was:\n${res.out}`);
+  assert.match(
+    res.stdout,
+    /^- sess-better .*implement runs: 1/m,
+    'a session started with /better:implement is listed as one implement run'
+  );
+});
+
 test('project directory resolves from cwd the way Claude Code slugs it', async () => {
   const mod = await import(script);
   assert.equal(

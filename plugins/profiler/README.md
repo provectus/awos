@@ -1,6 +1,6 @@
 # profiler
 
-Profiles `/awos:implement` runs from the Claude Code session transcripts, so that "it ran for eight hours" becomes "generation 4.0 h, tools 3.0 h of which tests 0.8 h, one 54-minute hang on `playwright-cli close | tail`, and 1.1 h with no activity on the machine".
+Profiles `/awos:implement` and `/better:implement` runs from the Claude Code session transcripts, so that "it ran for eight hours" becomes "generation 4.0 h, tools 3.0 h of which tests 0.8 h, one 54-minute hang on `playwright-cli close | tail`, and 1.1 h with no activity on the machine".
 
 ## Install
 

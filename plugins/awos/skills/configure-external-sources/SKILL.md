@@ -93,7 +93,7 @@ Read `context/sources/sources.md` if it exists.
 
 - Absent → Step 3.
 - `## Status: none` → say when discovery last ran and what it checked, then ask with `AskUserQuestion`: **Run discovery again** or **Keep as is**. Keep → stop.
-- `## Status: configured` → the record exists; skip to Step 5 and connect this user. Do not re-interview. If the user asked to add or change a source, run Step 3 for that source only, then continue to Step 5.
+- `## Status: configured` → the record exists; skip to Step 5 and connect this user. Do not re-interview. If the user asked to add or change a source, run Step 3 for that source only, then continue to Step 5. A record written by an older version of this skill carries `- Category:` instead of `- Role:` (`tickets` → `tracker`, `documentation` → `docs`, `communication` → `communication`): read it as its `Role:` and rewrite the line in Step 6 — the one rename allowed on an existing manifest.
 
 When `AWOS_UNATTENDED` is set: run Step 1, then Step 5's probe only, report the states, write nothing, ask nothing.
 
@@ -165,7 +165,7 @@ When a source still fails, ask with `AskUserQuestion`: "Could not connect {sourc
 
 ## Step 6 — Write the manifest
 
-Write `context/sources/sources.md` with `## Status: configured` in the format above, one record per source. When the manifest already existed, change only what this run learned about the project: a path this user connected through that the `Tool` line did not list is appended to it, a `Verify` line written in 5c is added, a switch to manual or a removal the user confirmed is applied. Nothing about which sources this user reached is written.
+Write `context/sources/sources.md` with `## Status: configured` in the format above, one record per source. When the manifest already existed, change only what this run learned about the project: a path this user connected through that the `Tool` line did not list is appended to it, a `Verify` line written in 5c is added, a switch to manual or a removal the user confirmed is applied, and a `- Category:` line from an older version of this skill is rewritten as `- Role:` with the Step 2 mapping, everything else in that record untouched. Nothing about which sources this user reached is written.
 
 ## Step 7 — Report
 

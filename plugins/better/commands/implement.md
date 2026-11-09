@@ -162,10 +162,11 @@ When every criterion is `[x]`:
 1.  Tick each criterion's checkbox in `functional-spec.md`.
 2.  Set `Status: Completed` in `functional-spec.md` and `technical-considerations.md`.
 3.  Set `Status: verified` in `run.md`.
-4.  When the repository tracks the spec directory, commit its changes — the ticked criteria, both `Status: Completed` lines, `run.md` — as the run's last commit, `[spec directory name]: verified` absent a repository convention.
-5.  Compare what the run changed with `context/product/architecture.md` and `context/product/product-definition.md`. Where the implementation made either document inaccurate — a new technology, a changed boundary, a capability the product definition does not describe — print the command to run, with a specific prompt: `/awos:architecture [what changed]` or `/awos:product [what changed]`. The run does not edit those documents itself. Skip this when nothing drifted.
+4.  Compare what the run changed with `context/product/architecture.md` and `context/product/product-definition.md`. Where the implementation made either document inaccurate — a new technology, a changed boundary, a capability the product definition does not describe — print the command to run, with a specific prompt: `/awos:architecture [what changed]` or `/awos:product [what changed]`. The run does not edit those documents itself. Skip this when nothing drifted.
 
 ### Step 7: Report
+
+Before the report, when the repository tracks the spec directory and it has uncommitted changes — `run.md` after the verification walk, the ticked criteria, the status lines — commit them as the run's last commit: `[spec directory name]: verified` or `[spec directory name]: checkpoint — blocked`, absent a repository convention. A blocked run leaves its checkpoint committed, not in the working tree.
 
 The first line is always `Implementation run complete.` Then, in this order, one line each, omitting empty items:
 

@@ -2335,6 +2335,22 @@ test('commands/spec.md keeps the research-backed spec contracts (fan-out, unatte
       'Scope is a conflict too',
       'behavior already built but placed in a later iteration by the referenced ticket must become a scope marker, not get pulled into scope because it is merged',
     ],
+    [
+      'Write it with the `Write` tool',
+      'research-notes.md must be written with the Write tool, not a shell heredoc — a secrets-scanning PreToolUse hook blocks a shell command whose text quotes a finding containing "token", which ends an unattended run at Step 4',
+    ],
+    [
+      '**Language pass.**',
+      'the self-review must run a named language pass before the measurability pass — a research-drafted spec leaks tool names and browser mechanisms that the vague-wording check does not catch',
+    ],
+    [
+      'cookies, headers, origins, web addresses, beacons, background calls, redirects',
+      'the language pass must name the browser and network mechanisms that stand in for what the user sees — a generic "no implementation concepts" rule let an analytics product name, cookies and "a separate web address" through in a real run',
+    ],
+    [
+      '**The product is the subject.**',
+      "the Language Rules must say a requirement describes what the product accepts, refuses or returns when the user acts through another tool — otherwise a chat assistant's own answers get specified as requirements",
+    ],
   ];
   for (const [needle, contract] of requiredSubstrings) {
     assert.ok(
@@ -2377,6 +2393,10 @@ test('claude/agents/spec-verifier.md stays blind (tools restricted to Read, no o
   assert.ok(
     agent.includes('Do not read any other file'),
     `${path.relative(repoRoot, SPEC.agentFile)} body must prohibit reading any file other than the dispatched spec path`
+  );
+  assert.ok(
+    agent.includes('a mechanism named in place of what the user sees'),
+    `${path.relative(repoRoot, SPEC.agentFile)} must flag a mechanism named in place of on-screen behavior (an analytics product, cookies, a web address) — a tester cannot observe it, so the criterion cannot be run, and the command's language pass is the only other guard`
   );
 });
 

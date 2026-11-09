@@ -1223,9 +1223,20 @@ test('/awos:spec internal-KB lane reads only manifest fields the configure-exter
       `configure-external-sources SKILL.md must allow Role "${role}" — the lane names it`
     );
   }
+  const dispatchCondition = lane.slice(0, lane.indexOf('.') + 1);
   assert.ok(
-    !spec.includes('Category:'),
-    `${SPEC.label} must not gate on the retired Category: field — the skill writes Role:, so a Category: gate never matches`
+    dispatchCondition.includes('Dispatch iff') &&
+      !dispatchCondition.includes('Category'),
+    `${SPEC.label} must not gate the KB lane on the retired Category: field — the skill writes Role:, so a Category: gate never matches`
+  );
+  assert.ok(
+    /Read `Category:` as `Role:`/.test(spec),
+    `${SPEC.label} must read an older manifest's Category: line as Role: (tickets → tracker, documentation → docs) — the command updates through npm and the skill through the marketplace, so the two drift`
+  );
+  assert.ok(
+    /`- Category:` instead of `- Role:`/.test(skill) &&
+      /rewritten as `- Role:`/.test(skill),
+    'configure-external-sources SKILL.md must read an older Category: record as Role: and rewrite that one line on an existing manifest'
   );
 });
 
@@ -2307,6 +2318,22 @@ test('commands/spec.md keeps the research-backed spec contracts (fan-out, unatte
     [
       'Discover sources now',
       'the command must offer sources discovery when context/sources/sources.md is absent, with a skip — suggested, never enforced',
+    ],
+    [
+      'look at the skills list once more at the start of Step 3',
+      'a plugin skill can surface a few turns after session start — the command must re-check before dispatching the lanes so the KB lane runs in parallel rather than after the fact',
+    ],
+    [
+      'Check for an existing spec on the same ticket before allocating anything',
+      'a ticket ID that already has a spec directory must get an amend-or-create question before create-spec-directory.sh allocates a sibling — Mode Detection alone only sees spec numbers and directory names',
+    ],
+    [
+      '**Amend spec NNN (Update Mode)**',
+      'the existing-spec check must offer amendment as the recommended first option — the directory already exists',
+    ],
+    [
+      'Scope is a conflict too',
+      'behavior already built but placed in a later iteration by the referenced ticket must become a scope marker, not get pulled into scope because it is merged',
     ],
   ];
   for (const [needle, contract] of requiredSubstrings) {

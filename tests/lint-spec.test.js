@@ -325,6 +325,56 @@ test('weak words outside Functional Requirements and inside quoted text are not 
   );
 });
 
+test('a ## 2 section with criteria but no ### 2.N headings warns that the requirement check did not run', () => {
+  // The pre-2026-11 template wrote requirements as bold lines, not
+  // subsections. Such a spec must not pass silently with "0 numbered
+  // requirement(s)" — the reader has to learn the requirement-without-
+  // criteria check never ran.
+  const md = `# Functional Specification: Flat Requirements
+
+## 2. Functional Requirements (The "What")
+
+**Requirement 1:** The user can export a report.
+
+- **Acceptance Criteria:**
+  - [ ] When the user taps Export, then a CSV file downloads.
+`;
+  const { status, result } = runLint(md, { json: true });
+  assert.strictEqual(
+    status,
+    0,
+    'a flat-shaped spec with compliant criteria is not an error — the warning is advisory'
+  );
+  assert.deepStrictEqual(
+    result.errors,
+    [],
+    'no error may be raised for the missing subsections'
+  );
+  const flagged = result.warnings.filter(
+    (w) => w.code === 'no-numbered-requirements'
+  );
+  assert.strictEqual(
+    flagged.length,
+    1,
+    'exactly one no-numbered-requirements warning must be emitted for the section'
+  );
+  assert.strictEqual(
+    flagged[0].line,
+    lineOf(md, '## 2. Functional Requirements'),
+    'the warning must point at the ## 2 heading line'
+  );
+  assert.match(
+    flagged[0].message,
+    /requirement-without-criteria check did not run/,
+    'the warning must say which check was skipped'
+  );
+  const { result: clean } = runLint(CLEAN_MD, { json: true });
+  assert.ok(
+    !clean.warnings.some((w) => w.code === 'no-numbered-requirements'),
+    'a spec with ### 2.N subsections must not get the warning'
+  );
+});
+
 test('a legacy flat spec with no ## 2 section is still linted end to end', () => {
   const md = `# Functional Specification: Legacy
 
@@ -355,6 +405,10 @@ test('a legacy flat spec with no ## 2 section is still linted end to end', () =>
     result.warnings.some((w) => w.message.includes('"handle"')) &&
       result.warnings.some((w) => w.message.includes('"many"')),
     'without a ## 2 section the whole file is scanned for weak words'
+  );
+  assert.ok(
+    !result.warnings.some((w) => w.code === 'no-numbered-requirements'),
+    'the no-numbered-requirements warning is scoped to a ## 2 section — a spec without one gets no such warning'
   );
 });
 

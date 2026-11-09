@@ -20,7 +20,7 @@ A new numbered directory is created for each spec (e.g., `001-user-auth`, `002-f
 
 ## How it works
 
-1. **Picks the topic**: Uses your prompt as the feature topic, or asks you for one when the prompt is empty. In an unattended run with no topic, it stops with a one-line re-run instruction rather than guessing. A spec number in the prompt routes to an in-place amendment of that spec.
+1. **Picks the topic**: Uses your prompt as the feature topic, or asks you for one when the prompt is empty. In an unattended run with no topic, it stops with a one-line re-run instruction rather than guessing. A spec number in the prompt routes to an in-place amendment of that spec, and a ticket ID that already has a spec directory gets an amend-or-create question before any new directory is allocated.
 2. **Offers to discover sources**: When `context/sources/sources.md` does not exist, it asks once whether to discover the project's knowledge sources now or skip for this spec. Suggested, never enforced.
 3. **Researches before the first question**: As soon as the topic is known, research agents run in parallel — the codebase (always), the web (always; reports `SKIPPED` without web access), and the internal knowledge base (when `sources.md` is configured with a source an agent can reach). Anything the prompt references — a ticket, a URL, a file — is read first.
 4. **Writes the research notes**: From the research it writes `research-notes.md` — the raw findings per lane, what your prompt and its references said, and the unresolved conflicts. It exists before you are asked anything.

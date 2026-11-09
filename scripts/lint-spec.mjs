@@ -23,6 +23,10 @@
  *                                checkbox criterion at all.
  *
  * Warnings (reported, never fatal):
+ *   no-numbered-requirements     the Functional Requirements section has
+ *                                criteria but no `### 2.N` subsection, so the
+ *                                requirement-without-criteria check did not
+ *                                run (a spec in the pre-2026-11 flat shape).
  *   weak-word                    a word from the self-review list of
  *                                commands/spec.md — vague qualities, escape
  *                                clauses, open-ended lists, indefinite
@@ -297,6 +301,19 @@ export function lintSpec(md) {
         message: `requirement ${r.number} has no acceptance criterion: ${r.title}`,
       });
     }
+  }
+
+  if (
+    section2.start !== -1 &&
+    criteria.length > 0 &&
+    requirements.length === 0
+  ) {
+    warnings.push({
+      code: 'no-numbered-requirements',
+      line: section2.start + 1,
+      message:
+        'no `### 2.N` requirement subsections found; the requirement-without-criteria check did not run (pre-2026-11 template shape?)',
+    });
   }
 
   const scanStart = section2.start === -1 ? 0 : section2.start;

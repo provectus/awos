@@ -3432,6 +3432,33 @@ test('better:implement finishes without a human in the room', () => {
   );
 });
 
+test('better:implement proves unobserved criteria before asking, and asks once', () => {
+  // Adopter feedback (2026-11-09): the final verification sent the user
+  // to test 14 scenarios by hand. A [?] criterion gets an automated check
+  // written for it first; what remains goes to the user as one
+  // multi-select checklist with the steps, never one question per
+  // criterion.
+  const body = readUtf8(betterImplementPath);
+  const step5 = body.split(/### Step 5/)[1].split(/### Step 6/)[0];
+  assert.ok(
+    /verification of §x/.test(step5) && step5.includes('`Verifies:`'),
+    'better:implement Step 5 must turn a [?] criterion no tool reached into a verification unit (Unit N.V, `Verifies:`) before putting it to a person'
+  );
+  assert.ok(
+    /written outside the repository or removed after it has run/.test(step5),
+    'better:implement Step 5 must keep a one-off verification probe out of the slice commit'
+  );
+  assert.ok(
+    /\*\*one\*\* multi-select `AskUserQuestion`/.test(step5) &&
+      /never one per criterion/.test(step5),
+    'better:implement Step 5 must put the remaining [?] criteria to the user in one multi-select question, never one question per criterion'
+  );
+  assert.ok(
+    /steps to check/.test(step5) && /never to design the test/.test(step5),
+    'better:implement Step 5 must hand the user the steps to check each remaining [?] criterion — the user confirms, never designs the test'
+  );
+});
+
 test('better:implement commits every finished slice on a non-default branch', () => {
   // The second half of the same feedback: a run leaves a pile of
   // uncommitted changes. A slice is the unit of commit; the baseline's

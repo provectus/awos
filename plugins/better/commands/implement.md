@@ -36,7 +36,7 @@ The run is built to finish without a human in the room. An execution problem is 
 
 # PROCESS
 
-Steps 3 and 4 form the per-unit loop; repeat them for each unit in scope, in document order. Step 5 runs once after the loop, and may append rework units that go through the loop again.
+Steps 3 and 4 form the per-unit loop; repeat them for each unit in scope, in document order. Step 5 runs once after the loop, and may append verification and rework units that go through the loop again.
 
 ### Step 1: Identify the Target and Record the Baseline
 
@@ -136,23 +136,24 @@ Then, only when `## Open` records a staffing gap, ask once with `AskUserQuestion
 4.  Verify the unit's criteria now, while its work is fresh. For each criterion under `Realizes`, check the real behaviour with whatever fits — a command, an API call, reading state in a store or a log, driving the running UI through whatever browser tool this session has — and mark it in `run.md`:
     - `[x]` with one line of evidence (the command and what it returned, the state observed);
     - `[ ]` with what failed — the criterion is not met;
-    - `[?]` with why it cannot be checked here — no tool can reach it, the environment lacks the dependency, or it rests on an `Assumed:` reading the user has not confirmed. A criterion the subagent's tests cover but you could not observe yourself is `[x]` only when the test's output is quoted in the report; otherwise `[?]`.
+    - `[?]` with why it cannot be checked here — no tool can reach it, the environment lacks the dependency, or it rests on an `Assumed:` reading the user has not confirmed. A criterion the subagent's tests cover but you could not observe yourself is `[x]` only when the test's output is quoted in the report; otherwise `[?]`. A `[?]` for want of a tool is provisional: Step 5 has an automated check written for it before it is ever put to a person.
 5.  Set the unit's State to `done`, save `run.md`, and print one line: the unit, its marks, and the substitution if any.
-6.  When the unit was the last of its slice — every unit in the slice is `done` or `open` — commit the slice. Take the changed and untracked paths from `git status --porcelain`, drop the Baseline's dirty paths, and `git add` the rest by path — never `git add -A`. The spec directory's own files (`run.md`, the spec documents) are part of the slice when the repository tracks them. The message follows the convention the last twenty commits of `git log` show; absent one, `[spec directory name]: slice N — [slice name]` with the units and the criteria they realize in the body. Write the short SHA as `Committed:` under the slice heading; a slice that changed nothing records `Committed: nothing to commit`. A rework unit from Step 5 is committed on its own the same way. When the scope is a single unit, commit it the same way.
+6.  When the unit was the last of its slice — every unit in the slice is `done` or `open` — commit the slice. Take the changed and untracked paths from `git status --porcelain`, drop the Baseline's dirty paths, and `git add` the rest by path — never `git add -A`. The spec directory's own files (`run.md`, the spec documents) are part of the slice when the repository tracks them. The message follows the convention the last twenty commits of `git log` show; absent one, `[spec directory name]: slice N — [slice name]` with the units and the criteria they realize in the body. Write the short SHA as `Committed:` under the slice heading; a slice that changed nothing records `Committed: nothing to commit`. A verification or rework unit from Step 5 is committed on its own the same way. When the scope is a single unit, commit it the same way.
 7.  Return to Step 3 for the next unit; when none is left in scope, go to Step 5 (or to Step 7 when the scope was a single unit).
 
 ### Step 5: Verify Against the Agreement
 
 This is the exit criterion of the loop. The spec is not done because its units are; it is done when the agreement holds.
 
-1.  Walk every acceptance criterion in `functional-spec.md`. Criteria already `[x]` under a done unit keep their mark. Every other criterion — `[ ]`, `[?]`, or not realized by any unit — is checked again now, because later units may have realized it, with the same marks and evidence as Step 4.4. A `[?]` that rests on an `Assumed:` reading stays `[?]` until the user confirms it in item 4.
+1.  Walk every acceptance criterion in `functional-spec.md`. Criteria already `[x]` under a done unit keep their mark. Every other criterion — `[ ]`, `[?]`, or not realized by any unit — is checked again now, because later units may have realized it, with the same marks and evidence as Step 4.4. A `[?]` that rests on an `Assumed:` reading stays `[?]` until the user confirms it in item 5.
 2.  Check the boundaries. **Out-of-Scope:** nothing listed there was built; something that was is a deviation. **Technical decisions and `Assumptions recorded`** in the technical spec: the code follows them; a deviation marks the criteria it affects `[ ]` and is written under `## Open` as "Deviation from the agreement: …".
-3.  Rework, once per criterion. Each `[ ]` criterion becomes one unit appended to the last slice — `### Unit N.R — rework of §x "[criterion]"`, with `Rework-of:` naming the criterion, `Realizes` carrying only that criterion, and an agent chosen as in Step 2 — and runs through Steps 3–4. A criterion that is still `[ ]` after its rework unit is not retried: write both attempts' evidence under `## Open` as "Failed twice: …", set `Status: blocked`, and go to Step 7. A second failure usually means the agreement is unclear, not the code.
-4.  Put every open item to the user, one `AskUserQuestion` each, quoting the criterion or question and why it is open. Units this item creates or re-opens run through Steps 3–4 and are then checked as in item 1. Unattended, the `[?]` marks and `open` units stay, `Status: blocked`, Step 7.
-    - A criterion that rests on an `Assumed:` reading: **Confirm the reading — mark done**, **Different reading** (free text; the answer becomes a `Decision:` line and one rework unit as in item 3, and the criterion's mark is reset for it), and **Stop here**.
-    - A criterion no tool could reach: **I verified it manually — mark done** and **Stop here**.
-    - A unit left `open`: the subagent's options where it offered any, free text otherwise; the answer becomes its `Decision:` line, its State returns to `pending`, and it runs through Steps 3–4.
-5.  Write the `## Verification` section of `run.md`: every acceptance criterion with its mark and evidence, in spec order.
+3.  Prove what you could not observe. Each `[?]` criterion that no tool reached — not one resting on an `Assumed:` reading — becomes one verification unit appended to the last slice: `### Unit N.V — verification of §x "[criterion]"`, with `Verifies:` naming the criterion, `Realizes` carrying only that criterion, and an agent chosen as in Step 2. Its brief asks the subagent to write and run the check that proves the criterion and to quote its output: an end-to-end or integration test where the Testing Strategy welcomes one, otherwise a one-off probe written outside the repository or removed after it has run, so the commit stays clean. The unit runs through Steps 3–4 and the quoted output is the criterion's evidence. A criterion no automated check can reach — a physical device, a judgement call such as "looks right", an account only a person holds — stays `[?]`, with that reason and the exact steps a person would take to check it. The user is asked to confirm, never to design the test.
+4.  Rework, once per criterion. Each `[ ]` criterion becomes one unit appended to the last slice — `### Unit N.R — rework of §x "[criterion]"`, with `Rework-of:` naming the criterion, `Realizes` carrying only that criterion, and an agent chosen as in Step 2 — and runs through Steps 3–4. A criterion that is still `[ ]` after its rework unit is not retried: write both attempts' evidence under `## Open` as "Failed twice: …", set `Status: blocked`, and go to Step 7. A second failure usually means the agreement is unclear, not the code.
+5.  Put every open item to the user. Units this item creates or re-opens run through Steps 3–4 and are then checked as in item 1. Unattended, the `[?]` marks and `open` units stay, `Status: blocked`, Step 7.
+    - Every criterion still `[?]` after item 3, in **one** multi-select `AskUserQuestion`: each option is a criterion with the steps to check it from item 3, and the user ticks the ones they verified; the rest keep `[?]`. One question for the whole list, never one per criterion.
+    - A criterion that rests on an `Assumed:` reading, one `AskUserQuestion` each: **Confirm the reading — mark done**, **Different reading** (free text; the answer becomes a `Decision:` line and one rework unit as in item 4, and the criterion's mark is reset for it), and **Stop here**.
+    - A unit left `open`, one `AskUserQuestion` each: the subagent's options where it offered any, free text otherwise; the answer becomes its `Decision:` line, its State returns to `pending`, and it runs through Steps 3–4.
+6.  Write the `## Verification` section of `run.md`: every acceptance criterion with its mark and evidence, in spec order.
 
 ### Step 6: Complete the Spec
 
@@ -168,9 +169,9 @@ When every criterion is `[x]`:
 
 The first line is always `Implementation run complete.` Then, in this order, one line each, omitting empty items:
 
-- Run status: `verified`, or `blocked` with the reason (a unit failed twice, an unanswered open item, a criterion failed twice, unchecked `[?]` criteria, a staffing stop).
-- Units: done / total, the rework units added, and the units retried after a first failure.
-- Criteria: `[x]` / `[?]` / `[ ]` out of the total, with the `[?]` and `[ ]` ones listed.
+- Run status: `verified`, or `blocked` with the reason (a unit failed twice, an unanswered open item, a criterion failed twice, unconfirmed `[?]` criteria, a staffing stop).
+- Units: done / total, the verification and rework units added, and the units retried after a first failure.
+- Criteria: `[x]` / `[?]` / `[ ]` out of the total, with the `[?]` and `[ ]` ones listed — each `[?]` with the steps to check it.
 - Commits: the branch, and each slice with its short SHA; when the run is blocked, the paths it changed but left uncommitted. When git was skipped, say so here.
 - Baseline: the tests that were failing before the run, when any.
 - Substitutions: each unit that ran under `general-purpose` and the agent it was meant for.

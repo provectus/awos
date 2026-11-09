@@ -2091,7 +2091,7 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
 // The better plugin has its own independent version line. Its discipline
 // is three files moving together: its plugin.json, its marketplace.json entry,
 // and this pinned literal.
-const EXPECTED_BETTER_PLUGIN_VERSION = '0.3.2';
+const EXPECTED_BETTER_PLUGIN_VERSION = '0.4.0';
 
 test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -3338,6 +3338,7 @@ test('better:implement delegates by path and verbatim, never a re-authored brief
     '<do_the_work_yourself>',
     '<command_hygiene>',
     '<completion_evidence>',
+    '<execution_problems>',
     '<ask_instead_of_guessing>',
   ]) {
     assert.ok(
@@ -3391,6 +3392,68 @@ test('better:implement verifies against the agreement inside the loop', () => {
     /\/awos:architecture \[what changed\]/.test(body) &&
       /\/awos:product \[what changed\]/.test(body),
     'better:implement Step 6 must print the /awos:architecture or /awos:product prompt when the product documents drifted, never edit them itself'
+  );
+});
+
+test('better:implement finishes without a human in the room', () => {
+  // Adopter feedback (2026-11-09): a run left overnight stopped on its
+  // first unit with "my tests fail, what do I do". Three contracts keep
+  // the run going: execution problems are the subagent's, never a
+  // question; a failed unit is retried once before the run blocks; an
+  // agreement gap is carried as an assumed reading the user confirms at
+  // the end, so no question is asked between the split and Step 5.
+  const body = readUtf8(betterImplementPath);
+  const step3 = body.split(/### Step 3/)[1].split(/### Step 4/)[0];
+  const step4 = body.split(/### Step 4/)[1].split(/### Step 5/)[0];
+  assert.ok(
+    /never returned as a question/.test(step3),
+    'better:implement <execution_problems> must tell the subagent that failing tests, build errors and missing dependencies are its own to solve, never a question to return'
+  );
+  assert.ok(
+    /## Baseline/.test(body) && /failing before the run/.test(body),
+    'better:implement must record a ## Baseline in run.md naming the tests that failed before the run, so a pre-existing failure is neither fixed nor asked about'
+  );
+  assert.ok(
+    /first failure, delegate it again/.test(step4) &&
+      /second failure set `Status: blocked`/.test(step4),
+    'better:implement Step 4 must retry a failed unit once with its failure in the brief and block only on the second failure'
+  );
+  assert.ok(
+    body.includes('`Assumed:`') &&
+      /Confirm the reading — mark done/.test(body) &&
+      /Different reading/.test(body),
+    'better:implement must carry an agreement gap as an `Assumed:` reading marked [?] and put it to the user at the end with confirm / different-reading options'
+  );
+  assert.ok(
+    /No question is asked between the split and the end-of-run verification/.test(
+      body
+    ),
+    'better:implement INTERACTION must state that nothing is asked between the split and Step 5 — one batch after the work, not one interruption per unit'
+  );
+});
+
+test('better:implement commits every finished slice on a non-default branch', () => {
+  // The second half of the same feedback: a run leaves a pile of
+  // uncommitted changes. A slice is the unit of commit; the baseline's
+  // dirty paths are never staged; the run never commits on the default
+  // branch.
+  const body = readUtf8(betterImplementPath);
+  const step4 = body.split(/### Step 4/)[1].split(/### Step 5/)[0];
+  assert.ok(
+    body.includes('`Committed:`') && /commit the slice/.test(step4),
+    'better:implement Step 4 must commit a slice when its last unit is done and write the SHA as `Committed:` under the slice'
+  );
+  assert.ok(
+    /never `git add -A`/.test(step4) && /Baseline's dirty paths/.test(step4),
+    "better:implement must stage the run's own changes by path and never the dirty paths recorded in the Baseline"
+  );
+  assert.ok(
+    /awos\/\[spec directory name\]/.test(body) && /`origin\/HEAD`/.test(body),
+    'better:implement must branch off the default branch to awos/<spec directory> before anything runs'
+  );
+  assert.ok(
+    /not a git repository/.test(body),
+    'better:implement must skip the git steps outside a repository and say so in the report'
   );
 });
 

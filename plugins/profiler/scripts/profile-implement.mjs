@@ -7,7 +7,7 @@
  *   node profile-implement.mjs sessions [--projects <dir>] [--cwd <path>]
  *   node profile-implement.mjs report   [--projects <dir>] [--cwd <path>] [--session <id>]
  *                                       [--run latest|all|<n>] [--json <out-file>] [--now <iso>]
- *                                       [--sleep-log <pmset-log-file>|none]
+ *                                       [--sleep-log <pmset-log-file>|none] [--run-md <path>]
  *   node profile-implement.mjs watch    [--projects <dir>] [--cwd <path>] [--session <id>]
  *                                       [--interval <seconds>] [--once]
  *
@@ -50,6 +50,12 @@
  * "waiting on model" when the last line is a tool result. A delegator is an
  * agent that called the Agent tool. An empty spawn is a nested agent that
  * made no tool call and finished within two turns.
+ *
+ * Units (/better:implement only): the run's run.md, found as the first
+ * context/spec/<dir>/run.md path in the run's main-transcript lines resolved
+ * against that line's cwd (or --run-md <path>), names the unit each
+ * top-level subagent did, matched by its description ("Unit 2.1 …",
+ * "Verify §2.1 …", "Rework §2.1 …"). No time is read from run.md.
  *
  * `report` prints Markdown to stdout (and JSON to --json when given).
  * `watch` polls and prints one line per event — DONE, STALL, IDLE, SUMMARY,
@@ -420,8 +426,13 @@ export function findRuns(mainRows) {
         waitSec: waitSec > IDLE_GAP_SEC ? 0 : waitSec,
       });
     }
+    const c0 = String(content(mainRows[i]));
     runs.push({
       index: runs.length + 1,
+      // Which plugin started the run: only /better:implement keeps a run.md.
+      command: /(?:<command-name>|^\s*)\/better:implement\b/.test(c0)
+        ? 'better'
+        : 'awos',
       startRow: i,
       start: mainRows[i].__t,
       end,
@@ -972,6 +983,260 @@ export function profileRun(ctx, run) {
   };
 }
 
+// ---------- run.md units (/better:implement) ----------
+
+// /better:implement keeps a checkpoint, context/spec/<dir>/run.md, that
+// names each unit the run delegated. It gives no time: every number below
+// still comes from the transcripts. run.md only says which unit a subagent
+// did and what kind of unit it is. The fields read here are the ones the
+// better plugin keeps stable: Status, the "### Unit N.M" headings, and the
+// Agent:, State:, Committed: and Rework-of: lines.
+const RUN_MD_RE = /context\/spec\/[^/\s"'`\\]+\/run\.md/;
+
+// The first run.md path in the run's lines of the main transcript, resolved
+// against the session cwd. That is the cwd the session started in, not the
+// cwd of the line: an orchestrator that cd'd into a nested code repository
+// writes later lines with that repository's cwd.
+export function findRunMdPath(rows, sessionCwd) {
+  for (const row of rows) {
+    const m = RUN_MD_RE.exec(JSON.stringify(row));
+    if (m) return path.resolve(sessionCwd || process.cwd(), m[0]);
+  }
+  return null;
+}
+
+const unitKind = (suffix) =>
+  /^\d+$/.test(suffix)
+    ? 'work'
+    : /^V\d*$/i.test(suffix)
+      ? 'verification'
+      : /^R\d*$/i.test(suffix)
+        ? 'rework'
+        : 'other';
+const CRITERION_RE = /§\s*(\d+(?:\.\d+)*)/;
+const clean = (s) =>
+  String(s || '')
+    .replace(/`/g, '')
+    .trim();
+
+// Units in document order. A unit heading that occurs again (a run.md
+// rewritten by appending) keeps its first block; the id goes to duplicates.
+export function parseRunMd(text) {
+  const lines = String(text).split('\n');
+  const status = lines.map((l) => /^- Status:\s*(.*)$/.exec(l)).find(Boolean);
+  const out = {
+    status: status ? clean(status[1]) : null,
+    slices: [],
+    units: [],
+    duplicates: [],
+  };
+  const seen = new Set();
+  let slice = null;
+  let unit = null; // the block being read; null outside a unit block
+  let skipping = false; // inside a duplicated unit block
+  for (const line of lines) {
+    const sliceHead = /^## Slice (\d+):\s*(.*)$/.exec(line);
+    const unitHead = /^### Unit (\d+)\.(\w+)\s*(?:[—–-]+\s*)?(.*)$/.exec(line);
+    if (/^#{1,3} /.test(line)) {
+      unit = null;
+      skipping = false;
+      if (/^#{1,2} /.test(line)) slice = null;
+    }
+    if (sliceHead) {
+      slice = {
+        number: Number(sliceHead[1]),
+        name: clean(sliceHead[2]),
+        committed: null,
+      };
+      out.slices.push(slice);
+      continue;
+    }
+    if (unitHead) {
+      const id = `${unitHead[1]}.${unitHead[2]}`;
+      if (seen.has(id)) {
+        if (!out.duplicates.includes(id)) out.duplicates.push(id);
+        skipping = true;
+        continue;
+      }
+      seen.add(id);
+      const title = clean(unitHead[3]);
+      const kind = unitKind(unitHead[2]);
+      const crit =
+        kind === 'verification' || kind === 'rework'
+          ? CRITERION_RE.exec(title)
+          : null;
+      unit = {
+        id,
+        kind,
+        title,
+        criterion: crit ? `§${crit[1]}` : null,
+        slice: slice ? slice.number : null,
+        plannedAgent: null,
+        state: null,
+        committed: null,
+        reworkOf: null,
+      };
+      out.units.push(unit);
+      continue;
+    }
+    if (skipping) continue;
+    const field = /^- (Agent|State|Committed|Rework-of|Verifies):\s*(.*)$/.exec(
+      line
+    );
+    if (!field) continue;
+    const [, key, raw] = field;
+    const value = clean(raw);
+    if (unit) {
+      if (key === 'Agent' && unit.plannedAgent === null)
+        unit.plannedAgent = value;
+      if (key === 'State' && unit.state === null) unit.state = value;
+      if (key === 'Committed' && unit.committed === null)
+        unit.committed = value;
+      if (key === 'Rework-of' && unit.reworkOf === null) {
+        unit.reworkOf = value;
+        const c = CRITERION_RE.exec(value);
+        if (!unit.criterion && c) unit.criterion = `§${c[1]}`;
+      }
+      if (key === 'Verifies' && !unit.criterion) {
+        const c = CRITERION_RE.exec(value);
+        if (c) unit.criterion = `§${c[1]}`;
+      }
+    } else if (slice && key === 'Committed' && slice.committed === null) {
+      slice.committed = value;
+    }
+  }
+  return out;
+}
+
+// Which unit a subagent did, from its description: "Unit 2.1 …" names the
+// unit; "Verify §2.1 …" and "Rework §2.1 …" name the criterion of a
+// verification or rework unit.
+function unitClaim(description) {
+  const d = String(description || '');
+  let m = /^\s*Unit\s+(\d+\.\w+)/i.exec(d);
+  if (m) return { id: m[1] };
+  m = /^\s*Verif(?:y|ication)\b[^§]*§\s*(\d+(?:\.\d+)*)/i.exec(d);
+  if (m) return { kind: 'verification', criterion: `§${m[1]}` };
+  m = /^\s*Rework\b[^§]*§\s*(\d+(?:\.\d+)*)/i.exec(d);
+  if (m) return { kind: 'rework', criterion: `§${m[1]}` };
+  return null;
+}
+
+const activeSec = (a) => a.wallSec - a.idleSec - a.asleepSec;
+
+// Matches the run's top-level subagents (the orchestrator's own delegations)
+// to units, in start order. Several subagents for one unit are attempts. When
+// several units of one kind share a criterion, the k-th subagent for that
+// criterion takes the k-th unit in document order; any further one is an
+// attempt at the last. A nested agent belongs to its top-level ancestor's
+// unit: its context counts toward the unit's peak, its time is already inside
+// the ancestor's. Time is each attempt's active wall-clock, the Agents
+// table's Wall column.
+export function matchUnits(parsed, agents) {
+  const byId = new Map(agents.map((a) => [a.id, a]));
+  const rootOf = (a) => {
+    let r = a;
+    const seen = new Set();
+    while (r.parent && byId.has(r.parent) && !seen.has(r.parent)) {
+      seen.add(r.parent);
+      r = byId.get(r.parent);
+    }
+    return r;
+  };
+  const units = parsed.units.map((u) => ({
+    ...u,
+    attempts: 0,
+    agentIds: [],
+    agentTypes: [],
+    activeSec: 0,
+    peakContext: 0,
+  }));
+  const unitById = new Map(units.map((u) => [u.id, u]));
+  const taken = new Map(); // "kind §x" → how many subagents claimed it
+  const unmatched = [];
+  const roots = agents.filter((a) => rootOf(a) === a);
+  const unitOfRoot = new Map();
+  for (const a of roots) {
+    const claim = unitClaim(a.description);
+    let unit = null;
+    if (claim && claim.id) unit = unitById.get(claim.id) || null;
+    else if (claim) {
+      const same = units.filter(
+        (u) => u.kind === claim.kind && u.criterion === claim.criterion
+      );
+      const key = `${claim.kind} ${claim.criterion}`;
+      const k = taken.get(key) || 0;
+      taken.set(key, k + 1);
+      unit = same.length ? same[Math.min(k, same.length - 1)] : null;
+    }
+    if (!unit) {
+      unmatched.push({
+        id: a.id,
+        type: a.type,
+        description: a.description,
+        activeSec: activeSec(a),
+      });
+      continue;
+    }
+    unitOfRoot.set(a.id, unit);
+    unit.attempts++;
+    unit.agentIds.push(a.id);
+    if (!unit.agentTypes.includes(a.type)) unit.agentTypes.push(a.type);
+    unit.activeSec += activeSec(a);
+  }
+  for (const a of agents) {
+    const unit = unitOfRoot.get(rootOf(a).id);
+    if (unit) unit.peakContext = Math.max(unit.peakContext, a.peakContext);
+  }
+  const totals = { work: 0, verification: 0, rework: 0, other: 0 };
+  for (const u of units) totals[u.kind] += u.activeSec;
+  return {
+    units,
+    unmatched,
+    notRun: units.filter((u) => u.attempts === 0).map((u) => u.id),
+    totals,
+  };
+}
+
+// The unit view of one run, or the one-line reason it has none.
+export function runUnits(ctx, run, agents, runMdArg) {
+  if (run.command !== 'better')
+    return {
+      skipped:
+        'an /awos:implement run keeps no run.md; only /better:implement does',
+    };
+  let file = null;
+  if (typeof runMdArg === 'string') file = path.resolve(runMdArg);
+  else {
+    const rows = ctx.mainRows.filter(
+      (r) => r.__t >= run.start && r.__t <= run.end
+    );
+    file = findRunMdPath(rows, ctx.cwd);
+  }
+  if (!file)
+    return {
+      skipped:
+        'no context/spec/<dir>/run.md path in the run’s transcript lines; pass --run-md <path>',
+    };
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    return {
+      path: file,
+      skipped: `run.md at ${file} cannot be read (${(err && err.code) || 'error'})`,
+    };
+  }
+  const parsed = parseRunMd(text);
+  return {
+    path: file,
+    status: parsed.status,
+    duplicates: parsed.duplicates,
+    slices: parsed.slices,
+    ...matchUnits(parsed, agents),
+  };
+}
+
 function median(arr) {
   if (!arr.length) return 0;
   const s = [...arr].sort((a, b) => a - b);
@@ -1019,6 +1284,10 @@ export function loadContext(projectDir, sessionId, now, args = {}) {
     sleep,
     sleepSource: sleepSources.join(' + ') || 'none',
     runs: findRuns(mainRows),
+    // The session cwd: the first one its transcript records, else --cwd.
+    cwd:
+      (mainRows.find((r) => typeof r.cwd === 'string') || {}).cwd ||
+      (args.cwd ? path.resolve(args.cwd) : null),
     now,
   };
 }
@@ -1217,7 +1486,47 @@ export function renderRun(p, ctx) {
     );
   }
   out.push('');
+  if (p.units) out.push(...renderUnits(p.units));
   return out.join('\n');
+}
+
+const cell = (s) => String(s).replace(/\|/g, '\\|');
+
+function renderUnits(u) {
+  if (u.skipped) return [`Units: not shown — ${u.skipped}.`, ''];
+  const out = ['### Units', ''];
+  out.push(
+    `From \`${u.path}\` (run.md \`Status: ${u.status || '?'}\`). run.md names the unit each subagent did; every time below comes from the transcripts.${u.duplicates.length ? ` Duplicated: ${u.duplicates.join(', ')} (the first heading is used).` : ''}`
+  );
+  out.push('');
+  out.push(
+    '| Unit | Kind | Title | Planned agent | Actual agent | Attempts | Active | Peak ctx | State |'
+  );
+  out.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+  for (const x of u.units)
+    out.push(
+      `| ${x.id} | ${x.kind} | ${cell(x.title.slice(0, 40).trim())} | ${cell(x.plannedAgent || '—')} | ${x.agentTypes.join(', ') || '—'} | ${x.attempts} | ${x.attempts ? min(x.activeSec) : '—'} | ${kTok(x.peakContext)} | ${cell(x.state || '?')} |`
+    );
+  out.push('');
+  const kinds = ['work', 'verification', 'rework'];
+  const all = kinds.reduce((s, k) => s + u.totals[k], 0);
+  out.push(
+    `Unit time: ${kinds.map((k) => `${k} ${min(u.totals[k])} (${all > 0 ? pct(u.totals[k] / all) : '—'})`).join(', ')}.`
+  );
+  out.push('');
+  if (u.notRun.length) {
+    out.push(
+      `Units no subagent in this session ran (done in an earlier session, or not reached): ${u.notRun.join(', ')}.`
+    );
+    out.push('');
+  }
+  if (u.unmatched.length) {
+    out.push('Subagents that are not a unit:');
+    for (const a of u.unmatched)
+      out.push(`- ${a.type} "${a.description}": ${min(a.activeSec)}`);
+    out.push('');
+  }
+  return out;
 }
 
 // ---------- commands ----------
@@ -1276,7 +1585,11 @@ function cmdReport(args) {
     console.log(`No run "${which}" — session has runs 1..${ctx.runs.length}.`);
     return 1;
   }
-  const profiles = selected.map((r) => profileRun(ctx, r));
+  const profiles = selected.map((r) => {
+    const p = profileRun(ctx, r);
+    p.units = runUnits(ctx, r, p.agents, args['run-md']);
+    return p;
+  });
   const md = [`# /awos:implement profile — ${path.basename(projectDir)}`, ''];
   md.push(
     `Transcripts: \`${ctx.session.file}\` and its \`subagents/\`. Thinking text is redacted in transcripts; the thinking share counts turns that carry a thinking block. Time the machine slept and time a question waited on the user are taken out of the work buckets first; then idle gaps over ${IDLE_GAP_SEC / 60} min are excluded from every bucket.`
@@ -1320,6 +1633,17 @@ function cmdReport(args) {
         first: new Date(a.first).toISOString(),
         last: new Date(a.last).toISOString(),
       })),
+      units: p.units.units || [],
+      runMd: {
+        path: p.units.path || null,
+        status: p.units.status || null,
+        duplicates: p.units.duplicates || [],
+        skipped: p.units.skipped || null,
+        slices: p.units.slices || [],
+        totals: p.units.totals || null,
+        unitsNotRun: p.units.notRun || [],
+        unmatchedAgents: p.units.unmatched || [],
+      },
     }));
     fs.writeFileSync(
       args.json,
@@ -1439,7 +1763,7 @@ if (isMain) {
   else if (cmd === 'watch') code = cmdWatch(args);
   else {
     console.log(
-      'Usage: profile-implement.mjs <sessions|report|watch> [--projects <dir>] [--cwd <path>] [--session <id>] [--run latest|all|<n>] [--json <file>] [--interval <sec>] [--once] [--now <iso>] [--sleep-log <file>|none]'
+      'Usage: profile-implement.mjs <sessions|report|watch> [--projects <dir>] [--cwd <path>] [--session <id>] [--run latest|all|<n>] [--json <file>] [--interval <sec>] [--once] [--now <iso>] [--sleep-log <file>|none] [--run-md <path>]'
     );
     code = 2;
   }

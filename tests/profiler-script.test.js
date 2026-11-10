@@ -1319,3 +1319,349 @@ test('project directory resolves from cwd the way Claude Code slugs it', async (
     'every non-alphanumeric character in the cwd becomes "-"'
   );
 });
+
+// ---------- run.md units (/better:implement) ----------
+//
+// /better:implement keeps context/spec/<dir>/run.md, which names each unit
+// the run delegated. The profiler reads it only to tell which unit each
+// subagent did and what kind of unit it is; every time still comes from the
+// transcripts. The fixture is shaped on a real run: work units "Unit N.M",
+// verification units "N.Vk" delegated as "Verify §x …", rework units "N.Rk"
+// delegated as "Rework §x …", and a run.md rewritten by appending, so one
+// unit heading occurs twice.
+
+const BETTER_PROMPT =
+  '<command-message>better:implement</command-message>\n<command-name>/better:implement</command-name>\n<command-args>001</command-args>';
+
+const RUN_MD = `# Run: 001-demo
+
+- Started: 2026-09-17
+- Status: verified
+- Branch: awos/001-demo
+
+## Baseline
+
+- Test suite: \`npm test\` — passed
+
+## Slice 1: Backend
+
+- Committed: \`aaa1111\`
+
+### Unit 1.1 — Backend API
+
+- Agent: python-backend
+- State: done
+- Realizes:
+  - [x] §1.1 — the API returns the list
+
+### Unit 1.2 — Backend migration
+
+- Agent: python-backend
+- State: done
+- Realizes: none — enables 1.1
+
+## Slice 2: Frontend
+
+- Committed: \`bbb2222\`
+
+### Unit 2.1 — Frontend list
+
+- Agent: react-frontend
+- State: done
+
+### Unit 2.V1 — verification of §1.1 "the API returns the list"
+
+- Agent: react-frontend
+- State: done
+- Committed: nothing to commit
+- Verifies: §1.1 — the API returns the list
+
+### Unit 2.V2 — verification of §1.1 "the API returns the list"
+
+- Agent: react-frontend
+- State: done
+
+### Unit 2.R1 — rework of §1.2 "the list shows names"
+
+- Agent: general-purpose — gap: frontend
+- State: done
+- Committed: \`ccc3333\`
+- Rework-of: §1.2 — the list shows names
+
+## Verification
+
+### Unit 2.R1 — rework of §1.2 "the list shows names"
+
+- Agent: someone-else
+- State: failed
+`;
+
+// Each agent: [id, type, description, startSec, endSec, extraMeta, ctx]
+const UNIT_AGENTS = [
+  ['u1', 'python-backend', 'Unit 1.1 backend API', 100, 400],
+  ['u2', 'react-frontend', 'Unit 2.1 frontend list', 500, 800],
+  ['u3', 'react-frontend', 'Unit 2.1 frontend list retry', 900, 1500],
+  ['u4', 'react-frontend', 'Verify §1.1 list endpoint', 1600, 1720],
+  ['u5', 'react-frontend', 'Verify §1.1 list endpoint again', 1800, 1980],
+  ['u6', 'general-purpose', 'Rework §1.2 names', 2000, 2600],
+  // Nested under the rework agent: not an attempt, not "not a unit"; its
+  // context counts toward the rework unit's peak.
+  [
+    'u7',
+    'Explore',
+    'look up the list component',
+    2100,
+    2200,
+    { parentAgentId: 'u6', spawnDepth: 2 },
+    ctxUsage(2, 1000, 90000),
+  ],
+  ['u8', 'general-purpose', 'Commit slice 2', 2700, 2760],
+];
+
+function writeBetterSession(
+  root,
+  { runMd = RUN_MD, prompt = BETTER_PROMPT } = {}
+) {
+  const work = path.join(root, 'work');
+  const specDir = path.join(work, 'context', 'spec', '001-demo');
+  fs.mkdirSync(specDir, { recursive: true });
+  if (runMd !== null) fs.writeFileSync(path.join(specDir, 'run.md'), runMd);
+  const proj = path.join(root, '-work');
+  const sid = 'sess-units';
+  const subDir = path.join(proj, sid, 'subagents');
+  fs.mkdirSync(subDir, { recursive: true });
+  const cwd = { cwd: work };
+  // The orchestrator later cd's into a nested code repo; the run.md path is
+  // still resolved against the session cwd.
+  const nestedCwd = { cwd: path.join(work, 'code') };
+  const main = [
+    userText(at(0), prompt, cwd),
+    row(
+      'assistant',
+      at(30),
+      {
+        role: 'assistant',
+        id: 'o-1',
+        model: MAIN,
+        content: [text('Writing context/spec/001-demo/run.md now.')],
+        usage: { ...ctxUsage(2, 1000, 9000), output_tokens: 10 },
+      },
+      nestedCwd
+    ),
+    ...UNIT_AGENTS.filter((a) => !a[5]).map((a, i) =>
+      assistant(
+        at(a[3] - 1),
+        `o-${i + 2}`,
+        MAIN,
+        [agentCall(`t-${a[0]}`, a[1], a[2])],
+        10
+      )
+    ),
+    assistant(
+      at(3000),
+      'o-end',
+      MAIN,
+      [text('Implementation run complete.')],
+      10
+    ),
+  ];
+  fs.writeFileSync(path.join(proj, `${sid}.jsonl`), main.join('\n') + '\n');
+  for (const [aid, type, description, s, e, extra = {}, ctx] of UNIT_AGENTS) {
+    fs.writeFileSync(
+      path.join(subDir, `agent-${aid}.meta.json`),
+      JSON.stringify({
+        agentType: type,
+        description,
+        toolUseId: `t-${aid}`,
+        spawnDepth: 1,
+        ...extra,
+      })
+    );
+    fs.writeFileSync(
+      path.join(subDir, `agent-${aid}.jsonl`),
+      [
+        userText(at(s), description, { isSidechain: true }),
+        assistant(at(e), `${aid}-m1`, SUB, [text('Done.')], 20, ctx),
+      ].join('\n') + '\n'
+    );
+  }
+  return { proj, sid, work };
+}
+
+test('units: run.md names the unit of each subagent; time comes from the transcripts', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid, work } = writeBetterSession(root);
+  const { md, json } = reportJson(proj, sid, root, at(4000));
+  const r = json.runs[0];
+  const unit = (id) => r.units.find((u) => u.id === id);
+
+  assert.equal(
+    r.runMd.path,
+    path.join(work, 'context', 'spec', '001-demo', 'run.md'),
+    'run.md is the first context/spec/<dir>/run.md path in the run, resolved against the session cwd, not the cwd of the line that mentions it'
+  );
+  assert.equal(
+    r.runMd.status,
+    'verified',
+    'the run.md Status line is reported'
+  );
+  assert.deepEqual(
+    r.units.map((u) => [u.id, u.kind]),
+    [
+      ['1.1', 'work'],
+      ['1.2', 'work'],
+      ['2.1', 'work'],
+      ['2.V1', 'verification'],
+      ['2.V2', 'verification'],
+      ['2.R1', 'rework'],
+    ],
+    'units are parsed in document order; N.M is work, N.Vk verification, N.Rk rework'
+  );
+  assert.deepEqual(
+    r.runMd.slices.map((s) => s.committed),
+    ['aaa1111', 'bbb2222'],
+    "each slice's Committed: line is parsed (not a unit's own Committed: line)"
+  );
+
+  // Work: "Unit N.M …" → that id; two subagents for one unit are attempts.
+  assert.equal(unit('1.1').attempts, 1, '"Unit 1.1 …" matches unit 1.1');
+  assert.equal(
+    unit('1.1').activeSec,
+    300,
+    "a unit's active time is its subagent's active wall-clock from the transcript (100 s → 400 s)"
+  );
+  assert.equal(
+    unit('2.1').attempts,
+    2,
+    'two subagents described "Unit 2.1 …" are two attempts at unit 2.1'
+  );
+  assert.equal(
+    unit('2.1').activeSec,
+    300 + 600,
+    "a unit's active time is the sum over its attempts"
+  );
+
+  // Verification: same criterion on two units → document order.
+  assert.deepEqual(
+    [unit('2.V1').agentIds, unit('2.V2').agentIds],
+    [['u4'], ['u5']],
+    'two "Verify §1.1 …" subagents take the two §1.1 verification units in document order'
+  );
+
+  // Rework, matched by criterion; the duplicated heading keeps the first block.
+  assert.deepEqual(
+    unit('2.R1').agentIds,
+    ['u6'],
+    '"Rework §1.2 …" matches the rework unit for §1.2; the nested agent under it is not an attempt'
+  );
+  assert.equal(
+    unit('2.R1').plannedAgent,
+    'general-purpose — gap: frontend',
+    'a duplicated unit heading keeps the first block, not the later copy'
+  );
+  assert.equal(
+    unit('2.R1').state,
+    'done',
+    'State: comes from the first block of a duplicated unit'
+  );
+  assert.equal(
+    unit('2.R1').reworkOf,
+    '§1.2 — the list shows names',
+    'Rework-of: is parsed'
+  );
+  assert.equal(
+    unit('2.R1').peakContext,
+    91002,
+    "a nested agent's context counts toward its top-level ancestor's unit peak"
+  );
+  assert.deepEqual(
+    r.runMd.duplicates,
+    ['2.R1'],
+    'duplicated unit ids are reported'
+  );
+  assert.match(
+    md,
+    /Duplicated: 2\.R1/,
+    'the report names the duplicated unit ids'
+  );
+
+  // Unit with no subagent, subagent with no unit.
+  assert.deepEqual(
+    r.runMd.unitsNotRun,
+    ['1.2'],
+    'a run.md unit that no subagent in this session ran is listed'
+  );
+  assert.match(md, /Units no subagent in this session ran[^\n]*: 1\.2\./);
+  assert.deepEqual(
+    r.runMd.unmatchedAgents.map((a) => a.description),
+    ['Commit slice 2'],
+    'a top-level subagent whose description names no unit is "not a unit"; a nested agent is not listed'
+  );
+  assert.match(
+    md,
+    /Subagents that are not a unit:\n- general-purpose "Commit slice 2": 1\.0 min/
+  );
+
+  // Totals by kind.
+  assert.deepEqual(
+    r.runMd.totals,
+    { work: 1200, verification: 300, rework: 600, other: 0 },
+    'unit time splits into work, verification and rework by the unit kind'
+  );
+  assert.match(
+    md,
+    /Unit time: work 20\.0 min \(57%\), verification 5\.0 min \(14%\), rework 10\.0 min \(29%\)\./,
+    'the totals line gives time and share for each kind'
+  );
+  assert.match(
+    md,
+    /\| 2\.1 \| work \| Frontend list \| react-frontend \| react-frontend \| 2 \| 15\.0 min \| 10k \| done \|/,
+    'the Units row carries id, kind, title, planned and actual agent, attempts, active time, peak context and State'
+  );
+  assert.ok(
+    md.indexOf('### Units') > md.indexOf('### Agents'),
+    'the Units section follows the Agents section'
+  );
+});
+
+test('units: a missing run.md or an /awos:implement run skips the section in one line and the report still renders', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeBetterSession(root, { runMd: null });
+  const { md, json } = reportJson(proj, sid, root, at(4000));
+  assert.match(
+    md,
+    /^Units: not shown — run\.md at .*001-demo\/run\.md cannot be read \(ENOENT\)\.$/m,
+    'a run.md path that does not resolve to a readable file is one skip line, not a failure'
+  );
+  assert.ok(!md.includes('### Units'), 'no Units section without a run.md');
+  assert.match(md, /### Agents/, 'the rest of the report still renders');
+  assert.deepEqual(json.runs[0].units, [], 'no units in JSON without a run.md');
+
+  const other = path.join(root, 'elsewhere-run.md');
+  fs.writeFileSync(other, RUN_MD);
+  const withFlag = reportJson(proj, sid, root, at(4000), ['--run-md', other]);
+  assert.equal(
+    withFlag.json.runs[0].runMd.path,
+    other,
+    '--run-md <path> overrides the path found in the transcript'
+  );
+  assert.equal(
+    withFlag.json.runs[0].units.length,
+    6,
+    '--run-md is parsed like a found run.md'
+  );
+
+  const root2 = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const awos = writeBetterSession(root2, { prompt: IMPLEMENT });
+  const a = reportJson(awos.proj, awos.sid, root2, at(4000));
+  assert.match(
+    a.md,
+    /^Units: not shown — an \/awos:implement run keeps no run\.md; only \/better:implement does\.$/m,
+    'an /awos:implement run skips the Units section in one line, even when a run.md path is in its transcript'
+  );
+  assert.equal(
+    a.json.runs[0].runMd.path,
+    null,
+    'an /awos:implement run reports no run.md'
+  );
+});

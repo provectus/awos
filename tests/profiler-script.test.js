@@ -38,13 +38,35 @@ const toolResult = (ts, toolUseId, content) =>
     role: 'user',
     content: [{ type: 'tool_result', tool_use_id: toolUseId, content }],
   });
-const assistant = (ts, id, model, blocks, outputTokens) =>
+// The three input fields of a real usage object; their sum is the context
+// the model read on that turn.
+const ctxUsage = (input, cacheCreation, cacheRead) => ({
+  input_tokens: input,
+  cache_creation_input_tokens: cacheCreation,
+  cache_read_input_tokens: cacheRead,
+});
+const assistant = (
+  ts,
+  id,
+  model,
+  blocks,
+  outputTokens,
+  ctx = ctxUsage(2, 1000, 9000)
+) =>
   row('assistant', ts, {
     role: 'assistant',
     id,
     model,
     content: blocks,
-    usage: { output_tokens: outputTokens },
+    usage: { ...ctx, output_tokens: outputTokens },
+  });
+const compactBoundary = (ts, preTokens, postTokens) =>
+  JSON.stringify({
+    type: 'system',
+    subtype: 'compact_boundary',
+    content: 'Conversation compacted',
+    timestamp: ts,
+    compactMetadata: { trigger: 'auto', preTokens, postTokens },
   });
 const bash = (id, command) => ({
   type: 'tool_use',
@@ -92,15 +114,18 @@ function writeFixture(root, { completed }) {
       'm-main-2',
       MAIN,
       [agentCall('tu2', 'general-purpose', 'Commit Slice 1')],
-      30
+      30,
+      ctxUsage(2, 2000, 18000)
     ),
     toolResult(at(21 * 60 + 1), 'tu2', 'Async agent launched successfully'),
+    // The orchestrator's peak context: 30 002 tokens at its third turn.
     assistant(
       at(22 * 60),
       'm-main-3',
       MAIN,
       [agentCall('tu4', 'react-frontend', 'Slice 1: verify UI')],
-      30
+      30,
+      ctxUsage(2, 1000, 29000)
     ),
     toolResult(at(22 * 60 + 1), 'tu4', 'Async agent launched successfully'),
     userText(
@@ -115,7 +140,8 @@ function writeFixture(root, { completed }) {
         'm-main-4',
         MAIN,
         [text('All tasks complete (100%). Run /awos:verify next.')],
-        20
+        20,
+        ctxUsage(2, 500, 24500)
       )
     );
     main.push(userText(at(40 * 60), 'thanks, next thing please'));
@@ -137,6 +163,9 @@ function writeFixture(root, { completed }) {
   // timed out and moved to background (excluded from tests), one 11.8-minute
   // hang on a non-test command, then a final report. Its first turn is
   // written twice with partial usage (streaming), so tokens must dedupe.
+  // Context: m1 24 002 (max per field over its two lines), m2 43 003 (the
+  // peak; its later partial line has smaller numbers), m3 30 000 (only
+  // cache_read_input_tokens present), one compaction, m4 12 002 (final).
   writeAgent(
     'a1',
     {
@@ -147,24 +176,57 @@ function writeFixture(root, { completed }) {
     },
     [
       userText(at(10), 'Implement the backend slice', { isSidechain: true }),
-      assistant(at(15), 'm1', SUB, [thinking(), bash('b1', 'npm test')], 2),
+      assistant(
+        at(15),
+        'm1',
+        SUB,
+        [thinking(), bash('b1', 'npm test')],
+        2,
+        ctxUsage(2, 500, 20000)
+      ),
       assistant(
         at(15, 100),
         'm1',
         SUB,
         [thinking(), bash('b1', 'npm test')],
-        500
+        500,
+        ctxUsage(2, 4000, 20000)
       ),
       toolResult(at(180), 'b1', '# pass 12'),
-      assistant(at(185), 'm2', SUB, [bash('b2', 'npm test -- --watch')], 40),
+      assistant(
+        at(185),
+        'm2',
+        SUB,
+        [bash('b2', 'npm test -- --watch')],
+        40,
+        ctxUsage(3, 3000, 40000)
+      ),
+      assistant(
+        at(185, 50),
+        'm2',
+        SUB,
+        [bash('b2', 'npm test -- --watch')],
+        40,
+        ctxUsage(1, 0, 0)
+      ),
       toolResult(
         at(305),
         'b2',
         'Command did not complete within its 120s timeout and was moved to the background'
       ),
-      assistant(at(310), 'm3', SUB, [bash('b3', 'sleep 1000')], 30),
+      assistant(at(310), 'm3', SUB, [bash('b3', 'sleep 1000')], 30, {
+        cache_read_input_tokens: 30000,
+      }),
       toolResult(at(1020), 'b3', ''),
-      assistant(at(1025), 'm4', SUB, [text('Done. Tests green.')], 60),
+      compactBoundary(at(1021), 43003, 9000),
+      assistant(
+        at(1025),
+        'm4',
+        SUB,
+        [text('Done. Tests green.')],
+        60,
+        ctxUsage(2, 3000, 9000)
+      ),
     ]
   );
 
@@ -193,7 +255,16 @@ function writeFixture(root, { completed }) {
         '<task-notification><task-id>a3</task-id></task-notification>',
         { isSidechain: true }
       ),
-      assistant(at(29 * 60 + 5), 'm6', MAIN, [text('Forwarded and done.')], 20),
+      // A turn that reports no input usage at all: it must not become the
+      // agent's final context.
+      assistant(
+        at(29 * 60 + 5),
+        'm6',
+        MAIN,
+        [text('Forwarded and done.')],
+        20,
+        {}
+      ),
     ]
   );
 
@@ -383,6 +454,110 @@ test('report profiles a completed implement run: buckets, dedupe, hang, tests, d
     byId.a2.children,
     ['a3'],
     'delegation children resolve through the Agent call tool_use_id'
+  );
+});
+
+test('report measures context fill per agent: peak, final, streaming dedupe of input fields, missing fields, compactions', () => {
+  // To check that a run keeps the orchestrator's context small, the context
+  // of each agent is read from the usage on its turns, never estimated.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeFixture(root, { completed: true });
+  const jsonOut = path.join(root, 'profile.json');
+  const res = run(
+    [
+      'report',
+      '--projects',
+      proj,
+      '--session',
+      sid,
+      '--now',
+      at(40 * 60),
+      '--json',
+      jsonOut,
+    ],
+    root
+  );
+  assert.equal(res.status, 0, `report must exit 0; output was:\n${res.out}`);
+  const md = res.stdout;
+  const r = JSON.parse(fs.readFileSync(jsonOut, 'utf8')).runs[0];
+  const byId = Object.fromEntries(r.agents.map((a) => [a.id, a]));
+
+  assert.equal(
+    byId.a1.peakContext,
+    43003,
+    'peak context is the largest input + cache_creation + cache_read sum over the turns; a later partial line of the same message with smaller numbers must not lower it'
+  );
+  assert.equal(
+    byId.a1.peakTurn,
+    2,
+    'the peak is attributed to the deduplicated turn where it happened (the second turn)'
+  );
+  assert.equal(
+    byId.a1.finalContext,
+    12002,
+    "final context is the agent's last turn, not its peak"
+  );
+  assert.equal(
+    byId.a2.finalContext,
+    10002,
+    'a last turn that reports no input usage at all does not set the final context to 0'
+  );
+  assert.ok(
+    Object.values(byId).every(
+      (a) => Number.isFinite(a.peakContext) && Number.isFinite(a.finalContext)
+    ),
+    'a missing usage field counts as 0, so no context number is NaN'
+  );
+  assert.equal(
+    byId.a1.compactions.length,
+    1,
+    'each compact_boundary line in a transcript is one compaction'
+  );
+  assert.deepEqual(
+    byId.a1.compactions[0],
+    {
+      at: at(1021),
+      trigger: 'auto',
+      preTokens: 43003,
+      postTokens: 9000,
+    },
+    'a compaction carries its time, trigger, preTokens and postTokens from compactMetadata'
+  );
+  assert.equal(
+    byId.a4.compactions.length,
+    0,
+    'a transcript without compact_boundary lines has no compactions, even when its numbers drop'
+  );
+  assert.deepEqual(
+    {
+      peak: r.orchestrator.peakContext,
+      turn: r.orchestrator.peakTurn,
+      final: r.orchestrator.finalContext,
+      compactions: r.orchestrator.compactions.length,
+    },
+    { peak: 30002, turn: 3, final: 25002, compactions: 0 },
+    'the JSON carries the orchestrator context fill over the run window: peak, its turn, final, compactions'
+  );
+
+  assert.match(
+    md,
+    /\| Peak ctx \| Final ctx \|/,
+    'the Agents table has Peak ctx and Final ctx columns'
+  );
+  assert.match(
+    md,
+    /\| Slice 1: backend \|.*\| 43k \| 12k \|/,
+    'the Agents table shows peak and final context in thousands of tokens'
+  );
+  assert.match(
+    md,
+    /\| Orchestrator context \(peak \/ final\) \| 30k at turn 3 \(16:22 UTC\) \/ 25k \|/,
+    'the Rates table shows the orchestrator peak with its turn and time, and its final context'
+  );
+  assert.match(
+    md,
+    /### Context\n\nCompactions written by the host \(compact_boundary lines\): 1\.\n\n- 2026-09-17 16:17 UTC in typescript-backend "Slice 1: backend": auto, 43k → 9k/,
+    'the Context section lists each compaction with its time, agent, trigger and preTokens → postTokens'
   );
 });
 

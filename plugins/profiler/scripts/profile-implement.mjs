@@ -38,7 +38,10 @@
  *   - thinking share  = turns whose content carries a thinking block (the
  *                       thinking text itself is redacted in transcripts)
  * Streaming writes several lines per assistant turn with partial usage, so
- * turns are deduplicated by message.id and output_tokens is the max seen.
+ * turns are deduplicated by message.id and each usage field is the max seen.
+ * Context at a turn = input_tokens + cache_creation_input_tokens +
+ * cache_read_input_tokens; each agent gets its peak and final context, and
+ * the compact_boundary lines in its transcript are listed as compactions.
  *
  * Status of an agent: "done" when its last line is an assistant message with
  * text and no tool call; "waiting on <tool>" when the last line is a tool call;
@@ -431,6 +434,67 @@ export function findRuns(mainRows) {
   return runs;
 }
 
+// ---------- context fill ----------
+
+const CONTEXT_FIELDS = [
+  'input_tokens',
+  'cache_creation_input_tokens',
+  'cache_read_input_tokens',
+];
+
+// Context at a turn is everything the model read on that request: fresh
+// input plus cache writes plus cache reads. Streaming writes several lines
+// per turn with partial usage, so each field is the max seen per message.id,
+// as output_tokens is. A missing field counts as 0. A turn that reports no
+// input usage at all (a host-written error line) carries no context reading
+// and does not become the final context.
+// Compactions are the compact_boundary system lines the host writes; they
+// are never inferred from a drop in the numbers.
+export function contextFill(rows) {
+  const turns = new Map();
+  const compactions = [];
+  for (const row of rows) {
+    if (row.type === 'system' && row.subtype === 'compact_boundary') {
+      const m = row.compactMetadata || {};
+      compactions.push({
+        at: row.__t,
+        trigger: typeof m.trigger === 'string' ? m.trigger : '?',
+        preTokens: Number(m.preTokens) || 0,
+        postTokens: Number(m.postTokens) || 0,
+      });
+      continue;
+    }
+    if (row.type !== 'assistant' || isSleepError(row)) continue;
+    const m = row.message || {};
+    const id = m.id || `${row.__t}`;
+    const entry = turns.get(id) || { at: row.__t, fields: [0, 0, 0] };
+    const u = m.usage || {};
+    CONTEXT_FIELDS.forEach((f, i) => {
+      entry.fields[i] = Math.max(entry.fields[i], Number(u[f]) || 0);
+    });
+    turns.set(id, entry);
+  }
+  const fill = {
+    peakContext: 0,
+    peakTurn: 0,
+    peakAt: null,
+    finalContext: 0,
+    compactions,
+  };
+  let n = 0;
+  for (const e of turns.values()) {
+    n++;
+    const ctx = e.fields[0] + e.fields[1] + e.fields[2];
+    if (ctx > fill.peakContext) {
+      fill.peakContext = ctx;
+      fill.peakTurn = n;
+      fill.peakAt = e.at;
+    }
+    if (ctx > 0) fill.finalContext = ctx;
+  }
+  return fill;
+}
+
 // ---------- agent profiling ----------
 
 export function profileAgent(rows, meta, now, sleep = []) {
@@ -455,6 +519,11 @@ export function profileAgent(rows, meta, now, sleep = []) {
     turns: 0,
     outputTokens: 0,
     thinkingTurns: 0,
+    peakContext: 0,
+    peakTurn: 0,
+    peakAt: null,
+    finalContext: 0,
+    compactions: [],
     toolCalls: 0,
     agentCalls: [],
     hangs: [],
@@ -570,6 +639,7 @@ export function profileAgent(rows, meta, now, sleep = []) {
     agent.outputTokens += e.out;
     if (e.think) agent.thinkingTurns++;
   }
+  Object.assign(agent, contextFill(rows));
   agent.isDelegator = agent.agentCalls.length > 0;
   agent.isEmptySpawn =
     agent.depth > 1 && agent.toolCalls === 0 && agent.turns <= 2;
@@ -756,6 +826,9 @@ export function profileRun(ctx, run) {
     }
     prev = row.__t;
   }
+  // The orchestrator's context fill over the run window only; turns before
+  // the run belong to whatever the session did earlier.
+  Object.assign(orch, contextFill(rowsInRun));
 
   // classify big gaps: activity elsewhere on the machine, or none
   for (const g of bigGaps) {
@@ -934,6 +1007,7 @@ export function loadContext(projectDir, sessionId, now, args = {}) {
 const min = (sec) => `${(sec / 60).toFixed(1)} min`;
 const hrs = (sec) => `${(sec / 3600).toFixed(2)} h`;
 const pct = (x) => `${Math.round(x * 100)}%`;
+const kTok = (n) => (n > 0 ? `${Math.round(n / 1000)}k` : '—');
 const iso = (ms) =>
   new Date(ms).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
 
@@ -947,6 +1021,7 @@ export function renderRun(p, ctx) {
     effortLeaks,
     bigGaps,
     concurrency,
+    orch,
   } = p;
   const out = [];
   out.push(
@@ -1033,6 +1108,30 @@ export function renderRun(p, ctx) {
   out.push(
     `| Median orchestrator handoff (subagent done → next Agent call) | ${totals.medianHandoffSec.toFixed(0)} s |`
   );
+  out.push(
+    `| Orchestrator context (peak / final) | ${orch.peakContext > 0 ? `${kTok(orch.peakContext)} at turn ${orch.peakTurn} (${iso(orch.peakAt).slice(11)})` : '—'} / ${kTok(orch.finalContext)} |`
+  );
+  out.push('');
+  out.push('### Context');
+  out.push('');
+  const compactions = [
+    ...orch.compactions.map((c) => ({ ...c, who: 'orchestrator' })),
+    ...agents.flatMap((a) =>
+      a.compactions.map((c) => ({ ...c, who: `${a.type} "${a.description}"` }))
+    ),
+  ].sort((x, y) => x.at - y.at);
+  if (compactions.length) {
+    out.push(
+      `Compactions written by the host (compact_boundary lines): ${compactions.length}.`
+    );
+    out.push('');
+    for (const c of compactions)
+      out.push(
+        `- ${iso(c.at)} in ${c.who}: ${c.trigger}, ${kTok(c.preTokens)} → ${kTok(c.postTokens)}`
+      );
+  } else {
+    out.push('No compaction in the transcripts of this run.');
+  }
   out.push('');
   if (bigGaps.length) {
     out.push('### Long gaps in the main session');
@@ -1084,15 +1183,15 @@ export function renderRun(p, ctx) {
   out.push('### Agents');
   out.push('');
   out.push(
-    '| Start | Depth | Type | Model | Description | Wall | Model | Tool | Tests | Turns | s/turn | tok/turn | Think | Longest wait | Status |'
+    '| Start | Depth | Type | Model | Description | Wall | Model | Tool | Tests | Turns | s/turn | tok/turn | Think | Peak ctx | Final ctx | Longest wait | Status |'
   );
   out.push(
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
   );
   for (const a of agents) {
     const t = Math.max(a.turns, 1);
     out.push(
-      `| ${new Date(a.first).toISOString().slice(11, 16)} | ${a.depth} | ${a.type} | ${(a.model || '?').replace('claude-', '')} | ${a.description.slice(0, 40)}${a.isDelegator ? ' [delegator]' : ''}${a.isEmptySpawn ? ' [empty]' : ''} | ${min(a.wallSec - a.idleSec - a.asleepSec)} | ${min(a.modelSec)} | ${min(a.toolSec)} | ${a.testRuns}×${min(a.testSec)} | ${a.turns} | ${(a.modelSec / t).toFixed(1)} | ${Math.round(a.outputTokens / t)} | ${pct(a.thinkingTurns / t)} | ${min(a.longestWait.sec)} ${a.longestWait.what.slice(0, 40)} | ${a.status} |`
+      `| ${new Date(a.first).toISOString().slice(11, 16)} | ${a.depth} | ${a.type} | ${(a.model || '?').replace('claude-', '')} | ${a.description.slice(0, 40)}${a.isDelegator ? ' [delegator]' : ''}${a.isEmptySpawn ? ' [empty]' : ''} | ${min(a.wallSec - a.idleSec - a.asleepSec)} | ${min(a.modelSec)} | ${min(a.toolSec)} | ${a.testRuns}×${min(a.testSec)} | ${a.turns} | ${(a.modelSec / t).toFixed(1)} | ${Math.round(a.outputTokens / t)} | ${pct(a.thinkingTurns / t)} | ${kTok(a.peakContext)} | ${kTok(a.finalContext)} | ${min(a.longestWait.sec)} ${a.longestWait.what.slice(0, 40)} | ${a.status} |`
     );
   }
   out.push('');
@@ -1118,6 +1217,17 @@ function cmdSessions(args) {
   }
   return 0;
 }
+
+const contextJson = (x) => ({
+  peakContext: x.peakContext,
+  peakTurn: x.peakTurn,
+  peakAt: x.peakAt === null ? null : new Date(x.peakAt).toISOString(),
+  finalContext: x.finalContext,
+  compactions: x.compactions.map((c) => ({
+    ...c,
+    at: new Date(c.at).toISOString(),
+  })),
+});
 
 function cmdReport(args) {
   const now = args.now ? Date.parse(args.now) : Date.now();
@@ -1181,8 +1291,10 @@ function cmdReport(args) {
         description: a.description,
         model: a.model,
       })),
+      orchestrator: contextJson(p.orch),
       agents: p.agents.map((a) => ({
         ...a,
+        ...contextJson(a),
         first: new Date(a.first).toISOString(),
         last: new Date(a.last).toISOString(),
       })),

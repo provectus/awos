@@ -7,6 +7,7 @@
  *   node profile-implement.mjs sessions [--projects <dir>] [--cwd <path>]
  *   node profile-implement.mjs report   [--projects <dir>] [--cwd <path>] [--session <id>]
  *                                       [--run latest|all|<n>] [--json <out-file>] [--now <iso>]
+ *                                       [--sleep-log <pmset-log-file>|none]
  *   node profile-implement.mjs watch    [--projects <dir>] [--cwd <path>] [--session <id>]
  *                                       [--interval <seconds>] [--once]
  *
@@ -27,6 +28,13 @@
  *   - idle            = any gap over IDLE_GAP_SEC, excluded from every bucket
  *                       and reported separately; a gap with no line in any
  *                       transcript on the machine is "no activity on the machine"
+ *   - asleep          = time the machine slept, taken out of every gap before
+ *                       the buckets above: from `pmset -g log` on macOS (or
+ *                       --sleep-log <file>) and, in any transcript of the
+ *                       session, the gap before an "API Error: Your computer
+ *                       went to sleep" line
+ *   - user wait       = typed prompts inside the run, plus each AskUserQuestion
+ *                       call from the call to its answer (not idle, not tool time)
  *   - thinking share  = turns whose content carries a thinking block (the
  *                       thinking text itself is redacted in transcripts)
  * Streaming writes several lines per assistant turn with partial usage, so
@@ -43,6 +51,7 @@
  * RUN ENDED — for a host that streams stdout lines as notifications.
  */
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -55,6 +64,9 @@ const TEST_RE =
   /\b(npm (run )?test|npx? (vitest|jest|mocha|playwright)|node --test|vitest|jest|pytest|go test|cargo test|tsc\b|mvn test|gradle test)/;
 const TIMEOUT_RE = /did not complete within|timed out|moved to the background/i;
 const BUILTIN_AGENTS = new Set(['general-purpose', 'fork', 'Explore', 'Plan']);
+// Claude Code writes this as an assistant line when a request was cut by the
+// machine going to sleep; the gap before it is (mostly) sleep.
+const SLEEP_ERROR_RE = /^\s*API Error: Your computer went to sleep/i;
 
 // ---------- args ----------
 
@@ -126,6 +138,122 @@ function readJson(file) {
   }
 }
 
+// ---------- time intervals ----------
+
+// Intervals are [fromMs, toMs] pairs.
+export function mergeIntervals(list) {
+  const s = list
+    .filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a)
+    .sort((x, y) => x[0] - y[0]);
+  const out = [];
+  for (const [a, b] of s) {
+    const last = out[out.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+
+function overlapSec(intervals, from, to) {
+  let ms = 0;
+  for (const [a, b] of intervals) {
+    if (b <= from) continue;
+    if (a >= to) break;
+    ms += Math.min(b, to) - Math.max(a, from);
+  }
+  return ms / 1000;
+}
+
+function subtractIntervals(list, cut) {
+  const out = [];
+  for (const [a0, b] of list) {
+    let a = a0;
+    for (const [c, d] of cut) {
+      if (d <= a || c >= b) continue;
+      if (c > a) out.push([a, c]);
+      a = Math.max(a, d);
+    }
+    if (a < b) out.push([a, b]);
+  }
+  return out;
+}
+
+// ---------- machine sleep ----------
+
+// macOS power log (`pmset -g log`): a sleep starts at "Sleep  Entering Sleep
+// state" and ends at the next "Wake" or "DarkWake" line. "Entering DarkWake
+// state" (display off, system running) and "Wake Requests" are not sleep
+// edges. A DarkWake is short maintenance time; the machine runs, so it is
+// awake time here.
+export function parsePmsetLog(text) {
+  const re =
+    /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) ([+-]\d{2})(\d{2}) (Sleep|Wake|DarkWake)\s+(.*)$/;
+  const out = [];
+  let start = null;
+  for (const line of String(text).split('\n')) {
+    const m = re.exec(line);
+    if (!m) continue;
+    const t = Date.parse(`${m[1]}T${m[2]}${m[3]}:${m[4]}`);
+    if (Number.isNaN(t)) continue;
+    const [kind, rest] = [m[5], m[6]];
+    if (kind === 'Sleep' && /^Entering Sleep state/.test(rest)) {
+      if (start === null) start = t;
+    } else if (
+      (kind === 'Wake' || kind === 'DarkWake') &&
+      !/^Requests\b/.test(rest) &&
+      start !== null
+    ) {
+      out.push([start, t]);
+      start = null;
+    }
+  }
+  return out;
+}
+
+// --sleep-log <file> reads a saved `pmset -g log`; --sleep-log none turns
+// the OS source off. Without the flag, macOS is asked directly (it keeps
+// about a week of history). Other systems: transcript markers only.
+function osSleepIntervals(args) {
+  const opt = args && args['sleep-log'];
+  if (opt === 'none') return { intervals: [], source: null };
+  if (typeof opt === 'string') {
+    try {
+      return {
+        intervals: parsePmsetLog(fs.readFileSync(opt, 'utf8')),
+        source: opt,
+      };
+    } catch {
+      return { intervals: [], source: null };
+    }
+  }
+  if (process.platform !== 'darwin') return { intervals: [], source: null };
+  try {
+    const text = execFileSync('pmset', ['-g', 'log'], {
+      encoding: 'utf8',
+      maxBuffer: 256 * 1024 * 1024,
+      timeout: 20000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return { intervals: parsePmsetLog(text), source: 'pmset -g log' };
+  } catch {
+    return { intervals: [], source: null };
+  }
+}
+
+function isSleepError(row) {
+  return row.type === 'assistant' && SLEEP_ERROR_RE.test(textOf(row));
+}
+
+// The gap before a "computer went to sleep" error line, in the same
+// transcript, counts as sleep. It also holds the request's generation time
+// before the machine slept, so it can overstate sleep by a few seconds.
+export function sleepMarkers(rows) {
+  const out = [];
+  for (let i = 1; i < rows.length; i++)
+    if (isSleepError(rows[i])) out.push([rows[i - 1].__t, rows[i].__t]);
+  return out;
+}
+
 function content(row) {
   const m = row && row.message;
   return m && typeof m === 'object' ? m.content : undefined;
@@ -188,7 +316,9 @@ function isImplementPrompt(row) {
 // as an intervention.
 function isAwosCommandPrompt(row) {
   const c = content(row);
-  return /<command-name>\/(awos|better):/.test(c) || /^\s*\/(awos|better):/.test(c);
+  return (
+    /<command-name>\/(awos|better):/.test(c) || /^\s*\/(awos|better):/.test(c)
+  );
 }
 
 // implement.md asks for "All tasks complete (100%). Run /awos:verify …" or
@@ -230,8 +360,39 @@ export function findRuns(mainRows) {
     let endReason = 'session end';
     let completedText = null;
     const interventions = [];
+    // AskUserQuestion calls: the run is blocked on the user from the call
+    // to its result, however long that takes.
+    const questions = [];
+    const asked = new Map();
     for (let j = i + 1; j < mainRows.length; j++) {
       const r = mainRows[j];
+      for (const b of blocks(r)) {
+        if (
+          r.type === 'assistant' &&
+          b.type === 'tool_use' &&
+          b.name === 'AskUserQuestion'
+        ) {
+          const q =
+            b.input && Array.isArray(b.input.questions)
+              ? b.input.questions[0]
+              : null;
+          asked.set(b.id, {
+            at: r.__t,
+            text: String((q && q.question) || '')
+              .replace(/\s+/g, ' ')
+              .slice(0, 120),
+          });
+        }
+        if (
+          r.type === 'user' &&
+          b.type === 'tool_result' &&
+          asked.has(b.tool_use_id)
+        ) {
+          const q = asked.get(b.tool_use_id);
+          asked.delete(b.tool_use_id);
+          questions.push({ at: q.at, answeredAt: r.__t, text: q.text });
+        }
+      }
       const done = runEndedText(r);
       if (done) {
         completedText = done;
@@ -263,6 +424,7 @@ export function findRuns(mainRows) {
       completed: Boolean(completedText),
       completedText,
       interventions,
+      questions,
       prompt: String(content(mainRows[i])).replace(/\s+/g, ' ').slice(0, 160),
     });
   }
@@ -271,7 +433,7 @@ export function findRuns(mainRows) {
 
 // ---------- agent profiling ----------
 
-export function profileAgent(rows, meta, now) {
+export function profileAgent(rows, meta, now, sleep = []) {
   const agent = {
     id: meta.agentId || null,
     type: meta.agentType || '?',
@@ -289,6 +451,7 @@ export function profileAgent(rows, meta, now) {
     testRuns: 0,
     testSec: 0,
     idleSec: 0,
+    asleepSec: 0,
     turns: 0,
     outputTokens: 0,
     thinkingTurns: 0,
@@ -308,14 +471,21 @@ export function profileAgent(rows, meta, now) {
   let prev = null;
   let lastKind = 'unknown';
   for (const row of rows) {
-    const gap = prev ? (row.__t - prev) / 1000 : 0;
+    // Time the machine slept is not model, tool or idle time; every bucket
+    // below sees only the awake part of the gap.
+    const asleep = prev ? overlapSec(sleep, prev, row.__t) : 0;
+    agent.asleepSec += asleep;
+    const gap = prev ? (row.__t - prev) / 1000 - asleep : 0;
     // A long wait on a tool result is a hang candidate, not idle: the run
     // level reclassifies it as idle only if nothing on the machine was active.
     const toolWait =
       row.type === 'user' && blocks(row).some((b) => b.type === 'tool_result');
     const idle = gap > IDLE_GAP_SEC && !toolWait;
     if (idle) agent.idleSec += gap;
-    if (row.type === 'assistant') {
+    if (row.type === 'assistant' && isSleepError(row)) {
+      // The error line is not a model turn.
+      lastKind = 'tool_result';
+    } else if (row.type === 'assistant') {
       if (prev && !idle) agent.modelSec += gap;
       const m = row.message || {};
       if (!agent.model && typeof m.model === 'string') agent.model = m.model;
@@ -416,10 +586,13 @@ export function profileAgent(rows, meta, now) {
   return agent;
 }
 
-export function loadAgents(sessionDir, now) {
+// The machine sleeps for every transcript at once, so sleep found in any of
+// them (plus baseSleep from the OS and the main transcript) applies to all.
+export function loadAgents(sessionDir, now, baseSleep = []) {
   const dir = path.join(sessionDir, 'subagents');
-  if (!fs.existsSync(dir)) return [];
-  const agents = [];
+  if (!fs.existsSync(dir))
+    return { agents: [], sleep: mergeIntervals(baseSleep), markers: 0 };
+  const raw = [];
   for (const f of fs.readdirSync(dir)) {
     if (!f.endsWith('.meta.json')) continue;
     const agentId = f.slice('agent-'.length, -'.meta.json'.length);
@@ -427,10 +600,13 @@ export function loadAgents(sessionDir, now) {
     meta.agentId = agentId;
     const rows = readJsonl(path.join(dir, `agent-${agentId}.jsonl`));
     if (!rows.length) continue;
-    agents.push(profileAgent(rows, meta, now));
+    raw.push({ meta, rows });
   }
+  const markers = raw.flatMap((r) => sleepMarkers(r.rows));
+  const sleep = mergeIntervals([...baseSleep, ...markers]);
+  const agents = raw.map((r) => profileAgent(r.rows, r.meta, now, sleep));
   agents.sort((a, b) => a.first - b.first);
-  return agents;
+  return { agents, sleep, markers: markers.length };
 }
 
 // ---------- machine-activity check ----------
@@ -528,20 +704,37 @@ export function profileRun(ctx, run) {
     }
   }
 
-  // orchestrator buckets over the run window
-  const orch = { modelSec: 0, toolSec: 0, idleSec: 0, handoffs: [] };
+  // orchestrator buckets over the run window. A gap splits into time asleep,
+  // time blocked on an AskUserQuestion, and the awake rest the buckets see.
+  const sleep = ctx.sleep || [];
+  const asking = subtractIntervals(
+    mergeIntervals((run.questions || []).map((q) => [q.at, q.answeredAt])),
+    sleep
+  );
+  const orch = {
+    modelSec: 0,
+    toolSec: 0,
+    idleSec: 0,
+    asleepSec: 0,
+    handoffs: [],
+  };
   let prev = null;
   let lastNotification = null;
   const rowsInRun = mainRows.filter((r) => r.__t >= run.start && r.__t <= end);
   const bigGaps = [];
   for (const row of rowsInRun) {
-    const gap = prev ? (row.__t - prev) / 1000 : 0;
+    const asleep = prev ? overlapSec(sleep, prev, row.__t) : 0;
+    const onUser = prev ? overlapSec(asking, prev, row.__t) : 0;
+    orch.asleepSec += asleep;
+    const gap = prev ? (row.__t - prev) / 1000 - asleep - onUser : 0;
     const idle = gap > IDLE_GAP_SEC;
     if (idle) {
       orch.idleSec += gap;
       bigGaps.push({ from: prev, to: row.__t, sec: gap });
     }
-    if (row.type === 'assistant') {
+    if (row.type === 'assistant' && isSleepError(row)) {
+      // not a model turn
+    } else if (row.type === 'assistant') {
       if (prev && !idle) orch.modelSec += gap;
       for (const b of blocks(row)) {
         if (
@@ -611,8 +804,15 @@ export function profileRun(ctx, run) {
   const working = inRun.filter((a) => !a.isDelegator && !a.isEmptySpawn);
   const sum = (arr, k) => arr.reduce((s, a) => s + a[k], 0);
   const turns = sum(working, 'turns');
+  const wallSec = (end - run.start) / 1000;
+  const asleepSec = overlapSec(sleep, run.start, end);
+  const questionWaitSec = overlapSec(asking, run.start, end);
+  const promptWaitSec = run.interventions.reduce((s, x) => s + x.waitSec, 0);
   const totals = {
-    wallSec: (end - run.start) / 1000,
+    wallSec,
+    asleepSec,
+    asleepPeriods: sleep.filter(([a, b]) => b > run.start && a < end).length,
+    awakeSec: wallSec - asleepSec,
     agents: inRun.length,
     workingAgents: working.length,
     delegators: inRun.filter((a) => a.isDelegator).length,
@@ -630,12 +830,16 @@ export function profileRun(ctx, run) {
     orchestratorToolSec: orch.toolSec,
     orchestratorIdleSec: orch.idleSec,
     userPrompts: run.interventions.length,
-    userWaitSec: run.interventions.reduce((s, x) => s + x.waitSec, 0),
+    userQuestions: (run.questions || []).length,
+    userQuestionWaitSec: questionWaitSec,
+    userWaitSec: promptWaitSec + questionWaitSec,
     turns,
     secPerTurn: turns ? sum(working, 'modelSec') / turns : 0,
     tokensPerTurn: turns ? sum(working, 'outputTokens') / turns : 0,
     thinkingShare: turns ? sum(working, 'thinkingTurns') / turns : 0,
-    medianWallMin: median(working.map((a) => (a.wallSec - a.idleSec) / 60)),
+    medianWallMin: median(
+      working.map((a) => (a.wallSec - a.idleSec - a.asleepSec) / 60)
+    ),
     medianHandoffSec: median(orch.handoffs),
   };
   const stalls = live
@@ -683,7 +887,7 @@ function median(arr) {
 
 // ---------- context ----------
 
-export function loadContext(projectDir, sessionId, now) {
+export function loadContext(projectDir, sessionId, now, args = {}) {
   const sessions = listSessions(projectDir);
   let session = sessionId ? sessions.find((s) => s.id === sessionId) : null;
   if (!session && !sessionId) {
@@ -699,7 +903,17 @@ export function loadContext(projectDir, sessionId, now) {
         (r) => r.type === 'assistant' && r.message && r.message.model
       ) || {}
     ).message?.model || null;
-  const agents = loadAgents(path.join(projectDir, session.id), now);
+  const osSleep = osSleepIntervals(args);
+  const mainMarkers = sleepMarkers(mainRows);
+  const { agents, sleep, markers } = loadAgents(
+    path.join(projectDir, session.id),
+    now,
+    [...osSleep.intervals, ...mainMarkers]
+  );
+  const sleepSources = [
+    osSleep.source,
+    mainMarkers.length + markers ? 'transcript sleep errors' : null,
+  ].filter(Boolean);
   return {
     projectDir,
     projectsDir: path.dirname(projectDir),
@@ -708,6 +922,8 @@ export function loadContext(projectDir, sessionId, now) {
     mainRows,
     mainModel,
     agents,
+    sleep,
+    sleepSource: sleepSources.join(' + ') || 'none',
     runs: findRuns(mainRows),
     now,
   };
@@ -734,7 +950,7 @@ export function renderRun(p, ctx) {
   } = p;
   const out = [];
   out.push(
-    `## Implement run ${run.index} — ${iso(run.start)} → ${iso(p.end)} (${hrs(totals.wallSec)})`
+    `## Implement run ${run.index} — ${iso(run.start)} → ${iso(p.end)} (${hrs(totals.wallSec)}${totals.asleepSec > 0 ? `, ${hrs(totals.awakeSec)} with the machine awake` : ''})`
   );
   out.push('');
   out.push(
@@ -745,6 +961,16 @@ export function renderRun(p, ctx) {
     out.push(
       `User prompts inside the run: ${run.interventions.length} (${run.interventions
         .map((x) => `"${x.text.slice(0, 40)}"`)
+        .join(', ')}).`
+    );
+  }
+  if (run.questions && run.questions.length) {
+    out.push('');
+    out.push(
+      `Questions the run asked (AskUserQuestion): ${run.questions.length} (${run.questions
+        .map(
+          (q) => `"${q.text.slice(0, 40)}" ${min((q.answeredAt - q.at) / 1000)}`
+        )
         .join(', ')}).`
     );
   }
@@ -768,10 +994,13 @@ export function renderRun(p, ctx) {
     `| Orchestrator waiting on its own tools | ${hrs(totals.orchestratorToolSec)} |`
   );
   out.push(
-    `| Waiting on the user (${totals.userPrompts} prompts inside the run) | ${hrs(totals.userWaitSec)} |`
+    `| Waiting on the user (${totals.userPrompts} prompts, ${totals.userQuestions} questions inside the run) | ${hrs(totals.userWaitSec)} |`
   );
   out.push(
     `| Idle gaps over ${IDLE_GAP_SEC / 60} min (main session) | ${hrs(totals.orchestratorIdleSec)} |`
+  );
+  out.push(
+    `| Machine asleep (${totals.asleepPeriods} periods; source: ${ctx.sleepSource || 'none'}) | ${hrs(totals.asleepSec)} |`
   );
   out.push('');
   out.push(
@@ -863,7 +1092,7 @@ export function renderRun(p, ctx) {
   for (const a of agents) {
     const t = Math.max(a.turns, 1);
     out.push(
-      `| ${new Date(a.first).toISOString().slice(11, 16)} | ${a.depth} | ${a.type} | ${(a.model || '?').replace('claude-', '')} | ${a.description.slice(0, 40)}${a.isDelegator ? ' [delegator]' : ''}${a.isEmptySpawn ? ' [empty]' : ''} | ${min(a.wallSec - a.idleSec)} | ${min(a.modelSec)} | ${min(a.toolSec)} | ${a.testRuns}×${min(a.testSec)} | ${a.turns} | ${(a.modelSec / t).toFixed(1)} | ${Math.round(a.outputTokens / t)} | ${pct(a.thinkingTurns / t)} | ${min(a.longestWait.sec)} ${a.longestWait.what.slice(0, 40)} | ${a.status} |`
+      `| ${new Date(a.first).toISOString().slice(11, 16)} | ${a.depth} | ${a.type} | ${(a.model || '?').replace('claude-', '')} | ${a.description.slice(0, 40)}${a.isDelegator ? ' [delegator]' : ''}${a.isEmptySpawn ? ' [empty]' : ''} | ${min(a.wallSec - a.idleSec - a.asleepSec)} | ${min(a.modelSec)} | ${min(a.toolSec)} | ${a.testRuns}×${min(a.testSec)} | ${a.turns} | ${(a.modelSec / t).toFixed(1)} | ${Math.round(a.outputTokens / t)} | ${pct(a.thinkingTurns / t)} | ${min(a.longestWait.sec)} ${a.longestWait.what.slice(0, 40)} | ${a.status} |`
     );
   }
   out.push('');
@@ -893,7 +1122,7 @@ function cmdSessions(args) {
 function cmdReport(args) {
   const now = args.now ? Date.parse(args.now) : Date.now();
   const projectDir = resolveProjectDir(args);
-  const ctx = loadContext(projectDir, args.session, now);
+  const ctx = loadContext(projectDir, args.session, now, args);
   if (!ctx) {
     console.log(
       `No session transcripts under ${projectDir}. Pass --projects <dir> or --session <id>.`
@@ -918,7 +1147,7 @@ function cmdReport(args) {
   const profiles = selected.map((r) => profileRun(ctx, r));
   const md = [`# /awos:implement profile — ${path.basename(projectDir)}`, ''];
   md.push(
-    `Transcripts: \`${ctx.session.file}\` and its \`subagents/\`. Thinking text is redacted in transcripts; the thinking share counts turns that carry a thinking block. Idle gaps over ${IDLE_GAP_SEC / 60} min are excluded from every bucket.`
+    `Transcripts: \`${ctx.session.file}\` and its \`subagents/\`. Thinking text is redacted in transcripts; the thinking share counts turns that carry a thinking block. Time the machine slept and time a question waited on the user are taken out of the work buckets first; then idle gaps over ${IDLE_GAP_SEC / 60} min are excluded from every bucket.`
   );
   md.push('');
   for (const p of profiles) md.push(renderRun(p, ctx));
@@ -964,6 +1193,7 @@ function cmdReport(args) {
         {
           session: ctx.session.id,
           mainModel: ctx.mainModel,
+          sleepSource: ctx.sleepSource,
           generatedAt: new Date(now).toISOString(),
           runs: json,
         },
@@ -985,7 +1215,7 @@ function cmdWatch(args) {
   const line = (s) => process.stdout.write(s + '\n');
   const tick = () => {
     const now = args.now ? Date.parse(args.now) : Date.now();
-    const ctx = loadContext(projectDir, args.session, now);
+    const ctx = loadContext(projectDir, args.session, now, args);
     if (!ctx || !ctx.runs.length) {
       line(`WAITING no /awos:implement run found under ${projectDir}`);
       return false;
@@ -1003,11 +1233,11 @@ function cmdWatch(args) {
           );
         else if (a.isDelegator)
           line(
-            `DONE (delegator)${tag} ${a.type} "${a.description}": ${min(a.wallSec - a.idleSec)}, ${a.turns} own turns, handed work to ${a.agentCalls.map((c) => c.subagentType).join(', ')}`
+            `DONE (delegator)${tag} ${a.type} "${a.description}": ${min(a.wallSec - a.idleSec - a.asleepSec)}, ${a.turns} own turns, handed work to ${a.agentCalls.map((c) => c.subagentType).join(', ')}`
           );
         else
           line(
-            `DONE${tag} ${a.type} "${a.description}": wall ${min(a.wallSec - a.idleSec)}, model ${min(a.modelSec)}, tool ${min(a.toolSec)}, tests ${a.testRuns}×${min(a.testSec)}, ${a.turns} turns, ${(a.modelSec / t).toFixed(1)} s/turn, ${Math.round(a.outputTokens / t)} tok/turn, think ${pct(a.thinkingTurns / t)}${a.model === ctx.mainModel && BUILTIN_AGENTS.has(a.type) ? ` — on the orchestrator model ${a.model}` : ''}`
+            `DONE${tag} ${a.type} "${a.description}": wall ${min(a.wallSec - a.idleSec - a.asleepSec)}, model ${min(a.modelSec)}, tool ${min(a.toolSec)}, tests ${a.testRuns}×${min(a.testSec)}, ${a.turns} turns, ${(a.modelSec / t).toFixed(1)} s/turn, ${Math.round(a.outputTokens / t)} tok/turn, think ${pct(a.thinkingTurns / t)}${a.model === ctx.mainModel && BUILTIN_AGENTS.has(a.type) ? ` — on the orchestrator model ${a.model}` : ''}`
           );
       }
       if (
@@ -1075,7 +1305,7 @@ if (isMain) {
   else if (cmd === 'watch') code = cmdWatch(args);
   else {
     console.log(
-      'Usage: profile-implement.mjs <sessions|report|watch> [--projects <dir>] [--cwd <path>] [--session <id>] [--run latest|all|<n>] [--json <file>] [--interval <sec>] [--once] [--now <iso>]'
+      'Usage: profile-implement.mjs <sessions|report|watch> [--projects <dir>] [--cwd <path>] [--session <id>] [--run latest|all|<n>] [--json <file>] [--interval <sec>] [--once] [--now <iso>] [--sleep-log <file>|none]'
     );
     code = 2;
   }

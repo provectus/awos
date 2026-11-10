@@ -245,7 +245,9 @@ function writeFixture(root, { completed }) {
 }
 
 function run(args, cwd) {
-  const res = spawnSync(process.execPath, [script, ...args], {
+  // The OS sleep log (pmset on macOS) is machine state; tests pass their own.
+  const sleepArgs = args.includes('--sleep-log') ? [] : ['--sleep-log', 'none'];
+  const res = spawnSync(process.execPath, [script, ...args, ...sleepArgs], {
     cwd,
     encoding: 'utf8',
   });
@@ -709,7 +711,13 @@ test('a second /better:implement starts a new run, and an answer in between stay
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
   const { proj, sid } = writeSession(root, [
     userText(at(0), BETTER),
-    assistant(at(60), 'b-1', MAIN, [text('Which port does the backend use?')], 10),
+    assistant(
+      at(60),
+      'b-1',
+      MAIN,
+      [text('Which port does the backend use?')],
+      10
+    ),
     userText(at(2 * 60), '8888'),
     assistant(at(3 * 60), 'b-2', MAIN, [text('Working on slice 1.')], 10),
     userText(at(30 * 60), BETTER),
@@ -728,7 +736,11 @@ test('a second /better:implement starts a new run, and an answer in between stay
     'two /better:implement prompts make two runs; the answer "8888" does not split the first one'
   );
   const r1 = json.runs[0];
-  assert.equal(r1.run.endReason, 'next command', 'the second /better:implement ends the first run');
+  assert.equal(
+    r1.run.endReason,
+    'next command',
+    'the second /better:implement ends the first run'
+  );
   assert.ok(
     Math.abs(r1.totals.wallSec - 30 * 60) < 2,
     `run 1 ends at the second /better:implement at 30 min; got ${r1.totals.wallSec}s`
@@ -841,8 +853,208 @@ test('answers and "continue" stay inside the run, teammate and usage-limit messa
   );
   assert.match(
     md,
-    /\| Waiting on the user \(4 prompts inside the run\) \| 0\.09 h \|/,
+    /\| Waiting on the user \(4 prompts, 0 questions inside the run\) \| 0\.09 h \|/,
     'the report shows the user wait as its own bucket'
+  );
+});
+
+test('time the machine slept is taken out of every bucket: no hang, no idle gap, no model time', () => {
+  // On 09.11 a benchmark run lost 83 min to idle sleep. The report showed a
+  // 16 min "hang" (a tool call across a sleep), a 49 min idle gap marked
+  // "machine active" (the sleeping agent wrote its "went to sleep" error
+  // lines inside the gap) and sleep counted as model time.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(
+    root,
+    [
+      userText(at(0), IMPLEMENT),
+      assistant(
+        at(10),
+        's-1',
+        MAIN,
+        [agentCall('tb1', 'typescript-backend', 'Slice 1: backend')],
+        20
+      ),
+      toolResult(at(11), 'tb1', 'Async agent launched successfully'),
+      userText(
+        at(50 * 60),
+        '<task-notification><task-id>b1</task-id></task-notification>'
+      ),
+      assistant(
+        at(51 * 60),
+        's-2',
+        MAIN,
+        [text('Implementation run complete. 1/1 tasks done (100%).')],
+        20
+      ),
+    ],
+    [
+      userText(at(11), 'Implement the backend slice', { isSidechain: true }),
+      assistant(at(20), 'a-1', SUB, [bash('x1', 'pnpm build')], 40),
+      // 25 min tool wait; the OS log says the machine slept 20 min of it.
+      toolResult(at(25 * 60 + 20), 'x1', 'built'),
+      assistant(at(26 * 60), 'a-2', SUB, [text('Checking the page.')], 30),
+      // A request cut by sleep: the error line ends a 20 min gap.
+      row(
+        'assistant',
+        at(46 * 60),
+        {
+          role: 'assistant',
+          id: 'err-1',
+          model: '<synthetic>',
+          content: [
+            text(
+              'API Error: Your computer went to sleep mid-response. The response above may be incomplete.'
+            ),
+          ],
+        },
+        { isApiErrorMessage: true }
+      ),
+      assistant(at(47 * 60), 'a-3', SUB, [text('Done.')], 30),
+    ]
+  );
+  // T0 is 16:00 UTC = 19:00 +0300. One sleep 19:01–19:21; "Wake Requests"
+  // inside it and an "Entering DarkWake state" later are not sleep edges.
+  const log = path.join(root, 'pmset.log');
+  fs.writeFileSync(
+    log,
+    [
+      'PM ASL data store: /var/log/powermanagement',
+      "2026-09-17 19:01:00 +0300 Sleep               \tEntering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using AC (Charge:100%) 1 secs",
+      '2026-09-17 19:01:01 +0300 Wake Requests       \t[process=dasd request=SleepService deltaSecs=940 wakeAt=2026-09-17 19:16:41]',
+      '2026-09-17 19:21:00 +0300 Wake                \tWake from Deep Idle [CDNVA] : due to UserActivity Using AC (Charge:100%) 1 secs',
+      "2026-09-17 19:30:00 +0300 Sleep               \tEntering DarkWake state due to 'Software Sleep pid=163': Using AC (Charge:100%) 2 secs",
+      '2026-09-17 19:31:00 +0300 DarkWake            \tDarkWake from Deep Idle [CDNP] : due to RTC Using AC (Charge:100%) 30 secs',
+    ].join('\n') + '\n'
+  );
+  const { md, json } = reportJson(proj, sid, root, at(72 * 3600), [
+    '--sleep-log',
+    log,
+  ]);
+  const r = json.runs[0];
+  const t = r.totals;
+  assert.ok(
+    Math.abs(t.asleepSec - 40 * 60) < 2,
+    `20 min from the OS log + 20 min before the sleep error = 40 min asleep; got ${t.asleepSec}s`
+  );
+  assert.equal(t.asleepPeriods, 2);
+  assert.ok(
+    Math.abs(t.awakeSec - 11 * 60) < 2,
+    `51 min wall - 40 min asleep = 11 min awake; got ${t.awakeSec}s`
+  );
+  assert.equal(
+    t.hangSec,
+    0,
+    'a tool call across a sleep is not a hang: 5 min awake'
+  );
+  assert.ok(
+    Math.abs(t.subagentToolSec - 5 * 60) < 2,
+    `tool time is the awake 5 min of the 25 min wait; got ${t.subagentToolSec}s`
+  );
+  assert.ok(
+    Math.abs(t.subagentModelSec - 109) < 2,
+    `model time is 9 + 40 + 60 s; the 20 min before the sleep error is not model time; got ${t.subagentModelSec}s`
+  );
+  assert.equal(t.turns, 3, 'the sleep error line is not a model turn');
+  assert.equal(
+    r.bigGaps.length,
+    0,
+    'the orchestrator waited 50 min, 40 of them asleep: not an idle gap'
+  );
+  assert.equal(t.orchestratorIdleSec, 0);
+  assert.equal(json.sleepSource, `${log} + transcript sleep errors`);
+  assert.match(md, /\(0\.85 h, 0\.18 h with the machine awake\)/);
+  assert.match(
+    md,
+    /\| Machine asleep \(2 periods; source: .*pmset\.log \+ transcript sleep errors\) \| 0\.67 h \|/
+  );
+});
+
+test('an AskUserQuestion wait is time waiting on the user, not idle and not tool time', () => {
+  // A run asked one question in the evening and got the answer in the
+  // morning; the report put the whole night into "idle gaps" and showed
+  // "Waiting on the user (0 prompts)". Short waits went into tool time.
+  const ask = (id, q) => ({
+    type: 'tool_use',
+    id,
+    name: 'AskUserQuestion',
+    input: {
+      questions: [
+        { question: q, options: [{ label: 'Yes' }, { label: 'No' }] },
+      ],
+    },
+  });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(root, [
+    userText(at(0), IMPLEMENT),
+    assistant(
+      at(60),
+      'u-1',
+      MAIN,
+      [ask('ask1', 'Accept the failing tests as baseline?')],
+      20
+    ),
+    toolResult(
+      at(60 + 3 * 3600),
+      'ask1',
+      'User has answered your questions: "Accept the failing tests as baseline?"="Yes".'
+    ),
+    assistant(
+      at(3 * 3600 + 200),
+      'u-2',
+      MAIN,
+      [ask('ask2', 'VoiceOver checked?')],
+      20
+    ),
+    toolResult(
+      at(3 * 3600 + 320),
+      'ask2',
+      'User has answered your questions: "VoiceOver checked?"="No".'
+    ),
+    assistant(
+      at(3 * 3600 + 400),
+      'u-3',
+      MAIN,
+      [text('Implementation run complete. 1/1 tasks done (100%).')],
+      20
+    ),
+  ]);
+  const { md, json } = reportJson(proj, sid, root, at(72 * 3600));
+  const r = json.runs[0];
+  const t = r.totals;
+  assert.equal(t.userQuestions, 2);
+  assert.equal(
+    t.userPrompts,
+    0,
+    'an answer to AskUserQuestion is a tool result, not a typed prompt'
+  );
+  assert.ok(
+    Math.abs(t.userQuestionWaitSec - (3 * 3600 + 120)) < 2,
+    `3 h + 2 min on questions; got ${t.userQuestionWaitSec}s`
+  );
+  assert.ok(Math.abs(t.userWaitSec - (3 * 3600 + 120)) < 2);
+  assert.equal(
+    t.orchestratorIdleSec,
+    0,
+    'a night spent on a question is not an idle gap'
+  );
+  assert.equal(r.bigGaps.length, 0);
+  assert.equal(
+    t.orchestratorToolSec,
+    0,
+    'the 2 min question is not orchestrator tool time'
+  );
+  assert.deepEqual(
+    r.run.questions.map((q) => q.text),
+    ['Accept the failing tests as baseline?', 'VoiceOver checked?']
+  );
+  assert.match(
+    md,
+    /\| Waiting on the user \(0 prompts, 2 questions inside the run\) \| 3\.03 h \|/
+  );
+  assert.match(
+    md,
+    /Questions the run asked \(AskUserQuestion\): 2 \("Accept the failing tests as baseline\?" 180\.0 min, "VoiceOver checked\?" 2\.0 min\)/
   );
 });
 

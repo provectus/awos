@@ -108,7 +108,7 @@ Out of scope: the step works and needs no redesign. What the seam contract asks 
 - `awos-recruitment#195` (merged): two hooks built from the reported gaps.
 - `awos-recruitment#190` (open): the agent body as a role, not a persona.
 - `validate` is a required check on awos-recruitment `main` since 2026-11-05.
-- #240 (open) runs hire at the end of `/awos:tech`, a step toward (a); not yet decided.
+- #240 (merged) runs hire at the end of `/awos:tech`, a step toward (a); not yet decided.
 
 ### 1.7 awos-qa Phase B
 

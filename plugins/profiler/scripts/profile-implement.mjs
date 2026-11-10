@@ -41,7 +41,9 @@
  * turns are deduplicated by message.id and each usage field is the max seen.
  * Context at a turn = input_tokens + cache_creation_input_tokens +
  * cache_read_input_tokens; each agent gets its peak and final context, and
- * the compact_boundary lines in its transcript are listed as compactions.
+ * the compact_boundary lines in its transcript are listed as compactions,
+ * each marked as after a pause or during work by the time since the agent's
+ * previous model turn.
  *
  * Status of an agent: "done" when its last line is an assistant message with
  * text and no tool call; "waiting on <tool>" when the last line is a tool call;
@@ -450,21 +452,40 @@ const CONTEXT_FIELDS = [
 // and does not become the final context.
 // Compactions are the compact_boundary system lines the host writes; they
 // are never inferred from a drop in the numbers.
+// The host compacts in two cases: a context that grew too large during work,
+// and a context that sat without a model request long enough for its prompt
+// cache to expire (the agent waited on the user, a subagent, a long tool or
+// a sleeping machine). To tell them apart, each compaction carries the pause
+// from the agent's previous model turn to the start of the compaction (the
+// line's timestamp is written at its end, so durationMs is taken off). A
+// tool result or a user prompt does not end the pause: the cache ages from
+// the last request, and the request after a long wait is what compacts.
+export const COMPACTION_PAUSE_SEC = 5 * 60;
+
 export function contextFill(rows) {
   const turns = new Map();
   const compactions = [];
+  let lastTurnAt = null;
   for (const row of rows) {
     if (row.type === 'system' && row.subtype === 'compact_boundary') {
       const m = row.compactMetadata || {};
+      const start = row.__t - (Number(m.durationMs) || 0);
+      const pauseSec =
+        lastTurnAt === null
+          ? null
+          : Math.max(0, Math.round((start - lastTurnAt) / 1000));
       compactions.push({
         at: row.__t,
         trigger: typeof m.trigger === 'string' ? m.trigger : '?',
         preTokens: Number(m.preTokens) || 0,
         postTokens: Number(m.postTokens) || 0,
+        pauseSec,
+        afterPause: pauseSec !== null && pauseSec >= COMPACTION_PAUSE_SEC,
       });
       continue;
     }
     if (row.type !== 'assistant' || isSleepError(row)) continue;
+    lastTurnAt = row.__t;
     const m = row.message || {};
     const id = m.id || `${row.__t}`;
     const entry = turns.get(id) || { at: row.__t, fields: [0, 0, 0] };
@@ -1121,13 +1142,14 @@ export function renderRun(p, ctx) {
     ),
   ].sort((x, y) => x.at - y.at);
   if (compactions.length) {
+    const paused = compactions.filter((c) => c.afterPause).length;
     out.push(
-      `Compactions written by the host (compact_boundary lines): ${compactions.length}.`
+      `Compactions written by the host (compact_boundary lines): ${compactions.length}; ${paused} after a pause of ${COMPACTION_PAUSE_SEC / 60}+ min since the agent's previous model turn, ${compactions.length - paused} during work.`
     );
     out.push('');
     for (const c of compactions)
       out.push(
-        `- ${iso(c.at)} in ${c.who}: ${c.trigger}, ${kTok(c.preTokens)} → ${kTok(c.postTokens)}`
+        `- ${iso(c.at)} in ${c.who}: ${c.trigger}, ${kTok(c.preTokens)} → ${kTok(c.postTokens)}, ${c.pauseSec === null ? 'no model turn before it' : c.afterPause ? `after a ${min(c.pauseSec)} pause` : `during work (${c.pauseSec} s after the previous model turn)`}`
       );
   } else {
     out.push('No compaction in the transcripts of this run.');

@@ -520,8 +520,10 @@ test('report measures context fill per agent: peak, final, streaming dedupe of i
       trigger: 'auto',
       preTokens: 43003,
       postTokens: 9000,
+      pauseSec: 711,
+      afterPause: true,
     },
-    'a compaction carries its time, trigger, preTokens and postTokens from compactMetadata'
+    "a compaction carries its time, trigger, preTokens and postTokens from compactMetadata, and the pause since the agent's previous model turn (m3 at 310 s; the tool result at 1020 s does not end the pause)"
   );
   assert.equal(
     byId.a4.compactions.length,
@@ -556,8 +558,84 @@ test('report measures context fill per agent: peak, final, streaming dedupe of i
   );
   assert.match(
     md,
-    /### Context\n\nCompactions written by the host \(compact_boundary lines\): 1\.\n\n- 2026-09-17 16:17 UTC in typescript-backend "Slice 1: backend": auto, 43k → 9k/,
-    'the Context section lists each compaction with its time, agent, trigger and preTokens → postTokens'
+    /### Context\n\nCompactions written by the host \(compact_boundary lines\): 1; 1 after a pause of 5\+ min since the agent's previous model turn, 0 during work\.\n\n- 2026-09-17 16:17 UTC in typescript-backend "Slice 1: backend": auto, 43k → 9k, after a 11\.\d min pause/,
+    'the Context section counts compactions after a pause and during work, and lists each with its time, agent, trigger, preTokens → postTokens and pause'
+  );
+});
+
+test('a compaction is marked after a pause or during work by the time since the previous model turn', async () => {
+  // The host compacts a context that grew too large during work, and also a
+  // context that sat without a model request until its prompt cache expired.
+  // Only the first means the work outgrew one context, so the two are told
+  // apart by the pause from the agent's previous model turn.
+  const { contextFill, COMPACTION_PAUSE_SEC } = await import(script);
+  const r = (sec, obj) => ({ ...obj, __t: T0 + sec * 1000 });
+  const turn = (sec, id, text = 'ok') =>
+    r(sec, {
+      type: 'assistant',
+      message: {
+        id,
+        content: [{ type: 'text', text }],
+        usage: ctxUsage(1, 0, 1000),
+      },
+    });
+  const compact = (sec, durationMs) =>
+    r(sec, {
+      type: 'system',
+      subtype: 'compact_boundary',
+      compactMetadata: {
+        trigger: 'auto',
+        preTokens: 250000,
+        postTokens: 40000,
+        durationMs,
+      },
+    });
+  const prompt = (sec) =>
+    r(sec, { type: 'user', message: { role: 'user', content: 'back' } });
+  const result = (sec) =>
+    r(sec, {
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'x', content: '' }],
+      },
+    });
+  const fill = contextFill([
+    compact(5, 0),
+    turn(10, 'm1'),
+    prompt(3610),
+    compact(3640, 30000),
+    turn(3700, 'm2'),
+    result(3710),
+    compact(3712, 2000),
+    turn(3720, 'm3'),
+    result(6120),
+    compact(6121, 0),
+    turn(6130, 'm4'),
+    turn(6530, 'err', 'API Error: Your computer went to sleep'),
+    compact(6531, 0),
+  ]);
+  assert.equal(
+    COMPACTION_PAUSE_SEC,
+    300,
+    'the pause threshold is 5 minutes, the shortest prompt-cache lifetime'
+  );
+  assert.deepEqual(
+    fill.compactions.map((c) => [c.pauseSec, c.afterPause]),
+    [
+      [null, false],
+      [3600, true],
+      [10, false],
+      [2401, true],
+      [401, true],
+    ],
+    [
+      'a compaction with no model turn before it has no pause',
+      'a user prompt after an hour away does not end the pause, and durationMs is taken off the end-of-compaction timestamp',
+      'a compaction 10 s after a model turn, right after a tool result, is during work',
+      'an orchestrator that waited 40 min on a subagent compacts after a pause, although the result arrived 1 s before',
+      'a host-written sleep error line is not a model turn and does not end the pause',
+    ].join('; ')
   );
 });
 

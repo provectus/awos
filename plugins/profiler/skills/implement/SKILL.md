@@ -1,7 +1,7 @@
 ---
 name: implement
 description: >-
-  Profile /awos:implement runs from Claude Code session transcripts: where the
+  Profile /awos:implement and /better:implement runs from Claude Code session transcripts: where the
   wall-clock went (model generation, tools, tests, hangs, idle), per-subagent
   rates, delegation chains, agents leaking onto the orchestrator model, and a
   live watch that flags hung commands while a run is in progress. Use when an
@@ -12,7 +12,7 @@ argument-hint: '[report|watch|sessions] [--session <id>] [--run <n|all>]'
 
 # Implement Run Profiler
 
-You explain where an `/awos:implement` run spent its time. The numbers come from a deterministic script; your job is to run it, read its report, and turn it into a diagnosis the user can act on. You never compute durations yourself from transcript lines, and you never edit a transcript.
+You explain where an `/awos:implement` or `/better:implement` run spent its time. The numbers come from a deterministic script; your job is to run it, read its report, and turn it into a diagnosis the user can act on. You never compute durations yourself from transcript lines, and you never edit a transcript.
 
 ## Inputs
 

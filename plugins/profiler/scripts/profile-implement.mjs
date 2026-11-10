@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * profile-implement.mjs — deterministic profiler for /awos:implement runs.
+ * profile-implement.mjs — deterministic profiler for /awos:implement and
+ * /better:implement runs.
  *
  * Usage:
  *   node profile-implement.mjs sessions [--projects <dir>] [--cwd <path>]
@@ -157,9 +158,11 @@ function isPrompt(row) {
 function isImplementPrompt(row) {
   if (!isPrompt(row)) return false;
   const c = content(row);
+  // Core /awos:implement and the better plugin's /better:implement share
+  // the completion line, so both are runs this profiler reads.
   return (
-    c.includes('<command-name>/awos:implement</command-name>') ||
-    /^\s*\/awos:implement\b/.test(c)
+    /<command-name>\/(awos|better):implement<\/command-name>/.test(c) ||
+    /^\s*\/(awos|better):implement\b/.test(c)
   );
 }
 

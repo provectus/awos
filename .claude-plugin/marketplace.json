@@ -15,10 +15,16 @@
       "version": "2.4.7"
     },
     {
+      "name": "better",
+      "source": "./plugins/better",
+      "description": "Experimental one-command implementation: /better:implement splits an agreed spec into units, delegates each by path, commits each finished slice, checks every unit against its acceptance criteria, and verifies the whole against the agreement before the spec is called done, with run.md in the spec directory as the resumable checkpoint.",
+      "version": "0.4.0"
+    },
+    {
       "name": "profiler",
       "source": "./plugins/profiler",
       "description": "Profiles /awos:implement runs from Claude Code session transcripts: where wall-clock went (model generation, tools, tests, stalls, idle), per-subagent rates, delegation chains, effort leaks, and a live watch mode that flags hung commands while a run is in progress (/profiler:implement).",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }

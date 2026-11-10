@@ -144,7 +144,7 @@ The experiment: store functional specs in memory. An outdated spec is either not
 
 - **Decision point D-9 — memory and sources, one story or two.** Recommendation: two, with a shared home. _Memory_ is what the project knows about itself; _sources_ is where the project's knowledge lives outside the repo; the flow writes the first and only reads the second. Where memory lives follows the experiment's result.
 
-**Status (2026-11-10).** mem0 was researched and dropped. Two runs on JL ([evaluation note](2026-11-05-cross-spec-reading-eval.md)): the 1.6.0 `/awos:spec` reads earlier specs on its own; nothing in the flow writes back what shipped. Proposed: no memory infrastructure; two prompt rules — `/awos:spec` treats prior decisions as decided, `/better:implement` writes drift as a draft at every run end. D-9, proposed: as recommended.
+**Status (2026-11-10).** mem0 was researched and dropped, for four reasons. Some of its features work only in the cloud service. A stored fact has no link to its source. Memory is scoped to one user, not to the project. In two evaluations, its automatic capture without review scored below no memory.
 
 **Exit.** The team reviews the results. If the memory infrastructure is not viable, investment stops and the approach is rethought. The Product Definition decision, and with it the product half of Phase 4, follows the review.
 

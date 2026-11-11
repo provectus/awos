@@ -558,8 +558,57 @@ test('report measures context fill per agent: peak, final, streaming dedupe of i
   );
   assert.match(
     md,
-    /### Context\n\nCompactions written by the host \(compact_boundary lines\): 1; 1 after a pause of 5\+ min since the agent's previous model turn, 0 during work\.\n\n- 2026-09-17 16:17 UTC in typescript-backend "Slice 1: backend": auto, 43k → 9k, after a 11\.\d min pause/,
-    'the Context section counts compactions after a pause and during work, and lists each with its time, agent, trigger, preTokens → postTokens and pause'
+    /### Context\n\nNo compaction during work\.\n\nCompacted after a pause of 5\+ min, when the prompt cache had expired \(the wait, not the context size\): typescript-backend "Slice 1: backend" at 16:17 UTC after 11\.\d min\./,
+    'a compaction after a pause is named in one line, not listed as a finding, and the section says there was no compaction during work'
+  );
+  assert.doesNotMatch(
+    md,
+    /Compactions written by the host|\d+ after a pause/,
+    'the report does not give a compaction count as a measure'
+  );
+});
+
+test('only a compaction during work is listed as a finding, with its agent, tokens and time since the previous model turn', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(
+    root,
+    [
+      userText(at(0), IMPLEMENT),
+      assistant(
+        at(10),
+        'cw-1',
+        MAIN,
+        [agentCall('tb1', 'typescript-backend', 'Slice 1: backend')],
+        20
+      ),
+      toolResult(at(11), 'tb1', 'Async agent launched successfully'),
+      assistant(
+        at(10 * 60),
+        'cw-2',
+        MAIN,
+        [text('Implementation run complete.')],
+        20
+      ),
+    ],
+    [
+      userText(at(11), 'Implement the backend slice', { isSidechain: true }),
+      assistant(at(20), 'b-m1', SUB, [bash('bb1', 'npm test')], 40),
+      toolResult(at(80), 'bb1', '# pass 3'),
+      // 65 s after the previous model turn: the context outgrew itself.
+      compactBoundary(at(85), 180000, 20000),
+      assistant(at(9 * 60), 'b-m2', SUB, [text('Done. Tests green.')], 30),
+    ]
+  );
+  const { md } = reportJson(proj, sid, root, at(72 * 3600));
+  assert.match(
+    md,
+    /### Context\n\nCompactions during work \(the context outgrew itself; details of the brief or of earlier steps can be missing after it\):\n\n- 2026-09-17 16:01 UTC in typescript-backend "Slice 1: backend": auto, 180k → 20k, 65 s after the previous model turn\n/,
+    'a compaction during work is listed with its time, agent, trigger, preTokens → postTokens and the time since the previous model turn'
+  );
+  assert.doesNotMatch(
+    md,
+    /Compacted after a pause/,
+    'with no compaction after a pause, the after-pause line is left out'
   );
 });
 

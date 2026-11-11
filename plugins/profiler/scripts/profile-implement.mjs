@@ -1410,18 +1410,36 @@ export function renderRun(p, ctx) {
       a.compactions.map((c) => ({ ...c, who: `${a.type} "${a.description}"` }))
     ),
   ].sort((x, y) => x.at - y.at);
-  if (compactions.length) {
-    const paused = compactions.filter((c) => c.afterPause).length;
+  // Only a compaction during work says something about the context: it
+  // outgrew itself. One after a pause is the host compacting a context whose
+  // prompt cache expired while the agent waited, whatever its size, so it is
+  // named in one line and not counted as a finding.
+  const duringWork = compactions.filter(
+    (c) => c.pauseSec !== null && !c.afterPause
+  );
+  const other = compactions.filter((c) => !duringWork.includes(c));
+  if (duringWork.length) {
     out.push(
-      `Compactions written by the host (compact_boundary lines): ${compactions.length}; ${paused} after a pause of ${COMPACTION_PAUSE_SEC / 60}+ min since the agent's previous model turn, ${compactions.length - paused} during work.`
+      'Compactions during work (the context outgrew itself; details of the brief or of earlier steps can be missing after it):'
     );
     out.push('');
-    for (const c of compactions)
+    for (const c of duringWork)
       out.push(
-        `- ${iso(c.at)} in ${c.who}: ${c.trigger}, ${kTok(c.preTokens)} → ${kTok(c.postTokens)}, ${c.pauseSec === null ? 'no model turn before it' : c.afterPause ? `after a ${min(c.pauseSec)} pause` : `during work (${c.pauseSec} s after the previous model turn)`}`
+        `- ${iso(c.at)} in ${c.who}: ${c.trigger}, ${kTok(c.preTokens)} → ${kTok(c.postTokens)}, ${c.pauseSec} s after the previous model turn`
       );
   } else {
-    out.push('No compaction in the transcripts of this run.');
+    out.push('No compaction during work.');
+  }
+  if (other.length) {
+    out.push('');
+    out.push(
+      `Compacted after a pause of ${COMPACTION_PAUSE_SEC / 60}+ min, when the prompt cache had expired (the wait, not the context size): ${other
+        .map(
+          (c) =>
+            `${c.who} at ${iso(c.at).slice(11)} ${c.pauseSec === null ? 'before its first model turn' : `after ${min(c.pauseSec)}`}`
+        )
+        .join(', ')}.`
+    );
   }
   out.push('');
   if (bigGaps.length) {

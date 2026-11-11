@@ -30,7 +30,7 @@ node plugins/profiler/scripts/profile-implement.mjs report --cwd /path/to/projec
 
 - **Where the time went:** subagent model generation, subagent tool execution, test and typecheck runs, hung tool calls, orchestrator generation, time waiting on the user (typed prompts and `AskUserQuestion` answers), idle gaps, time the machine was asleep, and how much of the wall-clock had 0, 1, 2, or 3+ subagents running.
 - **Rates:** working agents versus delegators and empty spawns, median active wall-clock per working agent, seconds of generation per API turn, output tokens per turn, share of turns carrying a thinking block, median orchestrator handoff, and the orchestrator's peak context (with its turn and time) and final context.
-- **Context:** each compaction the host wrote in a transcript of the run (a `compact_boundary` line), with its time, agent, trigger, tokens before and after, and whether it came after a pause or during work.
+- **Context:** each compaction during work (a `compact_boundary` line the host wrote while the agent was working), with its time, agent, trigger, and tokens before and after. Compactions after a pause are named in one line: the host compacted a context whose prompt cache had expired, so they say nothing about the context size. The report gives no compaction count as a measure.
 - **Long gaps** in the main session, each classified as machine active or inactive by checking whether any transcript on the machine has a line inside the gap.
 - **Hangs and stalls:** single tool waits over 10 minutes (20 for test commands), with the command; during a live run, agents currently silent on a tool call.
 - **Agents on the orchestrator model:** built-in agent types that ran on the session model and effort instead of a specialist's.

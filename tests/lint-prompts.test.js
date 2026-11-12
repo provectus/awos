@@ -2113,7 +2113,7 @@ test(`plugin.json version matches the awos marketplace entry and equals ${EXPECT
 // The better plugin has its own independent version line. Its discipline
 // is three files moving together: its plugin.json, its marketplace.json entry,
 // and this pinned literal.
-const EXPECTED_BETTER_PLUGIN_VERSION = '0.4.0';
+const EXPECTED_BETTER_PLUGIN_VERSION = '0.5.0';
 
 test(`better plugin.json version matches its marketplace entry and equals ${EXPECTED_BETTER_PLUGIN_VERSION}`, () => {
   const pluginManifest = JSON.parse(
@@ -3478,6 +3478,57 @@ test('better:implement proves unobserved criteria before asking, and asks once',
   assert.ok(
     /steps to check/.test(step5) && /never to design the test/.test(step5),
     'better:implement Step 5 must hand the user the steps to check each remaining [?] criterion — the user confirms, never designs the test'
+  );
+});
+
+test('better:implement marks [x] only for behaviour observed in the running application', () => {
+  // JL benchmark (2026-11-11): under the old Step 4.4 exception — "[x]
+  // when the test's output is quoted" — a run closed 72 of 75 criteria
+  // on test output and observed none against the running backend; a
+  // green `truncate`-class test hid a missing ellipsis. Other runs closed
+  // criteria on a code reading or after stubbing the app until a failed
+  // check passed. A test, a code reading, and a stubbed observation are
+  // context for a [?], never an [x] — in Step 4.4 and in Step 5's
+  // verification units alike.
+  const body = readUtf8(betterImplementPath);
+  const step4 = body.split(/### Step 4/)[1].split(/### Step 5/)[0];
+  const step5 = body.split(/### Step 5/)[1].split(/### Step 6/)[0];
+  assert.ok(
+    !/is `\[x\]` only when the test's output is quoted/.test(body),
+    'better:implement must not let quoted test output make a criterion [x] — a passing test is not an observation of the behaviour'
+  );
+  assert.ok(
+    /observe the real behaviour in the running application/.test(step4),
+    'better:implement Step 4.4 must check each criterion by observing the running application, at the surface the criterion names'
+  );
+  assert.ok(
+    /a reading of the code are not observations/.test(step4) &&
+      /test output kept as context/.test(step4),
+    'better:implement Step 4.4 must mark a criterion supported only by a passing test or a code reading [?], keeping the test output as context'
+  );
+  assert.ok(
+    /stubbed, intercepted or patched/.test(step4),
+    "better:implement Step 4.4 must not count an observation made with the application's code or responses stubbed, intercepted or patched"
+  );
+  assert.ok(
+    /as Step 4\.4 defines an observation/.test(step5) &&
+      /Neither may stub, intercept or patch/.test(step5),
+    'better:implement Step 5 verification units must observe the running application as Step 4.4 defines it, with nothing stubbed — or a [?] would return to [x] on test output'
+  );
+  // Scratch run (2026-11-12): to see a native tooltip, an unattended
+  // verification unit opened a headed browser, captured the whole desktop
+  // and read the frame — the user's other windows went into the model's
+  // context. Observation stays inside a browser or client the run starts;
+  // a desktop-only behaviour is a [?] with steps for a person.
+  assert.ok(
+    /never capture or inspect the user's screen or other windows/.test(step4) &&
+      /visible only on the user's desktop/.test(step4),
+    "better:implement Step 4.4 must keep observation inside a browser or client the run starts, never the user's screen or windows, and leave a desktop-only behaviour [?] for a person"
+  );
+  assert.ok(
+    /capture or inspect the user's screen or other windows/.test(step5) &&
+      /visible only on the user's desktop — stays `\[\?\]`/.test(step5),
+    "better:implement Step 5 verification units must not capture or inspect the user's screen, and must leave a desktop-only behaviour [?] with the steps for a person"
   );
 });
 

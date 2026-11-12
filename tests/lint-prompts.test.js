@@ -3515,6 +3515,21 @@ test('better:implement marks [x] only for behaviour observed in the running appl
       /Neither may stub, intercept or patch/.test(step5),
     'better:implement Step 5 verification units must observe the running application as Step 4.4 defines it, with nothing stubbed — or a [?] would return to [x] on test output'
   );
+  // Scratch run (2026-11-12): to see a native tooltip, an unattended
+  // verification unit opened a headed browser, captured the whole desktop
+  // and read the frame — the user's other windows went into the model's
+  // context. Observation stays inside a browser or client the run starts;
+  // a desktop-only behaviour is a [?] with steps for a person.
+  assert.ok(
+    /never capture or inspect the user's screen or other windows/.test(step4) &&
+      /visible only on the user's desktop/.test(step4),
+    "better:implement Step 4.4 must keep observation inside a browser or client the run starts, never the user's screen or windows, and leave a desktop-only behaviour [?] for a person"
+  );
+  assert.ok(
+    /capture or inspect the user's screen or other windows/.test(step5) &&
+      /visible only on the user's desktop — stays `\[\?\]`/.test(step5),
+    "better:implement Step 5 verification units must not capture or inspect the user's screen, and must leave a desktop-only behaviour [?] with the steps for a person"
+  );
 });
 
 test('better:implement commits every finished slice on a non-default branch', () => {

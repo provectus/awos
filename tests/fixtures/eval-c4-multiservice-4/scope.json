@@ -1,0 +1,18 @@
+{
+  "comment": "Files/dirs the 001-checkout-totals spec legitimately touches, per its technical considerations. The eval's out-of-scope grader flags any other edit. 'ignored' paths are neither in nor out of scope (runtime state, AWOS install artifacts, planning docs).",
+  "allowed": [
+    "packages/domain/src",
+    "services/pricing-service/src",
+    "services/promotions-service/src",
+    "services/checkout-orchestrator/src",
+    "services/payments-gateway/src",
+    "services/stock-service/src",
+    "services/cart-api/src/routes",
+    "services/cart-api/src/views",
+    "services/cart-api/src/serializers",
+    "services/cart-api/src/router.js",
+    "services/catalog-api/src/projector",
+    "tests"
+  ],
+  "ignored": ["context", "var", ".awos", ".claude", "node_modules"]
+}

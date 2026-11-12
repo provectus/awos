@@ -1,0 +1,6 @@
+{
+  "name": "@meterhub/ingest-api",
+  "private": true,
+  "description": "Field-device HTTP API: meter registry and reading intake.",
+  "main": "src/server.js"
+}

@@ -3,6 +3,7 @@
 - **Author:** Daria Garanina
 - **Created:** 2026-09-18
 - **Status:** Draft, pending team review
+- **Updated:** 2026-11-10 — status of Phases 0, 2, 3 and 6, and of items 1.4, 1.5, 1.6 and 5.3
 - **Role:** the plan for AWOS 2.0 — what gets built, in what order, gated on what, and which decisions are still open. The principles it serves are in [Philosophy](../philosophy.md), [Direction](../direction.md), and [Rationale](../rationale.md); each item names the principle (§N) or direction it advances, and when two directions pull against each other, toward agreement wins. Decision points (D-N) carry a recommendation, not a decision.
 
 ---
@@ -19,7 +20,7 @@ The way to 2.0 is through experiments that define what 2.0 is, not through items
 
 | Phase | What                                                                                                              | Depends on                                      | Gate                                                                                             |
 | ----- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| 0     | Preparation — flow, roadmap, brownfield removed; philosophy adopted; prior-agreements lane in flight              | —                                               | Done except three merges (#200, awos-qa #51, #205) and the lane evaluation                       |
+| 0     | Preparation — flow, roadmap, brownfield removed; philosophy adopted; prior-agreements lane in flight              | —                                               | Done except awos-qa #51 and D-3 (#200 merged; #205 closed; evaluation note published)            |
 | 1     | Implement — one command that splits the work, implements it, and verifies the result; verify first; hire reworked | Phase 0                                         | `better:implement` benchmarked against `/awos:implement` on the profiler's criteria; D-7 decided |
 | 2     | Memory — an experiment: can memory-based context, in a solution of the team's own, replace the Product Definition | Phase 0                                         | Team review of the results; if the memory infrastructure is not viable, investment stops         |
 | 3     | BetterSpec — the seam contract, proven on `better:spec`: what every `better` command emits and honours            | Phase 0                                         | `sources.md` dissolved; contract in templates and lint; `better:spec` release                    |
@@ -33,7 +34,7 @@ Implement (with the hire rework) and Memory come first, next to each other, righ
 
 ## Phase 0: Preparation
 
-Done on the PR #200 branch: `/awos:flow`, `/awos:roadmap`, and the brownfield subsystem are removed; `/awos:product` is interview-only; `/awos:architecture` gathers the codebase unconditionally and confirms drift item by item in Update Mode; the user-file policy is adopted; the philosophy documents are on `main`. Kept on purpose: `/awos:hire` (reworked in Phase 1) and the AI-readiness audit (retires in Phase 6, not marked deprecated before then). What remains to remove, and when:
+Merged in PR #200 (2026-10-07): `/awos:flow`, `/awos:roadmap`, and the brownfield subsystem are removed; `/awos:product` is interview-only; `/awos:architecture` gathers the codebase unconditionally and confirms drift item by item in Update Mode; the user-file policy is adopted; the philosophy documents are on `main`. Kept on purpose: `/awos:hire` (reworked in Phase 1) and the AI-readiness audit (retires in Phase 6, not marked deprecated before then). What remains to remove, and when:
 
 | Candidate                                                                                                       | Disposition                                                                        | Where              |
 | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------ |
@@ -50,6 +51,8 @@ Done on the PR #200 branch: `/awos:flow`, `/awos:roadmap`, and the brownfield su
 - **Decision point D-3 — separate lane or merged.** (a) Keep the fourth lane as in #205. (b) Merge its retrieval into the codebase lane and keep the verdict rule and the `[prior]` label. (c) Build (b) and measure both on the same repositories. Recommendation: (c), with a bias to (b) if it holds — the smaller-surface regression is the extra agent, not the extra label. Until decided, #205 is the working version.
 
 **Exit.** PR #200 merged as a 1.x minor; awos-qa PR #51 merged; PR #205 merged as the working version; the evaluation note published and D-3 decided. Owners: Daria (merges), Rail (evaluation).
+
+**Status (2026-11-10).** PR #200 shipped in 1.5.0. PR #205 was closed without a merge on 2026-10-28, after `/awos:spec` 1.6.0 (#237) shipped research lanes; its codebase lane reads earlier specs, but with no `intact | changed | unclear` verdict and no `[prior]` label. Evaluation note: [2026-11-05-cross-spec-reading-eval.md](2026-11-05-cross-spec-reading-eval.md). D-3 is moot. Open: awos-qa PR #51.
 
 ---
 
@@ -81,19 +84,33 @@ Out of scope: the step works and needs no redesign. What the seam contract asks 
 ### 1.4 Profiler and benchmark criteria
 
 - **Instrument.** The `profiler` plugin (PR #210, merged): `/profiler:implement` reads the session transcripts and reports per-agent wall time, turns, tokens, thinking share, delegation chains, hangs, and agents running on the orchestrator's model.
+- **Run boundaries.** PR #232 (open) finds where an implement run ends on real sessions: at the final report or the next `/awos:` command, with user answers kept inside the run. On 12 real sessions the current rules found the correct end in 3, the new rules in 12. The benchmark runs depend on it. #232 now also takes sleep and question waits out of the work time and reports each agent's peak and final context.
 - **Criteria, in order of weight.** _Fidelity_ — acceptance criteria met on the first verification pass, criteria that rested on an unresolved marker, rework units after verification (§1 judges by outcome, §4 by fidelity; time and tokens are means). Then _wall time_ and _tokens_ per run. Then _hangs and delegation depth_. Without fidelity a faster, cheaper run that builds the wrong thing scores well.
 - **Decision point D-2 — where the profiler lives.** It ships in the awos marketplace today. Recommendation: move it to awos-qa when Phase 5 collapses plugins — it is a maintainer instrument, not part of the method's surface.
+
+**Status (2026-11-10).** First benchmark run, one JL spec, one run per variant. Work time: core flow with persona agents 3.12 h, core flow with container agents 2.26 h (core: implement step only), `/better:implement` 0.83 h. Acceptance 71/0/4 in all three: the harness does not tell the variants apart.
 
 ### 1.5 Agent model and effort
 
 - **Landed.** PR #207 (merged): generated agents carry `model: sonnet` and `effort: low`, host-native frontmatter; `awos-recruitment#94` adds `effort` to the registry schema. PR #209 (merged): `disallowedTools: Agent` so specialists cannot re-delegate, plus command-hygiene and one-suite-run rules. A prompt instruction cannot control the host's reasoning budget; the frontmatter fields can (§10).
 - **Next.** Measure their effect with the profiler as the first benchmark run, so the `better:implement` work starts from a known baseline. #207 assumes hire stays — if D-7 removes hire, the template moves with whatever replaces it.
 
+**Status (2026-11-10).** `awos-recruitment#94` merged on 2026-09-18. #243 (merged): the generated agent is a container for a role, not a persona; in the four interactive runs measured for it, `skills:` was filled.
+
 ### 1.6 Hire rework
 
 - **Starting point.** Hire stays until an integrated approach exists where the model hires the needed agents itself. The repo already picks agents by introspecting the `Agent` tool's description block in tech, tasks, and implement; `context/product/hired-agents.md` is read by no command. The general-purpose fallback triggers when no _installed_ agent covers a task — installing agents is what hire does. The design question is "who installs agents and when", not "who reads the file".
 - **Decision point D-7 — hire's fate.** (a) Hire stays a foundation step with a `better:hire` version. (b) `better:implement` hires on demand: when the split finds no installed agent for a unit, it queries the recruitment MCP, proposes the agent, and installs on confirmation; hire as a command retires. (c) Hire leaves the path; recruitment is documented as host tooling the team sets up itself (§9). Recommendation: (b) — it removes a foundation step (smaller surface), keeps the human's confirmation on what gets installed (agreement), answers the staffing gap on the path rather than beside it, and makes the installer's unconditional MCP registration unnecessary. Owner: Rail (recruitment) with whoever owns `better:implement`.
 - **Tech-phase hire.** `/awos:tech` Step 5 hires for the gaps the saved tech spec leaves: a technology inside a stack an installed project-local agent covers extends that agent with the skills found; one with no covering agent gets a container agent from the template with the skills in `skills:` (written even when the registry has none), with a matching registry agent only as an alternative the user picks; no `expert` in names; the rows it changes patched in `hired-agents.md`. `better:implement` asks no consent. `/awos:hire` stays as the whole-project pass after `/awos:architecture` and regenerates the coverage report. D-7 is open.
+
+**Status (2026-11-10).** Evidence for D-7, not a decision:
+
+- #238 (merged): hire reports unmet searches through `report_gap`.
+- `awos-recruitment#164` (merged): installed skills update from the registry.
+- `awos-recruitment#195` (merged): two hooks built from the reported gaps.
+- `awos-recruitment#190` (open): the agent body as a role, not a persona.
+- `validate` is a required check on awos-recruitment `main` since 2026-11-05.
+- #240 (merged) runs hire at the end of `/awos:tech`, a step toward (a); not yet decided.
 
 ### 1.7 awos-qa Phase B
 
@@ -129,6 +146,8 @@ The experiment: store functional specs in memory. An outdated spec is either not
 
 - **Decision point D-9 — memory and sources, one story or two.** Recommendation: two, with a shared home. _Memory_ is what the project knows about itself; _sources_ is where the project's knowledge lives outside the repo; the flow writes the first and only reads the second. Where memory lives follows the experiment's result.
 
+**Status (2026-11-10).** mem0 was researched and dropped, for four reasons. Some of its features work only in the cloud service. A stored fact has no link to its source. Memory is scoped to one user, not to the project. In two evaluations, its automatic capture without review scored below no memory.
+
 **Exit.** The team reviews the results. If the memory infrastructure is not viable, investment stops and the approach is rethought. The Product Definition decision, and with it the product half of Phase 4, follows the review.
 
 ---
@@ -136,6 +155,8 @@ The experiment: store functional specs in memory. An outdated spec is either not
 ## Phase 3: BetterSpec and the seam contract
 
 **Goal.** Fix what every command on the path emits and honours — so the `better` commands are built against a contract instead of retrofitted — and prove it on `better:spec`, the one `better` command that exists. BetterSpec stays a standalone item: it has value on its own — better acceptance criteria, even with the current implement — but sources and knowledge-base access are fixed first (3.1). Serves §3, §2 and §7, §6, §5, and the fidelity direction.
+
+**Status (2026-11-10).** `/better:spec` became the core `/awos:spec` in 1.6.0 (#237); #245 (1.6.1) dropped the feature brief and the understanding gate. The 3.1 design was not followed: `sources.md` is now the gate of the core knowledge-base lane, which reads sources of any role. D-8 stays open.
 
 **Why the seam.** `/better:spec` produces the richest agreement in the repo, and every signal in it — the confirmation, the markers, the provenance, the verifier's residuals — is dropped at the boundary to the next command. `better:implement` (Phase 1) is built before this contract exists; when the contract lands, its verify reads the agreement the seam records instead of the raw spec.
 
@@ -223,6 +244,8 @@ Each core command retires when its `better` version is beta, under the user-file
 
 D-7 is decided in Phase 1. Whatever the choice, the installer's unconditional `awos-recruitment` MCP registration ends here: under (b) `better:implement` asks to connect it when first needed; under (a) hire registers it on first run; under (c) it is documentation.
 
+**Status (2026-11-10).** The registry now serves hooks (`awos-recruitment#164`, `awos-recruitment#195`). The installer still registers the `awos-recruitment` MCP server unconditionally.
+
 ### 5.4 Release and test automation
 
 Blocking tests (3.5); plugin version pins checked in CI against the marketplace as a blocking job; a release job that publishes the plugin versions alongside the npm package so the marketplace never lags the tag; the awos-qa behavioural suite triggered on a `better` command change (needs a Claude runtime in CI — _assumption_: a token is available to the org; if not, awos-qa stays a manual pre-release gate); the Phase 1 profiler benchmark run against a fixed fixture spec on each `better:implement` change, so a regression in fidelity or wall time is visible in the PR. awos-recruitment's own CI is out of scope; if D-7 chooses (b), the MCP's search contract becomes an interface `better:implement` depends on and gets a contract test here.
@@ -238,5 +261,7 @@ Delete `.github/copilot-instructions.md`; strip Cursor and Copilot pointers from
 ## Phase 6: Audit stack retirement
 
 Last. **Gate: the successor audit, developed in its separate repository, has passed beta.** Delete `plugins/awos/skills/ai-readiness-audit/`, `agents/repo-auditor.md`, `standards-refresh`, `tools/ai-readiness-audit/`, `dist/`, the engine scripts, devDependencies, and CI jobs; retire the now-empty `awos` plugin and the marketplace machinery and its installer step. The audit is not marked deprecated before then. Its Spec-Driven-Development dimension still scores a 2.0 project down for following 2.0 (it expects `roadmap` and `context/product/roadmap.md`); that rides until this phase, and is reopened as one fix if the successor slips past Phase 5.
+
+**Status (2026-11-10).** The successor audit is `provectus/ai-sdlc-audit` (Oleksii Tkachenko and Konstantin): the "another repository" of the Phase 6 gate.
 
 **Successor-audit requirements** (owned by the successor repository): narrative claims mechanically traceable to check evidence (#157); an applicability model with "can't determine" and deployment context (#158); a per-ecosystem fixture matrix, Maven multi-module first (#159); orchestration-root / multi-repo topology as first-class (#172); attribution as an unscored descriptor, if anywhere (#173); BDD suites first-class and a pyramid check that SKIPs rather than PASSes on unclassifiable trees (#176); one definition of "project file" plus coverage-report dedup (#179); the measured-or-not MTTR decision owned by a single function (#186).

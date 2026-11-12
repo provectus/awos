@@ -321,15 +321,17 @@ function isImplementPrompt(row) {
   );
 }
 
-// A prompt that starts another AWOS command (/awos:… or the better plugin's
-// /better:…) ends the current run. Any other prompt — an answer, "continue",
+// A prompt that starts a plugin command (/<plugin>:<command>, such as
+// /awos:verify, /better:implement or /profiler:implement) ends the current
+// run. Any other prompt — an answer, "continue", a built-in command such as
 // /login after an expired session — happens inside the run and is recorded
 // as an intervention.
-function isAwosCommandPrompt(row) {
-  const c = content(row);
-  return (
-    /<command-name>\/(awos|better):/.test(c) || /^\s*\/(awos|better):/.test(c)
-  );
+const PLUGIN_COMMAND = String.raw`\/[A-Za-z0-9][\w.-]*:[A-Za-z0-9]`;
+const PLUGIN_COMMAND_RE = new RegExp(
+  String.raw`<command-name>${PLUGIN_COMMAND}|^\s*${PLUGIN_COMMAND}`
+);
+function isPluginCommandPrompt(row) {
+  return PLUGIN_COMMAND_RE.test(content(row));
 }
 
 // implement.md asks for "All tasks complete (100%). Run /awos:verify …" or
@@ -412,7 +414,7 @@ export function findRuns(mainRows) {
         break;
       }
       if (!isPrompt(r)) continue;
-      if (isAwosCommandPrompt(r)) {
+      if (isPluginCommandPrompt(r)) {
         end = r.__t;
         endReason = 'next command';
         break;
@@ -1319,7 +1321,7 @@ export function renderRun(p, ctx) {
   );
   out.push('');
   out.push(
-    `Session \`${ctx.session.id}\`, orchestrator model \`${ctx.mainModel || '?'}\`. ${run.completed ? "Completed with the orchestrator's completion line" : run.endReason === 'next command' ? 'Ended by the next AWOS command, no completion line' : p.live ? 'Still running' : 'Ended without a completion line; measured to the last transcript activity'}.`
+    `Session \`${ctx.session.id}\`, orchestrator model \`${ctx.mainModel || '?'}\`. ${run.completed ? "Completed with the orchestrator's completion line" : run.endReason === 'next command' ? 'Ended by the next plugin command, no completion line' : p.live ? 'Still running' : 'Ended without a completion line; measured to the last transcript activity'}.`
   );
   if (run.interventions.length) {
     out.push('');
@@ -1747,7 +1749,7 @@ function cmdWatch(args) {
     }
     if (ended) {
       line(
-        `RUN ENDED ${run.completed ? run.completedText.replace(/\s+/g, ' ').slice(0, 160) : 'by the next AWOS command'}`
+        `RUN ENDED ${run.completed ? run.completedText.replace(/\s+/g, ' ').slice(0, 160) : 'by the next plugin command'}`
       );
       return true;
     }

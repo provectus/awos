@@ -1054,6 +1054,53 @@ test('a second /better:implement starts a new run, and an answer in between stay
   );
 });
 
+test('any plugin command ends a run with no completion line; a built-in command such as /login stays inside it', () => {
+  // The run below is interrupted and never prints its completion line. The
+  // user then types /login (a built-in, no plugin namespace) and later
+  // /profiler:implement (a plugin command) in the same session.
+  const LOGIN = '<command-name>/login</command-name>';
+  const PROFILER =
+    '<command-message>profiler:implement</command-message>\n<command-name>/profiler:implement</command-name>\n<command-args>report</command-args>';
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(root, [
+    userText(at(0), IMPLEMENT),
+    assistant(at(60), 'p-1', MAIN, [text('Working on slice 1.')], 10),
+    userText(at(5 * 60), LOGIN),
+    assistant(at(6 * 60), 'p-2', MAIN, [text('Working on slice 2.')], 10),
+    userText(at(20 * 60), PROFILER),
+    assistant(at(21 * 60), 'p-3', MAIN, [text('Here is the profile.')], 10),
+  ]);
+  const { md, json } = reportJson(proj, sid, root, at(40 * 60), [
+    '--run',
+    'all',
+  ]);
+  assert.equal(
+    json.runs.length,
+    1,
+    '/profiler:implement does not start a new implement run'
+  );
+  const r = json.runs[0];
+  assert.equal(
+    r.run.endReason,
+    'next command',
+    '/profiler:implement ends the interrupted run; it is not a "continue" inside it'
+  );
+  assert.ok(
+    Math.abs(r.totals.wallSec - 20 * 60) < 2,
+    `the run ends at /profiler:implement at 20 min, not at the profiler's own turn at 21 min; got ${r.totals.wallSec}s`
+  );
+  assert.deepEqual(
+    r.run.interventions.map((x) => x.text),
+    [LOGIN],
+    'the built-in /login stays inside the run as an intervention'
+  );
+  assert.match(
+    md,
+    /Ended by the next plugin command, no completion line/,
+    'the report says a plugin command ended the run'
+  );
+});
+
 test('answers and "continue" stay inside the run, teammate and usage-limit messages are not prompts, and the next /awos: command starts a new run', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
   const { proj, sid } = writeSession(root, [

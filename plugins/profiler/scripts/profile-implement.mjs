@@ -284,8 +284,51 @@ function textOf(row) {
     .join('\n');
 }
 
-function isPrompt(row) {
+// A built-in command the user typed, such as /login, is written as a
+// `system` row with subtype `local_command` and the command in `content`;
+// its output follows in a row of the same kind.
+function isLocalCommand(row) {
+  return (
+    row.type === 'system' &&
+    row.subtype === 'local_command' &&
+    typeof row.content === 'string' &&
+    /^\s*<command-name>/.test(row.content)
+  );
+}
+
+// The text the user typed: a user row's content, or a local command's.
+function promptText(row) {
+  return isLocalCommand(row) ? row.content : content(row);
+}
+
+// A command prompt as the user typed it: "<command-name>/login</command-name>
+// <command-args>x</command-args>" reads as "/login x".
+function typedText(row) {
+  const c = String(promptText(row));
+  const name = c.match(/<command-name>([^<]*)<\/command-name>/);
+  if (!name) return c;
+  const args = c.match(/<command-args>([^<]*)<\/command-args>/);
+  return [name[1], args ? args[1] : ''].join(' ').trim();
+}
+
+// The host marks what it writes for a local command with a meta row that
+// holds <local-command-caveat>. A plain-text user row at the same time is the
+// host's reply (such as "Commands are in the form `/command [args]`" for a
+// mistyped command), not text the user typed.
+function isHostReply(row, prev) {
+  return Boolean(
+    prev &&
+    prev.isMeta &&
+    prev.__t === row.__t &&
+    String(content(prev)).includes('<local-command-caveat>') &&
+    !/^\s*<command-name>/.test(String(content(row)))
+  );
+}
+
+function isPrompt(row, prev) {
+  if (isLocalCommand(row)) return true;
   if (row.type !== 'user' || row.isMeta) return false;
+  if (isHostReply(row, prev)) return false;
   const c = content(row);
   if (typeof c !== 'string') return false;
   if (c.includes('<task-notification>')) return false;
@@ -331,7 +374,7 @@ const PLUGIN_COMMAND_RE = new RegExp(
   String.raw`<command-name>${PLUGIN_COMMAND}|^\s*${PLUGIN_COMMAND}`
 );
 function isPluginCommandPrompt(row) {
-  return PLUGIN_COMMAND_RE.test(content(row));
+  return PLUGIN_COMMAND_RE.test(String(promptText(row)));
 }
 
 // implement.md asks for "All tasks complete (100%). Run /awos:verify …" or
@@ -413,7 +456,7 @@ export function findRuns(mainRows) {
         endReason = 'completed';
         break;
       }
-      if (!isPrompt(r)) continue;
+      if (!isPrompt(r, mainRows[j - 1])) continue;
       if (isPluginCommandPrompt(r)) {
         end = r.__t;
         endReason = 'next command';
@@ -424,7 +467,7 @@ export function findRuns(mainRows) {
       const waitSec = (r.__t - mainRows[j - 1].__t) / 1000;
       interventions.push({
         at: r.__t,
-        text: String(content(r)).replace(/\s+/g, ' ').slice(0, 120),
+        text: typedText(r).replace(/\s+/g, ' ').slice(0, 120),
         waitSec: waitSec > IDLE_GAP_SEC ? 0 : waitSec,
       });
     }
@@ -818,13 +861,25 @@ export function profileRun(ctx, run) {
   const orch = {
     modelSec: 0,
     toolSec: 0,
+    agentWaitSec: 0,
     idleSec: 0,
     asleepSec: 0,
     handoffs: [],
+    // Each stretch of the orchestrator's own work (a model turn or a tool
+    // of its own), so the Units section can place it between subagents.
+    active: [],
   };
   let prev = null;
   let lastNotification = null;
   const rowsInRun = mainRows.filter((r) => r.__t >= run.start && r.__t <= end);
+  // A foreground Agent call returns its subagent's result as a tool result.
+  // The wait for it is the subagent's own time, already counted in the
+  // subagent buckets, so it is kept out of the orchestrator's tool time.
+  const agentCalls = new Set();
+  for (const row of rowsInRun)
+    if (row.type === 'assistant')
+      for (const b of blocks(row))
+        if (b.type === 'tool_use' && b.name === 'Agent') agentCalls.add(b.id);
   const bigGaps = [];
   for (const row of rowsInRun) {
     const asleep = prev ? overlapSec(sleep, prev, row.__t) : 0;
@@ -839,7 +894,10 @@ export function profileRun(ctx, run) {
     if (row.type === 'assistant' && isSleepError(row)) {
       // not a model turn
     } else if (row.type === 'assistant') {
-      if (prev && !idle) orch.modelSec += gap;
+      if (prev && !idle) {
+        orch.modelSec += gap;
+        orch.active.push({ from: prev, to: row.__t, sec: gap });
+      }
       for (const b of blocks(row)) {
         if (
           b.type === 'tool_use' &&
@@ -853,8 +911,15 @@ export function profileRun(ctx, run) {
       }
     } else if (row.type === 'user') {
       const c = content(row);
-      if (blocks(row).some((b) => b.type === 'tool_result') && prev && !idle)
-        orch.toolSec += gap;
+      const results = blocks(row).filter((b) => b.type === 'tool_result');
+      if (results.length && prev && !idle) {
+        if (results.some((b) => agentCalls.has(b.tool_use_id)))
+          orch.agentWaitSec += gap;
+        else {
+          orch.toolSec += gap;
+          orch.active.push({ from: prev, to: row.__t, sec: gap });
+        }
+      }
       if (typeof c === 'string' && c.includes('<task-notification>'))
         lastNotification = row.__t;
     }
@@ -935,6 +1000,7 @@ export function profileRun(ctx, run) {
     ),
     orchestratorModelSec: orch.modelSec,
     orchestratorToolSec: orch.toolSec,
+    orchestratorAgentWaitSec: orch.agentWaitSec,
     orchestratorIdleSec: orch.idleSec,
     userPrompts: run.interventions.length,
     userQuestions: (run.questions || []).length,
@@ -1134,7 +1200,7 @@ const activeSec = (a) => a.wallSec - a.idleSec - a.asleepSec;
 // unit: its context counts toward the unit's peak, its time is already inside
 // the ancestor's. Time is each attempt's active wall-clock, the Agents
 // table's Wall column.
-export function matchUnits(parsed, agents) {
+export function matchUnits(parsed, agents, window = null) {
   const byId = new Map(agents.map((a) => [a.id, a]));
   const rootOf = (a) => {
     let r = a;
@@ -1151,6 +1217,7 @@ export function matchUnits(parsed, agents) {
     agentIds: [],
     agentTypes: [],
     activeSec: 0,
+    orchestratorSec: 0,
     peakContext: 0,
   }));
   const unitById = new Map(units.map((u) => [u.id, u]));
@@ -1197,11 +1264,63 @@ export function matchUnits(parsed, agents) {
     unmatched,
     notRun: units.filter((u) => u.attempts === 0).map((u) => u.id),
     totals,
+    orchestrator: window ? placeOrchestrator(roots, unitOfRoot, window) : null,
   };
 }
 
+// The orchestrator's own work, placed between top-level subagents. After a
+// subagent ends, /better:implement spot-checks its report, observes the
+// unit's criteria in the running application and commits the slice before
+// it starts the next one; that stretch belongs to the unit the subagent did.
+// The stretch ends at the next subagent's start or end, whichever comes
+// first, so stretches never overlap when subagents run at once. Time before
+// the first subagent (baseline, plan) and after the last one (the final walk
+// over every criterion, the questions, the report) is reported apart.
+function placeOrchestrator(roots, unitOfRoot, { active, start, end }) {
+  const within = (a, b) =>
+    active.reduce((s, x) => {
+      const lo = Math.max(a, x.from);
+      const hi = Math.min(b, x.to);
+      if (hi <= lo || x.to <= x.from) return s;
+      return s + (x.sec * (hi - lo)) / (x.to - x.from);
+    }, 0);
+  const out = {
+    beforeFirstSec: 0,
+    betweenSec: 0,
+    afterLastSec: 0,
+    whileSubagentsSec: 0,
+  };
+  const totalSec = within(start, end);
+  const timed = roots.filter((a) => a.first !== null && a.last !== null);
+  if (!timed.length) {
+    out.beforeFirstSec = totalSec;
+    return out;
+  }
+  const marks = timed.flatMap((a) => [a.first, a.last]);
+  out.beforeFirstSec = within(start, Math.min(...timed.map((a) => a.first)));
+  for (const a of timed) {
+    const later = marks.filter((t) => t > a.last);
+    const unit = unitOfRoot.get(a.id);
+    if (!later.length) {
+      // The last subagent's check runs inside the final walk. Subagents
+      // that end at the same last moment share one stretch.
+      if (unit) unit.orchestratorInFinal = true;
+      if (!out.afterLastSec) out.afterLastSec = within(a.last, end);
+      continue;
+    }
+    const sec = within(a.last, Math.min(...later));
+    out.betweenSec += sec;
+    if (unit) unit.orchestratorSec += sec;
+  }
+  out.whileSubagentsSec = Math.max(
+    0,
+    totalSec - out.beforeFirstSec - out.betweenSec - out.afterLastSec
+  );
+  return out;
+}
+
 // The unit view of one run, or the one-line reason it has none.
-export function runUnits(ctx, run, agents, runMdArg) {
+export function runUnits(ctx, run, agents, runMdArg, window = null) {
   if (run.command !== 'better')
     return {
       skipped:
@@ -1235,7 +1354,7 @@ export function runUnits(ctx, run, agents, runMdArg) {
     status: parsed.status,
     duplicates: parsed.duplicates,
     slices: parsed.slices,
-    ...matchUnits(parsed, agents),
+    ...matchUnits(parsed, agents, window),
   };
 }
 
@@ -1520,12 +1639,12 @@ function renderUnits(u) {
   );
   out.push('');
   out.push(
-    '| Unit | Kind | Title | Planned agent | Actual agent | Attempts | Active | Peak ctx | State |'
+    '| Unit | Kind | Title | Planned agent | Actual agent | Attempts | Active | Orchestrator after | Peak ctx | State |'
   );
-  out.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+  out.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
   for (const x of u.units)
     out.push(
-      `| ${x.id} | ${x.kind} | ${cell(x.title.slice(0, 40).trim())} | ${cell(x.plannedAgent || '—')} | ${x.agentTypes.join(', ') || '—'} | ${x.attempts} | ${x.attempts ? min(x.activeSec) : '—'} | ${kTok(x.peakContext)} | ${cell(x.state || '?')} |`
+      `| ${x.id} | ${x.kind} | ${cell(x.title.slice(0, 40).trim())} | ${cell(x.plannedAgent || '—')} | ${x.agentTypes.join(', ') || '—'} | ${x.attempts} | ${x.attempts ? min(x.activeSec) : '—'} | ${!x.attempts || !u.orchestrator ? '—' : x.orchestratorInFinal && !x.orchestratorSec ? 'in the final walk' : min(x.orchestratorSec)} | ${kTok(x.peakContext)} | ${cell(x.state || '?')} |`
     );
   out.push('');
   const kinds = ['work', 'verification', 'rework'];
@@ -1533,6 +1652,13 @@ function renderUnits(u) {
   out.push(
     `Unit time: ${kinds.map((k) => `${k} ${min(u.totals[k])} (${all > 0 ? pct(u.totals[k] / all) : '—'})`).join(', ')}.`
   );
+  if (u.orchestrator) {
+    const o = u.orchestrator;
+    out.push('');
+    out.push(
+      `Orchestrator's own work: before the first subagent ${min(o.beforeFirstSec)} (baseline, plan); after a subagent and before the next one ${min(o.betweenSec)} (the "Orchestrator after" column: spot-check, observing the unit's criteria, commit); after the last subagent ${min(o.afterLastSec)} (the final walk over every criterion, the questions, the report); while subagents ran ${min(o.whileSubagentsSec)}.`
+    );
+  }
   out.push('');
   if (u.notRun.length) {
     out.push(
@@ -1607,7 +1733,11 @@ function cmdReport(args) {
   }
   const profiles = selected.map((r) => {
     const p = profileRun(ctx, r);
-    p.units = runUnits(ctx, r, p.agents, args['run-md']);
+    p.units = runUnits(ctx, r, p.agents, args['run-md'], {
+      active: p.orch.active,
+      start: r.start,
+      end: p.end,
+    });
     return p;
   });
   const md = [`# /awos:implement profile — ${path.basename(projectDir)}`, ''];
@@ -1661,6 +1791,7 @@ function cmdReport(args) {
         skipped: p.units.skipped || null,
         slices: p.units.slices || [],
         totals: p.units.totals || null,
+        orchestrator: p.units.orchestrator || null,
         unitsNotRun: p.units.notRun || [],
         unmatchedAgents: p.units.unmatched || [],
       },

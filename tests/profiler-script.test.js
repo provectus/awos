@@ -1054,6 +1054,105 @@ test('a second /better:implement starts a new run, and an answer in between stay
   );
 });
 
+test('a /login written as a local_command system row is a prompt inside the run; the host reply to a mistyped command is not', () => {
+  // The real shape after an API error: the user first mistypes a command
+  // (the host writes a caveat meta row and its reply at the same time), then
+  // types /login, which the host writes as a `system` row with subtype
+  // `local_command`, followed by the command's output in a row of the same
+  // kind.
+  const localCommand = (ts, c) =>
+    JSON.stringify({
+      type: 'system',
+      subtype: 'local_command',
+      content: c,
+      timestamp: ts,
+      isMeta: false,
+    });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(root, [
+    userText(at(0), IMPLEMENT),
+    assistant(at(60), 'l-1', MAIN, [text('Working on slice 1.')], 10),
+    userText(
+      at(300),
+      '<local-command-caveat>The command below was run directly in Claude Code, not sent to you as a request.</local-command-caveat>',
+      { isMeta: true }
+    ),
+    userText(at(300), 'Commands are in the form `/command [args]`'),
+    localCommand(
+      at(375),
+      '<command-name>/login</command-name>\n            <command-message>login</command-message>\n            <command-args></command-args>'
+    ),
+    localCommand(
+      at(375),
+      '<local-command-stdout>Login successful</local-command-stdout>'
+    ),
+    assistant(at(400), 'l-2', MAIN, [text('Working on slice 2.')], 10),
+    assistant(
+      at(500),
+      'l-3',
+      MAIN,
+      [text('Implementation run complete. 2/2 tasks done (100%).')],
+      10
+    ),
+  ]);
+  const { json } = reportJson(proj, sid, root, at(40 * 60));
+  const r = json.runs[0];
+  assert.equal(
+    r.run.completed,
+    true,
+    'the built-in /login does not end the run; it ends at its completion line'
+  );
+  assert.deepEqual(
+    r.run.interventions.map((x) => x.text),
+    ['/login'],
+    'the /login system row is the one prompt, shown as typed; the host reply "Commands are in the form …" and the "Login successful" output are not prompts'
+  );
+  assert.ok(
+    Math.abs(r.run.interventions[0].waitSec - 75) < 1,
+    `the wait before /login is counted from the host reply at 5 min to the command at 6 min 15 s; got ${r.run.interventions[0].waitSec}s`
+  );
+});
+
+test('a foreground Agent call is not orchestrator tool time: its wait is the subagent’s own time', () => {
+  // The orchestrator calls the subagent in the foreground (its result comes
+  // back as a tool result), then runs one Bash command of its own.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(
+    root,
+    [
+      userText(at(0), IMPLEMENT),
+      assistant(
+        at(10),
+        'f-1',
+        MAIN,
+        [agentCall('tb1', 'typescript-backend', 'Slice 1: backend')],
+        20
+      ),
+      toolResult(at(120), 'tb1', 'Done. Tests green.'),
+      assistant(at(130), 'f-2', MAIN, [bash('m1', 'git status')], 10),
+      toolResult(at(140), 'm1', 'clean'),
+      assistant(
+        at(150),
+        'f-3',
+        MAIN,
+        [text('Implementation run complete. 1/1 tasks done (100%).')],
+        10
+      ),
+    ],
+    backendAgent(110)
+  );
+  const { json } = reportJson(proj, sid, root, at(40 * 60));
+  const t = json.runs[0].totals;
+  assert.ok(
+    Math.abs(t.orchestratorToolSec - 10) < 1,
+    `orchestrator tool time is its own 10 s Bash call only, not the 110 s it waited on the subagent; got ${t.orchestratorToolSec}s`
+  );
+  assert.ok(
+    Math.abs(t.orchestratorAgentWaitSec - 110) < 1,
+    `the 110 s wait on the foreground subagent is reported apart, in orchestratorAgentWaitSec; got ${t.orchestratorAgentWaitSec}s`
+  );
+});
+
 test('any plugin command ends a run with no completion line; a built-in command such as /login stays inside it', () => {
   // The run below is interrupted and never prints its completion line. The
   // user then types /login (a built-in, no plugin namespace) and later
@@ -1091,8 +1190,8 @@ test('any plugin command ends a run with no completion line; a built-in command 
   );
   assert.deepEqual(
     r.run.interventions.map((x) => x.text),
-    [LOGIN],
-    'the built-in /login stays inside the run as an intervention'
+    ['/login'],
+    'the built-in /login stays inside the run as an intervention, shown as typed'
   );
   assert.match(
     md,
@@ -1711,8 +1810,46 @@ test('units: run.md names the unit of each subagent; time comes from the transcr
   );
   assert.match(
     md,
-    /\| 2\.1 \| work \| Frontend list \| react-frontend \| react-frontend \| 2 \| 15\.0 min \| 10k \| done \|/,
-    'the Units row carries id, kind, title, planned and actual agent, attempts, active time, peak context and State'
+    /\| 2\.1 \| work \| Frontend list \| react-frontend \| react-frontend \| 2 \| 15\.0 min \| 3\.3 min \| 10k \| done \|/,
+    'the Units row carries id, kind, title, planned and actual agent, attempts, active time, orchestrator time after it, peak context and State'
+  );
+
+  // The orchestrator's own work, placed between top-level subagents. Its
+  // turns in this fixture run without a break from 0 to 3000 s, so each
+  // stretch is the length of its window: from a subagent's end to the next
+  // subagent's start or end.
+  const near = (got, want, what) =>
+    assert.ok(Math.abs(got - want) < 1, `${what}: want ${want} s, got ${got}`);
+  near(unit('1.1').orchestratorSec, 100, 'after Unit 1.1 (400 → 500 s)');
+  near(
+    unit('2.1').orchestratorSec,
+    200,
+    'after both Unit 2.1 attempts (800 → 900 s and 1500 → 1600 s)'
+  );
+  near(unit('2.V1').orchestratorSec, 80, 'after 2.V1 (1720 → 1800 s)');
+  near(unit('2.V2').orchestratorSec, 20, 'after 2.V2 (1980 → 2000 s)');
+  near(
+    unit('2.R1').orchestratorSec,
+    100,
+    'after 2.R1 (2600 → 2700 s); its nested Explore agent marks no window'
+  );
+  const o = r.runMd.orchestrator;
+  near(o.beforeFirstSec, 100, 'before the first subagent (0 → 100 s)');
+  near(o.betweenSec, 500, 'between subagents, the sum of the windows');
+  near(
+    o.afterLastSec,
+    240,
+    'after the last subagent, the commit helper (2760 → 3000 s)'
+  );
+  near(
+    o.whileSubagentsSec,
+    2160,
+    'the rest of the 3000 s ran while a subagent was working'
+  );
+  assert.match(
+    md,
+    /Orchestrator's own work: before the first subagent 1\.7 min \(baseline, plan\); after a subagent and before the next one 8\.3 min .*; after the last subagent 4\.0 min .*; while subagents ran 36\.0 min\./,
+    'the report gives the orchestrator time before, between, after and during the subagents'
   );
   assert.ok(
     md.indexOf('### Units') > md.indexOf('### Agents'),

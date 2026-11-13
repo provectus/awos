@@ -38,13 +38,35 @@ const toolResult = (ts, toolUseId, content) =>
     role: 'user',
     content: [{ type: 'tool_result', tool_use_id: toolUseId, content }],
   });
-const assistant = (ts, id, model, blocks, outputTokens) =>
+// The three input fields of a real usage object; their sum is the context
+// the model read on that turn.
+const ctxUsage = (input, cacheCreation, cacheRead) => ({
+  input_tokens: input,
+  cache_creation_input_tokens: cacheCreation,
+  cache_read_input_tokens: cacheRead,
+});
+const assistant = (
+  ts,
+  id,
+  model,
+  blocks,
+  outputTokens,
+  ctx = ctxUsage(2, 1000, 9000)
+) =>
   row('assistant', ts, {
     role: 'assistant',
     id,
     model,
     content: blocks,
-    usage: { output_tokens: outputTokens },
+    usage: { ...ctx, output_tokens: outputTokens },
+  });
+const compactBoundary = (ts, preTokens, postTokens) =>
+  JSON.stringify({
+    type: 'system',
+    subtype: 'compact_boundary',
+    content: 'Conversation compacted',
+    timestamp: ts,
+    compactMetadata: { trigger: 'auto', preTokens, postTokens },
   });
 const bash = (id, command) => ({
   type: 'tool_use',
@@ -92,15 +114,18 @@ function writeFixture(root, { completed }) {
       'm-main-2',
       MAIN,
       [agentCall('tu2', 'general-purpose', 'Commit Slice 1')],
-      30
+      30,
+      ctxUsage(2, 2000, 18000)
     ),
     toolResult(at(21 * 60 + 1), 'tu2', 'Async agent launched successfully'),
+    // The orchestrator's peak context: 30 002 tokens at its third turn.
     assistant(
       at(22 * 60),
       'm-main-3',
       MAIN,
       [agentCall('tu4', 'react-frontend', 'Slice 1: verify UI')],
-      30
+      30,
+      ctxUsage(2, 1000, 29000)
     ),
     toolResult(at(22 * 60 + 1), 'tu4', 'Async agent launched successfully'),
     userText(
@@ -115,7 +140,8 @@ function writeFixture(root, { completed }) {
         'm-main-4',
         MAIN,
         [text('All tasks complete (100%). Run /awos:verify next.')],
-        20
+        20,
+        ctxUsage(2, 500, 24500)
       )
     );
     main.push(userText(at(40 * 60), 'thanks, next thing please'));
@@ -137,6 +163,9 @@ function writeFixture(root, { completed }) {
   // timed out and moved to background (excluded from tests), one 11.8-minute
   // hang on a non-test command, then a final report. Its first turn is
   // written twice with partial usage (streaming), so tokens must dedupe.
+  // Context: m1 24 002 (max per field over its two lines), m2 43 003 (the
+  // peak; its later partial line has smaller numbers), m3 30 000 (only
+  // cache_read_input_tokens present), one compaction, m4 12 002 (final).
   writeAgent(
     'a1',
     {
@@ -147,24 +176,57 @@ function writeFixture(root, { completed }) {
     },
     [
       userText(at(10), 'Implement the backend slice', { isSidechain: true }),
-      assistant(at(15), 'm1', SUB, [thinking(), bash('b1', 'npm test')], 2),
+      assistant(
+        at(15),
+        'm1',
+        SUB,
+        [thinking(), bash('b1', 'npm test')],
+        2,
+        ctxUsage(2, 500, 20000)
+      ),
       assistant(
         at(15, 100),
         'm1',
         SUB,
         [thinking(), bash('b1', 'npm test')],
-        500
+        500,
+        ctxUsage(2, 4000, 20000)
       ),
       toolResult(at(180), 'b1', '# pass 12'),
-      assistant(at(185), 'm2', SUB, [bash('b2', 'npm test -- --watch')], 40),
+      assistant(
+        at(185),
+        'm2',
+        SUB,
+        [bash('b2', 'npm test -- --watch')],
+        40,
+        ctxUsage(3, 3000, 40000)
+      ),
+      assistant(
+        at(185, 50),
+        'm2',
+        SUB,
+        [bash('b2', 'npm test -- --watch')],
+        40,
+        ctxUsage(1, 0, 0)
+      ),
       toolResult(
         at(305),
         'b2',
         'Command did not complete within its 120s timeout and was moved to the background'
       ),
-      assistant(at(310), 'm3', SUB, [bash('b3', 'sleep 1000')], 30),
+      assistant(at(310), 'm3', SUB, [bash('b3', 'sleep 1000')], 30, {
+        cache_read_input_tokens: 30000,
+      }),
       toolResult(at(1020), 'b3', ''),
-      assistant(at(1025), 'm4', SUB, [text('Done. Tests green.')], 60),
+      compactBoundary(at(1021), 43003, 9000),
+      assistant(
+        at(1025),
+        'm4',
+        SUB,
+        [text('Done. Tests green.')],
+        60,
+        ctxUsage(2, 3000, 9000)
+      ),
     ]
   );
 
@@ -193,7 +255,16 @@ function writeFixture(root, { completed }) {
         '<task-notification><task-id>a3</task-id></task-notification>',
         { isSidechain: true }
       ),
-      assistant(at(29 * 60 + 5), 'm6', MAIN, [text('Forwarded and done.')], 20),
+      // A turn that reports no input usage at all: it must not become the
+      // agent's final context.
+      assistant(
+        at(29 * 60 + 5),
+        'm6',
+        MAIN,
+        [text('Forwarded and done.')],
+        20,
+        {}
+      ),
     ]
   );
 
@@ -245,7 +316,9 @@ function writeFixture(root, { completed }) {
 }
 
 function run(args, cwd) {
-  const res = spawnSync(process.execPath, [script, ...args], {
+  // The OS sleep log (pmset on macOS) is machine state; tests pass their own.
+  const sleepArgs = args.includes('--sleep-log') ? [] : ['--sleep-log', 'none'];
+  const res = spawnSync(process.execPath, [script, ...args, ...sleepArgs], {
     cwd,
     encoding: 'utf8',
   });
@@ -384,6 +457,237 @@ test('report profiles a completed implement run: buckets, dedupe, hang, tests, d
   );
 });
 
+test('report measures context fill per agent: peak, final, streaming dedupe of input fields, missing fields, compactions', () => {
+  // To check that a run keeps the orchestrator's context small, the context
+  // of each agent is read from the usage on its turns, never estimated.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeFixture(root, { completed: true });
+  const jsonOut = path.join(root, 'profile.json');
+  const res = run(
+    [
+      'report',
+      '--projects',
+      proj,
+      '--session',
+      sid,
+      '--now',
+      at(40 * 60),
+      '--json',
+      jsonOut,
+    ],
+    root
+  );
+  assert.equal(res.status, 0, `report must exit 0; output was:\n${res.out}`);
+  const md = res.stdout;
+  const r = JSON.parse(fs.readFileSync(jsonOut, 'utf8')).runs[0];
+  const byId = Object.fromEntries(r.agents.map((a) => [a.id, a]));
+
+  assert.equal(
+    byId.a1.peakContext,
+    43003,
+    'peak context is the largest input + cache_creation + cache_read sum over the turns; a later partial line of the same message with smaller numbers must not lower it'
+  );
+  assert.equal(
+    byId.a1.peakTurn,
+    2,
+    'the peak is attributed to the deduplicated turn where it happened (the second turn)'
+  );
+  assert.equal(
+    byId.a1.finalContext,
+    12002,
+    "final context is the agent's last turn, not its peak"
+  );
+  assert.equal(
+    byId.a2.finalContext,
+    10002,
+    'a last turn that reports no input usage at all does not set the final context to 0'
+  );
+  assert.ok(
+    Object.values(byId).every(
+      (a) => Number.isFinite(a.peakContext) && Number.isFinite(a.finalContext)
+    ),
+    'a missing usage field counts as 0, so no context number is NaN'
+  );
+  assert.equal(
+    byId.a1.compactions.length,
+    1,
+    'each compact_boundary line in a transcript is one compaction'
+  );
+  assert.deepEqual(
+    byId.a1.compactions[0],
+    {
+      at: at(1021),
+      trigger: 'auto',
+      preTokens: 43003,
+      postTokens: 9000,
+      pauseSec: 711,
+      afterPause: true,
+    },
+    "a compaction carries its time, trigger, preTokens and postTokens from compactMetadata, and the pause since the agent's previous model turn (m3 at 310 s; the tool result at 1020 s does not end the pause)"
+  );
+  assert.equal(
+    byId.a4.compactions.length,
+    0,
+    'a transcript without compact_boundary lines has no compactions, even when its numbers drop'
+  );
+  assert.deepEqual(
+    {
+      peak: r.orchestrator.peakContext,
+      turn: r.orchestrator.peakTurn,
+      final: r.orchestrator.finalContext,
+      compactions: r.orchestrator.compactions.length,
+    },
+    { peak: 30002, turn: 3, final: 25002, compactions: 0 },
+    'the JSON carries the orchestrator context fill over the run window: peak, its turn, final, compactions'
+  );
+
+  assert.match(
+    md,
+    /\| Peak ctx \| Final ctx \|/,
+    'the Agents table has Peak ctx and Final ctx columns'
+  );
+  assert.match(
+    md,
+    /\| Slice 1: backend \|.*\| 43k \| 12k \|/,
+    'the Agents table shows peak and final context in thousands of tokens'
+  );
+  assert.match(
+    md,
+    /\| Orchestrator context \(peak \/ final\) \| 30k at turn 3 \(16:22 UTC\) \/ 25k \|/,
+    'the Rates table shows the orchestrator peak with its turn and time, and its final context'
+  );
+  assert.match(
+    md,
+    /### Context\n\nNo compaction during work\.\n\nCompacted after a pause of 5\+ min, when the prompt cache had expired \(the wait, not the context size\): typescript-backend "Slice 1: backend" at 16:17 UTC after 11\.\d min\./,
+    'a compaction after a pause is named in one line, not listed as a finding, and the section says there was no compaction during work'
+  );
+  assert.doesNotMatch(
+    md,
+    /Compactions written by the host|\d+ after a pause/,
+    'the report does not give a compaction count as a measure'
+  );
+});
+
+test('only a compaction during work is listed as a finding, with its agent, tokens and time since the previous model turn', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(
+    root,
+    [
+      userText(at(0), IMPLEMENT),
+      assistant(
+        at(10),
+        'cw-1',
+        MAIN,
+        [agentCall('tb1', 'typescript-backend', 'Slice 1: backend')],
+        20
+      ),
+      toolResult(at(11), 'tb1', 'Async agent launched successfully'),
+      assistant(
+        at(10 * 60),
+        'cw-2',
+        MAIN,
+        [text('Implementation run complete.')],
+        20
+      ),
+    ],
+    [
+      userText(at(11), 'Implement the backend slice', { isSidechain: true }),
+      assistant(at(20), 'b-m1', SUB, [bash('bb1', 'npm test')], 40),
+      toolResult(at(80), 'bb1', '# pass 3'),
+      // 65 s after the previous model turn: the context outgrew itself.
+      compactBoundary(at(85), 180000, 20000),
+      assistant(at(9 * 60), 'b-m2', SUB, [text('Done. Tests green.')], 30),
+    ]
+  );
+  const { md } = reportJson(proj, sid, root, at(72 * 3600));
+  assert.match(
+    md,
+    /### Context\n\nCompactions during work \(the context outgrew itself; details of the brief or of earlier steps can be missing after it\):\n\n- 2026-09-17 16:01 UTC in typescript-backend "Slice 1: backend": auto, 180k → 20k, 65 s after the previous model turn\n/,
+    'a compaction during work is listed with its time, agent, trigger, preTokens → postTokens and the time since the previous model turn'
+  );
+  assert.doesNotMatch(
+    md,
+    /Compacted after a pause/,
+    'with no compaction after a pause, the after-pause line is left out'
+  );
+});
+
+test('a compaction is marked after a pause or during work by the time since the previous model turn', async () => {
+  // The host compacts a context that grew too large during work, and also a
+  // context that sat without a model request until its prompt cache expired.
+  // Only the first means the work outgrew one context, so the two are told
+  // apart by the pause from the agent's previous model turn.
+  const { contextFill, COMPACTION_PAUSE_SEC } = await import(script);
+  const r = (sec, obj) => ({ ...obj, __t: T0 + sec * 1000 });
+  const turn = (sec, id, text = 'ok') =>
+    r(sec, {
+      type: 'assistant',
+      message: {
+        id,
+        content: [{ type: 'text', text }],
+        usage: ctxUsage(1, 0, 1000),
+      },
+    });
+  const compact = (sec, durationMs) =>
+    r(sec, {
+      type: 'system',
+      subtype: 'compact_boundary',
+      compactMetadata: {
+        trigger: 'auto',
+        preTokens: 250000,
+        postTokens: 40000,
+        durationMs,
+      },
+    });
+  const prompt = (sec) =>
+    r(sec, { type: 'user', message: { role: 'user', content: 'back' } });
+  const result = (sec) =>
+    r(sec, {
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'x', content: '' }],
+      },
+    });
+  const fill = contextFill([
+    compact(5, 0),
+    turn(10, 'm1'),
+    prompt(3610),
+    compact(3640, 30000),
+    turn(3700, 'm2'),
+    result(3710),
+    compact(3712, 2000),
+    turn(3720, 'm3'),
+    result(6120),
+    compact(6121, 0),
+    turn(6130, 'm4'),
+    turn(6530, 'err', 'API Error: Your computer went to sleep'),
+    compact(6531, 0),
+  ]);
+  assert.equal(
+    COMPACTION_PAUSE_SEC,
+    300,
+    'the pause threshold is 5 minutes, the shortest prompt-cache lifetime'
+  );
+  assert.deepEqual(
+    fill.compactions.map((c) => [c.pauseSec, c.afterPause]),
+    [
+      [null, false],
+      [3600, true],
+      [10, false],
+      [2401, true],
+      [401, true],
+    ],
+    [
+      'a compaction with no model turn before it has no pause',
+      'a user prompt after an hour away does not end the pause, and durationMs is taken off the end-of-compaction timestamp',
+      'a compaction 10 s after a model turn, right after a tool result, is during work',
+      'an orchestrator that waited 40 min on a subagent compacts after a pause, although the result arrived 1 s before',
+      'a host-written sleep error line is not a model turn and does not end the pause',
+    ].join('; ')
+  );
+});
+
 test('watch --once on a live run reports completions, empty spawns, delegators and a stall', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
   const { proj, sid } = writeFixture(root, { completed: false });
@@ -486,11 +790,1111 @@ test('sessions lists a /better:implement run too — the plugin fork shares the 
   );
 });
 
+// ---------- run boundaries ----------
+// Regression fixtures from real runs: an orchestrator that paraphrased its
+// completion line was profiled as still running (73 h instead of 2.5 h); a
+// run that resumed after the user answered a question or typed "continue"
+// was cut at that prompt (2 h measured out of 12); and on hosts where
+// background teammates report back as user-role messages, the first teammate
+// message ended the run.
+
+const IMPLEMENT =
+  '<command-message>awos:implement</command-message> <command-name>/awos:implement</command-name>';
+
+function writeSession(root, mainRows, agentRows = []) {
+  const proj = path.join(root, '-Users-someone-Work-proj');
+  const sid = 'sess-bounds';
+  const subDir = path.join(proj, sid, 'subagents');
+  fs.mkdirSync(subDir, { recursive: true });
+  fs.writeFileSync(path.join(proj, `${sid}.jsonl`), mainRows.join('\n') + '\n');
+  if (agentRows.length) {
+    fs.writeFileSync(
+      path.join(subDir, 'agent-b1.meta.json'),
+      JSON.stringify({
+        agentType: 'typescript-backend',
+        description: 'Slice 1: backend',
+        toolUseId: 'tb1',
+        spawnDepth: 1,
+      })
+    );
+    fs.writeFileSync(
+      path.join(subDir, 'agent-b1.jsonl'),
+      agentRows.join('\n') + '\n'
+    );
+  }
+  return { proj, sid };
+}
+
+function reportJson(proj, sid, root, now, extra = []) {
+  const jsonOut = path.join(root, 'bounds.json');
+  const res = run(
+    [
+      'report',
+      '--projects',
+      proj,
+      '--session',
+      sid,
+      '--now',
+      now,
+      '--json',
+      jsonOut,
+      ...extra,
+    ],
+    root
+  );
+  assert.equal(res.status, 0, `report must exit 0; output was:\n${res.out}`);
+  return { md: res.stdout, json: JSON.parse(fs.readFileSync(jsonOut, 'utf8')) };
+}
+
+const backendAgent = (doneAtSec) => [
+  userText(at(11), 'Implement the backend slice', { isSidechain: true }),
+  assistant(at(20), 'b-m1', SUB, [bash('bb1', 'npm test')], 40),
+  toolResult(at(80), 'bb1', '# pass 3'),
+  assistant(at(doneAtSec), 'b-m2', SUB, [text('Done. Tests green.')], 30),
+];
+
+test('a paraphrased completion line ends the run, and prose that mentions finishing tasks does not', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(
+    root,
+    [
+      userText(at(0), IMPLEMENT),
+      assistant(
+        at(60),
+        'p-1',
+        MAIN,
+        [text('Once all tasks complete, I will point you to verify.')],
+        20
+      ),
+      assistant(
+        at(70),
+        'p-2',
+        MAIN,
+        [agentCall('tb1', 'typescript-backend', 'Slice 1: backend')],
+        20
+      ),
+      toolResult(at(71), 'tb1', 'Async agent launched successfully'),
+      userText(
+        at(10 * 60),
+        '<task-notification><task-id>b1</task-id></task-notification>'
+      ),
+      assistant(
+        at(12 * 60),
+        'p-3',
+        MAIN,
+        [
+          text(
+            'All tasks complete.\n\n## Summary\n\n**All 50 tasks complete (100%)**'
+          ),
+        ],
+        40
+      ),
+      userText(at(20 * 60), 'thanks'),
+    ],
+    backendAgent(9 * 60)
+  );
+  const { md, json } = reportJson(
+    proj,
+    sid,
+    root,
+    new Date(T0 + 72 * 3600 * 1000).toISOString()
+  );
+  const r = json.runs[0];
+  assert.equal(
+    r.run.completed,
+    true,
+    '"All tasks complete." followed by "**All 50 tasks complete (100%)**" is a completion line even though it does not match implement.md word for word'
+  );
+  assert.ok(
+    Math.abs(r.totals.wallSec - 12 * 60) < 2,
+    `the run ends at the paraphrased completion line (12 min), not at the earlier "once all tasks complete" prose and not three days later at --now; got ${r.totals.wallSec}s`
+  );
+  assert.match(md, /Completed with the orchestrator's completion line/);
+});
+
+test('a final report that only points to /awos:verify ends the run as completed', () => {
+  // Newer models skip "All tasks complete (100%)" and write a summary that
+  // closes with the pointer to /awos:verify, which implement.md gives only
+  // when every task is done.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(
+    root,
+    [
+      userText(at(0), IMPLEMENT),
+      assistant(
+        at(10),
+        'v-1',
+        MAIN,
+        [agentCall('tb1', 'typescript-backend', 'Slice 1: backend')],
+        20
+      ),
+      toolResult(at(11), 'tb1', 'Async agent launched successfully'),
+      assistant(
+        at(15 * 60),
+        'v-2',
+        MAIN,
+        [
+          text(
+            'Slices 1 to 8 are closed and the suite is green.\n\nRun `/awos:verify` to check the acceptance criteria and mark the spec as Completed.'
+          ),
+        ],
+        40
+      ),
+    ],
+    backendAgent(9 * 60)
+  );
+  const { json } = reportJson(
+    proj,
+    sid,
+    root,
+    new Date(T0 + 72 * 3600 * 1000).toISOString()
+  );
+  const r = json.runs[0];
+  assert.equal(
+    r.run.completed,
+    true,
+    'a closing pointer to /awos:verify marks the run completed even without the "All tasks complete" sentence'
+  );
+  assert.ok(
+    Math.abs(r.totals.wallSec - 15 * 60) < 2,
+    `the run ends at the final report (15 min); got ${r.totals.wallSec}s`
+  );
+});
+
+test('a run with no completion line ends at its last activity, not at the time of the report', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(
+    root,
+    [
+      userText(at(0), IMPLEMENT),
+      assistant(
+        at(10),
+        'q-1',
+        MAIN,
+        [agentCall('tb1', 'typescript-backend', 'Slice 1: backend')],
+        20
+      ),
+      toolResult(at(11), 'tb1', 'Async agent launched successfully'),
+      assistant(at(20 * 60), 'q-2', MAIN, [text('Waiting for the agent.')], 10),
+    ],
+    // The background agent keeps writing after the orchestrator's last line.
+    backendAgent(33 * 60)
+  );
+  const { md, json } = reportJson(
+    proj,
+    sid,
+    root,
+    new Date(T0 + 72 * 3600 * 1000).toISOString()
+  );
+  const r = json.runs[0];
+  assert.equal(
+    r.live,
+    false,
+    'a run whose transcripts have been quiet for three days is not live'
+  );
+  assert.ok(
+    Math.abs(r.totals.wallSec - 33 * 60) < 2,
+    `the run ends at the last line of any transcript in it (the background agent at 33 min), not at --now 72 h later; got ${r.totals.wallSec}s`
+  );
+  assert.equal(r.stalls.length, 0, 'a finished run reports no live stalls');
+  assert.match(
+    md,
+    /Ended without a completion line; measured to the last transcript activity/,
+    'the report says the run ended without a completion line rather than calling it still running'
+  );
+});
+
+test('a second /better:implement starts a new run, and an answer in between stays inside the first one', () => {
+  // A /better:implement run that stops without its completion line is
+  // started again with the same command. That prompt is an AWOS command, so
+  // it ends the first run; it is not an answer inside it.
+  const BETTER =
+    '<command-message>better:implement</command-message>\n<command-name>/better:implement</command-name>\n<command-args>008</command-args>';
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(root, [
+    userText(at(0), BETTER),
+    assistant(
+      at(60),
+      'b-1',
+      MAIN,
+      [text('Which port does the backend use?')],
+      10
+    ),
+    userText(at(2 * 60), '8888'),
+    assistant(at(3 * 60), 'b-2', MAIN, [text('Working on slice 1.')], 10),
+    userText(at(30 * 60), BETTER),
+    assistant(
+      at(31 * 60),
+      'b-3',
+      MAIN,
+      [text('Implementation run complete. 3/3 tasks done (100%).')],
+      10
+    ),
+  ]);
+  const { json } = reportJson(proj, sid, root, at(40 * 60), ['--run', 'all']);
+  assert.equal(
+    json.runs.length,
+    2,
+    'two /better:implement prompts make two runs; the answer "8888" does not split the first one'
+  );
+  const r1 = json.runs[0];
+  assert.equal(
+    r1.run.endReason,
+    'next command',
+    'the second /better:implement ends the first run'
+  );
+  assert.ok(
+    Math.abs(r1.totals.wallSec - 30 * 60) < 2,
+    `run 1 ends at the second /better:implement at 30 min; got ${r1.totals.wallSec}s`
+  );
+  assert.deepEqual(
+    r1.run.interventions.map((x) => x.text),
+    ['8888'],
+    'only the answer is a prompt inside the first run, not the next /better:implement'
+  );
+});
+
+test('a /login written as a local_command system row is a prompt inside the run; the host reply to a mistyped command is not', () => {
+  // The real shape after an API error: the user first mistypes a command
+  // (the host writes a caveat meta row and its reply at the same time), then
+  // types /login, which the host writes as a `system` row with subtype
+  // `local_command`, followed by the command's output in a row of the same
+  // kind.
+  const localCommand = (ts, c) =>
+    JSON.stringify({
+      type: 'system',
+      subtype: 'local_command',
+      content: c,
+      timestamp: ts,
+      isMeta: false,
+    });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(root, [
+    userText(at(0), IMPLEMENT),
+    assistant(at(60), 'l-1', MAIN, [text('Working on slice 1.')], 10),
+    userText(
+      at(300),
+      '<local-command-caveat>The command below was run directly in Claude Code, not sent to you as a request.</local-command-caveat>',
+      { isMeta: true }
+    ),
+    userText(at(300), 'Commands are in the form `/command [args]`'),
+    localCommand(
+      at(375),
+      '<command-name>/login</command-name>\n            <command-message>login</command-message>\n            <command-args></command-args>'
+    ),
+    localCommand(
+      at(375),
+      '<local-command-stdout>Login successful</local-command-stdout>'
+    ),
+    assistant(at(400), 'l-2', MAIN, [text('Working on slice 2.')], 10),
+    assistant(
+      at(500),
+      'l-3',
+      MAIN,
+      [text('Implementation run complete. 2/2 tasks done (100%).')],
+      10
+    ),
+  ]);
+  const { json } = reportJson(proj, sid, root, at(40 * 60));
+  const r = json.runs[0];
+  assert.equal(
+    r.run.completed,
+    true,
+    'the built-in /login does not end the run; it ends at its completion line'
+  );
+  assert.deepEqual(
+    r.run.interventions.map((x) => x.text),
+    ['/login'],
+    'the /login system row is the one prompt, shown as typed; the host reply "Commands are in the form …" and the "Login successful" output are not prompts'
+  );
+  assert.ok(
+    Math.abs(r.run.interventions[0].waitSec - 75) < 1,
+    `the wait before /login is counted from the host reply at 5 min to the command at 6 min 15 s; got ${r.run.interventions[0].waitSec}s`
+  );
+});
+
+test('a foreground Agent call is not orchestrator tool time: its wait is the subagent’s own time', () => {
+  // The orchestrator calls the subagent in the foreground (its result comes
+  // back as a tool result), then runs one Bash command of its own.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(
+    root,
+    [
+      userText(at(0), IMPLEMENT),
+      assistant(
+        at(10),
+        'f-1',
+        MAIN,
+        [agentCall('tb1', 'typescript-backend', 'Slice 1: backend')],
+        20
+      ),
+      toolResult(at(120), 'tb1', 'Done. Tests green.'),
+      assistant(at(130), 'f-2', MAIN, [bash('m1', 'git status')], 10),
+      toolResult(at(140), 'm1', 'clean'),
+      assistant(
+        at(150),
+        'f-3',
+        MAIN,
+        [text('Implementation run complete. 1/1 tasks done (100%).')],
+        10
+      ),
+    ],
+    backendAgent(110)
+  );
+  const { json } = reportJson(proj, sid, root, at(40 * 60));
+  const t = json.runs[0].totals;
+  assert.ok(
+    Math.abs(t.orchestratorToolSec - 10) < 1,
+    `orchestrator tool time is its own 10 s Bash call only, not the 110 s it waited on the subagent; got ${t.orchestratorToolSec}s`
+  );
+  assert.ok(
+    Math.abs(t.orchestratorAgentWaitSec - 110) < 1,
+    `the 110 s wait on the foreground subagent is reported apart, in orchestratorAgentWaitSec; got ${t.orchestratorAgentWaitSec}s`
+  );
+});
+
+test('any plugin command ends a run with no completion line; a built-in command such as /login stays inside it', () => {
+  // The run below is interrupted and never prints its completion line. The
+  // user then types /login (a built-in, no plugin namespace) and later
+  // /profiler:implement (a plugin command) in the same session.
+  const LOGIN = '<command-name>/login</command-name>';
+  const PROFILER =
+    '<command-message>profiler:implement</command-message>\n<command-name>/profiler:implement</command-name>\n<command-args>report</command-args>';
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(root, [
+    userText(at(0), IMPLEMENT),
+    assistant(at(60), 'p-1', MAIN, [text('Working on slice 1.')], 10),
+    userText(at(5 * 60), LOGIN),
+    assistant(at(6 * 60), 'p-2', MAIN, [text('Working on slice 2.')], 10),
+    userText(at(20 * 60), PROFILER),
+    assistant(at(21 * 60), 'p-3', MAIN, [text('Here is the profile.')], 10),
+  ]);
+  const { md, json } = reportJson(proj, sid, root, at(40 * 60), [
+    '--run',
+    'all',
+  ]);
+  assert.equal(
+    json.runs.length,
+    1,
+    '/profiler:implement does not start a new implement run'
+  );
+  const r = json.runs[0];
+  assert.equal(
+    r.run.endReason,
+    'next command',
+    '/profiler:implement ends the interrupted run; it is not a "continue" inside it'
+  );
+  assert.ok(
+    Math.abs(r.totals.wallSec - 20 * 60) < 2,
+    `the run ends at /profiler:implement at 20 min, not at the profiler's own turn at 21 min; got ${r.totals.wallSec}s`
+  );
+  assert.deepEqual(
+    r.run.interventions.map((x) => x.text),
+    ['/login'],
+    'the built-in /login stays inside the run as an intervention, shown as typed'
+  );
+  assert.match(
+    md,
+    /Ended by the next plugin command, no completion line/,
+    'the report says a plugin command ended the run'
+  );
+});
+
+test('answers and "continue" stay inside the run, teammate and usage-limit messages are not prompts, and the next /awos: command starts a new run', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(root, [
+    userText(at(0), IMPLEMENT),
+    assistant(
+      at(2 * 60),
+      'r-1',
+      MAIN,
+      [text('Verify failed. Options: 1. patch it myself 2. route the fix')],
+      30
+    ),
+    userText(at(5 * 60), 'Option 2: route the fix through a subagent'),
+    assistant(
+      at(6 * 60),
+      'r-2',
+      MAIN,
+      [agentCall('tb1', 'typescript-backend', 'Slice 1: backend')],
+      20
+    ),
+    toolResult(at(6 * 60 + 1), 'tb1', 'Async agent launched successfully'),
+    userText(
+      at(10 * 60),
+      'Another Claude session sent a message: <teammate-message teammate_id="s1-t1"> {"type":"idle_notification"} </teammate-message>'
+    ),
+    userText(
+      at(11 * 60),
+      '[Usage limit reached; a short grace allowance remains, then this turn is cut off without warning.]'
+    ),
+    userText(
+      at(12 * 60),
+      'Your claude.ai usage limit has reset. Continue the task you were working on.'
+    ),
+    assistant(
+      at(12 * 60 + 30),
+      'r-3',
+      MAIN,
+      [text('API Error: Stream idle timeout - partial response received')],
+      5
+    ),
+    userText(at(14 * 60), 'continue'),
+    userText(at(14 * 60 + 30), '/login'),
+    userText(
+      at(14 * 60 + 40),
+      '<local-command-stdout>Login successful</local-command-stdout>'
+    ),
+    userText(at(14 * 60 + 50), '<bash-input>pwd</bash-input>'),
+    userText(
+      at(14 * 60 + 51),
+      '<bash-stdout>/Users/someone/Work/proj</bash-stdout><bash-stderr></bash-stderr>'
+    ),
+    assistant(
+      at(20 * 60),
+      'r-4',
+      MAIN,
+      [text('All tasks complete (100%).')],
+      20
+    ),
+    userText(at(30 * 60), IMPLEMENT),
+    assistant(
+      at(31 * 60),
+      'r-5',
+      MAIN,
+      [text('Implementation run complete. 0/0 tasks done (0%).')],
+      10
+    ),
+  ]);
+  const { md, json } = reportJson(proj, sid, root, at(40 * 60), [
+    '--run',
+    'all',
+  ]);
+  assert.equal(
+    json.runs.length,
+    2,
+    'two /awos:implement prompts make two runs; nothing in between splits the first one'
+  );
+  const r1 = json.runs[0];
+  assert.equal(
+    r1.run.completed,
+    true,
+    'run 1 survives the answer, the teammate message, the usage-limit notices and "continue", and ends at its completion line'
+  );
+  assert.ok(
+    Math.abs(r1.totals.wallSec - 20 * 60) < 2,
+    `run 1 spans to its completion line at 20 min; got ${r1.totals.wallSec}s`
+  );
+  assert.deepEqual(
+    r1.run.interventions.map((x) => x.text),
+    [
+      'Option 2: route the fix through a subagent',
+      'continue',
+      '/login',
+      '<bash-input>pwd</bash-input>',
+    ],
+    'only what the user typed is an intervention: the teammate message, the host usage-limit notices and the echoed /login and `!pwd` output are not'
+  );
+  assert.ok(
+    Math.abs(r1.totals.userWaitSec - (180 + 90 + 30 + 10)) < 1,
+    `wait on the user sums the gap before each prompt (3 min + 90 s + 30 s + 10 s); got ${r1.totals.userWaitSec}s`
+  );
+  assert.match(
+    md,
+    /\| Waiting on the user \(4 prompts, 0 questions inside the run\) \| 0\.09 h \|/,
+    'the report shows the user wait as its own bucket'
+  );
+});
+
+test('time the machine slept is taken out of every bucket: no hang, no idle gap, no model time', () => {
+  // On 09.11 a benchmark run lost 83 min to idle sleep. The report showed a
+  // 16 min "hang" (a tool call across a sleep), a 49 min idle gap marked
+  // "machine active" (the sleeping agent wrote its "went to sleep" error
+  // lines inside the gap) and sleep counted as model time.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(
+    root,
+    [
+      userText(at(0), IMPLEMENT),
+      assistant(
+        at(10),
+        's-1',
+        MAIN,
+        [agentCall('tb1', 'typescript-backend', 'Slice 1: backend')],
+        20
+      ),
+      toolResult(at(11), 'tb1', 'Async agent launched successfully'),
+      userText(
+        at(50 * 60),
+        '<task-notification><task-id>b1</task-id></task-notification>'
+      ),
+      assistant(
+        at(51 * 60),
+        's-2',
+        MAIN,
+        [text('Implementation run complete. 1/1 tasks done (100%).')],
+        20
+      ),
+    ],
+    [
+      userText(at(11), 'Implement the backend slice', { isSidechain: true }),
+      assistant(at(20), 'a-1', SUB, [bash('x1', 'pnpm build')], 40),
+      // 25 min tool wait; the OS log says the machine slept 20 min of it.
+      toolResult(at(25 * 60 + 20), 'x1', 'built'),
+      assistant(at(26 * 60), 'a-2', SUB, [text('Checking the page.')], 30),
+      // A request cut by sleep: the error line ends a 20 min gap.
+      row(
+        'assistant',
+        at(46 * 60),
+        {
+          role: 'assistant',
+          id: 'err-1',
+          model: '<synthetic>',
+          content: [
+            text(
+              'API Error: Your computer went to sleep mid-response. The response above may be incomplete.'
+            ),
+          ],
+        },
+        { isApiErrorMessage: true }
+      ),
+      assistant(at(47 * 60), 'a-3', SUB, [text('Done.')], 30),
+    ]
+  );
+  // T0 is 16:00 UTC = 19:00 +0300. One sleep 19:01–19:21; "Wake Requests"
+  // inside it and an "Entering DarkWake state" later are not sleep edges.
+  const log = path.join(root, 'pmset.log');
+  fs.writeFileSync(
+    log,
+    [
+      'PM ASL data store: /var/log/powermanagement',
+      "2026-09-17 19:01:00 +0300 Sleep               \tEntering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using AC (Charge:100%) 1 secs",
+      '2026-09-17 19:01:01 +0300 Wake Requests       \t[process=dasd request=SleepService deltaSecs=940 wakeAt=2026-09-17 19:16:41]',
+      '2026-09-17 19:21:00 +0300 Wake                \tWake from Deep Idle [CDNVA] : due to UserActivity Using AC (Charge:100%) 1 secs',
+      "2026-09-17 19:30:00 +0300 Sleep               \tEntering DarkWake state due to 'Software Sleep pid=163': Using AC (Charge:100%) 2 secs",
+      '2026-09-17 19:31:00 +0300 DarkWake            \tDarkWake from Deep Idle [CDNP] : due to RTC Using AC (Charge:100%) 30 secs',
+    ].join('\n') + '\n'
+  );
+  const { md, json } = reportJson(proj, sid, root, at(72 * 3600), [
+    '--sleep-log',
+    log,
+  ]);
+  const r = json.runs[0];
+  const t = r.totals;
+  assert.ok(
+    Math.abs(t.asleepSec - 40 * 60) < 2,
+    `20 min from the OS log + 20 min before the sleep error = 40 min asleep; got ${t.asleepSec}s`
+  );
+  assert.equal(t.asleepPeriods, 2);
+  assert.ok(
+    Math.abs(t.awakeSec - 11 * 60) < 2,
+    `51 min wall - 40 min asleep = 11 min awake; got ${t.awakeSec}s`
+  );
+  assert.equal(
+    t.hangSec,
+    0,
+    'a tool call across a sleep is not a hang: 5 min awake'
+  );
+  assert.ok(
+    Math.abs(t.subagentToolSec - 5 * 60) < 2,
+    `tool time is the awake 5 min of the 25 min wait; got ${t.subagentToolSec}s`
+  );
+  assert.ok(
+    Math.abs(t.subagentModelSec - 109) < 2,
+    `model time is 9 + 40 + 60 s; the 20 min before the sleep error is not model time; got ${t.subagentModelSec}s`
+  );
+  assert.equal(t.turns, 3, 'the sleep error line is not a model turn');
+  assert.equal(
+    r.bigGaps.length,
+    0,
+    'the orchestrator waited 50 min, 40 of them asleep: not an idle gap'
+  );
+  assert.equal(t.orchestratorIdleSec, 0);
+  assert.equal(json.sleepSource, `${log} + transcript sleep errors`);
+  assert.match(md, /\(0\.85 h, 0\.18 h with the machine awake\)/);
+  assert.match(
+    md,
+    /\| Machine asleep \(2 periods; source: .*pmset\.log \+ transcript sleep errors\) \| 0\.67 h \|/
+  );
+});
+
+test('an AskUserQuestion wait is time waiting on the user, not idle and not tool time', () => {
+  // A run asked one question in the evening and got the answer in the
+  // morning; the report put the whole night into "idle gaps" and showed
+  // "Waiting on the user (0 prompts)". Short waits went into tool time.
+  const ask = (id, q) => ({
+    type: 'tool_use',
+    id,
+    name: 'AskUserQuestion',
+    input: {
+      questions: [
+        { question: q, options: [{ label: 'Yes' }, { label: 'No' }] },
+      ],
+    },
+  });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeSession(root, [
+    userText(at(0), IMPLEMENT),
+    assistant(
+      at(60),
+      'u-1',
+      MAIN,
+      [ask('ask1', 'Accept the failing tests as baseline?')],
+      20
+    ),
+    toolResult(
+      at(60 + 3 * 3600),
+      'ask1',
+      'User has answered your questions: "Accept the failing tests as baseline?"="Yes".'
+    ),
+    assistant(
+      at(3 * 3600 + 200),
+      'u-2',
+      MAIN,
+      [ask('ask2', 'VoiceOver checked?')],
+      20
+    ),
+    toolResult(
+      at(3 * 3600 + 320),
+      'ask2',
+      'User has answered your questions: "VoiceOver checked?"="No".'
+    ),
+    assistant(
+      at(3 * 3600 + 400),
+      'u-3',
+      MAIN,
+      [text('Implementation run complete. 1/1 tasks done (100%).')],
+      20
+    ),
+  ]);
+  const { md, json } = reportJson(proj, sid, root, at(72 * 3600));
+  const r = json.runs[0];
+  const t = r.totals;
+  assert.equal(t.userQuestions, 2);
+  assert.equal(
+    t.userPrompts,
+    0,
+    'an answer to AskUserQuestion is a tool result, not a typed prompt'
+  );
+  assert.ok(
+    Math.abs(t.userQuestionWaitSec - (3 * 3600 + 120)) < 2,
+    `3 h + 2 min on questions; got ${t.userQuestionWaitSec}s`
+  );
+  assert.ok(Math.abs(t.userWaitSec - (3 * 3600 + 120)) < 2);
+  assert.equal(
+    t.orchestratorIdleSec,
+    0,
+    'a night spent on a question is not an idle gap'
+  );
+  assert.equal(r.bigGaps.length, 0);
+  assert.equal(
+    t.orchestratorToolSec,
+    0,
+    'the 2 min question is not orchestrator tool time'
+  );
+  assert.deepEqual(
+    r.run.questions.map((q) => q.text),
+    ['Accept the failing tests as baseline?', 'VoiceOver checked?']
+  );
+  assert.match(
+    md,
+    /\| Waiting on the user \(0 prompts, 2 questions inside the run\) \| 3\.03 h \|/
+  );
+  assert.match(
+    md,
+    /Questions the run asked \(AskUserQuestion\): 2 \("Accept the failing tests as baseline\?" 180\.0 min, "VoiceOver checked\?" 2\.0 min\)/
+  );
+});
+
 test('project directory resolves from cwd the way Claude Code slugs it', async () => {
   const mod = await import(script);
   assert.equal(
     mod.projectSlug('/Users/someone/Work/proj'),
     '-Users-someone-Work-proj',
     'every non-alphanumeric character in the cwd becomes "-"'
+  );
+});
+
+// ---------- run.md units (/better:implement) ----------
+//
+// /better:implement keeps context/spec/<dir>/run.md, which names each unit
+// the run delegated. The profiler reads it only to tell which unit each
+// subagent did and what kind of unit it is; every time still comes from the
+// transcripts. The fixture is shaped on a real run: work units "Unit N.M",
+// verification units "N.Vk" delegated as "Verify §x …", rework units "N.Rk"
+// delegated as "Rework §x …", and a run.md rewritten by appending, so one
+// unit heading occurs twice.
+
+const BETTER_PROMPT =
+  '<command-message>better:implement</command-message>\n<command-name>/better:implement</command-name>\n<command-args>001</command-args>';
+
+const RUN_MD = `# Run: 001-demo
+
+- Started: 2026-09-17
+- Status: verified
+- Branch: awos/001-demo
+
+## Baseline
+
+- Test suite: \`npm test\` — passed
+
+## Slice 1: Backend
+
+- Committed: \`aaa1111\`
+
+### Unit 1.1 — Backend API
+
+- Agent: python-backend
+- State: done
+- Realizes:
+  - [x] §1.1 — the API returns the list
+
+### Unit 1.2 — Backend migration
+
+- Agent: python-backend
+- State: done
+- Realizes: none — enables 1.1
+
+## Slice 2: Frontend
+
+- Committed: \`bbb2222\`
+
+### Unit 2.1 — Frontend list
+
+- Agent: react-frontend
+- State: done
+
+### Unit 2.V1 — verification of §1.1 "the API returns the list"
+
+- Agent: react-frontend
+- State: done
+- Committed: nothing to commit
+- Verifies: §1.1 — the API returns the list
+
+### Unit 2.V2 — verification of §1.1 "the API returns the list"
+
+- Agent: react-frontend
+- State: done
+
+### Unit 2.R1 — rework of §1.2 "the list shows names"
+
+- Agent: general-purpose — gap: frontend
+- State: done
+- Committed: \`ccc3333\`
+- Rework-of: §1.2 — the list shows names
+
+## Verification
+
+### Unit 2.R1 — rework of §1.2 "the list shows names"
+
+- Agent: someone-else
+- State: failed
+`;
+
+// Each agent: [id, type, description, startSec, endSec, extraMeta, ctx]
+const UNIT_AGENTS = [
+  ['u1', 'python-backend', 'Unit 1.1 backend API', 100, 400],
+  ['u2', 'react-frontend', 'Unit 2.1 frontend list', 500, 800],
+  ['u3', 'react-frontend', 'Unit 2.1 frontend list retry', 900, 1500],
+  ['u4', 'react-frontend', 'Verify §1.1 list endpoint', 1600, 1720],
+  ['u5', 'react-frontend', 'Verify §1.1 list endpoint again', 1800, 1980],
+  ['u6', 'general-purpose', 'Rework §1.2 names', 2000, 2600],
+  // Nested under the rework agent: not an attempt, not "not a unit"; its
+  // context counts toward the rework unit's peak.
+  [
+    'u7',
+    'Explore',
+    'look up the list component',
+    2100,
+    2200,
+    { parentAgentId: 'u6', spawnDepth: 2 },
+    ctxUsage(2, 1000, 90000),
+  ],
+  ['u8', 'general-purpose', 'Commit slice 2', 2700, 2760],
+];
+
+function writeBetterSession(
+  root,
+  { runMd = RUN_MD, prompt = BETTER_PROMPT } = {}
+) {
+  const work = path.join(root, 'work');
+  const specDir = path.join(work, 'context', 'spec', '001-demo');
+  fs.mkdirSync(specDir, { recursive: true });
+  if (runMd !== null) fs.writeFileSync(path.join(specDir, 'run.md'), runMd);
+  const proj = path.join(root, '-work');
+  const sid = 'sess-units';
+  const subDir = path.join(proj, sid, 'subagents');
+  fs.mkdirSync(subDir, { recursive: true });
+  const cwd = { cwd: work };
+  // The orchestrator later cd's into a nested code repo; the run.md path is
+  // still resolved against the session cwd.
+  const nestedCwd = { cwd: path.join(work, 'code') };
+  const main = [
+    userText(at(0), prompt, cwd),
+    row(
+      'assistant',
+      at(30),
+      {
+        role: 'assistant',
+        id: 'o-1',
+        model: MAIN,
+        content: [text('Writing context/spec/001-demo/run.md now.')],
+        usage: { ...ctxUsage(2, 1000, 9000), output_tokens: 10 },
+      },
+      nestedCwd
+    ),
+    ...UNIT_AGENTS.filter((a) => !a[5]).map((a, i) =>
+      assistant(
+        at(a[3] - 1),
+        `o-${i + 2}`,
+        MAIN,
+        [agentCall(`t-${a[0]}`, a[1], a[2])],
+        10
+      )
+    ),
+    assistant(
+      at(3000),
+      'o-end',
+      MAIN,
+      [text('Implementation run complete.')],
+      10
+    ),
+  ];
+  fs.writeFileSync(path.join(proj, `${sid}.jsonl`), main.join('\n') + '\n');
+  for (const [aid, type, description, s, e, extra = {}, ctx] of UNIT_AGENTS) {
+    fs.writeFileSync(
+      path.join(subDir, `agent-${aid}.meta.json`),
+      JSON.stringify({
+        agentType: type,
+        description,
+        toolUseId: `t-${aid}`,
+        spawnDepth: 1,
+        ...extra,
+      })
+    );
+    fs.writeFileSync(
+      path.join(subDir, `agent-${aid}.jsonl`),
+      [
+        userText(at(s), description, { isSidechain: true }),
+        assistant(at(e), `${aid}-m1`, SUB, [text('Done.')], 20, ctx),
+      ].join('\n') + '\n'
+    );
+  }
+  return { proj, sid, work };
+}
+
+test('units: run.md names the unit of each subagent; time comes from the transcripts', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid, work } = writeBetterSession(root);
+  const { md, json } = reportJson(proj, sid, root, at(4000));
+  const r = json.runs[0];
+  const unit = (id) => r.units.find((u) => u.id === id);
+
+  assert.equal(
+    r.runMd.path,
+    path.join(work, 'context', 'spec', '001-demo', 'run.md'),
+    'run.md is the first context/spec/<dir>/run.md path in the run, resolved against the session cwd, not the cwd of the line that mentions it'
+  );
+  assert.equal(
+    r.runMd.status,
+    'verified',
+    'the run.md Status line is reported'
+  );
+  assert.deepEqual(
+    r.units.map((u) => [u.id, u.kind]),
+    [
+      ['1.1', 'work'],
+      ['1.2', 'work'],
+      ['2.1', 'work'],
+      ['2.V1', 'verification'],
+      ['2.V2', 'verification'],
+      ['2.R1', 'rework'],
+    ],
+    'units are parsed in document order; N.M is work, N.Vk verification, N.Rk rework'
+  );
+  assert.deepEqual(
+    r.runMd.slices.map((s) => s.committed),
+    ['aaa1111', 'bbb2222'],
+    "each slice's Committed: line is parsed (not a unit's own Committed: line)"
+  );
+
+  // Work: "Unit N.M …" → that id; two subagents for one unit are attempts.
+  assert.equal(unit('1.1').attempts, 1, '"Unit 1.1 …" matches unit 1.1');
+  assert.equal(
+    unit('1.1').activeSec,
+    300,
+    "a unit's active time is its subagent's active wall-clock from the transcript (100 s → 400 s)"
+  );
+  assert.equal(
+    unit('2.1').attempts,
+    2,
+    'two subagents described "Unit 2.1 …" are two attempts at unit 2.1'
+  );
+  assert.equal(
+    unit('2.1').activeSec,
+    300 + 600,
+    "a unit's active time is the sum over its attempts"
+  );
+
+  // Verification: same criterion on two units → document order.
+  assert.deepEqual(
+    [unit('2.V1').agentIds, unit('2.V2').agentIds],
+    [['u4'], ['u5']],
+    'two "Verify §1.1 …" subagents take the two §1.1 verification units in document order'
+  );
+
+  // Rework, matched by criterion; the duplicated heading keeps the first block.
+  assert.deepEqual(
+    unit('2.R1').agentIds,
+    ['u6'],
+    '"Rework §1.2 …" matches the rework unit for §1.2; the nested agent under it is not an attempt'
+  );
+  assert.equal(
+    unit('2.R1').plannedAgent,
+    'general-purpose — gap: frontend',
+    'a duplicated unit heading keeps the first block, not the later copy'
+  );
+  assert.equal(
+    unit('2.R1').state,
+    'done',
+    'State: comes from the first block of a duplicated unit'
+  );
+  assert.equal(
+    unit('2.R1').reworkOf,
+    '§1.2 — the list shows names',
+    'Rework-of: is parsed'
+  );
+  assert.equal(
+    unit('2.R1').peakContext,
+    91002,
+    "a nested agent's context counts toward its top-level ancestor's unit peak"
+  );
+  assert.deepEqual(
+    r.runMd.duplicates,
+    ['2.R1'],
+    'duplicated unit ids are reported'
+  );
+  assert.match(
+    md,
+    /Duplicated: 2\.R1/,
+    'the report names the duplicated unit ids'
+  );
+
+  // Unit with no subagent, subagent with no unit.
+  assert.deepEqual(
+    r.runMd.unitsNotRun,
+    ['1.2'],
+    'a run.md unit that no subagent in this session ran is listed'
+  );
+  assert.match(md, /Units no subagent in this session ran[^\n]*: 1\.2\./);
+  assert.deepEqual(
+    r.runMd.unmatchedAgents.map((a) => a.description),
+    ['Commit slice 2'],
+    'a top-level subagent whose description names no unit is "not a unit"; a nested agent is not listed'
+  );
+  assert.match(
+    md,
+    /Subagents that are not a unit:\n- general-purpose "Commit slice 2": 1\.0 min/
+  );
+
+  // Totals by kind.
+  assert.deepEqual(
+    r.runMd.totals,
+    { work: 1200, verification: 300, rework: 600, other: 0 },
+    'unit time splits into work, verification and rework by the unit kind'
+  );
+  assert.match(
+    md,
+    /Unit time: work 20\.0 min \(57%\), verification 5\.0 min \(14%\), rework 10\.0 min \(29%\)\./,
+    'the totals line gives time and share for each kind'
+  );
+  assert.match(
+    md,
+    /\| 2\.1 \| work \| Frontend list \| react-frontend \| react-frontend \| 2 \| 15\.0 min \| 3\.3 min \| 10k \| done \|/,
+    'the Units row carries id, kind, title, planned and actual agent, attempts, active time, orchestrator time after it, peak context and State'
+  );
+
+  // The orchestrator's own work, placed between top-level subagents. Its
+  // turns in this fixture run without a break from 0 to 3000 s, so each
+  // stretch is the length of its window: from a subagent's end to the next
+  // subagent's start or end.
+  const near = (got, want, what) =>
+    assert.ok(Math.abs(got - want) < 1, `${what}: want ${want} s, got ${got}`);
+  near(unit('1.1').orchestratorSec, 100, 'after Unit 1.1 (400 → 500 s)');
+  near(
+    unit('2.1').orchestratorSec,
+    200,
+    'after both Unit 2.1 attempts (800 → 900 s and 1500 → 1600 s)'
+  );
+  near(unit('2.V1').orchestratorSec, 80, 'after 2.V1 (1720 → 1800 s)');
+  near(unit('2.V2').orchestratorSec, 20, 'after 2.V2 (1980 → 2000 s)');
+  near(
+    unit('2.R1').orchestratorSec,
+    100,
+    'after 2.R1 (2600 → 2700 s); its nested Explore agent marks no window'
+  );
+  const o = r.runMd.orchestrator;
+  near(o.beforeFirstSec, 100, 'before the first subagent (0 → 100 s)');
+  near(o.betweenSec, 500, 'between subagents, the sum of the windows');
+  near(
+    o.afterLastSec,
+    240,
+    'after the last subagent, the commit helper (2760 → 3000 s)'
+  );
+  near(
+    o.whileSubagentsSec,
+    2160,
+    'the rest of the 3000 s ran while a subagent was working'
+  );
+  assert.match(
+    md,
+    /Orchestrator's own work: before the first subagent 1\.7 min \(baseline, plan\); after a subagent and before the next one 8\.3 min .*; after the last subagent 4\.0 min .*; while subagents ran 36\.0 min\./,
+    'the report gives the orchestrator time before, between, after and during the subagents'
+  );
+  assert.ok(
+    md.indexOf('### Units') > md.indexOf('### Agents'),
+    'the Units section follows the Agents section'
+  );
+});
+
+test('units: a missing run.md or an /awos:implement run skips the section in one line and the report still renders', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const { proj, sid } = writeBetterSession(root, { runMd: null });
+  const { md, json } = reportJson(proj, sid, root, at(4000));
+  assert.match(
+    md,
+    /^Units: not shown — run\.md at .*001-demo\/run\.md cannot be read \(ENOENT\)\.$/m,
+    'a run.md path that does not resolve to a readable file is one skip line, not a failure'
+  );
+  assert.ok(!md.includes('### Units'), 'no Units section without a run.md');
+  assert.match(md, /### Agents/, 'the rest of the report still renders');
+  assert.deepEqual(json.runs[0].units, [], 'no units in JSON without a run.md');
+
+  const other = path.join(root, 'elsewhere-run.md');
+  fs.writeFileSync(other, RUN_MD);
+  const withFlag = reportJson(proj, sid, root, at(4000), ['--run-md', other]);
+  assert.equal(
+    withFlag.json.runs[0].runMd.path,
+    other,
+    '--run-md <path> overrides the path found in the transcript'
+  );
+  assert.equal(
+    withFlag.json.runs[0].units.length,
+    6,
+    '--run-md is parsed like a found run.md'
+  );
+
+  const root2 = fs.mkdtempSync(path.join(os.tmpdir(), 'awos-profiler-'));
+  const awos = writeBetterSession(root2, { prompt: IMPLEMENT });
+  const a = reportJson(awos.proj, awos.sid, root2, at(4000));
+  assert.match(
+    a.md,
+    /^Units: not shown — an \/awos:implement run keeps no run\.md; only \/better:implement does\.$/m,
+    'an /awos:implement run skips the Units section in one line, even when a run.md path is in its transcript'
+  );
+  assert.equal(
+    a.json.runs[0].runMd.path,
+    null,
+    'an /awos:implement run reports no run.md'
   );
 });

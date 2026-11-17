@@ -7,6 +7,7 @@
  *   node profile-implement.mjs sessions [--projects <dir>] [--cwd <path>]
  *   node profile-implement.mjs report   [--projects <dir>] [--cwd <path>] [--session <id>]
  *                                       [--run latest|all|<n>] [--json <out-file>] [--now <iso>]
+ *                                       [--sleep-log <pmset-log-file>|none] [--run-md <path>]
  *   node profile-implement.mjs watch    [--projects <dir>] [--cwd <path>] [--session <id>]
  *                                       [--interval <seconds>] [--once]
  *
@@ -27,10 +28,22 @@
  *   - idle            = any gap over IDLE_GAP_SEC, excluded from every bucket
  *                       and reported separately; a gap with no line in any
  *                       transcript on the machine is "no activity on the machine"
+ *   - asleep          = time the machine slept, taken out of every gap before
+ *                       the buckets above: from `pmset -g log` on macOS (or
+ *                       --sleep-log <file>) and, in any transcript of the
+ *                       session, the gap before an "API Error: Your computer
+ *                       went to sleep" line
+ *   - user wait       = typed prompts inside the run, plus each AskUserQuestion
+ *                       call from the call to its answer (not idle, not tool time)
  *   - thinking share  = turns whose content carries a thinking block (the
  *                       thinking text itself is redacted in transcripts)
  * Streaming writes several lines per assistant turn with partial usage, so
- * turns are deduplicated by message.id and output_tokens is the max seen.
+ * turns are deduplicated by message.id and each usage field is the max seen.
+ * Context at a turn = input_tokens + cache_creation_input_tokens +
+ * cache_read_input_tokens; each agent gets its peak and final context, and
+ * the compact_boundary lines in its transcript are listed as compactions,
+ * each marked as after a pause or during work by the time since the agent's
+ * previous model turn.
  *
  * Status of an agent: "done" when its last line is an assistant message with
  * text and no tool call; "waiting on <tool>" when the last line is a tool call;
@@ -38,11 +51,18 @@
  * agent that called the Agent tool. An empty spawn is a nested agent that
  * made no tool call and finished within two turns.
  *
+ * Units (/better:implement only): the run's run.md, found as the first
+ * context/spec/<dir>/run.md path in the run's main-transcript lines resolved
+ * against that line's cwd (or --run-md <path>), names the unit each
+ * top-level subagent did, matched by its description ("Unit 2.1 …",
+ * "Verify §2.1 …", "Rework §2.1 …"). No time is read from run.md.
+ *
  * `report` prints Markdown to stdout (and JSON to --json when given).
  * `watch` polls and prints one line per event — DONE, STALL, IDLE, SUMMARY,
  * RUN ENDED — for a host that streams stdout lines as notifications.
  */
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -55,6 +75,9 @@ const TEST_RE =
   /\b(npm (run )?test|npx? (vitest|jest|mocha|playwright)|node --test|vitest|jest|pytest|go test|cargo test|tsc\b|mvn test|gradle test)/;
 const TIMEOUT_RE = /did not complete within|timed out|moved to the background/i;
 const BUILTIN_AGENTS = new Set(['general-purpose', 'fork', 'Explore', 'Plan']);
+// Claude Code writes this as an assistant line when a request was cut by the
+// machine going to sleep; the gap before it is (mostly) sleep.
+const SLEEP_ERROR_RE = /^\s*API Error: Your computer went to sleep/i;
 
 // ---------- args ----------
 
@@ -126,6 +149,122 @@ function readJson(file) {
   }
 }
 
+// ---------- time intervals ----------
+
+// Intervals are [fromMs, toMs] pairs.
+export function mergeIntervals(list) {
+  const s = list
+    .filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a)
+    .sort((x, y) => x[0] - y[0]);
+  const out = [];
+  for (const [a, b] of s) {
+    const last = out[out.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+
+function overlapSec(intervals, from, to) {
+  let ms = 0;
+  for (const [a, b] of intervals) {
+    if (b <= from) continue;
+    if (a >= to) break;
+    ms += Math.min(b, to) - Math.max(a, from);
+  }
+  return ms / 1000;
+}
+
+function subtractIntervals(list, cut) {
+  const out = [];
+  for (const [a0, b] of list) {
+    let a = a0;
+    for (const [c, d] of cut) {
+      if (d <= a || c >= b) continue;
+      if (c > a) out.push([a, c]);
+      a = Math.max(a, d);
+    }
+    if (a < b) out.push([a, b]);
+  }
+  return out;
+}
+
+// ---------- machine sleep ----------
+
+// macOS power log (`pmset -g log`): a sleep starts at "Sleep  Entering Sleep
+// state" and ends at the next "Wake" or "DarkWake" line. "Entering DarkWake
+// state" (display off, system running) and "Wake Requests" are not sleep
+// edges. A DarkWake is short maintenance time; the machine runs, so it is
+// awake time here.
+export function parsePmsetLog(text) {
+  const re =
+    /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) ([+-]\d{2})(\d{2}) (Sleep|Wake|DarkWake)\s+(.*)$/;
+  const out = [];
+  let start = null;
+  for (const line of String(text).split('\n')) {
+    const m = re.exec(line);
+    if (!m) continue;
+    const t = Date.parse(`${m[1]}T${m[2]}${m[3]}:${m[4]}`);
+    if (Number.isNaN(t)) continue;
+    const [kind, rest] = [m[5], m[6]];
+    if (kind === 'Sleep' && /^Entering Sleep state/.test(rest)) {
+      if (start === null) start = t;
+    } else if (
+      (kind === 'Wake' || kind === 'DarkWake') &&
+      !/^Requests\b/.test(rest) &&
+      start !== null
+    ) {
+      out.push([start, t]);
+      start = null;
+    }
+  }
+  return out;
+}
+
+// --sleep-log <file> reads a saved `pmset -g log`; --sleep-log none turns
+// the OS source off. Without the flag, macOS is asked directly (it keeps
+// about a week of history). Other systems: transcript markers only.
+function osSleepIntervals(args) {
+  const opt = args && args['sleep-log'];
+  if (opt === 'none') return { intervals: [], source: null };
+  if (typeof opt === 'string') {
+    try {
+      return {
+        intervals: parsePmsetLog(fs.readFileSync(opt, 'utf8')),
+        source: opt,
+      };
+    } catch {
+      return { intervals: [], source: null };
+    }
+  }
+  if (process.platform !== 'darwin') return { intervals: [], source: null };
+  try {
+    const text = execFileSync('pmset', ['-g', 'log'], {
+      encoding: 'utf8',
+      maxBuffer: 256 * 1024 * 1024,
+      timeout: 20000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return { intervals: parsePmsetLog(text), source: 'pmset -g log' };
+  } catch {
+    return { intervals: [], source: null };
+  }
+}
+
+function isSleepError(row) {
+  return row.type === 'assistant' && SLEEP_ERROR_RE.test(textOf(row));
+}
+
+// The gap before a "computer went to sleep" error line, in the same
+// transcript, counts as sleep. It also holds the request's generation time
+// before the machine slept, so it can overstate sleep by a few seconds.
+export function sleepMarkers(rows) {
+  const out = [];
+  for (let i = 1; i < rows.length; i++)
+    if (isSleepError(rows[i])) out.push([rows[i - 1].__t, rows[i].__t]);
+  return out;
+}
+
 function content(row) {
   const m = row && row.message;
   return m && typeof m === 'object' ? m.content : undefined;
@@ -145,13 +284,72 @@ function textOf(row) {
     .join('\n');
 }
 
-function isPrompt(row) {
+// A built-in command the user typed, such as /login, is written as a
+// `system` row with subtype `local_command` and the command in `content`;
+// its output follows in a row of the same kind.
+function isLocalCommand(row) {
+  return (
+    row.type === 'system' &&
+    row.subtype === 'local_command' &&
+    typeof row.content === 'string' &&
+    /^\s*<command-name>/.test(row.content)
+  );
+}
+
+// The text the user typed: a user row's content, or a local command's.
+function promptText(row) {
+  return isLocalCommand(row) ? row.content : content(row);
+}
+
+// A command prompt as the user typed it: "<command-name>/login</command-name>
+// <command-args>x</command-args>" reads as "/login x".
+function typedText(row) {
+  const c = String(promptText(row));
+  const name = c.match(/<command-name>([^<]*)<\/command-name>/);
+  if (!name) return c;
+  const args = c.match(/<command-args>([^<]*)<\/command-args>/);
+  return [name[1], args ? args[1] : ''].join(' ').trim();
+}
+
+// The host marks what it writes for a local command with a meta row that
+// holds <local-command-caveat>. A plain-text user row at the same time is the
+// host's reply (such as "Commands are in the form `/command [args]`" for a
+// mistyped command), not text the user typed.
+function isHostReply(row, prev) {
+  return Boolean(
+    prev &&
+    prev.isMeta &&
+    prev.__t === row.__t &&
+    String(content(prev)).includes('<local-command-caveat>') &&
+    !/^\s*<command-name>/.test(String(content(row)))
+  );
+}
+
+function isPrompt(row, prev) {
+  if (isLocalCommand(row)) return true;
   if (row.type !== 'user' || row.isMeta) return false;
+  if (isHostReply(row, prev)) return false;
   const c = content(row);
   if (typeof c !== 'string') return false;
   if (c.includes('<task-notification>')) return false;
   if (c.includes('SYSTEM NOTIFICATION')) return false;
   if (c.startsWith('[Request interrupted')) return false;
+  // Background teammates report back as user-role messages; they are agent
+  // traffic, not the user typing.
+  if (c.includes('<teammate-message')) return false;
+  // The host echoes back the output of a local slash command such as /login
+  // and of a `!` shell command; only the command the user typed is a prompt.
+  if (
+    /^\s*<(local-command-(stdout|stderr|caveat)|bash-(stdout|stderr))>/.test(c)
+  )
+    return false;
+  // Usage-limit notices are injected by the host, not typed by the user.
+  if (
+    /^\s*\[?(Usage limit reached|Earlier usage-limit notes|Your claude\.ai usage limit)/i.test(
+      c
+    )
+  )
+    return false;
   return true;
 }
 
@@ -166,12 +364,33 @@ function isImplementPrompt(row) {
   );
 }
 
+// A prompt that starts a plugin command (/<plugin>:<command>, such as
+// /awos:verify, /better:implement or /profiler:implement) ends the current
+// run. Any other prompt — an answer, "continue", a built-in command such as
+// /login after an expired session — happens inside the run and is recorded
+// as an intervention.
+const PLUGIN_COMMAND = String.raw`\/[A-Za-z0-9][\w.-]*:[A-Za-z0-9]`;
+const PLUGIN_COMMAND_RE = new RegExp(
+  String.raw`<command-name>${PLUGIN_COMMAND}|^\s*${PLUGIN_COMMAND}`
+);
+function isPluginCommandPrompt(row) {
+  return PLUGIN_COMMAND_RE.test(String(promptText(row)));
+}
+
+// implement.md asks for "All tasks complete (100%). Run /awos:verify …" or
+// "Implementation run complete. N/M tasks done", but models paraphrase it
+// ("All tasks complete.", "**All 50 tasks complete (100%)**") or drop the
+// first sentence and keep only the closing pointer to /awos:verify, which
+// implement.md gives only when every task is done. The "All … tasks
+// complete" phrase is matched at the start of a line, so prose like "once
+// all tasks complete" does not end the run.
+const RUN_END_RE =
+  /Implementation run complete|(?:^|\n)\s*(?:\*\*)?All (?:\d+ )?(?:\w+ )?tasks (?:are )?complete\b|\/awos:verify\b/;
+
 function runEndedText(row) {
   if (row.type !== 'assistant') return null;
   const t = textOf(row);
-  if (/Implementation run complete|All tasks complete \(100%\)/.test(t))
-    return t;
-  return null;
+  return RUN_END_RE.test(t) ? t : null;
 }
 
 // ---------- session discovery ----------
@@ -196,8 +415,40 @@ export function findRuns(mainRows) {
     let end = mainRows[mainRows.length - 1].__t;
     let endReason = 'session end';
     let completedText = null;
+    const interventions = [];
+    // AskUserQuestion calls: the run is blocked on the user from the call
+    // to its result, however long that takes.
+    const questions = [];
+    const asked = new Map();
     for (let j = i + 1; j < mainRows.length; j++) {
       const r = mainRows[j];
+      for (const b of blocks(r)) {
+        if (
+          r.type === 'assistant' &&
+          b.type === 'tool_use' &&
+          b.name === 'AskUserQuestion'
+        ) {
+          const q =
+            b.input && Array.isArray(b.input.questions)
+              ? b.input.questions[0]
+              : null;
+          asked.set(b.id, {
+            at: r.__t,
+            text: String((q && q.question) || '')
+              .replace(/\s+/g, ' ')
+              .slice(0, 120),
+          });
+        }
+        if (
+          r.type === 'user' &&
+          b.type === 'tool_result' &&
+          asked.has(b.tool_use_id)
+        ) {
+          const q = asked.get(b.tool_use_id);
+          asked.delete(b.tool_use_id);
+          questions.push({ at: q.at, answeredAt: r.__t, text: q.text });
+        }
+      }
       const done = runEndedText(r);
       if (done) {
         completedText = done;
@@ -205,29 +456,125 @@ export function findRuns(mainRows) {
         endReason = 'completed';
         break;
       }
-      if (isPrompt(r)) {
+      if (!isPrompt(r, mainRows[j - 1])) continue;
+      if (isPluginCommandPrompt(r)) {
         end = r.__t;
-        endReason = 'next user prompt';
+        endReason = 'next command';
         break;
       }
+      // The run waited on the user from its last line to this prompt; a gap
+      // over IDLE_GAP_SEC is idle and already excluded everywhere else.
+      const waitSec = (r.__t - mainRows[j - 1].__t) / 1000;
+      interventions.push({
+        at: r.__t,
+        text: typedText(r).replace(/\s+/g, ' ').slice(0, 120),
+        waitSec: waitSec > IDLE_GAP_SEC ? 0 : waitSec,
+      });
     }
+    const c0 = String(content(mainRows[i]));
     runs.push({
       index: runs.length + 1,
+      // Which plugin started the run: only /better:implement keeps a run.md.
+      command: /(?:<command-name>|^\s*)\/better:implement\b/.test(c0)
+        ? 'better'
+        : 'awos',
       startRow: i,
       start: mainRows[i].__t,
       end,
       endReason,
       completed: Boolean(completedText),
       completedText,
+      interventions,
+      questions,
       prompt: String(content(mainRows[i])).replace(/\s+/g, ' ').slice(0, 160),
     });
   }
   return runs;
 }
 
+// ---------- context fill ----------
+
+const CONTEXT_FIELDS = [
+  'input_tokens',
+  'cache_creation_input_tokens',
+  'cache_read_input_tokens',
+];
+
+// Context at a turn is everything the model read on that request: fresh
+// input plus cache writes plus cache reads. Streaming writes several lines
+// per turn with partial usage, so each field is the max seen per message.id,
+// as output_tokens is. A missing field counts as 0. A turn that reports no
+// input usage at all (a host-written error line) carries no context reading
+// and does not become the final context.
+// Compactions are the compact_boundary system lines the host writes; they
+// are never inferred from a drop in the numbers.
+// The host compacts in two cases: a context that grew too large during work,
+// and a context that sat without a model request long enough for its prompt
+// cache to expire (the agent waited on the user, a subagent, a long tool or
+// a sleeping machine). To tell them apart, each compaction carries the pause
+// from the agent's previous model turn to the start of the compaction (the
+// line's timestamp is written at its end, so durationMs is taken off). A
+// tool result or a user prompt does not end the pause: the cache ages from
+// the last request, and the request after a long wait is what compacts.
+export const COMPACTION_PAUSE_SEC = 5 * 60;
+
+export function contextFill(rows) {
+  const turns = new Map();
+  const compactions = [];
+  let lastTurnAt = null;
+  for (const row of rows) {
+    if (row.type === 'system' && row.subtype === 'compact_boundary') {
+      const m = row.compactMetadata || {};
+      const start = row.__t - (Number(m.durationMs) || 0);
+      const pauseSec =
+        lastTurnAt === null
+          ? null
+          : Math.max(0, Math.round((start - lastTurnAt) / 1000));
+      compactions.push({
+        at: row.__t,
+        trigger: typeof m.trigger === 'string' ? m.trigger : '?',
+        preTokens: Number(m.preTokens) || 0,
+        postTokens: Number(m.postTokens) || 0,
+        pauseSec,
+        afterPause: pauseSec !== null && pauseSec >= COMPACTION_PAUSE_SEC,
+      });
+      continue;
+    }
+    if (row.type !== 'assistant' || isSleepError(row)) continue;
+    lastTurnAt = row.__t;
+    const m = row.message || {};
+    const id = m.id || `${row.__t}`;
+    const entry = turns.get(id) || { at: row.__t, fields: [0, 0, 0] };
+    const u = m.usage || {};
+    CONTEXT_FIELDS.forEach((f, i) => {
+      entry.fields[i] = Math.max(entry.fields[i], Number(u[f]) || 0);
+    });
+    turns.set(id, entry);
+  }
+  const fill = {
+    peakContext: 0,
+    peakTurn: 0,
+    peakAt: null,
+    finalContext: 0,
+    compactions,
+  };
+  let n = 0;
+  for (const e of turns.values()) {
+    n++;
+    const ctx = e.fields[0] + e.fields[1] + e.fields[2];
+    if (ctx > fill.peakContext) {
+      fill.peakContext = ctx;
+      fill.peakTurn = n;
+      fill.peakAt = e.at;
+    }
+    if (ctx > 0) fill.finalContext = ctx;
+  }
+  return fill;
+}
+
 // ---------- agent profiling ----------
 
-export function profileAgent(rows, meta, now) {
+export function profileAgent(rows, meta, now, sleep = []) {
   const agent = {
     id: meta.agentId || null,
     type: meta.agentType || '?',
@@ -245,9 +592,15 @@ export function profileAgent(rows, meta, now) {
     testRuns: 0,
     testSec: 0,
     idleSec: 0,
+    asleepSec: 0,
     turns: 0,
     outputTokens: 0,
     thinkingTurns: 0,
+    peakContext: 0,
+    peakTurn: 0,
+    peakAt: null,
+    finalContext: 0,
+    compactions: [],
     toolCalls: 0,
     agentCalls: [],
     hangs: [],
@@ -264,14 +617,21 @@ export function profileAgent(rows, meta, now) {
   let prev = null;
   let lastKind = 'unknown';
   for (const row of rows) {
-    const gap = prev ? (row.__t - prev) / 1000 : 0;
+    // Time the machine slept is not model, tool or idle time; every bucket
+    // below sees only the awake part of the gap.
+    const asleep = prev ? overlapSec(sleep, prev, row.__t) : 0;
+    agent.asleepSec += asleep;
+    const gap = prev ? (row.__t - prev) / 1000 - asleep : 0;
     // A long wait on a tool result is a hang candidate, not idle: the run
     // level reclassifies it as idle only if nothing on the machine was active.
     const toolWait =
       row.type === 'user' && blocks(row).some((b) => b.type === 'tool_result');
     const idle = gap > IDLE_GAP_SEC && !toolWait;
     if (idle) agent.idleSec += gap;
-    if (row.type === 'assistant') {
+    if (row.type === 'assistant' && isSleepError(row)) {
+      // The error line is not a model turn.
+      lastKind = 'tool_result';
+    } else if (row.type === 'assistant') {
       if (prev && !idle) agent.modelSec += gap;
       const m = row.message || {};
       if (!agent.model && typeof m.model === 'string') agent.model = m.model;
@@ -356,6 +716,7 @@ export function profileAgent(rows, meta, now) {
     agent.outputTokens += e.out;
     if (e.think) agent.thinkingTurns++;
   }
+  Object.assign(agent, contextFill(rows));
   agent.isDelegator = agent.agentCalls.length > 0;
   agent.isEmptySpawn =
     agent.depth > 1 && agent.toolCalls === 0 && agent.turns <= 2;
@@ -372,10 +733,13 @@ export function profileAgent(rows, meta, now) {
   return agent;
 }
 
-export function loadAgents(sessionDir, now) {
+// The machine sleeps for every transcript at once, so sleep found in any of
+// them (plus baseSleep from the OS and the main transcript) applies to all.
+export function loadAgents(sessionDir, now, baseSleep = []) {
   const dir = path.join(sessionDir, 'subagents');
-  if (!fs.existsSync(dir)) return [];
-  const agents = [];
+  if (!fs.existsSync(dir))
+    return { agents: [], sleep: mergeIntervals(baseSleep), markers: 0 };
+  const raw = [];
   for (const f of fs.readdirSync(dir)) {
     if (!f.endsWith('.meta.json')) continue;
     const agentId = f.slice('agent-'.length, -'.meta.json'.length);
@@ -383,10 +747,13 @@ export function loadAgents(sessionDir, now) {
     meta.agentId = agentId;
     const rows = readJsonl(path.join(dir, `agent-${agentId}.jsonl`));
     if (!rows.length) continue;
-    agents.push(profileAgent(rows, meta, now));
+    raw.push({ meta, rows });
   }
+  const markers = raw.flatMap((r) => sleepMarkers(r.rows));
+  const sleep = mergeIntervals([...baseSleep, ...markers]);
+  const agents = raw.map((r) => profileAgent(r.rows, r.meta, now, sleep));
   agents.sort((a, b) => a.first - b.first);
-  return agents;
+  return { agents, sleep, markers: markers.length };
 }
 
 // ---------- machine-activity check ----------
@@ -455,8 +822,18 @@ function machineActiveDuring(projectsDir, fromMs, toMs, excludeFile) {
 
 export function profileRun(ctx, run) {
   const { mainRows, agents, now, mainModel } = ctx;
-  const live = !run.completed && run.endReason === 'session end';
-  const end = live ? now : Math.min(run.end, now);
+  // A run with no completion line and no later command is live only while
+  // something is still writing. Background subagents can outlive the
+  // orchestrator's last line, so the last activity is the latest line in
+  // the main transcript or in any subagent started within the run.
+  const openEnded = !run.completed && run.endReason === 'session end';
+  const lastActivity = openEnded
+    ? agents
+        .filter((a) => a.first !== null && a.first >= run.start)
+        .reduce((t, a) => Math.max(t, a.last), run.end)
+    : run.end;
+  const live = openEnded && (now - lastActivity) / 1000 < IDLE_GAP_SEC;
+  const end = live ? now : Math.min(lastActivity, now);
   const inRun = agents.filter((a) => a.first >= run.start && a.first <= end);
   const byId = new Map(inRun.map((a) => [a.id, a]));
   const byToolUse = new Map(
@@ -474,21 +851,53 @@ export function profileRun(ctx, run) {
     }
   }
 
-  // orchestrator buckets over the run window
-  const orch = { modelSec: 0, toolSec: 0, idleSec: 0, handoffs: [] };
+  // orchestrator buckets over the run window. A gap splits into time asleep,
+  // time blocked on an AskUserQuestion, and the awake rest the buckets see.
+  const sleep = ctx.sleep || [];
+  const asking = subtractIntervals(
+    mergeIntervals((run.questions || []).map((q) => [q.at, q.answeredAt])),
+    sleep
+  );
+  const orch = {
+    modelSec: 0,
+    toolSec: 0,
+    agentWaitSec: 0,
+    idleSec: 0,
+    asleepSec: 0,
+    handoffs: [],
+    // Each stretch of the orchestrator's own work (a model turn or a tool
+    // of its own), so the Units section can place it between subagents.
+    active: [],
+  };
   let prev = null;
   let lastNotification = null;
   const rowsInRun = mainRows.filter((r) => r.__t >= run.start && r.__t <= end);
+  // A foreground Agent call returns its subagent's result as a tool result.
+  // The wait for it is the subagent's own time, already counted in the
+  // subagent buckets, so it is kept out of the orchestrator's tool time.
+  const agentCalls = new Set();
+  for (const row of rowsInRun)
+    if (row.type === 'assistant')
+      for (const b of blocks(row))
+        if (b.type === 'tool_use' && b.name === 'Agent') agentCalls.add(b.id);
   const bigGaps = [];
   for (const row of rowsInRun) {
-    const gap = prev ? (row.__t - prev) / 1000 : 0;
+    const asleep = prev ? overlapSec(sleep, prev, row.__t) : 0;
+    const onUser = prev ? overlapSec(asking, prev, row.__t) : 0;
+    orch.asleepSec += asleep;
+    const gap = prev ? (row.__t - prev) / 1000 - asleep - onUser : 0;
     const idle = gap > IDLE_GAP_SEC;
     if (idle) {
       orch.idleSec += gap;
       bigGaps.push({ from: prev, to: row.__t, sec: gap });
     }
-    if (row.type === 'assistant') {
-      if (prev && !idle) orch.modelSec += gap;
+    if (row.type === 'assistant' && isSleepError(row)) {
+      // not a model turn
+    } else if (row.type === 'assistant') {
+      if (prev && !idle) {
+        orch.modelSec += gap;
+        orch.active.push({ from: prev, to: row.__t, sec: gap });
+      }
       for (const b of blocks(row)) {
         if (
           b.type === 'tool_use' &&
@@ -502,13 +911,23 @@ export function profileRun(ctx, run) {
       }
     } else if (row.type === 'user') {
       const c = content(row);
-      if (blocks(row).some((b) => b.type === 'tool_result') && prev && !idle)
-        orch.toolSec += gap;
+      const results = blocks(row).filter((b) => b.type === 'tool_result');
+      if (results.length && prev && !idle) {
+        if (results.some((b) => agentCalls.has(b.tool_use_id)))
+          orch.agentWaitSec += gap;
+        else {
+          orch.toolSec += gap;
+          orch.active.push({ from: prev, to: row.__t, sec: gap });
+        }
+      }
       if (typeof c === 'string' && c.includes('<task-notification>'))
         lastNotification = row.__t;
     }
     prev = row.__t;
   }
+  // The orchestrator's context fill over the run window only; turns before
+  // the run belong to whatever the session did earlier.
+  Object.assign(orch, contextFill(rowsInRun));
 
   // classify big gaps: activity elsewhere on the machine, or none
   for (const g of bigGaps) {
@@ -557,8 +976,15 @@ export function profileRun(ctx, run) {
   const working = inRun.filter((a) => !a.isDelegator && !a.isEmptySpawn);
   const sum = (arr, k) => arr.reduce((s, a) => s + a[k], 0);
   const turns = sum(working, 'turns');
+  const wallSec = (end - run.start) / 1000;
+  const asleepSec = overlapSec(sleep, run.start, end);
+  const questionWaitSec = overlapSec(asking, run.start, end);
+  const promptWaitSec = run.interventions.reduce((s, x) => s + x.waitSec, 0);
   const totals = {
-    wallSec: (end - run.start) / 1000,
+    wallSec,
+    asleepSec,
+    asleepPeriods: sleep.filter(([a, b]) => b > run.start && a < end).length,
+    awakeSec: wallSec - asleepSec,
     agents: inRun.length,
     workingAgents: working.length,
     delegators: inRun.filter((a) => a.isDelegator).length,
@@ -574,12 +1000,19 @@ export function profileRun(ctx, run) {
     ),
     orchestratorModelSec: orch.modelSec,
     orchestratorToolSec: orch.toolSec,
+    orchestratorAgentWaitSec: orch.agentWaitSec,
     orchestratorIdleSec: orch.idleSec,
+    userPrompts: run.interventions.length,
+    userQuestions: (run.questions || []).length,
+    userQuestionWaitSec: questionWaitSec,
+    userWaitSec: promptWaitSec + questionWaitSec,
     turns,
     secPerTurn: turns ? sum(working, 'modelSec') / turns : 0,
     tokensPerTurn: turns ? sum(working, 'outputTokens') / turns : 0,
     thinkingShare: turns ? sum(working, 'thinkingTurns') / turns : 0,
-    medianWallMin: median(working.map((a) => (a.wallSec - a.idleSec) / 60)),
+    medianWallMin: median(
+      working.map((a) => (a.wallSec - a.idleSec - a.asleepSec) / 60)
+    ),
     medianHandoffSec: median(orch.handoffs),
   };
   const stalls = live
@@ -604,6 +1037,7 @@ export function profileRun(ctx, run) {
   return {
     run,
     live,
+    end,
     totals,
     agents: inRun,
     working,
@@ -617,6 +1051,313 @@ export function profileRun(ctx, run) {
   };
 }
 
+// ---------- run.md units (/better:implement) ----------
+
+// /better:implement keeps a checkpoint, context/spec/<dir>/run.md, that
+// names each unit the run delegated. It gives no time: every number below
+// still comes from the transcripts. run.md only says which unit a subagent
+// did and what kind of unit it is. The fields read here are the ones the
+// better plugin keeps stable: Status, the "### Unit N.M" headings, and the
+// Agent:, State:, Committed: and Rework-of: lines.
+const RUN_MD_RE = /context\/spec\/[^/\s"'`\\]+\/run\.md/;
+
+// The first run.md path in the run's lines of the main transcript, resolved
+// against the session cwd. That is the cwd the session started in, not the
+// cwd of the line: an orchestrator that cd'd into a nested code repository
+// writes later lines with that repository's cwd.
+export function findRunMdPath(rows, sessionCwd) {
+  for (const row of rows) {
+    const m = RUN_MD_RE.exec(JSON.stringify(row));
+    if (m) return path.resolve(sessionCwd || process.cwd(), m[0]);
+  }
+  return null;
+}
+
+const unitKind = (suffix) =>
+  /^\d+$/.test(suffix)
+    ? 'work'
+    : /^V\d*$/i.test(suffix)
+      ? 'verification'
+      : /^R\d*$/i.test(suffix)
+        ? 'rework'
+        : 'other';
+const CRITERION_RE = /§\s*(\d+(?:\.\d+)*)/;
+const clean = (s) =>
+  String(s || '')
+    .replace(/`/g, '')
+    .trim();
+
+// Units in document order. A unit heading that occurs again (a run.md
+// rewritten by appending) keeps its first block; the id goes to duplicates.
+export function parseRunMd(text) {
+  const lines = String(text).split('\n');
+  const status = lines.map((l) => /^- Status:\s*(.*)$/.exec(l)).find(Boolean);
+  const out = {
+    status: status ? clean(status[1]) : null,
+    slices: [],
+    units: [],
+    duplicates: [],
+  };
+  const seen = new Set();
+  let slice = null;
+  let unit = null; // the block being read; null outside a unit block
+  let skipping = false; // inside a duplicated unit block
+  for (const line of lines) {
+    const sliceHead = /^## Slice (\d+):\s*(.*)$/.exec(line);
+    const unitHead = /^### Unit (\d+)\.(\w+)\s*(?:[—–-]+\s*)?(.*)$/.exec(line);
+    if (/^#{1,3} /.test(line)) {
+      unit = null;
+      skipping = false;
+      if (/^#{1,2} /.test(line)) slice = null;
+    }
+    if (sliceHead) {
+      slice = {
+        number: Number(sliceHead[1]),
+        name: clean(sliceHead[2]),
+        committed: null,
+      };
+      out.slices.push(slice);
+      continue;
+    }
+    if (unitHead) {
+      const id = `${unitHead[1]}.${unitHead[2]}`;
+      if (seen.has(id)) {
+        if (!out.duplicates.includes(id)) out.duplicates.push(id);
+        skipping = true;
+        continue;
+      }
+      seen.add(id);
+      const title = clean(unitHead[3]);
+      const kind = unitKind(unitHead[2]);
+      const crit =
+        kind === 'verification' || kind === 'rework'
+          ? CRITERION_RE.exec(title)
+          : null;
+      unit = {
+        id,
+        kind,
+        title,
+        criterion: crit ? `§${crit[1]}` : null,
+        slice: slice ? slice.number : null,
+        plannedAgent: null,
+        state: null,
+        committed: null,
+        reworkOf: null,
+      };
+      out.units.push(unit);
+      continue;
+    }
+    if (skipping) continue;
+    const field = /^- (Agent|State|Committed|Rework-of|Verifies):\s*(.*)$/.exec(
+      line
+    );
+    if (!field) continue;
+    const [, key, raw] = field;
+    const value = clean(raw);
+    if (unit) {
+      if (key === 'Agent' && unit.plannedAgent === null)
+        unit.plannedAgent = value;
+      if (key === 'State' && unit.state === null) unit.state = value;
+      if (key === 'Committed' && unit.committed === null)
+        unit.committed = value;
+      if (key === 'Rework-of' && unit.reworkOf === null) {
+        unit.reworkOf = value;
+        const c = CRITERION_RE.exec(value);
+        if (!unit.criterion && c) unit.criterion = `§${c[1]}`;
+      }
+      if (key === 'Verifies' && !unit.criterion) {
+        const c = CRITERION_RE.exec(value);
+        if (c) unit.criterion = `§${c[1]}`;
+      }
+    } else if (slice && key === 'Committed' && slice.committed === null) {
+      slice.committed = value;
+    }
+  }
+  return out;
+}
+
+// Which unit a subagent did, from its description: "Unit 2.1 …" names the
+// unit; "Verify §2.1 …" and "Rework §2.1 …" name the criterion of a
+// verification or rework unit.
+function unitClaim(description) {
+  const d = String(description || '');
+  let m = /^\s*Unit\s+(\d+\.\w+)/i.exec(d);
+  if (m) return { id: m[1] };
+  m = /^\s*Verif(?:y|ication)\b[^§]*§\s*(\d+(?:\.\d+)*)/i.exec(d);
+  if (m) return { kind: 'verification', criterion: `§${m[1]}` };
+  m = /^\s*Rework\b[^§]*§\s*(\d+(?:\.\d+)*)/i.exec(d);
+  if (m) return { kind: 'rework', criterion: `§${m[1]}` };
+  return null;
+}
+
+const activeSec = (a) => a.wallSec - a.idleSec - a.asleepSec;
+
+// Matches the run's top-level subagents (the orchestrator's own delegations)
+// to units, in start order. Several subagents for one unit are attempts. When
+// several units of one kind share a criterion, the k-th subagent for that
+// criterion takes the k-th unit in document order; any further one is an
+// attempt at the last. A nested agent belongs to its top-level ancestor's
+// unit: its context counts toward the unit's peak, its time is already inside
+// the ancestor's. Time is each attempt's active wall-clock, the Agents
+// table's Wall column.
+export function matchUnits(parsed, agents, window = null) {
+  const byId = new Map(agents.map((a) => [a.id, a]));
+  const rootOf = (a) => {
+    let r = a;
+    const seen = new Set();
+    while (r.parent && byId.has(r.parent) && !seen.has(r.parent)) {
+      seen.add(r.parent);
+      r = byId.get(r.parent);
+    }
+    return r;
+  };
+  const units = parsed.units.map((u) => ({
+    ...u,
+    attempts: 0,
+    agentIds: [],
+    agentTypes: [],
+    activeSec: 0,
+    orchestratorSec: 0,
+    peakContext: 0,
+  }));
+  const unitById = new Map(units.map((u) => [u.id, u]));
+  const taken = new Map(); // "kind §x" → how many subagents claimed it
+  const unmatched = [];
+  const roots = agents.filter((a) => rootOf(a) === a);
+  const unitOfRoot = new Map();
+  for (const a of roots) {
+    const claim = unitClaim(a.description);
+    let unit = null;
+    if (claim && claim.id) unit = unitById.get(claim.id) || null;
+    else if (claim) {
+      const same = units.filter(
+        (u) => u.kind === claim.kind && u.criterion === claim.criterion
+      );
+      const key = `${claim.kind} ${claim.criterion}`;
+      const k = taken.get(key) || 0;
+      taken.set(key, k + 1);
+      unit = same.length ? same[Math.min(k, same.length - 1)] : null;
+    }
+    if (!unit) {
+      unmatched.push({
+        id: a.id,
+        type: a.type,
+        description: a.description,
+        activeSec: activeSec(a),
+      });
+      continue;
+    }
+    unitOfRoot.set(a.id, unit);
+    unit.attempts++;
+    unit.agentIds.push(a.id);
+    if (!unit.agentTypes.includes(a.type)) unit.agentTypes.push(a.type);
+    unit.activeSec += activeSec(a);
+  }
+  for (const a of agents) {
+    const unit = unitOfRoot.get(rootOf(a).id);
+    if (unit) unit.peakContext = Math.max(unit.peakContext, a.peakContext);
+  }
+  const totals = { work: 0, verification: 0, rework: 0, other: 0 };
+  for (const u of units) totals[u.kind] += u.activeSec;
+  return {
+    units,
+    unmatched,
+    notRun: units.filter((u) => u.attempts === 0).map((u) => u.id),
+    totals,
+    orchestrator: window ? placeOrchestrator(roots, unitOfRoot, window) : null,
+  };
+}
+
+// The orchestrator's own work, placed between top-level subagents. After a
+// subagent ends, /better:implement spot-checks its report, observes the
+// unit's criteria in the running application and commits the slice before
+// it starts the next one; that stretch belongs to the unit the subagent did.
+// The stretch ends at the next subagent's start or end, whichever comes
+// first, so stretches never overlap when subagents run at once. Time before
+// the first subagent (baseline, plan) and after the last one (the final walk
+// over every criterion, the questions, the report) is reported apart.
+function placeOrchestrator(roots, unitOfRoot, { active, start, end }) {
+  const within = (a, b) =>
+    active.reduce((s, x) => {
+      const lo = Math.max(a, x.from);
+      const hi = Math.min(b, x.to);
+      if (hi <= lo || x.to <= x.from) return s;
+      return s + (x.sec * (hi - lo)) / (x.to - x.from);
+    }, 0);
+  const out = {
+    beforeFirstSec: 0,
+    betweenSec: 0,
+    afterLastSec: 0,
+    whileSubagentsSec: 0,
+  };
+  const totalSec = within(start, end);
+  const timed = roots.filter((a) => a.first !== null && a.last !== null);
+  if (!timed.length) {
+    out.beforeFirstSec = totalSec;
+    return out;
+  }
+  const marks = timed.flatMap((a) => [a.first, a.last]);
+  out.beforeFirstSec = within(start, Math.min(...timed.map((a) => a.first)));
+  for (const a of timed) {
+    const later = marks.filter((t) => t > a.last);
+    const unit = unitOfRoot.get(a.id);
+    if (!later.length) {
+      // The last subagent's check runs inside the final walk. Subagents
+      // that end at the same last moment share one stretch.
+      if (unit) unit.orchestratorInFinal = true;
+      if (!out.afterLastSec) out.afterLastSec = within(a.last, end);
+      continue;
+    }
+    const sec = within(a.last, Math.min(...later));
+    out.betweenSec += sec;
+    if (unit) unit.orchestratorSec += sec;
+  }
+  out.whileSubagentsSec = Math.max(
+    0,
+    totalSec - out.beforeFirstSec - out.betweenSec - out.afterLastSec
+  );
+  return out;
+}
+
+// The unit view of one run, or the one-line reason it has none.
+export function runUnits(ctx, run, agents, runMdArg, window = null) {
+  if (run.command !== 'better')
+    return {
+      skipped:
+        'an /awos:implement run keeps no run.md; only /better:implement does',
+    };
+  let file = null;
+  if (typeof runMdArg === 'string') file = path.resolve(runMdArg);
+  else {
+    const rows = ctx.mainRows.filter(
+      (r) => r.__t >= run.start && r.__t <= run.end
+    );
+    file = findRunMdPath(rows, ctx.cwd);
+  }
+  if (!file)
+    return {
+      skipped:
+        'no context/spec/<dir>/run.md path in the run’s transcript lines; pass --run-md <path>',
+    };
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    return {
+      path: file,
+      skipped: `run.md at ${file} cannot be read (${(err && err.code) || 'error'})`,
+    };
+  }
+  const parsed = parseRunMd(text);
+  return {
+    path: file,
+    status: parsed.status,
+    duplicates: parsed.duplicates,
+    slices: parsed.slices,
+    ...matchUnits(parsed, agents, window),
+  };
+}
+
 function median(arr) {
   if (!arr.length) return 0;
   const s = [...arr].sort((a, b) => a - b);
@@ -626,7 +1367,7 @@ function median(arr) {
 
 // ---------- context ----------
 
-export function loadContext(projectDir, sessionId, now) {
+export function loadContext(projectDir, sessionId, now, args = {}) {
   const sessions = listSessions(projectDir);
   let session = sessionId ? sessions.find((s) => s.id === sessionId) : null;
   if (!session && !sessionId) {
@@ -642,7 +1383,17 @@ export function loadContext(projectDir, sessionId, now) {
         (r) => r.type === 'assistant' && r.message && r.message.model
       ) || {}
     ).message?.model || null;
-  const agents = loadAgents(path.join(projectDir, session.id), now);
+  const osSleep = osSleepIntervals(args);
+  const mainMarkers = sleepMarkers(mainRows);
+  const { agents, sleep, markers } = loadAgents(
+    path.join(projectDir, session.id),
+    now,
+    [...osSleep.intervals, ...mainMarkers]
+  );
+  const sleepSources = [
+    osSleep.source,
+    mainMarkers.length + markers ? 'transcript sleep errors' : null,
+  ].filter(Boolean);
   return {
     projectDir,
     projectsDir: path.dirname(projectDir),
@@ -651,7 +1402,13 @@ export function loadContext(projectDir, sessionId, now) {
     mainRows,
     mainModel,
     agents,
+    sleep,
+    sleepSource: sleepSources.join(' + ') || 'none',
     runs: findRuns(mainRows),
+    // The session cwd: the first one its transcript records, else --cwd.
+    cwd:
+      (mainRows.find((r) => typeof r.cwd === 'string') || {}).cwd ||
+      (args.cwd ? path.resolve(args.cwd) : null),
     now,
   };
 }
@@ -661,6 +1418,7 @@ export function loadContext(projectDir, sessionId, now) {
 const min = (sec) => `${(sec / 60).toFixed(1)} min`;
 const hrs = (sec) => `${(sec / 3600).toFixed(2)} h`;
 const pct = (x) => `${Math.round(x * 100)}%`;
+const kTok = (n) => (n > 0 ? `${Math.round(n / 1000)}k` : '—');
 const iso = (ms) =>
   new Date(ms).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
 
@@ -674,15 +1432,34 @@ export function renderRun(p, ctx) {
     effortLeaks,
     bigGaps,
     concurrency,
+    orch,
   } = p;
   const out = [];
   out.push(
-    `## Implement run ${run.index} — ${iso(run.start)} → ${iso(run.end)} (${hrs(totals.wallSec)})`
+    `## Implement run ${run.index} — ${iso(run.start)} → ${iso(p.end)} (${hrs(totals.wallSec)}${totals.asleepSec > 0 ? `, ${hrs(totals.awakeSec)} with the machine awake` : ''})`
   );
   out.push('');
   out.push(
-    `Session \`${ctx.session.id}\`, orchestrator model \`${ctx.mainModel || '?'}\`. ${run.completed ? "Completed with the orchestrator's completion line" : run.endReason === 'next user prompt' ? 'Ended by the next user prompt, no completion line' : 'Still running or ended without a completion line'}.`
+    `Session \`${ctx.session.id}\`, orchestrator model \`${ctx.mainModel || '?'}\`. ${run.completed ? "Completed with the orchestrator's completion line" : run.endReason === 'next command' ? 'Ended by the next plugin command, no completion line' : p.live ? 'Still running' : 'Ended without a completion line; measured to the last transcript activity'}.`
   );
+  if (run.interventions.length) {
+    out.push('');
+    out.push(
+      `User prompts inside the run: ${run.interventions.length} (${run.interventions
+        .map((x) => `"${x.text.slice(0, 40)}"`)
+        .join(', ')}).`
+    );
+  }
+  if (run.questions && run.questions.length) {
+    out.push('');
+    out.push(
+      `Questions the run asked (AskUserQuestion): ${run.questions.length} (${run.questions
+        .map(
+          (q) => `"${q.text.slice(0, 40)}" ${min((q.answeredAt - q.at) / 1000)}`
+        )
+        .join(', ')}).`
+    );
+  }
   out.push('');
   out.push('### Where the time went');
   out.push('');
@@ -703,7 +1480,13 @@ export function renderRun(p, ctx) {
     `| Orchestrator waiting on its own tools | ${hrs(totals.orchestratorToolSec)} |`
   );
   out.push(
+    `| Waiting on the user (${totals.userPrompts} prompts, ${totals.userQuestions} questions inside the run) | ${hrs(totals.userWaitSec)} |`
+  );
+  out.push(
     `| Idle gaps over ${IDLE_GAP_SEC / 60} min (main session) | ${hrs(totals.orchestratorIdleSec)} |`
+  );
+  out.push(
+    `| Machine asleep (${totals.asleepPeriods} periods; source: ${ctx.sleepSource || 'none'}) | ${hrs(totals.asleepSec)} |`
   );
   out.push('');
   out.push(
@@ -736,6 +1519,49 @@ export function renderRun(p, ctx) {
   out.push(
     `| Median orchestrator handoff (subagent done → next Agent call) | ${totals.medianHandoffSec.toFixed(0)} s |`
   );
+  out.push(
+    `| Orchestrator context (peak / final) | ${orch.peakContext > 0 ? `${kTok(orch.peakContext)} at turn ${orch.peakTurn} (${iso(orch.peakAt).slice(11)})` : '—'} / ${kTok(orch.finalContext)} |`
+  );
+  out.push('');
+  out.push('### Context');
+  out.push('');
+  const compactions = [
+    ...orch.compactions.map((c) => ({ ...c, who: 'orchestrator' })),
+    ...agents.flatMap((a) =>
+      a.compactions.map((c) => ({ ...c, who: `${a.type} "${a.description}"` }))
+    ),
+  ].sort((x, y) => x.at - y.at);
+  // Only a compaction during work says something about the context: it
+  // outgrew itself. One after a pause is the host compacting a context whose
+  // prompt cache expired while the agent waited, whatever its size, so it is
+  // named in one line and not counted as a finding.
+  const duringWork = compactions.filter(
+    (c) => c.pauseSec !== null && !c.afterPause
+  );
+  const other = compactions.filter((c) => !duringWork.includes(c));
+  if (duringWork.length) {
+    out.push(
+      'Compactions during work (the context outgrew itself; details of the brief or of earlier steps can be missing after it):'
+    );
+    out.push('');
+    for (const c of duringWork)
+      out.push(
+        `- ${iso(c.at)} in ${c.who}: ${c.trigger}, ${kTok(c.preTokens)} → ${kTok(c.postTokens)}, ${c.pauseSec} s after the previous model turn`
+      );
+  } else {
+    out.push('No compaction during work.');
+  }
+  if (other.length) {
+    out.push('');
+    out.push(
+      `Compacted after a pause of ${COMPACTION_PAUSE_SEC / 60}+ min, when the prompt cache had expired (the wait, not the context size): ${other
+        .map(
+          (c) =>
+            `${c.who} at ${iso(c.at).slice(11)} ${c.pauseSec === null ? 'before its first model turn' : `after ${min(c.pauseSec)}`}`
+        )
+        .join(', ')}.`
+    );
+  }
   out.push('');
   if (bigGaps.length) {
     out.push('### Long gaps in the main session');
@@ -787,19 +1613,66 @@ export function renderRun(p, ctx) {
   out.push('### Agents');
   out.push('');
   out.push(
-    '| Start | Depth | Type | Model | Description | Wall | Model | Tool | Tests | Turns | s/turn | tok/turn | Think | Longest wait | Status |'
+    '| Start | Depth | Type | Model | Description | Wall | Model | Tool | Tests | Turns | s/turn | tok/turn | Think | Peak ctx | Final ctx | Longest wait | Status |'
   );
   out.push(
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
   );
   for (const a of agents) {
     const t = Math.max(a.turns, 1);
     out.push(
-      `| ${new Date(a.first).toISOString().slice(11, 16)} | ${a.depth} | ${a.type} | ${(a.model || '?').replace('claude-', '')} | ${a.description.slice(0, 40)}${a.isDelegator ? ' [delegator]' : ''}${a.isEmptySpawn ? ' [empty]' : ''} | ${min(a.wallSec - a.idleSec)} | ${min(a.modelSec)} | ${min(a.toolSec)} | ${a.testRuns}×${min(a.testSec)} | ${a.turns} | ${(a.modelSec / t).toFixed(1)} | ${Math.round(a.outputTokens / t)} | ${pct(a.thinkingTurns / t)} | ${min(a.longestWait.sec)} ${a.longestWait.what.slice(0, 40)} | ${a.status} |`
+      `| ${new Date(a.first).toISOString().slice(11, 16)} | ${a.depth} | ${a.type} | ${(a.model || '?').replace('claude-', '')} | ${a.description.slice(0, 40)}${a.isDelegator ? ' [delegator]' : ''}${a.isEmptySpawn ? ' [empty]' : ''} | ${min(a.wallSec - a.idleSec - a.asleepSec)} | ${min(a.modelSec)} | ${min(a.toolSec)} | ${a.testRuns}×${min(a.testSec)} | ${a.turns} | ${(a.modelSec / t).toFixed(1)} | ${Math.round(a.outputTokens / t)} | ${pct(a.thinkingTurns / t)} | ${kTok(a.peakContext)} | ${kTok(a.finalContext)} | ${min(a.longestWait.sec)} ${a.longestWait.what.slice(0, 40)} | ${a.status} |`
     );
   }
   out.push('');
+  if (p.units) out.push(...renderUnits(p.units));
   return out.join('\n');
+}
+
+const cell = (s) => String(s).replace(/\|/g, '\\|');
+
+function renderUnits(u) {
+  if (u.skipped) return [`Units: not shown — ${u.skipped}.`, ''];
+  const out = ['### Units', ''];
+  out.push(
+    `From \`${u.path}\` (run.md \`Status: ${u.status || '?'}\`). run.md names the unit each subagent did; every time below comes from the transcripts.${u.duplicates.length ? ` Duplicated: ${u.duplicates.join(', ')} (the first heading is used).` : ''}`
+  );
+  out.push('');
+  out.push(
+    '| Unit | Kind | Title | Planned agent | Actual agent | Attempts | Active | Orchestrator after | Peak ctx | State |'
+  );
+  out.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+  for (const x of u.units)
+    out.push(
+      `| ${x.id} | ${x.kind} | ${cell(x.title.slice(0, 40).trim())} | ${cell(x.plannedAgent || '—')} | ${x.agentTypes.join(', ') || '—'} | ${x.attempts} | ${x.attempts ? min(x.activeSec) : '—'} | ${!x.attempts || !u.orchestrator ? '—' : x.orchestratorInFinal && !x.orchestratorSec ? 'in the final walk' : min(x.orchestratorSec)} | ${kTok(x.peakContext)} | ${cell(x.state || '?')} |`
+    );
+  out.push('');
+  const kinds = ['work', 'verification', 'rework'];
+  const all = kinds.reduce((s, k) => s + u.totals[k], 0);
+  out.push(
+    `Unit time: ${kinds.map((k) => `${k} ${min(u.totals[k])} (${all > 0 ? pct(u.totals[k] / all) : '—'})`).join(', ')}.`
+  );
+  if (u.orchestrator) {
+    const o = u.orchestrator;
+    out.push('');
+    out.push(
+      `Orchestrator's own work: before the first subagent ${min(o.beforeFirstSec)} (baseline, plan); after a subagent and before the next one ${min(o.betweenSec)} (the "Orchestrator after" column: spot-check, observing the unit's criteria, commit); after the last subagent ${min(o.afterLastSec)} (the final walk over every criterion, the questions, the report); while subagents ran ${min(o.whileSubagentsSec)}.`
+    );
+  }
+  out.push('');
+  if (u.notRun.length) {
+    out.push(
+      `Units no subagent in this session ran (done in an earlier session, or not reached): ${u.notRun.join(', ')}.`
+    );
+    out.push('');
+  }
+  if (u.unmatched.length) {
+    out.push('Subagents that are not a unit:');
+    for (const a of u.unmatched)
+      out.push(`- ${a.type} "${a.description}": ${min(a.activeSec)}`);
+    out.push('');
+  }
+  return out;
 }
 
 // ---------- commands ----------
@@ -822,10 +1695,21 @@ function cmdSessions(args) {
   return 0;
 }
 
+const contextJson = (x) => ({
+  peakContext: x.peakContext,
+  peakTurn: x.peakTurn,
+  peakAt: x.peakAt === null ? null : new Date(x.peakAt).toISOString(),
+  finalContext: x.finalContext,
+  compactions: x.compactions.map((c) => ({
+    ...c,
+    at: new Date(c.at).toISOString(),
+  })),
+});
+
 function cmdReport(args) {
   const now = args.now ? Date.parse(args.now) : Date.now();
   const projectDir = resolveProjectDir(args);
-  const ctx = loadContext(projectDir, args.session, now);
+  const ctx = loadContext(projectDir, args.session, now, args);
   if (!ctx) {
     console.log(
       `No session transcripts under ${projectDir}. Pass --projects <dir> or --session <id>.`
@@ -847,10 +1731,18 @@ function cmdReport(args) {
     console.log(`No run "${which}" — session has runs 1..${ctx.runs.length}.`);
     return 1;
   }
-  const profiles = selected.map((r) => profileRun(ctx, r));
+  const profiles = selected.map((r) => {
+    const p = profileRun(ctx, r);
+    p.units = runUnits(ctx, r, p.agents, args['run-md'], {
+      active: p.orch.active,
+      start: r.start,
+      end: p.end,
+    });
+    return p;
+  });
   const md = [`# /awos:implement profile — ${path.basename(projectDir)}`, ''];
   md.push(
-    `Transcripts: \`${ctx.session.file}\` and its \`subagents/\`. Thinking text is redacted in transcripts; the thinking share counts turns that carry a thinking block. Idle gaps over ${IDLE_GAP_SEC / 60} min are excluded from every bucket.`
+    `Transcripts: \`${ctx.session.file}\` and its \`subagents/\`. Thinking text is redacted in transcripts; the thinking share counts turns that carry a thinking block. Time the machine slept and time a question waited on the user are taken out of the work buckets first; then idle gaps over ${IDLE_GAP_SEC / 60} min are excluded from every bucket.`
   );
   md.push('');
   for (const p of profiles) md.push(renderRun(p, ctx));
@@ -860,8 +1752,9 @@ function cmdReport(args) {
       run: {
         ...p.run,
         start: new Date(p.run.start).toISOString(),
-        end: new Date(p.run.end).toISOString(),
+        end: new Date(p.end).toISOString(),
       },
+      live: p.live,
       totals: p.totals,
       concurrency: p.concurrency,
       bigGaps: p.bigGaps.map((g) => ({
@@ -883,11 +1776,25 @@ function cmdReport(args) {
         description: a.description,
         model: a.model,
       })),
+      orchestrator: contextJson(p.orch),
       agents: p.agents.map((a) => ({
         ...a,
+        ...contextJson(a),
         first: new Date(a.first).toISOString(),
         last: new Date(a.last).toISOString(),
       })),
+      units: p.units.units || [],
+      runMd: {
+        path: p.units.path || null,
+        status: p.units.status || null,
+        duplicates: p.units.duplicates || [],
+        skipped: p.units.skipped || null,
+        slices: p.units.slices || [],
+        totals: p.units.totals || null,
+        orchestrator: p.units.orchestrator || null,
+        unitsNotRun: p.units.notRun || [],
+        unmatchedAgents: p.units.unmatched || [],
+      },
     }));
     fs.writeFileSync(
       args.json,
@@ -895,6 +1802,7 @@ function cmdReport(args) {
         {
           session: ctx.session.id,
           mainModel: ctx.mainModel,
+          sleepSource: ctx.sleepSource,
           generatedAt: new Date(now).toISOString(),
           runs: json,
         },
@@ -916,7 +1824,7 @@ function cmdWatch(args) {
   const line = (s) => process.stdout.write(s + '\n');
   const tick = () => {
     const now = args.now ? Date.parse(args.now) : Date.now();
-    const ctx = loadContext(projectDir, args.session, now);
+    const ctx = loadContext(projectDir, args.session, now, args);
     if (!ctx || !ctx.runs.length) {
       line(`WAITING no /awos:implement run found under ${projectDir}`);
       return false;
@@ -934,11 +1842,11 @@ function cmdWatch(args) {
           );
         else if (a.isDelegator)
           line(
-            `DONE (delegator)${tag} ${a.type} "${a.description}": ${min(a.wallSec - a.idleSec)}, ${a.turns} own turns, handed work to ${a.agentCalls.map((c) => c.subagentType).join(', ')}`
+            `DONE (delegator)${tag} ${a.type} "${a.description}": ${min(a.wallSec - a.idleSec - a.asleepSec)}, ${a.turns} own turns, handed work to ${a.agentCalls.map((c) => c.subagentType).join(', ')}`
           );
         else
           line(
-            `DONE${tag} ${a.type} "${a.description}": wall ${min(a.wallSec - a.idleSec)}, model ${min(a.modelSec)}, tool ${min(a.toolSec)}, tests ${a.testRuns}×${min(a.testSec)}, ${a.turns} turns, ${(a.modelSec / t).toFixed(1)} s/turn, ${Math.round(a.outputTokens / t)} tok/turn, think ${pct(a.thinkingTurns / t)}${a.model === ctx.mainModel && BUILTIN_AGENTS.has(a.type) ? ` — on the orchestrator model ${a.model}` : ''}`
+            `DONE${tag} ${a.type} "${a.description}": wall ${min(a.wallSec - a.idleSec - a.asleepSec)}, model ${min(a.modelSec)}, tool ${min(a.toolSec)}, tests ${a.testRuns}×${min(a.testSec)}, ${a.turns} turns, ${(a.modelSec / t).toFixed(1)} s/turn, ${Math.round(a.outputTokens / t)} tok/turn, think ${pct(a.thinkingTurns / t)}${a.model === ctx.mainModel && BUILTIN_AGENTS.has(a.type) ? ` — on the orchestrator model ${a.model}` : ''}`
           );
       }
       if (
@@ -962,7 +1870,7 @@ function cmdWatch(args) {
         `IDLE orchestrator and every subagent silent for ${min(mainQuiet)} — the run may be waiting on you or stopped`
       );
     }
-    const ended = run.completed || run.endReason === 'next user prompt';
+    const ended = run.completed || run.endReason === 'next command';
     if (Date.now() - lastSummary > 1800 * 1000 || ended) {
       lastSummary = Date.now();
       const t = p.totals;
@@ -972,7 +1880,7 @@ function cmdWatch(args) {
     }
     if (ended) {
       line(
-        `RUN ENDED ${run.completed ? run.completedText.replace(/\s+/g, ' ').slice(0, 160) : 'by the next user prompt'}`
+        `RUN ENDED ${run.completed ? run.completedText.replace(/\s+/g, ' ').slice(0, 160) : 'by the next plugin command'}`
       );
       return true;
     }
@@ -1006,7 +1914,7 @@ if (isMain) {
   else if (cmd === 'watch') code = cmdWatch(args);
   else {
     console.log(
-      'Usage: profile-implement.mjs <sessions|report|watch> [--projects <dir>] [--cwd <path>] [--session <id>] [--run latest|all|<n>] [--json <file>] [--interval <sec>] [--once] [--now <iso>]'
+      'Usage: profile-implement.mjs <sessions|report|watch> [--projects <dir>] [--cwd <path>] [--session <id>] [--run latest|all|<n>] [--json <file>] [--interval <sec>] [--once] [--now <iso>] [--sleep-log <file>|none] [--run-md <path>]'
     );
     code = 2;
   }

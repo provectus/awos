@@ -3197,6 +3197,130 @@ test('hire.md reports unmet searches back to the registry via report_gap', () =>
   );
 });
 
+test('hire.md and tech.md keep command skills out of skills: and report them as commands', () => {
+  // A registry skill with `disable-model-invocation: true` is a process the
+  // user starts with its slash command. Claude Code cannot preload it into a
+  // subagent: it skips the `skills:` entry with only a debug-log warning, so
+  // the entry is dead and hired-agents.md claims a skill the agent lacks.
+  // The registry marks such skills with `user_invoked: true` in each
+  // search_capabilities skill result. Both hire paths must read the field,
+  // keep the skill out of every `skills:` list, fall back to today's
+  // behavior when an older server omits the field, and name the skill as a
+  // command in the final report (provectus/awos#249).
+  const prompts = {
+    'hire.md': {
+      excluded: /never add it to the `skills:` list of an agent/,
+      report: /\*\*Commands Installed:\*\*[^\n]*as its command/,
+    },
+    'tech.md': {
+      excluded: /goes in no agent's `skills:` list/,
+      report: /Report:[^\n]*each installed command skill as its command/,
+    },
+  };
+  for (const [file, pattern] of Object.entries(prompts)) {
+    const body = readUtf8(path.join(commandsDir, file));
+    assert.ok(
+      body.includes('`user_invoked`'),
+      `commands/${file} must read the \`user_invoked\` field of each search_capabilities skill result — it is the only way to tell a command skill from a knowledge skill`
+    );
+    assert.ok(
+      body.includes('`disable-model-invocation: true`'),
+      `commands/${file} must say that \`user_invoked: true\` means the skill has \`disable-model-invocation: true\`, so a reader can see why an agent cannot preload it`
+    );
+    assert.ok(
+      pattern.excluded.test(body),
+      `commands/${file} must keep a command skill out of every agent's \`skills:\` list — a preload entry for it is dead`
+    );
+    assert.ok(
+      /older registry server; treat it as `(user_invoked: )?false`/.test(body),
+      `commands/${file} must treat a skill result without \`user_invoked\` (an older registry server) as \`false\`, so hire behaves as before against that server`
+    );
+    assert.ok(
+      pattern.report.test(body),
+      `commands/${file} final report must name each installed command skill as its command, or the user never learns how to start it`
+    );
+  }
+  const hire = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    !/server's `search` tool/.test(hire),
+    'commands/hire.md must call the registry tool by its registered name, `search_capabilities`, not `search`'
+  );
+});
+
+test('hire.md asks the registry for recommendations, on consent, and remembers declines', () => {
+  // The registry keeps the cases where a stack probably needs a capability
+  // that a search for it does not find (a DR plan for a system on AWS, a
+  // browser for a web frontend), so AWOS carries no rule per skill. Hire
+  // calls recommend_capabilities one time, asks before it installs any
+  // result, keeps results out of agents' `skills:` lists, reports each
+  // outcome, and writes declines to hired-agents.md so the next run passes
+  // them in `exclude` (provectus/awos#249). Tech does not call the tool:
+  // recommendations are project-wide, and tech runs per spec.
+  const hire = readUtf8(path.join(commandsDir, 'hire.md'));
+  const checks = [
+    [
+      /call the `awos-recruitment` server's `recommend_capabilities` tool one time/,
+      'must call recommend_capabilities exactly one time per run',
+    ],
+    [
+      /as `exclude`[^\n]*`## Declined Recommendations`/,
+      'must pass the declined names from hired-agents.md in `exclude`, or the user is asked again on every run',
+    ],
+    [
+      /never add it to the `skills:` list of an agent, and do not count it as a gap/,
+      'must keep a recommendation out of agent `skills:` lists and out of the Step 7 gaps — it belongs to no role',
+    ],
+    [
+      /no such tool \(an older registry server\)[^\n]*skip recommendations/,
+      'must skip recommendations against an older registry server instead of failing',
+    ],
+    [
+      /in the same `AskUserQuestion` call as Gate 1, as a separate multi-select question/,
+      'must ask the recommendations in the Gate 1 call, as their own question, so approving the found components never approves a recommendation',
+    ],
+    [
+      /Nothing is selected by default/,
+      'must not preselect a recommendation — the user did not search for it',
+    ],
+    [
+      /A recommended hook goes to Gate 2/,
+      'must send a recommended hook through the executable-behavior gate like any other hook',
+    ],
+    [
+      /call `report_recommendation` one time per result[^\n]*`installed`[^\n]*`declined`[^\n]*`not_answered`/,
+      'must report each recommendation outcome so the registry can tell useful entries from noise',
+    ],
+    [
+      /## Declined Recommendations\n\n\(one bullet per registry recommendation the user declined\)/,
+      'Step 8 coverage-report structure must contain the "## Declined Recommendations" section',
+    ],
+    [
+      /Copy the bullets of the previous file when you regenerate it/,
+      'must carry declines over when hired-agents.md is regenerated, or a decline is forgotten after one run',
+    ],
+    [
+      /A recommendation whose gate got no answer is not declined/,
+      'must not record an unanswered recommendation as declined — the user never saw it',
+    ],
+    [
+      /\*\*Recommendations:\*\*[^\n]*installed, declined, or not answered/,
+      'final report must list each recommendation with its outcome',
+    ],
+  ];
+  for (const [pattern, contract] of checks) {
+    assert.ok(pattern.test(hire), `commands/hire.md ${contract}`);
+  }
+  const tech = readUtf8(path.join(commandsDir, 'tech.md'));
+  assert.ok(
+    !tech.includes('recommend_capabilities'),
+    'commands/tech.md must not call recommend_capabilities — recommendations are project-wide, and tech runs per spec, so it would ask again for every spec'
+  );
+  assert.ok(
+    /change nothing else in it/.test(tech),
+    'commands/tech.md must patch hired-agents.md without touching other sections, so `## Declined Recommendations` survives a tech run'
+  );
+});
+
 test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
   // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
   // propose a QA agent by searching the registry, not by always

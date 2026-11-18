@@ -84,7 +84,7 @@ Follow this process precisely.
 
 ## Step 4: Search the MCP Server
 
-1.  For each **Missing** or **Partially Covered** role, call the `awos-recruitment` MCP server's `search` tool with a natural-language query built from technology names and domain. Issue these searches in parallel — one call per role. Example queries:
+1.  For each **Missing** or **Partially Covered** role, call the `awos-recruitment` MCP server's `search_capabilities` tool with a natural-language query built from technology names and domain. Issue these searches in parallel — one call per role. Example queries:
     - `"React TypeScript frontend development"`
     - `"Python FastAPI backend API"`
     - `"AWS Terraform infrastructure deployment"`
@@ -96,15 +96,20 @@ Follow this process precisely.
     Filter the results against the hooks already configured (Step 3). If the searches return no hooks, skip the hooks phase silently — no warning needed.
 
 3.  If the `awos-recruitment` MCP server is not available or returns errors, tell the user it is unavailable and that you will proceed with generating agent files using general configuration. Note that they can prepare custom skills and agents in `.claude/skills/` and `.claude/agents/`, and wire their own hooks in `.claude/settings.json`. Skip to **Step 6**.
-4.  Gather all found skills, MCPs, agents, and hooks from the search results.
-5.  Show the user what was found and collect consent in **two separate gates** — never one blanket confirmation covering both:
+4.  Gather all found skills, MCPs, agents, and hooks from the search results. Read the `user_invoked` field of each skill result. A skill with `user_invoked: true` has `disable-model-invocation: true` in its `SKILL.md`: it is a process that the user starts with its command (`/<skill-name>`), not knowledge for a role, and an agent cannot preload it. Call it a **command skill**. Install it when the user agrees, but never add it to the `skills:` list of an agent (Step 6). A skill result without the field comes from an older registry server; treat it as `user_invoked: false`.
+5.  **Ask the registry for recommendations.** After the searches, call the `awos-recruitment` server's `recommend_capabilities` tool one time. Pass every technology and domain from the Step 2 table as `stack`, one per item. Pass as `exclude` the names that this run already proposes from its searches, the names already in the project (`.claude/skills/`, `.claude/agents/`, the MCP servers in `.mcp.json`, the hooks from Step 3), and the names under `## Declined Recommendations` in `context/product/hired-agents.md` when that file exists. Keep a declined name out of `exclude` only if the user prompt asks for it. A recommendation is a capability that the registry maintainers expect this stack to need but that a search for it does not find. It belongs to no role: never add it to the `skills:` list of an agent, and do not count it as a gap in Step 7. If the server has no such tool (an older registry server) or the call fails, skip recommendations and continue.
+6.  Show the user what was found and collect consent in **two separate gates** — never one blanket confirmation covering both:
 
     | Role             | Found Skills                  | Found MCPs | Found Agents       |
     | ---------------- | ----------------------------- | ---------- | ------------------ |
     | `python-backend` | `fastapi-expert`              | —          | —                  |
     | `aws-infra`      | `terraform-pro`, `aws-deploy` | `aws-mcp`  | `aws-infra-expert` |
 
+    Show a command skill in the Found Skills cell as its command, for example `/disaster-recovery-plan (command)`, so the user can see that it does not go to the agent.
+
     **Gate 1 — passive components.** Confirm installation of the skills, MCPs, and agents above. These are prompt text and configuration that only act when invoked.
+
+    Ask the recommendations of Step 4.5, except hooks, in the same `AskUserQuestion` call as Gate 1, as a separate multi-select question that says the registry recommends these for the stack. Make one option per recommendation: the label is its name (a command skill as `/name`), and the description is its `reason`. Nothing is selected by default. `AskUserQuestion` needs at least two options, so ask a single recommendation as a question with the options "Install `<name>`" and "Skip". A recommended hook goes to Gate 2 with the other hooks, with its `reason` in the "Why relevant" column.
 
     **Gate 2 — hooks.** Hooks are different in kind: each one installs a shell script that runs automatically on the listed lifecycle event, with no invocation by the user. Show them in their own table with behavior-level detail, then ask a dedicated `AskUserQuestion` that names the executable nature — e.g. "These hooks install shell scripts that run automatically on the listed events — install them?" — so approving the passive batch can never silently approve executable behavior:
 
@@ -114,7 +119,7 @@ Follow this process precisely.
 
     Tell the user that the "What it runs" column comes from registry metadata (the hook's `HOOK.md`), which the registry does not vet against the script itself, and that the actual installed script will be shown for review immediately after install (Step 5.4) — the registry CLI has no preview mode, so the on-disk copy is the first chance to inspect the real behavior.
 
-6.  **If a gate gets no answer — the `AskUserQuestion` tool is unavailable, or the question comes back unanswered — treat consent as withheld.** Install nothing that gate covered and continue to Step 6. Do not re-ask the same question as plain text, and do not end the turn. Installing is what needed permission; the coverage report does not, so Step 8 still runs and records what is actually on disk. List the components you did not install under **Gaps** so the user can approve them on a later run.
+7.  **If a gate gets no answer — the `AskUserQuestion` tool is unavailable, or the question comes back unanswered — treat consent as withheld.** Install nothing that gate covered and continue to Step 6. This includes the recommendations in that gate. Do not re-ask the same question as plain text, and do not end the turn. Installing is what needed permission; the coverage report does not, so Step 8 still runs and records what is actually on disk. List the components you did not install under **Gaps** so the user can approve them on a later run.
 
 **QA Complement Rule:**
 
@@ -158,7 +163,9 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
 
     After the CLI reports success, complete the second half of the hook consent: for each hook just installed, `Read` the installed `.claude/hooks/<name>/HOOK.md` and the entrypoint script it references, and summarize to the user what the script actually does — the commands it runs, the files it touches, what it can block. If the script's real behavior exceeds or contradicts the metadata the user approved in Step 4, ask the user with `AskUserQuestion` whether to keep it or roll it back; on rollback, delete `.claude/hooks/<name>/` and remove the settings entry the CLI just added (undoing the CLI's own write is rollback, not authoring).
 
-5.  Report successes and failures for each installation.
+5.  Install the recommendations the user selected with the same commands, by `type`: `skill`, `tool` (the `mcp` command), `agent`, or `hook`. A recommended hook gets the same review of the installed script as any other hook.
+6.  Report successes and failures for each installation.
+7.  Report the outcome of each recommendation to the registry: call `report_recommendation` one time per result of Step 4.5, in one parallel batch, with its `id` and one `outcome`: `installed` when the user selected it and the install succeeded, `declined` when the user did not select it, or `not_answered` when its gate got no answer. Do not report a selected recommendation whose install failed. The call records telemetry only and needs no confirmation.
 
 ## Step 6: Generate or Update Agent Files
 
@@ -171,16 +178,16 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
       - `[When Claude should delegate to this agent]` → trigger phrasing based on domain and technologies
       - `[domain]` → the domain name (e.g., "frontend", "backend", "infrastructure")
       - `[technology list]` → comma-separated list of technologies for this domain, taken from the architecture
-      - `skills` → every skill installed in Step 5 for this role's technologies. A role whose searches found no skill still gets an agent file with `skills: []`; its technologies go to the Step 7 table.
+      - `skills` → every skill installed in Step 5 for this role's technologies, except command skills (Step 4.4). A role whose searches found no skill other than a command skill still gets an agent file with `skills: []`; its technologies go to the Step 7 table.
       - `[Responsibility aligned with the agent's domain]` → specific responsibilities derived from the architecture
       - `model` and `effort` → keep the template's `sonnet` and `low`. An agent file that omits them inherits the orchestrator's model and effort level, which is what makes a routine implementation task think for minutes on a model priced for hard reasoning. Raise either one only for a role whose tasks are genuinely reasoning-heavy, and name that role when you show the file for review.
-4.  For **Partially Covered** roles: read the existing agent file and append newly installed skills to its `skills` list. Leave the body as it is unless the user asks for a change.
+4.  For **Partially Covered** roles: read the existing agent file and append newly installed skills, except command skills, to its `skills` list. Leave the body as it is unless the user asks for a change.
 5.  For every agent file this run installed from the registry or generated — and for every existing file in `.claude/agents/` that lacks it — ensure the frontmatter carries `disallowedTools: Agent`. `/awos:implement` routes each task to one specialist; a specialist that can spawn agents tends to forward its brief instead of doing it, adding a hop and no work. Keep the `Agent` tool only for an agent whose description names it as a coordinator, and say so in the review.
 6.  **Write the agent files, then show each generated or updated file to the user for review** and apply any adjustments they ask for. Writing before the review is safe here: an agent file is reversible — re-run `/awos:hire` to revise it, or delete it.
 
 ## Step 7: Warn About Missing Skills
 
-1.  Collect the roles whose search did not help: the server was unavailable, returned no results, or returned results that did not fit the role (a different technology, or an MCP server or hook when a skill or agent for the role was needed).
+1.  Collect the roles whose search did not help: the server was unavailable, returned no results, or returned results that did not fit the role (a different technology, or an MCP server, hook, or command skill when a skill or agent for the role was needed).
 2.  If there are gaps, show the user a warning table:
 
     | Missing Skill       | For Agent        | Impact                                         |
@@ -188,7 +195,7 @@ Detect the project's package runner: prefer `bunx` if a `bun.lockb` or `bun.lock
     | Terraform expertise | `aws-infra`      | Agent will use general knowledge for IaC tasks |
     | FastAPI patterns    | `python-backend` | Agent will use general Python knowledge        |
 
-3.  Report each row to the registry so its maintainers can see what is missing. Call the `awos-recruitment` server's `report_gap` tool once per row, in the same parallel batch, with the exact search text from Step 4 as `query`, the names that search returned as `offered`, the agent name as `needed_for`, the gist of the Impact column as `note`, and one `reason`: `no_results` when the search returned nothing, `not_relevant` when it returned a different technology, `wrong_type` when it returned an MCP server or hook where a skill or agent was needed. The call records telemetry only; it changes nothing in the project and needs no confirmation. Skip it when the server was unavailable in Step 4, since there is nothing to report to.
+3.  Report each row to the registry so its maintainers can see what is missing. Call the `awos-recruitment` server's `report_gap` tool once per row, in the same parallel batch, with the exact search text from Step 4 as `query`, the names that search returned as `offered`, the agent name as `needed_for`, the gist of the Impact column as `note`, and one `reason`: `no_results` when the search returned nothing, `not_relevant` when it returned a different technology, `wrong_type` when it returned an MCP server, hook, or command skill where a skill or agent was needed. The call records telemetry only; it changes nothing in the project and needs no confirmation. Skip it when the server was unavailable in Step 4, since there is nothing to report to.
 4.  Advise the user that the generated agents will work using general knowledge, but custom skills and agents in `.claude/skills/` and `.claude/agents/` will improve results for the gaps above.
 
 ## Step 8: Write Coverage Report
@@ -220,6 +227,10 @@ Generated by `/awos:hire` on YYYY-MM-DD. Re-run `/awos:hire` to refresh — this
 ## Gaps
 
 (one bullet per missing or partial coverage row, with the impact)
+
+## Declined Recommendations
+
+(one bullet per registry recommendation the user declined)
 ```
 
 Rules for the **Coverage by Technology** rows:
@@ -244,6 +255,12 @@ Rules for the **Installed Hooks** table:
 
 The **Gaps** section may be empty. If non-empty, each bullet is one line: `- <Technology>: <what's missing> → <suggested action>`.
 
+Rules for the **Declined Recommendations** section:
+
+- One bullet per recommendation the user declined in this run or in an earlier run: `- <name> (<type>) — declined YYYY-MM-DD`. Copy the bullets of the previous file when you regenerate it, so that Step 4.5 does not offer them again. Remove a bullet only when the capability is now installed.
+- A recommendation whose gate got no answer is not declined: do not list it here.
+- If there are no bullets, replace the placeholder with the single line `None.`
+
 ## Step 9: Final Summary
 
 Report:
@@ -252,8 +269,10 @@ Report:
 - **Agents Created (from Template):** each new agent generated from template, with file path
 - **Agents Updated:** each updated agent and what was added
 - **Skills Installed:** all successfully installed skills
+- **Commands Installed:** each command skill installed in Step 5, as its command (for example `/disaster-recovery-plan`), with one line on when to run it. Say that no agent preloads these skills: the user starts each one.
 - **MCPs Installed:** all successfully installed MCPs
 - **Hooks Installed:** all successfully installed hooks
+- **Recommendations:** each result of Step 4.5 with its outcome (installed, declined, or not answered) and its `reason`. For one that got no answer, give the install command, so the user can install it later.
 - **Coverage Report:** path to `context/product/hired-agents.md`
 - **Gaps Remaining:** any technologies without specific skill coverage
 

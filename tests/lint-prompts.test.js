@@ -3197,6 +3197,56 @@ test('hire.md reports unmet searches back to the registry via report_gap', () =>
   );
 });
 
+test('hire.md and tech.md keep command skills out of skills: and report them as commands', () => {
+  // A registry skill with `disable-model-invocation: true` is a process the
+  // user starts with its slash command. Claude Code cannot preload it into a
+  // subagent: it skips the `skills:` entry with only a debug-log warning, so
+  // the entry is dead and hired-agents.md claims a skill the agent lacks.
+  // The registry marks such skills with `user_invoked: true` in each
+  // search_capabilities skill result. Both hire paths must read the field,
+  // keep the skill out of every `skills:` list, fall back to today's
+  // behavior when an older server omits the field, and name the skill as a
+  // command in the final report (provectus/awos#249).
+  const prompts = {
+    'hire.md': {
+      excluded: /never add it to the `skills:` list of an agent/,
+      report: /\*\*Commands Installed:\*\*[^\n]*as its command/,
+    },
+    'tech.md': {
+      excluded: /goes in no agent's `skills:` list/,
+      report: /Report:[^\n]*each installed command skill as its command/,
+    },
+  };
+  for (const [file, pattern] of Object.entries(prompts)) {
+    const body = readUtf8(path.join(commandsDir, file));
+    assert.ok(
+      body.includes('`user_invoked`'),
+      `commands/${file} must read the \`user_invoked\` field of each search_capabilities skill result — it is the only way to tell a command skill from a knowledge skill`
+    );
+    assert.ok(
+      body.includes('`disable-model-invocation: true`'),
+      `commands/${file} must say that \`user_invoked: true\` means the skill has \`disable-model-invocation: true\`, so a reader can see why an agent cannot preload it`
+    );
+    assert.ok(
+      pattern.excluded.test(body),
+      `commands/${file} must keep a command skill out of every agent's \`skills:\` list — a preload entry for it is dead`
+    );
+    assert.ok(
+      /older registry server; treat it as `(user_invoked: )?false`/.test(body),
+      `commands/${file} must treat a skill result without \`user_invoked\` (an older registry server) as \`false\`, so hire behaves as before against that server`
+    );
+    assert.ok(
+      pattern.report.test(body),
+      `commands/${file} final report must name each installed command skill as its command, or the user never learns how to start it`
+    );
+  }
+  const hire = readUtf8(path.join(commandsDir, 'hire.md'));
+  assert.ok(
+    !/server's `search` tool/.test(hire),
+    'commands/hire.md must call the registry tool by its registered name, `search_capabilities`, not `search`'
+  );
+});
+
 test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
   // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
   // propose a QA agent by searching the registry, not by always

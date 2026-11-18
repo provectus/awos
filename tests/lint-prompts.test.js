@@ -3247,6 +3247,80 @@ test('hire.md and tech.md keep command skills out of skills: and report them as 
   );
 });
 
+test('hire.md asks the registry for recommendations, on consent, and remembers declines', () => {
+  // The registry keeps the cases where a stack probably needs a capability
+  // that a search for it does not find (a DR plan for a system on AWS, a
+  // browser for a web frontend), so AWOS carries no rule per skill. Hire
+  // calls recommend_capabilities one time, asks before it installs any
+  // result, keeps results out of agents' `skills:` lists, reports each
+  // outcome, and writes declines to hired-agents.md so the next run passes
+  // them in `exclude` (provectus/awos#249). Tech does not call the tool:
+  // recommendations are project-wide, and tech runs per spec.
+  const hire = readUtf8(path.join(commandsDir, 'hire.md'));
+  const checks = [
+    [
+      /call the `awos-recruitment` server's `recommend_capabilities` tool one time/,
+      'must call recommend_capabilities exactly one time per run',
+    ],
+    [
+      /as `exclude`[^\n]*`## Declined Recommendations`/,
+      'must pass the declined names from hired-agents.md in `exclude`, or the user is asked again on every run',
+    ],
+    [
+      /never add it to the `skills:` list of an agent, and do not count it as a gap/,
+      'must keep a recommendation out of agent `skills:` lists and out of the Step 7 gaps — it belongs to no role',
+    ],
+    [
+      /no such tool \(an older registry server\)[^\n]*skip recommendations/,
+      'must skip recommendations against an older registry server instead of failing',
+    ],
+    [
+      /in the same `AskUserQuestion` call as Gate 1, as a separate multi-select question/,
+      'must ask the recommendations in the Gate 1 call, as their own question, so approving the found components never approves a recommendation',
+    ],
+    [
+      /Nothing is selected by default/,
+      'must not preselect a recommendation — the user did not search for it',
+    ],
+    [
+      /A recommended hook goes to Gate 2/,
+      'must send a recommended hook through the executable-behavior gate like any other hook',
+    ],
+    [
+      /call `report_recommendation` one time per result[^\n]*`installed`[^\n]*`declined`[^\n]*`not_answered`/,
+      'must report each recommendation outcome so the registry can tell useful entries from noise',
+    ],
+    [
+      /## Declined Recommendations\n\n\(one bullet per registry recommendation the user declined\)/,
+      'Step 8 coverage-report structure must contain the "## Declined Recommendations" section',
+    ],
+    [
+      /Copy the bullets of the previous file when you regenerate it/,
+      'must carry declines over when hired-agents.md is regenerated, or a decline is forgotten after one run',
+    ],
+    [
+      /A recommendation whose gate got no answer is not declined/,
+      'must not record an unanswered recommendation as declined — the user never saw it',
+    ],
+    [
+      /\*\*Recommendations:\*\*[^\n]*installed, declined, or not answered/,
+      'final report must list each recommendation with its outcome',
+    ],
+  ];
+  for (const [pattern, contract] of checks) {
+    assert.ok(pattern.test(hire), `commands/hire.md ${contract}`);
+  }
+  const tech = readUtf8(path.join(commandsDir, 'tech.md'));
+  assert.ok(
+    !tech.includes('recommend_capabilities'),
+    'commands/tech.md must not call recommend_capabilities — recommendations are project-wide, and tech runs per spec, so it would ask again for every spec'
+  );
+  assert.ok(
+    /change nothing else in it/.test(tech),
+    'commands/tech.md must patch hired-agents.md without touching other sections, so `## Declined Recommendations` survives a tech run'
+  );
+});
+
 test('hire.md QA Complement Rule is search-first and not tool-hardcoded', () => {
   // Mirror of the verify.md anti-hardcoding rule. /awos:hire must
   // propose a QA agent by searching the registry, not by always

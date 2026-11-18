@@ -1,0 +1,6 @@
+{
+  "name": "@atlas/domain",
+  "private": true,
+  "description": "Shared models, validation, and integer-minor-unit money arithmetic with currency-aware rounding.",
+  "main": "src/index.js"
+}

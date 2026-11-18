@@ -1,0 +1,6 @@
+{
+  "name": "@atlas/stock-service",
+  "private": true,
+  "description": "Background worker owning the stock store: reserve/release commands with an idempotency ledger, stock events out.",
+  "main": "src/service.js"
+}

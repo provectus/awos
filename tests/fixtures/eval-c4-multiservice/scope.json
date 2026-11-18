@@ -1,0 +1,16 @@
+{
+  "comment": "Files/dirs the 001-delivery-eta spec legitimately touches, per its technical considerations. The eval's out-of-scope grader flags any other edit. 'ignored' paths are neither in nor out of scope (runtime state, AWOS install artifacts, planning docs).",
+  "allowed": [
+    "packages/shared/src/models",
+    "packages/shared/src/validation.js",
+    "services/tracking-worker/src/handlers",
+    "services/tracking-worker/src/store",
+    "services/gateway-api/src/routes",
+    "services/gateway-api/src/router.js",
+    "services/gateway-api/src/server.js",
+    "services/gateway-api/src/clients",
+    "services/gateway-api/src/serializers",
+    "tests"
+  ],
+  "ignored": ["context", "var", ".awos", ".claude", "node_modules"]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "@atlas/cart-api",
+  "private": true,
+  "description": "HTTP service owning the carts store: cart and line management, quote requests over the command queue, read-only views over checkout state.",
+  "main": "src/server.js"
+}

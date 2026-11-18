@@ -1,0 +1,6 @@
+{
+  "name": "@atlas/pricing-service",
+  "private": true,
+  "description": "Background worker owning the rates store: consumes pricing commands, emits price-quoted events.",
+  "main": "src/service.js"
+}

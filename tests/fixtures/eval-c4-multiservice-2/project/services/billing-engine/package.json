@@ -1,0 +1,6 @@
+{
+  "name": "@meterhub/billing-engine",
+  "private": true,
+  "description": "Queue consumer: persists readings, computes cycles, issues invoices. No HTTP surface.",
+  "main": "src/engine.js"
+}

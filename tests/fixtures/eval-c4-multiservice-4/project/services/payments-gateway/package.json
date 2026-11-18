@@ -1,0 +1,6 @@
+{
+  "name": "@atlas/payments-gateway",
+  "private": true,
+  "description": "Background worker simulating payment authorization and capture with deterministic per-currency rules; owns the payments journal.",
+  "main": "src/service.js"
+}

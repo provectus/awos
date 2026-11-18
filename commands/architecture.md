@@ -41,6 +41,20 @@ Your task is to manage the architecture file located at `context/product/archite
 
 ---
 
+# DIAGRAMS
+
+The architecture document carries a `## Diagrams (C4)` section: a Context diagram and a Container diagram, drawn as Mermaid `flowchart` blocks with the C4 styling convention from the template. Include it by default — measured A/B evaluations found specs with these diagrams produced more correct downstream implementations at a ~3% median token cost (`docs/2.0/c4-diagram-evidence.md` in the AWOS repository) — and omit it only when the user asks or the project documents a different diagram convention.
+
+Rules for drawing:
+
+- Use Mermaid `flowchart` with `classDef` styling (person / container / datastore / external), never the `C4Context`/`C4Container` block types — those render inconsistently across hosts.
+- The Context diagram has exactly one system box. The Container diagram has at most 10 containers; a bigger system means the zoom is wrong, not the limit.
+- Every edge carries a label stating direction and mechanism ("publishes shipment events", "HTTPS, bearer token", "read-only filesystem view"). The diagram is where the prose's ambiguities about who calls whom get resolved — an unlabeled arrow re-creates the ambiguity the diagram exists to remove.
+- Shared libraries linked into services are not containers; leave them out of the Container diagram and say so in the paragraph after it.
+- Draw only what the findings evidence. Every box and edge must correspond to something real in the codebase exploration, the product definition, or a confirmed decision — the diagrams are the prose sections restated, never new claims.
+
+---
+
 # PROCESS
 
 Follow this logic precisely.
@@ -110,7 +124,8 @@ Follow this logic precisely.
     - For each architectural area, propose a concrete title from the template placeholder.
     - For each component, propose a specific technology with one or more alternatives, justified by the project context. When the codebase exploration or documentation retrieval provided a known technology, use it as the default and keep its evidence citation; otherwise pick a sensible best-practice default and label it as an assumption.
     - Cover every architectural area (Data, Infrastructure, etc.).
-5.  Proceed to **Step 3: Finalization**.
+5.  Draft the `## Diagrams (C4)` section (see `# DIAGRAMS` above), derived from the same findings as the prose sections.
+6.  Proceed to **Step 3: Finalization**.
 
 ---
 
@@ -121,7 +136,8 @@ Follow this logic precisely.
 3.  Determine the requested change. When `<user_prompt>` is non-empty, it is the change request — this is the receiving side of `/awos:verify`'s "run `/awos:architecture <prompt describing what changed>`" handoff, so consume it directly and do not re-ask what to change. When it is empty, present the current architecture together with any drift items and ask the user what to change; if no answer comes (e.g. an unattended run), there is no change to apply — report the drift items and end the run cleanly (the exception in `# INTERACTION`).
 4.  Propose a specific, reasoned change, preferring scalable and cost-effective options. For example: to support file uploads, propose adding S3 under Data & Persistence.
 5.  Before saving, check whether the change conflicts with existing principles, technologies, or cost/operational constraints. For complex changes (e.g., swapping a database), discuss the potential impacts and migration strategy with the user. Surface any concern before applying.
-6.  Proceed to **Step 3: Finalization**. Drift items travel with the draft unresolved: the write records the requested change only — never an unconfirmed drift adoption — and the drift questions come after the write, where a dismissed question can no longer cost the deliverable.
+6.  When the change adds, removes, or rewires a container, datastore, queue, or external system, update the `## Diagrams (C4)` section in the same edit — a diagram that contradicts the prose is worse than no diagram, because downstream agents trust it. If the document predates the diagram convention and has no such section, add it (see `# DIAGRAMS`).
+7.  Proceed to **Step 3: Finalization**. Drift items travel with the draft unresolved: the write records the requested change only — never an unconfirmed drift adoption — and the drift questions come after the write, where a dismissed question can no longer cost the deliverable.
 
 ---
 
